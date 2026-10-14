@@ -92,9 +92,9 @@ describe('page language', () => {
     expect(about).toContain('id="replays"');
     const help = await html('/leaderboard/help', ja);
     expect(help).toContain('>プレイの見方<');
-    expect(help).toContain('クリアできなかった。');
+    expect(help).toContain('クリアに届かなかった。');
     expect(help).toContain('id="lamps"');
-    expect(await html('/leaderboard/settings', ja)).toContain('パスキーでサインイン');
+    expect(await html('/leaderboard/settings', ja)).toContain('パスキーでログイン');
     const missing = await fetchApp('/leaderboard/players/nobody-here', { headers: ja });
     expect(missing.status).toBe(404);
     expect(await missing.text()).toContain('このプレイヤーは存在しないか、削除されました。');
@@ -226,8 +226,8 @@ describe('Leaderboard pages', () => {
     expect(own.html).toContain('>not public<');
     // Both reasons: the chart is not listed, and Carol's account is anonymous (with how to change that).
     expect(own.html).toContain('Its chart is not listed yet');
-    expect(own.html).toContain('It was played on an anonymous account');
-    expect(own.html).toContain('Create a passkey to keep the account');
+    expect(own.html).toContain('It was played anonymously, before an account was created');
+    expect(own.html).toContain('Create an account and your earlier plays become public too.');
 
     // On a listed chart, Carol's play is left out by default and comes in with anonymous players on.
     const carolsPlay = `/leaderboard/scores/${await submit(carol, chart, 7, 'Carol on a listed chart', 2)}`;
@@ -287,10 +287,12 @@ describe('Leaderboard pages', () => {
     const playPage = await page(`/leaderboard/scores/${scoreId}`);
     expect(playPage.html).toContain('This play is not public');
     expect(playPage.html).toContain('Its chart is not listed yet');
-    expect(playPage.html).toContain('It was played on an anonymous account');
-    expect(playPage.html).not.toContain('Create a passkey to keep the account');
+    expect(playPage.html).toContain('It was played anonymously, before an account was created');
+    expect(playPage.html).not.toContain('Create an account and your earlier plays become public too.');
     expect(playPage.html).toContain('href="/leaderboard/help#visibility"');
-    expect((await page(`/leaderboard/scores/${scoreId}`, erin)).html).toContain('Create a passkey to keep the account');
+    expect((await page(`/leaderboard/scores/${scoreId}`, erin)).html).toContain(
+      'Create an account and your earlier plays become public too.',
+    );
 
     const own = await page(chartPath, erin);
     expect(own.html).toContain(`/leaderboard/scores/${scoreId}`);

@@ -15,7 +15,7 @@ describe('describeAccountError', () => {
 
   test('answers in the page language', () => {
     const ja = clientMessages('ja');
-    expect(describeAccountError('handle-taken', undefined, ja)).toBe('そのハンドルは使われています。');
+    expect(describeAccountError('handle-taken', undefined, ja)).toBe('このユーザー名はすでに使われています。');
     expect(describeAccountError('http-500', undefined, ja)).toBe('問題が発生しました（http-500）。');
   });
 });

@@ -52,11 +52,15 @@ const en: AboutContent = {
   also: [
     {
       title: 'Checked charts',
-      text: 'a made-up chart is not listed until two players with a passkey play it.',
+      text: 'a new chart is listed once two players with an account have played it.',
       more: 'checks',
     },
     { title: 'Every play a replay', text: 'download any play log and watch it judged again.', more: 'replays' },
-    { title: 'No sign-up to start', text: 'play anonymously; a passkey keeps the account.', more: 'accounts' },
+    {
+      title: 'No sign-up to start',
+      text: 'play anonymously, and create an account whenever you like.',
+      more: 'accounts',
+    },
     {
       title: 'Bests kept apart',
       text: 'best EX-Score, lamp and fewest misses, each from its own play.',
@@ -90,24 +94,25 @@ const en: AboutContent = {
           link it to the LR2IR Archive, Mocha-Repository, MinIR and BMS Search, and let a ranking narrow to one file.
         </p>
         <p>
-          A chart is <strong>listed</strong> once two players with a passkey have played it, which keeps a chart someone
-          made up from passing as a real one.
+          A new chart is <strong>listed</strong> once two players with an account have played it, so the rankings list
+          only charts that really exist.
         </p>
       </Section>
       <Section id="accounts" title="Accounts">
         <p>
-          Playing needs no sign-up: your first submitted play makes an <strong>anonymous</strong> account in that
-          browser. Rankings leave anonymous players out unless you ask for them.
+          Playing needs no sign-up: your plays are recorded <strong>anonymously</strong> in that browser. Rankings show
+          anonymous plays when you turn them on.
         </p>
         <p>
-          <strong>Create a passkey</strong> to keep the account: you can sign in with it on another device, and your
-          plays join the rankings. Sign-in with Google and Discord is on the way.
+          <strong>Create an account</strong> and your plays so far come with you and join the rankings, and you can sign
+          in on another device. Signing in uses a passkey (your device’s fingerprint, face or PIN). Sign-in with Google
+          and Discord is coming soon.
         </p>
       </Section>
       <Section id="checks" title="What is checked">
         <ul class="space-y-1">
           <li>The score is always recounted from the inputs, never read from the log.</li>
-          <li>Auto play and plays quit with ESC are refused; failed plays count.</li>
+          <li>Auto play and plays quit with ESC are not recorded; failed plays are.</li>
           <li>
             Plays with an assist (auto scratch, a widened judge window) are <strong>ranked apart</strong>.
           </li>
@@ -117,8 +122,8 @@ const en: AboutContent = {
           </li>
         </ul>
         <p>
-          A fabricated stream of inputs cannot be told from a human one with certainty; such plays are left to reports
-          and moderation.
+          Machine-generated inputs cannot always be told from a person’s, so such plays are handled through reports and
+          moderation.
         </p>
       </Section>
       <Section id="bests" title="Personal bests">
@@ -167,42 +172,42 @@ const en: AboutContent = {
 
 const ja: AboutContent = {
   title: 'このサイトについて',
-  description: 'be-music Leaderboard とは何か、プレイをどう採点するか。',
+  description: 'be-music Leaderboard の特長と、プレイの採点方法。',
   lead: 'be-music で遊んだ BMS 譜面のランキング。',
-  apart: 'ほかとの違い',
+  apart: 'ほかのランキングとの違い',
   moreBelow: '詳しくは下へ',
   highlights: [
     {
-      title: 'スコアはサーバーが数える',
-      text: 'プレイヤーが送るのはスコアではなく打鍵の記録です。サーバーがそれを be-music エンジンで再生して結果を数え直すので、書き換えた数字がランキングに載ることはありません。',
+      title: 'スコアはサーバーが計算',
+      text: 'プレイヤーが送るのはスコアではなく打鍵の記録です。サーバーがそれを be-music エンジンで再生してスコアを計算し直すので、ランキングには正しく計算されたスコアだけが並びます。',
       more: 'scoring',
     },
     {
-      title: '1 プレイを 3 つのルールで',
-      text: 'すべてのプレイを LR2・beatoraja・IIDX のルールで同時に採点します。どのルールで遊んだプレイも、同じ物差しで 1 つのランキングに並びます。',
+      title: '1 プレイを 3 つのルールで採点',
+      text: 'すべてのプレイを LR2・beatoraja・IIDX のルールで同時に採点します。どのルールで遊んだプレイも、同じ基準で 1 つのランキングに並びます。',
       more: 'scoring',
     },
     {
       title: '譜面は中身で見分ける',
-      text: '譜面はファイルではなく、ノーツとタイミング（#RANDOM のすべての分岐を含む）で識別します。保存し直したり再エンコードしたりしたコピーも同じランキングです。',
+      text: '譜面はファイルではなく、ノーツとタイミング（#RANDOM のすべての分岐を含む）で見分けます。保存し直したり再エンコードしたりしたファイルも、同じランキングにまとまります。',
       more: 'charts',
     },
   ],
   also: [
     {
       title: '譜面の確認',
-      text: 'でっち上げの譜面は、パスキーを持つプレイヤー 2 人が遊ぶまで一般公開されません。',
+      text: '新しい譜面は、アカウントを持つプレイヤー 2 人が遊ぶと公開されます。',
       more: 'checks',
     },
     {
-      title: 'すべてのプレイがリプレイ',
-      text: 'どのプレイログもダウンロードして、判定し直す様子を見られます。',
+      title: 'すべてのプレイをリプレイで',
+      text: 'どのプレイもプレイログをダウンロードして、もう一度見られます。',
       more: 'replays',
     },
-    { title: '登録なしで始められる', text: '匿名で遊べて、パスキーでアカウントを残せます。', more: 'accounts' },
+    { title: '登録なしで始められる', text: '匿名ですぐに遊べて、あとからアカウントを作れます。', more: 'accounts' },
     {
-      title: 'ベストは項目ごと',
-      text: 'ベスト EX スコア・ランプ・最少ミスを、それぞれ記録したプレイから取ります。',
+      title: '自己ベストは項目ごと',
+      text: 'EX スコア・クリアランプ・最少ミスのベストを、それぞれ記録したプレイから取ります。',
       more: 'bests',
     },
     {
@@ -216,76 +221,75 @@ const ja: AboutContent = {
       <Section id="scoring" title="プレイの採点">
         <p>
           プレイが終わると、プレイヤーは<strong>プレイログ</strong>
-          を送ります。譜面のノーツと、すべての打鍵とその時刻です。サーバーはプレイヤーが見たスコアを受け取らず、ログを
-          be-music エンジンで再生して結果を数え直します。
+          （譜面のノーツと、すべての打鍵とその時刻）を送ります。サーバーはプレイヤーの画面に出たスコアを使わず、ログを
+          be-music エンジンで再生してスコアを計算し直します。
         </p>
         <p>
-          これを <strong>LR2</strong>・<strong>beatoraja</strong>・<strong>IIDX</strong>{' '}
-          の採点ルール（判定幅・ゲージ・クリアランプ）で 3 回行います。どのプレイも 3
-          つのランキングすべてに載ります。プレイが<em>実際に遊んだ</em>
-          ルールはプレイに表示され、ページに表示するルールはヘッダーで選べます。ルールはプレイの数え方であって、プレイしたソフトウェアのことではありません。
+          この計算を <strong>LR2</strong>・<strong>beatoraja</strong>・<strong>IIDX</strong>{' '}
+          の採点ルール（判定幅・ゲージ・クリアランプ）でそれぞれ行うので、どのプレイも 3
+          つのランキングすべてに載ります。プレイヤーが<em>実際に遊んだ</em>
+          ルールはプレイごとに表示され、ページに表示するルールはヘッダーで切り替えられます。ルールはスコアの計算方法を表すもので、プレイしたソフトとは関係ありません。
         </p>
       </Section>
       <Section id="charts" title="譜面">
         <p>
-          譜面はファイルではなく、ノーツとタイミングから求める<strong>フィンガープリント</strong>
-          で識別します。保存し直したり再エンコードしたりしたコピーも同じランキングです。譜面ファイルごとの SHA-256 と
-          MD5 も記録しており、LR2IR Archive・Mocha-Repository・MinIR・BMS Search へのリンクや、ランキングを 1
+          譜面はファイルではなく、ノーツとタイミングから求める<strong>譜面 ID</strong>
+          （フィンガープリント）で見分けます。保存し直したり再エンコードしたりしたファイルも、同じランキングにまとまります。譜面ファイルごとの
+          SHA-256 と MD5 も記録しており、LR2IR Archive・Mocha-Repository・MinIR・BMS Search へのリンクや、ランキングを 1
           ファイルに絞り込むのに使います。
         </p>
         <p>
-          譜面は、パスキーを持つプレイヤー 2 人が遊ぶと<strong>一般公開</strong>
-          されます。誰かがでっち上げた譜面が本物として載るのを防ぐためです。
+          新しい譜面は、アカウントを持つプレイヤー 2 人が遊ぶと<strong>公開</strong>
+          されます。実在する譜面だけがランキングに並ぶようにするためです。
         </p>
       </Section>
       <Section id="accounts" title="アカウント">
         <p>
-          遊ぶのに登録は要りません。最初にプレイを送信すると、そのブラウザに<strong>匿名</strong>
-          アカウントができます。ランキングは、指定しない限り匿名プレイヤーを表示しません。
+          遊ぶのに登録は要りません。最初にプレイを送信すると、そのブラウザで<strong>匿名</strong>
+          のまま記録されます。ランキングは、設定でオンにしない限り匿名のプレイを表示しません。
         </p>
         <p>
-          アカウントを残すには<strong>パスキーを作成</strong>
-          してください。ほかの端末からもサインインでき、プレイがランキングに載ります。Google と Discord
-          でのサインインも準備中です。
+          <strong>アカウントを作る</strong>
+          と、それまでのプレイも引き継いでランキングに載り、ほかの端末からもログインできます。ログインにはパスキー（端末の指紋認証や
+          PIN）を使います。Google と Discord でのログインも準備中です。
         </p>
       </Section>
       <Section id="checks" title="確認していること">
         <ul class="space-y-1">
-          <li>スコアは常に入力から数え直し、ログの値は使いません。</li>
-          <li>オートプレイと ESC で中断したプレイは受け付けません。FAILED のプレイは数えます。</li>
+          <li>スコアは常に打鍵の記録から計算し直し、ログに書かれた値は使いません。</li>
+          <li>オートプレイと、ESC で途中終了したプレイは記録されません。FAILED のプレイは記録されます。</li>
           <li>
-            アシスト（オートスクラッチ、判定幅の拡大）を使ったプレイは<strong>別のランキング</strong>になります。
+            アシスト（オートスクラッチ、判定幅の拡大）を使ったプレイは<strong>別枠のランキング</strong>になります。
           </li>
           <li>
-            ログの譜面がフィンガープリントと一致すること（<strong>L3</strong>
-            ）、遊んだ譜面がこの譜面だとわかっていること（<strong>L4</strong>: <code>#RANDOM</code>{' '}
-            がないか、既に見た分岐）を確かめます。
+            ログの譜面が譜面 ID と一致すること（<strong>L3</strong>）と、遊んだ譜面がこの譜面だと確かめられること（
+            <strong>L4</strong>: <code>#RANDOM</code> がない、または既に確認済みの分岐）を確認します。
           </li>
         </ul>
         <p>
-          でっち上げた入力の列を人の入力と確実に見分けることはできません。そうしたプレイは通報とモデレーションで対応します。
+          機械的に作られた打鍵を人の打鍵と確実に見分けることはできないため、そうしたプレイには通報とモデレーションで対応します。
         </p>
       </Section>
       <Section id="bests" title="自己ベスト">
         <p>
-          譜面ごとのベスト EX
-          スコア・ベストクリアランプ・最少ミス（BP）は、それぞれを記録したプレイから別々に取ります。あるプレイのベストランプと、別のプレイのベストスコアがどちらも有効です。プレイはすべて残します。
+          譜面ごとの EX
+          スコア・クリアランプ・最少ミス（BP）のベストは、それぞれを記録したプレイから別々に取ります。あるプレイのベストランプと、別のプレイのベストスコアがどちらも有効です。プレイはすべて保存します。
         </p>
       </Section>
       <Section id="replays" title="リプレイ">
         <p>
           ベストだけでなく、すべてのプレイを<strong>プレイログ</strong>
-          付きで残しています。プレイのページからダウンロードしてプレイヤーにドロップすると、もう一度見られます。同じエンジンで同じ打鍵を再生するので、判定もそのときのとおりです。
+          付きで保存しています。プレイのページからダウンロードしてプレイヤーにドロップすると、もう一度見られます。同じエンジンで同じ打鍵を再生するので、判定もそのときと同じです。
         </p>
         <p>
-          各プレイのページには<strong>共有カード</strong>
-          もあります。SNS のリンクに表示される結果の画像で、ブラウザが描画します。
+          各プレイのページには<strong>共有カード</strong>もあります。SNS
+          でリンクを共有したときに表示される結果の画像で、ブラウザが描画します。
         </p>
       </Section>
       <Section id="open" title="ブラウザで、オープンに">
         <p>
           be-music はブラウザで動きます。BMS
-          フォルダをドロップして遊び、そのままプレイを送信できます。インストールは要りません。
+          のフォルダをドロップして遊び、そのままプレイを送信できます。インストールは要りません。
         </p>
         <p>
           be-music はオープンソースです:{' '}
@@ -301,8 +305,8 @@ const ja: AboutContent = {
       </Section>
       <Section id="beta" title="ベータ版">
         <p>
-          フィンガープリント（<code>bmfp0</code>
-          ）と採点ルールはまだバージョン 0 です。固まるまでの間、ランキングはリセットされることがあります。
+          譜面 ID（<code>bmfp0</code>）と採点ルールはまだバージョン 0
+          です。内容が固まるまでの間、ランキングがリセットされることがあります。
         </p>
       </Section>
     </>

@@ -27,8 +27,8 @@ describe('signing in on the site', () => {
     // Sign in and Sign up open dialogs; Google and Discord are shown but disabled, in development.
     expect(top).toContain('data-account-action="open-sign-in"');
     expect(top).toContain('data-account-action="open-sign-up"');
-    expect(top).toMatch(/<button[^>]*disabled[^>]*title="Sign in with Google is in development"/);
-    expect(top).toMatch(/<button[^>]*disabled[^>]*title="Sign up with Discord is in development"/);
+    expect(top).toMatch(/<button[^>]*disabled[^>]*title="Sign in with Google is coming soon"/);
+    expect(top).toMatch(/<button[^>]*disabled[^>]*title="Sign up with Discord is coming soon"/);
     const settings = await html('/leaderboard/settings');
     expect(settings).toContain('Sign in with a passkey');
     expect(settings).not.toContain('data-profile-form');
@@ -54,8 +54,8 @@ describe('signing in on the site', () => {
     const settings = await html('/leaderboard/settings', cookie);
     expect(settings).toContain('data-profile-form');
     expect(settings).toContain(`value="${me.handle}"`);
-    // An anonymous account is urged to create a passkey; it has no upload to remove yet.
-    expect(settings).toContain('Create a passkey to keep this account');
+    // An anonymous player is offered a passkey to save the account; it has no upload to remove yet.
+    expect(settings).toContain('Create a passkey to save your account');
     expect(settings).not.toContain('data-account-action="remove-avatar"');
   });
 });
