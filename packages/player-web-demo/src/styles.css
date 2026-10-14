@@ -471,6 +471,7 @@ textarea {
  * interactive parts take it back.
  */
 .start-leaderboard,
+.start-audio,
 .compat-panel {
   width: min(360px, calc(100vw - 96px));
   pointer-events: auto;
@@ -478,6 +479,7 @@ textarea {
 }
 
 .shell:not(.empty) .start-leaderboard,
+.shell:not(.empty) .start-audio,
 .shell:not(.empty) .compat-panel {
   display: none;
 }
@@ -615,6 +617,29 @@ textarea {
 }
 .start-account-hint:empty {
   display: none;
+}
+
+/*
+ * "Play in silent mode" row of the start card (Safari / iOS only): the same
+ * checkbox as the Leaderboard's, with a note on what it costs underneath.
+ */
+.start-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 16px;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+}
+.start-audio[hidden] {
+  display: none;
+}
+
+.start-audio-note {
+  margin: 0;
+  padding-left: 26px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(170 180 194 / 0.85);
 }
 
 .start-account-status {
