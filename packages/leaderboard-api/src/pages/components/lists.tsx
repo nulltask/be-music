@@ -30,6 +30,21 @@ import { HelpTip } from './help-tip.tsx';
 import { InfoButton, When } from './play-info.tsx';
 import { useMessages, type Messages } from '../i18n/index.ts';
 
+/**
+ * A detail only a wide row shows. A narrow row keeps its details line to what tells the plays apart (who, the lamp, the
+ * misses, the place, when); the rest (the rules it was played under, the gauge, the lane option) is in the play's info
+ * popover anyway.
+ */
+interface WideOnly {
+  wideOnly: Child;
+}
+
+const wideOnly = (child: Child): WideOnly => ({ wideOnly: child });
+
+const isWideOnly = (item: unknown): item is WideOnly => typeof item === 'object' && item !== null && 'wideOnly' in item;
+
+const shown = (item: Child): boolean => item !== null && item !== false && item !== undefined;
+
 /** The frame of a list: a card whose rows are split by hairlines, and the container its rows lay out against. */
 function List(props: { label: string; children: Child }) {
   return (
@@ -38,6 +53,10 @@ function List(props: { label: string; children: Child }) {
     </ol>
   );
 }
+
+/** A details-line item and the separator after it (its `content` set where one is due). */
+const DETAIL =
+  "items-center gap-1 after:ms-1 after:text-muted-foreground/60 @xl:[&:not(:last-child)]:after:content-['·']";
 
 /**
  * One row: a fixed start column, the main text (title over details), the score, and, for a play, its info icon in a
@@ -52,7 +71,7 @@ function Row(props: {
   label: string;
   start: Child;
   title: Child;
-  details: Child[];
+  details: Array<Child | WideOnly>;
   end: Child;
   /** A play's row: the info column, holding the play's info icon when its info was loaded. */
   play?: { info: PlayInfo | undefined };
@@ -71,13 +90,18 @@ function Row(props: {
       </div>
       <div class="text-muted-foreground col-[2/-1] row-start-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 self-start text-xs leading-tight @xl:col-[2/3]">
         {props.details
-          .filter((item) => item !== null && item !== false && item !== undefined)
-          .map((item) => (
-            // The separator trails each item, so a wrapped line never starts with one.
-            <span class="inline-flex items-center gap-1 [&:not(:last-child)]:after:ms-1 [&:not(:last-child)]:after:text-muted-foreground/60 [&:not(:last-child)]:after:content-['·']">
-              {item}
-            </span>
-          ))}
+          .filter((item) => (isWideOnly(item) ? shown(item.wideOnly) : shown(item)))
+          .map((item) =>
+            // The separator trails each item, so a wrapped line never starts with one: in a wide row every item but
+            // the last has one; in a narrow one, an item has one only while a narrow item follows it.
+            isWideOnly(item) ? (
+              <span class={`${DETAIL} hidden @xl:inline-flex`}>{item.wideOnly}</span>
+            ) : (
+              <span class={`${DETAIL} inline-flex [&:has(~[data-narrow])]:after:content-['·']`} data-narrow>
+                {item}
+              </span>
+            ),
+          )}
       </div>
       <div class="col-start-3 row-start-1 @xl:row-span-2">{props.end}</div>
       {hasInfo ? (
@@ -87,6 +111,11 @@ function Row(props: {
       ) : null}
     </li>
   );
+}
+
+/** What only a wide row shows: the avatar beside a name, a help tip beside a badge. */
+function NarrowHidden(props: { children: Child }) {
+  return <span class="hidden items-center @xl:inline-flex">{props.children}</span>;
 }
 
 /** What a lamp means, in the page's language. */
@@ -117,7 +146,8 @@ function LampLabel(props: { lamp: number; from?: number }) {
       <span class="ring-foreground/20 inline-block size-2 rounded-full ring-1" style={`background:${style.color}`} />
       {raised ? (
         <>
-          <span class="text-muted-foreground/70">{lampStyle(props.from!).label} →</span>
+          {/* A narrow row shows only the lamp reached; the info popover and the score page say what it came from. */}
+          <span class="text-muted-foreground/70 hidden @xl:inline">{lampStyle(props.from!).label} →</span>
           <span class="text-foreground font-medium">{style.label}</span>
         </>
       ) : (
@@ -201,7 +231,9 @@ export function RankingList(props: {
             <span class="flex items-center gap-3">
               <span class="w-6 text-end font-semibold">{entry.rank}</span>
               <LampBar lamp={entry.clearLamp} />
-              <Avatar src={entry.avatarUrl} size={32} />
+              <NarrowHidden>
+                <Avatar src={entry.avatarUrl} size={32} />
+              </NarrowHidden>
             </span>
           }
           title={
@@ -215,7 +247,7 @@ export function RankingList(props: {
           details={[
             <LampLabel lamp={entry.clearLamp} />,
             <>BP {entry.missCount}</>,
-            props.everyPlay ? null : <>{t.count.plays(entry.playCount)}</>,
+            props.everyPlay ? null : wideOnly(<>{t.count.plays(entry.playCount)}</>),
             <When at={entry.achievedAt} />,
           ]}
           end={<Score exScore={entry.exScore} noteCount={props.noteCount} />}
@@ -239,14 +271,16 @@ function PrivacyBadge(props: { hidden: boolean; reasons: Array<string | undefine
       <span class="badge" data-variant="secondary">
         {label}
       </span>
-      <HelpTip topic="visibility" label={label}>
-        {t.visibility.onlyYou}
-        {reasons.map((reason) => (
-          <>
-            <br />• {reason}
-          </>
-        ))}
-      </HelpTip>
+      <NarrowHidden>
+        <HelpTip topic="visibility" label={label}>
+          {t.visibility.onlyYou}
+          {reasons.map((reason) => (
+            <>
+              <br />• {reason}
+            </>
+          ))}
+        </HelpTip>
+      </NarrowHidden>
     </span>
   );
 }
@@ -282,7 +316,11 @@ export function RecentScoresList(props: {
             start={
               <span class="flex items-center gap-3">
                 <LampBar lamp={entry.clearLamp} />
-                {props.showPlayer ? <Avatar src={entry.avatarUrl} size={32} /> : null}
+                {props.showPlayer ? (
+                  <NarrowHidden>
+                    <Avatar src={entry.avatarUrl} size={32} />
+                  </NarrowHidden>
+                ) : null}
               </span>
             }
             title={
@@ -320,25 +358,25 @@ export function RecentScoresList(props: {
                 </>
               ) : null,
               <LampLabel lamp={entry.clearLamp} from={previous?.clearLamp} />,
-              showsGauge(entry.clearLamp) ? <>{formatGauge(entry.gaugeType, entry.gaugeFinal)}</> : null,
+              showsGauge(entry.clearLamp) ? wideOnly(<>{formatGauge(entry.gaugeType, entry.gaugeFinal)}</>) : null,
               <>
                 BP {entry.missCount}
                 {missDelta < 0 ? <Delta delta={missDelta} better title={t.lists.fewerMisses} /> : null}
               </>,
-              entry.laneOption !== null && entry.laneOption !== 'OFF' && entry.laneOption !== '-' ? (
-                <>{entry.laneOption}</>
-              ) : null,
+              entry.laneOption !== null && entry.laneOption !== 'OFF' && entry.laneOption !== '-'
+                ? wideOnly(<>{entry.laneOption}</>)
+                : null,
               entry.hidden ? null : (
                 <span title={t.lists.rankAmong(entry.players)}>
                   #{entry.rank} / {entry.players}
                 </span>
               ),
-              <>
+              wideOnly(
                 <span title={t.rules.playedWithTitle}>
                   {t.rules.playedWith(t.rules.name(RULESET_LABELS[entry.playedRuleset] ?? entry.playedRuleset))}
-                </span>
-                {entry.assisted ? <Tag>{t.lists.assist}</Tag> : null}
-              </>,
+                </span>,
+              ),
+              entry.assisted ? <Tag>{t.lists.assist}</Tag> : null,
               <When at={entry.createdAt} />,
             ]}
             end={<Score exScore={entry.exScore} noteCount={entry.noteCount} previous={previous?.exScore} />}
