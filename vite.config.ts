@@ -125,6 +125,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Many engine tests wait on the wall clock (input scheduled in real time) rather than compute, so on CI's few cores
+    // more workers than cores keep them overlapping instead of queueing behind each other.
+    ...(process.env.CI === 'true' ? { maxWorkers: '200%' } : {}),
     projects: [
       ...workspaceProjects,
       {
