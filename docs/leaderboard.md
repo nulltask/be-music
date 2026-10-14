@@ -365,13 +365,6 @@ application, HonoX or Nuxt can take over; the shared data-access functions keep 
   reports cover images (section 12).
 - **First card**: one design for a score — title, artist, level, clear-lamp band, EX score, rate, DJ level, judgments,
   rank and player count, ruleset badge, player name, date. Ranking, profile and versus cards come later.
-- **Chart cards are drawn by the Worker.** A chart page previews as the default card with the chart's own notes on the
-  playfield: the two measures (8 beats, starting on a whole beat) with the most notes, as lanes in the usual colours
-  (white and blue keys, a red scratch, long notes as bars, bar lines). `GET /leaderboard/charts/:chartFingerprint/card`
-  reads the chart's fingerprint document from R2, lays the notes out (`src/chart-card/excerpt.ts`), draws them as
-  rectangles over a palette image of `og-chart.svg` that `scripts/build-icons.ts` prepares, and writes an uncompressed
-  palette PNG (about 760 KB; a few milliseconds of CPU, no rasterizer or font), which it keeps in R2 at
-  `og/charts/{fingerprint}/{version}.png`. A chart with `#RANDOM` shows the notes every outcome shares.
 - **Meta tags** on every page: absolute `og:image`, `og:image:width` / `height`, `twitter:card=summary_large_image`.
 - **Safe area** (`src/pages/share-card-safe-area.ts`): link previews draw over and crop the card, so titles, scores,
   the player and the site's name stay inside it, and the bottom left holds nothing that matters. As of October 2026:
