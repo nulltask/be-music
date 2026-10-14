@@ -7,6 +7,7 @@ import {
   describeAccountChip,
   describeLeaderboardAccount,
   describeStartAccount,
+  shouldTurnOnSubmitting,
   loadLeaderboardAccount,
   signInWithLeaderboardPasskey,
   signOutOfLeaderboard,
@@ -53,6 +54,8 @@ export class LeaderboardPanel {
     // Signing in is choosing to take part: plays from now on are submitted.
     onSignedIn: () => this.submitController?.setValue(true),
   });
+  /** The account state last shown, so signing in (or arriving signed in) can be told from a refresh. */
+  private shownState: 'signed-in' | 'anonymous' | 'signed-out' | undefined;
   /** The toggle as it was when the current play started: a play is sent only if it was on at song start. */
   private submitThisPlay = false;
 
@@ -161,6 +164,11 @@ export class LeaderboardPanel {
   /** Re-reads the account into the Debug Menu's "Account" row and the account chip. */
   async refreshAccount(): Promise<void> {
     const account = await loadLeaderboardAccount();
+    const state = describeAccountChip(account).state;
+    // A player who is signed in takes part: submitting turns on when they arrive signed in or sign in, not on every
+    // refresh, so unticking it during a session sticks.
+    if (shouldTurnOnSubmitting(this.shownState, state)) this.submitController?.setValue(true);
+    this.shownState = state;
     this.accountState.status = describeLeaderboardAccount(account);
     this.accountController?.updateDisplay();
     this.renderStartAccount(account);
