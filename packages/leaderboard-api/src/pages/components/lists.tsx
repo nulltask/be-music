@@ -191,13 +191,15 @@ function Score(props: { exScore: number; noteCount: number; previous?: number })
   );
 }
 
-/** A chart's mode and level as a small badge (`7K ☆12`), the difficulty's name on hover. */
+/**
+ * A chart's mode and level (`7K ☆12`), the difficulty's name on hover: the first item of a play's details, so the
+ * title line keeps its width for the title.
+ */
 function ChartLevel(props: { laneMode: string | null; playLevel: string | null; difficulty: number | null }) {
   const label = formatChartLevel(props.laneMode, props.playLevel);
   if (label === undefined) return null;
-  const name = difficultyName(props.difficulty);
   return (
-    <span class="badge shrink-0 font-normal" data-variant="outline" title={name}>
+    <span class="text-foreground/80 font-medium" title={difficultyName(props.difficulty)}>
       {label}
     </span>
   );
@@ -326,7 +328,6 @@ export function RecentScoresList(props: {
                   <EntityIcon kind="chart" size="sm" />
                   <span class="truncate">{title}</span>
                 </a>
-                <ChartLevel laneMode={entry.laneMode} playLevel={entry.playLevel} difficulty={entry.difficulty} />
                 <PrivacyBadge
                   hidden={entry.hidden}
                   reasons={[
@@ -340,6 +341,9 @@ export function RecentScoresList(props: {
               </>
             }
             details={[
+              formatChartLevel(entry.laneMode, entry.playLevel) !== undefined ? (
+                <ChartLevel laneMode={entry.laneMode} playLevel={entry.playLevel} difficulty={entry.difficulty} />
+              ) : null,
               props.showPlayer ? (
                 <>
                   <a

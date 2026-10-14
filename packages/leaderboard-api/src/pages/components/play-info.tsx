@@ -104,5 +104,5 @@ export function InfoButton(props: { info: PlayInfo | undefined }) {
 
 /** When a play happened, compact (`2026-10-13 15:20`, in the viewer's time; UTC on hover). */
 export function When(props: { at: number }) {
-  return <LocalTime at={props.at} compact />;
+  return <LocalTime at={props.at} precision="relative" compact />;
 }
