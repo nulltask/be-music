@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test';
 import {
+  benchmarkRenderResolution,
   DEFAULT_RENDER_RESOLUTION,
+  frameTimes,
+  keepsUp,
   nearestRenderResolution,
   parseStoredRenderResolution,
   renderResolutionLabel,
@@ -56,5 +59,98 @@ describe('parseStoredRenderResolution', () => {
       expect(parseStoredRenderResolution(stored)).toBe(DEFAULT_RENDER_RESOLUTION);
     }
     expect(DEFAULT_RENDER_RESOLUTION).toBe(1.5);
+  });
+});
+
+describe('frameTimes', () => {
+  it('reports the median and 90th percentile', () => {
+    const intervals = [16, 17, 16, 17, 16, 17, 16, 17, 16, 50];
+    expect(frameTimes(intervals)).toEqual({ p50: 17, p90: 50 });
+  });
+
+  it('is zero for no frames', () => {
+    expect(frameTimes([])).toEqual({ p50: 0, p90: 0 });
+  });
+});
+
+describe('keepsUp', () => {
+  it('allows a quarter over the baseline at the 90th percentile', () => {
+    expect(keepsUp({ p50: 16.7, p90: 20.8 }, 16.7)).toBe(true);
+    expect(keepsUp({ p50: 16.7, p90: 33.4 }, 16.7)).toBe(false);
+  });
+});
+
+/** A fake frame clock: each resolution draws in the given ms per frame. */
+function fakeDisplay(frameMs: Record<number, number>) {
+  let resolution = 0;
+  let now = 0;
+  const applied: number[] = [];
+  return {
+    applied,
+    apply: (value: number) => {
+      resolution = value;
+      applied.push(value);
+    },
+    nextFrame: async () => {
+      now += frameMs[resolution]!;
+      return now;
+    },
+  };
+}
+
+describe('benchmarkRenderResolution', () => {
+  it('picks the highest resolution that holds the frame rate', async () => {
+    const display = fakeDisplay({ 1: 16.7, 1.5: 16.7, 2: 33.4 });
+    const result = await benchmarkRenderResolution({
+      steps: [1, 1.5, 2],
+      ...display,
+      warmupFrames: 2,
+      sampleFrames: 10,
+    });
+    expect(result.chosen).toBe(1.5);
+    expect(result.baseline).toBeCloseTo(16.7);
+    expect(result.results.map((entry) => entry.resolution)).toEqual([1, 2, 1.5]);
+    expect(display.applied.at(-1)).toBe(1.5);
+  });
+
+  it('stops at the highest when it keeps up', async () => {
+    const display = fakeDisplay({ 1: 16.7, 1.5: 16.7, 2: 16.7 });
+    const result = await benchmarkRenderResolution({
+      steps: [1, 1.5, 2],
+      ...display,
+      warmupFrames: 2,
+      sampleFrames: 10,
+    });
+    expect(result.chosen).toBe(2);
+    expect(result.results.map((entry) => entry.resolution)).toEqual([1, 2]);
+  });
+
+  it('falls back to the lowest when nothing else keeps up', async () => {
+    const display = fakeDisplay({ 1: 16.7, 1.5: 25, 2: 33.4 });
+    const result = await benchmarkRenderResolution({
+      steps: [1, 1.5, 2],
+      ...display,
+      warmupFrames: 2,
+      sampleFrames: 10,
+    });
+    expect(result.chosen).toBe(1);
+    expect(display.applied.at(-1)).toBe(1);
+  });
+
+  it('keeps a high resolution when the CPU, not the resolution, sets the frame rate', async () => {
+    const display = fakeDisplay({ 1: 33.4, 1.5: 33.4, 2: 33.4 });
+    const result = await benchmarkRenderResolution({
+      steps: [1, 1.5, 2],
+      ...display,
+      warmupFrames: 2,
+      sampleFrames: 10,
+    });
+    expect(result.chosen).toBe(2);
+  });
+
+  it('measures the only resolution of a 1x display and keeps it', async () => {
+    const display = fakeDisplay({ 1: 16.7 });
+    const result = await benchmarkRenderResolution({ steps: [1], ...display, warmupFrames: 2, sampleFrames: 10 });
+    expect(result.chosen).toBe(1);
   });
 });
