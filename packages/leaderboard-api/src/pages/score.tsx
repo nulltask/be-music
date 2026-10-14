@@ -15,6 +15,7 @@ import type { ScoreDetail } from '../scores/detail.ts';
 import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, rulesetName } from './format.ts';
 import { shareText, xIntentUrl, type ScoreCardData } from './score-card-data.ts';
 import { Layout, PageHeader } from './layout.tsx';
+import { helpHref } from './help-topics.ts';
 import { useMessages } from './i18n/index.ts';
 import {
   displayRuleset,
@@ -155,6 +156,15 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
   const { hidden } = detail.score;
   c.header('cache-control', PAGE_CACHE);
   const t = pageMessages(c);
+  // Why the rankings and lists leave a shown play out; the play's own player also reads how to change it.
+  const notPublic = [
+    detail.chart.status === 'listed' ? undefined : t.visibility.reasonNotListed,
+    player.anonymous
+      ? isOwner
+        ? t.visibility.sentences([t.visibility.reasonAnonymous, t.visibility.passkeyHint])
+        : t.visibility.reasonAnonymous
+      : undefined,
+  ].filter((reason) => reason !== undefined);
   const pageMeta = {
     ...meta(c, `${title} — ${player.displayName}`, description, [
       ...chartsetCrumbs(filed),
@@ -186,6 +196,21 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
         <div class="alert" role="note">
           <h2>{t.score.hiddenTitle}</h2>
           <section>{t.score.hiddenLead}</section>
+        </div>
+      ) : notPublic.length > 0 ? (
+        <div class="alert" role="note">
+          <h2>{t.visibility.title}</h2>
+          <section>
+            <p>{t.visibility.lead}</p>
+            <ul class="mt-1 list-disc space-y-0.5 ps-5">
+              {notPublic.map((reason) => (
+                <li>{reason}</li>
+              ))}
+            </ul>
+            <a class="mt-1 inline-block underline underline-offset-4" href={helpHref('visibility')}>
+              {t.help.more}
+            </a>
+          </section>
         </div>
       ) : null}
       <ResultCards

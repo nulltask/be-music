@@ -193,8 +193,10 @@ describe('Leaderboard pages', () => {
     expect((await page('/leaderboard')).html).toContain('No plays here yet');
     const own = await page('/leaderboard', alice);
     expect(own.html.match(/\/leaderboard\/scores\//g)).toHaveLength(1);
-    expect(own.html).toContain('>not listed<');
+    expect(own.html).toContain('>not public<');
     expect(own.html).toContain('#1 / 1');
+    // Its badge's help tip says why: the chart is not listed yet.
+    expect(own.html).toMatch(/Only you see this play in the rankings and lists\.<br\/>• Its chart is not listed yet/);
 
     // A second such player lists the chart: both plays are public, ranked.
     await claimAccount(db, await userIdOf(bob));
@@ -203,7 +205,7 @@ describe('Leaderboard pages', () => {
     expect(listed.html).toContain('#1 / 2');
     expect(listed.html).toContain('#2 / 2');
     expect(listed.html).toContain('played with LR2 rules');
-    expect(listed.html).not.toContain('>not listed<');
+    expect(listed.html).not.toContain('>not public<');
     // Player-controlled text is escaped, never rendered as markup.
     expect(listed.html).not.toContain(evil);
     expect(listed.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -221,7 +223,11 @@ describe('Leaderboard pages', () => {
     expect((await page('/leaderboard?anonymous=1')).html).not.toContain('Only Carol');
     const own = await page('/leaderboard', carol);
     expect(own.html).toContain('Only Carol');
-    expect(own.html).toContain('>not listed<');
+    expect(own.html).toContain('>not public<');
+    // Both reasons: the chart is not listed, and Carol's account is anonymous (with how to change that).
+    expect(own.html).toContain('Its chart is not listed yet');
+    expect(own.html).toContain('It was played on an anonymous account');
+    expect(own.html).toContain('Create a passkey to keep the account');
 
     // On a listed chart, Carol's play is left out by default and comes in with anonymous players on.
     const carolsPlay = `/leaderboard/scores/${await submit(carol, chart, 7, 'Carol on a listed chart', 2)}`;
@@ -276,6 +282,15 @@ describe('Leaderboard pages', () => {
     expect(anyone.html).toContain('Not listed yet');
     expect(anyone.html).toContain('Sign in to see your own record.');
     expect(anyone.html).not.toContain(`/leaderboard/scores/${scoreId}`);
+
+    // The play's page says why it is not public; only Erin reads how to change the anonymous part.
+    const playPage = await page(`/leaderboard/scores/${scoreId}`);
+    expect(playPage.html).toContain('This play is not public');
+    expect(playPage.html).toContain('Its chart is not listed yet');
+    expect(playPage.html).toContain('It was played on an anonymous account');
+    expect(playPage.html).not.toContain('Create a passkey to keep the account');
+    expect(playPage.html).toContain('href="/leaderboard/help#visibility"');
+    expect((await page(`/leaderboard/scores/${scoreId}`, erin)).html).toContain('Create a passkey to keep the account');
 
     const own = await page(chartPath, erin);
     expect(own.html).toContain(`/leaderboard/scores/${scoreId}`);
@@ -340,6 +355,7 @@ describe('Leaderboard pages', () => {
     const ownList = await page(`/leaderboard/players/${me.handle}`, frank);
     expect(ownList.html).toContain(`/leaderboard/scores/${high}`);
     expect(ownList.html).toContain('>hidden<');
+    expect(ownList.html).toContain('You hid it; open it to show it again.');
     // It moved no best and holds no place, so its row shows no rank.
     const hiddenRow = ownList.html.slice(ownList.html.indexOf(`/leaderboard/scores/${high}`));
     expect(hiddenRow.slice(0, hiddenRow.indexOf('</li>'))).not.toMatch(/#\d+ \/ \d+/);
