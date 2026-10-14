@@ -54,13 +54,69 @@ export async function toggleFullscreen(
 
 /**
  * True when the demo should consume Escape so the active scene (quit play / dismiss
- * result / close a select folder) does not also fire while leaving fullscreen.
+ * result / close a select folder) does not also fire while leaving fullscreen. With the
+ * Escape key locked ({@link FullscreenEscapeLock}) a short Esc press belongs to the page
+ * and the browser leaves fullscreen on a long press instead, so nothing is consumed.
  */
 export function shouldCaptureFullscreenEscape(
   event: Pick<KeyboardEvent, 'key' | 'code'>,
   doc: FullscreenDocumentLike = document,
+  escapeLocked = false,
 ): boolean {
+  if (escapeLocked) return false;
   return (event.key === 'Escape' || event.code === 'Escape') && getFullscreenElement(doc) !== null;
+}
+
+/** The slice of the Keyboard Lock API (`navigator.keyboard`, Chromium only) the demo uses. */
+export type KeyboardLockLike = {
+  lock?: (keyCodes?: string[]) => Promise<void>;
+  unlock?: () => void;
+};
+
+export type KeyboardLockNavigatorLike = { keyboard?: KeyboardLockLike };
+
+/**
+ * Locks the Escape key while the demo is fullscreen, where the browser supports Keyboard Lock
+ * (Chrome / Edge). A short Esc press then reaches the page — quitting the play as it does
+ * windowed — and the browser leaves fullscreen only on a long press, showing its own hint.
+ * Safari and Firefox have no `navigator.keyboard.lock`, so this is a no-op there and Esc
+ * keeps leaving fullscreen first.
+ */
+export class FullscreenEscapeLock {
+  private locked = false;
+  /** Bumped on every sync so a lock that resolves after fullscreen was left is not recorded. */
+  private generation = 0;
+  private readonly nav: KeyboardLockNavigatorLike | undefined;
+  private readonly onLockError: (error: unknown) => void;
+
+  constructor(nav: KeyboardLockNavigatorLike | undefined, onLockError: (error: unknown) => void = () => {}) {
+    this.nav = nav;
+    this.onLockError = onLockError;
+  }
+
+  /** Whether Escape is currently locked (the lock request resolved and fullscreen has not been left since). */
+  isLocked(): boolean {
+    return this.locked;
+  }
+
+  /** Locks Escape when `fullscreen` is true, unlocks it otherwise. Lock failures are reported, never thrown. */
+  async sync(fullscreen: boolean): Promise<void> {
+    const keyboard = this.nav?.keyboard;
+    const generation = ++this.generation;
+    if (!fullscreen) {
+      this.locked = false;
+      keyboard?.unlock?.();
+      return;
+    }
+    if (keyboard?.lock === undefined) return;
+    try {
+      await keyboard.lock(['Escape']);
+      if (generation === this.generation) this.locked = true;
+    } catch (error) {
+      if (generation === this.generation) this.locked = false;
+      this.onLockError(error);
+    }
+  }
 }
 
 type OrientationLike = { orientation?: { lock?: (orientation: string) => Promise<void> } };

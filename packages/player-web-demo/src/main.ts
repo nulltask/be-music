@@ -137,6 +137,7 @@ const dropLog = logger('drop');
 const recordLog = logger('record');
 const gameplayLog = logger('gameplay');
 const resolutionLog = logger('render-resolution');
+const fullscreenLog = logger('fullscreen');
 
 const AUTO_DETECT_RESOLUTION_LABEL = 'Auto-detect resolution';
 
@@ -167,7 +168,15 @@ import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } fro
 import { applyLoadProgress, hideLoadingOverlay, showLoadingOverlay } from './loading-overlay.ts';
 import { fetchZipAsFile, fetchZipAsFiles, parseUrlMediaParams } from './url-load.ts';
 import { DEBUG_MENU_FOLDERS, clearDemoSettings, rememberFolderOpenStates, type DebugMenuFolder } from './debug-menu.ts';
-import { enterTouchFullscreen, exitFullscreen, shouldCaptureFullscreenEscape, toggleFullscreen } from './fullscreen.ts';
+import {
+  enterTouchFullscreen,
+  exitFullscreen,
+  FullscreenEscapeLock,
+  getFullscreenElement,
+  type KeyboardLockNavigatorLike,
+  shouldCaptureFullscreenEscape,
+  toggleFullscreen,
+} from './fullscreen.ts';
 import {
   type PlayLayoutChoice,
   type SkinEffectsLevel,
@@ -999,7 +1008,9 @@ class PlayerWebDemoApp {
    * Double-click the Pixi canvas to toggle the demo shell into (and out of) fullscreen.
    * Escape while fullscreen is consumed here so the active scene's Esc handler — quit play,
    * dismiss result, close a select folder — does not fire on the same keypress that leaves
-   * fullscreen.
+   * fullscreen. Where the browser has Keyboard Lock (Chrome / Edge), Escape is locked while
+   * fullscreen instead: a short press reaches the scene as it does windowed and the browser
+   * leaves fullscreen on a long press, so nothing is consumed.
    */
   private wireCanvasFullscreen(): void {
     const canvas = this.sceneHost.app.canvas;
@@ -1022,10 +1033,18 @@ class PlayerWebDemoApp {
       if (lastPointerType !== 'mouse' && this.elements.shell.classList.contains('in-gameplay')) return;
       void toggleFullscreen(this.elements.shell);
     });
+    // Every way in or out of fullscreen (double-click, the Debug Menu toggle, the phone's first tap, the browser's own
+    // exit) fires `fullscreenchange`, so the lock follows it from here.
+    const escapeLock = new FullscreenEscapeLock(navigator as KeyboardLockNavigatorLike, (error) =>
+      fullscreenLog.debug('Escape key lock refused', error),
+    );
+    const syncEscapeLock = (): void => void escapeLock.sync(getFullscreenElement() !== null);
+    document.addEventListener('fullscreenchange', syncEscapeLock);
+    document.addEventListener('webkitfullscreenchange', syncEscapeLock);
     window.addEventListener(
       'keydown',
       (event) => {
-        if (!shouldCaptureFullscreenEscape(event)) return;
+        if (!shouldCaptureFullscreenEscape(event, document, escapeLock.isLocked())) return;
         event.preventDefault();
         event.stopImmediatePropagation();
         void exitFullscreen();
