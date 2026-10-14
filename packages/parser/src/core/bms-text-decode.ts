@@ -29,6 +29,9 @@ const HEADER_LINE = /^#([A-Z][A-Z0-9_]*)(?:\s+(.+))?$/i;
 const BMS_KNOWN_COMMAND_LINE =
   /^#(?:TITLE|SUBTITLE|ARTIST|GENRE|COMMENT|BPM|PLAYLEVEL|RANK|TOTAL|DIFFICULTY|STAGEFILE|BACKBMP|BANNER|PREVIEW|LNTYPE|LNMODE|LNOBJ|VOLWAV|DEFEXRANK|PLAYER|PATH_WAV|BASEBPM|STP|OPTION|WAVCMD|POORBGA|VIDEOFILE|MIDIFILE|MATERIALS|DIVIDEPROP|CHARSET|WAV[0-9A-Z]{2}|BMP[0-9A-Z]{2}|BPM[0-9A-Z]{2}|STOP[0-9A-Z]{2}|TEXT[0-9A-Z]{2}|EXRANK[0-9A-Z]{2}|ARGB[0-9A-Z]{2}|CHANGEOPTION[0-9A-Z]{2}|EXWAV[0-9A-Z]{2}|EXBMP[0-9A-Z]{2}|BGA[0-9A-Z]{2}|SCROLL[0-9A-Z]{2}|SPEED[0-9A-Z]{2}|SWBGA[0-9A-Z]{2}|RANDOM\s+\d+|SETRANDOM\s+\d+|ENDRANDOM|IF\s+\d+|ELSEIF\s+\d+|ELSE|ENDIF|SWITCH\s+\d+|SETSWITCH\s+\d+|CASE\s+\d+|DEF|SKIP|ENDSW|[0-9]{3}[0-9A-Z]{2}\s*:)/i;
 
+/** How much of the file the `#CHARSET` scan reads: `extractDeclaredBmsCharset` looks at the first 4 KB only. */
+const CHARSET_SCAN_BYTES = 4096;
+
 export interface DecodedBmsText {
   encoding: 'utf8' | 'shift_jis' | 'euc-jp' | 'euc-kr' | 'utf-16le' | 'utf-16be' | 'iso-8859-1';
   text: string;
@@ -58,7 +61,7 @@ export function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
   // it. The web `TextDecoder` accepts the same canonical encoding names `canonicalizeBmsCharset` produces
   // (utf-8 / shift_jis / euc-jp / utf-16le / utf-16be / iso-8859-1), so we can route directly through it without an
   // intermediate library.
-  const declaredCharset = extractDeclaredBmsCharset(decodeLatin1Text(buffer));
+  const declaredCharset = extractDeclaredBmsCharset(decodeLatin1Text(buffer.subarray(0, CHARSET_SCAN_BYTES)));
   if (declaredCharset) {
     const decoded = decodeWithDeclaredCharset(buffer, declaredCharset);
     if (decoded) return decoded;
@@ -167,115 +170,142 @@ function decodeWithDeclaredCharset(buffer: Uint8Array, charset: string): Decoded
   }
 }
 
-function decodeByScoring(buffer: Uint8Array): DecodedBmsText {
-  const candidates: Array<{ encoding: DecodedBmsText['encoding']; label: string; bias: number }> = [
-    { encoding: 'shift_jis', label: 'shift_jis', bias: 5 },
-    { encoding: 'utf8', label: 'utf-8', bias: 4 },
-    { encoding: 'euc-jp', label: 'euc-jp', bias: 3 },
-    { encoding: 'iso-8859-1', label: 'iso-8859-1', bias: -5 },
-  ];
+const SCORING_CANDIDATES: ReadonlyArray<{ encoding: DecodedBmsText['encoding']; label: string; bias: number }> = [
+  { encoding: 'shift_jis', label: 'shift_jis', bias: 5 },
+  { encoding: 'utf8', label: 'utf-8', bias: 4 },
+  { encoding: 'euc-jp', label: 'euc-jp', bias: 3 },
+  { encoding: 'iso-8859-1', label: 'iso-8859-1', bias: -5 },
+];
 
-  let best: DecodedBmsText | undefined;
-  let bestScore = Number.NEGATIVE_INFINITY;
-  for (const candidate of candidates) {
-    let text: string;
-    try {
-      text = new TextDecoder(candidate.label).decode(buffer);
-    } catch {
-      continue;
-    }
-    const score = scoreDecodedBmsText(text, candidate.bias);
-    if (score > bestScore) {
-      bestScore = score;
-      best = {
-        encoding: candidate.encoding,
-        text,
-      };
-    }
-  }
-
-  return (
-    best ?? {
-      encoding: 'utf8',
-      text: decodeUtf8Text(buffer),
-    }
-  );
-}
-
-function scoreDecodedBmsText(text: string, bias: number): number {
-  let score = bias;
-  if (text.length === 0) {
-    return Number.NEGATIVE_INFINITY;
-  }
-
-  const textStats = collectTextStatistics(text);
-  score -= textStats.replacementCount * 120;
-  score -= textStats.nullCount * 80;
-  score -= textStats.lowControlCount * 8;
-
-  const lines = text.split(/\r?\n/);
-  let hashLines = 0;
-  let objectLines = 0;
-  let headerLines = 0;
-  let knownCommandLines = 0;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('#')) {
-      continue;
-    }
-
-    hashLines += 1;
-    if (OBJECT_DATA_LINE.test(trimmed)) {
-      objectLines += 1;
-    } else if (HEADER_LINE.test(trimmed)) {
-      headerLines += 1;
-    }
-    if (BMS_KNOWN_COMMAND_LINE.test(trimmed)) {
-      knownCommandLines += 1;
-    }
-  }
-
-  score += hashLines * 0.4;
-  score += objectLines * 14;
-  score += headerLines * 8;
-  score += knownCommandLines * 3;
-
-  const printableRatio = textStats.printableCount / Math.max(1, text.length);
-  score += printableRatio * 20;
-
-  score += Math.min(40, textStats.japaneseCount * 0.02);
-
-  return score;
-}
-
-function collectTextStatistics(text: string): {
+/** What a text's score is made of: character and line counts, summed over any split of the text into lines. */
+interface ScoreCounts {
+  length: number;
   replacementCount: number;
   nullCount: number;
   lowControlCount: number;
   printableCount: number;
   japaneseCount: number;
-} {
-  let replacementCount = 0;
-  let nullCount = 0;
-  let lowControlCount = 0;
-  let printableCount = 0;
-  let japaneseCount = 0;
+  hashLines: number;
+  objectLines: number;
+  headerLines: number;
+  knownCommandLines: number;
+}
 
-  for (let index = 0; index < text.length; index += 1) {
-    const code = text.charCodeAt(index);
+function emptyScoreCounts(): ScoreCounts {
+  return {
+    length: 0,
+    replacementCount: 0,
+    nullCount: 0,
+    lowControlCount: 0,
+    printableCount: 0,
+    japaneseCount: 0,
+    hashLines: 0,
+    objectLines: 0,
+    headerLines: 0,
+    knownCommandLines: 0,
+  };
+}
+
+/**
+ * Picks the candidate encoding whose decoded text scores highest. Every candidate decodes a byte below `0x80` to the
+ * same character and never swallows one into a multibyte sequence, and a line feed ends any pending sequence, so a
+ * line made only of ASCII bytes reads the same under all of them: those lines are counted once, and only the lines
+ * holding a byte `>= 0x80` are decoded and counted per candidate. The counts are integers summed exactly, and the score
+ * is formed from them in the same order as before, so the choice is the one a whole-text pass would make.
+ */
+function decodeByScoring(buffer: Uint8Array): DecodedBmsText {
+  // Latin-1 maps each byte to the code point of the same value, so an ASCII line reads straight out of it.
+  const latin1 = decodeLatin1Text(buffer);
+  const shared = emptyScoreCounts();
+  const mixedLines: Uint8Array[] = [];
+  let lineStart = 0;
+  let lineHasHighByte = false;
+  const endLine = (end: number): void => {
+    if (lineHasHighByte) {
+      mixedLines.push(buffer.subarray(lineStart, end));
+    } else {
+      countScoredLine(shared, latin1.slice(lineStart, end));
+    }
+  };
+  for (let index = 0; index < buffer.length; index += 1) {
+    const byte = buffer[index]!;
+    if (byte === 0x0a) {
+      endLine(index);
+      // The line feed itself: one printable character in every candidate's text.
+      shared.length += 1;
+      shared.printableCount += 1;
+      lineStart = index + 1;
+      lineHasHighByte = false;
+    } else if (byte >= 0x80) {
+      lineHasHighByte = true;
+    }
+  }
+  endLine(buffer.length);
+
+  // The mixed lines, rejoined with line feeds: decoding them in one call reads each line as the whole text does.
+  let mixedLength = 0;
+  for (const line of mixedLines) {
+    mixedLength += line.length;
+  }
+  const mixed = new Uint8Array(mixedLength + Math.max(0, mixedLines.length - 1));
+  let offset = 0;
+  for (const [index, line] of mixedLines.entries()) {
+    if (index > 0) {
+      mixed[offset] = 0x0a;
+      offset += 1;
+    }
+    mixed.set(line, offset);
+    offset += line.length;
+  }
+
+  let best: { encoding: DecodedBmsText['encoding']; label: string } | undefined;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const candidate of SCORING_CANDIDATES) {
+    let decoded: string;
+    try {
+      // `ignoreBOM`: a BOM-looking sequence that starts a mixed line is not at the start of the file.
+      decoded = new TextDecoder(candidate.label, { ignoreBOM: true }).decode(mixed);
+    } catch {
+      continue;
+    }
+    const counts = { ...shared };
+    for (const line of decoded.split('\n')) {
+      countScoredLine(counts, line);
+    }
+    // The line feeds that rejoined the mixed lines are not in the file.
+    const joins = Math.max(0, mixedLines.length - 1);
+    counts.length -= joins;
+    counts.printableCount -= joins;
+    const score = scoreCounts(counts, candidate.bias);
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  }
+
+  if (best === undefined) {
+    return { encoding: 'utf8', text: decodeUtf8Text(buffer) };
+  }
+  return { encoding: best.encoding, text: new TextDecoder(best.label).decode(buffer) };
+}
+
+/** Adds one line (without its line feed) to `counts`: its characters, and how BMS-shaped it is. */
+function countScoredLine(counts: ScoreCounts, line: string): void {
+  counts.length += line.length;
+  for (let index = 0; index < line.length; index += 1) {
+    const code = line.charCodeAt(index);
     if (code === 0xfffd) {
-      replacementCount += 1;
+      counts.replacementCount += 1;
     }
     if (code === 0x0000) {
-      nullCount += 1;
+      counts.nullCount += 1;
     }
     if (
       (code >= 0x0001 && code <= 0x0008) ||
       (code >= 0x000b && code <= 0x000c) ||
       (code >= 0x000e && code <= 0x001f)
     ) {
-      lowControlCount += 1;
+      counts.lowControlCount += 1;
     }
     if (
       code === 0x000a ||
@@ -286,20 +316,49 @@ function collectTextStatistics(text: string): {
       (code >= 0x3000 && code <= 0x30ff) ||
       (code >= 0x3400 && code <= 0x9fff)
     ) {
-      printableCount += 1;
+      counts.printableCount += 1;
     }
     if ((code >= 0x3040 && code <= 0x30ff) || (code >= 0x3400 && code <= 0x9fff)) {
-      japaneseCount += 1;
+      counts.japaneseCount += 1;
     }
   }
 
-  return {
-    replacementCount,
-    nullCount,
-    lowControlCount,
-    printableCount,
-    japaneseCount,
-  };
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('#')) {
+    return;
+  }
+  counts.hashLines += 1;
+  if (OBJECT_DATA_LINE.test(trimmed)) {
+    counts.objectLines += 1;
+  } else if (HEADER_LINE.test(trimmed)) {
+    counts.headerLines += 1;
+  }
+  if (BMS_KNOWN_COMMAND_LINE.test(trimmed)) {
+    counts.knownCommandLines += 1;
+  }
+}
+
+function scoreCounts(counts: ScoreCounts, bias: number): number {
+  let score = bias;
+  if (counts.length === 0) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  score -= counts.replacementCount * 120;
+  score -= counts.nullCount * 80;
+  score -= counts.lowControlCount * 8;
+
+  score += counts.hashLines * 0.4;
+  score += counts.objectLines * 14;
+  score += counts.headerLines * 8;
+  score += counts.knownCommandLines * 3;
+
+  const printableRatio = counts.printableCount / Math.max(1, counts.length);
+  score += printableRatio * 20;
+
+  score += Math.min(40, counts.japaneseCount * 0.02);
+
+  return score;
 }
 
 function tryDecodeStrictUtf8(buffer: Uint8Array): string | undefined {
