@@ -529,10 +529,13 @@ export function normalizeObjectKey(value: string, base: 36 | 62 = 36): string {
     return normalizeObjectKeyBase62(value);
   }
   if (value.length === 2) {
-    const code0 = normalizeAsciiBase36CodeFast(value.charCodeAt(0));
-    const code1 = normalizeAsciiBase36CodeFast(value.charCodeAt(1));
+    const raw0 = value.charCodeAt(0);
+    const raw1 = value.charCodeAt(1);
+    const code0 = normalizeAsciiBase36CodeFast(raw0);
+    const code1 = normalizeAsciiBase36CodeFast(raw1);
     if (code0 >= 0 && code1 >= 0) {
-      return String.fromCharCode(code0, code1);
+      // Already normalized (the common case, called per event in every hot loop): no new string.
+      return code0 === raw0 && code1 === raw1 ? value : String.fromCharCode(code0, code1);
     }
   }
   if (value.length === 1) {
@@ -610,10 +613,13 @@ function normalizeObjectKeyBase62(value: string): string {
 
 export function normalizeChannel(value: string): string {
   if (value.length === 2) {
-    const code0 = normalizeAsciiBase36CodeFast(value.charCodeAt(0));
-    const code1 = normalizeAsciiBase36CodeFast(value.charCodeAt(1));
+    const raw0 = value.charCodeAt(0);
+    const raw1 = value.charCodeAt(1);
+    const code0 = normalizeAsciiBase36CodeFast(raw0);
+    const code1 = normalizeAsciiBase36CodeFast(raw1);
     if (code0 >= 0 && code1 >= 0) {
-      return String.fromCharCode(code0, code1);
+      // Already normalized (the common case, called per event in every hot loop): no new string.
+      return code0 === raw0 && code1 === raw1 ? value : String.fromCharCode(code0, code1);
     }
   }
   return normalizeObjectKey(value);
