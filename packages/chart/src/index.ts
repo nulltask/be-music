@@ -92,8 +92,10 @@ export {
 } from './note-rules.ts';
 
 export {
+  countScoredNotes,
   resolveChart,
   type ResolveChartOptions,
+  type ScoredNoteCount,
   type ResolvedChart,
   type ResolvedJudgeRank,
   type ResolvedTotal,
