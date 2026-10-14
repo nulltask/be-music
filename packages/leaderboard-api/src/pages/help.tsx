@@ -4,24 +4,7 @@ import { Lamp } from './components/basics.tsx';
 import { LAMP_STYLES, lampStyle, formatLnMode, RULESET_LABELS } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { meta, PAGE_CACHE, type PageContext } from './page.tsx';
-
-/** Where each part of the help lives, for the contents and for links from other pages (`/leaderboard/help#lamps`). */
-export const HELP_SECTIONS = [
-  { id: 'rows', title: 'Reading a play' },
-  { id: 'lamps', title: 'Clear lamps' },
-  { id: 'scores', title: 'EX-Score, rate and DJ LEVEL' },
-  { id: 'judgments', title: 'Judgments and BP' },
-  { id: 'rules', title: 'Scoring rules' },
-  { id: 'gauges', title: 'Gauges' },
-  { id: 'long-notes', title: 'Long notes' },
-  { id: 'filters', title: 'Ranking switches' },
-  { id: 'verification', title: 'Verification' },
-] as const;
-
-type HelpId = (typeof HELP_SECTIONS)[number]['id'];
-
-/** A link into the help, for the pages' own hints. */
-export const helpHref = (id: HelpId): string => `/leaderboard/help#${id}`;
+import { HELP_SECTIONS, type HelpId } from './help-topics.ts';
 
 function Section(props: { id: HelpId; children: Child }) {
   const title = HELP_SECTIONS.find((section) => section.id === props.id)!.title;

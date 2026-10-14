@@ -26,6 +26,7 @@ import {
 } from '../format.ts';
 import { ABOVE, Avatar, chartHref, Empty, LINK, playerHref, RowLink, scoreHref, Tag } from './basics.tsx';
 import { EntityIcon } from './entity-icon.tsx';
+import { HelpTip } from './help-tip.tsx';
 import { InfoButton, When } from './play-info.tsx';
 
 /** The frame of a list: a card whose rows are split by hairlines. */
@@ -376,7 +377,13 @@ export function ResultCards(props: {
   return (
     <section class="space-y-2" aria-labelledby="scored-with">
       <h2 id="scored-with" class="text-muted-foreground text-sm">
-        <abbr title={RULESET_MEANING}>Scored with</abbr> each set of rules
+        <span class="inline-flex items-center gap-0.5">
+          <abbr title={RULESET_MEANING}>Scored with</abbr> each set of rules
+          <HelpTip topic="rules" label="the rule sets">
+            Every play is scored under LR2, beatoraja and IIDX rules. “selected” is the one the pages show; “played
+            with” is the one the player played under.
+          </HelpTip>
+        </span>
       </h2>
       <div class="grid gap-3 sm:grid-cols-3">
         {results.map((result) => {

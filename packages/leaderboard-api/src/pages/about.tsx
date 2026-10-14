@@ -5,6 +5,45 @@ import { meta, PAGE_CACHE, type PageContext } from './page.tsx';
 
 const LINK = 'text-foreground underline underline-offset-4 hover:text-primary';
 
+/**
+ * What the Leaderboard does that other Internet Rankings do not, for the top of the page: each with the section below
+ * that tells it in full.
+ */
+const HIGHLIGHTS: ReadonlyArray<{ title: string; text: string; more: string }> = [
+  {
+    title: 'The server counts the score',
+    text: 'The player sends the key presses, not a score. The server replays them on the be-music engine and counts the result itself, so an edited number never reaches a ranking.',
+    more: 'scoring',
+  },
+  {
+    title: 'One play, three sets of rules',
+    text: 'Every play is scored under LR2, beatoraja and IIDX rules at once, so plays from any of them meet in one ranking, measured the same way.',
+    more: 'scoring',
+  },
+  {
+    title: 'Charts known by what they are',
+    text: 'A chart is identified by its notes and timing, every #RANDOM branch included, not by its file: re-saved and re-encoded copies share one ranking.',
+    more: 'charts',
+  },
+];
+
+/** The rest of what it does differently, one line each under the highlights. */
+const ALSO: ReadonlyArray<{ title: string; text: string; more: string }> = [
+  {
+    title: 'Checked charts',
+    text: 'a made-up chart is not listed until two players with a passkey play it.',
+    more: 'checks',
+  },
+  { title: 'Every play a replay', text: 'download any play log and watch it judged again.', more: 'replays' },
+  { title: 'No sign-up to start', text: 'play anonymously; a passkey keeps the account.', more: 'accounts' },
+  { title: 'Bests kept apart', text: 'best EX-Score, lamp and fewest misses, each from its own play.', more: 'bests' },
+  {
+    title: 'In the browser, in the open',
+    text: 'play and send from the browser; the API and the source are open.',
+    more: 'open',
+  },
+];
+
 /** One section of the page: a heading and its paragraphs or list. */
 function Section(props: { id: string; title: string; children: Child }) {
   return (
@@ -31,6 +70,32 @@ export function aboutPage(c: PageContext<'/leaderboard/about'>) {
       <PageHeader title="About" kind="about">
         Rankings for BMS charts played in be-music.
       </PageHeader>
+      <section aria-labelledby="different" class="space-y-3">
+        <h2 id="different" class="text-base font-semibold tracking-tight">
+          What sets it apart
+        </h2>
+        <ul class="grid gap-3 sm:grid-cols-3">
+          {HIGHLIGHTS.map((item) => (
+            <li class="card flex flex-col gap-2 px-4 py-4">
+              <h3 class="text-sm font-semibold">{item.title}</h3>
+              <p class="text-muted-foreground text-sm leading-relaxed">{item.text}</p>
+              <a class="text-foreground mt-auto pt-1 text-xs underline underline-offset-4" href={`#${item.more}`}>
+                More below
+              </a>
+            </li>
+          ))}
+        </ul>
+        <ul class="text-muted-foreground grid gap-x-6 gap-y-1.5 pt-2 text-sm sm:grid-cols-2">
+          {ALSO.map((item) => (
+            <li>
+              <a class="text-foreground underline-offset-4 hover:underline" href={`#${item.more}`}>
+                {item.title}
+              </a>{' '}
+              — {item.text}
+            </li>
+          ))}
+        </ul>
+      </section>
       <div class="space-y-8">
         <Section id="scoring" title="How a play is scored">
           <p>
@@ -90,10 +155,21 @@ export function aboutPage(c: PageContext<'/leaderboard/about'>) {
             that set it, so a best lamp from one play and a best score from another both count. Every play is kept.
           </p>
         </Section>
-        <Section id="beta" title="Beta">
+        <Section id="replays" title="Replays">
           <p>
-            The fingerprint (<code>bmfp0</code>) and the scoring rules are still version 0. While they settle, rankings
-            may be reset.
+            Every play is kept with its <strong>play log</strong>, not just the best ones. Download it from the play’s
+            page and drop it on the player to watch it again: it replays the same key presses on the same engine, so it
+            is judged exactly as it was.
+          </p>
+          <p>
+            Each play’s page also has a <strong>share card</strong>, an image of the result your browser draws for links
+            on social sites.
+          </p>
+        </Section>
+        <Section id="open" title="In the browser, in the open">
+          <p>
+            be-music runs in the browser: play a BMS folder you drop on it, and send the play from there. Nothing to
+            install.
           </p>
           <p>
             be-music is open source:{' '}
@@ -105,6 +181,12 @@ export function aboutPage(c: PageContext<'/leaderboard/about'>) {
               API
             </a>{' '}
             is open too.
+          </p>
+        </Section>
+        <Section id="beta" title="Beta">
+          <p>
+            The fingerprint (<code>bmfp0</code>) and the scoring rules are still version 0. While they settle, rankings
+            may be reset.
           </p>
         </Section>
       </div>

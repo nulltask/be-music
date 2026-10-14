@@ -6,10 +6,11 @@ import type { ExternalLink } from '../external.ts';
 import { lampStyle } from '../format.ts';
 import type { JudgeTotals } from '../stats.ts';
 import type { Distribution } from '../stats.ts';
+import { HelpTip } from './help-tip.tsx';
 import { Icon } from './icon.tsx';
 
 /** A titled block of details: label / value rows. */
-export function Details(props: { title: string; rows: Array<[string, Child]> }) {
+export function Details(props: { title: string; rows: Array<[Child, Child]> }) {
   return (
     <section class="card gap-4" data-size="sm">
       <header>
@@ -69,7 +70,14 @@ export function DistributionCard<Key extends number | string>(props: {
   return (
     <section class="card gap-4" data-size="sm">
       <header>
-        <h2>{props.title}</h2>
+        <h2 class="inline-flex items-center gap-0.5">
+          {props.title}
+          <HelpTip topic={props.kind === 'lamp' ? 'lamps' : 'scores'} label={props.title}>
+            {props.kind === 'lamp'
+              ? 'The best lamp each play reached, lowest first; each ruleset tops out at its own lamp.'
+              : 'The EX-Score rate in ninths: AAA from 88.89%, AA from 77.78%, down to F.'}
+          </HelpTip>
+        </h2>
         <p>{props.description}</p>
       </header>
       <div class="space-y-3 px-4">
@@ -177,7 +185,13 @@ export function JudgeTotalsCard(props: { judges: JudgeTotals; ruleset: string })
   return (
     <section class="card gap-4" data-size="sm">
       <header>
-        <h2>Judgments</h2>
+        <h2 class="inline-flex items-center gap-0.5">
+          Judgments
+          <HelpTip topic="judgments" label="Judgments">
+            PGREAT, GREAT and GOOD keep the combo; BAD and POOR break it. Empty POOR is a press with no note. BP counts
+            BAD, POOR and empty POOR.
+          </HelpTip>
+        </h2>
         <p>Every note of every play under {props.ruleset}.</p>
       </header>
       <div class="space-y-3 px-4">
