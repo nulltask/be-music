@@ -136,6 +136,7 @@ import demoPackageJson from '../package.json' with { type: 'json' };
 const dropLog = logger('drop');
 const recordLog = logger('record');
 const gameplayLog = logger('gameplay');
+const resolutionLog = logger('render-resolution');
 
 /** This app as the recorder of its play-logs (`recorder` in `*.bmplay.json`); the engine adds its own version. */
 const PLAYLOG_RECORDER: Omit<PlaylogRecorderInfo, 'engine'> = {
@@ -190,6 +191,7 @@ import {
   type RecordingDeps,
 } from './recording-controller.ts';
 import {
+  benchmarkRenderResolution,
   nearestRenderResolution,
   readStoredRenderResolution,
   renderResolutionLabel,
@@ -1317,19 +1319,63 @@ class PlayerWebDemoApp {
       });
     // Canvas pixels per CSS pixel, 1× up to the display's ratio. Lower trades sharpness for fill-rate (tablets drop
     // under 30 fps at 2×); applies from the next frame. `?resolution=` in the URL overrides it until a pick here.
-    skin
+    const resolutionSteps = renderResolutionSteps(window.devicePixelRatio || 1);
+    const resolutionPicker = skin
       .add(
         this.guiState,
         'renderResolution',
-        Object.fromEntries(
-          renderResolutionSteps(window.devicePixelRatio || 1).map((value) => [renderResolutionLabel(value), value]),
-        ),
+        Object.fromEntries(resolutionSteps.map((value) => [renderResolutionLabel(value), value])),
       )
       .name('Render resolution')
       .onChange((value: number) => {
         storeRenderResolution(value);
         this.sceneHost.setResolution(value);
       });
+    // Measures the frame rate at each resolution on whatever screen is showing and keeps the highest that holds it.
+    const AUTO_DETECT_LABEL = 'Auto-detect resolution';
+    let detecting = false;
+    const autoDetect = skin
+      .add(
+        {
+          detect: async () => {
+            if (detecting || resolutionSteps.length < 2) return;
+            detecting = true;
+            autoDetect.disable();
+            resolutionPicker.disable();
+            try {
+              const result = await benchmarkRenderResolution({
+                steps: resolutionSteps,
+                apply: (value) => this.sceneHost.setResolution(value),
+                nextFrame: () => new Promise((resolve) => requestAnimationFrame(resolve)),
+                onStep: (value) => autoDetect.name(`Measuring ${renderResolutionLabel(value)}…`),
+              });
+              this.guiState.renderResolution = result.chosen;
+              storeRenderResolution(result.chosen);
+              resolutionPicker.updateDisplay();
+              resolutionLog.info('picked', {
+                chosen: result.chosen,
+                baselineMs: result.baseline,
+                results: result.results.map(
+                  ({ resolution, times }) =>
+                    `${resolution}×: p50 ${times.p50.toFixed(1)} ms, p90 ${times.p90.toFixed(1)} ms`,
+                ),
+              });
+              autoDetect.name(`${AUTO_DETECT_LABEL} (picked ${renderResolutionLabel(result.chosen)})`);
+            } catch (error) {
+              resolutionLog.warn('auto-detect failed', error);
+              this.sceneHost.setResolution(this.guiState.renderResolution);
+              autoDetect.name(AUTO_DETECT_LABEL);
+            } finally {
+              detecting = false;
+              autoDetect.enable();
+              resolutionPicker.enable();
+            }
+          },
+        },
+        'detect',
+      )
+      .name(AUTO_DETECT_LABEL);
+    if (resolutionSteps.length < 2) autoDetect.hide();
     // Auto picks the touch layout on phones / tablets; applies from the next play.
     skin
       .add(this.guiState, 'playLayout', { Auto: 'auto', Desktop: 'standard', Touch: 'touch' })
