@@ -29,7 +29,7 @@ export async function topPage(c: PageContext) {
   c.header('cache-control', PAGE_CACHE);
   const t = pageMessages(c);
   return c.html(
-    <Layout meta={meta(c, t.latest.title, t.latest.description, [{ label: t.latest.title, kind: 'latest' }])}>
+    <Layout meta={meta(c, t.latest.title, t.latest.description)}>
       <PageHeader title={t.latest.title} kind="latest">
         <span class="inline-flex items-center gap-0.5">
           {t.latest.lead(t.rules.name(RULESET_LABELS[ruleset] ?? ruleset))}
