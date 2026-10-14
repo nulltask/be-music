@@ -11,7 +11,8 @@ import { EntityIcon } from './components/entity-icon.tsx';
 import { chartsetHref, Filters, LocalTime, SectionHeading, Segmented, Tag, Toggle } from './components/basics.tsx';
 import { loadChart, loadChartAliases, loadChartsetOf, loadPlayInfos } from './data.ts';
 import { externalLinks, type ChartAlias } from './external.ts';
-import { chartTitle, difficultyName, formatJudgeRank, formatLaneMode, formatLnMode, rulesetName } from './format.ts';
+import { chartTitle, difficultyName, formatJudgeRank, formatLaneMode, RULESET_LABELS } from './format.ts';
+import { useMessages } from './i18n/index.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import {
   day,
@@ -21,6 +22,7 @@ import {
   notFound,
   orDash,
   PAGE_CACHE,
+  pageMessages,
   RANKING_LIMIT,
   withArtist,
   withQuery,
@@ -62,9 +64,11 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
   const title = chartTitle(found.title, chartFingerprint);
   const elsewhere = externalLinks(found, aliases, files);
   c.header('cache-control', PAGE_CACHE);
+  const t = pageMessages(c);
+  const rules = t.rules.name(RULESET_LABELS[ruleset] ?? ruleset);
   return c.html(
     <Layout
-      meta={meta(c, title, `${title} — ranking under ${rulesetName(ruleset)}, ${ranking.players} players.`, [
+      meta={meta(c, title, t.chart.description(title, rules, ranking.players), [
         ...chartsetCrumbs(filed),
         { label: title, kind: 'chart' },
       ])}
@@ -88,14 +92,14 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
             {difficultyName(found.difficulty) !== undefined ? ` ${difficultyName(found.difficulty)}` : ''} ·{' '}
           </span>
         ) : null}
-        {found.noteCount} notes · {everyone} player{everyone === 1 ? '' : 's'}
+        {t.count.notes(found.noteCount)} · {t.count.players(everyone)}
       </PageHeader>
       <Stats
         items={[
-          ['Players', stats.players],
-          ['Plays', stats.plays],
-          ['First played', day(stats.firstPlayedAt)],
-          ['Last played', day(stats.lastPlayedAt)],
+          [t.chart.stats.players, stats.players],
+          [t.chart.stats.plays, stats.plays],
+          [t.chart.stats.firstPlayed, day(stats.firstPlayedAt)],
+          [t.chart.stats.lastPlayed, day(stats.lastPlayedAt)],
         ]}
       />
       <section class="space-y-3" aria-labelledby="ranking">
@@ -103,31 +107,31 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
           id="ranking"
           note={
             everyPlay
-              ? `${'plays' in ranking ? ranking.plays : ranking.entries.length} plays`
-              : `${ranking.players} player${ranking.players === 1 ? '' : 's'}`
+              ? t.count.plays('plays' in ranking ? Number(ranking.plays) : ranking.entries.length)
+              : t.count.players(ranking.players)
           }
         >
-          Ranking
+          {t.chart.ranking}
         </SectionHeading>
         <Filters>
           <Toggle
             help="filters"
-            label="Every play"
-            description="List each play on its own row, so a player can appear more than once"
+            label={t.filters.everyPlay}
+            description={t.filters.everyPlayHelp}
             on={everyPlay}
             href={withQuery(c, 'every', everyPlay ? undefined : '1')}
           />
           <Toggle
             help="filters"
-            label="Assisted"
-            description="Plays with auto-scratch or a judge window override, ranked apart"
+            label={t.filters.assisted}
+            description={t.filters.assistedHelp}
             on={assisted}
             href={withQuery(c, 'assisted', assisted ? undefined : '1')}
           />
           <Toggle
             help="filters"
-            label="Anonymous players"
-            description="Include players who have not made a passkey yet"
+            label={t.filters.anonymous}
+            description={t.filters.anonymousHelp}
             on={includeAnonymous}
             href={withQuery(c, 'anonymous', includeAnonymous ? undefined : '1')}
           />
@@ -135,16 +139,15 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
         {files.length > 1 ? (
           <div class="flex flex-wrap items-center gap-3">
             <span class="text-muted-foreground inline-flex items-center gap-0.5 text-xs">
-              File
-              <HelpTip topic="filters" label="File">
-                One chart can come in several files (re-saves, re-encodes). Pick one to rank only its plays; the number
-                is its plays.
+              {t.filters.file}
+              <HelpTip topic="filters" label={t.filters.file}>
+                {t.filters.fileHelp}
               </HelpTip>
             </span>
             <Segmented
-              label="Chart file"
+              label={t.filters.chartFile}
               options={[
-                { label: 'All files', href: withQuery(c, 'file', undefined), current: fileSha256 === undefined },
+                { label: t.filters.allFiles, href: withQuery(c, 'file', undefined), current: fileSha256 === undefined },
                 ...files.map((file) => ({
                   label: (
                     <span class="inline-flex items-baseline gap-1.5">
@@ -154,7 +157,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
                   ),
                   href: withQuery(c, 'file', file.sha256),
                   current: file.sha256 === fileSha256,
-                  title: `SHA-256 ${file.sha256}${file.md5 !== null ? ` · MD5 ${file.md5}` : ''} · ${file.plays} play${file.plays === 1 ? '' : 's'}`,
+                  title: `SHA-256 ${file.sha256}${file.md5 !== null ? ` · MD5 ${file.md5}` : ''} · ${t.count.plays(file.plays)}`,
                 })),
               ]}
             />
@@ -169,16 +172,16 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
         />
       </section>
       <DistributionCard
-        title="Clear lamps"
-        description={`Best lamps of the players above, under ${rulesetName(ruleset)}.`}
+        title={t.chart.clearLamps}
+        description={t.chart.clearLampsLead(rules)}
         distribution={stats.lamps}
         kind="lamp"
       />
       <Details
-        title="Chart"
+        title={t.chart.details}
         rows={known([
           [
-            'Chartset',
+            t.chart.rows.chartset,
             filed === undefined ? (
               '-'
             ) : (
@@ -192,32 +195,35 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
             ),
           ],
           [
-            'Package',
-            found.packType === 'included' ? 'original' : found.packType === 'additional' ? 'add-on (差分)' : '-',
+            t.chart.rows.package,
+            found.packType === 'included' ? t.chart.original : found.packType === 'additional' ? t.chart.addOn : '-',
           ],
-          ['Genre', orDash(found.genre)],
-          ['Mode', formatLaneMode(found.laneMode)],
-          ['Notes', found.noteCount],
-          ['TOTAL', orDash(found.total)],
-          ['Judge rank', formatJudgeRank(found.judgeRank)],
+          [t.chart.rows.genre, orDash(found.genre)],
+          [t.chart.rows.mode, formatLaneMode(found.laneMode)],
+          [t.chart.rows.notes, found.noteCount],
+          [t.chart.rows.total, orDash(found.total)],
+          [t.chart.rows.judgeRank, formatJudgeRank(found.judgeRank)],
           [
             <span class="inline-flex items-center gap-0.5">
-              LN mode
-              <HelpTip topic="long-notes" label="LN mode">
-                How the chart's long notes are judged: LN judges the start, CN the release too, HCN also the hold.
+              {t.chart.rows.lnMode}
+              <HelpTip topic="long-notes" label={t.chart.rows.lnMode}>
+                {t.chart.rows.lnModeHelp}
               </HelpTip>
             </span>,
-            formatLnMode(found.lnMode),
+            found.lnMode === 1 || found.lnMode === 2 || found.lnMode === 3 ? t.lnModes[found.lnMode] : '-',
           ],
-          ['Format', found.sourceFormat === null ? '-' : found.sourceFormat.toUpperCase()],
+          [t.chart.rows.format, found.sourceFormat === null ? '-' : found.sourceFormat.toUpperCase()],
           [
-            '#RANDOM outcomes',
-            found.playFingerprints.length > 1 ? `${found.playFingerprints.length} seen` : 'none seen',
+            t.chart.rows.randomOutcomes,
+            found.playFingerprints.length > 1 ? t.chart.randomSeen(found.playFingerprints.length) : t.chart.noneSeen,
           ],
-          ['Fingerprint', <span class="font-mono text-xs">{chartFingerprint}</span>],
-          [files.length > 1 ? 'Files' : 'File', <ChartFilesList files={files} aliases={aliases} />],
-          ['First seen', <LocalTime at={found.createdAt.getTime()} />],
-          ['Listed', found.status === 'listed' ? 'yes' : 'not yet (two players with a passkey list a chart)'],
+          [t.chart.rows.fingerprint, <span class="font-mono text-xs">{chartFingerprint}</span>],
+          [
+            files.length > 1 ? t.chart.rows.files : t.chart.rows.file,
+            <ChartFilesList files={files} aliases={aliases} />,
+          ],
+          [t.chart.rows.firstSeen, <LocalTime at={found.createdAt.getTime()} />],
+          [t.chart.rows.listed, found.status === 'listed' ? t.chart.listedYes : t.chart.listedNo],
         ])}
       />
       <Elsewhere links={elsewhere} />
@@ -230,6 +236,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
  * reported for it. One chart fingerprint can cover several files.
  */
 function ChartFilesList(props: { files: ChartFile[]; aliases: ChartAlias[] }) {
+  const t = useMessages();
   const played = new Set(props.files.flatMap((file) => [file.sha256, file.md5]));
   const others = props.aliases.filter((alias) => !played.has(alias.hash));
   if (props.files.length === 0 && others.length === 0) return <>-</>;
@@ -239,9 +246,7 @@ function ChartFilesList(props: { files: ChartFile[]; aliases: ChartAlias[] }) {
         <li class="space-y-0.5">
           <div class="font-mono text-xs break-all">SHA-256 {file.sha256}</div>
           {file.md5 !== null ? <div class="font-mono text-xs break-all">MD5 {file.md5}</div> : null}
-          <div class="text-muted-foreground text-xs">
-            {file.plays} play{file.plays === 1 ? '' : 's'} by {file.players} player{file.players === 1 ? '' : 's'}
-          </div>
+          <div class="text-muted-foreground text-xs">{t.count.playsBy(file.plays, file.players)}</div>
         </li>
       ))}
       {others.map((alias) => (

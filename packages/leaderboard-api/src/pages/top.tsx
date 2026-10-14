@@ -5,9 +5,9 @@ import { isOn } from '../http/query.ts';
 import { RecentScoresList } from './components/lists.tsx';
 import { Filters, Toggle } from './components/basics.tsx';
 import { loadPlayInfos, loadRecentScores } from './data.ts';
-import { rulesetName } from './format.ts';
+import { RULESET_LABELS } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
-import { displayRuleset, meta, PAGE_CACHE, RECENT_LIMIT, withQuery, type PageContext } from './page.tsx';
+import { displayRuleset, meta, PAGE_CACHE, pageMessages, RECENT_LIMIT, withQuery, type PageContext } from './page.tsx';
 
 /**
  * Latest: every play by a player who is not anonymous, on any chart; a chart not listed yet carries a "new chart"
@@ -25,24 +25,22 @@ export async function topPage(c: PageContext) {
     includeUnlisted: true,
   });
   c.header('cache-control', PAGE_CACHE);
+  const t = pageMessages(c);
   return c.html(
-    <Layout
-      meta={meta(c, 'Latest', 'The latest plays on the be-music Leaderboard.', [{ label: 'Latest', kind: 'latest' }])}
-    >
-      <PageHeader title="Latest" kind="latest">
+    <Layout meta={meta(c, t.latest.title, t.latest.description, [{ label: t.latest.title, kind: 'latest' }])}>
+      <PageHeader title={t.latest.title} kind="latest">
         <span class="inline-flex items-center gap-0.5">
-          The latest plays, scored under {rulesetName(ruleset)}.
-          <HelpTip topic="rows" label="a play row">
-            Each row: the lamp's colour bar, the chart with its mode and level, the player, what the play changed on
-            their best, where it ranks, the rules it was played with, and its EX-Score with DJ LEVEL and rate.
+          {t.latest.lead(t.rules.name(RULESET_LABELS[ruleset] ?? ruleset))}
+          <HelpTip topic="rows" label={t.latest.rowsLabel}>
+            {t.latest.rowsHelp}
           </HelpTip>
         </span>
       </PageHeader>
       <Filters>
         <Toggle
           help="filters"
-          label="Anonymous players"
-          description="Include plays by players who have not made a passkey yet"
+          label={t.filters.anonymous}
+          description={t.filters.anonymousPlaysHelp}
           on={includeAnonymous}
           href={withQuery(c, 'anonymous', includeAnonymous ? undefined : '1')}
         />
@@ -54,11 +52,7 @@ export async function topPage(c: PageContext) {
           scores.map((entry) => entry.scoreId),
         )}
         showPlayer
-        empty={
-          includeAnonymous
-            ? 'No plays yet.'
-            : 'Plays show up once their player creates a passkey — turn on “Anonymous players” to see the rest.'
-        }
+        empty={includeAnonymous ? t.latest.empty : t.latest.emptyNamed}
       />
     </Layout>,
   );
