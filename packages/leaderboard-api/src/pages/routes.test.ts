@@ -59,6 +59,8 @@ describe('about and help pages', () => {
     const about = await page('/leaderboard/about');
     expect(about.status).toBe(200);
     expect(about.html).toContain('How a play is scored');
+    expect(about.html).toContain('What sets it apart');
+    expect(about.html).toContain('One play, three sets of rules');
     expect(about.html).toContain('href="https://github.com/nulltask/be-music"');
     expect((await page('/leaderboard')).html).toContain('href="/leaderboard/about"');
   });

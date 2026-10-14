@@ -5,6 +5,28 @@ import { meta, PAGE_CACHE, type PageContext } from './page.tsx';
 
 const LINK = 'text-foreground underline underline-offset-4 hover:text-primary';
 
+/**
+ * What the Leaderboard does that other Internet Rankings do not, for the top of the page: each with the section below
+ * that tells it in full.
+ */
+const HIGHLIGHTS: ReadonlyArray<{ title: string; text: string; more: string }> = [
+  {
+    title: 'The server counts the score',
+    text: 'The player sends the key presses, not a score. The server replays them on the be-music engine and counts the result itself, so an edited number never reaches a ranking.',
+    more: 'scoring',
+  },
+  {
+    title: 'One play, three sets of rules',
+    text: 'Every play is scored under LR2, beatoraja and IIDX rules at once, so plays from any of them meet in one ranking, measured the same way.',
+    more: 'scoring',
+  },
+  {
+    title: 'Charts known by what they are',
+    text: 'A chart is identified by its notes and timing, every #RANDOM branch included, not by its file: re-saved and re-encoded copies share one ranking.',
+    more: 'charts',
+  },
+];
+
 /** One section of the page: a heading and its paragraphs or list. */
 function Section(props: { id: string; title: string; children: Child }) {
   return (
@@ -31,6 +53,22 @@ export function aboutPage(c: PageContext<'/leaderboard/about'>) {
       <PageHeader title="About" kind="about">
         Rankings for BMS charts played in be-music.
       </PageHeader>
+      <section aria-labelledby="different" class="space-y-3">
+        <h2 id="different" class="text-base font-semibold tracking-tight">
+          What sets it apart
+        </h2>
+        <ul class="grid gap-3 sm:grid-cols-3">
+          {HIGHLIGHTS.map((item) => (
+            <li class="card flex flex-col gap-2 px-4 py-4">
+              <h3 class="text-sm font-semibold">{item.title}</h3>
+              <p class="text-muted-foreground text-sm leading-relaxed">{item.text}</p>
+              <a class="text-foreground mt-auto pt-1 text-xs underline underline-offset-4" href={`#${item.more}`}>
+                More below
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
       <div class="space-y-8">
         <Section id="scoring" title="How a play is scored">
           <p>
