@@ -24,6 +24,7 @@ import {
   formatPlayVariantLabel,
   resolveSongRowFacts,
   stageProgress,
+  selectListRows,
 } from '@be-music/skin-sdk';
 import {
   addHitArea,
@@ -32,6 +33,7 @@ import {
   type PixiSelectRenderer,
   type PixiSelectSkin,
   type SkinTextOptions,
+  fadeChildrenFrom,
 } from '../pixi-kit/index.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
@@ -394,7 +396,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     // Cursor bar: springs from the previous row to the focused one.
     const cursorAge = frame.nowMs - frame.cursorChangedAt;
     const cursorT = springEase(Math.min(1, Math.max(0, cursorAge / CURSOR_MS)), 2.6, 0.42);
-    const rowY = (index: number) => listTop + (index - frame.firstVisibleIndex) * rowHeight;
+    const rowY = (index: number) => listTop + (index - frame.firstVisibleIndex) * rowHeight - frame.listScroll;
     const fromIndex = this.previousSelected ?? frame.selectedIndex;
     const fromY = Math.max(listTop - rowHeight, Math.min(rowY(fromIndex), listTop + frame.visibleRows * rowHeight));
     const barY = fromY + (rowY(frame.selectedIndex) - fromY) * cursorT;
@@ -412,11 +414,12 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
       this.target = undefined;
     }
     let animating = cursorAge < CURSOR_MS;
-    for (let visibleIndex = 0; visibleIndex < frame.visibleRows; visibleIndex += 1) {
-      const entryIndex = frame.firstVisibleIndex + visibleIndex;
-      const entry = frame.entries[entryIndex];
-      if (!entry) break;
-      animating = this.renderRow(frame, rows, entry, entryIndex, visibleIndex, listWidth) || animating;
+    // Rows follow the list's pull (`frame.listScroll`); a row's labels fade where it slides past the window's edge.
+    for (const { entryIndex, slot, alpha } of selectListRows(frame, rowHeight)) {
+      const entry = frame.entries[entryIndex]!;
+      const from = frame.layer.children.length;
+      animating = this.renderRow(frame, rows, entry, entryIndex, slot, listWidth) || animating;
+      fadeChildrenFrom(frame.layer, from, alpha);
     }
     return animating;
   }
@@ -434,7 +437,11 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     const active = entryIndex === frame.selectedIndex;
     const song = entry.kind === 'song' ? entry.song : undefined;
     const folder = entry.kind === 'folder' ? entry.folder : undefined;
-    const introT = stageProgress(frame.nowMs - frame.sceneStartedAt, 100 + visibleIndex * INTRO_STAGGER_MS, 700);
+    const introT = stageProgress(
+      frame.nowMs - frame.sceneStartedAt,
+      100 + Math.max(0, visibleIndex) * INTRO_STAGGER_MS,
+      700,
+    );
     const x = listX;
     const alpha = Math.min(1, introT * 4);
     // Physics: rows drop into place from above and bounce on their rule.

@@ -262,8 +262,8 @@ class GameplayScreen {
 }
 
 /**
- * Select: the renderer's persistent back / front layers around a layer rebuilt whenever the select state changes (or
- * while the renderer asks for it). Hit areas declared during the rebuild are handed to the player on every frame.
+ * Select: the renderer's persistent back / front layers around a layer rebuilt whenever the select state changes, the
+ * list is pulled (`frame.listScroll`), or while the renderer asks for it. Hit areas declared during the rebuild are handed to the player on every frame.
  */
 class SelectScreen {
   private readonly renderer: PixiSelectRenderer;
@@ -272,6 +272,8 @@ class SelectScreen {
   /** Retires the previous rebuild a frame late, so unchanged labels keep their text textures. */
   private readonly disposer = new LaggedDisposer();
   private revision = -1;
+  /** `frame.listScroll` the layer was last built with: a drag moves it every frame without moving the revision. */
+  private listScroll = 0;
   private needsFrame = false;
   private hits: PixiHitArea[] = [];
 
@@ -281,8 +283,14 @@ class SelectScreen {
   }
 
   build(frame: BeMusicSelectFrame): Container {
-    if (frame.revision !== this.revision || this.needsFrame || frame.launchAt !== undefined) {
+    if (
+      frame.revision !== this.revision ||
+      frame.listScroll !== this.listScroll ||
+      this.needsFrame ||
+      frame.launchAt !== undefined
+    ) {
       this.revision = frame.revision;
+      this.listScroll = frame.listScroll;
       this.disposer.cycle(this.layer);
       // The Pixi renderer declares its click targets through `addHitArea`; they are replayed into `frame.hit` below.
       const pixiFrame: PixiSelectFrame = { ...frame, layer: this.layer };
