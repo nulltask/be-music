@@ -10,6 +10,7 @@
 // area are culled.
 
 import { Container, Sprite, type Texture } from 'pixi.js';
+import { findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import {
   normalizeBeatorajaDestinations,
   type BeatorajaImageElement,
@@ -182,9 +183,16 @@ export class BeatorajaMarkerLayer {
       // short-circuit picked only the FIRST prototype and painted it at every beat, so DP
       // 2P-side measure lines / BPM-change / STOP / time markers never rendered. The user-
       // reported symptom: "2P 側に小節線や BPM 変更線が表示されない" on DP charts.
+      // Under LR2's rules the beats (each list ascending) before `passedBeat` are gone, and once one draws above the lane
+      // top every later one does too: the walk starts past the first and stops at the second, instead of visiting every
+      // marker of the chart each frame.
+      const lr2 = window !== undefined && window.rules !== 'beatoraja';
+      const firstIndex = lr2 ? findFirstIndexNumberAtOrAfter(beats, passedBeat) : 0;
+      const stopsAtTop = lr2 && args.pixelsPerBeat > 0;
       for (const proto of kind) {
         if (proto.texture === undefined) continue;
-        for (const beat of beats) {
+        for (let beatIndex = firstIndex; beatIndex < beats.length; beatIndex += 1) {
+          const beat = beats[beatIndex]!;
           if (window?.rules === 'beatoraja') {
             if (isPastDrawWindow(window, beat)) break;
             if (secondsAt && !isDrawnAtTime(window, secondsAt(beat))) continue;
@@ -200,6 +208,7 @@ export class BeatorajaMarkerLayer {
           // (which for ModernChic is 12 px above the lane bottom, crossing through the note
           // head's middle).
           const y = scrollY + proto.bottomOffsetFromLaneBottomPixi;
+          if (stopsAtTop && y < args.laneTopY - 24) break;
           // Cull markers outside the lane area. Test against the OFFSET y so a marker that sits
           // well above the lane bottom (e.g., a hypothetical "ceiling marker") doesn't get
           // culled prematurely. 24-pixel slack matches the note layer's culling so markers
