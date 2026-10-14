@@ -44,8 +44,8 @@ import {
   collectStopChanges,
   collectTempoChanges,
   createTimingBuildContext,
-  createTimingResolverWithContext,
   parseStpStop,
+  type TimingResolver,
 } from './timing.ts';
 import {
   addRational,
@@ -411,11 +411,18 @@ function withEvents(context: ItemContext, events: BeMusicEvent[]): BeMusicJson {
   return { ...json, events, bms: { ...json.bms, lnType: context.lnType } };
 }
 
+/**
+ * The note resolver stamps each note with its time in seconds; the fingerprint reads positions only and never a time,
+ * so it hands the resolver this stand-in instead of building a BPM / STOP timing resolver for every lane set of every
+ * outcome.
+ */
+const NO_SECONDS = { beatToSeconds: () => 0 } as unknown as TimingResolver;
+
 function noteContext(json: BeMusicJson, freeZone: boolean): ResolvedNoteContext {
   const timingContext = createTimingBuildContext(json);
   return {
     json,
-    timing: createTimingResolverWithContext(json, timingContext),
+    timing: NO_SECONDS,
     beatResolver: timingContext.beatResolver,
     sortedEvents: timingContext.sortedEvents,
     idBase: resolveBmsBase(json),

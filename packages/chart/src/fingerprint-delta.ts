@@ -559,18 +559,47 @@ export function applyDelta(top: FlatItems, delta: ItemDelta): void {
   top.header = { ...top.header, ...delta.header };
 }
 
+/**
+ * The keys of a list `applyKeyed` returned, so the next delta applied to it (one per factor, `hoistCommon`) reuses them
+ * instead of keying every item of the chart again. The lists are never changed in place.
+ */
+const APPLIED_KEYS = new WeakMap<ReadonlyArray<unknown>, readonly string[]>();
+
 function applyKeyed<T>(
   list: ReadonlyArray<T>,
   key: (item: T) => string,
   remove: ReadonlyArray<Keyed<T>>,
   add: ReadonlyArray<Keyed<T>>,
 ): T[] {
-  const keyed = list.map((item) => ({ key: key(item), item }));
-  const kept = subtractKeyed(keyed, remove);
-  if (kept.length + remove.length !== keyed.length) {
+  const keys = APPLIED_KEYS.get(list) ?? list.map(key);
+  // `subtractKeyed`: each removed key takes out its earliest remaining item.
+  const counts = new Map<string, number>();
+  for (const entry of remove) {
+    counts.set(entry.key, (counts.get(entry.key) ?? 0) + 1);
+  }
+  const items: T[] = [];
+  const itemKeys: string[] = [];
+  let removed = 0;
+  for (let index = 0; index < list.length; index += 1) {
+    const itemKey = keys[index]!;
+    const count = counts.get(itemKey) ?? 0;
+    if (count > 0) {
+      counts.set(itemKey, count - 1);
+      removed += 1;
+    } else {
+      items.push(list[index]!);
+      itemKeys.push(itemKey);
+    }
+  }
+  if (removed !== remove.length) {
     throw new Error('fingerprint: a removed item is not present');
   }
-  return [...kept.map((entry) => entry.item), ...add.map((entry) => entry.item)];
+  for (const entry of add) {
+    items.push(entry.item);
+    itemKeys.push(entry.key);
+  }
+  APPLIED_KEYS.set(items, itemKeys);
+  return items;
 }
 
 function formatDeltaLists(lists: DeltaLists): FingerprintDeltaLists {
