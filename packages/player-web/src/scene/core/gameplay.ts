@@ -205,6 +205,7 @@ import {
   type TouchLaneChange,
 } from './touch-lanes.ts';
 import { logger } from '../../logger.ts';
+import { QUIT_HOLD_KEY_CODE, QuitHoldController } from '../quit-hold.ts';
 
 const log = logger('gameplay');
 
@@ -1602,6 +1603,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // filter mirrors this list so it doesn't also push duplicate `interrupt` / `toggle-pause` commands. Lane
     // input goes through the WebInputRuntime's own `keydown` listener to the engine's input bus.
     window.addEventListener('keydown', this.handleSharedEngineExitKey);
+    // Holding Backspace quits like Escape (`QuitHoldController`); the keyup / blur listeners end the hold.
+    window.addEventListener('keyup', this.handleQuitHoldKeyUp);
+    window.addEventListener('blur', this.cancelQuitHold);
     this.app.canvas.addEventListener('pointerdown', this.focus);
     // Touch play: fingers on the lanes press them. `touch-action: none` keeps the page from scrolling or zooming under
     // the fingers while the play is up.
@@ -1941,6 +1945,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.stopAnimationLoop();
     // Detach window-level event listeners so a stray keypress doesn't hit a disposed view.
     window.removeEventListener('keydown', this.handleSharedEngineExitKey);
+    window.removeEventListener('keyup', this.handleQuitHoldKeyUp);
+    window.removeEventListener('blur', this.cancelQuitHold);
+    this.quitHold.cancel();
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.focus);
       const canvas = this.host.app.canvas;
@@ -2937,6 +2944,20 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.app.canvas.focus();
   };
 
+  /** Holding Backspace for `QUIT_HOLD_THRESHOLD_MS` leaves the play the way Escape does. */
+  private readonly quitHold = new QuitHoldController({
+    onComplete: () => this.requestExit(),
+    now: () => performance.now(),
+  });
+
+  private readonly handleQuitHoldKeyUp = (event: KeyboardEvent): void => {
+    this.quitHold.handleKeyUp(event);
+  };
+
+  private readonly cancelQuitHold = (): void => {
+    this.quitHold.cancel();
+  };
+
   /**
    * Captures ESC / F5 in shared-engine mode so the LR2 `#FADEOUT` exit animation runs to completion BEFORE the
    * engine's `PlayerInterruptedError` flow disposes the audio session. Without this intercept, pushing
@@ -2950,6 +2971,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * have nothing audible to interrupt.
    */
   private readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => {
+    // Backspace first: its auto-repeat must still be `preventDefault`ed, which the repeat filter below would skip.
+    if (this.quitHold.handleKeyDown(event)) return;
     if (event.repeat) return;
     if (event.code === 'Escape') {
       event.preventDefault();
@@ -4981,6 +5004,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // routing the toggle through the view's `togglePause` keeps the view's `paused` flag, the audio bus's
         // suspend, the BGA video pause, and the engine's playback clock all on the same single entry-point.
         if (event.code === 'Escape' || event.code === 'F5' || event.code === 'Space') return true;
+        // Backspace is the view's hold-to-quit key (`QuitHoldController`), never a lane.
+        if (event.code === QUIT_HOLD_KEY_CODE) return true;
         if (event.code === 'ArrowUp' || event.code === 'ArrowDown') return true;
         return false;
       },

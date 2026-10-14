@@ -82,6 +82,7 @@ import { HISPEED_MAX, HISPEED_MIN } from '../gameplay-constants.ts';
 import { drainWebUiSignals } from '../../runtime/web-ui-runtime.ts';
 import { logger } from '../../logger.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
+import { QUIT_HOLD_KEY_CODE, QuitHoldController } from '../quit-hold.ts';
 
 const log = logger('beatoraja-gameplay');
 
@@ -511,6 +512,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', this.handleKeyDown);
+      // Holding Backspace quits like Escape (`QuitHoldController`); the keyup / blur listeners end the hold.
+      window.addEventListener('keyup', this.handleQuitHoldKeyUp);
+      window.addEventListener('blur', this.cancelQuitHold);
       window.addEventListener('wheel', this.handleWheel, { passive: false });
     }
 
@@ -522,7 +526,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       audio: this.options.audio,
       mode: this.options.mode,
       inputTarget: this.options.inputTarget,
-      shouldSkipKey: this.options.shouldSkipKey,
+      // Backspace is the scene's hold-to-quit key, never a lane.
+      shouldSkipKey: (event) => event.code === QUIT_HOLD_KEY_CODE || (this.options.shouldSkipKey?.(event) ?? false),
       // Forward the chart-filename extension so the engine's `resolveLaneMode` picks the right
       // binding family (PMS / BME / BMS). Mirrors LR2 `PixiGameplayView`'s identical wiring at
       // `scene/lr2/gameplay.ts:1700`. Without this a `#PLAYER 1` PMS chart that doesn't use channel 17
@@ -622,8 +627,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.tickerHandle = undefined;
     if (typeof window !== 'undefined') {
       window.removeEventListener('keydown', this.handleKeyDown);
+      window.removeEventListener('keyup', this.handleQuitHoldKeyUp);
+      window.removeEventListener('blur', this.cancelQuitHold);
       window.removeEventListener('wheel', this.handleWheel);
     }
+    this.quitHold.cancel();
     this.host = undefined;
   }
 
@@ -1145,7 +1153,22 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.backdrop.clear().rect(0, 0, width, height).fill(0x000000);
   }
 
+  /** Holding Backspace for `QUIT_HOLD_THRESHOLD_MS` leaves the play the way Escape does. */
+  private readonly quitHold = new QuitHoldController({
+    onComplete: () => this.requestExit(),
+    now: () => performance.now(),
+  });
+
+  private readonly handleQuitHoldKeyUp = (event: KeyboardEvent): void => {
+    this.quitHold.handleKeyUp(event);
+  };
+
+  private readonly cancelQuitHold = (): void => {
+    this.quitHold.cancel();
+  };
+
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (this.quitHold.handleKeyDown(event)) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       this.requestExit();
