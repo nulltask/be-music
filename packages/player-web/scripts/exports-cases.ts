@@ -826,6 +826,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveRendererPreference('?renderer=webgl');
     },
   });
+  define('player-web.resolveRenderResolution', {
+    run: () => {
+      playerWebCoreApi.resolveRenderResolution(2, '?resolution=1.5');
+    },
+  });
   // Both `renderDefaultGameplayFrame` (canonical, added in 94d425e) and its backwards-compatibility alias
   // `renderFallbackLr2Frame` ultimately construct Pixi v8 `Text` objects whose layout measurement reaches for
   // `document.createElement('canvas')`. The bench harness runs under raw Node so `document` is undefined and

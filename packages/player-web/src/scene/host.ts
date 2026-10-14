@@ -130,8 +130,8 @@ export class PixiSceneHost {
       autoDensity: true,
       // Render at the display's full devicePixelRatio so vector chrome and text land on real device pixels. (This
       // used to be capped at 2× to save fill-rate on 3× displays, but the built-in skins' vector shapes and text then
-      // rendered visibly soft there.)
-      resolution: globalThis.devicePixelRatio || 1,
+      // rendered visibly soft there.) `?resolution=` caps it, trading that sharpness for fill-rate on slow GPUs.
+      resolution: resolveRenderResolution(globalThis.devicePixelRatio || 1),
       roundPixels: true,
       // Force the discrete GPU on hybrid systems (every modern laptop with switchable graphics). Rhythm-game
       // input-to-display latency is critical, and the integrated-GPU path adds variable frame-time on top of the
@@ -344,6 +344,26 @@ export function resolveRendererPreference(rawSearch?: string): 'webgl' | 'webgpu
   const flag = params.get('renderer');
   if (flag === 'webgl') return 'webgl';
   return 'webgpu';
+}
+
+/** Lowest render resolution `?resolution=` may ask for. */
+const MIN_RENDER_RESOLUTION = 0.5;
+
+/**
+ * The render resolution (canvas pixels per CSS pixel) for a display of `devicePixelRatio`: the display's own ratio,
+ * capped by `?resolution=<number>` (e.g. `1` or `1.5`) from `window.location.search` when given. The cap never raises
+ * the ratio, and goes no lower than 0.5; anything that isn't a positive number is ignored. Every surface follows the
+ * renderer's resolution, so this sets the pixel count the GPU fills each frame.
+ */
+export function resolveRenderResolution(devicePixelRatio: number, rawSearch?: string): number {
+  const native = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const search =
+    rawSearch ??
+    (typeof globalThis !== 'undefined' && typeof globalThis.location !== 'undefined' ? globalThis.location.search : '');
+  const raw = search ? new URLSearchParams(search).get('resolution') : null;
+  const cap = raw === null || raw.trim() === '' ? Number.NaN : Number(raw);
+  if (!Number.isFinite(cap) || cap <= 0) return native;
+  return Math.min(native, Math.max(MIN_RENDER_RESOLUTION, cap));
 }
 
 /**
