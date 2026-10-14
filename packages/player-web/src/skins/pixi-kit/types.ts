@@ -28,6 +28,11 @@ export interface PixiSkinDefinition extends Omit<
   readonly gameplay: PixiGameplaySkin;
   readonly select: PixiSelectSkin;
   readonly result: PixiResultSkin;
+  /**
+   * The skin's GPU passes or shaders are GLSL only. Under a player rendering with WebGPU it then draws on its own WebGL
+   * canvas, uploaded every frame, instead of through the player's renderer.
+   */
+  readonly requiresWebGL?: boolean;
 }
 
 /** What {@link PixiGameplaySkin.renderChrome} receives: its layers and pools, the runtime values, and the layout. */
