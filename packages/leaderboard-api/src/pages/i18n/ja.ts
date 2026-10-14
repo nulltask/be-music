@@ -8,7 +8,6 @@ export const ja: Messages = {
   locale: 'ja',
   site: {
     name: 'be-music Leaderboard',
-    leaderboard: 'Leaderboard',
     previewAlt: 'be-music Leaderboard: BMS プレイヤーのためのランキング、リプレイ、ライバル',
   },
   nav: {

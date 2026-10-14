@@ -10,7 +10,6 @@ export const en = {
   locale: 'en',
   site: {
     name: 'be-music Leaderboard',
-    leaderboard: 'Leaderboard',
     previewAlt: 'be-music Leaderboard: rankings, replays and rivals for BMS players',
   },
   nav: {
