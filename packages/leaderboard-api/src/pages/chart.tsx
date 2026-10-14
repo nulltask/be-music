@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import { HelpTip } from './components/help-tip.tsx';
 import type { Child } from 'hono/jsx';
 import { openDatabase } from '../db/client.ts';
 import { isOn } from '../http/query.ts';
@@ -110,18 +111,21 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
         </SectionHeading>
         <Filters>
           <Toggle
+            help="filters"
             label="Every play"
             description="List each play on its own row, so a player can appear more than once"
             on={everyPlay}
             href={withQuery(c, 'every', everyPlay ? undefined : '1')}
           />
           <Toggle
+            help="filters"
             label="Assisted"
             description="Plays with auto-scratch or a judge window override, ranked apart"
             on={assisted}
             href={withQuery(c, 'assisted', assisted ? undefined : '1')}
           />
           <Toggle
+            help="filters"
             label="Anonymous players"
             description="Include players who have not made a passkey yet"
             on={includeAnonymous}
@@ -130,7 +134,13 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
         </Filters>
         {files.length > 1 ? (
           <div class="flex flex-wrap items-center gap-3">
-            <span class="text-muted-foreground text-xs">File</span>
+            <span class="text-muted-foreground inline-flex items-center gap-0.5 text-xs">
+              File
+              <HelpTip topic="filters" label="File">
+                One chart can come in several files (re-saves, re-encodes). Pick one to rank only its plays; the number is
+                its plays.
+              </HelpTip>
+            </span>
             <Segmented
               label="Chart file"
               options={[
@@ -190,7 +200,15 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
           ['Notes', found.noteCount],
           ['TOTAL', orDash(found.total)],
           ['Judge rank', formatJudgeRank(found.judgeRank)],
-          ['LN mode', formatLnMode(found.lnMode)],
+          [
+            <span class="inline-flex items-center gap-0.5">
+              LN mode
+              <HelpTip topic="long-notes" label="LN mode">
+                How the chart's long notes are judged: LN judges the start, CN the release too, HCN also the hold.
+              </HelpTip>
+            </span>,
+            formatLnMode(found.lnMode),
+          ],
           ['Format', found.sourceFormat === null ? '-' : found.sourceFormat.toUpperCase()],
           [
             '#RANDOM outcomes',

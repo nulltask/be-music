@@ -40,7 +40,7 @@ export const chartsetCrumbs = (filed: { id: string; title: string } | undefined)
   filed === undefined ? [] : [{ label: filed.title, href: chartsetHref(filed.id), kind: 'chartset' }];
 
 /** Detail rows without the ones the play log left empty. */
-export const known = (rows: Array<[string, Child]>): Array<[string, Child]> =>
+export const known = (rows: Array<[Child, Child]>): Array<[Child, Child]> =>
   rows.filter(([, value]) => value !== '-');
 
 /** A text value a play log may have left out. */
