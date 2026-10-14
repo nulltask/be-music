@@ -26,6 +26,8 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
   description:
     'A cosmic particle world in ember and gold with electric blue and magenta accents, where the space flies, flocks, and bursts with the music.',
   homepage: 'https://github.com/nulltask/be-music',
+  // The charge cloud steps its particles with GLSL programs.
+  requiresWebGL: true,
   license: 'MIT',
   fontLoads: ['400 16px "Michroma"', '300 12px "M PLUS 1p"', '500 12px "M PLUS 1p"'],
   stage: wideStage,
