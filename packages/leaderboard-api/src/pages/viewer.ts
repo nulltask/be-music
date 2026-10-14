@@ -4,8 +4,8 @@ import type { AppEnv } from '../app.ts';
 import { createAuth } from '../auth.ts';
 import { openDatabase } from '../db/client.ts';
 
-/** Who is looking at a page: their account, or null when signed out. */
-export type Viewer = AccountSummary;
+/** Who is looking at a page: their account (and its id, to show them what only they may see), or null when signed out. */
+export type Viewer = AccountSummary & { userId: string };
 
 /** Paths that never show the viewer (assets, icons, the manifest): no session lookup for them. */
 function needsViewer(path: string): boolean {
@@ -25,7 +25,10 @@ export const loadViewer: MiddlewareHandler<AppEnv> = async (c, next) => {
   c.set('viewer', null);
   if (needsViewer(c.req.path)) {
     const session = await createAuth(c.env, new URL(c.req.url).origin).api.getSession({ headers: c.req.raw.headers });
-    if (session !== null) c.set('viewer', (await loadAccount(openDatabase(c.env.DB), session.user.id)) ?? null);
+    if (session !== null) {
+      const account = await loadAccount(openDatabase(c.env.DB), session.user.id);
+      c.set('viewer', account === undefined ? null : { ...account, userId: session.user.id });
+    }
   }
   await next();
 };

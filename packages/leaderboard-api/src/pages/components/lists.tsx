@@ -260,6 +260,11 @@ export function RecentScoresList(props: {
                   <span class="truncate">{title}</span>
                 </a>
                 <ChartLevel laneMode={entry.laneMode} playLevel={entry.playLevel} difficulty={entry.difficulty} />
+                {entry.chartListed ? null : (
+                  <span class="badge shrink-0" data-variant="secondary" title={t.lists.notListedHelp}>
+                    {t.lists.notListed}
+                  </span>
+                )}
               </>
             }
             details={[

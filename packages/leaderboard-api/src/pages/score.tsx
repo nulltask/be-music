@@ -133,6 +133,8 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
       { label: t.score.crumb(player.displayName), kind: 'score' as const },
     ]),
     image: { path: image, alt: card !== undefined ? shareText(card) : description },
+    // A play of a chart not listed yet stays out of search engines too.
+    noindex: detail.chart.status !== 'listed',
   };
   return c.html(
     <Layout meta={pageMeta}>

@@ -1,4 +1,4 @@
-import { and, asc, countDistinct, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, countDistinct, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { avatarUrl } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import type { RulesetId } from '../rulesets.ts';
@@ -16,6 +16,8 @@ export interface RecentScore {
   title: string | null;
   artist: string | null;
   laneMode: string | null;
+  /** Whether the chart is listed; a play of one that is not reaches lists only for its own player. */
+  chartListed: boolean;
   playLevel: string | null;
   difficulty: number | null;
   playedRuleset: RulesetId;
@@ -46,6 +48,11 @@ export interface RecentScoresFilter {
   includeAnonymous: boolean;
   /** Include charts not listed yet (fewer than two players). Off by default (docs/leaderboard.md section 7). */
   includeUnlisted: boolean;
+  /**
+   * A player who also sees their own plays of charts not listed yet, and while their account is anonymous (the
+   * signed-in viewer), while everyone else's stay out. Ignored where the filters already let them all in.
+   */
+  ownerUserId?: string;
   /** Only this player's plays. */
   handle?: string;
 }
@@ -56,8 +63,15 @@ export interface RecentScoresFilter {
  */
 export async function loadRecentScores(db: Database, filter: RecentScoresFilter): Promise<RecentScore[]> {
   const conditions: SQL[] = [eq(scoreResult.ruleset, filter.ruleset)];
-  if (!filter.includeAnonymous) conditions.push(eq(user.isAnonymous, false));
-  if (!filter.includeUnlisted) conditions.push(eq(chart.status, 'listed'));
+  if (!filter.includeAnonymous) {
+    // A viewer's own plays show even while their account is anonymous.
+    const named = eq(user.isAnonymous, false);
+    conditions.push(filter.ownerUserId === undefined ? named : or(named, eq(score.userId, filter.ownerUserId))!);
+  }
+  if (!filter.includeUnlisted) {
+    const listed = eq(chart.status, 'listed');
+    conditions.push(filter.ownerUserId === undefined ? listed : or(listed, eq(score.userId, filter.ownerUserId))!);
+  }
   if (filter.handle !== undefined) conditions.push(eq(profile.handle, filter.handle));
   const rows = await db
     .select({
@@ -71,6 +85,7 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       title: chart.title,
       artist: chart.artist,
       laneMode: chart.laneMode,
+      chartStatus: chart.status,
       playLevel: chart.playLevel,
       difficulty: chart.difficulty,
       playedRuleset: score.playedRuleset,
@@ -94,11 +109,12 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
     .orderBy(desc(score.createdAt), desc(score.id))
     .limit(filter.limit);
   return rows.map(
-    ({ createdAt, anonymous, avatarKey, previousEx, previousLamp, previousMiss, above, players, ...row }) => ({
+    ({ createdAt, chartStatus, anonymous, avatarKey, previousEx, previousLamp, previousMiss, above, players, ...row }) => ({
       ...row,
       avatarUrl: avatarUrl(row.handle, avatarKey),
       createdAt: createdAt.getTime(),
       anonymous: anonymous === true,
+      chartListed: chartStatus === 'listed',
       ...(previousEx === null
         ? {}
         : {
