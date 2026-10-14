@@ -34,6 +34,21 @@ describe('createCachedCroppedTexture', () => {
     );
   });
 
+  it('tells frames apart by every number, and treats -0 as 0 as the old text key did', () => {
+    const base = texture();
+    const frames = [
+      { x: 1, y: 2, w: 3, h: 4 },
+      { x: 2, y: 1, w: 3, h: 4 },
+      { x: 1, y: 2, w: 4, h: 3 },
+      { x: 1.5, y: 2, w: 3, h: 4 },
+    ];
+    const crops = frames.map((frame) => createCachedCroppedTexture(base, frame));
+    expect(new Set(crops).size).toBe(frames.length);
+    expect(createCachedCroppedTexture(base, { x: -0, y: 0, w: 8, h: 8 })).toBe(
+      createCachedCroppedTexture(base, { x: 0, y: -0, w: 8, h: 8 }),
+    );
+  });
+
   it('skips missing and empty crops', () => {
     expect(createCachedCroppedTexture(undefined, { x: 0, y: 0, w: 1, h: 1 })).toBeUndefined();
     expect(createCachedCroppedTexture(texture(), { x: 0, y: 0, w: 0, h: 1 })).toBeUndefined();
