@@ -244,11 +244,30 @@ export function bucketOfChannel(channel: string): string | undefined {
   return channel === 'A0' ? 'tl:exrank' : undefined;
 }
 
+/**
+ * `bucketOfChannel` of an event's raw channel, remembered: a chart has a few dozen channels but thousands of events.
+ * `null` records a channel the fingerprint ignores. Cleared if odd input ever fills it.
+ */
+const BUCKET_BY_RAW_CHANNEL = new Map<string, string | null>();
+const BUCKET_CACHE_LIMIT = 4096;
+
+function bucketOfEventChannel(channel: string): string | undefined {
+  let bucket = BUCKET_BY_RAW_CHANNEL.get(channel);
+  if (bucket === undefined) {
+    if (BUCKET_BY_RAW_CHANNEL.size >= BUCKET_CACHE_LIMIT) {
+      BUCKET_BY_RAW_CHANNEL.clear();
+    }
+    bucket = bucketOfChannel(normalizeChannel(channel)) ?? null;
+    BUCKET_BY_RAW_CHANNEL.set(channel, bucket);
+  }
+  return bucket ?? undefined;
+}
+
 /** Events of a chart grouped by bucket, each bucket in the engine's event order. */
 export function bucketEvents(events: ReadonlyArray<BeMusicEvent>): Map<string, BeMusicEvent[]> {
   const buckets = new Map<string, BeMusicEvent[]>();
   for (const event of events) {
-    const bucket = bucketOfChannel(normalizeChannel(event.channel));
+    const bucket = bucketOfEventChannel(event.channel);
     if (bucket === undefined) {
       continue;
     }
