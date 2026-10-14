@@ -146,6 +146,21 @@ export interface PageMeta {
 }
 
 /**
+ * The frame of the header's menus. They sit in the header's no-wrap row, so they turn wrapping back on (Japanese at
+ * phrase boundaries where the browser can), and they never grow wider than the screen less a margin on each side.
+ */
+const HEADER_MENU_CLASS =
+  'bg-popover text-popover-foreground max-w-[calc(100vw-2rem)] rounded-lg border p-1 text-sm whitespace-normal [word-break:auto-phrase] shadow-md';
+
+/**
+ * Below the button, right edges aligned; the other way round when that would run off the screen, and centred under the
+ * button, a gutter in from the edges, when neither fits (`--header-menu-span` in app.css).
+ */
+function headerMenuStyle(anchor: string): string {
+  return `position-anchor:${anchor};inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline,--header-menu-span`;
+}
+
+/**
  * The header's account area. Signed out: Sign in (a passkey) and Sign up (a handle and a name, then a passkey). Signed
  * in: the player's icon, opening a menu with their page, Settings and Sign out. The buttons are wired by the client
  * script (client/main.ts); `data-account-status` shows what went wrong.
@@ -159,7 +174,13 @@ function AccountMenu(props: { viewer: Viewer | null }) {
         <button type="button" class="btn" data-size="sm" data-variant="ghost" data-account-action="open-sign-in">
           {t.account.signIn}
         </button>
-        <button type="button" class="btn" data-size="sm" data-variant="outline" data-account-action="open-sign-up">
+        <button
+          type="button"
+          class="btn hidden sm:inline-flex"
+          data-size="sm"
+          data-variant="outline"
+          data-account-action="open-sign-up"
+        >
           {t.account.signUp}
         </button>
         <SignInDialog />
@@ -185,8 +206,8 @@ function AccountMenu(props: { viewer: Viewer | null }) {
       <div
         id="account-menu"
         popover="auto"
-        class="bg-popover text-popover-foreground w-56 rounded-lg border p-1 text-sm shadow-md"
-        style="position-anchor:--account-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline"
+        class={`${HEADER_MENU_CLASS} w-56`}
+        style={headerMenuStyle('--account-menu')}
       >
         <div class="border-b px-2 py-2">
           <div class="truncate font-medium">{viewer.displayName}</div>
@@ -385,14 +406,14 @@ function RulesetMenu(props: { current: PlaylogRulesetId; path: string }) {
       >
         <Icon svg={Scale} class="text-muted-foreground" />
         <span>{RULESET_LABELS[props.current]}</span>
-        <span class="hidden sm:inline">{t.rules.word}</span>
+        <span class="hidden md:inline">{t.rules.word}</span>
         <Icon svg={ChevronDown} class="text-muted-foreground" />
       </button>
       <div
         id="ruleset-menu"
         popover="auto"
-        class="bg-popover text-popover-foreground w-72 rounded-lg border p-1 text-sm shadow-md"
-        style="position-anchor:--ruleset-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline"
+        class={`${HEADER_MENU_CLASS} w-72`}
+        style={headerMenuStyle('--ruleset-menu')}
       >
         <div class="text-muted-foreground px-2 pt-1.5 pb-1 text-xs">{t.rules.showUnder}</div>
         {RULESET_IDS.map((id) => (
@@ -445,8 +466,8 @@ function LanguageMenu(props: { current: Locale; path: string }) {
       <div
         id="language-menu"
         popover="auto"
-        class="bg-popover text-popover-foreground w-44 rounded-lg border p-1 text-sm shadow-md"
-        style="position-anchor:--language-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline"
+        class={`${HEADER_MENU_CLASS} w-44`}
+        style={headerMenuStyle('--language-menu')}
       >
         {LOCALES.map((locale) => (
           <a
@@ -573,11 +594,11 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         {/* Every component on the page reads the page's language from here (`useMessages`). */}
         <MessagesContext.Provider value={t}>
           <header class="border-b">
-            <div class="mx-auto flex max-w-5xl items-center gap-x-4 px-4 py-2.5 sm:gap-x-6">
+            <div class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6">
               <a href="/leaderboard" class="shrink-0 font-semibold tracking-tight">
-                be-music <span class="text-muted-foreground hidden font-normal sm:inline">Leaderboard</span>
+                be-music <span class="text-muted-foreground hidden font-normal md:inline">Leaderboard</span>
               </a>
-              <nav class="text-muted-foreground flex items-center gap-4 text-sm" aria-label={t.nav.label}>
+              <nav class="text-muted-foreground hidden items-center gap-4 text-sm sm:flex" aria-label={t.nav.label}>
                 <a
                   class="hover:text-foreground inline-flex items-center gap-1.5 whitespace-nowrap"
                   href="/leaderboard"
@@ -589,8 +610,9 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
               </nav>
               <div class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2">
                 <RulesetMenu current={props.meta.ruleset} path={props.meta.path} />
+                {/* Not on a phone, where the header has no room: the footer links to Help too. */}
                 <a
-                  class="btn"
+                  class="btn hidden sm:inline-flex"
                   data-size="sm"
                   data-variant="ghost"
                   href="/leaderboard/help"
@@ -600,9 +622,9 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                   <EntityIcon kind="help" size="md" class="text-current" />
                 </a>
                 <AccountMenu viewer={props.meta.viewer} />
-                <a class="btn" data-size="sm" href="/" title={t.nav.playTitle}>
+                <a class="btn" data-size="sm" href="/" title={t.nav.playTitle} aria-label={t.nav.play}>
                   <Icon svg={Play} />
-                  {t.nav.play}
+                  <span class="hidden md:inline">{t.nav.play}</span>
                 </a>
                 {/* Last, at the right edge: switching the language changes the other labels' widths, not its place. */}
                 <LanguageMenu current={props.meta.locale} path={props.meta.path} />
