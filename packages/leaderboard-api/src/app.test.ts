@@ -12,7 +12,7 @@ import {
 import { createApp } from './app.ts';
 import { eq } from 'drizzle-orm';
 import { openDatabase } from './db/client.ts';
-import { score } from './db/schema.ts';
+import { bestScore, score } from './db/schema.ts';
 import { loadChartFiles, loadPlayRanking } from './ranking-plays.ts';
 import { backfillPlayedFiles } from './scores/backfill.ts';
 import type { Env } from './env.ts';
@@ -56,6 +56,36 @@ async function submitPlay(cookie: string, chart: TestChart, hits: number, withCh
     cookie,
     submissionBody(playlog, chart.playDocument, withChartDocument ? chart.chartDocument : undefined),
   );
+}
+
+async function userIdOf(cookie: string): Promise<string> {
+  const session = await fetchApp('/api/auth/get-session', { headers: { cookie } });
+  return ((await session.json()) as { user: { id: string } }).user.id;
+}
+
+/** `count` distinct charts, told apart by where their last two notes fall; `lane` keeps one set apart from another. */
+function makeCharts(count: number, lane: string): TestChart[] {
+  return Array.from({ length: count }, (_, index) =>
+    makeChart(['#00111:01', `#${String(index + 2).padStart(3, '0')}${lane}:0101`]),
+  );
+}
+
+/** A D1 binding that counts the statements it prepares: every one D1 runs, on its own or in a batch. */
+function countingStatements(d1: D1Database): { d1: D1Database; statements: () => number } {
+  let statements = 0;
+  const counted = new Proxy(d1, {
+    get(target, property) {
+      if (property === 'prepare') {
+        return (query: string) => {
+          statements += 1;
+          return target.prepare(query);
+        };
+      }
+      const value = Reflect.get(target, property);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  return { d1: counted, statements: () => statements };
 }
 
 describe('API versions', () => {
@@ -311,10 +341,6 @@ describe('reassignScores', () => {
     await submitPlay(linked, chart, 4);
 
     const db = openDatabase(env.DB);
-    const userIdOf = async (cookie: string) => {
-      const session = await fetchApp('/api/auth/get-session', { headers: { cookie } });
-      return ((await session.json()) as { user: { id: string } }).user.id;
-    };
     await reassignScores(db, await userIdOf(anonymous), await userIdOf(linked));
 
     const me = await fetchApp(
@@ -324,6 +350,73 @@ describe('reassignScores', () => {
       },
     );
     expect(await me.json()).toMatchObject({ exScore: 18, playCount: 2 });
+  });
+
+  test('moves a player with many charts, played under two rulesets, past what one statement can carry', async () => {
+    const { reassignScores } = await import('./scores/reassign.ts');
+    const { rebuildBestScores } = await import('./scores/bests.ts');
+    const charts = makeCharts(30, '14');
+    const anonymous = await signInAnonymously(fetchApp);
+    const linked = await signInAnonymously(fetchApp);
+    for (const chart of charts) {
+      for (const [judgeRuleset, hits] of [
+        ['lr2', 6],
+        ['beatoraja', 8],
+      ] as const) {
+        const playlog = makePlaylog(chart, { noteCount: 10, hits, play: { judgeRuleset } });
+        const response = await submit(anonymous, submissionBody(playlog, chart.playDocument, chart.chartDocument));
+        expect(response.status).toBe(201);
+      }
+    }
+
+    const db = openDatabase(env.DB);
+    const linkedId = await userIdOf(linked);
+    await reassignScores(db, await userIdOf(anonymous), linkedId);
+    // Every play is ranked under all three rulesets: 90 best rows, where one insert carries 7.
+    const expectBests = async () => {
+      const rows = await db.select().from(bestScore).where(eq(bestScore.userId, linkedId));
+      expect(rows).toHaveLength(charts.length * 3);
+      for (const row of rows) {
+        expect(row).toMatchObject({ bestEx: 16, playCount: 2, playedHere: row.ruleset !== 'iidx' });
+      }
+    };
+    await expectBests();
+
+    // More charts than one statement can list (most never played, the played ones split across two statements)
+    // rebuild to the same bests.
+    const unplayed = Array.from({ length: 100 }, (_, index) => `unplayed-${index}`);
+    const played = charts.map((chart) => chart.chartFingerprint);
+    await rebuildBestScores(db, linkedId, [...unplayed.slice(0, 80), ...played, ...unplayed.slice(80)], Date.now());
+    await expectBests();
+  });
+
+  test('the linked account counts towards listing the charts it takes over', async () => {
+    const { reassignScores } = await import('./scores/reassign.ts');
+    const { claimAccount } = await import('./accounts.ts');
+    const db = openDatabase(env.DB);
+    const [shared, onlyAnonymous] = makeCharts(2, '17') as [TestChart, TestChart];
+    const bob = await signInAnonymously(fetchApp);
+    // The account the anonymous player links stands in for a Discord or Google one: not anonymous.
+    const linked = await signInAnonymously(fetchApp);
+    await claimAccount(db, await userIdOf(bob));
+    await claimAccount(db, await userIdOf(linked));
+    const anonymous = await signInAnonymously(fetchApp);
+    expect((await submitPlay(bob, shared, 5)).status).toBe(201);
+    expect((await submitPlay(anonymous, shared, 7)).status).toBe(201);
+    expect((await submitPlay(anonymous, onlyAnonymous, 7)).status).toBe(201);
+    const status = async (chart: TestChart) =>
+      (
+        await db.query.chart.findFirst({
+          where: (row, { eq }) => eq(row.chartFingerprint, chart.chartFingerprint),
+          columns: { status: true },
+        })
+      )?.status;
+    expect(await status(shared)).toBe('provisional');
+
+    await reassignScores(db, await userIdOf(anonymous), await userIdOf(linked));
+    // Bob and the linked account have both played the shared chart now; the other one still has a single player.
+    expect(await status(shared)).toBe('listed');
+    expect(await status(onlyAnonymous)).toBe('provisional');
   });
 });
 
@@ -357,5 +450,47 @@ describe('accounts', () => {
     const listed = (await (await fetchApp(ranking)).json()) as { players: number; entries: Array<{ handle: string }> };
     expect(listed.players).toBe(1);
     expect(listed.entries[0]!.handle).toBe(before.handle);
+  });
+
+  test('claiming an account lists every chart it played that now has two players with accounts, in one batch', async () => {
+    const { claimAccount } = await import('./accounts.ts');
+    const db = openDatabase(env.DB);
+    const shared = makeCharts(30, '15');
+    const [solo, withAnonymous] = makeCharts(2, '16') as [TestChart, TestChart];
+    const bob = await signInAnonymously(fetchApp);
+    await claimAccount(db, await userIdOf(bob));
+    const alice = await signInAnonymously(fetchApp);
+    const carol = await signInAnonymously(fetchApp);
+    for (const chart of shared) {
+      expect((await submitPlay(bob, chart, 5)).status).toBe(201);
+      expect((await submitPlay(alice, chart, 7)).status).toBe(201);
+    }
+    expect((await submitPlay(alice, solo, 7)).status).toBe(201);
+    expect((await submitPlay(alice, withAnonymous, 7)).status).toBe(201);
+    expect((await submitPlay(carol, withAnonymous, 3)).status).toBe(201);
+
+    const statuses = async () => {
+      const rows = await db.query.chart.findMany({
+        where: (row, { inArray }) =>
+          inArray(
+            row.chartFingerprint,
+            [...shared, solo, withAnonymous].map((chart) => chart.chartFingerprint),
+          ),
+        columns: { chartFingerprint: true, status: true },
+      });
+      return new Map(rows.map((row) => [row.chartFingerprint, row.status]));
+    };
+    // Alice is still anonymous: Bob alone has an account on each chart.
+    expect(new Set((await statuses()).values())).toEqual(new Set(['provisional']));
+
+    const counted = countingStatements(env.DB);
+    await claimAccount(openDatabase(counted.d1), await userIdOf(alice));
+    // The same three statements however many charts Alice played.
+    expect(counted.statements()).toBe(3);
+    const after = await statuses();
+    for (const chart of shared) expect(after.get(chart.chartFingerprint)).toBe('listed');
+    // Alice alone, and Alice with Carol (still anonymous), are one player with an account each.
+    expect(after.get(solo.chartFingerprint)).toBe('provisional');
+    expect(after.get(withAnonymous.chartFingerprint)).toBe('provisional');
   });
 });
