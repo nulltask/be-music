@@ -112,16 +112,21 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   const now = deps.now();
   const scoreId = deps.newId();
   const playlogKey = `playlogs/${scoreId}.bmplay.json.gz`;
-  await blobs.put(playlogKey, await gzip(input.playlogText), {
-    httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
-  });
-  if (chartRegistration !== undefined) {
-    await blobs.put(documentKey(chartFingerprint), JSON.stringify(chartRegistration.document), {
-      httpMetadata: { contentType: 'application/json' },
-    });
-  }
-
-  const currentBests = await loadBestScores(db, input.userId, chartFingerprint, assisted);
+  // The stored files and the current bests do not depend on each other: one wait for all of them. The play's rows are
+  // written only once every file is stored, as before.
+  const [currentBests] = await Promise.all([
+    loadBestScores(db, input.userId, chartFingerprint, assisted),
+    gzip(input.playlogText).then((compressed) =>
+      blobs.put(playlogKey, compressed, {
+        httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
+      }),
+    ),
+    chartRegistration === undefined
+      ? undefined
+      : blobs.put(documentKey(chartFingerprint), JSON.stringify(chartRegistration.document), {
+          httpMetadata: { contentType: 'application/json' },
+        }),
+  ]);
   const playedRuleset = input.playlog.play.judgeRuleset ?? 'lr2';
   const figures = simulated.map(({ ruleset, result }) => {
     const lamp = resolveClearLamp(result, ruleset);
@@ -223,23 +228,31 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
     }),
   ];
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
-  await refreshChartListing(db, chartFingerprint);
 
-  const results: RulesetOutcome[] = [];
-  for (const { ruleset, result, lamp, missCount, update } of figures) {
-    const filter = { chartFingerprint, ruleset, assisted, includeAnonymous: true, playedHereOnly: false };
-    results.push({
-      ruleset,
-      rulesetRevision: result.ruleset,
-      exScore: result.exScore,
-      noteCount: result.noteCount,
-      clearLamp: lamp,
-      missCount,
-      rank: await rankOfExScore(db, filter, update.next.bestEx),
-      players: await countPlayers(db, filter),
-      improved: update.improved,
-    });
-  }
+  // The listing and each ruleset's rank and player count read the rows just written and not each other: asked at once.
+  const [, results] = await Promise.all([
+    refreshChartListing(db, chartFingerprint),
+    Promise.all(
+      figures.map(async ({ ruleset, result, lamp, missCount, update }): Promise<RulesetOutcome> => {
+        const filter = { chartFingerprint, ruleset, assisted, includeAnonymous: true, playedHereOnly: false };
+        const [rank, players] = await Promise.all([
+          rankOfExScore(db, filter, update.next.bestEx),
+          countPlayers(db, filter),
+        ]);
+        return {
+          ruleset,
+          rulesetRevision: result.ruleset,
+          exScore: result.exScore,
+          noteCount: result.noteCount,
+          clearLamp: lamp,
+          missCount,
+          rank,
+          players,
+          improved: update.improved,
+        };
+      }),
+    ),
+  ]);
   return { status: 'accepted', scoreId, chartFingerprint, results };
 }
 
@@ -292,21 +305,29 @@ async function loadOutcomes(
   assisted: boolean,
 ): Promise<RulesetOutcome[]> {
   const rows = await db.select().from(scoreResult).where(eq(scoreResult.scoreId, scoreId));
-  const outcomes: RulesetOutcome[] = [];
-  for (const row of rows) {
-    const filter = { chartFingerprint, ruleset: row.ruleset, assisted, includeAnonymous: true, playedHereOnly: false };
-    outcomes.push({
-      ruleset: row.ruleset,
-      rulesetRevision: row.rulesetRevision,
-      exScore: row.exScore,
-      noteCount: row.noteCount,
-      clearLamp: row.clearLamp as ClearLamp,
-      missCount: row.missCount,
-      rank: await rankOfExScore(db, filter, row.exScore),
-      players: await countPlayers(db, filter),
-      improved: { exScore: false, lamp: false, missCount: false },
-    });
-  }
+  const outcomes = await Promise.all(
+    rows.map(async (row): Promise<RulesetOutcome> => {
+      const filter = {
+        chartFingerprint,
+        ruleset: row.ruleset,
+        assisted,
+        includeAnonymous: true,
+        playedHereOnly: false,
+      };
+      const [rank, players] = await Promise.all([rankOfExScore(db, filter, row.exScore), countPlayers(db, filter)]);
+      return {
+        ruleset: row.ruleset,
+        rulesetRevision: row.rulesetRevision,
+        exScore: row.exScore,
+        noteCount: row.noteCount,
+        clearLamp: row.clearLamp as ClearLamp,
+        missCount: row.missCount,
+        rank,
+        players,
+        improved: { exScore: false, lamp: false, missCount: false },
+      };
+    }),
+  );
   return outcomes.sort(byRulesetOrder);
 }
 
