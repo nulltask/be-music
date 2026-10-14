@@ -4,7 +4,13 @@
  * `fingerprint-*.ts` its reference implementation.
  */
 import type { BeMusicJson } from '@be-music/json';
-import { bucketEvents, computeChartItems, flattenItems, resolveLaneModeExtension } from './fingerprint-items.ts';
+import {
+  bucketEvents,
+  computeChartItems,
+  flattenItems,
+  resolveLaneModeExtension,
+  withEventTimes,
+} from './fingerprint-items.ts';
 import { sha256Hex } from './sha256.ts';
 import {
   type BeMusicFingerprintDocument,
@@ -54,8 +60,10 @@ export function createPlayFingerprintDocument(
   json: BeMusicJson,
   options: BeMusicFingerprintOptions,
 ): BeMusicPlayFingerprintDocument {
-  const items = flattenItems(computeChartItems(json, bucketEvents(json.events)));
-  return assemblePlayDocument(items, resolveLaneModeExtension(options.chartPath));
+  return withEventTimes(() => {
+    const items = flattenItems(computeChartItems(json, bucketEvents(json.events)));
+    return assemblePlayDocument(items, resolveLaneModeExtension(options.chartPath));
+  });
 }
 
 /**
@@ -67,7 +75,7 @@ export function createChartFingerprintDocument(
   json: BeMusicJson,
   options: BeMusicFingerprintOptions,
 ): BeMusicFingerprintDocument {
-  return buildChartModel(json, resolveLaneModeExtension(options.chartPath)).document;
+  return withEventTimes(() => buildChartModel(json, resolveLaneModeExtension(options.chartPath)).document);
 }
 
 /**

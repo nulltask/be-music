@@ -13,12 +13,11 @@ import {
   normalizeObjectKey,
   resolveBmsBase,
 } from '@be-music/json';
-import { drawRandomOutcomes, type RandomDraws } from '@be-music/chart';
+import { compareEvents, drawRandomOutcomes, type RandomDraws } from '@be-music/chart';
 import { normalizeAsciiBase36Code } from '@be-music/utils/core';
 import { countDistinctValues, createBmsonValueKeyTable, encodeBmsonKey, resolveBmsonKeyBase } from './bmson-keys.ts';
 import {
   buildBmsObjectLineEntry,
-  collectNonZeroObjectTokens,
   normalizeBmsonNoteLength,
   sortAndNormalizeEvents,
   upsertMeasureLength,
@@ -129,6 +128,7 @@ export function parseBms(input: string): BeMusicJson {
           json.preservation.bms.sourceLines.push(controlFlowObject);
         }
       } else {
+        // Tokenized once: the preserved line and the chart's events come from the same entry.
         const objectLine = buildBmsObjectLineEntry(measure, channel, data, base);
         if (objectLine) {
           json.preservation.bms.objectLines.push(objectLine);
@@ -136,8 +136,19 @@ export function parseBms(input: string): BeMusicJson {
             kind: 'object',
             ...objectLine,
           });
+          if (objectLine.measureLength !== undefined) {
+            upsertMeasureLength(json, measure, objectLine.measureLength, measureByIndex);
+          }
+          for (const event of objectLine.events) {
+            // A copy per event: the chart's events must not alias the preserved line's.
+            json.events.push({
+              measure,
+              channel,
+              position: [event.position[0], event.position[1]],
+              value: event.value,
+            });
+          }
         }
-        pushObjectDataLine(json, measure, channel, data, base, measureByIndex);
       }
       return;
     }
@@ -229,7 +240,8 @@ export function parseBms(input: string): BeMusicJson {
     json.metadata.bpm = 130;
   }
   json.measures.sort((left, right) => left.index - right.index);
-  json.events = sortAndNormalizeEvents(json.events, base);
+  // Every event above was built normalized (channel and object ids folded, positions in range), so sorting is enough.
+  json.events.sort(compareEvents);
   return json;
 }
 
@@ -618,33 +630,6 @@ export function resolveBmsControlFlowWithDraws(input: BeMusicJson, draws: Random
 
 export { decodeBmsText, decodeUtf8Text, type DecodedBmsText } from './bms-text-decode.ts';
 export { canonicalizeBmsCharset, extractDeclaredBmsCharset } from './bms-charset.ts';
-
-function pushObjectDataLine(
-  json: BeMusicJson,
-  measure: number,
-  channel: string,
-  data: string,
-  base: 36 | 62,
-  measureByIndex?: Map<number, MeasureLengthEntry>,
-): void {
-  if (channel === '02') {
-    const length = Number.parseFloat(data);
-    if (Number.isFinite(length) && length > 0) {
-      upsertMeasureLength(json, measure, length, measureByIndex);
-    }
-    return;
-  }
-
-  const parsed = collectNonZeroObjectTokens(data, base);
-  for (const token of parsed.tokens) {
-    json.events.push({
-      measure,
-      channel,
-      position: [token.index, parsed.tokenCount],
-      value: token.value,
-    });
-  }
-}
 
 interface ParsedObjectDataLine {
   measure: number;

@@ -9,7 +9,7 @@ import { RankingList } from './components/lists.tsx';
 import { Details, DistributionCard, Elsewhere, Stats } from './components/cards.tsx';
 import { EntityIcon } from './components/entity-icon.tsx';
 import { chartsetHref, Filters, LocalTime, SectionHeading, Segmented, Tag, Toggle } from './components/basics.tsx';
-import { loadChart, loadChartAliases, loadChartsetOf, loadPlayInfos } from './data.ts';
+import { loadChart, loadChartAliases, loadChartsetOf } from './data.ts';
 import { externalLinks, type ChartAlias } from './external.ts';
 import { chartTitle, difficultyName, formatJudgeRank, formatLaneMode, RULESET_LABELS } from './format.ts';
 import { useMessages } from './i18n/index.ts';
@@ -56,21 +56,23 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
   };
   const page = { offset: 0, limit: RANKING_LIMIT };
   // Everything below depends only on the chart: ask D1 for it at once rather than one query after another.
-  const [ranking, everyone, aliases, stats, filed, files] = await Promise.all([
+  const [ranking, everyoneCount, aliases, stats, filed, files] = await Promise.all([
     // The kept personal bests answer the plain ranking; every play and one file's plays need the plays themselves.
+    // Each row's play info comes with the ranking: no second round trip for the info popovers.
     everyPlay || fileSha256 !== undefined
-      ? loadPlayRanking(db, filter, { everyPlay, fileSha256 }, page)
-      : loadRanking(db, filter, page),
-    countPlayers(db, { ...filter, includeAnonymous: true }),
+      ? loadPlayRanking(db, filter, { everyPlay, fileSha256 }, page, { playInfo: true })
+      : loadRanking(db, filter, page, { playInfo: true }),
+    // Every player, anonymous ones included: the kept-bests ranking's own count already is that when it includes them.
+    !everyPlay && fileSha256 === undefined && filter.includeAnonymous && filter.onlyUserId === undefined
+      ? undefined
+      : countPlayers(db, { ...filter, includeAnonymous: true }),
     loadChartAliases(db, chartFingerprint),
     loadChartStats(db, filter),
     loadChartsetOf(db, found.chartsetId),
     loadChartFiles(db, chartFingerprint),
   ]);
-  const infos = await loadPlayInfos(
-    db,
-    ranking.entries.map((entry) => entry.exScoreId),
-  );
+  const infos = ranking.infos ?? new Map();
+  const everyone = everyoneCount ?? ranking.players;
   const title = chartTitle(found.title, chartFingerprint);
   const elsewhere = externalLinks(found, aliases, files);
   c.header('cache-control', PAGE_CACHE);

@@ -21,6 +21,7 @@ import { resolveChartLongNoteMode, type LongNoteMode } from './note-rules.ts';
 import { getPlayModeLayouts, type PlayModeLayout } from './play-modes.ts';
 import {
   resolveInvisibleNotes,
+  resolveJudgedNoteEntries,
   resolveJudgedNotes,
   resolveMineNotes,
   type ResolvedNote,
@@ -161,6 +162,52 @@ export interface ResolvedChart {
  */
 export function resolveChart(chart: BeMusicJson, options: ResolveChartOptions = {}): ResolvedChart {
   return new LazyResolvedChart(chart, options);
+}
+
+/** What {@link countScoredNotes} reports: the scored notes and the play variant they were resolved under. */
+export interface ScoredNoteCount {
+  /** The notes the engine scores: the judged notes without FREE ZONE ones (a long note counts once). */
+  readonly notes: number;
+  readonly playVariant: ChartPlayVariant;
+}
+
+/** Notes carry their time in seconds; counting them needs none, so this stands in for a BPM / STOP timing resolver. */
+const NO_SECONDS = { beatToSeconds: () => 0 } as unknown as TimingResolver;
+
+/**
+ * How many notes a chart scores, as `resolveChart(chart, options).notes` counts them without its FREE ZONE notes, and
+ * the play variant that decided FREE ZONE. A song list needs only the count, so this resolves the same judged notes
+ * without timing every one of them.
+ */
+export function countScoredNotes(
+  chart: BeMusicJson,
+  options: Omit<ResolveChartOptions, 'randomDraws'> = {},
+): ScoredNoteCount {
+  const playVariant =
+    options.playVariant ??
+    resolveChartPlayVariant({
+      chartPath: options.chartPath,
+      events: chart.events,
+      bms: chart.bms,
+      bmson: chart.bmson,
+    });
+  const context = createTimingBuildContext(chart);
+  const { notes } = resolveJudgedNoteEntries({
+    json: chart,
+    timing: NO_SECONDS,
+    beatResolver: context.beatResolver,
+    sortedEvents: context.sortedEvents,
+    idBase: resolveBmsBase(chart),
+    resolvePlayVariant: () => playVariant,
+    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+  });
+  let count = 0;
+  for (const note of notes) {
+    if (note.freeZone !== true) {
+      count += 1;
+    }
+  }
+  return { notes: count, playVariant };
 }
 
 class LazyResolvedChart implements ResolvedChart {

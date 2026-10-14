@@ -316,4 +316,25 @@ describe('BeatorajaMarkerLayer — LR2 window on a chart that does not scroll', 
     });
     expect(visibleYs(layer)).toEqual([800, 800, 700]);
   });
+  it('draws the same bar lines from a whole chart of them: those past the playhead and above the lead-in band are skipped', () => {
+    const layer = makeLayer();
+    const window = resolveNoteDrawWindow({
+      rules: 'lr2',
+      currentBeat: 400,
+      nowSeconds: 200,
+      laneBeats: 3,
+      overscanBeats: 0,
+    });
+    // A bar line every half beat over 1,000 beats; the lane shows beats 400 to 403 plus the 24 px band above it.
+    const group = Array.from({ length: 2001 }, (_, index) => index / 2);
+    layer.update({
+      currentBeat: 400,
+      judgementY: 800,
+      laneTopY: 500,
+      pixelsPerBeat: 100,
+      markers: { group, bpm: [], stop: [], time: [] },
+      window,
+    });
+    expect(visibleYs(layer)).toEqual([800, 750, 700, 650, 600, 550, 500]);
+  });
 });

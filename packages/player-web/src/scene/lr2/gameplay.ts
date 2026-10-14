@@ -25,7 +25,6 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import { disposeChildren } from '../pixi-utils.ts';
 import {
   BLUE,
   BOMB_CYCLE_MS,
@@ -129,13 +128,21 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
    * `renderTextElement`. The bitmap-text helper returns a freshly-allocated `Container` each call, which the pool
    * abstraction can't recycle (it tracks `Sprite` / `Graphics` / `Text` instances only). Without this dedicated
    * sub-layer the per-frame Containers used to silently accumulate inside `skinLayer` after the pool refactor —
-   * visible as the LR2 intro title text staying painted across every subsequent frame. We `disposeChildren` this
-   * sub-layer at the top of every `renderThemeLayer` pass so its content is rebuilt from scratch each tick, the same
-   * as the pre-pool path did for the whole skin layer.
+   * visible as the LR2 intro title text staying painted across every subsequent frame. Each render lists the
+   * containers it paints (`bitmapTextShown`) and `syncBitmapTextLayer` makes this sub-layer hold exactly those.
    */
   private readonly skinBitmapTextLayer = new Container();
   /** Lazy-loaded LR2 bitmap fonts (font index → glyph payload). */
   private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
+  /**
+   * Each bitmap-font text element's glyph container, kept while its string, size, tint and alpha stay the same: only
+   * its position follows the destination per frame, and a change rebuilds it. `bitmapTextShown` lists the containers
+   * this frame paints, in order.
+   */
+  private readonly bitmapTextCache = new Map<Lr2TextElement, { key: string; font: Lr2LoadedFont; node: Container }>();
+  private readonly bitmapTextShown: Container[] = [];
+  private bitmapTextExtras: Container[] = [];
+  private previousBitmapTextExtras: Container[] = [];
 
   /**
    * LR2 turntable physics — per-side angular state for sprites authored with `op4 === 1` (1P scratch) or `op4 === 2`
@@ -604,6 +611,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     }
     // Drop skin / font caches and the LR2 timer-span tables so a lingering async tail can't pin them.
     this.skinTextStyleCache.clear();
+    this.clearBitmapTextCache();
     this.bitmapFonts.clear();
     this.runtimeOps.clear();
     this.keyOnFadeDurationMs.clear();
@@ -1285,10 +1293,9 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     }
     this.skinLayerPool.begin();
     this.overlayLayerPool.begin();
-    // The bitmap-font path of `renderTextElement` adds a freshly-allocated Container per text element each frame
-    // (see `makeLr2BitmapTextSprite`). The pool abstraction can't recycle those, so we host them in a dedicated
-    // sub-layer and tear it down per render — same approach the pre-pool path used for the whole skin layer.
-    disposeChildren(this.skinBitmapTextLayer);
+    // The bitmap-font path of `renderTextElement` lists the glyph containers this frame paints (built once per string
+    // and style, see `bitmapTextNode`); the sub-layer is brought in line with that list at the end of the render.
+    this.bitmapTextShown.length = 0;
     const scale = Math.min(width / skin.width, height / skin.height);
     this.skinLayer.scale.set(scale);
     this.skinLayer.position.set((width - skin.width * scale) / 2, (height - skin.height * scale) / 2);
@@ -1392,13 +1399,83 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     this.renderJudgeAndComboOnOverlay(skin);
     this.skinLayerPool.end();
     this.overlayLayerPool.end();
-    // Re-pin the bitmap-text sub-layer at the top of `skinLayer`'s child stack. The pool's `acquireSprite` /
-    // `acquireGraphics` calls land freshly-allocated children at the END of `skinLayer.children` whenever the
-    // pool grows (first render, after a pool growth, etc.), which would otherwise leave the bitmap-text Container
-    // — created up-front in the scene constructor — sitting at index 0 / behind every chrome sprite. Re-`addChild`-
-    // ing it once per render moves it to the tail in O(1) inside Pixi's child array, so its glyphs (LR2 intro
-    // title etc.) paint on top of the pool-allocated chrome instead of being covered by the lane-frame image.
-    this.skinLayer.addChild(this.skinBitmapTextLayer);
+    this.syncBitmapTextLayer();
+    // Keep the bitmap-text sub-layer at the top of `skinLayer`'s child stack. The pool's `acquireSprite` /
+    // `acquireGraphics` calls land freshly-allocated children at the END of `skinLayer.children` whenever the pool
+    // grows (first render, after a pool growth, etc.), which would otherwise leave the bitmap-text Container — created
+    // up-front in the scene constructor — behind every chrome sprite, so its glyphs (LR2 intro title etc.) would be
+    // covered by the lane-frame image. Only re-attach when it is not already last: Pixi's `addChild` of a child it
+    // already holds flags the whole render group's structure as changed, which rebuilds its draw list every frame.
+    const skinChildren = this.skinLayer.children;
+    if (skinChildren[skinChildren.length - 1] !== this.skinBitmapTextLayer) {
+      this.skinLayer.addChild(this.skinBitmapTextLayer);
+    }
+  }
+
+  /**
+   * The glyph container for a bitmap-font text element this frame: the cached one while the string, size, tint, alpha
+   * and font are unchanged (moved to the destination's position), else a new one. An element drawn twice in one frame
+   * gets an uncached second container.
+   */
+  private bitmapTextNode(
+    text: Lr2TextElement,
+    value: string,
+    interpolated: Lr2DestinationRect,
+    loaded: Lr2LoadedFont,
+  ): Container {
+    const rect = normalizeRect(interpolated);
+    const key = `${value}\u0000${rect.w}|${rect.h}|${interpolated.r}|${interpolated.g}|${interpolated.b}|${interpolated.alpha}`;
+    const cached = this.bitmapTextCache.get(text);
+    if (cached !== undefined && this.bitmapTextShown.includes(cached.node)) {
+      const extra = makeLr2BitmapTextSprite(value, text, interpolated, loaded);
+      this.bitmapTextExtras.push(extra);
+      return extra;
+    }
+    if (cached !== undefined && cached.key === key && cached.font === loaded) {
+      cached.node.position.set(rect.x, rect.y);
+      return cached.node;
+    }
+    cached?.node.destroy({ children: true });
+    const node = makeLr2BitmapTextSprite(value, text, interpolated, loaded);
+    this.bitmapTextCache.set(text, { key, font: loaded, node });
+    return node;
+  }
+
+  /** Brings the bitmap-text sub-layer in line with this frame's containers, touching it only when they changed. */
+  private syncBitmapTextLayer(): void {
+    const layer = this.skinBitmapTextLayer;
+    const shown = this.bitmapTextShown;
+    let same = layer.children.length === shown.length;
+    for (let index = 0; same && index < shown.length; index += 1) {
+      same = layer.children[index] === shown[index];
+    }
+    if (!same) {
+      layer.removeChildren();
+      if (shown.length > 0) {
+        layer.addChild(...shown);
+      }
+    }
+    // Uncached second containers live for one frame, like every container did before the cache.
+    for (const extra of this.previousBitmapTextExtras) {
+      extra.destroy({ children: true });
+    }
+    this.previousBitmapTextExtras = this.bitmapTextExtras;
+    this.bitmapTextExtras = [];
+  }
+
+  /** Drops the cached glyph containers (the skin or its fonts went away). */
+  private clearBitmapTextCache(): void {
+    this.skinBitmapTextLayer.removeChildren();
+    for (const { node } of this.bitmapTextCache.values()) {
+      node.destroy({ children: true });
+    }
+    this.bitmapTextCache.clear();
+    this.bitmapTextShown.length = 0;
+    for (const extra of [...this.bitmapTextExtras, ...this.previousBitmapTextExtras]) {
+      extra.destroy({ children: true });
+    }
+    this.bitmapTextExtras = [];
+    this.previousBitmapTextExtras = [];
   }
 
   private renderTexturedBombs(): void {
@@ -1655,9 +1732,9 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     // loaded.
     const loaded = this.bitmapFonts.get(text.font);
     if (loaded) {
-      // Bitmap-text path uses a per-frame disposeChildren'd sub-layer (see `skinBitmapTextLayer`) instead of the
-      // pool because `makeLr2BitmapTextSprite` builds a fresh `Container` of glyph sprites each call.
-      this.skinBitmapTextLayer.addChild(makeLr2BitmapTextSprite(value, text, interpolated, loaded));
+      // Bitmap-text path: a cached glyph container per element (see `bitmapTextNode`) on its own sub-layer, instead of
+      // the pool, because `makeLr2BitmapTextSprite` builds a whole `Container` of glyph sprites.
+      this.bitmapTextShown.push(this.bitmapTextNode(text, value, interpolated, loaded));
       return;
     }
     // Match the LR2 destination height as the font size; this gives roughly the right size for system fonts even though

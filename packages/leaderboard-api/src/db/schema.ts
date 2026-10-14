@@ -259,8 +259,9 @@ export const score = sqliteTable(
   (table) => [
     index('score_user_chart_idx').on(table.userId, table.chartFingerprint),
     index('score_chart_file_idx').on(table.chartFingerprint, table.fileSha256),
-    // The newest plays (the top page) and a player's newest plays.
-    index('score_created_idx').on(table.createdAt),
+    // The newest plays (the top page) and a player's newest plays. `id` breaks ties as the lists order them, so the
+    // top page walks this index newest-first and stops at its page instead of sorting every play.
+    index('score_created_idx').on(table.createdAt, table.id),
     index('score_user_created_idx').on(table.userId, table.createdAt),
     // Plays the hourly backfill has yet to fill in (src/scores/backfill.ts); empty once it has caught up.
     index('score_pending_backfill_idx')

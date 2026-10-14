@@ -644,6 +644,17 @@ type ViewEntry =
   | GaugeEntry
   | PmCharaEntry;
 
+/** `main_state.judge(n)`'s number ids: PERFECT, GREAT, GOOD, BAD, POOR, combo break. */
+const LUA_JUDGE_NUMBERS = [
+  BEATORAJA_NUM.PERFECT,
+  BEATORAJA_NUM.GREAT,
+  BEATORAJA_NUM.GOOD,
+  BEATORAJA_NUM.BAD,
+  BEATORAJA_NUM.POOR,
+  BEATORAJA_NUM.COMBOBREAK,
+] as const;
+
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 export class BeatorajaPlaySkinView {
   readonly container: Container = new Container();
   readonly width: number;
@@ -1899,30 +1910,43 @@ export class BeatorajaPlaySkinView {
     return { kind: 'timingdistribution', group, element, graphics, lastSampleCount: -1 };
   }
 
+  /**
+   * The Lua runtime context for this frame. Built once and kept: its functions read the frame through
+   * {@link luaFrame}, set here each frame, instead of a fresh set of closures being made every frame. The Lua bridge
+   * only reads the context while it evaluates a call (`update` does that synchronously), never later.
+   */
   private buildLuaRuntimeContext(context: BeatorajaRenderContext): BeatorajaLuaRuntimeContext {
+    this.luaFrame = context;
+    const lua = (this.luaRuntimeContext ??= this.createLuaRuntimeContext());
+    // Forward host audio hooks so BooleanProperty / customEvent callbacks evaluated at draw
+    // time can fire SE. The hooks themselves come from the demo's `BeatorajaSkinAudioPlayer`
+    // (one per loaded theme bundle); the skin-view never owns audio state.
+    lua.audioPlay = context.audioPlay;
+    lua.audioLoop = context.audioLoop;
+    lua.audioStop = context.audioStop;
+    return lua;
+  }
+
+  private luaFrame: BeatorajaRenderContext | undefined;
+  private luaRuntimeContext: Mutable<BeatorajaLuaRuntimeContext> | undefined;
+
+  private createLuaRuntimeContext(): Mutable<BeatorajaLuaRuntimeContext> {
+    const frame = (): BeatorajaRenderContext => this.luaFrame!;
     return {
-      option: (id) => context.activeOps.has(id),
+      option: (id) => frame().activeOps.has(id),
       number: (id) => this.resolveNumberValue(id),
       floatNumber: (id) => this.resolveSliderValue(id) ?? this.resolveGraphValue(id),
       text: (id) => this.resolveTextContent(id),
-      offset: (id) => context.resolveOffset?.(id),
+      offset: (id) => frame().resolveOffset?.(id),
       timer: (id) => {
-        const start = id === 0 ? 0 : context.getTimerStart(id);
+        const start = id === 0 ? 0 : frame().getTimerStart(id);
         return start === undefined ? BEATORAJA_LUA_TIMER_OFF_VALUE : start * 1000;
       },
-      time: () => context.nowMs * 1000,
+      time: () => frame().nowMs * 1000,
       rate: () => this.resolveNumberValue(BEATORAJA_NUM.SCORE_RATE),
       exscore: () => this.resolveNumberValue(BEATORAJA_NUM.POINT),
       judge: (judge) => {
-        const refs = [
-          BEATORAJA_NUM.PERFECT,
-          BEATORAJA_NUM.GREAT,
-          BEATORAJA_NUM.GOOD,
-          BEATORAJA_NUM.BAD,
-          BEATORAJA_NUM.POOR,
-          BEATORAJA_NUM.COMBOBREAK,
-        ] as const;
-        const ref = refs[judge];
+        const ref = LUA_JUDGE_NUMBERS[judge];
         return ref === undefined ? undefined : this.resolveNumberValue(ref);
       },
       gauge: () => {
@@ -1932,13 +1956,7 @@ export class BeatorajaPlaySkinView {
       // `main_state.gauge_type()` — beatoraja's `BEATORAJA_GAUGE_MODE.*` int constant.
       // Sourced from the runtime adapter's `resolveGaugeState`. Returns `undefined` when no
       // frame has landed yet; the Lua bridge defaults to 0 in that case.
-      gaugeType: () => context.resolveGaugeState?.()?.mode,
-      // Forward host audio hooks so BooleanProperty / customEvent callbacks evaluated at draw
-      // time can fire SE. The hooks themselves come from the demo's `BeatorajaSkinAudioPlayer`
-      // (one per loaded theme bundle); the skin-view never owns audio state.
-      audioPlay: context.audioPlay,
-      audioLoop: context.audioLoop,
-      audioStop: context.audioStop,
+      gaugeType: () => frame().resolveGaugeState?.()?.mode,
     };
   }
 

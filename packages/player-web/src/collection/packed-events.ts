@@ -7,8 +7,27 @@ import type { BeMusicEvent, BmsonEventExtensions } from '@be-music/json';
 export class PackedEventStrings {
   private readonly values: string[] = [];
   private readonly ids = new Map<string, number>();
+  /**
+   * Ids of two-character ASCII strings, nearly every channel and object id, by their two character codes: looked up per
+   * event without hashing the string. `-1` marks one not seen yet.
+   */
+  private readonly asciiPairIds = new Int32Array(128 * 128).fill(-1);
 
   idOf(value: string): number {
+    if (value.length === 2) {
+      const high = value.charCodeAt(0);
+      const low = value.charCodeAt(1);
+      if (high < 128 && low < 128) {
+        const slot = (high << 7) | low;
+        let id = this.asciiPairIds[slot]!;
+        if (id < 0) {
+          id = this.values.length;
+          this.values.push(value);
+          this.asciiPairIds[slot] = id;
+        }
+        return id;
+      }
+    }
     let id = this.ids.get(value);
     if (id === undefined) {
       id = this.values.length;
