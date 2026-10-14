@@ -593,7 +593,10 @@ function Breadcrumbs(props: { crumbs: Crumb[] }) {
                     <span class="truncate">{crumb.label}</span>
                   </span>
                 ) : (
-                  <a class="hover:text-foreground inline-flex max-w-[40ch] min-w-0 items-center gap-1" href={crumb.href}>
+                  <a
+                    class="hover:text-foreground inline-flex max-w-[40ch] min-w-0 items-center gap-1"
+                    href={crumb.href}
+                  >
                     {crumb.kind !== undefined ? <EntityIcon kind={crumb.kind} size="sm" /> : null}
                     <span class="truncate">{crumb.label}</span>
                   </a>
@@ -715,9 +718,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
             </div>
             <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />
           </header>
-          <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">
-            {props.children}
-          </main>
+          <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">{props.children}</main>
           <footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs">
             {/* What is about the site rather than in it: its story, help, the API (a tool page of its own, so it opens
               beside the Leaderboard) and the source. */}
