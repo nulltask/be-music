@@ -174,12 +174,14 @@ import {
   SILENT_MODE_STRINGS,
   installSilentModePlayback,
   mountSilentModeHint,
+  mountStartSilentModeOption,
   readPlayInSilentMode,
   readSilentModeHintSeen,
   resolveSilentModeLanguage,
   shouldShowSilentModeHint,
   storePlayInSilentMode,
   storeSilentModeHintSeen,
+  type StartSilentModeOption,
 } from './silent-mode-playback.ts';
 import {
   RECORD_LABEL,
@@ -668,6 +670,8 @@ class PlayerWebDemoApp {
   private autoRecordArmed = false;
   /** The Debug Menu's "Play in silent mode" checkbox, when the browser offers the setting. */
   private silentModeController: Controller | undefined;
+  /** The start card's "Play in silent mode" checkbox, when the browser offers the setting. */
+  private startSilentModeOption: StartSilentModeOption | undefined;
   private readonly elements: PlayerWebDemoElements;
   public constructor(elements: PlayerWebDemoElements) {
     this.elements = elements;
@@ -768,6 +772,7 @@ class PlayerWebDemoApp {
     storePlayInSilentMode(value);
     applySilentModePlayback(value);
     this.silentModeController?.updateDisplay();
+    this.startSilentModeOption?.setChecked(value);
     // Once the user has found the setting, the hint has nothing left to say.
     storeSilentModeHintSeen();
   }
@@ -1243,6 +1248,16 @@ class PlayerWebDemoApp {
       note.className = 'gui-note';
       note.textContent = strings.note;
       audio.$children.append(note);
+      // The same setting on the start card, so it can be chosen before the first sound.
+      const startSection = document.querySelector<HTMLElement>('#start-silent-mode');
+      if (startSection !== null) {
+        this.startSilentModeOption = mountStartSilentModeOption({
+          section: startSection,
+          strings,
+          checked: this.guiState.playInSilentMode,
+          onChange: (value) => this.setPlayInSilentMode(value),
+        });
+      }
     }
     const compressor = addFolder(audio, DEBUG_MENU_FOLDERS.compressor);
     compressor

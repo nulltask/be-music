@@ -1,16 +1,17 @@
 // The demo's "Play in silent mode" setting: whether the page asks the platform audio session (`navigator.audioSession`,
 // Safari / iOS) for `'playback'`, so sound plays with the Ring / Silent switch on — at the cost of pausing music
-// playing in other apps. Off by default (the browser's own `'auto'`). Also the one-time hint pointing iPhone / iPad
-// users at the setting when sound starts.
+// playing in other apps. On by default (a rhythm game with no sound is unplayable); turned off it restores the
+// browser's own `'auto'`. Offered on the start card and in the Debug Menu. Also the one-time hint pointing iPhone /
+// iPad users at the setting when sound starts with it off.
 
 import { applySilentModePlayback, type SystemAudioSessionHost } from '@be-music/player-web/runtime';
 
 export const PLAY_IN_SILENT_MODE_STORAGE_KEY = 'be-music-demo.play-in-silent-mode';
 export const SILENT_MODE_HINT_SEEN_STORAGE_KEY = 'be-music-demo.silent-mode-hint-seen';
 
-/** Parses the stored setting: only `'on'` turns it on, anything else (nothing stored, junk) keeps the default off. */
+/** Parses the stored setting: only `'off'` turns it off, anything else (nothing stored, junk) keeps the default on. */
 export function parseStoredPlayInSilentMode(raw: string | null | undefined): boolean {
-  return raw === 'on';
+  return raw !== 'off';
 }
 
 export function serializePlayInSilentMode(enabled: boolean): string {
@@ -28,12 +29,12 @@ function defaultStorage(): SettingStorage | undefined {
   }
 }
 
-/** The stored setting; off when nothing is stored or storage is blocked. */
+/** The stored setting; on when nothing is stored or storage is blocked. */
 export function readPlayInSilentMode(storage: SettingStorage | undefined = defaultStorage()): boolean {
   try {
     return parseStoredPlayInSilentMode(storage?.getItem(PLAY_IN_SILENT_MODE_STORAGE_KEY));
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -161,6 +162,43 @@ export function installSilentModePlayback(options: InstallSilentModePlaybackOpti
     for (const type of AUDIO_UNLOCK_EVENTS) target.removeEventListener(type, onGesture, listenerOptions);
     visibility?.removeEventListener('visibilitychange', onVisibilityChange);
     target.removeEventListener('pageshow', apply);
+  };
+}
+
+export interface StartSilentModeOptionOptions {
+  /** The start card's `#start-silent-mode` section, hidden in the markup until the browser offers the setting. */
+  readonly section: HTMLElement;
+  readonly strings: SilentModeStrings;
+  /** The current setting. */
+  readonly checked: boolean;
+  /** The player ticked or unticked the box. */
+  readonly onChange: (checked: boolean) => void;
+}
+
+/** The start card's "Play in silent mode" checkbox, kept in step with the Debug Menu's. */
+export interface StartSilentModeOption {
+  setChecked(checked: boolean): void;
+}
+
+/**
+ * Fills and shows the start card's "Play in silent mode" row: the checkbox and a one-line note on what it costs. Call
+ * it only where the browser has an audio session; elsewhere the section stays hidden.
+ */
+export function mountStartSilentModeOption(options: StartSilentModeOptionOptions): StartSilentModeOption | undefined {
+  const { section, strings } = options;
+  const input = section.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  if (input === null) return undefined;
+  const label = section.querySelector<HTMLElement>('[data-silent-mode-label]');
+  const note = section.querySelector<HTMLElement>('[data-silent-mode-note]');
+  if (label !== null) label.textContent = strings.label;
+  if (note !== null) note.textContent = strings.note;
+  input.checked = options.checked;
+  input.addEventListener('change', () => options.onChange(input.checked));
+  section.hidden = false;
+  return {
+    setChecked: (checked) => {
+      input.checked = checked;
+    },
   };
 }
 
