@@ -21,9 +21,23 @@ export interface BeatNote {
 /** The colour of a lane's notes, as the usual BMS lanes: white and blue keys, a red scratch. */
 export type ExcerptTone = 'white' | 'blue' | 'red';
 
+/** One lane of an excerpt: its notes' colour and the side (bank) it belongs to. */
+export interface ExcerptLane {
+  tone: ExcerptTone;
+  side: '1P' | '2P';
+}
+
+/**
+ * How the lanes share the playfield's width, as the Synesthesia skin lays them out: `iidx` gives each lane a fixed
+ * width by kind (scratch, white key, blue key) and parts double play's banks; `shared` splits one side's width evenly
+ * (9 KEY).
+ */
+export type ExcerptLaneWidths = 'iidx' | 'shared';
+
 /** The excerpt a score card draws: its lanes left to right, and the window's notes and bar lines. */
 export interface ChartExcerpt {
-  lanes: ExcerptTone[];
+  lanes: ExcerptLane[];
+  widths: ExcerptLaneWidths;
   /** The window's length in beats; beats below count from its start. */
   beats: number;
   /** `lane` indexes `lanes`; `end` is a long note's end, which may lie past the window. */
@@ -32,8 +46,31 @@ export interface ChartExcerpt {
   bars: number[];
 }
 
-/** The excerpt's length: two 4/4 measures. */
-export const EXCERPT_BEATS = 8;
+/**
+ * The Synesthesia skin's playfield in its design pixels (the standard landscape layout,
+ * `resolveGameplayLaneGeometry` in packages/skin-sdk/src/touch-layout.ts). Mirrored rather than imported: the skin SDK
+ * pulls in the player package, which neither the Worker nor the card's client script bundles.
+ * - lane widths by kind: `IIDX_LANE_WIDTHS` (packages/skin-sdk/src/lane-geometry.ts:21), used for 5 / 7 / 10 / 14 KEY;
+ * - the gap between double play's banks: `IIDX_DP_SIDE_GAP` (packages/skin-sdk/src/lane-geometry.ts:28);
+ * - one side's width (shared out evenly in 9 KEY) and the playfield's height from its top to the judgement line:
+ *   `PLAYFIELD` (packages/skin-sdk/src/playfield.ts:6, `w: 194`, `y: 0`, `judgementY: 321`).
+ */
+export const SYNESTHESIA_PLAYFIELD = {
+  laneWidths: { scratch: 41, white: 24, black: 19 },
+  sideGap: 60,
+  sideWidth: 194,
+  height: 321,
+} as const;
+
+/**
+ * The scroll speed the excerpt shows: Synesthesia at HIGH SPEED 2.0, the gameplay scene's default (`hiSpeed = 2.0`,
+ * packages/player-web/src/scene/core/gameplay.ts:1180), which moves notes `PIXELS_PER_BEAT * hiSpeed` design pixels a
+ * beat (`PIXELS_PER_BEAT = 72`, packages/player-web/src/scene/gameplay-constants.ts:12).
+ */
+export const EXCERPT_PIXELS_PER_BEAT = 72 * 2;
+
+/** The excerpt's length: the beats Synesthesia's playfield shows at that speed, 321 / 144 = 2.23. */
+export const EXCERPT_BEATS = SYNESTHESIA_PLAYFIELD.height / EXCERPT_PIXELS_PER_BEAT;
 
 /** The most lanes a card's playfield shows readably (14 KEY's 16); wider modes keep the decorative playfield. */
 export const MAX_EXCERPT_LANES = 16;
@@ -117,7 +154,8 @@ export function densestWindow(notes: readonly BeatNote[], beats: number): Excerp
  */
 export function chartExcerpt(
   document: ExcerptDocument,
-  lanes: ReadonlyArray<{ channel: string; tone: ExcerptTone }>,
+  lanes: ReadonlyArray<{ channel: string } & ExcerptLane>,
+  widths: ExcerptLaneWidths,
   beats = EXCERPT_BEATS,
 ): ChartExcerpt | null {
   if (lanes.length === 0 || lanes.length > MAX_EXCERPT_LANES) return null;
@@ -129,7 +167,8 @@ export function chartExcerpt(
     .filter((beat) => beat >= window.start && beat <= window.start + beats)
     .map((beat) => beat - window.start);
   return {
-    lanes: lanes.map((lane) => lane.tone),
+    lanes: lanes.map((lane) => ({ tone: lane.tone, side: lane.side })),
+    widths,
     beats,
     notes: notes
       .filter((note) => note.beat >= window.start && note.beat < window.start + beats)

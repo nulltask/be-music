@@ -56,7 +56,7 @@ describe('share cards', () => {
     const ownView = await (await fetchApp(`/leaderboard/scores/${scoreId}`, { headers: { cookie: owner } })).text();
     expect(ownView).toContain(`data-upload="/api/v0/scores/${scoreId}/card"`);
     // The card to draw carries the chart's densest notes for its playfield; nobody else's view needs them.
-    expect(ownView).toMatch(/"excerpt":\{"lanes":\["red","white",/);
+    expect(ownView).toMatch(/"excerpt":\{"lanes":\[\{"tone":"red","side":"1P"\},/);
     expect(page).not.toContain('"excerpt"');
 
     const fallback = await fetchApp(new URL(image!).pathname + new URL(image!).search);
