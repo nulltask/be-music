@@ -8,7 +8,7 @@ import {
   wideStage,
 } from '@be-music/skin-sdk';
 import { logger } from '../../logger.ts';
-import { PIXI_HOST_TARGET, pixiHostRender, type PixiHostTarget } from '../../skins/pixi-kit/host-render.ts';
+import { PIXI_HOST_TARGET, rendersOnPixiHost, type PixiHostTarget } from '../../skins/pixi-kit/host-render.ts';
 import type {
   BeMusicBgaFrame,
   BeMusicBomb,
@@ -35,8 +35,8 @@ import type {
 /**
  * The player's side of a be-music skin: each screen gets a canvas sized to the screen pixels the stage covers, the skin
  * draws it with whatever it likes, and the canvas is shown in the Pixi scene as one texture. Skins never see Pixi —
- * except Pixi-kit skins, which draw through the player's own renderer into the texture when they accept it (see
- * `PIXI_HOST_RENDER`), so the frame stays on the GPU.
+ * except Pixi-kit skins, which draw through the player's own renderer into the texture (see `PIXI_HOST_RENDER`),
+ * so the frame stays on the GPU.
  */
 
 const log = logger('be-music-skin');
@@ -93,11 +93,11 @@ class SkinSurface {
   /** The stage size of the frame being drawn; follows the screen when the host switches between the skin's stages. */
   private stage: SurfaceSize;
 
-  /** `renderer` is the player's; a skin that accepts it draws through it instead of on the canvas. */
+  /** `renderer` is the player's; a Pixi-kit skin draws through it instead of on the canvas. */
   constructor(skin: BeMusicSkin, renderer: Renderer | undefined) {
     this.skin = skin;
     this.stage = resolveBeMusicSkinStage(skin);
-    this.hostRenderer = renderer !== undefined && pixiHostRender(skin)?.accepts(renderer) ? renderer : undefined;
+    this.hostRenderer = renderer !== undefined && rendersOnPixiHost(skin) ? renderer : undefined;
     // Nearest sampling: the canvas is sized to the screen pixels it covers, so it is shown dot by dot, never filtered.
     // Dynamic: sprites showing the texture follow its size when the stage changes (a rotation between the skin's
     // landscape and portrait stages).
@@ -266,7 +266,7 @@ export class BeMusicGameplayBinding {
   /**
    * `songImage` resolves the song's images for `frame.songImage`; without one every image reads as unavailable.
    * `settings` are the player's stored values for the skin's settings; without them the skin draws with its defaults.
-   * `renderer` is the player's Pixi renderer: a Pixi-kit skin that accepts it draws through it.
+   * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
@@ -420,7 +420,7 @@ export class BeMusicSelectBinding {
    * reads as never played. `songImage` resolves song images for `frame.songImage` (call {@link invalidate} when one
    * arrives); without one every image reads as unavailable. `settings` are the player's stored values for the skin's
    * settings; without them the skin draws with its defaults.
-   * `renderer` is the player's Pixi renderer: a Pixi-kit skin that accepts it draws through it.
+   * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
@@ -541,7 +541,7 @@ export class BeMusicResultBinding {
   /**
    * `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. `settings`
    * are the player's stored values for the skin's settings; without them the skin draws with its defaults.
-   * `renderer` is the player's Pixi renderer: a Pixi-kit skin that accepts it draws through it.
+   * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,
@@ -589,7 +589,7 @@ export class BeMusicDecideBinding {
   /**
    * `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. `settings`
    * are the player's stored values for the skin's settings; without them the skin draws with its defaults.
-   * `renderer` is the player's Pixi renderer: a Pixi-kit skin that accepts it draws through it.
+   * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
    */
   constructor(
     skin: BeMusicSkin,

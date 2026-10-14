@@ -1,7 +1,7 @@
-import type { WebGLRenderer } from 'pixi.js';
+import type { Renderer } from 'pixi.js';
 
 /** Work a skin wants done on the GPU before the frame is drawn, e.g. stepping a particle simulation in textures. */
-export type GpuPass = (renderer: WebGLRenderer) => void;
+export type GpuPass = (renderer: Renderer) => void;
 
 const pending: GpuPass[] = [];
 
@@ -15,7 +15,7 @@ export function queueGpuPass(pass: GpuPass): void {
 }
 
 /** Runs and clears every queued pass, in the order they were queued. A failing pass doesn't stop the rest. */
-export function runGpuPasses(renderer: WebGLRenderer, onError?: (error: unknown) => void): void {
+export function runGpuPasses(renderer: Renderer, onError?: (error: unknown) => void): void {
   const passes = pending.splice(0);
   for (const pass of passes) {
     try {

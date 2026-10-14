@@ -1,6 +1,6 @@
 import { Container, Graphics, WebGLRenderer, type Renderer, type Texture } from 'pixi.js';
 import { runGpuPasses } from './gpu-pass.ts';
-import { acceptsHostRenderer, PIXI_HOST_RENDER, pixiHostTarget, type PixiHostRender } from './host-render.ts';
+import { PIXI_HOST_RENDER, pixiHostTarget } from './host-render.ts';
 import {
   defineBeMusicSkin,
   type BeMusicGameplayFrame,
@@ -25,7 +25,7 @@ const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
  * on the surface's WebGL 2 context and the frame is rendered into the canvas.
  */
 export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'webgl2'> {
-  const { gameplay, select, result: _result, requiresWebGL = false, ...meta } = definition;
+  const { gameplay, select, result: _result, ...meta } = definition;
   const surfaces = new WeakMap<HTMLCanvasElement, PixiSurface>();
   const surfaceFor = (surface: BeMusicSurface<'webgl2'>): PixiSurface | undefined => surfaces.get(surface.canvas);
 
@@ -102,8 +102,7 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
       },
     },
   });
-  const hostRender: PixiHostRender = { accepts: (renderer) => acceptsHostRenderer(renderer, requiresWebGL) };
-  Object.defineProperty(skin, PIXI_HOST_RENDER, { value: hostRender });
+  Object.defineProperty(skin, PIXI_HOST_RENDER, { value: true });
   return skin;
 }
 
@@ -129,9 +128,8 @@ class PixiSurface {
     // The canvas never sees the pointer (the player handles input), so skip Pixi's hit-testing tree entirely.
     root.eventMode = 'none';
     root.interactiveChildren = false;
-    // GPU work the frame asked for while it was built (simulation steps into render textures) runs first. Passes are
-    // GLSL, so they reach a host renderer only when it is WebGL (`requiresWebGL` keeps such a skin off any other).
-    runGpuPasses(renderer as WebGLRenderer);
+    // GPU work the frame asked for while it was built (simulation steps into render textures) runs first.
+    runGpuPasses(renderer);
     if (this.target) {
       // The player rounds its own sprites to device pixels; the skin's vector shapes were drawn unrounded on their own
       // renderer, and keep that.
