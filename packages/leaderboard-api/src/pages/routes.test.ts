@@ -54,6 +54,21 @@ const page = async (path: string, cookie?: string) => {
   return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
 };
 
+describe('session cookies', () => {
+  test('a page refreshes the session cookie cache it had to read from the database', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    // Only the session token, as when the five-minute cookie cache has expired: the session comes from D1, and the
+    // response hands back a fresh cache so the next request need not ask D1 again.
+    const token = cookie.split('; ').find((part) => part.includes('session_token='))!;
+    const response = await fetchApp('/leaderboard', { headers: { cookie: token } });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('@player_');
+    expect(response.headers.getSetCookie().some((set) => set.includes('session_data='))).toBe(true);
+    // Signed out, nothing is set.
+    expect((await fetchApp('/leaderboard')).headers.getSetCookie()).toEqual([]);
+  });
+});
+
 describe('page language', () => {
   const html = async (path: string, headers: Record<string, string> = {}) => (await fetchApp(path, { headers })).text();
 
