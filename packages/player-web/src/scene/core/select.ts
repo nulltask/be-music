@@ -46,7 +46,17 @@ import {
 } from './viewport.ts';
 import { masterOutput } from '../../runtime/master-volume.ts';
 import { resolveBeMusicSelectLayout, resolveStageOrientation, type BeMusicSelectLayout } from '@be-music/skin-sdk';
-import { isTouchDrag, stepTouchScroll } from './touch-scroll.ts';
+import {
+  FLING_START_VELOCITY,
+  FLING_STOP_VELOCITY,
+  isTouchDrag,
+  isWheelNotch,
+  releaseVelocity,
+  stepFling,
+  stepTouchScroll,
+  stepWheelScroll,
+  type TouchSample,
+} from './touch-scroll.ts';
 
 const log = logger('select');
 const BG = new Color('#050912');
@@ -77,14 +87,21 @@ const READTEXT_LINE_SCROLL = 36;
 const READTEXT_PAGE_SCROLL = 360;
 
 /**
- * Minimum interval between two wheel-driven cursor moves in the bar list. Modern trackpads / high-resolution mice fire
- * `wheel` events at ~60+ Hz with tiny per-event `deltaY`s, so an unthrottled handler advances the cursor a dozen+ slots
- * per flick — far past the entry the user was aiming for, with the `cursor-move` SFX chattering on every notch and the
- * smooth-scroll offset re-seeded before the previous slide finishes. 15 ms ≈ twice the rate of macOS's fastest key-
- * repeat setting (~30 ms / repeat at the slider's max), so a sustained scroll feels noticeably snappier than holding
- * an arrow key while still resolving a deliberate trackpad flick to a bounded number of steps instead of a dozen+.
+ * Minimum interval between two notch-driven cursor moves in the bar list, so a free-spinning notched wheel can't fire
+ * the `cursor-move` SFX and re-seed the slide faster than it can play. Smooth (trackpad) scrolling isn't throttled: it
+ * steps by the distance travelled instead (see `stepWheelScroll`).
  */
 const WHEEL_THROTTLE_INTERVAL_MS = 15;
+
+/** Finger positions kept per touch for the release velocity (a few frames' worth). */
+const TOUCH_SAMPLE_LIMIT = 8;
+
+/** How long (ms) after the last wheel or drag movement a partly pulled list starts settling back to a row. */
+const PULL_SETTLE_DELAY_MS = 120;
+/** Time constant (ms) of the settle back to a row. */
+const PULL_SETTLE_TIME_CONSTANT_MS = 70;
+/** Below this pull (design pixels) the list counts as at rest. */
+const PULL_SETTLE_EPSILON = 0.3;
 
 /**
  * Serializable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
@@ -691,8 +708,31 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * on lift — as a tap when it never became a swipe — so swiping the list does not also pick the row it started on.
    */
   private touchGesture:
-    | { pointerId: number; startX: number; startY: number; lastY: number; dragging: boolean; carry: number }
+    | {
+        pointerId: number;
+        startX: number;
+        startY: number;
+        lastY: number;
+        dragging: boolean;
+        /** Recent positions (design pixels), for the velocity the list keeps once the finger lifts. */
+        samples: TouchSample[];
+      }
     | undefined;
+  /**
+   * The list still gliding after a swipe was let go: its velocity (design pixels per ms, positive = toward earlier
+   * entries, as the finger moved down) and when it last advanced.
+   */
+  private fling: { velocity: number; lastAt: number } | undefined;
+  /**
+   * How far the list is pulled past the focused row toward later entries, in design pixels, less than a row: the
+   * travel of a drag, a fling or a trackpad not yet turned into a cursor step. Shown to the skin as
+   * `frame.listScroll`, and eased back to a row (see {@link settleListPull}) once nothing is moving the list.
+   */
+  private listPull = 0;
+  /** `performance.now()` of the last wheel or drag movement, so the pull settles only once input stops. */
+  private lastPullInputAt = Number.NEGATIVE_INFINITY;
+  /** `performance.now()` of the last {@link settleListPull}, for its frame-rate independent easing. */
+  private lastSettleAt: number | undefined;
   /**
    * Last known pointer position in **design-space** coordinates, used by `#SRC_ONMOUSE` hit-tests and
    * `#SRC_MOUSECURSOR` follow. `-1` means "no pointer over canvas yet"; both renderers skip drawing in that case.
@@ -1300,9 +1340,13 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    */
   private tickFrame(): void {
     if (!this.visible) {
+      this.fling = undefined;
       return;
     }
     this.perf.beginTick();
+    const tickNow = performance.now();
+    this.advanceFling(tickNow);
+    this.settleListPull(tickNow);
     if (this.themeDesignSize) {
       this.perf.time('render', () => this.render());
     } else {
@@ -1322,6 +1366,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
         const { width, height } = this.beMusicDesignSize;
         const onStage = this.mouseX >= 0 && this.mouseY >= 0 && this.mouseX < width && this.mouseY < height;
         this.beMusicRenderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
+        this.beMusicRenderer.setListScroll(this.shownListPull());
         this.beMusicRenderer.tick(now, this.focusedSong(), this.launchAt, this.selectAudioAnalyzer?.sample(now));
       }
     }
@@ -1842,23 +1887,89 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     const delta = (event.offsetY - gesture.lastY) / viewport.scale;
     gesture.lastY = event.offsetY;
+    gesture.samples.push({ at: performance.now(), y: event.offsetY / viewport.scale });
+    if (gesture.samples.length > TOUCH_SAMPLE_LIMIT) gesture.samples.shift();
     // A swipe over the open README pans its body, as the wheel does.
     if (this.readTextOpen) {
       this.scrollReadText(-delta);
       return;
     }
-    const step = stepTouchScroll(gesture.carry, delta, this.resolveTouchScrollPitch());
-    gesture.carry = step.carry;
+    const step = stepTouchScroll(this.listPull, delta, this.resolveTouchScrollPitch());
+    this.listPull = step.carry;
+    this.lastPullInputAt = performance.now();
     if (step.steps !== 0) this.moveCursorBy(step.steps);
   };
 
-  /** A finger lifting: a touch that never became a swipe is a tap at the point it touched down. */
+  /**
+   * A finger lifting: a touch that never became a swipe is a tap at the point it touched down; a swipe let go while
+   * still moving keeps the list gliding and slowing down (see {@link advanceFling}).
+   */
   private readonly handlePointerUp = (event: PointerEvent): void => {
     const gesture = this.touchGesture;
     if (gesture === undefined || gesture.pointerId !== event.pointerId) return;
     this.touchGesture = undefined;
-    if (!gesture.dragging) this.handlePointerTap(gesture.startX, gesture.startY);
+    if (!gesture.dragging) {
+      this.handlePointerTap(gesture.startX, gesture.startY);
+      return;
+    }
+    if (this.readTextOpen) return;
+    const now = performance.now();
+    const velocity = releaseVelocity(gesture.samples, now);
+    if (Math.abs(velocity) >= FLING_START_VELOCITY) {
+      this.fling = { velocity, lastAt: now };
+    }
   };
+
+  /** Moves a gliding list on by the time since its last frame, stepping the cursor per row travelled. */
+  private advanceFling(now: number): void {
+    const fling = this.fling;
+    if (fling === undefined) return;
+    const { distance, velocity } = stepFling(fling.velocity, now - fling.lastAt);
+    fling.lastAt = now;
+    fling.velocity = velocity;
+    const step = stepTouchScroll(this.listPull, distance, this.resolveTouchScrollPitch());
+    this.listPull = step.carry;
+    if (step.steps !== 0) this.moveCursorBy(step.steps);
+    if (Math.abs(velocity) < FLING_STOP_VELOCITY) this.fling = undefined;
+  }
+
+  /**
+   * Once nothing moves the list (no finger down, no fling, no wheel for {@link PULL_SETTLE_DELAY_MS}), eases its pull
+   * back to a row: on to the next one when it was pulled past half a row and the window can move that way, back to the
+   * focused one otherwise.
+   */
+  private settleListPull(now: number): void {
+    const dt = this.lastSettleAt === undefined ? 0 : now - this.lastSettleAt;
+    this.lastSettleAt = now;
+    if (this.listPull === 0 || this.touchGesture?.dragging || this.fling !== undefined) return;
+    if (now - this.lastPullInputAt < PULL_SETTLE_DELAY_MS) return;
+    const pitch = this.resolveTouchScrollPitch();
+    const direction = Math.sign(this.listPull);
+    if (Math.abs(this.listPull) >= pitch / 2 && this.listWindowMoves(direction)) {
+      this.moveCursorBy(direction);
+      this.listPull -= direction * pitch;
+    }
+    this.listPull *= Math.exp(-dt / PULL_SETTLE_TIME_CONSTANT_MS);
+    if (Math.abs(this.listPull) < PULL_SETTLE_EPSILON) this.listPull = 0;
+  }
+
+  /** The pull the skin draws: none where the list window can't move that way (at the list's ends). */
+  private shownListPull(): number {
+    return this.listPull !== 0 && this.listWindowMoves(Math.sign(this.listPull)) ? this.listPull : 0;
+  }
+
+  /** Whether one cursor step in `direction` (±1) scrolls the list window rather than only moving the highlight. */
+  private listWindowMoves(direction: number): boolean {
+    const entries = this.currentEntries();
+    const next = this.selectedIndex + direction;
+    if (next < 0 || next >= entries.length) return false;
+    const layout = this.beMusicSelectLayout;
+    const { height } = this.resolveDesignSize();
+    return (
+      resolveSelectListWindow(layout, height, next, entries.length).firstVisibleIndex !==
+      resolveSelectListWindow(layout, height, this.selectedIndex, entries.length).firstVisibleIndex
+    );
+  }
 
   private readonly handlePointerCancel = (event: PointerEvent): void => {
     if (this.touchGesture?.pointerId === event.pointerId) this.touchGesture = undefined;
@@ -2062,9 +2173,10 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
   /**
    * Wheel-scroll → cursor move. `deltaY > 0` (wheel down) advances to the next entry; `deltaY < 0` (wheel up) rewinds.
-   * Multiple notches per event (`deltaMode` lines / pages) are clamped to one cursor step so a fast trackpad flick
-   * doesn't send the cursor flying past dozens of entries — `noteCursorChange` only animates one slot worth of slide
-   * and large jumps would make the smooth-scroll look broken.
+   * A notched mouse wheel moves one entry per notch (several notches in one event still count once, throttled by
+   * {@link WHEEL_THROTTLE_INTERVAL_MS}). A trackpad or free-spinning wheel sends a stream of small pixel deltas; those
+   * move the list by the distance travelled, one entry per row pitch on screen, so a light touch no longer races through
+   * the list.
    *
    * Wraps at the list ends, matching the keyboard navigation. Skipped while hidden (gameplay on top) so a wheel event
    * over the canvas doesn't navigate the select view in the background.
@@ -2081,10 +2193,17 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     const entries = this.currentEntries();
     if (entries.length === 0) return;
-    // Throttle high-rate wheel input. Modern trackpads emit a continuous stream of small `deltaY`s during a single
-    // flick — without this gate one flick advances the cursor 10+ slots, the smooth-scroll keeps re-seeding before
-    // the previous slide finishes, and `cursor-move` chatters on every notch. The floor is intentionally gentle:
-    // sustained scrolling still progresses ~11 entries / second, but discrete flicks resolve to roughly one step.
+    this.fling = undefined;
+    if (!isWheelNotch(event)) {
+      const { width: designWidth, height: designHeight } = this.resolveDesignSize();
+      const viewport = resolveScaledViewport(this.app.screen.width, this.app.screen.height, designWidth, designHeight);
+      const step = stepWheelScroll(this.listPull, event.deltaY / viewport.scale, this.resolveTouchScrollPitch());
+      this.listPull = step.carry;
+      this.lastPullInputAt = performance.now();
+      if (step.steps !== 0) this.moveCursorBy(step.steps);
+      return;
+    }
+    this.listPull = 0;
     const now = performance.now();
     if (now - this.lastWheelMoveAt < WHEEL_THROTTLE_INTERVAL_MS) return;
     this.lastWheelMoveAt = now;
@@ -2108,13 +2227,15 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     // A finger may be starting a swipe over the list, so its tap waits for the lift (`handlePointerUp`).
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       if (this.touchGesture !== undefined) return;
+      // A touch stops a gliding list where it is, like catching it.
+      this.fling = undefined;
       this.touchGesture = {
         pointerId: event.pointerId,
         startX: event.offsetX,
         startY: event.offsetY,
         lastY: event.offsetY,
         dragging: false,
-        carry: 0,
+        samples: [],
       };
       return;
     }

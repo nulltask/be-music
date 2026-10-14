@@ -43,6 +43,7 @@ const BENCH_RESULT = {
   scoreHistory: [{ progress: 0, exScore: 0 }],
 } satisfies skinSdkApi.BeMusicResultData;
 const BENCH_CHANNELS_7K = ['16', '11', '12', '13', '14', '15', '18', '19'];
+const BENCH_SELECT_ENTRIES: readonly number[] = Array.from({ length: 40 }, (_, index) => index);
 const BENCH_LAYOUT_INPUT = { laneChannels: BENCH_CHANNELS_7K, playVariant: '7' } as const;
 const BENCH_LANES = skinSdkApi.resolveGameplayLayout(BENCH_LAYOUT_INPUT, skinSdkApi.wideStage).lanes;
 const BENCH_MOMENT_INPUT = {
@@ -310,6 +311,14 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
         { stage: skinSdkApi.wideStage, portraitStage: skinSdkApi.tallStage },
         { width: 390, height: 844 },
         { laneChannels: BENCH_CHANNELS_7K, playVariant: '7' },
+      );
+    },
+  });
+  define('skin-sdk.selectListRows', {
+    run: () => {
+      skinSdkApi.selectListRows(
+        { entries: BENCH_SELECT_ENTRIES, firstVisibleIndex: 10, visibleRows: 14, listScroll: 9 },
+        28,
       );
     },
   });
