@@ -49,6 +49,12 @@ export class ScrollDistanceMapper implements ScrollDistanceMapperLike {
   private readonly segments: ScrollSegment[];
   private readonly lookaheadBeats: number;
   private readonly invalidDistance: number;
+  /**
+   * The last `fromBeat` {@link distanceBetween} measured from, and its distance: a frame measures every note and bar
+   * line from the same playhead, so its distance is worked out once per frame instead of once per object.
+   */
+  private lastFromBeat = Number.NaN;
+  private lastFromDistance = 0;
 
   constructor(
     scrollTimeline?: ReadonlyArray<ScrollTimelinePoint>,
@@ -64,7 +70,11 @@ export class ScrollDistanceMapper implements ScrollDistanceMapperLike {
     if (!Number.isFinite(fromBeat) || !Number.isFinite(toBeat)) {
       return this.invalidDistance;
     }
-    return this.distanceAt(toBeat) - this.distanceAt(fromBeat);
+    if (fromBeat !== this.lastFromBeat) {
+      this.lastFromDistance = this.distanceAt(fromBeat);
+      this.lastFromBeat = fromBeat;
+    }
+    return this.distanceAt(toBeat) - this.lastFromDistance;
   }
 
   hasBidirectionalScrollWithinLookahead(fromBeat: number): boolean {
@@ -381,8 +391,10 @@ function integrateSegmentDistanceTerms({ linear, quadratic }: SegmentDistanceTer
   return linear * deltaBeats + quadratic * deltaBeats * deltaBeats;
 }
 
+const segmentStartBeat = (segment: ScrollSegment): number => segment.startBeat;
+
 function findLastSegmentIndexByBeat(segments: ScrollSegment[], beat: number): number {
-  const index = findLastIndexAtOrBefore(segments, beat, (segment) => segment.startBeat);
+  const index = findLastIndexAtOrBefore(segments, beat, segmentStartBeat);
   return Math.max(0, index);
 }
 

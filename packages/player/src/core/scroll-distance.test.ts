@@ -2,6 +2,23 @@ import { describe, expect, test } from 'vite-plus/test';
 import { createScrollDistanceMapper } from './scroll-distance.ts';
 
 describe('scroll distance', () => {
+  test('measures from a remembered start exactly as from a fresh one', () => {
+    const timeline = [
+      { beat: 0, speed: 1 },
+      { beat: 4, speed: -0.5 },
+      { beat: 8, speed: 2 },
+    ];
+    const speeds = [{ beat: 2, speed: 1.5 }];
+    const reused = createScrollDistanceMapper(timeline, speeds);
+    // A frame measures many objects from one playhead, then the playhead moves on (and back, after a reversal).
+    for (const from of [3, 3, 3, 6.5, 6.5, 3, Number.NaN, 10]) {
+      for (const to of [0, 3.5, 5, 9, 12]) {
+        const fresh = createScrollDistanceMapper(timeline, speeds).distanceBetween(from, to);
+        expect(Object.is(reused.distanceBetween(from, to), fresh)).toBe(true);
+      }
+    }
+  });
+
   test('distanceBetween integrates plain beat distance', () => {
     const mapper = createScrollDistanceMapper();
     expect(mapper.distanceBetween(2, 6)).toBeCloseTo(4, 6);
