@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  computeGaugeBucketOp,
+  computeGaugeTypeOps,
   LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT,
   LR2_GROOVE_GAUGE_UNITS,
   resolveGrooveGaugeBeads,
@@ -71,5 +73,42 @@ describe('resolveGrooveGaugeBeads', () => {
   test('exposes the LR2 constants', () => {
     expect(LR2_GROOVE_GAUGE_UNITS).toBe(50);
     expect(LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT).toBe(80);
+  });
+});
+
+describe('computeGaugeTypeOps', () => {
+  test('HARD / DEATH light the red gauge ops (43 / 45), not the normal ones', () => {
+    for (const gauge of ['HARD', 'DEATH'] as const) {
+      const ops = computeGaugeTypeOps(gauge);
+      expect(ops).toEqual([43, 45]);
+      expect(ops).not.toContain(42);
+      expect(ops).not.toContain(44);
+    }
+  });
+
+  test('GROOVE / EASY light the normal gauge ops (42 / 44), not the red ones', () => {
+    for (const gauge of ['GROOVE', 'EASY'] as const) {
+      const ops = computeGaugeTypeOps(gauge);
+      expect(ops).toEqual([42, 44]);
+      expect(ops).not.toContain(43);
+      expect(ops).not.toContain(45);
+    }
+  });
+});
+
+describe('computeGaugeBucketOp', () => {
+  test('maps each 10 % band to 230–240', () => {
+    expect(computeGaugeBucketOp(0)).toBe(230);
+    expect(computeGaugeBucketOp(9.9)).toBe(230);
+    expect(computeGaugeBucketOp(10)).toBe(231);
+    expect(computeGaugeBucketOp(79.9)).toBe(237);
+    expect(computeGaugeBucketOp(80)).toBe(238);
+    expect(computeGaugeBucketOp(99.9)).toBe(239);
+    expect(computeGaugeBucketOp(100)).toBe(240);
+  });
+
+  test('clamps out-of-range input to the end buckets', () => {
+    expect(computeGaugeBucketOp(-5)).toBe(230);
+    expect(computeGaugeBucketOp(150)).toBe(240);
   });
 });
