@@ -9,7 +9,18 @@ import { CLIENT_SCRIPT_PATH } from './client-script.ts';
 import { Avatar, playerHref } from './components/basics.tsx';
 import { EntityIcon, type EntityKind } from './components/entity-icon.tsx';
 import { Icon } from './components/icon.tsx';
-import { Check, ChevronDown, ExternalLink, KeyRound, Languages, LogOut, Play, Scale } from 'lucide-static';
+import {
+  Check,
+  ChevronDown,
+  ExternalLink,
+  KeyRound,
+  Languages,
+  LogOut,
+  Menu,
+  Play,
+  Scale,
+  UserPlus,
+} from 'lucide-static';
 import { CARD_HEIGHT, CARD_WIDTH } from '../cards.ts';
 import { ICON_LINKS } from './icons.ts';
 import { ICONS } from './icons.generated.ts';
@@ -449,7 +460,7 @@ function RulesetMenu(props: { current: PlaylogRulesetId; path: string }) {
 function LanguageMenu(props: { current: Locale; path: string }) {
   const t = useMessages();
   return (
-    <div class="relative">
+    <div class="relative hidden sm:block">
       <button
         type="button"
         class="btn"
@@ -469,19 +480,76 @@ function LanguageMenu(props: { current: Locale; path: string }) {
         class={`${HEADER_MENU_CLASS} w-44`}
         style={headerMenuStyle('--language-menu')}
       >
-        {LOCALES.map((locale) => (
-          <a
-            class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5"
-            href={`/leaderboard/lang/${locale}?next=${encodeURIComponent(withoutLang(props.path))}`}
-            aria-current={locale === props.current ? 'true' : undefined}
-            lang={locale}
-          >
-            <span class={locale === props.current ? '' : 'invisible'}>
-              <Icon svg={Check} />
-            </span>
-            {LOCALE_NAMES[locale]}
+        <LanguageLinks current={props.current} path={props.path} />
+      </div>
+    </div>
+  );
+}
+
+/** The languages to pick from, the page's own checked: the language menu's items, and the phone menu's last part. */
+function LanguageLinks(props: { current: Locale; path: string }) {
+  return (
+    <>
+      {LOCALES.map((locale) => (
+        <a
+          class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5"
+          href={`/leaderboard/lang/${locale}?next=${encodeURIComponent(withoutLang(props.path))}`}
+          aria-current={locale === props.current ? 'true' : undefined}
+          lang={locale}
+        >
+          <span class={locale === props.current ? '' : 'invisible'}>
+            <Icon svg={Check} />
+          </span>
+          {LOCALE_NAMES[locale]}
+        </a>
+      ))}
+    </>
+  );
+}
+
+/**
+ * The header's menu on a phone, where only the main buttons (ruleset, account, Play) fit in the row: the navigation,
+ * Help, Sign up when signed out, and the language, behind one button at the right edge. From `sm` up the header shows
+ * all of them itself and this button is hidden.
+ */
+function NavMenu(props: { current: Locale; path: string; signedIn: boolean }) {
+  const t = useMessages();
+  const item = 'hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start';
+  return (
+    <div class="relative sm:hidden">
+      <button
+        type="button"
+        class="btn"
+        data-size="sm"
+        data-variant="ghost"
+        popovertarget="nav-menu"
+        aria-label={t.nav.menu}
+        title={t.nav.menu}
+        style="anchor-name:--nav-menu"
+      >
+        <Icon svg={Menu} />
+      </button>
+      <div id="nav-menu" popover="auto" class={`${HEADER_MENU_CLASS} w-56`} style={headerMenuStyle('--nav-menu')}>
+        <nav aria-label={t.nav.label}>
+          <a class={item} href="/leaderboard">
+            <EntityIcon kind="latest" size="md" class="text-current" />
+            {t.nav.latestTitle}
           </a>
-        ))}
+          <a class={item} href="/leaderboard/help">
+            <EntityIcon kind="help" size="md" class="text-current" />
+            {t.nav.help}
+          </a>
+        </nav>
+        {props.signedIn ? null : (
+          <button type="button" class={item} data-account-action="open-sign-up">
+            <Icon svg={UserPlus} />
+            {t.account.signUp}
+          </button>
+        )}
+        <div class="mt-1 border-t pt-1">
+          <div class="text-muted-foreground px-2 pt-1.5 pb-1 text-xs">{t.language.menuTitle}</div>
+          <LanguageLinks current={props.current} path={props.path} />
+        </div>
       </div>
     </div>
   );
@@ -610,7 +678,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
               </nav>
               <div class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2">
                 <RulesetMenu current={props.meta.ruleset} path={props.meta.path} />
-                {/* Not on a phone, where the header has no room: the footer links to Help too. */}
+                {/* Not on a phone, where the header has no room: it is in the phone menu (NavMenu) there. */}
                 <a
                   class="btn hidden sm:inline-flex"
                   data-size="sm"
@@ -628,6 +696,8 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                 </a>
                 {/* Last, at the right edge: switching the language changes the other labels' widths, not its place. */}
                 <LanguageMenu current={props.meta.locale} path={props.meta.path} />
+                {/* In its place on a phone: the menu holding what the row has no room for. */}
+                <NavMenu current={props.meta.locale} path={props.meta.path} signedIn={props.meta.viewer !== null} />
               </div>
             </div>
             <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />

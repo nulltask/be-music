@@ -15,6 +15,7 @@ export const en = {
   },
   nav: {
     label: 'Leaderboard',
+    menu: 'Menu',
     latest: 'Latest',
     latestTitle: 'Latest plays',
     help: 'Help',
