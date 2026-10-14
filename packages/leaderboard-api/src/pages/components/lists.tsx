@@ -146,7 +146,7 @@ function LampLabel(props: { lamp: number; from?: number }) {
       <span class="ring-foreground/20 inline-block size-2 rounded-full ring-1" style={`background:${style.color}`} />
       {raised ? (
         <>
-          {/* A narrow row shows only the lamp reached; the info popover and the score page say what it came from. */}
+          {/* A narrow row shows only the lamp reached; the score page says what it came from. */}
           <span class="text-muted-foreground/70 hidden @xl:inline">{lampStyle(props.from!).label} →</span>
           <span class="text-foreground font-medium">{style.label}</span>
         </>
