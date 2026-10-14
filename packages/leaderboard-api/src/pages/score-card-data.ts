@@ -1,3 +1,5 @@
+import type { ChartExcerpt } from './chart-excerpt.ts';
+
 /**
  * What a play's share card shows. The score page hands it to the client script as JSON; client/score-card.ts draws
  * the card from it. Kept free of DOM and Worker types, so both sides can import it.
@@ -25,6 +27,11 @@ export interface ScoreCardData {
   gauge: string;
   /** Epoch ms. */
   playedAt: number;
+  /**
+   * The chart's densest two measures for the playfield on the right; absent when the card is not to be drawn here or
+   * the chart's document is not at hand, and the card keeps its decorative notes.
+   */
+  excerpt?: ChartExcerpt;
 }
 
 /** The text of a share: chart, lamp, DJ Rank, EX-Score and rate, ruleset. */

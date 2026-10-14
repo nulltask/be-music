@@ -9,9 +9,11 @@
  * wider than within them. The DJ Rank is the one big thing; the lamp's colour is the one accent, repeated in the
  * glow, the lamp pill and the playfield's judge line. Labels repeat one style (small, spaced capitals, muted).
  */
+import type { ChartExcerpt, ExcerptTone } from '../src/pages/chart-excerpt.ts';
 import type { ScoreCardData } from '../src/pages/score-card-data.ts';
 import {
   type Box,
+  SAFE_EDGE,
   SHARE_CARD_HEIGHT,
   SHARE_CARD_WIDTH,
   X_DOMAIN_LABEL_ZONE,
@@ -194,44 +196,167 @@ export function countColumns(left: number, width: number, gap: number): number[]
   return COUNT_LABELS.map((_, i) => Math.round(left + i * column + (i >= 5 ? gap : 0)));
 }
 
-/** The 7-key playfield on the right, as in the site icon; the judge line takes the lamp's colour. */
-function drawPlayfield(ctx: CanvasRenderingContext2D, lampColor: string): void {
-  const lane = 58;
-  const width = lane * 7;
-  const left = CARD_WIDTH - width;
-  const fadeWidth = 200;
+/** The playfield's panel: 406 px at the card's right edge, its left edge fading into the background. */
+const PANEL_WIDTH = 406;
+const PANEL_LEFT = CARD_WIDTH - PANEL_WIDTH;
+const LANE_LIGHT = '#1a2036';
+const LANE_DARK = '#10152a';
+
+/**
+ * Where the chart's own notes go on the panel: lanes from past the fade to the safe area's right edge; the window's
+ * start on the judge line (its top on the counts row's baseline), its end below the site's name, and long notes cut
+ * off just above that.
+ */
+export const EXCERPT_FRAME = {
+  left: PANEL_LEFT + 48,
+  right: CARD_WIDTH - SAFE_EDGE,
+  topY: 112,
+  clipY: 96,
+  judgeY: COUNTS_BASELINE - 8,
+  noteHeight: 12,
+  fadeWidth: 48,
+} as const;
+
+export type ExcerptRectKind = 'lane-light' | 'lane-dark' | 'bar' | `long-${ExcerptTone}` | `note-${ExcerptTone}`;
+
+export const EXCERPT_RECT_COLORS: Readonly<Record<ExcerptRectKind, string>> = {
+  'lane-light': LANE_LIGHT,
+  'lane-dark': LANE_DARK,
+  bar: '#2e3657',
+  'long-white': '#8f97b3',
+  'long-blue': '#2c7fa8',
+  'long-red': '#a83445',
+  'note-white': '#ffffff',
+  'note-blue': '#4ec9ff',
+  'note-red': '#ff4d5e',
+};
+
+export interface ExcerptRect extends Box {
+  kind: ExcerptRectKind;
+}
+
+/**
+ * The rectangles of a chart excerpt on the panel, back to front: lane backgrounds (blue keys' lanes darker), bar lines,
+ * long-note bodies, then note heads. Lanes split the frame in whole pixels; a note sits on its beat with its bottom
+ * edge, the window's start on the judge line and later beats above it.
+ */
+export function excerptRects(excerpt: ChartExcerpt, frame = EXCERPT_FRAME): ExcerptRect[] {
+  const count = excerpt.lanes.length;
+  const laneLeft = (i: number) => frame.left + Math.round(((frame.right - frame.left) * i) / count);
+  const pixelsPerBeat = (frame.judgeY - frame.topY) / excerpt.beats;
+  const yOf = (beat: number) => Math.round(frame.judgeY - beat * pixelsPerBeat);
+  const rects: ExcerptRect[] = excerpt.lanes.map((tone, i) => ({
+    x: laneLeft(i),
+    y: 0,
+    width: laneLeft(i + 1) - laneLeft(i),
+    height: CARD_HEIGHT,
+    kind: tone === 'blue' ? 'lane-dark' : 'lane-light',
+  }));
+  for (const beat of excerpt.bars) {
+    rects.push({ x: frame.left, y: yOf(beat) - 1, width: frame.right - frame.left, height: 2, kind: 'bar' });
+  }
+  const heads: ExcerptRect[] = [];
+  for (const note of excerpt.notes) {
+    const tone = excerpt.lanes[note.lane];
+    if (tone === undefined) continue;
+    const width = laneLeft(note.lane + 1) - laneLeft(note.lane);
+    const gap = width >= 30 ? 3 : 1;
+    const x = laneLeft(note.lane) + gap;
+    const bottom = yOf(note.beat);
+    if (note.end !== undefined) {
+      // The body runs up to its end, or to the clip line when it ends past the window.
+      const endY = yOf(note.end);
+      const top = Math.max(frame.clipY, endY);
+      const inset = Math.max(1, Math.round(width / 6));
+      rects.push({
+        x: x + inset,
+        y: top,
+        width: width - 2 * gap - 2 * inset,
+        height: bottom - top,
+        kind: `long-${tone}`,
+      });
+      if (endY - frame.noteHeight >= frame.clipY) {
+        heads.push({
+          x,
+          y: endY - frame.noteHeight,
+          width: width - 2 * gap,
+          height: frame.noteHeight,
+          kind: `note-${tone}`,
+        });
+      }
+    }
+    heads.push({
+      x,
+      y: bottom - frame.noteHeight,
+      width: width - 2 * gap,
+      height: frame.noteHeight,
+      kind: `note-${tone}`,
+    });
+  }
+  return [...rects, ...heads];
+}
+
+/** The decorative notes of a card without its chart: lane, top, colour on 7 lanes of 58 px. */
+const DECORATIVE_NOTES: ReadonlyArray<readonly [number, number, string]> = [
+  // The top row peeks in from above, leaving the top right corner to the site's name.
+  [1, -6, '#4ec9ff'],
+  [5, -6, '#4ec9ff'],
+  [4, 108, '#ffffff'],
+  [2, 182, '#ffffff'],
+  [6, 182, '#ffffff'],
+  [3, 256, '#4ec9ff'],
+  [2, 330, '#ffffff'],
+  [6, 330, '#ffffff'],
+  [1, 404, '#4ec9ff'],
+];
+
+/**
+ * The playfield on the right; the judge line takes the lamp's colour. With the chart's excerpt it shows the chart's
+ * densest two measures; without it, a 7-key playfield of decorative notes, as in the site icon.
+ */
+function drawPlayfield(ctx: CanvasRenderingContext2D, lampColor: string, excerpt: ChartExcerpt | undefined): void {
+  const width = PANEL_WIDTH;
+  const left = PANEL_LEFT;
+  const fadeWidth = excerpt !== undefined ? EXCERPT_FRAME.fadeWidth : 200;
   const layer = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(width, CARD_HEIGHT) : null;
   const target = layer?.getContext('2d') ?? null;
   const g = target ?? ctx;
   const x0 = target !== null ? 0 : left;
-  for (let i = 0; i < 7; i++) {
-    g.fillStyle = i % 2 === 0 ? '#1a2036' : '#10152a';
-    g.fillRect(x0 + i * lane, 0, lane, CARD_HEIGHT);
+  // The glow and the judge line sit on the counts row's baseline.
+  const drawGlow = () => {
+    const glow = g.createLinearGradient(0, COUNTS_BASELINE - 64, 0, COUNTS_BASELINE);
+    glow.addColorStop(0, hexAlpha(lampColor, 0));
+    glow.addColorStop(1, hexAlpha(lampColor, 0.5));
+    g.fillStyle = glow;
+    g.fillRect(x0, COUNTS_BASELINE - 64, width, 64);
+  };
+  if (excerpt !== undefined) {
+    g.fillStyle = LANE_LIGHT;
+    g.fillRect(x0, 0, width, CARD_HEIGHT);
+    const rects = excerptRects(excerpt);
+    // Lanes and bar lines under the glow, notes over it.
+    const firstNote = rects.findIndex((rect) => rect.kind.startsWith('long-') || rect.kind.startsWith('note-'));
+    rects.forEach((rect, i) => {
+      if (i === firstNote) drawGlow();
+      g.fillStyle = EXCERPT_RECT_COLORS[rect.kind];
+      g.beginPath();
+      g.roundRect(x0 + rect.x - left, rect.y, rect.width, rect.height, rect.kind.startsWith('note-') ? 2 : 0);
+      g.fill();
+    });
+    if (firstNote < 0) drawGlow();
+  } else {
+    for (let i = 0; i < 7; i++) {
+      g.fillStyle = i % 2 === 0 ? LANE_LIGHT : LANE_DARK;
+      g.fillRect(x0 + i * 58, 0, 58, CARD_HEIGHT);
+    }
+    for (const [laneIndex, y, color] of DECORATIVE_NOTES) {
+      g.fillStyle = color;
+      g.beginPath();
+      g.roundRect(x0 + laneIndex * 58 + 4, y, 58 - 8, 16, 3);
+      g.fill();
+    }
+    drawGlow();
   }
-  const notes: Array<[number, number, string]> = [
-    // The top row peeks in from above, leaving the top right corner to the site's name.
-    [1, -6, '#4ec9ff'],
-    [5, -6, '#4ec9ff'],
-    [4, 108, '#ffffff'],
-    [2, 182, '#ffffff'],
-    [6, 182, '#ffffff'],
-    [3, 256, '#4ec9ff'],
-    [2, 330, '#ffffff'],
-    [6, 330, '#ffffff'],
-    [1, 404, '#4ec9ff'],
-  ];
-  for (const [laneIndex, y, color] of notes) {
-    g.fillStyle = color;
-    g.beginPath();
-    g.roundRect(x0 + laneIndex * lane + 4, y, lane - 8, 16, 3);
-    g.fill();
-  }
-  // The judge line sits on the counts row's baseline.
-  const glow = g.createLinearGradient(0, COUNTS_BASELINE - 64, 0, COUNTS_BASELINE);
-  glow.addColorStop(0, hexAlpha(lampColor, 0));
-  glow.addColorStop(1, hexAlpha(lampColor, 0.5));
-  g.fillStyle = glow;
-  g.fillRect(x0, COUNTS_BASELINE - 64, width, 64);
   g.fillStyle = lampColor;
   g.fillRect(x0, COUNTS_BASELINE - 8, width, 8);
   if (target === null || layer === null) return;
@@ -293,7 +418,7 @@ export function drawScoreCard(
   aura.addColorStop(1, hexAlpha(data.lamp.color, 0));
   ctx.fillStyle = aura;
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-  drawPlayfield(ctx, data.lamp.color);
+  drawPlayfield(ctx, data.lamp.color, data.excerpt);
 
   // The chart: the genre as a label on the top margin, the title (shrunk to fit, then cut) and the artist below. The
   // rows keep their places when the chart names no genre, so every card shares one grid.

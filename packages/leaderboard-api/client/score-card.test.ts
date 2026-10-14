@@ -4,6 +4,8 @@ import {
   countColumns,
   djRankGradient,
   ellipsize,
+  EXCERPT_FRAME,
+  excerptRects,
   fitFontSize,
   opticalInset,
   PLAYER_TEXT_MAX_WIDTH,
@@ -11,6 +13,7 @@ import {
   readableTextColor,
   SCORE_CARD_BOXES,
 } from './score-card.ts';
+import type { ExcerptTone } from '../src/pages/chart-excerpt.ts';
 import { safeAreaViolation, X_DOMAIN_LABEL_ZONE } from '../src/pages/share-card-safe-area.ts';
 
 // A stand-in for canvas measurement: every character is 0.6 em wide.
@@ -74,5 +77,57 @@ describe('score card layout', () => {
 
   test("the site's name keeps clear of the chart's column", () => {
     expect(SCORE_CARD_BOXES.siteName.x).toBeGreaterThan(SCORE_CARD_BOXES.chart.x + SCORE_CARD_BOXES.chart.width);
+  });
+
+  test('excerptRects lays the lanes across the panel and the notes on their beats, the window start on the judge line', () => {
+    const rects = excerptRects({
+      lanes: ['red', 'white', 'blue', 'white', 'blue', 'white', 'blue', 'white'],
+      beats: 8,
+      notes: [
+        { lane: 0, beat: 0 },
+        { lane: 2, beat: 4 },
+        { lane: 3, beat: 2, end: 3 },
+      ],
+      bars: [0, 4, 8],
+    });
+    const lanes = rects.filter((rect) => rect.kind.startsWith('lane-'));
+    expect(lanes).toHaveLength(8);
+    expect(lanes[0]?.x).toBe(EXCERPT_FRAME.left);
+    expect((lanes.at(-1)?.x ?? 0) + (lanes.at(-1)?.width ?? 0)).toBe(EXCERPT_FRAME.right);
+    expect(lanes[2]?.kind).toBe('lane-dark');
+    const heads = rects.filter((rect) => rect.kind.startsWith('note-'));
+    expect(heads.map((rect) => rect.kind)).toEqual(['note-red', 'note-blue', 'note-white', 'note-white']);
+    // The scratch note at beat 0 sits on the judge line; the blue one at beat 4 halfway up the window.
+    const scratch = heads.find((rect) => rect.kind === 'note-red');
+    expect((scratch?.y ?? 0) + (scratch?.height ?? 0)).toBe(EXCERPT_FRAME.judgeY);
+    const blue = heads.find((rect) => rect.kind === 'note-blue');
+    expect((blue?.y ?? 0) + (blue?.height ?? 0)).toBe(Math.round((EXCERPT_FRAME.judgeY + EXCERPT_FRAME.topY) / 2));
+    expect(rects.filter((rect) => rect.kind === 'bar').map((rect) => rect.y + 1)).toEqual([
+      EXCERPT_FRAME.judgeY,
+      Math.round((EXCERPT_FRAME.judgeY + EXCERPT_FRAME.topY) / 2),
+      EXCERPT_FRAME.topY,
+    ]);
+  });
+
+  test.each([6, 8, 9, 12, 16])('with %i lanes, every note stays in the safe area and below the site name', (count) => {
+    const lanes = Array.from({ length: count }, (_, i): ExcerptTone =>
+      i === 0 ? 'red' : i % 2 === 0 ? 'blue' : 'white',
+    );
+    const rects = excerptRects({
+      lanes,
+      beats: 8,
+      // A note on every lane at the window's start and its end, and a long note running far past it.
+      notes: lanes.flatMap((_, lane) => [
+        { lane, beat: 0 },
+        { lane, beat: 7.99 },
+        { lane, beat: 1, end: 40 },
+      ]),
+      bars: [0, 8],
+    });
+    for (const rect of rects.filter((r) => !r.kind.startsWith('lane-'))) {
+      expect(safeAreaViolation(rect)).toBeNull();
+      expect(rect.y).toBeGreaterThanOrEqual(SCORE_CARD_BOXES.siteName.y + SCORE_CARD_BOXES.siteName.height);
+      expect(rect.width).toBeGreaterThan(0);
+    }
   });
 });
