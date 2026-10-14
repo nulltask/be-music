@@ -1,6 +1,6 @@
 import { Container, RendererType } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
-import { PixiSceneHost, resolveRendererPreference, type PixiScene } from './host.ts';
+import { PixiSceneHost, resolveRendererPreference, resolveRenderResolution, type PixiScene } from './host.ts';
 
 function makeScene(overrides: Partial<PixiScene> = {}): PixiScene {
   return {
@@ -92,5 +92,42 @@ describe('PixiSceneHost', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe('resolveRenderResolution', () => {
+  it('keeps the display ratio without ?resolution=', () => {
+    expect(resolveRenderResolution(2, '')).toBe(2);
+    expect(resolveRenderResolution(3, '?renderer=webgl')).toBe(3);
+  });
+
+  it('caps the display ratio', () => {
+    expect(resolveRenderResolution(2, '?resolution=1')).toBe(1);
+    expect(resolveRenderResolution(3, '?resolution=1.5')).toBe(1.5);
+  });
+
+  it('never raises the ratio above the display', () => {
+    expect(resolveRenderResolution(1, '?resolution=2')).toBe(1);
+  });
+
+  it('goes no lower than 0.5', () => {
+    expect(resolveRenderResolution(2, '?resolution=0.1')).toBe(0.5);
+  });
+
+  it('ignores values that are not positive numbers', () => {
+    for (const search of [
+      '?resolution=',
+      '?resolution=abc',
+      '?resolution=0',
+      '?resolution=-1',
+      '?resolution=Infinity',
+    ]) {
+      expect(resolveRenderResolution(2, search)).toBe(2);
+    }
+  });
+
+  it('falls back to 1 for a missing display ratio', () => {
+    expect(resolveRenderResolution(Number.NaN, '')).toBe(1);
+    expect(resolveRenderResolution(0, '?resolution=1.5')).toBe(1);
   });
 });
