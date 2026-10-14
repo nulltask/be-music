@@ -37,11 +37,17 @@ const BLOCKED_STORAGE: SettingStorage = {
 };
 
 describe('play-in-silent-mode persistence', () => {
-  it('defaults to off', () => {
-    expect(parseStoredPlayInSilentMode(null)).toBe(false);
-    expect(parseStoredPlayInSilentMode(undefined)).toBe(false);
-    expect(parseStoredPlayInSilentMode('true')).toBe(false);
-    expect(readPlayInSilentMode(memoryStorage())).toBe(false);
+  it('defaults to on', () => {
+    expect(parseStoredPlayInSilentMode(null)).toBe(true);
+    expect(parseStoredPlayInSilentMode(undefined)).toBe(true);
+    expect(parseStoredPlayInSilentMode('true')).toBe(true);
+    expect(parseStoredPlayInSilentMode('')).toBe(true);
+    expect(readPlayInSilentMode(memoryStorage())).toBe(true);
+  });
+
+  it('turns off only for a stored off', () => {
+    expect(parseStoredPlayInSilentMode('off')).toBe(false);
+    expect(parseStoredPlayInSilentMode('on')).toBe(true);
   });
 
   it('round-trips through storage', () => {
@@ -55,9 +61,9 @@ describe('play-in-silent-mode persistence', () => {
   });
 
   it('survives blocked storage', () => {
-    expect(readPlayInSilentMode(BLOCKED_STORAGE)).toBe(false);
-    expect(() => storePlayInSilentMode(true, BLOCKED_STORAGE)).not.toThrow();
-    expect(readPlayInSilentMode(undefined)).toBe(false);
+    expect(readPlayInSilentMode(BLOCKED_STORAGE)).toBe(true);
+    expect(() => storePlayInSilentMode(false, BLOCKED_STORAGE)).not.toThrow();
+    expect(readPlayInSilentMode(undefined)).toBe(true);
   });
 
   it('remembers that the hint was shown', () => {
@@ -126,6 +132,16 @@ describe('installSilentModePlayback', () => {
   it('applies the setting immediately, before any audio exists', () => {
     expect(setup({ value: true }).session.type).toBe('playback');
     expect(setup({ value: false }).session.type).toBe('auto');
+  });
+
+  it('asks for playback when nothing is stored', () => {
+    const session = { type: 'auto' };
+    installSilentModePlayback({
+      enabled: () => readPlayInSilentMode(memoryStorage()),
+      target: new EventTarget(),
+      host: { audioSession: session },
+    });
+    expect(session.type).toBe('playback');
   });
 
   it('re-applies on the first gesture only, then reports it once', () => {
