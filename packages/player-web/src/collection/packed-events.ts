@@ -1,5 +1,8 @@
 import type { BeMusicEvent, BmsonEventExtensions } from '@be-music/json';
 
+/** Lookups after which a load's string table also indexes two-character ids by their character codes. */
+const PAIR_TABLE_AFTER = 2048;
+
 /**
  * String table shared by every chart packed during one collection load. Event channels and values are a small
  * vocabulary (`"01"`, `"11"`, `"0A"`, …), so each packed event stores two small integers instead of two strings.
@@ -9,21 +12,25 @@ export class PackedEventStrings {
   private readonly ids = new Map<string, number>();
   /**
    * Ids of two-character ASCII strings, nearly every channel and object id, by their two character codes: looked up per
-   * event without hashing the string. `-1` marks one not seen yet.
+   * event without hashing the string. Built only once a load has looked up {@link PAIR_TABLE_AFTER} values, so a small
+   * load does not pay for the table; `-1` marks a pair not seen yet.
    */
-  private readonly asciiPairIds = new Int32Array(128 * 128).fill(-1);
+  private asciiPairIds: Int32Array | undefined;
+  private lookups = 0;
 
   idOf(value: string): number {
-    if (value.length === 2) {
+    const pairIds = this.asciiPairIds ?? this.buildPairTableWhenBusy();
+    if (pairIds !== undefined && value.length === 2) {
       const high = value.charCodeAt(0);
       const low = value.charCodeAt(1);
       if (high < 128 && low < 128) {
         const slot = (high << 7) | low;
-        let id = this.asciiPairIds[slot]!;
+        let id = pairIds[slot]!;
         if (id < 0) {
           id = this.values.length;
           this.values.push(value);
-          this.asciiPairIds[slot] = id;
+          this.ids.set(value, id);
+          pairIds[slot] = id;
         }
         return id;
       }
@@ -35,6 +42,19 @@ export class PackedEventStrings {
       this.ids.set(value, id);
     }
     return id;
+  }
+
+  private buildPairTableWhenBusy(): Int32Array | undefined {
+    this.lookups += 1;
+    if (this.lookups < PAIR_TABLE_AFTER) return undefined;
+    const pairIds = new Int32Array(128 * 128).fill(-1);
+    for (const [value, id] of this.ids) {
+      if (value.length === 2 && value.charCodeAt(0) < 128 && value.charCodeAt(1) < 128) {
+        pairIds[(value.charCodeAt(0) << 7) | value.charCodeAt(1)] = id;
+      }
+    }
+    this.asciiPairIds = pairIds;
+    return pairIds;
   }
 
   valueOf(id: number): string {

@@ -18,6 +18,27 @@ describe('PackedEventStrings', () => {
   });
 });
 
+describe('PackedEventStrings on a large load', () => {
+  test('keeps every id across the switch to the character-code table', () => {
+    const strings = new PackedEventStrings();
+    const vocabulary = ['01', '11', 'ZZ', 'zz', 'A0', '1', 'long-value', 'é1'];
+    const first = vocabulary.map((value) => strings.idOf(value));
+    // Enough lookups to cross the threshold, with fresh string objects as the parser makes them.
+    for (let index = 0; index < 5000; index += 1) {
+      const value = vocabulary[index % vocabulary.length]!;
+      expect(strings.idOf(String.fromCharCode(...[...value].map((char) => char.charCodeAt(0))))).toBe(
+        first[index % vocabulary.length],
+      );
+    }
+    // New values after the switch get the next ids, and every id reads back its value.
+    expect(strings.idOf('99')).toBe(vocabulary.length);
+    expect(strings.idOf('another')).toBe(vocabulary.length + 1);
+    for (const [index, value] of [...vocabulary, '99', 'another'].entries()) {
+      expect(strings.valueOf(index)).toBe(value);
+    }
+  });
+});
+
 describe('packEvents / unpackEvents', () => {
   test('round-trips events with the same fields and order', () => {
     const strings = new PackedEventStrings();
