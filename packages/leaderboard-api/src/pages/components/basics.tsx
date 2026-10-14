@@ -1,6 +1,8 @@
 /** @jsxImportSource hono/jsx */
 /** Shared building blocks of the Leaderboard pages: links, tags, lamps, filter chips, table frames. */
 import type { Child } from 'hono/jsx';
+import type { HelpId } from '../help-topics.ts';
+import { HelpTip } from './help-tip.tsx';
 import { formatTimestamp, lampStyle } from '../format.ts';
 
 export const scoreHref = (scoreId: string): string => `/leaderboard/scores/${encodeURIComponent(scoreId)}`;
@@ -38,13 +40,13 @@ export function Lamp(props: { lamp: number }) {
  * An on/off switch for a filter: a link to the same page with one query flag flipped. It looks like a switch (a track
  * with a knob) rather than a button, so its state reads at a glance, and says so to assistive technology.
  */
-export function Toggle(props: { label: string; on: boolean; href: string; description?: string }) {
-  return (
+export function Toggle(props: { label: string; on: boolean; href: string; description?: string; help?: HelpId }) {
+  const toggle = (
     <a
       role="switch"
       aria-checked={props.on ? 'true' : 'false'}
       href={props.href}
-      title={props.description}
+      title={props.help === undefined ? props.description : undefined}
       class={`inline-flex items-center gap-2 rounded-md py-1 text-sm transition-colors ${props.on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
     >
       <span
@@ -56,6 +58,16 @@ export function Toggle(props: { label: string; on: boolean; href: string; descri
       </span>
       {props.label}
     </a>
+  );
+  // With `help`, the description moves from the hover title into a "?" beside the switch, linking into the Help page.
+  if (props.help === undefined) return toggle;
+  return (
+    <span class="inline-flex items-center gap-1">
+      {toggle}
+      <HelpTip topic={props.help} label={`"${props.label}"`}>
+        {props.description}
+      </HelpTip>
+    </span>
   );
 }
 
