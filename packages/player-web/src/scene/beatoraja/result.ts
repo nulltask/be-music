@@ -43,6 +43,7 @@ import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { BrowserSongEntry } from '../../collection/types.ts';
+import { isResultRetryKey } from '../core/result-keys.ts';
 import {
   attachBeatorajaSceneLifecycle,
   BeatorajaSceneBgmPlayer,
@@ -107,6 +108,12 @@ export interface PixiBeatorajaResultSceneOptions {
   chartImages?: BeatorajaChartImages;
   /** Fired exactly once when the user dismisses the result (Enter / Space / Escape). */
   onContinue?: () => void;
+  /**
+   * Fired exactly once when the user asks to play the same chart again (a bare R press, no modifiers, not an
+   * auto-repeat, after `Skin.input`). Runs after the same `Skin.fadeout` window as {@link onContinue}; hosts typically
+   * start the chart straight away with the options the play just ended with. R does nothing when this is unset.
+   */
+  onRetry?: () => void;
   /** Optional audio backend for `main_state.audio_play / loop / stop` Lua calls. */
   skinAudio?: BeatorajaSkinAudio;
 }
@@ -147,6 +154,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
    * effectively never), so the helper is only kicked off by the keyboard handler.
    */
   private transitionToContinue: BeatorajaSceneTransition | undefined;
+  private transitionToRetry: BeatorajaSceneTransition | undefined;
   private disposed = false;
   private readonly bgm = new BeatorajaSceneBgmPlayer('beatoraja-result', () => this.disposed);
   private cachedBaseOps: ReadonlySet<number> | undefined;
@@ -213,11 +221,12 @@ export class PixiBeatorajaResultScene implements PixiScene {
       getElapsedMs: () => performance.now() - this.startMs,
       tick: () => this.tick(),
       handleKeyDown: this.handleKeyDown,
-      transitionCompletions: [() => this.options.onContinue?.()],
+      transitionCompletions: [() => this.options.onContinue?.(), () => this.options.onRetry?.()],
     });
-    const [continueTransition] = lifecycle.transitions;
+    const [continueTransition, retryTransition] = lifecycle.transitions;
     this.timerStartedAt = lifecycle.timerStartedAt;
     this.transitionToContinue = continueTransition;
+    this.transitionToRetry = retryTransition;
     this.sceneLoop = lifecycle.sceneLoop;
     void this.bgm.start(this.options.bgmBytes);
   }
@@ -230,6 +239,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
     // helper's internal `completed` latch would otherwise carry over and silently no-op
     // future fadeouts on the same instance.
     this.transitionToContinue = undefined;
+    this.transitionToRetry = undefined;
   }
 
   dispose(): void {
@@ -281,6 +291,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
     // Per-frame fadeout-window poll. No-op until the keyboard handler kicks off the
     // transition; once active, fires `onContinue` once the `Skin.fadeout` window elapses.
     this.transitionToContinue?.tick();
+    this.transitionToRetry?.tick();
   }
 
   private baseOps(): ReadonlySet<number> {
@@ -695,12 +706,18 @@ export class PixiBeatorajaResultScene implements PixiScene {
     if (this.disposed) return;
     // Mirrors upstream `MusicResult.render` line 16's `if (timer.isTimerOn(TIMER_FADEOUT))`
     // short-circuit — once the fadeout has begun, additional key presses are ignored.
-    if (hasBeatorajaSceneLockedTransition(this.transitionToContinue)) return;
+    if (hasBeatorajaSceneLockedTransition(this.transitionToContinue, this.transitionToRetry)) return;
     // Gate input on `Skin.input` per upstream `MusicResult.render` line 12. Stops the
     // player from accidentally dismissing the result splash within the first few hundred
     // ms while their hand is still on the gameplay key.
     const inputDelay = resolveBeatorajaSkinTimingMs(this.options.skin.input, DEFAULT_RESULT_INPUT_MS);
     if (!isBeatorajaSceneInputReady(this.startMs, inputDelay, performance.now())) return;
+    if (this.options.onRetry !== undefined && isResultRetryKey(event)) {
+      event.preventDefault();
+      // Same fadeout as a dismissal, but `onRetry` fires at its end instead of `onContinue`.
+      this.transitionToRetry?.begin();
+      return;
+    }
     switch (event.key) {
       case 'Enter':
       case ' ':

@@ -5,6 +5,7 @@ import { disposeChildren } from '../pixi-utils.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
+import { isResultRetryKey } from './result-keys.ts';
 import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
 import { BeMusicResultBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
@@ -88,6 +89,13 @@ export interface CoreResultViewOptions {
    */
   onContinue?: () => void;
   /**
+   * Callback fired when the user asks to play the same chart again from the result screen. Hosts typically start the
+   * chart straight away with the options the play just ended with, skipping song select. Triggered by a bare R press
+   * (no modifiers, not an auto-repeat) once the input-enable delay has elapsed, at any point of the timer ladder. Fires
+   * at most once per mount; R does nothing when this is unset.
+   */
+  onRetry?: () => void;
+  /**
    * Encoded result-screen audio bytes used when the chart was cleared (`LR2files/Sound/<theme>/clear.wav` in the LR2
    * default theme — these jingles live in `Sound/`, not `Bgm/`). Falls back to {@link resultBgm} when unset so
    * single-loop themes still produce sound.
@@ -150,6 +158,8 @@ export class CoreResultView {
     this.render();
   };
   protected disposed = false;
+  /** Latched once `onRetry` fires so further presses can't start the chart twice while the host swaps scenes. */
+  private retryRequested = false;
   /**
    * Web Audio plumbing for the result-screen BGM. Created lazily the first time `mount` runs and torn down by
    * `dispose`. The scene is one-shot (host destroys + recreates between charts) so we don't bother caching the decoded
@@ -238,6 +248,7 @@ export class CoreResultView {
     this.prepareTheme();
     this.sceneStartedAt = performance.now();
     this.timerStartedAt.clear();
+    this.retryRequested = false;
     this.timerStartedAt.set(0, this.sceneStartedAt);
     // Schedule timer 1 (input enable) and timer 150 (chart-draw) from wall clock so the intro animation plays out even
     // without user interaction. Timer 151 fires automatically once the chart-draw window elapses; 152 needs an input.
@@ -489,9 +500,18 @@ export class CoreResultView {
    * - Between 151 and 152 — Enter / Space fire timer 152 (the high-score-update press).
    * - After 152 — any of the three keys (Enter / Space / Escape) dismisses the scene via `onContinue`.
    * - Escape always dismisses, regardless of where we are in the timeline.
+   * - R (bare, no auto-repeat) retries the chart via `onRetry` once the input-enable delay has elapsed.
    */
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (this.disposed) return;
+    if (this.disposed || this.retryRequested) return;
+    if (this.options.onRetry !== undefined && isResultRetryKey(event)) {
+      event.preventDefault();
+      // Same input-enable gate as Enter / Space, so the R can't land while the hand is still coming off the keys.
+      if (!this.timerStartedAt.has(1)) return;
+      this.retryRequested = true;
+      this.options.onRetry();
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       this.options.onContinue?.();
