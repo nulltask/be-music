@@ -1384,14 +1384,48 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
   private resolveLaneGeometry(): ReturnType<typeof resolveGameplayLaneGeometry> {
-    return resolveGameplayLaneGeometry(
+    // Asked several times a frame (lanes, BGA, notes); it changes only with its inputs, so it is kept until one does. The
+    // stage is one of the skin's own stage objects, so a rotation that switches stages shows up as a new one.
+    const stage = this.beMusicStage;
+    const cached = this.laneGeometryCache;
+    if (
+      cached !== undefined &&
+      cached.laneChannels === this.laneChannels &&
+      cached.laneCount === this.laneChannels.length &&
+      cached.playVariant === this.chartPlayVariant &&
+      cached.layoutMode === this.layoutMode &&
+      cached.stage === stage
+    ) {
+      return cached.geometry;
+    }
+    const geometry = resolveGameplayLaneGeometry(
       this.laneChannels,
       this.laneChannels.length,
       this.chartPlayVariant,
       this.layoutMode,
-      this.beMusicStage,
+      stage,
     );
+    this.laneGeometryCache = {
+      laneChannels: this.laneChannels,
+      laneCount: this.laneChannels.length,
+      playVariant: this.chartPlayVariant,
+      layoutMode: this.layoutMode,
+      stage,
+      geometry,
+    };
+    return geometry;
   }
+
+  private laneGeometryCache:
+    | {
+        laneChannels: readonly string[];
+        laneCount: number;
+        playVariant: unknown;
+        layoutMode: unknown;
+        stage: BeMusicStage | undefined;
+        geometry: ReturnType<typeof resolveGameplayLaneGeometry>;
+      }
+    | undefined;
 
   /**
    * The be-music skin's stage while the scene paints through it, otherwise `undefined`: its portrait stage while the
@@ -4127,10 +4161,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       hasBga: this.hasBga,
       nowMs: this.playClock(),
       progressRatio: songLengthSeconds > 0 ? Math.max(0, Math.min(1, seconds / songLengthSeconds)) : 0,
-      beatPhase: (() => {
-        const beat = this.currentBeat(seconds);
-        return beat - Math.floor(beat);
-      })(),
+      // The beat this frame already worked out for the same `seconds`.
+      beatPhase: currentBeat - Math.floor(currentBeat),
       rulesetLabel: this.resolveJudgeRuleset(),
       gaugeLabel: this.gaugeState.type ?? 'GROOVE',
       gaugeSurvival: this.gaugeState.survival === true,

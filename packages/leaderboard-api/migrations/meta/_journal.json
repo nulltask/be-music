@@ -50,6 +50,13 @@
       "when": 1791941466447,
       "tag": "0006_score_hidden",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791948272404,
+      "tag": "0007_score_created_id_index",
+      "breakpoints": true
     }
   ]
 }

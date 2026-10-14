@@ -541,9 +541,16 @@ function enumeratePaths(root: OutcomeNode): SegmentPath[] {
   ];
   while (stack.length > 0) {
     let { node, classes, entries } = stack.pop()!;
-    while (node.kind === 'emit') {
-      entries = [...entries, node.entry];
-      node = node.next;
+    // A run of emitted lines is gathered first and appended once: appending line by line copied the path so far for
+    // every line, quadratic in a branch that holds a whole chart. `entries` is shared with sibling paths, so it is
+    // never changed in place.
+    if (node.kind === 'emit') {
+      const run: number[] = [];
+      while (node.kind === 'emit') {
+        run.push(node.entry);
+        node = node.next;
+      }
+      entries = entries.concat(run);
     }
     if (node.kind === 'end') {
       paths.push({ classes, entries });

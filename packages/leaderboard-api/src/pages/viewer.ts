@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { loadAccount, type AccountSummary } from '../accounts.ts';
 import type { AppEnv } from '../app.ts';
-import { createAuth } from '../auth.ts';
+import { loadSession, passOnSetCookies } from '../auth.ts';
 import { openDatabase } from '../db/client.ts';
 
 /** Who is looking at a page: their account (and its id, to show them what only they may see), or null when signed out. */
@@ -23,12 +23,15 @@ function needsViewer(path: string): boolean {
  */
 export const loadViewer: MiddlewareHandler<AppEnv> = async (c, next) => {
   c.set('viewer', null);
+  let setCookies: string[] = [];
   if (needsViewer(c.req.path)) {
-    const session = await createAuth(c.env, new URL(c.req.url).origin).api.getSession({ headers: c.req.raw.headers });
-    if (session !== null) {
-      const account = await loadAccount(openDatabase(c.env.DB), session.user.id);
-      c.set('viewer', account === undefined ? null : { ...account, userId: session.user.id });
+    const loaded = await loadSession(c.env, c.req.raw);
+    setCookies = loaded.setCookies;
+    if (loaded.session !== null) {
+      const account = await loadAccount(openDatabase(c.env.DB), loaded.session.user.id);
+      c.set('viewer', account === undefined ? null : { ...account, userId: loaded.session.user.id });
     }
   }
   await next();
+  passOnSetCookies(c.res, setCookies);
 };

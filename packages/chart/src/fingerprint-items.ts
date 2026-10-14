@@ -44,8 +44,8 @@ import {
   collectStopChanges,
   collectTempoChanges,
   createTimingBuildContext,
-  createTimingResolverWithContext,
   parseStpStop,
+  type TimingResolver,
 } from './timing.ts';
 import {
   addRational,
@@ -173,11 +173,35 @@ function normalizePositionNumerator(value: number, denominator: number): number 
   return Number.isFinite(value) ? Math.max(0, Math.min(denominator - 1, Math.floor(value))) : 0;
 }
 
+/**
+ * Event positions for the fingerprint being computed ({@link withEventTimes}): every outcome of a chart reads the same
+ * events again. Kept for one computation only, so a caller that edits its events in place between two fingerprints is
+ * never served an old position.
+ */
+let eventTimes: WeakMap<BeMusicEvent, FpTime> | undefined;
+
+/** Runs `compute` with {@link eventTime} remembering each event's position (nested calls share the outer cache). */
+export function withEventTimes<T>(compute: () => T): T {
+  const outer = eventTimes;
+  eventTimes ??= new WeakMap();
+  try {
+    return compute();
+  } finally {
+    eventTimes = outer;
+  }
+}
+
 /** The exact position an object is written at: cell index / cell count of its measure line (spec 3.3). */
 export function eventTime(event: BeMusicEvent): FpTime {
+  const cached = eventTimes?.get(event);
+  if (cached !== undefined) {
+    return cached;
+  }
   const measure = Number.isFinite(event.measure) ? Math.max(0, Math.floor(event.measure)) : 0;
   const denominator = normalizePositionDenominator(event.position[1]);
-  return createTime(measure, normalizePositionNumerator(event.position[0], denominator), denominator);
+  const time = createTime(measure, normalizePositionNumerator(event.position[0], denominator), denominator);
+  eventTimes?.set(event, time);
+  return time;
 }
 
 export function compareTime(left: FpTime, right: FpTime): number {
@@ -244,11 +268,30 @@ export function bucketOfChannel(channel: string): string | undefined {
   return channel === 'A0' ? 'tl:exrank' : undefined;
 }
 
+/**
+ * `bucketOfChannel` of an event's raw channel, remembered: a chart has a few dozen channels but thousands of events.
+ * `null` records a channel the fingerprint ignores. Cleared if odd input ever fills it.
+ */
+const BUCKET_BY_RAW_CHANNEL = new Map<string, string | null>();
+const BUCKET_CACHE_LIMIT = 4096;
+
+function bucketOfEventChannel(channel: string): string | undefined {
+  let bucket = BUCKET_BY_RAW_CHANNEL.get(channel);
+  if (bucket === undefined) {
+    if (BUCKET_BY_RAW_CHANNEL.size >= BUCKET_CACHE_LIMIT) {
+      BUCKET_BY_RAW_CHANNEL.clear();
+    }
+    bucket = bucketOfChannel(normalizeChannel(channel)) ?? null;
+    BUCKET_BY_RAW_CHANNEL.set(channel, bucket);
+  }
+  return bucket ?? undefined;
+}
+
 /** Events of a chart grouped by bucket, each bucket in the engine's event order. */
 export function bucketEvents(events: ReadonlyArray<BeMusicEvent>): Map<string, BeMusicEvent[]> {
   const buckets = new Map<string, BeMusicEvent[]>();
   for (const event of events) {
-    const bucket = bucketOfChannel(normalizeChannel(event.channel));
+    const bucket = bucketOfEventChannel(event.channel);
     if (bucket === undefined) {
       continue;
     }
@@ -392,11 +435,18 @@ function withEvents(context: ItemContext, events: BeMusicEvent[]): BeMusicJson {
   return { ...json, events, bms: { ...json.bms, lnType: context.lnType } };
 }
 
+/**
+ * The note resolver stamps each note with its time in seconds; the fingerprint reads positions only and never a time,
+ * so it hands the resolver this stand-in instead of building a BPM / STOP timing resolver for every lane set of every
+ * outcome.
+ */
+const NO_SECONDS = { beatToSeconds: () => 0 } as unknown as TimingResolver;
+
 function noteContext(json: BeMusicJson, freeZone: boolean): ResolvedNoteContext {
   const timingContext = createTimingBuildContext(json);
   return {
     json,
-    timing: createTimingResolverWithContext(json, timingContext),
+    timing: NO_SECONDS,
     beatResolver: timingContext.beatResolver,
     sortedEvents: timingContext.sortedEvents,
     idBase: resolveBmsBase(json),

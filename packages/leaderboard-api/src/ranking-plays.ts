@@ -2,6 +2,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import { avatarUrl } from './avatars.ts';
 import type { Database } from './db/client.ts';
 import type { RankingEntry, RankingFilter } from './ranking.ts';
+import { rawToPlayInfo, type PlayInfo, type RawPlayInfoRow } from './play-info.ts';
 
 /** How a ranking built from the plays themselves (rather than the kept personal bests) is cut. */
 export interface PlayRankingOptions {
@@ -11,13 +12,10 @@ export interface PlayRankingOptions {
   fileSha256?: string;
 }
 
-interface PlayRow {
-  score_id: string;
-  created_at: number;
+interface PlayRow extends RawPlayInfoRow {
   ex_score: number;
   clear_lamp: number;
   miss_count: number;
-  played_ruleset: string;
   handle: string;
   display_name: string;
   is_anonymous: number | null;
@@ -39,7 +37,8 @@ export async function loadPlayRanking(
   filter: RankingFilter,
   options: PlayRankingOptions,
   page: { offset: number; limit: number },
-): Promise<{ entries: RankingEntry[]; players: number; plays: number }> {
+  infoOptions: { playInfo?: boolean } = {},
+): Promise<{ entries: RankingEntry[]; players: number; plays: number; infos?: Map<string, PlayInfo> }> {
   const conditions: SQL[] = [
     sql`s.chart_fingerprint = ${filter.chartFingerprint}`,
     sql`s.assisted = ${filter.assisted ? 1 : 0}`,
@@ -52,6 +51,8 @@ export async function loadPlayRanking(
   const rows = await db.all<PlayRow>(sql`
     with plays as (
       select s.id as score_id, s.created_at, s.played_ruleset, s.user_id,
+        s.gauge, s.assist_flags, s.lane_option, s.duration_ms, s.verification, s.recorded_by, s.submitted_by,
+        s.server_engine,
         r.ex_score, r.clear_lamp, r.miss_count,
         p.handle, p.display_name, p.avatar_key, u.is_anonymous,
         row_number() over (partition by s.user_id order by r.ex_score desc, s.created_at asc) as nth,
@@ -72,7 +73,11 @@ export async function loadPlayRanking(
     limit ${page.limit} offset ${page.offset}
   `);
   const first = rows[0];
+  // Each row's play info comes from the same query, so the page needs no second round trip for it.
+  const infos =
+    infoOptions.playInfo === true ? new Map(rows.map((row) => [row.score_id, rawToPlayInfo(row)])) : undefined;
   return {
+    ...(infos === undefined ? {} : { infos }),
     entries: rows.map((row) => ({
       rank: Number(row.rank),
       handle: row.handle,

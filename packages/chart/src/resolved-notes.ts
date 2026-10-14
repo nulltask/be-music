@@ -75,6 +75,8 @@ export interface JudgedNoteEntry {
   readonly channel: string;
   readonly beat: number;
   readonly lnMode?: LongNoteMode;
+  /** A FREE ZONE note (`17` / `27` under a variant that has FREE ZONE): judged by nobody, so not scored. */
+  readonly freeZone?: true;
   /** Set exactly when the note is a long note. */
   readonly tail?: JudgedNoteTail;
 }

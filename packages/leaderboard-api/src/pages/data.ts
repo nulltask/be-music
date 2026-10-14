@@ -1,9 +1,10 @@
-import { and, asc, countDistinct, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, countDistinct, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { avatarUrl } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import type { RulesetId } from '../rulesets.ts';
 import { bestScore, chart, chartAlias, chartset, profile, score, scoreResult, user } from '../db/schema.ts';
 import type { ChartAlias } from './external.ts';
+import { PLAY_INFO_COLUMNS, toPlayInfo, type PlayInfo } from '../play-info.ts';
 
 export interface RecentScore {
   scoreId: string;
@@ -40,6 +41,8 @@ export interface RecentScore {
   /** Where the play's EX-Score stands among the other players' bests on the chart, and how many players there are. */
   rank: number;
   players: number;
+  /** The play's info popover, read in the same query. */
+  info: PlayInfo;
 }
 
 export interface RecentScoresFilter {
@@ -64,7 +67,10 @@ export interface RecentScoresFilter {
  * so any ruleset has figures). Anonymous players and unlisted charts are left out unless asked for.
  */
 export async function loadRecentScores(db: Database, filter: RecentScoresFilter): Promise<RecentScore[]> {
-  const conditions: SQL[] = [eq(scoreResult.ruleset, filter.ruleset)];
+  // The page is picked first, from the plays alone, newest first: the figures and the per-play subqueries below then run
+  // for the rows shown rather than for every play that passes the filters (SQLite does not flatten a subquery with a
+  // LIMIT into a join, so the page stays a walk down `score_created_idx` that stops at `limit`).
+  const conditions: SQL[] = [];
   if (!filter.includeAnonymous) {
     // A viewer's own plays show even while their account is anonymous.
     const named = eq(user.isAnonymous, false);
@@ -78,6 +84,16 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
   const shown = eq(score.hidden, false);
   conditions.push(filter.ownerUserId === undefined ? shown : or(shown, eq(score.userId, filter.ownerUserId))!);
   if (filter.handle !== undefined) conditions.push(eq(profile.handle, filter.handle));
+  const page = db
+    .select({ id: score.id, createdAt: score.createdAt })
+    .from(score)
+    .innerJoin(chart, eq(chart.chartFingerprint, score.chartFingerprint))
+    .innerJoin(user, eq(user.id, score.userId))
+    .innerJoin(profile, eq(profile.userId, score.userId))
+    .where(and(...conditions))
+    .orderBy(desc(score.createdAt), desc(score.id))
+    .limit(filter.limit)
+    .as('page');
   const rows = await db
     .select({
       scoreId: score.id,
@@ -103,17 +119,18 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       missCount: scoreResult.missCount,
       gaugeType: scoreResult.gaugeType,
       gaugeFinal: scoreResult.gaugeFinal,
+      info: PLAY_INFO_COLUMNS,
       ...previousBest(filter.ruleset),
       ...standing(filter),
     })
-    .from(score)
-    .innerJoin(scoreResult, eq(scoreResult.scoreId, score.id))
+    .from(page)
+    .innerJoin(score, eq(score.id, page.id))
+    .innerJoin(scoreResult, and(eq(scoreResult.scoreId, score.id), eq(scoreResult.ruleset, filter.ruleset)))
     .innerJoin(chart, eq(chart.chartFingerprint, score.chartFingerprint))
     .innerJoin(user, eq(user.id, score.userId))
     .innerJoin(profile, eq(profile.userId, score.userId))
-    .where(and(...conditions))
-    .orderBy(desc(score.createdAt), desc(score.id))
-    .limit(filter.limit);
+    // Ordered by the page's own columns, so the page drives the join rather than a scan of every play in index order.
+    .orderBy(desc(page.createdAt), desc(page.id));
   return rows.map(
     ({
       createdAt,
@@ -125,9 +142,11 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       previousMiss,
       above,
       players,
+      info,
       ...row
     }) => ({
       ...row,
+      info: toPlayInfo(info),
       avatarUrl: avatarUrl(row.handle, avatarKey),
       createdAt: createdAt.getTime(),
       anonymous: anonymous === true,
@@ -264,42 +283,4 @@ export async function loadChartAliases(db: Database, chartFingerprint: string): 
     .orderBy(chartAlias.kind, chartAlias.hash);
 }
 
-/** What a score's info popover shows: how the play was made and which software recorded and sent it. */
-export interface PlayInfo {
-  scoreId: string;
-  createdAt: number;
-  playedRuleset: string;
-  gauge: string;
-  assistFlags: string[];
-  /** The lane arrangement (`RANDOM`, ...); null or `-` while unknown. */
-  laneOption: string | null;
-  durationMs: number | null;
-  verification: string;
-  /** The play log's `recorder` (application, version, build, engine version, platform). */
-  recordedBy: Record<string, string> | null;
-  /** The `Be-Music-Client` header the play was sent with. */
-  submittedBy: string | null;
-  serverEngine: string;
-}
-
-/** Info of several scores at once, keyed by score id. */
-export async function loadPlayInfos(db: Database, scoreIds: readonly string[]): Promise<Map<string, PlayInfo>> {
-  if (scoreIds.length === 0) return new Map();
-  const rows = await db
-    .select({
-      scoreId: score.id,
-      createdAt: score.createdAt,
-      playedRuleset: score.playedRuleset,
-      gauge: score.gauge,
-      assistFlags: score.assistFlags,
-      laneOption: score.laneOption,
-      durationMs: score.durationMs,
-      verification: score.verification,
-      recordedBy: score.recordedBy,
-      submittedBy: score.submittedBy,
-      serverEngine: score.serverEngine,
-    })
-    .from(score)
-    .where(inArray(score.id, [...new Set(scoreIds)]));
-  return new Map(rows.map((row) => [row.scoreId, { ...row, createdAt: row.createdAt.getTime() }]));
-}
+export type { PlayInfo } from '../play-info.ts';

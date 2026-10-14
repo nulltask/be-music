@@ -597,9 +597,9 @@ class PlaylogSimulation {
       const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
       const scanLate = Math.min(set.judges[JUDGE_BAD]![0], set.ms?.[0] ?? 0);
       const scanEarly = Math.max(set.judges[JUDGE_BAD]![1], set.ms?.[1] ?? 0);
-      for (const note of lane.notes) {
+      for (let index = firstNoteInReach(lane.notes, timeUs, scanLate); index < lane.notes.length; index += 1) {
+        const note = lane.notes[index]!;
         const dmUs = note.timeUs - timeUs;
-        if (dmUs < scanLate) continue;
         if (dmUs > scanEarly) break;
         if (note.holding) continue;
         let judge: JudgeClassification;
@@ -684,9 +684,9 @@ class PlaylogSimulation {
       const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
       const badWindow = set.judges[JUDGE_BAD]!;
       const goodWindow = set.judges[JUDGE_GOOD]!;
-      for (const note of lane.notes) {
+      for (let index = firstNoteInReach(lane.notes, timeUs, badWindow[0]); index < lane.notes.length; index += 1) {
+        const note = lane.notes[index]!;
         const dmUs = note.timeUs - timeUs;
-        if (dmUs < badWindow[0]) continue;
         if (dmUs > badWindow[1]) break;
         if (note.judged || note.holding || note === tnote) continue;
         if (dmUs >= goodWindow[0] && dmUs <= goodWindow[1]) continue;
@@ -748,4 +748,23 @@ function worseJudge(left: GaugeJudgeIndex, right: GaugeJudgeIndex): GaugeJudgeIn
 
 function windowSetFor(candidate: SelectionCandidate, windows: RulesetWindowTables): JudgeWindowSetUs {
   return selectJudgeWindowSet(windows, { scratch: candidate.lane.scratch });
+}
+
+/**
+ * Index of a lane's first note a press at `timeUs` can reach: the first whose `timeUs - pressUs` is not below `lateUs`
+ * (the window's late edge, negative). A lane's notes are sorted by time, so a binary search finds it where a walk from
+ * the lane's start would cost every note already passed, on every press.
+ */
+function firstNoteInReach(notes: readonly SimNote[], pressUs: number, lateUs: number): number {
+  let low = 0;
+  let high = notes.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (notes[middle]!.timeUs - pressUs < lateUs) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
 }

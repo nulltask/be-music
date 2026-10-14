@@ -227,6 +227,29 @@ const FLASH_LANE_HOLD_MS = 60;
  */
 const LN_TAIL_BOMB_HOLD_MS = 320;
 
+/**
+ * For each BPM segment, the last positive BPM at or before it (`NaN` before the first one), so the current BPM is one
+ * binary search away. `undefined` when the segments are not in time order, where only the walk is right.
+ */
+function bpmLookupFor(segments: ReadonlyArray<BeatorajaBpmSegment>): Float64Array | undefined {
+  if (BPM_LOOKUPS.has(segments)) return BPM_LOOKUPS.get(segments);
+  let lookup: Float64Array | undefined = new Float64Array(segments.length);
+  let lastPositive = Number.NaN;
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
+    if (index > 0 && segment.timeMs < segments[index - 1]!.timeMs) {
+      lookup = undefined;
+      break;
+    }
+    if (segment.bpm > 0) lastPositive = segment.bpm;
+    lookup[index] = lastPositive;
+  }
+  BPM_LOOKUPS.set(segments, lookup);
+  return lookup;
+}
+
+const BPM_LOOKUPS = new WeakMap<ReadonlyArray<BeatorajaBpmSegment>, Float64Array | undefined>();
+
 export class BeatorajaRuntimeAdapter {
   /**
    * Live op set — option ops (from `baseOps`) plus runtime ops the engine has toggled. Exposed via
@@ -1367,7 +1390,7 @@ export class BeatorajaRuntimeAdapter {
       const { width, space } = this.judgeComboMetrics[side];
       const shiftPx = ((width + space) * digitCount) / 2;
       // Negative x shifts the judge word LEFT in skin coords.
-      return { x: -shiftPx, y: 0, w: 0, h: 0, r: 0, a: 0 };
+      return this.liveOffset(offsetId, -shiftPx, 0, 0);
     }
     if (offsetId === 3) {
       // OFFSET_LIFT — derived live from `liftRatio`, scaled by the skin's lane height so
@@ -1378,7 +1401,7 @@ export class BeatorajaRuntimeAdapter {
         // alpha=0 = no change (additive default). Previously 255 was the multiplicative
         // no-op default; matched the old offset semantics but became a +1.0 brightness
         // delta after the alpha-additive switch.
-        return { x: 0, y: this.liftRatio * -this.laneHeight, w: 0, h: 0, r: 0, a: 0 };
+        return this.liveOffset(offsetId, 0, this.liftRatio * -this.laneHeight, 0);
       }
     }
     if (offsetId === 5) {
@@ -1396,22 +1419,34 @@ export class BeatorajaRuntimeAdapter {
       // 0 — invisible. Default disabled state hides the cover until the player toggles it
       // on via {@link setHiddenCover}.
       if (!this.hiddenEnabled) {
-        return { x: 0, y: 0, w: 0, h: 0, r: 0, a: -255 };
+        return this.liveOffset(offsetId, 0, 0, -255);
       }
       // Negative y in libGDX-Y-UP shifts the cover edge UPWARD (toward the top of the lane).
       // The `(1 - lift)` factor pulls the cover toward the lift edge as the lift rises.
       const liftFactor = this.liftRatio !== 0 ? 1 - this.liftRatio : 1;
-      return {
-        x: 0,
-        y: this.hiddenRatio * liftFactor * -this.laneHeight,
-        w: 0,
-        h: 0,
-        r: 0,
-        a: 0,
-      };
+      return this.liveOffset(offsetId, 0, this.hiddenRatio * liftFactor * -this.laneHeight, 0);
     }
     return this.offsets.get(offsetId);
   }
+
+  /**
+   * The value of a live offset (judge shift, lift, hidden cover), filled into one object per id: `resolveOffset` runs
+   * for every element carrying the id every frame, and its callers read the value at once (`combineBeatorajaOffsets`)
+   * rather than keep it.
+   */
+  private liveOffset(offsetId: number, x: number, y: number, a: number): Readonly<BeatorajaSkinOffsetValue> {
+    let value = this.liveOffsets.get(offsetId);
+    if (value === undefined) {
+      value = { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 };
+      this.liveOffsets.set(offsetId, value);
+    }
+    value.x = x;
+    value.y = y;
+    value.a = a;
+    return value;
+  }
+
+  private readonly liveOffsets = new Map<number, BeatorajaSkinOffsetValue>();
 
   /**
    * Push a value for a `SkinProperty.OFFSET_*` id. Called by the host whenever the player drags
@@ -1838,12 +1873,30 @@ export class BeatorajaRuntimeAdapter {
   private currentBpmAtMs(timeMs: number): number {
     const segments = this.bpmSegments;
     if (segments.length === 0) return this.chart?.metadata.bpm ?? 0;
-    let lastPositive = segments[0]!.bpm > 0 ? segments[0]!.bpm : (this.chart?.metadata.bpm ?? 0);
-    for (const seg of segments) {
-      if (seg.timeMs > timeMs) break;
-      if (seg.bpm > 0) lastPositive = seg.bpm;
+    const initial = segments[0]!.bpm > 0 ? segments[0]!.bpm : (this.chart?.metadata.bpm ?? 0);
+    const lookup = bpmLookupFor(segments);
+    if (lookup === undefined) {
+      let lastPositive = initial;
+      for (const seg of segments) {
+        if (seg.timeMs > timeMs) break;
+        if (seg.bpm > 0) lastPositive = seg.bpm;
+      }
+      return lastPositive;
     }
-    return lastPositive;
+    // The last segment at or before `timeMs` (a binary search), and the last positive BPM up to it: what walking the
+    // segments in order until one starts after `timeMs` finds, for a readout asked several times a frame.
+    let low = 0;
+    let high = segments.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (segments[middle]!.timeMs > timeMs) {
+        high = middle;
+      } else {
+        low = middle + 1;
+      }
+    }
+    const lastPositive = low === 0 ? Number.NaN : lookup[low - 1]!;
+    return Number.isNaN(lastPositive) ? initial : lastPositive;
   }
 
   /**

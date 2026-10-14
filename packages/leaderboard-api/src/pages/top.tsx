@@ -4,7 +4,7 @@ import { openDatabase } from '../db/client.ts';
 import { isOn } from '../http/query.ts';
 import { RecentScoresList } from './components/lists.tsx';
 import { Filters, Toggle } from './components/basics.tsx';
-import { loadPlayInfos, loadRecentScores } from './data.ts';
+import { loadRecentScores } from './data.ts';
 import { RULESET_LABELS } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { displayRuleset, meta, PAGE_CACHE, pageMessages, RECENT_LIMIT, withQuery, type PageContext } from './page.tsx';
@@ -49,10 +49,7 @@ export async function topPage(c: PageContext) {
       </Filters>
       <RecentScoresList
         scores={scores}
-        infos={await loadPlayInfos(
-          db,
-          scores.map((entry) => entry.scoreId),
-        )}
+        infos={new Map(scores.map((entry) => [entry.scoreId, entry.info]))}
         showPlayer
         empty={includeAnonymous ? t.latest.empty : t.latest.emptyNamed}
         anonymousOnlyForOwner={!includeAnonymous}
