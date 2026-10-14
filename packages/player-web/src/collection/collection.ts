@@ -1,7 +1,7 @@
 import { unzipSync } from 'fflate';
 import {
   type ChartPlayVariant,
-  resolveChart,
+  countScoredNotes,
   resolveChartPlayVariant as resolveChartPlayVariantForChart,
 } from '@be-music/chart';
 import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
@@ -432,7 +432,7 @@ export async function loadSongCollectionFromFiles(
     for (const path of source.files.keys()) {
       if (isChartFilePath(path)) paths.push(path);
     }
-    paths.sort((left, right) => left.localeCompare(right, 'ja'));
+    paths.sort(JAPANESE_COLLATOR.compare);
     return paths;
   });
   const chartCount = chartPathsBySource.reduce((acc, list) => acc + list.length, 0);
@@ -473,7 +473,8 @@ export async function loadSongCollectionFromFiles(
           throw new Error(`chart bytes missing for ${path}`);
         }
         const chart = parseChart(path, chartBytes);
-        const notes = resolveChart(chart, { chartPath: path, inferBmsLnTypeWhenMissing: true }).notes;
+        // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
+        const scored = countScoredNotes(chart, { chartPath: path, inferBmsLnTypeWhenMissing: true });
         const song: BrowserSongEntry = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
@@ -490,14 +491,15 @@ export async function loadSongCollectionFromFiles(
           bpm: chart.metadata.bpm,
           // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
           // notes at all. A long note counts once.
-          totalNotes: notes.filter((note) => note.freeZone !== true).length,
+          totalNotes: scored.notes,
           chart,
         };
         songs.push(song);
         // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
-        // it. Work out the play variant first, while the events are still plain objects: select screens filter the
-        // whole list by it, and a cached answer spares them from unpacking every chart's events.
-        resolveChartPlayVariant(song);
+        // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
+        // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
+        // worked it out (`resolveChartPlayVariant` over the same chart and path).
+        playVariantByChart.set(chart, { chartPath: song.chartPath, variant: scored.playVariant });
         compactCollectionChart(chart, eventStrings);
       } catch (error) {
         errors.push({
@@ -619,6 +621,12 @@ export function resolveChartPlayVariant(song: BrowserSongEntry, chart: BeMusicJs
  * the file extension.
  */
 const playVariantByChart = new WeakMap<BeMusicJson, { chartPath: string; variant: ChartPlayVariant }>();
+
+/**
+ * `localeCompare(…, 'ja')` as one collator: the same order, without setting up a collator for each of the thousands of
+ * comparisons a large drop's path sort makes.
+ */
+const JAPANESE_COLLATOR = new Intl.Collator('ja');
 
 function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): BrowserSongSourceKind {
   for (const path of files.keys()) {
@@ -837,7 +845,7 @@ export function groupSongsByFolder(songs: readonly BrowserSongEntry[]): BrowserF
   }
   return [...buckets.entries()]
     .map(([label, entries]): BrowserFolderNode => ({ label, songs: entries }))
-    .sort((left, right) => left.label.localeCompare(right.label, 'ja'));
+    .sort((left, right) => JAPANESE_COLLATOR.compare(left.label, right.label));
 }
 
 function topLevelFolderLabel(song: BrowserSongEntry): string {
