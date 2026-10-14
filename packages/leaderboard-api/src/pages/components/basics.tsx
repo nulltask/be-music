@@ -153,9 +153,11 @@ export function Avatar(props: { src: string; size: number; class?: string }) {
 
 /**
  * A moment: written in UTC here, rewritten in the viewer's local time by LOCAL_TIME_SCRIPT (local-time.ts). `compact`
- * leaves the zone out of the UTC text (table cells); the title always holds the UTC time.
+ * leaves the zone out of the UTC text (table cells); the title always holds the UTC time. `relative` has the script
+ * write how long ago it was instead (`3 日前`, the date once it is a month old); the page is cached, so only the
+ * viewer's browser knows "now".
  */
-export function LocalTime(props: { at: number; precision?: 'minute' | 'day'; compact?: boolean }) {
+export function LocalTime(props: { at: number; precision?: 'minute' | 'day' | 'relative'; compact?: boolean }) {
   const utc = formatTimestamp(props.at);
   const precision = props.precision ?? 'minute';
   const text = precision === 'day' ? utc.slice(0, 10) : props.compact ? utc.replace(' UTC', '') : utc;
