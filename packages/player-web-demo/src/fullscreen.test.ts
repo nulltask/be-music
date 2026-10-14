@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vite-plus/test';
 import {
   enterTouchFullscreen,
   exitFullscreen,
+  FullscreenEscapeLock,
   getFullscreenElement,
   requestFullscreen,
   shouldCaptureFullscreenEscape,
@@ -83,6 +84,61 @@ describe('shouldCaptureFullscreenEscape', () => {
     expect(shouldCaptureFullscreenEscape({ key: 'Enter', code: 'Enter' }, { fullscreenElement: {} as Element })).toBe(
       false,
     );
+  });
+});
+
+describe('shouldCaptureFullscreenEscape with Escape locked', () => {
+  test('leaves Escape to the page while the Keyboard Lock holds it', () => {
+    expect(
+      shouldCaptureFullscreenEscape({ key: 'Escape', code: 'Escape' }, { fullscreenElement: {} as Element }, true),
+    ).toBe(false);
+  });
+});
+
+describe('FullscreenEscapeLock', () => {
+  test('locks Escape on entering fullscreen and unlocks on leaving', async () => {
+    const lock = vi.fn().mockResolvedValue(undefined);
+    const unlock = vi.fn();
+    const escapeLock = new FullscreenEscapeLock({ keyboard: { lock, unlock } });
+    await escapeLock.sync(true);
+    expect(lock).toHaveBeenCalledWith(['Escape']);
+    expect(escapeLock.isLocked()).toBe(true);
+    await escapeLock.sync(false);
+    expect(unlock).toHaveBeenCalledOnce();
+    expect(escapeLock.isLocked()).toBe(false);
+  });
+
+  test('is a no-op without navigator.keyboard (Safari / Firefox)', async () => {
+    const escapeLock = new FullscreenEscapeLock({});
+    await expect(escapeLock.sync(true)).resolves.toBeUndefined();
+    expect(escapeLock.isLocked()).toBe(false);
+    await expect(escapeLock.sync(false)).resolves.toBeUndefined();
+    await expect(new FullscreenEscapeLock(undefined).sync(true)).resolves.toBeUndefined();
+  });
+
+  test('reports a rejected lock and stays unlocked', async () => {
+    const error = new Error('NotAllowedError');
+    const onLockError = vi.fn();
+    const escapeLock = new FullscreenEscapeLock({ keyboard: { lock: vi.fn().mockRejectedValue(error) } }, onLockError);
+    await expect(escapeLock.sync(true)).resolves.toBeUndefined();
+    expect(onLockError).toHaveBeenCalledWith(error);
+    expect(escapeLock.isLocked()).toBe(false);
+  });
+
+  test('a lock that resolves after fullscreen was left is not recorded', async () => {
+    let resolveLock: () => void = () => {};
+    const lock = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveLock = resolve;
+        }),
+    );
+    const escapeLock = new FullscreenEscapeLock({ keyboard: { lock, unlock: vi.fn() } });
+    const pending = escapeLock.sync(true);
+    await escapeLock.sync(false);
+    resolveLock();
+    await pending;
+    expect(escapeLock.isLocked()).toBe(false);
   });
 });
 
