@@ -3,13 +3,19 @@
 import type { Child } from 'hono/jsx';
 import type { PlayInfo } from '../data.ts';
 import { LocalTime } from './basics.tsx';
-import { formatPlayTime, formatRecorder, rulesetName, verificationMeaning } from '../format.ts';
+import { formatPlayTime, formatRecorder, RULESET_LABELS } from '../format.ts';
+import { messagesFor, useMessages, type Messages } from '../i18n/index.ts';
 
 /**
  * Everything a play's info popover lists: how it was played, how far it was verified, and which software recorded,
  * sent and scored it. The app that recorded a play is usually the one that sent it; then it gets one row.
  */
-export function playInfoRows(info: PlayInfo): Array<[string, Child]> {
+export function playInfoRows(info: PlayInfo, t: Messages = messagesFor('en')): Array<[string, Child]> {
+  const p = t.playInfo;
+  const recorded = (value: Record<string, string> | null) => {
+    const text = formatRecorder(value);
+    return text === 'unknown' ? p.unknown : text.replace(/^unknown app/, p.unknownApp);
+  };
   const recorder = info.recordedBy;
   const sentByRecorder =
     recorder !== null &&
@@ -17,16 +23,19 @@ export function playInfoRows(info: PlayInfo): Array<[string, Child]> {
     recorder.name !== undefined &&
     info.submittedBy.startsWith(`${recorder.name}/${recorder.version ?? ''}`);
   const rows: Array<[string, Child | undefined]> = [
-    ['Played', <LocalTime at={info.createdAt} />],
-    ['Played under', rulesetName(info.playedRuleset)],
-    ['Gauge', info.gauge],
-    ['Lanes', info.laneOption !== null && info.laneOption !== '-' ? info.laneOption : undefined],
-    ['Assists', info.assistFlags.length > 0 ? info.assistFlags.join(', ') : 'none'],
-    ['Length', info.durationMs !== null && info.durationMs > 0 ? formatPlayTime(info.durationMs) : undefined],
-    ['Verified', verificationMeaning(info.verification)],
-    sentByRecorder ? ['App', formatRecorder(recorder)] : ['Recorded with', formatRecorder(recorder)],
-    ['Sent from', sentByRecorder ? undefined : (info.submittedBy ?? 'unknown')],
-    ['Scored by', `be-music engine ${info.serverEngine}`],
+    [p.played, <LocalTime at={info.createdAt} />],
+    [p.playedUnder, t.rules.name(RULESET_LABELS[info.playedRuleset] ?? info.playedRuleset)],
+    [p.gauge, info.gauge],
+    [p.lanes, info.laneOption !== null && info.laneOption !== '-' ? info.laneOption : undefined],
+    [p.assists, info.assistFlags.length > 0 ? info.assistFlags.join(', ') : p.none],
+    [
+      p.length,
+      info.durationMs !== null && info.durationMs > 0 ? formatPlayTime(info.durationMs, t.duration) : undefined,
+    ],
+    [p.verified, p.verification[info.verification] ?? info.verification],
+    sentByRecorder ? [p.app, recorded(recorder)] : [p.recordedWith, recorded(recorder)],
+    [p.sentFrom, sentByRecorder ? undefined : (info.submittedBy ?? p.unknown)],
+    [p.scoredBy, p.engine(info.serverEngine)],
   ];
   return rows.filter((row): row is [string, Child] => row[1] !== undefined);
 }
@@ -38,6 +47,7 @@ export function playInfoRows(info: PlayInfo): Array<[string, Child]> {
  * hover and the placement for browsers without CSS anchor positioning.
  */
 export function InfoButton(props: { info: PlayInfo | undefined }) {
+  const t = useMessages();
   if (props.info === undefined) return null;
   const id = `info-${props.info.scoreId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
   const anchor = `--${id}`;
@@ -50,7 +60,7 @@ export function InfoButton(props: { info: PlayInfo | undefined }) {
         data-size="icon-sm"
         popovertarget={id}
         data-tooltip-for={id}
-        aria-label="Play details"
+        aria-label={t.playInfo.details}
         style={`anchor-name:${anchor}`}
       >
         <svg
@@ -80,7 +90,7 @@ export function InfoButton(props: { info: PlayInfo | undefined }) {
         style={`position-anchor:${anchor};inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-block,flip-inline`}
       >
         <dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 whitespace-normal">
-          {playInfoRows(props.info).map(([label, value]) => (
+          {playInfoRows(props.info, t).map(([label, value]) => (
             <>
               <dt class="text-muted-foreground">{label}</dt>
               <dd class="break-words">{value}</dd>

@@ -1,5 +1,6 @@
 import { ClearLamp } from '../scoring/lamp.ts';
 import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
+import { en, type Messages } from './i18n/en.ts';
 
 /** Display name and colour of each clear lamp, LR2 / beatoraja style. */
 export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string; meaning: string }>> = {
@@ -50,13 +51,13 @@ export function formatScoreRate(exScore: number, noteCount: number): string {
 export const djLevel = (exScore: number, noteCount: number): string => resolveIidxRankLabel(exScore, noteCount);
 
 /** A length of time for totals: `3h 25m`, `25m 12s`, `48s`. */
-export function formatPlayTime(ms: number): string {
+export function formatPlayTime(ms: number, duration: Messages['duration'] = en.duration): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
+  if (hours > 0) return duration.hoursMinutes(hours, minutes);
+  if (minutes > 0) return duration.minutesSeconds(minutes, seconds % 60);
+  return duration.seconds(seconds);
 }
 
 /** `2026-10-13 14:51` in UTC, so a cached page reads the same everywhere. */

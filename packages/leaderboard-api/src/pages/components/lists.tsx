@@ -20,14 +20,14 @@ import {
   formatLaneMode,
   formatScoreRate,
   lampStyle,
-  RULESET_MEANING,
-  rulesetName,
+  RULESET_LABELS,
   showsGauge,
 } from '../format.ts';
 import { ABOVE, Avatar, chartHref, Empty, LINK, playerHref, RowLink, scoreHref, Tag } from './basics.tsx';
 import { EntityIcon } from './entity-icon.tsx';
 import { HelpTip } from './help-tip.tsx';
 import { InfoButton, When } from './play-info.tsx';
+import { useMessages, type Messages } from '../i18n/index.ts';
 
 /** The frame of a list: a card whose rows are split by hairlines. */
 function List(props: { label: string; children: Child }) {
@@ -83,24 +83,31 @@ function Row(props: {
   );
 }
 
+/** What a lamp means, in the page's language. */
+function lampMeaning(t: Messages, lamp: number): string {
+  return t.lampMeanings[lamp] ?? t.lampMeanings.none;
+}
+
 /** The lamp as a colour bar: the row's leading edge, the same colour the lamp has everywhere else. */
 function LampBar(props: { lamp: number }) {
+  const t = useMessages();
   const style = lampStyle(props.lamp);
   return (
     <span
       class="ring-foreground/15 block h-8 w-1.5 rounded-full ring-1"
       style={`background:${style.color}`}
-      title={`${style.label}: ${style.meaning}`}
+      title={`${style.label}: ${lampMeaning(t, props.lamp)}`}
     />
   );
 }
 
 /** The lamp's name in its colour's dot, for the details line; `from` marks a lamp this play raised. */
 function LampLabel(props: { lamp: number; from?: number }) {
+  const t = useMessages();
   const style = lampStyle(props.lamp);
   const raised = props.from !== undefined && props.lamp > props.from;
   return (
-    <span class="inline-flex items-center gap-1" title={style.meaning}>
+    <span class="inline-flex items-center gap-1" title={lampMeaning(t, props.lamp)}>
       <span class="ring-foreground/20 inline-block size-2 rounded-full ring-1" style={`background:${style.color}`} />
       {raised ? (
         <>
@@ -128,13 +135,14 @@ function Delta(props: { delta: number; better: boolean; title: string }) {
  * player's best, when it did.
  */
 function Score(props: { exScore: number; noteCount: number; previous?: number }) {
+  const t = useMessages();
   const gain = props.previous !== undefined ? props.exScore - props.previous : 0;
   return (
     <div class="text-end leading-tight">
       <div class="flex items-baseline justify-end gap-1.5">
         {gain > 0 ? (
           <span class="text-xs">
-            <Delta delta={gain} better title="Above the player’s previous best EX-Score" />
+            <Delta delta={gain} better title={t.lists.aboveBest} />
           </span>
         ) : null}
         <span class="font-semibold">{props.exScore}</span>
@@ -171,15 +179,16 @@ export function RankingList(props: {
   everyPlay?: boolean;
   empty?: string;
 }) {
+  const t = useMessages();
   if (props.entries.length === 0) {
-    return <Empty title="Nobody here yet">{props.empty ?? 'No plays match these filters.'}</Empty>;
+    return <Empty title={t.lists.nobody}>{props.empty ?? t.lists.noMatch}</Empty>;
   }
   return (
-    <List label="Ranking">
+    <List label={t.lists.ranking}>
       {props.entries.map((entry) => (
         <Row
           href={scoreHref(entry.exScoreId)}
-          label={`Play of ${entry.displayName}, rank ${entry.rank}`}
+          label={t.lists.playOfPlayer(entry.displayName, entry.rank)}
           current={props.highlight === entry.handle}
           play={{ info: props.infos.get(entry.exScoreId) }}
           start={
@@ -194,17 +203,13 @@ export function RankingList(props: {
               <a class={`${LINK} ${ABOVE} truncate`} href={playerHref(entry.handle)}>
                 {entry.displayName}
               </a>
-              {entry.anonymous ? <Tag>anonymous</Tag> : null}
+              {entry.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
             </>
           }
           details={[
             <LampLabel lamp={entry.clearLamp} />,
             <>BP {entry.missCount}</>,
-            props.everyPlay ? null : (
-              <>
-                {entry.playCount} play{entry.playCount === 1 ? '' : 's'}
-              </>
-            ),
+            props.everyPlay ? null : <>{t.count.plays(entry.playCount)}</>,
             <When at={entry.achievedAt} />,
           ]}
           end={<Score exScore={entry.exScore} noteCount={props.noteCount} />}
@@ -224,11 +229,12 @@ export function RecentScoresList(props: {
   showPlayer: boolean;
   empty: string;
 }) {
+  const t = useMessages();
   if (props.scores.length === 0) {
-    return <Empty title="No plays here yet">{props.empty}</Empty>;
+    return <Empty title={t.lists.noPlays}>{props.empty}</Empty>;
   }
   return (
-    <List label="Latest plays">
+    <List label={t.lists.latestPlays}>
       {props.scores.map((entry) => {
         const title = chartTitle(entry.title, entry.chartFingerprint);
         const previous = entry.previous;
@@ -236,7 +242,7 @@ export function RecentScoresList(props: {
         return (
           <Row
             href={scoreHref(entry.scoreId)}
-            label={`Play of ${title} by ${entry.displayName}`}
+            label={t.lists.playOfChart(title, entry.displayName)}
             play={{ info: props.infos.get(entry.scoreId) }}
             start={
               <span class="flex items-center gap-3">
@@ -265,28 +271,26 @@ export function RecentScoresList(props: {
                   >
                     {entry.displayName}
                   </a>
-                  {entry.anonymous ? <Tag>anonymous</Tag> : null}
+                  {entry.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
                 </>
               ) : null,
               <LampLabel lamp={entry.clearLamp} from={previous?.clearLamp} />,
               showsGauge(entry.clearLamp) ? <>{formatGauge(entry.gaugeType, entry.gaugeFinal)}</> : null,
               <>
                 BP {entry.missCount}
-                {missDelta < 0 ? (
-                  <Delta delta={missDelta} better title="Fewer misses than the player’s previous best" />
-                ) : null}
+                {missDelta < 0 ? <Delta delta={missDelta} better title={t.lists.fewerMisses} /> : null}
               </>,
               entry.laneOption !== null && entry.laneOption !== 'OFF' && entry.laneOption !== '-' ? (
                 <>{entry.laneOption}</>
               ) : null,
-              <span title={`Rank among ${entry.players} player${entry.players === 1 ? '' : 's'} on this chart`}>
+              <span title={t.lists.rankAmong(entry.players)}>
                 #{entry.rank} / {entry.players}
               </span>,
               <>
-                <span title="The scoring rules the player played under">
-                  played with {rulesetName(entry.playedRuleset)}
+                <span title={t.rules.playedWithTitle}>
+                  {t.rules.playedWith(t.rules.name(RULESET_LABELS[entry.playedRuleset] ?? entry.playedRuleset))}
                 </span>
-                {entry.assisted ? <Tag>assist</Tag> : null}
+                {entry.assisted ? <Tag>{t.lists.assist}</Tag> : null}
               </>,
               <When at={entry.createdAt} />,
             ]}
@@ -298,20 +302,20 @@ export function RecentScoresList(props: {
   );
 }
 
-const PACK_TYPE_LABELS = {
-  included: { label: 'original', meaning: 'Came in the work’s own package.' },
-  additional: { label: 'add-on', meaning: 'An add-on chart (差分), distributed separately from the work.' },
-} as const;
-
 /** The charts of a chartset; a row opens the chart. */
 export function ChartsetChartsList(props: { charts: ChartsetChart[] }) {
+  const t = useMessages();
   if (props.charts.length === 0) {
-    return <Empty title="No charts yet">No chart of this work has been played here.</Empty>;
+    return <Empty title={t.chartset.empty}>{t.chartset.emptyLead}</Empty>;
   }
+  const packs = {
+    included: { label: t.chartset.original, meaning: t.chartset.originalMeaning },
+    additional: { label: t.chartset.addOn, meaning: t.chartset.addOnMeaning },
+  };
   return (
-    <List label="Charts">
+    <List label={t.chartset.listLabel}>
       {props.charts.map((entry) => {
-        const pack = entry.packType === null ? undefined : PACK_TYPE_LABELS[entry.packType];
+        const pack = entry.packType === null ? undefined : packs[entry.packType];
         const title = chartTitle(entry.title, entry.chartFingerprint);
         return (
           <Row
@@ -331,13 +335,13 @@ export function ChartsetChartsList(props: { charts: ChartsetChart[] }) {
             }
             details={[
               entry.artist !== null && entry.artist.length > 0 ? <>{entry.artist}</> : null,
-              <span class="tabular-nums">{entry.noteCount} notes</span>,
+              <span class="tabular-nums">{t.count.notes(entry.noteCount)}</span>,
               pack !== undefined ? <span title={pack.meaning}>{pack.label}</span> : null,
             ]}
             end={
               <div class="text-end tabular-nums">
                 <div class="font-semibold">{entry.players}</div>
-                <div class="text-muted-foreground text-xs">player{entry.players === 1 ? '' : 's'}</div>
+                <div class="text-muted-foreground text-xs">{t.chartset.players(entry.players)}</div>
               </div>
             }
           />
@@ -373,15 +377,16 @@ export function ResultCards(props: {
   /** The viewer's display ruleset (the header's ruleset menu), marked as selected. */
   displayRuleset: string;
 }) {
+  const t = useMessages();
+  const name = (ruleset: string) => t.rules.name(RULESET_LABELS[ruleset] ?? ruleset);
   const results = [...props.results].sort(byRulesetOrder);
   return (
     <section class="space-y-2" aria-labelledby="scored-with">
       <h2 id="scored-with" class="text-muted-foreground text-sm">
         <span class="inline-flex items-center gap-0.5">
-          <abbr title={RULESET_MEANING}>Scored with</abbr> each set of rules
-          <HelpTip topic="rules" label="the rule sets">
-            Every play is scored under LR2, beatoraja and IIDX rules. “selected” is the one the pages show; “played
-            with” is the one the player played under.
+          <abbr title={t.rules.meaning}>{t.score.scoredWith}</abbr> {t.score.eachSet}
+          <HelpTip topic="rules" label={t.score.rulesLabel}>
+            {t.score.rulesHelp}
           </HelpTip>
         </span>
       </h2>
@@ -391,14 +396,14 @@ export function ResultCards(props: {
           return (
             <section
               class={`card gap-3 px-4 py-4 ${shown ? 'ring-primary ring-2' : ''}`}
-              aria-label={rulesetName(result.ruleset)}
+              aria-label={name(result.ruleset)}
               data-state={shown ? 'selected' : undefined}
             >
               {/* A div, not a header: Basecoat pads a card's header, which would shift it off the card's edge. */}
               <div class="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                {rulesetName(result.ruleset)}
-                {shown ? <Tag>selected</Tag> : null}
-                {result.ruleset === props.playedRuleset ? <Tag>played with</Tag> : null}
+                {name(result.ruleset)}
+                {shown ? <Tag>{t.score.selected}</Tag> : null}
+                {result.ruleset === props.playedRuleset ? <Tag>{t.score.playedWith}</Tag> : null}
               </div>
               <div class="flex items-end justify-between gap-3">
                 <LampLabel lamp={result.clearLamp} />
@@ -422,11 +427,11 @@ export function ResultCards(props: {
                   <dd class="text-foreground">{result.missCount}</dd>
                 </div>
                 <div class="flex justify-between gap-2">
-                  <dt>Combo</dt>
+                  <dt>{t.score.combo}</dt>
                   <dd class="text-foreground">{result.maxCombo}</dd>
                 </div>
                 <div class="col-span-3 flex justify-between gap-2">
-                  <dt>Gauge</dt>
+                  <dt>{t.score.gauge}</dt>
                   <dd class="text-foreground">{formatGauge(result.gaugeType, result.gaugeFinal)}</dd>
                 </div>
               </dl>

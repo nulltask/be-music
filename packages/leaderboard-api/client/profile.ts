@@ -1,26 +1,30 @@
 /** Pure helpers of the pages' client script (main.ts): messages for API errors and the icon's square crop. */
+import { clientMessages, type ClientMessages } from './messages.ts';
 
 /** A message for an error the account API answered (`{ error, detail? }`), for the settings page. */
-export function describeAccountError(error: string, detail?: string): string {
+export function describeAccountError(
+  error: string,
+  detail?: string,
+  messages: ClientMessages = clientMessages('en'),
+): string {
+  const m = messages.errors;
   switch (error) {
     case 'invalid-handle':
-      return detail === 'reserved'
-        ? 'That handle is reserved. Pick another.'
-        : 'Handles are 3 to 15 letters, digits or _.';
+      return detail === 'reserved' ? m.handleReserved : m.handleFormat;
     case 'invalid-display-name':
-      if (detail === 'empty') return 'The name cannot be empty.';
-      if (detail === 'length') return 'Names are at most 32 characters.';
-      return 'Names cannot contain line breaks or control characters.';
+      if (detail === 'empty') return m.nameEmpty;
+      if (detail === 'length') return m.nameLength;
+      return m.nameCharacters;
     case 'handle-taken':
-      return 'That handle is taken.';
+      return m.handleTaken;
     case 'avatar-too-large':
-      return 'The image is too large.';
+      return m.avatarTooLarge;
     case 'unsupported-image':
-      return 'Use a PNG, JPEG or WebP image.';
+      return m.unsupportedImage;
     case 'sign-in-required':
-      return 'Sign in first.';
+      return m.signInRequired;
     default:
-      return `Something went wrong (${error}).`;
+      return m.unknown(error);
   }
 }
 
