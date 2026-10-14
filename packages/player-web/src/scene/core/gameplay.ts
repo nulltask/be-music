@@ -75,7 +75,7 @@ import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/
 import {
   loadAssetBytes,
   normalizePath,
-  resolveChartImageAsset,
+  resolveChartBgaAsset,
   resolveChartAudioAsset,
   resolveChartPlayVariant,
 } from '../../collection/collection.ts';
@@ -2755,8 +2755,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // still find the asset; video extensions fall through to the original path verbatim. Decoding is bounded because
       // image/video decoders allocate native memory outside the JS heap; fanning every BGA out at once can kill the
       // Chrome renderer before any decode promise rejects.
-      const entry = resolveChartImageAsset(source, song.chartPath, path);
-      const bytes = await loadAssetBytes(entry);
+      const resolved = resolveChartBgaAsset(source, song.chartPath, path);
+      const bytes = await loadAssetBytes(resolved?.entry);
       if (this.disposed) return;
       if (!bytes) {
         return;
@@ -2768,7 +2768,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           // Video BGA — wraps a `<video>` element in a Pixi texture. The same texture handle is used on both tracks
           // (no chroma-key on layer; black-keying a moving video looks worse than just letting the artist's blacks
           // show).
-          const handle = await loadVideoTextureFromBytes(path, bytes, {
+          // The file found may be a re-encode under another extension (`_bga.mpg` → `_bga.mp4`): name it as found.
+          const handle = await loadVideoTextureFromBytes(resolved?.path ?? path, bytes, {
             maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
             useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
           });

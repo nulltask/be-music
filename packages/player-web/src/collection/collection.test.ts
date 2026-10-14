@@ -4,6 +4,7 @@ import {
   BrowserSongCollectionStore,
   loadSongCollectionFromFiles,
   resolveChartAudioAsset,
+  resolveChartBgaAsset,
   resolveChartImageAsset,
   resolveChartPlayVariant,
 } from './collection.ts';
@@ -475,6 +476,30 @@ describe('resolveChartImageAsset', () => {
       const source = makeAssetSource({ 'Song/clip.png': PNG_BYTES });
       expect(resolveChartImageAsset(source, 'Song/main.bms', `clip.${ext}`)).toBeUndefined();
     }
+  });
+});
+
+describe('resolveChartBgaAsset', () => {
+  test('finds a video re-encoded under another video extension, and names it', () => {
+    const MP4_BYTES = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70]);
+    const source = makeAssetSource({ 'Song/_bga.mp4': MP4_BYTES });
+    expect(resolveChartBgaAsset(source, 'Song/main.bms', '_bga.mpg')).toEqual({ entry: MP4_BYTES, path: '_bga.mp4' });
+    expect(resolveChartBgaAsset(source, 'Song/main.bms', '_bga.wmv')?.path).toBe('_bga.mp4');
+  });
+
+  test('prefers the declared file, then browser-native containers', () => {
+    const MPG = new Uint8Array([1]);
+    const MP4 = new Uint8Array([2]);
+    const WMV = new Uint8Array([3]);
+    const both = makeAssetSource({ 'Song/m.mpg': MPG, 'Song/m.mp4': MP4 });
+    expect(resolveChartBgaAsset(both, 'Song/main.bms', 'm.mpg')?.path).toBe('m.mpg');
+    const legacy = makeAssetSource({ 'Song/m.wmv': WMV, 'Song/m.mp4': MP4 });
+    expect(resolveChartBgaAsset(legacy, 'Song/main.bms', 'm.avi')?.path).toBe('m.mp4');
+  });
+
+  test('still never answers a video with an image', () => {
+    const source = makeAssetSource({ 'Song/m.png': new Uint8Array([0x89]) });
+    expect(resolveChartBgaAsset(source, 'Song/main.bms', 'm.mpg')).toBeUndefined();
   });
 });
 

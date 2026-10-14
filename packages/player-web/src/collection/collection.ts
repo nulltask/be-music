@@ -784,14 +784,33 @@ export function resolveChartImageAsset(
   chartPath: string,
   assetPath: string,
 ): BrowserSongAssetEntry | undefined {
+  return resolveChartBgaAsset(source, chartPath, assetPath)?.entry;
+}
+
+/**
+ * {@link resolveChartImageAsset}, also naming the file it found (`path`, relative like `assetPath`): a video declared
+ * as `_bga.mpg` may resolve to `_bga.mp4`, and the video loader should treat the bytes as what they are.
+ */
+export function resolveChartBgaAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): { entry: BrowserSongAssetEntry; path: string } | undefined {
   for (const candidate of imageFallbackPaths(assetPath)) {
     const entry = resolveChartAsset(source, chartPath, candidate);
     if (entry) {
-      return entry;
+      return { entry, path: candidate };
     }
   }
   return undefined;
 }
+
+/**
+ * The video extensions tried, in order, when a chart's declared video BGA isn't there under its own name: packs often
+ * re-encode `_bga.mpg` / `_bga.wmv` to `_bga.mp4` without touching the chart (beatoraja looks for the other
+ * extensions too). Browser-native containers come first, so the re-encode wins over a legacy original left beside it.
+ */
+const VIDEO_FALLBACK_EXTENSIONS = ['mp4', 'webm', 'm4v', 'mov', 'mpg', 'mpeg', 'wmv', 'avi', 'mkv'] as const;
 
 function imageFallbackPaths(path: string): string[] {
   const lastSlash = path.lastIndexOf('/');
@@ -799,6 +818,7 @@ function imageFallbackPaths(path: string): string[] {
   if (dotIndex < 0 || dotIndex < lastSlash) {
     return [path];
   }
+  // A declared video falls back to the same name under the other video extensions (see VIDEO_FALLBACK_EXTENSIONS).
   // Don't walk image extensions when the chart explicitly declared a video BGA — `_scualee.mpg` paired with a same-
   // basename `_scualee.png` (cover art / static fallback frame shipped alongside the actual video) would otherwise have
   // the resolver pick the PNG. The BGA loader only checks the declared path's extension to decide between the image vs.
@@ -806,7 +826,9 @@ function imageFallbackPaths(path: string): string[] {
   // MP4 — visually a frozen still during gameplay. Returning just the original path here keeps the video reference
   // resolving to its own file.
   if (isVideoExtensionPath(path)) {
-    return [path];
+    const videoBase = path.slice(0, dotIndex);
+    const declared = path.slice(dotIndex + 1).toLowerCase();
+    return [path, ...VIDEO_FALLBACK_EXTENSIONS.filter((ext) => ext !== declared).map((ext) => `${videoBase}.${ext}`)];
   }
   const base = path.slice(0, dotIndex);
   const candidates = [`${base}.webp`, `${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];
