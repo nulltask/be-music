@@ -344,13 +344,6 @@ SHA-256 で Mocha-Repository、MinIR、BMS Search（`/patterns/{sha256}`）を�
 - **最初のカード**はスコア用の 1 種類です。曲名、アーティスト、レベル、クリアランプの帯、EX スコア、レート、
   DJ LEVEL、判定数、順位と参加人数、ルールセットのバッジ、プレイヤー名、日付。ランキング・プロフィール・ライバル
   比較のカードは後で作ります。
-- **譜面のカードは Worker が描きます。** 譜面ページのプレビューは、既定のカードのプレイフィールドにその譜面の
-  ノーツを載せたものです。ノーツが最も多い 2 小節（8 拍、拍の頭から）を、いつもの色（白鍵と青鍵、赤の皿、ロング
-  ノーツは帯、小節線）のレーンで描きます。`GET /leaderboard/charts/:chartFingerprint/card` が R2 から譜面の
-  フィンガープリント文書を読み、ノーツを配置し（`src/chart-card/excerpt.ts`）、`scripts/build-icons.ts` が
-  `og-chart.svg` から用意したパレット画像の上に矩形として描いて、無圧縮のパレット PNG（約 760 KB。CPU は数ミリ秒で、
-  ラスタライザもフォントも要りません）にし、R2 の `og/charts/{fingerprint}/{version}.png` に保存します。`#RANDOM`
-  のある譜面は、どの分岐にも共通するノーツを描きます。
 - **メタタグ**をすべてのページに出します。絶対 URL の `og:image`、`og:image:width` / `height`、
   `twitter:card=summary_large_image`。
 - **セーフエリア**（`src/pages/share-card-safe-area.ts`）: リンクプレビューはカードの上に描き、端を切り落とすので、

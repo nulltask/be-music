@@ -9,7 +9,6 @@ import { RankingList } from './components/lists.tsx';
 import { Details, DistributionCard, Elsewhere, Stats } from './components/cards.tsx';
 import { EntityIcon } from './components/entity-icon.tsx';
 import { chartsetHref, Filters, LocalTime, SectionHeading, Segmented, Tag, Toggle } from './components/basics.tsx';
-import { chartCardUrl } from './card.ts';
 import { loadChart, loadChartAliases, loadChartsetOf } from './data.ts';
 import { externalLinks, type ChartAlias } from './external.ts';
 import { chartTitle, difficultyName, formatJudgeRank, formatLaneMode, RULESET_LABELS } from './format.ts';
@@ -88,7 +87,6 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
         ]),
         // Search engines leave a chart alone until it is listed: a made-up one should not spread from here.
         noindex: !listed,
-        image: { path: chartCardUrl(chartFingerprint), alt: t.chart.cardAlt(title) },
       }}
     >
       <PageHeader

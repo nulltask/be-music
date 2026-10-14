@@ -121,7 +121,6 @@ export const en = {
   chart: {
     description: (title: string, rules: string, players: number) =>
       `${title} — ranking under ${rules}, ${plural(players, 'player', 'players')}.`,
-    cardAlt: (title: string) => `be-music Leaderboard: the densest two measures of ${title}, drawn as lanes and notes`,
     stats: { players: 'Players', plays: 'Plays', firstPlayed: 'First played', lastPlayed: 'Last played' },
     ranking: 'Ranking',
     clearLamps: 'Clear lamps',
