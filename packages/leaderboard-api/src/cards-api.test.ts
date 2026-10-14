@@ -53,9 +53,11 @@ describe('share cards', () => {
     expect(page).toContain('https://x.com/intent/post?');
     // Only the player's own view asks the client to draw and upload the card.
     expect(page).not.toContain('data-upload=');
-    expect(await (await fetchApp(`/leaderboard/scores/${scoreId}`, { headers: { cookie: owner } })).text()).toContain(
-      `data-upload="/api/v0/scores/${scoreId}/card"`,
-    );
+    const ownView = await (await fetchApp(`/leaderboard/scores/${scoreId}`, { headers: { cookie: owner } })).text();
+    expect(ownView).toContain(`data-upload="/api/v0/scores/${scoreId}/card"`);
+    // The card to draw carries the chart's densest notes for its playfield; nobody else's view needs them.
+    expect(ownView).toMatch(/"excerpt":\{"lanes":\[\{"tone":"red","side":"1P"\},/);
+    expect(page).not.toContain('"excerpt"');
 
     const fallback = await fetchApp(new URL(image!).pathname + new URL(image!).search);
     expect(fallback.headers.get('content-type')).toBe('image/png');
