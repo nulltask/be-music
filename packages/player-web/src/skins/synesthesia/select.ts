@@ -55,6 +55,7 @@ import {
   type BrowserBrowseEntry,
   type BrowserSongEntry,
   formatPlayVariantLabel,
+  resolveSongStats,
   hash01,
   resolveSongRowFacts,
   stageProgress,
@@ -682,6 +683,16 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     }
     addText(position, 288, 268, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
+    // The judge rank (#RANK / #DEFEXRANK) on the same line, from the left, centred on the position's line.
+    const judgeLabel = addText('JUDGE', 30, 273, { ...labelStyle(), anchorY: 0.5 });
+    addText(song ? resolveSongStats(song).judgeRank : '-', 30 + judgeLabel.width + 8, 273, {
+      size: 11,
+      fill: SYN_WHITE,
+      fontFamily: SYN_DISPLAY_FONT,
+      anchorY: 0.5,
+      maxWidth: 150,
+      dropShadow: { color: SYN_WHITE, distance: 0, blur: 6, alpha: 0.4 },
+    });
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
     chrome.rect(26, 296, 170, 40).fill({ color: accent, alpha: 0.16 });
@@ -865,13 +876,24 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       }
     }
     addText(position, left + innerW, dotsY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
+    // The judge rank (#RANK / #DEFEXRANK) at the end of the file line.
+    const judgeRank = song ? resolveSongStats(song).judgeRank : '-';
+    const judgeText = addText(judgeRank, left + innerW, card.y + 166, {
+      size: 11,
+      fill: SYN_WHITE,
+      fontFamily: SYN_DISPLAY_FONT,
+      anchorX: 1,
+      dropShadow: { color: SYN_WHITE, distance: 0, blur: 6, alpha: 0.4 },
+    });
+    const judgeLabelRight = left + innerW - judgeText.width - 8;
+    addText('JUDGE', judgeLabelRight, card.y + 168, { ...label(), anchorX: 1 });
     if (song?.fileLabel) {
       addText(song.fileLabel, left, card.y + 166, {
         size: 10,
         weight: '300',
         fill: SYN_DIM,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: innerW,
+        maxWidth: Math.max(40, judgeLabelRight - left - 60),
       });
     }
 
