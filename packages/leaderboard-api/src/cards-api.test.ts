@@ -74,6 +74,36 @@ describe('share cards', () => {
     expect(await (await fetchApp(`/leaderboard/scores/${scoreId}`)).text()).toContain(`${ORIGIN}${cardUrl}`);
   });
 
+  test("the chart page previews as the chart's own card, its densest notes drawn by the Worker", async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const chart = makeChart(['#00111:01010101', '#00216:01000000', '#00213:0101']);
+    const playlog = makePlaylog(chart, { noteCount: 7, hits: 7 });
+    const response = await fetchApp('/api/v0/scores', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie },
+      body: submissionBody(playlog, chart.playDocument, chart.chartDocument),
+    });
+    expect(response.status).toBe(201);
+    const page = await (
+      await fetchApp(`/leaderboard/charts/${chart.chartFingerprint}`, { headers: { cookie } })
+    ).text();
+    const image = /<meta property="og:image" content="([^"]+)"/.exec(page)?.[1];
+    expect(image).toMatch(
+      new RegExp(`/leaderboard/charts/${encodeURIComponent(chart.chartFingerprint)}/card\\?v=\\d+-[0-9a-f]{12}$`),
+    );
+    expect(page).toContain('<meta name="twitter:image:alt" content="be-music Leaderboard: the densest two measures');
+    const card = await fetchApp(new URL(image!).pathname + new URL(image!).search);
+    expect(card.status).toBe(200);
+    expect(card.headers.get('content-type')).toBe('image/png');
+    const bytes = new Uint8Array(await card.arrayBuffer());
+    // A palette PNG of 1200 x 630 (colour type 3): drawn by the Worker, not the default card.
+    expect([...bytes.subarray(1, 4)]).toEqual([0x50, 0x4e, 0x47]);
+    const header = new DataView(bytes.buffer, bytes.byteOffset + 16, 8);
+    expect([header.getUint32(0), header.getUint32(4)]).toEqual([1200, 630]);
+    expect(bytes[25]).toBe(3);
+    expect((await fetchApp('/leaderboard/charts/bmfp0:unknown/card')).status).toBe(404);
+  });
+
   test('other pages preview as the site card', async () => {
     const top = await (await fetchApp('/leaderboard')).text();
     expect(top).toMatch(
