@@ -3,7 +3,7 @@ import { openDatabase } from '../db/client.ts';
 import { ChartsetChartsList } from './components/lists.tsx';
 import { loadChartset, loadChartsetCharts } from './data.ts';
 import { Layout, PageHeader } from './layout.tsx';
-import { meta, notFound, PAGE_CACHE, type PageContext } from './page.tsx';
+import { meta, notFound, PAGE_CACHE, pageMessages, type PageContext } from './page.tsx';
 
 /** A chartset: the charts of one work, the original package's and the add-ons, as BMS Search files them. */
 export async function chartsetPage(c: PageContext<'/leaderboard/chartsets/:id'>) {
@@ -12,17 +12,16 @@ export async function chartsetPage(c: PageContext<'/leaderboard/chartsets/:id'>)
     loadChartset(db, c.req.param('id')),
     loadChartsetCharts(db, c.req.param('id')),
   ]);
-  if (found === undefined) return notFound(c, 'This chartset');
+  if (found === undefined) return notFound(c, 'chartset');
   c.header('cache-control', PAGE_CACHE);
+  const t = pageMessages(c).chartset;
   return c.html(
     <Layout
-      meta={meta(c, found.title, `${found.title} — ${charts.length} charts on the be-music Leaderboard.`, [
-        { label: found.title, kind: 'chartset' },
-      ])}
+      meta={meta(c, found.title, t.description(found.title, charts.length), [{ label: found.title, kind: 'chartset' }])}
     >
       <PageHeader title={found.title} kind="chartset">
         {found.event !== null ? `${found.event} · ` : ''}
-        {charts.length} chart{charts.length === 1 ? '' : 's'} ·
+        {t.charts(charts.length)} ·
         <a
           class="underline-offset-4 hover:underline"
           href={`https://bmssearch.net/bmses/${encodeURIComponent(found.id)}`}
@@ -33,9 +32,7 @@ export async function chartsetPage(c: PageContext<'/leaderboard/chartsets/:id'>)
         </a>
       </PageHeader>
       <ChartsetChartsList charts={charts} />
-      <p class="text-muted-foreground text-sm">
-        Charts are grouped as BMS Search files them, by hand; a chart it has not filed yet stays on its own.
-      </p>
+      <p class="text-muted-foreground text-sm">{t.grouping}</p>
     </Layout>,
   );
 }

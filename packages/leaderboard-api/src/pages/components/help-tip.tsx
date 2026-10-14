@@ -3,6 +3,7 @@ import type { Child } from 'hono/jsx';
 import { CircleHelp } from 'lucide-static';
 import { helpHref, type HelpId } from '../help-topics.ts';
 import { Icon } from './icon.tsx';
+import { useMessages } from '../i18n/index.ts';
 
 /** Ids for the tips on one response; unique enough as long as each page renders its tips once. */
 let nextTipId = 0;
@@ -13,6 +14,7 @@ let nextTipId = 0;
  * the Popover API opens it without script, and TOOLTIP_SCRIPT in layout.tsx adds the hover and the placement.
  */
 export function HelpTip(props: { topic: HelpId; label: string; children: Child }) {
+  const t = useMessages();
   const id = `help-${props.topic}-${(nextTipId = (nextTipId + 1) % 1_000_000)}`;
   const anchor = `--${id}`;
   return (
@@ -22,7 +24,7 @@ export function HelpTip(props: { topic: HelpId; label: string; children: Child }
         class="text-muted-foreground hover:text-foreground relative z-10 inline-flex size-5 shrink-0 cursor-help items-center justify-center rounded-full align-middle"
         popovertarget={id}
         data-tooltip-for={id}
-        aria-label={`What ${props.label} means`}
+        aria-label={t.help.whatItMeans(props.label)}
         style={`anchor-name:${anchor}`}
       >
         <Icon svg={CircleHelp} class="[&>svg]:size-3.5" />
@@ -37,7 +39,7 @@ export function HelpTip(props: { topic: HelpId; label: string; children: Child }
       >
         <p>{props.children}</p>
         <a class="text-foreground underline underline-offset-4" href={helpHref(props.topic)}>
-          More in Help
+          {t.help.more}
         </a>
       </div>
     </>

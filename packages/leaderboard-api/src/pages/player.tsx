@@ -5,9 +5,19 @@ import { RecentScoresList } from './components/lists.tsx';
 import { Details, DistributionCard, JudgeTotalsCard, Stats } from './components/cards.tsx';
 import { Avatar, LocalTime, SectionHeading, Tag } from './components/basics.tsx';
 import { loadPlayer, loadPlayInfos, loadRecentScores } from './data.ts';
-import { formatPercent, formatPlayTime, rulesetName } from './format.ts';
+import { formatPercent, formatPlayTime, RULESET_LABELS } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
-import { day, displayRuleset, meta, notFound, PAGE_CACHE, RECENT_LIMIT, when, type PageContext } from './page.tsx';
+import {
+  day,
+  displayRuleset,
+  meta,
+  notFound,
+  PAGE_CACHE,
+  pageMessages,
+  RECENT_LIMIT,
+  when,
+  type PageContext,
+} from './page.tsx';
 import { loadPlayerStats } from './stats.ts';
 import { resolveFormerHandle } from '../profiles.ts';
 import { movedTo } from './avatar.ts';
@@ -20,7 +30,7 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
     // A handle the player has since changed: send old links to the current page.
     const current = await resolveFormerHandle(db, c.req.param('handle'));
     if (current !== undefined) return c.redirect(movedTo(c.req.url, c.req.param('handle'), current), 301);
-    return notFound(c, 'This player');
+    return notFound(c, 'player');
   }
   const ruleset = displayRuleset(c);
   const [stats, scores] = await Promise.all([
@@ -34,9 +44,12 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
     }),
   ]);
   c.header('cache-control', PAGE_CACHE);
+  const t = pageMessages(c);
+  const label = (id: string) => t.rules.name(RULESET_LABELS[id] ?? id);
+  const rules = label(ruleset);
   return c.html(
     <Layout
-      meta={meta(c, player.displayName, `${player.displayName} (@${player.handle}) on the be-music Leaderboard.`, [
+      meta={meta(c, player.displayName, t.player.description(player.displayName, player.handle), [
         { label: player.displayName, kind: 'player' },
       ])}
     >
@@ -49,57 +62,55 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
         }
       >
         @{player.handle}
-        {player.anonymous ? <Tag>anonymous</Tag> : null}
+        {player.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
       </PageHeader>
       <Stats
         items={[
-          ['Plays', stats.plays],
-          ['Charts', stats.charts],
-          ['Play time', formatPlayTime(stats.playTimeMs)],
-          ['Notes', stats.notes.toLocaleString('en-US')],
-          [`Average rate`, formatPercent(stats.averageRate)],
-          ['Last played', day(stats.lastPlayedAt)],
+          [t.player.stats.plays, stats.plays],
+          [t.player.stats.charts, stats.charts],
+          [t.player.stats.playTime, formatPlayTime(stats.playTimeMs, t.duration)],
+          [t.player.stats.notes, stats.notes.toLocaleString('en-US')],
+          [t.player.stats.averageRate, formatPercent(stats.averageRate)],
+          [t.player.stats.lastPlayed, day(stats.lastPlayedAt)],
         ]}
       />
-      <JudgeTotalsCard judges={stats.judges} ruleset={rulesetName(ruleset)} />
+      <JudgeTotalsCard judges={stats.judges} ruleset={rules} />
       <div class="grid gap-6 lg:grid-cols-2">
         <DistributionCard
-          title="Clear lamps"
-          description={`Best lamp per chart under ${rulesetName(ruleset)}, without assists.`}
+          title={t.player.clearLamps}
+          description={t.player.clearLampsLead(rules)}
           distribution={stats.lamps}
           kind="lamp"
           showEmpty
         />
         <DistributionCard
-          title="DJ Ranks"
-          description={`Best EX-Score per chart under ${rulesetName(ruleset)}, without assists.`}
+          title={t.player.djRanks}
+          description={t.player.djRanksLead(rules)}
           distribution={stats.djRanks}
           kind="dj-rank"
           showEmpty
         />
       </div>
       <Details
-        title="Player"
+        title={t.player.details}
         rows={[
-          ['Joined', <LocalTime at={player.joinedAt} />],
-          ['First play', when(stats.firstPlayedAt)],
+          [t.player.joined, <LocalTime at={player.joinedAt} />],
+          [t.player.firstPlay, when(stats.firstPlayedAt)],
           [
             <span class="inline-flex items-center gap-0.5">
-              Played under
-              <HelpTip topic="rules" label="Played under">
-                The rules the player's plays were played with. Every play is still scored under all three.
+              {t.player.playedUnder}
+              <HelpTip topic="rules" label={t.player.playedUnder}>
+                {t.player.playedUnderHelp}
               </HelpTip>
             </span>,
             stats.playsByRuleset.length === 0
               ? '-'
-              : stats.playsByRuleset
-                  .map((entry) => `${rulesetName(entry.ruleset)}: ${entry.count} play${entry.count === 1 ? '' : 's'}`)
-                  .join(' · '),
+              : stats.playsByRuleset.map((entry) => t.player.playsUnder(label(entry.ruleset), entry.count)).join(' · '),
           ],
         ]}
       />
       <section class="space-y-3" aria-labelledby="latest-plays">
-        <SectionHeading id="latest-plays">Latest plays</SectionHeading>
+        <SectionHeading id="latest-plays">{t.player.latestPlays}</SectionHeading>
         <RecentScoresList
           scores={scores}
           infos={await loadPlayInfos(
@@ -107,7 +118,7 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
             scores.map((entry) => entry.scoreId),
           )}
           showPlayer={false}
-          empty="No plays yet."
+          empty={t.player.empty}
         />
       </section>
     </Layout>,

@@ -7,10 +7,13 @@ import { passkeyClient } from '@better-auth/passkey/client';
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
 import type { ScoreCardData } from '../src/pages/score-card-data.ts';
+import { clientMessages } from './messages.ts';
 import { centerSquare, describeAccountError } from './profile.ts';
 import { CARD_HEIGHT, CARD_WIDTH, drawScoreCard } from './score-card.ts';
 
 const AVATAR_SIZE = 256;
+/** Messages in the page's language. */
+const t = clientMessages(document.documentElement.lang);
 /** The server's limit for a share card (src/cards.ts). */
 const CARD_UPLOAD_LIMIT = 512 * 1024;
 
@@ -33,7 +36,7 @@ function say(message: string | undefined, selector = '[data-account-status]'): v
 }
 
 function errorText(error: { message?: string; code?: string } | null | undefined): string {
-  return error?.message ?? error?.code ?? 'Something went wrong.';
+  return error?.message ?? error?.code ?? t.somethingWentWrong;
 }
 
 /** Answers of the account API: the body on success, a message otherwise. */
@@ -41,7 +44,7 @@ async function callAccountApi(path: string, init: RequestInit): Promise<{ ok: tr
   const response = await fetch(path, { credentials: 'same-origin', ...init });
   if (response.ok) return { ok: true };
   const body = (await response.json().catch(() => ({}))) as { error?: string; detail?: string };
-  return { ok: false, message: describeAccountError(body.error ?? `http-${response.status}`, body.detail) };
+  return { ok: false, message: describeAccountError(body.error ?? `http-${response.status}`, body.detail, t) };
 }
 
 const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
@@ -49,7 +52,7 @@ const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
     const result = await auth().signIn.passkey();
     // Inside the sign-in dialog the message goes under its button; elsewhere (Settings) to the header's status line.
     const status = button.closest('dialog') !== null ? '[data-sign-in-status]' : undefined;
-    if (result?.error) return say(`Sign-in failed: ${errorText(result.error)}`, status);
+    if (result?.error) return say(t.signInFailed(errorText(result.error)), status);
     location.reload();
   },
   async 'sign-out'() {
@@ -67,7 +70,7 @@ const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
   },
   async 'create-passkey'() {
     const result = await auth().passkey.addPasskey({ name: 'be-music' });
-    if (result?.error) return say(`Creating the passkey failed: ${errorText(result.error)}`, '[data-settings-status]');
+    if (result?.error) return say(t.passkeyFailed(errorText(result.error)), '[data-settings-status]');
     location.reload();
   },
   async 'remove-avatar'() {
@@ -142,7 +145,7 @@ document.addEventListener('submit', (event) => {
     const session = await auth().getSession();
     if (session.data === null) {
       const anonymous = await auth().signIn.anonymous();
-      if (anonymous?.error) return say(`Could not start the account: ${errorText(anonymous.error)}`, status);
+      if (anonymous?.error) return say(t.accountStartFailed(errorText(anonymous.error)), status);
     }
     const saved = await callAccountApi('/api/v0/me', {
       method: 'PATCH',
@@ -155,10 +158,7 @@ document.addEventListener('submit', (event) => {
     if (!saved.ok) return say(saved.message, status);
     const passkey = await auth().passkey.addPasskey({ name: 'be-music' });
     if (passkey?.error) {
-      return say(
-        `Your account is ready, but the passkey was not made (${errorText(passkey.error)}). Add one in Settings to keep it.`,
-        status,
-      );
+      return say(t.passkeyNotMade(errorText(passkey.error)), status);
     }
     location.reload();
   })()
@@ -182,7 +182,7 @@ async function toAvatar(file: File): Promise<Blob> {
   canvas.width = AVATAR_SIZE;
   canvas.height = AVATAR_SIZE;
   const context = canvas.getContext('2d');
-  if (context === null) throw new Error('This browser cannot draw the image.');
+  if (context === null) throw new Error(t.cannotDrawImage);
   context.imageSmoothingQuality = 'high';
   context.drawImage(bitmap, crop.x, crop.y, crop.size, crop.size, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
   bitmap.close();
@@ -191,7 +191,7 @@ async function toAvatar(file: File): Promise<Blob> {
   const webp = await encode('image/webp', 0.9);
   if (webp !== null && webp.type === 'image/webp') return webp;
   const jpeg = await encode('image/jpeg', 0.88);
-  if (jpeg === null) throw new Error('This browser cannot encode the image.');
+  if (jpeg === null) throw new Error(t.cannotEncodeImage);
   return jpeg;
 }
 
@@ -224,7 +224,7 @@ async function renderScoreCard(data: ScoreCardData, font: CardFont | undefined):
   canvas.width = CARD_WIDTH;
   canvas.height = CARD_HEIGHT;
   const context = canvas.getContext('2d');
-  if (context === null) throw new Error('This browser cannot draw the card.');
+  if (context === null) throw new Error(t.cannotDrawCard);
   const avatar = await loadImage(data.avatarUrl).catch(() => null);
   await loadCardFont(font);
   if (document.fonts !== undefined) await document.fonts.ready;
@@ -242,7 +242,7 @@ async function renderScoreCard(data: ScoreCardData, font: CardFont | undefined):
   const webp = await encode('image/webp', 0.92);
   if (webp !== null && webp.type === 'image/webp' && webp.size <= CARD_UPLOAD_LIMIT) return webp;
   const jpeg = await encode('image/jpeg', 0.9);
-  if (jpeg === null) throw new Error('This browser cannot encode the card.');
+  if (jpeg === null) throw new Error(t.cannotEncodeCard);
   return jpeg;
 }
 
@@ -287,7 +287,7 @@ async function ensureScoreCard(source: HTMLScriptElement): Promise<void> {
   source.dataset.hasCard = 'true';
   const preview = document.querySelector<HTMLImageElement>('[data-card-preview]');
   if (preview !== null) preview.src = cardUrl;
-  say('Your share card is ready.', '[data-share-status]');
+  say(t.cardReady, '[data-share-status]');
 }
 
 function setUpSharing(): void {
@@ -303,14 +303,11 @@ function setUpSharing(): void {
   document.querySelector('[data-share-copy]')?.addEventListener('click', () => {
     void navigator.clipboard
       .writeText(location.href)
-      .then(() => say('Link copied.', '[data-share-status]'))
-      .catch(() => say('Copying is not allowed here; copy the address bar instead.', '[data-share-status]'));
+      .then(() => say(t.linkCopied, '[data-share-status]'))
+      .catch(() => say(t.copyNotAllowed, '[data-share-status]'));
   });
   void ensureScoreCard(source).catch((error: unknown) =>
-    say(
-      `The share card could not be made: ${error instanceof Error ? error.message : String(error)}`,
-      '[data-share-status]',
-    ),
+    say(t.cardFailed(error instanceof Error ? error.message : String(error)), '[data-share-status]'),
   );
 }
 
