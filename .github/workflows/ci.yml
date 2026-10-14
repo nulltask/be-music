@@ -210,12 +210,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p tmp/bench/head-runs tmp/bench/base-runs
+          # Only the packages this change can affect (the ones it touches and their dependents, see
+          # scripts/bench/affected-packages.ts), measured on both sides; a change outside packages/ measures them all.
+          BENCH_PACKAGES="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" | node --conditions=source scripts/bench/affected-packages.ts)"
+          echo "Benchmarking: $BENCH_PACKAGES"
           base_ok=false
           if [ -n "${BASE_DIR:-}" ]; then base_ok=true; fi
           for run_index in $(seq 1 "$BENCH_REPEATS"); do
-            BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+            BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
             if [ "$base_ok" = true ]; then
-              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.pull_request.base.sha }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
+              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.pull_request.base.sha }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
                 echo "::warning::The base benchmark failed; the report shows the head only."
                 base_ok=false
                 rm -f tmp/bench/base-runs/*.json

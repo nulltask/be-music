@@ -328,6 +328,9 @@ describe('buildDiffMarkdown', () => {
     expect(markdown).toContain('### Regressions (1)');
     expect(markdown).toContain('| `utils.noisy` | 10.0 ms | 14.3 ms | 42.9% slower | ±0.0% / ±0.0% |');
     expect(markdown).toContain('<details><summary>Run details</summary>');
+    // The table names its columns rather than leaving an empty header row.
+    expect(markdown).toContain('| Measure | Value |');
+    expect(markdown).not.toContain('| | |');
     expect(markdown).toContain('| Median change (all compared cases) | +1.00% |');
   });
 
