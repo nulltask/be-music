@@ -438,6 +438,7 @@ export class CoreResultView {
       this.skinBinding = new BeMusicResultBinding(this.options.beMusicSkin ?? phantomSkin, {
         songImage: this.songImages.lookup,
         settings: this.beMusicSkinSettings,
+        renderer: this.host?.app.renderer,
       });
       this.fallbackLayer.addChild(this.skinBinding.view);
     }

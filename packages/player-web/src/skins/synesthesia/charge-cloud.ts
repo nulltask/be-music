@@ -3,14 +3,16 @@ import {
   Geometry,
   GlProgram,
   Mesh,
+  RendererType,
   RenderTexture,
   Shader,
   UniformGroup,
+  type Renderer,
   type TextureSource,
-  type WebGLRenderer,
 } from 'pixi.js';
 import { type AudioDrive, bandLevel } from '@be-music/skin-sdk';
 import { queueGpuPass } from '../pixi-kit/index.ts';
+import { chargeCloudGpuPrograms } from './charge-cloud-wgsl.ts';
 
 /**
  * Charge cloud — a classic music-visualizer idea: a handful of small, dark, charged orbs hang in a dense fluid
@@ -23,7 +25,8 @@ import { queueGpuPass } from '../pixi-kit/index.ts';
  *
  * The particles live in float textures and step on the GPU each frame; the orbs are analytic spheres drawn by a
  * fragment shader, so they need no depth sorting against the particles (particles behind an orb are hidden in the
- * particle shader instead).
+ * particle shader instead). Every program comes in GLSL (below) and WGSL (`charge-cloud-wgsl.ts`), so the cloud draws
+ * with whichever renderer runs it.
  */
 
 export const CHARGE_ORB_COUNT = 5;
@@ -564,7 +567,7 @@ void main() {
  * the body has alpha 1 (it hides what is behind it) and the light has alpha 0 (it adds), so both go out in one draw.
  */
 const ORB_VERTEX = /* glsl */ `#version 300 es
-in vec2 aCorner;
+in vec2 aPosition;
 uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform mat3 uTransformMatrix;
@@ -587,8 +590,8 @@ void main() {
   vec2 centre = oc.xy * k * uView.x;
   float radius = orb.w * k * uView.x;
   float extent = extentFor(uLights[index].y);
-  vLocal = aCorner * extent;
-  vScreen = centre + aCorner * extent * radius;
+  vLocal = aPosition * extent;
+  vScreen = centre + aPosition * extent * radius;
   // Lit from the cloud's heart (the origin) and a little from above.
   vLightDir = normalize(-centre + vec2(0.0, -0.4 * radius) + vec2(1e-3));
   vRadius = radius;
@@ -665,11 +668,22 @@ function cloudPrograms() {
   return programs;
 }
 
-function quad(attribute: string): Geometry {
+/**
+ * A ±1 quad. Its attribute is always `aPosition`: Pixi's WebGPU backend caches vertex buffer bindings by attribute
+ * location alone, so same-shaped geometries naming their attribute differently would bind each other's buffers.
+ */
+function quad(): Geometry {
   return new Geometry({
-    attributes: { [attribute]: { buffer: new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]), format: 'float32x2' } },
+    attributes: { aPosition: { buffer: new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]), format: 'float32x2' } },
     indexBuffer: new Uint16Array([0, 1, 2, 0, 2, 3]),
   });
+}
+
+/** WebGPU draws points one pixel wide: there each particle is one instance of a quad, sized by the shader. */
+function particleQuads(count: number): Geometry {
+  const geometry = quad();
+  geometry.instanceCount = count;
+  return geometry;
 }
 
 function particleDots(count: number): Geometry {
@@ -727,7 +741,10 @@ export class ChargeCloud {
   private readonly velocityStep: Mesh<Geometry, Shader>;
   private readonly positionStep: Mesh<Geometry, Shader>;
   private readonly stepHost = new Container();
+  /** GL point sprites, drawn under WebGL. */
   private readonly particles: Mesh<Geometry, Shader>;
+  /** Instanced quads, drawn under WebGPU in place of {@link particles}. */
+  private readonly particleQuads: Mesh<Geometry, Shader>;
   private readonly orbs: Mesh<Geometry, Shader>[];
 
   /** `side` × `side` particles. */
@@ -757,12 +774,14 @@ export class ChargeCloud {
     this.positions = [stateTexture(side), stateTexture(side)];
     this.velocities = [stateTexture(side), stateTexture(side)];
     const { velocity, position, particles, orb, splat } = cloudPrograms();
-    const stepQuad = quad('aPosition');
-    const step = (glProgram: GlProgram) => {
+    const gpu = chargeCloudGpuPrograms();
+    const stepQuad = quad();
+    const step = (glProgram: GlProgram, gpuProgram: (typeof gpu)['velocity']) => {
       const mesh = new Mesh({
         geometry: stepQuad,
         shader: new Shader({
           glProgram,
+          gpuProgram,
           resources: {
             cloud: this.uniforms,
             uPositions: this.positions[0].source,
@@ -775,12 +794,13 @@ export class ChargeCloud {
       mesh.state.blend = false;
       return mesh;
     };
-    this.velocityStep = step(velocity);
-    this.positionStep = step(position);
+    this.velocityStep = step(velocity, gpu.velocity);
+    this.positionStep = step(position, gpu.position);
     this.splat = new Mesh({
       geometry: splatPoints(side * side),
       shader: new Shader({
         glProgram: splat,
+        gpuProgram: gpu.splat,
         resources: {
           cloud: this.uniforms,
           splatUniforms: new UniformGroup({ uSide: { value: side, type: 'f32' } }),
@@ -790,23 +810,29 @@ export class ChargeCloud {
       }),
     });
     this.splat.blendMode = 'add';
+    const particleUniforms = new UniformGroup({
+      uSide: { value: side, type: 'f32' },
+      uStroke: { value: 0.11 * ((384 * 384) / (side * side)) ** 0.7, type: 'f32' },
+    });
+    const particleResources = () => ({
+      cloud: this.uniforms,
+      particleUniforms,
+      uPositions: this.positions[0].source,
+      uVelocities: this.velocities[0].source,
+    });
     this.particles = new Mesh({
       geometry: particleDots(side * side),
-      shader: new Shader({
-        glProgram: particles,
-        resources: {
-          cloud: this.uniforms,
-          particleUniforms: new UniformGroup({
-            uSide: { value: side, type: 'f32' },
-            uStroke: { value: 0.11 * ((384 * 384) / (side * side)) ** 0.7, type: 'f32' },
-          }),
-          uPositions: this.positions[0].source,
-          uVelocities: this.velocities[0].source,
-        },
-      }),
+      shader: new Shader({ glProgram: particles, resources: particleResources() }),
     });
     this.particles.blendMode = 'add';
-    const orbQuad = quad('aCorner');
+    this.particleQuads = new Mesh({
+      geometry: particleQuads(side * side),
+      shader: new Shader({ gpuProgram: gpu.particles, resources: particleResources() }),
+    });
+    this.particleQuads.blendMode = 'add';
+    // Until the first step knows the renderer.
+    this.particleQuads.visible = false;
+    const orbQuad = quad();
     this.orbs = Array.from(
       { length: ORBS },
       (_, index) =>
@@ -814,6 +840,7 @@ export class ChargeCloud {
           geometry: orbQuad,
           shader: new Shader({
             glProgram: orb,
+            gpuProgram: gpu.orb,
             resources: {
               cloud: this.uniforms,
               orbUniforms: new UniformGroup({ uIndex: { value: index, type: 'f32' } }),
@@ -821,7 +848,7 @@ export class ChargeCloud {
           }),
         }),
     );
-    this.view.addChild(...this.orbs, this.particles);
+    this.view.addChild(...this.orbs, this.particles, this.particleQuads);
   }
 
   public update(frame: ChargeCloudFrame): void {
@@ -868,7 +895,10 @@ export class ChargeCloud {
     }
   }
 
-  private step(renderer: WebGLRenderer): void {
+  private step(renderer: Renderer): void {
+    const quads = renderer.type === RendererType.WEBGPU;
+    this.particles.visible = !quads;
+    this.particleQuads.visible = quads;
     const from = this.current;
     const to = 1 - from;
     this.bind(this.splat, this.positions[from].source, this.velocities[from].source);
@@ -881,6 +911,7 @@ export class ChargeCloud {
     this.render(renderer, this.positionStep, this.positions[to]);
     this.current = to;
     this.bind(this.particles, this.positions[to].source, this.velocities[to].source);
+    this.bind(this.particleQuads, this.positions[to].source, this.velocities[to].source);
     if (!this.initialised) {
       this.initialised = true;
       (this.uniforms.uniforms as Record<string, Float32Array>).uSim2![3] = 1;
@@ -893,14 +924,21 @@ export class ChargeCloud {
     mesh.shader!.resources.uVelocities = velocities;
   }
 
-  private render(renderer: WebGLRenderer, mesh: Mesh<Geometry, Shader>, target: RenderTexture): void {
+  private render(renderer: Renderer, mesh: Mesh<Geometry, Shader>, target: RenderTexture): void {
     this.stepHost.addChild(mesh);
     renderer.render({ container: this.stepHost, target, clear: false });
     this.stepHost.removeChild(mesh);
   }
 
   public destroy(): void {
-    for (const mesh of [this.splat, this.velocityStep, this.positionStep, this.particles, ...this.orbs]) {
+    for (const mesh of [
+      this.splat,
+      this.velocityStep,
+      this.positionStep,
+      this.particles,
+      this.particleQuads,
+      ...this.orbs,
+    ]) {
       const shader = mesh.shader;
       mesh.destroy();
       shader?.destroy();

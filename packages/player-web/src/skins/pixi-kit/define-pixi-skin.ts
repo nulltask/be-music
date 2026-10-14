@@ -1,5 +1,6 @@
-import { Container, Graphics, WebGLRenderer } from 'pixi.js';
+import { Container, Graphics, WebGLRenderer, type Renderer, type Texture } from 'pixi.js';
 import { runGpuPasses } from './gpu-pass.ts';
+import { PIXI_HOST_RENDER, pixiHostTarget } from './host-render.ts';
 import {
   defineBeMusicSkin,
   type BeMusicGameplayFrame,
@@ -18,16 +19,17 @@ import type { PixiSelectFrame, PixiSelectRenderer, PixiSkinDefinition } from './
 const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
 
 /**
- * Turns a {@link PixiSkinDefinition} into a be-music skin. Every surface the player hands the skin gets its own Pixi
- * `WebGLRenderer` on the surface's WebGL 2 context; each frame replays the player's plain frame data into the skin's
- * Pixi renderer functions and renders the result into the canvas.
+ * Turns a {@link PixiSkinDefinition} into a be-music skin. Each frame replays the player's plain frame data into the
+ * skin's Pixi renderer functions and renders the result. A player that renders with Pixi draws it with its own renderer
+ * into a texture it shows (see {@link PIXI_HOST_RENDER}); anywhere else every surface gets its own Pixi `WebGLRenderer`
+ * on the surface's WebGL 2 context and the frame is rendered into the canvas.
  */
 export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'webgl2'> {
   const { gameplay, select, result: _result, ...meta } = definition;
   const surfaces = new WeakMap<HTMLCanvasElement, PixiSurface>();
   const surfaceFor = (surface: BeMusicSurface<'webgl2'>): PixiSurface | undefined => surfaces.get(surface.canvas);
 
-  return defineBeMusicSkin<BeMusicSkin<'webgl2'>>({
+  const skin = defineBeMusicSkin<BeMusicSkin<'webgl2'>>({
     ...meta,
     context: 'webgl2',
     // Pixi needs a stencil buffer for masks; the canvas is composited over the BGA, so it keeps (premultiplied) alpha.
@@ -41,6 +43,11 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
       preserveDrawingBuffer: false,
     },
     async setup(surface) {
+      const host = pixiHostTarget(surface);
+      if (host) {
+        surfaces.set(surface.canvas, new PixiSurface(host.renderer, host.texture));
+        return;
+      }
       const renderer = new WebGLRenderer();
       await renderer.init({
         canvas: surface.canvas,
@@ -52,7 +59,7 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
         antialias: true,
         autoDensity: false,
       });
-      surfaces.set(surface.canvas, new PixiSurface(renderer));
+      surfaces.set(surface.canvas, new PixiSurface(renderer, undefined));
     },
     teardown(surface) {
       surfaceFor(surface)?.destroy();
@@ -95,15 +102,22 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
       },
     },
   });
+  Object.defineProperty(skin, PIXI_HOST_RENDER, { value: true });
+  return skin;
 }
 
-/** One surface's renderer and the screen it shows. */
+/**
+ * One surface's renderer and the screen it shows: the surface's own `WebGLRenderer`, or — with a `target` — the
+ * player's renderer, drawing into the player's texture.
+ */
 class PixiSurface {
   screen: GameplayScreen | SelectScreen | ResultScreen | undefined;
-  private readonly renderer: WebGLRenderer;
+  private readonly renderer: Renderer;
+  private readonly target: Texture | undefined;
 
-  constructor(renderer: WebGLRenderer) {
+  constructor(renderer: Renderer, target: Texture | undefined) {
     this.renderer = renderer;
+    this.target = target;
   }
 
   /** Matches the renderer to the surface's size and density, builds the frame, and renders it into the canvas. */
@@ -114,6 +128,20 @@ class PixiSurface {
     // The canvas never sees the pointer (the player handles input), so skip Pixi's hit-testing tree entirely.
     root.eventMode = 'none';
     root.interactiveChildren = false;
+    // GPU work the frame asked for while it was built (simulation steps into render textures) runs first.
+    runGpuPasses(renderer);
+    if (this.target) {
+      // The player rounds its own sprites to device pixels; the skin's vector shapes were drawn unrounded on their own
+      // renderer, and keep that.
+      const roundPixels = renderer._roundPixels;
+      renderer._roundPixels = 0;
+      try {
+        renderer.render({ container: root, target: this.target, clear: true, clearColor: [0, 0, 0, 0] });
+      } finally {
+        renderer._roundPixels = roundPixels;
+      }
+      return;
+    }
     if (
       renderer.resolution !== surface.pixelRatio ||
       renderer.screen.width !== surface.width ||
@@ -121,15 +149,14 @@ class PixiSurface {
     ) {
       renderer.resize(surface.width, surface.height, surface.pixelRatio);
     }
-    // GPU work the frame asked for while it was built (simulation steps into render textures) runs first.
-    runGpuPasses(renderer);
     renderer.render({ container: root, clear: true });
   }
 
   destroy(): void {
     this.screen?.destroy();
     this.screen = undefined;
-    this.renderer.destroy();
+    // The player owns its renderer.
+    if (!this.target) this.renderer.destroy();
   }
 }
 

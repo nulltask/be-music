@@ -2484,6 +2484,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
         resolveSongRecord: this.options.resolveSongRecord,
         songImage: songImages.lookup,
         settings: this.beMusicSkinSettings,
+        renderer: this.host?.app.renderer,
       });
       this.beMusicBackHolder.addChild(this.beMusicRenderer.backLayer);
       this.beMusicFrontHolder.addChild(this.beMusicRenderer.frontLayer);
