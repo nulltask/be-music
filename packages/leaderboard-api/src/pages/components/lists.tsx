@@ -113,7 +113,7 @@ function Row(props: {
   );
 }
 
-/** What only a wide row shows: the avatar beside a name, a help tip beside a badge. */
+/** What only a wide row shows, such as a help tip beside a badge. */
 function NarrowHidden(props: { children: Child }) {
   return <span class="hidden items-center @xl:inline-flex">{props.children}</span>;
 }
@@ -146,7 +146,7 @@ function LampLabel(props: { lamp: number; from?: number }) {
       <span class="ring-foreground/20 inline-block size-2 rounded-full ring-1" style={`background:${style.color}`} />
       {raised ? (
         <>
-          {/* A narrow row shows only the lamp reached; the score page says what it came from. */}
+          {/* A narrow row shows only the lamp reached; a wide one adds the lamp it was raised from. */}
           <span class="text-muted-foreground/70 hidden @xl:inline">{lampStyle(props.from!).label} →</span>
           <span class="text-foreground font-medium">{style.label}</span>
         </>
@@ -231,9 +231,7 @@ export function RankingList(props: {
             <span class="flex items-center gap-3">
               <span class="w-6 text-end font-semibold">{entry.rank}</span>
               <LampBar lamp={entry.clearLamp} />
-              <NarrowHidden>
-                <Avatar src={entry.avatarUrl} size={32} />
-              </NarrowHidden>
+              <Avatar src={entry.avatarUrl} size={32} />
             </span>
           }
           title={
@@ -316,11 +314,7 @@ export function RecentScoresList(props: {
             start={
               <span class="flex items-center gap-3">
                 <LampBar lamp={entry.clearLamp} />
-                {props.showPlayer ? (
-                  <NarrowHidden>
-                    <Avatar src={entry.avatarUrl} size={32} />
-                  </NarrowHidden>
-                ) : null}
+                {props.showPlayer ? <Avatar src={entry.avatarUrl} size={32} /> : null}
               </span>
             }
             title={
