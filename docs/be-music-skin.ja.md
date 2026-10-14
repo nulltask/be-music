@@ -274,6 +274,7 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 - **`select.outroMs`:** 曲決定後のアウトロの長さ。終わるまで `frame.launchAt` を設定したまま描画が続き、その間の入力は無視されます。
 - **`select.draw(surface, frame)`** は `BeMusicSelectFrame` を受け取ります。
   - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedSong`
+  - `listScroll`: リストが後ろのエントリ側へ引かれている量（デザインピクセル、1 行未満）。指でドラッグしている間、スワイプ後に慣性で流れている間、トラックパッドでスクロールしている途中は 0 以外になり、静止時とリストの端では 0 です。行を `selectListRows(frame, rowHeight)` で並べると、リストが指に追随します。各行の小数の `slot`（上端は `listTop + slot * rowHeight`）と、表示範囲の端にかかった行を薄くする `alpha` が得られます。無視したスキンは 1 行ずつスクロールします。
   - `folderLabel`、`searchQuery`、`totalCharts`
   - `actions`: `play`、`autoPlay`、`activateSearch`、`setPlayOption(key, value)`、`cyclePlayOption(key, step?)`（step は 1 か -1、端で折り返し）、`toggleReadme()`（フォーカス中の曲の `.txt` を開閉）
   - `playOptions`（`BeMusicPlayOptions`: ハイスピード、ランダム、ゲージ、HIDDEN / SUDDEN、レーンカバー、BGA、リストのフィルタなど）と `playOptionChoices`（列挙型・オンオフのオプションが取りうる値）。選択肢にない値は無視されます。`hiSpeed` と `shutter` は任意の数値を受け付けて範囲内に丸められ、`cyclePlayOption` では変わりません。

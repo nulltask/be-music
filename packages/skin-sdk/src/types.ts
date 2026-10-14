@@ -624,6 +624,14 @@ export interface BeMusicSelectFrame {
   /** First entry index drawn in the list window, and how many rows fit (see `resolveSelectListWindow`). */
   firstVisibleIndex: number;
   visibleRows: number;
+  /**
+   * Design pixels the list is pulled past its resting place toward later entries (negative: toward earlier ones), less
+   * than one row: a finger dragging it, a list gliding after a swipe, or a trackpad mid-scroll. Each whole row turns
+   * into a cursor step, so it stays under a row either way, and it is 0 at rest and where the window can't move (the
+   * list's ends). Draw the rows that much higher, as `selectListRows` lays them out, and the list follows the finger;
+   * a skin that ignores it scrolls a row at a time.
+   */
+  listScroll: number;
   focusedSong: BrowserSongEntry | undefined;
   /** Current folder label (or search label), `undefined` at the library root. */
   folderLabel: string | undefined;
