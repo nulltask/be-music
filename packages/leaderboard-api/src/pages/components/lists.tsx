@@ -26,8 +26,6 @@ import {
 } from '../format.ts';
 import { ABOVE, Avatar, chartHref, Empty, LINK, playerHref, RowLink, scoreHref, Tag } from './basics.tsx';
 import { EntityIcon } from './entity-icon.tsx';
-import { Icon } from './icon.tsx';
-import { EyeOff } from 'lucide-static';
 import { HelpTip } from './help-tip.tsx';
 import { InfoButton, When } from './play-info.tsx';
 import { useMessages, type Messages } from '../i18n/index.ts';
@@ -90,8 +88,8 @@ function Row(props: {
     >
       <RowLink href={props.href} label={props.label} />
       <div class={hasSubtitle ? 'row-span-3 @xl:row-span-2' : 'row-span-2'}>{props.start}</div>
-      {/* A narrow row marks the title with icons and quiet text only, so it stays one line; a wide one has room for
-        badges, which wrap under the title rather than squeeze it. */}
+      {/* A narrow row keeps the title and its badge on one line, the title giving way; a wide one has room for the
+        badges to wrap under the title rather than squeeze it. */}
       <div class="col-start-2 row-start-1 flex min-w-0 flex-nowrap items-center gap-x-2 gap-y-1 self-center leading-tight font-medium @xl:flex-wrap @xl:self-end">
         {props.title}
       </div>
@@ -296,12 +294,7 @@ function PrivacyBadge(props: { hidden: boolean; reasons: Array<string | undefine
   const label = props.hidden ? t.visibility.hidden : t.visibility.notPublic;
   return (
     <span class="inline-flex shrink-0 items-center">
-      {/* A narrow row marks it with an icon alone, to keep the title line quiet; the label is its tooltip. */}
-      <span class="text-muted-foreground inline-flex @xl:hidden" title={`${label}: ${reasons.join(' / ')}`}>
-        <Icon svg={EyeOff} class="[&>svg]:size-3.5" />
-        <span class="sr-only">{label}</span>
-      </span>
-      <span class="badge hidden @xl:inline-flex" data-variant="secondary">
+      <span class="badge" data-variant="secondary">
         {label}
       </span>
       <NarrowHidden>
