@@ -1919,6 +1919,32 @@ describe('parser', () => {
     expect(decoded.encoding).toBe('euc-jp');
     expect(parseChart(decoded.text).metadata.title).toBe('テスト');
   });
+
+  test('decodeBmsText: scores only the non-ASCII lines per candidate, and returns the whole file decoded', () => {
+    // CRLF Shift_JIS with many ASCII-only lines: those read the same under every candidate, so they are counted once,
+    // and the result is still the whole file decoded with the winning candidate.
+    const ascii = (text: string) => [...new TextEncoder().encode(text)];
+    const bytes = new Uint8Array([
+      ...ascii('#TITLE '),
+      0x83,
+      0x65,
+      0x83,
+      0x58,
+      0x83,
+      0x67, // テスト
+      ...ascii('\r\n#BPM 150\r\n'),
+      ...Array.from({ length: 40 }, (_, index) => ascii(`#0${String(index).padStart(2, '0')}11:0101\r\n`)).flat(),
+      ...ascii('#GENRE '),
+      0x83,
+      0x65, // テ, on the last line with no line break after it
+    ]);
+    const decoded = decodeBmsText(bytes);
+    expect(decoded.encoding).toBe('shift_jis');
+    expect(decoded.text).toBe(new TextDecoder('shift_jis').decode(bytes));
+    const parsed = parseChart(decoded.text);
+    expect(parsed.metadata.title).toBe('テスト');
+    expect(parsed.metadata.genre).toBe('テ');
+  });
 });
 
 /** Channels of `events` in chart-time order. */
