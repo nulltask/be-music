@@ -168,6 +168,8 @@ export const en = {
     fewerMisses: 'Fewer misses than the player’s previous best',
     anonymous: 'anonymous',
     assist: 'assist',
+    hidden: 'hidden',
+    hiddenHelp: 'You hid this play: only you can see it. Open it to show it again.',
     notListed: 'not listed',
     notListedHelp:
       'Only you see this play: its chart is not listed yet. It is listed once two players with a passkey have played it.',
@@ -292,6 +294,15 @@ export const en = {
     postOnX: 'Post on X',
     shareNative: 'Share…',
     copyLink: 'Copy link',
+    hiddenTitle: 'This play is hidden',
+    hiddenLead:
+      'Only you can see it. It is out of the rankings, your personal bests, your figures and every list until you show it again.',
+    visibility: 'Visibility',
+    visibilityShownLead:
+      'Hide this play to take it out of the rankings, your personal bests, your figures and every list. It is kept, and you can show it again.',
+    visibilityHiddenLead: 'Show this play again to put it back in the rankings, your personal bests and the lists.',
+    hide: 'Hide this play',
+    show: 'Show this play',
   },
   settings: {
     title: 'Settings',

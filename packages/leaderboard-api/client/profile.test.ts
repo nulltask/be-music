@@ -8,6 +8,7 @@ describe('describeAccountError', () => {
     expect(describeAccountError('invalid-handle', 'reserved')).toBe('That handle is reserved. Pick another.');
     expect(describeAccountError('invalid-display-name', 'length')).toBe('Names are at most 32 characters.');
     expect(describeAccountError('handle-taken')).toBe('That handle is taken.');
+    expect(describeAccountError('not-your-score')).toBe('Only the player of this play can change it.');
     expect(describeAccountError('unsupported-image')).toBe('Use a PNG, JPEG or WebP image.');
     expect(describeAccountError('http-500')).toBe('Something went wrong (http-500).');
   });

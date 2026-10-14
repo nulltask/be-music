@@ -109,6 +109,15 @@ export const submissionResponse = v.object({
   results: described(v.array(rulesetOutcome), 'The play under every ruleset.'),
 });
 
+export const scoreVisibilityBody = v.object({
+  hidden: described(
+    v.boolean(),
+    'Hide the play (`true`): it leaves the rankings, the personal bests, the figures and every list, and only its player can open it. `false` shows it again.',
+  ),
+});
+
+export const scoreVisibilityResponse = v.object({ id: v.string(), hidden: v.boolean() });
+
 export const scoreResponse = v.object({
   id: v.string(),
   chartFingerprint: v.string(),
@@ -120,6 +129,7 @@ export const scoreResponse = v.object({
   assistFlags: v.array(v.string()),
   verification: described(v.string(), 'Highest verification layer passed (`L3`, `L4`, ...).'),
   createdAt: epochMs('When the play was accepted'),
+  hidden: described(v.boolean(), 'Hidden by its player: only the player sees a hidden play.'),
   results: v.array(
     v.object({
       ruleset: rulesetSchema,

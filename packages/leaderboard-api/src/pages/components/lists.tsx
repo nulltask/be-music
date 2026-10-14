@@ -237,7 +237,8 @@ export function RecentScoresList(props: {
     <List label={t.lists.latestPlays}>
       {props.scores.map((entry) => {
         const title = chartTitle(entry.title, entry.chartFingerprint);
-        const previous = entry.previous;
+        // A hidden play moved no best and holds no place in the ranking: it shows neither.
+        const previous = entry.hidden ? undefined : entry.previous;
         const missDelta = previous !== undefined ? entry.missCount - previous.missCount : 0;
         return (
           <Row
@@ -265,6 +266,11 @@ export function RecentScoresList(props: {
                     {t.lists.notListed}
                   </span>
                 )}
+                {entry.hidden ? (
+                  <span class="badge shrink-0" data-variant="secondary" title={t.lists.hiddenHelp}>
+                    {t.lists.hidden}
+                  </span>
+                ) : null}
               </>
             }
             details={[
@@ -288,9 +294,11 @@ export function RecentScoresList(props: {
               entry.laneOption !== null && entry.laneOption !== 'OFF' && entry.laneOption !== '-' ? (
                 <>{entry.laneOption}</>
               ) : null,
-              <span title={t.lists.rankAmong(entry.players)}>
-                #{entry.rank} / {entry.players}
-              </span>,
+              entry.hidden ? null : (
+                <span title={t.lists.rankAmong(entry.players)}>
+                  #{entry.rank} / {entry.players}
+                </span>
+              ),
               <>
                 <span title={t.rules.playedWithTitle}>
                   {t.rules.playedWith(t.rules.name(RULESET_LABELS[entry.playedRuleset] ?? entry.playedRuleset))}
