@@ -5,11 +5,15 @@
 //
 // icon.svg is the browser-tab icon as is. The PNGs (180 px for the iOS home screen, 192 / 512 px for the web app
 // manifest) are rendered from it, and og.svg becomes the default 1200 x 630 share card, unless a hand-made file of that name sits next to it (apple-touch-icon.png,
-// icon-192.png, icon-512.png) — small sizes often look better drawn by hand.
+// icon-192.png, icon-512.png) — small sizes often look better drawn by hand. og-chart.svg becomes the background of the
+// charts' share cards, as a palette image the Worker draws each chart's notes over (src/chart-card/).
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { deflateSync } from 'node:zlib';
 import { Resvg } from '@resvg/resvg-js';
+import { BACKGROUND_COLORS } from '../src/chart-card/palette.ts';
+import { quantize } from '../src/chart-card/quantize.ts';
 
 const packageDir = resolve(import.meta.dirname, '..');
 const iconsDir = join(packageDir, 'src/pages/icons');
@@ -69,6 +73,27 @@ const entries = icons.map((icon) => {
   ].join('\n');
 });
 
+/** The charts' share card background: og-chart.svg as palette indices (zlib) and its palette. */
+function chartCardBackground(): string {
+  const rendered = new Resvg(readFileSync(join(iconsDir, 'og-chart.svg')), {
+    fitTo: { mode: 'width', value: 1200 },
+    font: { loadSystemFonts: true, defaultFontFamily: 'Helvetica' },
+  }).render();
+  const image = quantize(rendered.pixels, rendered.width, rendered.height, BACKGROUND_COLORS);
+  const pixels = deflateSync(image.pixels, { level: 9 });
+  const hash = createHash('sha256').update(image.palette).update(image.pixels).digest('hex').slice(0, 12);
+  return [
+    "/** The charts' share card background (og-chart.svg): palette indices, zlib-compressed, and an RGB palette. */",
+    'export const CHART_CARD_BACKGROUND = {',
+    `  hash: '${hash}',`,
+    `  width: ${image.width},`,
+    `  height: ${image.height},`,
+    `  palette: '${Buffer.from(image.palette).toString('base64')}',`,
+    `  pixels: '${pixels.toString('base64')}',`,
+    '} as const;',
+  ].join('\n');
+}
+
 writeFileSync(
   output,
   [
@@ -77,6 +102,8 @@ writeFileSync(
     'export const ICONS = {',
     ...entries,
     '} as const;',
+    '',
+    chartCardBackground(),
     '',
   ].join('\n'),
 );

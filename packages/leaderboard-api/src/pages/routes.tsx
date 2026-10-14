@@ -8,7 +8,7 @@ import { isLocale, LOCALE_COOKIE } from './i18n/index.ts';
 import { aboutPage } from './about.tsx';
 import { avatarImage } from './avatar.ts';
 import { helpPage } from './help.tsx';
-import { scoreCardImage } from './card.ts';
+import { chartCardImage, scoreCardImage } from './card.ts';
 import { mountClientScript } from './client-script.ts';
 import { chartPage } from './chart.tsx';
 import { chartsetPage } from './chartset.tsx';
@@ -34,6 +34,7 @@ export function mountPages(app: Hono<AppEnv>): void {
   app.get('/leaderboard/scores/:id', scorePage);
   app.get('/leaderboard/scores/:id/card', scoreCardImage);
   app.get('/leaderboard/charts/:chartFingerprint', chartPage);
+  app.get('/leaderboard/charts/:chartFingerprint/card', chartCardImage);
   app.get('/leaderboard/players/:handle', playerPage);
   app.get('/leaderboard/players/:handle/avatar', avatarImage);
   app.get('/leaderboard/chartsets/:id', chartsetPage);

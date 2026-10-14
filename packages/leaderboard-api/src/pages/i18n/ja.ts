@@ -118,6 +118,7 @@ export const ja: Messages = {
   },
   chart: {
     description: (title, rules, players) => `${title} — ${rules}でのランキング（${players} 人）。`,
+    cardAlt: (title) => `be-music Leaderboard: ${title} の最もノーツが密な 2 小節のレーン表示`,
     stats: { players: 'プレイヤー', plays: 'プレイ', firstPlayed: '初プレイ', lastPlayed: '最終プレイ' },
     ranking: 'ランキング',
     clearLamps: 'クリアランプ',
