@@ -576,6 +576,13 @@ class PlayerWebDemoApp {
    */
   private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
   private resultView: PixiResultView | DefaultPixiResultView | undefined;
+  /**
+   * The chart and play mode of the most recent play start (LR2 / default and beatoraja alike), so the result screen's
+   * R key can start the same chart again. `autoPlay` is resolved at play start so a retry keeps the mode the play ran
+   * in even when the toggle changes on the result screen; the remaining play options are read from the GUI state as
+   * on any play start.
+   */
+  private lastPlay: { song: BrowserSongEntry; overrides: { autoPlay: boolean; replay?: BeMusicPlaylog } } | undefined;
   private decideView: PixiDecideView | DefaultPixiDecideView | undefined;
   private hostMounted = false;
   /**
@@ -2654,6 +2661,8 @@ class PlayerWebDemoApp {
     const chartImages = await this.loadBeatorajaChartImages(song);
 
     // 4. Mount the gameplay view.
+    const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
+    this.lastPlay = { song, overrides: { autoPlay } };
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
       skin: skinLoad.skin,
       textures,
@@ -2670,7 +2679,7 @@ class PlayerWebDemoApp {
       sourceChart: song.chart,
       audio: prep.audio,
       skinAudio: this.beatorajaSkinAudio,
-      mode: (overrides.autoPlay ?? this.guiState.autoPlay) ? 'auto' : 'manual',
+      mode: autoPlay ? 'auto' : 'manual',
       // DP flip — when the user enabled it via the Play options (Debug Menu / LR2 select panel, two-way synced
       // into `guiState`) AND the chart is a DP variant (10 / 14 keys), the chart's lane channels mirror at
       // construction. SP charts pass through unchanged because they have no 2P channels to swap with.
@@ -3391,6 +3400,8 @@ class PlayerWebDemoApp {
     const chartImages = await this.loadBeatorajaChartImages(song);
 
     let dismissed = false;
+    // R on the result plays the same chart again — only offered when the recorded play start is this chart's.
+    const retry = this.lastPlay?.song.id === song.id ? this.lastPlay : undefined;
     this.beatorajaResultScene = new PixiBeatorajaResultScene({
       skin: result.skin,
       textures,
@@ -3425,6 +3436,19 @@ class PlayerWebDemoApp {
           void this.showSelect();
         });
       },
+      ...(retry !== undefined
+        ? {
+            onRetry: () => {
+              if (dismissed) return;
+              dismissed = true;
+              void this.sceneHost.setScene(undefined).then(() => {
+                this.beatorajaResultScene?.dispose();
+                this.beatorajaResultScene = undefined;
+                void this.playSong(retry.song, retry.overrides);
+              });
+            },
+          }
+        : {}),
     });
     await this.sceneHost.setScene(this.beatorajaResultScene);
     this.setStatus(
@@ -4096,6 +4120,7 @@ class PlayerWebDemoApp {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
+    this.lastPlay = { song, overrides: { autoPlay, ...(replay !== undefined ? { replay } : {}) } };
     // Only a play the player actually played counts towards the chart's best record.
     this.activePlayRecordKey =
       autoPlay || replay !== undefined ? undefined : songRecordKey(song, overrides.chartHashes?.sha256);
@@ -4297,6 +4322,8 @@ class PlayerWebDemoApp {
     // strips the slot even if the loaded theme has a result skin.
     const resultFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'result');
     const lr2ResultSkin = resultFamily === 'lr2' ? this.resultSkin : undefined;
+    // R on the result plays the same chart again — only offered when the recorded play start is this chart's.
+    const retry = this.lastPlay?.song.id === data.song.id ? this.lastPlay : undefined;
     const sharedResultOptions = {
       collection: this.collection,
       clearBgm: this.clearBgmBytes,
@@ -4305,6 +4332,17 @@ class PlayerWebDemoApp {
       onContinue: () => {
         void this.showSelect();
       },
+      ...(retry !== undefined
+        ? {
+            onRetry: () => {
+              // Straight back into the chart, skipping select and decide. `playSong` tears down gameplay / decide but
+              // not the result view, so drop it (and its BGM) first.
+              this.resultView?.dispose();
+              this.resultView = undefined;
+              void this.playSong(retry.song, retry.overrides);
+            },
+          }
+        : {}),
     };
     this.resultView = lr2ResultSkin
       ? new PixiResultView({ skin: lr2ResultSkin, ...sharedResultOptions })
