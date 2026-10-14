@@ -645,7 +645,7 @@ export function resolveSongSource(
 /**
  * Resolves a chart-relative asset path (BMP, WAV, banner, …) to its decoded byte array within a song asset source.
  * Mirrors the BMS convention of looking next to the chart file first, then falling back to the source's root and the
- * basename. Used by both gameplay (BGA/audio) and select (banner / preview) loaders.
+ * basename, then — as LR2 does — the same one folder up from the chart. Used by both gameplay (BGA/audio) and select (banner / preview) loaders.
  *
  * Lookup is **case-insensitive** at every candidate step: real-world BMS archives routinely mix `KICK.WAV` / `kick.WAV`
  * / `Kick.wav`, and demanding the chart's casing match the file's would scuttle a large fraction of legitimate drops on
@@ -653,6 +653,30 @@ export function resolveSongSource(
  * builds a lazy lower-key index the first time it's called per source and caches it via WeakMap.
  */
 export function resolveChartAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): BrowserSongAssetEntry | undefined {
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    const entry = resolveChartAssetInFolder(source, folderChartPath, assetPath);
+    if (entry) return entry;
+  }
+  return undefined;
+}
+
+/**
+ * Where a chart's assets are looked for, as chart paths: the chart itself, then — as LR2 does — a stand-in one folder
+ * up, so a 差分 (alternate difficulty) chart shipped in a sub-folder finds the keysounds and BGA beside its parent.
+ * A chart directly under the dropped folder has no extra entry: its parent is the top, which the lookup always tries.
+ * Every extension is tried in the chart's own folder before the parent's (see {@link resolveChartAudioAsset}).
+ */
+function chartLookupFolders(chartPath: string): string[] {
+  const parent = dirname(dirname(chartPath));
+  return parent === '' ? [chartPath] : [chartPath, `${parent}/${basename(chartPath)}`];
+}
+
+/** {@link resolveChartAsset} in one folder: next to `chartPath`, then the top of the source. */
+function resolveChartAssetInFolder(
   source: BrowserSongAssetSource,
   chartPath: string,
   assetPath: string,
@@ -710,17 +734,21 @@ export function resolveChartAudioAsset(
   assetPath: string,
   options: ResolveChartAudioAssetOptions = {},
 ): BrowserSongAssetEntry | undefined {
-  for (const candidate of audioFallbackPaths(assetPath)) {
-    // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
-    // doesn't resolve. Charts that don't author `#PATH_WAV` pass `pathPrefix: undefined` and behave exactly as before.
-    const prefixed = joinPathWavPrefix(options.pathPrefix, candidate);
-    if (prefixed !== undefined) {
-      const entry = resolveChartAsset(source, chartPath, prefixed);
-      if (entry) return entry;
-    }
-    const entry = resolveChartAsset(source, chartPath, candidate);
-    if (entry) {
-      return entry;
+  // Every codec in the chart's folder before any in its parent, as LR2 does.
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    for (const candidate of audioFallbackPaths(assetPath)) {
+      // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
+      // doesn't resolve. Charts that don't author `#PATH_WAV` pass `pathPrefix: undefined` and behave exactly as
+      // before.
+      const prefixed = joinPathWavPrefix(options.pathPrefix, candidate);
+      if (prefixed !== undefined) {
+        const entry = resolveChartAssetInFolder(source, folderChartPath, prefixed);
+        if (entry) return entry;
+      }
+      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate);
+      if (entry) {
+        return entry;
+      }
     }
   }
   return undefined;
@@ -796,10 +824,13 @@ export function resolveChartBgaAsset(
   chartPath: string,
   assetPath: string,
 ): { entry: BrowserSongAssetEntry; path: string } | undefined {
-  for (const candidate of imageFallbackPaths(assetPath)) {
-    const entry = resolveChartAsset(source, chartPath, candidate);
-    if (entry) {
-      return { entry, path: candidate };
+  // Every extension in the chart's folder before any in its parent, as LR2 does.
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    for (const candidate of imageFallbackPaths(assetPath)) {
+      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate);
+      if (entry) {
+        return { entry, path: candidate };
+      }
     }
   }
   return undefined;
