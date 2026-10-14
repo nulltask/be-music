@@ -135,16 +135,76 @@ export function canonicalizeJsonValue(value: unknown): string {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return `[${value.map(canonicalizeJsonValue).join(',')}]`;
+    let text = '[';
+    for (let index = 0; index < value.length; index += 1) {
+      if (index > 0) {
+        text += ',';
+      }
+      text += canonicalizeJsonValue(value[index]);
+    }
+    return `${text}]`;
   }
   if (typeof value === 'object') {
     const record = value as Record<string, unknown>;
-    const keys = Object.keys(record)
-      .filter((key) => record[key] !== undefined)
-      .sort();
-    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalizeJsonValue(record[key])}`).join(',')}}`;
+    const order = keyOrderOf(Object.keys(record));
+    let text = '{';
+    let first = true;
+    for (let index = 0; index < order.sorted.length; index += 1) {
+      const field = record[order.sorted[index]!];
+      if (field === undefined) {
+        continue;
+      }
+      text += first ? order.quoted[index]! : `,${order.quoted[index]!}`;
+      text += canonicalizeJsonValue(field);
+      first = false;
+    }
+    return `${text}}`;
   }
   throw new TypeError(`canonical JSON cannot represent a ${typeof value}`);
+}
+
+/** An object's keys in canonical (code unit) order, each quoted with its colon, for `canonicalizeJsonValue`. */
+interface KeyOrder {
+  keys: readonly string[];
+  sorted: readonly string[];
+  quoted: readonly string[];
+}
+
+/**
+ * The fingerprint documents hold many objects of a few shapes (notes, mines, timeline items): their key orders are
+ * worked out once per shape, keyed by the keys as `Object.keys` lists them. A hit is checked key by key, so two shapes
+ * whose joined keys collide never share an order. Cleared if odd input ever fills it.
+ */
+const KEY_ORDERS = new Map<string, KeyOrder>();
+const KEY_ORDER_LIMIT = 1024;
+
+function keyOrderOf(keys: string[]): KeyOrder {
+  const signature = keys.join('\u0000');
+  const cached = KEY_ORDERS.get(signature);
+  if (cached !== undefined && sameKeys(cached.keys, keys)) {
+    return cached;
+  }
+  const sorted = [...keys].sort();
+  const order: KeyOrder = { keys, sorted, quoted: sorted.map((key) => `${JSON.stringify(key)}:`) };
+  if (cached === undefined) {
+    if (KEY_ORDERS.size >= KEY_ORDER_LIMIT) {
+      KEY_ORDERS.clear();
+    }
+    KEY_ORDERS.set(signature, order);
+  }
+  return order;
+}
+
+function sameKeys(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function assemblePlayDocument(items: FlatItems, extension: LaneModeExtension): BeMusicPlayFingerprintDocument {
