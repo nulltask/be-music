@@ -168,11 +168,20 @@ export const en = {
     fewerMisses: 'Fewer misses than the player’s previous best',
     anonymous: 'anonymous',
     assist: 'assist',
+  },
+  visibility: {
+    /** Sentences run together, as the language spaces them. */
+    sentences: (parts: readonly string[]) => parts.join(' '),
+    notPublic: 'not public',
     hidden: 'hidden',
-    hiddenHelp: 'You hid this play: only you can see it. Open it to show it again.',
-    notListed: 'not listed',
-    notListedHelp:
-      'Only you see this play: its chart is not listed yet. It is listed once two players with a passkey have played it.',
+    onlyYou: 'Only you see this play in the rankings and lists.',
+    reasonHidden: 'You hid it; open it to show it again.',
+    reasonNotListed: 'Its chart is not listed yet: it is listed once two players with a passkey have played it.',
+    reasonAnonymous:
+      'It was played on an anonymous account, which the rankings and Latest show only with “Anonymous players” on.',
+    passkeyHint: 'Create a passkey to keep the account and make its plays public.',
+    title: 'This play is not public',
+    lead: 'The rankings and the Latest list leave it out:',
   },
   lnModes: {
     1: 'LN — the start is judged; hold to the end',
