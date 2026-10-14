@@ -3284,7 +3284,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.updateDisplayedScore();
       this.updateThemeState();
     });
-    this.perf.time('render', () => this.render(seconds));
+    this.perf.time('render', () => {
+      this.render(seconds);
+      // A skin drawing through the player's renderer draws the frame just collected now, before Pixi renders.
+      this.skinBindingInstance?.flush();
+    });
     const report = this.perf.endFrame(() => ({
       stage: this.app.stage.children.length,
       skin: this.skinLayer.children.length,
@@ -3826,6 +3830,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.skinBindingInstance = new BeMusicGameplayBinding(skin, {
         songImage: this.songImages.lookup,
         settings: this.beMusicSkinSettings,
+        renderer: this.host?.app.renderer,
       });
     }
     return this.skinBindingInstance;

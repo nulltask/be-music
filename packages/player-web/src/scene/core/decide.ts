@@ -127,6 +127,7 @@ export class CoreDecideView {
       this.binding = new BeMusicDecideBinding(skin, {
         songImage: this.songImages.lookup,
         settings: this.beMusicSkinSettings,
+        renderer: host.app.renderer,
       });
       this.root.addChild(this.binding.view);
     }
