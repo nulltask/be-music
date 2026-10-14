@@ -9,7 +9,7 @@
  * wider than within them. The DJ Rank is the one big thing; the lamp's colour is the one accent, repeated in the
  * glow, the lamp pill and the playfield's judge line. Labels repeat one style (small, spaced capitals, muted).
  */
-import type { ChartExcerpt, ExcerptTone } from '../src/pages/chart-excerpt.ts';
+import { SYNESTHESIA_PLAYFIELD, type ChartExcerpt, type ExcerptTone } from '../src/pages/chart-excerpt.ts';
 import type { ScoreCardData } from '../src/pages/score-card-data.ts';
 import {
   type Box,
@@ -213,7 +213,7 @@ export const EXCERPT_FRAME = {
   topY: 112,
   clipY: 96,
   judgeY: COUNTS_BASELINE - 8,
-  noteHeight: 12,
+  noteHeight: 10,
   fadeWidth: 48,
 } as const;
 
@@ -236,62 +236,83 @@ export interface ExcerptRect extends Box {
 }
 
 /**
+ * The excerpt's lanes across the panel, as the Synesthesia skin lays them out (SYNESTHESIA_PLAYFIELD): IIDX modes give
+ * the scratch, white and blue keys their fixed widths and part double play's banks by the side gap; 9 KEY shares one
+ * side's width evenly. The design widths are scaled by one factor so a 7 KEY side fills the panel (and wider modes fit
+ * it), and centred in it. Edges are rounded to whole pixels, each lane starting where the previous one ends.
+ */
+export function excerptLaneBoxes(excerpt: ChartExcerpt, frame = EXCERPT_FRAME): Array<{ x: number; width: number }> {
+  const { laneWidths, sideGap, sideWidth } = SYNESTHESIA_PLAYFIELD;
+  const shared = sideWidth / Math.max(1, excerpt.lanes.filter((lane) => lane.side === '1P').length);
+  const widths = excerpt.lanes.map(({ tone }) =>
+    excerpt.widths === 'shared'
+      ? shared
+      : tone === 'red'
+        ? laneWidths.scratch
+        : tone === 'blue'
+          ? laneWidths.black
+          : laneWidths.white,
+  );
+  const gaps = excerpt.lanes.map((lane, i): number =>
+    i > 0 && excerpt.widths === 'iidx' && lane.side !== excerpt.lanes[i - 1]?.side ? sideGap : 0,
+  );
+  const total = widths.reduce((sum, width) => sum + width, 0) + gaps.reduce((sum, gap) => sum + gap, 0);
+  const span = frame.right - frame.left;
+  const scale = Math.min(span / sideWidth, span / total);
+  const left = frame.left + (span - total * scale) / 2;
+  const boxes: Array<{ x: number; width: number }> = [];
+  let edge = 0;
+  widths.forEach((width, i) => {
+    edge += gaps[i] ?? 0;
+    const x = Math.round(left + edge * scale);
+    edge += width;
+    boxes.push({ x, width: Math.round(left + edge * scale) - x });
+  });
+  return boxes;
+}
+
+/**
  * The rectangles of a chart excerpt on the panel, back to front: lane backgrounds (blue keys' lanes darker), bar lines,
- * long-note bodies, then note heads. Lanes split the frame in whole pixels; a note sits on its beat with its bottom
- * edge, the window's start on the judge line and later beats above it.
+ * long-note bodies, then note heads. Lanes follow excerptLaneBoxes; the vertical scale is Synesthesia's at HIGH SPEED
+ * 2.0 (its playfield's height in the window's beats), so the window's start sits on the judge line and its end at
+ * `frame.topY`.
  */
 export function excerptRects(excerpt: ChartExcerpt, frame = EXCERPT_FRAME): ExcerptRect[] {
-  const count = excerpt.lanes.length;
-  const laneLeft = (i: number) => frame.left + Math.round(((frame.right - frame.left) * i) / count);
+  const lanes = excerptLaneBoxes(excerpt, frame);
+  const fieldLeft = lanes[0]?.x ?? frame.left;
+  const fieldRight = (lanes.at(-1)?.x ?? frame.right) + (lanes.at(-1)?.width ?? 0);
   const pixelsPerBeat = (frame.judgeY - frame.topY) / excerpt.beats;
   const yOf = (beat: number) => Math.round(frame.judgeY - beat * pixelsPerBeat);
-  const rects: ExcerptRect[] = excerpt.lanes.map((tone, i) => ({
-    x: laneLeft(i),
+  const rects: ExcerptRect[] = excerpt.lanes.map(({ tone }, i) => ({
+    x: lanes[i]?.x ?? 0,
     y: 0,
-    width: laneLeft(i + 1) - laneLeft(i),
+    width: lanes[i]?.width ?? 0,
     height: CARD_HEIGHT,
     kind: tone === 'blue' ? 'lane-dark' : 'lane-light',
   }));
   for (const beat of excerpt.bars) {
-    rects.push({ x: frame.left, y: yOf(beat) - 1, width: frame.right - frame.left, height: 2, kind: 'bar' });
+    rects.push({ x: fieldLeft, y: yOf(beat) - 1, width: fieldRight - fieldLeft, height: 2, kind: 'bar' });
   }
   const heads: ExcerptRect[] = [];
   for (const note of excerpt.notes) {
-    const tone = excerpt.lanes[note.lane];
-    if (tone === undefined) continue;
-    const width = laneLeft(note.lane + 1) - laneLeft(note.lane);
-    const gap = width >= 30 ? 3 : 1;
-    const x = laneLeft(note.lane) + gap;
+    const tone = excerpt.lanes[note.lane]?.tone;
+    const lane = lanes[note.lane];
+    if (tone === undefined || lane === undefined) continue;
+    const gap = lane.width >= 20 ? 2 : 1;
+    const x = lane.x + gap;
+    const width = lane.width - 2 * gap;
     const bottom = yOf(note.beat);
     if (note.end !== undefined) {
       // The body runs up to its end, or to the clip line when it ends past the window.
       const endY = yOf(note.end);
       const top = Math.max(frame.clipY, endY);
       const inset = Math.max(1, Math.round(width / 6));
-      rects.push({
-        x: x + inset,
-        y: top,
-        width: width - 2 * gap - 2 * inset,
-        height: bottom - top,
-        kind: `long-${tone}`,
-      });
+      rects.push({ x: x + inset, y: top, width: width - 2 * inset, height: bottom - top, kind: `long-${tone}` });
       if (endY - frame.noteHeight >= frame.clipY) {
-        heads.push({
-          x,
-          y: endY - frame.noteHeight,
-          width: width - 2 * gap,
-          height: frame.noteHeight,
-          kind: `note-${tone}`,
-        });
+        heads.push({ x, y: endY - frame.noteHeight, width, height: frame.noteHeight, kind: `note-${tone}` });
       }
     }
-    heads.push({
-      x,
-      y: bottom - frame.noteHeight,
-      width: width - 2 * gap,
-      height: frame.noteHeight,
-      kind: `note-${tone}`,
-    });
+    heads.push({ x, y: bottom - frame.noteHeight, width, height: frame.noteHeight, kind: `note-${tone}` });
   }
   return [...rects, ...heads];
 }
@@ -331,7 +352,8 @@ function drawPlayfield(ctx: CanvasRenderingContext2D, lampColor: string, excerpt
     g.fillRect(x0, COUNTS_BASELINE - 64, width, 64);
   };
   if (excerpt !== undefined) {
-    g.fillStyle = LANE_LIGHT;
+    // The panel behind the lanes, and between double play's banks.
+    g.fillStyle = '#0b0f1f';
     g.fillRect(x0, 0, width, CARD_HEIGHT);
     const rects = excerptRects(excerpt);
     // Lanes and bar lines under the glow, notes over it.
