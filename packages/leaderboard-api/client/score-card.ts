@@ -2,16 +2,23 @@
  * Draws a play's share card (1200 x 630, the link-preview picture of its score page) on a canvas. The player's browser
  * draws it, since the Worker cannot rasterize on the Free plan, and main.ts uploads it.
  *
- * The layout keeps to a grid: one left edge (MARGIN) for every block, the same margin at the top and right, and the
- * player in a footer band below. Blocks group what belongs together: the chart (genre, title, artist), the result (DJ Rank,
+ * The layout keeps to a grid: one left edge (MARGIN) for every block, the same margin at the top and right, the site's
+ * name in the top right corner and the player in a footer band below, on its right: link previews lay their own labels
+ * over the bottom left (src/pages/share-card-safe-area.ts), so nothing that matters sits there. Blocks group what belongs together: the chart (genre, title, artist), the result (DJ Rank,
  * EX-Score, rate), the play (lamp, ruleset, gauge), the counts, and who played it when. Space between the groups is
  * wider than within them. The DJ Rank is the one big thing; the lamp's colour is the one accent, repeated in the
  * glow, the lamp pill and the playfield's judge line. Labels repeat one style (small, spaced capitals, muted).
  */
 import type { ScoreCardData } from '../src/pages/score-card-data.ts';
+import {
+  type Box,
+  SHARE_CARD_HEIGHT,
+  SHARE_CARD_WIDTH,
+  X_DOMAIN_LABEL_ZONE,
+} from '../src/pages/share-card-safe-area.ts';
 
-export const CARD_WIDTH = 1200;
-export const CARD_HEIGHT = 630;
+export const CARD_WIDTH = SHARE_CARD_WIDTH;
+export const CARD_HEIGHT = SHARE_CARD_HEIGHT;
 
 /**
  * Latin letters and figures in Inter Tight (main.ts loads it from the site); Japanese and anything else Inter Tight
@@ -139,6 +146,37 @@ const BYLINE_BASELINE = TITLE_BASELINE + 38;
 /** Where the result block starts, and the counts row's baseline (the playfield's judge line sits on it). */
 const RESULT_TOP = 206;
 const COUNTS_BASELINE = FOOTER_TOP - TOP;
+const RIGHT = CARD_WIDTH - MARGIN;
+const FOOTER_MIDDLE = (FOOTER_TOP + CARD_HEIGHT) / 2;
+const AVATAR_SIZE = 56;
+/** The footer's two lines: the player's name, then their handle and the date, on these baselines. */
+const PLAYER_BASELINE = 570;
+const HANDLE_BASELINE = PLAYER_BASELINE + 26;
+/** The player's lines end left of the avatar, at the right margin, and stay clear of X's domain label. */
+export const PLAYER_TEXT_RIGHT = RIGHT - AVATAR_SIZE - 18;
+export const PLAYER_TEXT_MAX_WIDTH = PLAYER_TEXT_RIGHT - (X_DOMAIN_LABEL_ZONE.x + X_DOMAIN_LABEL_ZONE.width) - 24;
+/** The widest the site's name gets in the top right corner, clear of the chart's column. */
+export const SITE_NAME_MAX_WIDTH = RIGHT - (MARGIN + COLUMN_WIDTH) - 24;
+
+/**
+ * The boxes the card's important content may take, whatever the play: the chart, the result, the play's pills, the
+ * counts, the player and the site's name. Heights reach from the cap height above the first line to the descenders
+ * below the last; the tests keep each inside the safe area.
+ */
+export const SCORE_CARD_BOXES = {
+  chart: { x: MARGIN, y: TOP, width: COLUMN_WIDTH, height: BYLINE_BASELINE + 8 - TOP },
+  result: { x: MARGIN, y: RESULT_TOP, width: COLUMN_WIDTH, height: 102 },
+  play: { x: MARGIN, y: RESULT_TOP + 102 + 24, width: COLUMN_WIDTH, height: 40 },
+  counts: { x: MARGIN, y: COUNTS_BASELINE - 60, width: COLUMN_WIDTH, height: 66 },
+  avatar: { x: RIGHT - AVATAR_SIZE, y: FOOTER_MIDDLE - AVATAR_SIZE / 2, width: AVATAR_SIZE, height: AVATAR_SIZE },
+  player: {
+    x: PLAYER_TEXT_RIGHT - PLAYER_TEXT_MAX_WIDTH,
+    y: PLAYER_BASELINE - 20,
+    width: PLAYER_TEXT_MAX_WIDTH,
+    height: HANDLE_BASELINE + 5 - (PLAYER_BASELINE - 20),
+  },
+  siteName: { x: RIGHT - SITE_NAME_MAX_WIDTH, y: TOP, width: SITE_NAME_MAX_WIDTH, height: 26 },
+} as const satisfies Record<string, Box>;
 
 const TEXT = '#ffffff';
 const SOFT = '#c7cde0';
@@ -171,8 +209,9 @@ function drawPlayfield(ctx: CanvasRenderingContext2D, lampColor: string): void {
     g.fillRect(x0 + i * lane, 0, lane, CARD_HEIGHT);
   }
   const notes: Array<[number, number, string]> = [
-    [1, 34, '#4ec9ff'],
-    [5, 34, '#4ec9ff'],
+    // The top row peeks in from above, leaving the top right corner to the site's name.
+    [1, -6, '#4ec9ff'],
+    [5, -6, '#4ec9ff'],
     [4, 108, '#ffffff'],
     [2, 182, '#ffffff'],
     [6, 182, '#ffffff'],
@@ -213,7 +252,6 @@ export function drawScoreCard(
   avatar: CanvasImageSource | null,
   playedOn: string,
 ): void {
-  const right = CARD_WIDTH - MARGIN;
   let fontSize = 0;
   const set = (weight: number, size: number, color: string, spacing = 0) => {
     fontSize = size;
@@ -263,6 +301,16 @@ export function drawScoreCard(
     set(700, 15, MUTED, 1.5);
     inkText(fit(data.genre, COLUMN_WIDTH), MARGIN, TOP + capHeight());
   }
+  // The site's name in the top right corner, its capitals' top on the genre's.
+  set(700, 26, TEXT);
+  const siteBaseline = TOP + capHeight();
+  set(400, 26, MUTED);
+  const siteWidth = ctx.measureText(' Leaderboard').width;
+  ctx.textAlign = 'right';
+  ctx.fillText(' Leaderboard', RIGHT, siteBaseline);
+  set(700, 26, TEXT);
+  ctx.fillText('be-music', RIGHT - siteWidth, siteBaseline);
+  ctx.textAlign = 'left';
   const titleSize = fitFontSize(
     (text, size) => {
       ctx.font = font(800, size);
@@ -349,47 +397,33 @@ export function drawScoreCard(
     inkText(String(counts[i]), x, COUNTS_BASELINE);
   });
 
-  // The footer band: who played it, and when, on the site.
+  // The footer band: who played it, and when, on its right; its left is where previews put their own labels.
   ctx.fillStyle = 'rgba(5, 7, 14, 0.78)';
   ctx.fillRect(0, FOOTER_TOP, CARD_WIDTH, CARD_HEIGHT - FOOTER_TOP);
   ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
   ctx.fillRect(0, FOOTER_TOP, CARD_WIDTH, 1);
-  const footerMiddle = (FOOTER_TOP + CARD_HEIGHT) / 2;
-  const avatarSize = 56;
-  const avatarTop = footerMiddle - avatarSize / 2;
+  const avatarBox = SCORE_CARD_BOXES.avatar;
   ctx.save();
   ctx.beginPath();
-  ctx.arc(MARGIN + avatarSize / 2, footerMiddle, avatarSize / 2, 0, Math.PI * 2);
+  ctx.arc(avatarBox.x + AVATAR_SIZE / 2, FOOTER_MIDDLE, AVATAR_SIZE / 2, 0, Math.PI * 2);
   ctx.clip();
   if (avatar !== null) {
-    ctx.drawImage(avatar, MARGIN, avatarTop, avatarSize, avatarSize);
+    ctx.drawImage(avatar, avatarBox.x, avatarBox.y, AVATAR_SIZE, AVATAR_SIZE);
   } else {
     ctx.fillStyle = '#334155';
-    ctx.fillRect(MARGIN, avatarTop, avatarSize, avatarSize);
+    ctx.fillRect(avatarBox.x, avatarBox.y, AVATAR_SIZE, AVATAR_SIZE);
     set(700, 26, TEXT);
     ctx.textAlign = 'center';
-    ctx.fillText([...data.playerName][0] ?? '?', MARGIN + avatarSize / 2, footerMiddle + capHeight() / 2);
+    ctx.fillText([...data.playerName][0] ?? '?', avatarBox.x + AVATAR_SIZE / 2, FOOTER_MIDDLE + capHeight() / 2);
     ctx.textAlign = 'left';
   }
   ctx.restore();
-  // Two lines on each side, on the same two baselines, centred in the band.
-  set(700, 26, TEXT);
-  const nameCap = capHeight();
-  const lineGap = 26;
-  const firstBaseline = Math.round(footerMiddle + (nameCap - lineGap) / 2);
-  const secondBaseline = firstBaseline + lineGap;
-  const nameX = MARGIN + avatarSize + 18;
-  ctx.fillText(fit(data.playerName, 420), nameX, firstBaseline);
-  set(400, 18, MUTED);
-  ctx.fillText(fit(`@${data.handle}`, 420), nameX, secondBaseline);
+  // Two lines, right-aligned to the avatar: the name, then the handle and the date.
   ctx.textAlign = 'right';
-  set(400, 26, MUTED);
-  const siteWidth = ctx.measureText(' Leaderboard').width;
-  ctx.fillText(' Leaderboard', right, firstBaseline);
   set(700, 26, TEXT);
-  ctx.fillText('be-music', right - siteWidth, firstBaseline);
+  ctx.fillText(fit(data.playerName, PLAYER_TEXT_MAX_WIDTH), PLAYER_TEXT_RIGHT, PLAYER_BASELINE);
   set(400, 18, MUTED);
-  ctx.fillText(playedOn, right, secondBaseline);
+  ctx.fillText(fit(`@${data.handle}  ·  ${playedOn}`, PLAYER_TEXT_MAX_WIDTH), PLAYER_TEXT_RIGHT, HANDLE_BASELINE);
   ctx.textAlign = 'left';
   if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
 }

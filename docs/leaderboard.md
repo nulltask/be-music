@@ -366,6 +366,21 @@ application, HonoX or Nuxt can take over; the shared data-access functions keep 
 - **First card**: one design for a score — title, artist, level, clear-lamp band, EX score, rate, DJ level, judgments,
   rank and player count, ruleset badge, player name, date. Ranking, profile and versus cards come later.
 - **Meta tags** on every page: absolute `og:image`, `og:image:width` / `height`, `twitter:card=summary_large_image`.
+- **Safe area** (`src/pages/share-card-safe-area.ts`): link previews draw over and crop the card, so titles, scores,
+  the player and the site's name stay inside it, and the bottom left holds nothing that matters. As of October 2026:
+  - X shows `summary_large_image` at 2:1 (15 px off the top and the bottom of a 1200 × 630 card), rounds the corners,
+    and since October 2023 lays the link's domain over the bottom left, 12 px in and 20 px high on the shown card
+    ([Polypane, 2023-10-09](https://polypane.app/blog/where-to-put-text-so-it-doesnt-overlap-in-the-new-x-twitter-preview/),
+    which keeps the bottom 20 % clear; [TechCrunch, 2023-11-22](https://techcrunch.com/2023/11/22/elon-musk-says-x-will-show-headlines-on-the-platform-again/)).
+    On a phone, where the card is about 300 px wide, that is the bottom fifth and, for a domain of some 20
+    characters, the left half: `X_DOMAIN_LABEL_ZONE`.
+  - Bluesky shows link cards at 1200 / 630 with rounded corners (`CARD_ASPECT_RATIO` in bluesky-social/social-app);
+    Mastodon at 1.91:1 with 8 px corners, or a 1:1 thumbnail beside the text when the card is not large
+    (mastodon/mastodon `card.tsx`); Facebook, Threads, Slack and Discord show 1.91:1 with the title outside the
+    picture. None of them lays text over it.
+  - So content keeps 24 px from every edge (`SAFE_EDGE`), out of a 48 px square at each corner (`SAFE_CORNER`) and out
+    of X's label. The score card puts the player in the footer's right half and the site's name in the top right; the
+    tests check every block's box against the safe area.
 - **Sharing**: a "Share on X" button opens the X post intent; no X API and no X sign-in are needed:
 
   ```

@@ -346,6 +346,21 @@ SHA-256 で Mocha-Repository、MinIR、BMS Search（`/patterns/{sha256}`）を�
   比較のカードは後で作ります。
 - **メタタグ**をすべてのページに出します。絶対 URL の `og:image`、`og:image:width` / `height`、
   `twitter:card=summary_large_image`。
+- **セーフエリア**（`src/pages/share-card-safe-area.ts`）: リンクプレビューはカードの上に描き、端を切り落とすので、
+  曲名・スコア・プレイヤー・サイト名はその内側に置き、左下には大事なものを置きません。2026 年 10 月時点で:
+  - X は `summary_large_image` を 2:1 で表示し（1200 × 630 のカードなら上下 15 px が切れます）、角を丸め、
+    2023 年 10 月からリンクのドメインを左下に重ねます。表示上で端から 12 px、高さ 20 px です
+    （[Polypane, 2023-10-09](https://polypane.app/blog/where-to-put-text-so-it-doesnt-overlap-in-the-new-x-twitter-preview/)。
+    下 20 % を空けることを勧めています。[TechCrunch, 2023-11-22](https://techcrunch.com/2023/11/22/elon-musk-says-x-will-show-headlines-on-the-platform-again/)）。
+    カードが約 300 px 幅になるスマートフォンでは下 5 分の 1、20 文字ほどのドメインなら左半分にあたります
+    （`X_DOMAIN_LABEL_ZONE`）。
+  - Bluesky はリンクカードを 1200 / 630 で角を丸めて表示します（bluesky-social/social-app の `CARD_ASPECT_RATIO`）。
+    Mastodon は 1.91:1・角丸 8 px、大きなカードでないときは本文横の 1:1 サムネイルです（mastodon/mastodon の
+    `card.tsx`）。Facebook、Threads、Slack、Discord は 1.91:1 で、タイトルは画像の外に出します。画像に文字を
+    重ねるのは X だけです。
+  - そこで、内容は各辺から 24 px（`SAFE_EDGE`）離し、四隅の 48 px 四方（`SAFE_CORNER`）と X のラベルを避けます。
+    スコアのカードはプレイヤーをフッターの右半分に、サイト名を右上に置き、各ブロックの枠がセーフエリアに収まることを
+    テストで確かめます。
 - **共有**: 「X で共有」ボタンが X の投稿用 URL を開きます。X の API も X でのログインも要りません。
 
   ```
