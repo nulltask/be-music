@@ -440,6 +440,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       void resolved.sampleTriggers;
     },
   });
+  define('chart.countScoredNotes', {
+    run: (fixtures) => {
+      chartApi.countScoredNotes(fixtures.sampleBmsJson, { chartPath: 'sample.bms', inferBmsLnTypeWhenMissing: true });
+    },
+  });
   define('chart.isInvisibleNoteChannel', {
     run: () => {
       chartApi.isInvisibleNoteChannel('3A');

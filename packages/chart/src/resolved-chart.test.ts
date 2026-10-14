@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '../../json/src/index.ts';
-import { isInvisibleNoteChannel, resolveChart } from './index.ts';
+import { countScoredNotes, isInvisibleNoteChannel, resolveChart } from './index.ts';
 
 function event(measure: number, channel: string, value: string, position: [number, number] = [0, 1]): BeMusicEvent {
   return { measure, channel, position, value };
@@ -56,6 +56,30 @@ describe('resolveChart', () => {
     const popn = resolveChart(json, { chartPath: 'chart.pms' });
     expect(popn.playVariant).toBe('9');
     expect(popn.notes.find((note) => note.channel === '17')).toMatchObject({ kind: 'tap' });
+  });
+
+  test('countScoredNotes counts the resolved notes without FREE ZONE ones, with the variant that decided it', () => {
+    const json = bmsChart([event(0, '11', '01'), event(0, '16', '01'), event(0, '17', '01'), event(1, '51', '02')]);
+    json.events.push(event(2, '51', '02'));
+    const scored = (options: Parameters<typeof countScoredNotes>[1]) => {
+      const resolved = resolveChart(json, options);
+      return {
+        notes: resolved.notes.filter((note) => note.freeZone !== true).length,
+        playVariant: resolved.playVariant,
+      };
+    };
+    // IIDX 7 KEY: `17` is FREE ZONE and not scored; the `51` pair is one long note.
+    expect(countScoredNotes(json, { inferBmsLnTypeWhenMissing: true })).toEqual(
+      scored({ inferBmsLnTypeWhenMissing: true }),
+    );
+    expect(countScoredNotes(json, { inferBmsLnTypeWhenMissing: true }).notes).toBe(3);
+    // POPN 9 (`.pms`): `17` is an ordinary key and counts.
+    expect(countScoredNotes(json, { chartPath: 'chart.pms', inferBmsLnTypeWhenMissing: true })).toEqual({
+      notes: 4,
+      playVariant: '9',
+    });
+    // A variant the host decided wins over the chart's.
+    expect(countScoredNotes(json, { playVariant: '9' }).playVariant).toBe('9');
   });
 
   test('takes the play variant from the host when given', () => {
