@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import { claimAccount } from '../accounts.ts';
 import { createApp } from '../app.ts';
+import { eq } from 'drizzle-orm';
 import { openDatabase } from '../db/client.ts';
+import { chart as chartTable } from '../db/schema.ts';
 import type { Env } from '../env.ts';
 import {
   makeChart,
@@ -281,6 +283,55 @@ describe('Leaderboard pages', () => {
     await submit(dave, levelled, 8, 'Dave Song');
     const better = await page('/leaderboard', dave);
     expect(rowText(better.html)).toMatch(/\+\d+/);
+  });
+
+  test('the chart page shows the LN mode only for a chart with long notes', async () => {
+    const heidi = await signInAnonymously(fetchApp);
+    const lnMode = 'LN — the start is judged; hold to the end';
+    const submitWith = async (target: TestChart, longNotes: boolean, hits = 5) => {
+      const playlog = makePlaylog(target, { noteCount: 10, hits });
+      if (longNotes) {
+        const first = playlog.chart.notes[0]!;
+        first.type = 'long';
+        first.endTimeUs = first.timeUs + 200_000;
+        first.lnMode = 1;
+      }
+      const response = await fetchApp('/api/v0/scores', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie: heidi },
+        body: submissionBody(playlog, target.playDocument, target.chartDocument),
+      });
+      expect(response.status).toBe(201);
+    };
+    const chartPage = (target: TestChart) =>
+      page(`/leaderboard/charts/${encodeURIComponent(target.chartFingerprint)}`, heidi);
+    const db = openDatabase(env.DB);
+
+    const plain = makeChart(['#00111:01', '#00211:0101', '#00311:010101']);
+    await submitWith(plain, false);
+    const plainPage = (await chartPage(plain)).html;
+    expect(plainPage).toContain('>Notes<');
+    expect(plainPage).not.toContain(lnMode);
+    expect(plainPage).not.toContain('>LN mode');
+
+    const held = makeChart(['#00111:01', '#00211:0101', '#00311:01010101']);
+    await submitWith(held, true);
+    expect((await chartPage(held)).html).toContain(lnMode);
+
+    // A later play with long notes (another `#RANDOM` outcome) shows it on a chart that had none so far.
+    await submitWith(plain, true, 6);
+    expect((await chartPage(plain)).html).toContain(lnMode);
+
+    // A chart registered before this was kept still shows it, until its next play tells.
+    const older = makeChart(['#00111:0101', '#00211:01', '#00311:010101']);
+    await submitWith(older, false);
+    await db
+      .update(chartTable)
+      .set({ hasLongNotes: null })
+      .where(eq(chartTable.chartFingerprint, older.chartFingerprint));
+    expect((await chartPage(older)).html).toContain(lnMode);
+    await submitWith(older, false, 6);
+    expect((await chartPage(older)).html).not.toContain(lnMode);
   });
 
   test('a chart not listed yet keeps out of search engines and shows each player only their own record', async () => {

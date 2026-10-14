@@ -1,0 +1,1 @@
+ALTER TABLE `chart` ADD `has_long_notes` integer;
