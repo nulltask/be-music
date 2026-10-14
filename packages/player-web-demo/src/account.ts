@@ -245,3 +245,14 @@ export function describeStartAccount(account: LeaderboardAccount | undefined): S
     hint: undefined,
   };
 }
+
+/**
+ * Whether submitting should turn on: when the player arrives signed in, or signs in, to a kept account — not on every
+ * re-read of an account already shown as signed in, so unticking it during a session sticks.
+ */
+export function shouldTurnOnSubmitting(
+  previous: AccountChip['state'] | undefined,
+  next: AccountChip['state'],
+): boolean {
+  return next === 'signed-in' && previous !== 'signed-in';
+}
