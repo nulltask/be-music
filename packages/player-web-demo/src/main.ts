@@ -136,6 +136,12 @@ import demoPackageJson from '../package.json' with { type: 'json' };
 const dropLog = logger('drop');
 const recordLog = logger('record');
 const gameplayLog = logger('gameplay');
+const resolutionLog = logger('render-resolution');
+
+const AUTO_DETECT_RESOLUTION_LABEL = 'Auto-detect resolution';
+
+/** How long the select screen settles (song images, fonts, first BGM) before the first-run resolution benchmark. */
+const FIRST_RUN_RESOLUTION_DELAY_MS = 2000;
 
 /** This app as the recorder of its play-logs (`recorder` in `*.bmplay.json`); the engine adds its own version. */
 const PLAYLOG_RECORDER: Omit<PlaylogRecorderInfo, 'engine'> = {
@@ -189,6 +195,16 @@ import {
   toggleRecording,
   type RecordingDeps,
 } from './recording-controller.ts';
+import {
+  benchmarkRenderResolution,
+  DEFAULT_RENDER_RESOLUTION,
+  nearestRenderResolution,
+  RenderResolutionBenchmarkCancelled,
+  readStoredRenderResolution,
+  renderResolutionLabel,
+  renderResolutionSteps,
+  storeRenderResolution,
+} from './render-resolution.ts';
 import type { ChartImageTexture, DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
 import './styles.css';
 
@@ -584,6 +600,13 @@ class PlayerWebDemoApp {
    * + `controller.updateDisplay()`.
    */
   private readonly guiState: DemoGuiState;
+  /** The Debug Menu's "Render resolution" dropdown and "Auto-detect resolution" button. */
+  private resolutionPicker: Controller | undefined;
+  private autoDetectResolutionControl: Controller | undefined;
+  /** Whether a render resolution benchmark is running. */
+  private detectingResolution = false;
+  /** Whether this visit already scheduled the first-run benchmark. */
+  private firstRunResolutionScheduled = false;
   /**
    * lil-gui handles for controllers we need to address by name after construction — toggling the per-stage folder
    * visibility, renaming the record button, and reflecting URL- flag-driven compressor changes back into the GUI.
@@ -722,6 +745,10 @@ class PlayerWebDemoApp {
       skinFamilyOverride: EXTRA_SKINS_ENABLED ? 'auto' : 'default',
       builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
       skinEffects: readStoredSkinEffects(),
+      renderResolution: nearestRenderResolution(
+        renderResolutionSteps(window.devicePixelRatio || 1),
+        readStoredRenderResolution() ?? DEFAULT_RENDER_RESOLUTION,
+      ),
       playLayout: readStoredPlayLayout(),
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
@@ -907,7 +934,7 @@ class PlayerWebDemoApp {
   private async ensureHostMounted(): Promise<void> {
     if (this.hostMounted) return;
     this.hostMounted = true;
-    await this.sceneHost.mount(this.elements.stage);
+    await this.sceneHost.mount(this.elements.stage, { resolution: this.guiState.renderResolution });
     this.wireCanvasFullscreen();
     this.wireTouchControls();
     this.sceneHost.app.ticker.add(this.syncGameplayShellState);
@@ -1304,6 +1331,25 @@ class PlayerWebDemoApp {
         }
         this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
       });
+    // Canvas pixels per CSS pixel, 1× up to the display's ratio. Lower trades sharpness for fill-rate (tablets drop
+    // under 30 fps at 2×); applies from the next frame. `?resolution=` in the URL overrides it until a pick here.
+    const resolutionSteps = renderResolutionSteps(window.devicePixelRatio || 1);
+    this.resolutionPicker = skin
+      .add(
+        this.guiState,
+        'renderResolution',
+        Object.fromEntries(resolutionSteps.map((value) => [renderResolutionLabel(value), value])),
+      )
+      .name('Render resolution')
+      .onChange((value: number) => {
+        storeRenderResolution(value);
+        this.sceneHost.setResolution(value);
+      });
+    // Measures the frame rate at each resolution on whatever screen is showing and keeps the highest that holds it.
+    this.autoDetectResolutionControl = skin
+      .add({ detect: () => void this.detectRenderResolution() }, 'detect')
+      .name(AUTO_DETECT_RESOLUTION_LABEL);
+    if (resolutionSteps.length < 2) this.autoDetectResolutionControl.hide();
     // Auto picks the touch layout on phones / tablets; applies from the next play.
     skin
       .add(this.guiState, 'playLayout', { Auto: 'auto', Desktop: 'standard', Touch: 'touch' })
@@ -3865,6 +3911,73 @@ class PlayerWebDemoApp {
         });
     await this.selectView.mount(this.sceneHost);
     this.selectView.setCollection(this.collection);
+    this.scheduleFirstRunResolutionDetect();
+  }
+
+  /**
+   * Before the player has picked a render resolution (by hand or by an earlier benchmark), benchmarks the select screen
+   * once, after it settles, to pick one for this device. Skipped where there's nothing to choose (a 1× display) and
+   * when `?resolution=` pins it.
+   */
+  private scheduleFirstRunResolutionDetect(): void {
+    if (this.firstRunResolutionScheduled) return;
+    this.firstRunResolutionScheduled = true;
+    if (readStoredRenderResolution() !== undefined) return;
+    if (new URLSearchParams(window.location.search).has('resolution')) return;
+    if (renderResolutionSteps(window.devicePixelRatio || 1).length < 2) return;
+    const selectView = this.selectView;
+    window.setTimeout(() => {
+      // Gone on to a play already: measuring gameplay that just started would mislead, so wait for the next visit.
+      if (this.selectView !== selectView || !selectView?.isVisible() || readStoredRenderResolution() !== undefined) {
+        return;
+      }
+      void this.detectRenderResolution({ whileShowing: selectView });
+    }, FIRST_RUN_RESOLUTION_DELAY_MS);
+  }
+
+  /**
+   * Measures the frame rate at each resolution on the screen being shown and keeps (and stores) the highest that holds
+   * it. With `whileShowing`, the run is dropped — nothing stored, the previous resolution back — once that view is no
+   * longer the select screen; any run is dropped when the page is hidden, since a hidden page's frames are throttled.
+   */
+  private async detectRenderResolution(options: { whileShowing?: unknown } = {}): Promise<void> {
+    const steps = renderResolutionSteps(window.devicePixelRatio || 1);
+    if (this.detectingResolution || steps.length < 2) return;
+    this.detectingResolution = true;
+    const control = this.autoDetectResolutionControl;
+    control?.disable();
+    this.resolutionPicker?.disable();
+    try {
+      const result = await benchmarkRenderResolution({
+        steps,
+        apply: (value) => this.sceneHost.setResolution(value),
+        nextFrame: () => new Promise((resolve) => requestAnimationFrame(resolve)),
+        onStep: (value) => control?.name(`Measuring ${renderResolutionLabel(value)}…`),
+        cancelled: () =>
+          document.visibilityState !== 'visible' ||
+          (options.whileShowing !== undefined &&
+            (this.selectView !== options.whileShowing || this.selectView?.isVisible() !== true)),
+      });
+      this.guiState.renderResolution = result.chosen;
+      storeRenderResolution(result.chosen);
+      this.resolutionPicker?.updateDisplay();
+      resolutionLog.info('picked', {
+        chosen: result.chosen,
+        baselineMs: result.baseline,
+        results: result.results.map(
+          ({ resolution, times }) => `${resolution}×: p50 ${times.p50.toFixed(1)} ms, p90 ${times.p90.toFixed(1)} ms`,
+        ),
+      });
+      control?.name(`${AUTO_DETECT_RESOLUTION_LABEL} (picked ${renderResolutionLabel(result.chosen)})`);
+    } catch (error) {
+      if (!(error instanceof RenderResolutionBenchmarkCancelled)) resolutionLog.warn('auto-detect failed', error);
+      this.sceneHost.setResolution(this.guiState.renderResolution);
+      control?.name(AUTO_DETECT_RESOLUTION_LABEL);
+    } finally {
+      this.detectingResolution = false;
+      control?.enable();
+      this.resolutionPicker?.enable();
+    }
   }
 
   /**
