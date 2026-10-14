@@ -1,12 +1,13 @@
 /**
  * The demo's render resolution setting (canvas pixels per CSS pixel): the Debug Menu offers 1× up to the display's
- * `devicePixelRatio` in 0.5 steps, and the pick is remembered. Without a stored pick the player renders at 1.5×: full
- * density at 2× and above made tablets fill-rate bound (under 30 fps on iPad, 60 fps at 1.5×).
+ * `devicePixelRatio` in 0.5 steps, and the pick is remembered. Before any pick the player renders at 1.5× (full density
+ * at 2× and above made tablets fill-rate bound: under 30 fps on iPad, 60 fps at 1.5×) and benchmarks the select screen
+ * once to pick for the device.
  */
 
 export const RENDER_RESOLUTION_STORAGE_KEY = 'be-music-demo.render-resolution';
 
-/** Resolution used until the player picks one. */
+/** Resolution used until the player (or the first-run benchmark) picks one. */
 export const DEFAULT_RENDER_RESOLUTION = 1.5;
 
 const STEP = 0.5;
@@ -37,18 +38,19 @@ export function renderResolutionLabel(value: number): string {
   return `${Number(value.toFixed(3))}×`;
 }
 
-/** The stored resolution as a number, or the default when none is stored or it isn't a positive number. */
-export function parseStoredRenderResolution(stored: string | null): number {
+/** The stored resolution as a number, or `undefined` when none is stored or it isn't a positive number. */
+export function parseStoredRenderResolution(stored: string | null): number | undefined {
   const value = stored === null || stored.trim() === '' ? Number.NaN : Number(stored);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_RENDER_RESOLUTION;
+  return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
-export function readStoredRenderResolution(): number {
+/** The resolution the player picked (by hand or by auto-detect), or `undefined` before any pick. */
+export function readStoredRenderResolution(): number | undefined {
   try {
     return parseStoredRenderResolution(window.localStorage.getItem(RENDER_RESOLUTION_STORAGE_KEY));
   } catch {
-    // Storage blocked — use the default.
-    return DEFAULT_RENDER_RESOLUTION;
+    // Storage blocked — treat as not picked.
+    return undefined;
   }
 }
 
@@ -104,6 +106,16 @@ export interface RenderResolutionBenchmarkOptions {
   warmupFrames?: number;
   /** Frames measured per resolution. */
   sampleFrames?: number;
+  /** Checked every frame; when it returns true the benchmark stops with {@link RenderResolutionBenchmarkCancelled}. */
+  cancelled?(): boolean;
+}
+
+/** Thrown by {@link benchmarkRenderResolution} when its `cancelled` check fires. Nothing is applied after it. */
+export class RenderResolutionBenchmarkCancelled extends Error {
+  constructor() {
+    super('render resolution benchmark cancelled');
+    this.name = 'RenderResolutionBenchmarkCancelled';
+  }
 }
 
 /**
@@ -115,7 +127,12 @@ export interface RenderResolutionBenchmarkOptions {
 export async function benchmarkRenderResolution(
   options: RenderResolutionBenchmarkOptions,
 ): Promise<RenderResolutionBenchmark> {
-  const { steps, apply, nextFrame, onStep, warmupFrames = 20, sampleFrames = 90 } = options;
+  const { steps, apply, onStep, cancelled, warmupFrames = 20, sampleFrames = 90 } = options;
+  const nextFrame = async (): Promise<number> => {
+    const at = await options.nextFrame();
+    if (cancelled?.()) throw new RenderResolutionBenchmarkCancelled();
+    return at;
+  };
   const results: RenderResolutionBenchmark['results'] = [];
   const measure = async (resolution: number): Promise<FrameTimes> => {
     onStep?.(resolution);
