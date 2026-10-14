@@ -11,6 +11,7 @@
  *  - `#account-chip` — `main.ts` (`refreshLeaderboardAccount`)
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
+ *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), wired from `main.ts`
  *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — referenced via `PlayerWebDemoElements` in `main.ts`
  */
 export const DEMO_APP_HTML = `
@@ -100,6 +101,20 @@ export const DEMO_APP_HTML = `
             </div>
             <p class="start-account-hint" id="start-account-hint"></p>
             <div class="start-account-status" id="start-account-status" role="status" aria-live="polite"></div>
+          </section>
+          <!--
+            Sound in silent mode: Safari / iOS only (\`navigator.audioSession\`),
+            so hidden until \`mountStartSilentModeOption\`
+            (silent-mode-playback.ts) fills the label and note in the
+            browser's language and shows it. The checkbox is the Debug
+            Menu's "Play in silent mode" setting.
+          -->
+          <section class="start-audio" id="start-silent-mode" aria-label="Sound" hidden>
+            <label class="start-check">
+              <input type="checkbox" id="start-silent-mode-input" checked />
+              <span data-silent-mode-label>Play in silent mode</span>
+            </label>
+            <p class="start-audio-note" data-silent-mode-note></p>
           </section>
           <!--
             Browser-compatibility check, folded: the summary gives the
