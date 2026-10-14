@@ -249,6 +249,11 @@ export const score = sqliteTable(
     replayVisibility: text('replay_visibility', { enum: ['public', 'private'] })
       .notNull()
       .default('public'),
+    /**
+     * Hidden by its player: kept, but out of the rankings, the personal bests, the figures and every list, and shown
+     * to no one else. The player can show it again.
+     */
+    hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
     ...timestamps,
   },
   (table) => [

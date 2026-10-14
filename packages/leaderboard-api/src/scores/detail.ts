@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { chart, profile, score, scoreResult, user } from '../db/schema.ts';
 import { byRulesetOrder } from '../rulesets.ts';
+import { canSeeScore } from './visibility.ts';
 
 /** One play with its chart, its player (null when the profile is gone) and its figures under every ruleset. */
 export async function loadScoreDetail(db: Database, scoreId: string) {
@@ -51,13 +52,14 @@ export function toScoreResponse(detail: ScoreDetail) {
     assistFlags: found.assistFlags,
     verification: found.verification,
     createdAt: found.createdAt.getTime(),
+    hidden: found.hidden,
     results: detail.results.map(({ scoreId: _scoreId, ...result }) => result),
   };
 }
 
 /**
- * Where a play's log is stored, if the viewer may read it: anyone for a public replay, only its player for a private
- * one. Undefined otherwise, so a private replay looks the same as a missing one.
+ * Where a play's log is stored, if the viewer may read it: anyone for a public replay of a shown play, only its player
+ * for a private replay or a hidden play. Undefined otherwise, so a private replay looks the same as a missing one.
  */
 export async function loadPlaylogAccess(
   db: Database,
@@ -66,9 +68,9 @@ export async function loadPlaylogAccess(
 ): Promise<{ key: string; public: boolean } | undefined> {
   const found = await db.query.score.findFirst({
     where: eq(score.id, scoreId),
-    columns: { userId: true, playlogKey: true, replayVisibility: true },
+    columns: { userId: true, playlogKey: true, replayVisibility: true, hidden: true },
   });
-  if (found === undefined) return undefined;
+  if (found === undefined || !canSeeScore(found, viewerId)) return undefined;
   const isPublic = found.replayVisibility === 'public';
   if (!isPublic && found.userId !== viewerId) return undefined;
   return { key: found.playlogKey, public: isPublic };

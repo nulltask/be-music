@@ -287,6 +287,85 @@ describe('Leaderboard pages', () => {
     expect((await page(`/leaderboard/players/${me.handle}`)).html).not.toContain(`/leaderboard/scores/${scoreId}`);
   });
 
+  test('a player hides a play and shows it again; hidden, only they see it, and it leaves the rankings', async () => {
+    const hideable = makeChart(['#00111:0101', '#00211:0101', '#00311:0101']);
+    const db = openDatabase(env.DB);
+    const frank = await signInAnonymously(fetchApp);
+    const grace = await signInAnonymously(fetchApp);
+    await claimAccount(db, await userIdOf(frank));
+    await claimAccount(db, await userIdOf(grace));
+    const low = await submit(frank, hideable, 3, 'Hideable');
+    const high = await submit(frank, hideable, 9, 'Hideable');
+    await submit(grace, hideable, 5, 'Hideable');
+    const { chartFingerprint, hidden: hiddenAtFirst } = (await (await fetchApp(`/api/v0/scores/${high}`)).json()) as {
+      chartFingerprint: string;
+      hidden: boolean;
+    };
+    expect(hiddenAtFirst).toBe(false);
+    const frankBest = async () => {
+      const response = await fetchApp(`/api/v0/charts/${encodeURIComponent(chartFingerprint)}/leaderboard?ruleset=lr2`);
+      const { entries } = (await response.json()) as { entries: Array<{ exScoreId: string; playCount: number }> };
+      return entries.find((entry) => entry.exScoreId === high || entry.exScoreId === low);
+    };
+    expect(await frankBest()).toMatchObject({ exScoreId: high, playCount: 2 });
+
+    const setHidden = (hidden: boolean, cookie?: string) =>
+      fetchApp(`/api/v0/scores/${high}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', ...(cookie !== undefined ? { cookie } : {}) },
+        body: JSON.stringify({ hidden }),
+      });
+    // Only the play's player can hide it.
+    expect((await setHidden(true)).status).toBe(401);
+    expect((await setHidden(true, grace)).status).toBe(403);
+    const hid = await setHidden(true, frank);
+    expect(hid.status).toBe(200);
+    expect(await hid.json()).toEqual({ id: high, hidden: true });
+
+    // Hidden, the play leaves the ranking: Frank's best falls back to the play still shown.
+    expect(await frankBest()).toMatchObject({ exScoreId: low, playCount: 1 });
+    // Nobody else can open it, its log or its page; the lists leave it out.
+    expect((await fetchApp(`/api/v0/scores/${high}`)).status).toBe(404);
+    expect((await fetchApp(`/api/v0/scores/${high}`, { headers: { cookie: grace } })).status).toBe(404);
+    expect((await fetchApp(`/api/v0/scores/${high}/playlog`)).status).toBe(404);
+    expect((await page(`/leaderboard/scores/${high}`)).status).toBe(404);
+    expect((await page('/leaderboard')).html).not.toContain(`/leaderboard/scores/${high}`);
+    expect((await page('/leaderboard')).html).toContain(`/leaderboard/scores/${low}`);
+    expect((await page(`/leaderboard/charts/${encodeURIComponent(chartFingerprint)}?every=1`)).html).not.toContain(
+      `/leaderboard/scores/${high}`,
+    );
+
+    // Frank still sees it: marked hidden on his lists, and on its page with the way back.
+    const me = (await (await fetchApp('/api/v0/me', { headers: { cookie: frank } })).json()) as { handle: string };
+    const ownList = await page(`/leaderboard/players/${me.handle}`, frank);
+    expect(ownList.html).toContain(`/leaderboard/scores/${high}`);
+    expect(ownList.html).toContain('>hidden<');
+    // It moved no best and holds no place, so its row shows no rank.
+    const hiddenRow = ownList.html.slice(ownList.html.indexOf(`/leaderboard/scores/${high}`));
+    expect(hiddenRow.slice(0, hiddenRow.indexOf('</li>'))).not.toMatch(/#\d+ \/ \d+/);
+    expect((await page(`/leaderboard/players/${me.handle}`)).html).not.toContain(`/leaderboard/scores/${high}`);
+    const own = await page(`/leaderboard/scores/${high}`, frank);
+    expect(own.status).toBe(200);
+    expect(own.html).toContain('This play is hidden');
+    expect(own.html).toContain('data-account-action="show-score"');
+    expect(own.html).toContain('<meta name="robots" content="noindex"/>');
+    expect(
+      (
+        (await (await fetchApp(`/api/v0/scores/${high}`, { headers: { cookie: frank } })).json()) as {
+          hidden: boolean;
+        }
+      ).hidden,
+    ).toBe(true);
+    expect((await fetchApp(`/api/v0/scores/${high}/playlog`, { headers: { cookie: frank } })).status).toBe(200);
+
+    // Shown again, everything is back.
+    expect((await setHidden(false, frank)).status).toBe(200);
+    expect(await frankBest()).toMatchObject({ exScoreId: high, playCount: 2 });
+    expect((await page(`/leaderboard/scores/${high}`)).status).toBe(200);
+    expect((await page(`/leaderboard/scores/${high}`, frank)).html).toContain('data-account-action="hide-score"');
+    expect((await page(`/leaderboard/scores/${high}`)).html).not.toContain('-score"');
+  });
+
   test('the score, chart and player pages render with their sharing tags', async () => {
     const score = await page(`/leaderboard/scores/${firstScore}`);
     expect(score.status).toBe(200);

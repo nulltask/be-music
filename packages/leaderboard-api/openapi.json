@@ -966,6 +966,7 @@
           "Scores"
         ],
         "summary": "A play",
+        "description": "A hidden play answers only its player; to anyone else it does not exist.",
         "responses": {
           "200": {
             "description": "The play under every ruleset.",
@@ -1034,6 +1035,10 @@
                     "createdAt": {
                       "type": "integer",
                       "description": "When the play was accepted (epoch ms)."
+                    },
+                    "hidden": {
+                      "type": "boolean",
+                      "description": "Hidden by its player: only the player sees a hidden play."
                     },
                     "results": {
                       "type": "array",
@@ -1120,6 +1125,7 @@
                     "assistFlags",
                     "verification",
                     "createdAt",
+                    "hidden",
                     "results"
                   ]
                 }
@@ -1149,6 +1155,173 @@
                     "error"
                   ]
                 }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patchScoresById",
+        "tags": [
+          "Scores"
+        ],
+        "summary": "Hide or show my play",
+        "description": "A hidden play is kept, but leaves the rankings, the personal bests, the figures and every list, and only its player can open it. The player’s bests on the chart are rebuilt from the plays still shown.",
+        "responses": {
+          "200": {
+            "description": "The play’s visibility after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "hidden": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "hidden"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Someone else played it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-your-score"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The score does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hidden": {
+                    "type": "boolean",
+                    "description": "Hide the play (`true`): it leaves the rankings, the personal bests, the figures and every list, and only its player can open it. `false` shows it again."
+                  }
+                },
+                "required": [
+                  "hidden"
+                ]
               }
             }
           }

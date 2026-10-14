@@ -18,6 +18,8 @@ export interface RecentScore {
   laneMode: string | null;
   /** Whether the chart is listed; a play of one that is not reaches lists only for its own player. */
   chartListed: boolean;
+  /** Hidden by its player; a hidden play reaches lists only for its own player. */
+  hidden: boolean;
   playLevel: string | null;
   difficulty: number | null;
   playedRuleset: RulesetId;
@@ -49,8 +51,8 @@ export interface RecentScoresFilter {
   /** Include charts not listed yet (fewer than two players). Off by default (docs/leaderboard.md section 7). */
   includeUnlisted: boolean;
   /**
-   * A player who also sees their own plays of charts not listed yet, and while their account is anonymous (the
-   * signed-in viewer), while everyone else's stay out. Ignored where the filters already let them all in.
+   * A player who also sees their own plays of charts not listed yet, while their account is anonymous, and that they
+   * hid (the signed-in viewer), while everyone else's stay out. Ignored where the filters already let them all in.
    */
   ownerUserId?: string;
   /** Only this player's plays. */
@@ -72,6 +74,9 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
     const listed = eq(chart.status, 'listed');
     conditions.push(filter.ownerUserId === undefined ? listed : or(listed, eq(score.userId, filter.ownerUserId))!);
   }
+  // Hidden plays stay out, except for their own player.
+  const shown = eq(score.hidden, false);
+  conditions.push(filter.ownerUserId === undefined ? shown : or(shown, eq(score.userId, filter.ownerUserId))!);
   if (filter.handle !== undefined) conditions.push(eq(profile.handle, filter.handle));
   const rows = await db
     .select({
@@ -86,6 +91,7 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       artist: chart.artist,
       laneMode: chart.laneMode,
       chartStatus: chart.status,
+      hidden: score.hidden,
       playLevel: chart.playLevel,
       difficulty: chart.difficulty,
       playedRuleset: score.playedRuleset,
@@ -149,7 +155,7 @@ function previousBest(ruleset: RulesetId) {
   const earlier = (column: SQL) => sql`(
     select ${column} from score p join score_result pr on pr.score_id = p.id and pr.ruleset = ${ruleset}
     where p.user_id = ${score.userId} and p.chart_fingerprint = ${score.chartFingerprint}
-      and p.assisted = ${score.assisted} and p.created_at < ${score.createdAt}
+      and p.assisted = ${score.assisted} and p.created_at < ${score.createdAt} and p.hidden = 0
   )`;
   return {
     previousEx: sql<number | null>`${earlier(sql`max(pr.ex_score)`)}`,

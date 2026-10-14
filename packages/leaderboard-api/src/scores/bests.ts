@@ -63,7 +63,8 @@ export function toBestScoreRow(
 
 /**
  * Recomputes a player's personal bests on the given charts from their stored plays, folding the plays in the order they
- * were accepted so ties keep the earlier play. Used when plays change owner (an anonymous account linked to a real one).
+ * were accepted so ties keep the earlier play. Hidden plays are left out. Used when plays change owner (an anonymous
+ * account linked to a real one) and when a player hides or shows a play.
  */
 export async function rebuildBestScores(
   db: Database,
@@ -86,7 +87,9 @@ export async function rebuildBestScores(
     })
     .from(score)
     .innerJoin(scoreResult, eq(scoreResult.scoreId, score.id))
-    .where(and(eq(score.userId, userId), inArray(score.chartFingerprint, [...chartFingerprints])))
+    .where(
+      and(eq(score.userId, userId), inArray(score.chartFingerprint, [...chartFingerprints]), eq(score.hidden, false)),
+    )
     .orderBy(asc(score.createdAt), asc(score.id));
 
   type Folded = {
