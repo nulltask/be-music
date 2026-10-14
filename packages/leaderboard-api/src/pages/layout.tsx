@@ -589,7 +589,6 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
               </nav>
               <div class="ms-auto flex items-center gap-1 whitespace-nowrap sm:gap-2">
                 <RulesetMenu current={props.meta.ruleset} path={props.meta.path} />
-                <LanguageMenu current={props.meta.locale} path={props.meta.path} />
                 <a
                   class="btn"
                   data-size="sm"
@@ -605,6 +604,8 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                   <Icon svg={Play} />
                   {t.nav.play}
                 </a>
+                {/* Last, at the right edge: switching the language changes the other labels' widths, not its place. */}
+                <LanguageMenu current={props.meta.locale} path={props.meta.path} />
               </div>
             </div>
             <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />

@@ -5,7 +5,7 @@
 // `image[].id` that points at a source-bitmap rect — and per-lane geometry (`note.dst[]`). The
 // renderer:
 //
-//   1. Resolves the active lane geometry against the runtime op set (`pickBeatorajaNoteRects`).
+//   1. Resolves the active lane geometry against the runtime op set (`resolveBeatorajaNoteDstBlockIndex`).
 //   2. For each in-flight engine note, picks the matching per-lane image id, looks up the image[]
 //      entry, crops the source texture to the image's `(x, y, w, h)`, and paints it as a Pixi sprite.
 //   3. Long notes (with `endBeat`) compose three sprites — start cap, tiled body, end cap — using
@@ -19,12 +19,11 @@ import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
 import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import {
-  pickBeatorajaNoteRects,
-  type BeatorajaImageElement,
-  type BeatorajaImageId,
-  type BeatorajaNoteRect,
-  type BeatorajaNoteSection,
+import type {
+  BeatorajaImageElement,
+  BeatorajaImageId,
+  BeatorajaNoteRect,
+  BeatorajaNoteSection,
 } from '@be-music/beatoraja-skin';
 import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
@@ -38,6 +37,7 @@ import {
   resolveDrawBottom,
   resolveDrawY,
 } from '../core/note-draw-window.ts';
+import { resolveBeatorajaNoteDstBlockIndex } from './note-dst-block.ts';
 import { resolveBeatorajaScrollPlacement } from './scroll-placement.ts';
 import type { NoteDrawWindow } from '../core/note-draw-window.ts';
 
@@ -257,7 +257,8 @@ export class BeatorajaNoteLayer {
   private readonly spritePool: Sprite[] = [];
   /** Pool of LN body tiling sprites. Separate because TilingSprite has its own size / position semantics. */
   private readonly tilingPool: TilingSprite[] = [];
-  private cachedActiveOps: ReadonlySet<number> | undefined;
+  /** `note.dst[]` block `cachedRects` was flipped from (`-1` = none matched); `undefined` until the first resolve. */
+  private cachedBlockIndex: number | undefined;
   private cachedRects: ReadonlyArray<BeatorajaNoteRect> = [];
   /**
    * Per-`(imageId)` cropped texture cache, populated lazily on first access. Each entry persists for
@@ -487,13 +488,16 @@ export class BeatorajaNoteLayer {
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
 
   private resolveLaneRects(activeOps: ReadonlySet<number>): ReadonlyArray<BeatorajaNoteRect> {
-    if (this.cachedActiveOps === activeOps) return this.cachedRects;
+    // The caller passes the same mutated-in-place `activeOps` Set every frame, so the cache is keyed on the block it
+    // selects: a lift / alternate-layout op toggling mid-play swaps the geometry, and every other frame reuses it.
+    const blockIndex = resolveBeatorajaNoteDstBlockIndex(this.noteSection, activeOps);
+    if (blockIndex === this.cachedBlockIndex) return this.cachedRects;
     // beatoraja's `note.dst[]` rects are in libGDX Y-UP coordinates (origin at canvas bottom-
     // left). Flip each rect once on resolve so the rest of the layer (judgement-Y, getLaneBounds,
     // per-frame scroll math) can treat lane rects as ordinary Pixi Y-DOWN screen rects.
-    const raw = pickBeatorajaNoteRects(this.noteSection, activeOps);
+    const raw = blockIndex < 0 ? [] : this.noteSection.dst[blockIndex]!.rects;
     this.cachedRects = raw.map((rect) => flipRectToPixi(rect, this.canvasHeight));
-    this.cachedActiveOps = activeOps;
+    this.cachedBlockIndex = blockIndex;
     return this.cachedRects;
   }
 

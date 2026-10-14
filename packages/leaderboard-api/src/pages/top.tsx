@@ -52,6 +52,7 @@ export async function topPage(c: PageContext) {
         infos={new Map(scores.map((entry) => [entry.scoreId, entry.info]))}
         showPlayer
         empty={includeAnonymous ? t.latest.empty : t.latest.emptyNamed}
+        anonymousOnlyForOwner={!includeAnonymous}
       />
     </Layout>,
   );

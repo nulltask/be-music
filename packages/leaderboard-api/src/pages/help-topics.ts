@@ -11,6 +11,7 @@ export const HELP_SECTIONS = [
   { id: 'long-notes', title: 'Long notes' },
   { id: 'filters', title: 'Ranking switches' },
   { id: 'verification', title: 'Verification' },
+  { id: 'visibility', title: 'Who sees a play' },
 ] as const;
 
 export type HelpId = (typeof HELP_SECTIONS)[number]['id'];

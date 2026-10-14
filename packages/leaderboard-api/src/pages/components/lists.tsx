@@ -220,6 +220,32 @@ export function RankingList(props: {
 }
 
 /**
+ * Marks a play only its own player sees in the lists: "hidden" when they hid it, "not public" otherwise. The help tip
+ * says why (any of: hidden, chart not listed yet, anonymous account), so the reason reads without hovering a title.
+ */
+function PrivacyBadge(props: { hidden: boolean; reasons: Array<string | undefined> }) {
+  const t = useMessages();
+  const reasons = props.reasons.filter((reason) => reason !== undefined);
+  if (reasons.length === 0) return null;
+  const label = props.hidden ? t.visibility.hidden : t.visibility.notPublic;
+  return (
+    <span class="inline-flex shrink-0 items-center">
+      <span class="badge" data-variant="secondary">
+        {label}
+      </span>
+      <HelpTip topic="visibility" label={label}>
+        {t.visibility.onlyYou}
+        {reasons.map((reason) => (
+          <>
+            <br />• {reason}
+          </>
+        ))}
+      </HelpTip>
+    </span>
+  );
+}
+
+/**
  * The latest plays: which chart (with its mode and level), who, how it went under the display ruleset and what it
  * changed on the player's best, where it places on the chart, and when.
  */
@@ -228,6 +254,8 @@ export function RecentScoresList(props: {
   infos: Map<string, PlayInfo>;
   showPlayer: boolean;
   empty: string;
+  /** The list leaves anonymous players out, so an anonymous row is the viewer's own and only they see it. */
+  anonymousOnlyForOwner?: boolean;
 }) {
   const t = useMessages();
   if (props.scores.length === 0) {
@@ -261,16 +289,16 @@ export function RecentScoresList(props: {
                   <span class="truncate">{title}</span>
                 </a>
                 <ChartLevel laneMode={entry.laneMode} playLevel={entry.playLevel} difficulty={entry.difficulty} />
-                {entry.chartListed ? null : (
-                  <span class="badge shrink-0" data-variant="secondary" title={t.lists.notListedHelp}>
-                    {t.lists.notListed}
-                  </span>
-                )}
-                {entry.hidden ? (
-                  <span class="badge shrink-0" data-variant="secondary" title={t.lists.hiddenHelp}>
-                    {t.lists.hidden}
-                  </span>
-                ) : null}
+                <PrivacyBadge
+                  hidden={entry.hidden}
+                  reasons={[
+                    entry.hidden ? t.visibility.reasonHidden : undefined,
+                    entry.chartListed ? undefined : t.visibility.reasonNotListed,
+                    entry.anonymous && props.anonymousOnlyForOwner === true
+                      ? t.visibility.sentences([t.visibility.reasonAnonymous, t.visibility.passkeyHint])
+                      : undefined,
+                  ]}
+                />
               </>
             }
             details={[

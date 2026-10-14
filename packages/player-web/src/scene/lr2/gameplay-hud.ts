@@ -5,6 +5,7 @@ import {
   resolveIidxSelectRankOp,
   type ScoreSummary,
 } from '@be-music/player/core/scoring';
+import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import {
   type Lr2DestinationRect,
@@ -110,6 +111,19 @@ export function resolveNumberValue(
 
 export function computeRankOp(score: ScoreSummary): number | undefined {
   return resolveIidxSelectRankOp(score);
+}
+
+/**
+ * LR2 gauge-type ops for the play's gauge, as `[1P, 2P]`: HARD / DEATH light the "red" gauge ops (43 / 45), GROOVE /
+ * EASY share the normal ones (42 / 44). Skins gate their gauge frame plate on these (`#IF op43` for the red plate).
+ */
+export function computeGaugeTypeOps(gauge: GrooveGaugeType): readonly [number, number] {
+  return gauge === 'HARD' || gauge === 'DEATH' ? [43, 45] : [42, 44];
+}
+
+/** LR2 1P gauge-percentage bucket op: 230 = 0–9 %, 231 = 10–19 %, …, 240 = 100 %. */
+export function computeGaugeBucketOp(gaugePercent: number): number {
+  return 230 + Math.min(10, Math.max(0, Math.floor(gaugePercent / 10)));
 }
 
 export function lastJudgeToNowComboKind(lastJudge: string): Lr2NowComboKind | undefined {
