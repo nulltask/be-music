@@ -93,8 +93,9 @@ export const DEMO_APP_HTML = `
               <input type="checkbox" id="start-submit" />
               <span>Submit my plays to the Leaderboard</span>
             </label>
-            <div class="start-account" id="start-account" data-state="signed-out">
-              <span class="start-account-label" id="start-account-label">Not signed in</span>
+            <!-- \`loading\` until the account has been read, so a signed-in player never sees "Not signed in". -->
+            <div class="start-account" id="start-account" data-state="loading">
+              <span class="start-account-label" id="start-account-label">Checking account…</span>
               <div class="start-account-actions" id="start-account-actions"></div>
             </div>
             <p class="start-account-hint" id="start-account-hint"></p>
@@ -311,9 +312,9 @@ export const DEMO_APP_HTML = `
       out). Signed in, it opens the player's Leaderboard page; signed out,
       it opens the Debug Menu's Leaderboard folder. Wired in \`main.ts\`.
     -->
-    <a class="account-chip" id="account-chip" data-state="signed-out" href="/leaderboard" target="_blank" rel="noopener">
+    <a class="account-chip" id="account-chip" data-state="loading" href="/leaderboard" target="_blank" rel="noopener">
       <span class="account-chip-dot" aria-hidden="true"></span>
-      <span class="account-chip-label" id="account-chip-label">Not signed in</span>
+      <span class="account-chip-label" id="account-chip-label"></span>
     </a>
     <!--
       Touch play controls. Phones and tablets have no Space / Esc key, so

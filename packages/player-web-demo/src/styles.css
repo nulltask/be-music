@@ -2655,3 +2655,11 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
 html.touch-first .search-input.search-inline:focus {
   transform: none;
 }
+
+/* Until the account has been read, the chip stays out of sight and the start card says it is checking. */
+.account-chip[data-state='loading'] {
+  visibility: hidden;
+}
+.start-account[data-state='loading'] .start-account-label {
+  color: rgb(170 180 194 / 0.7);
+}

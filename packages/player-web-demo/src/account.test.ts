@@ -5,6 +5,7 @@ import {
   describeProfileError,
   describeStartAccount,
   saveProfile,
+  shouldTurnOnSubmitting,
   loadLeaderboardAccount,
 } from './account.ts';
 
@@ -133,5 +134,19 @@ describe('describeProfileError', () => {
       'Names cannot contain line breaks or control characters.',
     );
     expect(describeProfileError('http-500')).toBe('Something went wrong (http-500).');
+  });
+});
+
+describe('shouldTurnOnSubmitting', () => {
+  test('turns submitting on when the player arrives signed in or signs in', () => {
+    expect(shouldTurnOnSubmitting(undefined, 'signed-in')).toBe(true);
+    expect(shouldTurnOnSubmitting('signed-out', 'signed-in')).toBe(true);
+    expect(shouldTurnOnSubmitting('anonymous', 'signed-in')).toBe(true);
+  });
+
+  test('leaves it alone on a re-read, and without a kept account', () => {
+    expect(shouldTurnOnSubmitting('signed-in', 'signed-in')).toBe(false);
+    expect(shouldTurnOnSubmitting(undefined, 'anonymous')).toBe(false);
+    expect(shouldTurnOnSubmitting(undefined, 'signed-out')).toBe(false);
   });
 });
