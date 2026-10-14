@@ -6,10 +6,10 @@ import type { Renderer, Texture } from 'pixi.js';
  * {@link PixiHostTarget} under {@link PIXI_HOST_TARGET} and shows that texture, so the frame never leaves the GPU (no
  * per-frame canvas upload). Skins outside the kit keep the plain canvas contract.
  */
-export const PIXI_HOST_RENDER = Symbol('be-music.pixi-host-render');
+export const PIXI_HOST_RENDER: unique symbol = Symbol('be-music.pixi-host-render');
 
 /** Key of the {@link PixiHostTarget} on a surface the host renders itself. */
-export const PIXI_HOST_TARGET = Symbol('be-music.pixi-host-target');
+export const PIXI_HOST_TARGET: unique symbol = Symbol('be-music.pixi-host-target');
 
 /** The host's renderer and the texture a surface draws into, both owned by the host. */
 export interface PixiHostTarget {

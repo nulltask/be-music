@@ -4,8 +4,13 @@ import { chargeCloudGpuPrograms } from './charge-cloud-wgsl.ts';
 describe('chargeCloudGpuPrograms', () => {
   const programs = Object.entries(chargeCloudGpuPrograms());
 
-  it.each(programs)('%s binds its textures as unfilterable floats (32-bit state)', (_name, program) => {
-    const textures = program.gpuLayout.flat().filter((entry) => entry.texture);
+  // The orb program reads no textures.
+  const texturePrograms = programs.filter(([name]) => name !== 'orb');
+
+  it.each(texturePrograms)('%s binds its textures as unfilterable floats (32-bit state)', (_name, program) => {
+    const entries: { texture?: { sampleType?: string } }[] = program.gpuLayout.flat();
+    const textures = entries.filter((entry) => entry.texture);
+    expect(textures.length).toBeGreaterThan(0);
     for (const entry of textures) expect(entry.texture!.sampleType).toBe('unfilterable-float');
   });
 
