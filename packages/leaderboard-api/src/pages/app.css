@@ -8,6 +8,8 @@
 @layer base {
   html {
     font-variant-numeric: tabular-nums;
+    /* A link to a section (Help's topics) scrolls it into view below the sticky header, not under it. */
+    scroll-padding-top: 3.5rem;
   }
 }
 

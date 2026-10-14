@@ -664,8 +664,9 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
       <body class="bg-background text-foreground min-h-screen antialiased">
         {/* Every component on the page reads the page's language from here (`useMessages`). */}
         <MessagesContext.Provider value={t}>
-          {/* Named for the cross-page view transition (app.css): it stays put while the page below it changes. */}
-          <header class="border-b [view-transition-name:site-header]">
+          {/* Stays at the top while the page scrolls, over the rows (their links sit at z-10), the page showing faintly
+            through. Named for the cross-page view transition (app.css): it stays put while the page below it changes. */}
+          <header class="bg-background/90 sticky top-0 z-40 border-b backdrop-blur [view-transition-name:site-header]">
             <div class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6">
               <a href="/leaderboard" class="shrink-0 font-semibold tracking-tight">
                 be-music <span class="text-muted-foreground hidden font-normal md:inline">Leaderboard</span>
