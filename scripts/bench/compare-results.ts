@@ -252,7 +252,7 @@ export function buildDiffMarkdown(
     lines.push(...newlySkipped.map((key) => `- \`${key}\`: ${headSnapshot.skipped[key]}`), '', '</details>');
   }
 
-  lines.push('', '<details><summary>Run details</summary>', '', '| | |', '| --- | ---: |');
+  lines.push('', '<details><summary>Run details</summary>', '', '| Measure | Value |', '| --- | ---: |');
   lines.push(`| Median change (all compared cases) | ${formatPercent(summary.medianDeltaPercent)} |`);
   lines.push(`| Mean change | ${formatPercent(summary.meanDeltaPercent)} |`);
   lines.push(`| Overall verdict (median vs. threshold) | ${summary.overallVerdict} |`);
