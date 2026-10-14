@@ -1411,6 +1411,11 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
   }
 
+  /** Whether the select screen is showing (not hidden behind a decide / play / result screen). */
+  public isVisible(): boolean {
+    return this.visible;
+  }
+
   /**
    * Hides / shows the select scene's subtree on the shared host stage. Toggles `sceneRoot.visible` (so we keep
    * contributing zero pixels while hidden) and pauses our rAF tick — the keyframe-driven re-render is wasted CPU when
