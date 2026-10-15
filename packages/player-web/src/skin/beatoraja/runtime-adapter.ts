@@ -20,6 +20,8 @@
 //        - drain judge-combo states → `adapter.applyJudgeCombo(state)`
 //        - `view.update(adapter.getRenderContext())`
 
+import type { SceneCourseInfo } from '../../scene/course-info.ts';
+import { resolveBeatorajaCourseText } from '../../scene/beatoraja/course.ts';
 import type { BeMusicJson } from '@be-music/json';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
@@ -105,6 +107,11 @@ export interface BeatorajaRuntimeAdapterOptions {
    * reference theme uses this to show the parent folder name on the play scene's status bar.
    */
   directoryLabel?: string;
+  /**
+   * The running course, when the play is one of its stages: its stage titles surface on `STRING_COURSE1_TITLE` …
+   * `STRING_COURSE10_TITLE` (150-159).
+   */
+  courseInfo?: SceneCourseInfo;
   /**
    * Per-skin lane height in skin-pixel units. Used to scale `OFFSET_LIFT.y` so the lift slider's
    * full range moves the hidden-cover edge across exactly one lane height (= the visual extent
@@ -269,6 +276,7 @@ export class BeatorajaRuntimeAdapter {
   private readonly skinHeaderName: string | undefined;
   private readonly skinHeaderAuthor: string | undefined;
   private readonly directoryLabel: string | undefined;
+  private readonly courseInfo: SceneCourseInfo | undefined;
   /**
    * Skin-pixel lane height — used to scale `OFFSET_LIFT.y` so the lift slider's full extent
    * matches one lane height. See {@link BeatorajaRuntimeAdapterOptions.laneHeight}.
@@ -614,6 +622,7 @@ export class BeatorajaRuntimeAdapter {
     this.skinHeaderName = options.skinHeaderName;
     this.skinHeaderAuthor = options.skinHeaderAuthor;
     this.directoryLabel = options.directoryLabel;
+    this.courseInfo = options.courseInfo;
     this.laneHeight =
       typeof options.laneHeight === 'number' && Number.isFinite(options.laneHeight) && options.laneHeight > 0
         ? options.laneHeight
@@ -1498,6 +1507,8 @@ export class BeatorajaRuntimeAdapter {
     // promoted to a typed metadata field). Hosts that need structured access can post-process
     // bmson entries via `parseBmsonSubartist`.
     const subartist = extractChartSubartist(chart);
+    const courseText = this.courseInfo !== undefined ? resolveBeatorajaCourseText(refOp, this.courseInfo) : undefined;
+    if (courseText !== undefined) return courseText;
     switch (refOp) {
       case BEATORAJA_TEXT.TITLE:
         return meta.title ?? '';
