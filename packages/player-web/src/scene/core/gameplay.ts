@@ -5176,6 +5176,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         decodedSamples: this.decodedSamples,
         wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
         bmsonSlicePlayback: this.bmsonSlicePlayback,
+        // The engine plays through its own session: a stitched NONSTOP chart's stage rates (FIT) and fades go with it.
+        ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
       ui: callbacks,
