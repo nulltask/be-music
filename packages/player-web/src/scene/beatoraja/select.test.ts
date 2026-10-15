@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import type { Container, Text, Texture } from 'pixi.js';
+import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
+import type { BrowserCourseEntry } from '../../collection/types.ts';
 import { lnModeDirectiveToIndex, PixiBeatorajaSelectScene } from './select.ts';
 
 function fakeTextureCache(): BeatorajaTextureCache {
@@ -91,5 +93,49 @@ describe('lnModeDirectiveToIndex', () => {
     expect(lnModeDirectiveToIndex(undefined)).toBe(0);
     expect(lnModeDirectiveToIndex(0)).toBe(0);
     expect(lnModeDirectiveToIndex(4)).toBe(0);
+  });
+});
+
+describe('PixiBeatorajaSelectScene course bars', () => {
+  const course = (id: string, playable: boolean): BrowserCourseEntry =>
+    ({
+      id,
+      definition: { name: id, kind: 'grade', stages: [], constraints: [], trophies: [] },
+      stages: [{ title: 'a' }],
+      playable,
+    }) as unknown as BrowserCourseEntry;
+
+  type CourseSceneInternals = { activateCurrentEntry(): void; moveCursor(delta: number): void };
+
+  /** A scene with one course folder, opened, and the decide / cancel cues it plays. */
+  function sceneInCourseFolder(
+    courses: BrowserCourseEntry[],
+    onCoursePicked: (course: BrowserCourseEntry, options?: { autoPlay?: boolean }) => void,
+  ) {
+    const cues: string[] = [];
+    const scene = new PixiBeatorajaSelectScene({
+      skin: makeSkin(),
+      textures: fakeTextureCache(),
+      songs: [],
+      courseFolders: [{ label: 'Dan', songs: [], courses }],
+      onSongPicked: () => undefined,
+      onCoursePicked,
+      systemSoundPaths: { decide: 'decide', cancel: 'cancel', folderOpen: 'open' },
+      skinAudio: { play: (path: string) => void cues.push(path) } as unknown as BeatorajaSkinAudio,
+    });
+    const internals = scene as unknown as CourseSceneInternals;
+    internals.activateCurrentEntry();
+    cues.length = 0;
+    return { scene, internals, cues };
+  }
+
+  it('hands a course with a missing stage to the host with the cancel cue, so the host can say why', () => {
+    const picked: BrowserCourseEntry[] = [];
+    const missing = course('missing', false);
+    const { scene, internals, cues } = sceneInCourseFolder([missing], (entry) => picked.push(entry));
+    internals.activateCurrentEntry();
+    expect(picked).toEqual([missing]);
+    expect(cues).toEqual(['cancel']);
+    scene.dispose();
   });
 });
