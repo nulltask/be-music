@@ -1,3 +1,4 @@
+/// <reference path="./signalsmith-stretch.d.ts" />
 /**
  * Offline time stretching with Signalsmith Stretch (MIT; `signalsmith-stretch`, WASM in an AudioWorklet): the signal is
  * rendered through a stretch node in an `OfflineAudioContext`. The library is loaded only when this is used.
