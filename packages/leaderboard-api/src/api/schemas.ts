@@ -50,6 +50,27 @@ export const submissionBody = v.object({
   ),
 });
 
+export const courseSubmissionBody = v.object({
+  coursePlaylog: described(v.unknown(), 'The course play log (`be-music-course-playlog`, docs/playlog.md).'),
+  stages: described(
+    v.array(
+      v.object({
+        playDocument: described(
+          v.unknown(),
+          'Fingerprint document of the stage chart as played; it must hash to the stage’s `chart.playFingerprint`.',
+        ),
+        chartDocument: v.optional(
+          described(
+            v.unknown(),
+            'Fingerprint document of the whole stage chart. Required the first time the server sees the chart.',
+          ),
+        ),
+      }),
+    ),
+    'The fingerprint documents of each played stage, in the order the stages were played.',
+  ),
+});
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Responses
 // ---------------------------------------------------------------------------------------------------------------------
@@ -176,4 +197,74 @@ export const myRankResponse = v.object({
   clearLamp: described(v.pipe(v.number(), v.integer()), 'Best clear lamp (see the score results).'),
   missCount: described(v.pipe(v.number(), v.integer()), 'Fewest BP.'),
   playCount: v.pipe(v.number(), v.integer()),
+});
+
+const courseRulesetOutcome = v.object({
+  ruleset: rulesetSchema,
+  rulesetRevision: described(v.string(), 'Revision of the ruleset the run was simulated under (`lr2/0`, ...).'),
+  exScore: v.pipe(v.number(), v.integer()),
+  noteCount: described(v.pipe(v.number(), v.integer()), 'Judgment notes over every stage, reached or not.'),
+  clearLamp,
+  missCount: described(v.pipe(v.number(), v.integer()), 'BP, with every note the run never judged.'),
+  maxCombo: described(v.pipe(v.number(), v.integer()), 'The course-wide max combo.'),
+  stagesPlayed: described(v.pipe(v.number(), v.integer()), 'Stages reached under this ruleset.'),
+  trophy: described(v.nullable(v.string()), 'The best trophy the run earned, by name.'),
+  rank: described(v.pipe(v.number(), v.integer()), 'The player’s rank on the course after this run.'),
+  players: v.pipe(v.number(), v.integer()),
+  improved: described(
+    v.object({ exScore: v.boolean(), lamp: v.boolean(), missCount: v.boolean() }),
+    'Which personal bests on the course this run improved.',
+  ),
+});
+
+export const courseSubmissionResponse = v.object({
+  courseScoreId: v.string(),
+  courseFingerprint: described(v.string(), 'Course fingerprint (`bmcourse0:…`), the ranking key.'),
+  results: described(v.array(courseRulesetOutcome), 'The run under every ruleset.'),
+});
+
+export const courseResponse = v.object({
+  courseFingerprint: v.string(),
+  name: described(v.string(), 'The name the course was first submitted with.'),
+  kind: described(v.picklist(['grade', 'expert', 'nonstop']), 'Course kind.'),
+  constraints: described(v.array(v.string()), 'Constraints, normalized and sorted (`gauge_lr2`, `grade_mirror`, ...).'),
+  stages: v.array(
+    v.object({
+      chartFingerprint: v.string(),
+      title: described(v.nullable(v.string()), 'Null while the server has not seen the chart played.'),
+      artist: v.nullable(v.string()),
+      playLevel: v.nullable(v.string()),
+    }),
+  ),
+  createdAt: epochMs('When the first run was accepted'),
+});
+
+export const courseScoreResponse = v.object({
+  id: v.string(),
+  courseFingerprint: v.string(),
+  player: v.nullable(player),
+  playedRuleset: rulesetSchema,
+  gauge: v.string(),
+  assisted: v.boolean(),
+  assistFlags: v.array(v.string()),
+  verification: described(v.string(), 'Lowest verification layer its stages passed (`L3`, `L4`, ...).'),
+  stagesPlayed: described(v.pipe(v.number(), v.integer()), 'Stages the run played.'),
+  createdAt: epochMs('When the run was accepted'),
+  hidden: v.boolean(),
+  results: v.array(
+    v.object({
+      ruleset: rulesetSchema,
+      rulesetRevision: v.string(),
+      exScore: v.pipe(v.number(), v.integer()),
+      noteCount: v.pipe(v.number(), v.integer()),
+      clearLamp,
+      missCount: v.pipe(v.number(), v.integer()),
+      maxCombo: v.pipe(v.number(), v.integer()),
+      stagesPlayed: v.pipe(v.number(), v.integer()),
+      trophy: v.nullable(v.string()),
+      gaugeType: v.string(),
+      gaugeFinal: described(v.number(), 'Gauge the course ended on, in percent.'),
+      judges: described(v.record(v.string(), v.number()), 'Judgment counts over the stages played.'),
+    }),
+  ),
 });

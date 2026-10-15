@@ -64,6 +64,13 @@
       "when": 1791967134338,
       "tag": "0008_chart_long_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792058437206,
+      "tag": "0009_course_rankings",
+      "breakpoints": true
     }
   ]
 }

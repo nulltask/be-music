@@ -1,4 +1,5 @@
 import {
+  computeChartFingerprint,
   computeFingerprintOfDocument,
   createChartFingerprintDocument,
   createPlayFingerprintDocument,
@@ -7,6 +8,7 @@ import {
 } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
+import { checkCoursePlaylogEligibility, type BeMusicCoursePlaylog } from '@be-music/player/playlog';
 import { checkPlaylogEligibility, type BeMusicPlaylog } from '@be-music/player-web/runtime';
 
 /** What the Leaderboard API needs for one play (docs/leaderboard.md section 5.1). */
@@ -36,7 +38,21 @@ export function prepareLeaderboardSubmission(
   if (!eligibility.eligible) {
     return { ok: false, reason: eligibility.reason === 'missing-fingerprint' ? 'missing-fingerprint' : 'not-rankable' };
   }
-  const { chartFingerprint, playFingerprint } = eligibility;
+  const documents = rebuildDocuments(playlog, sourceChart, chartPath, eligibility);
+  if (documents === undefined) return { ok: false, reason: 'fingerprint-mismatch' };
+  return { ok: true, submission: { playlog, ...documents } };
+}
+
+/**
+ * Both fingerprint documents of a play, rebuilt from the source chart as the recorder fingerprinted it, or `undefined`
+ * when they would not hash to the play log's fingerprints.
+ */
+function rebuildDocuments(
+  playlog: BeMusicPlaylog,
+  sourceChart: BeMusicJson,
+  chartPath: string | undefined,
+  fingerprints: { chartFingerprint: string; playFingerprint: string },
+): { playDocument: BeMusicFingerprintDocument; chartDocument: BeMusicFingerprintDocument } | undefined {
   const playedChart = hasControlFlow(sourceChart)
     ? resolveBmsControlFlowWithDraws(sourceChart, playlog.play.randomDraws ?? [])
     : sourceChart;
@@ -44,12 +60,12 @@ export function prepareLeaderboardSubmission(
   const playDocument = createPlayFingerprintDocument(playedChart, options);
   const chartDocument = createChartFingerprintDocument(sourceChart, options);
   if (
-    computeFingerprintOfDocument(playDocument) !== playFingerprint ||
-    computeFingerprintOfDocument(chartDocument) !== chartFingerprint
+    computeFingerprintOfDocument(playDocument) !== fingerprints.playFingerprint ||
+    computeFingerprintOfDocument(chartDocument) !== fingerprints.chartFingerprint
   ) {
-    return { ok: false, reason: 'fingerprint-mismatch' };
+    return undefined;
   }
-  return { ok: true, submission: { playlog, playDocument, chartDocument } };
+  return { playDocument, chartDocument };
 }
 
 /** The API's answer for one ruleset (`RulesetOutcome` in `@be-music/leaderboard-api`). */
@@ -82,6 +98,28 @@ export async function submitToLeaderboard(
   submission: LeaderboardSubmission,
   options: LeaderboardClientOptions = {},
 ): Promise<LeaderboardSubmitResult> {
+  const response = await postWithChartDocuments('/api/v0/scores', options, (withChartDocument) => ({
+    playlog: submission.playlog,
+    playDocument: submission.playDocument,
+    ...(withChartDocument ? { chartDocument: submission.chartDocument } : {}),
+  }));
+  if (!(response instanceof Response)) return response;
+  if (response.status === 201 || response.status === 200) {
+    const body = (await response.json()) as { scoreId: string; results: LeaderboardRulesetResult[] };
+    return { status: response.status === 201 ? 'accepted' : 'duplicate', ...body };
+  }
+  return { status: 'failed', httpStatus: response.status, error: (await readError(response)) ?? 'unknown' };
+}
+
+/**
+ * Signs in anonymously when there is no session yet, then posts `body(false)` gzipped, and resends `body(true)` (with
+ * the chart documents) when the server does not know a chart (409 `chart-document-required`).
+ */
+async function postWithChartDocuments(
+  path: string,
+  options: LeaderboardClientOptions,
+  body: (withChartDocuments: boolean) => unknown,
+): Promise<Response | { status: 'failed'; httpStatus: number; error: string }> {
   const doFetch = options.fetch ?? fetch.bind(globalThis);
   const session = await doFetch('/api/auth/get-session', { credentials: 'same-origin' });
   const signedIn = session.ok && (await session.json().catch(() => null)) !== null;
@@ -95,8 +133,8 @@ export async function submitToLeaderboard(
     if (!signIn.ok) return { status: 'failed', httpStatus: signIn.status, error: 'sign-in-failed' };
   }
 
-  const post = async (withChartDocument: boolean): Promise<Response> =>
-    doFetch('/api/v0/scores', {
+  const post = async (withChartDocuments: boolean): Promise<Response> =>
+    doFetch(path, {
       method: 'POST',
       credentials: 'same-origin',
       headers: {
@@ -104,22 +142,111 @@ export async function submitToLeaderboard(
         'content-encoding': 'gzip',
         ...(options.client !== undefined ? { 'be-music-client': options.client } : {}),
       },
-      body: await gzipJson({
-        playlog: submission.playlog,
-        playDocument: submission.playDocument,
-        ...(withChartDocument ? { chartDocument: submission.chartDocument } : {}),
-      }),
+      body: await gzipJson(body(withChartDocuments)),
     });
 
-  let response = await post(false);
+  const response = await post(false);
   if (response.status === 409 && (await readError(response.clone())) === 'chart-document-required') {
-    response = await post(true);
+    return await post(true);
   }
+  return response;
+}
+
+/** What the Leaderboard API needs for one course run: the course play log and each played stage's documents. */
+export interface CourseLeaderboardSubmission {
+  coursePlaylog: BeMusicCoursePlaylog;
+  stages: Array<{ playDocument: BeMusicFingerprintDocument; chartDocument: BeMusicFingerprintDocument }>;
+}
+
+export type CourseSubmissionPreparation =
+  | { ok: true; submission: CourseLeaderboardSubmission }
+  | { ok: false; reason: 'not-rankable' | 'missing-fingerprint' | 'fingerprint-mismatch' };
+
+/**
+ * Builds the submission of a finished course run: the course play log, with the fingerprint documents of each played
+ * stage rebuilt from the stage's chart as the course played it (`stageCharts`, one per course stage, in order) and
+ * checked like a single play's. Runs the server would refuse outright (auto play, an aborted stage, a stage chart
+ * without its fingerprint) are skipped here (`checkCoursePlaylogEligibility`).
+ */
+export function prepareCourseLeaderboardSubmission(
+  coursePlaylog: BeMusicCoursePlaylog,
+  stageCharts: ReadonlyArray<{ chart: BeMusicJson; chartPath: string | undefined }>,
+): CourseSubmissionPreparation {
+  const eligibility = checkCoursePlaylogEligibility(coursePlaylog);
+  if (!eligibility.eligible) {
+    return { ok: false, reason: eligibility.reason === 'missing-fingerprint' ? 'missing-fingerprint' : 'not-rankable' };
+  }
+  const stages: CourseLeaderboardSubmission['stages'] = [];
+  for (const [index, entry] of coursePlaylog.stages.entries()) {
+    if (!entry.played) break;
+    const stageChart = stageCharts[index];
+    const documents =
+      stageChart === undefined
+        ? undefined
+        : rebuildDocuments(entry.playlog, stageChart.chart, stageChart.chartPath, eligibility.stages[index]!);
+    if (documents === undefined) return { ok: false, reason: 'fingerprint-mismatch' };
+    stages.push(documents);
+  }
+  return { ok: true, submission: { coursePlaylog, stages } };
+}
+
+/**
+ * The chart fingerprint of a course stage's chart, as the recorder would record it had the stage been played (the
+ * chart as the course plays it, the chart path as the lane-mode input). It keys an unreached stage of a course play
+ * log; `undefined` when the chart cannot be fingerprinted.
+ */
+export function courseStageChartFingerprint(stage: {
+  chart: BeMusicJson;
+  chartPath: string | undefined;
+}): string | undefined {
+  try {
+    return computeChartFingerprint(stage.chart, { chartPath: stage.chartPath });
+  } catch {
+    return undefined;
+  }
+}
+
+/** The API's answer for one ruleset of a course run (`CourseRulesetOutcome` in `@be-music/leaderboard-api`). */
+export interface CourseLeaderboardRulesetResult extends LeaderboardRulesetResult {
+  stagesPlayed: number;
+  trophy: string | null;
+}
+
+export type CourseLeaderboardSubmitResult =
+  | { status: 'accepted' | 'duplicate'; courseScoreId: string; results: CourseLeaderboardRulesetResult[] }
+  | { status: 'failed'; httpStatus: number; error: string };
+
+/**
+ * Sends one course run to the Leaderboard (`POST /api/v0/course-scores`), signing in anonymously when needed and
+ * resending with every stage's chart document when the server does not know a stage chart.
+ */
+export async function submitCourseToLeaderboard(
+  submission: CourseLeaderboardSubmission,
+  options: LeaderboardClientOptions = {},
+): Promise<CourseLeaderboardSubmitResult> {
+  const response = await postWithChartDocuments('/api/v0/course-scores', options, (withChartDocuments) => ({
+    coursePlaylog: submission.coursePlaylog,
+    stages: submission.stages.map((stage) => ({
+      playDocument: stage.playDocument,
+      ...(withChartDocuments ? { chartDocument: stage.chartDocument } : {}),
+    })),
+  }));
+  if (!(response instanceof Response)) return response;
   if (response.status === 201 || response.status === 200) {
-    const body = (await response.json()) as { scoreId: string; results: LeaderboardRulesetResult[] };
+    const body = (await response.json()) as { courseScoreId: string; results: CourseLeaderboardRulesetResult[] };
     return { status: response.status === 201 ? 'accepted' : 'duplicate', ...body };
   }
   return { status: 'failed', httpStatus: response.status, error: (await readError(response)) ?? 'unknown' };
+}
+
+/** {@link describeLeaderboardResult} for a course run: the course rank under the ruleset the run was played with. */
+export function describeCourseLeaderboardResult(result: CourseLeaderboardSubmitResult, playedRuleset: string): string {
+  if (result.status === 'failed') return `Leaderboard: course not submitted (${result.error})`;
+  const summary = describeLeaderboardResult(
+    { status: result.status, scoreId: result.courseScoreId, results: result.results },
+    playedRuleset,
+  );
+  return summary.replace(/^Leaderboard /, 'Leaderboard course ');
 }
 
 /**
@@ -151,6 +278,20 @@ export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation,
       return 'Leaderboard: not submitted (this play log has no chart fingerprint)';
     case 'fingerprint-mismatch':
       return 'Leaderboard: not submitted (the chart does not match the recorded play)';
+  }
+}
+
+/** Why a course run was not sent, for the status line. */
+export function describeSkippedCourseSubmission(
+  reason: Exclude<CourseSubmissionPreparation, { ok: true }>['reason'],
+): string {
+  switch (reason) {
+    case 'not-rankable':
+      return 'Leaderboard: course not submitted (auto play and aborted stages are not ranked)';
+    case 'missing-fingerprint':
+      return 'Leaderboard: course not submitted (a stage chart has no fingerprint)';
+    case 'fingerprint-mismatch':
+      return 'Leaderboard: course not submitted (a stage chart does not match the recorded play)';
   }
 }
 
