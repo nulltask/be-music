@@ -170,6 +170,14 @@ import {
   courseRecordKey,
   type CourseStagePlan,
 } from './course-session.ts';
+import {
+  describeCourseTableImportError,
+  importCourseTable,
+  mergeCourseGroup,
+  normalizeCourseTableUrl,
+  readStoredCourseTableUrls,
+  rememberCourseTableUrl,
+} from './course-table-import.ts';
 import { buildNonstopCoursePlaylog, prepareNonstopCourse, type PreparedNonstopCourse } from './nonstop-course.ts';
 import { LR2_COURSE_MAKER_MAX_STAGES, type CourseDefinition } from '@be-music/player/course';
 import { CourseMakerPanel } from './course-maker-panel.ts';
@@ -448,7 +456,10 @@ class PlayerWebDemoApp {
    */
   private readonly sceneHost = new PixiSceneHost();
   private collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
-  /** Course files dropped so far (`.lr2crs`, beatoraja `course/*.json`), resolved into `collection.courseFolders`. */
+  /**
+   * Course files dropped so far (`.lr2crs`, beatoraja `course/*.json`) and courses imported from difficulty-table URLs,
+   * resolved into `collection.courseFolders`.
+   */
   private courseGroups: CourseDefinitionGroup[] = [];
   /** The course being played, between its stages. */
   private courseSession: CourseSession | undefined;
@@ -1033,11 +1044,12 @@ class PlayerWebDemoApp {
     const urlParams = parseUrlMediaParams(window.location.href);
     // `?skin=` is on hold with the other extra skins.
     const mediaParams = EXTRA_SKINS_ENABLED ? urlParams : { ...urlParams, skinUrl: undefined };
-    if (mediaParams.musicUrl || mediaParams.skinUrl) {
-      void initialSelectReady.then(() => this.loadFromUrl(mediaParams));
-    } else {
-      void initialSelectReady;
-    }
+    // Difficulty tables imported in an earlier visit are imported again, after the URL load so their stages match it.
+    const storedCourseTables = readStoredCourseTableUrls();
+    void initialSelectReady.then(async () => {
+      if (mediaParams.musicUrl || mediaParams.skinUrl) await this.loadFromUrl(mediaParams);
+      if (storedCourseTables.length > 0) await this.importCourseTables(storedCourseTables, false);
+    });
   }
 
   private async ensureHostMounted(): Promise<void> {
@@ -1581,6 +1593,20 @@ class PlayerWebDemoApp {
     library.add(urls, 'music').name('Music ZIP URL');
     if (EXTRA_SKINS_ENABLED) library.add(urls, 'skin').name('Skin ZIP URL');
     library.add(urls, 'load').name('Load from URLs');
+    // Courses from a difficulty table's page (or header JSON) URL; the URL is remembered and imported again on load.
+    const courseTable = {
+      url: '',
+      import: () => {
+        const url = normalizeCourseTableUrl(courseTable.url);
+        if (url === undefined) {
+          this.setStatus('Enter a difficulty-table URL first');
+          return;
+        }
+        void this.importCourseTables([url], true);
+      },
+    };
+    library.add(courseTable, 'url').name('Course table URL');
+    library.add(courseTable, 'import').name('Import courses');
     // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
     // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
     // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
@@ -2065,6 +2091,37 @@ class PlayerWebDemoApp {
   }
 
   /**
+   * Imports the courses of difficulty tables by URL into `courseGroups` (replacing a group with the same label), then
+   * matches them against the collection. With `remember`, a table that imported is stored to be imported again on load.
+   */
+  private async importCourseTables(urls: readonly string[], remember: boolean): Promise<void> {
+    let imported = 0;
+    for (const url of urls) {
+      this.setStatus('Fetching course table…');
+      try {
+        const { group } = await importCourseTable(url);
+        this.courseGroups = mergeCourseGroup(this.courseGroups, group);
+        if (remember) rememberCourseTableUrl(url);
+        imported += 1;
+        dropLog.info(`course table: ${url} · ${group.label} · courses=${group.courses.length}`);
+        this.setStatus(`Course table: ${group.label} (${group.courses.length} courses)`);
+      } catch (error) {
+        dropLog.warn(`course table import failed: ${url}`, error);
+        this.setStatus(describeCourseTableImportError(error));
+      }
+    }
+    if (imported === 0) return;
+    await this.refreshCourseFolders();
+    // Re-list the select screen so the new folders show; mid-play they show the next time it opens.
+    const busy =
+      this.elements.shell.classList.contains('playing') ||
+      this.resultView !== undefined ||
+      this.beatorajaResultScene !== undefined ||
+      this.decideView !== undefined;
+    if (!busy) await this.showSelect();
+  }
+
+  /**
    * Matches every dropped course's stages against the collection by chart-file hash and lists them as course folders.
    * Hashing the whole library is cheap (chart files are small) and cached per song.
    */
@@ -2435,6 +2492,7 @@ class PlayerWebDemoApp {
       if (params.musicUrl) {
         this.setStatus('Fetching music…');
         await this.loadSongs([await fetchZipAsFile(params.musicUrl)]);
+        if (this.courseGroups.length > 0) await this.refreshCourseFolders();
         await this.showSelect();
       }
       if (this.collection.songs.length > 0) {
