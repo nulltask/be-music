@@ -237,6 +237,16 @@ export function aggregateCourseResult(
   return result;
 }
 
+/**
+ * A stage the player gave up (ESC, `play.aborted`) did not clear, whatever its gauge stood at: a course given up is
+ * recorded as a failed run, as LR2 does.
+ */
+function givenUpResult(stageLog: BeMusicPlaylog, result: PlaylogRulesetResult): PlaylogRulesetResult {
+  return stageLog.play.aborted === true && result.gauge.cleared
+    ? { ...result, gauge: { ...result.gauge, cleared: false } }
+    : result;
+}
+
 /** The gauge a stage hands on: a stage that ended with its survival gauge empty ends the course. */
 function stageFailed(result: PlaylogRulesetResult): boolean {
   return result.gauge.failedMidPlay === true || result.gauge.final <= 0;
@@ -282,7 +292,7 @@ export function simulateCoursePlaylog(
       };
     }
     stageLog.play.course = course;
-    previous = simulatePlaylog(stageLog, options);
+    previous = givenUpResult(stageLog, simulatePlaylog(stageLog, options));
     stageResults.push(previous);
   }
   const stageNoteCounts = courseLog.stages.map((entry, index) =>
@@ -308,7 +318,12 @@ function nonstopCourseResult(
 ): PlaylogCourseResult {
   const { judge, noteCount } = run;
   const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor;
-  const gauge = { type: run.gauge.type, final: run.gauge.final, cleared: run.gauge.cleared };
+  // A NONSTOP play given up with ESC is a failed run.
+  const gauge = {
+    type: run.gauge.type,
+    final: run.gauge.final,
+    cleared: run.gauge.cleared && courseLog.nonstop?.playlog.play.aborted !== true,
+  };
   const result: PlaylogCourseResult = {
     ruleset: run.ruleset,
     judge: { ...judge },
@@ -371,7 +386,10 @@ export function createCoursePlaylog(options: {
     return log;
   }
   const played = options.stages.filter((entry) => entry.played);
-  const native = played.map((entry) => entry.playlog.results?.native);
+  const native = played.map((entry) => {
+    const result = entry.playlog.results?.native;
+    return result !== undefined ? givenUpResult(entry.playlog, result) : undefined;
+  });
   if (played.length > 0 && native.every((result) => result !== undefined)) {
     const ruleset = played[0]!.playlog.play.judgeRuleset ?? 'lr2';
     const noteCounts = options.stages.map((entry, index) =>
