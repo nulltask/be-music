@@ -74,6 +74,24 @@ beatoraja の**ランダムコース**（`RandomCourseData`）は、曲データ
 
 コースはステージを `charts`（`sha256` を持ちうる表の要素そのもの）または `md5` から取ります。`charts` に hash のない譜面があるコースは読み飛ばします。ヘッダーの `mode`（`beat-7k`、`popn-9k` など）が `keyMode` になります。
 
+#### URL から表を読む
+
+難易度表はふつう HTML ページの URL で共有され、そのページが `<meta name="bmstable" content="header.json">` でヘッダーを指しています。`fetchTableHeaderCourses(url, fetchText)` は、このページの URL か、ヘッダー JSON の URL そのものからコースを読み込みます。
+
+```mermaid
+flowchart TD
+  url["表の URL"] -->|fetchText| body["レスポンス本文"]
+  body -->|JSON オブジェクト| header["header.json"]
+  body -->|HTML| meta["resolveTableHeaderUrl<br/>(bmstable meta)"]
+  meta -->|fetchText| header
+  header -->|parseTableHeaderCourses| result["ラベル + コース"]
+```
+
+- `resolveTableHeaderUrl(pageUrl, html)` は `bmstable` の meta を探し（属性の順序、引用符、大文字小文字は問いません）、`content` をページの URL から解決します。なければ `undefined` を返します。
+- ラベルはヘッダーの `name`、なければ `symbol`、それもなければ URL のホストです。コースのグループは 1 つのリストに平らにします。
+- 取得するのはヘッダーだけです。`data_url` の曲リストは読みません。
+- `fetchText` は呼び出し側が渡すので、モジュールはランタイム非依存のままです。ブラウザのホストは `fetch` を包み、CLI はディスクやネットワークから読めます。取得のエラーはそのまま投げ、ヘッダーのないページや JSON オブジェクトでないヘッダーは例外になります。
+
 ## ステージを探す
 
 `resolveCourseStages(course, lookup)` は各ステージを手元の譜面に対応させます。ステージが SHA-256 を持てば SHA-256 で、なければ MD5 で照合します。beatoraja の `TableBar` と同じです。両方を持つステージは、SHA-256 に一致する譜面がなければ MD5 で探し直します。ステージが欠けたコースも一覧には出しますが `playable` にはなりません。LR2 はそのステージを「この曲を所持していません」と表示し、beatoraja はコースを開始しません。

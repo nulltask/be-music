@@ -234,6 +234,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseApi.parseTableHeaderCourses(benchTableHeader);
     },
   });
+  const benchTablePageUrl = 'https://example.com/table/table.html';
+  const benchTablePage = `<html><head><meta charset="utf-8"><meta content="header.json" name="bmstable"></head></html>`;
+  const benchTableHeaderText = JSON.stringify({ name: 'Bench table', ...benchTableHeader });
+  // A stub instead of the network: benchmarks must not fetch.
+  const benchTableFetch = async (url: string): Promise<string> =>
+    url === benchTablePageUrl ? benchTablePage : benchTableHeaderText;
+  define('player.course.resolveTableHeaderUrl', {
+    run: () => {
+      courseApi.resolveTableHeaderUrl(benchTablePageUrl, benchTablePage);
+    },
+  });
+  define('player.course.fetchTableHeaderCourses', {
+    run: async () => {
+      await courseApi.fetchTableHeaderCourses(benchTablePageUrl, benchTableFetch);
+    },
+  });
   define('player.course.resolveCourseStages', {
     run: () => {
       courseApi.resolveCourseStages(benchCourse, { bySha256: () => 'chart', byMd5: () => 'chart' });
