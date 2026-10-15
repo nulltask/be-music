@@ -8,3 +8,4 @@ export * from './filter.ts';
 export * from './random.ts';
 export * from './nonstop/plan.ts';
 export * from './nonstop/stage.ts';
+export * from './nonstop/compose.ts';

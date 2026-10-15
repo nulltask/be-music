@@ -91,7 +91,7 @@ flowchart LR
 
 ## NONSTOP courses
 
-An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBmsFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). NONSTOP is LR2-only and BMS-only. This section covers how the stages are placed; playing the stitched chart is not built yet.
+An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBmsFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). NONSTOP is LR2-only and BMS-only. This section covers how the stages are placed and stitched; playing the stitched chart in a host is not built yet.
 
 **Connections.** Each stage but the last has a connection to the next, stored in the first ten characters of the course hash (`courseKeys`, `0`-`5`) and read by `parseLr2NonstopConnections` into `CourseDefinition.connections`:
 
@@ -120,6 +120,16 @@ flowchart LR
 - The positions LR2 keeps as 32-bit floats are rounded the same way. OpenLR2 truncates the previous stage's last-measure time to an integer; the binary keeps it a float.
 
 **LR2 placement.** `planNonstopCourse(..., { placement: 'lr2' })` follows the binary exactly, including what looks like a bug. LR2 never updates its `lastMeasure` after cutting a stage, so from the third stage on a stage starts at the previous stage's line _before_ that stage was cut: its time origin runs on by the previous cut at its own BPM and measure-0 length, and it is then cut by both. The result matches the intended placement while the tempo and measure lengths stay the same, and moves the stage when its first measures differ (by the previous cut × the difference). This placement also takes the first note as LR2's loader reads it: the first visible note in file order, lowered by any object on a later line. The default `'intended'` placement starts each stage where the previous one was placed and takes the first visible note.
+
+**Stitching** (`stitchNonstopCourse`). The placed stages become one BMS chart that the engine plays as a single chart:
+
+- **Time-based scroll.** LR2 scrolls a NONSTOP play by time, a constant 150-BPM scroll ([L26529](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26529), [L27067](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27067)). The stitched chart therefore runs at 150 BPM, and each object sits where its own stage's timing (and FIT) puts it, to 1/9600 of a measure (about 0.17 ms).
+- **Windows.** Each stage owns the time from the previous boundary to its own. Its bar lines there (from the one nearest its first note) become the stitched measures, and its STOPs there freeze the scroll. Notes, invisible notes, mines, BGM and BGA keep their place wherever they fall.
+- **The seam.** A later stage's note that lands more than 0.1 s before the previous stage's last note head, or within 0.1 s of it on a lane an earlier stage also used then, becomes background sound. A long note converted this way keeps only its head's sound ([L26988-L27010](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26988-L27010)).
+- **Keys.** Every stage's keysound, BGA and STOP keys are renumbered into one base-62 space (`#BASE 62`). A course that needs more than 3843 of one kind is refused (`id-space`). Mines keep their value, which is their damage.
+- **Rank and TOTAL.** The first stage's `#RANK` and the last stage's `#TOTAL` are used; LR2 overwrites TOTAL stage by stage.
+- **For the host.** The result's map gives each stage its keys (for its sound bus and BGA layer), its window, the sound fades and the 3 s BGA crossfade the connection calls for, and whether LR2 announces the stage (only after a BLANK connection). `assetPath` lets the host prefix each stage's file paths.
+- **Not covered yet.** The judge rank change LR2 applies when a later stage starts, the BPM readout (the stitched chart shows 150), and the scroll of an object of one stage that sounds during another stage's STOP. Only BMS stages can be stitched.
 
 ## Finding the stages
 
