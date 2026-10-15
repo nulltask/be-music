@@ -1504,6 +1504,7 @@ class PlayerWebDemoApp {
       .name('Enabled')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressor(value);
+        this.beatorajaGameplayPrep?.audioBus.setMode(value ? this.compressorMode : 'off');
         this.refreshCompressorStageVisibility();
       });
     const stages = addFolder(compressor, DEBUG_MENU_FOLDERS.compressorStages);
@@ -1513,18 +1514,21 @@ class PlayerWebDemoApp {
       .name('Key')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('key', value);
+        this.beatorajaGameplayPrep?.audioBus.setStageEnabled('key', value);
       });
     stages
       .add(this.guiState, 'compressorBgm')
       .name('BGM')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('bgm', value);
+        this.beatorajaGameplayPrep?.audioBus.setStageEnabled('bgm', value);
       });
     stages
       .add(this.guiState, 'compressorMaster')
       .name('Master')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('master', value);
+        this.beatorajaGameplayPrep?.audioBus.setStageEnabled('master', value);
       });
     this.buildCompressorTuningGui(compressor);
   }
@@ -3283,6 +3287,12 @@ class PlayerWebDemoApp {
         audioBusOptions: {
           initialVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
           initialCompressorParams: this.resolveCompressorParamOverrides(),
+          // The Debug Menu's per-stage compressor toggles, as the LR2 / default play takes them.
+          initialStages: {
+            key: this.guiState.compressorKey,
+            bgm: this.guiState.compressorBgm,
+            master: this.guiState.compressorMaster,
+          },
         },
         ...(preResolved !== undefined ? { preResolved } : {}),
         bgaTranscode: {
