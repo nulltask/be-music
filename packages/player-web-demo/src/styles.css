@@ -2612,15 +2612,6 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   text-underline-offset: 3px;
 }
 
-.skin-offer-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.skin-offer-buttons > button {
-  width: 100%;
-}
-
 /*
  * "Drop a skin" prompt: the drop card's look, as a modal over the page.
  * Drops on it bubble to the window's drop handler like any other.
