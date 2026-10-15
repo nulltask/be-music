@@ -43,7 +43,8 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `endOnFailure` (the play ended the moment its survival gauge emptied; absent on logs from before that, which kept
    judging), `tempo` (the play tempo, `PlayerOptions.speed`, when it was not 1: the chart, its audio and the clock ran
    `tempo` times as fast; judgments and input times stay in chart time, so a re-simulation ignores it and a replay plays
-   back at it; absent = 1, and such a practice play is not ranked), `course` for a course stage (its kind, the course's gauge set and judge constraint, and `carryIn`: the
+   back at it; absent = 1, and on a log re-recorded from a replay, whose speed only sets how fast it is re-driven; such a
+   practice play is not ranked), `course` for a course stage (its kind, the course's gauge set and judge constraint, and `carryIn`: the
    gauge value, course combo and course max combo the previous stage left), and `randomDraws`: the play's `#RANDOM` /
    `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes as a `RandomDraws` value (`@be-music/chart`), one
    `{ command, range, value }` entry per such line of the chart in file order. They are the
@@ -201,7 +202,7 @@ flowchart TD
 
 - `nonstop.playlog`: the play of the stitched chart, as recorded. It is what was judged, and `simulateCoursePlaylog` takes the course result from it: its judgments, gauge and max combo, with BP counting every note it never judged.
 - `nonstop.connections` and `nonstop.placement`: how the chart was stitched.
-- `nonstop.stages`: where each stage sat in the play (`offsetUs`, its window `windowStartUs` / `windowEndUs`, its FIT `rate`).
+- `nonstop.stages`: where each stage sat in the play (`offsetUs`, its window `windowStartUs` / `windowEndUs`, its FIT `rate`), and the `#RANDOM` / `#SWITCH` draws its chart was resolved with before stitching (`randomDraws`, as `play.randomDraws` records a single play's; absent for a chart without control flow). With the stage charts, the draws rebuild the stitched chart.
 - `nonstop.noteStages`: the stage of each note of the play, by note id (`resolveNonstopNoteStages` reads it from the stitched chart's per-stage keys).
 
 `stages` still holds one entry per stage. Each reached stage is cut out of the play by `splitNonstopPlaylog`:
@@ -210,7 +211,11 @@ flowchart TD
 - a press goes to the stage of the nearest note on its lanes, and a release with its press;
 - `play.course.carryIn` is the state the stitched play was in when the stage began (the play simulated up to the stage's window).
 
-So `extractCourseStage` still gives a single-chart log that replays on its own; at the seams its judgments can differ from the stitched play. The Leaderboard does not rank NONSTOP runs yet (`checkCoursePlaylogEligibility` refuses them as `nonstop`).
+- its `chart.chartFingerprint` names the stage's chart, as an unreached stage's `chartFingerprint` does, so the course is keyed like any other.
+
+So `extractCourseStage` still gives a single-chart log that replays on its own; at the seams its judgments can differ from the stitched play.
+
+`checkCoursePlaylogEligibility` checks a NONSTOP run on its stitched play: it must pass the single-play check (auto play is refused; an ESC abort is a failed run), carry `play.course.kind: 'nonstop'`, and its `nonstop.stages` must cover every stage of the course. Every stage must still name its chart. The result carries the stitched play's fingerprints as `nonstop`, and `stages` is empty: the stages were not played on their own, so a verifier rebuilds them from their charts (`resolvePlayChart` with the recorded draws, then `stitchNonstopCourse`; see [Leaderboard design](./leaderboard.md#61-course-rankings)).
 
 ## CLI
 

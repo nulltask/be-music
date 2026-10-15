@@ -88,7 +88,7 @@ export function displayRuleset(c: Context) {
   return resolveDisplayRuleset(getCookie(c, RULESET_COOKIE));
 }
 
-export function notFound(c: Context<AppEnv>, kind: 'chart' | 'chartset' | 'player' | 'score' | 'page') {
+export function notFound(c: Context<AppEnv>, kind: 'chart' | 'chartset' | 'course' | 'player' | 'score' | 'page') {
   const t = pageMessages(c).notFound;
   const what = t[kind];
   return c.html(

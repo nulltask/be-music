@@ -8,7 +8,11 @@ import {
 } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
-import { checkCoursePlaylogEligibility, type BeMusicCoursePlaylog } from '@be-music/player/playlog';
+import {
+  checkCoursePlaylogEligibility,
+  resolveCourseStageChartFingerprints,
+  type BeMusicCoursePlaylog,
+} from '@be-music/player/playlog';
 import { checkPlaylogEligibility, type BeMusicPlaylog } from '@be-music/player-web/runtime';
 
 /** What the Leaderboard API needs for one play (docs/leaderboard.md section 5.1). */
@@ -152,10 +156,15 @@ async function postWithChartDocuments(
   return response;
 }
 
-/** What the Leaderboard API needs for one course run: the course play log and each played stage's documents. */
+/**
+ * What the Leaderboard API needs for one course run: the course play log, each played stage's documents, and the charts
+ * of the stages the server rebuilds (every unreached stage, and every stage of a NONSTOP run).
+ */
 export interface CourseLeaderboardSubmission {
   coursePlaylog: BeMusicCoursePlaylog;
+  /** One entry per played stage; none for a NONSTOP run. */
   stages: Array<{ playDocument: BeMusicFingerprintDocument; chartDocument: BeMusicFingerprintDocument }>;
+  stageCharts: Array<{ stage: number; chart: BeMusicJson; pms?: boolean }>;
 }
 
 export type CourseSubmissionPreparation =
@@ -165,8 +174,11 @@ export type CourseSubmissionPreparation =
 /**
  * Builds the submission of a finished course run: the course play log, with the fingerprint documents of each played
  * stage rebuilt from the stage's chart as the course played it (`stageCharts`, one per course stage, in order) and
- * checked like a single play's. Runs the server would refuse outright (auto play, an aborted stage, a stage chart
- * without its fingerprint) are skipped here (`checkCoursePlaylogEligibility`).
+ * checked like a single play's, and the chart of each stage the server rebuilds itself: every stage the run never
+ * reached (the server checks the notes they count as BP), and every stage of a NONSTOP run (the server stitches them
+ * again; a NONSTOP run sends no documents). Each such chart must hash to the chart fingerprint the log names for its
+ * stage. Runs the server would refuse outright (auto play, an aborted stage, a stage chart without its fingerprint) are
+ * skipped here (`checkCoursePlaylogEligibility`).
  */
 export function prepareCourseLeaderboardSubmission(
   coursePlaylog: BeMusicCoursePlaylog,
@@ -176,18 +188,31 @@ export function prepareCourseLeaderboardSubmission(
   if (!eligibility.eligible) {
     return { ok: false, reason: skippedReason(eligibility.reason) };
   }
+  const nonstop = eligibility.nonstop !== undefined;
   const stages: CourseLeaderboardSubmission['stages'] = [];
+  const rebuilt: CourseLeaderboardSubmission['stageCharts'] = [];
+  const chartFingerprints = resolveCourseStageChartFingerprints(coursePlaylog);
   for (const [index, entry] of coursePlaylog.stages.entries()) {
-    if (!entry.played) break;
     const stageChart = stageCharts[index];
-    const documents =
-      stageChart === undefined
-        ? undefined
-        : rebuildDocuments(entry.playlog, stageChart.chart, stageChart.chartPath, eligibility.stages[index]!);
-    if (documents === undefined) return { ok: false, reason: 'fingerprint-mismatch' };
-    stages.push(documents);
+    if (stageChart === undefined) return { ok: false, reason: 'fingerprint-mismatch' };
+    if (entry.played && !nonstop) {
+      const documents = rebuildDocuments(
+        entry.playlog,
+        stageChart.chart,
+        stageChart.chartPath,
+        eligibility.stages[index]!,
+      );
+      if (documents === undefined) return { ok: false, reason: 'fingerprint-mismatch' };
+      stages.push(documents);
+      continue;
+    }
+    if (courseStageChartFingerprint(stageChart) !== chartFingerprints[index]) {
+      return { ok: false, reason: 'fingerprint-mismatch' };
+    }
+    const pms = stageChart.chartPath?.toLowerCase().endsWith('.pms') === true;
+    rebuilt.push({ stage: index, chart: stageChart.chart, ...(pms ? { pms } : {}) });
   }
-  return { ok: true, submission: { coursePlaylog, stages } };
+  return { ok: true, submission: { coursePlaylog, stages, stageCharts: rebuilt } };
 }
 
 /**
@@ -218,7 +243,8 @@ export type CourseLeaderboardSubmitResult =
 
 /**
  * Sends one course run to the Leaderboard (`POST /api/v0/course-scores`), signing in anonymously when needed and
- * resending with every stage's chart document when the server does not know a stage chart.
+ * resending with every stage's chart document when the server does not know a stage chart. The stage charts the server
+ * rebuilds go with every request.
  */
 export async function submitCourseToLeaderboard(
   submission: CourseLeaderboardSubmission,
@@ -230,6 +256,7 @@ export async function submitCourseToLeaderboard(
       playDocument: stage.playDocument,
       ...(withChartDocuments ? { chartDocument: stage.chartDocument } : {}),
     })),
+    stageCharts: submission.stageCharts,
   }));
   if (!(response instanceof Response)) return response;
   if (response.status === 201 || response.status === 200) {

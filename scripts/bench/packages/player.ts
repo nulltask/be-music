@@ -31,6 +31,8 @@ export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
     'playlog.resolveNonstopPlaylogStages': playlogApi.resolveNonstopPlaylogStages,
     'playlog.resolveNonstopNoteStages': playlogApi.resolveNonstopNoteStages,
     'playlog.splitNonstopPlaylog': playlogApi.splitNonstopPlaylog,
+    'playlog.resolveChartRulesetFacts': playlogApi.resolveChartRulesetFacts,
+    'playlog.resolvePlayChart': playlogApi.resolvePlayChart,
     'playlog.computeScoreRate': playlogApi.computeScoreRate,
     'playlog.resolveIidxRankLabel': playlogApi.resolveIidxRankLabel,
   },

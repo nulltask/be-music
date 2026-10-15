@@ -1,3 +1,4 @@
+import type { RandomDraw } from '@be-music/chart';
 import type { PlaylogRecorderInfo, PlaylogRulesetResult } from './format.ts';
 
 /** Structural problem in a serialized play log (or course play log), with the field path in the message. */
@@ -102,4 +103,29 @@ export function expectFiniteNumber(value: unknown, path: string): number {
 export function optionalFiniteNumber(value: unknown, path: string): number | undefined {
   if (value === undefined) return undefined;
   return expectFiniteNumber(value, path);
+}
+
+const RANDOM_DRAW_COMMANDS: ReadonlySet<string> = new Set(['RANDOM', 'SETRANDOM', 'SWITCH', 'SETSWITCH']);
+
+/** Parses a list of `#RANDOM` / `#SWITCH` draws (`play.randomDraws`, a NONSTOP stage's `randomDraws`) at `at`. */
+export function parseRandomDraws(value: unknown, at: string): RandomDraw[] {
+  if (!Array.isArray(value)) {
+    throw new PlaylogParseError(`${at}: expected an array`);
+  }
+  return value.map((entry: unknown, index): RandomDraw => {
+    const path = `${at}[${index}]`;
+    const draw = expectRecord(entry, path);
+    const { command, range, value: drawn } = draw;
+    if (typeof command !== 'string' || !RANDOM_DRAW_COMMANDS.has(command)) {
+      throw new PlaylogParseError(`${path}.command: expected 'RANDOM' | 'SETRANDOM' | 'SWITCH' | 'SETSWITCH'`);
+    }
+    if (typeof range !== 'number' || !Number.isInteger(range) || range < 1) {
+      throw new PlaylogParseError(`${path}.range: expected a positive integer`);
+    }
+    const fixed = command === 'SETRANDOM' || command === 'SETSWITCH';
+    if (typeof drawn !== 'number' || !Number.isInteger(drawn) || drawn < 1 || (fixed ? range !== 1 : drawn > range)) {
+      throw new PlaylogParseError(`${path}.value: expected an integer in 1..range (range 1 for a #SET… line)`);
+    }
+    return { command: command as RandomDraw['command'], range, value: drawn };
+  });
 }

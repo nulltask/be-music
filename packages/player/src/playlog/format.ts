@@ -9,6 +9,7 @@ import {
   expectString,
   optionalFiniteNumber,
   optionalString,
+  parseRandomDraws,
   parseRecorder,
   parseResults,
   PlaylogParseError,
@@ -180,7 +181,8 @@ export interface PlaylogPlay {
   /**
    * The play tempo (`PlayerOptions.speed`): the chart, its audio and the play clock ran `tempo` times as fast (0.5 to
    * 1.5 in the web player). Judgments and input times stay in chart time, so a re-simulation is unaffected; a replay
-   * plays back at the same tempo. Absent = 1. A play at another tempo is a practice play and is not ranked.
+   * plays back at the same tempo. Absent = 1, and on a log re-recorded from a replay (`replayInputs`), whose speed only
+   * sets how fast it is re-driven. A play at another tempo is a practice play and is not ranked.
    */
   tempo?: number;
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
@@ -550,7 +552,7 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     parsed.judgeRuleset = play.judgeRuleset;
   }
   if (play.randomDraws !== undefined) {
-    parsed.randomDraws = parseRandomDraws(play.randomDraws);
+    parsed.randomDraws = parseRandomDraws(play.randomDraws, 'play.randomDraws');
   }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
@@ -605,28 +607,4 @@ function parseCourseStage(course: Record<string, unknown>): PlaylogCourseStage {
   }
   if (course.rate !== undefined) parsed.rate = expectFiniteNumber(course.rate, 'play.course.rate');
   return parsed;
-}
-
-const RANDOM_DRAW_COMMANDS: ReadonlySet<string> = new Set(['RANDOM', 'SETRANDOM', 'SWITCH', 'SETSWITCH']);
-
-function parseRandomDraws(value: unknown): RandomDraw[] {
-  if (!Array.isArray(value)) {
-    throw new PlaylogParseError('play.randomDraws: expected an array');
-  }
-  return value.map((entry: unknown, index): RandomDraw => {
-    const path = `play.randomDraws[${index}]`;
-    const draw = expectRecord(entry, path);
-    const { command, range, value: drawn } = draw;
-    if (typeof command !== 'string' || !RANDOM_DRAW_COMMANDS.has(command)) {
-      throw new PlaylogParseError(`${path}.command: expected 'RANDOM' | 'SETRANDOM' | 'SWITCH' | 'SETSWITCH'`);
-    }
-    if (typeof range !== 'number' || !Number.isInteger(range) || range < 1) {
-      throw new PlaylogParseError(`${path}.range: expected a positive integer`);
-    }
-    const fixed = command === 'SETRANDOM' || command === 'SETSWITCH';
-    if (typeof drawn !== 'number' || !Number.isInteger(drawn) || drawn < 1 || (fixed ? range !== 1 : drawn > range)) {
-      throw new PlaylogParseError(`${path}.value: expected an integer in 1..range (range 1 for a #SET… line)`);
-    }
-    return { command: command as RandomDraw['command'], range, value: drawn };
-  });
 }

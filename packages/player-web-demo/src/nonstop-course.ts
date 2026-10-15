@@ -1,8 +1,15 @@
+import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
-import { stitchNonstopCourse, type NonstopConnection, type NonstopStitchMap } from '@be-music/player/course';
-import { resolveChartRulesetFacts, resolvePlayChart } from '@be-music/player/core/engine';
+import {
+  applyCourseLongNoteConstraint,
+  stitchNonstopCourse,
+  type NonstopConnection,
+  type NonstopStitchMap,
+} from '@be-music/player/course';
 import {
   createCoursePlaylog,
+  resolveChartRulesetFacts,
+  resolvePlayChart,
   resolveNonstopNoteStages,
   resolveNonstopPlaylogStages,
   splitNonstopPlaylog,
@@ -12,7 +19,6 @@ import {
   type PlaylogCourseStageEntry,
 } from '@be-music/player/playlog';
 import {
-  applyCourseLongNoteConstraint,
   createNonstopAssets,
   NONSTOP_CHART_PATH,
   type BrowserCourseEntry,
@@ -31,6 +37,8 @@ export interface PreparedNonstopCourse {
   placement: 'intended' | 'lr2';
   /** Each stage's chart as played: control flow resolved, the course's long-note constraint applied. */
   stageCharts: BeMusicJson[];
+  /** The `#RANDOM` / `#SWITCH` draws each stage chart was resolved with (the Leaderboard rebuilds the stitch with them). */
+  stageDraws: RandomDraws[];
   /** What a cut-out stage log names its chart by. */
   stageFacts: NonstopStageChartFacts[];
 }
@@ -41,13 +49,16 @@ export type NonstopPrepareFailure = 'missing-stage' | 'bmson' | 'id-space' | 'no
 /**
  * Stitches a NONSTOP course from the collection: resolves each stage's `#RANDOM` (with `random`), applies the course's
  * long-note constraint, finds each stage's files in its own source and stitches the stages with the course's
- * connections (`stitchNonstopCourse`).
+ * connections (`stitchNonstopCourse`). The Leaderboard rebuilds the stitched chart the same way from the stage charts and
+ * the draws, so the steps here must stay the ones it takes (`checkNonstopStageCharts` in `@be-music/leaderboard-api`).
+ * `chartFingerprintOf` names each stage's chart in the course play log, which keys the course on the Leaderboard.
  */
 export function prepareNonstopCourse(
   course: BrowserCourseEntry,
   options: {
     sourceOf: (song: BrowserSongEntry) => BrowserSongAssetSource | undefined;
     hashesOf?: (song: BrowserSongEntry) => { sha256?: string; md5?: string } | undefined;
+    chartFingerprintOf?: (stage: { chart: BeMusicJson; chartPath: string | undefined }) => string | undefined;
     placement?: 'intended' | 'lr2';
     random?: () => number;
   },
@@ -57,9 +68,8 @@ export function prepareNonstopCourse(
   const missing = songs.findIndex((song, index) => song === undefined || sources[index] === undefined);
   if (missing >= 0) return { ok: false, reason: 'missing-stage', stage: missing };
   const random = options.random ?? Math.random;
-  const stageCharts = songs.map((song) =>
-    applyCourseLongNoteConstraint(resolvePlayChart(song!.chart, { random }).chart, course.definition.constraints),
-  );
+  const resolved = songs.map((song) => resolvePlayChart(song!.chart, { random }));
+  const stageCharts = resolved.map(({ chart }) => applyCourseLongNoteConstraint(chart, course.definition.constraints));
   const assets = createNonstopAssets(
     songs.map((song, index) => ({ chart: stageCharts[index]!, source: sources[index]!, chartPath: song!.chartPath })),
   );
@@ -93,10 +103,13 @@ export function prepareNonstopCourse(
       connections,
       placement,
       stageCharts,
+      stageDraws: resolved.map(({ randomDraws }) => randomDraws),
       stageFacts: songs.map((stage) => {
         const hashes = options.hashesOf?.(stage!);
+        const chartFingerprint = options.chartFingerprintOf?.({ chart: stage!.chart, chartPath: stage!.chartPath });
         return {
           title: stage!.title,
+          ...(chartFingerprint !== undefined ? { chartFingerprint } : {}),
           ...(stage!.subtitle !== undefined ? { subtitle: stage!.subtitle } : {}),
           ...(stage!.artist !== undefined ? { artist: stage!.artist } : {}),
           ...(hashes?.sha256 !== undefined ? { sha256: hashes.sha256 } : {}),
@@ -118,7 +131,7 @@ export function buildNonstopCoursePlaylog(
   options: { createdAt?: string; recorder?: BeMusicPlaylog['recorder'] } = {},
 ): BeMusicCoursePlaylog {
   const noteStages = resolveNonstopNoteStages(prepared.song.chart, prepared.map, playlog.chart.notes);
-  const stages = resolveNonstopPlaylogStages(prepared.map);
+  const stages = resolveNonstopPlaylogStages(prepared.map, prepared.stageDraws);
   const cut = splitNonstopPlaylog({ playlog, stages, noteStages }, prepared.stageFacts, {
     ruleset: playlog.play.judgeRuleset ?? 'lr2',
   });
@@ -131,6 +144,7 @@ export function buildNonstopCoursePlaylog(
       facts: resolveChartRulesetFacts(chart, { laneModeExtension: course.stages[index]?.song?.chartPath }),
       ...(facts?.sha256 !== undefined ? { sha256: facts.sha256 } : {}),
       ...(facts?.md5 !== undefined ? { md5: facts.md5 } : {}),
+      ...(facts?.chartFingerprint !== undefined ? { chartFingerprint: facts.chartFingerprint } : {}),
     };
   });
   const { definition } = course;

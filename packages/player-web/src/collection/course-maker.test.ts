@@ -46,7 +46,7 @@ describe('CourseMaker', () => {
     courses.start('expert');
     await courses.append(SEVEN[2]!);
     const second = courses.finish()!;
-    expect(second.name).toBe('EXPERT COURSE 1');
+    expect(second.name).toBe('COURSE 1');
     expect(courses.courses).toEqual([second, saved]);
     expect(changes).toContain('courses');
     expect(changes).toContain('settings');
@@ -103,7 +103,7 @@ describe('resolveCourseMakerFolders', () => {
     courses.finish();
     const lookup = createSongHashLookup(SEVEN.map((entry) => ({ song: entry, md5: MD5.get(entry.id)! })));
     const folders = resolveCourseMakerFolders(courses.courses, lookup);
-    expect(folders.map((folder) => folder.label)).toEqual(['EXPERT COURSE', 'NONSTOP COURSE', 'GRADE COURSE']);
+    expect(folders.map((folder) => folder.label)).toEqual(['MY COURSES', 'MY NONSTOP', 'MY DAN']);
     const [made, add] = folders[0]!.courses!;
     expect(made).toMatchObject({ editable: true, playable: true, stages: [{ title: 'A' }] });
     expect(add).toMatchObject({ newCourse: true, definition: { kind: 'expert', name: 'NEW COURSE' } });

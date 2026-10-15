@@ -290,28 +290,5 @@ export function isCourseHiSpeedLocked(constraints: readonly CourseConstraint[]):
   return constraints.includes('no_speed');
 }
 
-/**
- * Applies a course's long-note constraint (`ln` / `cn` / `hcn`) to a stage chart that leaves its long-note mode
- * undefined, as beatoraja forces `lnmode` for such charts. A chart that names its own mode (`#LNMODE`, bmson `ln_type`)
- * keeps it. Returns the chart unchanged when nothing applies, else a copy.
- */
-export function applyCourseLongNoteConstraint(
-  json: BeMusicJson,
-  constraints: readonly CourseConstraint[],
-): BeMusicJson {
-  const mode = constraints.includes('ln')
-    ? 1
-    : constraints.includes('cn')
-      ? 2
-      : constraints.includes('hcn')
-        ? 3
-        : undefined;
-  if (mode === undefined) return json;
-  if (json.sourceFormat === 'bms') {
-    if (json.bms.lnMode !== undefined) return json;
-    return { ...json, bms: { ...json.bms, lnMode: mode } };
-  }
-  const lnType = json.bmson.info.lnType;
-  if (lnType !== undefined && lnType !== 0) return json;
-  return { ...json, bmson: { ...json.bmson, info: { ...json.bmson.info, lnType: mode } } };
-}
+/** Moved to `@be-music/player/course`; re-exported here for the hosts that import it from the collection. */
+export { applyCourseLongNoteConstraint } from '@be-music/player/course';

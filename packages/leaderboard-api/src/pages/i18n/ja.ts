@@ -101,6 +101,9 @@ export const ja: Messages = {
     empty: 'まだプレイがありません。',
     emptyNamed:
       'アカウントを持つプレイヤーのプレイがここに表示されます。匿名のプレイも見るには「匿名プレイヤー」をオンにしてください。',
+
+    runs: '最新のコースプレイ',
+    runsLead: (rules) => `段位認定・エキスパート・ノンストップコースのプレイ（${rules}で計算）。`,
   },
   filters: {
     everyPlay: 'すべてのプレイ',
@@ -153,6 +156,57 @@ export const ja: Messages = {
     notListedSignIn: 'ログインすると自分の記録を見られます。',
     notListedEmpty: '公開されると、ここに記録が表示されます。',
   },
+  course: {
+    description: (name, rules, players) => `${name} — ${rules}でのコースランキング（${players} 人）。`,
+    kinds: { grade: '段位認定', expert: 'エキスパートコース', nonstop: 'ノンストップコース' },
+    stages: (count) => `${count} ステージ`,
+    stats: { players: 'プレイヤー', runs: 'プレイ', firstRun: '初プレイ', lastRun: '最終プレイ' },
+    ranking: 'ランキング',
+    rankingHelp:
+      'コース全体のベスト EX スコアの順です。行を開くと、その記録を出したプレイが表示されます。ランプと BP はベストランプと最少 BP で、別のプレイの記録のこともあります。',
+    clearLamps: 'クリアランプ',
+    clearLampsLead: (rules) => `上のプレイヤーのコースのベストランプ（${rules}）。`,
+    stageList: 'ステージ',
+    stageListLead: 'コースの譜面をプレイする順に並べています。開くとその譜面のランキングが表示されます。',
+    stageLabel: (stage) => `${stage} 曲目`,
+    unknownChart: '単曲ではまだプレイされていない譜面',
+    details: 'コース',
+    rows: {
+      kind: '種類',
+      constraints: '制約',
+      stages: 'ステージ数',
+      fingerprint: 'コース ID',
+      firstRun: '初プレイ',
+    },
+    noConstraints: 'なし',
+  },
+  courseRun: {
+    crumb: (name) => `${name} のプレイ`,
+    runBy: 'プレイヤー:',
+    stagesReached: 'ステージ',
+    stagesOf: (reached, total) => `${reached} / ${total}`,
+    trophy: 'トロフィー',
+    noTrophy: 'なし',
+    stages: 'ステージ',
+    stagesLead: (rules) =>
+      `ステージごとの結果（${rules}）。ゲージは次のステージに引き継いだ値です。BP には落ちたステージで判定されなかったノーツも数えます。`,
+    notReached: '未到達',
+    noBreakdown: 'このプレイは、ステージごとの結果を残す前に記録されました。',
+    details: 'プレイ',
+    course: 'コース',
+    playLog: 'プレイログ',
+    downloadPlayLog: 'コースのプレイログをダウンロード',
+    hiddenTitle: 'このプレイは非表示です',
+    hiddenLead:
+      'あなただけが見られます。表示に戻すまで、コースのランキング・自己ベスト・すべてのリストから外れています。',
+    notPublicTitle: 'このプレイは公開されていません',
+    visibility: '表示',
+    visibilityShownLead:
+      '非表示にすると、このプレイはコースのランキング・自己ベスト・すべてのリストから外れます。プレイは残り、いつでも表示に戻せます。',
+    visibilityHiddenLead: '表示に戻すと、コースのランキング・自己ベスト・リストに再び載ります。',
+    hide: 'このプレイを非表示にする',
+    show: 'このプレイを表示に戻す',
+  },
   lists: {
     ranking: 'ランキング',
     latestPlays: '最新のプレイ',
@@ -166,6 +220,13 @@ export const ja: Messages = {
     fewerMisses: '自己ベストより少ないミス数',
     anonymous: '匿名',
     assist: 'アシスト',
+    latestRuns: '最新のコースプレイ',
+    noRuns: 'まだコースのプレイがありません',
+    runOfPlayer: (name, rank) => `${name} のコースプレイ（${rank} 位）`,
+    runOfCourse: (course, name) => `${name} による ${course} のプレイ`,
+    rankAmongOnCourse: (players) => `このコースの ${players} 人中の順位`,
+    stagesReached: (reached, total) => `${reached} / ${total} ステージ`,
+    onlyYouRun: 'このプレイは、ランキングとリストではあなたにだけ表示されています。',
   },
   visibility: {
     sentences: (parts) => parts.join(''),
@@ -224,6 +285,7 @@ export const ja: Messages = {
     chartset: 'この作品',
     player: 'このプレイヤー',
     score: 'このスコア',
+    course: 'このコース',
     page: 'このページ',
   },
   player: {
@@ -248,6 +310,7 @@ export const ja: Messages = {
     playsUnder: (rules, plays) => `${rules}: ${plays} プレイ`,
     latestPlays: '最新のプレイ',
     empty: 'まだプレイがありません。',
+    latestRuns: '最新のコースプレイ',
   },
   judgments: {
     title: '判定',
