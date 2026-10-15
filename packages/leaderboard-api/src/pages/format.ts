@@ -1,5 +1,5 @@
 import { ClearLamp } from '../scoring/lamp.ts';
-import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
+import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/playlog';
 import { en, type Messages } from './i18n/en.ts';
 
 /** Display name and colour of each clear lamp, LR2 / beatoraja style. */
