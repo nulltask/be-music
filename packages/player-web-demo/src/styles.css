@@ -2817,3 +2817,7 @@ html.touch-first .search-input.search-inline:focus {
   font-weight: 600;
   letter-spacing: 0.04em;
 }
+.course-maker-constraints {
+  display: grid;
+  gap: 6px;
+}
