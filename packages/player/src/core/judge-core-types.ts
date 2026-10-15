@@ -41,8 +41,6 @@ export interface JudgeCoreConfig {
   invisibleNotes: TimedPlayableNote[];
   /** Notes whose keysound a note-less press plays (LR2 lane-sound hold). */
   laneSoundNotes: readonly TimedPlayableNote[];
-  /** FREE ZONE channels: a note-less press there plays its keysound and never charges an empty POOR. */
-  freeZoneChannels: ReadonlySet<string>;
   /** Scratch lanes (`16` / `26` and their mapped equivalents) — they read the scratch window tables. */
   scratchChannels: ReadonlySet<string>;
   /** AUTO SCRATCH: the core plays the scratch lanes itself and ignores input on them. */

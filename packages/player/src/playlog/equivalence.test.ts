@@ -590,6 +590,25 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // FREE ZONE has no judging effect in any reference (LR2 and beatoraja drop channel 17 from 7-key charts; IIDX never had
+  // it): a scratch press there is an ordinary press, and charges an empty POOR when a scratch note is in reach.
+  test.each(RULESETS)('%s: a scratch press in a FREE ZONE is judged as any other press', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '17', position: [0, 1], value: '01' },
+      { measure: 1, channel: '16', position: [3, 4], value: '01' },
+      { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '18', position: [0, 1], value: '01' },
+    ]);
+    // A scratch key resolves to the scratch lane and its FREE ZONE alias, as the play log records it.
+    const inputs = [down(0, 1_300_000, '16', '17'), up(1, 1_320_000, '16', '17')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { playVariant: '7' });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.emptyPoor).toBe(simulated.judge.emptyPoor);
+    expect(summary.emptyPoor).toBe(1);
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
