@@ -2,7 +2,7 @@
 // the stored URL list and the group merge live here; `main.ts` only binds the Debug Menu controls and refreshes the
 // course folders.
 import type { CourseDefinitionGroup } from '@be-music/player-web/collection';
-import { fetchTableHeaderCourses, type TableFetchText } from '@be-music/player/course';
+import { fetchTableHeaderCourses, parseTableHeaderCourses, type TableFetchText } from '@be-music/player/course';
 import { DEMO_STORAGE_PREFIX } from './debug-menu.ts';
 
 /** `localStorage` key of the difficulty-table URLs whose courses are imported again on load. */
@@ -83,7 +83,10 @@ export function mergeCourseGroup(
  */
 export function describeCourseTableImportError(error: unknown): string {
   if (error instanceof TypeError) {
-    return 'Course table import failed: the site could not be fetched (most tables do not allow cross-origin requests)';
+    return (
+      'Course table import failed: the site does not let other pages read it. Save the table’s header file ' +
+      '(the JSON its page names in <meta name="bmstable">, usually header.json) and drop it here instead'
+    );
   }
   const message = error instanceof Error ? error.message : String(error);
   return `Course table import failed: ${message}`;
@@ -112,4 +115,35 @@ function defaultStorage(): Storage | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** Whether a dropped file may be a saved difficulty-table header: a JSON file named `header.json`, as tables name it. */
+export function isTableHeaderFilePath(path: string): boolean {
+  const name = path.replaceAll('\\', '/').split('/').at(-1) ?? path;
+  return name.toLowerCase() === 'header.json';
+}
+
+/**
+ * Reads a saved difficulty-table header (`header.json`) into its course group, the way a table URL import reads it:
+ * labelled with the table's `name` (else its `symbol`, else `fallbackLabel`). `undefined` when the text is not a JSON
+ * object or lists no course, so the file can go on to the other loaders.
+ */
+export function readTableHeaderFile(text: string, fallbackLabel: string): CourseDefinitionGroup | undefined {
+  let header: unknown;
+  try {
+    header = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  if (typeof header !== 'object' || header === null || Array.isArray(header)) return undefined;
+  const courses = parseTableHeaderCourses(header).flat();
+  if (courses.length === 0) return undefined;
+  const { name, symbol } = header as { name?: unknown; symbol?: unknown };
+  const label =
+    typeof name === 'string' && name.trim().length > 0
+      ? name.trim()
+      : typeof symbol === 'string' && symbol.trim().length > 0
+        ? symbol.trim()
+        : fallbackLabel;
+  return { label, courses };
 }
