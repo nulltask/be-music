@@ -6,25 +6,26 @@ This document covers how a chart becomes something to play (the Source and Resol
 
 be-music reads a chart in two layers. The **Source layer** says what the file says. The **Resolved layer** says what the player plays. Exactly one function, `resolveChart`, turns the first into the second, and every format default and de facto reading is applied there or in a helper it calls. Consumers read the Resolved layer and do not interpret the format again.
 
-```text
- .bms / .bme / .pms / .bmson / .json
-            │  @be-music/parser (parseChart, parseBms, parseBmson)
-            ▼
- BeMusicJson ─────────────────────────────── Source layer (@be-music/json)
-            │  drawRandomOutcomes(chart, random)  → RandomDraws      (@be-music/chart)
-            │  resolveBmsControlFlowWithDraws(chart, draws)          (@be-music/parser)
-            │    (hosts: resolvePlayChart(chart) → { chart, randomDraws }, @be-music/player)
-            ▼
- BeMusicJson without control flow
-            │  resolveChart(chart, { randomDraws, chartPath, playVariant, inferBmsLnTypeWhenMissing })
-            ▼
- ResolvedChart ───────────────────────────── Resolved layer (@be-music/chart)
-            │
-            ├─ @be-music/player        engine bootstrap (preparePlaybackChart), ruleset facts, play log
-            ├─ @be-music/audio-renderer renderJson
-            ├─ @be-music/player-tui     chart list, preview signature, BGA, UI worker
-            ├─ @be-music/player-web     gameplay scene, beatoraja prep, audio preview, song collection
-            └─ @be-music/skin-sdk       song facts
+```mermaid
+flowchart TD
+  files[".bms / .bme / .pms / .bmson / .json"]
+  source["BeMusicJson<br/><i>Source layer (@be-music/json)</i>"]
+  flat["BeMusicJson without control flow"]
+  resolved["ResolvedChart<br/><i>Resolved layer (@be-music/chart)</i>"]
+  player["@be-music/player<br/>engine bootstrap (preparePlaybackChart), ruleset facts, play log"]
+  renderer["@be-music/audio-renderer<br/>renderJson"]
+  tui["@be-music/player-tui<br/>chart list, preview signature, BGA, UI worker"]
+  web["@be-music/player-web<br/>gameplay scene, beatoraja prep, audio preview, song collection"]
+  skin["@be-music/skin-sdk<br/>song facts"]
+
+  files -->|"@be-music/parser<br/>parseChart, parseBms, parseBmson"| source
+  source -->|"drawRandomOutcomes(chart, random) → RandomDraws (@be-music/chart)<br/>resolveBmsControlFlowWithDraws(chart, draws) (@be-music/parser)<br/>hosts: resolvePlayChart(chart) → { chart, randomDraws } (@be-music/player)"| flat
+  flat -->|"resolveChart(chart, { randomDraws, chartPath, playVariant, inferBmsLnTypeWhenMissing })"| resolved
+  resolved --> player
+  resolved --> renderer
+  resolved --> tui
+  resolved --> web
+  resolved --> skin
 ```
 
 ## Source layer
@@ -97,22 +98,32 @@ The reasons behind each reading, and every place where be-music departs from a s
 
 `@be-music/player`'s engine ([`core/`](../packages/player/src/core)) is a deterministic judge core with drivers around it.
 
-```text
-            clock / key input / recorded play log
-                          │
-   manual-play.ts ────────┼──────── auto-play.ts                 drivers
-                          ▼
-      step(state, input) → effects                               judge core
-   judge-core.ts (+ judge-core-{types,score,advance,press}.ts)   (manual play)
-   auto-judge-core.ts                                            (AUTO play)
-                          │
-                          ▼
-   engine-effects.ts → audio session, UI buses, play log, no-TUI trace
+```mermaid
+flowchart TD
+  inputs(["clock / key input / recorded play log"])
+  subgraph drivers["drivers"]
+    manual["manual-play.ts"]
+    auto["auto-play.ts"]
+  end
+  subgraph core["judge core"]
+    judge["judge-core.ts<br/>(+ judge-core-{types,score,advance,press}.ts)<br/><i>manual play</i>"]
+    autoJudge["auto-judge-core.ts<br/><i>AUTO play</i>"]
+  end
+  effects["engine-effects.ts"]
+  host(["audio session, UI buses, play log, no-TUI trace"])
+
+  inputs --> manual
+  inputs --> auto
+  manual -->|"step(state, input)"| judge
+  auto -->|"step(state, input)"| autoJudge
+  judge -->|effects| effects
+  autoJudge -->|effects| effects
+  effects --> host
 ```
 
 - **The judge core** holds everything that decides a judgment in an explicit state object: note selection, the ruleset windows, long-note holds and tails, HCN gauge ticks, mines, auto-scratch, misses, combo, score and gauge. `runJudgeCoreStep(state, input, emit)` (or `stepJudgeCore(state, input)`, which returns the effects as an array) applies one input — `advance`, `press`, `hold`, `release` or `finish`, stamped with chart seconds — and reports what happened as effects: sounds and sound stops, gauge / combo / long-note changes, UI cues, play-log records and trace lines. The core reads no clock, sets no timer and does no I/O, so the same state and inputs always give the same effects. `auto-judge-core.ts` does the same for AUTO play. The LR2 negative-BPM reversal reaches the cores as chart data (`reversalSeconds`, from `ResolvedChart.reversal`): past it they stop sweeping misses and mines and judge presses and releases on the mirrored clock `2R − now`, computed from the input's own chart time.
 - **The drivers** (`manualPlay`, `autoPlay`) own the clock, the input runtimes, audio scheduling, pause and HIGH-SPEED, and map the core's effects onto the host through `engine-effects.ts`. Live play steps the core from the playback clock once per frame and on every key event. A replay (`PlayerOptions.replayInputs`) steps it with `advanceJudgeCoreReplay` from one instant to the next: to each recorded input's microsecond and to the microsecond after each timed judgment (a long-note tail, a miss deadline, an AUTO SCRATCH note, a mine check, from `nextTimedJudgmentUs`), so a replay's judgments do not depend on tick timing or `speed`.
-- **Timed judgments** fall due once time has moved past their whole microsecond (the play log's clock). One instant settles tails first, then AUTO SCRATCH notes, then misses, then mines, each in channel order; misses are taken at each note's own deadline. The play-log simulator schedules the same judgments in the same order, so the two reach the gauge in the same sequence even where it clamps.
+- **Timed judgments** fall due once time has moved past their whole microsecond (the play log's clock). One instant settles long-note tails and held-back releases first, then Hell Charge gauge ticks, then AUTO SCRATCH notes, then misses, then mines, each in channel order; misses are taken at each note's own deadline. `finish` steps through every judgment still pending the same way before it applies the end-of-play rules, and an ESC abort stops where the judge stood (the play log records it as `play.abortedAtUs`). The play-log simulator schedules the same judgments in the same order, so the two reach the gauge in the same sequence even where it clamps.
 - **Shared rules.** The rules both the judge core and the play-log simulator (`playlog/simulate.ts`) apply live in the ruleset: windows and classification (`ruleset/judge.ts`), candidate selection (`ruleset/selection.ts`), the gauge (`ruleset/gauge.ts`), and the long-note rules — the mode a ruleset plays, the missed-charge-tail POOR, LR2's late LN-head BAD and the multi-BAD pruning (`ruleset/long-note.ts`). The simulator keeps its own microsecond event queue, so `playlog/equivalence.test.ts` checks that the two reach the same judgments on the same input stream.
 - **Driver services** sit beside the drivers: `engine-preparation.ts` (chart resolution for play, load progress, runtime start-up), `engine-audio.ts` (the built-in Node audio session and mixing), `engine-clock.ts`, `engine-trace.ts` (no-TUI output) and `engine-types.ts` (the public types). `engine.ts` is the public facade; its exports did not change with the split.
 
