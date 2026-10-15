@@ -245,6 +245,33 @@ select, gameplay, and result shape without a decide scene:
 Scenes implement `enter()`, `exit()`, and `dispose()`.
 `exit()` detaches transient listeners and ticker work for transitions, while `dispose()` permanently releases scene-owned resources.
 
+### What the gameplay families share
+
+The LR2 / default gameplay view and the beatoraja gameplay view render with their own skins, but everything that decides how a play sounds, looks and ends comes from one place, so the two cannot drift apart:
+
+```mermaid
+flowchart TD
+  subgraph shared [Shared modules]
+    audio[chart/play-audio.ts]
+    bga[chart/play-bga.ts]
+    ending[scene/play-ending.ts]
+    lamp[resolveClearLamp]
+  end
+  core[LR2 / default gameplay view] --> audio
+  core --> bga
+  core --> ending
+  prep[prepareBeatorajaGameplayChart] --> audio
+  prep --> bga
+  bview[beatoraja gameplay view] --> ending
+  bview --> prep
+  lamp --> results[Results and records]
+```
+
+- `chart/play-audio.ts` builds the play's AudioContext and bus (with `#VOLWAV`), decodes the `#WAV` samples under the key the audio session looks them up by, stretches them for a keep-pitch tempo, and folds the `#WAVCMD` / `#EXWAV` volumes.
+- `chart/play-bga.ts` picks the BGA resources a play needs (`#BMPxx`, bmson `bga.header`, the sources of `#BGAxx` sub-regions, the implicit `#BMP00` POOR image for the LR2 view), decodes stills through the shared texture loader and videos through the video loader, keys the BMS layer track's black out, and cuts the sub-region views.
+- `scene/play-ending.ts` times the end of a play: a lead-out of about two measures after the last note, in chart time, then the theme or skin fade-out; a play cut short by its gauge emptying skips the lead-out and fades its sound and picture for at least 1.5 s.
+- `resolveClearLamp` is the one clear-lamp rule. The beatoraja result and select show it through `beatorajaClearLampOp`, and the demo records every family's plays with it.
+
 ## Note visibility
 
 Drawing is not part of a judge ruleset, so the ruleset plays no part in it. The gameplay view picks one of two rule sets for which notes, mines and bar lines it draws and where ([`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)):

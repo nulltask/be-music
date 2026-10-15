@@ -23,7 +23,7 @@
 // key-beam glows, LN hold effects, and HUD text on top of the same engine-driven state.
 
 import { withBeatorajaCourseStageOps, type SceneCourseInfo } from './course.ts';
-import { DEFAULT_BEATORAJA_FADEOUT_MS } from '../../skin/beatoraja/scene-transition.ts';
+import { computeAuthoredLaneBottomYPixi, readJudgeComboMetrics, resolveFadeoutMs } from './play-skin-metrics.ts';
 import { Container, Graphics, Text, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';
 import type {
@@ -42,7 +42,8 @@ import {
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { chartPlayVariantForBeatorajaVariant, type BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
 import { BeatorajaNoteLayer, beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat } from './notes.ts';
-import { createTimingResolver, type TempoReversalPoint } from '@be-music/chart';
+import { resolveChart, type TempoReversalPoint } from '@be-music/chart';
+import { playEndingFadeAlpha, resolvePlayEnding, type PlayEnding, type PlayEndingNote } from '../play-ending.ts';
 import { BeatorajaMarkerLayer } from './markers.ts';
 import {
   createBeatorajaLaneTimelines,
@@ -51,7 +52,7 @@ import {
   type BeatorajaLaneTimelines,
 } from './scroll-placement.ts';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import { flipRectToPixi, type BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
+import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import { computeBeatorajaChartMarkers } from '../../chart/beatoraja/markers.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import {
@@ -302,9 +303,15 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private engineSettled = false;
   /** Whether the skin's fade-out timer has been stamped (at the chart's end, or at the engine's stop). */
   private fadeoutStamped = false;
-  /** Holds the play open past the chart's end through the skin's fade-out (`holdAfterChart`). */
+  /** Holds the play open past the chart's end through the lead-out and the skin's fade-out (`holdAfterChart`). */
   private chartEndHold: AbortController | undefined;
-  private chartEndHoldTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The play's ending once it began (`scene/play-ending.ts`), its lead-out / fade-out timer, and the fade's start. */
+  private ending: PlayEnding | undefined;
+  private endingTimer: ReturnType<typeof setTimeout> | undefined;
+  private endingFadeStartedAt: number | undefined;
+  /** The chart's judged notes and tempo map, for the lead-out after the last note. */
+  private readonly endingNotes: ReadonlyArray<PlayEndingNote>;
+  private readonly endingTiming: ReturnType<typeof resolveChart>['timing'];
   private exitRequested = false;
   /**
    * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`).
@@ -345,7 +352,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.scrollHiSpeed.jump(this.hiSpeed);
     this.scrollMapper = createBeatorajaScrollMapper(effectiveChart);
     this.laneTimelines = this.scrollMapper ? createBeatorajaLaneTimelines(effectiveChart) : undefined;
-    this.tempoReversal = createTimingResolver(effectiveChart).reversal;
+    const resolved = resolveChart(effectiveChart, { inferBmsLnTypeWhenMissing: true });
+    this.tempoReversal = resolved.reversal;
+    this.endingNotes = resolved.notes;
+    this.endingTiming = resolved.timing;
     this.skinAudioRenderContext = {
       activeOps: new Set<number>(),
       getTimerStart: () => undefined,
@@ -570,17 +580,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         onPlaylogRecorded: (playlog) => {
           this.playlog = playlog;
         },
-        // Keys stay live after the last note: the skin's fade-out starts when the chart settles, and the play ends
-        // (handing the host its summary) once the fade-out has run.
+        // Keys stay live after the last note: the lead-out and the skin's fade-out run once the chart settles, and the
+        // play ends (handing the host its summary) after them.
         holdAfterChart: {
           signal: (this.chartEndHold = new AbortController()).signal,
-          onSettled: () => {
-            this.stampFadeout();
-            this.chartEndHoldTimer = setTimeout(
-              () => this.chartEndHold?.abort(),
-              resolveFadeoutMs(this.options.skin.fadeout),
-            );
-          },
+          onSettled: () => this.beginEnding(undefined, () => this.chartEndHold?.abort()),
         },
       },
       onInputSignalsReady: ({ inputSignals }) => {
@@ -627,19 +631,15 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     })
       .then((summary) => {
         this.engineSettled = true;
-        // End-of-chart fail declaration. Mid-play instant fail (HARD / DEATH gauge → 0) is
-        // already caught by the adapter's per-frame gauge-zero detector; calling `markFailed`
-        // here covers the GROOVE / EASY case where the chart finishes with the gauge below
-        // the clear threshold but never reached zero. The adapter's idempotent latch makes
-        // this safe to call regardless of which path tripped first — only the EARLIER stamp
-        // wins, so the failure animation runs from the fail moment, not the chart's last
-        // frame.
-        if (summary.gauge !== undefined && !summary.gauge.cleared) {
-          this.adapter.markFailed();
+        // End-of-chart fail declaration for a gauge that finished under its clear line without emptying (an emptied one
+        // was stamped by the adapter's per-frame detector; its idempotent latch keeps the earlier stamp).
+        if (summary.gauge !== undefined && !summary.gauge.cleared) this.adapter.markFailed();
+        // A play that ended on its own (auto play, a gauge emptied) runs its ending now; a held one already ran it.
+        if (this.ending === undefined && !this.exitRequested) {
+          this.beginEnding(summary, () => this.complete(summary));
+          return summary;
         }
-        if (!this.disposed) {
-          this.options.onComplete?.(summary, this.adapter.getMaxCombo(), this.adapter.getResultHistory());
-        }
+        this.complete(summary);
         return summary;
       })
       .catch((error) => {
@@ -652,6 +652,40 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       });
   }
 
+  /**
+   * Runs the end of the play as the LR2 / built-in view does (`resolvePlayEnding`): the lead-out after the last note,
+   * then the skin's fade-out — or, for a play cut short by its gauge emptying, at once a fade of the sound and the
+   * picture lasting at least `FAILED_FADE_OUT_MS` — then `done`.
+   */
+  private beginEnding(summary: PlayerSummary | undefined, done: () => void): void {
+    if (this.ending !== undefined || this.disposed) return;
+    const ending = resolvePlayEnding({
+      summary,
+      notes: this.endingNotes,
+      timing: this.endingTiming,
+      currentSeconds: this.currentFrame?.currentSeconds ?? 0,
+      tempo: this.options.engineOptions?.speed ?? 1,
+      themeFadeOutMs: resolveFadeoutMs(this.options.skin.fadeout),
+    });
+    this.ending = ending;
+    this.endingTimer = setTimeout(() => {
+      this.stampFadeout();
+      this.endingFadeStartedAt = performance.now();
+      if (ending.fadeAudio) this.options.audio.audioBus.fadeOutAudibleTo(0, ending.fadeOutMs);
+      this.endingTimer = setTimeout(() => {
+        this.endingTimer = undefined;
+        if (!this.disposed) done();
+      }, ending.fadeOutMs);
+    }, ending.leadOutMs);
+  }
+
+  /** Hands the host the play's final summary. */
+  private complete(summary: PlayerSummary): void {
+    if (!this.disposed) {
+      this.options.onComplete?.(summary, this.adapter.getMaxCombo(), this.adapter.getResultHistory());
+    }
+  }
+
   /** Stamps the skin's fade-out timer once, so the engine's stop after a held outro does not restart the fade. */
   private stampFadeout(): void {
     if (this.fadeoutStamped) return;
@@ -660,8 +694,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   }
 
   exit(): void {
-    if (this.chartEndHoldTimer !== undefined) clearTimeout(this.chartEndHoldTimer);
-    this.chartEndHoldTimer = undefined;
+    if (this.endingTimer !== undefined) clearTimeout(this.endingTimer);
+    this.endingTimer = undefined;
     if (this.tickerHandle && this.host) {
       this.host.app.ticker.remove(this.tickerHandle);
     }
@@ -1076,6 +1110,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // last fit (mount-time layout, window resize, dev-tools open). Cheap when nothing changed — the
     // setter early-outs when `(width, height)` matches the cached values.
     this.fitToStage();
+    // A failed play's picture fades with its sound (the skin draws its own fade-out on a normal end).
+    if (this.ending?.failed === true && this.endingFadeStartedAt !== undefined) {
+      const elapsed = performance.now() - this.endingFadeStartedAt;
+      this.view.container.alpha = playEndingFadeAlpha(elapsed, this.ending.fadeOutMs);
+    }
     // Cover indicator fade — emitted when the user taps H / J / K. Lingers fully visible for
     // 800ms then fades over the next 600ms. Single-Text node, cheap to update per frame.
     if (this.coverIndicatorText !== undefined && this.coverIndicatorText.visible) {
@@ -1366,33 +1405,6 @@ function insertNoteAndMarkerLayers(
 }
 
 /**
- * Compute the AUTHORED Pixi-Y of the lane's bottom edge from the note section's first dst
- * block. Mirrors upstream's `hl = lanes[0].region.y` (`LaneRenderer.java:275`) — the lane's
- * authored bottom is what every barline / BPM-marker / time-marker offset references.
- *
- * `noteSection.dst[0]` carries the default lane layout (no `if` gating); we ignore the optional
- * gated alts. Each per-lane rect is in libGDX Y-UP; flip to Pixi and take the max bottom edge
- * across all lanes — that's the judgement line in screen space. Returns `0` when the section
- * has no rects (no lane authored), letting the marker layer fall back to "marker bottom =
- * scroll position" via its `laneAuthoredBottomY: undefined` branch.
- */
-function computeAuthoredLaneBottomYPixi(
-  rects: ReadonlyArray<{ readonly x: number; readonly y: number; readonly w: number; readonly h: number }>,
-  canvasHeight: number,
-): number | undefined {
-  if (rects.length === 0) return undefined;
-  let bottom = 0;
-  let any = false;
-  for (const rect of rects) {
-    const flipped = flipRectToPixi({ x: rect.x, y: rect.y, w: rect.w, h: rect.h }, canvasHeight);
-    const b = flipped.y + flipped.h;
-    if (b > bottom) bottom = b;
-    any = true;
-  }
-  return any ? bottom : undefined;
-}
-
-/**
  * Map a synthetic chart-image id (`-100` STAGEFILE / `-101` BACKBMP / `-102` BANNER) onto
  * the host-supplied texture. Returns `undefined` for unknown ids OR when the host didn't
  * supply a texture for that slot — the renderer hides the destination in that case. Same
@@ -1400,81 +1412,6 @@ function computeAuthoredLaneBottomYPixi(
  * authored chart-image destinations (ModernChic's lane-cover backing, default's loading
  * panel) render correctly.
  */
-/**
- * Read the per-side combo-digit metrics needed to compute the judge-word-shift amount.
- * Mirrors upstream's `nowCount.getLength()` formula at `SkinNumber.java:185`:
- *
- *     length = (region.width + space) * (currentImages.length - shiftbase)
- *
- * For the shift's purposes we need `region.width + space` as the per-digit pitch — that's
- * what we capture here. Two skin sources contribute:
- *
- *   - `skin.judge[i].numbers[0].dst[0].w` — the per-digit cell width (= `region.width` at
- *     runtime, before any offsets[].w grows it).
- *   - `skin.value[id == numbers[0].id].space` — the inter-digit space (`SkinNumber.space`),
- *     authored on the matching `value[]` declaration. Most skins author 0; some banner-style
- *     digit fonts use small positive values.
- *
- * Default `(width = 40, space = 0)` covers default skin's `play5.json` / `play7main.lua`
- * which both author `numbers[i].dst.w = 40` and the matching `value` block doesn't author
- * a non-zero space.
- */
-function readJudgeComboMetrics(skin: BeatorajaSkin): {
-  1: { width: number; space: number };
-  2: { width: number; space: number };
-} {
-  const result = {
-    1: { width: 40, space: 0 },
-    2: { width: 40, space: 0 },
-  };
-  const judges = (skin as { judge?: unknown }).judge;
-  if (!Array.isArray(judges)) return result;
-  // Build a quick `value[].id → value` map so we can look up the `space` field for each
-  // judge.numbers[0].id without re-scanning value[] for every judge.
-  const valuesById = new Map<string | number, { space?: number }>();
-  const values = (skin as { value?: unknown }).value;
-  if (Array.isArray(values)) {
-    for (const v of values) {
-      if (v === null || typeof v !== 'object') continue;
-      const obj = v as Readonly<Record<string, unknown>>;
-      const id = obj.id;
-      if (typeof id === 'string' || typeof id === 'number') {
-        valuesById.set(id, obj as { space?: number });
-      }
-    }
-  }
-  for (const judge of judges) {
-    if (judge === null || typeof judge !== 'object') continue;
-    const obj = judge as Readonly<Record<string, unknown>>;
-    const index = typeof obj.index === 'number' ? obj.index : 0;
-    const side: 1 | 2 = index === 1 ? 2 : 1;
-    const numbers = Array.isArray(obj.numbers) ? obj.numbers : [];
-    const first = numbers[0];
-    if (first === null || typeof first !== 'object') continue;
-    const firstObj = first as Readonly<Record<string, unknown>>;
-    const dst = firstObj.dst;
-    if (Array.isArray(dst) && dst.length > 0) {
-      const kf = dst[0];
-      if (kf !== null && typeof kf === 'object') {
-        const w = (kf as Readonly<Record<string, unknown>>).w;
-        if (typeof w === 'number' && Number.isFinite(w) && w > 0) {
-          result[side].width = w;
-        }
-      }
-    }
-    // `numbers[0].id` references a `value[]` declaration — pull its `space` field.
-    const valueId = firstObj.id;
-    if (typeof valueId === 'string' || typeof valueId === 'number') {
-      const valueDef = valuesById.get(valueId);
-      const space = valueDef?.space;
-      if (typeof space === 'number' && Number.isFinite(space)) {
-        result[side].space = space;
-      }
-    }
-  }
-  return result;
-}
-
 function resolveChartImage(
   images: PixiBeatorajaGameplayViewOptions['chartImages'] | undefined,
   syntheticId: number,
@@ -1490,11 +1427,4 @@ function resolveChartImage(
     default:
       return undefined;
   }
-}
-
-/** The skin's fade-out window in ms: its `fadeout`, or beatoraja's 500 ms when it has none. */
-function resolveFadeoutMs(fadeout: number | undefined): number {
-  return typeof fadeout === 'number' && Number.isFinite(fadeout) && fadeout >= 0
-    ? fadeout
-    : DEFAULT_BEATORAJA_FADEOUT_MS;
 }
