@@ -182,6 +182,12 @@ describe('NONSTOP play logs', () => {
       stages: [],
       nonstop: { playFingerprint: playlog.chart.playFingerprint },
     });
+    // A NONSTOP run played at another tempo is practice, refused on its stitched play.
+    const slowed = { ...log.nonstop!.playlog, play: { ...log.nonstop!.playlog.play, tempo: 0.9 } };
+    expect(checkCoursePlaylogEligibility({ ...log, nonstop: { ...log.nonstop!, playlog: slowed } })).toEqual({
+      eligible: false,
+      reason: 'tempo',
+    });
     expect(() =>
       parseCoursePlaylog({
         ...JSON.parse(serializeCoursePlaylog(log)),

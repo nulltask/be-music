@@ -64,6 +64,15 @@ import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
 import { isVideoExtension, toBrowserBgaTimeline } from '../../scene/core/gameplay-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
+import {
+  clampPlayTempo,
+  resolveSamplePlaybackRate,
+  resolveSampleStretchRates,
+  stretchDecodedSamples,
+  stretchSlicePlayback,
+  type TempoPitchMode,
+  type TimeStretchAlgorithm,
+} from '../../runtime/play-tempo.ts';
 
 const log = logger('beatoraja-prep');
 
@@ -88,6 +97,16 @@ export interface PrepareBeatorajaGameplayChartOptions {
   preResolved?: ResolvedPlayChart;
   /** How a video BGA the browser can't play is transcoded (size cap, WebCodecs encode), as the LR2 path takes it. */
   bgaTranscode?: VideoTranscodeOptions;
+  /**
+   * The play tempo (`clampPlayTempo`; default 1). The prep readies the audio and the video BGA for it: samples play
+   * `tempo` times as fast (or are stretched to it, see {@link tempoPitchMode}) and videos run at it. The host passes the
+   * same value as the view's `engineOptions.speed`.
+   */
+  tempo?: number;
+  /** How a tempo change sounds: `pitch` (default) moves the pitch, `keep-pitch` stretches the samples and keeps it. */
+  tempoPitchMode?: TempoPitchMode;
+  /** The time stretcher keep pitch uses: `signalsmith` (default) or `wsola`. */
+  tempoStretchAlgorithm?: TimeStretchAlgorithm;
 }
 
 export interface PreparedBeatorajaGameplayChart {
@@ -161,6 +180,18 @@ export async function prepareBeatorajaGameplayChart(
     }
   });
 
+  // Keep pitch: the samples are stretched to the play tempo once, here, and then play at their own pitch.
+  const tempo = clampPlayTempo(options.tempo);
+  const pitchMode = options.tempoPitchMode ?? 'pitch';
+  if (pitchMode === 'keep-pitch' && tempo !== 1) {
+    await stretchDecodedSamples(
+      audioContext,
+      decodedSamples,
+      resolveSampleStretchRates(chart.resources.wav, normalizePath, tempo),
+      options.tempoStretchAlgorithm ?? 'signalsmith',
+    );
+  }
+
   // 4. WAVCMD + EXWAV volume multipliers. Both fold into the same map; same-slot entries multiply.
   const wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(chart.bms.wavCmds, resolveBmsBase(chart));
   for (const [slot, multiplier] of collectBmsExWavVolumeMultipliers(chart.bms.exWav)) {
@@ -172,10 +203,13 @@ export async function prepareBeatorajaGameplayChart(
   const resolved = resolveChart(chart, { randomDraws, chartPath: song.chartPath, inferBmsLnTypeWhenMissing: true });
   const timingResolver = resolved.timing;
   const beatResolver = resolved.beatResolver;
-  const bmsonSlicePlayback: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined =
+  const bmsonSlices: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined =
     chart.sourceFormat === 'bmson'
       ? createBmsonSamplePlaybackMap(chart, timingResolver, chart.events.slice(), beatResolver)
       : undefined;
+  // Slices index into the samples, which keep pitch stretched.
+  const bmsonSlicePlayback =
+    bmsonSlices !== undefined && pitchMode === 'keep-pitch' ? stretchSlicePlayback(bmsonSlices, tempo) : bmsonSlices;
 
   // 6. BGA timeline.
   const cues = toBrowserBgaTimeline(resolved.bga);
@@ -221,6 +255,9 @@ export async function prepareBeatorajaGameplayChart(
         // active cue. Seeking to 0 first guarantees frame-0 is already decoded so the
         // first paint isn't black.
         handle.video.pause();
+        // The video runs at the play tempo, so its time stays the chart time since its cue.
+        handle.video.defaultPlaybackRate = tempo;
+        handle.video.playbackRate = tempo;
         bgaTextures.set(key, handle.texture);
         bgaVideoElements.set(key, handle.video);
         bgaVideoObjectUrls.push(handle.objectUrl);
@@ -247,6 +284,7 @@ export async function prepareBeatorajaGameplayChart(
     decodedSamples,
     wavCmdVolumeMultipliers,
     bmsonSlicePlayback,
+    playbackRate: resolveSamplePlaybackRate(pitchMode, tempo),
   };
 
   let disposed = false;
