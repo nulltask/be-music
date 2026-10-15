@@ -226,10 +226,17 @@ describe('course submissions', () => {
     expect(courseStageChartFingerprint(stageCharts[0]!)).toBe(recordedPlaylog().chart.chartFingerprint);
   });
 
-  test('prepareCourseLeaderboardSubmission rebuilds each played stage’s documents', () => {
+  test('prepareCourseLeaderboardSubmission rebuilds each played stage’s documents and sends each unreached chart', () => {
     const prepared = prepareCourseLeaderboardSubmission(courseLog(), stageCharts);
     expect(prepared.ok).toBe(true);
-    expect((prepared as { ok: true; submission: CourseLeaderboardSubmission }).submission.stages).toHaveLength(1);
+    const { submission } = prepared as { ok: true; submission: CourseLeaderboardSubmission };
+    expect(submission.stages).toHaveLength(1);
+    // The server counts the unreached stage's notes from its chart.
+    expect(submission.stageCharts).toEqual([{ stage: 1, chart: OTHER }]);
+    expect(prepareCourseLeaderboardSubmission(courseLog(), [stageCharts[0]!, stageCharts[0]!])).toEqual({
+      ok: false,
+      reason: 'fingerprint-mismatch',
+    });
     expect(prepareCourseLeaderboardSubmission(courseLog({ mode: 'auto' }), stageCharts)).toEqual({
       ok: false,
       reason: 'not-rankable',
@@ -280,7 +287,10 @@ describe('course submissions', () => {
     }) as typeof fetch;
     const result = await submitCourseToLeaderboard(prepared.submission, { fetch: fetchImpl });
     expect(result).toEqual({ status: 'accepted', ...accepted });
-    expect(bodies).toMatchObject([{ stages: [{}] }, { stages: [{ chartDocument: {} }] }]);
+    expect(bodies).toMatchObject([
+      { stages: [{}], stageCharts: [{ stage: 1 }] },
+      { stages: [{ chartDocument: {} }], stageCharts: [{ stage: 1 }] },
+    ]);
     expect((bodies[0] as { stages: object[] }).stages[0]).not.toHaveProperty('chartDocument');
     expect(describeCourseLeaderboardResult(result, 'beatoraja')).toBe(
       'Leaderboard course beatoraja: #3 / 7 · EX 8 · new best EX',
