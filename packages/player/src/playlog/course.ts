@@ -22,6 +22,8 @@ import {
 } from './parse.ts';
 import { resolveRulesetConfig } from './rulesets.ts';
 import { simulatePlaylog, type SimulatePlaylogOptions } from './simulate.ts';
+import type { PlaylogNonstopRun } from './nonstop.ts';
+import { LR2_NONSTOP_CONNECTIONS } from '../course/lr2crs.ts';
 
 /**
  * A course play log: one file for a whole course run, holding each stage's own play log in order. Every stage log is
@@ -39,8 +41,10 @@ export interface BeMusicCoursePlaylog {
   createdAt?: string;
   recorder?: PlaylogRecorderInfo;
   course: PlaylogCourseInfo;
-  /** One entry per course stage, in order. */
+  /** One entry per course stage, in order. For a NONSTOP run, the reached stages cut out of {@link nonstop}. */
   stages: PlaylogCourseStageEntry[];
+  /** A NONSTOP run: the stitched play that was judged. The course result comes from it. */
+  nonstop?: PlaylogNonstopRun;
   /** Regenerable cache: the course result per ruleset id, plus `native` (the engine's own). */
   results?: Record<string, PlaylogCourseResult>;
 }
@@ -254,6 +258,12 @@ export function simulateCoursePlaylog(
   courseLog: BeMusicCoursePlaylog,
   options: Omit<SimulatePlaylogOptions, 'course'>,
 ): PlaylogCourseResult {
+  if (courseLog.nonstop !== undefined) {
+    const stageResults = courseLog.stages.flatMap((entry) =>
+      entry.played ? [simulatePlaylog(entry.playlog, options)] : [],
+    );
+    return nonstopCourseResult(courseLog, simulatePlaylog(courseLog.nonstop.playlog, options), stageResults);
+  }
   const stageResults: PlaylogRulesetResult[] = [];
   let pick: GrooveGaugeType = 'GROOVE';
   let previous: PlaylogRulesetResult | undefined;
@@ -287,6 +297,42 @@ export function simulateCoursePlaylog(
   );
 }
 
+/**
+ * A NONSTOP course result: the stitched play's own judgments, gauge and max combo (it was one play), BP with every note
+ * it never judged, and the cut-out stages' results listed alongside.
+ */
+function nonstopCourseResult(
+  courseLog: BeMusicCoursePlaylog,
+  run: PlaylogRulesetResult,
+  stageResults: readonly PlaylogRulesetResult[],
+): PlaylogCourseResult {
+  const { judge, noteCount } = run;
+  const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor;
+  const gauge = { type: run.gauge.type, final: run.gauge.final, cleared: run.gauge.cleared };
+  const result: PlaylogCourseResult = {
+    ruleset: run.ruleset,
+    judge: { ...judge },
+    fast: run.fast,
+    slow: run.slow,
+    exScore: run.exScore,
+    noteCount,
+    missCount: judge.bad + judge.poor + judge.emptyPoor + Math.max(0, noteCount - judged),
+    maxCombo: run.maxCombo,
+    djLevel: resolveIidxRankLabel(run.exScore, noteCount),
+    gauge,
+    stagesPlayed: courseLog.stages.filter((entry) => entry.played).length,
+    lamp: resolveCourseLamp(
+      run.ruleset.split('/')[0]!,
+      { judge, noteCount, maxCombo: run.maxCombo, gauge },
+      courseLog.nonstop!.playlog.play.gauge,
+    ),
+    stages: [...stageResults],
+  };
+  const trophy = gauge.cleared ? resolveCourseTrophy(courseLog.course.trophies, result) : undefined;
+  if (trophy !== undefined) result.trophy = trophy;
+  return result;
+}
+
 /** A course stage's own play log, ready to replay or re-simulate as a single-chart log. `undefined` for an unreached stage. */
 export function extractCourseStage(courseLog: BeMusicCoursePlaylog, index: number): BeMusicPlaylog | undefined {
   const entry = courseLog.stages[index];
@@ -302,6 +348,8 @@ export function createCoursePlaylog(options: {
   stages: readonly PlaylogCourseStageEntry[];
   recorder?: PlaylogRecorderInfo;
   createdAt?: string;
+  /** A NONSTOP run's stitched play; `stages` then hold its cut-out stages (`splitNonstopPlaylog`). */
+  nonstop?: PlaylogNonstopRun;
 }): BeMusicCoursePlaylog {
   const log: BeMusicCoursePlaylog = {
     format: BE_MUSIC_COURSE_PLAYLOG_FORMAT,
@@ -311,6 +359,17 @@ export function createCoursePlaylog(options: {
   };
   if (options.createdAt !== undefined) log.createdAt = options.createdAt;
   if (options.recorder !== undefined) log.recorder = { ...options.recorder };
+  if (options.nonstop !== undefined) {
+    log.nonstop = structuredClone(options.nonstop);
+    const native = options.nonstop.playlog.results?.native;
+    if (native !== undefined) {
+      const stageNative = options.stages.flatMap((entry) =>
+        entry.played && entry.playlog.results?.native !== undefined ? [entry.playlog.results.native] : [],
+      );
+      log.results = { native: nonstopCourseResult(log, native, stageNative) };
+    }
+    return log;
+  }
   const played = options.stages.filter((entry) => entry.played);
   const native = played.map((entry) => entry.playlog.results?.native);
   if (played.length > 0 && native.every((result) => result !== undefined)) {
@@ -487,11 +546,61 @@ export function parseCoursePlaylog(source: unknown): BeMusicCoursePlaylog {
   };
   const createdAt = optionalString(root.createdAt, 'createdAt');
   if (createdAt !== undefined) parsed.createdAt = createdAt;
+  if (root.nonstop !== undefined) parsed.nonstop = parseNonstopRun(expectRecord(root.nonstop, 'nonstop'));
   if (root.recorder !== undefined) parsed.recorder = parseRecorder(expectRecord(root.recorder, 'recorder'));
   if (root.results !== undefined) {
     parsed.results = parseCourseResults(expectRecord(root.results, 'results'));
   }
   return parsed;
+}
+
+const NONSTOP_CONNECTIONS: ReadonlySet<string> = new Set(LR2_NONSTOP_CONNECTIONS);
+
+function parseNonstopRun(run: Record<string, unknown>): PlaylogNonstopRun {
+  if (!Array.isArray(run.connections) || !run.connections.every((value) => NONSTOP_CONNECTIONS.has(value as string))) {
+    throw new PlaylogParseError('nonstop.connections: expected an array of NONSTOP connections');
+  }
+  if (run.placement !== 'intended' && run.placement !== 'lr2') {
+    throw new PlaylogParseError(`nonstop.placement: expected 'intended' | 'lr2'`);
+  }
+  let playlog: BeMusicPlaylog;
+  try {
+    playlog = parsePlaylog(run.playlog);
+  } catch (error) {
+    if (error instanceof PlaylogParseError) throw new PlaylogParseError(`nonstop.playlog: ${error.message}`);
+    throw error;
+  }
+  if (!Array.isArray(run.stages) || run.stages.length === 0) {
+    throw new PlaylogParseError('nonstop.stages: expected a non-empty array');
+  }
+  const stages = run.stages.map((raw, index) => {
+    const path = `nonstop.stages[${index}]`;
+    const stage = expectRecord(raw, path);
+    const parsed: PlaylogNonstopRun['stages'][number] = {
+      offsetUs: expectFiniteNumber(stage.offsetUs, `${path}.offsetUs`),
+      windowStartUs: expectFiniteNumber(stage.windowStartUs, `${path}.windowStartUs`),
+      rate: expectFiniteNumber(stage.rate, `${path}.rate`),
+    };
+    if (stage.windowEndUs !== undefined) {
+      parsed.windowEndUs = expectFiniteNumber(stage.windowEndUs, `${path}.windowEndUs`);
+    }
+    return parsed;
+  });
+  const noteStages = run.noteStages;
+  if (
+    !Array.isArray(noteStages) ||
+    noteStages.length !== playlog.chart.notes.length ||
+    !noteStages.every((stage) => Number.isInteger(stage) && stage >= 0 && stage < stages.length)
+  ) {
+    throw new PlaylogParseError('nonstop.noteStages: expected a stage index per note of nonstop.playlog');
+  }
+  return {
+    connections: [...(run.connections as PlaylogNonstopRun['connections'])],
+    placement: run.placement,
+    playlog,
+    stages,
+    noteStages: [...(noteStages as number[])],
+  };
 }
 
 function parseCourseResults(results: Record<string, unknown>): Record<string, PlaylogCourseResult> {

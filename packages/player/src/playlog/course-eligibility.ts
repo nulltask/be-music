@@ -7,8 +7,15 @@ import { checkPlaylogEligibility, type PlaylogAssistFlag } from './eligibility.t
  * play, for any stage (`missing-fingerprint` also covers an unreached stage without its chart fingerprint).
  * `not-a-course-run` is a log whose stages do not make one run: no stage played, a played stage after an unreached one,
  * or a stage log that was not played as a stage of this course (no `play.course`, or another course kind).
+ * `nonstop` is a NONSTOP run (`courseLog.nonstop`), which the Leaderboard does not verify yet: its stitched chart has no
+ * chart document of its own.
  */
-export type CoursePlaylogIneligibleReason = 'auto-play' | 'aborted' | 'missing-fingerprint' | 'not-a-course-run';
+export type CoursePlaylogIneligibleReason =
+  | 'auto-play'
+  | 'aborted'
+  | 'missing-fingerprint'
+  | 'not-a-course-run'
+  | 'nonstop';
 
 export type CoursePlaylogEligibility =
   | {
@@ -29,6 +36,7 @@ export type CoursePlaylogEligibility =
  * given up needs the stages re-simulated, so the server decides that.
  */
 export function checkCoursePlaylogEligibility(courseLog: BeMusicCoursePlaylog): CoursePlaylogEligibility {
+  if (courseLog.nonstop !== undefined) return { eligible: false, reason: 'nonstop' };
   const stages: Array<{ chartFingerprint: string; playFingerprint: string }> = [];
   const assistFlags = new Set<PlaylogAssistFlag>();
   let reachedEnd = false;

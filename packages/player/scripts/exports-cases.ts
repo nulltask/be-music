@@ -230,6 +230,33 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
     },
   });
+  const benchStitched = courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
+  const benchStitchedMap = benchStitched.ok ? benchStitched.map : { stages: [] };
+  const benchStitchedChart = benchStitched.ok ? benchStitched.chart : benchNonstopChart;
+  const benchSplitStages = [
+    { offsetUs: 0, windowStartUs: 0, windowEndUs: 1_500_000, rate: 1 },
+    { offsetUs: 500_000, windowStartUs: 1_500_000, rate: 1 },
+  ];
+  const benchSplitNoteStages = BENCH_PLAYLOG.chart.notes.map((note) => (note.timeUs < 1_500_000 ? 0 : 1));
+  define('player.playlog.resolveNonstopPlaylogStages', {
+    run: () => {
+      playlogApi.resolveNonstopPlaylogStages(benchStitchedMap);
+    },
+  });
+  define('player.playlog.resolveNonstopNoteStages', {
+    run: () => {
+      playlogApi.resolveNonstopNoteStages(benchStitchedChart, benchStitchedMap, BENCH_PLAYLOG.chart.notes);
+    },
+  });
+  define('player.playlog.splitNonstopPlaylog', {
+    run: () => {
+      playlogApi.splitNonstopPlaylog(
+        { playlog: BENCH_PLAYLOG, stages: benchSplitStages, noteStages: benchSplitNoteStages },
+        [{ title: 'A' }, { title: 'B' }],
+        { ruleset: 'lr2' },
+      );
+    },
+  });
   define('player.course.planNonstopCourse', {
     run: () => {
       courseApi.planNonstopCourse(benchNonstopStages, ['fade', 'cut-fit', 'blank1']);

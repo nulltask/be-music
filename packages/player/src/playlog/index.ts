@@ -4,6 +4,7 @@ export * from './course-fingerprint.ts';
 export type { RulesetChartFacts } from '../ruleset/facts.ts';
 export * from './eligibility.ts';
 export * from './format.ts';
+export * from './nonstop.ts';
 export * from './recorder.ts';
 export * from './simulate.ts';
 // The score-rate / DJ Rank helpers a result (or a ranked play log's simulated result) is read with, so consumers

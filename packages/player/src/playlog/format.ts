@@ -184,6 +184,11 @@ export interface PlaylogCourseStage {
   judge?: CourseJudgeConstraint;
   /** The state the previous stage left. Absent for the first stage, which starts on a full gauge and no combo. */
   carryIn?: PlaylogCourseCarry;
+  /**
+   * A stage cut out of a NONSTOP play: the FIT time-stretch it was played at (its notes keep the stretched times; 1
+   * without FIT). Display only; the log replays as recorded.
+   */
+  rate?: number;
 }
 
 /** The state carried from one course stage into the next. */
@@ -559,6 +564,7 @@ function parseCourseStage(course: Record<string, unknown>): PlaylogCourseStage {
       maxCombo: expectNonNegativeInteger(carry.maxCombo, 'play.course.carryIn.maxCombo'),
     };
   }
+  if (course.rate !== undefined) parsed.rate = expectFiniteNumber(course.rate, 'play.course.rate');
   return parsed;
 }
 
