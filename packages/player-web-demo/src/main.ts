@@ -5184,7 +5184,14 @@ class PlayerWebDemoApp {
       failBgm: (mode.course !== undefined ? this.courseFailBgmBytes : undefined) ?? this.failBgmBytes,
       resultBgm: this.resultBgmBytes,
       onContinue: () => {
-        if (courseStage && this.continueCourse()) return;
+        if (courseStage && this.courseSession !== undefined) {
+          // The next stage does not tear the result view down, and a live one would keep taking its clicks and keys
+          // (Enter / Space / Escape) during that stage, starting it over: drop it first.
+          this.resultView?.dispose();
+          this.resultView = undefined;
+          this.continueCourse();
+          return;
+        }
         void this.showSelect();
       },
       ...(retry !== undefined

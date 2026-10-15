@@ -160,6 +160,8 @@ export class CoreResultView {
   protected disposed = false;
   /** Latched once `onRetry` fires so further presses can't start the chart twice while the host swaps scenes. */
   private retryRequested = false;
+  /** Latched once `onContinue` fires: later clicks and keys (say, in the play the host starts next) are ignored. */
+  private continued = false;
   /**
    * Web Audio plumbing for the result-screen BGM. Created lazily the first time `mount` runs and torn down by
    * `dispose`. The scene is one-shot (host destroys + recreates between charts) so we don't bother caching the decoded
@@ -249,6 +251,7 @@ export class CoreResultView {
     this.sceneStartedAt = performance.now();
     this.timerStartedAt.clear();
     this.retryRequested = false;
+    this.continued = false;
     this.timerStartedAt.set(0, this.sceneStartedAt);
     // Schedule timer 1 (input enable) and timer 150 (chart-draw) from wall clock so the intro animation plays out even
     // without user interaction. Timer 151 fires automatically once the chart-draw window elapses; 152 needs an input.
@@ -503,7 +506,7 @@ export class CoreResultView {
    * - R (bare, no auto-repeat) retries the chart via `onRetry` once the input-enable delay has elapsed.
    */
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (this.disposed || this.retryRequested) return;
+    if (this.disposed || this.retryRequested || this.continued) return;
     if (this.options.onRetry !== undefined && isResultRetryKey(event)) {
       event.preventDefault();
       // Same input-enable gate as Enter / Space, so the R can't land while the hand is still coming off the keys.
@@ -514,6 +517,7 @@ export class CoreResultView {
     }
     if (event.key === 'Escape') {
       event.preventDefault();
+      this.continued = true;
       this.options.onContinue?.();
       return;
     }
@@ -525,7 +529,7 @@ export class CoreResultView {
   };
 
   private readonly handlePointerDown = (): void => {
-    if (this.disposed) return;
+    if (this.disposed || this.continued) return;
     this.advance();
   };
 
@@ -549,6 +553,7 @@ export class CoreResultView {
       this.timerStartedAt.set(152, performance.now());
       return;
     }
+    this.continued = true;
     this.options.onContinue?.();
   }
 }
