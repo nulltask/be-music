@@ -1,4 +1,5 @@
 import { resolveChart } from '@be-music/chart';
+import { parseChart } from '@be-music/parser';
 import * as playerApi from '@be-music/player';
 import * as courseApi from '@be-music/player/course';
 import * as judgingApi from '@be-music/player/judging';
@@ -198,6 +199,35 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.course.decodeCourseText', {
     run: () => {
       courseApi.decodeCourseText(new TextEncoder().encode(benchLr2Course));
+    },
+  });
+  const benchNonstopHeader = `0125${'0'.repeat(6)}1${'0'.repeat(21)}`;
+  const benchNonstopChart = parseChart(
+    ['#BPM 150', '#BPM01 180', '#00002:0.75', '#00111:01010101', '#00301:01', '#00408:01', '#00512:0001'].join('\n'),
+    'bms',
+  );
+  const benchNonstopStage = courseApi.createNonstopStageTiming(benchNonstopChart);
+  const benchNonstopStages = [benchNonstopStage, benchNonstopStage, benchNonstopStage, benchNonstopStage];
+  define('player.course.parseLr2NonstopConnections', {
+    run: () => {
+      courseApi.parseLr2NonstopConnections(benchNonstopHeader);
+    },
+  });
+  define('player.course.resolveNonstopLastMeasure', {
+    run: () => {
+      courseApi.resolveNonstopLastMeasure(7.25);
+      courseApi.resolveNonstopLastMeasure(7.75);
+    },
+  });
+  define('player.course.createNonstopStageTiming', {
+    run: () => {
+      courseApi.createNonstopStageTiming(benchNonstopChart);
+    },
+  });
+  define('player.course.planNonstopCourse', {
+    run: () => {
+      courseApi.planNonstopCourse(benchNonstopStages, ['fade', 'cut-fit', 'blank1']);
+      courseApi.planNonstopCourse(benchNonstopStages, ['fade', 'cut-fit', 'blank1'], { placement: 'lr2' });
     },
   });
   define('player.course.parseLr2CourseFile', {
