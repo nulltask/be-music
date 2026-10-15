@@ -7,7 +7,7 @@ import {
   type PlaylogCourseStage,
   type PlaylogCourseStageEntry,
 } from '@be-music/player/playlog';
-import type { PixiGameplayResultData } from '@be-music/player-web/scenes';
+import { resolveSceneCourseInfo, type PixiGameplayResultData, type SceneCourseInfo } from '@be-music/player-web/scenes';
 import {
   applyCourseLongNoteConstraint,
   isCourseHiSpeedLocked,
@@ -25,6 +25,8 @@ export interface CourseStagePlan {
   song: BrowserSongEntry;
   /** `PlayerOptions.course` for the stage, with the state the previous stage left. */
   course: PlaylogCourseStage;
+  /** The course and this stage as the skins show them. */
+  courseInfo: SceneCourseInfo;
   hiSpeedLocked: boolean;
 }
 
@@ -48,6 +50,11 @@ export class CourseSession {
   /** Stages played so far. */
   get stagesPlayed(): number {
     return this.logs.length;
+  }
+
+  /** The course as the skins show it, at the stage last played (none before the first one). */
+  get courseInfo(): SceneCourseInfo {
+    return resolveSceneCourseInfo(this.course, this.logs.length > 0 ? this.logs.length - 1 : undefined);
   }
 
   /** True once a stage failed or the last stage was played. */
@@ -77,6 +84,7 @@ export class CourseSession {
       stageCount: this.course.stages.length,
       song: chart === song.chart ? song : { ...song, chart },
       course,
+      courseInfo: resolveSceneCourseInfo(this.course, index),
       hiSpeedLocked: isCourseHiSpeedLocked(constraints),
     };
   }
