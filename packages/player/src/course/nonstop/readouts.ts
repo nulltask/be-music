@@ -15,7 +15,27 @@ export interface NonstopStageReadoutInput {
   tempo: readonly NonstopTempoPoint[];
   /** The header `#BPM`, when the chart has one. */
   headerBpm?: number;
+  /** The header `#RANK`, when the chart has one. */
+  rank?: number;
+  /** Stitched seconds of the stage's first and last judged note heads, when it has any. */
+  noteHeads?: { first: number; last: number };
 }
+
+/**
+ * How a later stage's `#RANK` sets the judge windows: `'chart'` as a chart opening with that `#RANK` does, or
+ * `'lr2-nonstop'` by the table LR2's NONSTOP rank object reads (`LR2body.exe` 0x42be2f).
+ */
+export type NonstopStageRankTable = 'chart' | 'lr2-nonstop';
+
+/** A later stage's `#RANK` taking over the judge windows from stitched `seconds` on. */
+export interface NonstopStageRank {
+  seconds: number;
+  rank: number;
+  table: NonstopStageRankTable;
+}
+
+/** `#RANK` when a chart has none, as LR2 and the engine read it (NORMAL). */
+const DEFAULT_RANK = 2;
 
 function stageWindow(placements: readonly NonstopStagePlacement[], index: number): { start: number; end: number } {
   return {
@@ -79,4 +99,47 @@ export function nonstopBpmAt(tempo: readonly NonstopTempoPoint[], seconds: numbe
     }
   }
   return tempo[Math.max(0, found)]?.bpm;
+}
+
+/**
+ * The judge rank changes of a stitched NONSTOP chart: the stitched chart opens with the first stage's `#RANK`, and LR2
+ * switches to each later stage's `#RANK` during the play. Its loader inserts the `#RANK` of a later stage as an object
+ * (op 1001) at the stage's start (OpenLR2 `LR2f.cpp` L26301-L26313), which the stage's cut then moves earlier with the
+ * rest of the stage, and the play loop sets the judge windows when it reaches it (L12831-L12877, `LR2body.exe`
+ * 0x42be2f, for both players).
+ *
+ * - `'lr2'`: as LR2 does it, including what looks like a bug: the change comes at the stage's own time zero, which can
+ *   be well before the previous stage's last notes; a stage without `#RANK` keeps the rank in force; and the windows
+ *   come from a table of their own, which differs from the one a chart opens with for VERY HARD (PGREAT ±12 / GREAT ±24 /
+ *   GOOD ±60 ms instead of ±8 / ±24 / ±40) and HARD (±15 / ±30 / ±80 instead of ±15 / ±30 / ±60).
+ * - `'intended'` (default): each stage is judged with its own `#RANK`, with the windows a chart opening with that
+ *   `#RANK` gets, and a stage without `#RANK` is NORMAL, as it would be alone. The change comes halfway between the
+ *   previous stage's last note and the stage's first one, so the previous stage's last notes keep their rank even when
+ *   they lie past the boundary or are hit late; without notes on either side, at the boundary.
+ */
+export function resolveNonstopStageRanks(
+  stages: readonly Pick<NonstopStageReadoutInput, 'rank' | 'noteHeads'>[],
+  placements: readonly NonstopStagePlacement[],
+  options: NonstopPlanOptions = {},
+): NonstopStageRank[] {
+  const lr2 = options.placement === 'lr2';
+  const ranks: NonstopStageRank[] = [];
+  for (let index = 1; index < stages.length && index < placements.length; index += 1) {
+    const declared = stages[index]!.rank;
+    const rank = declared !== undefined && Number.isFinite(declared) ? Math.trunc(declared) : undefined;
+    if (lr2) {
+      if (rank !== undefined) {
+        ranks.push({ seconds: placements[index]!.offsetSeconds, rank, table: 'lr2-nonstop' });
+      }
+      continue;
+    }
+    const previousLast = stages[index - 1]!.noteHeads?.last;
+    const first = stages[index]!.noteHeads?.first;
+    const seconds =
+      previousLast !== undefined && first !== undefined
+        ? (previousLast + first) / 2
+        : stageWindow(placements, index).start;
+    ranks.push({ seconds, rank: rank ?? DEFAULT_RANK, table: 'chart' });
+  }
+  return ranks.sort((left, right) => left.seconds - right.seconds);
 }

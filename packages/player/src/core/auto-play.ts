@@ -122,7 +122,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   // only declared it for the log (`recordPlaylog.gauge`) gets it played too.
   const selectedGauge = options.gauge ?? options.recordPlaylog?.gauge;
   const autoRuleset = resolveRuleset(
-    rulesetChartFactsFromChart(resolvedJson, playbackChart),
+    rulesetChartFactsFromChart(resolvedJson, playbackChart, [], options.stageRanks),
     options.judgeRuleset ?? 'lr2',
     {
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
@@ -165,6 +165,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           // The chart the engine was handed is the source when it resolved the control flow itself.
           sourceChart: sourceChart ?? json,
           dynamicJudgeRankChanges: resolvedChart.judgeRank.changes,
+          ...(options.stageRanks !== undefined ? { stageRanks: options.stageRanks } : {}),
           reversalSeconds,
           play: {
             mode: 'auto',
