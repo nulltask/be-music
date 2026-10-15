@@ -4734,11 +4734,12 @@ class PlayerWebDemoApp {
     const playSkin =
       gameplayFamily !== 'lr2'
         ? undefined
-        : overrides.courseStage !== undefined
-          ? this.courseLr2Skin(pickLr2PlaySkin(this.playSkins, song), overrides.courseStage.courseInfo, {
-              kind: 'play',
-              playVariant: pickLr2PlaySkinVariant(this.playSkins, song),
-            })
+        : overrides.courseStage !== undefined || overrides.nonstop !== undefined
+          ? this.courseLr2Skin(
+              pickLr2PlaySkin(this.playSkins, song),
+              overrides.courseStage?.courseInfo ?? resolveSceneCourseInfo(overrides.nonstop!.course, 0),
+              { kind: 'play', playVariant: pickLr2PlaySkinVariant(this.playSkins, song) },
+            )
           : pickLr2PlaySkin(this.playSkins, song);
     // Chart-file hash for the recorded play-log (skipped for replays — they record nothing — and for a stitched
     // NONSTOP chart, which has no file).

@@ -1,4 +1,4 @@
-import type { CourseKind } from '@be-music/player/course';
+import type { CourseKind, NonstopConnection } from '@be-music/player/course';
 import type { SceneCourseInfo } from '../course-info.ts';
 
 /**
@@ -58,4 +58,40 @@ export function resolveLr2CourseText(st: number, course: SceneCourseInfo): strin
  */
 export function lr2ShowsCourseCombo(kind: CourseKind): boolean {
   return kind === 'expert' || kind === 'grade';
+}
+
+/** LR2's names of the NONSTOP connections (its `option_str[20]`), as the select screen shows them. */
+const LR2_CONNECTION_LABELS: Readonly<Record<NonstopConnection, string>> = {
+  fade: 'FADE',
+  'fade-fit': 'FADE+FIT',
+  cut: 'CUT',
+  'cut-fit': 'CUT+FIT',
+  blank1: 'BLANK1',
+  blank2: 'BLANK2',
+};
+
+/**
+ * LR2 texts 171-179 (OpenLR2 L8400-L8405): the connection after stages 1-9 of the selected NONSTOP course, or
+ * `DISABLE` for any other course. Returns `undefined` for other text ids.
+ */
+export function resolveLr2CourseConnectionText(st: number, course: SceneCourseInfo): string | undefined {
+  if (st < 171 || st > 179) return undefined;
+  if (course.kind !== 'nonstop' || course.connections === undefined) return 'DISABLE';
+  return LR2_CONNECTION_LABELS[course.connections[st - 171] ?? 'fade'];
+}
+
+/**
+ * The stage a stitched NONSTOP play shows on an LR2 skin at `seconds` (ops 280-289, title text 10). LR2 only announces
+ * a stage that follows a BLANK connection (its op 1002 marker, OpenLR2 L12878-L12889), so after a FADE or CUT the
+ * previous stage stays shown.
+ */
+export function resolveLr2NonstopStage(
+  stages: ReadonlyArray<{ windowStart: number; lr2StageMarker: boolean }>,
+  seconds: number,
+): number {
+  let shown = 0;
+  stages.forEach((stage, index) => {
+    if (index > 0 && stage.lr2StageMarker && stage.windowStart <= seconds) shown = index;
+  });
+  return shown;
 }

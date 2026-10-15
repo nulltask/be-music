@@ -551,6 +551,27 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveLr2CourseText(170, BENCH_COURSE_INFO);
     },
   });
+  define('player-web.resolveLr2CourseConnectionText', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseConnectionText(171, {
+        ...BENCH_COURSE_INFO,
+        kind: 'nonstop',
+        connections: ['cut'],
+      });
+      playerWebCoreApi.resolveLr2CourseConnectionText(172, BENCH_COURSE_INFO);
+    },
+  });
+  define('player-web.resolveLr2NonstopStage', {
+    run: () => {
+      playerWebCoreApi.resolveLr2NonstopStage(
+        [
+          { windowStart: 0, lr2StageMarker: false },
+          { windowStart: 20, lr2StageMarker: true },
+        ],
+        25,
+      );
+    },
+  });
   define('player-web.lr2ShowsCourseCombo', {
     run: () => {
       playerWebCoreApi.lr2ShowsCourseCombo('grade');
