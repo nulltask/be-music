@@ -32,6 +32,7 @@ import {
   resolveResultTrackRows,
   rollUpValue,
   stageProgress,
+  resolveResultVerdict,
 } from '@be-music/skin-sdk';
 import { resolveResultGrid } from './result-grid.ts';
 import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
@@ -147,7 +148,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const verdict = group('verdict');
   const verdictT = easeOutCubic(stageProgress(elapsed, 100, 900));
   verdict.g.rect(0, 44, designWidth, 1).fill({ color: verdictColor, alpha: 0.5 * verdictT });
-  text(verdict.root, cleared ? 'STAGE CLEAR' : 'FAILED', margin, 14, {
+  text(verdict.root, resolveResultVerdict(result), margin, 14, {
     ...display(15, SYN_WHITE),
     letterSpacing: 6 + 22 * (1 - verdictT),
     alpha: verdictT,
