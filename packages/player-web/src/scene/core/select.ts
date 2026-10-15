@@ -1576,30 +1576,16 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * list's length so the cursor never lands past the end.
    */
   private restoreNavigation(navigation: PixiSongSelectNavigation): boolean {
-    const stack: BrowserFolderNode[] = [];
-    let folders = groupSongsByFolder(this.collection.songs);
-    for (const label of navigation.folderPath) {
-      const match = folders.find((folder) => folder.label === label);
-      if (!match) break;
-      stack.push(match);
-      // Inside a folder, the next-level "folders" are derived from the folder's own songs; today we only group at the
-      // top, so a restored deeper path simply terminates here. Kept as `groupSongsByFolder(match.songs)` so a future
-      // multi-level hierarchy continues to work without changes.
-      folders = groupSongsByFolder(match.songs);
-    }
-    if (stack.length === 0 && navigation.folderPath.length > 0) {
-      // None of the saved labels matched — abort the restore so the caller falls back to the default "single-folder
-      // auto-enter" path instead of leaving the cursor on an unrelated entry.
-      return false;
-    }
-    this.browseStack = stack;
+    const resolved = resolveSelectNavigation(this.collection, navigation);
+    // None of the saved labels matched: the caller falls back to the default "single-folder auto-enter" path instead of
+    // leaving the cursor on an unrelated entry.
+    if (resolved === undefined) return false;
+    this.browseStack = resolved.stack;
     // No saved per-level cursor history yet — fill the parallel stack with zeros so its length matches `browseStack`.
     // If the user backs out without entering further, they land on the first folder bar of the parent (acceptable
     // fallback for a restored session that has no prior entry-time snapshot).
-    this.parentCursorStack = stack.map(() => 0);
-    const entries =
-      stack.length > 0 ? stack[stack.length - 1]!.songs.length : groupSongsByFolder(this.collection.songs).length;
-    this.selectedIndex = Math.max(0, Math.min(navigation.selectedIndex, Math.max(0, entries - 1)));
+    this.parentCursorStack = resolved.stack.map(() => 0);
+    this.selectedIndex = resolved.selectedIndex;
     return true;
   }
 
@@ -2787,6 +2773,34 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
   /** Theme hook: releases theme-owned GPU resources on {@link dispose}. Exceptions are caught and logged. */
   protected disposeTheme(): void {}
+}
+
+/**
+ * The browse stack and cursor a saved {@link PixiSongSelectNavigation} restores in `collection`: its folder path matched
+ * by label (song folders, then course folders, at the root), the cursor clamped to the deepest list. `undefined` when
+ * none of the saved labels matches.
+ */
+export function resolveSelectNavigation(
+  collection: Pick<BrowserSongCollection, 'songs' | 'courseFolders'>,
+  navigation: PixiSongSelectNavigation,
+): { stack: BrowserFolderNode[]; selectedIndex: number } | undefined {
+  // The root lists the course folders after the song folders, as `currentEntries` does, so a cursor left in a course
+  // folder comes back too (e.g. after a NONSTOP run, whose stitched source replaces the collection).
+  const rootFolders = [...groupSongsByFolder(collection.songs), ...(collection.courseFolders ?? [])];
+  const stack: BrowserFolderNode[] = [];
+  let folders = rootFolders;
+  for (const label of navigation.folderPath) {
+    const match = folders.find((folder) => folder.label === label);
+    if (!match) break;
+    stack.push(match);
+    // Inside a folder, the next-level "folders" are derived from the folder's own songs; today we only group at the top,
+    // so a restored deeper path simply terminates here.
+    folders = groupSongsByFolder(match.songs);
+  }
+  if (stack.length === 0 && navigation.folderPath.length > 0) return undefined;
+  const deepest = stack.at(-1);
+  const entries = deepest === undefined ? rootFolders.length : (deepest.courses?.length ?? deepest.songs.length);
+  return { stack, selectedIndex: Math.max(0, Math.min(navigation.selectedIndex, Math.max(0, entries - 1))) };
 }
 
 /**
