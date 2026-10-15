@@ -210,7 +210,7 @@ class PlaylogSimulation {
       djLevel: resolveIidxRankLabel(this.exScore, this.config.noteCount),
       gauge: {
         type: this.config.gauge.id,
-        final: Math.round(this.gauge.value * 100) / 100,
+        final: this.gauge.value,
         cleared: this.gauge.cleared(),
       },
     };
@@ -435,9 +435,8 @@ class PlaylogSimulation {
   private detonateMine(mine: SimMine): void {
     if (mine.applied) return;
     mine.applied = true;
-    if (mine.damage > 0) {
-      this.gauge.applyRawDelta(-mine.damage);
-    }
+    // Applied even at 0 damage, as the engine does: the raw path still settles a gauge sitting on its floor.
+    this.gauge.applyRawDelta(-mine.damage);
   }
 
   /** LR2: a press with a mine inside the PGREAT window of the line detonates it (before the press judges a note). */
@@ -735,9 +734,10 @@ class PlaylogSimulation {
       this.combo = 0;
     }
     if (dmUs !== undefined && (judgeIndex === JUDGE_GREAT || judgeIndex === JUDGE_GOOD)) {
+      // A delta of exactly 0 is neither, as in the engine (it is always inside PGREAT, so this is only consistency).
       if (dmUs > 0) {
         this.fast += 1;
-      } else {
+      } else if (dmUs < 0) {
         this.slow += 1;
       }
     }

@@ -91,38 +91,41 @@ export async function replayEngine(json: BeMusicJson, options: EngineReplayOptio
 }
 
 /**
+ * The fields on which an engine replay's own result (the play log's `results.native`) and the simulator's result for
+ * the same ruleset disagree, as `field engine/simulator`, or an empty list when they agree. Both report the same
+ * fields the same way, and both apply the same gauge steps in the same order, so every field must match exactly.
+ */
+export function findEngineSimulatorMismatches(engine: EngineReplay, simulated: PlaylogRulesetResult): string[] {
+  const native = engine.playlog.results?.native;
+  if (native === undefined) {
+    return ['results.native missing'];
+  }
+  const { ruleset: _engineRuleset, ...engineResult } = native;
+  const { ruleset: _simulatedRuleset, ...simulatedResult } = simulated;
+  const engineFields = flattenResult(engineResult);
+  const simulatedFields = flattenResult(simulatedResult);
+  return [...new Set([...engineFields.keys(), ...simulatedFields.keys()])]
+    .filter((field) => engineFields.get(field) !== simulatedFields.get(field))
+    .map((field) => `${field} ${engineFields.get(field)}/${simulatedFields.get(field)}`);
+}
+
+function flattenResult(value: object, prefix = ''): Map<string, unknown> {
+  const fields = new Map<string, unknown>();
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry !== null && typeof entry === 'object') {
+      for (const [nested, nestedEntry] of flattenResult(entry, `${prefix}${key}.`)) fields.set(nested, nestedEntry);
+    } else {
+      fields.set(`${prefix}${key}`, entry);
+    }
+  }
+  return fields;
+}
+
+/**
  * Replays one input stream through the live engine under every judge ruleset. The replays run concurrently: each
  * spends most of its time waiting for the next tick, and a replay is judged on the judge core's fixed chart-time grid,
  * so overlapping them only shortens the wall-clock time.
  */
-/**
- * The fields on which an engine replay and the simulator disagree for one ruleset, as `field engine/simulator`, or an
- * empty list when they agree. The simulator reports its final gauge rounded to 0.01, so the gauge is compared at that
- * precision.
- */
-export function findEngineSimulatorMismatches(engine: EngineReplay, simulated: PlaylogRulesetResult): string[] {
-  const { summary } = engine;
-  const pairs: Array<[string, unknown, unknown]> = [
-    ['pgreat', summary.perfect, simulated.judge.pgreat],
-    ['great', summary.great, simulated.judge.great],
-    ['good', summary.good, simulated.judge.good],
-    ['bad', summary.bad, simulated.judge.bad],
-    ['poor', summary.poor, simulated.judge.poor],
-    ['emptyPoor', summary.emptyPoor, simulated.judge.emptyPoor],
-    ['fast', summary.fast, simulated.fast],
-    ['slow', summary.slow, simulated.slow],
-    ['exScore', summary.exScore, simulated.exScore],
-    ['maxCombo', engine.playlog.results?.native?.maxCombo, simulated.maxCombo],
-    [
-      'gauge',
-      summary.gauge === undefined ? undefined : Math.round(summary.gauge.current * 100) / 100,
-      simulated.gauge.final,
-    ],
-    ['cleared', summary.gauge?.cleared, simulated.gauge.cleared],
-  ];
-  return pairs.filter(([, left, right]) => left !== right).map(([field, left, right]) => `${field} ${left}/${right}`);
-}
-
 export async function replayEngineRulesets(
   json: BeMusicJson,
   options: Omit<EngineReplayOptions, 'judgeRuleset'>,

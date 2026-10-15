@@ -207,6 +207,7 @@ describe('playlog recorder', () => {
   test('finalize caches the native result with judge counts, empty POORs, maxCombo, and gauge', () => {
     const recorder = createPlaylogRecorder(
       makeRecorderOptions({
+        moneyScore: true,
         play: {
           mode: 'manual',
           autoScratch: true,
@@ -251,6 +252,7 @@ describe('playlog recorder', () => {
         exScore: 5,
         noteCount: 4,
         maxCombo: 5,
+        djLevel: 'B',
         score: 123456,
         gauge: { type: 'GROOVE', final: 88.5, cleared: true },
       },
@@ -267,6 +269,30 @@ describe('playlog recorder', () => {
       maxCombo: 0,
       gauge: { type: 'GROOVE', final: 0, cleared: false },
     });
+    // Like the simulators, a ruleset without a money score reports none.
+    expect(playlog.results?.native?.score).toBeUndefined();
+  });
+
+  test('the native result counts judgments as the ruleset does and flags a mid-play death', () => {
+    const recorder = createPlaylogRecorder(makeRecorderOptions());
+    const summary = makeSummary({
+      total: 6,
+      gauge: {
+        current: 0,
+        max: 100,
+        clearThreshold: 0,
+        initial: 100,
+        effectiveTotal: 300,
+        cleared: false,
+        type: 'HARD',
+        survival: true,
+        failedMidPlay: true,
+      },
+    });
+    const native = recorder.finalize({ summary }).results?.native;
+
+    expect(native?.noteCount).toBe(6);
+    expect(native?.gauge.failedMidPlay).toBe(true);
   });
 
   test('records the play fingerprint of the resolved chart', () => {

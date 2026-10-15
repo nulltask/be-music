@@ -148,6 +148,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         const { chartSha256, chartMd5, recorder, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
         return createPlaylogRecorder({
           json: resolvedJson,
+          moneyScore: autoRuleset.moneyScore,
           chart: playbackChart,
           chartSha256,
           chartMd5,
