@@ -69,7 +69,9 @@ import {
   drawBrowserRandomCourse,
   readCourseFile,
   resolveCourseFolders,
+  resolveCourseMakerFolders,
   resolveCourseStageSettings,
+  CourseMaker,
   type BrowserCourseEntry,
   type BrowserDroppedFile,
   type BrowserSongCollection,
@@ -168,6 +170,9 @@ import {
   type CourseStagePlan,
 } from './course-session.ts';
 import { buildNonstopCoursePlaylog, prepareNonstopCourse, type PreparedNonstopCourse } from './nonstop-course.ts';
+import { LR2_COURSE_MAKER_MAX_STAGES, type CourseDefinition } from '@be-music/player/course';
+import { CourseMakerPanel } from './course-maker-panel.ts';
+import { loadMadeCourses, saveMadeCourses } from './course-maker-store.ts';
 
 /** A NONSTOP course being played as its stitched chart. */
 interface NonstopPlay {
@@ -440,6 +445,12 @@ class PlayerWebDemoApp {
   private courseGroups: CourseDefinitionGroup[] = [];
   /** The course being played, between its stages. */
   private courseSession: CourseSession | undefined;
+  /** The player's own courses and the course being made (LR2's course maker), kept in IndexedDB. */
+  private readonly courseMaker = new CourseMaker({
+    md5Of: async (song) => (await this.resolveChartHashes(song))?.md5,
+    onChange: (change) => void this.handleCourseMakerChange(change),
+  });
+  private courseMakerPanel: CourseMakerPanel | undefined;
   private selectSkin: Lr2Skin | undefined;
   private resultSkin: Lr2Skin | undefined;
   /** LR2 course-result skin (`#INFORMATION` type 15); the course result falls back to {@link resultSkin} without it. */
@@ -904,6 +915,11 @@ class PlayerWebDemoApp {
 
   public start(): void {
     this.buildGui();
+    this.courseMakerPanel = new CourseMakerPanel(this.courseMaker);
+    void loadMadeCourses().then(async (made) => {
+      this.courseMaker.restore(made);
+      if (made.courses.length > 0 && this.collection.songs.length > 0) await this.refreshMadeCourses();
+    });
     // Keep the initial mount's promise so URL auto-load (below) can wait for the Pixi host to finish initializing
     // before it drives its own `showSelect` — two concurrent first-mounts race and read the renderer before it exists.
     const initialSelectReady = this.showSelect();
@@ -1283,6 +1299,7 @@ class PlayerWebDemoApp {
       .onChange((value: boolean) => {
         this.guiState.courseAutoAdvance = value;
       });
+    folder.add({ open: () => this.courseMakerPanel?.openManager() }, 'open').name('Course: my courses…');
     folder
       .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
       .name('Course: NONSTOP placement')
@@ -1842,7 +1859,7 @@ class PlayerWebDemoApp {
     } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
       this.setStatus('Theme loaded');
     }
-    if (this.courseGroups.length > 0) await this.refreshCourseFolders();
+    await this.refreshCourseFolders();
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.songs, previousSongIds);
     if (dropped !== undefined) this.lastSelectNavigation = dropped;
@@ -2036,8 +2053,77 @@ class PlayerWebDemoApp {
     );
     this.collection = {
       ...this.collection,
-      courseFolders: resolveCourseFolders(this.courseGroups, createSongHashLookup(hashed)),
+      courseFolders: [
+        ...resolveCourseFolders(this.courseGroups, createSongHashLookup(hashed)),
+        ...resolveCourseMakerFolders(this.courseMaker.courses, createSongHashLookup(hashed)),
+      ],
     };
+  }
+
+  /**
+   * Reacts to the course maker: redraws its card and the select skin for the course being made, and saves the courses
+   * (and relists them) when they or the default connection change.
+   */
+  private async handleCourseMakerChange(change: 'draft' | 'courses' | 'settings'): Promise<void> {
+    this.courseMakerPanel?.update();
+    if (change === 'draft') {
+      // Same collection: the select view only redraws (an LR2 skin's course-maker ops and texts).
+      this.selectView?.setCollection(this.collection);
+      return;
+    }
+    try {
+      await saveMadeCourses({
+        courses: [...this.courseMaker.courses],
+        defaultConnection: this.courseMaker.defaultConnection,
+      });
+    } catch (error) {
+      this.setStatus('Could not save your courses in this browser; they last until the page is closed');
+      dropLog.warn('course save failed', error);
+    }
+    if (change === 'courses') await this.refreshMadeCourses();
+    else this.selectView?.setCollection(this.collection);
+  }
+
+  /** Relists the course folders after the player's own courses changed, keeping the select screen where it was. */
+  private async refreshMadeCourses(): Promise<void> {
+    await this.refreshCourseFolders();
+    if (this.beatorajaSelectScene !== undefined) {
+      await this.showSelect();
+      return;
+    }
+    const view = this.selectView;
+    if (view === undefined) return;
+    const navigation = view.getNavigation();
+    view.setCollection(this.collection);
+    view.setNavigation(navigation);
+  }
+
+  /**
+   * While a course is being made, deciding a song adds it to the course instead of playing it, as LR2 does; deciding one
+   * more once it holds five saves the course. Returns whether the song was taken.
+   */
+  private addSongToCourseBeingMade(song: BrowserSongEntry): boolean {
+    const draft = this.courseMaker.draft;
+    if (draft === undefined) return false;
+    if (draft.stages.length >= LR2_COURSE_MAKER_MAX_STAGES) {
+      const saved = this.courseMaker.finish();
+      if (saved !== undefined) this.setStatus(`Saved the course "${saved.name}"`);
+      return true;
+    }
+    void this.courseMaker.append(song).then((result) => {
+      if (result.ok) {
+        this.setStatus(`Added ${song.title} to the course (${this.courseMaker.draft?.stages.length ?? 0} / 5)`);
+        return;
+      }
+      const reasons = {
+        full: 'the course already has 5 songs',
+        'key-mode': 'its key mode differs from the first song’s',
+        'no-md5': 'its chart could not be hashed',
+        'not-making': 'no course is being made',
+      } as const;
+      this.setStatus(`Could not add ${song.title}: ${reasons[result.reason]}`);
+    });
+    return true;
   }
 
   /**
@@ -2045,6 +2131,12 @@ class PlayerWebDemoApp {
    * stage filter against the songs and their chart hashes); a stage that finds no chart leaves it unstarted.
    */
   private async startCourse(entry: BrowserCourseEntry): Promise<void> {
+    // A NEW COURSE bar starts making a course of its folder's kind; songs decided from now on join it.
+    if (entry.newCourse === true) {
+      this.courseMaker.start(entry.definition.kind);
+      this.setStatus('Making a course: decide songs to add them, then save');
+      return;
+    }
     if (!entry.playable) return;
     let course = entry;
     if (entry.random !== undefined) {
@@ -3346,6 +3438,7 @@ class PlayerWebDemoApp {
       // drop screen starts at root.
       restoreSnapshot: this.beatorajaSelectSnapshot,
       onSongPicked: (song, opts) => {
+        if (this.addSongToCourseBeingMade(song)) return;
         // Cache the index using the picked song's identity — survives the scene tear-down.
         this.beatorajaSelectIndex = this.collection.songs.indexOf(song);
         // Same flow as the LR2 select view: route to decide → gameplay. The decide branch in
@@ -4330,12 +4423,14 @@ class PlayerWebDemoApp {
       },
       resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
       onSongSelected: (song: BrowserSongEntry) => {
+        if (this.addSongToCourseBeingMade(song)) return;
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
         // the view is hidden, so the cue isn't cut by the gameplay mount.
         void this.selectView?.playDecideSound();
         void this.showDecide(song);
       },
       onSongAutoPlay: (song: BrowserSongEntry) => {
+        if (this.addSongToCourseBeingMade(song)) return;
         // The skin's AUTOPLAY button forces the auto flag on for this session regardless of the toolbar checkbox state.
         // We DON'T mutate the checkbox here — the user might want to keep it off for the next manual play.
         void this.selectView?.playDecideSound();
@@ -4346,6 +4441,9 @@ class PlayerWebDemoApp {
         void this.startCourse(course);
       },
       onSearchActivate: () => this.search.openFromPointer(),
+      courseMaker: this.courseMaker,
+      onCourseNameActivate: () => this.courseMakerPanel?.focusName(),
+      onCourseDeleteRequest: (course: CourseDefinition) => this.courseMakerPanel?.confirmDelete(course),
     };
     this.selectView = lr2SelectSkin
       ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
