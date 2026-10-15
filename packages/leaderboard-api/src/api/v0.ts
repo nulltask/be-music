@@ -16,6 +16,7 @@ import { isOn } from '../http/query.ts';
 import { afterResponse } from '../http/after-response.ts';
 import { loadPlaylogAccess, loadScoreDetail, toScoreResponse } from '../scores/detail.ts';
 import { submitScore } from '../scores/submit.ts';
+import { mountCourseRoutes } from './v0-courses.ts';
 import { canSeeScore, setScoreHidden } from '../scores/visibility.ts';
 import {
   accountResponse,
@@ -432,6 +433,8 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
       return c.json(mine);
     },
   );
+
+  mountCourseRoutes(v0, { now, newId });
 
   return v0;
 }
