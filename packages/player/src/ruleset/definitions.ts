@@ -70,6 +70,17 @@ export type MineTrigger = 'press-or-hold' | 'hold';
  */
 export type LnEarlyReleaseRule = 'head-unless-beyond-good' | 'worse-of-head-and-tail';
 
+/**
+ * What a press does on a lane whose long note is being held (a second key bound to the lane, such as the turntable's
+ * other direction). It never judges another note on that lane: the lane's current note is the long note.
+ *
+ * - `'rejudge-head-or-empty-poor'` — LR2 (OpenLR2 `ProcLongnote`, `LR2f.cpp:7547-7590`): a press within the BAD window of
+ *   the LN's head judges the head again; any other press is an empty POOR.
+ * - `'ignore'` — beatoraja (`JudgeManager` L355-377): a re-press during the hold, judging nothing. IIDX follows it: one
+ *   button per lane cannot be pressed again while held.
+ */
+export type PressDuringLongNoteRule = 'rejudge-head-or-empty-poor' | 'ignore';
+
 export interface GaugeGutsStep {
   /** Gauge value below (or at, when `inclusive`) which the damage multiplier applies. */
   threshold: number;
@@ -113,6 +124,8 @@ export interface RulesetConfig {
   longNoteStyle: LongNoteStyle;
   /** How an LN released before its tail is judged (see {@link LnEarlyReleaseRule}). */
   lnEarlyRelease: LnEarlyReleaseRule;
+  /** What a press on a lane whose long note is held does (see {@link PressDuringLongNoteRule}). */
+  pressDuringLongNote: PressDuringLongNoteRule;
   /**
    * How long (µs) a long-note release that would score BAD or worse before the tail waits before it is settled, per
    * lane kind. Pressing the lane again inside it resumes the hold, as if it had never been let go; any other release
@@ -724,6 +737,7 @@ export function resolveRuleset(
       ignoreLateBadOnLnHead: true,
       longNoteStyle: 'ln',
       lnEarlyRelease: 'head-unless-beyond-good',
+      pressDuringLongNote: 'rejudge-head-or-empty-poor',
       longNoteReleaseMarginUs: { note: 0, scratch: 0 },
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor: false,
@@ -755,6 +769,7 @@ export function resolveRuleset(
       ignoreLateBadOnLnHead: false,
       longNoteStyle: 'per-note',
       lnEarlyRelease: 'worse-of-head-and-tail',
+      pressDuringLongNote: 'ignore',
       longNoteReleaseMarginUs: { note: mode === BEATORAJA_MODES.PMS ? 200_000 : 0, scratch: 0 },
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor,
@@ -782,6 +797,7 @@ export function resolveRuleset(
     longNoteStyle: 'charge',
     // IIDX plays no LN (every long note is a charge note), so this never applies.
     lnEarlyRelease: 'worse-of-head-and-tail',
+    pressDuringLongNote: 'ignore',
     longNoteReleaseMarginUs: { note: 0, scratch: 0 },
     headBadSkipsTail: true,
     comboBreaksOnEmptyPoor: false,

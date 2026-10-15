@@ -495,6 +495,43 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // A second key pressing a lane whose long note is held never judges the lane's next note: LR2 charges an empty POOR,
+  // beatoraja and IIDX ignore the press.
+  test.each(RULESETS)('%s: a second key on a held long note agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+    json.events.push({ measure: 2, channel: '11', position: [1, 20], value: '01' });
+    const inputs = [down(0, 1_000_000, '11'), down(1, 1_980_000, '11'), up(2, 2_000_000, '11'), up(3, 2_100_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect([summary.perfect, summary.poor, summary.emptyPoor]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.poor,
+      simulated.judge.emptyPoor,
+    ]);
+    expect(summary.emptyPoor).toBe(ruleset === 'lr2' ? 1 : 0);
+  });
+
+  // LR2 judges an LN head again when a second key presses inside its BAD window.
+  test.each(RULESETS)('%s: a second key near the LN head agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+    const inputs = [down(0, 950_000, '11'), down(1, 1_005_000, '11'), up(2, 2_000_000, '11'), up(3, 2_010_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect([summary.perfect, summary.great, summary.good, summary.bad]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.great,
+      simulated.judge.good,
+      simulated.judge.bad,
+    ]);
+    if (ruleset === 'lr2') {
+      expect(summary.perfect).toBe(1);
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
