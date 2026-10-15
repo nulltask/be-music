@@ -4036,8 +4036,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // is fine in practice: the LR2 default skin uses identical flags on every rect, and a future skin that mixes them
     // per-rect would still get a consistent global playback state from this single sync point.
     const controllingBga = visibleBgas[0]!;
+    const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
+    const inPoorWindow =
+      !controllingBga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
     // A stitched NONSTOP chart shows one BGA stack per stage, crossfading at the seams; any other chart one stack.
-    const stacks = this.resolveBgaStacks(cueSeconds, controllingBga.noBase === true, controllingBga.noLayer === true);
+    const stacks = this.resolveBgaStacks(
+      cueSeconds,
+      controllingBga.noBase === true,
+      controllingBga.noLayer === true,
+      inPoorWindow,
+    );
     const leading = stacks.reduce<(typeof stacks)[number] | undefined>(
       (best, stack) => (best === undefined || stack.alpha >= best.alpha ? stack : best),
       undefined,
@@ -4046,10 +4054,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const layerCue = leading?.layerCue;
     const baseKey = baseCue?.bmpKey;
     const layerKey = layerCue?.bmpKey;
-    const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
-    const inPoorWindow =
-      !controllingBga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
-    let poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, cueSeconds) : undefined;
+    let poorKey = this.nonstopBgaTimelines !== undefined ? leading?.poorKey : undefined;
+    if (inPoorWindow && this.nonstopBgaTimelines === undefined) {
+      poorKey = pickActiveBgaKey(this.bgaTimeline.poor, cueSeconds);
+    }
     // BMP00 fallback: when no explicit POOR cue is active but the chart left `#POORBGA` blank with a `#BMP00` defined,
     // paint BMP00 during the miss window. Capped at the first authored POOR cue's chart-time so a chart that does
     // eventually author POOR isn't permanently stuck on the placeholder.
@@ -4061,6 +4069,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     ) {
       poorKey = this.poorBgaFallbackKey;
     }
+    if (this.nonstopBgaTimelines === undefined && stacks[0] !== undefined) stacks[0].poorKey = poorKey;
     this.syncBgaVideo('base', baseCue, seconds);
     this.syncBgaVideo('layer', layerCue, seconds);
 
@@ -4149,20 +4158,20 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           }
         }
       };
-      if (poorKey) {
-        // POOR uses base-mode decoding (no chroma key) since it replaces the entire base+layer composite during its
-        // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart authors
-        // don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
-        drawLayer(poorKey, this.bgaTextures, 'poor', undefined);
-      } else {
-        for (const stack of stacks) {
-          // `cue.seconds` anchors switching-BGA frame timing — `pickSwitchingBgaFrame` advances frames relative to when
-          // the cue fired, not relative to the chart origin.
-          drawLayer(stack.baseCue?.bmpKey, this.bgaTextures, 'base', stack.baseCue?.seconds, stack.alpha);
-          // Layer track is composited on top with black→transparent so the base track shows through where the
-          // foreground BMP is empty.
-          drawLayer(stack.layerCue?.bmpKey, this.bgaLayerTextures, 'layer', stack.layerCue?.seconds, stack.alpha);
+      for (const stack of stacks) {
+        if (stack.poorKey) {
+          // POOR uses base-mode decoding (no chroma key) since it replaces the stack's base+layer composite during its
+          // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart
+          // authors don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
+          drawLayer(stack.poorKey, this.bgaTextures, 'poor', undefined, stack.alpha);
+          continue;
         }
+        // `cue.seconds` anchors switching-BGA frame timing — `pickSwitchingBgaFrame` advances frames relative to when
+        // the cue fired, not relative to the chart origin.
+        drawLayer(stack.baseCue?.bmpKey, this.bgaTextures, 'base', stack.baseCue?.seconds, stack.alpha);
+        // Layer track is composited on top with black→transparent so the base track shows through where the
+        // foreground BMP is empty.
+        drawLayer(stack.layerCue?.bmpKey, this.bgaLayerTextures, 'layer', stack.layerCue?.seconds, stack.alpha);
       }
     }
     this.bgaLayerPool.end();
@@ -4170,21 +4179,30 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /**
    * The BGA stacks to draw at `cueSeconds`: the chart's base and layer cues at full opacity, or for a stitched NONSTOP
-   * chart each stage's own cues at the opacity of its crossfade, earlier stages first.
+   * chart each stage's own cues (and, during a POOR, its own POOR image) at the opacity of its crossfade, earlier
+   * stages first.
    */
   private resolveBgaStacks(
     cueSeconds: number,
     noBase: boolean,
     noLayer: boolean,
-  ): Array<{ alpha: number; baseCue: BgaCue | undefined; layerCue: BgaCue | undefined }> {
-    const pick = (timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[] }, alpha: number) => ({
+    inPoorWindow: boolean,
+  ): Array<{ alpha: number; baseCue: BgaCue | undefined; layerCue: BgaCue | undefined; poorKey?: string }> {
+    const pick = (
+      timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor?: readonly BgaCue[] },
+      alpha: number,
+    ) => ({
       alpha,
       baseCue: noBase ? undefined : pickActiveBgaCue(timeline.base, cueSeconds),
       layerCue: noLayer ? undefined : pickActiveBgaCue(timeline.layer, cueSeconds),
+      ...(inPoorWindow && timeline.poor !== undefined ? { poorKey: pickActiveBgaKey(timeline.poor, cueSeconds) } : {}),
     });
     const stages = this.options.nonstop?.stages;
     const timelines = this.nonstopBgaTimelines;
-    if (stages === undefined || timelines === undefined) return [pick(this.bgaTimeline, 1)];
+    if (stages === undefined || timelines === undefined) {
+      // The chart's own POOR cue (with its `#BMP00` fallback) is resolved by the caller.
+      return [pick({ base: this.bgaTimeline.base, layer: this.bgaTimeline.layer }, 1)];
+    }
     return stages.flatMap((stage, index) => {
       const alpha = resolveNonstopBgaAlpha(stage, cueSeconds);
       return alpha > 0 ? [pick(timelines[index]!, alpha)] : [];
