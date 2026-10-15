@@ -40,35 +40,24 @@
 
 import { Texture } from 'pixi.js';
 import { runWithConcurrency } from '@be-music/utils/core';
-import {
-  collectBmsExWavVolumeMultipliers,
-  collectBmsWavCmdVolumeMultipliers,
-  resolveChart,
-  volWavToLinearGain,
-} from '@be-music/chart';
-import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { resolveChart } from '@be-music/chart';
+import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { RandomDraws } from '@be-music/chart';
 import { resolvePlayChart, type ResolvedPlayChart } from '@be-music/player/core/engine';
 import { createBmsonSamplePlaybackMap } from '@be-music/audio-renderer/triggers';
-import {
-  buildAudioBus,
-  type AudioBusHandle,
-  type BuildAudioBusOptions,
-  type CompressorMode,
-} from '../../runtime/audio-bus.ts';
+import type { AudioBusHandle, BuildAudioBusOptions, CompressorMode } from '../../runtime/audio-bus.ts';
 import type { EngineDriverAudioContext } from '../../runtime/engine-driver.ts';
-import { loadAssetBytes, resolveChartAudioAsset, resolveChartBgaAsset } from '../../collection/collection.ts';
+import { loadAssetBytes, resolveChartBgaAsset } from '../../collection/collection.ts';
 import { loadVideoTextureFromBytes, type VideoTranscodeOptions } from '../../media/textures.ts';
 import { logger } from '../../logger.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
 import { isVideoExtension, toBrowserBgaTimeline } from '../../scene/core/gameplay-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import { decodedSampleKey, type WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
+import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
+import { collectChartVolumeMultipliers, createPlayAudioGraph, loadPlaySamples } from '../play-audio.ts';
 import {
   clampPlayTempo,
   resolveSamplePlaybackRate,
-  resolveSampleStretchRates,
-  stretchDecodedSamples,
   stretchSlicePlayback,
   type TempoPitchMode,
   type TimeStretchAlgorithm,
@@ -76,7 +65,6 @@ import {
 
 const log = logger('beatoraja-prep');
 
-const AUDIO_DECODE_CONCURRENCY = 8;
 const BGA_DECODE_CONCURRENCY = 4;
 
 export interface PrepareBeatorajaGameplayChartOptions {
@@ -152,52 +140,29 @@ export async function prepareBeatorajaGameplayChart(
   // caller that already resolved the chart for an upstream scene hands that resolution in, so it is not drawn twice.
   const { chart, randomDraws } = options.preResolved ?? resolvePlayChart(song.chart);
 
-  // 2. Audio context + bus.
-  const audioContext = new AudioContext({ latencyHint: 'interactive' });
-  // Pre-warm the context — most browsers ship it in `suspended` state until the first user gesture and
-  // the first `node.start()` would otherwise pay a one-time ramp-up tax.
-  void audioContext.resume().catch(() => undefined);
-  const audioBus = buildAudioBus(audioContext, options.audioCompressorMode ?? 'split', options.audioBusOptions);
-  // `#VOLWAV` master volume scaling; charts that omit the directive, or set it outside beatoraja's 0 < n < 200 range,
-  // stay at unity.
-  audioBus.setMasterGain(volWavToLinearGain(chart.bms.volWav));
-
-  // 3. Decode every `#WAVxx` slot in parallel. Audio entries are stored as lazy `File` references in the
-  // dropped-source map — `loadAssetBytes` does the on-demand `arrayBuffer()` unwrap.
-  const decodedSamples = new Map<string, AudioBuffer>();
-  const wavPaths = Object.values(chart.resources.wav).filter((path): path is string => typeof path === 'string');
-  const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
-  await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
-    const entry = resolveChartAudioAsset(source, song.chartPath, path, { pathPrefix: pathWavPrefix });
-    const bytes = await loadAssetBytes(entry);
-    if (!bytes) return;
-    try {
-      const decoded = await audioContext.decodeAudioData(bytes.slice().buffer);
-      decodedSamples.set(decodedSampleKey(path), decoded);
-    } catch (error) {
-      // Browsers vary in codec support; unsupported samples are silently skipped (matches LR2 behavior).
-      log.debug('decode skipped', { path, error });
-    }
-  });
-
-  // Keep pitch: the samples are stretched to the play tempo once, here, and then play at their own pitch.
+  // 2. Audio context + bus (with `#VOLWAV`), and 3. every `#WAVxx` sample decoded (stretched for keep pitch) — the same
+  // preparation the LR2 / built-in view runs (`chart/play-audio.ts`).
+  const { audioContext, audioBus } = createPlayAudioGraph(
+    chart,
+    options.audioCompressorMode ?? 'split',
+    options.audioBusOptions,
+  );
   const tempo = clampPlayTempo(options.tempo);
   const pitchMode = options.tempoPitchMode ?? 'pitch';
-  if (pitchMode === 'keep-pitch' && tempo !== 1) {
-    await stretchDecodedSamples(
-      audioContext,
-      decodedSamples,
-      resolveSampleStretchRates(chart.resources.wav, decodedSampleKey, tempo),
-      options.tempoStretchAlgorithm ?? 'signalsmith',
-    );
-  }
+  const decodedSamples = new Map<string, AudioBuffer>();
+  await loadPlaySamples({
+    audioContext,
+    chart,
+    source,
+    chartPath: song.chartPath,
+    samples: decodedSamples,
+    tempo,
+    tempoPitchMode: pitchMode,
+    tempoStretchAlgorithm: options.tempoStretchAlgorithm ?? 'signalsmith',
+  });
 
   // 4. WAVCMD + EXWAV volume multipliers. Both fold into the same map; same-slot entries multiply.
-  const wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(chart.bms.wavCmds, resolveBmsBase(chart));
-  for (const [slot, multiplier] of collectBmsExWavVolumeMultipliers(chart.bms.exWav)) {
-    const previous = wavCmdVolumeMultipliers.get(slot) ?? 1;
-    wavCmdVolumeMultipliers.set(slot, previous * multiplier);
-  }
+  const wavCmdVolumeMultipliers = collectChartVolumeMultipliers(chart);
 
   // 5. bmson 1.0 sample-slice playback map (skipped for BMS / json charts that don't slice).
   const resolved = resolveChart(chart, { randomDraws, chartPath: song.chartPath, inferBmsLnTypeWhenMissing: true });
