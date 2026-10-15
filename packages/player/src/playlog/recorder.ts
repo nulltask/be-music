@@ -46,7 +46,7 @@ export type PlaylogRecorderChartData = Pick<
 export interface PlaylogRecorderPlaySettings {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
-  /** Selected gauge — declared by the host (the engine's own summary path always runs GROOVE today). */
+  /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordPlaylog.gauge`); `GROOVE` when neither is set. */
   gauge?: GrooveGaugeType;
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;

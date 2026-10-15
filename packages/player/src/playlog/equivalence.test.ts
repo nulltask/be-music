@@ -36,7 +36,7 @@ async function replay(
     tui: false,
     judgeRuleset: ruleset,
     replayInputs: inputs,
-    recordPlaylog: {},
+    recordPlaylog: extra.recordPlaylog ?? {},
     onPlaylogRecorded: (recorded) => {
       playlog = recorded;
     },
@@ -320,6 +320,24 @@ describe('engine / simulator equivalence', () => {
 
       expect([summary.perfect, summary.poor], playVariant).toEqual([simulated.judge.pgreat, simulated.judge.poor]);
       expect(summary.perfect, playVariant).toBe(1);
+    }
+  });
+
+  // The play log must record the gauge the engine ran, whichever option the host set it through.
+  test.each(RULESETS)('%s: the recorded gauge is the gauge the engine ran', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    const inputs = [down(0, 1_000_000, '11'), up(1, 1_040_000, '11')];
+
+    for (const extra of [{ gauge: 'HARD' }, { recordPlaylog: { gauge: 'HARD' } }] as const) {
+      const { summary, playlog } = await replay(json, inputs, ruleset, extra);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect(playlog.play.gauge, JSON.stringify(extra)).toBe('HARD');
+      expect(summary.gauge?.type, JSON.stringify(extra)).toBe(simulated.gauge.type);
+      expect(summary.gauge?.current, JSON.stringify(extra)).toBeCloseTo(simulated.gauge.final, 2);
     }
   });
 
