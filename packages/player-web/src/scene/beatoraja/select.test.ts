@@ -105,7 +105,7 @@ describe('PixiBeatorajaSelectScene course bars', () => {
       playable,
     }) as unknown as BrowserCourseEntry;
 
-  type CourseSceneInternals = { activateCurrentEntry(): void; moveCursor(delta: number): void };
+  type CourseSceneInternals = { activateCurrentEntry(): void; handleButtonAction(act: number): void };
 
   /** A scene with one course folder, opened, and the decide / cancel cues it plays. */
   function sceneInCourseFolder(
@@ -136,6 +136,20 @@ describe('PixiBeatorajaSelectScene course bars', () => {
     internals.activateCurrentEntry();
     expect(picked).toEqual([missing]);
     expect(cues).toEqual(['cancel']);
+    scene.dispose();
+  });
+
+  it('starts the focused course from PLAY (act 15) and AUTO PLAY (act 16)', () => {
+    const picked: Array<[string, { autoPlay?: boolean } | undefined]> = [];
+    const dan = course('dan', true);
+    const { scene, internals, cues } = sceneInCourseFolder([dan], (entry, options) => picked.push([entry.id, options]));
+    internals.handleButtonAction(15);
+    internals.handleButtonAction(16);
+    expect(picked).toEqual([
+      ['dan', undefined],
+      ['dan', { autoPlay: true }],
+    ]);
+    expect(cues).toEqual(['decide', 'decide']);
     scene.dispose();
   });
 });
