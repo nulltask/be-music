@@ -1,7 +1,12 @@
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { createEmptyJson, type BeMusicEvent } from '../../../json/src/index.ts';
 import type { AudioBusHandle } from './audio-bus.ts';
-import { clampSampleDuration, clampSampleOffset, createWebAudioSession } from './web-audio-session.ts';
+import {
+  clampSampleDuration,
+  clampSampleOffset,
+  createWebAudioSession,
+  decodedSampleKey,
+} from './web-audio-session.ts';
 
 /**
  * Stubs the Web Audio API surface that {@link createWebAudioSession} touches. The session never reaches
@@ -406,5 +411,13 @@ describe('clampSampleOffset / clampSampleDuration', () => {
     expect(clampSampleDuration(-1, 1, 0)).toBeUndefined();
     expect(clampSampleDuration(0.3, 1, 0.5)).toBeCloseTo(0.3, 6);
     expect(clampSampleDuration(2, 1, 0.5)).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe('decodedSampleKey', () => {
+  test('resolves dot segments, doubled and back slashes, and case', () => {
+    expect(decodedSampleKey('./Sound/Kick.WAV')).toBe('sound/kick.wav');
+    expect(decodedSampleKey('bms\\..\\common//Snare.ogg')).toBe('common/snare.ogg');
+    expect(decodedSampleKey('kick.wav')).toBe(decodedSampleKey('KICK.wav'));
   });
 });
