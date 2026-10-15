@@ -97,6 +97,8 @@ import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.t
 import { JudgeTimingLog } from './judge-timing-log.ts';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
+import { advanceCourseCombo, createCourseCombo, type CourseComboState } from './course-combo.ts';
+import type { SceneCourseInfo } from '../course-info.ts';
 import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
@@ -571,6 +573,11 @@ export interface CoreGameplayViewOptions {
    * previous stage left. Recorded into the play log, which then replays on its own.
    */
   course?: PlaylogCourseStage;
+  /**
+   * The running course as the skin shows it — its kind, title, stage list and the stage being played (LR2 ops 280-293,
+   * texts 150-170; beatoraja's course strings). Display only; the judging follows {@link course}.
+   */
+  courseInfo?: SceneCourseInfo;
   /** The hi-speed cannot be changed during play (a course's `no_speed` constraint). */
   hiSpeedLocked?: boolean;
   /**
@@ -1046,6 +1053,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * hit count rather than the longest unbroken streak.
    */
   protected maxCombo = 0;
+  /**
+   * The course-wide combo of a course stage, carried in from the previous stage (`options.course.carryIn`); undefined
+   * outside a course. Skins that count the combo over the whole course read it (LR2 numbers 104 / 105 in an expert or
+   * grade course).
+   */
+  protected courseCombo: CourseComboState | undefined;
   /**
    * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`). Snapshotted
    * into {@link getResultData} so the result host can offer it as a download.
@@ -2378,6 +2391,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // on the common path.
     this.score = createEmptyScore(prepared.scorableNotes.length);
     this.tracker = createScoreTracker();
+    this.courseCombo = this.options.course !== undefined ? createCourseCombo(this.options.course.carryIn) : undefined;
     // Reset the result-screen "MAX COMBO" tracker whenever a fresh chart is prepared — restart (R), song-pick from
     // select, etc. Otherwise the previous play's max would leak into the new one.
     this.maxCombo = 0;
@@ -5308,6 +5322,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (summary.bad > 0 || summary.poor > 0) return;
     this.tracker.combo = Math.max(this.tracker.combo, summary.total);
     this.maxCombo = Math.max(this.maxCombo, summary.total);
+    if (this.courseCombo !== undefined) advanceCourseCombo(this.courseCombo, this.tracker.combo);
   }
 
   /**
@@ -5423,6 +5438,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (state.judge === 'READY') return;
     this.tracker.combo = state.combo;
     if (state.combo > this.maxCombo) this.maxCombo = state.combo;
+    if (this.courseCombo !== undefined) advanceCourseCombo(this.courseCombo, state.combo);
     const judgeKind = state.judge as JudgeKind;
     // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`; the log skips them.
     this.judgeTimings.push(this.playClock(), state.judge, state.deltaMs, state.channel);

@@ -11,10 +11,14 @@ export * from './host.ts';
 // Hi-speed range shared by every family's select and gameplay scenes (and hosts that remember the player's pick).
 export { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from './hi-speed.ts';
 
+// The course a scene shows (select bar under the cursor, running course stage, course result).
+export * from './course-info.ts';
+
 // Default family — built-in chrome when neither LR2 nor beatoraja themes are loaded.
 export * from './default/index.ts';
 
 // LR2 family — Lunatic Rave 2 skin-driven scenes.
+export * from './lr2/course.ts';
 export * from './lr2/decide.ts';
 export * from './lr2/gameplay.ts';
 export * from './lr2/result.ts';
