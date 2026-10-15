@@ -562,8 +562,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     });
   };
 
-  // Replay playback — recorded play-log inputs re-driven at their exact chart-relative timestamps on the judge core's
-  // fixed chart-time grid (`advanceJudgeCoreReplay`), so the replayed judgments are independent of tick timing.
+  // Replay playback — recorded play-log inputs re-driven at their exact chart-relative timestamps, stepping the judge
+  // core from one judgment instant to the next (`advanceJudgeCoreReplay`), so the replayed judgments are independent
+  // of tick timing.
   const replay = options.replayInputs !== undefined ? createJudgeCoreReplay(options.replayInputs) : undefined;
 
   // A held play (`holdAfterChart`) runs past its horizon until the host ends it.

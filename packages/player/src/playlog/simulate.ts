@@ -71,6 +71,17 @@ export function simulatePlaylogRulesets(
   return results;
 }
 
+/** At one instant: tails, then auto notes, then misses, then mines (see `advanceTime`). */
+const TIMED_EVENT_ORDER = {
+  'ln-complete': 0,
+  'hold-deadline': 0,
+  auto: 1,
+  miss: 2,
+  'mine-enter': 3,
+  mine: 3,
+  'mine-settle': 3,
+} as const;
+
 // Judge indices follow beatoraja: 0 PG / 1 GR / 2 GD / 3 BD / 4 missed POOR / 5 empty POOR.
 const JUDGE_PGREAT = 0;
 const JUDGE_GREAT = 1;
@@ -307,7 +318,7 @@ class PlaylogSimulation {
     }
     interface TimedEvent {
       timeUs: number;
-      kind: 'miss' | 'mine-enter' | 'mine' | 'mine-settle' | 'hold-deadline' | 'auto';
+      kind: 'ln-complete' | 'hold-deadline' | 'auto' | 'miss' | 'mine-enter' | 'mine' | 'mine-settle';
       lane: SimLane;
       note?: SimNote;
       mine?: SimMine;
@@ -335,6 +346,10 @@ class PlaylogSimulation {
         if (lane.hold && lane.hold.tailMissDeadlineUs < untilUs) {
           events.push({ timeUs: lane.hold.tailMissDeadlineUs, kind: 'hold-deadline', lane, note: lane.hold.note });
         }
+        if (lane.hold && lane.hold.note.longStyle === 1 && lane.hold.note.endTimeUs! < untilUs) {
+          // An LN held to its tail confirms its deferred head judgment there, in time order with everything else.
+          events.push({ timeUs: lane.hold.note.endTimeUs!, kind: 'ln-complete', lane, note: lane.hold.note });
+        }
       }
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
@@ -355,7 +370,14 @@ class PlaylogSimulation {
         if (due(settleUs)) events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
       }
     }
-    events.sort((left, right) => left.timeUs - right.timeUs);
+    // One instant settles tails first, then auto notes, then misses, then mines, each in channel order — the order the
+    // engine's judge core settles them in.
+    events.sort(
+      (left, right) =>
+        left.timeUs - right.timeUs ||
+        TIMED_EVENT_ORDER[left.kind] - TIMED_EVENT_ORDER[right.kind] ||
+        (left.lane.channel < right.lane.channel ? -1 : left.lane.channel > right.lane.channel ? 1 : 0),
+    );
 
     for (const event of events) {
       if (event.kind === 'auto') {
@@ -381,6 +403,14 @@ class PlaylogSimulation {
         if (event.lane.held) this.detonateMine(event.mine!);
       } else if (event.kind === 'mine-settle') {
         event.mine!.applied = true;
+      } else if (event.kind === 'ln-complete') {
+        const lane = event.lane;
+        const hold = lane.hold;
+        if (!hold || hold.note !== event.note) continue;
+        lane.hold = undefined;
+        hold.note.holding = false;
+        hold.note.judged = true;
+        this.applyJudge(hold.headJudge ?? JUDGE_BAD, hold.headDmUs);
       } else {
         // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / IIDX).
         const lane = event.lane;
@@ -394,16 +424,7 @@ class PlaylogSimulation {
       }
     }
 
-    // LN (style 1) holds confirm their deferred head judgment once the tail time is reached while still held.
     for (const lane of this.lanes.values()) {
-      const hold = lane.hold;
-      if (hold && hold.note.longStyle === 1 && hold.note.endTimeUs! < untilUs) {
-        this.integrateHcn(lane, hold.note.endTimeUs!);
-        lane.hold = undefined;
-        hold.note.holding = false;
-        hold.note.judged = true;
-        this.applyJudge(hold.headJudge ?? JUDGE_BAD, hold.headDmUs);
-      }
       this.integrateHcn(lane, untilUs);
     }
 

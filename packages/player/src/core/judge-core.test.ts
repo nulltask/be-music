@@ -454,7 +454,10 @@ describe('judge core', () => {
     );
     expect([...mapped]).toEqual(['11']);
 
+    // Timed judgments fall due once time has moved past their microsecond.
     stepJudgeCore(state, advance(2.25));
+    expect(state.config.scorableNotes.find((note) => note.channel === '16')!.judged).toBe(false);
+    stepJudgeCore(state, advance(2.250001));
     expect(state.config.scorableNotes.find((note) => note.channel === '16')!.judged).toBe(true);
     expect(state.summary.perfect).toBe(1);
   });

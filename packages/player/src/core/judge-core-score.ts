@@ -103,6 +103,24 @@ export function resolveMissDeadlineSeconds(config: JudgeCoreConfig, note: TimedP
   return judgeWindowLateReachUs(judgeWindowsFor(config, note.channel, note.seconds)) / 1e6;
 }
 
+/**
+ * A chart instant in whole microseconds, the play log's clock. Timed judgments (tails, misses, auto notes, mines) are
+ * scheduled on it, so the engine and the play-log simulator see the same instants and the same ties.
+ */
+export function toJudgeUs(seconds: number): number {
+  return Math.round(seconds * 1e6);
+}
+
+/** The microsecond past which a note can no longer be pressed: it is missed once time has moved beyond it. */
+export function resolveMissDeadlineUs(config: JudgeCoreConfig, note: TimedPlayableNote): number {
+  return toJudgeUs(note.seconds) + judgeWindowLateReachUs(judgeWindowsFor(config, note.channel, note.seconds));
+}
+
+/** Channel order, the tie-break for timed judgments that fall on the same microsecond. */
+export function compareJudgeChannels(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 // ---- score ----------------------------------------------------------------------------------------------------
 
 export function applyGaugeJudge(

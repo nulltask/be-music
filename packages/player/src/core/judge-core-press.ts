@@ -11,7 +11,7 @@ import {
   resolveRulesetLongNoteMode,
   toUiLongNoteMode,
 } from './judge-rules.ts';
-import { laneHoldHistory, processLandminePassage } from './judge-core-advance.ts';
+import { detonateLandminesOnPress, laneHoldHistory, processLandminePassage } from './judge-core-advance.ts';
 import { recordLaneDown, recordLaneUp } from './lane-hold.ts';
 import {
   applyGaugeJudge,
@@ -244,6 +244,7 @@ export function handleLanePress(
     recordLaneDown(laneHoldHistory(state, channel), tokens, nowMs);
   }
   processLandminePassage(state, nowSec, nowMs, emit);
+  detonateLandminesOnPress(state, candidateChannels, nowSec, emit);
 
   // Past an LR2 negative-BPM reversal the press is judged on the mirrored clock (#134; see `toJudgeClock`): note
   // selection, timing deltas, windows, the lane keysound and the empty-POOR reach all read `judgeSec`, while the
