@@ -3429,7 +3429,7 @@ class PlayerWebDemoApp {
             this.unlockPlaylogOptions();
             return;
           }
-          this.recordActivePlay(songRecordPlayFromSummary(summary, maxCombo));
+          this.recordActivePlay(songRecordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset));
           const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
           if (!mounted) await this.showSelect();
           // Auto-save fires even when the theme ships no result skin — falling back to select
@@ -4103,6 +4103,7 @@ class PlayerWebDemoApp {
     const retry = course === undefined && this.lastPlay?.song.id === song.id ? this.lastPlay : undefined;
     const cleared = summary.gauge?.cleared ?? false;
     this.beatorajaResultScene = new PixiBeatorajaResultScene({
+      judgeRuleset: this.guiState.judgeRuleset,
       skin: result.skin,
       textures,
       fonts,

@@ -23,18 +23,27 @@ const GAUGE_LAMPS: Readonly<Record<string, BeMusicClearLamp>> = {
  * better is `FULL_COMBO`, `PERFECT` when GREAT or better, and `MAX` when every one was a PERFECT; any other clear takes
  * the lamp of its gauge (`NORMAL` for gauges the table doesn't know). Empty POORs never touch a note, so they don't
  * cost a full combo.
+ *
+ * `ruleset` (the judge ruleset the play ran under) keeps the lamp to that game's own set: LR2 and IIDX stop at
+ * `FULL_COMBO` (they have no PERFECT or MAX lamp), and under LR2 a DEATH clear is `NORMAL`, as LR2 awards HARD only for
+ * its HARD-family gauges (OpenLR2 `LR2f.cpp` L2593-L2600). Without it the lamp uses beatoraja's full set.
  */
 export function resolveClearLamp(play: {
   cleared: boolean;
   score: Pick<ScoreSummary, 'total' | 'perfect' | 'great' | 'good'>;
   gaugeType?: string;
+  /** The judge ruleset id (`lr2`, `beatoraja`, `iidx`); any other value uses beatoraja's full set. */
+  ruleset?: string;
 }): BeMusicClearLamp {
   if (!play.cleared) return 'FAILED';
   const { total, perfect, great, good } = play.score;
+  const fullComboOnly = play.ruleset === 'lr2' || play.ruleset === 'iidx';
   if (total > 0) {
-    if (perfect >= total) return 'MAX';
-    if (perfect + great >= total) return 'PERFECT';
+    if (perfect >= total && !fullComboOnly) return 'MAX';
+    if (perfect + great >= total && !fullComboOnly) return 'PERFECT';
     if (perfect + great + good >= total) return 'FULL_COMBO';
   }
-  return (play.gaugeType !== undefined ? GAUGE_LAMPS[play.gaugeType.toUpperCase()] : undefined) ?? 'NORMAL';
+  const gauge = play.gaugeType?.toUpperCase();
+  if (play.ruleset === 'lr2' && gauge === 'DEATH') return 'NORMAL';
+  return (gauge !== undefined ? GAUGE_LAMPS[gauge] : undefined) ?? 'NORMAL';
 }

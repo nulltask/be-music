@@ -3466,7 +3466,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       gaugeHistory,
       scoreHistory,
       ...(this.playlog !== undefined ? { playlog: this.playlog } : {}),
-      lamp: resolveClearLamp({ cleared: this.gaugeState.cleared, score: this.score, gaugeType: this.gaugeState.type }),
+      lamp: resolveClearLamp({
+        cleared: this.gaugeState.cleared,
+        score: this.score,
+        gaugeType: this.gaugeState.type,
+        ruleset: this.resolveJudgeRuleset(),
+      }),
       gaugeType: this.gaugeState.type,
       judgeRuleset: this.resolveJudgeRuleset(),
       fast: this.fastCount,
