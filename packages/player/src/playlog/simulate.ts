@@ -146,6 +146,11 @@ interface SimLane {
   sweepCursor: number;
   mineCursor: number;
   held: boolean;
+  /**
+   * The keys holding the lane down now (`''` for an input recorded without tokens). Mines ask whether ANY key on the
+   * lane is down, so a second key keeps the lane down while the first is released, as the engine's lane history does.
+   */
+  downTokens: Set<string>;
   hold?: ActiveHold;
   /** Auto-played lane (AUTO mode or AUTO SCRATCH): every note resolves PGREAT on schedule. */
   auto: boolean;
@@ -301,6 +306,7 @@ class PlaylogSimulation {
         sweepCursor: 0,
         mineCursor: 0,
         held: false,
+        downTokens: new Set(),
         auto: autoPlay || (autoScratch && scratch),
         autoCursor: 0,
       };
@@ -418,7 +424,7 @@ class PlaylogSimulation {
         }
       } else if (event.kind === 'mine' || event.kind === 'mine-enter') {
         // Held as it enters the window (LR2) or as it crosses the line (every ruleset).
-        if (event.lane.held) this.detonateMine(event.mine!);
+        if (event.lane.downTokens.size > 0) this.detonateMine(event.mine!);
       } else if (event.kind === 'mine-settle') {
         event.mine!.applied = true;
       } else if (event.kind === 'release-settle') {
@@ -533,6 +539,11 @@ class PlaylogSimulation {
     const pressed = this.resolveInputLanes(input);
     for (const lane of pressed) {
       lane.held = true;
+      if (input.tokens === undefined || input.tokens.length === 0) {
+        lane.downTokens.add('');
+      } else {
+        for (const token of input.tokens) lane.downTokens.add(token);
+      }
     }
     // Pressing a lane whose release is waiting out the margin resumes its hold: that press judges nothing else. A lane
     // whose long note is held (pressed by another key bound to it) judges no other note either: its current note is
@@ -597,6 +608,13 @@ class PlaylogSimulation {
     const timeUs = input.timeUs;
     for (const lane of this.resolveInputLanes(input)) {
       lane.held = false;
+      if (input.tokens === undefined || input.tokens.length === 0) {
+        lane.downTokens.clear();
+      } else {
+        for (const token of input.tokens) lane.downTokens.delete(token);
+        // An unnamed press is released by any release of the lane.
+        lane.downTokens.delete('');
+      }
       const hold = lane.hold;
       if (!hold) continue;
       this.integrateHcn(lane, timeUs);
