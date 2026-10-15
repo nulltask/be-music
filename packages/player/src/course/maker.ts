@@ -23,6 +23,8 @@ export interface CourseDraftStage {
   /** The chart's key mode: every stage must match the first one's. */
   keyMode: number;
   title?: string;
+  /** The chart's subtitle, which LR2's texts 160-164 show while the course is being made. */
+  subtitle?: string;
   artist?: string;
 }
 

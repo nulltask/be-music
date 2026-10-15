@@ -109,7 +109,7 @@ describe('LR2 course maker', () => {
     kind: 'nonstop' as const,
     name: 'Mine',
     stages: [
-      { md5: '1'.repeat(32), keyMode: 7, title: 'One' },
+      { md5: '1'.repeat(32), keyMode: 7, title: 'One', subtitle: '[ANOTHER]' },
       { md5: '2'.repeat(32), keyMode: 7, title: 'Two' },
     ],
   };
@@ -126,6 +126,9 @@ describe('LR2 course maker', () => {
     expect(resolveLr2CourseText(150, info)).toBe('One');
     expect(resolveLr2CourseText(151, info)).toBe('Two');
     expect(resolveLr2CourseText(152, info)).toBe('');
+    // Texts 160-164: the subtitles of the songs added so far.
+    expect(resolveLr2CourseText(160, info)).toBe('[ANOTHER]');
+    expect(resolveLr2CourseText(161, info)).toBe('');
     expect(resolveLr2CourseText(170, info)).toBe('Mine');
     expect(resolveLr2CourseText(170, resolveLr2CourseDraftInfo({ ...draft, name: '' }, 'Type it'))).toBe('Type it');
     expect(resolveLr2CourseMakerText(198, 'cut-fit')).toBe('CUT+FIT');
