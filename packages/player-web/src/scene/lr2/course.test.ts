@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import type { SceneCourseInfo } from '../course-info.ts';
 import {
   lr2ShowsCourseCombo,
+  resolveLr2JudgeCombo,
   resolveLr2CourseConnectionText,
   resolveLr2CourseDraftInfo,
   resolveLr2CourseMakerAction,
@@ -148,5 +149,18 @@ describe('LR2 course maker', () => {
     expect(resolveLr2CourseMakerButtonState(240, course(3), 'fade')).toBe(0);
     expect(resolveLr2CourseMakerButtonState(268, undefined, 'blank2')).toBe(5);
     expect(resolveLr2CourseMakerButtonState(230, undefined, 'fade')).toBeUndefined();
+  });
+});
+
+describe('resolveLr2JudgeCombo', () => {
+  it('shows the course combo next to the judgement in an expert or grade course', () => {
+    expect(resolveLr2JudgeCombo(12, 340, 'grade')).toBe(340);
+    expect(resolveLr2JudgeCombo(12, 340, 'expert')).toBe(340);
+  });
+
+  it('shows the stage combo in a NONSTOP course and outside a course', () => {
+    expect(resolveLr2JudgeCombo(12, 340, 'nonstop')).toBe(12);
+    expect(resolveLr2JudgeCombo(12, undefined, undefined)).toBe(12);
+    expect(resolveLr2JudgeCombo(12, undefined, 'grade')).toBe(12);
   });
 });
