@@ -202,6 +202,7 @@ flowchart TD
 
 - `nonstop.playlog`: the play of the stitched chart, as recorded. It is what was judged, and `simulateCoursePlaylog` takes the course result from it: its judgments, gauge and max combo, with BP counting every note it never judged.
 - `nonstop.connections` and `nonstop.placement`: how the chart was stitched.
+- `nonstop.stitch`: the version of the stitching rules the chart was built by (`NONSTOP_STITCH_VERSION`), so the stitched chart is rebuilt the same way after the rules change. Logs from before it was recorded leave it out and read as version 1. It is not part of the course fingerprint: a fix to the stitching keeps the course's board.
 - `nonstop.stages`: where each stage sat in the play (`offsetUs`, its window `windowStartUs` / `windowEndUs`, its FIT `rate`), and the `#RANDOM` / `#SWITCH` draws its chart was resolved with before stitching (`randomDraws`, as `play.randomDraws` records a single play's; absent for a chart without control flow). With the stage charts, the draws rebuild the stitched chart.
 - `nonstop.noteStages`: the stage of each note of the play, by note id (`resolveNonstopNoteStages` reads it from the stitched chart's per-stage keys).
 

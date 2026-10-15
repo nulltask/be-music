@@ -57,6 +57,7 @@ const COURSE_REJECTIONS = [
   'stage-chart-invalid',
   'stage-chart-fingerprint-mismatch',
   'course-stage-facts-mismatch',
+  'nonstop-stitch-unsupported',
   'nonstop-chart-mismatch',
   'nonstop-stage-mismatch',
   'course-constraint-mismatch',

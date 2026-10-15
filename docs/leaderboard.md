@@ -292,7 +292,8 @@ with its own rankings per ruleset, and never as single-chart plays.
   judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it, since
   `stitchNonstopCourse` is deterministic: each stage chart must hash to its stage's chart fingerprint, is resolved with
   the `#RANDOM` draws its stage recorded (`nonstop.stages[].randomDraws`), gets the course's long-note constraint
-  (`applyCourseLongNoteConstraint`), and the stages are stitched with the recorded connections and placement. The
+  (`applyCourseLongNoteConstraint`), and the stages are stitched with the recorded connections, placement and stitching
+  rules (`nonstop.stitch`, version 1 when absent; rules the server does not know are `nonstop-stitch-unsupported`). The
   stitched play must have been recorded on that chart — its play fingerprint is the rebuilt chart's
   (`nonstop-chart-mismatch`) — and the stage map must be the rebuilt one: the stage placements, the stage of every
   note, and the number of stages the play reached (`nonstop-stage-mismatch`). The stitched play must pass the
@@ -351,7 +352,7 @@ flowchart TD
   charts["stage charts"] --> fp{"each hashes to its<br/>chartFingerprint?"}
   fp -->|yes| resolve["resolvePlayChart<br/>with the recorded draws"]
   resolve --> ln["applyCourseLongNoteConstraint"]
-  ln --> stitch["stitchNonstopCourse<br/>connections, placement"]
+  ln --> stitch["stitchNonstopCourse<br/>connections, placement, stitch"]
   stitch --> same{"play fingerprint ==<br/>nonstop.playlog's?"}
   same -->|yes| map{"stage map ==<br/>the rebuilt one?"}
   map -->|yes| sim["simulateCoursePlaylog<br/>on the stitched play"]

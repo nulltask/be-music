@@ -2,6 +2,7 @@ import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import {
   applyCourseLongNoteConstraint,
+  NONSTOP_STITCH_VERSION,
   stitchNonstopCourse,
   type NonstopConnection,
   type NonstopStitchMap,
@@ -44,7 +45,7 @@ export interface PreparedNonstopCourse {
 }
 
 /** Why a NONSTOP course cannot be stitched, for the status line. */
-export type NonstopPrepareFailure = 'missing-stage' | 'bmson' | 'id-space' | 'no-stage';
+export type NonstopPrepareFailure = 'missing-stage' | 'bmson' | 'id-space' | 'no-stage' | 'stitch-version';
 
 /**
  * Stitches a NONSTOP course from the collection: resolves each stage's `#RANDOM` (with `random`), applies the course's
@@ -157,7 +158,14 @@ export function buildNonstopCoursePlaylog(
       ...(definition.release === false ? { release: false as const } : {}),
     },
     stages: entries,
-    nonstop: { connections: prepared.connections, placement: prepared.placement, playlog, stages, noteStages },
+    nonstop: {
+      connections: prepared.connections,
+      placement: prepared.placement,
+      stitch: NONSTOP_STITCH_VERSION,
+      playlog,
+      stages,
+      noteStages,
+    },
     ...(options.createdAt !== undefined ? { createdAt: options.createdAt } : {}),
     ...(options.recorder !== undefined ? { recorder: options.recorder } : {}),
   });

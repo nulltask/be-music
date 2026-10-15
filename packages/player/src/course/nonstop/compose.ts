@@ -28,7 +28,19 @@ export interface NonstopStageInput {
   pms?: boolean;
 }
 
+/**
+ * The version of the stitching rules {@link stitchNonstopCourse} follows. A NONSTOP play log records it
+ * (`PlaylogNonstopRun.stitch`), so a stitched chart is rebuilt by the rules it was played on. Raise it whenever a change
+ * moves a stitched note, sound, rank or timing, and keep the earlier rules reachable through `options.stitch`.
+ */
+export const NONSTOP_STITCH_VERSION = 1;
+
+/** The stitching rule versions {@link stitchNonstopCourse} can follow. */
+export const NONSTOP_STITCH_VERSIONS: readonly number[] = [1];
+
 export interface StitchNonstopOptions extends NonstopPlanOptions {
+  /** The stitching rules to follow ({@link NONSTOP_STITCH_VERSION} by default); one it does not know is refused. */
+  stitch?: number;
   /** The connection after each stage but the last (`CourseDefinition.connections`); missing ones read as `fade`. */
   connections: readonly NonstopConnection[];
   /** The stitched chart's title, e.g. the course name. */
@@ -84,7 +96,7 @@ export interface NonstopStitchMap {
 
 export type StitchNonstopResult =
   | { ok: true; chart: BeMusicJson; map: NonstopStitchMap }
-  | { ok: false; reason: 'bmson' | 'id-space' | 'no-stage'; stage?: number };
+  | { ok: false; reason: 'bmson' | 'id-space' | 'no-stage' | 'stitch-version'; stage?: number };
 
 /** The stitched chart's tempo: LR2 scrolls a NONSTOP play at `realtime × 1.2` per 1920-unit measure, 150 BPM. */
 const STITCHED_BPM = 150;
@@ -132,12 +144,15 @@ interface StitchedStop {
  * note's stage also used there, becomes background sound, as LR2 does at the seam. Keysound and BGA keys are renumbered
  * into one base-62 space (`#BASE 62`); a course needing more than 3843 of either is refused (`id-space`). The chart's
  * judge rank is the first stage's (the map's `stageRanks` change it for later stages) and TOTAL the last stage's, as LR2
- * overwrites it.
+ * overwrites it. A stitching rule version it does not know (`options.stitch`) is refused (`stitch-version`).
  */
 export function stitchNonstopCourse(
   stages: readonly NonstopStageInput[],
   options: StitchNonstopOptions,
 ): StitchNonstopResult {
+  if (!NONSTOP_STITCH_VERSIONS.includes(options.stitch ?? NONSTOP_STITCH_VERSION)) {
+    return { ok: false, reason: 'stitch-version' };
+  }
   if (stages.length === 0) return { ok: false, reason: 'no-stage' };
   const bmsonStage = stages.findIndex((stage) => stage.chart.sourceFormat !== 'bms');
   if (bmsonStage >= 0) return { ok: false, reason: 'bmson', stage: bmsonStage };

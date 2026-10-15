@@ -2,7 +2,7 @@ import { resolveChart } from '@be-music/chart';
 import { createEmptyJson } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
 import { describe, expect, test } from 'vite-plus/test';
-import { stitchNonstopCourse } from './compose.ts';
+import { NONSTOP_STITCH_VERSION, stitchNonstopCourse } from './compose.ts';
 
 const bms = (...lines: string[]) => parseChart(lines.join('\n'), 'bms');
 
@@ -181,5 +181,10 @@ describe('stitchNonstopCourse', () => {
       reason: 'id-space',
     });
     expect(stitchNonstopCourse([], { connections: [] })).toEqual({ ok: false, reason: 'no-stage' });
+    // Stitching rules this build does not know are refused, not guessed at.
+    expect(stitchNonstopCourse([], { connections: [], stitch: NONSTOP_STITCH_VERSION + 1 })).toEqual({
+      ok: false,
+      reason: 'stitch-version',
+    });
   });
 });

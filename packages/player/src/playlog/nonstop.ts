@@ -13,6 +13,11 @@ import { simulatePlaylog, type SimulatePlaylogOptions } from './simulate.ts';
 export interface PlaylogNonstopRun {
   connections: NonstopConnection[];
   placement: 'intended' | 'lr2';
+  /**
+   * The stitching rules the stitched chart was built by (`NONSTOP_STITCH_VERSION`), so it is rebuilt the same way after
+   * the rules change. Absent in logs from before it was recorded, which read as version 1.
+   */
+  stitch?: number;
   /** The stitched play, as recorded: authoritative for the course result. */
   playlog: BeMusicPlaylog;
   stages: PlaylogNonstopStage[];

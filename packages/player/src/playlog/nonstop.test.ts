@@ -176,6 +176,10 @@ describe('NONSTOP play logs', () => {
     expect(() =>
       parseCoursePlaylog({ ...JSON.parse(serializeCoursePlaylog(log)), nonstop: { ...log.nonstop, noteStages: [0] } }),
     ).toThrow(/noteStages/);
+    // The stitching rule version round-trips and must be a positive integer.
+    const json = JSON.parse(serializeCoursePlaylog(log));
+    expect(parseCoursePlaylog({ ...json, nonstop: { ...json.nonstop, stitch: 2 } }).nonstop?.stitch).toBe(2);
+    expect(() => parseCoursePlaylog({ ...json, nonstop: { ...json.nonstop, stitch: 0 } })).toThrow(/nonstop\.stitch/);
     // Ranked on its stitched play, keyed by the stage charts the cut-out stages name.
     expect(checkCoursePlaylogEligibility(log)).toMatchObject({
       eligible: true,
