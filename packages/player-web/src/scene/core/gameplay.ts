@@ -100,7 +100,13 @@ import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker
 import { advanceCourseCombo, createCourseCombo, type CourseComboState } from './course-combo.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { nonstopBpmAt, type NonstopStitchMap } from '@be-music/player/course';
-import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
+import {
+  createNonstopStageMixer,
+  resolveNonstopStretchRates,
+  type NonstopFitMode,
+  type NonstopStageMixer,
+} from '../../runtime/nonstop-audio.ts';
+import { stretchAudioBuffers, type TimeStretchAlgorithm } from '../../runtime/time-stretch.ts';
 import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
@@ -588,6 +594,13 @@ export interface CoreGameplayViewOptions {
    * and its background sound fades at the stage seams.
    */
   nonstop?: NonstopStitchMap;
+  /**
+   * How a NONSTOP FIT stage follows the previous stage's tempo: `pitch` (default, as LR2) plays its samples at the FIT
+   * rate, `keep-pitch` stretches them to the new tempo and keeps their pitch.
+   */
+  nonstopFitMode?: NonstopFitMode;
+  /** The time stretcher keep pitch uses: `signalsmith` (default, Signalsmith Stretch) or `wsola`. */
+  nonstopStretchAlgorithm?: TimeStretchAlgorithm;
   /** The hi-speed cannot be changed during play (a course's `no_speed` constraint). */
   hiSpeedLocked?: boolean;
   /**
@@ -2745,6 +2758,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // walks the prefixed form first when set so a chart authored as `wav/` + bare `kick.wav` references resolves the
     // file as `wav/kick.wav`.
     const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
+    // Keep pitch: a FIT stage's samples are stretched to its new tempo once, here, and then play at their own pitch.
+    const keepPitch = this.options.nonstop !== undefined && this.options.nonstopFitMode === 'keep-pitch';
+    const stretchRates = keepPitch
+      ? resolveNonstopStretchRates(this.options.nonstop!, chart.resources.wav, (path) =>
+          normalizePath(path).toLowerCase(),
+        )
+      : undefined;
     await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
       if (this.disposed || !this.source || !this.song || !this.audioContext) return;
       // Audio-aware asset lookup: charts almost universally declare `.wav` paths but archives often ship `.ogg` /
@@ -2773,6 +2793,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // dispose can complete cleanly.
       }
     });
+    if (stretchRates !== undefined && stretchRates.size > 0) await this.stretchNonstopSamples(stretchRates);
     // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
     // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
     // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
@@ -2781,7 +2802,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.nonstopMixer?.dispose();
       this.nonstopMixer =
         this.options.nonstop !== undefined
-          ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop)
+          ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop, {
+              keepPitch: this.options.nonstopFitMode === 'keep-pitch',
+            })
           : undefined;
       this.webAudioSession = createWebAudioSession({
         audioContext: this.audioContext,
@@ -2792,6 +2815,27 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         bmsonSlicePlayback: this.bmsonSlicePlayback,
         ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
       });
+    }
+  }
+
+  /**
+   * Keep pitch: stretches each FIT stage's decoded samples to the stage's tempo in place, keeping their pitch. The
+   * samples of one rate are stretched together (one Signalsmith Stretch render per stage).
+   */
+  private async stretchNonstopSamples(rates: ReadonlyMap<string, number>): Promise<void> {
+    const byRate = new Map<number, string[]>();
+    for (const [path, rate] of rates) {
+      if (this.decodedSamples.has(path)) byRate.set(rate, [...(byRate.get(rate) ?? []), path]);
+    }
+    for (const [rate, paths] of byRate) {
+      if (this.disposed || !this.audioContext) return;
+      const stretched = await stretchAudioBuffers(
+        this.audioContext,
+        paths.map((path) => this.decodedSamples.get(path)!),
+        rate,
+        this.options.nonstopStretchAlgorithm ?? 'signalsmith',
+      );
+      paths.forEach((path, index) => this.decodedSamples.set(path, stretched[index]!));
     }
   }
 
@@ -5176,6 +5220,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         decodedSamples: this.decodedSamples,
         wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
         bmsonSlicePlayback: this.bmsonSlicePlayback,
+        // The engine plays through its own session: a stitched NONSTOP chart's stage rates (FIT) and fades go with it.
+        ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
       ui: callbacks,
