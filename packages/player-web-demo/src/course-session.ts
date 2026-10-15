@@ -110,18 +110,22 @@ export class CourseSession {
    */
   recordStage(playlog: BeMusicPlaylog | undefined): 'next' | 'finished' {
     if (this.ended) return 'finished';
-    const native = playlog?.results?.native;
-    if (playlog === undefined || native === undefined) {
-      this.ended = true;
-      return 'finished';
-    }
-    this.logs.push(playlog);
-    const failed = native.gauge.failedMidPlay === true || native.gauge.final <= 0;
-    if (failed || this.logs.length >= this.course.stages.length) {
+    const goesOn = this.goesOnAfter(playlog);
+    if (playlog?.results?.native !== undefined) this.logs.push(playlog);
+    if (!goesOn) {
       this.ended = true;
       return 'finished';
     }
     return 'next';
+  }
+
+  /** Whether the course would go on after recording `playlog` as the next stage ({@link recordStage} returning `next`). */
+  goesOnAfter(playlog: BeMusicPlaylog | undefined): boolean {
+    if (this.ended) return false;
+    const native = playlog?.results?.native;
+    if (native === undefined) return false;
+    const failed = native.gauge.failedMidPlay === true || native.gauge.final <= 0;
+    return !failed && this.logs.length + 1 < this.course.stages.length;
   }
 
   /**
@@ -176,6 +180,19 @@ export class CourseSession {
       ...(options.recorder !== undefined ? { recorder: options.recorder } : {}),
     });
   }
+}
+
+/**
+ * Whether a finished course stage goes straight on to the next stage without showing its result: always with stage
+ * results skipped (the Debug Menu's **Skip stage results**), and, as LR2 does (OpenLR2 `Main.cpp` M1381-M1384), when the
+ * course plays itself and goes on after the stage. The last stage's result (or a failed one's) still shows then.
+ */
+export function skipsCourseStageResult(options: {
+  skipStageResults: boolean;
+  autoPlay: boolean;
+  courseGoesOn: boolean;
+}): boolean {
+  return options.skipStageResults || (options.autoPlay && options.courseGoesOn);
 }
 
 /**

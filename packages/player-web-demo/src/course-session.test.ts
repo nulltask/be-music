@@ -3,7 +3,7 @@ import { parseBeatorajaCourseData } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import { describe, expect, test } from 'vite-plus/test';
-import { buildCourseResultSummary, CourseSession, courseRecordKey } from './course-session.ts';
+import { buildCourseResultSummary, CourseSession, courseRecordKey, skipsCourseStageResult } from './course-session.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
@@ -138,6 +138,19 @@ describe('CourseSession', () => {
     expect(seen).toEqual([3, 3]);
   });
 
+  test('tells whether the course goes on after a stage before it is recorded', () => {
+    const session = new CourseSession(course([]));
+    expect(session.goesOnAfter(stageLog({}))).toBe(true);
+    expect(session.goesOnAfter(stageLog({ gauge: { type: 'GRADE', final: 0, cleared: false } }))).toBe(false);
+    expect(session.goesOnAfter(undefined)).toBe(false);
+    // Asking records nothing.
+    expect(session.stagesPlayed).toBe(0);
+    session.recordStage(stageLog({}));
+    session.recordStage(stageLog({}));
+    // After the last stage the course result follows.
+    expect(session.goesOnAfter(stageLog({}))).toBe(false);
+  });
+
   test('refuses a course with a missing stage', () => {
     expect(() => new CourseSession({ ...course(), playable: false })).toThrow('not in the collection');
   });
@@ -181,5 +194,17 @@ describe('buildCourseResultSummary', () => {
       gauge: { type: 'CLASS', current: 36.5, cleared: true },
       course: { maxCombo: 40 },
     });
+  });
+});
+
+describe('skipsCourseStageResult', () => {
+  test('skips every stage result when stage results are skipped', () => {
+    expect(skipsCourseStageResult({ skipStageResults: true, autoPlay: false, courseGoesOn: false })).toBe(true);
+  });
+
+  test('skips an auto-played stage the course goes on after, as LR2 does, but not the last one', () => {
+    expect(skipsCourseStageResult({ skipStageResults: false, autoPlay: true, courseGoesOn: true })).toBe(true);
+    expect(skipsCourseStageResult({ skipStageResults: false, autoPlay: true, courseGoesOn: false })).toBe(false);
+    expect(skipsCourseStageResult({ skipStageResults: false, autoPlay: false, courseGoesOn: true })).toBe(false);
   });
 });

@@ -127,6 +127,7 @@ Courses play through the same select → play → result scenes. See [Courses an
   - Starting a course shows the decide screen once, before the first stage, naming the course as LR2's does (the selected bar's title); backing out of it drops the course. A NONSTOP course's quick retry skips it, as LR2's does.
   - The stages play in order. Each stage runs with `PlayerOptions.course`: the course kind, its gauge set and judge constraint, and the gauge value and course combo the previous stage left.
   - Dismissing a stage's result starts the next stage. With **Skip stage results** on (Debug Menu → Course), the next stage starts as soon as a stage ends, and only the course result is shown.
+  - A course played with AUTO skips the result of every stage the course goes on after, as LR2 does (OpenLR2 `Main.cpp` M1381-M1384); the last stage's result and the course result still show.
   - A stage whose gauge empties ends the course.
   - ESC gives the course up: the run is kept as a failed one (as LR2 records it) and the course result follows. F5 / quick retry is off.
   - The course constraints are applied:
@@ -136,7 +137,7 @@ Courses play through the same select → play → result scenes. See [Courses an
 - **Result:**
   - After the last stage, or the failed one, the result scene shows the course as one run: summed judgments, the course max combo, the final gauge and the course lamp.
   - The course play log (`*.bmcourse.json`, see [playlog.md](./playlog.md#course-play-logs)) is auto-downloaded when play-log auto-save is on.
-  - The best lamp, EX score, max combo and BP are kept per course.
+  - The best lamp, EX score, max combo and BP are kept per course. A run played with AUTO on any stage (or a NONSTOP run played with AUTO) keeps no record, as an auto play keeps none for a chart.
   - Stage results count for the course, not for the single charts, and are not submitted to the leaderboard.
 - **LR2 skins** (`SceneCourseInfo`, passed as `courseInfo` to the LR2 select, gameplay and result scenes):
   - Ops: a course bar on the select screen lights 3 (course bar), 5 when every stage is in the collection, 290 and its kind's op (291 NONSTOP, 292 EXPERT, 293 GRADE). During a course, play and result add the stage op: 280-288 for stages 1-9 that are not the last, 289 for the last.

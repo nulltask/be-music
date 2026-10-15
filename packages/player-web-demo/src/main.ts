@@ -137,7 +137,7 @@ import {
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
 import {
-  isCourseRunAtAnotherTempo,
+  courseRunKeepsRecord,
   mergeSongRecord,
   readStoredSongRecords,
   playRecordKey,
@@ -172,6 +172,7 @@ import {
   buildCourseResultSummary,
   CourseSession,
   courseRecordKey,
+  skipsCourseStageResult,
   type CourseStagePlan,
 } from './course-session.ts';
 import {
@@ -2393,7 +2394,8 @@ class PlayerWebDemoApp {
       return;
     }
     // A run at another tempo is practice: no record.
-    if (!isCourseRunAtAnotherTempo(courseLog)) this.recordCourseResult(courseRecordKey(nonstop.course), native);
+    // An auto-played run or one at another tempo leaves the record alone.
+    if (courseRunKeepsRecord(courseLog)) this.recordCourseResult(courseRecordKey(nonstop.course), native);
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
     this.leaderboard.maybeSubmitCourse(
@@ -2467,8 +2469,9 @@ class PlayerWebDemoApp {
       await this.showSelect();
       return;
     }
-    // A run at another tempo is practice: no record (and the Leaderboard refuses it as `tempo`).
-    if (!isCourseRunAtAnotherTempo(courseLog)) this.recordCourseResult(courseRecordKey(session.course), result);
+    // An auto-played run keeps no record, nor does a run at another tempo, which is practice (and the Leaderboard
+    // refuses it as `tempo`).
+    if (courseRunKeepsRecord(courseLog)) this.recordCourseResult(courseRecordKey(session.course), result);
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
     this.leaderboard.maybeSubmitCourse(courseLog, session.stageSongs());
@@ -3418,10 +3421,15 @@ class PlayerWebDemoApp {
         void this.finishBeatorajaGameplayThen(async () => {
           // A course stage: its play log carries the course on, and leaving its result plays the next stage.
           if (courseStage !== undefined && this.courseSession !== undefined) {
-            this.courseSession.recordStage(playlog);
-            // With stage results skipped, go straight on to the next stage (or the course result).
+            const goesOn = this.courseSession.recordStage(playlog) === 'next';
+            // With stage results skipped (or an auto-played stage the course goes on after, as LR2 skips it), go
+            // straight on to the next stage (or the course result).
             const mounted =
-              !this.guiState.courseAutoAdvance &&
+              !skipsCourseStageResult({
+                skipStageResults: this.guiState.courseAutoAdvance,
+                autoPlay,
+                courseGoesOn: goesOn,
+              }) &&
               (await this.showBeatorajaResult(song, summary, maxCombo, history, {
                 info: this.courseSession.courseInfo,
               }));
@@ -4982,8 +4990,17 @@ class PlayerWebDemoApp {
           void this.finishGameplayThen(() => this.showNonstopCourseResult(nonstop, result.playlog, result));
           return;
         }
-        // A course stage with stage results skipped goes straight on to the next stage (or the course result).
-        if (courseStage !== undefined && this.courseSession !== undefined && this.guiState.courseAutoAdvance) {
+        // A course stage with stage results skipped (or an auto-played one the course goes on after, as LR2 skips it)
+        // goes straight on to the next stage (or the course result).
+        if (
+          courseStage !== undefined &&
+          this.courseSession !== undefined &&
+          skipsCourseStageResult({
+            skipStageResults: this.guiState.courseAutoAdvance,
+            autoPlay,
+            courseGoesOn: this.courseSession.goesOnAfter(result.playlog),
+          })
+        ) {
           void this.finishGameplayThen(async () => {
             this.courseSession?.recordStage(result.playlog);
             this.gameplayView?.dispose({ preserveAudioTail: true });

@@ -3,7 +3,9 @@ import type { PixiGameplayResultData } from '@be-music/player-web/scenes';
 import {
   CLEAR_LAMP_ORDER,
   clearLampRank,
+  courseRunKeepsRecord,
   isCourseRunAtAnotherTempo,
+  isCourseRunAutoPlayed,
   mergeSongRecord,
   parseSongRecords,
   playRecordKey,
@@ -123,6 +125,29 @@ describe('isCourseRunAtAnotherTempo', () => {
 
   it('keeps a run played at the charts’ own tempo', () => {
     expect(isCourseRunAtAnotherTempo({ stages: [played(), played(1), unreached] })).toBe(false);
+  });
+});
+
+describe('isCourseRunAutoPlayed / courseRunKeepsRecord', () => {
+  type Log = Parameters<typeof courseRunKeepsRecord>[0];
+  const played = (play: { mode?: 'manual' | 'auto'; tempo?: number } = {}) =>
+    ({ played: true, playlog: { play: { mode: 'manual', ...play } } }) as unknown as Log['stages'][number];
+  const unreached = { played: false, facts: {} } as unknown as Log['stages'][number];
+
+  it('flags a run with any stage played by itself', () => {
+    expect(isCourseRunAutoPlayed({ stages: [played(), played({ mode: 'auto' }), unreached] })).toBe(true);
+    expect(isCourseRunAutoPlayed({ stages: [played(), played(), unreached] })).toBe(false);
+  });
+
+  it('flags a NONSTOP run whose stitched play played itself', () => {
+    const nonstop = { playlog: { play: { mode: 'auto' } } } as unknown as NonNullable<Log['nonstop']>;
+    expect(isCourseRunAutoPlayed({ stages: [unreached], nonstop })).toBe(true);
+  });
+
+  it('keeps a record only for a run played by hand at the charts’ own tempo', () => {
+    expect(courseRunKeepsRecord({ stages: [played(), played()] })).toBe(true);
+    expect(courseRunKeepsRecord({ stages: [played({ mode: 'auto' }), played()] })).toBe(false);
+    expect(courseRunKeepsRecord({ stages: [played({ tempo: 1.2 }), played()] })).toBe(false);
   });
 });
 

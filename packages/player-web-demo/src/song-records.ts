@@ -107,6 +107,20 @@ export function isCourseRunAtAnotherTempo(courseLog: Pick<BeMusicCoursePlaylog, 
 }
 
 /**
+ * Whether a course run played itself (`play.mode: 'auto'`) on any stage, or on the stitched play of a NONSTOP run: an
+ * auto-played run leaves the course's record alone, as an auto play leaves the chart's.
+ */
+export function isCourseRunAutoPlayed(courseLog: Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>): boolean {
+  if (courseLog.nonstop?.playlog.play.mode === 'auto') return true;
+  return courseLog.stages.some((entry) => entry.played && entry.playlog.play.mode === 'auto');
+}
+
+/** Whether a course run counts for the course's best record: not auto-played and not played at another tempo. */
+export function courseRunKeepsRecord(courseLog: Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>): boolean {
+  return !isCourseRunAutoPlayed(courseLog) && !isCourseRunAtAnotherTempo(courseLog);
+}
+
+/**
  * The key a chart's record is stored under: its chart-file SHA-256 when known (stable across sessions, machines, and
  * file moves — the same hash the play-logs record), else its chart path inside the dropped library.
  */
