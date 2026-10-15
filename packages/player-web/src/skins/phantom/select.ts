@@ -53,6 +53,8 @@ const OUTRO_MS = 860;
 const INTRO_STAGGER_MS = 40;
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 78;
+/** The widest a folder or course row's count may run (`4 stages · 1 missing`); the title gets the rest. */
+const ROW_COUNT_MAX_W = 170;
 const ROW_LENGTH_W = 30;
 const ROW_NOTES_W = 74;
 const KICKER_PITCH = 20;
@@ -657,11 +659,11 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       skewX: -0.18,
       anchorX: 1,
       anchorY: 0.5,
-      maxWidth: facts ? ROW_BPM_W : 64,
+      maxWidth: facts ? ROW_BPM_W : ROW_COUNT_MAX_W,
       marquee: active,
     });
     meta.label = `fallback-meta[idx=${entryIndex}]`;
-    let factsLeft = rowX + rowW - 12 - (facts ? ROW_BPM_W : metaText ? Math.min(64, meta.width) : 0) - 10;
+    let factsLeft = rowX + rowW - 12 - (facts ? ROW_BPM_W : metaText ? Math.min(ROW_COUNT_MAX_W, meta.width) : 0) - 10;
     if (facts) {
       const factStyle = (fill: number): SkinTextOptions => ({
         size: 11,
