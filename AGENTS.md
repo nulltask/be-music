@@ -48,6 +48,20 @@
 - Keep links within Japanese markdown files pointing to other Japanese markdown files when those counterparts exist.
 - Do not add non-changeset Markdown files under `.changeset/` other than `README.md`, because Changesets parses `.md` files in that directory as release entries.
 
+# Documentation Diagram Rules
+
+- Draw diagrams in documentation with Mermaid (` ```mermaid ` fenced blocks). Do not draw ASCII-art or ` ```text ` diagrams; convert an existing one when you edit the section around it.
+- Use a diagram wherever it explains something better than prose: data flow and package layering, state machines, the order of events (sequences, timelines), and decision rules. Keep the prose next to it for the details.
+- Make the rendered diagram easy to read:
+  - Pick the diagram type that matches the content (`flowchart`, `sequenceDiagram`, `stateDiagram-v2`, `classDiagram`, `timeline`, ...).
+  - Choose the direction that keeps it compact (`flowchart TD` for pipelines, `LR` for short chains), and avoid very wide or very tall layouts.
+  - Keep node and edge labels short; put explanations in the text, not in the boxes.
+  - Group related nodes with `subgraph`, and order nodes so edges do not cross where it can be avoided.
+  - Keep one diagram to what fits on one screen; split a large one into several focused diagrams.
+  - Do not hard-code colours or a theme, and do not carry meaning by colour alone, so it reads in GitHub's light and dark modes.
+- Check that a diagram renders (e.g. in the GitHub preview or the Mermaid Live Editor) before committing it.
+- Keep the diagrams of an English `.md` and its Japanese `.ja.md` in sync: the same structure, with labels translated.
+
 # Testing Rules
 
 - Add tests in the same change that introduces new exported functions, new parser directives, new pure-function helpers, or behavior changes to existing ones. Vitest lives at the workspace root (`pnpm test` runs `vp test run`, which executes the projects listed in the root `vite.config.ts`) and individual packages keep `*.test.ts` next to the source under test.

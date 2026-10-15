@@ -168,6 +168,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.simulatePlaylogRulesets(BENCH_PLAYLOG);
     },
   });
+  define('player.playlog.computeScoreRate', {
+    run: () => {
+      playlogApi.computeScoreRate({ total: 1000, exScore: 1650 });
+    },
+  });
+  define('player.playlog.resolveIidxRankLabel', {
+    run: () => {
+      playlogApi.resolveIidxRankLabel(1650, 1000);
+    },
+  });
 }
 
 const BENCH_PLAYLOG: BeMusicPlaylog = {
