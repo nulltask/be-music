@@ -7,12 +7,13 @@ import { checkPlaylogEligibility, type PlaylogAssistFlag } from './eligibility.t
  * play, for any stage (`missing-fingerprint` also covers an unreached stage without its chart fingerprint).
  * `not-a-course-run` is a log whose stages do not make one run: no stage played, a played stage after an unreached one,
  * or a stage log that was not played as a stage of this course (no `play.course`, or another course kind).
- * `nonstop` is a NONSTOP run (`courseLog.nonstop`), which the Leaderboard does not verify yet: its stitched chart has no
+ * `tempo` is a run with a stage played at another tempo (practice, as for a single play). `nonstop` is a NONSTOP run (`courseLog.nonstop`), which the Leaderboard does not verify yet: its stitched chart has no
  * chart document of its own.
  */
 export type CoursePlaylogIneligibleReason =
   | 'auto-play'
   | 'aborted'
+  | 'tempo'
   | 'missing-fingerprint'
   | 'not-a-course-run'
   | 'nonstop';
