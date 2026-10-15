@@ -402,6 +402,59 @@ describe('engine / simulator equivalence', () => {
     expect(summary.emptyPoor).toBe(1);
   });
 
+  // Misses are settled at each note's own deadline: a key note whose window closes before an earlier scratch note's
+  // (beatoraja's scratch BAD window reaches 10 ms further) is missed first, so a hit between the two deadlines starts a
+  // new combo instead of extending the old one.
+  test.each(RULESETS)('%s: misses settle in deadline order across lanes', async (ruleset) => {
+    const at = (channel: string, us: number) => ({
+      measure: 0,
+      channel,
+      position: [us, 1_000_000] as const,
+      value: '01',
+    });
+    const probe = await replay(chart([at('11', 1_000_000), at('16', 1_000_000)], 3), [], ruleset);
+    const { windows } = resolveRulesetConfig(probe.playlog, ruleset);
+    const keyLateUs = -windows.note.judges[3][0];
+    const scratchLateUs = -windows.scratch.judges[3][0];
+    const keyNoteUs = 400_000 + Math.max(0, scratchLateUs - keyLateUs) / 2;
+    const pressUs = keyNoteUs + keyLateUs + 1_000;
+
+    const json = chart([at('13', 100_000), at('16', 400_000), at('11', keyNoteUs), at('12', pressUs)], 3);
+    const inputs = [
+      down(0, 100_000, '13'),
+      up(1, 120_000, '13'),
+      down(2, pressUs, '12'),
+      up(3, pressUs + 20_000, '12'),
+    ];
+    const { playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.results?.native?.maxCombo).toBe(simulated.maxCombo);
+    if (ruleset === 'beatoraja') {
+      expect(simulated.maxCombo).toBe(1);
+    }
+  });
+
+  // An LN held to its tail settles at the tail, before a miss that falls due a moment later on another lane, so the
+  // tail extends the combo before the miss breaks it.
+  test.each(RULESETS)('%s: an LN tail settles before a later miss', async (ruleset) => {
+    const json = longNoteChart(1);
+    json.events.push(
+      { measure: 1, channel: '12', position: [1, 2], value: '01' },
+      { measure: 2, channel: '13', position: [1, 2000], value: '01' },
+    );
+    const inputs = [down(0, 1_000_000, '11'), down(1, 1_500_000, '12'), up(2, 1_520_000, '12'), up(3, 2_500_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.results?.native?.maxCombo).toBe(simulated.maxCombo);
+    expect(summary.gauge?.current).toBe(simulated.gauge.final);
+    if (ruleset === 'lr2') {
+      expect(simulated.maxCombo).toBe(2);
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 

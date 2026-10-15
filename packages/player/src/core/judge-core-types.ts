@@ -16,8 +16,6 @@ import type { PlayerGaugeSummary, PlayerUiCommand } from './ui-signal-bus.ts';
 export const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
 /** How long each further key event (or a held kitty key) keeps a long note held. */
 export const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
-/** Chart-time grid a replay advances its judge state on, between and alongside the replayed inputs. */
-export const REPLAY_JUDGE_STEP_SECONDS = 0.001;
 /**
  * Per-second gauge drain while a Hell-Charge LN (mode 3) is NOT held during its body. Upstream
  * `JudgeManager.java:324-340` integrates 0.5 % per 200 ms tick = 2.5 %/s; the core integrates the same rate
@@ -133,6 +131,11 @@ export interface JudgeCoreState {
   autoScratchCursor: number;
   scorableMissCursor: number;
   landmineExpireCursor: number;
+  /**
+   * How far each unsettled mine has been checked: 1 once its LR2 PGREAT-window entry, 2 once its crossing of the judge
+   * line. A mine is settled (judged) after its last check.
+   */
+  readonly landminePhases: Map<TimedLandmineNote, number>;
   invisibleExpireCursor: number;
   remainingScorableNotes: number;
   remainingLandmineNotes: number;

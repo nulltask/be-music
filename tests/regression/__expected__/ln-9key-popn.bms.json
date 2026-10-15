@@ -556,11 +556,11 @@
             "slow": 5,
             "exScore": 27,
             "noteCount": 26,
-            "maxCombo": 7,
+            "maxCombo": 6,
             "djLevel": "C",
             "gauge": {
               "type": "NORMAL",
-              "final": 97,
+              "final": 100,
               "cleared": true
             }
           },
@@ -625,7 +625,7 @@
               "exScore": 27,
               "score": 27,
               "gauge": {
-                "current": 97,
+                "current": 100,
                 "max": 100,
                 "clearThreshold": 80,
                 "initial": 20,
@@ -635,7 +635,7 @@
                 "survival": false,
                 "failedMidPlay": false
               },
-              "maxCombo": 7
+              "maxCombo": 6
             },
             "iidx": {
               "total": 43,
