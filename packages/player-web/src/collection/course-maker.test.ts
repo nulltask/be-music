@@ -95,6 +95,19 @@ test('restores saved courses without reporting a change', async () => {
   expect(changes).toEqual([]);
 });
 
+test('sets the constraints of the course being made and of a saved one', async () => {
+  const courses = maker();
+  courses.start('grade');
+  expect(courses.draft?.constraints).toEqual(['grade_mirror', 'gauge_lr2']);
+  courses.setConstraints(['grade', 'no_speed']);
+  await courses.append(SEVEN[0]!);
+  const saved = courses.finish()!;
+  expect(saved.constraints).toEqual(['grade', 'no_speed']);
+  const edited = courses.setCourseConstraints(saved, ['grade_random', 'gauge_7k'])!;
+  expect(edited.constraints).toEqual(['grade_random', 'gauge_7k']);
+  expect(courses.courses).toEqual([edited]);
+});
+
 describe('resolveCourseMakerFolders', () => {
   test('lists each kind with its saved courses then a NEW COURSE bar', async () => {
     const courses = maker();

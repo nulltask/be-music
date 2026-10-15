@@ -1,12 +1,15 @@
 import {
   appendCourseDraftStage,
   createCourseDraft,
+  defaultCourseMakerConstraints,
   finishCourseDraft,
   parseLr2NonstopConnections,
   removeLastCourseDraftStage,
   stepLr2NonstopConnection,
+  withCourseConstraints,
   withNonstopConnection,
   type CourseChartLookup,
+  type CourseConstraint,
   type CourseDefinition,
   type CourseDraft,
   type CourseDraftAppendFailure,
@@ -102,7 +105,7 @@ export class CourseMaker {
 
   /** Starts making a course of `kind`, dropping any course being made. */
   start(kind: CourseKind): void {
-    this.current = createCourseDraft(kind);
+    this.current = { ...createCourseDraft(kind), constraints: defaultCourseMakerConstraints(kind) };
     this.emit('draft');
   }
 
@@ -129,6 +132,13 @@ export class CourseMaker {
   removeLast(): void {
     if (this.current === undefined || this.current.stages.length === 0) return;
     this.current = removeLastCourseDraftStage(this.current);
+    this.emit('draft');
+  }
+
+  /** Sets the constraints of the course being made (beatoraja's course constraints, one per group). */
+  setConstraints(constraints: readonly CourseConstraint[]): void {
+    if (this.current === undefined) return;
+    this.current = { ...this.current, constraints: [...constraints] };
     this.emit('draft');
   }
 
@@ -193,6 +203,15 @@ export class CourseMaker {
   renameCourse(course: CourseDefinition, name: string): CourseDefinition | undefined {
     if (!this.owns(course)) return undefined;
     return this.replace(course, { ...course, name: name.trim() || course.name });
+  }
+
+  /** Replaces a saved course's constraints. */
+  setCourseConstraints(
+    course: CourseDefinition,
+    constraints: readonly CourseConstraint[],
+  ): CourseDefinition | undefined {
+    if (!this.owns(course)) return undefined;
+    return this.replace(course, withCourseConstraints(course, constraints));
   }
 
   /** Deletes a saved course. */
