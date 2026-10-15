@@ -426,7 +426,7 @@ keysound fallback が存在する場合は、fallback 音を先に再生でき�
 fallback は early `BAD` 窓がすでに開いた同レーン最新 WAV です。そのため 2 ノート間の空打鍵では、次ノートの判定窓が始まるまで前 WAV を鳴らし続けます。
 次ノートの WAV は、その判定窓が開く前には使いません。
 fallback 再生後、 FREE ZONE 上のチャンネルなら空POOR は発火させずそのまま return します (FREE ZONE は author が空打鍵による発音を意図したエリアなので、 phantom press 扱いしない)。
-LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させません (直前 LN の意図された tail re-tap として扱う)。
+キーの離鍵が取れない入力（離鍵イベントを送らない端末で、キーリピートが LN を弾いたキーを送り直す）では、LN を弾いたレーンでその LN の終点より前に押したノートなしの押下も同様に空POOR を発火させません。離鍵が取れる入力（kitty キーボードプロトコル、ブラウザ、リプレイ）ではこの窓はなく、すべての押下を実際の押下として LR2 / beatoraja と同じく判定します。
 
 ### 地雷
 
@@ -604,7 +604,7 @@ long note の確定タイミングは `AUTO` と同じく終点です。
 ### `MANUAL`
 
 `MANUAL` は入力トークンに対応するレーン集合から、`BAD` 窓内で最も適切な候補ノートを選びます。
-候補がない場合、runtime は early `BAD` 窓がすでに開いた同レーン最新 keysound を再生でき、その後 FREE ZONE 上のチャンネルまたは long-note repeat-suppress 窓内でない限り、LR2 互換の空POORを適用します。
+候補がない場合、runtime は early `BAD` 窓がすでに開いた同レーン最新 keysound を再生でき、その後 FREE ZONE 上のチャンネルでない限り、また離鍵が取れない入力でその LN の終点前でない限り、LR2 互換の空POORを適用します。
 次ノートの keysound は、そのノートの判定窓が開く前には再生しません。
 
 手動入力では、ノート未入力のまま `BAD` 窓を過ぎた対象を自動的に `POOR` とします。
