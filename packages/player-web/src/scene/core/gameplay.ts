@@ -103,7 +103,7 @@ import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { collectChartVolumeMultipliers, createPlayAudioGraph, loadPlaySamples } from '../../chart/play-audio.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
-import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import {
   parseBmsSwBga,
   pickSwitchingBgaFrame,
