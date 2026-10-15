@@ -51,6 +51,19 @@ import {
 // ---- presses --------------------------------------------------------------------------------------------------
 
 /**
+ * The first note a press scan visits: one microsecond wider than the reach, since the windows are compared in whole
+ * microseconds (`judgeDeltaUs`) while note times are float seconds. A note just outside is rejected by its windows.
+ */
+function scanStartIndex(notes: readonly TimedPlayableNote[], nowSec: number, reachSeconds: number): number {
+  return lowerBoundBySeconds(notes, nowSec - reachSeconds - 1e-6);
+}
+
+/** True once a scan has passed every note a press at `inputTimeUs` can reach, compared in whole microseconds. */
+function isBeyondScanReach(note: TimedPlayableNote, inputTimeUs: number, reachSeconds: number): boolean {
+  return toJudgeUs(note.seconds) - inputTimeUs > Math.round(reachSeconds * 1e6);
+}
+
+/**
  * The note a press resolves against, chosen by the ruleset's own selection algorithm. Reachability is per note: the
  * note's own lane (key vs scratch) and its own chart time (the `#EXRANKxx` rank in force there) pick its window set,
  * and both legs are checked separately. A note inside the coarse scan radius but outside its own windows is not a
@@ -69,13 +82,9 @@ function selectPressCandidate(
   let bestSelection: JudgeSelectionCandidate | undefined;
   // `scorableNotes` is sorted by time, so the scan visits candidates in the ascending order the selection algorithms
   // assume (`lowest` keeps the first, the others may displace it).
-  for (
-    let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds);
-    index < scorableNotes.length;
-    index += 1
-  ) {
+  for (let index = scanStartIndex(scorableNotes, nowSec, reachSeconds); index < scorableNotes.length; index += 1) {
     const note = scorableNotes[index]!;
-    if (note.seconds - nowSec > reachSeconds) {
+    if (isBeyondScanReach(note, inputTimeUs, reachSeconds)) {
       break;
     }
     if (note.judged || !candidateChannels.has(note.channel)) {
@@ -128,15 +137,12 @@ function applyMultiBadCollector(
   const { config } = state;
   const scorableNotes = config.scorableNotes;
   const reachSeconds = maxJudgeReachSeconds(config, nowSec);
+  const inputTimeUs = Math.round(nowSec * 1e6);
   const consumedNote = { time: consumed.seconds, isLong: isLongPlayableNote(consumed), judge: consumedJudge };
   const extras: TimedPlayableNote[] = [];
-  for (
-    let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds);
-    index < scorableNotes.length;
-    index += 1
-  ) {
+  for (let index = scanStartIndex(scorableNotes, nowSec, reachSeconds); index < scorableNotes.length; index += 1) {
     const note = scorableNotes[index]!;
-    if (note.seconds - nowSec > reachSeconds) {
+    if (isBeyondScanReach(note, inputTimeUs, reachSeconds)) {
       break;
     }
     if (note === consumed || note.judged || !candidateChannels.has(note.channel)) {
