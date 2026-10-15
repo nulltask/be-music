@@ -146,8 +146,11 @@ import {
   pickActiveBgaCue,
   pickActiveBgaKey,
   resolveBgaImageRect,
+  resolveNonstopBgaAlpha,
+  splitNonstopBgaTimeline,
   toBrowserBgaTimeline,
   type BgaCue,
+  type NonstopStageBgaTimeline,
 } from './gameplay-bga.ts';
 import {
   isPlayableInputChannel,
@@ -1245,6 +1248,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * keyed by (BMS id like "01" for BMS charts, header.name like "base.png" for bmson). `bmpKey === undefined` is the
    * "clear / hide" command (BMS `00`).
    */
+  /** A stitched NONSTOP chart's base / layer cues split by stage (`options.nonstop`). */
+  private nonstopBgaTimelines: NonstopStageBgaTimeline[] | undefined;
   private bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } = {
     base: [],
     layer: [],
@@ -2492,6 +2497,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
       : new Set();
     this.bgaTimeline = toBrowserBgaTimeline(resolvedPlay.bga);
+    this.nonstopBgaTimelines =
+      this.options.nonstop !== undefined
+        ? splitNonstopBgaTimeline(this.bgaTimeline, this.options.nonstop.stages)
+        : undefined;
     // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
     // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
     // black POOR plate on misses for charts that rely on this convention.
@@ -3994,8 +4003,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // is fine in practice: the LR2 default skin uses identical flags on every rect, and a future skin that mixes them
     // per-rect would still get a consistent global playback state from this single sync point.
     const controllingBga = visibleBgas[0]!;
-    const baseCue = controllingBga.noBase ? undefined : pickActiveBgaCue(this.bgaTimeline.base, cueSeconds);
-    const layerCue = controllingBga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, cueSeconds);
+    // A stitched NONSTOP chart shows one BGA stack per stage, crossfading at the seams; any other chart one stack.
+    const stacks = this.resolveBgaStacks(cueSeconds, controllingBga.noBase === true, controllingBga.noLayer === true);
+    const leading = stacks.reduce<(typeof stacks)[number] | undefined>(
+      (best, stack) => (best === undefined || stack.alpha >= best.alpha ? stack : best),
+      undefined,
+    );
+    const baseCue = leading?.baseCue;
+    const layerCue = leading?.layerCue;
     const baseKey = baseCue?.bmpKey;
     const layerKey = layerCue?.bmpKey;
     const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
@@ -4041,6 +4056,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         textures: ReadonlyMap<string, Texture>,
         layerName: 'base' | 'layer' | 'poor',
         cueSeconds: number | undefined,
+        alpha = 1,
       ): void => {
         if (!key) return;
         const resolvedKey = this.resolveBgaFrameKey(key, cueSeconds, seconds);
@@ -4068,6 +4084,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           backdrop.height = bga.h;
           bga.applyToSprite(backdrop);
           backdrop.tint = 0x000000;
+          backdrop.alpha *= alpha;
         }
         const sprite = this.bgaLayerPool.acquireSprite();
         sprite.texture = texture;
@@ -4076,6 +4093,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         sprite.width = placed.w;
         sprite.height = placed.h;
         bga.applyToSprite(sprite);
+        sprite.alpha *= alpha;
         // BMS spec — `#ARGBxx AARRGGBB` (and the ARGB tuple embedded in `#EXBMPxx a,r,g,b,filename`) declare the BMP
         // slot's alpha + RGB tint for layer composition. Apply the parsed values via Pixi's per-sprite `tint` (RGB
         // multiply) and `alpha` (overall opacity); the default `#FFFFFFFF` round-trips to `tint = 0xFFFFFF` / `alpha =
@@ -4104,15 +4122,40 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
         drawLayer(poorKey, this.bgaTextures, 'poor', undefined);
       } else {
-        // `cue.seconds` anchors switching-BGA frame timing — `pickSwitchingBgaFrame` advances frames relative to when
-        // the cue fired, not relative to the chart origin.
-        drawLayer(baseKey, this.bgaTextures, 'base', baseCue?.seconds);
-        // Layer track is composited on top with black→transparent so the base track shows through where the foreground
-        // BMP is empty.
-        drawLayer(layerKey, this.bgaLayerTextures, 'layer', layerCue?.seconds);
+        for (const stack of stacks) {
+          // `cue.seconds` anchors switching-BGA frame timing — `pickSwitchingBgaFrame` advances frames relative to when
+          // the cue fired, not relative to the chart origin.
+          drawLayer(stack.baseCue?.bmpKey, this.bgaTextures, 'base', stack.baseCue?.seconds, stack.alpha);
+          // Layer track is composited on top with black→transparent so the base track shows through where the
+          // foreground BMP is empty.
+          drawLayer(stack.layerCue?.bmpKey, this.bgaLayerTextures, 'layer', stack.layerCue?.seconds, stack.alpha);
+        }
       }
     }
     this.bgaLayerPool.end();
+  }
+
+  /**
+   * The BGA stacks to draw at `cueSeconds`: the chart's base and layer cues at full opacity, or for a stitched NONSTOP
+   * chart each stage's own cues at the opacity of its crossfade, earlier stages first.
+   */
+  private resolveBgaStacks(
+    cueSeconds: number,
+    noBase: boolean,
+    noLayer: boolean,
+  ): Array<{ alpha: number; baseCue: BgaCue | undefined; layerCue: BgaCue | undefined }> {
+    const pick = (timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[] }, alpha: number) => ({
+      alpha,
+      baseCue: noBase ? undefined : pickActiveBgaCue(timeline.base, cueSeconds),
+      layerCue: noLayer ? undefined : pickActiveBgaCue(timeline.layer, cueSeconds),
+    });
+    const stages = this.options.nonstop?.stages;
+    const timelines = this.nonstopBgaTimelines;
+    if (stages === undefined || timelines === undefined) return [pick(this.bgaTimeline, 1)];
+    return stages.flatMap((stage, index) => {
+      const alpha = resolveNonstopBgaAlpha(stage, cueSeconds);
+      return alpha > 0 ? [pick(timelines[index]!, alpha)] : [];
+    });
   }
 
   /**
