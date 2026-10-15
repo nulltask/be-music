@@ -239,6 +239,25 @@ export function skipsCourseStageResult(options: {
   return options.skipStageResults || (options.autoPlay && options.courseGoesOn);
 }
 
+/** Which result a result screen shows: a single play, a course stage, a course run, or a NONSTOP run. */
+export type ResultRun = 'single' | 'stage' | 'course' | 'nonstop';
+
+/**
+ * How a result screen presents its run, as LR2 does. A course run (EXPERT / GRADE) ends on the course result: the
+ * course-result skin (falling back to the result skin) with the course jingles, and no quick retry. A NONSTOP run has no
+ * course-result step (OpenLR2 `Main.cpp` M1406-M1412 only moves EXPERT / GRADE on to it), so it shows on the result
+ * skin with the clear / fail jingles, and R retries it as for a single play (L2854 allows the result's quick retry
+ * outside a course and on NONSTOP). A course stage's result offers no retry.
+ */
+export function resolveResultPresentation(run: ResultRun): {
+  courseResultSkin: boolean;
+  courseJingles: boolean;
+  quickRetry: boolean;
+} {
+  const course = run === 'course';
+  return { courseResultSkin: course, courseJingles: course, quickRetry: run === 'single' || run === 'nonstop' };
+}
+
 /**
  * The key a course's best record is kept under: the course kind, its constraints and its stages' chart hashes in
  * order (SHA-256 when the course names one, else MD5), like beatoraja keys course scores on the stage hashes.
