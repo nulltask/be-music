@@ -28,6 +28,23 @@ LR2 には鍵盤モード用の play skin がないため、`24` / `48` KEY の�
 parser は select、decide、play、result data を 1 つの `Lr2Skin` shape に保持します。
 consumer は scene に必要な field だけを読みます。
 
+## コース
+
+LR2 には、コース全体の結果を出す専用のシーンがあります。`#INFORMATION` の type 15 で、慣例では `CourseResult/` の下に置きます。`loadLr2ThemeSkinsFromFiles` はこれを `courseResultSkin` として読み込み、テーマの `Sound/` フォルダからコース結果用のジングル `courseclear` / `coursefail` も読みます。`result` の検索がこのスキンを選ぶことはありません。
+
+LR2 はシーンが始まるたびにスキンを読み込むので、`#IF` ブロックはシーンの間ずっと変わらない状態を条件にできます。コースでは、それがコースの op です（OpenLR2 `LR2f.cpp` L5403-L5444）。
+
+| op              | 意味                                                |
+| --------------- | --------------------------------------------------- |
+| 280-288         | 1〜9 ステージ目を遊んでいて、最後のステージではない |
+| 289             | 最後のステージ                                      |
+| 290             | コース（選択中のバー、または遊んでいるコース）      |
+| 291 / 292 / 293 | コースの種類：NONSTOP / EXPERT / GRADE              |
+
+テーマは、これらの op をオフにした状態で一度だけ解析します。`Lr2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` は、読み込み済みのファイルからスキンの 1 つを解析し直します。そのとき `#IF` / `#ELSEIF` の評価中は、追加の op を真として扱います（`LoadLr2SkinOptions.parseOps`）。`pickLr2PlaySkinVariant` は譜面を遊ぶプレイスキンの variant を返すので、ホストはコースのステージ用にそのスキンを解析し直せます。
+
+コース用スキンが読む値（数値 250-259、テキスト 150-170、104 / 105 のコースのコンボ）はシーンの状態で、`@be-music/player-web` が渡します。[コースと段位認定](./player-web.ja.md#コースと段位認定) を参照してください。
+
 ## 解析済み directive
 
 実装済み directive:
