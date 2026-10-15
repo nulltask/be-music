@@ -595,8 +595,8 @@ The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's
   `BAD` when that is `BAD` or worse (`JudgeManager` L533-545).
 - Mode `2` (CN): the head scores immediately on the press. The tail is judged on the RELEASE — against the exact
   release instant, not the frame that noticed it — and contributes a second judgment. Holding past the end point
-  is not yet a judgment: the player has until the tail's late window closes to let go. The lane sound stops on
-  release.
+  is not yet a judgment: the player has until the tail's late window closes to let go. Still holding when it
+  closes makes the tail a missed `POOR` (beatoraja's `CN end poor`). The lane sound stops on release.
 - Mode `3` (HCN): as mode `2`, plus the gauge keeps draining while the hold is broken. Reaching the end point with
   the hold broken makes the tail a `POOR`.
 
