@@ -1,0 +1,123 @@
+import type { CourseDefinitionGroup } from '@be-music/player-web/collection';
+import { describe, expect, test } from 'vite-plus/test';
+import {
+  COURSE_TABLE_URLS_STORAGE_KEY,
+  describeCourseTableImportError,
+  importCourseTable,
+  mergeCourseGroup,
+  normalizeCourseTableUrl,
+  parseStoredCourseTableUrls,
+  readStoredCourseTableUrls,
+  rememberCourseTableUrl,
+} from './course-table-import.ts';
+
+const MD5_A = '0123456789abcdef0123456789abcdef';
+
+function memoryStorage(): Pick<Storage, 'getItem' | 'setItem'> {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+  };
+}
+
+describe('course table URLs', () => {
+  test('normalizeCourseTableUrl accepts absolute http(s) URLs only', () => {
+    expect(normalizeCourseTableUrl('  https://example.com/sl/table.html ')).toBe('https://example.com/sl/table.html');
+    expect(normalizeCourseTableUrl('http://example.com')).toBe('http://example.com/');
+    expect(normalizeCourseTableUrl('')).toBeUndefined();
+    expect(normalizeCourseTableUrl('table.html')).toBeUndefined();
+    expect(normalizeCourseTableUrl('javascript:alert(1)')).toBeUndefined();
+  });
+
+  test('parseStoredCourseTableUrls keeps valid, distinct URLs', () => {
+    expect(parseStoredCourseTableUrls(null)).toEqual([]);
+    expect(parseStoredCourseTableUrls('{')).toEqual([]);
+    expect(parseStoredCourseTableUrls('{"a":1}')).toEqual([]);
+    expect(parseStoredCourseTableUrls('["https://a.example/t.html", 1, "nope", "https://a.example/t.html"]')).toEqual([
+      'https://a.example/t.html',
+    ]);
+  });
+
+  test('rememberCourseTableUrl stores each URL once', () => {
+    const storage = memoryStorage();
+    expect(readStoredCourseTableUrls(storage)).toEqual([]);
+    rememberCourseTableUrl('https://a.example/t.html', storage);
+    expect(rememberCourseTableUrl('https://a.example/t.html', storage)).toEqual(['https://a.example/t.html']);
+    rememberCourseTableUrl('https://b.example/h.json', storage);
+    expect(JSON.parse(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([
+      'https://a.example/t.html',
+      'https://b.example/h.json',
+    ]);
+  });
+
+  test('blocked storage reads as empty and still returns the URL', () => {
+    const blocked: Pick<Storage, 'getItem' | 'setItem'> = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    expect(readStoredCourseTableUrls(blocked)).toEqual([]);
+    expect(rememberCourseTableUrl('https://a.example/t.html', blocked)).toEqual(['https://a.example/t.html']);
+  });
+});
+
+describe('mergeCourseGroup', () => {
+  const group = (label: string, name: string): CourseDefinitionGroup => ({
+    label,
+    courses: [
+      {
+        name,
+        kind: 'grade',
+        stages: [],
+        constraints: [],
+        trophies: [],
+        release: true,
+        source: { format: 'table', legacyGrade: false },
+      },
+    ],
+  });
+
+  test('appends a new label and replaces an existing one in place', () => {
+    const groups = [group('A', 'a1'), group('B', 'b1')];
+    expect(mergeCourseGroup(groups, group('C', 'c1')).map((g) => g.label)).toEqual(['A', 'B', 'C']);
+    const replaced = mergeCourseGroup(groups, group('A', 'a2'));
+    expect(replaced.map((g) => [g.label, g.courses[0]!.name])).toEqual([
+      ['A', 'a2'],
+      ['B', 'b1'],
+    ]);
+    expect(groups[0]!.courses[0]!.name).toBe('a1');
+  });
+});
+
+describe('importCourseTable', () => {
+  test('reads a table page into one labelled group', async () => {
+    const pages: Record<string, string> = {
+      'https://example.com/t/table.html': '<meta name="bmstable" content="header.json">',
+      'https://example.com/t/header.json': JSON.stringify({
+        name: 'Example',
+        course: [[{ name: 'ex0', md5: [MD5_A] }]],
+      }),
+    };
+    const imported = await importCourseTable('https://example.com/t/table.html', async (url) => pages[url]!);
+    expect(imported.headerUrl).toBe('https://example.com/t/header.json');
+    expect(imported.group.label).toBe('Example');
+    expect(imported.group.courses.map((course) => course.name)).toEqual(['ex0']);
+  });
+
+  test('rejects a table without courses', async () => {
+    await expect(importCourseTable('https://example.com/h.json', async () => '{"name":"Empty"}')).rejects.toThrow(
+      /no course/u,
+    );
+  });
+
+  test('describes blocked fetches as a cross-origin failure', () => {
+    expect(describeCourseTableImportError(new TypeError('Failed to fetch'))).toMatch(/cross-origin/u);
+    expect(describeCourseTableImportError(new Error('HTTP 404'))).toBe('Course table import failed: HTTP 404');
+  });
+});
