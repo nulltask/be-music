@@ -148,3 +148,55 @@ export function buildSkinBgaFrame<Image>(
     poorActive: poor !== undefined,
   };
 }
+
+/** One stage of a stitched NONSTOP chart as its BGA needs it (`NonstopStitchStage` from `@be-music/player/course`). */
+export interface NonstopBgaStage {
+  windowStart: number;
+  windowEnd: number;
+  bmpKeys: readonly string[];
+  bgaFadeIn?: { start: number; end: number };
+  bgaFadeOut?: { start: number; end: number };
+}
+
+/** A stage's own base and layer BGA cues, the stitched timeline's cues split by the stage that owns each BMP key. */
+export interface NonstopStageBgaTimeline {
+  base: BgaCue[];
+  layer: BgaCue[];
+}
+
+/**
+ * Splits a stitched NONSTOP chart's base and layer BGA cues by stage (its stitched BMP keys are per stage), as LR2 keeps
+ * a BGA layer per stage (OpenLR2 `LR2f.cpp` L12726-L12780). A cue that clears the layer (no key) goes to the stage
+ * whose window it falls in.
+ */
+export function splitNonstopBgaTimeline(
+  timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[] },
+  stages: readonly NonstopBgaStage[],
+): NonstopStageBgaTimeline[] {
+  const stageOfKey = new Map<string, number>();
+  stages.forEach((stage, index) => stage.bmpKeys.forEach((key) => stageOfKey.set(key, index)));
+  const stageAt = (seconds: number): number => {
+    const index = stages.findIndex((stage) => seconds < stage.windowEnd);
+    return index < 0 ? stages.length - 1 : index;
+  };
+  const split = stages.map((): NonstopStageBgaTimeline => ({ base: [], layer: [] }));
+  for (const track of ['base', 'layer'] as const) {
+    for (const cue of timeline[track]) {
+      const stage = (cue.bmpKey !== undefined ? stageOfKey.get(cue.bmpKey) : undefined) ?? stageAt(cue.seconds);
+      split[stage]?.[track].push(cue);
+    }
+  }
+  return split;
+}
+
+/**
+ * How opaque a NONSTOP stage's BGA is at `seconds`: fully inside its window, fading in over the 3 s before it and out
+ * over the 3 s after it, linearly as LR2 mixes its stage BGA layers (OpenLR2 L27047-L27052).
+ */
+export function resolveNonstopBgaAlpha(stage: NonstopBgaStage, seconds: number): number {
+  const ramp = (window: { start: number; end: number }): number =>
+    window.end > window.start ? Math.min(1, Math.max(0, (seconds - window.start) / (window.end - window.start))) : 1;
+  if (seconds < stage.windowStart) return stage.bgaFadeIn !== undefined ? ramp(stage.bgaFadeIn) : 0;
+  if (seconds >= stage.windowEnd) return stage.bgaFadeOut !== undefined ? 1 - ramp(stage.bgaFadeOut) : 0;
+  return 1;
+}
