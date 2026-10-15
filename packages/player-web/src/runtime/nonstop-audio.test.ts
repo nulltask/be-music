@@ -1,6 +1,6 @@
 import type { NonstopStitchMap } from '@be-music/player/course';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { createNonstopStageMixer, nonstopFadeCurve } from './nonstop-audio.ts';
+import { createNonstopStageMixer, nonstopFadeCurve, nonstopStageGainAt } from './nonstop-audio.ts';
 
 function fakeContext(currentTime = 0) {
   const gains: Array<{
@@ -69,6 +69,23 @@ describe('nonstopFadeCurve', () => {
     expect([...nonstopFadeCurve('in', 5)]).toEqual([0, 0.0625, 0.25, 0.5625, 1]);
     expect([...nonstopFadeCurve('out', 3)]).toEqual([1, 0.25, 0]);
   });
+
+  test('carries on a fade from where it is', () => {
+    expect([...nonstopFadeCurve('in', 3, 0.5)]).toEqual([0.25, 0.5625, 1]);
+    expect([...nonstopFadeCurve('out', 2, 0.5)]).toEqual([0.25, 0]);
+  });
+});
+
+describe('nonstopStageGainAt', () => {
+  test('follows the fade-in and fade-out curves, 1 outside them', () => {
+    const [first, second] = MAP.stages;
+    expect(nonstopStageGainAt(first!, 10)).toBe(1);
+    expect(nonstopStageGainAt(first!, 25)).toBe(0.25);
+    expect(nonstopStageGainAt(first!, 31)).toBe(0);
+    expect(nonstopStageGainAt(second!, 14)).toBe(0);
+    expect(nonstopStageGainAt(second!, 17.5)).toBe(0.25);
+    expect(nonstopStageGainAt(second!, 21)).toBe(1);
+  });
 });
 
 describe('createNonstopStageMixer', () => {
@@ -112,5 +129,23 @@ describe('keep pitch', () => {
     const { context } = fakeContext();
     const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP, { keepPitch: true });
     expect([mixer.rate(0), mixer.rate(1)]).toEqual([1, 1]);
+  });
+});
+
+describe('live tempo', () => {
+  test('retimes the fades from the current chart time, carrying on a fade under way', () => {
+    const { context, gains } = fakeContext(10);
+    const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP);
+    // Chart 17.5 s now (mid fade-in of the second stage), and chart second s falls at 10 + (s - 17.5) / 2 from here.
+    mixer.retime(17.5, (seconds) => 10 + (seconds - 17.5) / 2);
+    const [first, second] = gains;
+    expect(first!.gain.cancelScheduledValues).toHaveBeenCalledWith(0);
+    expect(first!.gain.setValueAtTime).toHaveBeenCalledWith(1, 10);
+    expect(first!.gain.setValueCurveAtTime.mock.calls[0]?.slice(1)).toEqual([11.25, 5]);
+    // The fade-in is half done: its curve picks up from there, starting now, without a value set first.
+    expect(second!.gain.setValueAtTime).not.toHaveBeenCalled();
+    const [curve, start, duration] = second!.gain.setValueCurveAtTime.mock.calls[0]!;
+    expect((curve as Float32Array)[0]).toBe(0.25);
+    expect([start, duration]).toEqual([10, 1.25]);
   });
 });

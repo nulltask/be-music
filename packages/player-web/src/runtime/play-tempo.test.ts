@@ -5,10 +5,13 @@ import {
   chartToElapsedSeconds,
   clampPlayTempo,
   elapsedToChartSeconds,
+  resolveReplayTempo,
   resolveSamplePlaybackRate,
   resolveSampleStretchRates,
+  setVideoPlaybackTempo,
   stretchDecodedSamples,
   stretchSlicePlayback,
+  supportsLiveTempoChange,
 } from './play-tempo.ts';
 
 const placement = (rate = 1) => ({
@@ -160,5 +163,37 @@ describe('stretchDecodedSamples', () => {
     const samples = new Map([['a', original]]);
     await stretchDecodedSamples(context, samples, new Map([['a', 0.5]]), 'wsola', () => true);
     expect(samples.get('a')).toBe(original);
+  });
+});
+
+describe('live tempo', () => {
+  test('changes live only when the pitch follows the tempo', () => {
+    expect(supportsLiveTempoChange('pitch')).toBe(true);
+    expect(supportsLiveTempoChange('keep-pitch')).toBe(false);
+  });
+
+  test('a replay reproduces its recorded tempo and, in pitch mode, its changes', () => {
+    const play = { tempo: 0.8, tempoChanges: [{ timeUs: 1_000_000, tempo: 1.2 }] };
+    expect(resolveReplayTempo(play, { pitchMode: 'pitch' })).toEqual({
+      tempo: 0.8,
+      changes: [{ timeUs: 1_000_000, tempo: 1.2 }],
+    });
+    // Keep pitch stretched the samples to the starting tempo: the changes cannot be followed.
+    expect(resolveReplayTempo(play, { pitchMode: 'keep-pitch' })).toEqual({ tempo: 0.8, changes: [] });
+    expect(resolveReplayTempo({}, { pitchMode: 'pitch' })).toEqual({ tempo: 1, changes: [] });
+  });
+
+  test("a replay that does not reproduce the tempo plays at the viewer's own", () => {
+    const play = { tempo: 0.8, tempoChanges: [{ timeUs: 1_000_000, tempo: 1.2 }] };
+    expect(resolveReplayTempo(play, { pitchMode: 'pitch', reproduce: false, ownTempo: 1.1 })).toEqual({
+      tempo: 1.1,
+      changes: [],
+    });
+  });
+
+  test('runs videos at the tempo', () => {
+    const video = { defaultPlaybackRate: 1, playbackRate: 1 } as HTMLVideoElement;
+    setVideoPlaybackTempo([video], 1.3);
+    expect([video.defaultPlaybackRate, video.playbackRate]).toEqual([1.3, 1.3]);
   });
 });

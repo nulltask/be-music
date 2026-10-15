@@ -21,7 +21,12 @@ interface WebAudioSourceHandle {
   node: AudioBufferSourceNode;
   buffer: AudioBuffer;
   gain: GainNode | undefined;
+  /** The NONSTOP stage rate the sample plays at on top of the session's base rate (1 outside a stage). */
+  stageRate: number;
 }
+
+/** How long a live tempo change glides the playback rate of the samples already playing, in seconds. */
+export const LIVE_TEMPO_RAMP_SECONDS = 0.03;
 
 /**
  * Per-event playback override produced by the bmson 1.0.0 slicing pipeline. Each entry carries the seek `offset` into
@@ -82,6 +87,12 @@ export interface WebAudioSessionContext {
    * 1 when the samples were stretched to it. A NONSTOP stage's rate multiplies with it. Defaults to 1.
    */
   playbackRate?: number;
+  /**
+   * {@link playbackRate} is the play tempo (`pitch` mode), so a live tempo change ({@link AudioSession.setTempo}) sets it:
+   * samples started afterwards play at the new tempo, and the ones still playing glide to it. Without it (keep pitch,
+   * where the samples were stretched to the tempo they load at) the session ignores tempo changes.
+   */
+  playbackRateFollowsTempo?: boolean;
 }
 
 /**
@@ -133,7 +144,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   const { audioContext, audioBus, chart, decodedSamples, wavCmdVolumeMultipliers, bmsonSlicePlayback, stageMixer } =
     context;
   const resolveChartStartContextTime = context.getChartStartContextTime ?? (() => 0);
-  const basePlaybackRate = context.playbackRate !== undefined && context.playbackRate > 0 ? context.playbackRate : 1;
+  let basePlaybackRate = context.playbackRate !== undefined && context.playbackRate > 0 ? context.playbackRate : 1;
   const sampleIdBase = resolveBmsBase(chart);
   /** Active BufferSource per `#WAVxx` slot. Used to honor bmson `c = true` (skip retrigger of a still-playing sample)
    *  and to wipe the slot once the source ends naturally. */
@@ -174,12 +185,13 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const node = audioContext.createBufferSource();
     node.buffer = buffer;
     const stage = stageMixer?.stageOf(sampleKey);
-    let rate = basePlaybackRate;
+    let stageRate = 1;
     if (stage !== undefined) {
-      rate *= stageMixer!.rate(stage);
+      stageRate = stageMixer!.rate(stage);
       // A stage's background voices go through its fade; the player's keysounds stay on the key bus.
       if (bus === audioBus.bgmMixer) bus = stageMixer!.bgmInput(stage) ?? bus;
     }
+    const rate = basePlaybackRate * stageRate;
     if (rate !== 1) node.playbackRate.value = rate;
     let gain: GainNode | undefined;
     const combinedGain = (wavCmdVolumeMultipliers.get(sampleKey) ?? 1) * dynamicGain;
@@ -191,7 +203,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     } else {
       node.connect(bus);
     }
-    return { node, buffer, gain };
+    return { node, buffer, gain, stageRate };
   };
 
   const disconnectSource = (handle: WebAudioSourceHandle): void => {
@@ -371,12 +383,30 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       }
       playSampleEvent(event, audioContextStartSeconds);
     },
+    setTempo: (tempo: number): void => {
+      if (context.playbackRateFollowsTempo !== true || disposed || !(Number.isFinite(tempo) && tempo > 0)) return;
+      basePlaybackRate = tempo;
+      const now = audioContext.currentTime;
+      for (const handle of activeSources) {
+        glidePlaybackRate(handle.node.playbackRate, tempo * handle.stageRate, now);
+      }
+    },
     stopChannel: (channel: string): void => {
       const handle = activeByChannel.get(normalizeChannel(channel));
       if (!handle) return;
       stopSource(handle);
     },
   };
+}
+
+/**
+ * Moves a sample's playback rate to `rate` over {@link LIVE_TEMPO_RAMP_SECONDS} from `now`, so a long sample already
+ * playing changes speed without a click. A bmson slice keeps its length in buffer time, so it still ends on its note.
+ */
+export function glidePlaybackRate(param: AudioParam, rate: number, now: number): void {
+  param.cancelScheduledValues(now);
+  param.setValueAtTime(param.value, now);
+  param.linearRampToValueAtTime(rate, now + LIVE_TEMPO_RAMP_SECONDS);
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   clampSampleOffset,
   createWebAudioSession,
   decodedSampleKey,
+  LIVE_TEMPO_RAMP_SECONDS,
 } from './web-audio-session.ts';
 
 /**
@@ -49,7 +50,12 @@ function createMocks(): {
     createBufferSource: vi.fn(() => {
       const node = {
         buffer: null as AudioBuffer | null,
-        playbackRate: { value: 1 },
+        playbackRate: {
+          value: 1,
+          cancelScheduledValues: vi.fn(),
+          setValueAtTime: vi.fn(),
+          linearRampToValueAtTime: vi.fn(),
+        },
         onended: null as null | (() => void),
         connect: vi.fn(),
         disconnect: vi.fn(),
@@ -203,6 +209,55 @@ describe('createWebAudioSession', () => {
     const [key, staged] = trackedBufferSources;
     expect(key!.node.playbackRate.value).toBe(0.8);
     expect(staged!.node.playbackRate.value).toBe(1);
+  });
+
+  test('a live tempo change sets the rate of later samples and glides the ones playing, in pitch mode', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer()],
+        ['bgm.wav', makeMockAudioBuffer()],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+      playbackRate: 0.8,
+      playbackRateFollowsTempo: true,
+      stageMixer: {
+        stageOf: (key) => (key === '03' ? 1 : undefined),
+        rate: () => 1.25,
+        bgmInput: () => undefined,
+      },
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('01', '03'));
+    (audioContext as { currentTime: number }).currentTime = 2;
+    session.setTempo?.(1.2);
+    const playing = trackedBufferSources[0]!.node.playbackRate;
+    // The playing BGM glides from its rate to the new tempo times its stage rate.
+    expect(playing.cancelScheduledValues).toHaveBeenCalledWith(2);
+    expect(playing.setValueAtTime).toHaveBeenCalledWith(1, 2);
+    expect(playing.linearRampToValueAtTime).toHaveBeenCalledWith(1.5, 2 + LIVE_TEMPO_RAMP_SECONDS);
+    session.triggerEvent?.(mkEvent('11', '01'));
+    expect(trackedBufferSources[1]!.node.playbackRate.value).toBe(1.2);
+  });
+
+  test('ignores a live tempo change unless the rate follows the tempo (keep pitch)', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer()]]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.setTempo?.(1.2);
+    expect(trackedBufferSources[0]!.node.playbackRate.linearRampToValueAtTime).not.toHaveBeenCalled();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    expect(trackedBufferSources[1]!.node.playbackRate.value).toBe(1);
   });
 
   test('applies #WAVCMD per-slot gain via an intermediate GainNode', () => {
