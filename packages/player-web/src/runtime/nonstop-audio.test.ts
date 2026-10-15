@@ -61,6 +61,7 @@ const MAP: NonstopStitchMap = {
     },
   ],
   tempo: [],
+  stageRanks: [],
 };
 
 describe('nonstopFadeCurve', () => {

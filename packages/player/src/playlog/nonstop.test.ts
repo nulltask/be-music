@@ -101,6 +101,48 @@ describe('NONSTOP play logs', () => {
     expect(simulatePlaylog(second!, { ruleset: 'lr2' }).judge.pgreat).toBe(4);
   });
 
+  test('judges a later stage with its own #RANK, and replays and cuts it out with it', async () => {
+    // Stage 2 is VERY HARD (PGREAT ±8 ms); stage 1 has no #RANK (NORMAL, ±18 ms). Every note is hit 12 ms late.
+    const stitched = stitchNonstopCourse(
+      [
+        { chart: STAGES[0]! },
+        { chart: bms('#RANK 0', '#BPM 240', '#WAV01 b.wav', '#00211:00010001', '#00312:00010001') },
+      ],
+      { connections: ['cut'] },
+    );
+    if (!stitched.ok) throw new Error('stitch failed');
+    const inputs = presses(stitched.chart, () => false).map((input) => ({ ...input, timeUs: input.timeUs + 12_000 }));
+    let playlog: BeMusicPlaylog | undefined;
+    const summary = await manualPlay(stitched.chart, {
+      speed: 16,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      replayInputs: inputs,
+      course: { kind: 'nonstop' },
+      stageRanks: stitched.map.stageRanks,
+      recordPlaylog: {},
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+    });
+    expect(summary).toMatchObject({ perfect: 3, great: 4 });
+    expect(playlog!.chart.judgeRank.stageRanks).toEqual([
+      { timeUs: Math.round(stitched.map.stageRanks[0]!.seconds * 1_000_000), rank: 0, table: 'chart' },
+    ]);
+    expect(simulatePlaylog(playlog!, { ruleset: 'lr2' }).judge).toMatchObject({ pgreat: 3, great: 4 });
+    const [, second] = splitNonstopPlaylog(
+      {
+        playlog: playlog!,
+        stages: resolveNonstopPlaylogStages(stitched.map),
+        noteStages: resolveNonstopNoteStages(stitched.chart, stitched.map, playlog!.chart.notes),
+      },
+      [{}, {}],
+      { ruleset: 'lr2' },
+    );
+    expect(simulatePlaylog(second!, { ruleset: 'lr2' }).judge).toMatchObject({ pgreat: 0, great: 4 });
+  });
+
   test('takes the course result from the stitched play and round-trips through the file format', async () => {
     const { stitched, playlog } = await playStitched();
     const noteStages = resolveNonstopNoteStages(stitched.chart, stitched.map, playlog.chart.notes);

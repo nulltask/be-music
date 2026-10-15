@@ -2,7 +2,7 @@ import { resolveChart } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import type { NonstopConnection } from '../course/definition.ts';
 import type { NonstopStitchMap } from '../course/nonstop/compose.ts';
-import type { BeMusicPlaylog, PlaylogChart, PlaylogInputEvent, PlaylogNote } from './format.ts';
+import type { BeMusicPlaylog, PlaylogChart, PlaylogInputEvent, PlaylogJudgeRank, PlaylogNote } from './format.ts';
 import { simulatePlaylog, type SimulatePlaylogOptions } from './simulate.ts';
 
 /**
@@ -146,7 +146,7 @@ export function splitNonstopPlaylog(
         sourceFormat: 'bms',
         laneMode: playlog.chart.laneMode,
         lnMode: playlog.chart.lnMode,
-        judgeRank: playlog.chart.judgeRank,
+        judgeRank: shiftJudgeRank(playlog.chart.judgeRank, stage.offsetUs),
         noteCount: notes.filter((note) => note.type === 'normal' || note.type === 'long').length,
         notes,
         ...(playlog.chart.total !== undefined ? { total: playlog.chart.total } : {}),
@@ -163,6 +163,18 @@ export function splitNonstopPlaylog(
     logs.push(stageLog);
   });
   return logs;
+}
+
+/** The stitched play's judge rank in a stage's own clock: its rank changes moved by the stage's offset. */
+function shiftJudgeRank(judgeRank: PlaylogJudgeRank, offsetUs: number): PlaylogJudgeRank {
+  const shifted: PlaylogJudgeRank = { ...judgeRank };
+  if (judgeRank.timeline !== undefined) {
+    shifted.timeline = judgeRank.timeline.map((change) => ({ ...change, timeUs: change.timeUs - offsetUs }));
+  }
+  if (judgeRank.stageRanks !== undefined) {
+    shifted.stageRanks = judgeRank.stageRanks.map((change) => ({ ...change, timeUs: change.timeUs - offsetUs }));
+  }
+  return shifted;
 }
 
 /** The stage each input of a stitched play goes to (see {@link splitNonstopPlaylog}). */

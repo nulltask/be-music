@@ -14,7 +14,12 @@ import {
   type NonstopPlanOptions,
   type NonstopStagePlacement,
 } from './plan.ts';
-import { resolveNonstopTempo, type NonstopTempoPoint } from './readouts.ts';
+import {
+  resolveNonstopStageRanks,
+  resolveNonstopTempo,
+  type NonstopStageRank,
+  type NonstopTempoPoint,
+} from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
 
 /** One stage to stitch: its BMS chart with control flow resolved, and whether it is a `.pms` chart. */
@@ -70,6 +75,11 @@ export interface NonstopStitchMap {
    * stage's own BPM, scaled by its FIT rate, where the stitched chart itself runs at 150 BPM.
    */
   tempo: NonstopTempoPoint[];
+  /**
+   * The judge rank changes after the first stage ({@link resolveNonstopStageRanks}), for the engine's `stageRanks`
+   * option; the stitched chart's `#RANK` is the first stage's.
+   */
+  stageRanks: NonstopStageRank[];
 }
 
 export type StitchNonstopResult =
@@ -120,8 +130,9 @@ interface StitchedStop {
  *
  * A note of a later stage that lands before the previous stage's last note, or within 0.1 s of it on a lane that
  * note's stage also used there, becomes background sound, as LR2 does at the seam. Keysound and BGA keys are renumbered
- * into one base-62 space (`#BASE 62`); a course needing more than 3843 of either is refused (`id-space`). Judge rank
- * comes from the first stage and TOTAL from the last, as LR2 overwrites it.
+ * into one base-62 space (`#BASE 62`); a course needing more than 3843 of either is refused (`id-space`). The chart's
+ * judge rank is the first stage's (the map's `stageRanks` change it for later stages) and TOTAL the last stage's, as LR2
+ * overwrites it.
  */
 export function stitchNonstopCourse(
   stages: readonly NonstopStageInput[],
@@ -220,11 +231,13 @@ export function stitchNonstopCourse(
   if (last.total !== undefined) chart.metadata.total = last.total;
 
   const readouts = stages.map((stage, index) => ({
+    ...stageNoteHeads(objects, index),
     tempo: resolved[index]!.timing.tempoPoints.map((point) => ({
       seconds: point.seconds,
       bpm: point.displayBpm ?? point.bpm,
     })),
     headerBpm: stage.chart.metadata.bpm,
+    ...(stage.chart.metadata.rank !== undefined ? { rank: stage.chart.metadata.rank } : {}),
   }));
 
   return {
@@ -232,6 +245,7 @@ export function stitchNonstopCourse(
     chart,
     map: {
       tempo: resolveNonstopTempo(readouts, placements, options),
+      stageRanks: resolveNonstopStageRanks(readouts, placements, options),
       stages: placements.map((placement, index) => {
         const after = index < placements.length - 1 ? (options.connections[index] ?? 'fade') : undefined;
         const before = index > 0 ? (options.connections[index - 1] ?? 'fade') : undefined;
@@ -335,6 +349,15 @@ function convertSeamNotes(objects: StitchedObject[], stageCount: number): void {
       if (dropped.has(objects[index]!)) objects.splice(index, 1);
     }
   }
+}
+
+/** Stitched seconds of a stage's first and last judged note heads (after the seam rule), when it has any. */
+function stageNoteHeads(
+  objects: readonly StitchedObject[],
+  stage: number,
+): { noteHeads?: { first: number; last: number } } {
+  const heads = [...noteHeads(objects, stage).keys()].map((head) => head.seconds);
+  return heads.length > 0 ? { noteHeads: { first: Math.min(...heads), last: Math.max(...heads) } } : {};
 }
 
 /** A stage's judged note heads (taps and long-note heads), each with its long-note tail, in time order. */

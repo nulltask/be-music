@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { NonstopStagePlacement } from './plan.ts';
-import { nonstopBpmAt, resolveNonstopTempo } from './readouts.ts';
+import { nonstopBpmAt, resolveNonstopStageRanks, resolveNonstopTempo } from './readouts.ts';
 
 const placement = (offsetSeconds: number, boundarySeconds: number, rate = 1): NonstopStagePlacement => ({
   measureOffset: 0,
@@ -21,6 +21,7 @@ const stages = [
       { seconds: 21, bpm: 200 },
     ],
     headerBpm: 120,
+    rank: 3,
   },
   {
     tempo: [
@@ -29,6 +30,7 @@ const stages = [
       { seconds: 30, bpm: 90 },
     ],
     headerBpm: 100,
+    rank: 0,
   },
 ];
 
@@ -73,5 +75,33 @@ describe('nonstopBpmAt', () => {
 
   test('is undefined without a tempo', () => {
     expect(nonstopBpmAt([], 1)).toBeUndefined();
+  });
+});
+
+describe('resolveNonstopStageRanks', () => {
+  test("switches to each later stage's #RANK at the boundary when a side has no notes", () => {
+    expect(resolveNonstopStageRanks(stages, placements)).toEqual([{ seconds: 20, rank: 0, table: 'chart' }]);
+  });
+
+  test("switches halfway between the previous stage's last note and the stage's first", () => {
+    const withNotes = [
+      { ...stages[0]!, noteHeads: { first: 1, last: 20.5 } },
+      { ...stages[1]!, noteHeads: { first: 21.5, last: 40 } },
+    ];
+    expect(resolveNonstopStageRanks(withNotes, placements)).toEqual([{ seconds: 21, rank: 0, table: 'chart' }]);
+  });
+
+  test('reads a later stage without #RANK as NORMAL', () => {
+    expect(resolveNonstopStageRanks([stages[0]!, {}], placements)).toEqual([{ seconds: 20, rank: 2, table: 'chart' }]);
+  });
+
+  test("switches at the stage's own time zero, by LR2's NONSTOP table, under lr2", () => {
+    expect(resolveNonstopStageRanks(stages, placements, { placement: 'lr2' })).toEqual([
+      { seconds: 16, rank: 0, table: 'lr2-nonstop' },
+    ]);
+    expect(resolveNonstopStageRanks([stages[0]!, {}], placements, { placement: 'lr2' })).toEqual([]);
+    expect(resolveNonstopStageRanks([stages[0]!, { rank: 1.9 }], placements, { placement: 'lr2' })).toEqual([
+      { seconds: 16, rank: 1, table: 'lr2-nonstop' },
+    ]);
   });
 });

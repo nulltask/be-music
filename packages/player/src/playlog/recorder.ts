@@ -109,6 +109,8 @@ export interface PlaylogRecorderOptions {
   recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
+  /** A stitched NONSTOP chart's later stages taking over the judge rank (`PlayerPlaySettings.stageRanks`). */
+  stageRanks?: ReadonlyArray<{ seconds: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
   /** LR2 negative-BPM reversal (chart seconds, #134) — recorded so re-simulations freeze judging at the same point. */
   reversalSeconds?: number;
   /** Clock source for `createdAt` — injectable for tests. Defaults to `Date`. */
@@ -255,6 +257,13 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
     judgeRank.timeline = timelineSource.map((change) => ({
       timeUs: secondsToMicroseconds(change.seconds),
       exRankValue: change.exRankValue,
+    }));
+  }
+  if (options.stageRanks !== undefined && options.stageRanks.length > 0) {
+    judgeRank.stageRanks = options.stageRanks.map((change) => ({
+      timeUs: secondsToMicroseconds(change.seconds),
+      rank: change.rank,
+      table: change.table,
     }));
   }
 

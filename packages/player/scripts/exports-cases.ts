@@ -231,14 +231,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     },
   });
   const benchStitched = courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
-  const benchStitchedMap = benchStitched.ok ? benchStitched.map : { stages: [], tempo: [] };
+  const benchStitchedMap = benchStitched.ok ? benchStitched.map : { stages: [], tempo: [], stageRanks: [] };
   const benchReadoutPlacements = courseApi.planNonstopCourse(benchNonstopStages.slice(0, 3), ['fade', 'cut-fit']);
-  const benchReadoutStages = [0, 1, 2].map(() => ({
+  const benchReadoutStages = [0, 1, 2].map((index) => ({
     tempo: [
       { seconds: 0, bpm: 150 },
       { seconds: 4.8, bpm: 180 },
     ],
     headerBpm: 150,
+    rank: index,
+    noteHeads: { first: index * 10 + 1, last: index * 10 + 9 },
   }));
   define('player.course.resolveNonstopTempo', {
     run: () => {
@@ -250,6 +252,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     run: () => {
       courseApi.nonstopBpmAt(benchStitchedMap.tempo, 3);
       courseApi.nonstopBpmAt(benchStitchedMap.tempo, 30);
+    },
+  });
+  define('player.course.resolveNonstopStageRanks', {
+    run: () => {
+      courseApi.resolveNonstopStageRanks(benchReadoutStages, benchReadoutPlacements);
+      courseApi.resolveNonstopStageRanks(benchReadoutStages, benchReadoutPlacements, { placement: 'lr2' });
     },
   });
   const benchStitchedChart = benchStitched.ok ? benchStitched.chart : benchNonstopChart;

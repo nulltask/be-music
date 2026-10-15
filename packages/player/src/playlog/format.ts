@@ -90,6 +90,12 @@ export interface PlaylogJudgeRank {
   sourceExRank?: number;
   /** Dynamic `#EXRANKxx` changes (channel `A0`), in chart order. Values share the `100 = NORMAL` unit. */
   timeline?: Array<{ timeUs: number; exRankValue: number }>;
+  /**
+   * A stitched LR2 NONSTOP play's later stages taking over the judge rank with their `#RANK`, in time order: from
+   * `timeUs` on, the windows a chart opening with `rank` gets (`'chart'`) or LR2's NONSTOP rank table
+   * (`'lr2-nonstop'`). Absent in logs recorded before it existed, which played with the first stage's rank throughout.
+   */
+  stageRanks?: Array<{ timeUs: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
 }
 
 export interface PlaylogChart {
@@ -356,10 +362,12 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     sourceRank: optionalFiniteNumber(judgeRankRaw.sourceRank, 'chart.judgeRank.sourceRank'),
     sourceExRank: optionalFiniteNumber(judgeRankRaw.sourceExRank, 'chart.judgeRank.sourceExRank'),
     timeline: parseJudgeRankTimeline(judgeRankRaw.timeline),
+    stageRanks: parseStageRanks(judgeRankRaw.stageRanks),
   };
   if (judgeRank.sourceRank === undefined) delete judgeRank.sourceRank;
   if (judgeRank.sourceExRank === undefined) delete judgeRank.sourceExRank;
   if (judgeRank.timeline === undefined) delete judgeRank.timeline;
+  if (judgeRank.stageRanks === undefined) delete judgeRank.stageRanks;
 
   const notesRaw = chart.notes;
   if (!Array.isArray(notesRaw)) {
@@ -421,6 +429,26 @@ function parseJudgeRankTimeline(value: unknown): PlaylogJudgeRank['timeline'] {
     return {
       timeUs: expectFiniteNumber(record.timeUs, `chart.judgeRank.timeline[${index}].timeUs`),
       exRankValue: expectFiniteNumber(record.exRankValue, `chart.judgeRank.timeline[${index}].exRankValue`),
+    };
+  });
+}
+
+function parseStageRanks(value: unknown): PlaylogJudgeRank['stageRanks'] {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new PlaylogParseError('chart.judgeRank.stageRanks: expected an array');
+  }
+  return value.map((entry, index) => {
+    const path = `chart.judgeRank.stageRanks[${index}]`;
+    const record = expectRecord(entry, path);
+    const table = record.table;
+    if (table !== 'chart' && table !== 'lr2-nonstop') {
+      throw new PlaylogParseError(`${path}.table: expected 'chart' or 'lr2-nonstop'`);
+    }
+    return {
+      timeUs: expectFiniteNumber(record.timeUs, `${path}.timeUs`),
+      rank: expectFiniteNumber(record.rank, `${path}.rank`),
+      table,
     };
   });
 }
