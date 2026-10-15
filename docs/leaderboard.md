@@ -164,7 +164,7 @@ sequenceDiagram
     else the same play from another account
         A-->>C: 409 play_already_submitted
     end
-    A->>A: eligibility: auto play, ESC abort or course stage → 422, assists → flags
+    A->>A: eligibility: auto play, ESC abort, tempo or course stage → 422, assists → flags
     A->>A: sha256(canonicalize(play document)) == playFingerprint ?
     A->>D: chart known?
     alt unknown chart
@@ -228,7 +228,9 @@ turning a play document's positions and timeline into note times that match the 
 - **Assists** (auto scratch, a debug judge-window override, ...) are stored with flags and ranked separately from
   unassisted plays.
 - **ESC aborts are rejected, and so are course stages**: a stage starts from the state the previous one left, so it is
-  not a single-chart play; it is ranked as part of its course run instead (section 6.1). **Failed plays** (the gauge
+  not a single-chart play; it is ranked as part of its course run instead (section 6.1). **Plays at another tempo**
+  (`play.tempo` other than 1, the web player's tempo slider) are refused as `tempo`: they are practice, as beatoraja's
+  frequency trainer does not save its scores. **Failed plays** (the gauge
   emptied) are stored and count as plays.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
@@ -267,6 +269,8 @@ with its own rankings per ruleset, and never as single-chart plays.
   stages' notes count as BP. A run given up with ESC counts as a failed run too, as LR2 records it: its last played
   stage may carry `play.aborted`, the run fails whatever its gauge, and the rest of that stage and the unreached
   stages count as BP. An ESC abort on any earlier stage is still refused as `aborted`.
+- **Runs at another tempo are not ranked.** A course may be played at another tempo, as a single chart may, and the
+  run is then refused as `tempo` (naming the first such stage), like a single play at another tempo.
 - **NONSTOP runs are not ranked yet.** A NONSTOP course is played as one stitched chart, which has no chart document
   of its own to verify, so a course log with `nonstop` is refused as `nonstop`.
 - **Figures and bests.** Per ruleset: EX score, lamp (the course lamp on the chart lamp scale), BP, course max combo,

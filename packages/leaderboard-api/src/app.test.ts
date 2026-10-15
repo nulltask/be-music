@@ -181,6 +181,12 @@ describe('POST /api/v0/scores', () => {
     expect(autoResponse.status).toBe(422);
     expect(await autoResponse.json()).toEqual({ error: 'auto-play' });
 
+    // A play at another tempo is practice: refused, like beatoraja's frequency trainer leaves its scores unsaved.
+    const slowed = makePlaylog(chart, { noteCount: 10, hits: 10, play: { tempo: 0.8 } });
+    const slowedResponse = await submit(cookie, submissionBody(slowed, chart.playDocument, chart.chartDocument));
+    expect(slowedResponse.status).toBe(422);
+    expect(await slowedResponse.json()).toEqual({ error: 'tempo' });
+
     const malformed = await submit(cookie, submissionBody({ format: 'nope' }, chart.playDocument));
     expect(malformed.status).toBe(422);
     expect(((await malformed.json()) as { error: string }).error).toBe('invalid-playlog');

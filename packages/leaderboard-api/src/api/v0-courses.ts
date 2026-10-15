@@ -33,6 +33,7 @@ const COURSE_REJECTIONS = [
   'invalid-playlog',
   'auto-play',
   'aborted',
+  'tempo',
   'missing-fingerprint',
   'not-a-course-run',
   'nonstop',
