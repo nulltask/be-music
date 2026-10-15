@@ -127,7 +127,7 @@ describe('parseLr2CourseFile', () => {
     expect(courses[1]).toMatchObject({ name: 'EXPERT', kind: 'expert', constraints: [], keyMode: 14 });
   });
 
-  test('falls back to the header for the type, keeps ten stages and skips broken courses', () => {
+  test('falls back to the header for the type, keeps the five stages LR2 plays and skips broken courses', () => {
     const many = Array.from({ length: 12 }, () => MD5_A).join('');
     const xml = `<courselist>
       <course><title>N</title><hash>${header(2)}${many}</hash></course>
@@ -138,7 +138,7 @@ describe('parseLr2CourseFile', () => {
     </courselist>`;
     const courses = parseLr2CourseFile(new TextEncoder().encode(xml));
     expect(courses.map((course) => [course.name, course.kind, course.stages.length])).toEqual([
-      ['N', 'grade', 10],
+      ['N', 'grade', 5],
       ['', 'expert', 1],
     ]);
   });
@@ -326,8 +326,8 @@ describe('applyCourseLongNoteConstraint', () => {
   });
 });
 
-describe('LR2 NONSTOP stage limit', () => {
-  test('reads a NONSTOP course as its first five stages, as LR2 plays it', () => {
+describe('LR2 stage limit', () => {
+  test('reads every course as its first five stages, as LR2 plays it', () => {
     const md5s = ['1', '2', '3', '4', '5', '6'].map((digit) => digit.repeat(32));
     const header = `${'0'.repeat(10)}1${'0'.repeat(21)}`;
     const [nonstop] = parseLr2CourseFile(
@@ -338,6 +338,7 @@ describe('LR2 NONSTOP stage limit', () => {
     const [expert] = parseLr2CourseFile(
       `<courselist><course><title>E</title><type>0</type><hash>${header}${md5s.join('')}</hash></course></courselist>`,
     );
-    expect(expert!.stages).toHaveLength(6);
+    // LR2 clamps every course type, not only NONSTOP.
+    expect(expert!.stages.map((stage) => stage.md5)).toEqual(md5s.slice(0, 5));
   });
 });
