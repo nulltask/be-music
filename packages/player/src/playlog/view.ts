@@ -20,11 +20,19 @@ export interface PlaylogLaneCover {
 
 /** The view settings in force, or the ones that changed: every field is optional in a change. */
 export interface PlaylogViewState {
-  /** The scroll speed multiplier the scene drew with (its own hi-speed scale). */
+  /** The scroll speed multiplier the scene drew with (its own hi-speed scale, {@link hiSpeedScale}). */
   hiSpeed?: number;
+  /**
+   * The scale {@link hiSpeed} is on, named by the scene family that drew it (`be-music` for the built-in and LR2
+   * scenes, `beatoraja`): the same hi-speed scrolls at another speed on another scale. Absent = the viewer's own.
+   */
+  hiSpeedScale?: string;
   /** The hi-speed fix (`OFF`, `START`, `MAX`, `MAIN`, `MIN`, …) the scene kept the scroll with. */
   hsFix?: string;
-  /** How long a note stays visible below SUDDEN+, in ms (the "green number"), to show the speed across scenes. */
+  /**
+   * How long a note stays visible below SUDDEN+, in ms (the white number; × 0.6 is the green number), at the chart's main
+   * BPM and without `#SCROLL` / `#SPEED`, so the speed compares across scenes and hi-speed scales.
+   */
   visibleMs?: number;
   /** The lane covers per play side that has lanes. A change lists only the sides that changed. */
   covers?: PlaylogLaneCover[];
@@ -114,6 +122,8 @@ export function resolveReplayView(
   const view: PlaylogViewState = cloneView(own);
   if (replay.hiSpeed) {
     if (recorded.hiSpeed !== undefined) view.hiSpeed = recorded.hiSpeed;
+    // The recorded hi-speed is on the recorded scale; one recorded without a scale is taken to be on the viewer's.
+    if (recorded.hiSpeedScale !== undefined) view.hiSpeedScale = recorded.hiSpeedScale;
     if (recorded.hsFix !== undefined) view.hsFix = recorded.hsFix;
     if (recorded.visibleMs !== undefined) view.visibleMs = recorded.visibleMs;
   }
@@ -130,6 +140,108 @@ export function resolveReplayView(
     });
   }
   return view;
+}
+
+/**
+ * The hi-speed a scene on `scale` draws to show `view` (a {@link resolveReplayView} result): `view.hiSpeed` when it is
+ * on the same scale (or names none), else the hi-speed that shows `view.visibleMs`, which `fromVisibleMs` works out
+ * with the scene's own lane height and covers, else the recorded `view.hiSpeed` when nothing converts it. `undefined`
+ * when the view has no speed at all.
+ */
+export function resolveReplayHiSpeed(
+  view: PlaylogViewState,
+  scale: string,
+  fromVisibleMs: (visibleMs: number) => number | undefined,
+): number | undefined {
+  const sameScale = view.hiSpeedScale === undefined || view.hiSpeedScale === scale;
+  if (sameScale && view.hiSpeed !== undefined) return view.hiSpeed;
+  if (view.visibleMs !== undefined && view.visibleMs > 0) {
+    const converted = fromVisibleMs(view.visibleMs);
+    if (converted !== undefined && Number.isFinite(converted) && converted > 0) return converted;
+  }
+  return sameScale ? undefined : view.hiSpeed;
+}
+
+const COVER_EPSILON = 1e-6;
+
+function sameCover(left: PlaylogLaneCover, right: PlaylogLaneCover): boolean {
+  return (
+    Math.abs(left.sudden - right.sudden) < COVER_EPSILON &&
+    Math.abs(left.hidden - right.hidden) < COVER_EPSILON &&
+    Math.abs(left.lift - right.lift) < COVER_EPSILON
+  );
+}
+
+/**
+ * What changed from `previous` to `next`, as a {@link PlaylogViewChange} without its time: each scalar field whose value
+ * differs (a field `next` leaves out is not a change), and the full cover of each side whose cover differs. `undefined`
+ * when nothing did.
+ */
+export function diffPlaylogView(previous: PlaylogViewState, next: PlaylogViewState): PlaylogViewState | undefined {
+  const change: PlaylogViewState = {};
+  let changed = false;
+  if (next.hiSpeed !== undefined && next.hiSpeed !== previous.hiSpeed) {
+    change.hiSpeed = next.hiSpeed;
+    changed = true;
+  }
+  if (next.hiSpeedScale !== undefined && next.hiSpeedScale !== previous.hiSpeedScale) {
+    change.hiSpeedScale = next.hiSpeedScale;
+    changed = true;
+  }
+  if (next.hsFix !== undefined && next.hsFix !== previous.hsFix) {
+    change.hsFix = next.hsFix;
+    changed = true;
+  }
+  if (next.visibleMs !== undefined && next.visibleMs !== previous.visibleMs) {
+    change.visibleMs = next.visibleMs;
+    changed = true;
+  }
+  if (next.covers !== undefined) {
+    const before = new Map((previous.covers ?? []).map((cover) => [cover.side, cover]));
+    const covers = next.covers.filter((cover) => {
+      const old = before.get(cover.side);
+      return old === undefined || !sameCover(old, cover);
+    });
+    if (covers.length > 0) {
+      change.covers = covers.map((cover) => ({ ...cover }));
+      changed = true;
+    }
+  }
+  return changed ? change : undefined;
+}
+
+/** Folds a live view into the view changes a play log records: {@link createPlaylogViewCoalescer}. */
+export interface PlaylogViewCoalescer {
+  /**
+   * Takes the view in force at `nowMs` (any monotonic clock, e.g. the host's frame time) and returns the change to
+   * record now, if any: everything that changed since the last change it returned, at most one every `minIntervalMs`.
+   * A change held back is returned on a later call once the interval has passed, merged with what changed meanwhile.
+   */
+  observe(view: PlaylogViewState, nowMs: number): PlaylogViewState | undefined;
+}
+
+/**
+ * Coalesces a scene's live view (sampled each frame) into the changes its play log records, so a wheel spin or a held
+ * key records a handful of changes instead of one per frame: `initial` is the view recorded at the start
+ * (`play.view`), and a change is returned at most every `minIntervalMs` (default 100 ms) — the first one at once.
+ */
+export function createPlaylogViewCoalescer(
+  initial: PlaylogViewState,
+  options: { minIntervalMs?: number } = {},
+): PlaylogViewCoalescer {
+  const minIntervalMs = options.minIntervalMs ?? 100;
+  let recorded = cloneView(initial);
+  let lastAtMs = -Infinity;
+  return {
+    observe: (view, nowMs) => {
+      if (nowMs - lastAtMs < minIntervalMs) return undefined;
+      const change = diffPlaylogView(recorded, view);
+      if (change === undefined) return undefined;
+      recorded = resolvePlaylogViewAt(recorded, [{ timeUs: 0, ...change }], 0);
+      lastAtMs = nowMs;
+      return change;
+    },
+  };
 }
 
 function cloneView(view: PlaylogViewState): PlaylogViewState {
@@ -153,6 +265,10 @@ export function parsePlaylogViewState(raw: Record<string, unknown>, path: string
     const hiSpeed = expectFiniteNumber(raw.hiSpeed, `${path}.hiSpeed`);
     if (!(hiSpeed > 0)) throw new PlaylogParseError(`${path}.hiSpeed: expected a positive number`);
     view.hiSpeed = hiSpeed;
+  }
+  if (raw.hiSpeedScale !== undefined) {
+    if (typeof raw.hiSpeedScale !== 'string') throw new PlaylogParseError(`${path}.hiSpeedScale: expected a string`);
+    view.hiSpeedScale = raw.hiSpeedScale;
   }
   if (raw.hsFix !== undefined) {
     if (typeof raw.hsFix !== 'string') throw new PlaylogParseError(`${path}.hsFix: expected a string`);

@@ -1,13 +1,16 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { PlaylogParseError } from './parse.ts';
 import {
+  createPlaylogViewCoalescer,
   DEFAULT_PLAYLOG_VIEW_REPLAY,
+  diffPlaylogView,
   parsePlaylogTempoChanges,
   parsePlaylogViewChanges,
   parsePlaylogViewState,
   playedAtAnotherTempo,
   resolvePlaylogTempoAt,
   resolvePlaylogViewAt,
+  resolveReplayHiSpeed,
   resolveReplayView,
   type PlaylogViewState,
 } from './view.ts';
@@ -84,6 +87,97 @@ describe('resolveReplayView', () => {
   });
 });
 
+describe('resolveReplayHiSpeed', () => {
+  const fromVisibleMs = (visibleMs: number) => 1000 / visibleMs;
+
+  test('takes the hi-speed on the same scale, or one recorded without a scale', () => {
+    expect(
+      resolveReplayHiSpeed({ hiSpeed: 3, hiSpeedScale: 'be-music', visibleMs: 400 }, 'be-music', fromVisibleMs),
+    ).toBe(3);
+    expect(resolveReplayHiSpeed({ hiSpeed: 3, visibleMs: 400 }, 'beatoraja', fromVisibleMs)).toBe(3);
+  });
+
+  test('matches the visible time across scales', () => {
+    expect(
+      resolveReplayHiSpeed({ hiSpeed: 3, hiSpeedScale: 'beatoraja', visibleMs: 400 }, 'be-music', fromVisibleMs),
+    ).toBe(2.5);
+    // Same scale without a hi-speed: the visible time still converts.
+    expect(resolveReplayHiSpeed({ visibleMs: 500 }, 'be-music', fromVisibleMs)).toBe(2);
+  });
+
+  test('falls back to the recorded hi-speed when the visible time does not convert', () => {
+    expect(resolveReplayHiSpeed({ hiSpeed: 3, hiSpeedScale: 'beatoraja' }, 'be-music', fromVisibleMs)).toBe(3);
+    expect(
+      resolveReplayHiSpeed({ hiSpeed: 3, hiSpeedScale: 'beatoraja', visibleMs: 400 }, 'be-music', () => undefined),
+    ).toBe(3);
+    expect(resolveReplayHiSpeed({}, 'be-music', fromVisibleMs)).toBeUndefined();
+  });
+
+  test('resolveReplayView carries the recorded scale with the hi-speed only', () => {
+    const recorded: PlaylogViewState = { hiSpeed: 3, hiSpeedScale: 'beatoraja' };
+    const own: PlaylogViewState = { hiSpeed: 1.5, hiSpeedScale: 'be-music' };
+    expect(resolveReplayView(recorded, own, DEFAULT_PLAYLOG_VIEW_REPLAY).hiSpeedScale).toBe('beatoraja');
+    expect(resolveReplayView(recorded, own, { ...DEFAULT_PLAYLOG_VIEW_REPLAY, hiSpeed: false }).hiSpeedScale).toBe(
+      'be-music',
+    );
+  });
+});
+
+describe('diffPlaylogView', () => {
+  const before: PlaylogViewState = {
+    hiSpeed: 2,
+    hiSpeedScale: 'be-music',
+    hsFix: 'OFF',
+    visibleMs: 500,
+    covers: [cover('1P', 0.2), cover('2P', 0.1)],
+  };
+
+  test('lists only the fields that changed, and the full cover of a changed side', () => {
+    expect(diffPlaylogView(before, { ...before, covers: [cover('1P', 0.2), cover('2P', 0.1)] })).toBeUndefined();
+    expect(diffPlaylogView(before, { ...before, hiSpeed: 2.5, visibleMs: 400 })).toEqual({
+      hiSpeed: 2.5,
+      visibleMs: 400,
+    });
+    expect(diffPlaylogView(before, { covers: [cover('1P', 0.2), cover('2P', 0.1, 0.3)] })).toEqual({
+      covers: [cover('2P', 0.1, 0.3)],
+    });
+  });
+
+  test('a field the next view leaves out is not a change', () => {
+    expect(diffPlaylogView(before, { hiSpeed: 2 })).toBeUndefined();
+    // A side that was not there before is a change.
+    expect(diffPlaylogView({}, { covers: [cover('1P', 0)] })).toEqual({ covers: [cover('1P', 0)] });
+  });
+
+  test('ignores float noise in the covers', () => {
+    expect(diffPlaylogView(before, { covers: [cover('1P', 0.2 + 1e-9), cover('2P', 0.1)] })).toBeUndefined();
+  });
+});
+
+describe('createPlaylogViewCoalescer', () => {
+  test('returns the first change at once and holds the next ones to one per interval', () => {
+    const coalescer = createPlaylogViewCoalescer({ hiSpeed: 2 }, { minIntervalMs: 100 });
+    expect(coalescer.observe({ hiSpeed: 2 }, 0)).toBeUndefined();
+    expect(coalescer.observe({ hiSpeed: 2.1 }, 16)).toEqual({ hiSpeed: 2.1 });
+    // A wheel spin: every frame changes, but within the interval nothing is returned...
+    expect(coalescer.observe({ hiSpeed: 2.2, covers: [cover('1P', 0.1)] }, 32)).toBeUndefined();
+    expect(coalescer.observe({ hiSpeed: 2.3, covers: [cover('1P', 0.15)] }, 64)).toBeUndefined();
+    // ...and once it has passed, what changed meanwhile comes as one change.
+    expect(coalescer.observe({ hiSpeed: 2.3, covers: [cover('1P', 0.15)] }, 116)).toEqual({
+      hiSpeed: 2.3,
+      covers: [cover('1P', 0.15)],
+    });
+    expect(coalescer.observe({ hiSpeed: 2.3, covers: [cover('1P', 0.15)] }, 300)).toBeUndefined();
+  });
+
+  test('a change back to the recorded view within the interval records nothing', () => {
+    const coalescer = createPlaylogViewCoalescer({ hiSpeed: 2 });
+    expect(coalescer.observe({ hiSpeed: 2.5 }, 0)).toEqual({ hiSpeed: 2.5 });
+    expect(coalescer.observe({ hiSpeed: 2 }, 50)).toBeUndefined();
+    expect(coalescer.observe({ hiSpeed: 2.5 }, 150)).toBeUndefined();
+  });
+});
+
 describe('parsing', () => {
   test('reads a view state and rejects covers outside 0 to 1', () => {
     expect(parsePlaylogViewState({ hiSpeed: 2, covers: [cover('2P', 0.5)] }, 'play.view')).toEqual({
@@ -95,6 +189,11 @@ describe('parsing', () => {
       PlaylogParseError,
     );
     expect(() => parsePlaylogViewState({ hiSpeed: 0 }, 'play.view')).toThrow(/hiSpeed/);
+    expect(parsePlaylogViewState({ hiSpeed: 2, hiSpeedScale: 'beatoraja' }, 'play.view')).toEqual({
+      hiSpeed: 2,
+      hiSpeedScale: 'beatoraja',
+    });
+    expect(() => parsePlaylogViewState({ hiSpeedScale: 1 }, 'play.view')).toThrow(/hiSpeedScale/);
   });
 
   test('reads changes in time order only', () => {

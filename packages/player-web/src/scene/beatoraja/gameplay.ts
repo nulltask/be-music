@@ -65,7 +65,13 @@ import type { BgaCue } from '../core/gameplay-bga.ts';
 import type { Texture } from 'pixi.js';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { PlayerOptions, PlayerSummary } from '@be-music/player/core/engine';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import {
+  createPlaylogViewCoalescer,
+  type BeMusicPlaylog,
+  type PlaylogViewCoalescer,
+  type PlaylogViewState,
+} from '@be-music/player/playlog';
+import { resolveBeatorajaPlaylogView } from '../playlog-view.ts';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
@@ -305,6 +311,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private uiSignals?: PlayerUiSignalBus;
   private stateSignals?: PlayerStateSignals;
   private inputSignals?: PlayerInputSignalBus;
+  /** Folds the hi-speed and cover changes into the play log's view changes (`tick`). */
+  private playlogViewCoalescer?: PlaylogViewCoalescer;
   private lastJudgeComboTick = 0;
   private enginePromise?: Promise<EngineDriverResult>;
   private engineSettled = false;
@@ -583,7 +591,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // Host-provided `engineOptions.laneModeExtension` (if any) wins so callers explicitly
       // overriding the inference (rare) still take precedence.
       engineOptions: {
-        ...composeBeatorajaEngineOptions(this.options),
+        ...this.composeEngineOptions(),
         onPlaylogRecorded: (playlog) => {
           this.playlog = playlog;
         },
@@ -657,6 +665,27 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         }
         throw error;
       });
+  }
+
+  /** The engine options, with the view the recorded play log starts from (`play.view`). */
+  private composeEngineOptions(): ReturnType<typeof composeBeatorajaEngineOptions> {
+    const composed = composeBeatorajaEngineOptions(this.options);
+    const view = this.resolvePlaylogView();
+    this.playlogViewCoalescer = createPlaylogViewCoalescer(view);
+    return { ...composed, recordPlaylog: { ...composed.recordPlaylog, view } };
+  }
+
+  /** What the player sees now in the play log's units (`resolveBeatorajaPlaylogView`). */
+  private resolvePlaylogView(): PlaylogViewState {
+    return resolveBeatorajaPlaylogView({
+      hiSpeed: this.hiSpeed,
+      lanecover: this.adapter.getLanecover(),
+      lift: this.adapter.getLift(),
+      hiddenRatio: this.adapter.getHiddenCover(),
+      hiddenEnabled: this.adapter.isHiddenCoverEnabled(),
+      mainBpm: this.chartAnalysis.mainBpm,
+      sides: ['10', '14', '24d'].includes(this.options.variant) ? ['1P', '2P'] : ['1P'],
+    });
   }
 
   /**
@@ -1166,6 +1195,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         }
         this.adapter.setHiSpeed(this.hiSpeed);
       }
+      // The hi-speed, cover, lift and HIDDEN changes go to the play log, at most one per 100 ms.
+      const change = this.playlogViewCoalescer?.observe(this.resolvePlaylogView(), performance.now());
+      if (change !== undefined) this.inputSignals?.pushCommand({ kind: 'view', change });
     }
     const ctx = this.adapter.getRenderContext();
     const skinAudio = this.options.skinAudio;

@@ -50,3 +50,21 @@ export function resolveNoteVisibleMs(
 export function resolveGreenNumber(visibleMs: number): number {
   return Math.round((visibleMs * 3) / 5);
 }
+
+/**
+ * The hi-speed that shows a note for `visibleMs` ({@link resolveNoteVisibleMs} solved for the hi-speed, the scroll being
+ * `pixelsPerBeatAtHiSpeed1 × hiSpeed`, without `#SCROLL`): a replay uses it to match a visible time recorded on another
+ * hi-speed scale. `undefined` when nothing of the lane is uncovered or an input is not positive.
+ */
+export function resolveHiSpeedForVisibleMs(
+  laneHeightPx: number,
+  suddenRatio: number,
+  liftRatio: number,
+  pixelsPerBeatAtHiSpeed1: number,
+  bpm: number,
+  visibleMs: number,
+): number | undefined {
+  const atHiSpeed1 = resolveNoteVisibleMs(laneHeightPx, suddenRatio, liftRatio, pixelsPerBeatAtHiSpeed1, bpm);
+  if (!(atHiSpeed1 > 0) || !(visibleMs > 0)) return undefined;
+  return atHiSpeed1 / visibleMs;
+}

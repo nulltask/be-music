@@ -41,7 +41,19 @@ import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-time
 import { createBeatAtSecondsResolverFromTimingResolver } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
-import type { BeMusicPlaylog, PlaylogCourseStage, PlaylogRecordingOptions } from '@be-music/player/playlog';
+import {
+  createPlaylogViewCoalescer,
+  DEFAULT_PLAYLOG_VIEW_REPLAY,
+  resolveReplayHiSpeed,
+  resolveReplayView,
+  type BeMusicPlaylog,
+  type PlaylogCourseStage,
+  type PlaylogLaneCover,
+  type PlaylogRecordingOptions,
+  type PlaylogViewCoalescer,
+  type PlaylogViewReplay,
+  type PlaylogViewState,
+} from '@be-music/player/playlog';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
 import {
   advanceDrawCursor,
@@ -94,7 +106,8 @@ import {
   type TempoPitchMode,
   type TimeStretchAlgorithm,
 } from '../../runtime/play-tempo.ts';
-import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
+import { fillLaneCover, resolveGreenNumber, resolveHiSpeedForVisibleMs, resolveNoteVisibleMs } from './lane-cover.ts';
+import { BE_MUSIC_HI_SPEED_SCALE, PlaylogViewCursor } from '../playlog-view.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
@@ -539,6 +552,12 @@ export interface CoreGameplayViewOptions {
    * different chart file).
    */
   replay?: BeMusicPlaylog;
+  /**
+   * Which of the view a {@link replay} recorded (`play.view` / `play.viewChanges`) it shows over the viewer's own
+   * settings: the hi-speed, SUDDEN+ / HIDDEN+, the lift (this scene has none to show) and the tempo. Defaults to all
+   * (`DEFAULT_PLAYLOG_VIEW_REPLAY`).
+   */
+  replayView?: Readonly<PlaylogViewReplay>;
   /**
    * Judge-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): `'lr2'` (default) / `'beatoraja'`
    * / `'iidx'`. Recorded into the play-log; replays re-apply the log's own value instead.
@@ -1116,6 +1135,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * change and refilled in place every frame, so the runtime allocates nothing for them.
    */
   private laneCovers: { channels: readonly string[]; covers: BeMusicLaneCover[] } | undefined;
+  /** Folds the live view into the recorded play log's view changes ({@link updatePlaylogView}); unset in a replay. */
+  private playlogViewCoalescer: PlaylogViewCoalescer | undefined;
+  /** A replay's recorded view along the playhead ({@link updatePlaylogView}). */
+  private replayViewCursor: PlaylogViewCursor | undefined;
+  /** The SUDDEN+ / HIDDEN+ per side a replay shows over the viewer's own ({@link resolveLaneCovers}). */
+  private replayCovers: readonly PlaylogLaneCover[] | undefined;
   /**
    * Lane runs measure lines cross for a skin that draws them (`drawsMeasureLines`), with the lane geometry they were
    * worked out from; rebuilt only when the lanes move.
@@ -3277,6 +3302,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // engine itself owns judge / sample / chart-end bookkeeping and runs its own tick loop at
       // TUI_FRAME_INTERVAL_MS independent of this rAF.
       this.drainSharedEngineSignals();
+      this.updatePlaylogView(seconds);
     }
     this.perf.time('updateFps', () => this.updateFps());
     this.perf.time('updateScores', () => {
@@ -3681,34 +3707,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /**
-   * Draws the LR2 HIDDEN / SUDDEN / HID+SUD masks over the playfield. Pulls the union of all lanes' top/bottom from
-   * `laneX` so the mask exactly covers the lane area regardless of how the theme laid the lanes out (single-side, DP,
-   * etc.).
-   *
-   * `playOptions.shutter` (0..1) controls the fraction of the playfield each active mask covers. With HID+SUD that
-   * fraction applies to BOTH ends, so 0.5 leaves a thin slit in the middle.
+   * Draws the LR2 HIDDEN / SUDDEN / HID+SUD masks over the playfield: each side's {@link resolveLaneCovers} cover (the
+   * `shutter` fraction at the top, the bottom or both ends, nothing while LANE COVER is off, or what a replay shows),
+   * over the union of that side's lanes' top/bottom from `laneX`, so the mask exactly covers the lane area however the
+   * theme laid the lanes out (single-side, DP, etc.).
    */
   private renderShutter(): void {
     this.shutterLayer.clear();
     // A be-music skin that draws its own covers reads them from `runtime.laneCovers` instead.
     if (this.skinBinding?.drawsLaneCover) return;
-    // LANE COVER (`button_type 46`) is the master ON/OFF switch for the playfield mask. With it OFF, no shutter renders
-    // even if HIDDEN / SUDDEN / HID+SUD is selected — matches LR2's behavior where the user toggles LANE COVER off to
-    // hide the cover without losing the height they had dialed in. The HIDDEN / SUDDEN cycle picks WHERE the mask sits
-    // (top / bottom / both); this gate decides WHETHER it shows.
-    if (this.options.laneCover === false) return;
     if (this.laneX.size === 0) return;
-    const shutter = Math.max(0, Math.min(1, this.options.shutter ?? 0.25));
-    if (shutter <= 0) return;
-    const mode1P = this.options.hiddenSudden1P ?? 'OFF';
-    const mode2P = this.options.hiddenSudden2P ?? 'OFF';
-    if (mode1P === 'OFF' && mode2P === 'OFF') return;
-    // Per-side mask: collect each side's lane bounding box from `laneX`. Channels 11..16, 18, 19 are 1P (keyboard +
-    // scratch + start/select); 21..26, 28, 29 are 2P. SP charts only have 1P lanes registered, so the 2P loop will
-    // yield an empty bbox and skip rendering — drawing the 1P mask covers the whole playfield in that case, exactly as
-    // before.
-    this.paintSideShutter(this.collectSideBounds('1P'), mode1P, shutter);
-    this.paintSideShutter(this.collectSideBounds('2P'), mode2P, shutter);
+    for (const cover of this.resolveLaneCovers()) {
+      this.paintSideShutter(this.collectSideBounds(cover.side), cover.sudden, cover.hidden);
+    }
   }
 
   private collectSideBounds(side: '1P' | '2P'):
@@ -3740,22 +3751,21 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   private paintSideShutter(
     bounds: { left: number; right: number; top: number; bottom: number } | undefined,
-    mode: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD',
-    shutter: number,
+    sudden: number,
+    hidden: number,
   ): void {
-    if (!bounds || mode === 'OFF') return;
+    if (!bounds) return;
     const width = bounds.right - bounds.left;
     const height = bounds.bottom - bounds.top;
-    const maskHeight = height * shutter;
-    if (mode === 'SUDDEN' || mode === 'HID+SUD') {
+    if (sudden > 0) {
       // SUDDEN — opaque rect at the TOP of the playfield. Notes emerge below it.
-      this.shutterLayer.rect(bounds.left, bounds.top, width, maskHeight).fill({ color: 0x000000, alpha: 0.92 });
+      this.shutterLayer.rect(bounds.left, bounds.top, width, height * sudden).fill({ color: 0x000000, alpha: 0.92 });
     }
-    if (mode === 'HIDDEN' || mode === 'HID+SUD') {
+    if (hidden > 0) {
       // HIDDEN — opaque rect at the BOTTOM of the playfield, just above the judge line (lanes' `bottom` is the judge
       // line bottom edge — the mask itself ends there).
       this.shutterLayer
-        .rect(bounds.left, bounds.bottom - maskHeight, width, maskHeight)
+        .rect(bounds.left, bounds.bottom - height * hidden, width, height * hidden)
         .fill({ color: 0x000000, alpha: 0.92 });
     }
   }
@@ -4307,8 +4317,77 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     for (const cover of cache.covers) {
       const mode = (cover.side === '1P' ? this.options.hiddenSudden1P : this.options.hiddenSudden2P) ?? 'OFF';
       fillLaneCover(cover, mode, shutter, laneCover);
+      // A replay's SUDDEN+ / HIDDEN+ (the scene draws no LIFT, so that stays 0).
+      const replayed = this.replayCovers?.find((entry) => entry.side === cover.side);
+      if (replayed !== undefined) {
+        cover.sudden = replayed.sudden;
+        cover.hidden = replayed.hidden;
+      }
     }
     return cache.covers;
+  }
+
+  /** What the player sees now in the play log's units: the drawn hi-speed on this scene's scale, HS-FIX and covers. */
+  private resolvePlaylogView(): PlaylogViewState {
+    const covers = this.resolveLaneCovers().map(({ side, sudden, hidden, lift }) => ({ side, sudden, hidden, lift }));
+    const view: PlaylogViewState = {
+      hiSpeed: this.hiSpeed,
+      hiSpeedScale: BE_MUSIC_HI_SPEED_SCALE,
+      hsFix: this.options.hsFix ?? 'OFF',
+      covers,
+    };
+    // The visible time at the main BPM without `#SCROLL`, so another scale's replay can match it.
+    const visibleMs = this.resolveVisibleMs(covers[0], this.chartBpmRange?.mainBpm, 1);
+    if (visibleMs !== undefined && visibleMs > 0) view.visibleMs = Math.round(visibleMs);
+    return view;
+  }
+
+  /** The view the recorded play log starts from (`play.view`); later changes go through {@link updatePlaylogView}. */
+  private startPlaylogView(): PlaylogViewState {
+    const view = this.resolvePlaylogView();
+    this.playlogViewCoalescer = createPlaylogViewCoalescer(view);
+    return view;
+  }
+
+  /**
+   * Per frame, once the lanes are laid out: while recording, sends the engine what changed in the view (at most one
+   * change per 100 ms, so a held key records a few); while replaying, shows the recorded view at the playhead as far as
+   * {@link CoreGameplayViewOptions.replayView} asks.
+   */
+  private updatePlaylogView(seconds: number): void {
+    if (this.laneX.size === 0) return;
+    if (this.replayViewCursor !== undefined) {
+      const recorded = this.replayViewCursor.next(Math.round(seconds * 1_000_000));
+      if (recorded !== undefined) this.applyReplayView(recorded);
+      return;
+    }
+    const signals = this.sharedEngineInputSignals;
+    if (this.playlogViewCoalescer === undefined || signals === undefined) return;
+    const change = this.playlogViewCoalescer.observe(this.resolvePlaylogView(), performance.now());
+    if (change !== undefined) signals.pushCommand({ kind: 'view', change });
+  }
+
+  /**
+   * Shows a replay's recorded view over the viewer's own: the covers as recorded, and the hi-speed as recorded on this
+   * scale, or matching the recorded visible time when it was played on another (`resolveReplayHiSpeed`).
+   */
+  private applyReplayView(recorded: PlaylogViewState): void {
+    const replay = this.options.replayView ?? DEFAULT_PLAYLOG_VIEW_REPLAY;
+    this.replayCovers = undefined;
+    const view = resolveReplayView(recorded, this.resolvePlaylogView(), replay);
+    if (replay.covers) this.replayCovers = view.covers;
+    if (!replay.hiSpeed) return;
+    const sudden = view.covers?.[0]?.sudden ?? 0;
+    const mainBpm = this.chartBpmRange?.mainBpm;
+    const hiSpeed = resolveReplayHiSpeed(view, BE_MUSIC_HI_SPEED_SCALE, (visibleMs) =>
+      mainBpm === undefined
+        ? undefined
+        : resolveHiSpeedForVisibleMs(this.resolveLaneHeightPx(), sudden, 0, PIXELS_PER_BEAT, mainBpm, visibleMs),
+    );
+    const next = hiSpeed === undefined ? undefined : snapHiSpeed(hiSpeed);
+    if (next === undefined || next === this.hiSpeed) return;
+    this.hiSpeed = next;
+    this.scrollHiSpeed.retarget(next, performance.now());
   }
 
   /**
@@ -4322,18 +4401,23 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     scrollRate: number,
   ): number | undefined {
     if (this.laneX.size === 0 || bpm === undefined || !(bpm > 0)) return undefined;
-    let laneHeight = 0;
-    for (const lane of this.laneX.values()) {
-      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
-    }
     return resolveNoteVisibleMs(
-      laneHeight,
+      this.resolveLaneHeightPx(),
       cover?.sudden ?? 0,
       cover?.lift ?? 0,
       PIXELS_PER_BEAT * this.hiSpeed,
       bpm,
       scrollRate,
     );
+  }
+
+  /** The tallest lane laid out last frame, in design pixels (0 before the lanes are laid out). */
+  private resolveLaneHeightPx(): number {
+    let laneHeight = 0;
+    for (const lane of this.laneX.values()) {
+      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
+    }
+    return laneHeight;
   }
 
   /**
@@ -5030,6 +5114,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         this.sharedEngineSignals = signals;
       },
     };
+    // A replay shows its recorded view along the playhead; a recorded play logs its own from the start.
+    this.playlogViewCoalescer = undefined;
+    this.replayCovers = undefined;
+    this.replayViewCursor =
+      this.options.replay !== undefined
+        ? new PlaylogViewCursor(this.options.replay.play.view, this.options.replay.play.viewChanges)
+        : undefined;
     this.sharedEnginePromise = runEngineDriver({
       chart,
       audio: {
@@ -5169,6 +5260,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
                     }
                   : {}),
                 ...(this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {}),
+                // What the player sees at the start; the changes during the play go in as `view` commands.
+                view: this.startPlaylogView(),
                 ...(this.song?.chartPath !== undefined ? { native: { chartPath: this.song.chartPath } } : {}),
               },
               onPlaylogRecorded: (playlog) => {
