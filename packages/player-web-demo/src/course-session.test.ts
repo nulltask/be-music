@@ -70,6 +70,18 @@ describe('CourseSession', () => {
     expect(session.nextStage()!.course.carryIn).toEqual({ gauge: 71.5, combo: 4, maxCombo: 10 });
   });
 
+  test('names the stage being played for the skins', () => {
+    const session = new CourseSession(course());
+    expect(session.nextStage()!.courseInfo).toMatchObject({ kind: 'grade', title: 'Dan', stageIndex: 0 });
+    expect(session.courseInfo.stageIndex).toBeUndefined();
+    session.recordStage(stageLog({}));
+    expect(session.courseInfo).toMatchObject({
+      stageIndex: 0,
+      stages: [{ title: 'a' }, { title: 'b' }, { title: 'c' }],
+    });
+    expect(session.nextStage()!.courseInfo.stageIndex).toBe(1);
+  });
+
   test('ends on a failed stage and after the last stage', () => {
     const failing = new CourseSession(course());
     expect(

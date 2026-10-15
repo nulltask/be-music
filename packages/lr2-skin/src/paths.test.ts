@@ -19,6 +19,12 @@ describe('isSkinPathOfKind', () => {
     expect(isSkinPathOfKind('LR2files/Theme/LR2/CourseResult/result.lr2skin', 'result')).toBe(true);
     expect(isSkinPathOfKind('LR2files/Theme/LR2/Result/result.lr2skin', 'result')).toBe(true);
   });
+
+  it('matches the CourseResult folder for course-result skins only', () => {
+    expect(isSkinPathOfKind('LR2files/Theme/LR2/CourseResult/result.lr2skin', 'courseResult')).toBe(true);
+    expect(isSkinPathOfKind(String.raw`LR2files\Theme\LR2\CourseResult\result.lr2skin`, 'courseResult')).toBe(true);
+    expect(isSkinPathOfKind('LR2files/Theme/LR2/Result/result.lr2skin', 'courseResult')).toBe(false);
+  });
 });
 
 describe('scoreSkinPath', () => {
@@ -37,6 +43,13 @@ describe('scoreSkinPath', () => {
   it('penalizes course-result and half-play skins as fallbacks', () => {
     expect(scoreSkinPath('LR2files/Theme/LR2/CourseResult/result.lr2skin', 'result')).toBe(90);
     expect(scoreSkinPath('LR2files/Theme/LR2/Play/play_half.lr2skin', 'play')).toBe(50);
+  });
+
+  it('ranks course-result skins by the CourseResult folder, then the declared type', () => {
+    expect(scoreSkinPath('LR2files/Theme/LR2/CourseResult/courseresult.lr2skin', 'courseResult')).toBe(0);
+    expect(scoreSkinPath('LR2files/Theme/LR2/CourseResult/result.lr2skin', 'courseResult')).toBe(10);
+    expect(scoreSkinPath('LR2files/Theme/X/cr.lr2skin', 'courseResult', { type: 15 })).toBe(20);
+    expect(scoreSkinPath('LR2files/Theme/X/cr.lr2skin', 'courseResult', { type: 7 })).toBe(100);
   });
 
   describe('options object overload (type-aware scoring)', () => {
@@ -129,6 +142,7 @@ describe('informationTypeToKind / informationTypeToPlayVariant', () => {
     expect(informationTypeToKind(5)).toBe('select');
     expect(informationTypeToKind(6)).toBe('decide');
     expect(informationTypeToKind(7)).toBe('result');
+    expect(informationTypeToKind(LR2_SKIN_INFORMATION_TYPE.COURSE_RESULT)).toBe('courseResult');
   });
 
   it('returns undefined for codes we do not consume', () => {

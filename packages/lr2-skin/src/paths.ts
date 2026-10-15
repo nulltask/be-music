@@ -3,7 +3,7 @@ import { stripComment } from './csv.ts';
 /**
  * Which screen's `.lr2skin` to pick when a theme bundle ships multiple (play, select, result, decide, etc.).
  */
-export type Lr2SkinKind = 'play' | 'select' | 'result' | 'decide';
+export type Lr2SkinKind = 'play' | 'select' | 'result' | 'decide' | 'courseResult';
 
 /**
  * `play_N.lr2skin` variant hint for the play-skin loader.
@@ -24,6 +24,7 @@ export type Lr2PlayVariant = '5' | '7' | '9' | '10' | '14';
  * - 7    — Result.
  * - 8    — Key config (out of scope — player config screen).
  * - 9    — Skin select (also out of scope — we replace this UI with the Debug Menu's theme picker).
+ * - 15   — Course result (the result of a whole course; conventionally under `CourseResult/`).
  */
 export const LR2_SKIN_INFORMATION_TYPE = {
   PLAY_7KEYS: 0,
@@ -36,6 +37,7 @@ export const LR2_SKIN_INFORMATION_TYPE = {
   RESULT: 7,
   KEY_CONFIG: 8,
   SKIN_SELECT: 9,
+  COURSE_RESULT: 15,
 } as const;
 
 export type Lr2SkinInformationType = (typeof LR2_SKIN_INFORMATION_TYPE)[keyof typeof LR2_SKIN_INFORMATION_TYPE];
@@ -51,6 +53,7 @@ export function informationTypeToKind(type: number): Lr2SkinKind | undefined {
   if (type === 5) return 'select';
   if (type === 6) return 'decide';
   if (type === 7) return 'result';
+  if (type === 15) return 'courseResult';
   return undefined;
 }
 
@@ -130,6 +133,9 @@ export function isSkinPathOfKind(path: string, kind: Lr2SkinKind): boolean {
   if (kind === 'decide') {
     return lower.includes('/decide') || lower.includes('\\decide');
   }
+  if (kind === 'courseResult') {
+    return lower.includes('/courseresult') || lower.includes('\\courseresult');
+  }
   return lower.includes('/select') || lower.includes('\\select');
 }
 
@@ -178,6 +184,11 @@ export function scoreSkinPath(
     if (lower.includes('/courseresult')) return 90;
     if (lower.endsWith('/result.lr2skin')) return 0;
     if (lower.includes('/result') && lower.endsWith('.lr2skin')) return 10;
+    return informationTypeMatches(options.type, kind) ? 20 : 100;
+  }
+  if (kind === 'courseResult') {
+    if (lower.endsWith('/courseresult.lr2skin')) return 0;
+    if (lower.includes('/courseresult') && lower.endsWith('.lr2skin')) return 10;
     return informationTypeMatches(options.type, kind) ? 20 : 100;
   }
   if (kind === 'decide') {
