@@ -230,6 +230,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
     },
   });
+  define('player.course.applyCourseLongNoteConstraint', {
+    run: () => {
+      courseApi.applyCourseLongNoteConstraint(benchNonstopChart, ['cn']);
+    },
+  });
   const benchStitched = courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
   const benchStitchedMap = benchStitched.ok ? benchStitched.map : { stages: [] };
   const benchStitchedChart = benchStitched.ok ? benchStitched.chart : benchNonstopChart;
