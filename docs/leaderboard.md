@@ -164,7 +164,7 @@ sequenceDiagram
     else the same play from another account
         A-->>C: 409 play_already_submitted
     end
-    A->>A: eligibility: auto play → 422, ESC abort → 422, assists → flags
+    A->>A: eligibility: auto play, ESC abort or course stage → 422, assists → flags
     A->>A: sha256(canonicalize(play document)) == playFingerprint ?
     A->>D: chart known?
     alt unknown chart
@@ -227,7 +227,8 @@ turning a play document's positions and timeline into note times that match the 
   `HAZARD`, and so on).
 - **Assists** (auto scratch, a debug judge-window override, ...) are stored with flags and ranked separately from
   unassisted plays.
-- **ESC aborts are rejected. Failed plays** (the gauge emptied) are stored and count as plays.
+- **ESC aborts are rejected, and so are course stages**: a stage starts from the state the previous one left, so it is
+  not a single-chart play. **Failed plays** (the gauge emptied) are stored and count as plays.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
   play that was not aborted, cleared or not.

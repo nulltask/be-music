@@ -12,7 +12,7 @@ import { type GrooveGaugeType } from './groove-gauge.ts';
 import { type JudgeWindowRuleset } from './judge-window.ts';
 import { type LongNoteStyle, type PlaylogRulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type PlaylogRecordingOptions } from '../playlog/recorder.ts';
-import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
+import type { BeMusicPlaylog, PlaylogCourseStage, PlaylogInputEvent } from '../playlog/format.ts';
 import { type PreparedPlaybackChartData } from './bootstrap.ts';
 
 /**
@@ -114,6 +114,18 @@ export interface PlayerPlaySettings {
    * which long-note notation the chart uses.
    */
   playVariant?: ChartPlayVariant;
+  /**
+   * End the play the moment a survival gauge empties, as LR2 and beatoraja do: nothing after the judgment that emptied
+   * it counts, and the play stops there. Default `true`; `false` keeps judging to the end of the chart with the gauge
+   * dead (`failedMidPlay`). Recorded into the play log (`play.endOnFailure`) so re-simulations stop at the same point.
+   */
+  endOnFailure?: boolean;
+  /**
+   * This play is one stage of a course: the stage runs on the ruleset's course gauge under the course's judge
+   * constraint, starting from the state the previous stage left (`carryIn`; absent for the first stage). Recorded into
+   * the play log (`play.course`), so the stage replays on its own.
+   */
+  course?: PlaylogCourseStage;
 }
 
 /**
@@ -316,6 +328,8 @@ export interface PlayerSummary {
   exScore: number;
   score: number;
   gauge?: PlayerGrooveGaugeSummary;
+  /** For a course stage: the course-wide combo running now and the course-wide max combo (carried across stages). */
+  course?: { combo: number; maxCombo: number };
 }
 
 /** @see {@link PlayerGaugeSummary} — the canonical declaration lives beside the UI frame payload. */

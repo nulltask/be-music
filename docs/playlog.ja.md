@@ -39,7 +39,10 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
 3. **`play`** — スコアに影響する設定。モード（manual / auto）、オートスクラッチ、選択ゲージ、最終配置を
    生んだレーンオプションのラベル、ライブ判定幅ルールセット（`judgeRuleset`、省略時 `'lr2'`）、デバッグ用
    判定幅オーバーライド、ESC 中断フラグ（`aborted`。`abortedAtUs` は中断時に判定が済んでいた譜面時刻で、
-   再シミュレーションは残りの譜面をミスにせずそこで止まります）、`randomDraws` です。`randomDraws` はこのプレイの `#RANDOM` /
+   再シミュレーションは残りの譜面をミスにせずそこで止まります）、`endOnFailure`（サバイバル系ゲージが尽きた時点で
+   プレイを終えたこと。これがなかった頃のログには付かず、最後まで判定を続けます）、コースのステージなら `course`
+   （コースの種類、ゲージ表と判定の制約、前のステージが残したゲージ値・コースのコンボ・コースの最大コンボを表す
+   `carryIn`）、`randomDraws` です。`randomDraws` はこのプレイの `#RANDOM` /
    `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の結果を `RandomDraws`（`@be-music/chart`）として表したもので、
    譜面のそうした行ごとにファイル順で `{ command, range, value }` を 1 つ持ちます。これはエンジンが遊んだ
    `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`@be-music/player` の

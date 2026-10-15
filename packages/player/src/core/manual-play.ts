@@ -22,12 +22,14 @@ import {
   createJudgeCoreReplay,
   createJudgeCoreState,
   isJudgeCoreSettled,
+  isJudgingClosed,
   maxJudgeReachSeconds,
   resolveJudgeInputChannels,
   runJudgeCoreStep,
   type JudgeCoreInput,
 } from './judge-core.ts';
 import { createPlaylogRecorder } from '../playlog/recorder.ts';
+import { courseStageCarryCombo, courseStageRulesetOptions } from '../playlog/rulesets.ts';
 import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
 import { createInitialPlayerSummary, preparePlaybackChart } from './bootstrap.ts';
 import { appendShadowedNoteTriggers, collectRealtimeAudioTriggers } from './engine-audio.ts';
@@ -147,9 +149,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     {
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
+      ...(options.course !== undefined ? { course: courseStageRulesetOptions(options.course) } : {}),
     },
   );
   reportResolvedRuleset(options, ruleset);
+  const endOnFailure = options.endOnFailure ?? true;
   /** The BAD gate as a single width, for the log line and the host's judge-window readout. */
   const badWindowMs = judgeWindowLateReachUs(ruleset.windows.note) / 1000;
 
@@ -175,13 +179,21 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       // time on LR2's event pump freezes and presses are judged on the mirrored clock. The realtime audio streams are
       // already cut there (`collectRealtimeAudioTriggers` / `collectRealtimeAudioVolumeEvents`).
       reversalSeconds: resolvedChart.reversal?.seconds,
+      endOnFailure,
     },
     {
       ...createInitialPlayerSummary(ruleset, ruleset.noteCount),
-      scoreTracker: createScoreTracker({ moneyScore: ruleset.moneyScore }),
+      scoreTracker: createScoreTracker({
+        moneyScore: ruleset.moneyScore,
+        ...(options.course !== undefined ? { course: courseStageCarryCombo(options.course) } : {}),
+      }),
     },
   );
   const summary: PlayerSummary = judgeCore.summary;
+  if (judgeCore.scoreTracker.course !== undefined) {
+    // The same object the tracker updates, so the summary always shows the live course combo.
+    summary.course = judgeCore.scoreTracker.course;
+  }
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
         const { chartSha256, chartMd5, recorder, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
@@ -203,6 +215,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
+            ...(endOnFailure ? { endOnFailure } : {}),
+            ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
             gauge: selectedGauge,
           },
@@ -374,6 +388,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       ...dynamicJudgeRankChanges.map((change) => maxJudgeReachSeconds(judgeCore.config, change.seconds)),
     );
   const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
+  let endedOnFailure = false;
   let interruptedReason: PlayerInterruptReason | undefined;
   let realtimeAudioVolumeEventIndex = 0;
   let nonPlayableRealtimeAudioTriggerIndex = 0;
@@ -613,6 +628,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       // A replay has only judged up to its last chart-time step, which can trail the tick by up to one step.
       const judgedThroughSeconds = replay ? replay.judgedThroughSeconds : nowSec;
       const safeNowSeconds = Math.max(0, judgedThroughSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+      // A play that ends on failure stops the moment its gauge empties.
+      if (isJudgingClosed(judgeCore)) {
+        endedOnFailure = true;
+        break;
+      }
       // Without audio a play may end as soon as its chart is over — unless the host holds it open.
       if (isJudgeCoreSettled(judgeCore) && !audioSession && hold === undefined && safeNowSeconds >= totalSeconds) {
         break;
@@ -641,7 +661,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       stepJudge({ kind: 'finish', totalSeconds });
     }
   } finally {
-    if (interruptedReason) {
+    if (interruptedReason || endedOnFailure) {
       await disposeAudioSessionSafely(audioSession);
     } else {
       await finalizeAudioSessionSafely(audioSession);
@@ -683,10 +703,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   if (!uiEnabled) {
     writeRuntimeEventLog(writeOutput, 'playback-end', [
       ['time', formatSeconds(totalSeconds)],
-      ['reason', 'complete'],
+      ['reason', endedOnFailure ? 'failed' : 'complete'],
     ]);
     playbackStateLogger.logResult(totalSeconds, {
-      reason: 'complete',
+      reason: endedOnFailure ? 'failed' : 'complete',
       summary,
     });
   }

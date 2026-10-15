@@ -29,7 +29,13 @@ import {
  */
 
 export * from './judge-core-types.ts';
-export { clampToReversal, maxJudgeReachSeconds, noteOwesTailMiss, toJudgeClock } from './judge-core-score.ts';
+export {
+  clampToReversal,
+  isJudgingClosed,
+  maxJudgeReachSeconds,
+  noteOwesTailMiss,
+  toJudgeClock,
+} from './judge-core-score.ts';
 export { resolveLandmineExplosionEvent } from './judge-core-advance.ts';
 
 /** Builds the initial judge state of a play. */
