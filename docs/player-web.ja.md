@@ -58,7 +58,7 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 - **トップレベル:** Status（読み取り専用）、Open folder、Open files (ZIP / play log)。Open files では譜面の ZIP アーカイブ（`?music=` と同じ読み込み）や、リプレイするプレイログ（`*.bmplay.json`）を選べます。Open folder はフォルダー選択ダイアログを使い、ドロップと同じ経路で読み込みます。
 - **Play options**（既定で開く）: Auto play、Gauge、Random 1P / 2P、DP flip、Auto scratch 1P / 2P、Hi-speed。Hi-speed（その場で反映）以外は曲の開始時に確定し、プレイ中は無効になります。
   - **Replay / ghost**（既定で閉じる）: Tempo、Hi-speed、SUDDEN+ / HIDDEN+、LIFT — 記録したプレイヤーが見ていたもののうち、リプレイで再現するもの。それ以外は自分の設定のままです。既定ですべてオンで、次回以降も保持され、曲の開始時に確定し、プレイ中は無効になります。シーンには `replayView`（`PlaylogViewReplay`）として渡ります。
-- **Tempo**（既定で開く）: Tempo (%)、Pitch、Keep-pitch stretcher（[プレイテンポ](#プレイテンポ) を参照）。曲の開始時に確定し、プレイ中は無効になります。
+- **Tempo**（既定で開く）: Tempo (%)、Pitch、Keep-pitch stretcher（[プレイテンポ](#プレイテンポ) を参照）。曲の開始時に確定し、プレイ中は無効になります。ただしピッチがテンポに追従するときの Tempo (%) はプレイ中も有効で、プレイのテンポをその場で変えます。
 - **Course**（既定で開く）: Skip stage results、My courses…、NONSTOP placement（曲の開始時に確定し、プレイ中は無効）、Table URL と Import table courses。
 - **Skin & display**（既定で閉じる）: Skin system（Built-in / LR2 / beatoraja。スキン未読み込みのものを選ぶとドロップを促す）、Built-in skin、Skin effects、Play layout、Judged notes、Toggle fullscreen、LR2 theme（LR2 theme を含む drop の後）、**Beatoraja skins**（シーンごとの選択。beatoraja theme の読み込み中だけ表示）、**Skin settings**（組み込みスキンに設定がある場合）、**Add skin**。
 - **Audio**（既定で開く）: Master / Key sound / BGM の音量 (%)、Play in silent mode（Audio Session API があるブラウザーのみ。後述）、 **Compressor** フォルダー（Enabled、stage ごとの切り替え、各 compressor の threshold / knee / ratio / attack / release とリセット）。
@@ -69,7 +69,7 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 
 ### プレイテンポ
 
-Debug Menu → Tempo → **Tempo (%)** で、曲を本来のテンポの -50 % から +50 % で遊べます（既定 0、1 % 刻み）。**Pitch** はテンポを変えたときの鳴り方を決めます。**Pitch follows tempo (LR2)**（既定）はサンプルを速く・遅く再生するので、テンポと一緒にピッチも変わります。**Keep pitch** は読み込み時にサンプルを時間方向に伸縮し、ピッチを保ちます。伸縮の方式は **Keep-pitch stretcher** で選べます（既定は **Signalsmith Stretch**、ほかに **WSOLA**）。この 2 つの設定は NONSTOP の FIT のステージの鳴り方も決め（[NONSTOP](#コースと段位認定) を参照）、FIT のステージでは 2 つの倍率を掛け合わせます。3 つの設定は記憶し（`localStorage`、`be-music-demo.play-tempo`）、プレイの開始時に読み、ほかのプレイオプションと同じくプレイ中は無効になります。テンポが 0 でないときは状態表示に出ます（`Playing (tempo -20%): <曲名>`）。
+Debug Menu → Tempo → **Tempo (%)** で、曲を本来のテンポの -50 % から +50 % で遊べます（既定 0、1 % 刻み）。**Pitch** はテンポを変えたときの鳴り方を決めます。**Pitch follows tempo (LR2)**（既定）はサンプルを速く・遅く再生するので、テンポと一緒にピッチも変わります。**Keep pitch** は読み込み時にサンプルを時間方向に伸縮し、ピッチを保ちます。伸縮の方式は **Keep-pitch stretcher** で選べます（既定は **Signalsmith Stretch**、ほかに **WSOLA**）。この 2 つの設定は NONSTOP の FIT のステージの鳴り方も決め（[NONSTOP](#コースと段位認定) を参照）、FIT のステージでは 2 つの倍率を掛け合わせます。3 つの設定は記憶し（`localStorage`、`be-music-demo.play-tempo`）、プレイの開始時に読み、ほかのプレイオプションと同じくプレイ中は無効になります。テンポが 0 でないときは状態表示に出ます（`Playing (tempo -20%): <曲名>`）。**Pitch follows tempo (LR2)** のときは **Tempo (%)** がプレイ中も有効で、プレイのテンポをその場で変え、状態表示も追従します。**Pitch** と **Keep-pitch stretcher** はロックしたままです。**Keep pitch** のとき（サンプルは読み込み時のテンポに伸縮済み）、リプレイ中（ログに従います）、コースがテンポを切ったステージでは、スライダーもロックします。
 
 ```mermaid
 flowchart LR
@@ -79,6 +79,8 @@ flowchart LR
     C --> J[判定<br/>譜面時刻]
     J --> L[プレイログ<br/>play.tempo]
 ```
+
+プレイ中の変更（LR2 / 既定と beatoraja のゲームプレイビューの `setTempo(tempo)`。`pitch` モードのみ）は、入力コマンド `{ kind: 'tempo' }` としてエンジンへ送ります。エンジンはコマンドを取り出した譜面時刻で時計を付け替えるので譜面時刻は途切れず、その譜面秒とともに変更を知らせます（`onTempoChange`）。そこから、ビューの時計、後から鳴らすサンプルと鳴っているサンプル（`playbackRate` を 30 ms かけて新しい倍率へ動かします。`WebAudioSession.setTempo`。bmson のスライスはサンプル時間での長さを保つので、ノートの位置で終わります）、BGA の動画、NONSTOP の譜面のステージのフェードが新しいテンポで進みます。プレイログは変更を `play.tempoChanges` に記録し、一度でも別のテンポで進んだプレイは練習です。リプレイは、Replay / ghost のオプションでテンポを再現するとき、`pitch` モードで記録された変更に従います（`resolveReplayTempo`）。
 
 すべてが `tempo` 倍の速さで進みます。エンジンの時計（`PlayerOptions.speed`）、予約・発音するサンプル、スクロールと判定ライン、BGA の画像と動画（`playbackRate`）、NONSTOP のステージのフェード、結果画面までの譜面時刻での待ちです。スキンのアニメーションのタイマーは実時間のままです。判定は譜面時刻のままなので、プレイの入力と判定はテンポに左右されません。プレイログには `play.tempo` として記録し（[playlog.ja.md](./playlog.ja.md)）、リプレイはそのテンポで再生します。テンポを変えたプレイは、beatoraja の周波数トレーナーと同じく練習として扱います。Leaderboard には送らず（状態表示に理由を出します。サーバーも `tempo` として拒否します。[leaderboard.ja.md](./leaderboard.ja.md) を参照）、ベスト記録も更新しません。プレイログの自動保存はします。コースもテンポを変えて遊べます。すべてのステージがそのテンポで進み、そのプレイは順位付けせず、コースの記録も更新しません。LR2、既定、beatoraja のどのゲームプレイシーンでも使えます。LR2 / 既定のシーンには `tempo`、`tempoPitchMode`、`tempoStretchAlgorithm` を渡し、beatoraja のシーンでは `prepareBeatorajaGameplayChart` に同じ 3 つを渡し、ホストが `tempo` を `engineOptions.speed` として渡します。
 

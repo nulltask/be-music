@@ -1,4 +1,5 @@
 import type { NonstopStitchMap } from '@be-music/player/course';
+import { DEFAULT_PLAYLOG_VIEW_REPLAY, type PlaylogPlay, type PlaylogTempoChange } from '@be-music/player/playlog';
 import type { BeMusicEvent } from '@be-music/json';
 import { stretchAudioBuffers, type TimeStretchAlgorithm } from './time-stretch.ts';
 import type { WebAudioSessionSlicePlayback } from './web-audio-session.ts';
@@ -43,6 +44,46 @@ export function chartToElapsedSeconds(chartSeconds: number, tempo: number): numb
  */
 export function resolveSamplePlaybackRate(mode: TempoPitchMode, tempo: number, stageRate = 1): number {
   return mode === 'keep-pitch' ? 1 : tempo * stageRate;
+}
+
+/**
+ * Whether the tempo can change during a play: in `pitch` mode the samples follow the tempo through their playback rate;
+ * in `keep-pitch` mode they were stretched to the tempo they loaded at, so it stays.
+ */
+export function supportsLiveTempoChange(mode: TempoPitchMode): boolean {
+  return mode === 'pitch';
+}
+
+/** The tempo a replay plays at: the one it starts at and the changes it follows (chart time, the log's clock). */
+export interface ReplayTempo {
+  tempo: number;
+  changes: PlaylogTempoChange[];
+}
+
+/**
+ * The tempo a replay plays at. When the viewer reproduces the recorded tempo (`reproduce`, by default as
+ * `DEFAULT_PLAYLOG_VIEW_REPLAY`), it starts at `play.tempo` and, when the tempo can change live
+ * ({@link supportsLiveTempoChange}), follows `play.tempoChanges`; otherwise it plays at the viewer's own tempo.
+ */
+export function resolveReplayTempo(
+  play: Pick<PlaylogPlay, 'tempo' | 'tempoChanges'>,
+  options: { ownTempo?: number; pitchMode: TempoPitchMode; reproduce?: boolean },
+): ReplayTempo {
+  if (!(options.reproduce ?? DEFAULT_PLAYLOG_VIEW_REPLAY.tempo)) {
+    return { tempo: clampPlayTempo(options.ownTempo), changes: [] };
+  }
+  const changes = supportsLiveTempoChange(options.pitchMode)
+    ? (play.tempoChanges ?? []).map((change) => ({ timeUs: change.timeUs, tempo: clampPlayTempo(change.tempo) }))
+    : [];
+  return { tempo: clampPlayTempo(play.tempo ?? 1), changes };
+}
+
+/** Runs BGA videos at `tempo`, so their time stays the chart time since their cue. */
+export function setVideoPlaybackTempo(videos: Iterable<HTMLVideoElement>, tempo: number): void {
+  for (const video of videos) {
+    video.defaultPlaybackRate = tempo;
+    video.playbackRate = tempo;
+  }
 }
 
 /**

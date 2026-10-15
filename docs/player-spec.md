@@ -679,6 +679,13 @@ Only the notes on the scratch playable channel are automatically processed, and 
 `speed` is the speed at which in-game time progresses.
 Both `AUTO` and `MANUAL` are used to convert seconds on the musical score to real time.
 
+`speed` is the tempo at the start. A host can change it during the play with the `{ kind: 'tempo', tempo }` input command.
+The engine re-anchors its clock at the chart time it drains the command (`createTempoClock`), so chart time stays continuous and runs at the new tempo from then on.
+It records the change in the play log (`play.tempoChanges`), calls `AudioSession.setTempo` and reports the change through `onTempoChange`.
+Judgments and recorded inputs stay in chart time, so a re-simulation is unaffected.
+A replay follows its log's changes when the host passes them as `replayTempoChanges`.
+The built-in Node audio session renders its audio for the starting tempo and does not follow a change.
+
 ### `highSpeed`
 
 `highSpeed` is a display parameter that primarily changes the visible range and scrolling density of the TUI.

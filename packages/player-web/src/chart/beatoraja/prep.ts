@@ -54,6 +54,7 @@ import {
   clampPlayTempo,
   resolveSamplePlaybackRate,
   stretchSlicePlayback,
+  supportsLiveTempoChange,
   type TempoPitchMode,
   type TimeStretchAlgorithm,
 } from '../../runtime/play-tempo.ts';
@@ -204,6 +205,8 @@ export async function prepareBeatorajaGameplayChart(
     wavCmdVolumeMultipliers,
     bmsonSlicePlayback,
     playbackRate: resolveSamplePlaybackRate(pitchMode, tempo),
+    // In pitch mode the samples follow a live tempo change; kept pitch stays at the tempo it was stretched to.
+    playbackRateFollowsTempo: supportsLiveTempoChange(pitchMode),
   };
 
   let disposed = false;

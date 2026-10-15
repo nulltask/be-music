@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  allowsLiveTempo,
   clampTempoPercent,
   DEFAULT_PLAY_TEMPO_SETTINGS,
   describePlayingStatus,
@@ -9,6 +10,7 @@ import {
   readStoredPlayTempoSettings,
   storePlayTempoSettings,
   tempoFromPercent,
+  tempoPercentFromTempo,
 } from './play-tempo-settings.ts';
 
 describe('tempo percent', () => {
@@ -70,5 +72,20 @@ describe('stored settings', () => {
     };
     expect(readStoredPlayTempoSettings(blocked)).toEqual(DEFAULT_PLAY_TEMPO_SETTINGS);
     expect(() => storePlayTempoSettings(settings, blocked)).not.toThrow();
+  });
+});
+
+describe('live tempo', () => {
+  test('turns a play tempo back into a slider percent', () => {
+    expect([0.8, 1, 1.05, 1.5, 2].map(tempoPercentFromTempo)).toEqual([-20, 0, 5, 50, 50]);
+  });
+
+  test('the slider changes a running play only with the pitch following the tempo, at the slider tempo, not a replay', () => {
+    const pitch = { tempoPercent: -20, tempoPitchMode: 'pitch' as const };
+    expect(allowsLiveTempo(pitch, { replay: false, tempo: 0.8 })).toBe(true);
+    expect(allowsLiveTempo({ ...pitch, tempoPitchMode: 'keep-pitch' }, { replay: false, tempo: 0.8 })).toBe(false);
+    expect(allowsLiveTempo(pitch, { replay: true, tempo: 0.8 })).toBe(false);
+    // A course stage the course turned the tempo off for.
+    expect(allowsLiveTempo(pitch, { replay: false, tempo: 1 })).toBe(false);
   });
 });

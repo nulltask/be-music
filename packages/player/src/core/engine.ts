@@ -35,6 +35,7 @@ export {
   resolvePlayChart,
 } from './engine-preparation.ts';
 export { resolveBgmHeadroomGain, shouldUseAutoMixBgmHeadroomControl } from './engine-audio.ts';
+export { createTempoClock, type TempoClock, type TempoClockSegment } from './tempo-clock.ts';
 
 export type { JudgeWindowSetUs, LongNoteStyle, PlaylogRulesetId, RulesetWindowTables, WindowPairUs };
 
