@@ -23,7 +23,7 @@ function recordedPlaylog(play: Partial<BeMusicPlaylog['play']> = {}): BeMusicPla
   const played = resolveBmsControlFlowWithDraws(SOURCE, randomDraws);
   return {
     format: 'be-music-playlog',
-    version: 1,
+    version: 0,
     clock: { unit: 'us', origin: 'chart-zero' },
     chart: {
       sourceFormat: 'bms',

@@ -5,7 +5,7 @@ import { buildPlaylogReport, parsePlaylogCliArgs } from './playlog-cli.ts';
 function makePlaylog(): BeMusicPlaylog {
   return {
     format: 'be-music-playlog',
-    version: 1,
+    version: 0,
     createdAt: '2026-08-17T10:00:00.000Z',
     clock: { unit: 'us', origin: 'chart-zero' },
     chart: {

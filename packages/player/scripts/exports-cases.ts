@@ -172,7 +172,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
 
 const BENCH_PLAYLOG: BeMusicPlaylog = {
   format: 'be-music-playlog',
-  version: 1,
+  version: 0,
   clock: { unit: 'us', origin: 'chart-zero' },
   chart: {
     title: 'bench',
