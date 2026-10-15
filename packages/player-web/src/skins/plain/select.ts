@@ -1,4 +1,5 @@
 import {
+  describeCourseCard,
   formatPlayVariantLabel,
   resolveStageOrientation,
   resolveSongRowFacts,
@@ -84,6 +85,12 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   ctx.fillStyle = PANEL;
   ctx.fillRect(x, y, PANEL_W, 300);
   if (!song) {
+    if (frame.focusedCourse !== undefined) {
+      drawCourse(ctx, frame, frame.focusedCourse, x + 16, y, PANEL_W - 32);
+      button(ctx, frame, 'PLAY', x + 16, y + 236, 160, frame.actions.play, true);
+      button(ctx, frame, 'AUTO', x + 186, y + 236, 88, frame.actions.autoPlay, false);
+      return;
+    }
     text(ctx, 'Pick a folder', x + 16, y + 28, { size: 14, color: MUTED });
     return;
   }
@@ -130,6 +137,12 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
   const song = frame.focusedSong;
   const left = card.x + 16;
   if (!song) {
+    if (frame.focusedCourse !== undefined) {
+      drawCourse(ctx, frame, frame.focusedCourse, left, card.y, card.w - 32);
+      button(ctx, frame, 'PLAY', play.x, play.y, play.w, frame.actions.play, true, play.h);
+      button(ctx, frame, 'AUTO', auto.x, auto.y, auto.w, frame.actions.autoPlay, false, auto.h);
+      return;
+    }
     text(ctx, 'Pick a folder', left, card.y + 28, { size: 14, color: MUTED });
     return;
   }
@@ -164,6 +177,24 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
 
   button(ctx, frame, 'PLAY', play.x, play.y, play.w, frame.actions.play, true, play.h);
   button(ctx, frame, 'AUTO', auto.x, auto.y, auto.w, frame.actions.autoPlay, false, auto.h);
+}
+
+/** A focused course in place of a song: its name, its kind and stage count, and its stages (as many as fit). */
+function drawCourse(
+  ctx: CanvasRenderingContext2D,
+  frame: BeMusicSelectFrame,
+  course: NonNullable<BeMusicSelectFrame['focusedCourse']>,
+  x: number,
+  y: number,
+  width: number,
+): void {
+  const { nowMs } = frame;
+  const card = describeCourseCard(course);
+  text(ctx, card.title, x, y + 28, { size: 18, weight: 800, maxWidth: width, nowMs });
+  text(ctx, card.detail, x, y + 52, { size: 11, color: MUTED, maxWidth: width, nowMs });
+  card.stages.slice(0, 6).forEach((stage, index) => {
+    text(ctx, `${index + 1}. ${stage}`, x, y + 86 + index * 22, { size: 12, maxWidth: width, nowMs });
+  });
 }
 
 function button(

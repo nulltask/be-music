@@ -408,6 +408,8 @@ export interface CoreSongSelectViewOptions {
   onSongAutoPlay?: (song: BrowserSongEntry) => void;
   /** The player started a course bar whose every stage is in the collection (or a NEW COURSE bar). */
   onCourseSelected?: (course: BrowserCourseEntry) => void;
+  /** The player started a course with AUTO: every stage plays itself. Falls back to `onCourseSelected` when unset. */
+  onCourseAutoPlay?: (course: BrowserCourseEntry) => void;
   /**
    * The player's own courses and the course being made. An LR2 skin reads its course-maker ops, texts and buttons
    * from it (ops 571 / 572 / 580-599, texts 150-170 / 198, buttons 230 / 231 / 233 / 240-248 / 268).
@@ -2599,6 +2601,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       firstVisibleIndex: selectWindow.firstVisibleIndex,
       visibleRows: selectWindow.visibleRows,
       focusedSong: this.focusedSong(),
+      focusedCourse: this.focusedCourse(),
       folderLabel: currentFolder?.label,
       searchQuery: this.searchQuery,
       searchEditing: this.searchEditing,
@@ -2666,7 +2669,15 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     if (LIST_PLAY_OPTIONS.has(key)) this.snapCursorAfterFilterChange();
   }
 
+  /** PLAY / AUTO: starts the focused song, or the focused course (a course with a missing stage cannot start). */
   private launchFocusedSong(autoPlay: boolean): void {
+    const course = this.focusedCourse();
+    if (course !== undefined) {
+      if (!course.playable || this.launchAt !== undefined) return;
+      if (autoPlay && this.options.onCourseAutoPlay !== undefined) this.options.onCourseAutoPlay(course);
+      else this.options.onCourseSelected?.(course);
+      return;
+    }
     const focused = this.focusedSong();
     if (!focused) return;
     this.launchSong(focused, autoPlay);

@@ -27,6 +27,7 @@ import {
   type BeMusicSelectLayout,
   type BrowserBrowseEntry,
   type BrowserSongEntry,
+  describeCourseCard,
   formatPlayVariantLabel,
   hash01,
   resolveSongRowFacts,
@@ -386,8 +387,10 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
       addSkinText(layer, text, x, y, options);
 
-    const songTitle = song?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || '';
+    const course =
+      song === undefined && frame.focusedCourse !== undefined ? describeCourseCard(frame.focusedCourse) : undefined;
+    const songTitle = song?.title ?? course?.title ?? 'No chart selected';
+    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
     const playLevelNumber =
       song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
