@@ -1,9 +1,18 @@
 import { createEmptyJson } from '@be-music/json';
-import { parseBeatorajaCourseData, type NonstopConnection } from '@be-music/player/course';
+import { parseBeatorajaCourseData, parseLr2CourseFile, type NonstopConnection } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
+import type { BeMusicSongRecord } from '@be-music/player-web/skin';
 import { describe, expect, test } from 'vite-plus/test';
-import { buildCourseResultSummary, CourseSession, courseRecordKey } from './course-session.ts';
+import {
+  buildCourseResultSummary,
+  CourseSession,
+  courseRecordKey,
+  joinCourseStageHistories,
+  lookupCourseRecord,
+  resolveResultPresentation,
+  skipsCourseStageResult,
+} from './course-session.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
@@ -59,8 +68,16 @@ describe('CourseSession', () => {
     expect(first.course).toEqual({ kind: 'grade', gaugeSet: 'lr2' });
     // The HCN constraint applies to a chart that leaves its long-note mode undefined.
     expect(first.song.chart.sourceFormat === 'bms' && first.song.chart.bms.lnMode).toBe(3);
-    expect(session.laneOption('RANDOM')).toBe('OFF');
-    expect(session.laneOption('MIRROR')).toBe('MIRROR');
+    expect(session.laneOptions({ random1P: 'RANDOM', random2P: 'RANDOM', dpFlip: true })).toEqual({
+      random1P: 'OFF',
+      random2P: 'OFF',
+      dpFlip: false,
+    });
+    expect(session.laneOptions({ random1P: 'MIRROR', random2P: 'OFF', dpFlip: false })).toEqual({
+      random1P: 'MIRROR',
+      random2P: 'MIRROR',
+      dpFlip: true,
+    });
 
     expect(
       session.recordStage(
@@ -138,6 +155,27 @@ describe('CourseSession', () => {
     expect(seen).toEqual([3, 3]);
   });
 
+  test('tells whether the course goes on after a stage before it is recorded', () => {
+    const session = new CourseSession(course([]));
+    expect(session.goesOnAfter(stageLog({}))).toBe(true);
+    expect(session.goesOnAfter(stageLog({ gauge: { type: 'GRADE', final: 0, cleared: false } }))).toBe(false);
+    expect(session.goesOnAfter(undefined)).toBe(false);
+    // Asking records nothing.
+    expect(session.stagesPlayed).toBe(0);
+    session.recordStage(stageLog({}));
+    session.recordStage(stageLog({}));
+    // After the last stage the course result follows.
+    expect(session.goesOnAfter(stageLog({}))).toBe(false);
+  });
+
+  test('keeps each played stage’s graphs', () => {
+    const session = new CourseSession(course([]));
+    const history = { gaugeHistory: [{ progress: 1, value: 80 }], scoreHistory: [{ progress: 1, exScore: 20 }] };
+    session.recordStage(stageLog({}), history);
+    session.giveUp(stageLog({}));
+    expect(session.stageHistories).toEqual([history, { gaugeHistory: [], scoreHistory: [] }]);
+  });
+
   test('refuses a course with a missing stage', () => {
     expect(() => new CourseSession({ ...course(), playable: false })).toThrow('not in the collection');
   });
@@ -195,5 +233,168 @@ describe('buildCourseResultSummary', () => {
       gauge: { type: 'CLASS', current: 36.5, cleared: true },
       course: { maxCombo: 40 },
     });
+  });
+});
+
+describe('skipsCourseStageResult', () => {
+  test('skips every stage result when stage results are skipped', () => {
+    expect(skipsCourseStageResult({ skipStageResults: true, autoPlay: false, courseGoesOn: false })).toBe(true);
+  });
+
+  test('skips an auto-played stage the course goes on after, as LR2 does, but not the last one', () => {
+    expect(skipsCourseStageResult({ skipStageResults: false, autoPlay: true, courseGoesOn: true })).toBe(true);
+    expect(skipsCourseStageResult({ skipStageResults: false, autoPlay: true, courseGoesOn: false })).toBe(false);
+    expect(skipsCourseStageResult({ skipStageResults: false, autoPlay: false, courseGoesOn: true })).toBe(false);
+  });
+});
+
+describe('lookupCourseRecord', () => {
+  const dan = (): BrowserCourseEntry => {
+    const entry = course(['MIRROR']);
+    return {
+      ...entry,
+      definition: {
+        ...entry.definition,
+        trophies: [
+          { name: 'bronzemedal', missRate: 10, scoreRate: 50 },
+          { name: 'goldmedal', missRate: 2.5, scoreRate: 85 },
+        ],
+      },
+    };
+  };
+
+  test('reads the record kept under the course key, with the trophy its bests earn', () => {
+    const records = new Map<string, BeMusicSongRecord>([
+      [courseRecordKey(dan()), { lamp: 'FAILED', exScore: 52, missCount: 0 }],
+    ]);
+    // 30 notes: 52 / 60 = 86.7 % score, no BP. beatoraja grants trophies on the bests, cleared or not.
+    expect(lookupCourseRecord(dan(), records)).toEqual({
+      lamp: 'FAILED',
+      exScore: 52,
+      missCount: 0,
+      trophy: 'goldmedal',
+    });
+    records.set(courseRecordKey(dan()), { lamp: 'NORMAL', exScore: 40, missCount: 3 });
+    expect(lookupCourseRecord(dan(), records)?.trophy).toBe('bronzemedal');
+  });
+
+  test('has no record for a course never played, a random course or a NEW COURSE bar', () => {
+    const records = new Map([[courseRecordKey(dan()), { lamp: 'HARD' as const }]]);
+    expect(lookupCourseRecord(course(['GAUGE_LR2']), records)).toBeUndefined();
+    expect(lookupCourseRecord({ ...dan(), newCourse: true }, records)).toBeUndefined();
+    const random = { ...dan(), random: { name: 'r', stages: [], constraints: [], trophies: [] } };
+    expect(lookupCourseRecord(random as unknown as BrowserCourseEntry, records)).toBeUndefined();
+    expect(lookupCourseRecord(dan(), records)).toEqual({ lamp: 'HARD' });
+  });
+});
+
+describe('joinCourseStageHistories', () => {
+  test('lays the stages side by side by length, the EX score running on, an unreached stage at gauge 0', () => {
+    const joined = joinCourseStageHistories(
+      [
+        {
+          gaugeHistory: [
+            { progress: 0, value: 100 },
+            { progress: 1, value: 60 },
+          ],
+          scoreHistory: [
+            { progress: 0, exScore: 0 },
+            { progress: 1, exScore: 30 },
+          ],
+        },
+        {
+          gaugeHistory: [
+            { progress: 0, value: 60 },
+            { progress: 1, value: 10 },
+          ],
+          scoreHistory: [
+            { progress: 0, exScore: 0 },
+            { progress: 1, exScore: 10 },
+          ],
+        },
+      ],
+      [2, 1, 1],
+    );
+    expect(joined.gaugeHistory).toEqual([
+      { progress: 0, value: 100 },
+      { progress: 0.5, value: 60 },
+      { progress: 0.5, value: 60 },
+      { progress: 0.75, value: 10 },
+      { progress: 0.75, value: 0 },
+      { progress: 1, value: 0 },
+    ]);
+    expect(joined.scoreHistory).toEqual([
+      { progress: 0, exScore: 0 },
+      { progress: 0.5, exScore: 30 },
+      { progress: 0.5, exScore: 30 },
+      { progress: 0.75, exScore: 40 },
+      { progress: 0.75, exScore: 40 },
+      { progress: 1, exScore: 40 },
+    ]);
+  });
+
+  test('shares the width evenly when no stage has a length', () => {
+    const joined = joinCourseStageHistories([], [0, 0]);
+    expect(joined.gaugeHistory.map((sample) => sample.progress)).toEqual([0, 0.5, 0.5, 1]);
+  });
+});
+
+describe('CourseSession.playSettings', () => {
+  const picks = {
+    random1P: 'RANDOM' as const,
+    random2P: 'MIRROR' as const,
+    dpFlip: true,
+    gauge: 'EASY' as const,
+    hiddenSudden1P: 'SUDDEN' as const,
+    hiddenSudden2P: 'OFF' as const,
+    autoScratch1P: true,
+    autoScratch2P: false,
+    tempo: 0.9,
+  };
+
+  test('resets an LR2 GRADE course’s stage to what LR2 allows, lane options included', () => {
+    const definition = parseLr2CourseFile(
+      `<courselist><course><title>Dan</title><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${MD5[0]}</hash></course></courselist>`,
+    )[0]!;
+    const session = new CourseSession({ ...course(), definition });
+    expect(session.playSettings(picks)).toEqual({
+      random1P: 'OFF',
+      random2P: 'OFF',
+      dpFlip: false,
+      gauge: 'GROOVE',
+      hiddenSudden1P: 'OFF',
+      hiddenSudden2P: 'OFF',
+      autoScratch1P: false,
+      autoScratch2P: false,
+      tempo: 1,
+    });
+  });
+
+  test('applies only the lane-option constraint to another course', () => {
+    const session = new CourseSession(course(['MIRROR']));
+    expect(session.playSettings(picks)).toEqual({ ...picks, random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+  });
+});
+
+describe('resolveResultPresentation', () => {
+  test('shows a course run on the course-result skin with the course jingles and no retry', () => {
+    expect(resolveResultPresentation('course')).toEqual({
+      courseResultSkin: true,
+      courseJingles: true,
+      quickRetry: false,
+    });
+  });
+
+  test('shows a NONSTOP run as LR2 does: the result skin, the clear / fail jingles and quick retry', () => {
+    expect(resolveResultPresentation('nonstop')).toEqual({
+      courseResultSkin: false,
+      courseJingles: false,
+      quickRetry: true,
+    });
+  });
+
+  test('offers quick retry on a single play only, not on a course stage', () => {
+    expect(resolveResultPresentation('single').quickRetry).toBe(true);
+    expect(resolveResultPresentation('stage').quickRetry).toBe(false);
   });
 });

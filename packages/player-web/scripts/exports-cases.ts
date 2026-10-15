@@ -498,10 +498,39 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveCourseStageSettings(BENCH_COURSE_DEFINITION);
     },
   });
-  define('player-web.resolveCourseLaneOption', {
+  define('player-web.resolveCourseLaneOptions', {
     run: () => {
-      playerWebCoreApi.resolveCourseLaneOption(BENCH_COURSE_DEFINITION.constraints, 'RANDOM');
-      playerWebCoreApi.resolveCourseLaneOption(BENCH_COURSE_DEFINITION.constraints, 'MIRROR');
+      playerWebCoreApi.resolveCourseLaneOptions(BENCH_COURSE_DEFINITION.constraints, {
+        random1P: 'RANDOM',
+        random2P: 'MIRROR',
+        dpFlip: true,
+      });
+      playerWebCoreApi.resolveCourseLaneOptions(['grade_mirror'], {
+        random1P: 'MIRROR',
+        random2P: 'OFF',
+        dpFlip: false,
+      });
+    },
+  });
+  define('player-web.isLr2GradeCourse', {
+    run: () => {
+      playerWebCoreApi.isLr2GradeCourse(BENCH_COURSE_DEFINITION);
+    },
+  });
+  define('player-web.resolveLr2GradeCoursePlaySettings', {
+    run: () => {
+      playerWebCoreApi.resolveLr2GradeCoursePlaySettings(
+        { kind: 'grade', source: { format: 'lr2crs', type: 2, header: '0'.repeat(32), hash: '0'.repeat(64) } },
+        {
+          gauge: 'EASY',
+          hiddenSudden1P: 'SUDDEN',
+          hiddenSudden2P: 'OFF',
+          autoScratch1P: true,
+          autoScratch2P: false,
+          dpFlip: true,
+          tempo: 1.1,
+        },
+      );
     },
   });
   define('player-web.isCourseHiSpeedLocked', {
@@ -543,6 +572,18 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.resolveLr2CourseNumber', {
     run: () => {
       playerWebCoreApi.resolveLr2CourseNumber(250, BENCH_COURSE_INFO);
+    },
+  });
+  define('player-web.resolveLr2CourseStageDifficultyOps', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseStageDifficultyOps(BENCH_COURSE_INFO);
+      playerWebCoreApi.resolveLr2CourseStageDifficultyOps(undefined);
+    },
+  });
+  define('player-web.resolveLr2JudgeCombo', {
+    run: () => {
+      playerWebCoreApi.resolveLr2JudgeCombo(12, 340, 'grade');
+      playerWebCoreApi.resolveLr2JudgeCombo(12, 340, 'nonstop');
     },
   });
   define('player-web.resolveLr2CourseText', {

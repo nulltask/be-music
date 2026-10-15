@@ -1,10 +1,9 @@
 import { Color, Container, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import type {
-  Lr2BarBodyKind,
-  Lr2BarBodySource,
   Lr2BarBodySlot,
   Lr2BarFlashElement,
   Lr2BarLevelKind,
+  Lr2BarLampSource,
   Lr2BarLevelSource,
   Lr2BarTitleElement,
   Lr2ButtonElement,
@@ -31,7 +30,14 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from '../select-ops.ts';
+import { pickLr2BarBody } from './bar-body.ts';
+import {
+  computeSelectOps,
+  resolveKeyModeOp,
+  resolveLr2BarLampKind,
+  resolveLr2LampOp,
+  SELECT_DYNAMIC_OPS,
+} from '../select-ops.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
 import { resolveSceneCourseInfo, type SceneCourseInfo } from '../course-info.ts';
 import {
@@ -43,6 +49,7 @@ import {
   resolveLr2CourseMakerText,
   resolveLr2CourseNumber,
   resolveLr2CourseOps,
+  resolveLr2CourseStageDifficultyOps,
   resolveLr2CourseText,
 } from './course.ts';
 
@@ -223,27 +230,35 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    */
   /**
    * The select ops for the bar under the cursor. A course bar lights the course-bar op (3), the playable op (5) when
-   * every stage is in the collection, and the course ops (290 and its kind's op).
+   * every stage is in the collection, its best lamp (100-105), its stages' difficulties (700-745) and the course ops
+   * (290 and its kind's op).
    */
   private computeOps(skin: Lr2Skin): ReadonlySet<number> {
+    const song = this.focusedSong();
     const ops = computeSelectOps(
-      this.focusedSong(),
+      song,
       this.panelStates,
       this.playOptions,
       skin.customOptions,
       this.collection,
+      song !== undefined ? this.options.resolveSongRecord?.(song)?.lamp : undefined,
     );
     const course = this.focusedCourse();
     const maker = this.options.courseMaker;
-    if (course === undefined && maker === undefined) return ops;
     const withCourse = new Set(ops);
+    // Ops 700-745: the difficulty of the selected course's stages 1-5 (the `x0` ops on any other bar, as LR2 reads 0).
+    const courseInfo = course !== undefined ? resolveSceneCourseInfo(course) : undefined;
+    resolveLr2CourseStageDifficultyOps(courseInfo).forEach((op) => withCourse.add(op));
     if (maker !== undefined) {
       resolveLr2CourseMakerOps(maker.draft, course?.stages.length).forEach((op) => withCourse.add(op));
     }
-    if (course === undefined) return withCourse;
+    if (course === undefined || courseInfo === undefined) return withCourse;
     withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_COURSE);
     if (course.playable) withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_PLAYABLE);
-    resolveLr2CourseOps(resolveSceneCourseInfo(course)).forEach((op) => withCourse.add(op));
+    // The course's best lamp (ops 100-105), from the player's record on it as LR2 keeps one per course.
+    withCourse.delete(SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED);
+    withCourse.add(resolveLr2LampOp(this.options.resolveCourseRecord?.(course)?.lamp));
+    resolveLr2CourseOps(courseInfo).forEach((op) => withCourse.add(op));
     return withCourse;
   }
 
@@ -1143,7 +1158,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       if (!isDestinationVisible(dst, ops, this.timerActive)) {
         continue;
       }
-      const body = pickBarBody(layout.bodies, entry);
+      const body = pickLr2BarBody(layout.bodies, entry);
       if (body) {
         const texture = this.skinTextures.get(body.source.imagePath);
         if (texture) {
@@ -1168,10 +1183,35 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       if (isCenter && layout.flash) {
         this.drawBarFlash(layout.flash, dst);
       }
-      // BAR_LAMP / BAR_RANK: skipped for now because we don't yet persist clear-history per song. Once a score record
-      // exists, pick `layout.lamps[scoreLamp]` / `layout.ranks[scoreRank]` and render via the same offset-by-bar
-      // formula as BAR_TITLE.
+      // BAR_LAMP: a song or course bar's best lamp from the player's records, placed relative to the bar like
+      // BAR_TITLE. BAR_RANK is not drawn yet.
+      if (entry !== undefined && layout.lamps.length > 0 && layout.lampDestination !== undefined) {
+        this.drawBarLamp(entry, dst, layout.lamps, layout.lampDestination);
+      }
     }
+  }
+
+  /**
+   * Draws the `#SRC_BAR_LAMP` of a song or course bar for its best lamp (LR2 draws NO PLAY too, as its own lamp). A skin
+   * without that lamp's art draws nothing; folder bars have no lamp here.
+   */
+  private drawBarLamp(
+    entry: BrowserBrowseEntry,
+    bar: Lr2DestinationRect,
+    lamps: ReadonlyArray<Lr2BarLampSource>,
+    lampDst: Lr2DestinationRect,
+  ): void {
+    if (entry.kind === 'folder') return;
+    const record =
+      entry.kind === 'song'
+        ? this.options.resolveSongRecord?.(entry.song)
+        : this.options.resolveCourseRecord?.(entry.course);
+    const kind = resolveLr2BarLampKind(record?.lamp);
+    const lamp = lamps.find((source) => source.kind === kind);
+    if (lamp === undefined) return;
+    const absoluteDst: Lr2DestinationRect = { ...lampDst, x: bar.x + lampDst.x, y: bar.y + lampDst.y };
+    const sprite = this.makeSlicedSprite(lamp.source, absoluteDst, `bar-lamp[${kind}]`);
+    if (sprite) this.listLayer.addChild(sprite);
   }
 
   /**
@@ -1417,36 +1457,6 @@ export function isInsideLr2DefaultSearchBox(input: Lr2DefaultSearchBoxHitTestInp
 function containsPoint(rect: Lr2DestinationRect, x: number, y: number): boolean {
   const r = normalizeRect(rect);
   return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-}
-
-/**
- * Picks the bar-body sprite definition for a slot. Maps the entry kind onto the matching `#SRC_BAR_BODY` art — a folder
- * of courses gets the course-folder body, a course bar the course body — falling back to a `'song'` body when the skin
- * doesn't define that variant, and finally the first available body. Slots with no entry (i.e. out-of-range when the cursor is near the start / end of the list)
- * still get a body sprite so the empty slats keep rendering — that matches LR2's behavior where the rail draws even
- * past the end of the song list.
- */
-function pickBarBody(
-  bodies: ReadonlyArray<Lr2BarBodySource>,
-  entry: BrowserBrowseEntry | undefined,
-): Lr2BarBodySource | undefined {
-  if (bodies.length === 0) {
-    return undefined;
-  }
-  const kind: Lr2BarBodyKind =
-    entry?.kind === 'folder'
-      ? entry.folder.courses !== undefined
-        ? 'courseFolder'
-        : 'folder'
-      : entry?.kind === 'course'
-        ? 'course'
-        : 'song';
-  return (
-    bodies.find((body) => body.kind === kind) ??
-    (kind === 'courseFolder' ? bodies.find((body) => body.kind === 'folder') : undefined) ??
-    bodies.find((body) => body.kind === 'song') ??
-    bodies[0]
-  );
 }
 
 /**

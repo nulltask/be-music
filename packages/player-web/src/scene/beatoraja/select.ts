@@ -32,7 +32,7 @@
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
 
 import { resolveSceneCourseInfo } from '../course-info.ts';
-import { resolveBeatorajaCourseConstraintOps, resolveBeatorajaCourseText } from './course.ts';
+import { resolveBeatorajaCourseBarOps, resolveBeatorajaCourseText } from './course.ts';
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/chart';
 import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSongListLayout } from '@be-music/beatoraja-skin';
@@ -140,6 +140,12 @@ export interface PixiBeatorajaSelectSceneOptions {
    * Folder rows pass through unchanged (the lamp op is a song-bar concept).
    */
   resolveSongLampOp?: (song: BrowserSongEntry) => number | undefined;
+  /**
+   * The focused course bar's clear-lamp op (`BEATORAJA_OP.CLEAR_LAMP_*`), from the player's best record on the course, as
+   * beatoraja lights a `GradeBar`'s lamp from its course score. Omitted (or `undefined`) reads as `CLEAR_LAMP_NOPLAY`;
+   * a random course bar has no record.
+   */
+  resolveCourseLampOp?: (course: BrowserCourseEntry) => number | undefined;
   /**
    * Optional song collection — the same `BrowserSongCollection` the demo built `songs` from.
    * Required only for the chart-preview engine: `ChartPreviewEngine.focus()` needs to resolve
@@ -1072,11 +1078,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (entry.kind === 'folder') {
       ops.add(BEATORAJA_OP.FOLDERBAR);
     } else if (entry.kind === 'course') {
-      ops.add(BEATORAJA_OP.GRADEBAR);
-      // A random course's bar (`OPTION_RANDOMCOURSEBAR`); its stages are drawn when it is started.
-      if (entry.course.random !== undefined) ops.add(BEATORAJA_OP.RANDOMCOURSEBAR);
-      // The course's constraints (`OPTION_GRADEBAR_CLASS` … `_HCN`).
-      for (const op of resolveBeatorajaCourseConstraintOps(entry.course.definition.constraints)) ops.add(op);
+      // The course bar, its constraints (`OPTION_GRADEBAR_CLASS` … `_HCN`) and its best lamp, as a song bar's
+      // (`OPTION_SELECT_BAR_*_CLEARED`).
+      const lampOp = entry.course.random === undefined ? this.options.resolveCourseLampOp?.(entry.course) : undefined;
+      for (const op of resolveBeatorajaCourseBarOps(entry.course, lampOp)) ops.add(op);
     } else {
       ops.add(BEATORAJA_OP.SONGBAR);
       ops.add(BEATORAJA_OP.PLAYABLEBAR);

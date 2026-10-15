@@ -4,6 +4,7 @@ import type { BeMusicPlayOptions } from './play-options.ts';
 import type { BeMusicResultData, GaugeHistorySample, ScoreHistorySample } from './result-data.ts';
 import type { BeMusicSkinSetting, BeMusicSkinSettingValues } from './settings.ts';
 import type {
+  BeMusicCourseRecord,
   BeMusicSongImageKind,
   BeMusicSongRecord,
   BrowserBrowseEntry,
@@ -671,6 +672,11 @@ export interface BeMusicSelectFrame {
   pointer: { x: number; y: number } | undefined;
   /** The player's best record on `song`, or `undefined` when the host keeps none (or it was never played). */
   songRecord(song: BrowserSongEntry): BeMusicSongRecord | undefined;
+  /**
+   * The player's best record on `course` (a course bar), or `undefined` when the host keeps none, the course was never
+   * played, or it is a random course or a NEW COURSE bar. Absent from hosts that predate it.
+   */
+  courseRecord?(course: BrowserCourseEntry): BeMusicCourseRecord | undefined;
   songImage: BeMusicSongImageLookup;
   /** The player's values for the skin's {@link BeMusicSkin.settings}. */
   settings: BeMusicSkinSettingValues;

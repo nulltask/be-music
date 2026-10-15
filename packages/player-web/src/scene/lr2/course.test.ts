@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vite-plus/test';
 import type { SceneCourseInfo } from '../course-info.ts';
 import {
   lr2ShowsCourseCombo,
+  resolveLr2JudgeCombo,
+  resolveLr2CourseStageDifficultyOps,
   resolveLr2CourseConnectionText,
   resolveLr2CourseDraftInfo,
   resolveLr2CourseMakerAction,
@@ -107,7 +109,7 @@ describe('LR2 course maker', () => {
     kind: 'nonstop' as const,
     name: 'Mine',
     stages: [
-      { md5: '1'.repeat(32), keyMode: 7, title: 'One' },
+      { md5: '1'.repeat(32), keyMode: 7, title: 'One', subtitle: '[ANOTHER]' },
       { md5: '2'.repeat(32), keyMode: 7, title: 'Two' },
     ],
   };
@@ -124,6 +126,9 @@ describe('LR2 course maker', () => {
     expect(resolveLr2CourseText(150, info)).toBe('One');
     expect(resolveLr2CourseText(151, info)).toBe('Two');
     expect(resolveLr2CourseText(152, info)).toBe('');
+    // Texts 160-164: the subtitles of the songs added so far.
+    expect(resolveLr2CourseText(160, info)).toBe('[ANOTHER]');
+    expect(resolveLr2CourseText(161, info)).toBe('');
     expect(resolveLr2CourseText(170, info)).toBe('Mine');
     expect(resolveLr2CourseText(170, resolveLr2CourseDraftInfo({ ...draft, name: '' }, 'Type it'))).toBe('Type it');
     expect(resolveLr2CourseMakerText(198, 'cut-fit')).toBe('CUT+FIT');
@@ -148,5 +153,43 @@ describe('LR2 course maker', () => {
     expect(resolveLr2CourseMakerButtonState(240, course(3), 'fade')).toBe(0);
     expect(resolveLr2CourseMakerButtonState(268, undefined, 'blank2')).toBe(5);
     expect(resolveLr2CourseMakerButtonState(230, undefined, 'fade')).toBeUndefined();
+  });
+});
+
+describe('resolveLr2JudgeCombo', () => {
+  it('shows the course combo next to the judgement in an expert or grade course', () => {
+    expect(resolveLr2JudgeCombo(12, 340, 'grade')).toBe(340);
+    expect(resolveLr2JudgeCombo(12, 340, 'expert')).toBe(340);
+  });
+
+  it('shows the stage combo in a NONSTOP course and outside a course', () => {
+    expect(resolveLr2JudgeCombo(12, 340, 'nonstop')).toBe(12);
+    expect(resolveLr2JudgeCombo(12, undefined, undefined)).toBe(12);
+    expect(resolveLr2JudgeCombo(12, undefined, 'grade')).toBe(12);
+  });
+});
+
+describe('resolveLr2CourseStageDifficultyOps', () => {
+  it('lights 700 + 10 × stage + difficulty for the first five stages', () => {
+    const course: SceneCourseInfo = {
+      kind: 'grade',
+      title: 'Dan',
+      stages: [
+        { title: 'a', difficulty: 2 },
+        { title: 'b', difficulty: 4 },
+        { title: 'c' },
+        { title: 'd', difficulty: 5 },
+        { title: 'e', difficulty: 3 },
+        { title: 'f', difficulty: 1 },
+      ],
+    };
+    expect(resolveLr2CourseStageDifficultyOps(course)).toEqual([702, 714, 720, 735, 743]);
+  });
+
+  it('reads 0 for a stage the course lacks and for a bar that is not a course, as LR2 does', () => {
+    expect(
+      resolveLr2CourseStageDifficultyOps({ kind: 'expert', title: 'x', stages: [{ title: 'a', difficulty: 1 }] }),
+    ).toEqual([701, 710, 720, 730, 740]);
+    expect(resolveLr2CourseStageDifficultyOps(undefined)).toEqual([700, 710, 720, 730, 740]);
   });
 });

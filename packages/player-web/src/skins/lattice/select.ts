@@ -252,7 +252,9 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
 
     // Focused chart.
     const course =
-      song === undefined && frame.focusedCourse !== undefined ? describeCourseCard(frame.focusedCourse) : undefined;
+      song === undefined && frame.focusedCourse !== undefined
+        ? describeCourseCard(frame.focusedCourse, frame.courseRecord?.(frame.focusedCourse))
+        : undefined;
     const songTitle = song?.title ?? course?.title ?? 'No chart selected';
     const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const position =

@@ -71,9 +71,10 @@ import {
   readCourseFile,
   resolveCourseFolders,
   resolveCourseMakerFolders,
-  resolveCourseLaneOption,
+  resolveCourseLaneOptions,
   resolveCourseStageSettings,
   CourseMaker,
+  createCourseSongRecord,
   type BrowserCourseEntry,
   type BrowserDroppedFile,
   type BrowserSongCollection,
@@ -137,7 +138,11 @@ import {
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
 import {
-  isCourseRunAtAnotherTempo,
+  courseRunKeepsRecord,
+  courseStagePlayFromResult,
+  courseStagePlayFromSummary,
+  courseStageRecordKey,
+  mergeCourseStageRecord,
   mergeSongRecord,
   readStoredSongRecords,
   playRecordKey,
@@ -172,6 +177,10 @@ import {
   buildCourseResultSummary,
   CourseSession,
   courseRecordKey,
+  joinCourseStageHistories,
+  resolveResultPresentation,
+  lookupCourseRecord,
+  skipsCourseStageResult,
   type CourseStagePlan,
 } from './course-session.ts';
 import {
@@ -772,6 +781,11 @@ class PlayerWebDemoApp {
    * for autoplay and replay plays, which never touch the records.
    */
   private activePlayRecordKey: string | undefined;
+  /**
+   * Record key of the running EXPERT / GRADE course stage's chart, latched at stage start ({@link courseStageRecordKey}):
+   * as LR2 does, the stage also updates that chart's best EX score, max combo, BP and FULL COMBO lamp.
+   */
+  private activeStageRecordKey: string | undefined;
   /**
    * `guiState.autoSavePlaylog` as it was when the current play STARTED. The result-screen auto-save decision reads
    * this latch, not the live checkbox, so the value in effect at song start governs the whole play (the checkbox is
@@ -2392,8 +2406,8 @@ class PlayerWebDemoApp {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    // A run at another tempo is practice: no record.
-    if (!isCourseRunAtAnotherTempo(courseLog))
+    // An auto-played run or one at another tempo leaves the record alone.
+    if (courseRunKeepsRecord(courseLog))
       this.recordCourseResult(courseRecordKey(nonstop.course, nonstop.prepared.placement), native);
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
@@ -2401,8 +2415,13 @@ class PlayerWebDemoApp {
       courseLog,
       nonstop.course.stages.flatMap((stage) => (stage.song !== undefined ? [stage.song] : [])),
     );
-    await this.showResult(buildCourseResultData(nonstop.course, native, courseLog), {
-      course: resolveSceneCourseInfo(nonstop.course),
+    // As LR2 shows a NONSTOP run: on the result skin with the clear / fail jingles (no course-result step), and R
+    // stitches and plays the course again.
+    await this.showResult(buildCourseResultData(nonstop.course, native, courseLog, fallback), {
+      nonstop: {
+        info: resolveSceneCourseInfo(nonstop.course),
+        retry: () => void this.startNonstopCourse(nonstop.course),
+      },
     });
   }
 
@@ -2468,8 +2487,9 @@ class PlayerWebDemoApp {
       await this.showSelect();
       return;
     }
-    // A run at another tempo is practice: no record (and the Leaderboard refuses it as `tempo`).
-    if (!isCourseRunAtAnotherTempo(courseLog)) this.recordCourseResult(courseRecordKey(session.course), result);
+    // An auto-played run keeps no record, nor does a run at another tempo, which is practice (and the Leaderboard
+    // refuses it as `tempo`).
+    if (courseRunKeepsRecord(courseLog)) this.recordCourseResult(courseRecordKey(session.course), result);
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
     this.leaderboard.maybeSubmitCourse(courseLog, session.stageSongs());
@@ -2480,7 +2500,14 @@ class PlayerWebDemoApp {
         session.course.stages[0]!.song!,
         buildCourseResultSummary(result),
         result.maxCombo,
-        { scoreHistory: [], gaugeHistory: [], timingHistory: [] },
+        // beatoraja's course result draws every stage's graph joined, each stage as wide as its chart is long.
+        {
+          ...joinCourseStageHistories(
+            session.stageHistories,
+            session.stageSongs().map((song) => createCourseSongRecord(song).length ?? 0),
+          ),
+          timingHistory: [],
+        },
         { info: courseInfo, result: true },
       );
       if (mounted) {
@@ -2488,7 +2515,10 @@ class PlayerWebDemoApp {
         return;
       }
     }
-    await this.showResult(buildCourseResultData(session.course, result, courseLog), { course: courseInfo });
+    // LR2 (and the built-in result) shows the last stage's graph.
+    await this.showResult(buildCourseResultData(session.course, result, courseLog, session.stageHistories.at(-1)), {
+      course: courseInfo,
+    });
   }
 
   /**
@@ -2542,6 +2572,15 @@ class PlayerWebDemoApp {
     if (this.activePlayRecordKey === undefined) return;
     this.recordSongResult(this.activePlayRecordKey, play);
     this.activePlayRecordKey = undefined;
+  }
+
+  /** Folds the running course stage into its chart's record ({@link mergeCourseStageRecord}), when the stage counts. */
+  private recordActiveCourseStage(play: SongRecordPlay): void {
+    const key = this.activeStageRecordKey;
+    this.activeStageRecordKey = undefined;
+    if (key === undefined) return;
+    this.songRecords.set(key, mergeCourseStageRecord(this.songRecords.get(key), play));
+    storeSongRecords(this.songRecords);
   }
 
   /** Folds a finished play into its chart's best record and persists the records. */
@@ -3262,9 +3301,23 @@ class PlayerWebDemoApp {
     }
 
     // 3. Audio + BGA prep — owns the AudioContext for this play. The play tempo is read once, here, for the prep and the
-    // engine alike.
-    const tempoPercent = this.guiState.tempoPercent;
-    const tempo = tempoFromPercent(tempoPercent);
+    // engine alike. A course stage plays with what its course allows (its lane-option constraint's FLIP, and an LR2
+    // GRADE course's resets: EASY gauge to GROOVE, auto scratch, FLIP and the tempo off).
+    const picked = {
+      random1P: this.guiState.random1P,
+      random2P: this.guiState.random2P,
+      dpFlip: this.guiState.dpFlip,
+      gauge: this.guiState.gauge,
+      hiddenSudden1P: 'OFF' as const,
+      hiddenSudden2P: 'OFF' as const,
+      autoScratch1P: this.guiState.autoScratch1P,
+      autoScratch2P: this.guiState.autoScratch2P,
+      tempo: tempoFromPercent(this.guiState.tempoPercent),
+    };
+    const played =
+      courseStage !== undefined && this.courseSession !== undefined ? this.courseSession.playSettings(picked) : picked;
+    const tempo = played.tempo;
+    const tempoPercent = tempo === 1 ? 0 : this.guiState.tempoPercent;
     const source = resolveSongSource(this.collection, song);
     if (!source) {
       this.setStatus(`Beatoraja gameplay: no source for ${song.title}`);
@@ -3329,6 +3382,10 @@ class PlayerWebDemoApp {
       course: courseStage !== undefined,
       tempo,
     });
+    this.activeStageRecordKey =
+      courseStage !== undefined
+        ? courseStageRecordKey(song, chartHashes?.sha256, { autoPlay, replay: false, tempo })
+        : undefined;
     // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
     let givingUp = false;
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
@@ -3351,7 +3408,8 @@ class PlayerWebDemoApp {
       // DP flip — when the user enabled it via the Play options (Debug Menu / LR2 select panel, two-way synced
       // into `guiState`) AND the chart is a DP variant (10 / 14 keys), the chart's lane channels mirror at
       // construction. SP charts pass through unchanged because they have no 2P channels to swap with.
-      dpFlip: this.guiState.dpFlip,
+      // A course stage plays with the FLIP its course allows.
+      dpFlip: played.dpFlip,
       initialHiSpeed: this.guiState.hiSpeed,
       onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
       ...(courseStage !== undefined
@@ -3365,11 +3423,11 @@ class PlayerWebDemoApp {
         // The play tempo the prep readied the audio and BGA for; the engine judges in chart time.
         speed: tempo,
         judgeRuleset: this.guiState.judgeRuleset,
-        autoScratch: this.guiState.autoScratch1P || this.guiState.autoScratch2P,
-        gauge: this.guiState.gauge,
+        autoScratch: played.autoScratch1P || played.autoScratch2P,
+        gauge: played.gauge,
         ...(courseStage !== undefined ? { course: courseStage.course } : {}),
         recordPlaylog: {
-          gauge: this.guiState.gauge,
+          gauge: played.gauge,
           ...(chartHashes !== undefined ? { chartSha256: chartHashes.sha256, chartMd5: chartHashes.md5 } : {}),
           recorder: PLAYLOG_RECORDER,
         },
@@ -3419,10 +3477,16 @@ class PlayerWebDemoApp {
         void this.finishBeatorajaGameplayThen(async () => {
           // A course stage: its play log carries the course on, and leaving its result plays the next stage.
           if (courseStage !== undefined && this.courseSession !== undefined) {
-            this.courseSession.recordStage(playlog);
-            // With stage results skipped, go straight on to the next stage (or the course result).
+            const goesOn = this.courseSession.recordStage(playlog, history) === 'next';
+            this.recordActiveCourseStage(courseStagePlayFromSummary(summary, maxCombo));
+            // With stage results skipped (or an auto-played stage the course goes on after, as LR2 skips it), go
+            // straight on to the next stage (or the course result).
             const mounted =
-              !this.guiState.courseAutoAdvance &&
+              !skipsCourseStageResult({
+                skipStageResults: this.guiState.courseAutoAdvance,
+                autoPlay,
+                courseGoesOn: goesOn,
+              }) &&
               (await this.showBeatorajaResult(song, summary, maxCombo, history, {
                 info: this.courseSession.courseInfo,
               }));
@@ -3637,6 +3701,11 @@ class PlayerWebDemoApp {
       // same lamp rule the other families' selects show.
       resolveSongLampOp: (song) => {
         const record = this.lookupSongRecord(song);
+        return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
+      },
+      // A course bar's lamp comes from the course's record, kept under the course's key.
+      resolveCourseLampOp: (course) => {
+        const record = lookupCourseRecord(course, this.songRecords, this.guiState.nonstopPlacement);
         return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
       },
       // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
@@ -4636,6 +4705,8 @@ class PlayerWebDemoApp {
         this.refreshPlayOptionControllers();
       },
       resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
+      resolveCourseRecord: (course: BrowserCourseEntry) =>
+        lookupCourseRecord(course, this.songRecords, this.guiState.nonstopPlacement),
       onSongSelected: (song: BrowserSongEntry) => {
         if (this.addSongToCourseBeingMade(song)) return;
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
@@ -4879,24 +4950,41 @@ class PlayerWebDemoApp {
     const nonstop = overrides.nonstop;
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay, ...(replay !== undefined ? { replay } : {}) } };
+    // A course limits the lane options (both sides and DP FLIP) to what its constraint allows (`grade` none,
+    // `grade_mirror` MIRROR, ...), a NONSTOP course's stitched play included, and an LR2 GRADE course also turns off
+    // what LR2 turns off when one starts (EASY gauge, HIDDEN / SUDDEN, auto scratch, FLIP, the tempo).
+    const picked = {
+      random1P: this.guiState.random1P,
+      random2P: this.guiState.random2P,
+      dpFlip: this.guiState.dpFlip,
+      gauge: this.guiState.gauge,
+      hiddenSudden1P: playOptions?.hiddenSudden1P ?? ('OFF' as const),
+      hiddenSudden2P: playOptions?.hiddenSudden2P ?? ('OFF' as const),
+      autoScratch1P: this.guiState.autoScratch1P,
+      autoScratch2P: this.guiState.autoScratch2P,
+      tempo: replay !== undefined ? (replay.play.tempo ?? 1) : tempoFromPercent(this.guiState.tempoPercent),
+    };
+    const lanes =
+      this.courseSession !== undefined && courseStage !== undefined
+        ? this.courseSession.playSettings(picked)
+        : nonstop !== undefined
+          ? { ...picked, ...resolveCourseLaneOptions(nonstop.course.definition.constraints, picked) }
+          : picked;
+    const tempo = lanes.tempo;
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
     // course instead.
     // A play at another tempo is practice: it is not ranked, and leaves the records alone too.
-    const tempo = replay !== undefined ? (replay.play.tempo ?? 1) : tempoFromPercent(this.guiState.tempoPercent);
     this.activePlayRecordKey = playRecordKey(song, overrides.chartHashes?.sha256, {
       autoPlay,
       replay: replay !== undefined,
       course: courseStage !== undefined || nonstop !== undefined,
       tempo,
     });
-    // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...), a
-    // NONSTOP course's stitched play included.
-    const courseLane = (picked: typeof this.guiState.random1P): typeof this.guiState.random1P =>
-      this.courseSession !== undefined && courseStage !== undefined
-        ? this.courseSession.laneOption(picked)
-        : nonstop !== undefined
-          ? resolveCourseLaneOption(nonstop.course.definition.constraints, picked)
-          : picked;
+    // An EXPERT / GRADE stage also updates its chart's record, as LR2 does (not a NONSTOP run's stitched play).
+    this.activeStageRecordKey =
+      courseStage !== undefined
+        ? courseStageRecordKey(song, overrides.chartHashes?.sha256, { autoPlay, replay: replay !== undefined, tempo })
+        : undefined;
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
       // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
@@ -4911,19 +4999,19 @@ class PlayerWebDemoApp {
       bgaSize: playOptions?.bgaSize,
       scoreGraph: playOptions?.scoreGraph,
       hsFix: playOptions?.hsFix,
-      hiddenSudden1P: playOptions?.hiddenSudden1P,
-      hiddenSudden2P: playOptions?.hiddenSudden2P,
+      hiddenSudden1P: lanes.hiddenSudden1P,
+      hiddenSudden2P: lanes.hiddenSudden2P,
       shutter: playOptions?.shutter,
       laneCover: playOptions?.laneCover,
       // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge / judge ruleset govern
       // judging and the gauge readout, and the lane transforms stay off because the view re-applies the recorded
       // arrangement directly (see `PixiGameplayViewOptions.replay`).
-      autoScratch1P: replay !== undefined ? replay.play.autoScratch : this.guiState.autoScratch1P,
-      autoScratch2P: replay !== undefined ? false : this.guiState.autoScratch2P,
-      dpFlip: replay !== undefined ? false : this.guiState.dpFlip,
-      random1P: replay !== undefined ? ('OFF' as const) : courseLane(this.guiState.random1P),
-      random2P: replay !== undefined ? ('OFF' as const) : courseLane(this.guiState.random2P),
-      gauge: replay !== undefined ? replay.play.gauge : this.guiState.gauge,
+      autoScratch1P: replay !== undefined ? replay.play.autoScratch : lanes.autoScratch1P,
+      autoScratch2P: replay !== undefined ? false : lanes.autoScratch2P,
+      dpFlip: replay !== undefined ? false : lanes.dpFlip,
+      random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
+      random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,
+      gauge: replay !== undefined ? replay.play.gauge : lanes.gauge,
       ...(courseStage !== undefined
         ? { course: courseStage.course, courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }
         : {}),
@@ -4984,10 +5072,20 @@ class PlayerWebDemoApp {
           void this.finishGameplayThen(() => this.showNonstopCourseResult(nonstop, result.playlog, result));
           return;
         }
-        // A course stage with stage results skipped goes straight on to the next stage (or the course result).
-        if (courseStage !== undefined && this.courseSession !== undefined && this.guiState.courseAutoAdvance) {
+        // A course stage with stage results skipped (or an auto-played one the course goes on after, as LR2 skips it)
+        // goes straight on to the next stage (or the course result).
+        if (
+          courseStage !== undefined &&
+          this.courseSession !== undefined &&
+          skipsCourseStageResult({
+            skipStageResults: this.guiState.courseAutoAdvance,
+            autoPlay,
+            courseGoesOn: this.courseSession.goesOnAfter(result.playlog),
+          })
+        ) {
           void this.finishGameplayThen(async () => {
-            this.courseSession?.recordStage(result.playlog);
+            this.courseSession?.recordStage(result.playlog, result);
+            this.recordActiveCourseStage(courseStagePlayFromResult(result));
             this.gameplayView?.dispose({ preserveAudioTail: true });
             this.gameplayView = undefined;
             this.unlockPlaylogOptions();
@@ -5169,12 +5267,21 @@ class PlayerWebDemoApp {
    * Mounts the result scene for a play, or — with `mode.course` — for a whole course (the course result, shown on the
    * LR2 theme's course-result skin when it has one).
    */
-  private async showResult(data: PixiGameplayResultData, mode: { course?: SceneCourseInfo } = {}): Promise<void> {
+  private async showResult(
+    data: PixiGameplayResultData,
+    mode: { course?: SceneCourseInfo; nonstop?: { info: SceneCourseInfo; retry: () => void } } = {},
+  ): Promise<void> {
     await this.ensureHostMounted();
     this.resultView?.dispose();
     // A stage of a running course: its play log carries the course on, and dismissing its result plays the next stage.
-    const courseStage = mode.course === undefined && this.courseSession !== undefined;
-    if (courseStage) this.courseSession!.recordStage(data.playlog);
+    const courseStage = mode.course === undefined && mode.nonstop === undefined && this.courseSession !== undefined;
+    const presentation = resolveResultPresentation(
+      mode.course !== undefined ? 'course' : mode.nonstop !== undefined ? 'nonstop' : courseStage ? 'stage' : 'single',
+    );
+    if (courseStage) {
+      this.courseSession!.recordStage(data.playlog, data);
+      this.recordActiveCourseStage(courseStagePlayFromResult(data));
+    }
     // Family dispatch for result. We currently only model the LR2 / default split here — the beatoraja result
     // scene is constructed inside `playSongBeatoraja`'s onComplete handler, not via `showResult`, so this method
     // never sees the `'beatoraja'` family. Pick the LR2 result skin only when the family pick says so; defaulting
@@ -5182,25 +5289,36 @@ class PlayerWebDemoApp {
     const resultFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'result');
     // A course's results show the course on the skin (LR2 ops 280-293, texts 150-170): a stage's result at its stage,
     // the course result on the course-result skin, each parsed again with the course ops.
-    const courseInfo = mode.course ?? (courseStage ? this.courseSession!.courseInfo : undefined);
-    const mountedResultSkin = mode.course !== undefined ? (this.courseResultSkin ?? this.resultSkin) : this.resultSkin;
+    const courseInfo = mode.course ?? mode.nonstop?.info ?? (courseStage ? this.courseSession!.courseInfo : undefined);
+    const mountedResultSkin = presentation.courseResultSkin
+      ? (this.courseResultSkin ?? this.resultSkin)
+      : this.resultSkin;
     const lr2ResultSkin =
       resultFamily !== 'lr2'
         ? undefined
         : courseInfo === undefined
           ? mountedResultSkin
           : this.courseLr2Skin(mountedResultSkin, courseInfo, {
-              kind: mode.course !== undefined && this.courseResultSkin !== undefined ? 'courseResult' : 'result',
+              kind: presentation.courseResultSkin && this.courseResultSkin !== undefined ? 'courseResult' : 'result',
             });
     // R on the result plays the same chart again — only offered when the recorded play start is this chart's, and
-    // never in a course (LR2 and beatoraja disable quick retry there).
+    // never in a course (LR2 and beatoraja disable quick retry there), except that a NONSTOP run is stitched and played
+    // again, as LR2 allows.
+    const retryPlay =
+      presentation.quickRetry && mode.nonstop === undefined && this.lastPlay?.song.id === data.song.id
+        ? this.lastPlay
+        : undefined;
     const retry =
-      mode.course === undefined && !courseStage && this.lastPlay?.song.id === data.song.id ? this.lastPlay : undefined;
+      mode.nonstop !== undefined
+        ? mode.nonstop.retry
+        : retryPlay !== undefined
+          ? () => void this.playSong(retryPlay.song, retryPlay.overrides)
+          : undefined;
     const sharedResultOptions = {
       collection: this.collection,
       // The course result plays LR2's course jingles, falling back to the result ones.
-      clearBgm: (mode.course !== undefined ? this.courseClearBgmBytes : undefined) ?? this.clearBgmBytes,
-      failBgm: (mode.course !== undefined ? this.courseFailBgmBytes : undefined) ?? this.failBgmBytes,
+      clearBgm: (presentation.courseJingles ? this.courseClearBgmBytes : undefined) ?? this.clearBgmBytes,
+      failBgm: (presentation.courseJingles ? this.courseFailBgmBytes : undefined) ?? this.failBgmBytes,
       resultBgm: this.resultBgmBytes,
       onContinue: () => {
         if (courseStage && this.courseSession !== undefined) {
@@ -5220,7 +5338,7 @@ class PlayerWebDemoApp {
               // not the result view, so drop it (and its BGM) first.
               this.resultView?.dispose();
               this.resultView = undefined;
-              void this.playSong(retry.song, retry.overrides);
+              retry();
             },
           }
         : {}),
@@ -5242,8 +5360,8 @@ class PlayerWebDemoApp {
     this.gameplayView = undefined;
     this.setStatus(`Result: ${data.song.title}`);
     this.recordActivePlay(songRecordPlayFromResult(data));
-    // A course's stages are saved and ranked as the course, not one by one.
-    if (mode.course === undefined && !courseStage) {
+    // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
+    if (presentation.quickRetry && mode.nonstop === undefined) {
       this.maybeAutoSavePlaylog(data.playlog);
       this.leaderboard.maybeSubmit(data.playlog, data.song);
     }

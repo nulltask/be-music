@@ -1,6 +1,8 @@
 import { dirname } from '@be-music/utils/core';
 import { resolveChartPlayVariant, resolveSongSource } from '../collection/collection.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../collection/types.ts';
+import type { Lr2BarLampKind } from '@be-music/lr2-skin';
+import type { BeMusicClearLamp } from '../skin/be-music/types.ts';
 import type { PixiGaugeType, PixiPlayOptions } from './core/select.ts';
 
 /**
@@ -88,7 +90,8 @@ export const SELECT_KEYS_FILTER_TO_OP = {
 } as const;
 
 /**
- * Builds the full op set used to gate select-screen DST elements.
+ * Builds the full op set used to gate select-screen DST elements. `songLamp` is the best lamp of the player's record on
+ * `song` (ops 100-105); without one the song reads as never played.
  */
 export function computeSelectOps(
   song: BrowserSongEntry | undefined,
@@ -96,6 +99,7 @@ export function computeSelectOps(
   playOptions: PixiPlayOptions,
   customOptions: ReadonlyArray<{ defaultOp: number }> = [],
   collection?: BrowserSongCollection,
+  songLamp?: BeMusicClearLamp,
 ): ReadonlySet<number> {
   const ops = new Set<number>(SELECT_BASE_OPS);
   for (const which of panelStates) {
@@ -138,9 +142,32 @@ export function computeSelectOps(
   ops.add(song.chart.metadata.banner ? SELECT_DYNAMIC_OPS.BANNER_PRESENT : SELECT_DYNAMIC_OPS.BANNER_ABSENT);
   ops.add(song.chart.metadata.backBmp ? SELECT_DYNAMIC_OPS.BACKBMP_PRESENT : SELECT_DYNAMIC_OPS.BACKBMP_ABSENT);
   ops.add(SELECT_DYNAMIC_OPS.REPLAY_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED);
+  ops.add(resolveLr2LampOp(songLamp));
 
   return ops;
+}
+
+/** The key count each LR2 key-mode op stands for (op 160 7 keys … 164 9 keys). */
+const KEY_MODE_OP_KEYS: Readonly<Record<number, number>> = {
+  [SELECT_DYNAMIC_OPS.KEYS_7]: 7,
+  [SELECT_DYNAMIC_OPS.KEYS_5]: 5,
+  [SELECT_DYNAMIC_OPS.KEYS_14]: 14,
+  [SELECT_DYNAMIC_OPS.KEYS_10]: 10,
+  [SELECT_DYNAMIC_OPS.KEYS_9]: 9,
+};
+
+/**
+ * Whether a course bar stays listed under a key-mode filter (its LR2 op, {@link SELECT_KEYS_FILTER_TO_OP}): LR2 lists
+ * only the courses of the filter's key mode (OpenLR2 L18030-L18053, `WHERE line=…`). A course that names no key mode
+ * (`definition.keyMode`, e.g. a beatoraja course) and a NEW COURSE bar stay listed.
+ */
+export function courseMatchesKeysFilter(
+  course: { definition: { keyMode?: number }; newCourse?: true },
+  filterOp: number,
+): boolean {
+  const keyMode = course.definition.keyMode;
+  if (keyMode === undefined || course.newCourse === true) return true;
+  return KEY_MODE_OP_KEYS[filterOp] === keyMode;
 }
 
 export function resolveKeyModeOp(song: BrowserSongEntry): number {
@@ -263,4 +290,33 @@ function hasReadtextForSong(collection: BrowserSongCollection, song: BrowserSong
 
 function isRedGauge(type: PixiGaugeType): boolean {
   return type === 'HARD' || type === 'DEATH';
+}
+
+/** LR2's six clear lamps (`#SRC_BAR_LAMP` kinds, ops 100-105) for each of the host's lamps. */
+const LR2_LAMP_KINDS: Readonly<Record<BeMusicClearLamp, Lr2BarLampKind>> = {
+  NO_PLAY: 'noplay',
+  FAILED: 'failed',
+  ASSIST_EASY: 'easy',
+  EASY: 'easy',
+  NORMAL: 'clear',
+  HARD: 'hard',
+  EX_HARD: 'hard',
+  FULL_COMBO: 'fullcombo',
+  PERFECT: 'fullcombo',
+  MAX: 'fullcombo',
+};
+
+const LR2_LAMP_KIND_ORDER: readonly Lr2BarLampKind[] = ['noplay', 'failed', 'easy', 'clear', 'hard', 'fullcombo'];
+
+/**
+ * The LR2 clear lamp of a best record (`#SRC_BAR_LAMP` kind): LR2 has one lamp below NORMAL (EASY, which ASSIST EASY
+ * joins), one above it (HARD, which EX HARD joins) and FULL COMBO for PERFECT and MAX too. No record reads `noplay`.
+ */
+export function resolveLr2BarLampKind(lamp: BeMusicClearLamp | undefined): Lr2BarLampKind {
+  return lamp === undefined ? 'noplay' : LR2_LAMP_KINDS[lamp];
+}
+
+/** LR2's select op for the selected bar's clear lamp (100 NO PLAY … 105 FULL COMBO). */
+export function resolveLr2LampOp(lamp: BeMusicClearLamp | undefined): number {
+  return SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED + LR2_LAMP_KIND_ORDER.indexOf(resolveLr2BarLampKind(lamp));
 }

@@ -34,7 +34,7 @@ flowchart LR
 | `grade`                                                          | `CLASS`                      | option   | Dan course; no lane option.                        |
 | `grade_mirror`                                                   | `MIRROR`                     | option   | Dan course; MIRROR allowed.                        |
 | `grade_random`                                                   | `RANDOM`                     | option   | Dan course; random options allowed.                |
-| `no_speed`                                                       | `NO_SPEED`                   | speed    | No hi-speed change during play.                    |
+| `no_speed`                                                       | `NO_SPEED`                   | speed    | No hi-speed (or lane cover, lift, HIDDEN) change.  |
 | `no_good`                                                        | `NO_GOOD`                    | judge    | No GOOD window.                                    |
 | `no_great`                                                       | `NO_GREAT`                   | judge    | No GREAT or GOOD window.                           |
 | `gauge_lr2` / `gauge_5k` / `gauge_7k` / `gauge_9k` / `gauge_24k` | `GAUGE_LR2` … `GAUGE_24KEYS` | gauge    | Which class-gauge table set the course uses.       |
@@ -51,7 +51,8 @@ An XML `<courselist>` of `<course>` elements with `title`, `line` (key mode), `t
 - **Encoding.** A byte-order mark wins, then the XML declaration's `encoding`, then strict UTF-8, then Shift_JIS (`decodeCourseText`).
 - **`hash`.** A 32-character header followed by one 32-character chart MD5 per stage. LR2 keeps at most ten stages (OpenLR2 `LR2f.cpp` L18078-L18081), and plays only the first five of a NONSTOP course (L25857-L25858), so a NONSTOP course is read as those five. Character 10 of the header is the course type.
 - **`type`.** `0` EXPERT, `1` NONSTOP, `2` GRADE, following OpenLR2 (its `expert` / `nonstop` / `grade` tables and skin ops 291-293). Without a `type` element the header's character 10 is used.
-- **Constraints.** The format has none. A grade course gets `grade_mirror` and `gauge_lr2`, the same reading jbmstable-parser gives a table's legacy `grade` list. It reflects the community understanding that LR2's dan allows MIRROR; LR2's own option lock is not visible in the decompile.
+- **Constraints.** The format has none. A grade course gets `grade` and `gauge_lr2`: when a GRADE course starts, LR2 turns both sides' lane options off ([Main.cpp M1124-M1170](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1124-L1170)), so only OFF is allowed. A table's legacy `grade` list keeps jbmstable-parser's `grade_mirror`.
+- **LR2's other resets.** The same code also moves an EASY or G-ATTACK gauge pick to GROOVE and turns off HIDDEN / SUDDEN, the assists (auto scratch and the rest), BATTLE, DP FLIP, the play tempo (pitch) and the extra modifiers. LR2 writes them into its config; a host applies them to the course's stages only, so the player's settings come back afterwards (`isLr2GradeCourse`, `resolveLr2GradeCoursePlaySettings` in `@be-music/player-web/collection`). They apply to a GRADE course read from `.lr2crs` or made with the course maker, not to a table's or beatoraja's grade.
 - A course with no stage, a malformed stage hash or an unknown type is skipped.
 
 ### beatoraja `course/*.json`
@@ -72,7 +73,7 @@ The table header (`header.json`) carries courses the way jbmstable-parser reads 
 - `course` as one group (`Course[]`);
 - otherwise the legacy `grade` list. Its courses all get `grade_mirror` and `gauge_lr2`.
 
-A course takes its stages from `charts` (full table elements, which may carry `sha256`) or from `md5`. One whose charts lack a hash is skipped. The header's `mode` (`beat-7k`, `popn-9k`, …) sets `keyMode`.
+A course takes its stages from `charts` (full table elements, which may carry `sha256`) or from `md5`. One whose charts lack a hash is skipped, and a stage without a title becomes `course N`, as beatoraja's `CourseData.validate` names it. The header's `mode` (`beat-7k`, `popn-9k`, …) sets `keyMode`.
 
 #### Loading a table from its URL
 
@@ -170,10 +171,10 @@ stateDiagram-v2
 ```
 
 - **Adding songs.** `appendCourseDraftStage` adds a song to the end of a `CourseDraft`: at most five songs (`LR2_COURSE_MAKER_MAX_STAGES`), all in the first song's key mode, keyed by the chart's MD5. The same song may appear twice. `removeLastCourseDraftStage` drops the last one, as LR2's right click does.
-- **Saving.** `finishCourseDraft` turns the draft into a `CourseDefinition` shaped as `parseLr2CourseFile` would read it back. A NONSTOP course gets the default connection (LR2's button 268) after each of stages 1-5. A GRADE course reads as an LR2 grade (`grade_mirror`, `gauge_lr2`).
+- **Saving.** `finishCourseDraft` turns the draft into a `CourseDefinition` shaped as `parseLr2CourseFile` would read it back. A NONSTOP course gets the default connection (LR2's button 268) after each of stages 1-5. A GRADE course reads as an LR2 grade (`grade`, `gauge_lr2`).
 - **The hash.** `buildLr2CourseHash` writes LR2's 32-character header (the connection after each of stages 1-10, `0`-`5`; the type at character 10; zeros elsewhere) and each stage's MD5. LR2 puts the first four characters of the player's password MD5 at characters 28-31; a browser has no password, so they stay `0`.
 - **Editing.** `withNonstopConnection` changes the connection after one stage (LR2's buttons 240-248, which step through `stepLr2NonstopConnection`'s order: +1 on the right half, -1 on the left half). LR2 keeps a connection for each of stages 1-9 whatever the course's length.
-- **Constraints.** LR2's maker has none to set (its option-ban buttons were never built), so a made course takes `defaultCourseMakerConstraints` (a GRADE course reads as an LR2 grade, MIRROR allowed with the LR2 gauge; the others have none) unless the host sets them, as beatoraja's course editor does: `CourseDraft.constraints` while making, `withCourseConstraints` afterwards (one per group, normalized).
+- **Constraints.** LR2's maker has none to set (its option-ban buttons were never built), so a made course takes `defaultCourseMakerConstraints` (a GRADE course reads as an LR2 grade, no lane option with the LR2 gauge; the others have none) unless the host sets them, as beatoraja's course editor does: `CourseDraft.constraints` while making, `withCourseConstraints` afterwards (one per group, normalized).
 - **Sharing.** `serializeLr2CourseFile` writes courses as a UTF-8 `.lr2crs` that `parseLr2CourseFile` reads back into the same courses, but the format has no room for constraints. `serializeBeatorajaCourseFile` writes a beatoraja `course/*.json` that keeps them (NONSTOP courses, which beatoraja lacks, are left out).
 
 `CourseMaker` (`@be-music/player-web/collection`) holds the player's courses and the course being made for a host, and `resolveCourseMakerFolders` lists them as LR2 does: one course folder per kind, each with its courses and a NEW COURSE bar last.

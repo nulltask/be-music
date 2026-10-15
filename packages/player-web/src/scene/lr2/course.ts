@@ -35,6 +35,18 @@ export function resolveLr2CourseOps(course: SceneCourseInfo): number[] {
   return ops;
 }
 
+/**
+ * LR2 select ops 700-745 (OpenLR2 L5995-L6031): `700 + 10 × i + difficulty` lights for stage i + 1 (of the first five)
+ * of the selected bar's course, by the stage chart's `#DIFFICULTY` (0 undefined, 1 BEGINNER … 5 INSANE). LR2 reads
+ * 0 for a stage it does not have, a chart it does not own and any bar that is not a course, so those light the `x0` op.
+ */
+export function resolveLr2CourseStageDifficultyOps(course: SceneCourseInfo | undefined): number[] {
+  return [0, 1, 2, 3, 4].map((index) => {
+    const difficulty = Math.trunc(course?.stages[index]?.difficulty ?? 0);
+    return 700 + index * 10 + (difficulty >= 0 && difficulty <= 5 ? difficulty : 0);
+  });
+}
+
 /** LR2 numbers 250-259: the play level of course stage 1-10 (OpenLR2 L923-L942). */
 export function resolveLr2CourseNumber(num: number, course: SceneCourseInfo): number | undefined {
   if (num < 250 || num > 259) return undefined;
@@ -58,6 +70,18 @@ export function resolveLr2CourseText(st: number, course: SceneCourseInfo): strin
  */
 export function lr2ShowsCourseCombo(kind: CourseKind): boolean {
   return kind === 'expert' || kind === 'grade';
+}
+
+/**
+ * The combo an LR2 skin shows next to the judgement (`#DST_NOWCOMBO`): the course combo during an expert or grade
+ * course, as LR2 draws `now_combo_course` there (OpenLR2 L2019-L2034, L2516), else the stage's own combo.
+ */
+export function resolveLr2JudgeCombo(
+  stageCombo: number,
+  courseCombo: number | undefined,
+  kind: CourseKind | undefined,
+): number {
+  return kind !== undefined && courseCombo !== undefined && lr2ShowsCourseCombo(kind) ? courseCombo : stageCombo;
 }
 
 /** LR2's names of the NONSTOP connections (its `option_str[20]`), as the select screen shows them. */
@@ -123,7 +147,10 @@ export function resolveLr2CourseDraftInfo(draft: CourseDraft, namePrompt = ''): 
   return {
     kind: draft.kind,
     title: draft.name.length > 0 ? draft.name : namePrompt,
-    stages: draft.stages.map((stage) => ({ title: stage.title ?? '' })),
+    stages: draft.stages.map((stage) => ({
+      title: stage.title ?? '',
+      ...(stage.subtitle !== undefined ? { subtitle: stage.subtitle } : {}),
+    })),
   };
 }
 

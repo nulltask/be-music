@@ -1,5 +1,6 @@
 import { BEATORAJA_OP, BEATORAJA_TEXT } from '@be-music/beatoraja-skin';
 import type { CourseConstraint } from '@be-music/player/course';
+import type { BrowserCourseEntry } from '../../collection/types.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 
 export type { SceneCourseInfo };
@@ -30,6 +31,21 @@ export function resolveBeatorajaCourseConstraintOps(constraints: readonly Course
     const op = CONSTRAINT_OPS[constraint];
     return op !== undefined ? [op] : [];
   });
+}
+
+/**
+ * The ops a focused course bar lights on the select screen (beatoraja `BooleanPropertyFactory`): `OPTION_GRADEBAR` (3)
+ * on a fixed course only (`instanceof GradeBar`), `OPTION_RANDOMCOURSEBAR` (1031) on a random course,
+ * `OPTION_PLAYABLEBAR` (5) when the course can start (every stage in the collection, or every stage filter readable), one
+ * `OPTION_GRADEBAR_*` op per constraint, and the course's best lamp (`lampOp`, one of `CLEAR_LAMP_*`;
+ * `CLEAR_LAMP_NOPLAY` without one, and always on a random course, which keeps no record).
+ */
+export function resolveBeatorajaCourseBarOps(course: BrowserCourseEntry, lampOp?: number): number[] {
+  const ops: number[] = [course.random !== undefined ? BEATORAJA_OP.RANDOMCOURSEBAR : BEATORAJA_OP.GRADEBAR];
+  if (course.playable) ops.push(BEATORAJA_OP.PLAYABLEBAR);
+  ops.push(...resolveBeatorajaCourseConstraintOps(course.definition.constraints));
+  ops.push(course.random === undefined ? (lampOp ?? BEATORAJA_OP.CLEAR_LAMP_NOPLAY) : BEATORAJA_OP.CLEAR_LAMP_NOPLAY);
+  return ops;
 }
 
 /**

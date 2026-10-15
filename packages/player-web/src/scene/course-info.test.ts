@@ -36,6 +36,18 @@ describe('resolveSceneCourseInfo', () => {
     });
   });
 
+  it('carries each stage chart’s difficulty', () => {
+    const hyper = song('H');
+    hyper.chart.metadata.difficulty = 3;
+    const course: BrowserCourseEntry = {
+      id: 'dan#0',
+      definition,
+      stages: [{ title: 'H', song: hyper }],
+      playable: true,
+    };
+    expect(resolveSceneCourseInfo(course).stages).toEqual([{ title: 'H', difficulty: 3 }]);
+  });
+
   it("keeps the course file's title for a missing stage and leaves the stage index out on select", () => {
     const course: BrowserCourseEntry = { id: 'dan#0', definition, stages: [{ title: 'NOT FOUND' }], playable: false };
     expect(resolveSceneCourseInfo(course)).toEqual({ kind: 'grade', title: 'Dan 1', stages: [{ title: 'NOT FOUND' }] });
