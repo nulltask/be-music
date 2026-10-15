@@ -666,6 +666,42 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // An AUTO SCRATCH long note whose tail lies past an LR2 negative-BPM reversal is never cleared: the run ends with it
+  // outstanding, which LR2 fails by emptying the gauge.
+  test('lr2: an AUTO SCRATCH long note across a reversal agrees on both sides', async () => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '16', position: [1, 2], value: '01' },
+      { measure: 2, channel: '08', position: [0, 1], value: '02' },
+      { measure: 3, channel: '16', position: [0, 1], value: 'AA' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    json.resources.bpm['02'] = -240;
+    const inputs = [down(0, 1_000_000, '11'), up(1, 1_040_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'lr2', { autoScratch: true });
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(summary.gauge?.current).toBe(simulated.gauge.final);
+    expect(summary.gauge?.current).toBe(0);
+  });
+
+  // LR2's mine press leg is live up to the reversal instant itself.
+  test('lr2: a press at the reversal instant detonates a mine just before it on both sides', async () => {
+    const json = chart([
+      { measure: 1, channel: 'D1', position: [99, 100], value: '0A' },
+      { measure: 2, channel: '08', position: [0, 1], value: '02' },
+      { measure: 1, channel: '12', position: [0, 1], value: '01' },
+    ]);
+    json.resources.bpm['02'] = -240;
+    const inputs = [down(0, 2_000_000, '11'), up(1, 2_010_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(summary.gauge?.current).toBe(simulated.gauge.final);
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
