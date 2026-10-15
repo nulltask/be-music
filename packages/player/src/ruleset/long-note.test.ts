@@ -5,6 +5,8 @@ import {
   isMultiBadCollectorTarget,
   longNoteOwesTailMiss,
   resolveEffectiveLongNoteMode,
+  HCN_TICK_US,
+  HcnTickCounter,
   resolveLnEarlyRelease,
 } from './long-note.ts';
 import type { JudgeWindowSetUs } from './definitions.ts';
@@ -95,6 +97,40 @@ describe('ruleset long-note rules', () => {
         judge: 3,
         dmUs: 2_000_000,
       });
+    });
+  });
+
+  describe('HcnTickCounter', () => {
+    const run = (counter: HcnTickCounter, untilUs: number): Array<[boolean, number]> => {
+      const ticks: Array<[boolean, number]> = [];
+      counter.advance(untilUs, (gain, atUs) => ticks.push([gain, atUs]));
+      return ticks;
+    };
+
+    test('a lane losing from the start ticks once the counter is past -200 ms, then every 200 ms', () => {
+      const counter = new HcnTickCounter(1_000_000);
+      expect(run(counter, 1_200_001)).toEqual([]);
+      expect(run(counter, 1_600_001)).toEqual([
+        [false, 1_200_001],
+        [false, 1_400_001],
+      ]);
+    });
+
+    test('gaining starts from where the counter stands and leftover time carries over', () => {
+      const counter = new HcnTickCounter(0);
+      counter.setGaining(true, 0, () => undefined);
+      expect(run(counter, 150_000)).toEqual([]);
+      counter.setGaining(false, 150_000, () => undefined);
+      // From +150 ms the counter needs 350 ms more to pass -200 ms.
+      expect(counter.nextTickUs()).toBe(150_000 + 350_001);
+      expect(run(counter, 600_000)).toEqual([[false, 500_001]]);
+    });
+
+    test('a tick exactly at the limit waits for time to move past it', () => {
+      const counter = new HcnTickCounter(0);
+      counter.setGaining(true, 0, () => undefined);
+      expect(run(counter, HCN_TICK_US + 1)).toEqual([]);
+      expect(run(counter, HCN_TICK_US + 2)).toEqual([[true, HCN_TICK_US + 1]]);
     });
   });
 });

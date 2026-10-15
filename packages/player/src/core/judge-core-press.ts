@@ -18,6 +18,8 @@ import {
   detonateLandminesOnPress,
   laneHoldHistory,
   processLandminePassage,
+  setHcnGaining,
+  startHcnPassing,
 } from './judge-core-advance.ts';
 import { recordLaneDown, recordLaneUp } from './lane-hold.ts';
 import {
@@ -31,6 +33,7 @@ import {
   noteOwesTailMiss,
   setCombo,
   toJudgeClock,
+  toJudgeUs,
 } from './judge-core-score.ts';
 import {
   type JudgeCoreEffectSink,
@@ -260,6 +263,10 @@ export function handleLanePress(
   }
   processLandminePassage(state, nowSec, nowMs, emit);
   detonateLandminesOnPress(state, candidateChannels, nowSec, emit);
+  // A key going down on a lane with a passing Hell Charge note makes it gain.
+  for (const channel of candidateChannels) {
+    setHcnGaining(state, channel, toJudgeUs(nowSec), emit);
+  }
 
   // Past an LR2 negative-BPM reversal the press is judged on the mirrored clock (#134; see `toJudgeClock`): note
   // selection, timing deltas, windows, the lane keysound and the empty-POOR reach all read `judgeSec`, while the
@@ -365,6 +372,7 @@ export function handleLanePress(
     if (longNoteMode !== undefined && isChargeLongNoteMode(longNoteMode)) {
       // Charge modes score the head right here — it is a judgment of its own, not half of a deferred one.
       applyResolvedManualJudge(state, channel, headJudge, nowSec, emit);
+      startHcnPassing(state, candidate, toJudgeUs(nowSec));
       if (ruleset.headBadSkipsTail && (headJudge.kind === 'BAD' || headJudge.kind === 'POOR')) {
         // IIDX: a broken charge-note head cancels the tail; the note is finished with a single judgment.
         state.activeLongNotes.delete(channel);
@@ -380,7 +388,6 @@ export function handleLanePress(
         mode: longNoteMode,
         headJudge,
         headScored: true,
-        gaugeDrainCursorSeconds: judgeSec,
         audioStopped: false,
       });
       state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
@@ -395,7 +402,6 @@ export function handleLanePress(
         mode: 1,
         headJudge,
         headScored: false,
-        gaugeDrainCursorSeconds: judgeSec,
         audioStopped: false,
       });
       state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
@@ -497,6 +503,7 @@ export function handleLaneRelease(
   let settleNow = false;
   for (const channel of input.channels) {
     recordLaneUp(laneHoldHistory(state, channel), input.tokens, releaseMs);
+    setHcnGaining(state, channel, toJudgeUs(input.nowSec), emit);
     state.heldChannels.delete(channel);
     emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
     if (state.activeLongNotes.has(channel)) {

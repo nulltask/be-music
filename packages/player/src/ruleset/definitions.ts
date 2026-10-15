@@ -138,8 +138,6 @@ export interface RulesetConfig {
   comboBreaksOnEmptyPoor: boolean;
   /** When a mine detonates (see {@link MineTrigger}). */
   mineTrigger: MineTrigger;
-  /** HCN hold-state gauge tick interval (µs). */
-  hcnTickUs: number;
   /** HCN tick deltas as `[heldJudgeIndex, heldRate, releasedJudgeIndex, releasedRate]` (beatoraja model). */
   hcnTick: { heldJudge: number; heldRate: number; releasedJudge: number; releasedRate: number };
   gauge: GaugeSpec;
@@ -742,7 +740,6 @@ export function resolveRuleset(
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor: false,
       mineTrigger: 'press-or-hold',
-      hcnTickUs: 200_000,
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
       gauge: resolveLr2Gauge(gaugeId, effectiveTotal, baseNotes),
       noteCount,
@@ -774,7 +771,6 @@ export function resolveRuleset(
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
-      hcnTickUs: 200_000,
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
       gauge: resolveBeatorajaGauge(gaugeId, effectiveTotal, baseNotes),
       noteCount,
@@ -803,7 +799,6 @@ export function resolveRuleset(
     comboBreaksOnEmptyPoor: false,
     // IIDX has no mines; LR2's model stands in until there is evidence otherwise.
     mineTrigger: 'press-or-hold',
-    hcnTickUs: 200_000,
     hcnTick: { heldJudge: 0, heldRate: 1, releasedJudge: 5, releasedRate: 1 },
     gauge: resolveIidxGauge(gaugeId, noteCount),
     noteCount,

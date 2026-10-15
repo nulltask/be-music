@@ -1,7 +1,7 @@
 import type { BeMusicEvent } from '@be-music/json';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import { judgeWindowLateReachUs, pgreatWindowReachUs } from '../ruleset/judge.ts';
-import { isChargeLongNoteMode } from '../ruleset/long-note.ts';
+import { HcnTickCounter, isChargeLongNoteMode } from '../ruleset/long-note.ts';
 import {
   combineLongNoteJudges,
   insertPendingAutoLongNote,
@@ -24,6 +24,7 @@ import {
   applyTailMissPoor,
   badWindowSeconds,
   clampToReversal,
+  applyHcnGaugeTick,
   compareJudgeChannels,
   judgeWindowsFor,
   markInvisibleJudged,
@@ -39,8 +40,6 @@ import {
 } from './judge-core-score.ts';
 import {
   type ActiveLongNoteState,
-  HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
-  HELL_CHARGE_GAUGE_GAIN_PER_SECOND,
   type JudgeCoreEffectSink,
   type JudgeCoreState,
   LANDMINE_EXPLOSION_SAMPLE_KEY,
@@ -450,10 +449,11 @@ function applyExpiredScorableJudgements(
     }
   }
   due.sort((left, right) => left.atUs - right.atUs || compareJudgeChannels(left.note.channel, right.note.channel));
-  for (const { note } of due) {
+  for (const { atUs, note } of due) {
     if (!markScorableJudged(state, note)) {
       continue;
     }
+    startHcnPassing(state, note, atUs);
     if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
       note.visibleUntilBeat = note.endBeat;
     }
@@ -509,9 +509,18 @@ function finalizeActiveLongNote(
   atSeconds: number,
   emit: JudgeCoreEffectSink,
 ): void {
+  const passing = state.hcnPassing.get(channel);
+  const settlesPassingNote = passing !== undefined && passing.note === state.activeLongNotes.get(channel)?.note;
+  if (settlesPassingNote && isGoodOrBetter(judge.kind)) {
+    // A Hell Charge tail released at GOOD or better keeps its lane gaining until the tail passes.
+    passing.tailGood = true;
+  }
   state.activeLongNotes.delete(channel);
   state.longHoldUntilMs.delete(channel);
   state.longHoldReleaseSeconds.delete(channel);
+  if (settlesPassingNote) {
+    setHcnGaining(state, channel, toJudgeUs(atSeconds), emit);
+  }
   // Pair the head's `hold-lane-until-beat` so the renderer fades the LN-hold timer and lane laser out right here.
   emit({
     kind: 'ui',
@@ -523,6 +532,66 @@ function finalizeActiveLongNote(
   });
   emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
   applyResolvedManualJudge(state, channel, judge, atSeconds, emit);
+}
+
+// ---- Hell Charge gauge ticks -----------------------------------------------------------------------------------
+
+function isGoodOrBetter(kind: TimedManualJudge['kind']): boolean {
+  return kind === 'PERFECT' || kind === 'GREAT' || kind === 'GOOD';
+}
+
+/**
+ * Starts the gauge ticks of a Hell Charge note whose head was just judged at `judgedUs` (pressed, or missed at its
+ * deadline): they run from the later of the head and that instant until the tail passes. AUTO SCRATCH lanes have
+ * none.
+ */
+export function startHcnPassing(state: JudgeCoreState, note: TimedPlayableNote, judgedUs: number): void {
+  const { config } = state;
+  const endSeconds = resolveLongNoteEndSeconds(note);
+  if (endSeconds === undefined || resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) !== 3) {
+    return;
+  }
+  if (config.autoScratch && config.scratchChannels.has(note.channel)) {
+    return;
+  }
+  const startUs = Math.max(toJudgeUs(note.seconds), judgedUs);
+  const counter = new HcnTickCounter(startUs);
+  counter.setGaining(isLaneDown(state, note.channel), startUs, () => undefined);
+  state.hcnPassing.set(note.channel, { note, endUs: toJudgeUs(endSeconds), counter, tailGood: false });
+}
+
+/** Re-reads whether a lane with a passing Hell Charge note gains (a key on it is down, or its tail went well). */
+export function setHcnGaining(state: JudgeCoreState, channel: string, atUs: number, emit: JudgeCoreEffectSink): void {
+  const passing = state.hcnPassing.get(channel);
+  if (passing === undefined) {
+    return;
+  }
+  passing.counter.setGaining(
+    passing.tailGood || isLaneDown(state, channel),
+    Math.min(atUs, passing.endUs),
+    (gain, tickUs) => applyHcnGaugeTick(state, tickUs / 1e6, gain, emit),
+  );
+}
+
+function isLaneDown(state: JudgeCoreState, channel: string): boolean {
+  if (!state.keyStateInput) {
+    // Without release events a key is only known to be down while the long note it holds is unreleased.
+    return state.activeLongNotes.has(channel);
+  }
+  return (state.laneHolds.get(channel)?.activeTokens.size ?? 0) > 0;
+}
+
+/** Runs every passing Hell Charge note's ticks up to `nowUs` (channel order), and ends those whose tail has passed. */
+function advanceHcnPassing(state: JudgeCoreState, nowUs: number, emit: JudgeCoreEffectSink): void {
+  const passings = [...state.hcnPassing.entries()].sort(([left], [right]) => compareJudgeChannels(left, right));
+  for (const [channel, passing] of passings) {
+    passing.counter.advance(Math.min(nowUs, passing.endUs), (gain, tickUs) =>
+      applyHcnGaugeTick(state, tickUs / 1e6, gain, emit),
+    );
+    if (nowUs > passing.endUs) {
+      state.hcnPassing.delete(channel);
+    }
+  }
 }
 
 /** The microsecond past which a charge tail still held is a missed POOR: the tail's late window closes there. */
@@ -619,24 +688,6 @@ export function advanceJudgeState(
       );
       continue;
     }
-    if (hold.mode === 3) {
-      const accumulateUntilSeconds = Math.min(judgeSec, hold.endSeconds);
-      if (accumulateUntilSeconds > hold.gaugeDrainCursorSeconds) {
-        const elapsedSeconds = accumulateUntilSeconds - hold.gaugeDrainCursorSeconds;
-        if (isHolding) {
-          // HCN GAIN — held cleanly through this step (upstream `gauge.update(1, 0.5f)` per 200 ms tick).
-          applyGaugeDelta(state, nowSec, elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND, 'hold-gain', emit);
-        } else {
-          // HCN DRAIN — hold broken during this step (upstream `gauge.update(3, 0.5f)` per 200 ms tick).
-          applyGaugeDelta(state, nowSec, -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND, 'hold-drain', emit);
-        }
-      }
-      hold.gaugeDrainCursorSeconds = accumulateUntilSeconds;
-      if (!isHolding && !hold.audioStopped) {
-        stopLongNoteSound(hold, channel, nowSec, 'break', emit);
-      }
-    }
-
     // A tail settles once time has moved past it (whole microseconds, like every timed judgment).
     if (judgeUs > toJudgeUs(hold.endSeconds)) {
       if (
@@ -660,20 +711,6 @@ export function advanceJudgeState(
         });
         finalizeActiveLongNote(state, channel, hold.headJudge, nowSec, emit);
         continue;
-      }
-      if (hold.mode === 3 && hold.endSeconds > hold.gaugeDrainCursorSeconds) {
-        // Catch the HCN accumulator up to the tail mark; the residual slice takes the current step's hold state.
-        const elapsedSeconds = hold.endSeconds - hold.gaugeDrainCursorSeconds;
-        applyGaugeDelta(
-          state,
-          nowSec,
-          isHolding
-            ? elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND
-            : -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
-          isHolding ? 'hold-gain' : 'hold-drain',
-          emit,
-        );
-        hold.gaugeDrainCursorSeconds = hold.endSeconds;
       }
       emit({
         kind: 'long-note',
@@ -700,7 +737,7 @@ export function advanceJudgeState(
       continue;
     }
 
-    if (hold.mode === 2 && holdUntilMs !== undefined && nowMs > holdUntilMs) {
+    if (isChargeLongNoteMode(hold.mode) && holdUntilMs !== undefined && nowMs > holdUntilMs) {
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
       }
@@ -719,6 +756,8 @@ export function advanceJudgeState(
       );
     }
   }
+
+  advanceHcnPassing(state, toJudgeUs(nowSec), emit);
 
   for (const [channel, suppressUntil] of state.longNoteSuppressUntilSeconds.entries()) {
     if (nowSec >= suppressUntil) {
@@ -764,6 +803,9 @@ export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): num
     if (isChargeLongNoteMode(hold.mode)) {
       consider(resolveChargeTailDeadlineUs(state, channel, hold));
     }
+  }
+  for (const passing of state.hcnPassing.values()) {
+    consider(Math.min(passing.counter.nextTickUs(), passing.endUs));
   }
   for (const pending of state.pendingAutoScratchLongNotes) {
     if (toJudgeUs(pending.endSeconds) < reversalUs) consider(toJudgeUs(pending.endSeconds));

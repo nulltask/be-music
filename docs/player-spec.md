@@ -605,8 +605,13 @@ The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's
   release instant, not the frame that noticed it — and contributes a second judgment. Holding past the end point
   is not yet a judgment: the player has until the tail's late window closes to let go. Still holding when it
   closes makes the tail a missed `POOR` (beatoraja's `CN end poor`). The lane sound stops on release.
-- Mode `3` (HCN): as mode `2`, plus the gauge keeps draining while the hold is broken. Reaching the end point with
-  the hold broken makes the tail a `POOR`.
+- Mode `3` (HCN): judged exactly as mode `2` (the tail on the release), plus beatoraja's gauge ticks
+  (`JudgeManager` L289-L340, `HcnTickCounter`). From the later of the start point and the head's judgment (pressed, or
+  missed) until the end point passes, a signed counter runs up while the lane gains — a key on it is down, or the
+  tail was released at `GOOD` or better — and down otherwise. Each time it passes +200 ms the gauge gains one tick
+  (beatoraja: `GREAT` ×0.5 of the judge table); each time it passes −200 ms it loses one (`BAD` ×0.5). The ticks
+  keep running after an early release, so pressing the lane again before the end point gains once more. AUTO
+  SCRATCH lanes have none.
 
 A release is settled at its own instant. The one exception is the ruleset's long-note release margin
 (`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release
