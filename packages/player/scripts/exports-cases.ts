@@ -231,7 +231,27 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
     },
   });
   const benchStitched = courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
-  const benchStitchedMap = benchStitched.ok ? benchStitched.map : { stages: [] };
+  const benchStitchedMap = benchStitched.ok ? benchStitched.map : { stages: [], tempo: [] };
+  const benchReadoutPlacements = courseApi.planNonstopCourse(benchNonstopStages.slice(0, 3), ['fade', 'cut-fit']);
+  const benchReadoutStages = [0, 1, 2].map(() => ({
+    tempo: [
+      { seconds: 0, bpm: 150 },
+      { seconds: 4.8, bpm: 180 },
+    ],
+    headerBpm: 150,
+  }));
+  define('player.course.resolveNonstopTempo', {
+    run: () => {
+      courseApi.resolveNonstopTempo(benchReadoutStages, benchReadoutPlacements);
+      courseApi.resolveNonstopTempo(benchReadoutStages, benchReadoutPlacements, { placement: 'lr2' });
+    },
+  });
+  define('player.course.nonstopBpmAt', {
+    run: () => {
+      courseApi.nonstopBpmAt(benchStitchedMap.tempo, 3);
+      courseApi.nonstopBpmAt(benchStitchedMap.tempo, 30);
+    },
+  });
   const benchStitchedChart = benchStitched.ok ? benchStitched.chart : benchNonstopChart;
   const benchSplitStages = [
     { offsetUs: 0, windowStartUs: 0, windowEndUs: 1_500_000, rate: 1 },
