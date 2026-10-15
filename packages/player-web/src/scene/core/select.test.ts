@@ -5,11 +5,12 @@ import {
   DEFAULT_PLAY_OPTIONS,
   HISPEED_MAX,
   matchesSearchQuery,
+  resolveSelectNavigation,
   resolveSkinPlayOptionValue,
   wrappedCursorDelta,
 } from './select.ts';
 import type { PixiPlayOptions } from './select.ts';
-import type { BrowserBrowseEntry, BrowserSongEntry } from '../../collection/types.ts';
+import type { BrowserBrowseEntry, BrowserCourseEntry, BrowserSongEntry } from '../../collection/types.ts';
 
 /**
  * Builds a minimal `BrowserSongEntry` for tests. Only the fields `matchesSearchQuery` consults are populated; the rest
@@ -205,5 +206,38 @@ describe('cycleSkinPlayOptionValue', () => {
     expect(cycleSkinPlayOptionValue('hiSpeed', DEFAULT_PLAY_OPTIONS.hiSpeed)).toBeUndefined();
     expect(cycleSkinPlayOptionValue('shutter', DEFAULT_PLAY_OPTIONS.shutter, -1)).toBeUndefined();
     expect(cycleSkinPlayOptionValue('bogus' as keyof PixiPlayOptions, 0 as never)).toBeUndefined();
+  });
+});
+
+describe('resolveSelectNavigation', () => {
+  const song = (id: string, directoryLabel: string): BrowserSongEntry =>
+    (makeSongEntry({ id, directoryLabel }) as { song: BrowserSongEntry }).song;
+  const songs = [song('a', 'pack'), song('b', 'pack'), song('c', 'other')];
+  const courses = [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }] as unknown as BrowserCourseEntry[];
+  const collection = { songs, courseFolders: [{ label: 'my courses', songs: [], courses }] };
+
+  it('restores a cursor inside a song folder', () => {
+    const resolved = resolveSelectNavigation(collection, { folderPath: ['pack'], selectedIndex: 1 });
+    expect(resolved?.stack.map((folder) => folder.label)).toEqual(['pack']);
+    expect(resolved?.selectedIndex).toBe(1);
+  });
+
+  it('restores a cursor inside a course folder, clamped to its courses', () => {
+    // A NONSTOP run replaces the collection, so coming back from it restores the cursor on its course bar this way.
+    const resolved = resolveSelectNavigation(collection, { folderPath: ['my courses'], selectedIndex: 2 });
+    expect(resolved?.stack.map((folder) => folder.label)).toEqual(['my courses']);
+    expect(resolved?.selectedIndex).toBe(2);
+    expect(resolveSelectNavigation(collection, { folderPath: ['my courses'], selectedIndex: 9 })?.selectedIndex).toBe(
+      2,
+    );
+  });
+
+  it('counts the course folders among the root bars', () => {
+    // Root: 'other', 'pack', then 'my courses'.
+    expect(resolveSelectNavigation(collection, { folderPath: [], selectedIndex: 2 })?.selectedIndex).toBe(2);
+  });
+
+  it('gives up when no saved folder matches', () => {
+    expect(resolveSelectNavigation(collection, { folderPath: ['gone'], selectedIndex: 0 })).toBeUndefined();
   });
 });

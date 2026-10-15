@@ -95,6 +95,7 @@ import {
 export {
   DEFAULT_PLAY_OPTIONS,
   matchesSearchQuery,
+  resolveSelectNavigation,
   wrappedCursorDelta,
   type PixiBgaMode,
   type PixiBgaSize,
