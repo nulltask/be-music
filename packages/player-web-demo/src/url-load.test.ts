@@ -13,14 +13,14 @@ describe('URL media auto-load helpers', () => {
 
   test('resolveUrlLoadFetchUrl routes cross-origin archives through the same-origin proxy', () => {
     const resolved = resolveUrlLoadFetchUrl(
-      'https://assets.nulltask.dev/LR2beta3.zip',
-      'http://localhost:5174/player?skin=https://assets.nulltask.dev/LR2beta3.zip',
+      'https://assets.be-music.app/LR2beta3.zip',
+      'http://localhost:5174/player?skin=https://assets.be-music.app/LR2beta3.zip',
     );
     const proxy = new URL(resolved);
 
     expect(proxy.origin).toBe('http://localhost:5174');
     expect(proxy.pathname).toBe(URL_LOAD_PROXY_PATH);
-    expect(proxy.searchParams.get('url')).toBe('https://assets.nulltask.dev/LR2beta3.zip');
+    expect(proxy.searchParams.get('url')).toBe('https://assets.be-music.app/LR2beta3.zip');
   });
 
   test('resolveUrlLoadFetchUrl keeps same-origin archive URLs direct', () => {
