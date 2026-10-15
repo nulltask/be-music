@@ -42,6 +42,12 @@ describe('checkPlaylogEligibility', () => {
     });
   });
 
+  test('rejects a play at another tempo, which is practice', () => {
+    expect(checkPlaylogEligibility(playlog({ tempo: 0.8 }))).toEqual({ eligible: false, reason: 'tempo' });
+    expect(checkPlaylogEligibility(playlog({ tempo: 1.5 }))).toEqual({ eligible: false, reason: 'tempo' });
+    expect(checkPlaylogEligibility(playlog({ tempo: 1 }))).toMatchObject({ eligible: true });
+  });
+
   test('rejects a log without either fingerprint', () => {
     expect(checkPlaylogEligibility(playlog({}, { chartFingerprint: undefined }))).toEqual({
       eligible: false,
