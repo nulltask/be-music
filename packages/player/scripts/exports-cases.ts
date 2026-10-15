@@ -93,6 +93,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.resolvePlayChart(fixtures.controlFlowJson, { random: () => 0.42 });
     },
   });
+  define('player.playlog.resolveChartRulesetFacts', {
+    run: (fixtures) => {
+      playlogApi.resolveChartRulesetFacts(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.playlog.resolvePlayChart', {
+    run: (fixtures) => {
+      playlogApi.resolvePlayChart(fixtures.controlFlowJson, { random: () => 0.42 });
+    },
+  });
   define('player.preparePlaybackChartData', {
     run: (fixtures) => {
       playerApi.preparePlaybackChartData(
@@ -228,6 +238,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.course.stitchNonstopCourse', {
     run: () => {
       courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
+    },
+  });
+  define('player.course.applyCourseLongNoteConstraint', {
+    run: () => {
+      courseApi.applyCourseLongNoteConstraint(benchNonstopChart, ['cn']);
     },
   });
   const benchStitched = courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });

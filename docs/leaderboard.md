@@ -254,8 +254,12 @@ with its own rankings per ruleset, and never as single-chart plays.
   reached ([playlog.md](./playlog.md#course-play-logs)).
 - **What the client sends.** The course play log (`be-music-course-playlog`), gzipped, with the play document (and,
   for a chart the server does not know yet, the chart document) of each stage it played, to
-  `POST /api/v0/course-scores`. The idempotency, rate limit, sign-in and size limits are those of single plays; the
-  submission id hashes the course fingerprint and each played stage as a single play's id does.
+  `POST /api/v0/course-scores`. It adds the **stage chart** (`stageCharts`: the parsed chart as loaded, `#RANDOM` still
+  in, and whether it is a `.pms` file) of every stage the server rebuilds itself: each stage the run never reached,
+  and every stage of a NONSTOP run (which sends no documents). Fingerprint documents cannot give a stage's note count
+  or be stitched, so these stages need the chart itself; the server only reads it to verify the run and never stores
+  it. The idempotency, rate limit, sign-in and size limits are those of single plays; the submission id hashes the
+  course fingerprint and each played stage as a single play's id does (a NONSTOP run: its stitched play).
 - **Verification.** Every played stage passes the checks of a single play (sections 5.2 and 5.3: auto play and ESC
   aborts refused, fingerprint documents, chart registration, outcome composition); being a course stage is what it must
   be here, not a reason to refuse it. The stages must be judged under one ruleset, play under the course's constraints
@@ -263,12 +267,28 @@ with its own rankings per ruleset, and never as single-chart plays.
   stage left once re-simulated (gauge, course combo and course max combo; the first stage carries in nothing). The run
   is re-simulated under `lr2`, `beatoraja` and `iidx` with `simulateCoursePlaylog`; the client's cached results are
   ignored.
+- **Unreached stages.** Their notes count as BP, so their note counts must not be the client's word. Every unreached
+  stage's chart is required (`stage-chart-required`), must hash to the chart fingerprint the log names for the stage
+  (`stage-chart-fingerprint-mismatch`; this also keys the course), and must give, through the client's own helper
+  `resolveChartRulesetFacts`, the facts the log claims for it — its note tallies, long-note mode, lane mode and format
+  (`course-stage-facts-mismatch`). The rule is the same whether the server knows the chart or not: it keeps fingerprint
+  documents, not charts, and a document cannot be counted the way the engine counts notes.
 - **Failed and abandoned runs.** A run that failed a stage is stored and ranked like a failed play: its unreached
   stages' notes count as BP. A run given up with ESC counts as a failed run too, as LR2 records it: its last played
   stage may carry `play.aborted`, the run fails whatever its gauge, and the rest of that stage and the unreached
   stages count as BP. An ESC abort on any earlier stage is still refused as `aborted`.
-- **NONSTOP runs are not ranked yet.** A NONSTOP course is played as one stitched chart, which has no chart document
-  of its own to verify, so a course log with `nonstop` is refused as `nonstop`.
+- **NONSTOP runs.** A NONSTOP course is played as one stitched chart, and that play (`nonstop.playlog`) is what is
+  judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it, since
+  `stitchNonstopCourse` is deterministic: each stage chart must hash to its stage's chart fingerprint, is resolved with
+  the `#RANDOM` draws its stage recorded (`nonstop.stages[].randomDraws`), gets the course's long-note constraint
+  (`applyCourseLongNoteConstraint`), and the stages are stitched with the recorded connections and placement. The
+  stitched play must have been recorded on that chart — its play fingerprint is the rebuilt chart's
+  (`nonstop-chart-mismatch`) — and the stage map must be the rebuilt one: the stage placements, the stage of every
+  note, and the number of stages the play reached (`nonstop-stage-mismatch`). The stitched play must pass the
+  single-play eligibility check and play under the course's constraints; it is re-simulated under every ruleset, and a
+  play given up with ESC is a failed run. The run is ranked under the course fingerprint, like any course run. A
+  NONSTOP run registers no stage charts: its cut-out stages carry the stitched play's judge rank and TOTAL, not their
+  charts' own.
 - **Figures and bests.** Per ruleset: EX score, lamp (the course lamp on the chart lamp scale), BP, course max combo,
   stages reached and trophy. Bests are kept beatoraja style, as for charts (best EX score, best lamp, fewest BP, each
   pointing at its run), assisted runs apart. A course run creates no chart scores and no chart bests.
@@ -281,12 +301,16 @@ sequenceDiagram
     participant D as D1
     participant R as R2
 
-    C->>A: POST /api/v0/course-scores (gzip)<br/>course play log + documents per played stage
+    C->>A: POST /api/v0/course-scores (gzip)<br/>course play log + documents per played stage<br/>+ unreached stage charts
     A->>A: checkCoursePlaylogEligibility<br/>(auto, aborted, fingerprints, one run)
     A->>D: submission id already stored?
     loop each played stage
         A->>A: play document hashes to playFingerprint (L3)
         A->>D: chart known? else 409 chart_document_required
+    end
+    loop each unreached stage
+        A->>A: chart hashes to its chartFingerprint
+        A->>A: resolveChartRulesetFacts == the logged facts
     end
     A->>A: simulateCoursePlaylog under the played ruleset
     A->>A: constraints, carry-in, failed vs given up
@@ -294,6 +318,22 @@ sequenceDiagram
     A->>R: PUT course play log, new chart documents
     A->>D: batch: charts, course, course score + results, course bests
     A-->>C: 201 { courseScoreId, courseFingerprint, results, ranks }
+```
+
+A NONSTOP run takes the place of the stage loops with one rebuild of its stitched chart:
+
+```mermaid
+flowchart TD
+  charts["stage charts"] --> fp{"each hashes to its<br/>chartFingerprint?"}
+  fp -->|yes| resolve["resolvePlayChart<br/>with the recorded draws"]
+  resolve --> ln["applyCourseLongNoteConstraint"]
+  ln --> stitch["stitchNonstopCourse<br/>connections, placement"]
+  stitch --> same{"play fingerprint ==<br/>nonstop.playlog's?"}
+  same -->|yes| map{"stage map ==<br/>the rebuilt one?"}
+  map -->|yes| sim["simulateCoursePlaylog<br/>on the stitched play"]
+  fp -->|no| refuse["422"]
+  same -->|no| refuse
+  map -->|no| refuse
 ```
 
 ## 7. Data model (D1)
@@ -515,6 +555,10 @@ application, HonoX or Nuxt can take over; the shared data-access functions keep 
 - **Rate limits**: the numbers in section 8 are proposals.
 - **Ghost visibility**: ghosts always public is proposed.
 - **Uploaded OG cards**: size limit and validation details.
-- **Courses**: the unreached stages' note counts come from the client's chart facts, which the server cannot check, so a run could
-  lower its BP by understating them. Course pages, hiding course runs, course play log downloads and a course trophy
-  best are not built yet.
+- **Courses**: the server checks unreached stages and NONSTOP runs from the parsed stage charts the client sends.
+  Re-deriving facts and re-stitching cost CPU on every such submission (see the Free-plan question above), and a
+  stage chart's content outside its fingerprint (keysounds, BGM objects, the file's object-line order) is taken on
+  trust; the BGM and the line order move where a NONSTOP stage is placed, so a forged one could change the gaps of a
+  stitched chart, though the play must then have been recorded on that chart. Like single plays (L5), the stitched
+  play's notes are not compared with the rebuilt chart beyond its play fingerprint. Course pages, hiding course runs,
+  course play log downloads and a course trophy best are not built yet.

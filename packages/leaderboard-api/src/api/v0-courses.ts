@@ -35,12 +35,17 @@ const COURSE_REJECTIONS = [
   'aborted',
   'missing-fingerprint',
   'not-a-course-run',
-  'nonstop',
   'play-document-not-a-document',
   'play-document-fingerprint-mismatch',
   'chart-document-not-a-document',
   'chart-document-fingerprint-mismatch',
   'course-ruleset-mismatch',
+  'stage-chart-required',
+  'stage-chart-invalid',
+  'stage-chart-fingerprint-mismatch',
+  'course-stage-facts-mismatch',
+  'nonstop-chart-mismatch',
+  'nonstop-stage-mismatch',
   'course-constraint-mismatch',
   'course-carry-in-mismatch',
 ] as const;
@@ -59,12 +64,15 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
       tags: ['Courses'],
       summary: 'Submit a course run',
       description:
-        'Submits a course play log with the fingerprint documents of each played stage. The body is JSON, ' +
-        'gzip-compressed (`Content-Encoding: gzip`). Every played stage is checked like a single play, the run is ' +
+        'Submits a course play log with the fingerprint documents of each played stage and the charts of the ' +
+        'stages it never reached. The body is JSON, gzip-compressed (`Content-Encoding: gzip`). Every played stage ' +
+        'is checked like a single play, every unreached stage’s facts must be its chart’s, the run is ' +
         're-simulated under every ruleset, and each stage’s carry-in must be the state the previous stage, ' +
         're-simulated, left. A run given up with ESC on its last stage played is a failed run; one that stopped ' +
-        'before the last stage otherwise must have failed there, or it is refused as `aborted`. A course run ' +
-        'creates no chart scores. The same run submitted again by the same ' +
+        'before the last stage otherwise must have failed there, or it is refused as `aborted`. A NONSTOP run ' +
+        'sends every stage chart instead of documents: the server stitches them again, the stitched play must have ' +
+        'been recorded on that chart, and the stitched play is re-simulated (given up with ESC, it is a failed run). ' +
+        'A course run creates no chart scores. The same run submitted again by the same ' +
         'account answers 200 with the stored result. Rejections name the stage at fault in `detail` when there is one.',
       requestBody: { required: true, content: { 'application/json': { schema: resolver(courseSubmissionBody) } } },
       responses: {
@@ -111,6 +119,7 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
           courseLog,
           courseLogText: serializeCoursePlaylog(courseLog),
           stages: parsedBody.output.stages,
+          ...(parsedBody.output.stageCharts !== undefined ? { stageCharts: parsedBody.output.stageCharts } : {}),
           submittedBy: c.req.header('be-music-client'),
         },
       );
