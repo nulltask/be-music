@@ -1,4 +1,4 @@
-import type { PlaylogRulesetId, PlaylogRulesetResult } from '@be-music/player/playlog';
+import type { CourseClearLamp, PlaylogRulesetId, PlaylogRulesetResult } from '@be-music/player/playlog';
 
 /**
  * Clear lamps on one scale shared by every ruleset, so best scores and sorting compare plain integers. A ruleset never
@@ -58,4 +58,12 @@ export function resolveClearLamp(result: PlaylogRulesetResult, ruleset: PlaylogR
 /** Miss count (BP): BADs, missed POORs and empty POORs, as LR2 and beatoraja count it. */
 export function resolveMissCount(result: PlaylogRulesetResult): number {
   return result.judge.bad + result.judge.poor + result.judge.emptyPoor;
+}
+
+/**
+ * A course lamp (`PlaylogCourseResult.lamp`, already capped at the ruleset's top lamp) on the same scale, so course bests
+ * compare like chart bests.
+ */
+export function toCourseClearLamp(lamp: CourseClearLamp): ClearLamp {
+  return ClearLamp[lamp];
 }

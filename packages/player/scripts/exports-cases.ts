@@ -375,6 +375,58 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.simulateCoursePlaylog(benchCourseLog, { ruleset: 'lr2' });
     },
   });
+  const benchKeyedCourseLog = playlogApi.createCoursePlaylog({
+    course: benchCourseInfo,
+    stages: [
+      {
+        played: true,
+        playlog: {
+          ...BENCH_PLAYLOG,
+          chart: {
+            ...BENCH_PLAYLOG.chart,
+            chartFingerprint: 'bmfp0:bench-stage-1',
+            playFingerprint: 'bmfp0:bench-stage-1',
+          },
+          play: { ...BENCH_PLAYLOG.play, course: { kind: 'grade' } },
+        },
+      },
+      {
+        played: false,
+        facts: {
+          sourceFormat: 'bms',
+          laneMode: '7keys',
+          lnMode: 1,
+          judgeRank: { percent: 75 },
+          notes: { normal: 64, long: { 1: 0, 2: 0, 3: 0 } },
+        },
+        chartFingerprint: 'bmfp0:bench-stage-2',
+      },
+    ],
+  });
+  define('player.playlog.computeCourseFingerprint', {
+    run: () => {
+      playlogApi.computeCourseFingerprint({
+        kind: 'grade',
+        constraints: ['grade_mirror', 'gauge_lr2'],
+        stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c', 'bmfp0:d'],
+      });
+    },
+  });
+  define('player.playlog.resolveCourseStageChartFingerprints', {
+    run: () => {
+      playlogApi.resolveCourseStageChartFingerprints(benchKeyedCourseLog);
+    },
+  });
+  define('player.playlog.computeCoursePlaylogFingerprint', {
+    run: () => {
+      playlogApi.computeCoursePlaylogFingerprint(benchKeyedCourseLog);
+    },
+  });
+  define('player.playlog.checkCoursePlaylogEligibility', {
+    run: () => {
+      playlogApi.checkCoursePlaylogEligibility(benchKeyedCourseLog);
+    },
+  });
   define('player.playlog.computeScoreRate', {
     run: () => {
       playlogApi.computeScoreRate({ total: 1000, exScore: 1650 });

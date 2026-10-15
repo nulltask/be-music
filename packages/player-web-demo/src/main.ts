@@ -140,6 +140,7 @@ import {
   storeSongRecords,
 } from './song-records.ts';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
+import { courseStageChartFingerprint } from './leaderboard.ts';
 import {
   describeSkinSettingControllers,
   readStoredSkinSettings,
@@ -2099,6 +2100,7 @@ class PlayerWebDemoApp {
       {
         createdAt: new Date().toISOString(),
         recorder: PLAYLOG_RECORDER,
+        chartFingerprintOf: courseStageChartFingerprint,
       },
     );
     const result = courseLog.results?.native;
@@ -2108,6 +2110,8 @@ class PlayerWebDemoApp {
     }
     this.recordCourseResult(courseRecordKey(session.course), result);
     this.maybeAutoSaveCoursePlaylog(courseLog);
+    // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
+    this.leaderboard.maybeSubmitCourse(courseLog, session.stageSongs());
     const courseInfo = resolveSceneCourseInfo(session.course);
     // A beatoraja theme shows the course result on its COURSE_RESULT skin (or its result skin).
     if (pickActiveFamilyForScene(this.familyDispatchState(), 'result') === 'beatoraja') {

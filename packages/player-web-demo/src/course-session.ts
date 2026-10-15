@@ -67,8 +67,6 @@ export class CourseSession {
   nextStage(): CourseStagePlan | undefined {
     if (this.ended) return undefined;
     const index = this.logs.length;
-    const stage = this.course.stages[index]!;
-    const song = stage.song!;
     const course: PlaylogCourseStage = resolveCourseStageSettings(this.course.definition);
     const previous = this.logs.at(-1)?.results?.native;
     if (previous !== undefined) {
@@ -79,15 +77,26 @@ export class CourseSession {
       };
     }
     const constraints = this.course.definition.constraints;
-    const chart = applyCourseLongNoteConstraint(song.chart, constraints);
     return {
       index,
       stageCount: this.course.stages.length,
-      song: chart === song.chart ? song : { ...song, chart },
+      song: this.stageSong(index),
       course,
       courseInfo: resolveSceneCourseInfo(this.course, index),
       hiSpeedLocked: isCourseHiSpeedLocked(constraints),
     };
+  }
+
+  /** Every stage's song as the course plays it, in order (what a played stage's fingerprints describe). */
+  stageSongs(): BrowserSongEntry[] {
+    return this.course.stages.map((_stage, index) => this.stageSong(index));
+  }
+
+  /** A stage's song as the course plays it: its chart with the course's long-note constraint applied. */
+  private stageSong(index: number): BrowserSongEntry {
+    const song = this.course.stages[index]!.song!;
+    const chart = applyCourseLongNoteConstraint(song.chart, this.course.definition.constraints);
+    return chart === song.chart ? song : { ...song, chart };
   }
 
   /** The lane option the course lets a stage play with, in place of the player's pick. */
@@ -116,23 +125,32 @@ export class CourseSession {
   }
 
   /**
-   * The course play log: the stages played, then the facts of every stage the run never reached (`factsOf` resolves a
-   * stage chart's ruleset facts, e.g. `resolveChartRulesetFacts`).
+   * The course play log: the stages played, then every stage the run never reached with its chart facts (`factsOf`,
+   * e.g. `resolveChartRulesetFacts`) and its chart fingerprint (`chartFingerprintOf`, which keys the course on the
+   * Leaderboard). Both read the stage's song as the course plays it (its long-note constraint applied), as a played
+   * stage's log does.
    */
   buildPlaylog(
     factsOf: (song: BrowserSongEntry) => RulesetChartFacts,
-    options: { createdAt?: string; recorder?: BeMusicPlaylog['recorder'] } = {},
+    options: {
+      createdAt?: string;
+      recorder?: BeMusicPlaylog['recorder'];
+      chartFingerprintOf?: (song: BrowserSongEntry) => string | undefined;
+    } = {},
   ): BeMusicCoursePlaylog {
     const { definition } = this.course;
-    const stages: PlaylogCourseStageEntry[] = this.course.stages.map((stage, index) => {
+    const stages: PlaylogCourseStageEntry[] = this.course.stages.map((_stage, index) => {
       const playlog = this.logs[index];
       if (playlog !== undefined) return { played: true, playlog };
       const ref = definition.stages[index];
+      const song = this.stageSong(index);
+      const chartFingerprint = options.chartFingerprintOf?.(song);
       return {
         played: false,
-        facts: factsOf(stage.song!),
+        facts: factsOf(song),
         ...(ref?.sha256 !== undefined ? { sha256: ref.sha256 } : {}),
         ...(ref?.md5 !== undefined ? { md5: ref.md5 } : {}),
+        ...(chartFingerprint !== undefined ? { chartFingerprint } : {}),
       };
     });
     return createCoursePlaylog({
