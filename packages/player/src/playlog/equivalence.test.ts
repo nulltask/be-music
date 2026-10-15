@@ -532,6 +532,33 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // A lane held by two keys stays down while either is: releasing the first before a mine crosses still detonates it.
+  test.each(RULESETS)('%s: a mine crossing a lane held by a second key agrees on both sides', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: 'D1', position: [0, 1], value: '0A' },
+      { measure: 3, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    const key = (seq: number, timeUs: number, action: 'down' | 'up', token: string): PlaylogInputEvent => ({
+      seq,
+      timeUs,
+      action,
+      channels: ['11'],
+      tokens: [token],
+    });
+    const inputs = [
+      key(0, 500_000, 'down', 'a'),
+      key(1, 600_000, 'down', 'b'),
+      key(2, 700_000, 'up', 'a'),
+      key(3, 1_500_000, 'up', 'b'),
+    ];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.gauge?.current).toBe(simulated.gauge.final);
+    expect(simulated.gauge.final).toBeLessThan(resolveRulesetConfig(playlog, ruleset).gauge.initial);
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
