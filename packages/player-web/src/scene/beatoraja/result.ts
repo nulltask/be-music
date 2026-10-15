@@ -18,11 +18,14 @@
 //   - Per-rank / clear-lamp comparisons that need "vs best" deltas. Current clear/rank ops reflect
 //     only the just-finished run.
 
+import type { SceneCourseInfo } from '../course-info.ts';
+import { resolveBeatorajaCourseStageOps, resolveBeatorajaCourseText } from './course.ts';
 import { Container, Graphics } from 'pixi.js';
 import type { PlayerSummary } from '@be-music/player/core/engine';
 import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
+  BEATORAJA_TEXT,
   buildBaseOpSet,
   computeClearLampOp,
   computeGenericRankOp,
@@ -116,6 +119,13 @@ export interface PixiBeatorajaResultSceneOptions {
   onRetry?: () => void;
   /** Optional audio backend for `main_state.audio_play / loop / stop` Lua calls. */
   skinAudio?: BeatorajaSkinAudio;
+  /**
+   * The course this result belongs to. With a `stageIndex` it is a stage's result: `MODE_COURSE` and the stage op
+   * light. Without one it is the course result (a `COURSE_RESULT` skin): `MODE_COURSE` lights and the title strings
+   * (10 / 12) read the course title, as beatoraja's `StringPropertyFactory` does for `CourseResult`. Either way the
+   * stage titles fill strings 150-159.
+   */
+  courseInfo?: SceneCourseInfo;
 }
 
 /**
@@ -334,11 +344,23 @@ export class PixiBeatorajaResultScene implements PixiScene {
     // counters (no per-frame refresh needed).
     for (const op of computeJudgeExistOps(summary)) ops.add(op);
 
+    if (this.options.courseInfo !== undefined) {
+      for (const op of resolveBeatorajaCourseStageOps(this.options.courseInfo)) ops.add(op);
+    }
+
     this.cachedBaseOps = ops;
     return this.cachedBaseOps;
   }
 
   private resolveSongText(refOp: number): string | undefined {
+    const course = this.options.courseInfo;
+    if (course !== undefined) {
+      const courseText = resolveBeatorajaCourseText(refOp, course);
+      if (courseText !== undefined) return courseText;
+      if (course.stageIndex === undefined && (refOp === BEATORAJA_TEXT.TITLE || refOp === BEATORAJA_TEXT.FULLTITLE)) {
+        return course.title;
+      }
+    }
     return resolveBeatorajaSongText(refOp, {
       song: this.options.song,
       skin: this.options.skin,
