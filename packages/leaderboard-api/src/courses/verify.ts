@@ -25,6 +25,8 @@ const CARRY_GAUGE_TOLERANCE = 1e-3;
 
 /** The ruleset every stage of a course run was judged under, or `undefined` when they differ. */
 export function resolveCoursePlayedRuleset(courseLog: BeMusicCoursePlaylog): PlaylogRulesetId | undefined {
+  // A NONSTOP run was one play.
+  if (courseLog.nonstop !== undefined) return courseLog.nonstop.playlog.play.judgeRuleset ?? 'lr2';
   const rulesets = new Set(
     courseLog.stages.flatMap((entry) => (entry.played ? [entry.playlog.play.judgeRuleset ?? 'lr2'] : [])),
   );
@@ -50,6 +52,20 @@ function laneAllowed(play: BeMusicPlaylog['play'], allowed: readonly string[] | 
   return sides.every((side) => allowed.includes(side));
 }
 
+/** Whether a play ran on the course's gauge set and judge constraint, with a lane option the course allows. */
+function playsUnderConstraints(
+  play: BeMusicPlaylog['play'],
+  expected: ReturnType<typeof expectedStageSettings>,
+): boolean {
+  const course = play.course;
+  return (
+    course !== undefined &&
+    course.gaugeSet === expected.gaugeSet &&
+    course.judge === expected.judge &&
+    laneAllowed(play, expected.lane)
+  );
+}
+
 /** A stage the re-simulation ended the course on: its survival gauge emptied, as `simulateCoursePlaylog` stops. */
 function stageFailed(result: PlaylogRulesetResult): boolean {
   return result.gauge.failedMidPlay === true || result.gauge.final <= 0;
@@ -65,18 +81,19 @@ function stageFailed(result: PlaylogRulesetResult): boolean {
  *   combo and max combo), and the first carried in nothing;
  * - no stage was played after one that failed, and a run that stopped before the last stage stopped because its last
  *   stage played failed or was given up (ESC, `play.aborted`). A course given up is a failed run, as LR2 records it.
+ *
+ * A NONSTOP run was one play of the stitched chart: only that play's settings are checked against the constraints. It
+ * carried nothing in, and wherever it stopped (cleared, failed, or given up with ESC) the re-simulation scores it.
  */
 export function checkCourseRun(courseLog: BeMusicCoursePlaylog, simulated: PlaylogCourseResult): CourseRunCheck {
   const expected = expectedStageSettings(courseLog.course.constraints);
+  if (courseLog.nonstop !== undefined) {
+    const { play } = courseLog.nonstop.playlog;
+    return playsUnderConstraints(play, expected) ? { ok: true } : { ok: false, reason: 'course-constraint-mismatch' };
+  }
   const played = courseLog.stages.filter((entry) => entry.played).map((entry) => entry.playlog);
   for (const [index, stage] of played.entries()) {
-    const course = stage.play.course;
-    if (
-      course === undefined ||
-      course.gaugeSet !== expected.gaugeSet ||
-      course.judge !== expected.judge ||
-      !laneAllowed(stage.play, expected.lane)
-    ) {
+    if (!playsUnderConstraints(stage.play, expected)) {
       return { ok: false, reason: 'course-constraint-mismatch', stage: index };
     }
   }

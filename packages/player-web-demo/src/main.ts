@@ -70,6 +70,7 @@ import {
   readCourseFile,
   resolveCourseFolders,
   resolveCourseMakerFolders,
+  resolveCourseLaneOption,
   resolveCourseStageSettings,
   CourseMaker,
   type BrowserCourseEntry,
@@ -2212,6 +2213,7 @@ class PlayerWebDemoApp {
     const prepared = prepareNonstopCourse(course, {
       sourceOf: (song) => resolveSongSource(this.collection, song),
       hashesOf: (song) => hashes.get(song.id),
+      chartFingerprintOf: courseStageChartFingerprint,
       placement: this.guiState.nonstopPlacement,
     });
     if (!prepared.ok) {
@@ -2257,6 +2259,11 @@ class PlayerWebDemoApp {
     }
     this.recordCourseResult(courseRecordKey(nonstop.course), native);
     this.maybeAutoSaveCoursePlaylog(courseLog);
+    // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
+    this.leaderboard.maybeSubmitCourse(
+      courseLog,
+      nonstop.course.stages.flatMap((stage) => (stage.song !== undefined ? [stage.song] : [])),
+    );
     await this.showResult(buildCourseResultData(nonstop.course, native, courseLog), {
       course: resolveSceneCourseInfo(nonstop.course),
     });
@@ -4718,9 +4725,14 @@ class PlayerWebDemoApp {
       autoPlay || replay !== undefined || courseStage !== undefined || nonstop !== undefined
         ? undefined
         : songRecordKey(song, overrides.chartHashes?.sha256);
-    // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...).
+    // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...), a
+    // NONSTOP course's stitched play included.
     const courseLane = (picked: typeof this.guiState.random1P): typeof this.guiState.random1P =>
-      this.courseSession !== undefined && courseStage !== undefined ? this.courseSession.laneOption(picked) : picked;
+      this.courseSession !== undefined && courseStage !== undefined
+        ? this.courseSession.laneOption(picked)
+        : nonstop !== undefined
+          ? resolveCourseLaneOption(nonstop.course.definition.constraints, picked)
+          : picked;
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
       // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it

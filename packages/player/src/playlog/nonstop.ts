@@ -1,4 +1,4 @@
-import { resolveChart } from '@be-music/chart';
+import { resolveChart, type RandomDraw } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import type { NonstopConnection } from '../course/definition.ts';
 import type { NonstopStitchMap } from '../course/nonstop/compose.ts';
@@ -29,18 +29,34 @@ export interface PlaylogNonstopStage {
   windowEndUs?: number;
   /** FIT's time-stretch the stage was played at (1 without FIT). */
   rate: number;
+  /**
+   * The `#RANDOM` / `#SWITCH` draws the stage chart was resolved with before stitching, as `play.randomDraws` records a
+   * single play's. With the stage's source chart they rebuild the stitched chart (the Leaderboard verifies a NONSTOP run
+   * that way). Absent for a chart without control flow, and in logs from before they were recorded.
+   */
+  randomDraws?: RandomDraw[];
 }
 
 const toUs = (seconds: number): number => Math.round(seconds * 1_000_000);
 
-/** The {@link PlaylogNonstopStage}s of a stitched chart's map. */
-export function resolveNonstopPlaylogStages(map: NonstopStitchMap): PlaylogNonstopStage[] {
-  return map.stages.map((stage) => ({
-    offsetUs: toUs(stage.placement.offsetSeconds),
-    windowStartUs: toUs(stage.windowStart),
-    ...(Number.isFinite(stage.windowEnd) ? { windowEndUs: toUs(stage.windowEnd) } : {}),
-    rate: stage.placement.rate,
-  }));
+/**
+ * The {@link PlaylogNonstopStage}s of a stitched chart's map, with each stage's `#RANDOM` / `#SWITCH` draws when
+ * `stageDraws` gives them (one list per stage; an empty list records none).
+ */
+export function resolveNonstopPlaylogStages(
+  map: NonstopStitchMap,
+  stageDraws: ReadonlyArray<readonly RandomDraw[] | undefined> = [],
+): PlaylogNonstopStage[] {
+  return map.stages.map((stage, index) => {
+    const draws = stageDraws[index];
+    return {
+      offsetUs: toUs(stage.placement.offsetSeconds),
+      windowStartUs: toUs(stage.windowStart),
+      ...(Number.isFinite(stage.windowEnd) ? { windowEndUs: toUs(stage.windowEnd) } : {}),
+      rate: stage.placement.rate,
+      ...(draws !== undefined && draws.length > 0 ? { randomDraws: draws.map((draw) => ({ ...draw })) } : {}),
+    };
+  });
 }
 
 /**
