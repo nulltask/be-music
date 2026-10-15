@@ -26,6 +26,7 @@ export interface DebugMenuFolder {
  */
 export const DEBUG_MENU_FOLDERS = {
   playOptions: { title: 'Play options', open: true },
+  replayView: { title: 'Replay / ghost', open: false },
   tempo: { title: 'Tempo', open: true },
   course: { title: 'Course', open: true },
   skin: { title: 'Skin & display', open: false },
