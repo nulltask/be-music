@@ -8,8 +8,11 @@ import { resolveClearLamp, type PixiGameplayResultData } from '@be-music/player-
 import type { BeMusicClearLamp, BeMusicSongRecord } from '@be-music/player-web/skin';
 
 const STORAGE_KEY = 'be-music-demo.song-records';
-/** Bumped when the stored shape changes; a stored map with another version is ignored. */
-const STORAGE_VERSION = 1;
+/**
+ * Bumped when the stored shape changes; a stored map with an unknown version is ignored. Version 1 records were kept
+ * before the LR2 ruleset's lamps followed LR2, and are read through {@link toLr2RecordLamp}.
+ */
+const STORAGE_VERSION = 2;
 
 /** Clear lamps from worst to best — a record keeps the best lamp it has seen. */
 export const CLEAR_LAMP_ORDER: readonly BeMusicClearLamp[] = [
@@ -212,12 +215,14 @@ export function parseSongRecords(raw: string | null | undefined): Map<string, Be
   }
   if (typeof parsed !== 'object' || parsed === null) return records;
   const { version, records: stored } = parsed as { version?: unknown; records?: unknown };
-  if (version !== STORAGE_VERSION || typeof stored !== 'object' || stored === null) return records;
+  if ((version !== STORAGE_VERSION && version !== 1) || typeof stored !== 'object' || stored === null) return records;
+  // Version 1 lamps predate LR2's lamp rules; the demo plays on LR2's ruleset by default, so they are read as LR2 plays.
+  const readLamp = version === 1 ? toLr2RecordLamp : (lamp: BeMusicClearLamp) => lamp;
   for (const [key, entry] of Object.entries(stored)) {
     if (typeof entry !== 'object' || entry === null) continue;
     const { lamp } = entry as { lamp?: unknown };
     if (typeof lamp !== 'string' || !CLEAR_LAMP_ORDER.includes(lamp as BeMusicClearLamp)) continue;
-    const record: BeMusicSongRecord = { lamp: lamp as BeMusicClearLamp };
+    const record: BeMusicSongRecord = { lamp: readLamp(lamp as BeMusicClearLamp) };
     for (const field of ['exScore', 'maxCombo', 'missCount', 'playCount'] as const) {
       const value = (entry as Record<string, unknown>)[field];
       if (typeof value === 'number' && Number.isInteger(value) && value >= 0) record[field] = value;
@@ -227,7 +232,17 @@ export function parseSongRecords(raw: string | null | undefined): Map<string, Be
   return records;
 }
 
-/** Serializes records as `{ version: 1, records: { [key]: BeMusicSongRecord } }`. */
+/**
+ * A record lamp kept before LR2's lamp rules, as LR2 awards it: LR2 has no PERFECT or MAX lamp (FULL COMBO is its top),
+ * and under its ruleset an EX HARD lamp could only come from a DEATH clear, which LR2 lamps NORMAL. Other lamps stay.
+ */
+export function toLr2RecordLamp(lamp: BeMusicClearLamp): BeMusicClearLamp {
+  if (lamp === 'PERFECT' || lamp === 'MAX') return 'FULL_COMBO';
+  if (lamp === 'EX_HARD') return 'NORMAL';
+  return lamp;
+}
+
+/** Serializes records as `{ version: 2, records: { [key]: BeMusicSongRecord } }`. */
 export function serializeSongRecords(records: ReadonlyMap<string, BeMusicSongRecord>): string {
   return JSON.stringify({ version: STORAGE_VERSION, records: Object.fromEntries(records) });
 }

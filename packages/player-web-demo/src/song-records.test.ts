@@ -12,6 +12,7 @@ import {
   isCourseRunAutoPlayed,
   mergeSongRecord,
   parseSongRecords,
+  toLr2RecordLamp,
   playRecordKey,
   serializeSongRecords,
   songRecordKey,
@@ -102,7 +103,28 @@ describe('parseSongRecords / serializeSongRecords', () => {
     expect(parseSongRecords(null).size).toBe(0);
     expect(parseSongRecords('{not json').size).toBe(0);
     expect(parseSongRecords('[]').size).toBe(0);
-    expect(parseSongRecords(JSON.stringify({ version: 2, records: { a: { lamp: 'MAX' } } })).size).toBe(0);
+    expect(parseSongRecords(JSON.stringify({ version: 3, records: { a: { lamp: 'MAX' } } })).size).toBe(0);
+  });
+
+  it('reads version-1 records with the lamps LR2 awards', () => {
+    const raw = JSON.stringify({
+      version: 1,
+      records: {
+        max: { lamp: 'MAX' },
+        perfect: { lamp: 'PERFECT' },
+        death: { lamp: 'EX_HARD', exScore: 10 },
+        hard: { lamp: 'HARD' },
+      },
+    });
+    expect(Object.fromEntries(parseSongRecords(raw))).toEqual({
+      max: { lamp: 'FULL_COMBO' },
+      perfect: { lamp: 'FULL_COMBO' },
+      death: { lamp: 'NORMAL', exScore: 10 },
+      hard: { lamp: 'HARD' },
+    });
+    // Records written now keep their lamps as they are.
+    const current = new Map([['a', { lamp: 'EX_HARD' as const }]]);
+    expect(parseSongRecords(serializeSongRecords(current))).toEqual(current);
   });
 
   it('drops entries with an unknown lamp and leaves out malformed counts', () => {
@@ -114,6 +136,16 @@ describe('parseSongRecords / serializeSongRecords', () => {
       },
     });
     expect([...parseSongRecords(raw)]).toEqual([['ok', { lamp: 'HARD', playCount: 4 }]]);
+  });
+});
+
+describe('toLr2RecordLamp', () => {
+  it('keeps LR2’s own lamps and maps the ones LR2 does not award', () => {
+    expect(
+      ['FAILED', 'EASY', 'NORMAL', 'HARD', 'FULL_COMBO', 'ASSIST_EASY'].map((lamp) => toLr2RecordLamp(lamp as never)),
+    ).toEqual(['FAILED', 'EASY', 'NORMAL', 'HARD', 'FULL_COMBO', 'ASSIST_EASY']);
+    expect(toLr2RecordLamp('MAX')).toBe('FULL_COMBO');
+    expect(toLr2RecordLamp('EX_HARD')).toBe('NORMAL');
   });
 });
 
