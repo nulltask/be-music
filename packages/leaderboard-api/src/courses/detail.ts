@@ -3,6 +3,7 @@ import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import type { Database } from '../db/client.ts';
 import { chart, course, courseBestScore, courseScore, courseScoreResult, profile } from '../db/schema.ts';
 import { byRulesetOrder } from '../rulesets.ts';
+import { canSeeScore } from '../scores/visibility.ts';
 import { countCoursePlayers, rankOfCourseExScore } from './ranking.ts';
 
 export interface CourseDetail {
@@ -56,7 +57,7 @@ export async function loadCourseScoreDetail(db: Database, id: string, viewerId: 
     .from(courseScore)
     .leftJoin(profile, eq(profile.userId, courseScore.userId))
     .where(eq(courseScore.id, id));
-  if (found === undefined || (found.score.hidden && found.score.userId !== viewerId)) return undefined;
+  if (found === undefined || !canSeeScore(found.score, viewerId)) return undefined;
   const results = await db.select().from(courseScoreResult).where(eq(courseScoreResult.courseScoreId, id));
   const { score } = found;
   return {
@@ -128,4 +129,22 @@ export async function loadMyCourseRank(
     trophy: mine.bestTrophy,
     trophyScoreId: mine.bestTrophyScoreId,
   };
+}
+
+/**
+ * Where a course run's play log is stored, if the viewer may read it, as `loadPlaylogAccess` answers for a play. Course
+ * runs have no replay setting of their own: a shown run's log is anyone's, a hidden run's only its player's. Undefined
+ * otherwise, so a hidden run looks the same as a missing one.
+ */
+export async function loadCoursePlaylogAccess(
+  db: Database,
+  courseScoreId: string,
+  viewerId: string | undefined,
+): Promise<{ key: string; public: boolean } | undefined> {
+  const found = await db.query.courseScore.findFirst({
+    where: eq(courseScore.id, courseScoreId),
+    columns: { userId: true, playlogKey: true, hidden: true },
+  });
+  if (found === undefined || !canSeeScore(found, viewerId)) return undefined;
+  return { key: found.playlogKey, public: !found.hidden };
 }
