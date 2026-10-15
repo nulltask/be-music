@@ -725,6 +725,8 @@ class PlayerWebDemoApp {
    * keeps this to put the cursor back on the course bar once it is over.
    */
   private courseReturnNavigation: PixiSongSelectNavigation | undefined;
+  /** Whether the status line describes a play or result, which a return to the select screen replaces. */
+  private playStatusShown = false;
   /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
   private activeSkinSystem: SkinFamilyOverride = 'auto';
   /** The skin system the "Drop a skin" prompt asked for, until a drop answers it or it is cancelled. */
@@ -1845,7 +1847,14 @@ class PlayerWebDemoApp {
    */
   private setStatus(text: string): void {
     this.guiState.status = text;
+    this.playStatusShown = false;
     this.statusController?.updateDisplay();
+  }
+
+  /** Shows a status about the play or result on screen, which the select screen replaces when it comes back. */
+  private setPlayStatus(text: string): void {
+    this.setStatus(text);
+    this.playStatusShown = true;
   }
 
   /**
@@ -2103,7 +2112,7 @@ class PlayerWebDemoApp {
       this.setStatus(`Replay: song not loaded (${playlog.chart.title ?? 'untitled'})`);
       return;
     }
-    this.setStatus(`Replaying: ${song.title}`);
+    this.setPlayStatus(`Replaying: ${song.title}`);
     try {
       // Replay always drives the LR2/default gameplay path — the shared engine owns the playback either way, so
       // the recorded run reproduces regardless of which skin family recorded it.
@@ -2170,7 +2179,8 @@ class PlayerWebDemoApp {
           dropLog.warn(`skipped (no course): ${path}`);
           continue;
         }
-        this.courseGroups.push(...groups);
+        // A file dropped again replaces its folder instead of adding another.
+        for (const group of groups) this.courseGroups = mergeCourseGroup(this.courseGroups, group);
         for (const group of groups) {
           dropLog.info(
             `course file: ${path} · ${group.label} · courses=${group.courses.length} random=${group.randomCourses?.length ?? 0}`,
@@ -3535,7 +3545,7 @@ class PlayerWebDemoApp {
     // type-code matches the active scene before triggering a live re-mount.
     this.currentBeatorajaPlayVariant = variant;
     await this.sceneHost.setScene(this.beatorajaGameplayView);
-    this.setStatus(describePlayingStatus(song.title, { family: 'beatoraja', tempoPercent }));
+    this.setPlayStatus(describePlayingStatus(song.title, { family: 'beatoraja', tempoPercent }));
     this.lockPlaylogOptionsForPlay(allowsLiveTempo(this.guiState, { replay: false, tempo }));
 
     // Consume the "user pressed Record on the select screen" flag. Same flow as the LR2
@@ -3776,7 +3786,6 @@ class PlayerWebDemoApp {
       },
     });
     await this.sceneHost.setScene(this.beatorajaSelectScene);
-    this.setStatus(`Select (beatoraja): ${this.collection.songs.length} song(s)`);
 
     // Build the bottom-centre skin-options panel for this select skin's `property[]` / `filepath[]`.
     // User picks flow back through `onApply` → live `replaceSkin` on the active scene so chrome
@@ -4251,8 +4260,8 @@ class PlayerWebDemoApp {
         : {}),
     });
     await this.sceneHost.setScene(this.beatorajaResultScene);
-    this.setStatus(
-      `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · score=${summary.score} ex=${summary.exScore} maxCombo=${maxCombo}`,
+    this.setPlayStatus(
+      `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · ex=${summary.exScore} maxCombo=${maxCombo}`,
     );
     return true;
   }
@@ -4608,6 +4617,8 @@ class PlayerWebDemoApp {
   }
 
   private async showSelect(): Promise<void> {
+    // Back from a play or a result: the status line describes the library again instead of the play just left.
+    if (this.playStatusShown) this.setStatus(describeSongCollection(this.collection));
     // Back from a course: the cursor returns to the course bar it was started from.
     if (this.courseReturnNavigation !== undefined && this.courseSession === undefined) {
       this.lastSelectNavigation = this.courseReturnNavigation;
@@ -5189,7 +5200,7 @@ class PlayerWebDemoApp {
     this.selectView?.setVisible(false);
     this.decideView?.dispose();
     this.decideView = undefined;
-    this.setStatus(describePlayingStatus(song.title, { tempoPercent: this.guiState.tempoPercent }));
+    this.setPlayStatus(describePlayingStatus(song.title, { tempoPercent: this.guiState.tempoPercent }));
     this.lockPlaylogOptionsForPlay(
       allowsLiveTempo(this.guiState, {
         replay: this.lastPlay?.overrides.replay !== undefined,
@@ -5272,7 +5283,7 @@ class PlayerWebDemoApp {
     // A replay plays at its recorded tempo, unless the Replay / ghost options keep the viewer's own.
     const tempoPercent =
       overrides.replay !== undefined ? tempoPercentFromTempo(this.gameplayView.getTempo()) : this.guiState.tempoPercent;
-    this.setStatus(describePlayingStatus(song.title, { tempoPercent }));
+    this.setPlayStatus(describePlayingStatus(song.title, { tempoPercent }));
     this.lockPlaylogOptionsForPlay(
       allowsLiveTempo(this.guiState, { replay: overrides.replay !== undefined, tempo: this.gameplayView.getTempo() }),
     );
@@ -5395,7 +5406,7 @@ class PlayerWebDemoApp {
     await this.resultView.mount(this.sceneHost, data);
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
-    this.setStatus(`Result: ${data.song.title}`);
+    this.setPlayStatus(`Result: ${data.song.title}`);
     this.recordActivePlay(songRecordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (presentation.quickRetry && mode.nonstop === undefined) {
@@ -5431,7 +5442,7 @@ class PlayerWebDemoApp {
     const title = this.lastPlay?.song.title;
     if (title !== undefined) {
       const family = this.beatorajaGameplayView !== undefined ? 'beatoraja' : undefined;
-      this.setStatus(describePlayingStatus(title, { family, tempoPercent: tempoPercentFromTempo(tempo) }));
+      this.setPlayStatus(describePlayingStatus(title, { family, tempoPercent: tempoPercentFromTempo(tempo) }));
     }
     if (tempo !== 1) {
       this.activePlayRecordKey = undefined;
