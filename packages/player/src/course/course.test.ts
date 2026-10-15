@@ -11,6 +11,7 @@ import {
   parseBeatorajaRandomCourseData,
   parseCourseConstraint,
   parseLr2CourseFile,
+  parseLr2NonstopConnections,
   parseTableHeaderCourses,
   resolveCourseStages,
   resolveTableModeKeys,
@@ -136,6 +137,30 @@ describe('parseLr2CourseFile', () => {
     expect(courses.map((course) => [course.name, course.kind, course.stages.length])).toEqual([
       ['N', 'nonstop', 10],
       ['', 'expert', 1],
+    ]);
+  });
+
+  test('reads a NONSTOP course connection after each stage from the header digits', () => {
+    const stages = [MD5_A, MD5_B, MD5_A, MD5_B].join('');
+    const nonstopHeader = `2405x${'0'.repeat(5)}1${'0'.repeat(21)}`;
+    const xml = `<courselist>
+      <course><title>NS</title><type>1</type><hash>${nonstopHeader}${stages}</hash></course>
+      <course><title>EX</title><type>0</type><hash>${header(0)}${MD5_A}${MD5_B}</hash></course>
+    </courselist>`;
+    const [nonstop, expert] = parseLr2CourseFile(xml);
+    expect(nonstop?.connections).toEqual(['cut', 'blank1', 'fade']);
+    expect(expert?.connections).toBeUndefined();
+    expect(parseLr2NonstopConnections('0123459x')).toEqual([
+      'fade',
+      'fade-fit',
+      'cut',
+      'cut-fit',
+      'blank1',
+      'blank2',
+      'fade',
+      'fade',
+      'fade',
+      'fade',
     ]);
   });
 
