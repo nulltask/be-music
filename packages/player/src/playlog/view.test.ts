@@ -12,6 +12,7 @@ import {
   resolvePlaylogViewAt,
   resolveReplayHiSpeed,
   resolveReplayView,
+  roundPlaylogView,
   type PlaylogViewState,
 } from './view.ts';
 
@@ -151,6 +152,31 @@ describe('diffPlaylogView', () => {
 
   test('ignores float noise in the covers', () => {
     expect(diffPlaylogView(before, { covers: [cover('1P', 0.2 + 1e-9), cover('2P', 0.1)] })).toBeUndefined();
+  });
+});
+
+describe('roundPlaylogView', () => {
+  test('rounds away float noise: hi-speed to 1/1000, visible time to ms, covers to 4 decimals', () => {
+    const view: PlaylogViewState = {
+      hiSpeed: 2.0670000000000006,
+      hiSpeedScale: 'be-music',
+      hsFix: 'MAX',
+      visibleMs: 812.4999,
+      covers: [{ side: '1P', sudden: 0.30000000000000004, hidden: 0.09999999999999999, lift: 0.123456 }],
+    };
+    expect(roundPlaylogView(view)).toEqual({
+      hiSpeed: 2.067,
+      hiSpeedScale: 'be-music',
+      hsFix: 'MAX',
+      visibleMs: 812,
+      covers: [{ side: '1P', sudden: 0.3, hidden: 0.1, lift: 0.1235 }],
+    });
+    // The input is left as it was.
+    expect(view.covers?.[0]?.hidden).toBe(0.09999999999999999);
+  });
+
+  test('leaves out what the view leaves out', () => {
+    expect(roundPlaylogView({ hiSpeedScale: 'beatoraja' })).toEqual({ hiSpeedScale: 'beatoraja' });
   });
 });
 
