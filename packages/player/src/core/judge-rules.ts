@@ -1,7 +1,14 @@
 import type { LongNoteStyle } from '../ruleset/definitions.ts';
 import { classifyRulesetJudge, RULESET_JUDGE_NONE } from '../ruleset/judge.ts';
 import type { JudgeWindowSetUs } from '../ruleset/definitions.ts';
-import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from '../ruleset/long-note.ts';
+import {
+  isChargeLongNoteMode,
+  resolveEffectiveLongNoteMode,
+  resolveLnEarlyRelease,
+  type LnJudgeIndex,
+  type LnTimedJudge,
+} from '../ruleset/long-note.ts';
+import type { RulesetConfig } from '../ruleset/definitions.ts';
 import type { LongNoteMode, TimedPlayableNote } from '../playable-notes.ts';
 import type { JudgeKind } from './scoring.ts';
 import type { PlayerUiLongNoteMode } from './ui-signal-bus.ts';
@@ -10,6 +17,15 @@ import type { PlayerUiLongNoteMode } from './ui-signal-bus.ts';
  * Pure judgment rules of the live engine: timing classification, long-note judgment merging and the long-note mode a
  * ruleset plays. Shared by the judge core (`judge-core.ts`) and the auto-play driver; nothing here reads a clock.
  */
+
+/**
+ * `noteTime - inputTime` in whole microseconds, the unit of the play log's clock and of the ruleset window tables.
+ * The difference of two float second values can land a hair outside a window edge that an exact delta sits on (a
+ * press 150 ms late reading as 150.0000001 ms), so every window comparison of the judge core goes through this.
+ */
+export function judgeDeltaUs(noteSeconds: number, inputSeconds: number): number {
+  return Math.round((noteSeconds - inputSeconds) * 1e6);
+}
 
 /** A judgment with the signed timing it was made at (positive = the press was LATE). */
 export interface TimedManualJudge {
@@ -34,7 +50,7 @@ export const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, Jud
  * (`noteTime - inputTime`, positive = EARLY), hence the negation.
  */
 export function resolveManualJudgeKind(signedDeltaMs: number, windows: JudgeWindowSetUs): JudgeKind | undefined {
-  const judge = classifyRulesetJudge(-signedDeltaMs * 1000, windows);
+  const judge = classifyRulesetJudge(Math.round(-signedDeltaMs * 1000), windows);
   return judge === RULESET_JUDGE_NONE ? undefined : RULESET_JUDGE_KINDS[judge];
 }
 
@@ -75,6 +91,27 @@ export function combineLongNoteJudges(head: TimedManualJudge, tail: TimedManualJ
     return tail;
   }
   return Math.abs(head.signedDeltaMs) >= Math.abs(tail.signedDeltaMs) ? head : tail;
+}
+
+const LN_JUDGE_KINDS: readonly JudgeKind[] = ['PERFECT', 'GREAT', 'GOOD', 'BAD', 'POOR'];
+
+/**
+ * The single judgment of an LN released before its tail, by the ruleset's rule ({@link resolveLnEarlyRelease}).
+ * `releaseDeltaMs` is the release against the tail in the engine's convention (negative = before the tail).
+ */
+export function resolveLongNoteEarlyReleaseJudge(
+  ruleset: Pick<RulesetConfig, 'lnEarlyRelease'>,
+  head: TimedManualJudge,
+  releaseDeltaMs: number,
+  endWindows: JudgeWindowSetUs,
+): TimedManualJudge {
+  const toRuleset = (judge: TimedManualJudge): LnTimedJudge => ({
+    judge: resolveJudgeSeverity(judge.kind) as LnJudgeIndex,
+    dmUs: Math.round(-judge.signedDeltaMs * 1000),
+  });
+  // Whole microseconds, like every other window comparison (see `judgeDeltaUs`).
+  const released = resolveLnEarlyRelease(ruleset, toRuleset(head), Math.round(-releaseDeltaMs * 1000), endWindows);
+  return { kind: LN_JUDGE_KINDS[released.judge]!, signedDeltaMs: -released.dmUs / 1000 };
 }
 
 /** True when a playable note carries a tail — a long / charge note rather than a single hit. */

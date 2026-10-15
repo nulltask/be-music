@@ -1,5 +1,4 @@
-import type { ScoreSummary } from '@be-music/player/core/scoring';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicPlaylog, ScoreSummary } from '@be-music/player/playlog';
 import type { BeMusicJudgeTiming } from './types.ts';
 import type { BeMusicClearLamp, BrowserSongEntry } from './song.ts';
 

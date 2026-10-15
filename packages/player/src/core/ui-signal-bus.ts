@@ -98,7 +98,7 @@ export interface PlayerUiFramePayload {
 
 /**
  * How the active ruleset plays a long note — which is not always the chart's `#LNMODE`: LR2 plays every long note as
- * an `'ln'`, IIDX plays them as charge notes. `'ln'` judges once (the start, early release = BAD), `'cn'` judges the
+ * an `'ln'`, IIDX plays them as charge notes. `'ln'` judges once (the start; an early release follows the ruleset's `lnEarlyRelease`), `'cn'` judges the
  * start and the release, `'hcn'` additionally drains the gauge while it isn't held.
  */
 export type PlayerUiLongNoteMode = 'ln' | 'cn' | 'hcn';

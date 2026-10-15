@@ -41,7 +41,7 @@ export type BeatorajaJudgeAlgorithm = 'combo' | 'duration' | 'lowest' | 'score';
 
 /** How a ruleset plays the chart's long notes. */
 export type LongNoteStyle =
-  /** LR2: every long note is an LN — one deferred judgment, early release = BAD. */
+  /** LR2: every long note is an LN — one deferred judgment (see {@link LnEarlyReleaseRule} for a release before the tail). */
   | 'ln'
   /** beatoraja: per-note lnMode decides LN (1) vs CN (2) vs HCN (3). */
   | 'per-note'
@@ -57,6 +57,29 @@ export type LongNoteStyle =
  *   shortly before or after does nothing.
  */
 export type MineTrigger = 'press-or-hold' | 'hold';
+
+/**
+ * How an LN (long-note mode 1) let go before its tail is judged. The LN's single judgment is otherwise the head's,
+ * confirmed when the tail is reached.
+ *
+ * - `'head-unless-beyond-good'` — LR2 (OpenLR2 `ProcLongnote`, `LR2f.cpp:7612-7621`): a release more than the GOOD
+ *   window before the tail is a BAD; a later one keeps the head's judgment.
+ * - `'worse-of-head-and-tail'` — beatoraja (`JudgeManager` L533-545): the release is judged against the long-note-end
+ *   windows and the LN takes the worse of that and the head; when that is BAD or worse and the release came before
+ *   the tail, it is a BAD.
+ */
+export type LnEarlyReleaseRule = 'head-unless-beyond-good' | 'worse-of-head-and-tail';
+
+/**
+ * What a press does on a lane whose long note is being held (a second key bound to the lane, such as the turntable's
+ * other direction). It never judges another note on that lane: the lane's current note is the long note.
+ *
+ * - `'rejudge-head-or-empty-poor'` — LR2 (OpenLR2 `ProcLongnote`, `LR2f.cpp:7547-7590`): a press within the BAD window of
+ *   the LN's head judges the head again; any other press is an empty POOR.
+ * - `'ignore'` — beatoraja (`JudgeManager` L355-377): a re-press during the hold, judging nothing. IIDX follows it: one
+ *   button per lane cannot be pressed again while held.
+ */
+export type PressDuringLongNoteRule = 'rejudge-head-or-empty-poor' | 'ignore';
 
 export interface GaugeGutsStep {
   /** Gauge value below (or at, when `inclusive`) which the damage multiplier applies. */
@@ -99,13 +122,22 @@ export interface RulesetConfig {
   /** LR2: a long-note head is never judged as a LATE bad — the press is ignored instead. */
   ignoreLateBadOnLnHead: boolean;
   longNoteStyle: LongNoteStyle;
+  /** How an LN released before its tail is judged (see {@link LnEarlyReleaseRule}). */
+  lnEarlyRelease: LnEarlyReleaseRule;
+  /** What a press on a lane whose long note is held does (see {@link PressDuringLongNoteRule}). */
+  pressDuringLongNote: PressDuringLongNoteRule;
+  /**
+   * How long (µs) a long-note release that would score BAD or worse before the tail waits before it is settled, per
+   * lane kind. Pressing the lane again inside it resumes the hold, as if it had never been let go; any other release
+   * settles at once. beatoraja's `JudgeProperty.longnoteMargin` / `longscratchMargin` (200 ms on PMS keys, 0
+   * elsewhere); LR2 and IIDX settle every release at once.
+   */
+  longNoteReleaseMarginUs: { note: number; scratch: number };
   /** IIDX: a BAD / POOR on a charge-note head skips the tail judgment entirely. */
   headBadSkipsTail: boolean;
   comboBreaksOnEmptyPoor: boolean;
   /** When a mine detonates (see {@link MineTrigger}). */
   mineTrigger: MineTrigger;
-  /** HCN hold-state gauge tick interval (µs). */
-  hcnTickUs: number;
   /** HCN tick deltas as `[heldJudgeIndex, heldRate, releasedJudgeIndex, releasedRate]` (beatoraja model). */
   hcnTick: { heldJudge: number; heldRate: number; releasedJudge: number; releasedRate: number };
   gauge: GaugeSpec;
@@ -702,10 +734,12 @@ export function resolveRuleset(
       multiBad: true,
       ignoreLateBadOnLnHead: true,
       longNoteStyle: 'ln',
+      lnEarlyRelease: 'head-unless-beyond-good',
+      pressDuringLongNote: 'rejudge-head-or-empty-poor',
+      longNoteReleaseMarginUs: { note: 0, scratch: 0 },
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor: false,
       mineTrigger: 'press-or-hold',
-      hcnTickUs: 200_000,
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
       gauge: resolveLr2Gauge(gaugeId, effectiveTotal, baseNotes),
       noteCount,
@@ -731,10 +765,12 @@ export function resolveRuleset(
       multiBad: false,
       ignoreLateBadOnLnHead: false,
       longNoteStyle: 'per-note',
+      lnEarlyRelease: 'worse-of-head-and-tail',
+      pressDuringLongNote: 'ignore',
+      longNoteReleaseMarginUs: { note: mode === BEATORAJA_MODES.PMS ? 200_000 : 0, scratch: 0 },
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
-      hcnTickUs: 200_000,
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
       gauge: resolveBeatorajaGauge(gaugeId, effectiveTotal, baseNotes),
       noteCount,
@@ -755,11 +791,14 @@ export function resolveRuleset(
     multiBad: false,
     ignoreLateBadOnLnHead: false,
     longNoteStyle: 'charge',
+    // IIDX plays no LN (every long note is a charge note), so this never applies.
+    lnEarlyRelease: 'worse-of-head-and-tail',
+    pressDuringLongNote: 'ignore',
+    longNoteReleaseMarginUs: { note: 0, scratch: 0 },
     headBadSkipsTail: true,
     comboBreaksOnEmptyPoor: false,
     // IIDX has no mines; LR2's model stands in until there is evidence otherwise.
     mineTrigger: 'press-or-hold',
-    hcnTickUs: 200_000,
     hcnTick: { heldJudge: 0, heldRate: 1, releasedJudge: 5, releasedRate: 1 },
     gauge: resolveIidxGauge(gaugeId, noteCount),
     noteCount,

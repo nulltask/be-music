@@ -261,6 +261,83 @@
               "final": 0,
               "cleared": false
             }
+          },
+          "engine": {
+            "lr2": {
+              "total": 28,
+              "perfect": 0,
+              "fast": 0,
+              "slow": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 28,
+              "emptyPoor": 0,
+              "exScore": 0,
+              "score": 0,
+              "gauge": {
+                "current": 2,
+                "max": 100,
+                "clearThreshold": 80,
+                "initial": 20,
+                "effectiveTotal": 200,
+                "cleared": false,
+                "type": "GROOVE",
+                "survival": false,
+                "failedMidPlay": false
+              },
+              "maxCombo": 0
+            },
+            "beatoraja": {
+              "total": 28,
+              "perfect": 0,
+              "fast": 0,
+              "slow": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 28,
+              "emptyPoor": 0,
+              "exScore": 0,
+              "score": 0,
+              "gauge": {
+                "current": 2,
+                "max": 100,
+                "clearThreshold": 80,
+                "initial": 20,
+                "effectiveTotal": 200,
+                "cleared": false,
+                "type": "NORMAL",
+                "survival": false,
+                "failedMidPlay": false
+              },
+              "maxCombo": 0
+            },
+            "iidx": {
+              "total": 28,
+              "perfect": 0,
+              "fast": 0,
+              "slow": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 28,
+              "emptyPoor": 0,
+              "exScore": 0,
+              "score": 0,
+              "gauge": {
+                "current": 0,
+                "max": 100,
+                "clearThreshold": 80,
+                "initial": 22,
+                "effectiveTotal": 200,
+                "cleared": false,
+                "type": "NORMAL",
+                "survival": false,
+                "failedMidPlay": false
+              },
+              "maxCombo": 0
+            }
           }
         },
         "perfect": {
@@ -331,6 +408,83 @@
               "final": 100,
               "cleared": true
             }
+          },
+          "engine": {
+            "lr2": {
+              "total": 28,
+              "perfect": 28,
+              "fast": 0,
+              "slow": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0,
+              "exScore": 56,
+              "score": 200000,
+              "gauge": {
+                "current": 100,
+                "max": 100,
+                "clearThreshold": 80,
+                "initial": 20,
+                "effectiveTotal": 200,
+                "cleared": true,
+                "type": "GROOVE",
+                "survival": false,
+                "failedMidPlay": false
+              },
+              "maxCombo": 28
+            },
+            "beatoraja": {
+              "total": 28,
+              "perfect": 28,
+              "fast": 0,
+              "slow": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0,
+              "exScore": 56,
+              "score": 56,
+              "gauge": {
+                "current": 100,
+                "max": 100,
+                "clearThreshold": 80,
+                "initial": 20,
+                "effectiveTotal": 200,
+                "cleared": true,
+                "type": "NORMAL",
+                "survival": false,
+                "failedMidPlay": false
+              },
+              "maxCombo": 28
+            },
+            "iidx": {
+              "total": 28,
+              "perfect": 28,
+              "fast": 0,
+              "slow": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0,
+              "exScore": 56,
+              "score": 56,
+              "gauge": {
+                "current": 100,
+                "max": 100,
+                "clearThreshold": 80,
+                "initial": 22,
+                "effectiveTotal": 200,
+                "cleared": true,
+                "type": "NORMAL",
+                "survival": false,
+                "failedMidPlay": false
+              },
+              "maxCombo": 28
+            }
           }
         },
         "offset": {
@@ -400,6 +554,83 @@
               "type": "NORMAL",
               "final": 92,
               "cleared": true
+            }
+          },
+          "engine": {
+            "lr2": {
+              "total": 28,
+              "perfect": 12,
+              "fast": 4,
+              "slow": 5,
+              "great": 5,
+              "good": 4,
+              "bad": 3,
+              "poor": 4,
+              "emptyPoor": 0,
+              "exScore": 29,
+              "score": 110714,
+              "gauge": {
+                "current": 90,
+                "max": 100,
+                "clearThreshold": 80,
+                "initial": 20,
+                "effectiveTotal": 200,
+                "cleared": true,
+                "type": "GROOVE",
+                "survival": false,
+                "failedMidPlay": false
+              },
+              "maxCombo": 9
+            },
+            "beatoraja": {
+              "total": 28,
+              "perfect": 12,
+              "fast": 4,
+              "slow": 5,
+              "great": 5,
+              "good": 4,
+              "bad": 0,
+              "poor": 7,
+              "emptyPoor": 3,
+              "exScore": 29,
+              "score": 29,
+              "gauge": {
+                "current": 86,
+                "max": 100,
+                "clearThreshold": 80,
+                "initial": 20,
+                "effectiveTotal": 200,
+                "cleared": true,
+                "type": "NORMAL",
+                "survival": false,
+                "failedMidPlay": false
+              },
+              "maxCombo": 9
+            },
+            "iidx": {
+              "total": 28,
+              "perfect": 12,
+              "fast": 4,
+              "slow": 5,
+              "great": 5,
+              "good": 4,
+              "bad": 3,
+              "poor": 4,
+              "emptyPoor": 0,
+              "exScore": 29,
+              "score": 29,
+              "gauge": {
+                "current": 92,
+                "max": 100,
+                "clearThreshold": 80,
+                "initial": 22,
+                "effectiveTotal": 200,
+                "cleared": true,
+                "type": "NORMAL",
+                "survival": false,
+                "failedMidPlay": false
+              },
+              "maxCombo": 9
             }
           }
         }
