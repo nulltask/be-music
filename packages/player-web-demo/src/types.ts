@@ -141,6 +141,18 @@ export interface DemoGuiState {
    */
   courseAutoAdvance: boolean;
   /**
+   * How a NONSTOP course places its stages: `'intended'` (the default) as LR2's loader means to, `'lr2'` exactly as
+   * LR2's binary does, including its third-stage start offset (`planNonstopCourse`).
+   */
+  nonstopPlacement: 'intended' | 'lr2';
+  /**
+   * How a NONSTOP FIT stage follows the previous stage's tempo: `'pitch'` (the default, as LR2) plays its sound faster or
+   * slower so the pitch moves too; `'keep-pitch'` stretches the sound and keeps its pitch.
+   */
+  nonstopFitMode: 'pitch' | 'keep-pitch';
+  /** The time stretcher keep pitch uses: Signalsmith Stretch (the default) or WSOLA. */
+  nonstopStretchAlgorithm: 'signalsmith' | 'wsola';
+  /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
    * in anonymously the first time (docs/leaderboard.md). Toggled from the Debug Menu's "Submit to Leaderboard"
    * checkbox and latched at song start like the auto-save.

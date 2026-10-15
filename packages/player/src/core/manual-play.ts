@@ -144,7 +144,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   // only declared it for the log (`recordPlaylog.gauge`) gets it played too.
   const selectedGauge = options.gauge ?? options.recordPlaylog?.gauge;
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(resolvedJson, playbackChart, dynamicJudgeRankChanges),
+    rulesetChartFactsFromChart(resolvedJson, playbackChart, dynamicJudgeRankChanges, options.stageRanks),
     judgeRuleset,
     {
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
@@ -208,6 +208,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           // The chart the engine was handed is the source when it resolved the control flow itself.
           sourceChart: sourceChart ?? json,
           dynamicJudgeRankChanges,
+          ...(options.stageRanks !== undefined ? { stageRanks: options.stageRanks } : {}),
           reversalSeconds: resolvedChart.reversal?.seconds,
           play: {
             mode: 'manual',
@@ -386,6 +387,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     Math.max(
       maxJudgeReachSeconds(judgeCore.config, 0),
       ...dynamicJudgeRankChanges.map((change) => maxJudgeReachSeconds(judgeCore.config, change.seconds)),
+      ...(options.stageRanks ?? []).map((change) => maxJudgeReachSeconds(judgeCore.config, change.seconds)),
     );
   const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
   let endedOnFailure = false;

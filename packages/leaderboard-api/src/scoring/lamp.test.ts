@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlaylogRulesetResult } from '@be-music/player/playlog';
-import { ClearLamp, resolveClearLamp, resolveMissCount } from './lamp.ts';
+import { ClearLamp, resolveClearLamp, resolveMissCount, toCourseClearLamp } from './lamp.ts';
 
 function result(
   gauge: { type: string; cleared: boolean },
@@ -59,5 +59,15 @@ describe('resolveClearLamp', () => {
 describe('resolveMissCount', () => {
   test('counts BADs, missed POORs and empty POORs', () => {
     expect(resolveMissCount(result({ type: 'GROOVE', cleared: true }, { bad: 2, poor: 3, emptyPoor: 4 }))).toBe(9);
+  });
+});
+
+describe('toCourseClearLamp', () => {
+  test('puts course lamps on the chart lamp scale', () => {
+    expect(toCourseClearLamp('FAILED')).toBe(ClearLamp.FAILED);
+    expect(toCourseClearLamp('EASY')).toBe(ClearLamp.EASY);
+    expect(toCourseClearLamp('NORMAL')).toBe(ClearLamp.NORMAL);
+    expect(toCourseClearLamp('EX_HARD')).toBe(ClearLamp.EX_HARD);
+    expect(toCourseClearLamp('MAX')).toBe(ClearLamp.MAX);
   });
 });

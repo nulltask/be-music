@@ -181,7 +181,7 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
 A course run is recorded as one **course play log** (`format: 'be-music-course-playlog'`, `*.bmcourse.json`). It holds the course (`name`, `kind`, `constraints`, `trophies`) and one entry per stage, in order:
 
 - a stage the run reached is `{ played: true, playlog }`, that stage's own complete play log. Its `play.course` carries the course kind and constraints and `carryIn`, the state the previous stage left, so `extractCourseStage(log, index)` returns a log that replays and re-simulates on its own;
-- a stage the run never reached (after a failed one) is `{ played: false, facts }`: the chart facts a ruleset needs to count its notes, and the chart's file hashes when known.
+- a stage the run never reached (after a failed one) is `{ played: false, facts }`: the chart facts a ruleset needs to count its notes, and, when known, the chart's file hashes (`sha256`, `md5`) and its chart fingerprint (`chartFingerprint`, as a played stage's `chart.chartFingerprint` would be). The fingerprint is optional, so older logs still parse, but a run without it cannot be keyed or ranked.
 
 ```mermaid
 flowchart TD
@@ -191,7 +191,28 @@ flowchart TD
   s2 -->|extractCourseStage| single["single-chart play log"]
 ```
 
-`simulateCoursePlaylog(log, { ruleset })` re-derives the course result. Each stage after the first starts from the state the **simulated** previous stage left, not the recorded `carryIn`, and the course stops at the first stage whose gauge emptied, as the live run did. The result (`PlaylogCourseResult`) sums the stages played: judgments, fast / slow, EX-SCORE. It counts notes over every stage, adds every note the run never judged to the BP (`missCount`), takes the course-wide max combo and the last stage's gauge, and resolves the course lamp and the trophy (see [Courses and dan certification](./course.md)). `createCoursePlaylog` assembles the log from the stage logs a host recorded and caches the engine's own course result as `results.native`.
+`simulateCoursePlaylog(log, { ruleset })` re-derives the course result. Each stage after the first starts from the state the **simulated** previous stage left, not the recorded `carryIn`, and the course stops at the first stage whose gauge emptied, as the live run did. A stage given up with ESC (`play.aborted`) fails the course whatever its gauge, as LR2 records a run given up mid-course. The result (`PlaylogCourseResult`) sums the stages played: judgments, fast / slow, EX-SCORE. It counts notes over every stage, adds every note the run never judged to the BP (`missCount`), takes the course-wide max combo and the last stage's gauge, and resolves the course lamp and the trophy (see [Courses and dan certification](./course.md)). `createCoursePlaylog` assembles the log from the stage logs a host recorded and caches the engine's own course result as `results.native`.
+
+**Course identity.** `computeCourseFingerprint({ kind, constraints, stageChartFingerprints })` keys a course as `bmcourse0:<sha256>` over its kind, its constraints (normalized as `normalizeCourseConstraints` reads them, then sorted) and its stages' chart fingerprints in order; the name and the trophies are left out. So the same course read from a `.lr2crs`, a beatoraja course file or a difficulty table gets one key whenever its charts match, and a random course, once drawn, is keyed like a fixed one. `computeCoursePlaylogFingerprint(log)` reads the stage fingerprints from the log (played and unreached stages alike, so failed runs are keyed too) and is `undefined` when one is missing. `checkCoursePlaylogEligibility(log)` is the course counterpart of `checkPlaylogEligibility`: every played stage must pass the single-play check (being a course stage of this course kind is required here, not refused), the played stages must come first, and the assists of every stage flag the run. Only the last played stage may be aborted: that is a run given up with ESC, which counts as a failed one.
+
+**NONSTOP runs.** An LR2 NONSTOP course is played as one stitched chart (see [Courses and dan certification](./course.md#nonstop-courses)), so its course log adds `nonstop`:
+
+- `nonstop.playlog`: the play of the stitched chart, as recorded. It is what was judged, and `simulateCoursePlaylog` takes the course result from it: its judgments, gauge and max combo, with BP counting every note it never judged.
+- `nonstop.connections` and `nonstop.placement`: how the chart was stitched.
+- `nonstop.stages`: where each stage sat in the play (`offsetUs`, its window `windowStartUs` / `windowEndUs`, its FIT `rate`), and the `#RANDOM` / `#SWITCH` draws its chart was resolved with before stitching (`randomDraws`, as `play.randomDraws` records a single play's; absent for a chart without control flow). With the stage charts, the draws rebuild the stitched chart.
+- `nonstop.noteStages`: the stage of each note of the play, by note id (`resolveNonstopNoteStages` reads it from the stitched chart's per-stage keys).
+
+`stages` still holds one entry per stage. Each reached stage is cut out of the play by `splitNonstopPlaylog`:
+
+- its notes are timed from the stage's own zero, at the FIT-stretched speed it was played at (`play.course.rate` records the stretch);
+- a press goes to the stage of the nearest note on its lanes, and a release with its press;
+- `play.course.carryIn` is the state the stitched play was in when the stage began (the play simulated up to the stage's window).
+
+- its `chart.chartFingerprint` names the stage's chart, as an unreached stage's `chartFingerprint` does, so the course is keyed like any other.
+
+So `extractCourseStage` still gives a single-chart log that replays on its own; at the seams its judgments can differ from the stitched play.
+
+`checkCoursePlaylogEligibility` checks a NONSTOP run on its stitched play: it must pass the single-play check (auto play is refused; an ESC abort is a failed run), carry `play.course.kind: 'nonstop'`, and its `nonstop.stages` must cover every stage of the course. Every stage must still name its chart. The result carries the stitched play's fingerprints as `nonstop`, and `stages` is empty: the stages were not played on their own, so a verifier rebuilds them from their charts (`resolvePlayChart` with the recorded draws, then `stitchNonstopCourse`; see [Leaderboard design](./leaderboard.md#61-course-rankings)).
 
 ## CLI
 

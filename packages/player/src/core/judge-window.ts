@@ -80,6 +80,51 @@ function resolveBmsonJudgeRankPercent(json: BeMusicJson): number {
   return bmsExRankValueToJudgeRankPercent(BMSON_DEFAULT_JUDGERANK);
 }
 
+/** A BMS `#RANK` on the internal judgerank percent axis; `#RANK 4` and anything outside 0-4 read as NORMAL, as in LR2. */
+export function resolveBmsRankJudgeRankPercent(rank: number): number {
+  const value = Number.isFinite(rank) ? Math.trunc(rank) : Number.NaN;
+  return value >= 0 && value < LR2_BMS_RANK_JUDGERANK_PERCENTS.length
+    ? LR2_BMS_RANK_JUDGERANK_PERCENTS[value as 0 | 1 | 2 | 3 | 4]
+    : LR2_NORMAL_JUDGERANK_PERCENT;
+}
+
+/**
+ * LR2's NONSTOP rank table: the windows its rank object (op 1001) sets when a later NONSTOP stage's `#RANK` takes over
+ * (`LR2body.exe` 0x42be2f, jump table 0x42cb34; OpenLR2 `LR2f.cpp` L12831-L12877). It differs from the table a chart
+ * opens with (0x4b5835) for VERY HARD and HARD:
+ *
+ * | `#RANK`     | PGREAT | GREAT | GOOD   |
+ * | ----------- | ------ | ----- | ------ |
+ * | 0 VERY HARD | ±12ms  | ±24ms | ±60ms  |
+ * | 1 HARD      | ±15ms  | ±30ms | ±80ms  |
+ * | 2 NORMAL    | ±18ms  | ±40ms | ±100ms |
+ * | 3 EASY      | ±21ms  | ±60ms | ±120ms |
+ *
+ * Any other `#RANK` reads as NORMAL; BAD stays ±200 ms.
+ */
+const LR2_NONSTOP_RANK_WINDOWS_MS: Readonly<Record<number, readonly [number, number, number]>> = {
+  0: [12, 24, 60],
+  1: [15, 30, 80],
+  2: [18, 40, 100],
+  3: [21, 60, 120],
+};
+
+/** The windows LR2's NONSTOP rank object sets for a later stage's `#RANK` (see `LR2_NONSTOP_RANK_WINDOWS_MS`). */
+export function resolveLr2NonstopRankWindowsMs(rank: number, debugBadWindowMs?: number): JudgeWindowsMs {
+  const bad =
+    typeof debugBadWindowMs === 'number' && Number.isFinite(debugBadWindowMs) && debugBadWindowMs > 0
+      ? debugBadWindowMs
+      : LR2_BAD_WINDOW_MS;
+  const [pgreat, great, good] =
+    LR2_NONSTOP_RANK_WINDOWS_MS[Number.isFinite(rank) ? Math.trunc(rank) : 2] ?? LR2_NONSTOP_RANK_WINDOWS_MS[2]!;
+  return {
+    pgreat: clampWindow(pgreat, bad),
+    great: clampWindow(great, bad),
+    good: clampWindow(good, bad),
+    bad,
+  };
+}
+
 export function resolveBmsJudgeWindowsMsForPercent(
   judgeRankPercent: number,
   debugBadWindowMs?: number,

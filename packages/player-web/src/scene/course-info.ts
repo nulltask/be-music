@@ -1,4 +1,4 @@
-import type { CourseKind } from '@be-music/player/course';
+import { parseLr2NonstopConnections, type CourseKind, type NonstopConnection } from '@be-music/player/course';
 import type { BrowserCourseEntry } from '../collection/types.ts';
 
 /** One stage of a course, as a skin shows it: the stage chart's title, subtitle and play level. */
@@ -19,6 +19,11 @@ export interface SceneCourseInfo {
   stages: readonly SceneCourseStageInfo[];
   /** Zero-based stage being played; absent on the select screen and on the course result. */
   stageIndex?: number;
+  /**
+   * A NONSTOP course's connection after each of its first nine stages, as LR2's select screen lists them (texts
+   * 171-179): from the `.lr2crs` header when the course came from one, else the course's connections.
+   */
+  connections?: readonly NonstopConnection[];
 }
 
 /** The {@link SceneCourseInfo} of a collection course, at `stageIndex` when one of its stages is being played. */
@@ -36,5 +41,13 @@ export function resolveSceneCourseInfo(course: BrowserCourseEntry, stageIndex?: 
       };
     }),
     ...(stageIndex !== undefined ? { stageIndex } : {}),
+    ...(course.definition.kind === 'nonstop'
+      ? {
+          connections:
+            course.definition.source.format === 'lr2crs'
+              ? parseLr2NonstopConnections(course.definition.source.header).slice(0, 9)
+              : (course.definition.connections ?? []),
+        }
+      : {}),
   };
 }

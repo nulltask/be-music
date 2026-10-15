@@ -52,10 +52,18 @@ export interface CourseTrophy {
   scoreRate: number;
 }
 
+/**
+ * How a NONSTOP course goes from one stage to the next (LR2's `courseKeys`, the first ten characters of a `.lr2crs`
+ * hash, `0`-`5` in this order): the sound fades out over 10 s / in over 5 s (`fade`) or cuts over 0.2 s (`cut`), the
+ * `-fit` forms also time-stretch the next stage to the previous one's BPM, and `blank1` / `blank2` leave a gap.
+ */
+export type NonstopConnection = 'fade' | 'fade-fit' | 'cut' | 'cut-fit' | 'blank1' | 'blank2';
+
 /** Where a course definition came from. */
 export type CourseSource =
   | { format: 'lr2crs'; type: number; header: string; hash: string }
   | { format: 'beatoraja-json' }
+  | { format: 'beatoraja-random' }
   | { format: 'table'; legacyGrade: boolean };
 
 export interface CourseDefinition {
@@ -70,16 +78,26 @@ export interface CourseDefinition {
   release: boolean;
   /** Key mode the course is meant for (LR2 `line`, table `mode`), when the source says. */
   keyMode?: number;
+  /** A NONSTOP course's connection after each stage but the last (see {@link NonstopConnection}). */
+  connections?: NonstopConnection[];
   source: CourseSource;
+}
+
+/** One stage of a random course: the filter its chart is drawn by, and the stage's display title. */
+export interface RandomCourseStage {
+  /** An SQL `WHERE` clause (see `parseCourseSongFilter`). Absent: the first stage draws from every chart, a later one reuses the previous stage's candidates. */
+  filter?: string;
+  title?: string;
 }
 
 /**
  * A beatoraja random course: each stage is drawn from the charts a filter selects. beatoraja's filters are SQL
- * `WHERE` clauses over its song database; an empty one reuses the previous stage's candidates.
+ * `WHERE` clauses over its song database; an empty one reuses the previous stage's candidates. `drawRandomCourse`
+ * turns one into a fixed {@link CourseDefinition}.
  */
 export interface RandomCourseDefinition {
   name: string;
-  stages: Array<{ filter?: string }>;
+  stages: RandomCourseStage[];
   constraints: CourseConstraint[];
   trophies: CourseTrophy[];
   /** `distinct`: no chart is drawn twice. */

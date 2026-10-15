@@ -92,9 +92,90 @@ flowchart TD
 - Only the header is fetched. The song list behind `data_url` is not read.
 - The caller passes `fetchText`, so the module stays runtime-neutral: a browser host wraps `fetch`, a CLI can read from disk or the network. Fetch errors propagate; a page without a header, or a header that is not a JSON object, throws.
 
+### beatoraja random courses
+
+beatoraja's command-folder file (`folder/default.json`, `BarManager.CommandFolder`) can hold **random courses** (`rcourse`, [`RandomCourseData`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/RandomCourseData.java)). Each stage is an SQL `WHERE` clause over the song database instead of a chart, and the stages are drawn when the course starts. `parseBeatorajaCommandFolderFile` reads them into `RandomCourseDefinition`s, one group per folder that has any.
+
+```mermaid
+flowchart LR
+  file["folder/default.json"] -->|parseBeatorajaCommandFolderFile| rdef["RandomCourseDefinition"]
+  rdef -->|"drawRandomCourse(definition, songs, random)"| def["CourseDefinition"]
+  def --> play["played like any course"]
+```
+
+- **Filters.** be-music has no song database, so `parseCourseSongFilter` / `evaluateCourseSongFilter` read the clause and test each chart (`CourseSongRecord`) with SQLite's comparison rules. The subset covers comparisons, `AND` / `OR` / `NOT`, `IN`, `LIKE`, `BETWEEN`, `IS NULL` and arithmetic over the `song` columns be-music can supply: `md5`, `sha256`, `title`, `subtitle`, `artist`, `subartist`, `genre`, `tag`, `path`, `level`, `difficulty`, `mode`, `notes`, `minbpm`, `maxbpm`, `length`, `judge`, `feature` and `content`. Anything else (an unknown column, a function, a sub-query) is a parse error, and the stage selects no chart, as beatoraja's failing query returns none.
+- **Drawing.** `drawRandomCourse(definition, candidates, random)` follows `RandomCourseData.lotterySongDatas`. Each stage draws uniformly from what its filter selects; a stage without a filter draws from the previous stage's selection (every chart for the first). With `distinct`, a chart already drawn is drawn again, unless every candidate is taken. The result is a fixed course: `grade` when the definition has a lane-option constraint, else `expert`. `random` is injected, so a draw is reproducible.
+- **Failure.** A stage whose filter does not parse, or selects nothing, stops the draw and is reported (`RandomCourseDrawFailure`).
+
+## NONSTOP courses
+
+An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBmsFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). NONSTOP is LR2-only and BMS-only. This section covers how the stages are placed and stitched; the browser player plays the stitched chart ([player-web.md](player-web.md)).
+
+**Connections.** Each stage but the last has a connection to the next, stored in the first ten characters of the course hash (`courseKeys`, `0`-`5`) and read by `parseLr2NonstopConnections` into `CourseDefinition.connections`:
+
+| Digit | Connection | Placement after it                                             | Sound                      |
+| ----- | ---------- | -------------------------------------------------------------- | -------------------------- |
+| 0     | `fade`     | next first note within 0.5 measure                             | 10 s fade-out, 5 s fade-in |
+| 1     | `fade-fit` | as `fade`, next stage time-stretched to this stage's final BPM | 5 s fade-in                |
+| 2     | `cut`      | as `fade`                                                      | 0.2 s cross-cut            |
+| 3     | `cut-fit`  | as `cut`, time-stretched                                       | 0.2 s cross-cut            |
+| 4     | `blank1`   | within 1.5 measures                                            | 5 s fade-in                |
+| 5     | `blank2`   | no cut, after a gap of more than 5 s                           | none                       |
+
+**Placement** (`planNonstopCourse`, with `createNonstopStageTiming` reading a stage chart):
+
+```mermaid
+flowchart LR
+  last["stage k: last note"] --> line["nearest bar line<br/>(boundary)"]
+  line --> start["stage k+1 starts<br/>at the boundary"]
+  start --> cut["cut leading measures<br/>until the first note is close"]
+  cut --> shift["move earlier by<br/>the measures cut"]
+```
+
+- A stage hands over at the bar line nearest its last visible note, the earlier one on a tie ([L26432-L26458](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26432-L26458)). After `blank2`, at the first bar line more than 5 s later.
+- The next stage starts at that line. Its leading measures are cut while its first note is 0.5 measure or more past the line (the binary compares `>=`; OpenLR2 reads `>`), more than 1.5 after `blank1`, and not at all after `blank2` ([L26888-L26960](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26888-L26960)). The stage is then moved earlier by the time of the measures cut.
+- After a `-fit` connection the stage is time-stretched by the previous stage's final BPM over its `#BPM`; LR2 also changes the keysounds' pitch by that factor.
+- The positions LR2 keeps as 32-bit floats are rounded the same way. OpenLR2 truncates the previous stage's last-measure time to an integer; the binary keeps it a float.
+
+**LR2 placement.** `planNonstopCourse(..., { placement: 'lr2' })` follows the binary exactly, including what looks like a bug. LR2 never updates its `lastMeasure` after cutting a stage, so from the third stage on a stage starts at the previous stage's line _before_ that stage was cut: its time origin runs on by the previous cut at its own BPM and measure-0 length, and it is then cut by both. The result matches the intended placement while the tempo and measure lengths stay the same, and moves the stage when its first measures differ (by the previous cut × the difference). This placement also takes the first note as LR2's loader reads it: the first visible note in file order, lowered by any object on a later line. The default `'intended'` placement starts each stage where the previous one was placed and takes the first visible note.
+
+**Stitching** (`stitchNonstopCourse`). The placed stages become one BMS chart that the engine plays as a single chart:
+
+- **Time-based scroll.** LR2 scrolls a NONSTOP play by time, a constant 150-BPM scroll ([L26529](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26529), [L27067](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27067)). The stitched chart therefore runs at 150 BPM, and each object sits where its own stage's timing (and FIT) puts it, to 1/9600 of a measure (about 0.17 ms).
+- **Windows.** Each stage owns the time from the previous boundary to its own. Its bar lines there (from the one nearest its first note) become the stitched measures, and its STOPs there freeze the scroll. Notes, invisible notes, mines, BGM and BGA keep their place wherever they fall.
+- **The seam.** A later stage's note that lands more than 0.1 s before the previous stage's last note head, or within 0.1 s of it on a lane an earlier stage also used then, becomes background sound. A long note converted this way keeps only its head's sound ([L26988-L27010](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26988-L27010)).
+- **Keys.** Every stage's keysound, BGA and STOP keys are renumbered into one base-62 space (`#BASE 62`). A course that needs more than 3843 of one kind is refused (`id-space`). Mines keep their value, which is their damage.
+- **Rank and TOTAL.** The stitched chart opens with the first stage's `#RANK` and uses the last stage's `#TOTAL`; LR2 overwrites TOTAL stage by stage. Each later stage's `#RANK` then takes over (`map.stageRanks`, below).
+- **Judge rank of later stages** (`resolveNonstopStageRanks`). LR2's loader turns a later stage's `#RANK` into an object at the stage's start ([L26301-L26313](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26301-L26313)), which moves earlier with the rest of the stage when it is cut, and the play loop sets the judge windows when it gets there ([L12831-L12877](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12831-L12877), `LR2body.exe` 0x42be2f). With `placement: 'lr2'` the change comes there, at the stage's own time zero, which can be several measures before the previous stage's last notes; a stage without `#RANK` keeps the rank in force; and the windows come from LR2's own NONSTOP table (`resolveLr2NonstopRankWindowsMs`), which differs from the one a chart opens with (0x4b5835) for VERY HARD (PGREAT ±12 / GREAT ±24 / GOOD ±60 ms instead of ±8 / ±24 / ±40) and HARD (GOOD ±80 ms instead of ±60). The default `'intended'` placement switches halfway between the previous stage's last note and the stage's first one, to the windows a chart opening with that `#RANK` gets, and reads a stage without `#RANK` as NORMAL.
+- **BPM readout** (`resolveNonstopTempo`, `nonstopBpmAt`). The stitched chart runs at 150 BPM, but LR2 shows each stage's own BPM: its loader inserts a later stage's `#BPM` as a BPM object (× the FIT rate) at the stage's start ([L26257-L26273](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26257-L26273)), and the play loop's BPM object sets the readout ([L12717-L12724](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12717-L12724)). `map.tempo` holds that readout: by default each stage's BPM over its own window; with `placement: 'lr2'` in LR2's event order (a later stage's `#BPM` from its time zero, and a stage's BPM changes from its last-measure line on dropped, except the last stage's, [L26970-L26976](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26970-L26976)).
+- **For the host.** The result's map gives each stage its keys (for its sound bus and BGA layer), its window, the sound fades and the 3 s BGA crossfade the connection calls for, and whether LR2 announces the stage (only after a BLANK connection), plus the BPM readout (`tempo`) and the judge rank changes (`stageRanks`, for the engine's `stageRanks` option, which the play log records as `chart.judgeRank.stageRanks` so a replay and a re-simulation judge with them). `assetPath` lets the host prefix each stage's file paths.
+- **Not covered yet.** The scroll of an object of one stage that sounds during another stage's STOP. Only BMS stages can be stitched.
+
 ## Finding the stages
 
 `resolveCourseStages(course, lookup)` matches each stage to a local chart: by SHA-256 when the stage has one, else by MD5, as beatoraja's `TableBar` does. A stage carrying both falls back to its MD5 when no chart has the SHA-256. A course with a missing stage is still listed, but it is not `playable`; LR2 shows such a stage as a song you do not own, and beatoraja refuses to start the course.
+
+## Making a course
+
+LR2 lets the player make their own EXPERT, NONSTOP and GRADE courses on the select screen ([L12148-L12269](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12148-L12269), [L11063-L11137](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L11063-L11137)), and keeps them in its database rather than in `.lr2crs` files. `@be-music/player/course` has the rules as pure functions:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Browsing
+    Browsing --> Making: NEW COURSE bar
+    Making --> Making: decide a song (append)
+    Making --> Making: remove the last song
+    Making --> Browsing: finish (saved)
+    Making --> Browsing: cancel
+```
+
+- **Adding songs.** `appendCourseDraftStage` adds a song to the end of a `CourseDraft`: at most five songs (`LR2_COURSE_MAKER_MAX_STAGES`), all in the first song's key mode, keyed by the chart's MD5. The same song may appear twice. `removeLastCourseDraftStage` drops the last one, as LR2's right click does.
+- **Saving.** `finishCourseDraft` turns the draft into a `CourseDefinition` shaped as `parseLr2CourseFile` would read it back. A NONSTOP course gets the default connection (LR2's button 268) after each of stages 1-5. A GRADE course reads as an LR2 grade (`grade_mirror`, `gauge_lr2`).
+- **The hash.** `buildLr2CourseHash` writes LR2's 32-character header (the connection after each of stages 1-10, `0`-`5`; the type at character 10; zeros elsewhere) and each stage's MD5. LR2 puts the first four characters of the player's password MD5 at characters 28-31; a browser has no password, so they stay `0`.
+- **Editing.** `withNonstopConnection` changes the connection after one stage (LR2's buttons 240-248, which step through `stepLr2NonstopConnection`'s order: +1 on the right half, -1 on the left half). LR2 keeps a connection for each of stages 1-9 whatever the course's length.
+- **Sharing.** `serializeLr2CourseFile` writes courses as a UTF-8 `.lr2crs` that `parseLr2CourseFile` reads back into the same courses.
+
+`CourseMaker` (`@be-music/player-web/collection`) holds the player's courses and the course being made for a host, and `resolveCourseMakerFolders` lists them as LR2 does: one course folder per kind, each with its courses and a NEW COURSE bar last.
 
 ## Playing a course stage
 

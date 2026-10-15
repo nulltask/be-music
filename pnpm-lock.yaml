@@ -373,6 +373,9 @@ importers:
       pixi.js:
         specifier: ^8.22.0
         version: 8.22.0
+      signalsmith-stretch:
+        specifier: ^1.3.2
+        version: 1.3.2
       ts-ebml:
         specifier: ^3.0.2
         version: 3.0.2
@@ -4721,6 +4724,9 @@ packages:
     resolution: {integrity: sha512-ZX99e6tRweoUXqR+VBrslhda51Nh5MTQwou5tnUDgbtyM0dBgmhEDtWGP/xbKn6hqfPRHujUNwz5fy/wbbhnpw==}
     engines: {node: '>= 0.4'}
 
+  signalsmith-stretch@1.3.2:
+    resolution: {integrity: sha512-tJqRbwPCoWLSHXwO29UQ75u72IwPsHns3RG+TKzuOAp7OduJiJMzEtz32JEFbPFQcTR7aiKCIVc+/Kzw8bMZUw==}
+
   simple-yenc@1.0.4:
     resolution: {integrity: sha512-5gvxpSd79e9a3V4QDYUqnqxeD4HGlhCakVpb6gMnDD7lexJggSBJRBO5h52y/iJrdXRilX9UCuDaIJhSWm5OWw==}
 
@@ -6517,7 +6523,8 @@ snapshots:
   '@rolldown/pluginutils@1.0.0-rc.17':
     optional: true
 
-  '@rolldown/pluginutils@1.0.1': {}
+  '@rolldown/pluginutils@1.0.1':
+    optional: true
 
   '@rollup/plugin-inject@5.0.5(rollup@4.59.0)':
     dependencies:
@@ -6937,9 +6944,9 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 5.0.3(@types/node@26.6.1)(@vitest/browser-preview@5.0.3)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      vitest: 5.0.3(@types/node@26.6.1)(@vitest/browser-preview@5.0.3)(@vitest/coverage-v8@5.0.3(@vitest/browser@5.0.3)(vitest@5.0.3))(@vitest/ui@5.0.3(vitest@5.0.3))(@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0))
     optionalDependencies:
-      '@vitest/browser': 5.0.3(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))(vitest@5.0.3)
+      '@vitest/browser': 5.0.3(@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0))(vitest@5.0.3)
 
   '@vitest/istanbul-lib-coverage@1.0.1': {}
 
@@ -6964,6 +6971,7 @@ snapshots:
       magic-string: 1.4.1
     optionalDependencies:
       vite: 8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
+    optional: true
 
   '@vitest/pretty-format@5.0.3':
     dependencies:
@@ -6986,7 +6994,7 @@ snapshots:
       pathe: 2.0.3
       sirv: 3.0.2
       tinyrainbow: 3.1.1
-      vitest: 5.0.3(@types/node@26.6.1)(@vitest/browser-preview@5.0.3)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      vitest: 5.0.3(@types/node@26.6.1)(@vitest/browser-preview@5.0.3)(@vitest/coverage-v8@5.0.3(@vitest/browser@5.0.3)(vitest@5.0.3))(@vitest/ui@5.0.3(vitest@5.0.3))(@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0))
 
   '@vitest/utils@5.0.3':
     dependencies:
@@ -8114,7 +8122,8 @@ snapshots:
 
   nanoid@3.3.18: {}
 
-  nanoid@3.3.20: {}
+  nanoid@3.3.20:
+    optional: true
 
   nanoid@5.1.16: {}
 
@@ -8367,6 +8376,7 @@ snapshots:
       nanoid: 3.3.20
       picocolors: 1.1.1
       source-map-js: 1.2.2
+    optional: true
 
   pretty-format@27.5.1:
     dependencies:
@@ -8501,6 +8511,7 @@ snapshots:
       '@rolldown/binding-openharmony-arm64': 1.2.13
       '@rolldown/binding-win32-arm64-msvc': 1.2.13
       '@rolldown/binding-win32-x64-msvc': 1.2.13
+    optional: true
 
   rollup@4.59.0:
     dependencies:
@@ -8664,6 +8675,8 @@ snapshots:
       side-channel-list: 1.0.1
       side-channel-map: 1.0.1
       side-channel-weakmap: 1.0.2
+
+  signalsmith-stretch@1.3.2: {}
 
   simple-yenc@1.0.4: {}
 
@@ -8936,6 +8949,7 @@ snapshots:
       jiti: 2.7.0
       tsx: 4.23.13
       yaml: 2.9.0
+    optional: true
 
   vitest@5.0.3(@types/node@26.6.1)(@vitest/browser-preview@5.0.3)(@vitest/coverage-v8@5.0.3(@vitest/browser@5.0.3)(vitest@5.0.3))(@vitest/ui@5.0.3(vitest@5.0.3))(@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0)):
     dependencies:
@@ -8984,6 +8998,7 @@ snapshots:
       '@vitest/ui': 5.0.3(vitest@5.0.3)
     transitivePeerDependencies:
       - msw
+    optional: true
 
   vm-browserify@1.1.2: {}
 

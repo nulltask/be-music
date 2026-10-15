@@ -57,6 +57,8 @@ export async function signInAnonymously(
 
 export interface TestChart {
   text: string;
+  /** The chart parsed (`BeMusicJson`), as a client sends a stage chart. */
+  json: ReturnType<typeof parseBms>;
   chartFingerprint: string;
   playFingerprint: string;
   chartDocument: unknown;
@@ -70,6 +72,7 @@ export function makeChart(lines: readonly string[]): TestChart {
   const options = { chartPath: undefined };
   return {
     text,
+    json,
     chartFingerprint: computeChartFingerprint(json, options),
     playFingerprint: computePlayFingerprint(json, options),
     chartDocument: createChartFingerprintDocument(json, options),

@@ -86,5 +86,18 @@ describe('browse entry row text', () => {
     expect(
       browseEntryBadge({ kind: 'course', course: { ...course, definition: { ...course.definition, kind: 'expert' } } }),
     ).toBe('CRS');
+    const random = {
+      ...course,
+      stages: [{ title: 'level = 12' }, { title: 'RANDOM' }],
+      random: {},
+      playable: true,
+    } as unknown as BrowserCourseEntry;
+    expect(browseEntryCount({ kind: 'course', course: random })).toBe('2 stages · random');
+    const newCourse = { ...course, stages: [], newCourse: true } as unknown as BrowserCourseEntry;
+    expect(browseEntryCount({ kind: 'course', course: newCourse })).toBe('make a course');
+    expect(browseEntryBadge({ kind: 'course', course: newCourse })).toBe('NEW');
+    expect(
+      browseEntryCount({ kind: 'folder', folder: { label: 'mine', songs: [], courses: [course, newCourse] } }),
+    ).toBe('1 course');
   });
 });

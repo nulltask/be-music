@@ -16,6 +16,8 @@ import type {
   BrowserSongCollection,
   BrowserSongEntry,
 } from '../../collection/types.ts';
+import type { CourseDefinition } from '@be-music/player/course';
+import type { CourseMaker } from '../../collection/course-maker.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
 import type {
   BeMusicBgaMode,
@@ -404,8 +406,17 @@ export interface CoreSongSelectViewOptions {
    * the gameplay's `autoPlay` flag.
    */
   onSongAutoPlay?: (song: BrowserSongEntry) => void;
-  /** The player started a course bar whose every stage is in the collection. */
+  /** The player started a course bar whose every stage is in the collection (or a NEW COURSE bar). */
   onCourseSelected?: (course: BrowserCourseEntry) => void;
+  /**
+   * The player's own courses and the course being made. An LR2 skin reads its course-maker ops, texts and buttons
+   * from it (ops 571 / 572 / 580-599, texts 150-170 / 198, buttons 230 / 231 / 233 / 240-248 / 268).
+   */
+  courseMaker?: CourseMaker;
+  /** Fired when the player clicks an LR2 skin's course name (text 170) while making a course or on their own course. */
+  onCourseNameActivate?: () => void;
+  /** Fired when the player asks to delete one of their own courses (an LR2 skin's button 233); the host confirms. */
+  onCourseDeleteRequest?: (course: CourseDefinition) => void;
   /**
    * Fired when the user clicks the skin's search-input region (#SRC_TEXT `st = 30, edit = 1`). The host typically
    * focuses a DOM `<input>` overlay so the user can type. Subsequent calls to {@link CoreSongSelectView.setSearchQuery}
