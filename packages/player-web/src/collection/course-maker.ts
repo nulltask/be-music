@@ -22,9 +22,16 @@ export const COURSE_MAKER_KINDS: readonly CourseKind[] = ['expert', 'nonstop', '
 
 /** The label of each course folder, as its folder bar shows it. */
 export const COURSE_MAKER_FOLDER_LABELS: Readonly<Record<CourseKind, string>> = {
-  expert: 'EXPERT COURSE',
-  nonstop: 'NONSTOP COURSE',
-  grade: 'GRADE COURSE',
+  expert: 'MY COURSES',
+  nonstop: 'MY NONSTOP',
+  grade: 'MY DAN',
+};
+
+/** What a course saved without a name is called, before its number in its folder. */
+const UNNAMED_COURSE_LABELS: Readonly<Record<CourseKind, string>> = {
+  expert: 'COURSE',
+  nonstop: 'NONSTOP',
+  grade: 'DAN',
 };
 
 /** The title of a course folder's NEW COURSE bar. */
@@ -139,8 +146,8 @@ export class CourseMaker {
   finish(): CourseDefinition | undefined {
     if (this.current === undefined) return undefined;
     const { kind } = this.current;
-    // A course saved without a name is named after its folder and its number there.
-    const fallback = `${COURSE_MAKER_FOLDER_LABELS[kind]} ${this.savedCourses.filter((saved) => saved.kind === kind).length + 1}`;
+    // A course saved without a name is named after its kind and its number among the courses of that kind.
+    const fallback = `${UNNAMED_COURSE_LABELS[kind]} ${this.savedCourses.filter((saved) => saved.kind === kind).length + 1}`;
     const course = finishCourseDraft(
       { ...this.current, name: this.current.name.trim() || fallback },
       { defaultConnection: this.connection },
