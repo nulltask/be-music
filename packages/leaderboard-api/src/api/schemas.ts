@@ -331,3 +331,44 @@ export const courseVisibilityBody = v.object({
     'Hide the run (`true`): it leaves the course rankings, the personal bests, the figures and every list, and only its player can open it. `false` shows it again.',
   ),
 });
+
+export const courseRunsQuery = v.object({
+  ruleset: rulesetSchema,
+  player: v.optional(described(v.string(), 'Only this player’s runs, by handle; anonymous or not.')),
+  anonymous: flagSchema('Include anonymous players’ runs.'),
+  limit: v.optional(
+    described(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1), v.maxValue(100)), 'Runs to return.'),
+    '50',
+  ),
+});
+
+export const courseRunsResponse = v.object({
+  runs: v.array(
+    v.object({
+      id: v.string(),
+      createdAt: epochMs('When the run was accepted'),
+      courseFingerprint: v.string(),
+      courseName: v.string(),
+      courseKind: v.picklist(['grade', 'expert', 'nonstop']),
+      stageCount: described(v.pipe(v.number(), v.integer()), 'Stages of the course.'),
+      handle: v.string(),
+      displayName: v.string(),
+      anonymous: v.boolean(),
+      avatarUrl: v.string(),
+      playedRuleset: rulesetSchema,
+      assisted: v.boolean(),
+      hidden: described(v.boolean(), 'Hidden by its player: listed only to the player.'),
+      exScore: v.pipe(v.number(), v.integer()),
+      noteCount: v.pipe(v.number(), v.integer()),
+      clearLamp,
+      missCount: v.pipe(v.number(), v.integer()),
+      stagesPlayed: described(v.pipe(v.number(), v.integer()), 'Stages reached under this ruleset.'),
+      trophy: v.nullable(v.string()),
+      rank: described(
+        v.pipe(v.number(), v.integer()),
+        'Where the run’s EX-Score stands among the other players’ bests on the course.',
+      ),
+      players: v.pipe(v.number(), v.integer()),
+    }),
+  ),
+});

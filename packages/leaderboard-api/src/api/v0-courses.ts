@@ -10,6 +10,7 @@ import {
   loadMyCourseRank,
 } from '../courses/detail.ts';
 import { loadCourseRanking } from '../courses/ranking.ts';
+import { loadRecentCourseRuns } from '../courses/runs.ts';
 import { submitCourseScore } from '../courses/submit.ts';
 import { setCourseScoreHidden } from '../courses/visibility.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
@@ -17,6 +18,8 @@ import { isOn } from '../http/query.ts';
 import {
   courseRankingResponse,
   courseResponse,
+  courseRunsQuery,
+  courseRunsResponse,
   courseScoreResponse,
   courseSubmissionBody,
   courseSubmissionResponse,
@@ -60,8 +63,8 @@ const COURSE_REJECTIONS = [
 
 /**
  * The course routes of `/api/v0` (docs/leaderboard.md section 6.1): submitting a course run, a course, its ranking, my
- * rank on it, one run, its play log, and hiding a run. Mounted on the version's own router, so they share its session
- * middleware and its OpenAPI document.
+ * rank on it, the latest runs, one run, its play log, and hiding a run. Mounted on the version's own router, so they
+ * share its session middleware and its OpenAPI document.
  */
 export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number; newId: () => string }): void {
   const { now, newId } = options;
@@ -157,6 +160,30 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
       const detail = await loadCourseScoreDetail(c.get('db'), c.req.param('id'), c.get('userId'));
       if (detail === undefined) return c.json({ error: 'not-found' }, 404);
       return c.json(detail);
+    },
+  );
+
+  v0.get(
+    '/course-scores',
+    describeRoute({
+      tags: ['Courses'],
+      summary: 'The latest course runs',
+      description:
+        'Newest first, with their figures under one ruleset. Anonymous players’ runs come in with `anonymous`, or for one `player`; hidden runs are listed only to their own player.',
+      responses: { 200: json('The runs.', courseRunsResponse) },
+    }),
+    validator('query', courseRunsQuery),
+    async (c) => {
+      const query = c.req.valid('query');
+      const userId = c.get('userId');
+      const runs = await loadRecentCourseRuns(c.get('db'), {
+        limit: query.limit,
+        ruleset: query.ruleset,
+        includeAnonymous: isOn(query.anonymous) || query.player !== undefined,
+        ...(userId !== undefined ? { ownerUserId: userId } : {}),
+        ...(query.player !== undefined ? { handle: query.player.toLowerCase() } : {}),
+      });
+      return c.json({ runs });
     },
   );
 
