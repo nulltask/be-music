@@ -75,6 +75,12 @@ describe('checkCoursePlaylogEligibility', () => {
     });
   });
 
+  test('rejects a run of a course that is not released (beatoraja release: false, a drawn random course)', () => {
+    const log = courseLog([stage('bmfp0:a'), stage('bmfp0:b')]);
+    log.course.release = false;
+    expect(checkCoursePlaylogEligibility(log)).toEqual({ eligible: false, reason: 'unreleased' });
+  });
+
   test('rejects a run with a stage played at another tempo, naming the stage', () => {
     expect(checkCoursePlaylogEligibility(courseLog([stage('bmfp0:a', { tempo: 0.9 }), stage('bmfp0:b')]))).toEqual({
       eligible: false,

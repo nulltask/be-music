@@ -259,6 +259,16 @@ describe('course play logs', () => {
     expect(parseCoursePlaylog(JSON.parse(serializeCoursePlaylog(log)))).toEqual(log);
   });
 
+  test('keeps an unreleased course marked, and rejects a release that is not a boolean', async () => {
+    const played = await playStage([], { kind: 'grade' }, { gauge: 'DEATH' } as const);
+    const json = JSON.parse(
+      serializeCoursePlaylog(createCoursePlaylog({ course: COURSE, stages: [{ played: true, playlog: played }] })),
+    );
+    expect(parseCoursePlaylog({ ...json, course: { ...json.course, release: false } }).course.release).toBe(false);
+    expect(parseCoursePlaylog({ ...json, course: { ...json.course, release: true } }).course.release).toBeUndefined();
+    expect(() => parseCoursePlaylog({ ...json, course: { ...json.course, release: 'no' } })).toThrow(/course.release/u);
+  });
+
   test('resolveCoursePlaylogFilename names the file after the course and the time', () => {
     const log = createCoursePlaylog({
       course: { ...COURSE, name: 'Dan: 1/2 ' },

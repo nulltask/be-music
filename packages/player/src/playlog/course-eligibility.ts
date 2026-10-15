@@ -6,7 +6,8 @@ import { checkPlaylogEligibility, type PlaylogAssistFlag } from './eligibility.t
  * Why a course run cannot be ranked. `auto-play`, `aborted` and `missing-fingerprint` mean what they mean for a single
  * play, for any stage (`missing-fingerprint` also covers an unreached stage without its chart fingerprint, and a NONSTOP
  * run's stitched play without its fingerprints). `tempo` is a run with a stage (or a NONSTOP run's stitched play) played
- * at another tempo: practice, as for a single play. `not-a-course-run` is a log whose stages do not make one run: no
+ * at another tempo: practice, as for a single play. `unreleased` is a course with `release: false` (beatoraja's flag,
+ * also set on a drawn random course). `not-a-course-run` is a log whose stages do not make one run: no
  * stage played, a played stage after an unreached one, a stage log that was not played as a stage of this course (no
  * `play.course`, or another course kind), or a NONSTOP run whose stitched play does not cover the course's stages.
  */
@@ -14,6 +15,7 @@ export type CoursePlaylogIneligibleReason =
   | 'auto-play'
   | 'aborted'
   | 'tempo'
+  | 'unreleased'
   | 'missing-fingerprint'
   | 'not-a-course-run';
 
@@ -47,6 +49,8 @@ type Ineligible = Extract<CoursePlaylogEligibility, { eligible: false }>;
  * name its chart, since the stage charts key the course.
  */
 export function checkCoursePlaylogEligibility(courseLog: BeMusicCoursePlaylog): CoursePlaylogEligibility {
+  // A course that is not released (beatoraja's `release: false`, a drawn random course) is never ranked.
+  if (courseLog.course.release === false) return { eligible: false, reason: 'unreleased' };
   const order = checkStageOrder(courseLog);
   if (order !== undefined) return order;
   if (courseLog.nonstop !== undefined) return checkNonstopEligibility(courseLog);
