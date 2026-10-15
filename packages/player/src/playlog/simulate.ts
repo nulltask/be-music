@@ -5,6 +5,7 @@ import {
   classifyRulesetJudge,
   ignoresLateLongNoteHeadBad,
   noteLateReachUs,
+  addHcnPassing,
   isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
   longNoteOwesTailMiss,
@@ -104,6 +105,15 @@ type JudgeClassification = GaugeJudgeIndex | typeof JUDGE_NONE;
 
 type SimLongStyle = 1 | 2 | 3;
 
+interface SimHcnPassing {
+  note: SimNote;
+  endUs: number;
+  counter: HcnTickCounter;
+  tailGood: boolean;
+  /** The lane's next Hell Charge note, judged before this one has passed. */
+  next?: SimHcnPassing;
+}
+
 interface SimNote {
   timeUs: number;
   endTimeUs?: number;
@@ -154,8 +164,8 @@ interface SimLane {
    * lane is down, so a second key keeps the lane down while the first is released, as the engine's lane history does.
    */
   downTokens: Set<string>;
-  /** The Hell Charge note passing the lane, while its gauge ticks run (see `HcnTickCounter`). */
-  passing?: { note: SimNote; endUs: number; counter: HcnTickCounter; tailGood: boolean };
+  /** The Hell Charge notes passing the lane, in tail order, while their gauge ticks run (see `HcnTickCounter`). */
+  passing?: SimHcnPassing;
   hold?: ActiveHold;
   /** Auto-played lane (AUTO mode or AUTO SCRATCH): every note resolves PGREAT on schedule. */
   auto: boolean;
@@ -413,29 +423,26 @@ class PlaylogSimulation {
     // certain and its ticks run from the deadline on.
     for (const lane of this.lanes.values()) {
       if (lane.auto) continue;
-      const passed = new Set<SimNote>();
-      for (;;) {
-        if (!lane.passing) {
-          const missed = lane.notes.find(
-            (note) =>
-              !passed.has(note) &&
-              note.isLong &&
-              note.longStyle === 3 &&
-              !note.judged &&
-              !note.holding &&
-              note.missDeadlineUs >= this.lastAdvanceUs &&
-              note.missDeadlineUs < untilUs,
-          );
-          if (!missed) break;
-          this.startHcnPassing(lane, missed, missed.missDeadlineUs);
+      for (let index = lane.sweepCursor; index < lane.notes.length; index += 1) {
+        const note = lane.notes[index]!;
+        if (note.timeUs >= untilUs) break;
+        if (
+          note.isLong &&
+          note.longStyle === 3 &&
+          !note.judged &&
+          !note.holding &&
+          note.missDeadlineUs >= this.lastAdvanceUs &&
+          note.missDeadlineUs < untilUs
+        ) {
+          this.startHcnPassing(lane, note, note.missDeadlineUs);
         }
-        const passing = lane.passing!;
-        passed.add(passing.note);
+      }
+      for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
         passing.counter.advance(Math.min(untilUs, passing.endUs), (gain, atUs) =>
           events.push({ timeUs: atUs, kind: 'hcn-tick', lane, gain }),
         );
+        lane.passing = passing.endUs >= untilUs ? passing : passing.next;
         if (passing.endUs >= untilUs) break;
-        lane.passing = undefined;
       }
     }
 
@@ -558,20 +565,23 @@ class PlaylogSimulation {
    * deadline), as the engine does: from the later of the head and that instant until the tail passes.
    */
   private startHcnPassing(lane: SimLane, note: SimNote, judgedUs: number): void {
-    if (lane.auto || !note.isLong || note.longStyle !== 3 || lane.passing?.note === note) return;
+    if (lane.auto || !note.isLong || note.longStyle !== 3) return;
+    for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
+      if (passing.note === note) return;
+    }
     const startUs = Math.max(note.timeUs, judgedUs);
     const counter = new HcnTickCounter(startUs);
     counter.setGaining(lane.downTokens.size > 0, startUs, () => undefined);
-    lane.passing = { note, endUs: note.endTimeUs!, counter, tailGood: false };
+    lane.passing = addHcnPassing(lane.passing, { note, endUs: note.endTimeUs!, counter, tailGood: false }, startUs);
   }
 
   /** Re-reads whether a lane's passing Hell Charge note gains: a key on it is down, or its tail went well. */
   private setHcnGaining(lane: SimLane, atUs: number): void {
-    const passing = lane.passing;
-    if (!passing) return;
-    passing.counter.setGaining(passing.tailGood || lane.downTokens.size > 0, Math.min(atUs, passing.endUs), (gain) =>
-      this.applyHcnTick(gain),
-    );
+    for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
+      passing.counter.setGaining(passing.tailGood || lane.downTokens.size > 0, Math.min(atUs, passing.endUs), (gain) =>
+        this.applyHcnTick(gain),
+      );
+    }
   }
 
   private applyHcnTick(gain: boolean): void {
@@ -711,9 +721,11 @@ class PlaylogSimulation {
       note.holding = false;
       note.judged = true;
       this.applyJudge(released.judge, released.dmUs);
-      if (lane.passing?.note === note && released.judge <= JUDGE_GOOD) {
-        // A Hell Charge tail released at GOOD or better keeps its lane gaining until the tail passes.
-        lane.passing.tailGood = true;
+      for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
+        if (passing.note === note && released.judge <= JUDGE_GOOD) {
+          // A Hell Charge tail released at GOOD or better keeps its lane gaining until the tail passes.
+          passing.tailGood = true;
+        }
       }
       this.setHcnGaining(lane, timeUs);
     }

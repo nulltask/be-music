@@ -612,8 +612,9 @@ The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's
   missed) until the end point passes, a signed counter runs up while the lane gains — a key on it is down, or the
   tail was released at `GOOD` or better — and down otherwise. Each time it passes +200 ms the gauge gains one tick
   (beatoraja: `GREAT` ×0.5 of the judge table); each time it passes −200 ms it loses one (`BAD` ×0.5). The ticks
-  keep running after an early release, so pressing the lane again before the end point gains once more. AUTO
-  SCRATCH lanes have none.
+  keep running after an early release, so pressing the lane again before the end point gains once more. Only the note
+  crossing the judge line ticks (`JudgeManager` L235-L242): one judged early waits until the one ahead of it on the
+  lane has passed, and a head missed only after its end point passed has no ticks. AUTO SCRATCH lanes have none.
 
 A release is settled at its own instant. The one exception is the ruleset's long-note release margin
 (`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release

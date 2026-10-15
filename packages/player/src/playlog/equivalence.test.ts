@@ -774,6 +774,42 @@ describe('engine / simulator equivalence', () => {
     expect(simulated.gauge.final).toBe(summary.gauge?.current);
   });
 
+  // beatoraja ticks the Hell Charge note crossing the judge line. Pressing the lane's next HCN early, before the one
+  // ahead of it is missed, must not let that late miss take over the lane's ticks.
+  test('beatoraja: an HCN pressed early keeps its ticks when the one ahead is missed', async () => {
+    const json = chart(
+      [
+        { measure: 1, channel: '11', position: [0, 12], value: '01' },
+        { measure: 1, channel: '11', position: [1, 12], value: 'AA' },
+        { measure: 1, channel: '11', position: [2, 12], value: '01' },
+        { measure: 2, channel: '11', position: [0, 1], value: 'AA' },
+        // Plain notes, never pressed, take the gauge well below its ceiling first.
+        ...Array.from({ length: 4 }, (_, index) => ({
+          measure: 0,
+          channel: '12',
+          position: [index, 4] as const,
+          value: '01',
+        })),
+      ],
+      3,
+    );
+    json.bms.lnObjs = ['AA'];
+    json.bms.lnMode = 3;
+    // A low #TOTAL keeps each judgment's gauge step small, so the ticks show.
+    json.metadata.total = 20;
+    // The first HCN (1.0-1.083 s) is never pressed. The press lands after its tail but before its miss deadline, and
+    // judges the second (1.167-2.0 s) early, so the first one's miss comes after the second started ticking.
+    const inputs = [down(0, 1_120_000, '11'), up(1, 2_000_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'beatoraja');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'beatoraja' });
+
+    // The missed HCN's head and its tail, and the plain notes.
+    expect(summary.poor).toBe(6);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+    expect(simulated.judge).toMatchObject({ poor: summary.poor, good: summary.good, great: summary.great });
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
