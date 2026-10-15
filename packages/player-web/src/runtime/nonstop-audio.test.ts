@@ -97,10 +97,10 @@ describe('createNonstopStageMixer', () => {
   });
 });
 
-describe('Master Tempo', () => {
+describe('keep pitch', () => {
   test('plays every stage at its own speed once its samples are stretched', () => {
     const { context } = fakeContext();
-    const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP, { masterTempo: true });
+    const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP, { keepPitch: true });
     expect([mixer.rate(0), mixer.rate(1)]).toEqual([1, 1]);
   });
 
