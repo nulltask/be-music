@@ -195,6 +195,21 @@ flowchart TD
 
 **Course identity.** `computeCourseFingerprint({ kind, constraints, stageChartFingerprints })` keys a course as `bmcourse0:<sha256>` over its kind, its constraints (normalized as `normalizeCourseConstraints` reads them, then sorted) and its stages' chart fingerprints in order; the name and the trophies are left out. So the same course read from a `.lr2crs`, a beatoraja course file or a difficulty table gets one key whenever its charts match, and a random course, once drawn, is keyed like a fixed one. `computeCoursePlaylogFingerprint(log)` reads the stage fingerprints from the log (played and unreached stages alike, so failed runs are keyed too) and is `undefined` when one is missing. `checkCoursePlaylogEligibility(log)` is the course counterpart of `checkPlaylogEligibility`: every played stage must pass the single-play check (being a course stage of this course kind is required here, not refused), the played stages must come first, and the assists of every stage flag the run.
 
+**NONSTOP runs.** An LR2 NONSTOP course is played as one stitched chart (see [Courses and dan certification](./course.md#nonstop-courses)), so its course log adds `nonstop`:
+
+- `nonstop.playlog`: the play of the stitched chart, as recorded. It is what was judged, and `simulateCoursePlaylog` takes the course result from it: its judgments, gauge and max combo, with BP counting every note it never judged.
+- `nonstop.connections` and `nonstop.placement`: how the chart was stitched.
+- `nonstop.stages`: where each stage sat in the play (`offsetUs`, its window `windowStartUs` / `windowEndUs`, its FIT `rate`).
+- `nonstop.noteStages`: the stage of each note of the play, by note id (`resolveNonstopNoteStages` reads it from the stitched chart's per-stage keys).
+
+`stages` still holds one entry per stage. Each reached stage is cut out of the play by `splitNonstopPlaylog`:
+
+- its notes are timed from the stage's own zero, at the FIT-stretched speed it was played at (`play.course.rate` records the stretch);
+- a press goes to the stage of the nearest note on its lanes, and a release with its press;
+- `play.course.carryIn` is the state the stitched play was in when the stage began (the play simulated up to the stage's window).
+
+So `extractCourseStage` still gives a single-chart log that replays on its own; at the seams its judgments can differ from the stitched play. The Leaderboard does not rank NONSTOP runs yet (`checkCoursePlaylogEligibility` refuses them as `nonstop`).
+
 ## CLI
 
 `@be-music/player-tui` ships a second binary, `bms-playlog`:
