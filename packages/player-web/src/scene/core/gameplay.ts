@@ -1008,6 +1008,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * the view resumed.
    */
   private sharedEngineInputSignals: PlayerInputSignalBus | undefined;
+  /**
+   * The interrupt the view sent the shared engine (ESC / F5 / teardown), once sent. The engine only reads its abort
+   * signal at launch, so a play left mid-chart must be interrupted through its input bus: that ends the engine's loop
+   * and, for ESC, records the play log as given up (`play.aborted`), which {@link waitForPlaylog} hands the host.
+   */
+  private sharedEngineInterrupt: 'escape' | 'restart' | undefined;
+  /** True once the shared engine settled the chart (every note judged) and holds the play open for the outro. */
+  private sharedEngineChartSettled = false;
   /** Which lane each finger on the canvas holds (touch play). */
   private readonly touchLanes = new TouchLaneTracker();
   /** Input token a touch on each lane channel presses, from the chart's lane bindings (built on the first touch). */
@@ -1867,9 +1875,27 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     });
   }
 
+  /**
+   * Hands the play over to the host once ({@link sharedEngineInterrupt}): a play still being judged is interrupted, so
+   * the engine stops (and, for ESC, records the play as given up); a play whose chart already settled is complete, so
+   * its hold is let go and it ends with its play log as usual. A no-op before the engine is running.
+   */
+  private interruptSharedEngine(reason: 'escape' | 'restart'): void {
+    if (this.sharedEngineInterrupt !== undefined) return;
+    const signals = this.sharedEngineInputSignals;
+    if (signals === undefined) return;
+    this.sharedEngineInterrupt = reason;
+    if (this.sharedEngineChartSettled) {
+      this.chartEndHold?.abort();
+      return;
+    }
+    signals.pushCommand({ kind: 'interrupt', reason });
+  }
+
   /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
   public requestExit(): void {
     this.beginExitSequence(() => {
+      this.interruptSharedEngine('escape');
       this.sharedEngineAbortController?.abort();
       this.options.onExit?.();
     });
@@ -2101,6 +2127,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via
     // `throwIfAborted` and unwinds; our launchSharedEngine catch swallows the resulting `AbortError` because
     // the host already initiated dispose.
+    // A play torn down mid-chart is interrupted too, so the engine stops instead of running on to the chart's end.
+    this.interruptSharedEngine('escape');
     if (this.sharedEngineAbortController) {
       try {
         this.sharedEngineAbortController.abort();
@@ -2918,6 +2946,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (event.code === 'F5') {
       event.preventDefault();
       this.beginExitSequence(() => {
+        this.interruptSharedEngine('restart');
         this.sharedEngineAbortController?.abort();
         this.options.onRestart?.();
       });
@@ -5027,6 +5056,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       ui: callbacks,
       onInputSignalsReady: (signals) => {
         this.sharedEngineInputSignals = signals.inputSignals;
+        this.sharedEngineInterrupt = undefined;
+        this.sharedEngineChartSettled = false;
       },
       // Listen on the window (default) so the runtime sees keyboard events regardless of which DOM element
       // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
@@ -5105,6 +5136,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         holdAfterChart: {
           signal: (this.chartEndHold = new AbortController()).signal,
           onSettled: () => {
+            this.sharedEngineChartSettled = true;
             this.drainSharedEngineSignals();
             this.handleSharedEngineChartFinished(undefined, true);
           },
@@ -5162,6 +5194,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         this.drainSharedEngineSignals();
         this.applyEngineSummary(summary);
         this.applyFinalComboSummary(summary);
+        // A play the view interrupted (ESC / F5 / teardown) has already handed the host over; it does not finish.
+        if (this.sharedEngineInterrupt !== undefined) return;
         // A held play ends when its outro lets go; one that ended on its own (auto play, a failed gauge) starts it now.
         const waiting = this.onHeldPlayEnded;
         if (waiting !== undefined) {
