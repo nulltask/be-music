@@ -6,9 +6,11 @@ import {
   isCourseRunAtAnotherTempo,
   mergeSongRecord,
   parseSongRecords,
+  playRecordKey,
   serializeSongRecords,
   songRecordKey,
   songRecordPlayFromResult,
+  songRecordPlayFromSummary,
 } from './song-records.ts';
 
 describe('clearLampRank', () => {
@@ -121,5 +123,44 @@ describe('isCourseRunAtAnotherTempo', () => {
 
   it('keeps a run played at the charts’ own tempo', () => {
     expect(isCourseRunAtAnotherTempo({ stages: [played(), played(1), unreached] })).toBe(false);
+  });
+});
+
+describe('songRecordPlayFromSummary', () => {
+  const summary = {
+    total: 10,
+    perfect: 10,
+    great: 0,
+    good: 0,
+    bad: 0,
+    poor: 0,
+    exScore: 20,
+    gauge: { type: 'HARD', cleared: true },
+  } as Parameters<typeof songRecordPlayFromSummary>[0];
+
+  it('takes the lamp from the same rule as a result: an all-PERFECT clear is MAX', () => {
+    expect(songRecordPlayFromSummary(summary, 10)).toEqual({ lamp: 'MAX', exScore: 20, maxCombo: 10, missCount: 0 });
+  });
+
+  it('records a failed gauge as FAILED and counts BAD + POOR as misses', () => {
+    const failed = { ...summary, perfect: 6, bad: 1, poor: 3, gauge: { type: 'HARD', cleared: false } };
+    expect(songRecordPlayFromSummary(failed as typeof summary, 4)).toMatchObject({ lamp: 'FAILED', missCount: 4 });
+  });
+});
+
+describe('playRecordKey', () => {
+  const song = { chartPath: 'Songs/a/main.bms' };
+  const played = { autoPlay: false, replay: false, course: false, tempo: 1 };
+
+  it('records a played chart under its hash', () => {
+    expect(playRecordKey(song, 'abc', played)).toBe('sha256:abc');
+    expect(playRecordKey(song, undefined, played)).toBe('path:Songs/a/main.bms');
+  });
+
+  it('leaves the records alone for auto play, a replay, a course stage and another tempo', () => {
+    expect(playRecordKey(song, 'abc', { ...played, autoPlay: true })).toBeUndefined();
+    expect(playRecordKey(song, 'abc', { ...played, replay: true })).toBeUndefined();
+    expect(playRecordKey(song, 'abc', { ...played, course: true })).toBeUndefined();
+    expect(playRecordKey(song, 'abc', { ...played, tempo: 1.1 })).toBeUndefined();
   });
 });

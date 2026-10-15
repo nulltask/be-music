@@ -1,9 +1,10 @@
 // The demo's per-chart best records, handed to be-music skins through the select scene's `resolveSongRecord`: lamp
 // ordering, merging a finished play into a record, and persistence across reloads.
 
+import type { PlayerSummary } from '@be-music/player/core/engine';
 import type { BeMusicCoursePlaylog } from '@be-music/player/playlog';
 import type { BrowserSongEntry } from '@be-music/player-web/collection';
-import type { PixiGameplayResultData } from '@be-music/player-web/scenes';
+import { resolveClearLamp, type PixiGameplayResultData } from '@be-music/player-web/scenes';
 import type { BeMusicClearLamp, BeMusicSongRecord } from '@be-music/player-web/skin';
 
 const STORAGE_KEY = 'be-music-demo.song-records';
@@ -49,6 +50,37 @@ export function songRecordPlayFromResult(data: PixiGameplayResultData): SongReco
 }
 
 /**
+ * The record-relevant facts of a play's final engine summary, for a family whose gameplay hands the host no result data
+ * (beatoraja): the lamp comes from the same `resolveClearLamp` rule the LR2 / default result uses.
+ */
+export function songRecordPlayFromSummary(
+  summary: Pick<PlayerSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore' | 'gauge'>,
+  maxCombo: number,
+): SongRecordPlay {
+  const cleared = summary.gauge?.cleared ?? false;
+  return {
+    lamp: resolveClearLamp({ cleared, score: summary, gaugeType: summary.gauge?.type }),
+    exScore: summary.exScore,
+    maxCombo,
+    missCount: summary.bad + summary.poor,
+  };
+}
+
+/**
+ * The key a play's result is recorded under, or `undefined` when the play leaves the records alone: an auto play, a
+ * replay, a course stage (NONSTOP included — the course keeps the record) and a play at another tempo (practice). The
+ * same rule holds whichever skin family plays the chart.
+ */
+export function playRecordKey(
+  song: Pick<BrowserSongEntry, 'chartPath'>,
+  chartSha256: string | undefined,
+  play: { autoPlay: boolean; replay: boolean; course: boolean; tempo: number },
+): string | undefined {
+  if (play.autoPlay || play.replay || play.course || play.tempo !== 1) return undefined;
+  return songRecordKey(song, chartSha256);
+}
+
+/**
  * Merges `play` into `previous`: the better lamp, the higher EX score and max combo, the lower miss count, and one more
  * play. Every best is kept independently, as LR2 and beatoraja do — the best EX score may come from a different play
  * than the best lamp.
@@ -67,10 +99,6 @@ export function mergeSongRecord(previous: BeMusicSongRecord | undefined, play: S
 }
 
 /**
- * The key a chart's record is stored under: its chart-file SHA-256 when known (stable across sessions, machines, and
- * file moves — the same hash the play-logs record), else its chart path inside the dropped library.
- */
-/**
  * Whether a course run played a stage at another tempo (`play.tempo`): such a run is practice, so it leaves the course's
  * record alone, as a single play at another tempo leaves the chart's.
  */
@@ -78,6 +106,10 @@ export function isCourseRunAtAnotherTempo(courseLog: Pick<BeMusicCoursePlaylog, 
   return courseLog.stages.some((entry) => entry.played && (entry.playlog.play.tempo ?? 1) !== 1);
 }
 
+/**
+ * The key a chart's record is stored under: its chart-file SHA-256 when known (stable across sessions, machines, and
+ * file moves — the same hash the play-logs record), else its chart path inside the dropped library.
+ */
 export function songRecordKey(song: Pick<BrowserSongEntry, 'chartPath'>, chartSha256: string | undefined): string {
   return chartSha256 !== undefined && chartSha256.length > 0 ? `sha256:${chartSha256}` : `path:${song.chartPath}`;
 }
