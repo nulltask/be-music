@@ -1,6 +1,6 @@
 import { createEmptyJson } from '../../../json/src/index.ts';
 import { describe, expect, test } from 'vite-plus/test';
-import { manualPlay } from '../index.ts';
+import { autoPlay, manualPlay } from '../index.ts';
 import type { PlayerInputCommand } from '../core/input-signal-bus.ts';
 import type { AudioSession, PlayerTempoChange } from '../core/engine-types.ts';
 import { createScheduledInputRuntime } from '../test-support/player-fixtures.ts';
@@ -175,5 +175,47 @@ describe('play tempo', () => {
     expect(audioTempos).toEqual([2]);
     expect(replayed?.play).not.toHaveProperty('tempoChanges');
     expect(summary.exScore).toBe(live.summary!.exScore);
+  }, 20_000);
+
+  test('an auto play follows a replay’s tempo changes and records where ESC stopped it', async () => {
+    const audioTempos: number[] = [];
+    const audioSession: AudioSession = {
+      start: () => undefined,
+      finish: async () => undefined,
+      dispose: async () => undefined,
+      pause: () => undefined,
+      resume: () => undefined,
+      chartStartDelayMs: 0,
+      backendLabel: 'test',
+      setTempo: (tempo) => audioTempos.push(tempo),
+    };
+    const changes: PlayerTempoChange[] = [];
+    await autoPlay(chart(), {
+      leadInMs: 0,
+      tui: false,
+      writeOutput: () => undefined,
+      createAudioSession: async () => audioSession,
+      replayTempoChanges: [{ timeUs: 300_000, tempo: 2 }],
+      onTempoChange: (change) => changes.push(change),
+    });
+    expect(changes.map((change) => change.tempo)).toEqual([2]);
+    expect(audioTempos).toEqual([2]);
+
+    let given: BeMusicPlaylog | undefined;
+    await autoPlay(chart(), {
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: () => undefined,
+      createInputRuntime: createScheduledInputRuntime([escape(800)]),
+      recordPlaylog: {},
+      onPlaylogRecorded: (recorded) => {
+        given = recorded;
+      },
+    }).catch(() => undefined);
+    expect(given?.play.aborted).toBe(true);
+    // About 0.8 s into the chart, so a course counts the stage's time up to there.
+    expect(given?.play.abortedAtUs).toBeGreaterThan(500_000);
+    expect(given?.play.abortedAtUs).toBeLessThan(1_500_000);
   }, 20_000);
 });
