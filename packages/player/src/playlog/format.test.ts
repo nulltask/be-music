@@ -154,6 +154,17 @@ describe('playlog format', () => {
     expect(withoutReversal.chart).not.toHaveProperty('reversalTimeUs');
   });
 
+  test('writes the unstable revision 0 and still reads logs stamped 1, as revision 0', () => {
+    expect(BE_MUSIC_PLAYLOG_VERSION).toBe(0);
+    const legacy = parsePlaylog(
+      corrupt((value) => {
+        value.version = 1;
+      }),
+    );
+    expect(legacy.version).toBe(0);
+    expect(legacy).toEqual(parsePlaylog(serializePlaylog(makePlaylog())));
+  });
+
   test('rejects invalid JSON and wrong format / version / clock markers', () => {
     expect(() => parsePlaylog('{oops')).toThrow(PlaylogParseError);
     expect(() => parsePlaylog('{oops')).toThrow(/invalid JSON/);

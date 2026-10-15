@@ -5,7 +5,7 @@ import type { BeMusicPlaylog } from './format.ts';
 function playlog(play: Partial<BeMusicPlaylog['play']> = {}, chart: Partial<BeMusicPlaylog['chart']> = {}) {
   return {
     format: 'be-music-playlog',
-    version: 1,
+    version: 0,
     clock: { unit: 'us', origin: 'chart-zero' },
     chart: {
       sourceFormat: 'bms',
