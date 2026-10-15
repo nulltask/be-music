@@ -99,9 +99,10 @@ export interface PixiBeatorajaSelectSceneOptions {
   courseFolders?: ReadonlyArray<BrowserFolderNode>;
   /**
    * The player started a course bar. A course with a stage missing from the collection (`playable: false`) is handed
-   * over too, so the host can say why it does not start.
+   * over too, so the host can say why it does not start. `autoPlay` is set when AUTO PLAY (act 16) started it: every
+   * stage plays itself.
    */
-  onCoursePicked?: (course: BrowserCourseEntry) => void;
+  onCoursePicked?: (course: BrowserCourseEntry, options?: { autoPlay?: boolean }) => void;
   /** Initial highlighted index (within the song list at root). Defaults to 0. */
   initialIndex?: number;
   /**
@@ -1608,6 +1609,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.buttonPressedAt.set(act, performance.now());
     const entry = this.entries[this.currentIndex];
     const song = entry?.kind === 'song' ? entry.song : entry?.kind === 'folder' ? entry.folder.songs[0] : undefined;
+    // PLAY / AUTO PLAY on a course bar start the course (`MusicSelector` reads the course bar the same way).
+    if ((act === 15 || act === 16) && entry?.kind === 'course') {
+      this.pickCourse(entry.course, act === 16);
+      return;
+    }
     switch (act) {
       case 15: // PLAY (user's default mode)
         if (song !== undefined) {
@@ -2604,10 +2610,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * Hands a course bar to the host. `MusicSelector` does not start a course with a missing stage ("Some of songs not
    * found"): it plays the cancel cue, and the host is still told so it can say which stages are missing.
    */
-  private pickCourse(course: BrowserCourseEntry): void {
+  private pickCourse(course: BrowserCourseEntry, autoPlay = false): void {
     const picked = this.options.onCoursePicked;
     this.playSystemSound(picked !== undefined && course.playable ? 'decide' : 'cancel');
-    picked?.(course);
+    if (autoPlay) picked?.(course, { autoPlay: true });
+    else picked?.(course);
   }
 
   private activateCurrentEntry(): void {
