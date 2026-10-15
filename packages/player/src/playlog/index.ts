@@ -1,4 +1,6 @@
 export * from './course.ts';
+export * from './course-eligibility.ts';
+export * from './course-fingerprint.ts';
 export type { RulesetChartFacts } from '../ruleset/facts.ts';
 export * from './eligibility.ts';
 export * from './format.ts';

@@ -61,6 +61,12 @@ export type PlaylogCourseStageEntry =
       /** The stage chart's file hashes, when known. */
       sha256?: string;
       md5?: string;
+      /**
+       * The stage chart's Be-Music chart fingerprint (`bmfp0:…`), as a played stage's `chart.chartFingerprint` would
+       * be: it keys the course on the Leaderboard (`computeCoursePlaylogFingerprint`). Absent in logs from before it was
+       * recorded.
+       */
+      chartFingerprint?: string;
       /** The facts a ruleset needs to count the stage's notes. */
       facts: RulesetChartFacts;
     };
@@ -467,8 +473,10 @@ export function parseCoursePlaylog(source: unknown): BeMusicCoursePlaylog {
     const unreached: PlaylogCourseStageEntry = { played: false, facts: parseFacts(entry.facts, `${path}.facts`) };
     const sha256 = optionalString(entry.sha256, `${path}.sha256`);
     const md5 = optionalString(entry.md5, `${path}.md5`);
+    const chartFingerprint = optionalString(entry.chartFingerprint, `${path}.chartFingerprint`);
     if (sha256 !== undefined) unreached.sha256 = sha256;
     if (md5 !== undefined) unreached.md5 = md5;
+    if (chartFingerprint !== undefined) unreached.chartFingerprint = chartFingerprint;
     return unreached;
   });
   const parsed: BeMusicCoursePlaylog = {
