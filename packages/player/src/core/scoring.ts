@@ -24,6 +24,11 @@ export interface ScoreTracker {
    * its own money score.
    */
   moneyScore: boolean;
+  /**
+   * The course-wide combo and max combo, for a course stage: carried in from the previous stage and kept alongside the
+   * stage's own combo, breaking where it breaks (beatoraja `JudgeManager.coursecombo`, LR2 `now_combo_course`).
+   */
+  course?: { combo: number; maxCombo: number };
 }
 
 export const IIDX_EX_SCORE_PER_PGREAT = 2;
@@ -32,12 +37,26 @@ export const IIDX_EX_SCORE_PER_GREAT = 1;
 export const LR2_MONEY_SCORE_MAX = 200000;
 const LR2_MONEY_SCORE_UNIT = 50000;
 
-export function createScoreTracker(options: { moneyScore?: boolean } = {}): ScoreTracker {
-  return {
+export function createScoreTracker(
+  options: { moneyScore?: boolean; course?: { combo: number; maxCombo: number } } = {},
+): ScoreTracker {
+  const tracker: ScoreTracker = {
     combo: 0,
     maxCombo: 0,
     moneyScore: options.moneyScore ?? true,
   };
+  if (options.course !== undefined) {
+    tracker.course = { combo: options.course.combo, maxCombo: Math.max(options.course.maxCombo, options.course.combo) };
+  }
+  return tracker;
+}
+
+/** Breaks the combo the max combo is measured on, and the course-wide combo with it. */
+export function breakTrackedCombo(tracker: ScoreTracker): void {
+  tracker.combo = 0;
+  if (tracker.course !== undefined) {
+    tracker.course.combo = 0;
+  }
 }
 
 export function createEmptyScore(total: number): ScoreSummary {
@@ -116,8 +135,12 @@ export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgeKind, tra
     if (tracker.combo > tracker.maxCombo) {
       tracker.maxCombo = tracker.combo;
     }
+    if (tracker.course !== undefined) {
+      tracker.course.combo += 1;
+      tracker.course.maxCombo = Math.max(tracker.course.maxCombo, tracker.course.combo);
+    }
   } else {
-    tracker.combo = 0;
+    breakTrackedCombo(tracker);
   }
 
   summary.score = tracker.moneyScore ? resolveLr2MoneyScore(summary) : summary.exScore;

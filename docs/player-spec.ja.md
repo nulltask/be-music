@@ -502,6 +502,12 @@ IIDX は未測定のため、どちらも分けたままです。`PlayerSummary`
   クリア判定（回復系は閾値、サバイバル系は「一度も 0 にならなかったか」）。
 - 選択したゲージは実際にプレイを支配します。色だけの飾りではありません — HARD は本当に削れ、
   底を打った HARD は `failedMidPlay` を報告し、以後クリアできません。
+- サバイバル系のゲージが尽きると、LR2 や beatoraja と同じくその場でプレイを終えます（`PlayerOptions.endOnFailure`、
+  既定は `true`）。ゲージを尽きさせた判定が最後に数える判定で、プレイはそこで止まります。`endOnFailure: false`
+  なら、尽きたゲージのまま譜面の最後まで判定を続けます。プレイログはこのフラグを記録するので、再シミュレーションも
+  同じ判定で止まります。フラグがなかった頃のログは最後まで判定を続けます。
+- コースのステージ（`PlayerOptions.course`）は、ルールセットのコース用ゲージで、前のステージが残した値から始めます。
+  [コースと段位認定](./course.ja.md#コースのステージを遊ぶ) を参照してください。
 - テーブルは [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) にあり、
   `RulesetGauge` を通して適用されます。最終スコアと summary の authority は共有エンジンで、
   browser scene は `summary.gauge` をミラーします。

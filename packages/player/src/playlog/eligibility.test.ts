@@ -36,6 +36,10 @@ describe('checkPlaylogEligibility', () => {
   test('rejects auto plays and ESC aborts', () => {
     expect(checkPlaylogEligibility(playlog({ mode: 'auto' }))).toEqual({ eligible: false, reason: 'auto-play' });
     expect(checkPlaylogEligibility(playlog({ aborted: true }))).toEqual({ eligible: false, reason: 'aborted' });
+    expect(checkPlaylogEligibility(playlog({ course: { kind: 'grade' } }))).toEqual({
+      eligible: false,
+      reason: 'course-stage',
+    });
   });
 
   test('rejects a log without either fingerprint', () => {
