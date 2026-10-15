@@ -87,6 +87,11 @@ const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 248 } as const;
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 30;
 const ROW_NOTES_W = 84;
+/**
+ * The widest a folder or course row's count may run (`12 charts`, `4 stages · 1 missing`): such a row has no fact
+ * columns, so its count takes what it needs up to this and the title gets the rest.
+ */
+const ROW_COUNT_MAX_W = 150;
 const SLIDE_MS = 320;
 const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
@@ -1036,9 +1041,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       maxWidth: 22,
     });
     const facts = song ? resolveSongRowFacts(song) : undefined;
-    const factsW = 84;
+    let factsW = 84;
     const factsRight = rowX + rowW - 10;
-    const factStyle = (fill: number): SkinTextOptions => ({
+    const factStyle = (fill: number, maxWidth: number = factsW): SkinTextOptions => ({
       size: 10,
       fill,
       fontFamily: SYN_DISPLAY_FONT,
@@ -1046,14 +1051,17 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorX: 1,
       anchorY: 0.5,
       alpha,
-      maxWidth: factsW,
+      maxWidth,
       marquee: active,
     });
     if (facts) {
       addSkinText(frame.layer, `${facts.bpm} BPM`, factsRight, midY - 7, factStyle(active ? SYN_WHITE : SYN_MIST));
       addSkinText(frame.layer, `${facts.notes} NOTES`, factsRight, midY + 8, factStyle(SYN_DIM));
     } else {
-      addSkinText(frame.layer, browseEntryCount(entry) ?? '', factsRight, midY, factStyle(SYN_MIST));
+      // A folder or course count takes what it needs (`4 stages · 1 missing`), up to ROW_COUNT_MAX_W.
+      const count = browseEntryCount(entry) ?? '';
+      const countNode = addSkinText(frame.layer, count, factsRight, midY, factStyle(SYN_MIST, ROW_COUNT_MAX_W));
+      factsW = count ? Math.max(factsW, Math.min(ROW_COUNT_MAX_W, countNode.width)) : factsW;
     }
     const textX = rowX + 38;
     const textW = Math.max(24, factsRight - factsW - 10 - textX);
@@ -1145,11 +1153,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorX: 1,
       anchorY: 0.5,
       alpha,
-      maxWidth: facts ? ROW_BPM_W : 70,
+      maxWidth: facts ? ROW_BPM_W : ROW_COUNT_MAX_W,
       marquee: active,
     });
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
-    let factsLeft = rowX + rowW - 14 - (facts ? ROW_BPM_W : meta ? Math.min(70, metaNode.width) : 0) - 12;
+    let factsLeft = rowX + rowW - 14 - (facts ? ROW_BPM_W : meta ? Math.min(ROW_COUNT_MAX_W, metaNode.width) : 0) - 12;
     if (facts) {
       const factStyle = (fill: number) => ({
         size: 9,

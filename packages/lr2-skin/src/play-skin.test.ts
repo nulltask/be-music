@@ -227,6 +227,36 @@ describe('loadLr2ThemeSkinsFromFiles progress events', () => {
     expect(imagesOf(theme.loadSkin({ kind: 'play', playVariant: '7', parseOps: [290] }))).toEqual(['course.png']);
   });
 
+  test('resolves the course jingles through the sound set, else by the stock stems', async () => {
+    const file = (path: string, text = ''): Lr2SkinInputFile => {
+      const bytes = new TextEncoder().encode(text);
+      return { webkitRelativePath: path, name: path.split('/').pop()!, arrayBuffer: async () => bytes.buffer };
+    };
+    const jingles = [
+      file('LR2files/Sound/lr2/clear.wav'),
+      file('LR2files/Sound/lr2/fail.wav'),
+      file('LR2files/Sound/lr2/course_clear.wav'),
+      file('LR2files/Sound/lr2/course_fail.wav'),
+    ];
+    const withoutSet = await loadLr2ThemeSkinsFromFiles(jingles);
+    expect(withoutSet.courseClearBgm?.path).toBe('LR2files/Sound/lr2/course_clear.wav');
+    expect(withoutSet.courseFailBgm?.path).toBe('LR2files/Sound/lr2/course_fail.wav');
+    const withSet = await loadLr2ThemeSkinsFromFiles([
+      ...jingles,
+      file('LR2files/Sound/my/win.ogg'),
+      file('LR2files/Sound/my/click.wav'),
+      file(
+        'LR2files/Sound/lr2.lr2ss',
+        '#COURSECLEAR,LR2files\\Sound\\my\\win.wav,\n#SCRATCH,LR2files\\Sound\\my\\click.wav,',
+      ),
+    ]);
+    expect(withSet.courseClearBgm?.path).toBe('LR2files/Sound/my/win.ogg');
+    expect(withSet.systemSounds.cursorMove?.path).toBe('LR2files/Sound/my/click.wav');
+    // Commands the set leaves out keep the stem lookup.
+    expect(withSet.courseFailBgm?.path).toBe('LR2files/Sound/lr2/course_fail.wav');
+    expect(withSet.clearBgm?.path).toBe('LR2files/Sound/lr2/clear.wav');
+  });
+
   test('survives without an onProgress callback', async () => {
     await expect(loadLr2ThemeSkinsFromFiles([])).resolves.toBeDefined();
   });

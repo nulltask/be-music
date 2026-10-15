@@ -297,6 +297,11 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
       skinSdkApi.resolveResultLamp(BENCH_RESULT);
     },
   });
+  define('skin-sdk.resolveResultVerdict', {
+    run: () => {
+      skinSdkApi.resolveResultVerdict(BENCH_RESULT);
+    },
+  });
   define('skin-sdk.resolveResultTrackRows', {
     run: () => {
       skinSdkApi.resolveResultTrackRows(BENCH_RESULT);

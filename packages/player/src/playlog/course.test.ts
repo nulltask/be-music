@@ -9,6 +9,7 @@ import {
   parseCoursePlaylog,
   resolveCoursePlaylogFilename,
   resolveCourseLamp,
+  resolveCourseStageStartGauge,
   resolveCourseTrophy,
   serializeCoursePlaylog,
   simulateCoursePlaylog,
@@ -327,5 +328,26 @@ describe('course play logs', () => {
     expect(() =>
       parseCoursePlaylog(corrupt((value) => (value.stages[0] = { played: true, playlog: { format: 'x' } }))),
     ).toThrow('stages[0].playlog: format');
+  });
+});
+
+describe('resolveCourseStageStartGauge', () => {
+  test('starts the first stage on a full course gauge named after the pick', () => {
+    expect(resolveCourseStageStartGauge('lr2', { kind: 'grade' }, 'GROOVE')).toEqual({
+      type: 'GRADE',
+      initial: 100,
+      max: 100,
+      border: 0,
+      survival: true,
+    });
+    expect(resolveCourseStageStartGauge('lr2', { kind: 'expert' }, 'EASY').type).toBe('COURSE-EASY');
+    expect(resolveCourseStageStartGauge('beatoraja', { kind: 'grade' }, 'HARD').type).toBe('EXCLASS');
+  });
+
+  test('starts a later stage on the gauge carried in, clamped to the range', () => {
+    const carryIn = { gauge: 64, combo: 3, maxCombo: 12 };
+    expect(resolveCourseStageStartGauge('lr2', { kind: 'grade', carryIn }, 'GROOVE').initial).toBe(64);
+    const over = { kind: 'expert' as const, carryIn: { ...carryIn, gauge: 140 } };
+    expect(resolveCourseStageStartGauge('beatoraja', over, 'GROOVE').initial).toBe(100);
   });
 });

@@ -4,6 +4,7 @@ import { extractDxaArchivesAsFlatFiles } from './dxa.ts';
 import { asLoadedBytes, readFilesIntoBytesMap, type Lr2SkinFileEntry } from './file-lookup.ts';
 import type { Lr2SkinInputFile } from './file-lookup.ts';
 import { loadLr2SkinFromSourceFiles, type LoadLr2SkinOptions, type Lr2PlayVariant, type Lr2Skin } from './skin.ts';
+import { readLr2SoundSet, resolveLr2SoundSetPath, type Lr2SoundSet, type Lr2SoundSetKey } from './sound-set.ts';
 
 export const LR2_PLAY_VARIANTS: readonly Lr2PlayVariant[] = ['7', '14', '10', '5', '9'];
 
@@ -89,11 +90,15 @@ export interface Lr2ThemeSkins {
    */
   resultBgm?: Lr2ThemeBgm;
   /**
-   * Course-result audio when the course was cleared (`LR2files/Sound/<theme>/courseclear.wav`). Hosts fall back to
+   * Course-result audio when the course was cleared: the sound set's `#COURSECLEAR` (stock
+   * `LR2files/Sound/lr2/course_clear.wav`), else `course_clear` / `courseclear` under `Sound/lr2/`. Hosts fall back to
    * {@link clearBgm} when missing, as LR2 does.
    */
   courseClearBgm?: Lr2ThemeBgm;
-  /** Course-result audio when the course was failed (`coursefail.wav`), falling back to {@link failBgm}. */
+  /**
+   * Course-result audio when the course was failed: `#COURSEFAIL` (stock `course_fail.wav`), else `course_fail` /
+   * `coursefail`, falling back to {@link failBgm}.
+   */
   courseFailBgm?: Lr2ThemeBgm;
   /**
    * LR2 system sound effects from `LR2files/Sound/lr2/*.wav`. Each slot is independently optional — themes that don't
@@ -192,6 +197,17 @@ export async function loadLr2ThemeSkinsFromFiles(
       onProgress?.({ phase: 'theme', current: completed, total: totalSubTasks, label });
       return value;
     });
+  // LR2 finds its system sounds through the sound set (`LR2files/Sound/lr2.lr2ss`), which names each file; the
+  // stems below are only the fallback for a drop that has no sound set or lacks the file it names.
+  const soundSet = readLr2SoundSet(sharedFiles, (path) => asLoadedBytes(sharedFiles.get(path)));
+  const pickSound = (key: Lr2SoundSetKey, stems: readonly string[]): Lr2ThemeAudioRef | undefined =>
+    pickFromSoundSet(sharedFiles, soundSet, key) ??
+    stems.reduce<Lr2ThemeAudioRef | undefined>(
+      (found, stem) => found ?? pickLr2SystemSoundFromMap(sharedFiles, stem),
+      undefined,
+    );
+  const pickBgm = (key: Lr2SoundSetKey, role: 'select' | 'decide'): Lr2ThemeAudioRef | undefined =>
+    pickFromSoundSet(sharedFiles, soundSet, key) ?? pickLr2ThemeBgmFromMap(sharedFiles, role);
   // Each task wraps a synchronous parse / pick in `Promise.resolve` so the existing progress-tracking + parallel-await
   // shape continues to work — no semantic change beyond the up-front batched read.
   const playSkinTasks = LR2_PLAY_VARIANTS.map((variant) =>
@@ -229,23 +245,24 @@ export async function loadLr2ThemeSkinsFromFiles(
     // `readFilesIntoBytesMap`'s `deferAudio: true` default is unwrapped here. The rest of the pack stays lazy — only
     // the theme's small handful of audio files (BGM + ~6 cues) is forced eager up front, since they need to be ready
     // the moment the user lands on the select scene.
-    track('bgm/select', materializeLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'select'))),
-    track('bgm/decide', materializeLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'decide'))),
+    track('bgm/select', materializeLr2ThemeAudio(pickBgm('SELECT', 'select'))),
+    track('bgm/decide', materializeLr2ThemeAudio(pickBgm('DECIDE', 'decide'))),
     // `clear` / `fail` / `result` jingles live alongside the LR2 system sound effects (scratch / mine / o-change …)
     // under `LR2files/Sound/<theme>/`, NOT in `LR2files/Bgm/`. The Bgm/ directory is reserved for the looping select /
     // decide tracks — picking from there would silently miss the result audio since LR2 default ships these stems only
-    // under Sound/lr2/.
-    track('sound/clear', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'clear'))),
-    track('sound/fail', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'fail'))),
+    // under Sound/lr2/. The sound set names each file (`#COURSECLEAR` → `course_clear.wav`); the stems are the
+    // fallback for a drop without one. `result` has no sound-set command.
+    track('sound/clear', materializeLr2ThemeAudio(pickSound('CLEAR', ['clear']))),
+    track('sound/fail', materializeLr2ThemeAudio(pickSound('FAIL', ['fail']))),
     track('sound/result', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'result'))),
-    track('sound/courseclear', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'courseclear'))),
-    track('sound/coursefail', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'coursefail'))),
-    track('sound/scratch', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'scratch'))),
-    track('sound/f-open', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-open'))),
-    track('sound/f-close', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-close'))),
-    track('sound/o-open', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-open'))),
-    track('sound/o-close', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-close'))),
-    track('sound/o-change', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-change'))),
+    track('sound/courseclear', materializeLr2ThemeAudio(pickSound('COURSECLEAR', ['course_clear', 'courseclear']))),
+    track('sound/coursefail', materializeLr2ThemeAudio(pickSound('COURSEFAIL', ['course_fail', 'coursefail']))),
+    track('sound/scratch', materializeLr2ThemeAudio(pickSound('SCRATCH', ['scratch']))),
+    track('sound/f-open', materializeLr2ThemeAudio(pickSound('FOLDER_OPEN', ['f-open']))),
+    track('sound/f-close', materializeLr2ThemeAudio(pickSound('FOLDER_CLOSE', ['f-close']))),
+    track('sound/o-open', materializeLr2ThemeAudio(pickSound('PANEL_OPEN', ['o-open']))),
+    track('sound/o-close', materializeLr2ThemeAudio(pickSound('PANEL_CLOSE', ['o-close']))),
+    track('sound/o-change', materializeLr2ThemeAudio(pickSound('OPTION_CHANGE', ['o-change']))),
   ]);
 
   const playSkins: Lr2PlaySkinMap = {};
@@ -407,6 +424,17 @@ function pickLr2ThemeBgmFromMap(
   role: 'select' | 'decide',
 ): Lr2ThemeAudioRef | undefined {
   return pickThemeAudioBytes(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
+}
+
+function pickFromSoundSet(
+  files: ReadonlyMap<string, Lr2SkinFileEntry>,
+  soundSet: Lr2SoundSet | undefined,
+  key: Lr2SoundSetKey,
+): Lr2ThemeAudioRef | undefined {
+  if (!soundSet) return undefined;
+  const path = resolveLr2SoundSetPath(files.keys(), soundSet, key);
+  const entry = path === undefined ? undefined : files.get(path);
+  return path === undefined || entry === undefined ? undefined : { path, entry };
 }
 
 function pickLr2SystemSoundFromMap(

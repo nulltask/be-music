@@ -30,7 +30,9 @@ consumer は scene に必要な field だけを読みます。
 
 ## コース
 
-LR2 には、コース全体の結果を出す専用のシーンがあります。`#INFORMATION` の type 15 で、慣例では `CourseResult/` の下に置きます。`loadLr2ThemeSkinsFromFiles` はこれを `courseResultSkin` として読み込み、テーマの `Sound/` フォルダからコース結果用のジングル `courseclear` / `coursefail` も読みます。`result` の検索がこのスキンを選ぶことはありません。
+LR2 には、コース全体の結果を出す専用のシーンがあります。`#INFORMATION` の type 15 で、慣例では `CourseResult/` の下に置きます。`loadLr2ThemeSkinsFromFiles` はこれを `courseResultSkin` として読み込み、コース結果用のジングルも読みます。`result` の検索がこのスキンを選ぶことはありません。
+
+LR2 は BGM とシステムサウンドを、各ファイルを名指しするサウンドセット `LR2files/Sound/*.lr2ss` から探します。標準の `lr2.lr2ss` は `#COURSECLEAR` / `#COURSEFAIL` を `Sound/lr2/course_clear.wav` / `course_fail.wav` に割り当てています。`loadLr2ThemeSkinsFromFiles` は、ドロップされたサウンドセット（`lr2.lr2ss` を優先）から選曲 / 決定の BGM、クリア / 失敗 / コースのジングル、カーソル・フォルダ・オプションの音を読みます。`*` のフォルダは `#CUSTOMFILE` の既定値で埋め、名指しされたファイルがなければ別の音声拡張子のものを使います。サウンドセットがないときや、そこに名前のないファイルは、`Sound/lr2/` の下をステム名で探します（コースのジングルは `course_clear` か `courseclear`）。
 
 LR2 はシーンが始まるたびにスキンを読み込むので、`#IF` ブロックはシーンの間ずっと変わらない状態を条件にできます。コースでは、それがコースの op です（OpenLR2 `LR2f.cpp` L5403-L5444）。
 

@@ -15,6 +15,18 @@ export function resolveResultLamp(result: Pick<BeMusicResultData, 'score' | 'cle
   return score.perfect >= score.total ? 'PERFECT' : 'FULL COMBO';
 }
 
+/** The headline a result screen leads with. */
+export type ResultVerdict = 'STAGE CLEAR' | 'FAILED' | 'COURSE CLEAR' | 'COURSE FAILED';
+
+/**
+ * The result's headline: `STAGE CLEAR` / `FAILED` for one play, `COURSE CLEAR` / `COURSE FAILED` for the result of a
+ * whole course (`courseResult`).
+ */
+export function resolveResultVerdict(result: Pick<BeMusicResultData, 'cleared' | 'courseResult'>): ResultVerdict {
+  if (result.courseResult === true) return result.cleared ? 'COURSE CLEAR' : 'COURSE FAILED';
+  return result.cleared ? 'STAGE CLEAR' : 'FAILED';
+}
+
 /** One label / value line of the track column. */
 export interface ResultTrackRow {
   label: string;

@@ -43,6 +43,8 @@ import {
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 76;
+/** The widest a folder or course row's count may run (`4 stages · 1 missing`); the title gets the rest. */
+const ROW_COUNT_MAX_W = 150;
 const ROW_LENGTH_W = 32;
 const ROW_NOTES_W = 76;
 const CURSOR_MS = 360;
@@ -502,12 +504,13 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         anchorX: 1,
         anchorY: 0.5,
         alpha,
-        maxWidth: facts ? ROW_BPM_W : 70,
+        maxWidth: facts ? ROW_BPM_W : ROW_COUNT_MAX_W,
         marquee: active,
       },
     );
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
-    let factsLeft = listX + listWidth - 10 - (facts ? ROW_BPM_W : meta ? Math.min(70, metaNode.width) : 0) - 14;
+    let factsLeft =
+      listX + listWidth - 10 - (facts ? ROW_BPM_W : meta ? Math.min(ROW_COUNT_MAX_W, metaNode.width) : 0) - 14;
     if (facts) {
       const mute = active ? LAT_WHITE : LAT_GRAPHITE;
       addSkinText(frame.layer, scrambleText(facts.length, rowScramble, tick, entryIndex + 600), factsLeft, midY, {
