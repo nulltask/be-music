@@ -25,6 +25,9 @@ import {
   resolveSongRowFacts,
   stageProgress,
   selectListRows,
+  browseEntryBadge,
+  browseEntryCount,
+  browseEntryTitle,
 } from '@be-music/skin-sdk';
 import {
   addHitArea,
@@ -472,7 +475,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         alpha,
       },
     ).label = `fallback-index[idx=${entryIndex}]`;
-    const level = song?.playLevel !== undefined ? String(song.playLevel) : folder ? 'DIR' : '-';
+    const level = browseEntryBadge(entry);
     rows.rect(x + 30.5, midY - 7.5, 22, 15).stroke({ color: active ? LAT_WHITE : LAT_INK, width: 1, alpha });
     addSkinText(frame.layer, level, x + 41.5, midY, {
       ...display(level.length > 2 ? 8 : 10, ink, '600'),
@@ -484,9 +487,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     // On the right, the facts a player checks before picking — gimmick tags, note count, length and tempo range — in
     // fixed columns so they line up down the list. Folders show their size instead.
     const facts = song ? resolveSongRowFacts(song) : undefined;
-    const meta = facts
-      ? `${facts.bpm} BPM`
-      : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
+    const meta = facts ? `${facts.bpm} BPM` : (browseEntryCount(entry) ?? '');
     const metaNode = addSkinText(
       frame.layer,
       scrambleText(meta, rowScramble, tick, entryIndex + 500),
@@ -549,7 +550,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     }
     const title = addSkinText(
       frame.layer,
-      scrambleText(song?.title ?? folder?.label ?? '', titleScramble, tick, entryIndex + 900),
+      scrambleText(browseEntryTitle(entry), titleScramble, tick, entryIndex + 900),
       x + 62,
       midY,
       {

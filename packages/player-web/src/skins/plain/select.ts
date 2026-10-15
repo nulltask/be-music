@@ -5,6 +5,8 @@ import {
   resolveSongStats,
   type BeMusicSelectLayout,
   type BrowserBrowseEntry,
+  type BrowserCourseEntry,
+  type BrowserFolderNode,
   type BeMusicSelectFrame,
   type BeMusicSurface,
   selectListRows,
@@ -232,7 +234,12 @@ function drawRow(
   const dim = nowMs !== undefined ? TEXT : MUTED;
   if (entry.kind === 'folder') {
     text(ctx, `▸ ${entry.folder.label}`, x + 12, midY, { size: 12, weight: 700, maxWidth: w - 120, nowMs });
-    text(ctx, `${entry.folder.songs.length} charts`, x + w - 12, midY, { size: 11, color: dim, align: 'right' });
+    text(ctx, describeFolderSize(entry.folder), x + w - 12, midY, { size: 11, color: dim, align: 'right' });
+    return;
+  }
+  if (entry.kind === 'course') {
+    text(ctx, entry.course.definition.name, x + 44, midY, { size: 12, weight: 700, maxWidth: w - 300, nowMs });
+    text(ctx, describeCourse(entry.course), x + w - 12, midY, { size: 11, color: dim, align: 'right', maxWidth: 236 });
     return;
   }
   const song = entry.song;
@@ -264,7 +271,12 @@ function drawPortraitRow(
   const textW = w - 56;
   if (entry.kind === 'folder') {
     text(ctx, `▸ ${entry.folder.label}`, x + 12, midY - 8, { size: 13, weight: 700, maxWidth: w - 24, nowMs });
-    text(ctx, `${entry.folder.songs.length} charts`, x + 12, midY + 9, { size: 10, color: dim });
+    text(ctx, describeFolderSize(entry.folder), x + 12, midY + 9, { size: 10, color: dim });
+    return;
+  }
+  if (entry.kind === 'course') {
+    text(ctx, entry.course.definition.name, x + 44, midY - 8, { size: 13, weight: 700, maxWidth: textW, nowMs });
+    text(ctx, describeCourse(entry.course), x + 44, midY + 9, { size: 10, color: dim, maxWidth: textW });
     return;
   }
   const song = entry.song;
@@ -277,4 +289,16 @@ function drawPortraitRow(
     maxWidth: textW,
     nowMs,
   });
+}
+
+/** A folder bar's size: its charts, or its courses for a course folder. */
+function describeFolderSize(folder: BrowserFolderNode): string {
+  return folder.courses !== undefined ? `${folder.courses.length} courses` : `${folder.songs.length} charts`;
+}
+
+/** A course bar's facts: its kind, its stage count, and how many stages are missing from the collection. */
+function describeCourse(course: BrowserCourseEntry): string {
+  const missing = course.stages.filter((stage) => stage.song === undefined).length;
+  const kind = course.definition.kind === 'grade' ? 'DAN' : course.definition.kind.toUpperCase();
+  return `${kind}   ${course.stages.length} STAGES${missing > 0 ? `   ${missing} MISSING` : ''}`;
 }

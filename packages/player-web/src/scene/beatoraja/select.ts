@@ -70,7 +70,12 @@ import { createCroppedBeatorajaTexture } from '../../skin/beatoraja/render.ts';
 import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from '../../collection/collection.ts';
 import { detectChartFeatures } from '../select-ops.ts';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
-import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from '../../collection/types.ts';
+import type {
+  BrowserBrowseEntry,
+  BrowserCourseEntry,
+  BrowserFolderNode,
+  BrowserSongEntry,
+} from '../../collection/types.ts';
 import { masterOutput } from '../../runtime/master-volume.ts';
 
 export interface PixiBeatorajaSelectSceneOptions {
@@ -88,6 +93,10 @@ export interface PixiBeatorajaSelectSceneOptions {
   skinConfig?: BeatorajaSkinConfig;
   /** Songs to choose from. Empty array → "no songs" placeholder. */
   songs: ReadonlyArray<BrowserSongEntry>;
+  /** Course folders, listed after the song folders at the root (see `resolveCourseFolders`). */
+  courseFolders?: ReadonlyArray<BrowserFolderNode>;
+  /** The player started a course bar whose every stage is in the collection. */
+  onCoursePicked?: (course: BrowserCourseEntry) => void;
   /** Initial highlighted index (within the song list at root). Defaults to 0. */
   initialIndex?: number;
   /**
@@ -1060,6 +1069,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
     if (entry.kind === 'folder') {
       ops.add(BEATORAJA_OP.FOLDERBAR);
+    } else if (entry.kind === 'course') {
+      ops.add(BEATORAJA_OP.GRADEBAR);
     } else {
       ops.add(BEATORAJA_OP.SONGBAR);
       ops.add(BEATORAJA_OP.PLAYABLEBAR);
@@ -1160,9 +1171,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         const sorted = this.sortMode !== 0 ? sortSongsByMode(searchFiltered, this.sortMode) : searchFiltered;
         this.entries = sorted.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
       } else {
-        const folders = groupSongsByFolder(searchFiltered);
+        const folders = [...groupSongsByFolder(searchFiltered), ...(this.options.courseFolders ?? [])];
         this.entries = folders.map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
       }
+    } else if (this.folderStack[this.folderStack.length - 1]!.courses !== undefined) {
+      const courses = this.folderStack[this.folderStack.length - 1]!.courses!;
+      this.entries = courses.map((course): BrowserBrowseEntry => ({ kind: 'course', course }));
     } else {
       const top = this.folderStack[this.folderStack.length - 1]!;
       // When a filter is active, the folder's pre-stored `songs` may include charts the
@@ -1570,7 +1584,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // because the song / folder isn't pickable).
     this.buttonPressedAt.set(act, performance.now());
     const entry = this.entries[this.currentIndex];
-    const song = entry?.kind === 'song' ? entry.song : entry?.folder.songs[0];
+    const song = entry?.kind === 'song' ? entry.song : entry?.kind === 'folder' ? entry.folder.songs[0] : undefined;
     switch (act) {
       case 15: // PLAY (user's default mode)
         if (song !== undefined) {
@@ -2183,7 +2197,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         // would extend the switch below; today they fall through to the default frame.
         const frames = this.rowBarFrameTextures[i];
         if (frames !== undefined) {
-          const frameIndex = entry.kind === 'folder' ? 1 : 0;
+          // `BarRenderer.java:150-166`: a GradeBar is frame 3, or 4 (`bar-nosong`) when a stage is missing.
+          const frameIndex =
+            entry.kind === 'folder' ? 1 : entry.kind === 'course' ? (entry.course.playable ? 3 : 4) : 0;
           const frame = frames[frameIndex] ?? frames[0];
           if (frame !== undefined) bar.texture = frame;
         }
@@ -2196,6 +2212,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         // `folder.getTitle()` (`FolderBar.java:35-36`), which is the folder's own name
         // without any subtitle merge.
         label.text = entry.folder.label;
+        if (levelLabel !== undefined) levelLabel.visible = false;
+        if (levelDigits !== undefined) {
+          for (const sprite of levelDigits) sprite.visible = false;
+        }
+      } else if (entry.kind === 'course') {
+        // `GradeBar.getTitle()` is the course name.
+        label.text = entry.course.definition.name;
         if (levelLabel !== undefined) levelLabel.visible = false;
         if (levelDigits !== undefined) {
           for (const sprite of levelDigits) sprite.visible = false;
@@ -2566,6 +2589,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       this.cursorStack.push(0);
       this.refreshEntries(0);
       this.playSystemSound('folderOpen');
+      return;
+    }
+    if (entry.kind === 'course') {
+      // `MusicSelector`: a course with a missing stage is not started ("Some of songs not found").
+      if (!entry.course.playable || this.options.onCoursePicked === undefined) {
+        this.playSystemSound('cancel');
+        return;
+      }
+      this.playSystemSound('decide');
+      this.options.onCoursePicked(entry.course);
       return;
     }
     // eslint-disable-next-line no-console
@@ -3178,6 +3211,7 @@ function isSameEntry(a: BrowserBrowseEntry, b: BrowserBrowseEntry): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === 'song' && b.kind === 'song') return a.song === b.song;
   if (a.kind === 'folder' && b.kind === 'folder') return a.folder.label === b.folder.label;
+  if (a.kind === 'course' && b.kind === 'course') return a.course.id === b.course.id;
   return false;
 }
 

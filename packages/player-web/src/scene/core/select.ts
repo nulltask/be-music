@@ -11,6 +11,7 @@ import { logger } from '../../logger.ts';
 import { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from '../hi-speed.ts';
 import type {
   BrowserBrowseEntry,
+  BrowserCourseEntry,
   BrowserFolderNode,
   BrowserSongCollection,
   BrowserSongEntry,
@@ -403,6 +404,8 @@ export interface CoreSongSelectViewOptions {
    * the gameplay's `autoPlay` flag.
    */
   onSongAutoPlay?: (song: BrowserSongEntry) => void;
+  /** The player started a course bar whose every stage is in the collection. */
+  onCourseSelected?: (course: BrowserCourseEntry) => void;
   /**
    * Fired when the user clicks the skin's search-input region (#SRC_TEXT `st = 30, edit = 1`). The host typically
    * focuses a DOM `<input>` overlay so the user can type. Subsequent calls to {@link CoreSongSelectView.setSearchQuery}
@@ -1207,6 +1210,17 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * Three call sites use this — keyboard Enter, skin-mode click, fallback-row click — so factoring it here keeps their
    * semantics identical.
    */
+  /** Opens a folder bar, starts a song bar, or starts a course bar (a course with a missing stage cannot start). */
+  protected activateEntry(entry: BrowserBrowseEntry): void {
+    if (entry.kind === 'folder') {
+      this.enterFolder(entry.folder);
+    } else if (entry.kind === 'song') {
+      this.launchSong(entry.song);
+    } else if (entry.course.playable && this.launchAt === undefined) {
+      this.options.onCourseSelected?.(entry.course);
+    }
+  }
+
   protected enterFolder(folder: BrowserFolderNode): void {
     // Stash the parent's cursor BEFORE pushing so leaveFolder can land the cursor back on this folder bar.
     this.parentCursorStack = [...this.parentCursorStack, this.selectedIndex];
@@ -1597,10 +1611,14 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       return this.cachedEntries;
     }
     const baseEntries: BrowserBrowseEntry[] = top
-      ? top.songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
+      ? top.courses !== undefined
+        ? top.courses.map((course): BrowserBrowseEntry => ({ kind: 'course', course }))
+        : top.songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
       : this.searchQuery.length > 0
         ? songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
-        : groupSongsByFolder(songs).map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
+        : [...groupSongsByFolder(songs), ...(this.collection.courseFolders ?? [])].map(
+            (folder): BrowserBrowseEntry => ({ kind: 'folder', folder }),
+          );
     let filtered = baseEntries;
     if (this.playOptions.difficultyFilter !== 'ALL') {
       const target = DIFFICULTY_FILTER_CYCLE.indexOf(this.playOptions.difficultyFilter);
@@ -2304,11 +2322,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     this.selectedIndex = entryIndex;
     this.render();
-    if (entry.kind === 'folder') {
-      this.enterFolder(entry.folder);
-    } else {
-      this.launchSong(entry.song);
-    }
+    this.activateEntry(entry);
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -2467,11 +2481,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       event.preventDefault();
       const entry = entries[this.selectedIndex];
       if (!entry) return;
-      if (entry.kind === 'folder') {
-        this.enterFolder(entry.folder);
-      } else {
-        this.launchSong(entry.song);
-      }
+      this.activateEntry(entry);
     } else if (event.key === 'Escape' || event.key === 'Backspace' || event.key === 'ArrowLeft') {
       // Pop one level up — Esc / Backspace / ← all back out of the current folder. No-op at the root so the user
       // doesn't get stuck on an "empty list" view by accident.
@@ -2957,6 +2967,9 @@ export function matchesSearchQuery(entry: BrowserBrowseEntry, lowerQuery: string
   if (lowerQuery.length === 0) return true;
   if (entry.kind === 'folder') {
     return entry.folder.label.toLowerCase().includes(lowerQuery);
+  }
+  if (entry.kind === 'course') {
+    return entry.course.definition.name.toLowerCase().includes(lowerQuery);
   }
   const song = entry.song;
   const haystacks: Array<string | undefined> = [song.title, song.subtitle, song.artist, song.genre, song.fileLabel];
