@@ -93,6 +93,9 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
   - 読み込みには `readCourseFile`（`@be-music/player-web/collection`）を使います。
   - デモはライブラリの譜面ファイルのハッシュを計算し（曲ごとにキャッシュ）、各ステージを SHA-256、次に MD5 で照合します（`resolveCourseFolders`）。
   - コースファイルだけをドロップした場合は、読み込み済みの曲と照合します。
+  - 難易度表のコースは URL から取り込めます。Debug Menu → Library & records → **Course table URL** に URL を入れて **Import courses** を押します。URL は表のページ（`bmstable` の meta がヘッダーを指すもの）でもヘッダー JSON でも構いません。デモは `fetchTableHeaderCourses`（`@be-music/player/course`、[URL から表を読む](./course.ja.md#url-から表を読む)）で取得します。`data_url` の曲リストは読み込みません。
+  - 表は、その名前をラベルにしたコースグループ 1 つになります。同じ表をもう一度取り込むか、同じラベルの別の出どころを読むと、そのグループを置き換えます。取り込んだ URL は `localStorage` に覚え、次に開いたときにもう一度取り込みます。
+  - 既知の制限：ブラウザが表を直接取得するため、CORS ヘッダー（`Access-Control-Allow-Origin`）を返さないサーバーの表は取り込めません。そうした表は少なくありません。その場合、ステータス行にサイトを取得できなかったと表示します。クロスオリジンの読み込みを許可するオリジン（またはデモ自身のオリジン）から配信したヘッダー JSON なら取り込めます。
 - **選曲：**
   - コースファイル 1 つが、曲フォルダの後に並ぶフォルダバー 1 つになります。その中では各コースがコースバー（`BrowserBrowseEntry` の `kind: 'course'`）です。
   - コレクションにないステージを含むコースは、一覧には出ますが開始できません。
