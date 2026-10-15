@@ -599,11 +599,11 @@
               "good": 2,
               "bad": 0,
               "poor": 4,
-              "emptyPoor": 1,
+              "emptyPoor": 2,
               "exScore": 16,
               "score": 16,
               "gauge": {
-                "current": 94,
+                "current": 92,
                 "max": 100,
                 "clearThreshold": 80,
                 "initial": 20,

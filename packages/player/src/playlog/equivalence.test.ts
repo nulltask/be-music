@@ -2,7 +2,7 @@ import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { manualPlay } from '../index.ts';
 import type { PlayerSummary } from '../core/engine.ts';
-import { simulatePlaylog } from './simulate.ts';
+import { resolveRulesetConfig, simulatePlaylog } from './simulate.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from './format.ts';
 import type { PlaylogRulesetId } from '../ruleset/index.ts';
 
@@ -228,6 +228,28 @@ describe('engine / simulator equivalence', () => {
       if (ruleset === 'lr2') {
         expect(summary.perfect, `${earlyUs} µs`).toBe(1);
       }
+    }
+  });
+
+  // A press exactly on a window edge: the playlog clock is whole microseconds, and a note at BPM 140 sits at a time
+  // whose float seconds do not subtract to an exact delta, so the engine must judge the rounded delta as the
+  // simulator does instead of landing a hair outside the edge.
+  test.each(RULESETS)('%s: a press on a window edge agrees on both sides', async (ruleset) => {
+    const json = chart([{ measure: 1, channel: '11', position: [0, 1], value: '01' }]);
+    json.metadata.bpm = 140;
+    const probe = await replay(json, [], ruleset);
+    const noteUs = probe.playlog.chart.notes[0]!.timeUs;
+    const [lateEdgeUs, earlyEdgeUs] = resolveRulesetConfig(probe.playlog, ruleset).windows.note.judges[2];
+
+    for (const pressUs of [noteUs - lateEdgeUs, noteUs - earlyEdgeUs]) {
+      const { summary, playlog } = await replay(json, [down(0, pressUs, '11'), up(1, pressUs + 40_000, '11')], ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.good, summary.bad], `press at ${pressUs} µs`).toEqual([1, 0]);
+      expect([summary.good, summary.bad], `press at ${pressUs} µs`).toEqual([
+        simulated.judge.good,
+        simulated.judge.bad,
+      ]);
     }
   });
 

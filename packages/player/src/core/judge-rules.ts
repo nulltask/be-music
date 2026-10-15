@@ -18,6 +18,15 @@ import type { PlayerUiLongNoteMode } from './ui-signal-bus.ts';
  * ruleset plays. Shared by the judge core (`judge-core.ts`) and the auto-play driver; nothing here reads a clock.
  */
 
+/**
+ * `noteTime - inputTime` in whole microseconds, the unit of the play log's clock and of the ruleset window tables.
+ * The difference of two float second values can land a hair outside a window edge that an exact delta sits on (a
+ * press 150 ms late reading as 150.0000001 ms), so every window comparison of the judge core goes through this.
+ */
+export function judgeDeltaUs(noteSeconds: number, inputSeconds: number): number {
+  return Math.round((noteSeconds - inputSeconds) * 1e6);
+}
+
 /** A judgment with the signed timing it was made at (positive = the press was LATE). */
 export interface TimedManualJudge {
   kind: JudgeKind;
@@ -41,7 +50,7 @@ export const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, Jud
  * (`noteTime - inputTime`, positive = EARLY), hence the negation.
  */
 export function resolveManualJudgeKind(signedDeltaMs: number, windows: JudgeWindowSetUs): JudgeKind | undefined {
-  const judge = classifyRulesetJudge(-signedDeltaMs * 1000, windows);
+  const judge = classifyRulesetJudge(Math.round(-signedDeltaMs * 1000), windows);
   return judge === RULESET_JUDGE_NONE ? undefined : RULESET_JUDGE_KINDS[judge];
 }
 
