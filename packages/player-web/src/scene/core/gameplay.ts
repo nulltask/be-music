@@ -401,6 +401,9 @@ const DEFAULT_THEME_TIMING: GameplayThemeTiming = {
 const BE_MUSIC_ENTER_FADE_MS = 400;
 const BE_MUSIC_THEME_TIMING: GameplayThemeTiming = { ...DEFAULT_THEME_TIMING, fadeOutMs: 450 };
 
+/** How long a failed play's sound and picture fade out at least, before its result shows. */
+const FAILED_FADE_OUT_MS = 1500;
+
 /**
  * Scene moments a theme can react to (the LR2 family stamps its skin timers from these). `at` is the
  * {@link CoreGameplayView.playClock} value the scene recorded for the moment.
@@ -1193,6 +1196,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private exitCloseHandle: number | undefined;
   /** `playClock()` at which the exit fade-out began; drives {@link applyExitFadeAlpha}. */
   private exitFadeStartedAt: number | undefined;
+  /** The fade-out the running exit sequence uses: the theme's, or longer for a failed play. */
+  private exitFadeOutMs = 0;
   /**
    * Intro / scene-stage timers that gate the load-end / play-start stages (and theme stages such as LR2
    * `#STARTINPUT`). These are independent from
@@ -3596,7 +3601,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       if (this.root.alpha !== alpha) this.root.alpha = alpha;
       return;
     }
-    const fadeOutMs = this.themeTiming.fadeOutMs;
+    const fadeOutMs = this.exitFadeOutMs;
     const fadeStart = this.exitFadeStartedAt;
     if (fadeStart === undefined || fadeOutMs <= 0) {
       // Fade hasn't been seeded (or the theme has no fade-out); leave root at full alpha. Close-only themes keep the
@@ -3618,13 +3623,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Idempotent — re-entry while a fade is in flight is a no-op, so a frantic second ESC press doesn't double-fire the
    * host callback. Themes with no fade-out / close timing collapse to immediate dispatch (the skinless behaviour).
    */
-  private beginExitSequence(callback: () => void, options: { fadeAudio?: boolean } = {}): void {
+  private beginExitSequence(callback: () => void, options: { fadeAudio?: boolean; minFadeOutMs?: number } = {}): void {
     if (this.exiting || this.disposed) {
       callback();
       return;
     }
     this.exiting = true;
-    const { fadeOutMs, closeMs } = this.themeTiming;
+    const closeMs = this.themeTiming.closeMs;
+    // A failed play fades out even on a theme without a fade-out of its own (`minFadeOutMs`).
+    const fadeOutMs = Math.max(this.themeTiming.fadeOutMs, options.minFadeOutMs ?? 0);
+    this.exitFadeOutMs = fadeOutMs;
     if (fadeOutMs <= 0 && closeMs <= 0) {
       callback();
       return;
@@ -5656,11 +5664,17 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (this.disposed || this.chartEnded) return;
     this.chartEnded = true;
     this.playMoments.outroAtMs ??= this.playClock();
+    // A play cut short by its gauge emptying (a course stage, a HARD gauge ending on failure) ends at once: its sound
+    // fades out as the screen goes dark, then the result shows. A gauge that emptied but played on to the end does not.
+    const now = this.currentSeconds();
+    const failed = finalSummary?.gauge?.failedMidPlay === true && this.notes.some((note) => note.seconds > now);
     // The lead-out is chart time: at another tempo it takes 1 / tempo as long.
-    const delayMs = chartToElapsedSeconds(
-      resolvePostChartResultDelayMs(this.notes, this.timingResolver, this.currentSeconds()),
-      this.tempo,
-    );
+    const delayMs = failed
+      ? 0
+      : chartToElapsedSeconds(
+          resolvePostChartResultDelayMs(this.notes, this.timingResolver, this.currentSeconds()),
+          this.tempo,
+        );
     // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
     // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
     // charts whose non-note tail has already carried us past the target.
@@ -5692,7 +5706,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           };
           this.chartEndHold?.abort();
         },
-        { fadeAudio: false },
+        failed ? { fadeAudio: true, minFadeOutMs: FAILED_FADE_OUT_MS } : { fadeAudio: false },
       );
     }, delayMs);
   }
