@@ -28,6 +28,23 @@ export function snapHiSpeed(value: number): number | undefined {
 }
 
 /**
+ * A hi-speed change under HS-FIX. The player's hi-speed (`player`, on their own scale: the one the select panel, the
+ * readouts and the host show) moves to `player + delta`, and the drawn one is that times the chart's HS-FIX
+ * `multiplier` (1 without HS-FIX). Stepping the player's value keeps it on the {@link HISPEED_STEP} grid, where
+ * stepping the drawn one would move the player's by `delta / multiplier`. `undefined` for non-finite input.
+ */
+export function stepPlayerHiSpeed(
+  player: number,
+  delta: number,
+  multiplier: number,
+): { player: number; drawn: number } | undefined {
+  const next = snapHiSpeed(player + delta);
+  if (next === undefined) return undefined;
+  const drawn = snapHiSpeed(next * multiplier);
+  return drawn === undefined ? undefined : { player: next, drawn };
+}
+
+/**
  * How long the note scroll takes to glide to a new hi-speed. Long enough that the notes visibly ease instead of
  * jumping, short enough that the new speed is readable right away.
  */
