@@ -9,11 +9,13 @@ import {
   pgreatWindowReachUs,
   preferJudgeCandidate,
   resolveEffectiveLongNoteMode,
+  resolveLnEarlyRelease,
   RULESET_JUDGE_NONE,
   RulesetGauge,
   selectJudgeWindowSet,
   type GaugeJudgeIndex,
   type JudgeSelectionCandidate,
+  type LnJudgeIndex,
   type RulesetJudgeIndex,
 } from '../ruleset/index.ts';
 import {
@@ -525,22 +527,25 @@ class PlaylogSimulation {
         longNoteEnd: true,
       });
       const dmUs = note.endTimeUs! - timeUs;
-      const endJudge = classifyJudge(dmUs, endWindows);
       lane.hold = undefined;
       note.holding = false;
       note.judged = true;
       if (note.longStyle === 1) {
-        // LN: worse of head and tail; an early release outside the GOOD reach is a BAD.
-        const tailJudge: GaugeJudgeIndex = endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge;
-        const headJudge: GaugeJudgeIndex = hold.headJudge ?? JUDGE_BAD;
-        let judge: GaugeJudgeIndex = worseJudge(tailJudge, headJudge);
-        if (judge >= JUDGE_BAD && dmUs > 0) {
-          judge = JUDGE_BAD;
-        }
-        const worseDm = hold.headDmUs !== undefined && Math.abs(hold.headDmUs) > Math.abs(dmUs) ? hold.headDmUs : dmUs;
-        this.applyJudge(judge > JUDGE_MISS_POOR ? JUDGE_MISS_POOR : judge, worseDm);
+        // LN: the ruleset decides how a release before the tail combines with the deferred head judgment.
+        const headJudge = hold.headJudge ?? JUDGE_BAD;
+        const released = resolveLnEarlyRelease(
+          this.config,
+          {
+            judge: (headJudge > JUDGE_MISS_POOR ? JUDGE_MISS_POOR : headJudge) as LnJudgeIndex,
+            dmUs: hold.headDmUs ?? 0,
+          },
+          dmUs,
+          endWindows,
+        );
+        this.applyJudge(released.judge, released.dmUs);
       } else {
         // CN / HCN tail: judged by the release timing; early releases beyond the windows are POOR.
+        const endJudge = classifyJudge(dmUs, endWindows);
         const judge = endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge;
         this.applyJudge(judge, dmUs);
       }
@@ -739,11 +744,6 @@ class PlaylogSimulation {
 function classifyJudge(dmUs: number, set: JudgeWindowSetUs): JudgeClassification {
   const judge = classifyRulesetJudge(dmUs, set);
   return judge === RULESET_JUDGE_NONE ? JUDGE_NONE : judge;
-}
-
-/** The worse (numerically larger) of two judgments — the judge indices are ordered best-to-worst. */
-function worseJudge(left: GaugeJudgeIndex, right: GaugeJudgeIndex): GaugeJudgeIndex {
-  return left >= right ? left : right;
 }
 
 function windowSetFor(candidate: SelectionCandidate, windows: RulesetWindowTables): JudgeWindowSetUs {

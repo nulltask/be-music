@@ -207,6 +207,30 @@ describe('engine / simulator equivalence', () => {
     expect(summary.exScore).toBe(simulated.exScore);
   });
 
+  // An LN let go just before its tail — e.g. a hand freeing the key for a tap that sits right on the tail — is not a
+  // BAD: LR2 keeps the head judgment inside the GOOD window, beatoraja takes the worse of head and release.
+  test.each(RULESETS)('%s: releasing an LN just before its tail agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+
+    for (const earlyUs of [1, 50_000]) {
+      const inputs = [down(0, 1_000_000, '11'), up(1, 2_000_000 - earlyUs, '11')];
+      const { summary, playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor], `${earlyUs} µs`).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.great,
+        simulated.judge.good,
+        simulated.judge.bad,
+        simulated.judge.poor,
+      ]);
+      expect(summary.bad, `${earlyUs} µs`).toBe(0);
+      if (ruleset === 'lr2') {
+        expect(summary.perfect, `${earlyUs} µs`).toBe(1);
+      }
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 

@@ -572,7 +572,7 @@ Long notes derived from `#mmm51-69` are counted the same way as `#LNOBJ` ones.
 
 The chart's `#LNMODE` is a request, not a decision — the ruleset maps it to what it actually plays:
 
-- `lr2` (`ln`): every long note is an LN, whatever `#LNMODE` says. One deferred judgment, early release is a `BAD`.
+- `lr2` (`ln`): every long note is an LN, whatever `#LNMODE` says. One deferred judgment; a release more than the `GOOD` window before the tail is a `BAD`.
 - `beatoraja` (`per-note`): honours the chart — `1` is an LN, `2` a CN, `3` an HCN.
 - `iidx` (`charge`): every long note is a charge note, an HCN where the chart says `3`. A `BAD` or `POOR` on the
   head cancels the tail judgment entirely.
@@ -588,8 +588,11 @@ However, the final decision timing depends on `#LNMODE`.
 
 The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's raw `#LNMODE`.
 
-- Mode `1` (LN): the head judgment is held and confirmed once, at the end point. Releasing midway makes it a `BAD`
-  at that point and stops the lane sound.
+- Mode `1` (LN): the head judgment is held and confirmed once, at the end point. Releasing before the end point
+  stops the lane sound and settles the LN at once, by the ruleset (`lnEarlyRelease`): `lr2` makes a release more than
+  the `GOOD` window before the tail a `BAD` and otherwise keeps the head judgment (OpenLR2 `ProcLongnote`);
+  `beatoraja` takes the worse of the head and the release judged against the long-note-end windows, and makes it a
+  `BAD` when that is `BAD` or worse (`JudgeManager` L533-545).
 - Mode `2` (CN): the head scores immediately on the press. The tail is judged on the RELEASE — against the exact
   release instant, not the frame that noticed it — and contributes a second judgment. Holding past the end point
   is not yet a judgment: the player has until the tail's late window closes to let go. The lane sound stops on

@@ -8,6 +8,7 @@ import {
   longNoteScoresTail,
   resolveLoggedLongNoteMode,
   resolveLongNoteEndSeconds,
+  resolveLongNoteEarlyReleaseJudge,
   resolveManualTimedJudge,
   resolveRulesetLongNoteMode,
   toUiLongNoteMode,
@@ -494,10 +495,16 @@ export function advanceJudgeState(
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
       }
+      // Let go before the tail: the ruleset decides whether that is a BAD or keeps (or worsens) the head judgment.
       finalizeActiveLongNote(
         state,
         channel,
-        { kind: 'BAD', signedDeltaMs: (tailJudgeSeconds - hold.endSeconds) * 1000 },
+        resolveLongNoteEarlyReleaseJudge(
+          config.ruleset,
+          hold.headJudge,
+          (tailJudgeSeconds - hold.endSeconds) * 1000,
+          judgeWindowsFor(config, channel, hold.endSeconds, true),
+        ),
         tailAtSeconds,
         emit,
       );
