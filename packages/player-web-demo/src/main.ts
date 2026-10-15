@@ -138,7 +138,6 @@ import {
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
 import {
-  courseRunKeepsRecord,
   courseStagePlayFromResult,
   courseStagePlayFromSummary,
   courseStageRecordKey,
@@ -170,7 +169,6 @@ import {
   resolveCoursePlaylogFilename,
   serializeCoursePlaylog,
   type BeMusicCoursePlaylog,
-  type PlaylogCourseResult,
 } from '@be-music/player/playlog';
 import {
   buildCourseResultData,
@@ -183,6 +181,16 @@ import {
   skipsCourseStageResult,
   type CourseStagePlan,
 } from './course-session.ts';
+import {
+  courseDecideSong,
+  describeNonstopPrepareFailure,
+  describeRandomCourseDrawFailure,
+  planCourseStart,
+  resolveCourseRecordUpdate,
+  resolveGameplayExit,
+  resolveGameplayRestart,
+  resolveResultRetry,
+} from './course-flow.ts';
 import {
   describeCourseTableImportError,
   importCourseTable,
@@ -2312,29 +2320,28 @@ class PlayerWebDemoApp {
   private async startCourse(entry: BrowserCourseEntry, options: { autoPlay?: boolean } = {}): Promise<void> {
     // AUTO on a course bar plays every stage itself; PLAY follows the Debug Menu's auto play.
     this.courseAutoPlay = options.autoPlay;
+    const plan = planCourseStart(entry);
     // A NEW COURSE bar starts making a course of its folder's kind; songs decided from now on join it.
-    if (entry.newCourse === true) {
-      this.courseMaker.start(entry.definition.kind);
+    if (plan.action === 'make') {
+      this.courseMaker.start(plan.kind);
       this.setStatus('Making a course: decide songs to add them, then save');
       return;
     }
-    if (!entry.playable) return;
+    if (plan.action === 'unplayable') return;
     this.courseReturnNavigation = this.selectView?.getNavigation() ?? this.lastSelectNavigation;
     let course = entry;
-    if (entry.random !== undefined) {
+    if (plan.action === 'draw') {
       const candidates = await Promise.all(
         this.collection.songs.map(async (song) => ({ song, ...(await this.resolveChartHashes(song)) })),
       );
       const drawn = drawBrowserRandomCourse(entry, candidates, Math.random);
       if (!drawn.ok) {
-        this.setStatus(
-          `${entry.definition.name}: stage ${drawn.stage + 1} ${drawn.reason === 'no-candidates' ? 'matches no chart' : `has an invalid filter (${drawn.error ?? ''})`}`,
-        );
+        this.setStatus(describeRandomCourseDrawFailure(entry.definition.name, drawn));
         return;
       }
       course = drawn.course;
     }
-    if (course.definition.kind === 'nonstop') {
+    if (planCourseStart(course).action === 'nonstop') {
       await this.startNonstopCourse(course, { decide: true });
       return;
     }
@@ -2346,10 +2353,8 @@ class PlayerWebDemoApp {
       await this.playNextCourseStage();
       return;
     }
-    // The splash names the selected bar, the course, as LR2's does; the first stage's chart supplies the rest.
-    const { subtitle: _subtitle, artist: _artist, genre: _genre, ...stage } = first;
     await this.showDecide(
-      { ...stage, title: course.definition.name },
+      courseDecideSong(course, first),
       {},
       {
         start: () => this.playNextCourseStage(),
@@ -2378,8 +2383,7 @@ class PlayerWebDemoApp {
       placement: this.guiState.nonstopPlacement,
     });
     if (!prepared.ok) {
-      const stage = prepared.stage !== undefined ? ` (stage ${prepared.stage + 1})` : '';
-      this.setStatus(`${course.definition.name}: cannot stitch the NONSTOP course: ${prepared.reason}${stage}`);
+      this.setStatus(describeNonstopPrepareFailure(course.definition.name, prepared));
       return;
     }
     // The stitched chart loads its assets from a composite source; keep one at a time.
@@ -2422,9 +2426,9 @@ class PlayerWebDemoApp {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    // An auto-played run or one at another tempo leaves the record alone.
-    if (courseRunKeepsRecord(courseLog))
-      this.recordCourseResult(courseRecordKey(nonstop.course, nonstop.prepared.placement), native);
+    this.recordCourseResult(
+      resolveCourseRecordUpdate(courseLog, native, courseRecordKey(nonstop.course, nonstop.prepared.placement)),
+    );
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
     this.leaderboard.maybeSubmitCourse(
@@ -2503,9 +2507,7 @@ class PlayerWebDemoApp {
       await this.showSelect();
       return;
     }
-    // An auto-played run keeps no record, nor does a run at another tempo, which is practice (and the Leaderboard
-    // refuses it as `tempo`).
-    if (courseRunKeepsRecord(courseLog)) this.recordCourseResult(courseRecordKey(session.course), result);
+    this.recordCourseResult(resolveCourseRecordUpdate(courseLog, result, courseRecordKey(session.course)));
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
     this.leaderboard.maybeSubmitCourse(courseLog, session.stageSongs());
@@ -2605,10 +2607,13 @@ class PlayerWebDemoApp {
     storeSongRecords(this.songRecords);
   }
 
-  /** Keeps a course run's best lamp, EX score, course max combo and BP under the course's key. */
-  private recordCourseResult(key: string, result: PlaylogCourseResult): void {
-    const play = { lamp: result.lamp, exScore: result.exScore, maxCombo: result.maxCombo, missCount: result.missCount };
-    this.songRecords.set(key, mergeSongRecord(this.songRecords.get(key), play));
+  /**
+   * Keeps a course run's best lamp, EX score, course max combo and BP under the course's key, when the run keeps a
+   * record ({@link resolveCourseRecordUpdate}).
+   */
+  private recordCourseResult(update: { key: string; play: SongRecordPlay } | undefined): void {
+    if (update === undefined) return;
+    this.songRecords.set(update.key, mergeSongRecord(this.songRecords.get(update.key), update.play));
     storeSongRecords(this.songRecords);
   }
 
@@ -5066,18 +5071,19 @@ class PlayerWebDemoApp {
         // ESC gives a running course up: the run is kept as a failed one (as LR2 records it), with the stage given up
         // recorded once the engine hands its play log over.
         const view = this.gameplayView;
-        if (courseStage !== undefined && this.courseSession !== undefined) {
-          const session = this.courseSession;
+        const session = courseStage !== undefined ? this.courseSession : undefined;
+        const exit = resolveGameplayExit({ courseStage: session !== undefined, nonstop: nonstop !== undefined });
+        if (exit === 'give-up-course') {
           void this.finishGameplayThen(async () => {
-            session.giveUp(await view?.waitForPlaylog());
+            session!.giveUp(await view?.waitForPlaylog());
             this.courseSession = session;
             await this.showCourseResult();
           });
           return;
         }
-        if (nonstop !== undefined) {
+        if (exit === 'nonstop-result') {
           void this.finishGameplayThen(async () => {
-            await this.showNonstopCourseResult(nonstop, await view?.waitForPlaylog());
+            await this.showNonstopCourseResult(nonstop!, await view?.waitForPlaylog());
           });
           return;
         }
@@ -5112,13 +5118,16 @@ class PlayerWebDemoApp {
         void this.finishGameplayThen(() => this.showResult(result));
       },
       onRestart: () => {
-        // A NONSTOP course allows quick retry, as LR2 does (OpenLR2 L2854): stitch and play it again.
-        if (nonstop !== undefined) {
-          void this.finishGameplayThen(() => this.startNonstopCourse(nonstop.course));
+        // A NONSTOP course allows quick retry, as LR2 does (OpenLR2 L2854); in a course stage F5 gives the course up.
+        const restart = resolveGameplayRestart({
+          courseStage: courseStage !== undefined,
+          nonstop: nonstop !== undefined,
+        });
+        if (restart === 'restitch') {
+          void this.finishGameplayThen(() => this.startNonstopCourse(nonstop!.course));
           return;
         }
-        // F5 restarts a single chart; in a course it gives the course up, as quick retry is off there.
-        if (courseStage !== undefined) {
+        if (restart === 'abandon-course') {
           this.courseSession = undefined;
           void this.finishGameplayThen(() => this.showSelect());
           return;
@@ -5320,15 +5329,18 @@ class PlayerWebDemoApp {
     // R on the result plays the same chart again — only offered when the recorded play start is this chart's, and
     // never in a course (LR2 and beatoraja disable quick retry there), except that a NONSTOP run is stitched and played
     // again, as LR2 allows.
-    const retryPlay =
-      presentation.quickRetry && mode.nonstop === undefined && this.lastPlay?.song.id === data.song.id
-        ? this.lastPlay
-        : undefined;
+    const lastPlay = this.lastPlay;
+    const retryTarget = resolveResultRetry({
+      quickRetry: presentation.quickRetry,
+      ...(mode.nonstop !== undefined ? { nonstopRetry: mode.nonstop.retry } : {}),
+      songId: data.song.id,
+      ...(lastPlay !== undefined ? { lastPlay: { songId: lastPlay.song.id, play: lastPlay } } : {}),
+    });
     const retry =
-      mode.nonstop !== undefined
-        ? mode.nonstop.retry
-        : retryPlay !== undefined
-          ? () => void this.playSong(retryPlay.song, retryPlay.overrides)
+      retryTarget?.kind === 'nonstop'
+        ? retryTarget.retry
+        : retryTarget?.kind === 'replay'
+          ? () => void this.playSong(retryTarget.play.song, retryTarget.play.overrides)
           : undefined;
     const sharedResultOptions = {
       collection: this.collection,
