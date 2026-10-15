@@ -128,7 +128,7 @@ const LAMP_ORDER: readonly CourseClearLamp[] = [
  *   HARD, else GROOVE / NORMAL); beatoraja's follows the class gauge (CLASS NORMAL, EXCLASS HARD, EXHARDCLASS EX-HARD).
  */
 export function resolveCourseLamp(
-  ruleset: PlaylogRulesetId | string,
+  ruleset: string,
   result: Pick<PlaylogCourseResult, 'judge' | 'noteCount' | 'maxCombo' | 'gauge'>,
   pick: GrooveGaugeType,
 ): CourseClearLamp {
