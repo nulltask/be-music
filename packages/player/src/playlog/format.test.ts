@@ -64,6 +64,7 @@ function makePlaylog(): BeMusicPlaylog {
         { command: 'SWITCH', range: 2, value: 1 },
       ],
       aborted: true,
+      abortedAtUs: 1_234_567,
       native: { hiSpeed: 2.5, skin: 'default', assist: false, memo: null },
     },
     results: {
