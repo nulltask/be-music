@@ -4,6 +4,7 @@
 
 import {
   LR2_NONSTOP_CONNECTIONS,
+  normalizeCourseConstraints,
   parseLr2CourseFile,
   serializeLr2CourseFile,
   type CourseDefinition,
@@ -29,6 +30,8 @@ interface StoredMadeCourses {
   lr2crs: string;
   /** Each course's stage titles, by course and stage index. */
   titles: string[][];
+  /** Each course's constraints, which `.lr2crs` has no room for (absent in records saved before they were kept). */
+  constraints?: string[][];
   defaultConnection: string;
 }
 
@@ -38,6 +41,7 @@ export function serializeMadeCourses(made: MadeCourses): StoredMadeCourses {
     version: STORE_VERSION,
     lr2crs: serializeLr2CourseFile(made.courses),
     titles: made.courses.map((course) => course.stages.map((stage) => stage.title ?? '')),
+    constraints: made.courses.map((course) => [...course.constraints]),
     defaultConnection: made.defaultConnection,
   };
 }
@@ -52,10 +56,13 @@ export function parseMadeCourses(value: unknown): MadeCourses {
     ? (stored.defaultConnection as NonstopConnection)
     : 'fade';
   const titles = Array.isArray(stored.titles) ? stored.titles : [];
+  const constraints = Array.isArray(stored.constraints) ? stored.constraints : [];
   const courses = parseLr2CourseFile(stored.lr2crs).map((course, index) => {
     const names = titles[index];
+    const kept = constraints[index];
     return {
       ...course,
+      ...(Array.isArray(kept) ? { constraints: normalizeCourseConstraints(kept) } : {}),
       stages: course.stages.map((stage, stageIndex) => {
         const title = Array.isArray(names) ? names[stageIndex] : undefined;
         return typeof title === 'string' && title.length > 0 ? { ...stage, title } : stage;

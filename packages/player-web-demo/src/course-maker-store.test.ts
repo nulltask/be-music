@@ -1,4 +1,9 @@
-import { createCourseDraft, finishCourseDraft, withNonstopConnection } from '@be-music/player/course';
+import {
+  createCourseDraft,
+  finishCourseDraft,
+  withCourseConstraints,
+  withNonstopConnection,
+} from '@be-music/player/course';
 import { describe, expect, test } from 'vite-plus/test';
 import { parseMadeCourses, serializeMadeCourses } from './course-maker-store.ts';
 
@@ -14,7 +19,7 @@ function made(kind: 'nonstop' | 'grade', name: string) {
 describe('made courses storage', () => {
   test('round-trips the courses, their stage titles and the default connection', () => {
     const nonstop = withNonstopConnection(made('nonstop', 'Mine'), 0, 'blank1');
-    const grade = made('grade', 'Dan');
+    const grade = withCourseConstraints(made('grade', 'Dan'), ['grade', 'no_speed', 'gauge_7k']);
     const read = parseMadeCourses(
       JSON.parse(JSON.stringify(serializeMadeCourses({ courses: [nonstop, grade], defaultConnection: 'cut' }))),
     );

@@ -3,9 +3,13 @@
 // saved courses (rename, NONSTOP connections, delete, export as `.lr2crs`).
 
 import {
+  courseConstraintGroup,
   LR2_NONSTOP_CONNECTIONS,
   parseLr2NonstopConnections,
+  serializeBeatorajaCourseFile,
   serializeLr2CourseFile,
+  type CourseConstraint,
+  type CourseConstraintGroup,
   type CourseDefinition,
   type CourseKind,
   type NonstopConnection,
@@ -31,9 +35,97 @@ export function madeCourseConnections(course: CourseDefinition): NonstopConnecti
   return parseLr2NonstopConnections(header).slice(0, Math.max(0, course.stages.length - 1));
 }
 
+/** The constraint choices of each group, as beatoraja's course editor offers them; the first one is "none". */
+const CONSTRAINT_FIELDS: readonly {
+  group: CourseConstraintGroup;
+  label: string;
+  choices: readonly (readonly [CourseConstraint | '', string])[];
+}[] = [
+  {
+    group: 'option',
+    label: 'Lane option',
+    choices: [
+      ['', 'Free'],
+      ['grade', 'Off only (CLASS)'],
+      ['grade_mirror', 'Off or MIRROR'],
+      ['grade_random', 'Random family'],
+    ],
+  },
+  {
+    group: 'speed',
+    label: 'Hi-speed',
+    choices: [
+      ['', 'Free'],
+      ['no_speed', 'Locked'],
+    ],
+  },
+  {
+    group: 'judge',
+    label: 'Judge',
+    choices: [
+      ['', 'Normal'],
+      ['no_great', 'No GREAT'],
+      ['no_good', 'No GOOD'],
+    ],
+  },
+  {
+    group: 'gauge',
+    label: 'Gauge',
+    choices: [
+      ['', 'Player’s choice'],
+      ['gauge_lr2', 'LR2'],
+      ['gauge_5k', '5 keys'],
+      ['gauge_7k', '7 keys'],
+      ['gauge_9k', '9 keys'],
+      ['gauge_24k', '24 keys'],
+    ],
+  },
+  {
+    group: 'longNote',
+    label: 'Long notes',
+    choices: [
+      ['', 'As charted'],
+      ['ln', 'LN'],
+      ['cn', 'CN'],
+      ['hcn', 'HCN'],
+    ],
+  },
+];
+
+/**
+ * Selects for a course's constraints, one per group (beatoraja's `CourseDataConstraint`). A NONSTOP course has no
+ * long-note choice: the stitched chart does not carry a stage's long-note mode.
+ */
+function constraintEditor(
+  kind: CourseKind,
+  constraints: readonly CourseConstraint[],
+  onChange: (constraints: CourseConstraint[]) => void,
+): HTMLElement {
+  const fields = CONSTRAINT_FIELDS.filter((field) => kind !== 'nonstop' || field.group !== 'longNote');
+  return element(
+    'div',
+    { className: 'course-maker-constraints' },
+    fields.map((field) => {
+      const current = constraints.find((constraint) => courseConstraintGroup(constraint) === field.group) ?? '';
+      const select = element('select', { className: 'course-maker-select' });
+      for (const [value, label] of field.choices) {
+        const option = element('option', { text: label });
+        option.value = value;
+        option.selected = value === current;
+        select.append(option);
+      }
+      select.addEventListener('change', () => {
+        const others = constraints.filter((constraint) => courseConstraintGroup(constraint) !== field.group);
+        onChange(select.value === '' ? others : [...others, select.value as CourseConstraint]);
+      });
+      return element('label', { className: 'course-maker-field', text: field.label }, [select]);
+    }),
+  );
+}
+
 /** Offers `text` as a file download named `filename`. */
-function download(filename: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/xml' }));
+function download(filename: string, text: string, type = 'application/xml'): void {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
@@ -91,6 +183,7 @@ interface CardParts {
   name: HTMLInputElement;
   stages: HTMLOListElement;
   connection: HTMLElement;
+  constraints: HTMLElement;
   removeLast: HTMLButtonElement;
   save: HTMLButtonElement;
 }
@@ -176,6 +269,9 @@ export class CourseMakerPanel {
           ]
         : []),
     );
+    parts.constraints.replaceChildren(
+      constraintEditor(draft.kind, draft.constraints ?? [], (constraints) => this.maker.setConstraints(constraints)),
+    );
     parts.save.disabled = draft.stages.length === 0;
     parts.removeLast.disabled = draft.stages.length === 0;
   }
@@ -194,6 +290,7 @@ export class CourseMakerPanel {
       name,
       stages: element('ol', { className: 'course-maker-stages' }),
       connection: element('div'),
+      constraints: element('div'),
       removeLast: button('Remove last', 'account-dialog-quiet', () => this.maker.removeLast()),
       save: button('Save', 'account-dialog-primary', () => this.maker.finish()),
     };
@@ -202,6 +299,7 @@ export class CourseMakerPanel {
       parts.name,
       parts.stages,
       parts.connection,
+      parts.constraints,
       element('div', { className: 'course-maker-buttons' }, [
         parts.removeLast,
         button('Cancel', 'account-dialog-quiet', () => this.maker.cancel()),
@@ -224,6 +322,11 @@ export class CourseMakerPanel {
       download('my-courses.lr2crs', serializeLr2CourseFile(this.maker.courses)),
     );
     exportButton.disabled = courses.length === 0;
+    // beatoraja's course file keeps the constraints, which `.lr2crs` cannot hold; it has no NONSTOP courses.
+    const exportBeatoraja = button('Export beatoraja .json', 'account-dialog-quiet', () =>
+      download('my-courses.json', serializeBeatorajaCourseFile(this.maker.courses), 'application/json'),
+    );
+    exportBeatoraja.disabled = !courses.some((course) => course.kind !== 'nonstop');
     this.dialog.replaceChildren(
       element('div', { className: 'account-dialog-body' }, [
         element('header', {}, [
@@ -233,6 +336,7 @@ export class CourseMakerPanel {
         list,
         element('div', { className: 'course-maker-buttons' }, [
           exportButton,
+          exportBeatoraja,
           button('Close', 'account-dialog-primary', () => this.dialog.close()),
         ]),
       ]),
@@ -270,6 +374,9 @@ export class CourseMakerPanel {
         button('Delete', 'account-dialog-quiet', () => this.confirmDelete(course)),
       ]),
       stages,
+      constraintEditor(course.kind, course.constraints, (constraints) =>
+        this.maker.setCourseConstraints(course, constraints),
+      ),
     ]);
   }
 }
