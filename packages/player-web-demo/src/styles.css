@@ -250,6 +250,17 @@ textarea {
 }
 
 /*
+ * The canvas takes keyboard focus (tabindex 0) so the scenes get their keys, but it is the whole play surface: a focus
+ * ring would frame the screen, most visibly in fullscreen. The fullscreen shell gets none either.
+ */
+.stage canvas:focus,
+.stage canvas:focus-visible,
+.shell:fullscreen,
+.shell:-webkit-full-screen {
+  outline: none;
+}
+
+/*
  * Fullscreen target is `.shell` (not the canvas itself) so Pixi's
  * `resizeTo: #stage` still sees a 100%-of-viewport container after
  * the browser chrome disappears, and so the floating debug / help /
