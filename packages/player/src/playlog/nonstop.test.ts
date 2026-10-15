@@ -104,8 +104,14 @@ describe('NONSTOP play logs', () => {
   test('takes the course result from the stitched play and round-trips through the file format', async () => {
     const { stitched, playlog } = await playStitched();
     const noteStages = resolveNonstopNoteStages(stitched.chart, stitched.map, playlog.chart.notes);
-    const stages = resolveNonstopPlaylogStages(stitched.map);
-    const split = splitNonstopPlaylog({ playlog, stages, noteStages }, [{}, {}], { ruleset: 'lr2' });
+    // The first stage was resolved with a `#RANDOM` draw; the second had no control flow.
+    const stages = resolveNonstopPlaylogStages(stitched.map, [[{ command: 'RANDOM', range: 2, value: 1 }], []]);
+    expect(stages.map((stage) => stage.randomDraws)).toEqual([[{ command: 'RANDOM', range: 2, value: 1 }], undefined]);
+    const split = splitNonstopPlaylog(
+      { playlog, stages, noteStages },
+      [{ chartFingerprint: 'bmfp0:a' }, { chartFingerprint: 'bmfp0:b' }],
+      { ruleset: 'lr2' },
+    );
     const log = createCoursePlaylog({
       course: { name: 'Nonstop', kind: 'nonstop', constraints: [], trophies: [] },
       stages: split.map((stageLog) => ({ played: true as const, playlog: stageLog })),
@@ -128,6 +134,20 @@ describe('NONSTOP play logs', () => {
     expect(() =>
       parseCoursePlaylog({ ...JSON.parse(serializeCoursePlaylog(log)), nonstop: { ...log.nonstop, noteStages: [0] } }),
     ).toThrow(/noteStages/);
-    expect(checkCoursePlaylogEligibility(log)).toEqual({ eligible: false, reason: 'nonstop' });
+    // Ranked on its stitched play, keyed by the stage charts the cut-out stages name.
+    expect(checkCoursePlaylogEligibility(log)).toMatchObject({
+      eligible: true,
+      stages: [],
+      nonstop: { playFingerprint: playlog.chart.playFingerprint },
+    });
+    expect(() =>
+      parseCoursePlaylog({
+        ...JSON.parse(serializeCoursePlaylog(log)),
+        nonstop: {
+          ...log.nonstop,
+          stages: [{ ...stages[0], randomDraws: [{ command: 'RANDOM', range: 2, value: 3 }] }, stages[1]],
+        },
+      }),
+    ).toThrow(/nonstop\.stages\[0\]\.randomDraws\[0\]\.value/);
   });
 });

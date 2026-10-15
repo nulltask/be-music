@@ -109,4 +109,61 @@ describe('checkCoursePlaylogEligibility', () => {
       stage: 0,
     });
   });
+
+  test('accepts a NONSTOP run on its stitched play, keyed by the stage charts', () => {
+    const log = nonstopLog([stage('bmfp0:a'), unreached('bmfp0:b')], { autoScratch: true });
+    expect(checkCoursePlaylogEligibility(log)).toEqual({
+      eligible: true,
+      courseFingerprint: computeCoursePlaylogFingerprint(log),
+      stages: [],
+      nonstop: { chartFingerprint: 'bmfp0:stitched', playFingerprint: 'bmfp0:stitched' },
+      assistFlags: ['auto-scratch'],
+    });
+    // A NONSTOP play given up with ESC is a failed run.
+    expect(
+      checkCoursePlaylogEligibility(nonstopLog([stage('bmfp0:a'), stage('bmfp0:b')], { aborted: true })),
+    ).toMatchObject({
+      eligible: true,
+    });
+  });
+
+  test('rejects a NONSTOP run played on auto, without fingerprints or not covering the course', () => {
+    const stages = () => [stage('bmfp0:a'), stage('bmfp0:b')];
+    expect(checkCoursePlaylogEligibility(nonstopLog(stages(), { mode: 'auto' }))).toEqual({
+      eligible: false,
+      reason: 'auto-play',
+    });
+    const unnamed = nonstopLog(stages());
+    delete unnamed.nonstop!.playlog.chart.playFingerprint;
+    expect(checkCoursePlaylogEligibility(unnamed)).toEqual({ eligible: false, reason: 'missing-fingerprint' });
+    const cut = nonstopLog(stages());
+    const second = cut.stages[1]!;
+    if (second.played) delete second.playlog.chart.chartFingerprint;
+    expect(checkCoursePlaylogEligibility(cut)).toEqual({ eligible: false, reason: 'missing-fingerprint', stage: 1 });
+    const short = nonstopLog(stages());
+    short.nonstop!.stages.pop();
+    expect(checkCoursePlaylogEligibility(short)).toEqual({ eligible: false, reason: 'not-a-course-run' });
+    const notNonstop = nonstopLog(stages(), { course: { kind: 'grade' } });
+    expect(checkCoursePlaylogEligibility(notNonstop)).toEqual({ eligible: false, reason: 'not-a-course-run' });
+  });
 });
+
+/** A NONSTOP run over `stages` (their cut-out logs or unreached facts), with its stitched play. */
+function nonstopLog(
+  stages: PlaylogCourseStageEntry[],
+  play: Partial<BeMusicPlaylog['play']> = {},
+): BeMusicCoursePlaylog {
+  const stitched = stage('bmfp0:stitched', { course: { kind: 'nonstop' }, ...play });
+  if (!stitched.played) throw new Error('unreachable');
+  stitched.playlog.chart.playFingerprint = 'bmfp0:stitched';
+  const log = courseLog(stages);
+  log.course.kind = 'nonstop';
+  log.nonstop = {
+    connections: [],
+    placement: 'intended',
+    playlog: stitched.playlog,
+    stages: stages.map((_entry, index) => ({ offsetUs: index * 1_000_000, windowStartUs: index * 1_000_000, rate: 1 })),
+    noteStages: [],
+  };
+  return log;
+}
