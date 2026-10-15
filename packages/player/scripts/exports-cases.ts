@@ -83,6 +83,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.resolveBgmHeadroomGain(fixtures.playableRenderResult, fixtures.bgmRenderResult);
     },
   });
+  define('player.createTempoClock', {
+    run: () => {
+      const clock = playerApi.createTempoClock(1);
+      clock.setTempoAtClockMs(1000, 1.25);
+      clock.setTempoAtClockMs(2000, 0.75);
+      clock.chartSecondsAt(2500);
+      clock.clockMsAt(2.5);
+      clock.initialTempoMsAt(2500);
+    },
+  });
   define('player.resolveBmsControlFlowForPlayback', {
     run: (fixtures) => {
       playerApi.resolveBmsControlFlowForPlayback(fixtures.controlFlowJson, () => 0.42);

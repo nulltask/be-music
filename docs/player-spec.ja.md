@@ -651,6 +651,13 @@ scratch playable channel 上の演奏ノートだけを自動で処理し、そ�
 `speed` はゲーム内時間の進行速度です。
 `AUTO` / `MANUAL` ともに、譜面上の seconds を実時間へ換算する際に使います。
 
+`speed` は開始時のテンポです。ホストはプレイ中に入力コマンド `{ kind: 'tempo', tempo }` でこれを変えられます。
+エンジンはコマンドを取り出した譜面時刻で時計を付け替える（`createTempoClock`）ので、譜面時刻は途切れずに続き、そこから新しいテンポで進みます。
+変更はプレイログ（`play.tempoChanges`）に記録し、`AudioSession.setTempo` を呼び、`onTempoChange` でホストへ知らせます。
+判定と記録する入力は譜面時刻のままなので、再シミュレーションには影響しません。
+リプレイは、ホストがログの変更を `replayTempoChanges` で渡すとそれに従います。
+組み込みの Node 音声セッションは開始時のテンポで音声を作るので、変更には追従しません。
+
 ### `highSpeed`
 
 `highSpeed` は主に TUI の可視範囲とスクロール密度を変える表示用パラメータです。

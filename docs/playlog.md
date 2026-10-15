@@ -45,7 +45,9 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `tempo` times as fast; judgments and input times stay in chart time, so a re-simulation ignores it and a replay plays
    back at it; absent = 1, and on a log re-recorded from a replay, whose speed only sets how fast it is re-driven; such a
    practice play is not ranked; it is the tempo at the start, and `tempoChanges` lists `{ timeUs, tempo }` changes
-   during the play, any of which other than 1 also makes it practice), `view` and `viewChanges` (what the player saw:
+   during the play, any of which other than 1 also makes it practice; a host changes the tempo with the
+   `{ kind: 'tempo' }` input command, recorded at the chart time the engine applied it, and a replay follows the changes
+   when its host passes them as `PlayerOptions.replayTempoChanges`), `view` and `viewChanges` (what the player saw:
    the hi-speed, the hi-speed fix, the visible time in ms and each side's lane cover as fractions of the lane height —
    `sudden`, `hidden`, `lift` — at the start, then every change in chart time; a host sends changes as
    `{ kind: 'view' }` input commands; judgments do not depend on them, and a replay or ghost reproduces as much of them
