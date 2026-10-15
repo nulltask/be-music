@@ -586,6 +586,8 @@ class PlayerWebDemoApp {
   private currentBeatorajaPlayVariant: BeatorajaPlayableVariant | undefined;
   /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
   private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
+  /** The chart path {@link beatorajaGameplayPrep} was prepared for. */
+  private beatorajaGameplayPrepChartPath: string | undefined;
   /**
    * The most recently resolved chart for a beatoraja run, paired with the song's `chartPath` so
    * subsequent stages can verify the cached chart still matches the song they're handling.
@@ -3268,9 +3270,12 @@ class PlayerWebDemoApp {
     try {
       // Reuse the chart the decide scene resolved IFF it belongs to the song we're about to play, so decide and
       // gameplay show and play the same `#RANDOM` branches. When the cached chart is for a different `chartPath`
-      // (= the player reached gameplay via a path that bypassed decide), the prep resolves the chart itself.
+      // (= the player reached gameplay via a path that bypassed decide), the prep resolves the chart itself. A course
+      // stage always resolves its own: its chart carries the course's long-note constraint (`CourseSession.stageSong`).
       const preResolved =
-        this.lastBeatorajaChart?.chartPath === song.chartPath ? this.lastBeatorajaChart.resolved : undefined;
+        courseStage === undefined && this.lastBeatorajaChart?.chartPath === song.chartPath
+          ? this.lastBeatorajaChart.resolved
+          : undefined;
       prep = await prepareBeatorajaGameplayChart({
         song,
         source,
@@ -3295,6 +3300,7 @@ class PlayerWebDemoApp {
       return;
     }
     this.beatorajaGameplayPrep = prep;
+    this.beatorajaGameplayPrepChartPath = song.chartPath;
 
     // Decode the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps so play-scene destinations
     // referencing the synthetic ids (-100 / -101 / -102) can paint them. ModernChic's lane
@@ -4480,13 +4486,16 @@ class PlayerWebDemoApp {
       // `chartPath ⇒ chart` association even on the rare path where the prep had to fall back to
       // a fresh resolve (e.g. gameplay reached without going through decide). The audio / BGA
       // resources owned by `prep` still get released by `dispose()`.
-      const chartPath = this.lastBeatorajaChart?.chartPath;
+      // Stamped with the path the prep was made for, never the previous cache's: a course stage of another chart must
+      // not leave its chart under that chart's path.
+      const chartPath = this.beatorajaGameplayPrepChartPath;
       if (chartPath !== undefined) {
         const { chart, randomDraws } = this.beatorajaGameplayPrep;
         this.lastBeatorajaChart = { resolved: { chart, randomDraws }, chartPath };
       }
       void this.beatorajaGameplayPrep.dispose();
       this.beatorajaGameplayPrep = undefined;
+      this.beatorajaGameplayPrepChartPath = undefined;
     }
   }
 
