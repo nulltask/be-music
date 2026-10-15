@@ -1,3 +1,4 @@
+import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart';
 import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
 import {
@@ -154,10 +155,13 @@ class PlaylogSimulation {
   private lastAdvanceUs = Number.NEGATIVE_INFINITY;
   private readonly playlog: BeMusicPlaylog;
   private readonly config: RulesetConfig;
+  /** The scratch lanes of the play mode the log was played in (none in PMS and the keyboard modes). */
+  private readonly scratchChannels: ReadonlySet<string>;
 
   constructor(playlog: BeMusicPlaylog, config: RulesetConfig) {
     this.playlog = playlog;
     this.config = config;
+    this.scratchChannels = resolveScratchChannels(playlog.chart.laneMode);
     this.gauge = new RulesetGauge(config.gauge);
     this.buildLanes();
   }
@@ -271,7 +275,7 @@ class PlaylogSimulation {
   private laneFor(channel: string, autoPlay: boolean, autoScratch: boolean): SimLane {
     let lane = this.lanes.get(channel);
     if (!lane) {
-      const scratch = channel === '16' || channel === '26';
+      const scratch = this.scratchChannels.has(channel);
       lane = {
         channel,
         scratch,
@@ -748,6 +752,29 @@ function classifyJudge(dmUs: number, set: JudgeWindowSetUs): JudgeClassification
 
 function windowSetFor(candidate: SelectionCandidate, windows: RulesetWindowTables): JudgeWindowSetUs {
   return selectJudgeWindowSet(windows, { scratch: candidate.lane.scratch });
+}
+
+/** Play-mode layout per leading key count, for lane-mode strings that are not a layout label (`'7keys'`, `'14K'`). */
+const LAYOUT_BY_KEY_COUNT: Readonly<Record<string, PlayModeLayoutId>> = {
+  '5': '5',
+  '7': '7',
+  '9': '9-pms',
+  '10': '10',
+  '14': '14',
+  '24': '24',
+  '48': '48',
+};
+
+/**
+ * The scratch lanes of a recorded lane mode: the lanes the play-mode table marks `scratch` in the layout the engine
+ * played (`PlaylogChart.laneMode` is its label), the same set the engine binds as scratch. Other spellings resolve by
+ * their leading key count, as the ruleset reads the lane mode, with 7 KEY for anything else.
+ */
+function resolveScratchChannels(laneMode: string): ReadonlySet<string> {
+  const layout =
+    Object.values(PLAY_MODE_LAYOUTS).find((candidate) => candidate.label === laneMode) ??
+    PLAY_MODE_LAYOUTS[LAYOUT_BY_KEY_COUNT[/^\d+/.exec(laneMode)?.[0] ?? ''] ?? '7'];
+  return new Set(layout.lanes.filter((lane) => lane.kind === 'scratch').map((lane) => lane.channel));
 }
 
 /**

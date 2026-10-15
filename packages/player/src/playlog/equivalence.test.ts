@@ -1,7 +1,7 @@
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { manualPlay } from '../index.ts';
-import type { PlayerSummary } from '../core/engine.ts';
+import type { PlayerOptions, PlayerSummary } from '../core/engine.ts';
 import { resolveRulesetConfig, simulatePlaylog } from './simulate.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from './format.ts';
 import type { PlaylogRulesetId } from '../ruleset/index.ts';
@@ -25,9 +25,11 @@ async function replay(
   json: BeMusicJson,
   inputs: readonly PlaylogInputEvent[],
   ruleset: PlaylogRulesetId,
+  extra: PlayerOptions = {},
 ): Promise<ReplayRun> {
   let playlog: BeMusicPlaylog | undefined;
   const summary = await manualPlay(json, {
+    ...extra,
     speed: 16,
     leadInMs: 0,
     audio: false,
@@ -301,6 +303,23 @@ describe('engine / simulator equivalence', () => {
     expect(playlog.results?.native?.maxCombo).toBe(simulated.maxCombo);
     if (ruleset === 'beatoraja') {
       expect(simulated.maxCombo).toBe(2);
+    }
+  });
+
+  // Channel 16 is a key, not a scratch, in the BME-type 9 KEY layout and the keyboard modes: AUTO SCRATCH must leave
+  // it to the player on both sides.
+  test.each(RULESETS)('%s: AUTO SCRATCH leaves channel 16 alone where it is a key', async (ruleset) => {
+    for (const playVariant of ['9', '24'] as const) {
+      const channels =
+        playVariant === '9' ? ['11', '12', '13', '14', '15', '16', '17', '18', '19'] : ['11', '16', '1A'];
+      const json = chart(channels.map((channel) => ({ measure: 1, channel, position: [0, 1], value: '01' })));
+      const inputs = [down(0, 1_000_000, '11'), up(1, 1_040_000, '11')];
+
+      const { summary, playlog } = await replay(json, inputs, ruleset, { autoScratch: true, playVariant });
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.poor], playVariant).toEqual([simulated.judge.pgreat, simulated.judge.poor]);
+      expect(summary.perfect, playVariant).toBe(1);
     }
   });
 
