@@ -103,7 +103,7 @@ Courses play through the same select → play → result scenes. See [Courses an
     - beatoraja skins light `GRADEBAR` (op 3) and draw the `bar-grade` frame, or `bar-nosong` when a stage is missing.
 - **Play:**
   - The stages play in order. Each stage runs with `PlayerOptions.course`: the course kind, its gauge set and judge constraint, and the gauge value and course combo the previous stage left.
-  - Dismissing a stage's result starts the next stage.
+  - Dismissing a stage's result starts the next stage. With **Course: skip stage results** on (Debug Menu → Play options), the next stage starts as soon as a stage ends, and only the course result is shown.
   - A stage whose gauge empties ends the course.
   - ESC gives the course up, and F5 / quick retry is off.
   - The course constraints are applied:

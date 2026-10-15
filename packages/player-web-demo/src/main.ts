@@ -775,6 +775,7 @@ class PlayerWebDemoApp {
       // play-log (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
       // scene mounts.
       autoSavePlaylog: false,
+      courseAutoAdvance: false,
       // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
       submitToLeaderboard: false,
       // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
@@ -1244,6 +1245,12 @@ class PlayerWebDemoApp {
           this.selectView?.setPlayOptions({ gauge1P: value });
         }),
     );
+    folder
+      .add(this.guiState, 'courseAutoAdvance')
+      .name('Course: skip stage results')
+      .onChange((value: boolean) => {
+        this.guiState.courseAutoAdvance = value;
+      });
     trackPlayOption(
       folder
         .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
@@ -2918,7 +2925,9 @@ class PlayerWebDemoApp {
           // A course stage: its play log carries the course on, and leaving its result plays the next stage.
           if (courseStage !== undefined && this.courseSession !== undefined) {
             this.courseSession.recordStage(playlog);
-            const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
+            // With stage results skipped, go straight on to the next stage (or the course result).
+            const mounted =
+              !this.guiState.courseAutoAdvance && (await this.showBeatorajaResult(song, summary, maxCombo, history));
             if (!mounted) this.continueCourse();
             this.unlockPlaylogOptions();
             return;
@@ -4400,6 +4409,17 @@ class PlayerWebDemoApp {
         void this.finishGameplayThen(() => this.showSelect());
       },
       onChartFinished: (result: PixiGameplayResultData) => {
+        // A course stage with stage results skipped goes straight on to the next stage (or the course result).
+        if (courseStage !== undefined && this.courseSession !== undefined && this.guiState.courseAutoAdvance) {
+          void this.finishGameplayThen(async () => {
+            this.courseSession?.recordStage(result.playlog);
+            this.gameplayView?.dispose({ preserveAudioTail: true });
+            this.gameplayView = undefined;
+            this.unlockPlaylogOptions();
+            this.continueCourse();
+          });
+          return;
+        }
         void this.finishGameplayThen(() => this.showResult(result));
       },
       onRestart: () => {
