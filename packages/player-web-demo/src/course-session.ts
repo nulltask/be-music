@@ -18,7 +18,20 @@ import {
   type CourseLaneOption,
 } from '@be-music/player-web/collection';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
-import type { BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/player-web/skin';
+import type {
+  BeMusicCourseRecord,
+  BeMusicSongRecord,
+  GaugeHistorySample,
+  ScoreHistorySample,
+} from '@be-music/player-web/skin';
+
+const EMPTY_HISTORY: CourseStageHistory = { gaugeHistory: [], scoreHistory: [] };
+
+/** A stage's gauge and EX-score polylines (`progress` 0..1 over the stage), as its result shows them. */
+export interface CourseStageHistory {
+  gaugeHistory: readonly GaugeHistorySample[];
+  scoreHistory: readonly ScoreHistorySample[];
+}
 
 /** What the next stage of a running course plays: its chart (with the course's long-note constraint applied) and settings. */
 export interface CourseStagePlan {
@@ -41,6 +54,8 @@ export interface CourseStagePlan {
 export class CourseSession {
   readonly course: BrowserCourseEntry;
   private readonly logs: BeMusicPlaylog[] = [];
+  /** Each played stage's polylines, in order (empty for a stage given up or played without them). */
+  private readonly histories: CourseStageHistory[] = [];
   private ended = false;
 
   constructor(course: BrowserCourseEntry) {
@@ -110,10 +125,13 @@ export class CourseSession {
    * Records a finished stage's play log. Returns whether the course goes on: it ends when the stage's gauge emptied,
    * when it was the last stage, or when the stage left no play log (nothing to carry on from).
    */
-  recordStage(playlog: BeMusicPlaylog | undefined): 'next' | 'finished' {
+  recordStage(playlog: BeMusicPlaylog | undefined, history?: CourseStageHistory): 'next' | 'finished' {
     if (this.ended) return 'finished';
     const goesOn = this.goesOnAfter(playlog);
-    if (playlog?.results?.native !== undefined) this.logs.push(playlog);
+    if (playlog?.results?.native !== undefined) {
+      this.logs.push(playlog);
+      this.histories.push(history ?? EMPTY_HISTORY);
+    }
     if (!goesOn) {
       this.ended = true;
       return 'finished';
@@ -136,8 +154,16 @@ export class CourseSession {
    */
   giveUp(playlog: BeMusicPlaylog | undefined): void {
     if (this.ended) return;
-    if (playlog?.results?.native !== undefined) this.logs.push(playlog);
+    if (playlog?.results?.native !== undefined) {
+      this.logs.push(playlog);
+      this.histories.push(EMPTY_HISTORY);
+    }
     this.ended = true;
+  }
+
+  /** The polylines of every stage played, in order (a stage given up has none). */
+  get stageHistories(): readonly CourseStageHistory[] {
+    return this.histories;
   }
 
   /**
@@ -231,13 +257,52 @@ export function lookupCourseRecord(
 }
 
 /**
+ * Every stage's polylines joined into one over the whole course, as beatoraja's course result draws its graphs
+ * (`CourseResult.create`): each stage takes a share of the width by its `weights` (its length), the EX score runs on
+ * from the stages before it, and a stage the run never reached reads a gauge of 0 (beatoraja fills it with zeros) with
+ * the EX score where the run left it.
+ */
+export function joinCourseStageHistories(
+  stages: readonly CourseStageHistory[],
+  weights: readonly number[],
+): CourseStageHistory {
+  const total = weights.reduce((sum, weight) => sum + Math.max(0, weight), 0);
+  const share = (index: number): number =>
+    total > 0 ? Math.max(0, weights[index] ?? 0) / total : 1 / Math.max(1, weights.length);
+  const gaugeHistory: GaugeHistorySample[] = [];
+  const scoreHistory: ScoreHistorySample[] = [];
+  let start = 0;
+  let exScore = 0;
+  weights.forEach((_weight, index) => {
+    const width = share(index);
+    const stage = stages[index];
+    if (stage === undefined) {
+      gaugeHistory.push({ progress: start, value: 0 }, { progress: start + width, value: 0 });
+      scoreHistory.push({ progress: start, exScore }, { progress: start + width, exScore });
+    } else {
+      for (const sample of stage.gaugeHistory) {
+        gaugeHistory.push({ progress: start + sample.progress * width, value: sample.value });
+      }
+      for (const sample of stage.scoreHistory) {
+        scoreHistory.push({ progress: start + sample.progress * width, exScore: exScore + sample.exScore });
+      }
+      exScore += stage.scoreHistory.at(-1)?.exScore ?? 0;
+    }
+    start += width;
+  });
+  return { gaugeHistory, scoreHistory };
+}
+
+/**
  * The course result as the result scene shows one run: the course's summed judgments, BP, course max combo and final
- * gauge, under the course's name (the first stage's chart supplies the song images).
+ * gauge, under the course's name (the first stage's chart supplies the song images). `history` is the graph it draws:
+ * LR2 shows the last stage's (its result clears the graph at each stage start, OpenLR2 L24151).
  */
 export function buildCourseResultData(
   course: BrowserCourseEntry,
   result: PlaylogCourseResult,
   courseLog: BeMusicCoursePlaylog,
+  history: CourseStageHistory = EMPTY_HISTORY,
 ): PixiGameplayResultData {
   const first = course.stages[0]!.song!;
   const lastStage = [...courseLog.stages].reverse().find((entry) => entry.played);
@@ -264,8 +329,8 @@ export function buildCourseResultData(
       subtitle: `${result.stagesPlayed} / ${course.stages.length} STAGES${result.trophy !== undefined ? ` · ${result.trophy}` : ''}`,
       totalNotes: result.noteCount,
     },
-    gaugeHistory: [],
-    scoreHistory: [],
+    gaugeHistory: [...history.gaugeHistory],
+    scoreHistory: [...history.scoreHistory],
     lamp: result.lamp,
     gaugeType: result.gauge.type,
     judgeRuleset: lastStage?.played === true ? (lastStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2',

@@ -8,6 +8,7 @@ import {
   buildCourseResultSummary,
   CourseSession,
   courseRecordKey,
+  joinCourseStageHistories,
   lookupCourseRecord,
   skipsCourseStageResult,
 } from './course-session.ts';
@@ -158,6 +159,14 @@ describe('CourseSession', () => {
     expect(session.goesOnAfter(stageLog({}))).toBe(false);
   });
 
+  test('keeps each played stage’s graphs', () => {
+    const session = new CourseSession(course([]));
+    const history = { gaugeHistory: [{ progress: 1, value: 80 }], scoreHistory: [{ progress: 1, exScore: 20 }] };
+    session.recordStage(stageLog({}), history);
+    session.giveUp(stageLog({}));
+    expect(session.stageHistories).toEqual([history, { gaugeHistory: [], scoreHistory: [] }]);
+  });
+
   test('refuses a course with a missing stage', () => {
     expect(() => new CourseSession({ ...course(), playable: false })).toThrow('not in the collection');
   });
@@ -253,5 +262,56 @@ describe('lookupCourseRecord', () => {
     const random = { ...dan(), random: { name: 'r', stages: [], constraints: [], trophies: [] } };
     expect(lookupCourseRecord(random as unknown as BrowserCourseEntry, records)).toBeUndefined();
     expect(lookupCourseRecord(dan(), records)).toEqual({ lamp: 'HARD' });
+  });
+});
+
+describe('joinCourseStageHistories', () => {
+  test('lays the stages side by side by length, the EX score running on, an unreached stage at gauge 0', () => {
+    const joined = joinCourseStageHistories(
+      [
+        {
+          gaugeHistory: [
+            { progress: 0, value: 100 },
+            { progress: 1, value: 60 },
+          ],
+          scoreHistory: [
+            { progress: 0, exScore: 0 },
+            { progress: 1, exScore: 30 },
+          ],
+        },
+        {
+          gaugeHistory: [
+            { progress: 0, value: 60 },
+            { progress: 1, value: 10 },
+          ],
+          scoreHistory: [
+            { progress: 0, exScore: 0 },
+            { progress: 1, exScore: 10 },
+          ],
+        },
+      ],
+      [2, 1, 1],
+    );
+    expect(joined.gaugeHistory).toEqual([
+      { progress: 0, value: 100 },
+      { progress: 0.5, value: 60 },
+      { progress: 0.5, value: 60 },
+      { progress: 0.75, value: 10 },
+      { progress: 0.75, value: 0 },
+      { progress: 1, value: 0 },
+    ]);
+    expect(joined.scoreHistory).toEqual([
+      { progress: 0, exScore: 0 },
+      { progress: 0.5, exScore: 30 },
+      { progress: 0.5, exScore: 30 },
+      { progress: 0.75, exScore: 40 },
+      { progress: 0.75, exScore: 40 },
+      { progress: 1, exScore: 40 },
+    ]);
+  });
+
+  test('shares the width evenly when no stage has a length', () => {
+    const joined = joinCourseStageHistories([], [0, 0]);
+    expect(joined.gaugeHistory.map((sample) => sample.progress)).toEqual([0, 0.5, 0.5, 1]);
   });
 });
