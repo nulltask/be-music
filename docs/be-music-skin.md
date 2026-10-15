@@ -510,7 +510,7 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 ## Versioning
 
 - **When to bump `version`:** whenever you release the skin. Follow semantic versioning from the player's point of view: a new look is a minor version, a fix is a patch.
-- **`apiVersion`:** set it to the SDK constant you built against. When the skin API changes incompatibly, the player raises `BE_MUSIC_SKIN_API_VERSION`. Skins written for an older revision are then refused until they are rebuilt against the new SDK.
+- **`apiVersion`:** set it to the SDK constant you built against. The skin API is still being defined: its revision is `0`, and it may change incompatibly without the number moving, so rebuild your skin against each new SDK. The first stable revision will be `1`; from then on, an incompatible change raises `BE_MUSIC_SKIN_API_VERSION`, and skins written for an older revision are refused until they are rebuilt. Skins that declared `1` before the API was marked unstable still run.
 - **Keep `id` stable:** hosts persist the selected skin by its `id`.
 
 ## Checklist
