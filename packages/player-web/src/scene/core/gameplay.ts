@@ -99,6 +99,8 @@ import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { advanceCourseCombo, createCourseCombo, type CourseComboState } from './course-combo.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
+import type { NonstopStitchMap } from '@be-music/player/course';
+import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
@@ -578,6 +580,11 @@ export interface CoreGameplayViewOptions {
    * texts 150-170; beatoraja's course strings). Display only; the judging follows {@link course}.
    */
   courseInfo?: SceneCourseInfo;
+  /**
+   * The chart is a stitched NONSTOP course (`stitchNonstopCourse`'s map): each stage's samples play at its FIT rate
+   * and its background sound fades at the stage seams.
+   */
+  nonstop?: NonstopStitchMap;
   /** The hi-speed cannot be changed during play (a course's `no_speed` constraint). */
   hiSpeedLocked?: boolean;
   /**
@@ -914,6 +921,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * sample-accurate Web Audio timing.
    */
   private audioContextStartTime = 0;
+  /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
+  private nonstopMixer: NonstopStageMixer | undefined;
   protected paused = false;
   private pauseTime = 0;
   private pauseTotal = 0;
@@ -1774,6 +1783,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.startTime = performance.now();
       if (this.audioContext) {
         this.audioContextStartTime = this.audioContext.currentTime;
+        this.nonstopMixer?.schedule(this.audioContextStartTime);
       }
       // Hand chart playback over to `@be-music/player`'s engine. Fires only after the play-start gate (= same instant
       // the legacy self-judge would have started consuming notes), so the engine's chart-time t=0 lines up with the
@@ -2083,6 +2093,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         : 0;
     const webAudioSession = this.webAudioSession;
     this.webAudioSession = undefined;
+    this.nonstopMixer?.dispose();
+    this.nonstopMixer = undefined;
     // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
     // The bus doesn't own the AudioContext itself; closing that is the next step.
     this.audioAnalyzer?.dispose();
@@ -2724,6 +2736,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
     // it. See the field doc for why this beats keeping the audio plumbing inline on the view.
     if (!this.disposed && this.audioContext && this.audioBus) {
+      this.nonstopMixer?.dispose();
+      this.nonstopMixer =
+        this.options.nonstop !== undefined
+          ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop)
+          : undefined;
       this.webAudioSession = createWebAudioSession({
         audioContext: this.audioContext,
         audioBus: this.audioBus,
@@ -2731,6 +2748,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         decodedSamples: this.decodedSamples,
         wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
         bmsonSlicePlayback: this.bmsonSlicePlayback,
+        ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
       });
     }
   }
@@ -5258,6 +5276,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (!this.sharedEngineClockAnchored && frame.currentSeconds > 0 && this.audioContext) {
       this.audioContextStartTime = this.audioContext.currentTime - frame.currentSeconds;
       this.sharedEngineClockAnchored = true;
+      this.nonstopMixer?.schedule(this.audioContextStartTime);
     }
     this.applyEngineSummary(frame.summary);
   }

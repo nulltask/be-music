@@ -44,6 +44,7 @@ function createMocks(): {
     createBufferSource: vi.fn(() => {
       const node = {
         buffer: null as AudioBuffer | null,
+        playbackRate: { value: 1 },
         onended: null as null | (() => void),
         connect: vi.fn(),
         disconnect: vi.fn(),
@@ -139,6 +140,38 @@ describe('createWebAudioSession', () => {
     expect(trackedBufferSources).toHaveLength(2);
     expect(trackedBufferSources[0]!.connectedTo).toBe(keyMixer);
     expect(trackedBufferSources[1]!.connectedTo).toBe(bgmMixer);
+  });
+
+  test("plays a stitched NONSTOP stage's samples at its rate and its background through its fade", () => {
+    const { audioContext, audioBus, trackedBufferSources, keyMixer } = createMocks();
+    const stageFade = { connect: vi.fn() } as unknown as GainNode;
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer()],
+        ['bgm.wav', makeMockAudioBuffer()],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+      stageMixer: {
+        stageOf: (key) => (key === '03' || key === '01' ? 1 : undefined),
+        rate: () => 1.25,
+        bgmInput: () => stageFade,
+      },
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('01', '03'));
+    session.triggerEvent?.(mkEvent('01', '02'));
+    const [key, bgm, other] = trackedBufferSources;
+    // The player's keysound keeps the key bus but plays at the stage's rate.
+    expect(key!.connectedTo).toBe(keyMixer);
+    expect(key!.node.playbackRate.value).toBe(1.25);
+    expect(bgm!.connectedTo).toBe(stageFade);
+    expect(bgm!.node.playbackRate.value).toBe(1.25);
+    // A sample of no stage is left alone.
+    expect(other?.node.playbackRate.value ?? 1).toBe(1);
   });
 
   test('applies #WAVCMD per-slot gain via an intermediate GainNode', () => {
