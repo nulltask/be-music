@@ -7,11 +7,17 @@ import { preferJudgeCandidate, type JudgeSelectionCandidate } from '../ruleset/s
 import {
   isLongPlayableNote,
   judgeDeltaUs,
+  resolveLongNoteEarlyReleaseJudge,
   resolveManualTimedJudge,
   resolveRulesetLongNoteMode,
   toUiLongNoteMode,
 } from './judge-rules.ts';
-import { detonateLandminesOnPress, laneHoldHistory, processLandminePassage } from './judge-core-advance.ts';
+import {
+  advanceJudgeState,
+  detonateLandminesOnPress,
+  laneHoldHistory,
+  processLandminePassage,
+} from './judge-core-advance.ts';
 import { recordLaneDown, recordLaneUp } from './lane-hold.ts';
 import {
   applyGaugeJudge,
@@ -228,9 +234,15 @@ export function handleLanePress(
   }
 
   let refreshedHold = false;
+  // Lanes whose long note was let go and is waiting out the ruleset's release margin: pressing again resumes the hold,
+  // so the press judges nothing else on them (beatoraja's re-press, `releasetime` reset).
+  const resumedChannels = new Set<string>();
   for (const channel of candidateChannels) {
     if (!state.activeLongNotes.has(channel)) {
       continue;
+    }
+    if (state.keyStateInput && state.longHoldReleaseSeconds.delete(channel)) {
+      resumedChannels.add(channel);
     }
     state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_REPEAT_HOLD_GRACE_MS);
     refreshedHold = true;
@@ -250,14 +262,21 @@ export function handleLanePress(
   // selection, timing deltas, windows, the lane keysound and the empty-POOR reach all read `judgeSec`, while the
   // judgments, logs, gauge history and UI cues keep the true `nowSec`.
   const judgeSec = toJudgeClock(config, nowSec);
-  const selected = selectPressCandidate(state, judgeSec, candidateChannels);
+  const judgedChannels =
+    resumedChannels.size === 0
+      ? candidateChannels
+      : new Set([...candidateChannels].filter((channel) => !resumedChannels.has(channel)));
+  if (judgedChannels.size === 0) {
+    return;
+  }
+  const selected = selectPressCandidate(state, judgeSec, judgedChannels);
 
   if (!selected) {
     if (refreshedHold) {
       // Active LN re-tap inside the hold-grace window — input is part of the sustain, not a phantom press.
       return;
     }
-    if (!state.keyStateInput && isLongNoteRepeatSuppressedInput(state, candidateChannels, nowSec)) {
+    if (!state.keyStateInput && isLongNoteRepeatSuppressedInput(state, judgedChannels, nowSec)) {
       // LN repeat-suppress window — terminal key repeat without release events re-sends the key that played a long
       // note, so a note-less press on its lane before the tail is not a phantom. With key-state input every press is a
       // real press and is judged as LR2 and beatoraja judge it.
@@ -265,7 +284,7 @@ export function handleLanePress(
     }
     const fallback = findLaneSoundCandidate(
       config.laneSoundNotes,
-      candidateChannels,
+      judgedChannels,
       judgeSec,
       maxJudgeEarlyReachSeconds(config, judgeSec),
     );
@@ -282,7 +301,7 @@ export function handleLanePress(
         return;
       }
     }
-    if (!hasEmptyPoorReferenceNote(state, candidateChannels, judgeSec)) {
+    if (!hasEmptyPoorReferenceNote(state, judgedChannels, judgeSec)) {
       // No note in the ruleset's miss window — the press is harmless: only the lane keysound plays.
       return;
     }
@@ -320,7 +339,7 @@ export function handleLanePress(
   const signedDeltaMs = (judgeSec - candidate.seconds) * 1000;
   const collectMultiBad = (): void => {
     if (ruleset.multiBad) {
-      applyMultiBadCollector(state, judgeSec, candidateChannels, candidate, selected.judge, nowSec, emit);
+      applyMultiBadCollector(state, judgeSec, judgedChannels, candidate, selected.judge, nowSec, emit);
     }
   };
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel } });
@@ -430,13 +449,43 @@ export function handleLaneRelease(
   state.keyStateInput = true;
   // The release's own instant (a live driver drains it later than it happened; the play log records the instant).
   const releaseMs = input.nowMs - (input.nowSec - input.recordSec) * state.config.judgeMsPerChartSecond;
+  let settleNow = false;
   for (const channel of input.channels) {
     recordLaneUp(laneHoldHistory(state, channel), input.tokens, releaseMs);
     state.heldChannels.delete(channel);
     emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
     if (state.activeLongNotes.has(channel)) {
-      state.longHoldUntilMs.set(channel, input.nowMs);
       state.longHoldReleaseSeconds.set(channel, input.nowSec);
+      const marginMs = resolveLongNoteReleaseMarginMs(state, channel, input.nowSec);
+      // A release settles its long note at once, unless the ruleset lets a BAD-or-worse early release wait out a
+      // margin in which the lane can be pressed again (beatoraja's `longnoteMargin`).
+      state.longHoldUntilMs.set(channel, marginMs > 0 ? input.nowMs + marginMs : Number.NEGATIVE_INFINITY);
+      settleNow ||= marginMs === 0;
     }
   }
+  if (settleNow) {
+    advanceJudgeState(state, input.nowSec, input.nowMs, emit);
+  }
+}
+
+/**
+ * How long (ms on the judge's clock) a long note released at `nowSec` waits before it settles: the ruleset's release
+ * margin when the release would score BAD or worse before the tail, 0 otherwise.
+ */
+function resolveLongNoteReleaseMarginMs(state: JudgeCoreState, channel: string, nowSec: number): number {
+  const { config } = state;
+  const hold = state.activeLongNotes.get(channel)!;
+  const margins = config.ruleset.longNoteReleaseMarginUs;
+  const marginUs = config.scratchChannels.has(channel) ? margins.scratch : margins.note;
+  const judgeSec = toJudgeClock(config, nowSec);
+  if (marginUs === 0 || judgeSec >= hold.endSeconds) {
+    return 0;
+  }
+  const releaseDeltaMs = (judgeSec - hold.endSeconds) * 1000;
+  const endWindows = judgeWindowsFor(config, channel, hold.endSeconds, true);
+  const judge =
+    hold.mode === 1
+      ? resolveLongNoteEarlyReleaseJudge(config.ruleset, hold.headJudge, releaseDeltaMs, endWindows)
+      : resolveManualTimedJudge(releaseDeltaMs, endWindows);
+  return judge.kind === 'BAD' || judge.kind === 'POOR' ? (marginUs / 1e6) * config.judgeMsPerChartSecond : 0;
 }

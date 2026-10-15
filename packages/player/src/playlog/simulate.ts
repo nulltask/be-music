@@ -75,6 +75,7 @@ export function simulatePlaylogRulesets(
 const TIMED_EVENT_ORDER = {
   'ln-complete': 0,
   'hold-deadline': 0,
+  'release-settle': 0,
   auto: 1,
   miss: 2,
   'mine-enter': 3,
@@ -130,6 +131,11 @@ interface ActiveHold {
   tailMissDeadlineUs: number;
   /** Signed HCN tick accumulator (µs). */
   hcnCounterUs: number;
+  /**
+   * A release waiting out the ruleset's long-note release margin: settled with `judge` at `atUs` unless the lane is
+   * pressed again first, which resumes the hold.
+   */
+  pendingRelease?: { atUs: number; judge: GaugeJudgeIndex; dmUs: number };
 }
 
 interface SimLane {
@@ -318,7 +324,15 @@ class PlaylogSimulation {
     }
     interface TimedEvent {
       timeUs: number;
-      kind: 'ln-complete' | 'hold-deadline' | 'auto' | 'miss' | 'mine-enter' | 'mine' | 'mine-settle';
+      kind:
+        | 'ln-complete'
+        | 'hold-deadline'
+        | 'release-settle'
+        | 'auto'
+        | 'miss'
+        | 'mine-enter'
+        | 'mine'
+        | 'mine-settle';
       lane: SimLane;
       note?: SimNote;
       mine?: SimMine;
@@ -345,6 +359,10 @@ class PlaylogSimulation {
         }
         if (lane.hold && lane.hold.tailMissDeadlineUs < untilUs) {
           events.push({ timeUs: lane.hold.tailMissDeadlineUs, kind: 'hold-deadline', lane, note: lane.hold.note });
+        }
+        const pending = lane.hold?.pendingRelease;
+        if (lane.hold && pending && pending.atUs < untilUs) {
+          events.push({ timeUs: pending.atUs, kind: 'release-settle', lane, note: lane.hold.note });
         }
         if (lane.hold && lane.hold.note.longStyle === 1 && lane.hold.note.endTimeUs! < untilUs) {
           // An LN held to its tail confirms its deferred head judgment there, in time order with everything else.
@@ -403,6 +421,14 @@ class PlaylogSimulation {
         if (event.lane.held) this.detonateMine(event.mine!);
       } else if (event.kind === 'mine-settle') {
         event.mine!.applied = true;
+      } else if (event.kind === 'release-settle') {
+        const lane = event.lane;
+        const hold = lane.hold;
+        if (!hold || hold.note !== event.note || !hold.pendingRelease) continue;
+        lane.hold = undefined;
+        hold.note.holding = false;
+        hold.note.judged = true;
+        this.applyJudge(hold.pendingRelease.judge, hold.pendingRelease.dmUs);
       } else if (event.kind === 'ln-complete') {
         const lane = event.lane;
         const hold = lane.hold;
@@ -504,10 +530,16 @@ class PlaylogSimulation {
   private handleDown(input: PlaylogInputEvent, minePressLegLive: boolean): void {
     const timeUs = input.timeUs;
     const windows = this.config.windowsAt(timeUs);
-    const lanes = this.resolveInputLanes(input);
-    for (const lane of lanes) {
+    const pressed = this.resolveInputLanes(input);
+    for (const lane of pressed) {
       lane.held = true;
     }
+    // Pressing a lane whose release is waiting out the margin resumes its hold: that press judges nothing else.
+    const lanes = pressed.filter((lane) => {
+      if (lane.hold?.pendingRelease === undefined) return true;
+      lane.hold.pendingRelease = undefined;
+      return false;
+    });
     if (lanes.length === 0) {
       return;
     }
@@ -551,13 +583,11 @@ class PlaylogSimulation {
         longNoteEnd: true,
       });
       const dmUs = note.endTimeUs! - timeUs;
-      lane.hold = undefined;
-      note.holding = false;
-      note.judged = true;
+      let released: { judge: GaugeJudgeIndex; dmUs: number };
       if (note.longStyle === 1) {
         // LN: the ruleset decides how a release before the tail combines with the deferred head judgment.
         const headJudge = hold.headJudge ?? JUDGE_BAD;
-        const released = resolveLnEarlyRelease(
+        released = resolveLnEarlyRelease(
           this.config,
           {
             judge: (headJudge > JUDGE_MISS_POOR ? JUDGE_MISS_POOR : headJudge) as LnJudgeIndex,
@@ -566,13 +596,23 @@ class PlaylogSimulation {
           dmUs,
           endWindows,
         );
-        this.applyJudge(released.judge, released.dmUs);
       } else {
         // CN / HCN tail: judged by the release timing; early releases beyond the windows are POOR.
         const endJudge = classifyJudge(dmUs, endWindows);
-        const judge = endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge;
-        this.applyJudge(judge, dmUs);
+        released = { judge: endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge, dmUs };
       }
+      const marginUs = note.scratch
+        ? this.config.longNoteReleaseMarginUs.scratch
+        : this.config.longNoteReleaseMarginUs.note;
+      if (marginUs > 0 && released.judge >= JUDGE_BAD && released.dmUs > 0) {
+        // beatoraja: a release that would score BAD or worse before the tail waits out the margin (`releasetime`).
+        hold.pendingRelease = { atUs: timeUs + marginUs, ...released };
+        continue;
+      }
+      lane.hold = undefined;
+      note.holding = false;
+      note.judged = true;
+      this.applyJudge(released.judge, released.dmUs);
     }
   }
 
