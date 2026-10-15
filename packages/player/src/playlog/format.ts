@@ -178,6 +178,13 @@ export interface PlaylogPlay {
   endOnFailure?: boolean;
   /** Set when the play was one stage of a course: what the stage's rules and starting state were. */
   course?: PlaylogCourseStage;
+  /**
+   * The play tempo (`PlayerOptions.speed`): the chart, its audio and the play clock ran `tempo` times as fast (0.5 to
+   * 1.5 in the web player). Judgments and input times stay in chart time, so a re-simulation is unaffected; a replay
+   * plays back at the same tempo. Absent = 1, and on a log re-recorded from a replay (`replayInputs`), whose speed only
+   * sets how fast it is re-driven. A play at another tempo is a practice play and is not ranked.
+   */
+  tempo?: number;
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
   native?: Record<string, string | number | boolean | null>;
 }
@@ -551,6 +558,11 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
   if (play.course !== undefined) parsed.course = parseCourseStage(expectRecord(play.course, 'play.course'));
+  if (play.tempo !== undefined) {
+    const tempo = expectFiniteNumber(play.tempo, 'play.tempo');
+    if (!(tempo > 0)) throw new PlaylogParseError('play.tempo: expected a positive number');
+    if (tempo !== 1) parsed.tempo = tempo;
+  }
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');
     const copied: Record<string, string | number | boolean | null> = {};

@@ -1,8 +1,9 @@
 import type { NonstopFade, NonstopStitchMap } from '@be-music/player/course';
+import { chartToElapsedSeconds } from './play-tempo.ts';
 
 /**
  * How a {@link createWebAudioSession} session plays a stitched NONSTOP chart's samples: which stage a stitched WAV key
- * belongs to, the playback rate of that stage's samples (FIT changes their pitch), and where a stage's background sound
+ * belongs to, the playback rate of that stage's samples on top of the play tempo (FIT changes their pitch), and where a stage's background sound
  * goes so its fades apply.
  */
 export interface WebAudioStageMixer {
@@ -39,13 +40,14 @@ export function nonstopFadeCurve(direction: 'in' | 'out', samples = 64): Float32
 /**
  * One gain per stage of a stitched NONSTOP chart, between the stage's background voices and `destination` (the BGM
  * bus). A stage with a fade-in starts silent, as LR2 starts that stage's BGM channel at 0; keysounds of the player's
- * lanes are not faded.
+ * lanes are not faded. `keepPitch`: the samples were stretched to their stage's rate already, so they play at rate 1
+ * (`resolveSampleStretchRates`). `tempo`: the play tempo, which the fades (in chart seconds) are scheduled at.
  */
 export function createNonstopStageMixer(
   audioContext: BaseAudioContext,
   destination: AudioNode,
   map: NonstopStitchMap,
-  options: { keepPitch?: boolean } = {},
+  options: { keepPitch?: boolean; tempo?: number } = {},
 ): NonstopStageMixer {
   const stageOfKey = new Map<string, number>();
   map.stages.forEach((stage, index) => stage.wavKeys.forEach((key) => stageOfKey.set(key, index)));
@@ -55,9 +57,10 @@ export function createNonstopStageMixer(
     gain.connect(destination);
     return gain;
   });
+  const tempo = options.tempo !== undefined && options.tempo > 0 ? options.tempo : 1;
   const fade = (gain: GainNode, window: NonstopFade, direction: 'in' | 'out', chartStart: number): void => {
-    const start = Math.max(audioContext.currentTime, chartStart + window.start);
-    const end = chartStart + window.end;
+    const start = Math.max(audioContext.currentTime, chartStart + chartToElapsedSeconds(window.start, tempo));
+    const end = chartStart + chartToElapsedSeconds(window.end, tempo);
     if (end - start <= 1e-3) {
       gain.gain.setValueAtTime(direction === 'in' ? 1 : 0, Math.max(start, end));
       return;
@@ -66,7 +69,8 @@ export function createNonstopStageMixer(
   };
   return {
     stageOf: (sampleKey) => stageOfKey.get(sampleKey),
-    // With keep pitch the samples were stretched to the stage's tempo already ({@link resolveNonstopStretchRates}).
+    // With keep pitch the samples were stretched to the stage's tempo already (`resolveSampleStretchRates`); the play
+    // tempo is the audio session's own rate.
     rate: (stage) => (options.keepPitch === true ? 1 : (map.stages[stage]?.placement.rate ?? 1)),
     bgmInput: (stage) => gains[stage],
     schedule: (chartStart) => {
@@ -88,33 +92,4 @@ export function createNonstopStageMixer(
       }
     },
   };
-}
-
-/**
- * How a stitched NONSTOP chart's FIT stages follow the previous stage's tempo: `pitch` plays their samples faster or
- * slower, so the pitch moves with the tempo (LR2, a turntable); `keep-pitch` stretches the samples in time and keeps
- * their pitch.
- */
-export type NonstopFitMode = 'pitch' | 'keep-pitch';
-
-/**
- * The samples a keep-pitch play stretches: each FIT stage's sample paths (as `normalizePath` lowercases them for the
- * decoded-sample cache) with the stage's rate. Stages played at their own tempo are left out. `wav` is the stitched
- * chart's `#WAV` table; `normalize` is the cache's path key.
- */
-export function resolveNonstopStretchRates(
-  map: NonstopStitchMap,
-  wav: Readonly<Record<string, string | undefined>>,
-  normalize: (path: string) => string,
-): Map<string, number> {
-  const rates = new Map<string, number>();
-  for (const stage of map.stages) {
-    const rate = stage.placement.rate;
-    if (rate === 1 || !(rate > 0)) continue;
-    for (const key of stage.wavKeys) {
-      const path = wav[key];
-      if (path !== undefined) rates.set(normalize(path), rate);
-    }
-  }
-  return rates;
 }

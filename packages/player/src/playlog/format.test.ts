@@ -158,6 +158,24 @@ describe('playlog format', () => {
     expect(withoutReversal.chart).not.toHaveProperty('reversalTimeUs');
   });
 
+  test('play.tempo survives the round-trip, a tempo of 1 is dropped and a non-positive one is refused', () => {
+    const playlog = makePlaylog();
+    playlog.play.tempo = 0.75;
+    const parsed = parsePlaylog(serializePlaylog(playlog));
+    expect(parsed.play.tempo).toBe(0.75);
+    expect(parsed).toEqual(playlog);
+    // Logs without the field (every log before it existed) played at tempo 1.
+    expect(parsePlaylog(serializePlaylog(makePlaylog())).play).not.toHaveProperty('tempo');
+    const unit = makePlaylog() as unknown as { play: Record<string, unknown> };
+    unit.play.tempo = 1;
+    expect(parsePlaylog(JSON.stringify(unit)).play).not.toHaveProperty('tempo');
+    for (const tempo of [0, -0.5, 'fast']) {
+      const log = makePlaylog() as unknown as { play: Record<string, unknown> };
+      log.play.tempo = tempo;
+      expect(() => parsePlaylog(JSON.stringify(log))).toThrow(/play\.tempo/);
+    }
+  });
+
   test('writes the unstable revision 0 and still reads logs stamped 1, as revision 0', () => {
     expect(BE_MUSIC_PLAYLOG_VERSION).toBe(0);
     const legacy = parsePlaylog(

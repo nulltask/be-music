@@ -174,6 +174,32 @@ describe('createWebAudioSession', () => {
     expect(other?.node.playbackRate.value ?? 1).toBe(1);
   });
 
+  test('plays every sample at the play tempo, multiplied with a NONSTOP stage rate', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer()],
+        ['bgm.wav', makeMockAudioBuffer()],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+      playbackRate: 0.8,
+      stageMixer: {
+        stageOf: (key) => (key === '03' ? 1 : undefined),
+        rate: () => 1.25,
+        bgmInput: () => undefined,
+      },
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('01', '03'));
+    const [key, staged] = trackedBufferSources;
+    expect(key!.node.playbackRate.value).toBe(0.8);
+    expect(staged!.node.playbackRate.value).toBe(1);
+  });
+
   test('applies #WAVCMD per-slot gain via an intermediate GainNode', () => {
     const { audioContext, audioBus, trackedBufferSources, keyMixer } = createMocks();
     const session = createWebAudioSession({

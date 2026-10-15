@@ -898,7 +898,7 @@
             }
           },
           "422": {
-            "description": "The play cannot be ranked: an auto or aborted play, a course stage, a malformed play log, or a fingerprint document that does not hash to the play log’s fingerprint.",
+            "description": "The play cannot be ranked: an auto or aborted play, a play at another tempo, a course stage, a malformed play log, or a fingerprint document that does not hash to the play log’s fingerprint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -909,6 +909,7 @@
                         "invalid-playlog",
                         "auto-play",
                         "aborted",
+                        "tempo",
                         "course-stage",
                         "missing-fingerprint",
                         "play-document-not-a-document",
@@ -2479,6 +2480,7 @@
                         "invalid-playlog",
                         "auto-play",
                         "aborted",
+                        "tempo",
                         "missing-fingerprint",
                         "not-a-course-run",
                         "play-document-not-a-document",

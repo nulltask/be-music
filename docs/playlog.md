@@ -41,7 +41,10 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    absent = `'lr2'`), the debug judge-window override, an ESC flag (`aborted`, with `abortedAtUs`: the chart time the judge had settled
    through when the play was aborted, where re-simulations stop instead of missing the rest of the chart),
    `endOnFailure` (the play ended the moment its survival gauge emptied; absent on logs from before that, which kept
-   judging), `course` for a course stage (its kind, the course's gauge set and judge constraint, and `carryIn`: the
+   judging), `tempo` (the play tempo, `PlayerOptions.speed`, when it was not 1: the chart, its audio and the clock ran
+   `tempo` times as fast; judgments and input times stay in chart time, so a re-simulation ignores it and a replay plays
+   back at it; absent = 1, and on a log re-recorded from a replay, whose speed only sets how fast it is re-driven; such a
+   practice play is not ranked), `course` for a course stage (its kind, the course's gauge set and judge constraint, and `carryIn`: the
    gauge value, course combo and course max combo the previous stage left), and `randomDraws`: the play's `#RANDOM` /
    `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes as a `RandomDraws` value (`@be-music/chart`), one
    `{ command, range, value }` entry per such line of the chart in file order. They are the

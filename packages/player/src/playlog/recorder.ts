@@ -61,6 +61,8 @@ export interface PlaylogRecorderPlaySettings {
   endOnFailure?: boolean;
   /** The course stage the play was (`PlayerOptions.course`). */
   course?: PlaylogCourseStage;
+  /** The play tempo (`PlayerOptions.speed`). Recorded when it is not 1. */
+  tempo?: number;
   native?: Record<string, string | number | boolean | null>;
 }
 
@@ -184,6 +186,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
       }
       if (options.play.endOnFailure === true) play.endOnFailure = true;
       if (options.play.course !== undefined) play.course = structuredClone(options.play.course);
+      if (options.play.tempo !== undefined && options.play.tempo !== 1) play.tempo = options.play.tempo;
       if (options.play.native !== undefined) play.native = options.play.native;
 
       const createdAt = (options.now?.() ?? new Date()).toISOString();

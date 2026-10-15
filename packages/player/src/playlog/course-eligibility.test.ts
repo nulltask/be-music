@@ -75,6 +75,14 @@ describe('checkCoursePlaylogEligibility', () => {
     });
   });
 
+  test('rejects a run with a stage played at another tempo, naming the stage', () => {
+    expect(checkCoursePlaylogEligibility(courseLog([stage('bmfp0:a', { tempo: 0.9 }), stage('bmfp0:b')]))).toEqual({
+      eligible: false,
+      reason: 'tempo',
+      stage: 0,
+    });
+  });
+
   test('accepts a course given up on its last played stage as a failed run, and no other abort', () => {
     const givenUp = courseLog([stage('bmfp0:a'), stage('bmfp0:b', { aborted: true }), unreached('bmfp0:c')]);
     expect(checkCoursePlaylogEligibility(givenUp)).toMatchObject({ eligible: true });

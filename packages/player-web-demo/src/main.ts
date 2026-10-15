@@ -137,6 +137,7 @@ import {
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
 import {
+  isCourseRunAtAnotherTempo,
   mergeSongRecord,
   readStoredSongRecords,
   songRecordKey,
@@ -220,6 +221,14 @@ import { navigationAfterDrop } from './drop-navigation.ts';
 import { InlineSearch } from './inline-search.ts';
 import { parseRecordingFormatKey, recordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
 import { readStoredHiSpeed, storeHiSpeed } from './hi-speed-storage.ts';
+import {
+  describePlayingStatus,
+  readStoredPlayTempoSettings,
+  storePlayTempoSettings,
+  TEMPO_PERCENT_MAX,
+  TEMPO_PERCENT_MIN,
+  tempoFromPercent,
+} from './play-tempo-settings.ts';
 import { askSkinOffer, describeSkinOffer, type OfferedSkinFamily } from './skin-offer.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
@@ -846,8 +855,8 @@ class PlayerWebDemoApp {
       autoSavePlaylog: false,
       courseAutoAdvance: false,
       nonstopPlacement: 'intended',
-      nonstopFitMode: 'pitch',
-      nonstopStretchAlgorithm: 'signalsmith',
+      // The play tempo, its pitch handling and the keep-pitch stretcher, remembered from the last visit.
+      ...readStoredPlayTempoSettings(),
       // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
       submitToLeaderboard: false,
       // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
@@ -1330,24 +1339,36 @@ class PlayerWebDemoApp {
         this.guiState.courseAutoAdvance = value;
       });
     folder.add({ open: () => this.courseMakerPanel?.openManager() }, 'open').name('Course: my courses…');
-    folder
-      .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
-      .name('Course: NONSTOP placement')
-      .onChange((value: DemoGuiState['nonstopPlacement']) => {
-        this.guiState.nonstopPlacement = value;
-      });
-    folder
-      .add(this.guiState, 'nonstopFitMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Keep pitch': 'keep-pitch' })
-      .name('Course: NONSTOP FIT')
-      .onChange((value: DemoGuiState['nonstopFitMode']) => {
-        this.guiState.nonstopFitMode = value;
-      });
-    folder
-      .add(this.guiState, 'nonstopStretchAlgorithm', { 'Signalsmith Stretch': 'signalsmith', WSOLA: 'wsola' })
-      .name('Course: keep-pitch stretcher')
-      .onChange((value: DemoGuiState['nonstopStretchAlgorithm']) => {
-        this.guiState.nonstopStretchAlgorithm = value;
-      });
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
+        .name('Course: NONSTOP placement')
+        .onChange((value: DemoGuiState['nonstopPlacement']) => {
+          this.guiState.nonstopPlacement = value;
+        }),
+    );
+    // The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
+    // Read when a play starts, so they are disabled during one; a play at another tempo is practice (not ranked, no
+    // records).
+    const rememberTempo = () => storePlayTempoSettings(this.guiState);
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'tempoPercent', TEMPO_PERCENT_MIN, TEMPO_PERCENT_MAX, 1)
+        .name('Tempo (%)')
+        .onChange(rememberTempo),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'tempoPitchMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Keep pitch': 'keep-pitch' })
+        .name('Tempo: pitch')
+        .onChange(rememberTempo),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'tempoStretchAlgorithm', { 'Signalsmith Stretch': 'signalsmith', WSOLA: 'wsola' })
+        .name('Tempo: keep-pitch stretcher')
+        .onChange(rememberTempo),
+    );
     trackPlayOption(
       folder
         .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
@@ -2349,7 +2370,8 @@ class PlayerWebDemoApp {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    this.recordCourseResult(courseRecordKey(nonstop.course), native);
+    // A run at another tempo is practice: no record.
+    if (!isCourseRunAtAnotherTempo(courseLog)) this.recordCourseResult(courseRecordKey(nonstop.course), native);
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
     this.leaderboard.maybeSubmitCourse(
@@ -2423,7 +2445,8 @@ class PlayerWebDemoApp {
       await this.showSelect();
       return;
     }
-    this.recordCourseResult(courseRecordKey(session.course), result);
+    // A run at another tempo is practice: no record (and the Leaderboard refuses it as `tempo`).
+    if (!isCourseRunAtAnotherTempo(courseLog)) this.recordCourseResult(courseRecordKey(session.course), result);
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
     this.leaderboard.maybeSubmitCourse(courseLog, session.stageSongs());
@@ -3208,7 +3231,10 @@ class PlayerWebDemoApp {
       this.beatorajaFontCachesByEntry.set(skinLoad.entry.entryPath, fonts);
     }
 
-    // 3. Audio + BGA prep — owns the AudioContext for this play.
+    // 3. Audio + BGA prep — owns the AudioContext for this play. The play tempo is read once, here, for the prep and the
+    // engine alike.
+    const tempoPercent = this.guiState.tempoPercent;
+    const tempo = tempoFromPercent(tempoPercent);
     const source = resolveSongSource(this.collection, song);
     if (!source) {
       this.setStatus(`Beatoraja gameplay: no source for ${song.title}`);
@@ -3235,6 +3261,9 @@ class PlayerWebDemoApp {
           maxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
           useWebCodecs: this.guiState.bgaUseWebCodecs,
         },
+        tempo,
+        tempoPitchMode: this.guiState.tempoPitchMode,
+        tempoStretchAlgorithm: this.guiState.tempoStretchAlgorithm,
       });
     } catch (error) {
       gameplayLog.warn('beatoraja prep failed', error);
@@ -3286,6 +3315,8 @@ class PlayerWebDemoApp {
       engineOptions: {
         // The draws `prep.chart` was resolved with: the engine plays that chart as is and names them in its summary.
         randomDraws: prep.randomDraws,
+        // The play tempo the prep readied the audio and BGA for; the engine judges in chart time.
+        speed: tempo,
         judgeRuleset: this.guiState.judgeRuleset,
         autoScratch: this.guiState.autoScratch1P || this.guiState.autoScratch2P,
         gauge: this.guiState.gauge,
@@ -3374,7 +3405,7 @@ class PlayerWebDemoApp {
     // type-code matches the active scene before triggering a live re-mount.
     this.currentBeatorajaPlayVariant = variant;
     await this.sceneHost.setScene(this.beatorajaGameplayView);
-    this.setStatus(`Playing (beatoraja): ${song.title}`);
+    this.setStatus(describePlayingStatus(song.title, { family: 'beatoraja', tempoPercent }));
     this.lockPlaylogOptionsForPlay();
 
     // Consume the "user pressed Record on the select screen" flag. Same flow as the LR2
@@ -4826,8 +4857,10 @@ class PlayerWebDemoApp {
     this.lastPlay = { song, overrides: { autoPlay, ...(replay !== undefined ? { replay } : {}) } };
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
     // course instead.
+    // A play at another tempo is practice: it is not ranked, and leaves the records alone too.
+    const tempo = replay !== undefined ? (replay.play.tempo ?? 1) : tempoFromPercent(this.guiState.tempoPercent);
     this.activePlayRecordKey =
-      autoPlay || replay !== undefined || courseStage !== undefined || nonstop !== undefined
+      autoPlay || replay !== undefined || courseStage !== undefined || nonstop !== undefined || tempo !== 1
         ? undefined
         : songRecordKey(song, overrides.chartHashes?.sha256);
     // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...), a
@@ -4873,10 +4906,13 @@ class PlayerWebDemoApp {
             course: resolveCourseStageSettings(nonstop.course.definition),
             courseInfo: resolveSceneCourseInfo(nonstop.course, 0),
             nonstop: nonstop.prepared.map,
-            nonstopFitMode: this.guiState.nonstopFitMode,
-            nonstopStretchAlgorithm: this.guiState.nonstopStretchAlgorithm,
           }
         : {}),
+      // A replay plays at the tempo its log recorded (the scene reads it from `replay`); the pitch setting applies to
+      // the song tempo and NONSTOP FIT stages alike.
+      tempo,
+      tempoPitchMode: this.guiState.tempoPitchMode,
+      tempoStretchAlgorithm: this.guiState.tempoStretchAlgorithm,
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
       ...(overrides.chartHashes !== undefined
         ? { chartSha256: overrides.chartHashes.sha256, chartMd5: overrides.chartHashes.md5 }
@@ -4996,7 +5032,7 @@ class PlayerWebDemoApp {
     this.selectView?.setVisible(false);
     this.decideView?.dispose();
     this.decideView = undefined;
-    this.setStatus(`Playing: ${song.title}`);
+    this.setStatus(describePlayingStatus(song.title, { tempoPercent: this.guiState.tempoPercent }));
     this.lockPlaylogOptionsForPlay();
     this.gameplayView.start();
     if (this.autoRecordArmed) {
@@ -5068,7 +5104,12 @@ class PlayerWebDemoApp {
         ? await this.resolveChartHashes(song)
         : undefined;
     this.gameplayView = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
-    this.setStatus(`Playing: ${song.title}`);
+    // A replay plays at its recorded tempo.
+    const tempoPercent =
+      overrides.replay !== undefined
+        ? Math.round(((overrides.replay.play.tempo ?? 1) - 1) * 100)
+        : this.guiState.tempoPercent;
+    this.setStatus(describePlayingStatus(song.title, { tempoPercent }));
     this.lockPlaylogOptionsForPlay();
     await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));
     // Consume the "user pressed Record on the select screen" flag now that gameplay is mounted — `startRecording`

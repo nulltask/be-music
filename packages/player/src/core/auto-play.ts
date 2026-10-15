@@ -176,6 +176,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
             gauge: selectedGauge,
+            // The tempo the play ran at; its inputs are in chart time either way.
+            ...(speed !== 1 ? { tempo: speed } : {}),
           },
         });
       })()

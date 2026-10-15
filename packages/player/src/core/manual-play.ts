@@ -220,6 +220,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
             gauge: selectedGauge,
+            // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
+            // fast it is re-driven, so it records none.
+            ...(speed !== 1 && !replayMode ? { tempo: speed } : {}),
           },
         });
       })()
