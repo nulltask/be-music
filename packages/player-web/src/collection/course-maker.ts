@@ -120,6 +120,7 @@ export class CourseMaker {
       md5: md5 ?? '',
       keyMode: Number(resolveChartPlayVariant(song)),
       title: song.title,
+      ...(song.subtitle !== undefined ? { subtitle: song.subtitle } : {}),
       ...(song.artist !== undefined ? { artist: song.artist } : {}),
     });
     if (!result.ok) return result;

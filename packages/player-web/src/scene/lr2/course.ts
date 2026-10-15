@@ -147,7 +147,10 @@ export function resolveLr2CourseDraftInfo(draft: CourseDraft, namePrompt = ''): 
   return {
     kind: draft.kind,
     title: draft.name.length > 0 ? draft.name : namePrompt,
-    stages: draft.stages.map((stage) => ({ title: stage.title ?? '' })),
+    stages: draft.stages.map((stage) => ({
+      title: stage.title ?? '',
+      ...(stage.subtitle !== undefined ? { subtitle: stage.subtitle } : {}),
+    })),
   };
 }
 
