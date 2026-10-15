@@ -1193,7 +1193,7 @@
             "djLevel": "C",
             "gauge": {
               "type": "GROOVE",
-              "final": 97.81,
+              "final": 97.809524,
               "cleared": true
             },
             "score": 100595
@@ -1216,7 +1216,7 @@
             "djLevel": "C",
             "gauge": {
               "type": "NORMAL",
-              "final": 97.81,
+              "final": 97.809524,
               "cleared": true
             }
           },
@@ -1905,7 +1905,7 @@
             "djLevel": "C",
             "gauge": {
               "type": "GROOVE",
-              "final": 97.81,
+              "final": 97.809524,
               "cleared": true
             },
             "score": 100595
@@ -1928,7 +1928,7 @@
             "djLevel": "C",
             "gauge": {
               "type": "NORMAL",
-              "final": 97.81,
+              "final": 97.809524,
               "cleared": true
             }
           },

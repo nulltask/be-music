@@ -11,6 +11,7 @@ import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
+import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
 import packageJson from '../../package.json' with { type: 'json' };
 import {
@@ -97,6 +98,8 @@ export interface PlaylogRecorderOptions {
    */
   sourceChart?: BeMusicJson;
   play: PlaylogRecorderPlaySettings;
+  /** True when the ruleset the play ran under keeps LR2's money score; the native result then carries `score`. */
+  moneyScore?: boolean;
   /** Host application that records the play. `engine` is always overwritten with this package's version. */
   recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
@@ -180,7 +183,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
         inputs,
         play,
         results: {
-          native: buildNativeResult(summary, maxCombo, emptyPoorCount, play.gauge, chart.noteCount),
+          native: buildNativeResult(summary, maxCombo, emptyPoorCount, play.gauge, options.moneyScore === true),
         },
       };
     },
@@ -340,8 +343,10 @@ function buildNativeResult(
   maxCombo: number | undefined,
   emptyPoorCount: number,
   declaredGauge: GrooveGaugeType,
-  noteCount: number,
+  moneyScore: boolean,
 ): PlaylogRulesetResult {
+  // Reported the way the simulators report a ruleset result: the judgment count as `noteCount`, the DJ LEVEL, a money
+  // score only where the ruleset has one, and the mid-play death flag.
   const result: PlaylogRulesetResult = {
     ruleset: PLAYLOG_NATIVE_RULESET_ID,
     judge: {
@@ -355,15 +360,21 @@ function buildNativeResult(
     fast: summary.fast,
     slow: summary.slow,
     exScore: summary.exScore,
-    noteCount,
+    noteCount: summary.total,
     maxCombo: maxCombo ?? 0,
-    score: summary.score,
+    djLevel: resolveIidxRankLabel(summary.exScore, summary.total),
     gauge: {
       type: summary.gauge?.type ?? declaredGauge,
       final: summary.gauge?.current ?? 0,
       cleared: summary.gauge?.cleared ?? false,
     },
   };
+  if (summary.gauge?.failedMidPlay === true) {
+    result.gauge.failedMidPlay = true;
+  }
+  if (moneyScore) {
+    result.score = summary.score;
+  }
   return result;
 }
 
