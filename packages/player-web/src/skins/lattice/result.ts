@@ -19,6 +19,7 @@ import {
   resolveResultTrackRows,
   rollUpValue,
   stageProgress,
+  resolveResultVerdict,
 } from '@be-music/skin-sdk';
 import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
 
@@ -101,7 +102,7 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
   rule(0, 43, designWidth, 0);
   addStaggeredSkinText(
     layer,
-    decode(cleared ? 'STAGE CLEAR' : 'FAILED', 60, 1, 620),
+    decode(resolveResultVerdict(result), 60, 1, 620),
     20,
     10,
     { ...display(20, verdictColor, '200'), letterSpacing: 5 },
