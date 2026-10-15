@@ -33,7 +33,17 @@ import {
 } from '../../skin/lr2/render.ts';
 import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from '../select-ops.ts';
 import { resolveSceneCourseInfo } from '../course-info.ts';
-import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
+import {
+  resolveLr2CourseConnectionText,
+  resolveLr2CourseNumber,
+  resolveLr2CourseOps,
+  resolveLr2CourseText,
+} from './course.ts';
+
+/** LR2 texts 171-179 on a bar that is not a course: the connection slots read `DISABLE` (OpenLR2 L8400-L8405). */
+function resolveLr2SongConnectionText(st: number): string | undefined {
+  return st >= 171 && st <= 179 ? 'DISABLE' : undefined;
+}
 import {
   Lr2ChartGraphicTextureStore,
   Lr2SkinTextureStore,
@@ -780,7 +790,10 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
               ? this.searchEditing
                 ? ''
                 : this.searchText
-              : ((focusedCourse !== undefined ? resolveLr2CourseText(entry.element.st, focusedCourse) : undefined) ??
+              : ((focusedCourse !== undefined
+                  ? (resolveLr2CourseText(entry.element.st, focusedCourse) ??
+                    resolveLr2CourseConnectionText(entry.element.st, focusedCourse))
+                  : resolveLr2SongConnectionText(entry.element.st)) ??
                 resolveSelectText(entry.element.st, focusedSong, this.playOptions));
           if (value === undefined || value.length === 0) break;
           layer.addChild(
