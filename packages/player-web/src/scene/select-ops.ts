@@ -147,6 +147,29 @@ export function computeSelectOps(
   return ops;
 }
 
+/** The key count each LR2 key-mode op stands for (op 160 7 keys … 164 9 keys). */
+const KEY_MODE_OP_KEYS: Readonly<Record<number, number>> = {
+  [SELECT_DYNAMIC_OPS.KEYS_7]: 7,
+  [SELECT_DYNAMIC_OPS.KEYS_5]: 5,
+  [SELECT_DYNAMIC_OPS.KEYS_14]: 14,
+  [SELECT_DYNAMIC_OPS.KEYS_10]: 10,
+  [SELECT_DYNAMIC_OPS.KEYS_9]: 9,
+};
+
+/**
+ * Whether a course bar stays listed under a key-mode filter (its LR2 op, {@link SELECT_KEYS_FILTER_TO_OP}): LR2 lists
+ * only the courses of the filter's key mode (OpenLR2 L18030-L18053, `WHERE line=…`). A course that names no key mode
+ * (`definition.keyMode`, e.g. a beatoraja course) and a NEW COURSE bar stay listed.
+ */
+export function courseMatchesKeysFilter(
+  course: { definition: { keyMode?: number }; newCourse?: true },
+  filterOp: number,
+): boolean {
+  const keyMode = course.definition.keyMode;
+  if (keyMode === undefined || course.newCourse === true) return true;
+  return KEY_MODE_OP_KEYS[filterOp] === keyMode;
+}
+
 export function resolveKeyModeOp(song: BrowserSongEntry): number {
   const cached = KEY_MODE_OP_CACHE.get(song);
   if (cached !== undefined) return cached;
