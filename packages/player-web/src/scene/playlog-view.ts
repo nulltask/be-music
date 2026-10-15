@@ -1,4 +1,9 @@
-import { resolvePlaylogViewAt, type PlaylogViewChange, type PlaylogViewState } from '@be-music/player/playlog';
+import {
+  resolvePlaylogViewAt,
+  roundPlaylogView,
+  type PlaylogViewChange,
+  type PlaylogViewState,
+} from '@be-music/player/playlog';
 
 /**
  * Walks a replayed play log's view (`play.view`, then `play.viewChanges`) along the playhead, so a scene re-applies it
@@ -72,9 +77,10 @@ export function resolveBeatorajaPlaylogView(input: BeatorajaViewInput): PlaylogV
     covers: input.sides.map((side) => ({ side, sudden: lanecover, hidden, lift })),
   };
   if (input.hiSpeed > 0 && input.mainBpm > 0) {
-    view.visibleMs = Math.round((240_000 / input.mainBpm / input.hiSpeed) * (1 - lanecover));
+    view.visibleMs = (240_000 / input.mainBpm / input.hiSpeed) * (1 - lanecover);
   }
-  return view;
+  // At the play log's precision: the HIDDEN cover's `ratio × (1 - lift)` and the adapter's fractions carry float noise.
+  return roundPlaylogView(view);
 }
 
 function clampFraction(value: number): number {
