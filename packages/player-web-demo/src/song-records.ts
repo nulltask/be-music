@@ -1,6 +1,7 @@
 // The demo's per-chart best records, handed to be-music skins through the select scene's `resolveSongRecord`: lamp
 // ordering, merging a finished play into a record, and persistence across reloads.
 
+import type { BeMusicCoursePlaylog } from '@be-music/player/playlog';
 import type { BrowserSongEntry } from '@be-music/player-web/collection';
 import type { PixiGameplayResultData } from '@be-music/player-web/scenes';
 import type { BeMusicClearLamp, BeMusicSongRecord } from '@be-music/player-web/skin';
@@ -69,6 +70,14 @@ export function mergeSongRecord(previous: BeMusicSongRecord | undefined, play: S
  * The key a chart's record is stored under: its chart-file SHA-256 when known (stable across sessions, machines, and
  * file moves — the same hash the play-logs record), else its chart path inside the dropped library.
  */
+/**
+ * Whether a course run played a stage at another tempo (`play.tempo`): such a run is practice, so it leaves the course's
+ * record alone, as a single play at another tempo leaves the chart's.
+ */
+export function isCourseRunAtAnotherTempo(courseLog: Pick<BeMusicCoursePlaylog, 'stages'>): boolean {
+  return courseLog.stages.some((entry) => entry.played && (entry.playlog.play.tempo ?? 1) !== 1);
+}
+
 export function songRecordKey(song: Pick<BrowserSongEntry, 'chartPath'>, chartSha256: string | undefined): string {
   return chartSha256 !== undefined && chartSha256.length > 0 ? `sha256:${chartSha256}` : `path:${song.chartPath}`;
 }

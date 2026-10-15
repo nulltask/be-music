@@ -20,7 +20,7 @@ export interface LeaderboardSubmission {
 
 export type SubmissionPreparation =
   | { ok: true; submission: LeaderboardSubmission }
-  | { ok: false; reason: 'not-rankable' | 'missing-fingerprint' | 'fingerprint-mismatch' };
+  | { ok: false; reason: 'not-rankable' | 'tempo' | 'missing-fingerprint' | 'fingerprint-mismatch' };
 
 /**
  * Builds the submission of a finished play from its play log and the song's chart as loaded. The play document is
@@ -36,7 +36,7 @@ export function prepareLeaderboardSubmission(
   // The server applies the same check (`checkPlaylogEligibility`); assists are allowed and ranked apart there.
   const eligibility = checkPlaylogEligibility(playlog);
   if (!eligibility.eligible) {
-    return { ok: false, reason: eligibility.reason === 'missing-fingerprint' ? 'missing-fingerprint' : 'not-rankable' };
+    return { ok: false, reason: skippedReason(eligibility.reason) };
   }
   const documents = rebuildDocuments(playlog, sourceChart, chartPath, eligibility);
   if (documents === undefined) return { ok: false, reason: 'fingerprint-mismatch' };
@@ -160,7 +160,7 @@ export interface CourseLeaderboardSubmission {
 
 export type CourseSubmissionPreparation =
   | { ok: true; submission: CourseLeaderboardSubmission }
-  | { ok: false; reason: 'not-rankable' | 'missing-fingerprint' | 'fingerprint-mismatch' };
+  | { ok: false; reason: 'not-rankable' | 'tempo' | 'missing-fingerprint' | 'fingerprint-mismatch' };
 
 /**
  * Builds the submission of a finished course run: the course play log, with the fingerprint documents of each played
@@ -174,7 +174,7 @@ export function prepareCourseLeaderboardSubmission(
 ): CourseSubmissionPreparation {
   const eligibility = checkCoursePlaylogEligibility(coursePlaylog);
   if (!eligibility.eligible) {
-    return { ok: false, reason: eligibility.reason === 'missing-fingerprint' ? 'missing-fingerprint' : 'not-rankable' };
+    return { ok: false, reason: skippedReason(eligibility.reason) };
   }
   const stages: CourseLeaderboardSubmission['stages'] = [];
   for (const [index, entry] of coursePlaylog.stages.entries()) {
@@ -269,11 +269,18 @@ export function describeLeaderboardResult(result: LeaderboardSubmitResult, playe
   return `Leaderboard ${mine.ruleset}: #${mine.rank} / ${mine.players} · EX ${mine.exScore}${best}${again}`;
 }
 
+/** The skip reason of a play or course run the server would refuse with `reason`. */
+function skippedReason(reason: string): 'not-rankable' | 'tempo' | 'missing-fingerprint' {
+  return reason === 'missing-fingerprint' || reason === 'tempo' ? reason : 'not-rankable';
+}
+
 /** Why a play was not sent, for the status line (a skipped play must never pass silently). */
 export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation, { ok: true }>['reason']): string {
   switch (reason) {
     case 'not-rankable':
       return 'Leaderboard: not submitted (auto play, aborted runs and course stages are not ranked)';
+    case 'tempo':
+      return 'Leaderboard: not submitted (a play at another tempo is practice and is not ranked)';
     case 'missing-fingerprint':
       return 'Leaderboard: not submitted (this play log has no chart fingerprint)';
     case 'fingerprint-mismatch':
@@ -288,6 +295,8 @@ export function describeSkippedCourseSubmission(
   switch (reason) {
     case 'not-rankable':
       return 'Leaderboard: course not submitted (auto play and aborted stages are not ranked)';
+    case 'tempo':
+      return 'Leaderboard: course not submitted (a run at another tempo is practice and is not ranked)';
     case 'missing-fingerprint':
       return 'Leaderboard: course not submitted (a stage chart has no fingerprint)';
     case 'fingerprint-mismatch':
