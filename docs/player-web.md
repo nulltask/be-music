@@ -135,7 +135,7 @@ Courses play through the same select → play → result scenes. See [Courses an
     - `no_speed` locks the hi-speed;
     - `ln` / `cn` / `hcn` set the long-note mode of charts that leave it undefined.
 - **Result:**
-  - After the last stage, or the failed one, the result scene shows the course as one run: summed judgments, the course max combo, the final gauge and the course lamp.
+  - After the last stage, or the failed one, the result scene shows the course as one run: summed judgments, the course max combo, the final gauge and the course lamp. Its graphs follow each family: LR2 skins and the built-in result draw the last stage's gauge and score graphs, as LR2 clears them at each stage (OpenLR2 L24151); beatoraja's course result draws every stage joined, each as wide as its chart is long, the EX score running on and an unreached stage at gauge 0 (`CourseResult.create`). A NONSTOP run draws its one stitched play.
   - The course play log (`*.bmcourse.json`, see [playlog.md](./playlog.md#course-play-logs)) is auto-downloaded when play-log auto-save is on.
   - The best lamp, EX score, max combo and BP are kept per course and shown on its course bar: LR2 skins light the bar's lamp ops (100-105) and draw its `#SRC_BAR_LAMP` (song bars draw theirs from the chart records too), beatoraja skins light its `CLEAR_LAMP_*` op, and the be-music skins' course card names the best lamp and the trophy the bests earn (as beatoraja's `GradeBar` works it out: best EX score and fewest BP, cleared or not). A run played with AUTO on any stage (or a NONSTOP run played with AUTO) keeps no record, as an auto play keeps none for a chart.
   - Stage results count for the course, not for the single charts, and are not submitted to the leaderboard.

@@ -74,6 +74,7 @@ import {
   resolveCourseLaneOption,
   resolveCourseStageSettings,
   CourseMaker,
+  createCourseSongRecord,
   type BrowserCourseEntry,
   type BrowserDroppedFile,
   type BrowserSongCollection,
@@ -172,6 +173,7 @@ import {
   buildCourseResultSummary,
   CourseSession,
   courseRecordKey,
+  joinCourseStageHistories,
   lookupCourseRecord,
   skipsCourseStageResult,
   type CourseStagePlan,
@@ -2403,7 +2405,7 @@ class PlayerWebDemoApp {
       courseLog,
       nonstop.course.stages.flatMap((stage) => (stage.song !== undefined ? [stage.song] : [])),
     );
-    await this.showResult(buildCourseResultData(nonstop.course, native, courseLog), {
+    await this.showResult(buildCourseResultData(nonstop.course, native, courseLog, fallback), {
       course: resolveSceneCourseInfo(nonstop.course),
     });
   }
@@ -2483,7 +2485,14 @@ class PlayerWebDemoApp {
         session.course.stages[0]!.song!,
         buildCourseResultSummary(result),
         result.maxCombo,
-        { scoreHistory: [], gaugeHistory: [], timingHistory: [] },
+        // beatoraja's course result draws every stage's graph joined, each stage as wide as its chart is long.
+        {
+          ...joinCourseStageHistories(
+            session.stageHistories,
+            session.stageSongs().map((song) => createCourseSongRecord(song).length ?? 0),
+          ),
+          timingHistory: [],
+        },
         { info: courseInfo, result: true },
       );
       if (mounted) {
@@ -2491,7 +2500,10 @@ class PlayerWebDemoApp {
         return;
       }
     }
-    await this.showResult(buildCourseResultData(session.course, result, courseLog), { course: courseInfo });
+    // LR2 (and the built-in result) shows the last stage's graph.
+    await this.showResult(buildCourseResultData(session.course, result, courseLog, session.stageHistories.at(-1)), {
+      course: courseInfo,
+    });
   }
 
   /**
@@ -3422,7 +3434,7 @@ class PlayerWebDemoApp {
         void this.finishBeatorajaGameplayThen(async () => {
           // A course stage: its play log carries the course on, and leaving its result plays the next stage.
           if (courseStage !== undefined && this.courseSession !== undefined) {
-            const goesOn = this.courseSession.recordStage(playlog) === 'next';
+            const goesOn = this.courseSession.recordStage(playlog, history) === 'next';
             // With stage results skipped (or an auto-played stage the course goes on after, as LR2 skips it), go
             // straight on to the next stage (or the course result).
             const mounted =
@@ -5009,7 +5021,7 @@ class PlayerWebDemoApp {
           })
         ) {
           void this.finishGameplayThen(async () => {
-            this.courseSession?.recordStage(result.playlog);
+            this.courseSession?.recordStage(result.playlog, result);
             this.gameplayView?.dispose({ preserveAudioTail: true });
             this.gameplayView = undefined;
             this.unlockPlaylogOptions();
@@ -5196,7 +5208,7 @@ class PlayerWebDemoApp {
     this.resultView?.dispose();
     // A stage of a running course: its play log carries the course on, and dismissing its result plays the next stage.
     const courseStage = mode.course === undefined && this.courseSession !== undefined;
-    if (courseStage) this.courseSession!.recordStage(data.playlog);
+    if (courseStage) this.courseSession!.recordStage(data.playlog, data);
     // Family dispatch for result. We currently only model the LR2 / default split here — the beatoraja result
     // scene is constructed inside `playSongBeatoraja`'s onComplete handler, not via `showResult`, so this method
     // never sees the `'beatoraja'` family. Pick the LR2 result skin only when the family pick says so; defaulting
