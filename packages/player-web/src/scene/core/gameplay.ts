@@ -1076,6 +1076,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * into {@link getResultData} so the result host can offer it as a download.
    */
   private playlog: BeMusicPlaylog | undefined;
+  /** Callers of {@link waitForPlaylog} waiting for the engine to record the play. */
+  private readonly playlogWaiters: Array<(playlog: BeMusicPlaylog) => void> = [];
   /**
    * Per-play sampled history of `(progress, gauge%)` pairs. Recorded inside `publishJudge` (the single chokepoint for
    * every judge event) and seeded with a `(0, initialGauge)` entry on `prepareSong` so the polyline starts from the LR2
@@ -1835,6 +1837,27 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** Whether the play is paused (by Space, {@link requestTogglePause}, or the auto-pause on losing focus). */
   public isPaused(): boolean {
     return this.paused;
+  }
+
+  /**
+   * The play log of this play once the engine has recorded it — also after Escape, which records the play as given up
+   * (`play.aborted`) a moment after `onExit` fires. Resolves `undefined` when none arrives within `timeoutMs` (a replay
+   * records none).
+   */
+  public waitForPlaylog(timeoutMs = 2000): Promise<BeMusicPlaylog | undefined> {
+    if (this.playlog !== undefined) return Promise.resolve(this.playlog);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        const index = this.playlogWaiters.indexOf(settle);
+        if (index >= 0) this.playlogWaiters.splice(index, 1);
+        resolve(undefined);
+      }, timeoutMs);
+      const settle = (playlog: BeMusicPlaylog): void => {
+        clearTimeout(timer);
+        resolve(playlog);
+      };
+      this.playlogWaiters.push(settle);
+    });
   }
 
   /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
@@ -5239,6 +5262,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
               },
               onPlaylogRecorded: (playlog) => {
                 this.playlog = playlog;
+                const waiters = this.playlogWaiters.splice(0);
+                for (const resolve of waiters) resolve(playlog);
               },
             }),
       },
