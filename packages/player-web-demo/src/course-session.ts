@@ -169,6 +169,7 @@ export class CourseSession {
         kind: definition.kind,
         constraints: [...definition.constraints],
         trophies: definition.trophies.map((trophy) => ({ ...trophy })),
+        ...(definition.release === false ? { release: false as const } : {}),
       },
       stages,
       ...(options.createdAt !== undefined ? { createdAt: options.createdAt } : {}),

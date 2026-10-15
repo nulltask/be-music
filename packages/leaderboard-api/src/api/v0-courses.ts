@@ -45,6 +45,7 @@ const COURSE_REJECTIONS = [
   'auto-play',
   'aborted',
   'tempo',
+  'unreleased',
   'missing-fingerprint',
   'not-a-course-run',
   'play-document-not-a-document',

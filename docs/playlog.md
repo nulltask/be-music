@@ -181,7 +181,7 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
 
 ## Course play logs
 
-A course run is recorded as one **course play log** (`format: 'be-music-course-playlog'`, `*.bmcourse.json`). It holds the course (`name`, `kind`, `constraints`, `trophies`) and one entry per stage, in order:
+A course run is recorded as one **course play log** (`format: 'be-music-course-playlog'`, `*.bmcourse.json`). It holds the course (`name`, `kind`, `constraints`, `trophies`, and `release: false` for a course whose runs must not be ranked) and one entry per stage, in order:
 
 - a stage the run reached is `{ played: true, playlog }`, that stage's own complete play log. Its `play.course` carries the course kind and constraints and `carryIn`, the state the previous stage left, so `extractCourseStage(log, index)` returns a log that replays and re-simulates on its own;
 - a stage the run never reached (after a failed one) is `{ played: false, facts }`: the chart facts a ruleset needs to count its notes, and, when known, the chart's file hashes (`sha256`, `md5`) and its chart fingerprint (`chartFingerprint`, as a played stage's `chart.chartFingerprint` would be). The fingerprint is optional, so older logs still parse, but a run without it cannot be keyed or ranked.

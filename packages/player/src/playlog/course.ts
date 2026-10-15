@@ -57,6 +57,11 @@ export interface PlaylogCourseInfo {
   /** The course's constraints, by their table-header names (`grade_mirror`, `gauge_lr2`, ...). */
   constraints: string[];
   trophies: Array<{ name: string; missRate: number; scoreRate: number }>;
+  /**
+   * `false` for a course whose runs must not be ranked: beatoraja's `release: false`, which also marks a drawn random
+   * course. Absent = released.
+   */
+  release?: false;
 }
 
 export type PlaylogCourseStageEntry =
@@ -531,6 +536,10 @@ export function parseCoursePlaylog(source: unknown): BeMusicCoursePlaylog {
       };
     }),
   };
+  if (course.release !== undefined) {
+    if (typeof course.release !== 'boolean') throw new PlaylogParseError('course.release: expected a boolean');
+    if (!course.release) info.release = false;
+  }
   if (!Array.isArray(root.stages) || root.stages.length === 0) {
     throw new PlaylogParseError('stages: expected a non-empty array');
   }

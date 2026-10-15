@@ -154,6 +154,7 @@ export function buildNonstopCoursePlaylog(
       kind: definition.kind,
       constraints: [...definition.constraints],
       trophies: definition.trophies.map((trophy) => ({ ...trophy })),
+      ...(definition.release === false ? { release: false as const } : {}),
     },
     stages: entries,
     nonstop: { connections: prepared.connections, placement: prepared.placement, playlog, stages, noteStages },
