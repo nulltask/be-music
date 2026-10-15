@@ -467,8 +467,9 @@ describe('judge core', () => {
     const effects = stepJudgeCore(state, { kind: 'finish', totalSeconds: 4 });
 
     expect(state.summary.poor).toBe(5);
-    expect(isJudgeCoreSettled(state)).toBe(false); // finish does not retire the counters, the driver stops anyway
-    expect(effects.at(-1)).toEqual({ kind: 'frame', seconds: 4 });
+    expect(isJudgeCoreSettled(state)).toBe(true); // finish settles every pending timed judgment at its own instant
+    // Each note is missed at its own deadline, as the play-log simulator does, rather than charged in one batch.
+    expect(effects.filter((effect) => effect.kind === 'judge-combo')).toHaveLength(5);
   });
 
   test('the judge clock mirrors past an LR2 negative-BPM reversal, and the pump clamps strictly below it', () => {

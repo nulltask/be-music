@@ -226,8 +226,8 @@ export function detonateLandminesOnPress(
     return;
   }
   const reversalSeconds = config.reversalSeconds;
-  if (reversalSeconds !== undefined && nowSec >= reversalSeconds) {
-    // The press leg is dead past the reversal (#134).
+  if (reversalSeconds !== undefined && toJudgeUs(nowSec) > toJudgeUs(reversalSeconds)) {
+    // The press leg is dead past the reversal (#134); a press at the reversal itself still counts.
     return;
   }
   const landmineNotes = config.landmineNotes;
@@ -859,6 +859,17 @@ export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): num
 export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, emit: JudgeCoreEffectSink): void {
   const { config } = state;
   const { ruleset, reversalSeconds } = config;
+  // Settle every timed judgment still pending — misses, tails, AUTO SCRATCH, mines, Hell Charge ticks — each at its
+  // own instant, as the play-log simulator does when its clock runs out.
+  for (let afterUs = Number.NEGATIVE_INFINITY; ;) {
+    const nextUs = nextTimedJudgmentUs(state, afterUs);
+    if (!Number.isFinite(nextUs)) {
+      break;
+    }
+    const stepSec = (nextUs + 1) / 1e6;
+    advanceJudgeState(state, stepSec, stepSec * config.judgeMsPerChartSecond, emit);
+    afterUs = nextUs + 1;
+  }
   let missingCount = 0;
   // Notes the LR2 negative-BPM reversal left unreachable (#134). LR2 never misses them — its mirrored judge clock
   // recedes before their deadline — and zeroes HP when the play ends with them outstanding.
@@ -876,6 +887,10 @@ export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, em
     if (noteOwesTailMiss(ruleset, note)) {
       missingCount += 1;
     }
+  }
+  if (reversalSeconds !== undefined && state.pendingAutoScratchLongNotes.length > 0) {
+    // An AUTO SCRATCH long note whose tail lies past the reversal is never cleared either.
+    outstandingPastReversal = true;
   }
   for (const hold of state.activeLongNotes.values()) {
     if (reversalSeconds !== undefined) {
