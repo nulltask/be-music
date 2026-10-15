@@ -174,6 +174,7 @@ import {
   CourseSession,
   courseRecordKey,
   joinCourseStageHistories,
+  resolveResultPresentation,
   lookupCourseRecord,
   skipsCourseStageResult,
   type CourseStagePlan,
@@ -2405,8 +2406,13 @@ class PlayerWebDemoApp {
       courseLog,
       nonstop.course.stages.flatMap((stage) => (stage.song !== undefined ? [stage.song] : [])),
     );
+    // As LR2 shows a NONSTOP run: on the result skin with the clear / fail jingles (no course-result step), and R
+    // stitches and plays the course again.
     await this.showResult(buildCourseResultData(nonstop.course, native, courseLog, fallback), {
-      course: resolveSceneCourseInfo(nonstop.course),
+      nonstop: {
+        info: resolveSceneCourseInfo(nonstop.course),
+        retry: () => void this.startNonstopCourse(nonstop.course),
+      },
     });
   }
 
@@ -5230,11 +5236,17 @@ class PlayerWebDemoApp {
    * Mounts the result scene for a play, or — with `mode.course` — for a whole course (the course result, shown on the
    * LR2 theme's course-result skin when it has one).
    */
-  private async showResult(data: PixiGameplayResultData, mode: { course?: SceneCourseInfo } = {}): Promise<void> {
+  private async showResult(
+    data: PixiGameplayResultData,
+    mode: { course?: SceneCourseInfo; nonstop?: { info: SceneCourseInfo; retry: () => void } } = {},
+  ): Promise<void> {
     await this.ensureHostMounted();
     this.resultView?.dispose();
     // A stage of a running course: its play log carries the course on, and dismissing its result plays the next stage.
-    const courseStage = mode.course === undefined && this.courseSession !== undefined;
+    const courseStage = mode.course === undefined && mode.nonstop === undefined && this.courseSession !== undefined;
+    const presentation = resolveResultPresentation(
+      mode.course !== undefined ? 'course' : mode.nonstop !== undefined ? 'nonstop' : courseStage ? 'stage' : 'single',
+    );
     if (courseStage) this.courseSession!.recordStage(data.playlog, data);
     // Family dispatch for result. We currently only model the LR2 / default split here — the beatoraja result
     // scene is constructed inside `playSongBeatoraja`'s onComplete handler, not via `showResult`, so this method
@@ -5243,25 +5255,36 @@ class PlayerWebDemoApp {
     const resultFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'result');
     // A course's results show the course on the skin (LR2 ops 280-293, texts 150-170): a stage's result at its stage,
     // the course result on the course-result skin, each parsed again with the course ops.
-    const courseInfo = mode.course ?? (courseStage ? this.courseSession!.courseInfo : undefined);
-    const mountedResultSkin = mode.course !== undefined ? (this.courseResultSkin ?? this.resultSkin) : this.resultSkin;
+    const courseInfo = mode.course ?? mode.nonstop?.info ?? (courseStage ? this.courseSession!.courseInfo : undefined);
+    const mountedResultSkin = presentation.courseResultSkin
+      ? (this.courseResultSkin ?? this.resultSkin)
+      : this.resultSkin;
     const lr2ResultSkin =
       resultFamily !== 'lr2'
         ? undefined
         : courseInfo === undefined
           ? mountedResultSkin
           : this.courseLr2Skin(mountedResultSkin, courseInfo, {
-              kind: mode.course !== undefined && this.courseResultSkin !== undefined ? 'courseResult' : 'result',
+              kind: presentation.courseResultSkin && this.courseResultSkin !== undefined ? 'courseResult' : 'result',
             });
     // R on the result plays the same chart again — only offered when the recorded play start is this chart's, and
-    // never in a course (LR2 and beatoraja disable quick retry there).
+    // never in a course (LR2 and beatoraja disable quick retry there), except that a NONSTOP run is stitched and played
+    // again, as LR2 allows.
+    const retryPlay =
+      presentation.quickRetry && mode.nonstop === undefined && this.lastPlay?.song.id === data.song.id
+        ? this.lastPlay
+        : undefined;
     const retry =
-      mode.course === undefined && !courseStage && this.lastPlay?.song.id === data.song.id ? this.lastPlay : undefined;
+      mode.nonstop !== undefined
+        ? mode.nonstop.retry
+        : retryPlay !== undefined
+          ? () => void this.playSong(retryPlay.song, retryPlay.overrides)
+          : undefined;
     const sharedResultOptions = {
       collection: this.collection,
       // The course result plays LR2's course jingles, falling back to the result ones.
-      clearBgm: (mode.course !== undefined ? this.courseClearBgmBytes : undefined) ?? this.clearBgmBytes,
-      failBgm: (mode.course !== undefined ? this.courseFailBgmBytes : undefined) ?? this.failBgmBytes,
+      clearBgm: (presentation.courseJingles ? this.courseClearBgmBytes : undefined) ?? this.clearBgmBytes,
+      failBgm: (presentation.courseJingles ? this.courseFailBgmBytes : undefined) ?? this.failBgmBytes,
       resultBgm: this.resultBgmBytes,
       onContinue: () => {
         if (courseStage && this.courseSession !== undefined) {
@@ -5281,7 +5304,7 @@ class PlayerWebDemoApp {
               // not the result view, so drop it (and its BGM) first.
               this.resultView?.dispose();
               this.resultView = undefined;
-              void this.playSong(retry.song, retry.overrides);
+              retry();
             },
           }
         : {}),
@@ -5303,8 +5326,8 @@ class PlayerWebDemoApp {
     this.gameplayView = undefined;
     this.setStatus(`Result: ${data.song.title}`);
     this.recordActivePlay(songRecordPlayFromResult(data));
-    // A course's stages are saved and ranked as the course, not one by one.
-    if (mode.course === undefined && !courseStage) {
+    // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
+    if (presentation.quickRetry && mode.nonstop === undefined) {
       this.maybeAutoSavePlaylog(data.playlog);
       this.leaderboard.maybeSubmit(data.playlog, data.song);
     }

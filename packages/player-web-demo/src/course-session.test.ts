@@ -10,6 +10,7 @@ import {
   courseRecordKey,
   joinCourseStageHistories,
   lookupCourseRecord,
+  resolveResultPresentation,
   skipsCourseStageResult,
 } from './course-session.ts';
 
@@ -358,5 +359,28 @@ describe('CourseSession.playSettings', () => {
   test('applies only the lane-option constraint to another course', () => {
     const session = new CourseSession(course(['MIRROR']));
     expect(session.playSettings(picks)).toEqual({ ...picks, random1P: 'OFF', random2P: 'OFF', dpFlip: false });
+  });
+});
+
+describe('resolveResultPresentation', () => {
+  test('shows a course run on the course-result skin with the course jingles and no retry', () => {
+    expect(resolveResultPresentation('course')).toEqual({
+      courseResultSkin: true,
+      courseJingles: true,
+      quickRetry: false,
+    });
+  });
+
+  test('shows a NONSTOP run as LR2 does: the result skin, the clear / fail jingles and quick retry', () => {
+    expect(resolveResultPresentation('nonstop')).toEqual({
+      courseResultSkin: false,
+      courseJingles: false,
+      quickRetry: true,
+    });
+  });
+
+  test('offers quick retry on a single play only, not on a course stage', () => {
+    expect(resolveResultPresentation('single').quickRetry).toBe(true);
+    expect(resolveResultPresentation('stage').quickRetry).toBe(false);
   });
 });
