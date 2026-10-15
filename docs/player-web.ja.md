@@ -130,7 +130,7 @@ flowchart LR
   - ゲージが尽きたステージでコースは終わります。
   - ESC でコースをやめられます。そのプレイは（LR2 の記録と同じく）落ちたプレイとして残り、コースの結果を表示します。F5 / クイックリトライは使えません。
   - コースの制約を適用します：
-    - レーンオプションを制限します（`grade` はなし、`grade_mirror` は MIRROR、`grade_random` はランダム系）。
+    - beatoraja の `MusicSelector` と同じくレーンオプションを制限します（`resolveCourseLaneOptions`）。`grade` は両サイドと DP の FLIP をオフにし、`grade_mirror` は 1P の MIRROR を残してそのとき 2P も MIRROR、FLIP をオンにします（ほかの選択ではすべてオフ）。`grade_random` は各サイドのランダム系を残します。
     - `no_speed` ではハイスピードを固定します（beatoraja のテーマではレーンカバー、リフト、HIDDEN カバーも）。
     - `ln` / `cn` / `hcn` は、ロングノートのモードを定めていない譜面に適用します。
 - **結果：**

@@ -498,10 +498,18 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveCourseStageSettings(BENCH_COURSE_DEFINITION);
     },
   });
-  define('player-web.resolveCourseLaneOption', {
+  define('player-web.resolveCourseLaneOptions', {
     run: () => {
-      playerWebCoreApi.resolveCourseLaneOption(BENCH_COURSE_DEFINITION.constraints, 'RANDOM');
-      playerWebCoreApi.resolveCourseLaneOption(BENCH_COURSE_DEFINITION.constraints, 'MIRROR');
+      playerWebCoreApi.resolveCourseLaneOptions(BENCH_COURSE_DEFINITION.constraints, {
+        random1P: 'RANDOM',
+        random2P: 'MIRROR',
+        dpFlip: true,
+      });
+      playerWebCoreApi.resolveCourseLaneOptions(['grade_mirror'], {
+        random1P: 'MIRROR',
+        random2P: 'OFF',
+        dpFlip: false,
+      });
     },
   });
   define('player-web.isCourseHiSpeedLocked', {
