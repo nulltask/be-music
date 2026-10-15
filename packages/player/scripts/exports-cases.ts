@@ -224,6 +224,51 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       });
     },
   });
+  define('player.course.parseBeatorajaCommandFolderFile', {
+    run: () => {
+      courseApi.parseBeatorajaCommandFolderFile(
+        JSON.stringify([{ name: 'Random', rcourse: [{ name: 'R', stage: [{ sql: 'level = 12' }, {}] }] }]),
+      );
+    },
+  });
+  const benchFilterSql = "song.level BETWEEN 11 AND 12 AND mode IN (7, 14) AND title NOT LIKE '%HYPER%'";
+  const benchFilter = courseApi.parseCourseSongFilter(benchFilterSql);
+  const benchSongs = Array.from({ length: 200 }, (_, index) => ({
+    md5: index.toString(16).padStart(32, '0'),
+    sha256: index.toString(16).padStart(64, '0'),
+    title: `song ${index}`,
+    level: index % 13,
+    mode: index % 2 === 0 ? 7 : 14,
+  }));
+  define('player.course.parseCourseSongFilter', {
+    run: () => {
+      courseApi.parseCourseSongFilter(benchFilterSql);
+    },
+  });
+  define('player.course.evaluateCourseSongFilter', {
+    run: () => {
+      if (benchFilter.ok) for (const song of benchSongs) courseApi.evaluateCourseSongFilter(benchFilter.filter, song);
+    },
+  });
+  let benchSeed = 1;
+  define('player.course.drawRandomCourse', {
+    run: () => {
+      courseApi.drawRandomCourse(
+        {
+          name: 'R',
+          stages: [{ filter: 'level = 12' }, {}, { filter: 'level >= 10' }, {}],
+          constraints: ['grade_mirror'],
+          trophies: [],
+          distinct: true,
+        },
+        benchSongs,
+        () => {
+          benchSeed = (benchSeed * 16807) % 2147483647;
+          return (benchSeed - 1) / 2147483646;
+        },
+      );
+    },
+  });
   define('player.course.resolveTableModeKeys', {
     run: () => {
       courseApi.resolveTableModeKeys('beat-7k');

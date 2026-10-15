@@ -1073,6 +1073,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       ops.add(BEATORAJA_OP.FOLDERBAR);
     } else if (entry.kind === 'course') {
       ops.add(BEATORAJA_OP.GRADEBAR);
+      // A random course's bar (`OPTION_RANDOMCOURSEBAR`); its stages are drawn when it is started.
+      if (entry.course.random !== undefined) ops.add(BEATORAJA_OP.RANDOMCOURSEBAR);
       // The course's constraints (`OPTION_GRADEBAR_CLASS` … `_HCN`).
       for (const op of resolveBeatorajaCourseConstraintOps(entry.course.definition.constraints)) ops.add(op);
     } else {

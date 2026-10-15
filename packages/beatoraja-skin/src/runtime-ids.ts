@@ -529,6 +529,8 @@ export const BEATORAJA_OP = {
   GRADEBAR_CN: 1016,
   /** SkinProperty `OPTION_GRADEBAR_HCN`. */
   GRADEBAR_HCN: 1017,
+  /** SkinProperty `OPTION_RANDOMCOURSEBAR` — the cursor is on a random-course bar. */
+  RANDOMCOURSEBAR: 1031,
   /** SkinProperty `OPTION_COURSE_STAGE1` — stage 1 of a course is played and is not the last one. */
   COURSE_STAGE1: 280,
   /** SkinProperty `OPTION_COURSE_STAGE2`. */

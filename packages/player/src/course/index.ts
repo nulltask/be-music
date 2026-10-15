@@ -4,3 +4,5 @@ export * from './lr2crs.ts';
 export * from './resolve.ts';
 export * from './table.ts';
 export { decodeCourseText } from './text.ts';
+export * from './filter.ts';
+export * from './random.ts';

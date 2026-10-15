@@ -56,6 +56,7 @@ export interface CourseTrophy {
 export type CourseSource =
   | { format: 'lr2crs'; type: number; header: string; hash: string }
   | { format: 'beatoraja-json' }
+  | { format: 'beatoraja-random' }
   | { format: 'table'; legacyGrade: boolean };
 
 export interface CourseDefinition {
@@ -73,13 +74,21 @@ export interface CourseDefinition {
   source: CourseSource;
 }
 
+/** One stage of a random course: the filter its chart is drawn by, and the stage's display title. */
+export interface RandomCourseStage {
+  /** An SQL `WHERE` clause (see `parseCourseSongFilter`). Absent: the first stage draws from every chart, a later one reuses the previous stage's candidates. */
+  filter?: string;
+  title?: string;
+}
+
 /**
  * A beatoraja random course: each stage is drawn from the charts a filter selects. beatoraja's filters are SQL
- * `WHERE` clauses over its song database; an empty one reuses the previous stage's candidates.
+ * `WHERE` clauses over its song database; an empty one reuses the previous stage's candidates. `drawRandomCourse`
+ * turns one into a fixed {@link CourseDefinition}.
  */
 export interface RandomCourseDefinition {
   name: string;
-  stages: Array<{ filter?: string }>;
+  stages: RandomCourseStage[];
   constraints: CourseConstraint[];
   trophies: CourseTrophy[];
   /** `distinct`: no chart is drawn twice. */
