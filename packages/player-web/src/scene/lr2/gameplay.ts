@@ -64,6 +64,7 @@ import {
 import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
 import {
   lr2ShowsCourseCombo,
+  resolveLr2JudgeCombo,
   resolveLr2CourseNumber,
   resolveLr2CourseOps,
   resolveLr2CourseText,
@@ -2065,7 +2066,9 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
           (entry) => entry.kind === comboKind && entry.side === side && this.isDestinationVisible(entry.destination),
         ) ?? skin.nowCombos.find((entry) => entry.kind === comboKind && this.isDestinationVisible(entry.destination)))
       : undefined;
-    const visibleCombo = comboKind && state.combo > 0 ? state.combo : 0;
+    // During an expert or grade course LR2 shows the course combo here, as numbers 104 / 105 do.
+    const combo = resolveLr2JudgeCombo(state.combo, state.courseCombo, this.options.courseInfo?.kind);
+    const visibleCombo = comboKind && combo > 0 ? combo : 0;
     // Compute centering offset so that judge plate + combo sits centered on this side's lane area. Without this the
     // assembly was anchored at LR2's static x=73 / x=185 coordinates, biased ~10px to the left of the lane center and
     // drifting further as the combo grew.

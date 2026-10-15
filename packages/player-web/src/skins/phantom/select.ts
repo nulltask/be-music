@@ -388,7 +388,9 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       addSkinText(layer, text, x, y, options);
 
     const course =
-      song === undefined && frame.focusedCourse !== undefined ? describeCourseCard(frame.focusedCourse) : undefined;
+      song === undefined && frame.focusedCourse !== undefined
+        ? describeCourseCard(frame.focusedCourse, frame.courseRecord?.(frame.focusedCourse))
+        : undefined;
     const songTitle = song?.title ?? course?.title ?? 'No chart selected';
     const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';

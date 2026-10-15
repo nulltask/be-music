@@ -45,8 +45,9 @@ export function parseLr2NonstopConnections(header: string): NonstopConnection[] 
  *   LR2 keeps the first ten, and plays only the first five of a NONSTOP course ({@link LR2_MAX_NONSTOP_STAGES}).
  * - `type` 0 / 1 / 2 is EXPERT / NONSTOP / GRADE (OpenLR2). Without a `type` element the header's char 10 is used.
  * - A NONSTOP course reads its connections from the header's chars 0-9 ({@link parseLr2NonstopConnections}).
- * - A grade course gets beatoraja's reading of an LR2 grade: MIRROR allowed and the LR2 gauge
- *   (`grade_mirror`, `gauge_lr2`), the constraints jbmstable-parser gives a table's legacy `grade` list.
+ * - A grade course allows no lane option and plays on the LR2 gauge (`grade`, `gauge_lr2`): LR2 turns both sides'
+ *   lane options off when a GRADE course starts (OpenLR2 `Main.cpp` M1124-M1125), along with the other resets a host
+ *   applies (`isLr2GradeCourse`). A table's legacy `grade` list keeps jbmstable-parser's `grade_mirror`.
  *
  * Courses with no stage or an unknown type are skipped. Accepts raw bytes (decoded by {@link decodeCourseText}) or text.
  */
@@ -81,7 +82,7 @@ export function parseLr2CourseFile(input: Uint8Array | string): CourseDefinition
       name: field('title') ?? '',
       kind,
       stages,
-      constraints: kind === 'grade' ? ['grade_mirror', 'gauge_lr2'] : [],
+      constraints: kind === 'grade' ? ['grade', 'gauge_lr2'] : [],
       trophies: [],
       release: true,
       source: { format: 'lr2crs', type, header, hash },

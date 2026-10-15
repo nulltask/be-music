@@ -109,6 +109,11 @@ describe('browse entry row text', () => {
       stages: course.stages.map((stage) => stage.title),
     });
     expect(describeCourseCard(random).detail).toBe('RANDOM COURSE · 2 stages · random');
+    // The player's record on the course adds its best lamp and trophy; a course never played adds nothing.
+    expect(describeCourseCard(course, { lamp: 'EX_HARD', trophy: 'goldmedal' }).detail).toBe(
+      'DAN · 2 stages · 1 missing · EX HARD · goldmedal',
+    );
+    expect(describeCourseCard(course, { lamp: 'NO_PLAY' }).detail).toBe('DAN · 2 stages · 1 missing');
     expect(
       browseEntryCount({ kind: 'folder', folder: { label: 'mine', songs: [], courses: [course, newCourse] } }),
     ).toBe('1 course');

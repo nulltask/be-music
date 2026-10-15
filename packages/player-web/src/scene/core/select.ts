@@ -6,7 +6,7 @@ import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from '../../col
 import { dirname } from '@be-music/utils/core';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
-import { resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
+import { courseMatchesKeysFilter, resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
 import { logger } from '../../logger.ts';
 import { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from '../hi-speed.ts';
 import type {
@@ -35,6 +35,7 @@ import type {
   BeMusicSelectSort,
   BeMusicSkin,
   BeMusicSongRecord,
+  BeMusicCourseRecord,
 } from '../../skin/be-music/types.ts';
 import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
@@ -477,6 +478,12 @@ export interface CoreSongSelectViewOptions {
    * song then reads as never played.
    */
   resolveSongRecord?: (song: BrowserSongEntry) => BeMusicSongRecord | undefined;
+  /**
+   * Looks up the player's best record on a course bar, for a be-music skin's `frame.courseRecord(course)` and an LR2
+   * skin's course-bar lamp. Return `undefined` for a course never played (and for a random course or a NEW COURSE bar).
+   * Called while the skin draws, so it should be a cheap lookup.
+   */
+  resolveCourseRecord?: (course: BrowserCourseEntry) => BeMusicCourseRecord | undefined;
 }
 
 /** Design-canvas size a skin family's theme renders the select frame into. */
@@ -1639,7 +1646,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     if (this.playOptions.keysFilter !== 'ALL') {
       const targetOp = SELECT_KEYS_FILTER_TO_OP[this.playOptions.keysFilter];
-      filtered = filtered.filter((entry) => entry.kind !== 'song' || resolveKeyModeOp(entry.song) === targetOp);
+      // A course bar is listed under its key mode, as LR2 lists courses by their `line`.
+      filtered = filtered.filter((entry) =>
+        entry.kind === 'song'
+          ? resolveKeyModeOp(entry.song) === targetOp
+          : entry.kind !== 'course' || courseMatchesKeysFilter(entry.course, targetOp),
+      );
     }
     if (this.searchQuery.length > 0) {
       filtered = filtered.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
@@ -2631,6 +2643,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       this.songImages = songImages;
       this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin, {
         resolveSongRecord: this.options.resolveSongRecord,
+        resolveCourseRecord: this.options.resolveCourseRecord,
         songImage: songImages.lookup,
         settings: this.beMusicSkinSettings,
         renderer: this.host?.app.renderer,

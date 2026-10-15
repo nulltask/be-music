@@ -42,6 +42,11 @@ describe('CourseMaker', () => {
     const saved = courses.finish()!;
     expect(saved).toMatchObject({ name: 'Mine', kind: 'nonstop', keyMode: 7, connections: ['cut'] });
     expect(saved.stages.map((stage) => stage.md5)).toEqual([MD5.get('a'), MD5.get('b')]);
+    courses.start('grade');
+    await courses.append({ ...SEVEN[0]!, subtitle: '[SPA]' });
+    // The draft keeps the song's subtitle for LR2's texts 160-164.
+    expect(courses.draft?.stages[0]).toMatchObject({ title: 'A', subtitle: '[SPA]' });
+    courses.cancel();
     expect(courses.draft).toBeUndefined();
     courses.start('expert');
     await courses.append(SEVEN[2]!);
@@ -98,7 +103,7 @@ test('restores saved courses without reporting a change', async () => {
 test('sets the constraints of the course being made and of a saved one', async () => {
   const courses = maker();
   courses.start('grade');
-  expect(courses.draft?.constraints).toEqual(['grade_mirror', 'gauge_lr2']);
+  expect(courses.draft?.constraints).toEqual(['grade', 'gauge_lr2']);
   courses.setConstraints(['grade', 'no_speed']);
   await courses.append(SEVEN[0]!);
   const saved = courses.finish()!;

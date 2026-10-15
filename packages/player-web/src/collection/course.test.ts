@@ -1,6 +1,6 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
-import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData } from '@be-music/player/course';
+import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData, parseLr2CourseFile } from '@be-music/player/course';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createCourseSongRecord,
@@ -11,7 +11,10 @@ import {
   isCourseHiSpeedLocked,
   readCourseFile,
   resolveCourseFolders,
-  resolveCourseLaneOption,
+  isLr2GradeCourse,
+  resolveCourseLaneOptions,
+  resolveLr2GradeCoursePlaySettings,
+  type CourseLaneOption,
   resolveCourseStageSettings,
 } from './course.ts';
 import type { BrowserSongEntry } from './types.ts';
@@ -244,17 +247,74 @@ describe('course stage settings', () => {
     expect(resolveCourseStageSettings({ ...course, kind: 'expert', constraints: [] })).toEqual({ kind: 'expert' });
   });
 
-  test('resolveCourseLaneOption follows the lane-option constraint', () => {
-    expect(resolveCourseLaneOption(['grade'], 'MIRROR')).toBe('OFF');
-    expect(resolveCourseLaneOption(['grade_mirror'], 'MIRROR')).toBe('MIRROR');
-    expect(resolveCourseLaneOption(['grade_mirror'], 'RANDOM')).toBe('OFF');
-    expect(resolveCourseLaneOption(['grade_random'], 'S-RANDOM')).toBe('S-RANDOM');
-    expect(resolveCourseLaneOption(['grade_random'], 'SCATTER')).toBe('OFF');
-    expect(resolveCourseLaneOption(['gauge_lr2'], 'SCATTER')).toBe('SCATTER');
+  test('resolveCourseLaneOptions follows the lane-option constraint on both sides and DP FLIP', () => {
+    const picked = (random1P: CourseLaneOption, random2P: CourseLaneOption = 'RANDOM', dpFlip = true) => ({
+      random1P,
+      random2P,
+      dpFlip,
+    });
+    const off = { random1P: 'OFF', random2P: 'OFF', dpFlip: false };
+    // CLASS turns every lane option and FLIP off.
+    expect(resolveCourseLaneOptions(['grade'], picked('MIRROR'))).toEqual(off);
+    // MIRROR: a 1P MIRROR plays 2P on MIRROR with FLIP on; anything else turns them all off.
+    expect(resolveCourseLaneOptions(['grade_mirror'], picked('MIRROR', 'OFF', false))).toEqual({
+      random1P: 'MIRROR',
+      random2P: 'MIRROR',
+      dpFlip: true,
+    });
+    expect(resolveCourseLaneOptions(['grade_mirror'], picked('RANDOM', 'MIRROR'))).toEqual(off);
+    // RANDOM keeps the plain random family on each side and leaves FLIP alone.
+    expect(resolveCourseLaneOptions(['grade_random'], picked('S-RANDOM', 'SCATTER'))).toEqual({
+      random1P: 'S-RANDOM',
+      random2P: 'OFF',
+      dpFlip: true,
+    });
+    expect(resolveCourseLaneOptions(['gauge_lr2'], picked('SCATTER', 'MIRROR', true))).toEqual(
+      picked('SCATTER', 'MIRROR', true),
+    );
   });
 
   test('isCourseHiSpeedLocked reads no_speed', () => {
     expect(isCourseHiSpeedLocked(['no_speed'])).toBe(true);
     expect(isCourseHiSpeedLocked(['grade'])).toBe(false);
+  });
+});
+
+describe('LR2 GRADE course resets', () => {
+  const lr2 = parseLr2CourseFile(
+    `<courselist><course><title>Dan</title><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${MD5_A}</hash></course></courselist>`,
+  )[0]!;
+  const picks = {
+    gauge: 'EASY' as const,
+    hiddenSudden1P: 'SUDDEN' as const,
+    hiddenSudden2P: 'HID+SUD' as const,
+    autoScratch1P: true,
+    autoScratch2P: true,
+    dpFlip: true,
+    tempo: 1.2,
+    random1P: 'MIRROR' as const,
+  };
+
+  test('tells an LR2 GRADE course from a table or beatoraja grade', () => {
+    expect(isLr2GradeCourse(lr2)).toBe(true);
+    expect(isLr2GradeCourse({ ...lr2, kind: 'expert' })).toBe(false);
+    expect(isLr2GradeCourse({ kind: 'grade', source: { format: 'table', legacyGrade: true } })).toBe(false);
+  });
+
+  test('turns off what LR2 turns off when a GRADE course starts, keeping the rest', () => {
+    expect(resolveLr2GradeCoursePlaySettings(lr2, picks)).toEqual({
+      gauge: 'GROOVE',
+      hiddenSudden1P: 'OFF',
+      hiddenSudden2P: 'OFF',
+      autoScratch1P: false,
+      autoScratch2P: false,
+      dpFlip: false,
+      tempo: 1,
+      random1P: 'MIRROR',
+    });
+    // HARD and DEATH stay.
+    expect(resolveLr2GradeCoursePlaySettings(lr2, { ...picks, gauge: 'HARD' }).gauge).toBe('HARD');
+    // Another course keeps every pick.
+    expect(resolveLr2GradeCoursePlaySettings({ ...lr2, kind: 'expert' }, picks)).toBe(picks);
   });
 });

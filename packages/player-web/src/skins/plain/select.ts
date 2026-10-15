@@ -189,7 +189,7 @@ function drawCourse(
   width: number,
 ): void {
   const { nowMs } = frame;
-  const card = describeCourseCard(course);
+  const card = describeCourseCard(course, frame.courseRecord?.(course));
   text(ctx, card.title, x, y + 28, { size: 18, weight: 800, maxWidth: width, nowMs });
   text(ctx, card.detail, x, y + 52, { size: 11, color: MUTED, maxWidth: width, nowMs });
   card.stages.slice(0, 6).forEach((stage, index) => {

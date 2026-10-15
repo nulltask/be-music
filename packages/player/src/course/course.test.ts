@@ -117,7 +117,8 @@ describe('parseLr2CourseFile', () => {
       name: '発狂初段',
       kind: 'grade',
       stages: [{ md5: MD5_A }, { md5: MD5_B }],
-      constraints: ['grade_mirror', 'gauge_lr2'],
+      // LR2 turns the lane options off for a GRADE course (Main.cpp M1124-M1125).
+      constraints: ['grade', 'gauge_lr2'],
       trophies: [],
       release: true,
       keyMode: 7,
@@ -256,6 +257,15 @@ describe('parseTableHeaderCourses', () => {
       source: { format: 'table', legacyGrade: false },
     });
     expect(groups[1]![0]).toMatchObject({ kind: 'expert', stages: [{ sha256: SHA_A, md5: MD5_A, title: 'S' }] });
+  });
+
+  test('names a stage without a title `course N`, as beatoraja does', () => {
+    const [course] = parseTableHeaderCourses({
+      course: [{ charts: [{ md5: MD5_A, title: 'A' }, { md5: MD5_B }, { md5: MD5_A, title: '' }] }],
+    })[0]!;
+    expect(course!.stages.map((stage) => stage.title)).toEqual(['A', 'course 2', 'course 3']);
+    const [byMd5] = parseTableHeaderCourses({ course: [{ md5: [MD5_A, MD5_B] }] })[0]!;
+    expect(byMd5!.stages.map((stage) => stage.title)).toEqual(['course 1', 'course 2']);
   });
 
   test('reads a single group and the legacy grade list', () => {

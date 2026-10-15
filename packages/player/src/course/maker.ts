@@ -23,6 +23,8 @@ export interface CourseDraftStage {
   /** The chart's key mode: every stage must match the first one's. */
   keyMode: number;
   title?: string;
+  /** The chart's subtitle, which LR2's texts 160-164 show while the course is being made. */
+  subtitle?: string;
   artist?: string;
 }
 
@@ -36,11 +38,11 @@ export interface CourseDraft {
 }
 
 /**
- * The constraints a made course starts with: an LR2 grade reads as beatoraja's reading of one (MIRROR allowed, the LR2
- * gauge; `grade_mirror`, `gauge_lr2`), and the other kinds have none.
+ * The constraints a made course starts with: a GRADE course reads as an LR2 grade (no lane option, the LR2 gauge;
+ * `grade`, `gauge_lr2`, as `parseLr2CourseFile` reads one), and the other kinds have none.
  */
 export function defaultCourseMakerConstraints(kind: CourseKind): CourseConstraint[] {
-  return kind === 'grade' ? ['grade_mirror', 'gauge_lr2'] : [];
+  return kind === 'grade' ? ['grade', 'gauge_lr2'] : [];
 }
 
 /** A course with its constraints replaced (normalized: known names only, one per group). */
