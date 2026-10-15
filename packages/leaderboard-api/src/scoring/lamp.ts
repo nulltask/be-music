@@ -48,16 +48,29 @@ export function resolveClearLamp(result: PlaylogRulesetResult, ruleset: PlaylogR
     return ClearLamp.FAILED;
   }
   const { great, good, bad, poor } = result.judge;
-  let lamp: ClearLamp = GAUGE_LAMPS[result.gauge.type] ?? ClearLamp.NORMAL;
+  let lamp: ClearLamp = gaugeLamp(result.gauge.type, ruleset);
   if (bad + poor === 0) {
     lamp = good > 0 ? ClearLamp.FULL_COMBO : great > 0 ? ClearLamp.PERFECT : ClearLamp.MAX;
   }
   return Math.min(lamp, TOP_LAMP[ruleset]) as ClearLamp;
 }
 
-/** Miss count (BP): BADs, missed POORs and empty POORs, as LR2 and beatoraja count it. */
-export function resolveMissCount(result: PlaylogRulesetResult): number {
-  return result.judge.bad + result.judge.poor + result.judge.emptyPoor;
+/**
+ * The lamp a cleared run's gauge earns. LR2 awards HARD only for its HARD-family gauges and NORMAL for every other one
+ * but EASY, so a DEATH clear is NORMAL there (OpenLR2 `LR2f.cpp` L2593-L2600, L1842-L1853); beatoraja and IIDX keep
+ * theirs.
+ */
+export function gaugeLamp(gaugeType: string, ruleset: PlaylogRulesetId): ClearLamp {
+  if (ruleset === 'lr2' && gaugeType === 'DEATH') return ClearLamp.NORMAL;
+  return GAUGE_LAMPS[gaugeType] ?? ClearLamp.NORMAL;
+}
+
+/**
+ * Miss count (BP): BADs and missed POORs, plus empty POORs where the ruleset counts them. beatoraja and IIDX do; LR2 does
+ * not (OpenLR2 `LR2f.cpp` L9649-L9657).
+ */
+export function resolveMissCount(result: PlaylogRulesetResult, ruleset: PlaylogRulesetId): number {
+  return result.judge.bad + result.judge.poor + (ruleset === 'lr2' ? 0 : result.judge.emptyPoor);
 }
 
 /**
