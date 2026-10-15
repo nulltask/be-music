@@ -268,6 +268,54 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseApi.parseLr2CourseFile(benchLr2Course);
     },
   });
+  const benchDraftStage = { md5: 'a'.repeat(32), keyMode: 7, title: 'Song' };
+  const benchDraft = { kind: 'nonstop' as const, name: 'Bench', stages: [benchDraftStage, benchDraftStage] };
+  const benchMadeCourse = courseApi.finishCourseDraft(benchDraft)!;
+  define('player.course.createCourseDraft', {
+    run: () => {
+      courseApi.createCourseDraft('nonstop', 'Bench');
+    },
+  });
+  define('player.course.appendCourseDraftStage', {
+    run: () => {
+      courseApi.appendCourseDraftStage(benchDraft, benchDraftStage);
+    },
+  });
+  define('player.course.removeLastCourseDraftStage', {
+    run: () => {
+      courseApi.removeLastCourseDraftStage(benchDraft);
+    },
+  });
+  define('player.course.buildLr2CourseHash', {
+    run: () => {
+      courseApi.buildLr2CourseHash({
+        kind: 'nonstop',
+        stageMd5s: ['a'.repeat(32), 'b'.repeat(32)],
+        connections: ['cut'],
+      });
+    },
+  });
+  define('player.course.finishCourseDraft', {
+    run: () => {
+      courseApi.finishCourseDraft(benchDraft, { defaultConnection: 'cut' });
+    },
+  });
+  define('player.course.stepLr2NonstopConnection', {
+    run: () => {
+      courseApi.stepLr2NonstopConnection('fade', 1);
+      courseApi.stepLr2NonstopConnection('fade', -1);
+    },
+  });
+  define('player.course.withNonstopConnection', {
+    run: () => {
+      courseApi.withNonstopConnection(benchMadeCourse, 0, 'blank1');
+    },
+  });
+  define('player.course.serializeLr2CourseFile', {
+    run: () => {
+      courseApi.serializeLr2CourseFile([benchMadeCourse]);
+    },
+  });
   define('player.course.parseBeatorajaCourseData', {
     run: () => {
       courseApi.parseBeatorajaCourseData(benchBeatorajaCourse);
