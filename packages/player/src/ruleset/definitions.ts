@@ -113,6 +113,13 @@ export interface RulesetConfig {
   longNoteStyle: LongNoteStyle;
   /** How an LN released before its tail is judged (see {@link LnEarlyReleaseRule}). */
   lnEarlyRelease: LnEarlyReleaseRule;
+  /**
+   * How long (µs) a long-note release that would score BAD or worse before the tail waits before it is settled, per
+   * lane kind. Pressing the lane again inside it resumes the hold, as if it had never been let go; any other release
+   * settles at once. beatoraja's `JudgeProperty.longnoteMargin` / `longscratchMargin` (200 ms on PMS keys, 0
+   * elsewhere); LR2 and IIDX settle every release at once.
+   */
+  longNoteReleaseMarginUs: { note: number; scratch: number };
   /** IIDX: a BAD / POOR on a charge-note head skips the tail judgment entirely. */
   headBadSkipsTail: boolean;
   comboBreaksOnEmptyPoor: boolean;
@@ -717,6 +724,7 @@ export function resolveRuleset(
       ignoreLateBadOnLnHead: true,
       longNoteStyle: 'ln',
       lnEarlyRelease: 'head-unless-beyond-good',
+      longNoteReleaseMarginUs: { note: 0, scratch: 0 },
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor: false,
       mineTrigger: 'press-or-hold',
@@ -747,6 +755,7 @@ export function resolveRuleset(
       ignoreLateBadOnLnHead: false,
       longNoteStyle: 'per-note',
       lnEarlyRelease: 'worse-of-head-and-tail',
+      longNoteReleaseMarginUs: { note: mode === BEATORAJA_MODES.PMS ? 200_000 : 0, scratch: 0 },
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
@@ -773,6 +782,7 @@ export function resolveRuleset(
     longNoteStyle: 'charge',
     // IIDX plays no LN (every long note is a charge note), so this never applies.
     lnEarlyRelease: 'worse-of-head-and-tail',
+    longNoteReleaseMarginUs: { note: 0, scratch: 0 },
     headBadSkipsTail: true,
     comboBreaksOnEmptyPoor: false,
     // IIDX has no mines; LR2's model stands in until there is evidence otherwise.

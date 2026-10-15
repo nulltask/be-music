@@ -198,7 +198,8 @@ describe('judge core', () => {
     stepJudgeCore(state, press(1, '11'));
     expect(state.activeLongNotes.has('11')).toBe(true);
     stepJudgeCore(state, advance(1.4));
-    stepJudgeCore(state, {
+    // With key-state input the release settles the LN itself, at its own instant.
+    const effects = stepJudgeCore(state, {
       kind: 'release',
       channels: new Set(['11']),
       tokens: [],
@@ -206,7 +207,6 @@ describe('judge core', () => {
       nowMs: 1500,
       recordSec: 1.5,
     });
-    const effects = stepJudgeCore(state, advance(1.6));
 
     expect(state.summary.bad).toBe(1);
     expect(state.activeLongNotes.size).toBe(0);

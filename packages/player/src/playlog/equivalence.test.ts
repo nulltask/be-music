@@ -455,6 +455,46 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // beatoraja's PMS rule lets a BAD early release wait 200 ms before it settles; pressing again inside it resumes the
+  // long note. Every other release settles at once.
+  test.each(RULESETS)('%s: a re-press inside the release margin agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+    json.events.push({ measure: 4, channel: '22', position: [0, 1], value: '01' });
+    const inputs = [down(0, 1_000_000, '11'), up(1, 1_500_000, '11'), down(2, 1_600_000, '11'), up(3, 2_000_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { playVariant: '9' });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect([summary.perfect, summary.bad, summary.poor, summary.emptyPoor]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.bad,
+      simulated.judge.poor,
+      simulated.judge.emptyPoor,
+    ]);
+    if (ruleset === 'beatoraja') {
+      expect([summary.perfect, summary.bad]).toEqual([1, 0]);
+    }
+  });
+
+  // A release settles its long note at the release, before a press on another lane at the same instant.
+  test.each(RULESETS)('%s: a release settles before a press at the same instant', async (ruleset) => {
+    for (const lnMode of [1, 2] as const) {
+      const json = longNoteChart(lnMode);
+      json.events.push({ measure: 1, channel: '12', position: [1, 2], value: '01' });
+      const inputs = [
+        down(0, 1_000_000, '11'),
+        up(1, 1_500_000, '11'),
+        down(2, 1_500_000, '12'),
+        up(3, 1_520_000, '12'),
+      ];
+
+      const { playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect(playlog.results?.native?.maxCombo, `#LNMODE ${lnMode}`).toBe(simulated.maxCombo);
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
