@@ -254,7 +254,6 @@ import {
   TEMPO_PERCENT_MIN,
   tempoFromPercent,
 } from './play-tempo-settings.ts';
-import { askSkinOffer, describeSkinOffer, type OfferedSkinFamily } from './skin-offer.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
@@ -321,19 +320,19 @@ if (!app) {
 app.innerHTML = DEMO_APP_HTML;
 
 /**
- * Skins beyond Synesthesia and Plain are on hold while those two are polished: Phantom and Lattice, LR2 themes and
- * beatoraja skins, and every way to add one (theme drops, `?skin=`, the skin ZIP URL, "Add skin", the family and theme
- * pickers). The code stays; turning this on brings it all back.
+ * Built-in be-music skins beyond Synesthesia and Plain are on hold while those two are polished: Phantom and Lattice,
+ * and "Add skin" (a be-music skin module). The code stays; turning this on brings them back. LR2 themes and beatoraja
+ * skins are not affected: they load from a drop, `?skin=` or the skin ZIP URL as before.
  */
-const EXTRA_SKINS_ENABLED = false;
+const EXTRA_BUILT_IN_SKINS_ENABLED = false;
 
 /** Built-in be-music skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
 const BE_MUSIC_SKINS = createBeMusicSkinRegistry(
-  EXTRA_SKINS_ENABLED ? BUILT_IN_BE_MUSIC_SKINS : [synesthesiaSkin, plainSkin],
+  EXTRA_BUILT_IN_SKINS_ENABLED ? BUILT_IN_BE_MUSIC_SKINS : [synesthesiaSkin, plainSkin],
 );
 const BUILT_IN_SKIN_STORAGE_KEY = 'be-music-demo.built-in-skin';
 // Lattice ships with the player but isn't loaded by default; bring it back when it was the last skin picked.
-if (EXTRA_SKINS_ENABLED && readStoredBuiltInSkinId() === latticeSkin.id) BE_MUSIC_SKINS.add(latticeSkin);
+if (EXTRA_BUILT_IN_SKINS_ENABLED && readStoredBuiltInSkinId() === latticeSkin.id) BE_MUSIC_SKINS.add(latticeSkin);
 
 /** Loads an added skin's faces in the background, so its first frame doesn't rasterize with a fallback font. */
 function loadSkinFonts(skin: BeMusicSkin): void {
@@ -724,9 +723,9 @@ class PlayerWebDemoApp {
    */
   private courseReturnNavigation: PixiSongSelectNavigation | undefined;
   /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
-  private activeSkinSystem: SkinFamilyOverride = EXTRA_SKINS_ENABLED ? 'auto' : 'default';
+  private activeSkinSystem: SkinFamilyOverride = 'auto';
   /** The skin system the "Drop a skin" prompt asked for, until a drop answers it or it is cancelled. */
-  private pendingSkinSystem: OfferedSkinFamily | undefined;
+  private pendingSkinSystem: 'lr2' | 'beatoraja' | undefined;
   /**
    * Compressor architecture for `audioCompressorMode` on every gameplay mount. Defaults to `'split'` (the new 3-stage
    * bus — see `audio-bus.ts` for the design rationale); the demo accepts a `?compressor=legacy` URL flag for A/B
@@ -895,8 +894,7 @@ class PlayerWebDemoApp {
       // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
       // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
       // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
-      // With extra skins on hold, every scene renders with the built-in be-music skin.
-      skinFamilyOverride: EXTRA_SKINS_ENABLED ? 'auto' : 'default',
+      skinFamilyOverride: 'auto',
       builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
       skinEffects: readStoredSkinEffects(),
       renderResolution: nearestRenderResolution(
@@ -1082,8 +1080,7 @@ class PlayerWebDemoApp {
     // same pipeline as a drag-drop, so the select screen lists the archive's charts (with any skin already applied).
     // Sequenced after the initial mount so it doesn't race the Pixi host's first-time renderer init.
     const urlParams = parseUrlMediaParams(window.location.href);
-    // `?skin=` is on hold with the other extra skins.
-    const mediaParams = EXTRA_SKINS_ENABLED ? urlParams : { ...urlParams, skinUrl: undefined };
+    const mediaParams = urlParams;
     // Difficulty tables imported in an earlier visit are imported again, after the URL load so their stages match it.
     const storedCourseTables = readStoredCourseTableUrls();
     void initialSelectReady.then(async () => {
@@ -1646,7 +1643,7 @@ class PlayerWebDemoApp {
     // LR2 theme picker — added once a drop discovers a theme (see `rebuildLr2ThemePicker`).
     this.rebuildLr2ThemePicker();
     // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
-    if (!EXTRA_SKINS_ENABLED) return;
+    if (!EXTRA_BUILT_IN_SKINS_ENABLED) return;
     const addSkins = addFolder(skin, DEBUG_MENU_FOLDERS.addSkin);
     const skinSource = {
       url: '',
@@ -1678,7 +1675,7 @@ class PlayerWebDemoApp {
       },
     };
     library.add(urls, 'music').name('Music ZIP URL');
-    if (EXTRA_SKINS_ENABLED) library.add(urls, 'skin').name('Skin ZIP URL');
+    library.add(urls, 'skin').name('Skin ZIP URL');
     library.add(urls, 'load').name('Load from URLs');
     // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
     // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
@@ -1942,9 +1939,8 @@ class PlayerWebDemoApp {
     const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
       themeFiles.map((file) => file.webkitRelativePath || file.name),
     );
-    // LR2 themes and beatoraja skins are on hold: their files are left out of the drop.
-    const carriesLr2Theme = EXTRA_SKINS_ENABLED && themeFamilies.has('lr2');
-    const carriesBeatorajaTheme = EXTRA_SKINS_ENABLED && themeFamilies.has('beatoraja');
+    const carriesLr2Theme = themeFamilies.has('lr2');
+    const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
     const themeMarkers = [...themeFamilies];
     dropLog.info(
       `received ${files.length} file(s) · theme=${themeFiles.length}${
@@ -1995,53 +1991,20 @@ class PlayerWebDemoApp {
     const dropped = navigationAfterDrop(this.collection.songs, previousSongIds);
     if (dropped !== undefined) this.lastSelectNavigation = dropped;
     await this.showSelect();
-    // With LR2 / beatoraja skins on hold they are not loaded with the drop; ask instead whether to use the one it carried.
-    if (!EXTRA_SKINS_ENABLED) await this.offerDroppedSkin(themeFamilies, themeFiles);
+    // A skin the player asked for through the Debug Menu ("drop a skin") is switched to once the drop brings it.
+    const asked = this.pendingSkinSystem;
+    this.pendingSkinSystem = undefined;
+    if (asked !== undefined && themeFamilies.has(asked)) this.handleSkinFamilyOverrideChange(asked);
     if (playlogFiles.length > 0) {
       await this.startPlaylogReplayFromFile(playlogFiles[0]!);
     }
   }
 
   /**
-   * Offers the LR2 or beatoraja skin a drop carried, once its songs are listed. Taking it loads the skin and switches the
-   * scenes to its family; declining keeps the built-in skin. Only used while those skins are on hold
-   * (`EXTRA_SKINS_ENABLED` off), where a drop does not load them by itself.
-   */
-  private async offerDroppedSkin(families: ReadonlySet<string>, themeFiles: File[]): Promise<void> {
-    // A skin the player asked for through the Debug Menu is used without asking again.
-    const asked = this.pendingSkinSystem;
-    this.pendingSkinSystem = undefined;
-    if (asked !== undefined && families.has(asked)) {
-      await this.applyDroppedSkin(asked, themeFiles);
-      return;
-    }
-    const offer = describeSkinOffer(
-      families,
-      families.has('lr2') ? discoverLr2Themes(themeFiles).map((theme) => theme.name) : [],
-    );
-    if (offer === undefined) return;
-    // The question goes over the select screen, not the loading overlay.
-    hideLoadingOverlay(this.elements);
-    const family = await askSkinOffer(offer);
-    if (family !== undefined) await this.applyDroppedSkin(family, themeFiles);
-  }
-
-  /** Loads the dropped skin of `family` and switches the scenes to that skin system. */
-  private async applyDroppedSkin(family: OfferedSkinFamily, themeFiles: File[]): Promise<void> {
-    showLoadingOverlay(this.elements);
-    try {
-      await (family === 'lr2' ? this.loadTheme(themeFiles) : this.loadBeatorajaTheme(themeFiles));
-    } finally {
-      hideLoadingOverlay(this.elements);
-    }
-    this.handleSkinFamilyOverrideChange(family);
-  }
-
-  /**
    * Asks for a drop of a skin of `family`, picked in the Debug Menu with none loaded: a drop-card-like prompt that any
    * drop closes. The skin it brings is then used without the "Use this skin?" question.
    */
-  private promptSkinDrop(family: OfferedSkinFamily): void {
+  private promptSkinDrop(family: 'lr2' | 'beatoraja'): void {
     const dialog = document.querySelector<HTMLDialogElement>('#skin-drop');
     if (dialog === null) return;
     this.pendingSkinSystem = family;
@@ -2811,7 +2774,7 @@ class PlayerWebDemoApp {
    */
   private rebuildLr2ThemePicker(): void {
     const folder = this.skinFolder;
-    if (folder === undefined || !EXTRA_SKINS_ENABLED) return;
+    if (folder === undefined) return;
     const themes = this.availableLr2Themes;
     if (themes.length === 0) {
       // No discovered theme (drop didn't carry an `LR2files/Theme/<name>/` shape, OR LR2 isn't loaded at all).
@@ -2979,17 +2942,13 @@ class PlayerWebDemoApp {
     // as a phantom dropdown value the runtime silently ignored.
     const override = this.guiState.skinFamilyOverride;
     if ((override === 'lr2' && !lr2Available) || (override === 'beatoraja' && !beatorajaAvailable)) {
-      this.guiState.skinFamilyOverride = EXTRA_SKINS_ENABLED ? 'auto' : 'default';
+      this.guiState.skinFamilyOverride = 'auto';
     }
     // The three skin systems are always listed; one without a loaded skin says so, and picking it asks for a drop.
-    const options: Record<string, SkinFamilyOverride> = EXTRA_SKINS_ENABLED
-      ? { 'Auto (prefer loaded theme)': 'auto' }
-      : {};
+    const options: Record<string, SkinFamilyOverride> = { 'Auto (prefer loaded theme)': 'auto' };
     options['Built-in'] = 'default';
     options[lr2Available ? 'LR2' : 'LR2 (drop a skin)'] = 'lr2';
     options[beatorajaAvailable ? 'beatoraja' : 'beatoraja (drop a skin)'] = 'beatoraja';
-    if (this.guiState.skinFamilyOverride === 'auto' && !EXTRA_SKINS_ENABLED)
-      this.guiState.skinFamilyOverride = 'default';
     if (this.skinFamilyController !== undefined) {
       // `OptionController#options(values)` updates the option list **in place** on an existing option controller
       // (see lil-gui v0.21.0 source: the subclass override mutates `_values` / `_names` + replaces the `<option>`

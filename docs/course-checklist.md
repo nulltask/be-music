@@ -7,7 +7,7 @@ A by-hand check of the course features in the web demo, on each skin family, for
 ## Setup
 
 1. **Fixtures.** `node scripts/course-checklist/fixtures.ts <dir>` writes a small BMS library to `<dir>/songs` (Fixture A–G, a dense Fixture D that empties the gauge of a no-input run, and a 5-key chart) with `songs/courses/fixture-courses.lr2crs` (FIX GRADE, FIX EXPERT, FIX NONSTOP, FIX GRADE FAIL), and `<dir>/seven-stages.lr2crs` for the five-stage warning.
-2. **Skins.** The built-in family needs nothing. For LR2 use the stock LR2 theme and its sound set (`LR2files/Theme/LR2` and `LR2files/Sound`); for beatoraja any skin (the last run used ModernChic). The demo ignores LR2 and beatoraja themes while `EXTRA_SKINS_ENABLED` in `packages/player-web-demo/src/main.ts` is `false`: set it to `true` locally for the run, and do not commit that.
+2. **Skins.** The built-in family needs nothing. For LR2 use the stock LR2 theme and its sound set (`LR2files/Theme/LR2` and `LR2files/Sound`); for beatoraja any skin (the last run used ModernChic). Dropping a theme applies it; the Debug Menu's Skin system switches between the families.
 3. **Dev server.** Run the demo on a port of its own (`pnpm --filter @be-music/player-web-demo run dev --port 5199 --strictPort`), so a session already playing on the default port is left alone.
 4. **Dropping files.** A person can drag the folders onto the page. Browser automation cannot, so serve them with `node scripts/course-checklist/serve.ts fixtures=<dir>/songs extra=<dir> lr2theme=<LR2files parent> beatoraja=<skin dir>` (port 5299) and dispatch a synthetic drop from the page console:
 

@@ -7,7 +7,7 @@ Web デモのコース機能を、スキンの種類ごとに手で確かめる�
 ## 準備
 
 1. **テスト用データ。** `node scripts/course-checklist/fixtures.ts <dir>` で、`<dir>/songs` に小さな BMS ライブラリを作ります。Fixture A〜G（無入力で遊ぶとゲージが尽きる密な Fixture D を含む）と 5 鍵の譜面、`songs/courses/fixture-courses.lr2crs`（FIX GRADE、FIX EXPERT、FIX NONSTOP、FIX GRADE FAIL）です。5 曲の上限の警告を確かめる `<dir>/seven-stages.lr2crs` も作ります。
-2. **スキン。** 標準のスキンは何も要りません。LR2 は標準のテーマと効果音（`LR2files/Theme/LR2` と `LR2files/Sound`）を、beatoraja は任意のスキン（前回は ModernChic）を使います。`packages/player-web-demo/src/main.ts` の `EXTRA_SKINS_ENABLED` が `false` の間、デモは LR2 と beatoraja のテーマを読み込みません。確認の間だけ手元で `true` にし、コミットはしません。
+2. **スキン。** 標準のスキンは何も要りません。LR2 は標準のテーマと効果音（`LR2files/Theme/LR2` と `LR2files/Sound`）を、beatoraja は任意のスキン（前回は ModernChic）を使います。テーマはドロップすると適用され、Debug Menu の Skin system でスキンの種類を切り替えられます。
 3. **開発サーバー。** デモは専用のポートで動かします（`pnpm --filter @be-music/player-web-demo run dev --port 5199 --strictPort`）。既定のポートで遊んでいるセッションに触れないためです。
 4. **ファイルのドロップ。** 人が確かめるなら、フォルダをページにドラッグすれば済みます。ブラウザの自動操作ではドロップできないので、`node scripts/course-checklist/serve.ts fixtures=<dir>/songs extra=<dir> lr2theme=<LR2files の親> beatoraja=<スキンのフォルダ>`（ポート 5299）で配信し、ページのコンソールから擬似的にドロップします。
 
