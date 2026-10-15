@@ -1,11 +1,13 @@
 import { parseLr2NonstopConnections, type CourseKind, type NonstopConnection } from '@be-music/player/course';
 import type { BrowserCourseEntry } from '../collection/types.ts';
 
-/** One stage of a course, as a skin shows it: the stage chart's title, subtitle and play level. */
+/** One stage of a course, as a skin shows it: the stage chart's title, subtitle, play level and difficulty. */
 export interface SceneCourseStageInfo {
   title: string;
   subtitle?: string;
   level?: number;
+  /** The chart's `#DIFFICULTY` (1 BEGINNER … 5 INSANE); absent when the chart names none or is not in the collection. */
+  difficulty?: number;
 }
 
 /**
@@ -34,10 +36,12 @@ export function resolveSceneCourseInfo(course: BrowserCourseEntry, stageIndex?: 
     stages: course.stages.map((stage): SceneCourseStageInfo => {
       const song = stage.song;
       const level = typeof song?.playLevel === 'string' ? Number.parseInt(song.playLevel, 10) : song?.playLevel;
+      const difficulty = song?.chart.metadata.difficulty;
       return {
         title: song?.title ?? stage.title,
         ...(song?.subtitle !== undefined ? { subtitle: song.subtitle } : {}),
         ...(level !== undefined && Number.isFinite(level) ? { level } : {}),
+        ...(difficulty !== undefined && Number.isFinite(difficulty) ? { difficulty } : {}),
       };
     }),
     ...(stageIndex !== undefined ? { stageIndex } : {}),

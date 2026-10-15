@@ -3,6 +3,7 @@ import type { SceneCourseInfo } from '../course-info.ts';
 import {
   lr2ShowsCourseCombo,
   resolveLr2JudgeCombo,
+  resolveLr2CourseStageDifficultyOps,
   resolveLr2CourseConnectionText,
   resolveLr2CourseDraftInfo,
   resolveLr2CourseMakerAction,
@@ -162,5 +163,30 @@ describe('resolveLr2JudgeCombo', () => {
     expect(resolveLr2JudgeCombo(12, 340, 'nonstop')).toBe(12);
     expect(resolveLr2JudgeCombo(12, undefined, undefined)).toBe(12);
     expect(resolveLr2JudgeCombo(12, undefined, 'grade')).toBe(12);
+  });
+});
+
+describe('resolveLr2CourseStageDifficultyOps', () => {
+  it('lights 700 + 10 × stage + difficulty for the first five stages', () => {
+    const course: SceneCourseInfo = {
+      kind: 'grade',
+      title: 'Dan',
+      stages: [
+        { title: 'a', difficulty: 2 },
+        { title: 'b', difficulty: 4 },
+        { title: 'c' },
+        { title: 'd', difficulty: 5 },
+        { title: 'e', difficulty: 3 },
+        { title: 'f', difficulty: 1 },
+      ],
+    };
+    expect(resolveLr2CourseStageDifficultyOps(course)).toEqual([702, 714, 720, 735, 743]);
+  });
+
+  it('reads 0 for a stage the course lacks and for a bar that is not a course, as LR2 does', () => {
+    expect(
+      resolveLr2CourseStageDifficultyOps({ kind: 'expert', title: 'x', stages: [{ title: 'a', difficulty: 1 }] }),
+    ).toEqual([701, 710, 720, 730, 740]);
+    expect(resolveLr2CourseStageDifficultyOps(undefined)).toEqual([700, 710, 720, 730, 740]);
   });
 });

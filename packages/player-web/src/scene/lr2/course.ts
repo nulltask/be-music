@@ -35,6 +35,18 @@ export function resolveLr2CourseOps(course: SceneCourseInfo): number[] {
   return ops;
 }
 
+/**
+ * LR2 select ops 700-745 (OpenLR2 L5995-L6031): `700 + 10 × i + difficulty` lights for stage i + 1 (of the first five)
+ * of the selected bar's course, by the stage chart's `#DIFFICULTY` (0 undefined, 1 BEGINNER … 5 INSANE). LR2 reads
+ * 0 for a stage it does not have, a chart it does not own and any bar that is not a course, so those light the `x0` op.
+ */
+export function resolveLr2CourseStageDifficultyOps(course: SceneCourseInfo | undefined): number[] {
+  return [0, 1, 2, 3, 4].map((index) => {
+    const difficulty = Math.trunc(course?.stages[index]?.difficulty ?? 0);
+    return 700 + index * 10 + (difficulty >= 0 && difficulty <= 5 ? difficulty : 0);
+  });
+}
+
 /** LR2 numbers 250-259: the play level of course stage 1-10 (OpenLR2 L923-L942). */
 export function resolveLr2CourseNumber(num: number, course: SceneCourseInfo): number | undefined {
   if (num < 250 || num > 259) return undefined;

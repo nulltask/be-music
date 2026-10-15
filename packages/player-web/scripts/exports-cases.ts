@@ -545,6 +545,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveLr2CourseNumber(250, BENCH_COURSE_INFO);
     },
   });
+  define('player-web.resolveLr2CourseStageDifficultyOps', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseStageDifficultyOps(BENCH_COURSE_INFO);
+      playerWebCoreApi.resolveLr2CourseStageDifficultyOps(undefined);
+    },
+  });
   define('player-web.resolveLr2JudgeCombo', {
     run: () => {
       playerWebCoreApi.resolveLr2JudgeCombo(12, 340, 'grade');

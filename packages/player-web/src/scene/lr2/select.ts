@@ -50,6 +50,7 @@ import {
   resolveLr2CourseMakerText,
   resolveLr2CourseNumber,
   resolveLr2CourseOps,
+  resolveLr2CourseStageDifficultyOps,
   resolveLr2CourseText,
 } from './course.ts';
 
@@ -230,7 +231,8 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    */
   /**
    * The select ops for the bar under the cursor. A course bar lights the course-bar op (3), the playable op (5) when
-   * every stage is in the collection, and the course ops (290 and its kind's op).
+   * every stage is in the collection, its best lamp (100-105), its stages' difficulties (700-745) and the course ops
+   * (290 and its kind's op).
    */
   private computeOps(skin: Lr2Skin): ReadonlySet<number> {
     const song = this.focusedSong();
@@ -244,18 +246,20 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     );
     const course = this.focusedCourse();
     const maker = this.options.courseMaker;
-    if (course === undefined && maker === undefined) return ops;
     const withCourse = new Set(ops);
+    // Ops 700-745: the difficulty of the selected course's stages 1-5 (the `x0` ops on any other bar, as LR2 reads 0).
+    const courseInfo = course !== undefined ? resolveSceneCourseInfo(course) : undefined;
+    resolveLr2CourseStageDifficultyOps(courseInfo).forEach((op) => withCourse.add(op));
     if (maker !== undefined) {
       resolveLr2CourseMakerOps(maker.draft, course?.stages.length).forEach((op) => withCourse.add(op));
     }
-    if (course === undefined) return withCourse;
+    if (course === undefined || courseInfo === undefined) return withCourse;
     withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_COURSE);
     if (course.playable) withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_PLAYABLE);
     // The course's best lamp (ops 100-105), from the player's record on it as LR2 keeps one per course.
     withCourse.delete(SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED);
     withCourse.add(resolveLr2LampOp(this.options.resolveCourseRecord?.(course)?.lamp));
-    resolveLr2CourseOps(resolveSceneCourseInfo(course)).forEach((op) => withCourse.add(op));
+    resolveLr2CourseOps(courseInfo).forEach((op) => withCourse.add(op));
     return withCourse;
   }
 
