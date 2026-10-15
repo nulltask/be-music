@@ -122,6 +122,11 @@ Courses play through the same select → play → result scenes. See [Courses an
   - In an expert or grade course, numbers 104 / 105 (combo, max combo) count the whole course: the combo the previous stage left runs on until the first break.
   - The gauge-type ops report the red gauge (43 / 45) for a course stage, as LR2 does for its course gauge.
   - The course result shows on the theme's course-result skin (`#INFORMATION` type 15) when it has one, else on the result skin, and plays `courseclear` / `coursefail`, falling back to `clear` / `fail`.
+- **beatoraja skins** (`courseInfo` on the beatoraja gameplay and result scenes; beatoraja `BooleanPropertyFactory` / `StringPropertyFactory`):
+  - Select: a course bar lights `GRADEBAR` (3) and one `OPTION_GRADEBAR_*` op per constraint (1002-1007, 1010-1017), and names its stages on strings 150-159, marking a stage the collection lacks `(no song) <title>`.
+  - Play and the stage results light `MODE_COURSE` (290) and the stage op: 280-283 for stages 1-4 that are not the last, 289 for the last. Strings 150-159 name the running course's stages.
+  - `no_speed` locks the hi-speed: the arrow keys do nothing and a change through the engine's Option + lane-key shortcut is set back.
+  - The course result shows on the theme's `COURSE_RESULT` skin (type 15), else its result skin, with `MODE_COURSE` lit and the title strings (10 / 12) reading the course title. It plays `course_clear` / `course_fail`, falling back to `clear` / `fail`.
 
 ## LR2 skin and theme support
 
