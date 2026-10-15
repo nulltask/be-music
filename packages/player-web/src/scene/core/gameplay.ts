@@ -49,6 +49,7 @@ import {
   DEFAULT_PLAYLOG_VIEW_REPLAY,
   resolveReplayHiSpeed,
   resolveReplayView,
+  roundPlaylogView,
   type BeMusicPlaylog,
   type PlaylogCourseStage,
   type PlaylogLaneCover,
@@ -4420,8 +4421,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     };
     // The visible time at the main BPM without `#SCROLL`, so another scale's replay can match it.
     const visibleMs = this.resolveVisibleMs(covers[0], this.chartBpmRange?.mainBpm, 1);
-    if (visibleMs !== undefined && visibleMs > 0) view.visibleMs = Math.round(visibleMs);
-    return view;
+    if (visibleMs !== undefined && visibleMs > 0) view.visibleMs = visibleMs;
+    // At the play log's precision, so cover fractions record without float noise.
+    return roundPlaylogView(view);
   }
 
   /** The view the recorded play log starts from (`play.view`); later changes go through {@link updatePlaylogView}. */

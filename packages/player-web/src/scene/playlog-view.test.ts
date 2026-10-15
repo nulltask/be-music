@@ -62,4 +62,11 @@ describe('resolveBeatorajaPlaylogView', () => {
       { side: '2P', sudden: 0.25, hidden: 0, lift: 0.2 },
     ]);
   });
+
+  test('records without float noise', () => {
+    // 0.5 × (1 - 0.8) is 0.09999999999999998 in floating point; 240000 / 150 / 3 × 0.9 is 479.99999999999994.
+    const view = resolveBeatorajaPlaylogView({ ...input, hiSpeed: 3, lanecover: 0.1, lift: 0.8 });
+    expect(view.visibleMs).toBe(480);
+    expect(view.covers).toEqual([{ side: '1P', sudden: 0.1, hidden: 0.1, lift: 0.8 }]);
+  });
 });
