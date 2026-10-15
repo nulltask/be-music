@@ -1376,7 +1376,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
           this.song,
           this.gaugeState.current,
           courseCombo?.combo ?? this.tracker.combo,
-          this.hiSpeed,
+          this.playerHiSpeed,
           this.currentSeconds(),
           this.displayedScore,
           this.fps,
@@ -2006,7 +2006,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       case 2: {
         // HiSpeed 1P: map the multiplier into [0..1] over the supported range.
         const span = HISPEED_MAX - HISPEED_MIN;
-        return span <= 0 ? 0 : Math.max(0, Math.min(1, (this.hiSpeed - HISPEED_MIN) / span));
+        return span <= 0 ? 0 : Math.max(0, Math.min(1, (this.playerHiSpeed - HISPEED_MIN) / span));
       }
       case 6: {
         // Chart progress ratio
