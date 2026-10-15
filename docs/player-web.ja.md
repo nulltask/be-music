@@ -128,6 +128,8 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
   - `no_speed` ではハイスピードを固定します。矢印キーは効かず、エンジンの Option + レーンキーによる変更も元に戻します。
   - コースの結果は、テーマに `COURSE_RESULT` スキン（type 15）があればそれで、なければ結果のスキンで表示します。`MODE_COURSE` を点け、タイトルの文字列（10 / 12）はコース名になります。BGM は `course_clear` / `course_fail` を流し、なければ `clear` / `fail` を流します。
 
+- **NONSTOP（作業中）：** つないだ NONSTOP の譜面は、合成したアセットソース（`createNonstopAssets`）から鳴らします。各ステージのファイルは、そのステージ単体と同じ探し方（`#PATH_WAV`、コーデックと画像拡張子の代替、LR2 の親フォルダ）で見つけ、`s<ステージ>/<キー>` の名前にします。譜面は `NONSTOP_CHART_PATH` として遊びます。ゲームプレイシーンの `nonstop` オプション（結合のマップ）を渡すと、各ステージのサンプルを FIT の再生レートで鳴らし、背景音はステージごとのゲインを通して、つなぎ目で LR2 と同じ `音量²` の曲線でフェードします。プレイヤーのキー音はフェードしません。一時停止はオーディオコンテキストを止めるので、フェードも一緒に止まります。
+
 ## LR2 skin と theme support
 
 core parser は LR2 CSV skin file を select、decide、gameplay、result scene 向けに扱います。

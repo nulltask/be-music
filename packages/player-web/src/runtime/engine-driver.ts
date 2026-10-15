@@ -1,4 +1,5 @@
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { WebAudioStageMixer } from './nonstop-audio.ts';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import {
   autoPlay as engineAutoPlay,
@@ -27,6 +28,8 @@ export interface EngineDriverAudioContext {
   decodedSamples: ReadonlyMap<string, AudioBuffer>;
   wavCmdVolumeMultipliers: ReadonlyMap<string, number>;
   bmsonSlicePlayback?: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback>;
+  /** A stitched NONSTOP chart's per-stage rates and fades (`createNonstopStageMixer`). */
+  stageMixer?: WebAudioStageMixer;
 }
 
 /**
@@ -115,6 +118,7 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
       decodedSamples: audio.decodedSamples,
       wavCmdVolumeMultipliers: audio.wavCmdVolumeMultipliers,
       bmsonSlicePlayback: audio.bmsonSlicePlayback,
+      ...(audio.stageMixer !== undefined ? { stageMixer: audio.stageMixer } : {}),
     });
   };
   const createInputRuntime = createWebInputRuntimeFactory({
