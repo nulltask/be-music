@@ -174,6 +174,23 @@ EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 
 - プレイログは解決済み譜面を保存するため、プレイヤー間の `#RANDOM` やレーンシャッフルの実装差は
   再シミュレーションに影響しません。
 
+## コースのプレイログ
+
+コース 1 回分は **コースのプレイログ**（`format: 'be-music-course-playlog'`、`*.bmcourse.json`）1 つに記録します。コース（`name`、`kind`、`constraints`、`trophies`）と、ステージごとのエントリを順に持ちます。
+
+- 到達したステージは `{ played: true, playlog }` で、そのステージ自身の完全なプレイログです。その `play.course` はコースの種類と制約、前のステージが残した状態 `carryIn` を持つので、`extractCourseStage(log, index)` が返すログは単体で再生・再シミュレーションできます。
+- 到達しなかったステージ（失敗したステージより後）は `{ played: false, facts }` で、ルールセットがノート数を数えるのに必要な譜面の事実と、わかる場合は譜面ファイルのハッシュを持ちます。
+
+```mermaid
+flowchart TD
+  log["コースのプレイログ"] --> s1["stages[0]: 到達<br/>ステージのプレイログ"]
+  log --> s2["stages[1]: 到達<br/>ステージのプレイログ (carryIn)"]
+  log --> s3["stages[2]: 未到達<br/>譜面の事実"]
+  s2 -->|extractCourseStage| single["単曲のプレイログ"]
+```
+
+`simulateCoursePlaylog(log, { ruleset })` はコースの結果を導き直します。2 ステージ目以降は、記録された `carryIn` ではなく、**シミュレーションした**前のステージが残した状態から始め、ライブのプレイと同じく、ゲージが尽きた最初のステージでコースを止めます。結果（`PlaylogCourseResult`）は、遊んだステージの判定・FAST / SLOW・EX スコアを合計します。ノート数は全ステージで数え、判定されなかったノートはすべて BP（`missCount`）に加え、コース全体の最大コンボと最後のステージのゲージを取り、コースのランプとトロフィーを決めます（[コースと段位認定](./course.ja.md) を参照）。`createCoursePlaylog` は、ホストが記録したステージのログからコースのログを組み立て、エンジン自身のコース結果を `results.native` としてキャッシュします。
+
 ## CLI
 
 `@be-music/player-tui` は 2 つ目のバイナリ `bms-playlog` を提供します。

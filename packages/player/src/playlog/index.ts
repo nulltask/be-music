@@ -1,3 +1,4 @@
+export * from './course.ts';
 export * from './eligibility.ts';
 export * from './format.ts';
 export * from './recorder.ts';

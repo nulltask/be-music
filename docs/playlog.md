@@ -176,6 +176,23 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
 - Because the playlog stores the resolved chart, `#RANDOM` and lane-shuffle differences between players never
   affect re-simulation.
 
+## Course play logs
+
+A course run is recorded as one **course play log** (`format: 'be-music-course-playlog'`, `*.bmcourse.json`). It holds the course (`name`, `kind`, `constraints`, `trophies`) and one entry per stage, in order:
+
+- a stage the run reached is `{ played: true, playlog }`, that stage's own complete play log. Its `play.course` carries the course kind and constraints and `carryIn`, the state the previous stage left, so `extractCourseStage(log, index)` returns a log that replays and re-simulates on its own;
+- a stage the run never reached (after a failed one) is `{ played: false, facts }`: the chart facts a ruleset needs to count its notes, and the chart's file hashes when known.
+
+```mermaid
+flowchart TD
+  log["course play log"] --> s1["stages[0]: played<br/>stage play log"]
+  log --> s2["stages[1]: played<br/>stage play log (carryIn)"]
+  log --> s3["stages[2]: not reached<br/>chart facts"]
+  s2 -->|extractCourseStage| single["single-chart play log"]
+```
+
+`simulateCoursePlaylog(log, { ruleset })` re-derives the course result. Each stage after the first starts from the state the **simulated** previous stage left, not the recorded `carryIn`, and the course stops at the first stage whose gauge emptied, as the live run did. The result (`PlaylogCourseResult`) sums the stages played: judgments, fast / slow, EX-SCORE. It counts notes over every stage, adds every note the run never judged to the BP (`missCount`), takes the course-wide max combo and the last stage's gauge, and resolves the course lamp and the trophy (see [Courses and dan certification](./course.md)). `createCoursePlaylog` assembles the log from the stage logs a host recorded and caches the engine's own course result as `results.native`.
+
 ## CLI
 
 `@be-music/player-tui` ships a second binary, `bms-playlog`:
