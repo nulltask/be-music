@@ -139,6 +139,10 @@ import {
 import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
 import {
   courseRunKeepsRecord,
+  courseStagePlayFromResult,
+  courseStagePlayFromSummary,
+  courseStageRecordKey,
+  mergeCourseStageRecord,
   mergeSongRecord,
   readStoredSongRecords,
   playRecordKey,
@@ -777,6 +781,11 @@ class PlayerWebDemoApp {
    * for autoplay and replay plays, which never touch the records.
    */
   private activePlayRecordKey: string | undefined;
+  /**
+   * Record key of the running EXPERT / GRADE course stage's chart, latched at stage start ({@link courseStageRecordKey}):
+   * as LR2 does, the stage also updates that chart's best EX score, max combo, BP and FULL COMBO lamp.
+   */
+  private activeStageRecordKey: string | undefined;
   /**
    * `guiState.autoSavePlaylog` as it was when the current play STARTED. The result-screen auto-save decision reads
    * this latch, not the live checkbox, so the value in effect at song start governs the whole play (the checkbox is
@@ -2565,6 +2574,15 @@ class PlayerWebDemoApp {
     this.activePlayRecordKey = undefined;
   }
 
+  /** Folds the running course stage into its chart's record ({@link mergeCourseStageRecord}), when the stage counts. */
+  private recordActiveCourseStage(play: SongRecordPlay): void {
+    const key = this.activeStageRecordKey;
+    this.activeStageRecordKey = undefined;
+    if (key === undefined) return;
+    this.songRecords.set(key, mergeCourseStageRecord(this.songRecords.get(key), play));
+    storeSongRecords(this.songRecords);
+  }
+
   /** Folds a finished play into its chart's best record and persists the records. */
   private recordSongResult(key: string, play: SongRecordPlay): void {
     this.songRecords.set(key, mergeSongRecord(this.songRecords.get(key), play));
@@ -3364,6 +3382,10 @@ class PlayerWebDemoApp {
       course: courseStage !== undefined,
       tempo,
     });
+    this.activeStageRecordKey =
+      courseStage !== undefined
+        ? courseStageRecordKey(song, chartHashes?.sha256, { autoPlay, replay: false, tempo })
+        : undefined;
     // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
     let givingUp = false;
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
@@ -3456,6 +3478,7 @@ class PlayerWebDemoApp {
           // A course stage: its play log carries the course on, and leaving its result plays the next stage.
           if (courseStage !== undefined && this.courseSession !== undefined) {
             const goesOn = this.courseSession.recordStage(playlog, history) === 'next';
+            this.recordActiveCourseStage(courseStagePlayFromSummary(summary, maxCombo));
             // With stage results skipped (or an auto-played stage the course goes on after, as LR2 skips it), go
             // straight on to the next stage (or the course result).
             const mounted =
@@ -4955,6 +4978,11 @@ class PlayerWebDemoApp {
       course: courseStage !== undefined || nonstop !== undefined,
       tempo,
     });
+    // An EXPERT / GRADE stage also updates its chart's record, as LR2 does (not a NONSTOP run's stitched play).
+    this.activeStageRecordKey =
+      courseStage !== undefined
+        ? courseStageRecordKey(song, overrides.chartHashes?.sha256, { autoPlay, replay: replay !== undefined, tempo })
+        : undefined;
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
       // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
@@ -5055,6 +5083,7 @@ class PlayerWebDemoApp {
         ) {
           void this.finishGameplayThen(async () => {
             this.courseSession?.recordStage(result.playlog, result);
+            this.recordActiveCourseStage(courseStagePlayFromResult(result));
             this.gameplayView?.dispose({ preserveAudioTail: true });
             this.gameplayView = undefined;
             this.unlockPlaylogOptions();
@@ -5247,7 +5276,10 @@ class PlayerWebDemoApp {
     const presentation = resolveResultPresentation(
       mode.course !== undefined ? 'course' : mode.nonstop !== undefined ? 'nonstop' : courseStage ? 'stage' : 'single',
     );
-    if (courseStage) this.courseSession!.recordStage(data.playlog, data);
+    if (courseStage) {
+      this.courseSession!.recordStage(data.playlog, data);
+      this.recordActiveCourseStage(courseStagePlayFromResult(data));
+    }
     // Family dispatch for result. We currently only model the LR2 / default split here — the beatoraja result
     // scene is constructed inside `playSongBeatoraja`'s onComplete handler, not via `showResult`, so this method
     // never sees the `'beatoraja'` family. Pick the LR2 result skin only when the family pick says so; defaulting

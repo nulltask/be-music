@@ -4,6 +4,10 @@ import {
   CLEAR_LAMP_ORDER,
   clearLampRank,
   courseRunKeepsRecord,
+  courseStagePlayFromResult,
+  courseStagePlayFromSummary,
+  courseStageRecordKey,
+  mergeCourseStageRecord,
   isCourseRunAtAnotherTempo,
   isCourseRunAutoPlayed,
   mergeSongRecord,
@@ -187,5 +191,68 @@ describe('playRecordKey', () => {
     expect(playRecordKey(song, 'abc', { ...played, replay: true })).toBeUndefined();
     expect(playRecordKey(song, 'abc', { ...played, course: true })).toBeUndefined();
     expect(playRecordKey(song, 'abc', { ...played, tempo: 1.1 })).toBeUndefined();
+  });
+});
+
+describe('course stage records', () => {
+  const song = { chartPath: 'Songs/a/main.bms' };
+
+  it('keys an EXPERT / GRADE stage under its chart, not when auto-played, replayed or at another tempo', () => {
+    const played = { autoPlay: false, replay: false, tempo: 1 };
+    expect(courseStageRecordKey(song, 'abc', played)).toBe('sha256:abc');
+    expect(courseStageRecordKey(song, 'abc', { ...played, autoPlay: true })).toBeUndefined();
+    expect(courseStageRecordKey(song, 'abc', { ...played, replay: true })).toBeUndefined();
+    expect(courseStageRecordKey(song, 'abc', { ...played, tempo: 0.9 })).toBeUndefined();
+  });
+
+  it('keeps the best EX score, max combo and BP but neither the clear lamp nor the play count, as LR2 does', () => {
+    const previous = { lamp: 'EASY' as const, exScore: 100, maxCombo: 50, missCount: 9, playCount: 3 };
+    expect(mergeCourseStageRecord(previous, { lamp: 'HARD', exScore: 120, maxCombo: 40, missCount: 12 })).toEqual({
+      lamp: 'EASY',
+      exScore: 120,
+      maxCombo: 50,
+      missCount: 9,
+      playCount: 3,
+    });
+  });
+
+  it('writes a FULL COMBO (or better) lamp', () => {
+    const previous = { lamp: 'HARD' as const, exScore: 100 };
+    expect(mergeCourseStageRecord(previous, { lamp: 'FULL_COMBO', exScore: 90, maxCombo: 80, missCount: 0 }).lamp).toBe(
+      'FULL_COMBO',
+    );
+    expect(
+      mergeCourseStageRecord({ lamp: 'MAX' }, { lamp: 'FULL_COMBO', exScore: 0, maxCombo: 0, missCount: 0 }).lamp,
+    ).toBe('MAX');
+  });
+
+  it('starts a chart never played alone at NO PLAY without a play count', () => {
+    expect(mergeCourseStageRecord(undefined, { lamp: 'NORMAL', exScore: 30, maxCombo: 12, missCount: 4 })).toEqual({
+      lamp: 'NO_PLAY',
+      exScore: 30,
+      maxCombo: 12,
+      missCount: 4,
+    });
+  });
+
+  it('counts the notes a failed stage never judged in its BP', () => {
+    const data = {
+      score: { total: 100, perfect: 30, great: 10, good: 5, bad: 2, poor: 3, emptyPoor: 1, exScore: 70, score: 70 },
+      maxCombo: 20,
+      cleared: false,
+      lamp: 'FAILED',
+    } as unknown as PixiGameplayResultData;
+    expect(courseStagePlayFromResult(data)).toEqual({ lamp: 'FAILED', exScore: 70, maxCombo: 20, missCount: 55 });
+    const summary = {
+      total: 100,
+      perfect: 30,
+      great: 10,
+      good: 5,
+      bad: 2,
+      poor: 3,
+      exScore: 70,
+      gauge: { type: 'GRADE', cleared: false },
+    } as Parameters<typeof courseStagePlayFromSummary>[0];
+    expect(courseStagePlayFromSummary(summary, 20)).toMatchObject({ lamp: 'FAILED', missCount: 55 });
   });
 });
