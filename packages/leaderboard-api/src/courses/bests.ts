@@ -5,6 +5,7 @@ import type { Database } from '../db/client.ts';
 import { courseBestScore, courseScore, courseScoreResult } from '../db/schema.ts';
 import { mergeBestScores, type BestScores } from '../scoring/best.ts';
 import type { ClearLamp } from '../scoring/lamp.ts';
+import { mergeCourseTrophy, type CourseTrophyBest } from './figures.ts';
 
 export type CourseBestScoreRow = typeof courseBestScore.$inferInsert;
 
@@ -14,7 +15,7 @@ export async function loadCourseBestScores(
   userId: string,
   courseFingerprint: string,
   assisted: boolean,
-): Promise<Map<PlaylogRulesetId, BestScores & { playedHere: boolean }>> {
+): Promise<Map<PlaylogRulesetId, BestScores & { trophy: CourseTrophyBest; playedHere: boolean }>> {
   const rows = await db
     .select()
     .from(courseBestScore)
@@ -37,6 +38,7 @@ export async function loadCourseBestScores(
         minMiss: row.minMiss,
         minMissScoreId: row.minMissScoreId,
         playCount: row.playCount,
+        trophy: { trophy: row.bestTrophy, rank: row.bestTrophyRank, scoreId: row.bestTrophyScoreId },
         playedHere: row.playedHere,
       },
     ]),
@@ -46,6 +48,7 @@ export async function loadCourseBestScores(
 export function toCourseBestScoreRow(
   key: { userId: string; courseFingerprint: string; ruleset: PlaylogRulesetId; assisted: boolean },
   bests: BestScores,
+  trophy: CourseTrophyBest,
   playedHere: boolean,
   now: number,
 ): CourseBestScoreRow {
@@ -58,6 +61,9 @@ export function toCourseBestScoreRow(
     bestLampScoreId: bests.bestLampScoreId,
     minMiss: bests.minMiss,
     minMissScoreId: bests.minMissScoreId,
+    bestTrophy: trophy.trophy,
+    bestTrophyRank: trophy.rank,
+    bestTrophyScoreId: trophy.scoreId,
     playCount: bests.playCount,
     playedHere,
     updatedAt: new Date(now),
@@ -66,8 +72,8 @@ export function toCourseBestScoreRow(
 
 /**
  * Recomputes a player's course bests on the given courses from their stored runs, in the order they were accepted, as
- * `rebuildBestScores` does for charts. Hidden runs are left out. Used when runs change owner (an anonymous account
- * linked to a real one).
+ * `rebuildBestScores` does for charts, the trophy best with them. Hidden runs are left out. Used when runs change owner
+ * (an anonymous account linked to a real one) and when a player hides or shows a run.
  */
 export async function rebuildCourseBestScores(
   db: Database,
@@ -87,6 +93,8 @@ export async function rebuildCourseBestScores(
       exScore: courseScoreResult.exScore,
       clearLamp: courseScoreResult.clearLamp,
       missCount: courseScoreResult.missCount,
+      trophy: courseScoreResult.trophy,
+      trophyRank: courseScoreResult.trophyRank,
     })
     .from(courseScore)
     .innerJoin(courseScoreResult, eq(courseScoreResult.courseScoreId, courseScore.id))
@@ -100,7 +108,7 @@ export async function rebuildCourseBestScores(
     .orderBy(asc(courseScore.createdAt), asc(courseScore.id));
 
   const folded = new Map<string, CourseBestScoreRow>();
-  const bests = new Map<string, { bests: BestScores; playedHere: boolean }>();
+  const bests = new Map<string, { bests: BestScores; trophy: CourseTrophyBest; playedHere: boolean }>();
   for (const row of rows) {
     const key = `${row.courseFingerprint}\u0000${row.ruleset}\u0000${row.assisted ? 1 : 0}`;
     const current = bests.get(key);
@@ -111,13 +119,19 @@ export async function rebuildCourseBestScores(
       lamp: row.clearLamp as ClearLamp,
       missCount: row.missCount,
     });
+    const trophy = mergeCourseTrophy(current?.trophy, {
+      scoreId: row.scoreId,
+      trophy: row.trophy,
+      rank: row.trophyRank,
+    }).next;
     const playedHere = (current?.playedHere ?? false) || row.playedRuleset === row.ruleset;
-    bests.set(key, { bests: next, playedHere });
+    bests.set(key, { bests: next, trophy, playedHere });
     folded.set(
       key,
       toCourseBestScoreRow(
         { userId, courseFingerprint: row.courseFingerprint, ruleset: row.ruleset, assisted: row.assisted },
         next,
+        trophy,
         playedHere,
         now,
       ),

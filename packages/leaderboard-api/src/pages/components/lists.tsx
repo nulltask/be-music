@@ -39,14 +39,14 @@ interface WideOnly {
   wideOnly: Child;
 }
 
-const wideOnly = (child: Child): WideOnly => ({ wideOnly: child });
+export const wideOnly = (child: Child): WideOnly => ({ wideOnly: child });
 
 const isWideOnly = (item: unknown): item is WideOnly => typeof item === 'object' && item !== null && 'wideOnly' in item;
 
 const shown = (item: Child): boolean => item !== null && item !== false && item !== undefined;
 
 /** The frame of a list: a card whose rows are split by hairlines, and the container its rows lay out against. */
-function List(props: { label: string; children: Child }) {
+export function List(props: { label: string; children: Child }) {
   return (
     <ol class="card divide-border @container gap-0 divide-y overflow-hidden py-0" aria-label={props.label}>
       {props.children}
@@ -67,7 +67,7 @@ const DETAIL =
  * small and muted, spanning to the row's end beneath them instead of wrapping down a column squeezed between the start
  * and the score. A wide row has room for the subtitle among the details, so it shows it there.
  */
-function Row(props: {
+export function Row(props: {
   href: string;
   label: string;
   start: Child;
@@ -132,7 +132,7 @@ function NarrowHidden(props: { children: Child }) {
 }
 
 /** Marks an anonymous player: quiet text in a narrow row, a badge in a wide one. */
-function AnonymousMark() {
+export function AnonymousMark() {
   const t = useMessages();
   return (
     <>
@@ -150,7 +150,7 @@ function lampMeaning(t: Messages, lamp: number): string {
 }
 
 /** The lamp as a colour bar: the row's leading edge, the same colour the lamp has everywhere else. */
-function LampBar(props: { lamp: number }) {
+export function LampBar(props: { lamp: number }) {
   const t = useMessages();
   const style = lampStyle(props.lamp);
   return (
@@ -163,7 +163,7 @@ function LampBar(props: { lamp: number }) {
 }
 
 /** The lamp's name in its colour's dot, for the details line; `from` marks a lamp this play raised. */
-function LampLabel(props: { lamp: number; from?: number }) {
+export function LampLabel(props: { lamp: number; from?: number }) {
   const t = useMessages();
   const style = lampStyle(props.lamp);
   const raised = props.from !== undefined && props.lamp > props.from;
@@ -196,7 +196,7 @@ function Delta(props: { delta: number; better: boolean; title: string }) {
  * EX-Score over its DJ LEVEL and rate, right-aligned on the digits; `previous` adds how far the play moved the
  * player's best, when it did.
  */
-function Score(props: { exScore: number; noteCount: number; previous?: number }) {
+export function Score(props: { exScore: number; noteCount: number; previous?: number }) {
   const t = useMessages();
   const gain = props.previous !== undefined ? props.exScore - props.previous : 0;
   return (
@@ -287,7 +287,7 @@ export function RankingList(props: {
  * Marks a play only its own player sees in the lists: "hidden" when they hid it, "not public" otherwise. The help tip
  * says why (any of: hidden, chart not listed yet, anonymous account), so the reason reads without hovering a title.
  */
-function PrivacyBadge(props: { hidden: boolean; reasons: Array<string | undefined> }) {
+export function PrivacyBadge(props: { hidden: boolean; reasons: Array<string | undefined>; onlyYou?: string }) {
   const t = useMessages();
   const reasons = props.reasons.filter((reason) => reason !== undefined);
   if (reasons.length === 0) return null;
@@ -299,7 +299,7 @@ function PrivacyBadge(props: { hidden: boolean; reasons: Array<string | undefine
       </span>
       <NarrowHidden>
         <HelpTip topic="visibility" label={label}>
-          {t.visibility.onlyYou}
+          {props.onlyYou ?? t.visibility.onlyYou}
           {reasons.map((reason) => (
             <>
               <br />• {reason}
@@ -493,7 +493,12 @@ export function ResultCards(props: {
     gaugeType: string;
     gaugeFinal: number | null;
     judges: Record<string, number>;
+    /** A course run's: the stages it reached and its trophy. */
+    stagesPlayed?: number;
+    trophy?: string | null;
   }>;
+  /** A course run's stage count, beside the stages each ruleset's run reached. */
+  stageCount?: number;
   playedRuleset: string;
   /** The viewer's display ruleset (the header's ruleset menu), marked as selected. */
   displayRuleset: string;
@@ -555,6 +560,18 @@ export function ResultCards(props: {
                   <dt>{t.score.gauge}</dt>
                   <dd class="text-foreground">{formatGauge(result.gaugeType, result.gaugeFinal)}</dd>
                 </div>
+                {result.stagesPlayed !== undefined && props.stageCount !== undefined ? (
+                  <div class="col-span-3 flex justify-between gap-2">
+                    <dt>{t.courseRun.stagesReached}</dt>
+                    <dd class="text-foreground">{t.courseRun.stagesOf(result.stagesPlayed, props.stageCount)}</dd>
+                  </div>
+                ) : null}
+                {result.trophy !== undefined ? (
+                  <div class="col-span-3 flex justify-between gap-2">
+                    <dt>{t.courseRun.trophy}</dt>
+                    <dd class="text-foreground">{result.trophy ?? t.courseRun.noTrophy}</dd>
+                  </div>
+                ) : null}
               </dl>
             </section>
           );

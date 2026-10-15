@@ -2,7 +2,18 @@ import { and, asc, countDistinct, desc, eq, or, sql, type SQL } from 'drizzle-or
 import { avatarUrl } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import type { RulesetId } from '../rulesets.ts';
-import { bestScore, chart, chartAlias, chartset, profile, score, scoreResult, user } from '../db/schema.ts';
+import {
+  chart,
+  chartAlias,
+  chartset,
+  courseScore,
+  courseScoreResult,
+  profile,
+  score,
+  scoreResult,
+  user,
+} from '../db/schema.ts';
+import { byRulesetOrder } from '../rulesets.ts';
 import type { ChartAlias } from './external.ts';
 import { PLAY_INFO_COLUMNS, toPlayInfo, type PlayInfo } from '../play-info.ts';
 
@@ -281,6 +292,31 @@ export async function loadChartAliases(db: Database, chartFingerprint: string): 
     .from(chartAlias)
     .where(eq(chartAlias.chartFingerprint, chartFingerprint))
     .orderBy(chartAlias.kind, chartAlias.hash);
+}
+
+/** One course run with its player (null when the profile is gone) and its figures under every ruleset, for its page. */
+export async function loadCourseRun(db: Database, courseScoreId: string) {
+  const [[row], results] = await Promise.all([
+    db
+      .select({
+        run: courseScore,
+        handle: profile.handle,
+        displayName: profile.displayName,
+        anonymous: user.isAnonymous,
+        avatarKey: profile.avatarKey,
+      })
+      .from(courseScore)
+      .leftJoin(user, eq(user.id, courseScore.userId))
+      .leftJoin(profile, eq(profile.userId, courseScore.userId))
+      .where(eq(courseScore.id, courseScoreId)),
+    db.select().from(courseScoreResult).where(eq(courseScoreResult.courseScoreId, courseScoreId)),
+  ]);
+  if (row === undefined) return undefined;
+  const player =
+    row.handle !== null && row.displayName !== null
+      ? { handle: row.handle, displayName: row.displayName, anonymous: row.anonymous === true }
+      : null;
+  return { run: row.run, player, results: results.sort(byRulesetOrder) };
 }
 
 export type { PlayInfo } from '../play-info.ts';

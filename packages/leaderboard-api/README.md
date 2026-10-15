@@ -15,12 +15,15 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 - `GET /api/v0/charts/:chartFingerprint/leaderboard` and `.../leaderboard/me`: rankings, with filters for assisted
   plays, anonymous players, and "played under this ruleset".
 - `GET /api/v0/scores/:id` and `.../playlog`.
+- Course runs (docs/leaderboard.md section 6.1): `POST /api/v0/course-scores`, the latest runs, one run, its play log,
+  hiding a run, a course, its ranking and my rank on it, with bests (the trophy best included) per course and ruleset.
 - `GET /api/v0/openapi.json`: the OpenAPI 3.1 document, generated from the routes' valibot schemas
   (`src/api/schemas.ts`), and its reference page at `/leaderboard/api`. A copy is committed as
   [`openapi.json`](./openapi.json); the test fails when it is out of date, so refresh it with `vp test run -u` after
   changing the API.
 
-- Pages under `/leaderboard`: new scores (top), a score, a chart's rankings, and a player.
+- Pages under `/leaderboard`: new scores and course runs (top), a score, a chart's rankings, a chartset, a course, a
+  course run, and a player.
 
 Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, and OG cards.
 

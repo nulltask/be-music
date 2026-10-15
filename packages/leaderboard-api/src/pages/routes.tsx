@@ -12,6 +12,8 @@ import { scoreCardImage } from './card.ts';
 import { mountClientScript } from './client-script.ts';
 import { chartPage } from './chart.tsx';
 import { chartsetPage } from './chartset.tsx';
+import { coursePage } from './course.tsx';
+import { courseRunPage } from './course-run.tsx';
 import { mountIcons } from './icons.ts';
 import { STYLESHEET_PATH } from './layout.tsx';
 import { notFound, RULESET_COOKIE_MAX_AGE } from './page.tsx';
@@ -34,6 +36,8 @@ export function mountPages(app: Hono<AppEnv>): void {
   app.get('/leaderboard/scores/:id', scorePage);
   app.get('/leaderboard/scores/:id/card', scoreCardImage);
   app.get('/leaderboard/charts/:chartFingerprint', chartPage);
+  app.get('/leaderboard/courses/:courseFingerprint', coursePage);
+  app.get('/leaderboard/course-scores/:id', courseRunPage);
   app.get('/leaderboard/players/:handle', playerPage);
   app.get('/leaderboard/players/:handle/avatar', avatarImage);
   app.get('/leaderboard/chartsets/:id', chartsetPage);

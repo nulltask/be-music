@@ -25,6 +25,7 @@ import { identifyPlay, type SubmissionDeps } from '../scores/submit.ts';
 import { mergeBestScores } from '../scoring/best.ts';
 import { toCourseClearLamp, type ClearLamp } from '../scoring/lamp.ts';
 import { loadCourseBestScores, toCourseBestScoreRow } from './bests.ts';
+import { courseTrophyRank, mergeCourseTrophy, toCourseStageFigures } from './figures.ts';
 import { countCoursePlayers, rankOfCourseExScore } from './ranking.ts';
 import { checkNonstopStageCharts, checkUnreachedStageCharts, type StageChartInput } from './stage-charts.ts';
 import { checkCourseRun, resolveCoursePlayedRuleset } from './verify.ts';
@@ -59,7 +60,7 @@ export interface CourseRulesetOutcome {
   trophy: string | null;
   rank: number;
   players: number;
-  improved: { exScore: boolean; lamp: boolean; missCount: boolean };
+  improved: { exScore: boolean; lamp: boolean; missCount: boolean; trophy: boolean };
 }
 
 export type CourseSubmissionOutcome =
@@ -168,8 +169,14 @@ export async function submitCourseScore(
       lamp,
       missCount: result.missCount,
     });
+    const trophyRank = courseTrophyRank(courseLog.course.trophies, result.trophy);
+    const trophy = mergeCourseTrophy(current?.trophy, {
+      scoreId: courseScoreId,
+      trophy: result.trophy ?? null,
+      rank: trophyRank,
+    });
     const playedHere = (current?.playedHere ?? false) || playedRuleset === ruleset;
-    return { ruleset, result, lamp, update, playedHere };
+    return { ruleset, result, lamp, update, trophyRank, trophy, playedHere };
   });
 
   // A NONSTOP run's gauge is its stitched play's.
@@ -214,7 +221,7 @@ export async function submitCourseScore(
       createdAt: new Date(now),
       updatedAt: new Date(now),
     }),
-    ...figures.map(({ ruleset, result, lamp }) =>
+    ...figures.map(({ ruleset, result, lamp, trophyRank }) =>
       db.insert(courseScoreResult).values({
         courseScoreId,
         ruleset,
@@ -226,15 +233,18 @@ export async function submitCourseScore(
         maxCombo: result.maxCombo,
         stagesPlayed: result.stagesPlayed,
         trophy: result.trophy ?? null,
+        trophyRank,
+        stages: result.stages.map(toCourseStageFigures),
         gaugeType: result.gauge.type,
         gaugeFinal: result.gauge.final,
         judges: { ...result.judge, fast: result.fast, slow: result.slow },
       }),
     ),
-    ...figures.map(({ ruleset, update, playedHere }) => {
+    ...figures.map(({ ruleset, update, trophy, playedHere }) => {
       const row = toCourseBestScoreRow(
         { userId: input.userId, courseFingerprint, ruleset, assisted },
         update.next,
+        trophy.next,
         playedHere,
         now,
       );
@@ -255,7 +265,7 @@ export async function submitCourseScore(
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 
   const results = await Promise.all(
-    figures.map(async ({ ruleset, result, lamp, update }): Promise<CourseRulesetOutcome> => {
+    figures.map(async ({ ruleset, result, lamp, update, trophy }): Promise<CourseRulesetOutcome> => {
       const filter = { courseFingerprint, ruleset, assisted, includeAnonymous: true, playedHereOnly: false };
       const [rank, players] = await Promise.all([
         rankOfCourseExScore(db, filter, update.next.bestEx),
@@ -273,7 +283,7 @@ export async function submitCourseScore(
         trophy: result.trophy ?? null,
         rank,
         players,
-        improved: update.improved,
+        improved: { ...update.improved, trophy: trophy.improved },
       };
     }),
   );
@@ -351,7 +361,7 @@ async function loadCourseOutcomes(
         trophy: row.trophy,
         rank,
         players,
-        improved: { exScore: false, lamp: false, missCount: false },
+        improved: { exScore: false, lamp: false, missCount: false, trophy: false },
       };
     }),
   );

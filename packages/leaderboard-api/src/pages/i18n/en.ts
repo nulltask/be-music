@@ -103,6 +103,8 @@ export const en = {
       'Each row: the lamp’s colour bar, the chart with its mode and level, the player, what the play changed on their best, where it ranks, the rules it was played with, and its EX-Score with DJ LEVEL and rate.',
     empty: 'No plays yet.',
     emptyNamed: 'Plays by players with an account show here. Turn on “Anonymous players” to see anonymous plays too.',
+    runs: 'Latest course runs',
+    runsLead: (rules: string) => `Dan, expert and NONSTOP course runs, scored under ${rules}.`,
   },
   filters: {
     everyPlay: 'Every play',
@@ -156,6 +158,61 @@ export const en = {
     notListedSignIn: 'Sign in to see your own record.',
     notListedEmpty: 'Records show here once the chart is listed.',
   },
+  course: {
+    description: (name: string, rules: string, players: number) =>
+      `${name} — course ranking under ${rules}, ${plural(players, 'player', 'players')}.`,
+    kinds: { grade: 'Grade course', expert: 'Expert course', nonstop: 'NONSTOP course' } as Readonly<
+      Record<string, string>
+    >,
+    stages: (count: number) => plural(count, 'stage', 'stages'),
+    stats: { players: 'Players', runs: 'Runs', firstRun: 'First run', lastRun: 'Last run' },
+    ranking: 'Ranking',
+    rankingHelp:
+      'Players by their best course EX-Score; each row opens the run that set it. The lamp and BP are their best lamp and fewest BP, which can come from other runs.',
+    clearLamps: 'Clear lamps',
+    clearLampsLead: (rules: string) => `Best course lamps of the players above, under ${rules}.`,
+    stageList: 'Stages',
+    stageListLead: 'The charts of the course, in the order they are played; each opens its own ranking.',
+    stageLabel: (stage: number) => `Stage ${stage}`,
+    unknownChart: 'a chart not played here on its own',
+    details: 'Course',
+    rows: {
+      kind: 'Kind',
+      constraints: 'Constraints',
+      stages: 'Stages',
+      fingerprint: 'Course ID',
+      firstRun: 'First run',
+    },
+    noConstraints: 'none',
+  },
+  courseRun: {
+    crumb: (name: string) => `${name}’s run`,
+    runBy: 'run by',
+    stagesReached: 'Stages',
+    stagesOf: (reached: number, total: number) => `${reached} / ${total}`,
+    trophy: 'Trophy',
+    noTrophy: 'none',
+    stages: 'Stages',
+    stagesLead: (rules: string) =>
+      `Each stage under ${rules}. The gauge is what the stage left for the next one; BP counts the notes a failed stage never judged.`,
+    notReached: 'not reached',
+    noBreakdown: 'This run was stored before its stages were kept one by one.',
+    details: 'Run',
+    course: 'Course',
+    playLog: 'Play log',
+    downloadPlayLog: 'Download course play log',
+    hiddenTitle: 'This run is hidden',
+    hiddenLead:
+      'Only you can see it. It is out of the course rankings, your personal bests and every list until you show it again.',
+    notPublicTitle: 'This run is not public',
+    visibility: 'Visibility',
+    visibilityShownLead:
+      'Hide this run to take it out of the course rankings, your personal bests and every list. It is kept, and you can show it again.',
+    visibilityHiddenLead:
+      'Show this run again to put it back in the course rankings, your personal bests and the lists.',
+    hide: 'Hide this run',
+    show: 'Show this run',
+  },
   lists: {
     ranking: 'Ranking',
     latestPlays: 'Latest plays',
@@ -169,6 +226,13 @@ export const en = {
     fewerMisses: 'Fewer misses than the player’s previous best',
     anonymous: 'anonymous',
     assist: 'assist',
+    latestRuns: 'Latest course runs',
+    noRuns: 'No course runs here yet',
+    runOfPlayer: (name: string, rank: number) => `Run of ${name}, rank ${rank}`,
+    runOfCourse: (course: string, name: string) => `Run of ${course} by ${name}`,
+    rankAmongOnCourse: (players: number) => `Rank among ${plural(players, 'player', 'players')} on this course`,
+    stagesReached: (reached: number, total: number) => `stage ${reached} / ${total}`,
+    onlyYouRun: 'Only you see this run in the rankings and lists.',
   },
   visibility: {
     /** Sentences run together, as the language spaces them. */
@@ -228,6 +292,7 @@ export const en = {
     chartset: 'This chartset',
     player: 'This player',
     score: 'This score',
+    course: 'This course',
     page: 'This page',
   },
   player: {
@@ -252,6 +317,7 @@ export const en = {
     playsUnder: (rules: string, plays: number) => `${rules}: ${plural(plays, 'play', 'plays')}`,
     latestPlays: 'Latest plays',
     empty: 'No plays yet.',
+    latestRuns: 'Latest course runs',
   },
   judgments: {
     title: 'Judgments',
