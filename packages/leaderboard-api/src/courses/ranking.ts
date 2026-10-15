@@ -35,7 +35,8 @@ export interface CourseRankingEntry {
   trophyScoreId: string | null;
 }
 
-function filterConditions(filter: CourseRankingFilter): SQL[] {
+/** The conditions of a course ranking's filters, over `course_best_score` joined to `user`. */
+export function courseFilterConditions(filter: CourseRankingFilter): SQL[] {
   const conditions: SQL[] = [
     eq(courseBestScore.courseFingerprint, filter.courseFingerprint),
     eq(courseBestScore.ruleset, filter.ruleset),
@@ -82,7 +83,7 @@ export async function loadCourseRanking(
         eq(courseScoreResult.ruleset, courseBestScore.ruleset),
       ),
     )
-    .where(and(...filterConditions(filter)))
+    .where(and(...courseFilterConditions(filter)))
     .orderBy(desc(courseBestScore.bestEx), asc(courseBestScore.bestExAt), asc(profile.handle))
     .limit(page.limit)
     .offset(page.offset);
@@ -118,7 +119,7 @@ export async function rankOfCourseExScore(db: Database, filter: CourseRankingFil
     .select({ above: count() })
     .from(courseBestScore)
     .innerJoin(user, eq(user.id, courseBestScore.userId))
-    .where(and(...filterConditions(filter), gt(courseBestScore.bestEx, exScore)));
+    .where(and(...courseFilterConditions(filter), gt(courseBestScore.bestEx, exScore)));
   return (above ?? 0) + 1;
 }
 
@@ -128,6 +129,6 @@ export async function countCoursePlayers(db: Database, filter: CourseRankingFilt
     .select({ players: count() })
     .from(courseBestScore)
     .innerJoin(user, eq(user.id, courseBestScore.userId))
-    .where(and(...filterConditions(filter)));
+    .where(and(...courseFilterConditions(filter)));
   return players ?? 0;
 }
