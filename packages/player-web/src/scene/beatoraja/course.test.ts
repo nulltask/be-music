@@ -4,6 +4,7 @@ import {
   resolveBeatorajaCourseConstraintOps,
   resolveBeatorajaCourseStageOps,
   resolveBeatorajaCourseText,
+  withBeatorajaCourseStageOps,
 } from './course.ts';
 
 function course(stageCount: number, stageIndex?: number): SceneCourseInfo {
@@ -45,6 +46,15 @@ describe('resolveBeatorajaCourseStageOps', () => {
 
   it('lights only MODE_COURSE without a stage (course result)', () => {
     expect(resolveBeatorajaCourseStageOps(course(4))).toEqual([290]);
+  });
+});
+
+describe('withBeatorajaCourseStageOps', () => {
+  it('adds the stage ops to the static set for a course stage only', () => {
+    const ops = new Set([900]);
+    expect(withBeatorajaCourseStageOps(ops, course(3, 0))).toBe(ops);
+    expect([...ops]).toEqual([900, 290, 280]);
+    expect([...withBeatorajaCourseStageOps(new Set([900]), undefined)]).toEqual([900]);
   });
 });
 
