@@ -2,6 +2,19 @@ import type { RandomDraw } from '@be-music/chart';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
 import type { LongNoteMode } from '../playable-notes.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
+import {
+  expectFiniteNumber,
+  expectNonNegativeInteger,
+  expectRecord,
+  expectString,
+  optionalFiniteNumber,
+  optionalString,
+  parseRecorder,
+  parseResults,
+  PlaylogParseError,
+} from './parse.ts';
+
+export { PlaylogParseError } from './parse.ts';
 
 /**
  * be-music play-log ("playlog") format.
@@ -282,13 +295,6 @@ export function resolvePlaylogFilename(playlog: BeMusicPlaylog, when?: Date): st
   return `${stem}-${timestamp}${PLAYLOG_FILE_SUFFIX}`;
 }
 
-export class PlaylogParseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PlaylogParseError';
-  }
-}
-
 /**
  * Parses (and defensively validates) a serialized playlog. Accepts either the JSON text or an already-parsed
  * value. Throws {@link PlaylogParseError} with a field-path message on structural problems; unknown extra fields
@@ -332,17 +338,6 @@ export function parsePlaylog(source: unknown): BeMusicPlaylog {
     play,
     ...(results !== undefined ? { results } : {}),
   };
-}
-
-const RECORDER_KEYS = ['name', 'version', 'build', 'engine', 'platform'] as const;
-
-function parseRecorder(recorder: Record<string, unknown>): PlaylogRecorderInfo {
-  const parsed: PlaylogRecorderInfo = {};
-  for (const key of RECORDER_KEYS) {
-    const value = optionalString(recorder[key], `recorder.${key}`);
-    if (value !== undefined) parsed[key] = value;
-  }
-  return parsed;
 }
 
 function parseChart(chart: Record<string, unknown>): PlaylogChart {
@@ -567,13 +562,6 @@ function parseCourseStage(course: Record<string, unknown>): PlaylogCourseStage {
   return parsed;
 }
 
-function expectNonNegativeInteger(value: unknown, path: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new PlaylogParseError(`${path}: expected a non-negative integer`);
-  }
-  return value;
-}
-
 const RANDOM_DRAW_COMMANDS: ReadonlySet<string> = new Set(['RANDOM', 'SETRANDOM', 'SWITCH', 'SETSWITCH']);
 
 function parseRandomDraws(value: unknown): RandomDraw[] {
@@ -596,79 +584,4 @@ function parseRandomDraws(value: unknown): RandomDraw[] {
     }
     return { command: command as RandomDraw['command'], range, value: drawn };
   });
-}
-
-function parseResults(results: Record<string, unknown>): Record<string, PlaylogRulesetResult> {
-  const parsed: Record<string, PlaylogRulesetResult> = {};
-  for (const [key, raw] of Object.entries(results)) {
-    const record = expectRecord(raw, `results.${key}`);
-    const judge = expectRecord(record.judge, `results.${key}.judge`);
-    const gauge = expectRecord(record.gauge, `results.${key}.gauge`);
-    const result: PlaylogRulesetResult = {
-      ruleset: expectString(record.ruleset, `results.${key}.ruleset`),
-      judge: {
-        pgreat: expectFiniteNumber(judge.pgreat, `results.${key}.judge.pgreat`),
-        great: expectFiniteNumber(judge.great, `results.${key}.judge.great`),
-        good: expectFiniteNumber(judge.good, `results.${key}.judge.good`),
-        bad: expectFiniteNumber(judge.bad, `results.${key}.judge.bad`),
-        poor: expectFiniteNumber(judge.poor, `results.${key}.judge.poor`),
-        emptyPoor: expectFiniteNumber(judge.emptyPoor, `results.${key}.judge.emptyPoor`),
-      },
-      fast: expectFiniteNumber(record.fast, `results.${key}.fast`),
-      slow: expectFiniteNumber(record.slow, `results.${key}.slow`),
-      exScore: expectFiniteNumber(record.exScore, `results.${key}.exScore`),
-      noteCount: expectFiniteNumber(record.noteCount, `results.${key}.noteCount`),
-      maxCombo: expectFiniteNumber(record.maxCombo, `results.${key}.maxCombo`),
-      gauge: {
-        type: expectString(gauge.type, `results.${key}.gauge.type`),
-        final: expectFiniteNumber(gauge.final, `results.${key}.gauge.final`),
-        cleared: gauge.cleared === true,
-      },
-    };
-    if (gauge.failedMidPlay !== undefined) result.gauge.failedMidPlay = gauge.failedMidPlay === true;
-    const score = optionalFiniteNumber(record.score, `results.${key}.score`);
-    if (score !== undefined) result.score = score;
-    const djLevel = optionalString(record.djLevel, `results.${key}.djLevel`);
-    if (djLevel !== undefined) result.djLevel = djLevel;
-    if (record.course !== undefined) {
-      const course = expectRecord(record.course, `results.${key}.course`);
-      result.course = {
-        combo: expectFiniteNumber(course.combo, `results.${key}.course.combo`),
-        maxCombo: expectFiniteNumber(course.maxCombo, `results.${key}.course.maxCombo`),
-      };
-    }
-    parsed[key] = result;
-  }
-  return parsed;
-}
-
-function expectRecord(value: unknown, path: string): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new PlaylogParseError(`${path}: expected an object`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function expectString(value: unknown, path: string): string {
-  if (typeof value !== 'string') {
-    throw new PlaylogParseError(`${path}: expected a string`);
-  }
-  return value;
-}
-
-function optionalString(value: unknown, path: string): string | undefined {
-  if (value === undefined) return undefined;
-  return expectString(value, path);
-}
-
-function expectFiniteNumber(value: unknown, path: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new PlaylogParseError(`${path}: expected a finite number`);
-  }
-  return value;
-}
-
-function optionalFiniteNumber(value: unknown, path: string): number | undefined {
-  if (value === undefined) return undefined;
-  return expectFiniteNumber(value, path);
 }
