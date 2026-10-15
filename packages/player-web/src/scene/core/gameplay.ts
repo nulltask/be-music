@@ -99,6 +99,14 @@ import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { advanceCourseCombo, createCourseCombo, type CourseComboState } from './course-combo.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
+import { nonstopBpmAt, type NonstopStitchMap } from '@be-music/player/course';
+import {
+  createNonstopStageMixer,
+  resolveNonstopStretchRates,
+  type NonstopFitMode,
+  type NonstopStageMixer,
+} from '../../runtime/nonstop-audio.ts';
+import { stretchAudioBuffers, type TimeStretchAlgorithm } from '../../runtime/time-stretch.ts';
 import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
@@ -144,8 +152,11 @@ import {
   pickActiveBgaCue,
   pickActiveBgaKey,
   resolveBgaImageRect,
+  resolveNonstopBgaAlpha,
+  splitNonstopBgaTimeline,
   toBrowserBgaTimeline,
   type BgaCue,
+  type NonstopStageBgaTimeline,
 } from './gameplay-bga.ts';
 import {
   isPlayableInputChannel,
@@ -578,6 +589,18 @@ export interface CoreGameplayViewOptions {
    * texts 150-170; beatoraja's course strings). Display only; the judging follows {@link course}.
    */
   courseInfo?: SceneCourseInfo;
+  /**
+   * The chart is a stitched NONSTOP course (`stitchNonstopCourse`'s map): each stage's samples play at its FIT rate
+   * and its background sound fades at the stage seams.
+   */
+  nonstop?: NonstopStitchMap;
+  /**
+   * How a NONSTOP FIT stage follows the previous stage's tempo: `pitch` (default, as LR2) plays its samples at the FIT
+   * rate, `keep-pitch` stretches them to the new tempo and keeps their pitch.
+   */
+  nonstopFitMode?: NonstopFitMode;
+  /** The time stretcher keep pitch uses: `signalsmith` (default, Signalsmith Stretch) or `wsola`. */
+  nonstopStretchAlgorithm?: TimeStretchAlgorithm;
   /** The hi-speed cannot be changed during play (a course's `no_speed` constraint). */
   hiSpeedLocked?: boolean;
   /**
@@ -914,6 +937,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * sample-accurate Web Audio timing.
    */
   private audioContextStartTime = 0;
+  /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
+  private nonstopMixer: NonstopStageMixer | undefined;
   protected paused = false;
   private pauseTime = 0;
   private pauseTotal = 0;
@@ -1064,6 +1089,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * into {@link getResultData} so the result host can offer it as a download.
    */
   private playlog: BeMusicPlaylog | undefined;
+  /** Callers of {@link waitForPlaylog} waiting for the engine to record the play. */
+  private readonly playlogWaiters: Array<(playlog: BeMusicPlaylog) => void> = [];
   /**
    * Per-play sampled history of `(progress, gauge%)` pairs. Recorded inside `publishJudge` (the single chokepoint for
    * every judge event) and seeded with a `(0, initialGauge)` entry on `prepareSong` so the polyline starts from the LR2
@@ -1236,6 +1263,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * keyed by (BMS id like "01" for BMS charts, header.name like "base.png" for bmson). `bmpKey === undefined` is the
    * "clear / hide" command (BMS `00`).
    */
+  /** A stitched NONSTOP chart's base / layer cues split by stage (`options.nonstop`). */
+  private nonstopBgaTimelines: NonstopStageBgaTimeline[] | undefined;
   private bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } = {
     base: [],
     layer: [],
@@ -1774,6 +1803,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.startTime = performance.now();
       if (this.audioContext) {
         this.audioContextStartTime = this.audioContext.currentTime;
+        this.nonstopMixer?.schedule(this.audioContextStartTime);
       }
       // Hand chart playback over to `@be-music/player`'s engine. Fires only after the play-start gate (= same instant
       // the legacy self-judge would have started consuming notes), so the engine's chart-time t=0 lines up with the
@@ -1820,6 +1850,27 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** Whether the play is paused (by Space, {@link requestTogglePause}, or the auto-pause on losing focus). */
   public isPaused(): boolean {
     return this.paused;
+  }
+
+  /**
+   * The play log of this play once the engine has recorded it — also after Escape, which records the play as given up
+   * (`play.aborted`) a moment after `onExit` fires. Resolves `undefined` when none arrives within `timeoutMs` (a replay
+   * records none).
+   */
+  public waitForPlaylog(timeoutMs = 2000): Promise<BeMusicPlaylog | undefined> {
+    if (this.playlog !== undefined) return Promise.resolve(this.playlog);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        const index = this.playlogWaiters.indexOf(settle);
+        if (index >= 0) this.playlogWaiters.splice(index, 1);
+        resolve(undefined);
+      }, timeoutMs);
+      const settle = (playlog: BeMusicPlaylog): void => {
+        clearTimeout(timer);
+        resolve(playlog);
+      };
+      this.playlogWaiters.push(settle);
+    });
   }
 
   /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
@@ -2083,6 +2134,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         : 0;
     const webAudioSession = this.webAudioSession;
     this.webAudioSession = undefined;
+    this.nonstopMixer?.dispose();
+    this.nonstopMixer = undefined;
     // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
     // The bus doesn't own the AudioContext itself; closing that is the next step.
     this.audioAnalyzer?.dispose();
@@ -2480,6 +2533,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
       : new Set();
     this.bgaTimeline = toBrowserBgaTimeline(resolvedPlay.bga);
+    this.nonstopBgaTimelines =
+      this.options.nonstop !== undefined
+        ? splitNonstopBgaTimeline(this.bgaTimeline, this.options.nonstop.stages)
+        : undefined;
     // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
     // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
     // black POOR plate on misses for charts that rely on this convention.
@@ -2553,6 +2610,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return resolver.displayBpmAtBeat(
       this.currentBeat(Math.min(seconds, resolver.reversal?.seconds ?? Number.POSITIVE_INFINITY)),
     );
+  }
+
+  /**
+   * The BPM the readouts (NOWBPM, the HUD) show at `seconds`: for a stitched NONSTOP chart, whose scroll runs at a
+   * constant 150 BPM, the BPM of the stage being played, scaled by its FIT rate (`NonstopStitchMap.tempo`), as LR2
+   * shows it; otherwise {@link nowBpm}.
+   */
+  protected displayBpm(seconds: number): number | undefined {
+    const tempo = this.options.nonstop?.tempo;
+    return tempo !== undefined && tempo.length > 0 ? nonstopBpmAt(tempo, seconds) : this.nowBpm(seconds);
   }
 
   protected currentBeat(seconds: number): number {
@@ -2691,6 +2758,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // walks the prefixed form first when set so a chart authored as `wav/` + bare `kick.wav` references resolves the
     // file as `wav/kick.wav`.
     const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
+    // Keep pitch: a FIT stage's samples are stretched to its new tempo once, here, and then play at their own pitch.
+    const keepPitch = this.options.nonstop !== undefined && this.options.nonstopFitMode === 'keep-pitch';
+    const stretchRates = keepPitch
+      ? resolveNonstopStretchRates(this.options.nonstop!, chart.resources.wav, (path) =>
+          normalizePath(path).toLowerCase(),
+        )
+      : undefined;
     await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
       if (this.disposed || !this.source || !this.song || !this.audioContext) return;
       // Audio-aware asset lookup: charts almost universally declare `.wav` paths but archives often ship `.ogg` /
@@ -2719,11 +2793,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // dispose can complete cleanly.
       }
     });
+    if (stretchRates !== undefined && stretchRates.size > 0) await this.stretchNonstopSamples(stretchRates);
     // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
     // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
     // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
     // it. See the field doc for why this beats keeping the audio plumbing inline on the view.
     if (!this.disposed && this.audioContext && this.audioBus) {
+      this.nonstopMixer?.dispose();
+      this.nonstopMixer =
+        this.options.nonstop !== undefined
+          ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop, {
+              keepPitch: this.options.nonstopFitMode === 'keep-pitch',
+            })
+          : undefined;
       this.webAudioSession = createWebAudioSession({
         audioContext: this.audioContext,
         audioBus: this.audioBus,
@@ -2731,7 +2813,29 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         decodedSamples: this.decodedSamples,
         wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
         bmsonSlicePlayback: this.bmsonSlicePlayback,
+        ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
       });
+    }
+  }
+
+  /**
+   * Keep pitch: stretches each FIT stage's decoded samples to the stage's tempo in place, keeping their pitch. The
+   * samples of one rate are stretched together (one Signalsmith Stretch render per stage).
+   */
+  private async stretchNonstopSamples(rates: ReadonlyMap<string, number>): Promise<void> {
+    const byRate = new Map<number, string[]>();
+    for (const [path, rate] of rates) {
+      if (this.decodedSamples.has(path)) byRate.set(rate, [...(byRate.get(rate) ?? []), path]);
+    }
+    for (const [rate, paths] of byRate) {
+      if (this.disposed || !this.audioContext) return;
+      const stretched = await stretchAudioBuffers(
+        this.audioContext,
+        paths.map((path) => this.decodedSamples.get(path)!),
+        rate,
+        this.options.nonstopStretchAlgorithm ?? 'signalsmith',
+      );
+      paths.forEach((path, index) => this.decodedSamples.set(path, stretched[index]!));
     }
   }
 
@@ -3976,14 +4080,28 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // is fine in practice: the LR2 default skin uses identical flags on every rect, and a future skin that mixes them
     // per-rect would still get a consistent global playback state from this single sync point.
     const controllingBga = visibleBgas[0]!;
-    const baseCue = controllingBga.noBase ? undefined : pickActiveBgaCue(this.bgaTimeline.base, cueSeconds);
-    const layerCue = controllingBga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, cueSeconds);
-    const baseKey = baseCue?.bmpKey;
-    const layerKey = layerCue?.bmpKey;
     const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
     const inPoorWindow =
       !controllingBga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
-    let poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, cueSeconds) : undefined;
+    // A stitched NONSTOP chart shows one BGA stack per stage, crossfading at the seams; any other chart one stack.
+    const stacks = this.resolveBgaStacks(
+      cueSeconds,
+      controllingBga.noBase === true,
+      controllingBga.noLayer === true,
+      inPoorWindow,
+    );
+    const leading = stacks.reduce<(typeof stacks)[number] | undefined>(
+      (best, stack) => (best === undefined || stack.alpha >= best.alpha ? stack : best),
+      undefined,
+    );
+    const baseCue = leading?.baseCue;
+    const layerCue = leading?.layerCue;
+    const baseKey = baseCue?.bmpKey;
+    const layerKey = layerCue?.bmpKey;
+    let poorKey = this.nonstopBgaTimelines !== undefined ? leading?.poorKey : undefined;
+    if (inPoorWindow && this.nonstopBgaTimelines === undefined) {
+      poorKey = pickActiveBgaKey(this.bgaTimeline.poor, cueSeconds);
+    }
     // BMP00 fallback: when no explicit POOR cue is active but the chart left `#POORBGA` blank with a `#BMP00` defined,
     // paint BMP00 during the miss window. Capped at the first authored POOR cue's chart-time so a chart that does
     // eventually author POOR isn't permanently stuck on the placeholder.
@@ -3995,6 +4113,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     ) {
       poorKey = this.poorBgaFallbackKey;
     }
+    if (this.nonstopBgaTimelines === undefined && stacks[0] !== undefined) stacks[0].poorKey = poorKey;
     this.syncBgaVideo('base', baseCue, seconds);
     this.syncBgaVideo('layer', layerCue, seconds);
 
@@ -4023,6 +4142,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         textures: ReadonlyMap<string, Texture>,
         layerName: 'base' | 'layer' | 'poor',
         cueSeconds: number | undefined,
+        alpha = 1,
       ): void => {
         if (!key) return;
         const resolvedKey = this.resolveBgaFrameKey(key, cueSeconds, seconds);
@@ -4050,6 +4170,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           backdrop.height = bga.h;
           bga.applyToSprite(backdrop);
           backdrop.tint = 0x000000;
+          backdrop.alpha *= alpha;
         }
         const sprite = this.bgaLayerPool.acquireSprite();
         sprite.texture = texture;
@@ -4058,6 +4179,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         sprite.width = placed.w;
         sprite.height = placed.h;
         bga.applyToSprite(sprite);
+        sprite.alpha *= alpha;
         // BMS spec — `#ARGBxx AARRGGBB` (and the ARGB tuple embedded in `#EXBMPxx a,r,g,b,filename`) declare the BMP
         // slot's alpha + RGB tint for layer composition. Apply the parsed values via Pixi's per-sprite `tint` (RGB
         // multiply) and `alpha` (overall opacity); the default `#FFFFFFFF` round-trips to `tint = 0xFFFFFF` / `alpha =
@@ -4080,21 +4202,55 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           }
         }
       };
-      if (poorKey) {
-        // POOR uses base-mode decoding (no chroma key) since it replaces the entire base+layer composite during its
-        // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart authors
-        // don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
-        drawLayer(poorKey, this.bgaTextures, 'poor', undefined);
-      } else {
+      for (const stack of stacks) {
+        if (stack.poorKey) {
+          // POOR uses base-mode decoding (no chroma key) since it replaces the stack's base+layer composite during its
+          // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart
+          // authors don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
+          drawLayer(stack.poorKey, this.bgaTextures, 'poor', undefined, stack.alpha);
+          continue;
+        }
         // `cue.seconds` anchors switching-BGA frame timing — `pickSwitchingBgaFrame` advances frames relative to when
         // the cue fired, not relative to the chart origin.
-        drawLayer(baseKey, this.bgaTextures, 'base', baseCue?.seconds);
-        // Layer track is composited on top with black→transparent so the base track shows through where the foreground
-        // BMP is empty.
-        drawLayer(layerKey, this.bgaLayerTextures, 'layer', layerCue?.seconds);
+        drawLayer(stack.baseCue?.bmpKey, this.bgaTextures, 'base', stack.baseCue?.seconds, stack.alpha);
+        // Layer track is composited on top with black→transparent so the base track shows through where the
+        // foreground BMP is empty.
+        drawLayer(stack.layerCue?.bmpKey, this.bgaLayerTextures, 'layer', stack.layerCue?.seconds, stack.alpha);
       }
     }
     this.bgaLayerPool.end();
+  }
+
+  /**
+   * The BGA stacks to draw at `cueSeconds`: the chart's base and layer cues at full opacity, or for a stitched NONSTOP
+   * chart each stage's own cues (and, during a POOR, its own POOR image) at the opacity of its crossfade, earlier
+   * stages first.
+   */
+  private resolveBgaStacks(
+    cueSeconds: number,
+    noBase: boolean,
+    noLayer: boolean,
+    inPoorWindow: boolean,
+  ): Array<{ alpha: number; baseCue: BgaCue | undefined; layerCue: BgaCue | undefined; poorKey?: string }> {
+    const pick = (
+      timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor?: readonly BgaCue[] },
+      alpha: number,
+    ) => ({
+      alpha,
+      baseCue: noBase ? undefined : pickActiveBgaCue(timeline.base, cueSeconds),
+      layerCue: noLayer ? undefined : pickActiveBgaCue(timeline.layer, cueSeconds),
+      ...(inPoorWindow && timeline.poor !== undefined ? { poorKey: pickActiveBgaKey(timeline.poor, cueSeconds) } : {}),
+    });
+    const stages = this.options.nonstop?.stages;
+    const timelines = this.nonstopBgaTimelines;
+    if (stages === undefined || timelines === undefined) {
+      // The chart's own POOR cue (with its `#BMP00` fallback) is resolved by the caller.
+      return [pick({ base: this.bgaTimeline.base, layer: this.bgaTimeline.layer }, 1)];
+    }
+    return stages.flatMap((stage, index) => {
+      const alpha = resolveNonstopBgaAlpha(stage, cueSeconds);
+      return alpha > 0 ? [pick(timelines[index]!, alpha)] : [];
+    });
   }
 
   /**
@@ -4248,7 +4404,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       songTitle: this.song?.title,
       songArtist: this.song?.artist,
       songGenre: this.song?.genre,
-      bpm,
+      // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBpm`.
+      bpm: this.displayBpm(seconds) ?? bpm,
       hiSpeed: this.hiSpeed,
       score: this.score.score,
       exScore: this.score.exScore,
@@ -5063,6 +5220,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         decodedSamples: this.decodedSamples,
         wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
         bmsonSlicePlayback: this.bmsonSlicePlayback,
+        // The engine plays through its own session: a stitched NONSTOP chart's stage rates (FIT) and fades go with it.
+        ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
       ui: callbacks,
@@ -5124,6 +5283,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         ...(this.options.replay === undefined && this.options.course !== undefined
           ? { course: this.options.course }
           : {}),
+        // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
+        ...(this.options.replay === undefined && this.options.nonstop !== undefined
+          ? { stageRanks: this.options.nonstop.stageRanks }
+          : {}),
+        ...(this.options.replay?.chart.judgeRank.stageRanks !== undefined
+          ? {
+              stageRanks: this.options.replay.chart.judgeRank.stageRanks.map((change) => ({
+                ...change,
+                seconds: change.timeUs / 1_000_000,
+              })),
+            }
+          : {}),
         // The engine reports the ruleset after applying the judge ruleset, the debug window override, and (for a
         // replay) the recorded settings below, so the windows skins see are the ones the run is judged with.
         onRulesetResolved: (info) => this.applyResolvedRuleset(info),
@@ -5178,6 +5349,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
               },
               onPlaylogRecorded: (playlog) => {
                 this.playlog = playlog;
+                const waiters = this.playlogWaiters.splice(0);
+                for (const resolve of waiters) resolve(playlog);
               },
             }),
       },
@@ -5258,6 +5431,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (!this.sharedEngineClockAnchored && frame.currentSeconds > 0 && this.audioContext) {
       this.audioContextStartTime = this.audioContext.currentTime - frame.currentSeconds;
       this.sharedEngineClockAnchored = true;
+      this.nonstopMixer?.schedule(this.audioContextStartTime);
     }
     this.applyEngineSummary(frame.summary);
   }

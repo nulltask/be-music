@@ -66,8 +66,13 @@ import {
   splitDroppedSongAndThemeFiles,
   createSongHashLookup,
   isCourseFilePath,
+  drawBrowserRandomCourse,
   readCourseFile,
   resolveCourseFolders,
+  resolveCourseMakerFolders,
+  resolveCourseLaneOption,
+  resolveCourseStageSettings,
+  CourseMaker,
   type BrowserCourseEntry,
   type BrowserDroppedFile,
   type BrowserSongCollection,
@@ -139,6 +144,7 @@ import {
   storeSongRecords,
 } from './song-records.ts';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
+import { courseStageChartFingerprint } from './leaderboard.ts';
 import {
   describeSkinSettingControllers,
   readStoredSkinSettings,
@@ -157,7 +163,13 @@ import {
   type BeMusicCoursePlaylog,
   type PlaylogCourseResult,
 } from '@be-music/player/playlog';
-import { buildCourseResultData, CourseSession, courseRecordKey, type CourseStagePlan } from './course-session.ts';
+import {
+  buildCourseResultData,
+  buildCourseResultSummary,
+  CourseSession,
+  courseRecordKey,
+  type CourseStagePlan,
+} from './course-session.ts';
 import {
   describeCourseTableImportError,
   importCourseTable,
@@ -166,6 +178,16 @@ import {
   readStoredCourseTableUrls,
   rememberCourseTableUrl,
 } from './course-table-import.ts';
+import { buildNonstopCoursePlaylog, prepareNonstopCourse, type PreparedNonstopCourse } from './nonstop-course.ts';
+import { LR2_COURSE_MAKER_MAX_STAGES, type CourseDefinition } from '@be-music/player/course';
+import { CourseMakerPanel } from './course-maker-panel.ts';
+import { loadMadeCourses, saveMadeCourses } from './course-maker-store.ts';
+
+/** A NONSTOP course being played as its stitched chart. */
+interface NonstopPlay {
+  course: BrowserCourseEntry;
+  prepared: PreparedNonstopCourse;
+}
 import demoPackageJson from '../package.json' with { type: 'json' };
 
 const dropLog = logger('drop');
@@ -403,6 +425,12 @@ async function waitForDefaultUiFonts(): Promise<void> {
   }
 }
 
+/** What a decide screen leads to instead of playing its song: a course's first stage, and what backing out undoes. */
+interface DecideContinuation {
+  start: () => Promise<void>;
+  cancel?: () => void;
+}
+
 class PlayerWebDemoApp {
   private readonly collectionStore = new BrowserSongCollectionStore();
   /**
@@ -435,6 +463,12 @@ class PlayerWebDemoApp {
   private courseGroups: CourseDefinitionGroup[] = [];
   /** The course being played, between its stages. */
   private courseSession: CourseSession | undefined;
+  /** The player's own courses and the course being made (LR2's course maker), kept in IndexedDB. */
+  private readonly courseMaker = new CourseMaker({
+    md5Of: async (song) => (await this.resolveChartHashes(song))?.md5,
+    onChange: (change) => void this.handleCourseMakerChange(change),
+  });
+  private courseMakerPanel: CourseMakerPanel | undefined;
   private selectSkin: Lr2Skin | undefined;
   private resultSkin: Lr2Skin | undefined;
   /** LR2 course-result skin (`#INFORMATION` type 15); the course result falls back to {@link resultSkin} without it. */
@@ -802,6 +836,9 @@ class PlayerWebDemoApp {
       // scene mounts.
       autoSavePlaylog: false,
       courseAutoAdvance: false,
+      nonstopPlacement: 'intended',
+      nonstopFitMode: 'pitch',
+      nonstopStretchAlgorithm: 'signalsmith',
       // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
       submitToLeaderboard: false,
       // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
@@ -898,6 +935,11 @@ class PlayerWebDemoApp {
 
   public start(): void {
     this.buildGui();
+    this.courseMakerPanel = new CourseMakerPanel(this.courseMaker);
+    void loadMadeCourses().then(async (made) => {
+      this.courseMaker.restore(made);
+      if (made.courses.length > 0 && this.collection.songs.length > 0) await this.refreshMadeCourses();
+    });
     // Keep the initial mount's promise so URL auto-load (below) can wait for the Pixi host to finish initializing
     // before it drives its own `showSelect` — two concurrent first-mounts race and read the renderer before it exists.
     const initialSelectReady = this.showSelect();
@@ -1277,6 +1319,25 @@ class PlayerWebDemoApp {
       .name('Course: skip stage results')
       .onChange((value: boolean) => {
         this.guiState.courseAutoAdvance = value;
+      });
+    folder.add({ open: () => this.courseMakerPanel?.openManager() }, 'open').name('Course: my courses…');
+    folder
+      .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
+      .name('Course: NONSTOP placement')
+      .onChange((value: DemoGuiState['nonstopPlacement']) => {
+        this.guiState.nonstopPlacement = value;
+      });
+    folder
+      .add(this.guiState, 'nonstopFitMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Keep pitch': 'keep-pitch' })
+      .name('Course: NONSTOP FIT')
+      .onChange((value: DemoGuiState['nonstopFitMode']) => {
+        this.guiState.nonstopFitMode = value;
+      });
+    folder
+      .add(this.guiState, 'nonstopStretchAlgorithm', { 'Signalsmith Stretch': 'signalsmith', WSOLA: 'wsola' })
+      .name('Course: keep-pitch stretcher')
+      .onChange((value: DemoGuiState['nonstopStretchAlgorithm']) => {
+        this.guiState.nonstopStretchAlgorithm = value;
       });
     trackPlayOption(
       folder
@@ -1845,7 +1906,7 @@ class PlayerWebDemoApp {
     } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
       this.setStatus('Theme loaded');
     }
-    if (this.courseGroups.length > 0) await this.refreshCourseFolders();
+    await this.refreshCourseFolders();
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.songs, previousSongIds);
     if (dropped !== undefined) this.lastSelectNavigation = dropped;
@@ -2012,13 +2073,17 @@ class PlayerWebDemoApp {
     for (const file of files) {
       const path = file.webkitRelativePath || file.name;
       try {
-        const group = readCourseFile(path, new Uint8Array(await file.arrayBuffer()));
-        if (group === undefined) {
+        const groups = readCourseFile(path, new Uint8Array(await file.arrayBuffer()));
+        if (groups.length === 0) {
           dropLog.warn(`skipped (no course): ${path}`);
           continue;
         }
-        this.courseGroups.push(group);
-        dropLog.info(`course file: ${path} · courses=${group.courses.length}`);
+        this.courseGroups.push(...groups);
+        for (const group of groups) {
+          dropLog.info(
+            `course file: ${path} · ${group.label} · courses=${group.courses.length} random=${group.randomCourses?.length ?? 0}`,
+          );
+        }
       } catch (error) {
         dropLog.warn(`skipped (course read failed): ${path}`, error);
       }
@@ -2066,15 +2131,199 @@ class PlayerWebDemoApp {
     );
     this.collection = {
       ...this.collection,
-      courseFolders: resolveCourseFolders(this.courseGroups, createSongHashLookup(hashed)),
+      courseFolders: [
+        ...resolveCourseFolders(this.courseGroups, createSongHashLookup(hashed)),
+        ...resolveCourseMakerFolders(this.courseMaker.courses, createSongHashLookup(hashed)),
+      ],
     };
   }
 
-  /** Starts a course from its first stage. */
-  private startCourse(course: BrowserCourseEntry): void {
-    if (!course.playable) return;
-    this.courseSession = new CourseSession(course);
-    void this.playNextCourseStage();
+  /**
+   * Reacts to the course maker: redraws its card and the select skin for the course being made, and saves the courses
+   * (and relists them) when they or the default connection change.
+   */
+  private async handleCourseMakerChange(change: 'draft' | 'courses' | 'settings'): Promise<void> {
+    this.courseMakerPanel?.update();
+    if (change === 'draft') {
+      // Same collection: the select view only redraws (an LR2 skin's course-maker ops and texts).
+      this.selectView?.setCollection(this.collection);
+      return;
+    }
+    try {
+      await saveMadeCourses({
+        courses: [...this.courseMaker.courses],
+        defaultConnection: this.courseMaker.defaultConnection,
+      });
+    } catch (error) {
+      this.setStatus('Could not save your courses in this browser; they last until the page is closed');
+      dropLog.warn('course save failed', error);
+    }
+    if (change === 'courses') await this.refreshMadeCourses();
+    else this.selectView?.setCollection(this.collection);
+  }
+
+  /** Relists the course folders after the player's own courses changed, keeping the select screen where it was. */
+  private async refreshMadeCourses(): Promise<void> {
+    await this.refreshCourseFolders();
+    if (this.beatorajaSelectScene !== undefined) {
+      await this.showSelect();
+      return;
+    }
+    const view = this.selectView;
+    if (view === undefined) return;
+    const navigation = view.getNavigation();
+    view.setCollection(this.collection);
+    view.setNavigation(navigation);
+  }
+
+  /**
+   * While a course is being made, deciding a song adds it to the course instead of playing it, as LR2 does; deciding one
+   * more once it holds five saves the course. Returns whether the song was taken.
+   */
+  private addSongToCourseBeingMade(song: BrowserSongEntry): boolean {
+    const draft = this.courseMaker.draft;
+    if (draft === undefined) return false;
+    if (draft.stages.length >= LR2_COURSE_MAKER_MAX_STAGES) {
+      const saved = this.courseMaker.finish();
+      if (saved !== undefined) this.setStatus(`Saved the course "${saved.name}"`);
+      return true;
+    }
+    void this.courseMaker.append(song).then((result) => {
+      if (result.ok) {
+        this.setStatus(`Added ${song.title} to the course (${this.courseMaker.draft?.stages.length ?? 0} / 5)`);
+        return;
+      }
+      const reasons = {
+        full: 'the course already has 5 songs',
+        'key-mode': 'its key mode differs from the first song’s',
+        'no-md5': 'its chart could not be hashed',
+        'not-making': 'no course is being made',
+      } as const;
+      this.setStatus(`Could not add ${song.title}: ${reasons[result.reason]}`);
+    });
+    return true;
+  }
+
+  /**
+   * Starts a course from its first stage. A beatoraja random course first draws its stages from the library (each
+   * stage filter against the songs and their chart hashes); a stage that finds no chart leaves it unstarted.
+   */
+  private async startCourse(entry: BrowserCourseEntry): Promise<void> {
+    // A NEW COURSE bar starts making a course of its folder's kind; songs decided from now on join it.
+    if (entry.newCourse === true) {
+      this.courseMaker.start(entry.definition.kind);
+      this.setStatus('Making a course: decide songs to add them, then save');
+      return;
+    }
+    if (!entry.playable) return;
+    let course = entry;
+    if (entry.random !== undefined) {
+      const candidates = await Promise.all(
+        this.collection.songs.map(async (song) => ({ song, ...(await this.resolveChartHashes(song)) })),
+      );
+      const drawn = drawBrowserRandomCourse(entry, candidates, Math.random);
+      if (!drawn.ok) {
+        this.setStatus(
+          `${entry.definition.name}: stage ${drawn.stage + 1} ${drawn.reason === 'no-candidates' ? 'matches no chart' : `has an invalid filter (${drawn.error ?? ''})`}`,
+        );
+        return;
+      }
+      course = drawn.course;
+    }
+    if (course.definition.kind === 'nonstop') {
+      await this.startNonstopCourse(course, { decide: true });
+      return;
+    }
+    const session = new CourseSession(course);
+    this.courseSession = session;
+    // LR2 shows the decide screen once, before the first stage (a stage after it starts from the previous result).
+    const first = course.stages[0]?.song;
+    if (first === undefined) {
+      await this.playNextCourseStage();
+      return;
+    }
+    // The splash names the selected bar, the course, as LR2's does; the first stage's chart supplies the rest.
+    const { subtitle: _subtitle, artist: _artist, genre: _genre, ...stage } = first;
+    await this.showDecide(
+      { ...stage, title: course.definition.name },
+      {},
+      {
+        start: () => this.playNextCourseStage(),
+        cancel: () => {
+          if (this.courseSession === session) this.courseSession = undefined;
+        },
+      },
+    );
+  }
+
+  /**
+   * Starts a NONSTOP course: its stages are stitched into one chart (`prepareNonstopCourse`) played from their own
+   * files, as LR2 plays a NONSTOP course in one go. Quick retry stitches and plays it again.
+   */
+  private async startNonstopCourse(course: BrowserCourseEntry, options: { decide?: boolean } = {}): Promise<void> {
+    const hashes = new Map<string, ChartFileHashes>();
+    for (const stage of course.stages) {
+      if (stage.song === undefined) continue;
+      const found = await this.resolveChartHashes(stage.song);
+      if (found !== undefined) hashes.set(stage.song.id, found);
+    }
+    const prepared = prepareNonstopCourse(course, {
+      sourceOf: (song) => resolveSongSource(this.collection, song),
+      hashesOf: (song) => hashes.get(song.id),
+      chartFingerprintOf: courseStageChartFingerprint,
+      placement: this.guiState.nonstopPlacement,
+    });
+    if (!prepared.ok) {
+      const stage = prepared.stage !== undefined ? ` (stage ${prepared.stage + 1})` : '';
+      this.setStatus(`${course.definition.name}: cannot stitch the NONSTOP course: ${prepared.reason}${stage}`);
+      return;
+    }
+    // The stitched chart loads its assets from a composite source; keep one at a time.
+    this.collection = {
+      ...this.collection,
+      sources: [
+        ...this.collection.sources.filter((source) => !source.id.startsWith('nonstop:')),
+        prepared.prepared.source,
+      ],
+    };
+    const play = () => this.playSong(prepared.prepared.song, { nonstop: { course, prepared: prepared.prepared } });
+    // The decide screen names the course (the stitched song's title); a quick retry skips it, as LR2's does.
+    if (options.decide === true) {
+      await this.showDecide(prepared.prepared.song, {}, { start: play });
+      return;
+    }
+    await play();
+  }
+
+  /** The course result of a NONSTOP run: its course log built from the stitched play, kept and shown as one run. */
+  private async showNonstopCourseResult(
+    nonstop: NonstopPlay,
+    playlog: BeMusicPlaylog | undefined,
+    fallback?: PixiGameplayResultData,
+  ): Promise<void> {
+    if (playlog === undefined) {
+      await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
+      return;
+    }
+    const courseLog = buildNonstopCoursePlaylog(nonstop.course, nonstop.prepared, playlog, {
+      createdAt: new Date().toISOString(),
+      recorder: PLAYLOG_RECORDER,
+    });
+    const native = courseLog.results?.native;
+    if (native === undefined) {
+      await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
+      return;
+    }
+    this.recordCourseResult(courseRecordKey(nonstop.course), native);
+    this.maybeAutoSaveCoursePlaylog(courseLog);
+    // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
+    this.leaderboard.maybeSubmitCourse(
+      courseLog,
+      nonstop.course.stages.flatMap((stage) => (stage.song !== undefined ? [stage.song] : [])),
+    );
+    await this.showResult(buildCourseResultData(nonstop.course, native, courseLog), {
+      course: resolveSceneCourseInfo(nonstop.course),
+    });
   }
 
   /** Plays the running course's next stage, or shows the course result when it is over. */
@@ -2128,6 +2377,7 @@ class PlayerWebDemoApp {
       {
         createdAt: new Date().toISOString(),
         recorder: PLAYLOG_RECORDER,
+        chartFingerprintOf: courseStageChartFingerprint,
       },
     );
     const result = courseLog.results?.native;
@@ -2137,9 +2387,24 @@ class PlayerWebDemoApp {
     }
     this.recordCourseResult(courseRecordKey(session.course), result);
     this.maybeAutoSaveCoursePlaylog(courseLog);
-    await this.showResult(buildCourseResultData(session.course, result, courseLog), {
-      course: resolveSceneCourseInfo(session.course),
-    });
+    // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
+    this.leaderboard.maybeSubmitCourse(courseLog, session.stageSongs());
+    const courseInfo = resolveSceneCourseInfo(session.course);
+    // A beatoraja theme shows the course result on its COURSE_RESULT skin (or its result skin).
+    if (pickActiveFamilyForScene(this.familyDispatchState(), 'result') === 'beatoraja') {
+      const mounted = await this.showBeatorajaResult(
+        session.course.stages[0]!.song!,
+        buildCourseResultSummary(result),
+        result.maxCombo,
+        { scoreHistory: [], gaugeHistory: [], timingHistory: [] },
+        { info: courseInfo, result: true },
+      );
+      if (mounted) {
+        this.unlockPlaylogOptions();
+        return;
+      }
+    }
+    await this.showResult(buildCourseResultData(session.course, result, courseLog), { course: courseInfo });
   }
 
   /**
@@ -2950,6 +3215,8 @@ class PlayerWebDemoApp {
     // 4. Mount the gameplay view.
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay } };
+    // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
+    let givingUp = false;
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
       skin: skinLoad.skin,
       textures,
@@ -2973,6 +3240,9 @@ class PlayerWebDemoApp {
       dpFlip: this.guiState.dpFlip,
       initialHiSpeed: this.guiState.hiSpeed,
       onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
+      ...(courseStage !== undefined
+        ? { courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }
+        : {}),
       // Judge-window ruleset + auto scratch + play-log extras ride the engine-options passthrough — the beatoraja
       // scene forwards them onto the shared engine and merges `recordPlaylog` with its own fields.
       engineOptions: {
@@ -3001,11 +3271,28 @@ class PlayerWebDemoApp {
       // bindings instead of POPN-9, which silently drops lane 6+ keys.
       chartPath: song.chartPath,
       onExit: () => {
-        // ESC gives a running course up.
-        if (courseStage !== undefined) this.courseSession = undefined;
+        // ESC gives a running course up: the run is kept as a failed one, with the stage given up recorded once the
+        // engine settles (its play log carries `play.aborted`).
+        const view = this.beatorajaGameplayView;
+        if (courseStage !== undefined && this.courseSession !== undefined) {
+          const session = this.courseSession;
+          givingUp = true;
+          const settled = Promise.race([
+            view?.awaitCompletion()?.catch(() => undefined),
+            new Promise((resolve) => setTimeout(resolve, 2000)),
+          ]);
+          void this.finishBeatorajaGameplayThen(async () => {
+            await settled;
+            session.giveUp(view?.getPlaylog());
+            this.courseSession = session;
+            await this.showCourseResult();
+          });
+          return;
+        }
         void this.finishBeatorajaGameplayThen(() => this.showSelect());
       },
       onComplete: (summary, maxCombo, history) => {
+        if (givingUp) return;
         // Result skin (`type = 7`) when the bundle ships one — otherwise jump back to select.
         // `finishBeatorajaGameplayThen` drops the gameplay scene first so the result scene gets a
         // clean stage; the result scene mounts in the `then` branch. `history` carries the
@@ -3019,7 +3306,10 @@ class PlayerWebDemoApp {
             this.courseSession.recordStage(playlog);
             // With stage results skipped, go straight on to the next stage (or the course result).
             const mounted =
-              !this.guiState.courseAutoAdvance && (await this.showBeatorajaResult(song, summary, maxCombo, history));
+              !this.guiState.courseAutoAdvance &&
+              (await this.showBeatorajaResult(song, summary, maxCombo, history, {
+                info: this.courseSession.courseInfo,
+              }));
             if (!mounted) this.continueCourse();
             this.unlockPlaylogOptions();
             return;
@@ -3037,6 +3327,7 @@ class PlayerWebDemoApp {
         // `PlayerInterruptedError` lands here for the ESC path — it's the expected exit for "user
         // pressed ESC mid-chart". Treat it as a clean exit.
         gameplayLog.info('beatoraja engine ended', { error: (error as Error).message });
+        if (givingUp) return;
         void this.finishBeatorajaGameplayThen(() => this.showSelect());
       },
     });
@@ -3224,7 +3515,7 @@ class PlayerWebDemoApp {
       skinAudio: this.beatorajaSkinAudio,
       songs: this.collection.songs,
       ...(this.collection.courseFolders !== undefined ? { courseFolders: this.collection.courseFolders } : {}),
-      onCoursePicked: (course: BrowserCourseEntry) => this.startCourse(course),
+      onCoursePicked: (course: BrowserCourseEntry) => void this.startCourse(course),
       // Pass the collection so the scene's `ChartPreviewEngine` can resolve each focused
       // song's `BrowserSongAssetSource` and play `#PREVIEW` audio (or fall back to in-place
       // chart playback) on cursor settle. Without this, the beatoraja select runs silent on
@@ -3256,6 +3547,7 @@ class PlayerWebDemoApp {
       // drop screen starts at root.
       restoreSnapshot: this.beatorajaSelectSnapshot,
       onSongPicked: (song, opts) => {
+        if (this.addSongToCourseBeingMade(song)) return;
         // Cache the index using the picked song's identity — survives the scene tear-down.
         this.beatorajaSelectIndex = this.collection.songs.indexOf(song);
         // Same flow as the LR2 select view: route to decide → gameplay. The decide branch in
@@ -3464,7 +3756,11 @@ class PlayerWebDemoApp {
    * `playSongBeatoraja`; the difference is whether the user sees an animated chrome between
    * select and gameplay.
    */
-  private async showBeatorajaDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<boolean> {
+  private async showBeatorajaDecide(
+    song: BrowserSongEntry,
+    overrides: { autoPlay?: boolean },
+    then?: DecideContinuation,
+  ): Promise<boolean> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return false;
 
@@ -3551,7 +3847,8 @@ class PlayerWebDemoApp {
     // `prepareBeatorajaGameplayChart` as `preResolved` by `playSongBeatoraja`, so nothing draws a second time.
     const resolved = resolvePlayChart(song.chart);
     const resolvedChart = resolved.chart;
-    this.lastBeatorajaChart = { resolved, chartPath: song.chartPath };
+    // A course resolves each stage's chart itself when the stage starts.
+    if (then === undefined) this.lastBeatorajaChart = { resolved, chartPath: song.chartPath };
 
     // Idempotency gate — `onContinue` and the auto-advance timer can race in theory; whichever
     // lands first wins. Same pattern as the LR2 decide path.
@@ -3586,7 +3883,7 @@ class PlayerWebDemoApp {
           void this.sceneHost.setScene(undefined).then(() => {
             this.beatorajaDecideScene?.dispose();
             this.beatorajaDecideScene = undefined;
-            void this.playSongBeatoraja(song, overrides);
+            void (then !== undefined ? then.start() : this.playSongBeatoraja(song, overrides));
           });
         }),
       onCancel: () =>
@@ -3595,6 +3892,7 @@ class PlayerWebDemoApp {
           void this.sceneHost.setScene(undefined).then(() => {
             this.beatorajaDecideScene?.dispose();
             this.beatorajaDecideScene = undefined;
+            then?.cancel?.();
             void this.showSelect();
           });
         }),
@@ -3618,9 +3916,12 @@ class PlayerWebDemoApp {
       gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
       timingHistory: ReadonlyArray<{ deltaMs: number; kind: string }>;
     },
+    course?: { info: SceneCourseInfo; result?: boolean },
   ): Promise<boolean> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return false;
+    // The course result (`course.result`) shows on the theme's COURSE_RESULT skin, falling back to its result skin.
+    const courseResult = course?.result === true;
 
     // Stash the run's clear-lamp into the in-session map (audit 2.18) so the next time the
     // user lands on this song in the select scene the bar's lamp icon lights up. Cleared
@@ -3637,7 +3938,8 @@ class PlayerWebDemoApp {
       gaugeType: summary.gauge?.type,
     });
     const previousLamp = this.beatorajaSessionLampOps.get(song.id);
-    if (newLamp !== BEATORAJA_OP.CLEAR_LAMP_FAILED || previousLamp === undefined) {
+    // A course's results count for the course, not for the single chart.
+    if (course === undefined && (newLamp !== BEATORAJA_OP.CLEAR_LAMP_FAILED || previousLamp === undefined)) {
       this.beatorajaSessionLampOps.set(song.id, newLamp);
     }
 
@@ -3645,11 +3947,15 @@ class PlayerWebDemoApp {
     // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default
     // in the Debug Menu (which clears the override) actually mounts the discovery default
     // instead of silently picking whatever theme happens to iterate first.
-    const resultCandidates = bundle.theme.entries.filter((entry) => entry.header.type === BEATORAJA_SKIN_TYPE.RESULT);
+    const resultType =
+      courseResult && bundle.theme.courseResultSkin !== undefined
+        ? BEATORAJA_SKIN_TYPE.COURSE_RESULT
+        : BEATORAJA_SKIN_TYPE.RESULT;
+    const resultCandidates = bundle.theme.entries.filter((entry) => entry.header.type === resultType);
     const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
-      BEATORAJA_SKIN_TYPE.RESULT,
+      resultType,
       resultCandidates,
-      bundle.theme.resultSkin,
+      resultType === BEATORAJA_SKIN_TYPE.COURSE_RESULT ? bundle.theme.courseResultSkin : bundle.theme.resultSkin,
     );
     if (selectedEntry === undefined) return false;
 
@@ -3705,8 +4011,10 @@ class PlayerWebDemoApp {
     const chartImages = await this.loadBeatorajaChartImages(song);
 
     let dismissed = false;
-    // R on the result plays the same chart again — only offered when the recorded play start is this chart's.
-    const retry = this.lastPlay?.song.id === song.id ? this.lastPlay : undefined;
+    // R on the result plays the same chart again — only offered when the recorded play start is this chart's, and
+    // never in a course (beatoraja disables quick retry there).
+    const retry = course === undefined && this.lastPlay?.song.id === song.id ? this.lastPlay : undefined;
+    const cleared = summary.gauge?.cleared ?? false;
     this.beatorajaResultScene = new PixiBeatorajaResultScene({
       skin: result.skin,
       textures,
@@ -3718,7 +4026,10 @@ class PlayerWebDemoApp {
       // reference is snapshot into `lastBeatorajaChart` for use here. We only forward when the
       // cached chart matches the song the result scene is rendering — otherwise the bpmgraph
       // would plot the wrong chart's BPM curve.
-      chart: this.lastBeatorajaChart?.chartPath === song.chartPath ? this.lastBeatorajaChart.resolved.chart : undefined,
+      chart:
+        !courseResult && this.lastBeatorajaChart?.chartPath === song.chartPath
+          ? this.lastBeatorajaChart.resolved.chart
+          : undefined,
       summary,
       maxCombo,
       scoreHistory: history.scoreHistory,
@@ -3728,9 +4039,16 @@ class PlayerWebDemoApp {
       // Pick the outcome-specific jingle when one was discovered, falling back to the generic
       // `result` slot. Beatoraja themes that ship a single result BGM authoredit as `result.*`,
       // while themes that distinguish clear / fail (most reference themes) ship dedicated tracks.
+      // The course result plays `course_clear` / `course_fail`, falling back to the result ones as beatoraja does.
       bgmBytes:
-        ((summary.gauge?.cleared ?? false) ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
+        (courseResult
+          ? cleared
+            ? this.beatorajaThemeBgm.courseClear
+            : this.beatorajaThemeBgm.courseFail
+          : undefined) ??
+        (cleared ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
         this.beatorajaThemeBgm.result,
+      ...(course !== undefined ? { courseInfo: course.info } : {}),
       skinAudio: this.beatorajaSkinAudio,
       onContinue: () => {
         if (dismissed) return;
@@ -3738,7 +4056,7 @@ class PlayerWebDemoApp {
         void this.sceneHost.setScene(undefined).then(() => {
           this.beatorajaResultScene?.dispose();
           this.beatorajaResultScene = undefined;
-          if (this.continueCourse()) return;
+          if (!courseResult && this.continueCourse()) return;
           void this.showSelect();
         });
       },
@@ -3758,7 +4076,7 @@ class PlayerWebDemoApp {
     });
     await this.sceneHost.setScene(this.beatorajaResultScene);
     this.setStatus(
-      `Result (beatoraja): ${song.title} · score=${summary.score} ex=${summary.exScore} maxCombo=${maxCombo}`,
+      `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · score=${summary.score} ex=${summary.exScore} maxCombo=${maxCombo}`,
     );
     return true;
   }
@@ -4220,12 +4538,14 @@ class PlayerWebDemoApp {
       },
       resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
       onSongSelected: (song: BrowserSongEntry) => {
+        if (this.addSongToCourseBeingMade(song)) return;
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
         // the view is hidden, so the cue isn't cut by the gameplay mount.
         void this.selectView?.playDecideSound();
         void this.showDecide(song);
       },
       onSongAutoPlay: (song: BrowserSongEntry) => {
+        if (this.addSongToCourseBeingMade(song)) return;
         // The skin's AUTOPLAY button forces the auto flag on for this session regardless of the toolbar checkbox state.
         // We DON'T mutate the checkbox here — the user might want to keep it off for the next manual play.
         void this.selectView?.playDecideSound();
@@ -4233,9 +4553,12 @@ class PlayerWebDemoApp {
       },
       onCourseSelected: (course: BrowserCourseEntry) => {
         void this.selectView?.playDecideSound();
-        this.startCourse(course);
+        void this.startCourse(course);
       },
       onSearchActivate: () => this.search.openFromPointer(),
+      courseMaker: this.courseMaker,
+      onCourseNameActivate: () => this.courseMakerPanel?.focusName(),
+      onCourseDeleteRequest: (course: CourseDefinition) => this.courseMakerPanel?.confirmDelete(course),
     };
     this.selectView = lr2SelectSkin
       ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
@@ -4325,14 +4648,19 @@ class PlayerWebDemoApp {
    * The decide view runs alongside the select view's AudioContext — `playDecideSound` was already fired at song-pick
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
    */
-  private async showDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
+  private async showDecide(
+    song: BrowserSongEntry,
+    overrides: { autoPlay?: boolean } = {},
+    then?: DecideContinuation,
+  ): Promise<void> {
+    const start = then?.start ?? (() => this.playSong(song, overrides));
     // Family dispatch for the decide splash. Note this is decoupled from the gameplay family pick: a user can be
     // playing in LR2 mode and have a beatoraja-only decide skin, or vice versa. The decide splash is a one-shot
     // overlay so each scene transition consults the family helper afresh.
     const decideFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'decide', song);
     if (decideFamily === 'beatoraja') {
-      const mounted = await this.showBeatorajaDecide(song, overrides);
-      if (!mounted) await this.playSong(song, overrides);
+      const mounted = await this.showBeatorajaDecide(song, overrides, then);
+      if (!mounted) await start();
       return;
     }
     // A be-music skin's decide screen hands over to the LR2 / default gameplay preloaded below, so it is skipped when
@@ -4344,7 +4672,7 @@ class PlayerWebDemoApp {
     if (!beMusicDecide && (decideFamily === 'default' || !this.decideSkin)) {
       // No decide splash: a be-music skin without one, or an LR2-only setup that didn't ship a decide skin. The select
       // view's `playDecideSound` already fired so the audio cue still plays.
-      await this.playSong(song, overrides);
+      await start();
       return;
     }
     await this.ensureHostMounted();
@@ -4356,7 +4684,8 @@ class PlayerWebDemoApp {
     // Build the gameplay view eagerly and kick off its heavy load (chart parse, audio decode, BGA preload) IN PARALLEL
     // with the Decide animation. The Decide splash typically runs ~3 s; chart asset decoding is mostly done by the time
     // the splash auto-advances, so the hand-off to gameplay becomes instant instead of dropping a frozen frame.
-    const preloaded = this.preloadGameplay(song, overrides);
+    // A course starts its own play once the splash is done, so nothing is preloaded for it.
+    const preloaded = then === undefined ? this.preloadGameplay(song, overrides) : undefined;
     let advanced = false;
     const advance = (then: () => void): void => {
       // Idempotent — the auto-advance timer, key input, and pointer click can all race; whichever lands first wins and
@@ -4368,6 +4697,12 @@ class PlayerWebDemoApp {
     const callbacks = {
       onContinue: () =>
         advance(() => {
+          if (preloaded === undefined) {
+            this.decideView?.dispose();
+            this.decideView = undefined;
+            void start();
+            return;
+          }
           void this.startGameplayAfterDecide(song, preloaded);
         }),
       onCancel: () =>
@@ -4375,6 +4710,7 @@ class PlayerWebDemoApp {
           // User backed out of the splash — abandon the prepared gameplay scene before falling back to the select view.
           this.gameplayView?.dispose();
           this.gameplayView = undefined;
+          then?.cancel?.();
           void this.showSelect();
         }),
     };
@@ -4432,22 +4768,29 @@ class PlayerWebDemoApp {
       replay?: BeMusicPlaylog;
       chartHashes?: ChartFileHashes;
       courseStage?: CourseStagePlan;
+      nonstop?: NonstopPlay;
     },
   ): PixiGameplayView | DefaultPixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
+    const nonstop = overrides.nonstop;
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay, ...(replay !== undefined ? { replay } : {}) } };
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
     // course instead.
     this.activePlayRecordKey =
-      autoPlay || replay !== undefined || courseStage !== undefined
+      autoPlay || replay !== undefined || courseStage !== undefined || nonstop !== undefined
         ? undefined
         : songRecordKey(song, overrides.chartHashes?.sha256);
-    // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...).
+    // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...), a
+    // NONSTOP course's stitched play included.
     const courseLane = (picked: typeof this.guiState.random1P): typeof this.guiState.random1P =>
-      this.courseSession !== undefined && courseStage !== undefined ? this.courseSession.laneOption(picked) : picked;
+      this.courseSession !== undefined && courseStage !== undefined
+        ? this.courseSession.laneOption(picked)
+        : nonstop !== undefined
+          ? resolveCourseLaneOption(nonstop.course.definition.constraints, picked)
+          : picked;
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
       // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
@@ -4478,6 +4821,15 @@ class PlayerWebDemoApp {
       ...(courseStage !== undefined
         ? { course: courseStage.course, courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }
         : {}),
+      ...(nonstop !== undefined
+        ? {
+            course: resolveCourseStageSettings(nonstop.course.definition),
+            courseInfo: resolveSceneCourseInfo(nonstop.course, 0),
+            nonstop: nonstop.prepared.map,
+            nonstopFitMode: this.guiState.nonstopFitMode,
+            nonstopStretchAlgorithm: this.guiState.nonstopStretchAlgorithm,
+          }
+        : {}),
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
       ...(overrides.chartHashes !== undefined
         ? { chartSha256: overrides.chartHashes.sha256, chartMd5: overrides.chartHashes.md5 }
@@ -4498,11 +4850,31 @@ class PlayerWebDemoApp {
       showInvisibleNotes: this.guiState.showInvisibleNotes,
       judgedNoteDisplay: this.guiState.judgedNoteDisplay,
       onExit: () => {
-        // ESC gives a running course up.
-        if (courseStage !== undefined) this.courseSession = undefined;
+        // ESC gives a running course up: the run is kept as a failed one (as LR2 records it), with the stage given up
+        // recorded once the engine hands its play log over.
+        const view = this.gameplayView;
+        if (courseStage !== undefined && this.courseSession !== undefined) {
+          const session = this.courseSession;
+          void this.finishGameplayThen(async () => {
+            session.giveUp(await view?.waitForPlaylog());
+            this.courseSession = session;
+            await this.showCourseResult();
+          });
+          return;
+        }
+        if (nonstop !== undefined) {
+          void this.finishGameplayThen(async () => {
+            await this.showNonstopCourseResult(nonstop, await view?.waitForPlaylog());
+          });
+          return;
+        }
         void this.finishGameplayThen(() => this.showSelect());
       },
       onChartFinished: (result: PixiGameplayResultData) => {
+        if (nonstop !== undefined) {
+          void this.finishGameplayThen(() => this.showNonstopCourseResult(nonstop, result.playlog, result));
+          return;
+        }
         // A course stage with stage results skipped goes straight on to the next stage (or the course result).
         if (courseStage !== undefined && this.courseSession !== undefined && this.guiState.courseAutoAdvance) {
           void this.finishGameplayThen(async () => {
@@ -4517,6 +4889,11 @@ class PlayerWebDemoApp {
         void this.finishGameplayThen(() => this.showResult(result));
       },
       onRestart: () => {
+        // A NONSTOP course allows quick retry, as LR2 does (OpenLR2 L2854): stitch and play it again.
+        if (nonstop !== undefined) {
+          void this.finishGameplayThen(() => this.startNonstopCourse(nonstop.course));
+          return;
+        }
         // F5 restarts a single chart; in a course it gives the course up, as quick retry is off there.
         if (courseStage !== undefined) {
           this.courseSession = undefined;
@@ -4593,14 +4970,20 @@ class PlayerWebDemoApp {
 
   private async playSong(
     song: BrowserSongEntry,
-    overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog; courseStage?: CourseStagePlan } = {},
+    overrides: {
+      autoPlay?: boolean;
+      replay?: BeMusicPlaylog;
+      courseStage?: CourseStagePlan;
+      nonstop?: NonstopPlay;
+    } = {},
   ): Promise<void> {
     // Family dispatch for the gameplay scene. The Debug Menu's "Skin family" pick funnels through here so a user
     // override of `'lr2'` / `'default'` forces that family even when beatoraja is technically available, while
     // `'auto'` keeps the legacy preference (beatoraja → LR2 → default). Replay playback always stays on the
     // LR2/default path — that's where the play-log arrangement remap and `replayInputs` are wired.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
-    if (gameplayFamily === 'beatoraja' && overrides.replay === undefined) {
+    // A stitched NONSTOP chart plays on the LR2 / default scenes, which carry its per-stage audio and BGA.
+    if (gameplayFamily === 'beatoraja' && overrides.replay === undefined && overrides.nonstop === undefined) {
       await this.playSongBeatoraja(song, overrides);
       return;
     }
@@ -4624,14 +5007,19 @@ class PlayerWebDemoApp {
     const playSkin =
       gameplayFamily !== 'lr2'
         ? undefined
-        : overrides.courseStage !== undefined
-          ? this.courseLr2Skin(pickLr2PlaySkin(this.playSkins, song), overrides.courseStage.courseInfo, {
-              kind: 'play',
-              playVariant: pickLr2PlaySkinVariant(this.playSkins, song),
-            })
+        : overrides.courseStage !== undefined || overrides.nonstop !== undefined
+          ? this.courseLr2Skin(
+              pickLr2PlaySkin(this.playSkins, song),
+              overrides.courseStage?.courseInfo ?? resolveSceneCourseInfo(overrides.nonstop!.course, 0),
+              { kind: 'play', playVariant: pickLr2PlaySkinVariant(this.playSkins, song) },
+            )
           : pickLr2PlaySkin(this.playSkins, song);
-    // Chart-file hash for the recorded play-log (skipped for replays — they record nothing).
-    const chartHashes = overrides.replay === undefined ? await this.resolveChartHashes(song) : undefined;
+    // Chart-file hash for the recorded play-log (skipped for replays — they record nothing — and for a stitched
+    // NONSTOP chart, which has no file).
+    const chartHashes =
+      overrides.replay === undefined && overrides.nonstop === undefined
+        ? await this.resolveChartHashes(song)
+        : undefined;
     this.gameplayView = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
     this.setStatus(`Playing: ${song.title}`);
     this.lockPlaylogOptionsForPlay();

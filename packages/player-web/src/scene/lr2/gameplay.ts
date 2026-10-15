@@ -62,7 +62,13 @@ import {
   resolveNumberValue,
 } from './gameplay-hud.ts';
 import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
-import { lr2ShowsCourseCombo, resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
+import {
+  lr2ShowsCourseCombo,
+  resolveLr2CourseNumber,
+  resolveLr2CourseOps,
+  resolveLr2CourseText,
+  resolveLr2NonstopStage,
+} from './course.ts';
 import {
   CoreGameplayView,
   KEY_ON_FADE_OUT_MS,
@@ -198,6 +204,8 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
   private static readonly TURNTABLE_STREAK_GAP_MS = 250;
   /** Active LR2 `#DST_*` op flags for the play session (see {@link initializeRuntimeOps}). */
   private readonly runtimeOps = new Set<number>();
+  /** The stage a stitched NONSTOP play currently shows (`updateNonstopStageOps`). */
+  private nonstopStage = 0;
   /**
    * Per-key-on-timer fade duration in ms, derived from the LR2 skin's `#DST_*` keyframes anchored to that timer
    * (longest `time` value across all elements). Populated in {@link prepareSkin}; consumers fall back to {@link
@@ -402,6 +410,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
   protected override updateThemeState(): void {
     this.updateRankOps();
     this.updateGaugeOps();
+    this.updateNonstopStageOps();
     // Integrate turntable physics before render so the disc's angle reflects this frame's elapsed time. Cheap
     // (constant work per side).
     this.updateTurntable(this.playClock());
@@ -1110,6 +1119,22 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
   }
 
   /**
+   * A stitched NONSTOP play moves its stage ops (280-289) to the stage LR2 last announced: one that follows a BLANK
+   * connection ({@link resolveLr2NonstopStage}). The skin itself stays as parsed for the first stage, as LR2 reads it
+   * once for the whole play.
+   */
+  private updateNonstopStageOps(): void {
+    const nonstop = this.options.nonstop;
+    const courseInfo = this.options.courseInfo;
+    if (nonstop === undefined || courseInfo === undefined) return;
+    const stage = resolveLr2NonstopStage(nonstop.stages, this.currentSeconds());
+    if (stage === this.nonstopStage) return;
+    this.nonstopStage = stage;
+    for (let op = 280; op <= 289; op += 1) this.runtimeOps.delete(op);
+    resolveLr2CourseOps({ ...courseInfo, stageIndex: stage }).forEach((op) => this.runtimeOps.add(op));
+  }
+
+  /**
    * One-shot full-combo timer cleanup. Same pattern as {@link cleanupBombTimers}: once the FC animation's full
    * keyframe-time window has elapsed, retire timer 48 / 49 from `timerStartedAt` so the skin's FC graphic (`loop = -1`
    * "play once and clamp" by convention) doesn't stay frozen on its final frame for the rest of the play session.
@@ -1354,8 +1379,9 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
           this.currentSeconds(),
           this.displayedScore,
           this.fps,
-          // NOWBPM freezes at the reversal value (LR2's frozen pump holds |BPM| there) — see `nowBpm`.
-          this.nowBpm(this.currentSeconds()),
+          // NOWBPM freezes at the reversal value (LR2's frozen pump holds |BPM| there) — see `nowBpm` — and shows the
+          // stage's own BPM during a stitched NONSTOP play — see `displayBpm`.
+          this.displayBpm(this.currentSeconds()),
           this.resolveSongDurationSeconds(),
           courseCombo?.maxCombo ?? this.maxCombo,
         );
@@ -1814,6 +1840,11 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     const courseText =
       this.options.courseInfo !== undefined ? resolveLr2CourseText(st, this.options.courseInfo) : undefined;
     if (courseText !== undefined) return courseText;
+    // A stitched NONSTOP play titles the stage LR2 last announced (after a BLANK connection); before that, the course.
+    if (st === 10 && this.nonstopStage > 0) {
+      const title = this.options.courseInfo?.stages[this.nonstopStage]?.title;
+      if (title !== undefined) return title;
+    }
     const subartists = song.chart.bmson.info?.subartists?.join(' / ');
     switch (st) {
       case 1:

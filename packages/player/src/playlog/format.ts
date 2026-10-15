@@ -9,6 +9,7 @@ import {
   expectString,
   optionalFiniteNumber,
   optionalString,
+  parseRandomDraws,
   parseRecorder,
   parseResults,
   PlaylogParseError,
@@ -90,6 +91,12 @@ export interface PlaylogJudgeRank {
   sourceExRank?: number;
   /** Dynamic `#EXRANKxx` changes (channel `A0`), in chart order. Values share the `100 = NORMAL` unit. */
   timeline?: Array<{ timeUs: number; exRankValue: number }>;
+  /**
+   * A stitched LR2 NONSTOP play's later stages taking over the judge rank with their `#RANK`, in time order: from
+   * `timeUs` on, the windows a chart opening with `rank` gets (`'chart'`) or LR2's NONSTOP rank table
+   * (`'lr2-nonstop'`). Absent in logs recorded before it existed, which played with the first stage's rank throughout.
+   */
+  stageRanks?: Array<{ timeUs: number; rank: number; table: 'chart' | 'lr2-nonstop' }>;
 }
 
 export interface PlaylogChart {
@@ -184,6 +191,11 @@ export interface PlaylogCourseStage {
   judge?: CourseJudgeConstraint;
   /** The state the previous stage left. Absent for the first stage, which starts on a full gauge and no combo. */
   carryIn?: PlaylogCourseCarry;
+  /**
+   * A stage cut out of a NONSTOP play: the FIT time-stretch it was played at (its notes keep the stretched times; 1
+   * without FIT). Display only; the log replays as recorded.
+   */
+  rate?: number;
 }
 
 /** The state carried from one course stage into the next. */
@@ -351,10 +363,12 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     sourceRank: optionalFiniteNumber(judgeRankRaw.sourceRank, 'chart.judgeRank.sourceRank'),
     sourceExRank: optionalFiniteNumber(judgeRankRaw.sourceExRank, 'chart.judgeRank.sourceExRank'),
     timeline: parseJudgeRankTimeline(judgeRankRaw.timeline),
+    stageRanks: parseStageRanks(judgeRankRaw.stageRanks),
   };
   if (judgeRank.sourceRank === undefined) delete judgeRank.sourceRank;
   if (judgeRank.sourceExRank === undefined) delete judgeRank.sourceExRank;
   if (judgeRank.timeline === undefined) delete judgeRank.timeline;
+  if (judgeRank.stageRanks === undefined) delete judgeRank.stageRanks;
 
   const notesRaw = chart.notes;
   if (!Array.isArray(notesRaw)) {
@@ -416,6 +430,26 @@ function parseJudgeRankTimeline(value: unknown): PlaylogJudgeRank['timeline'] {
     return {
       timeUs: expectFiniteNumber(record.timeUs, `chart.judgeRank.timeline[${index}].timeUs`),
       exRankValue: expectFiniteNumber(record.exRankValue, `chart.judgeRank.timeline[${index}].exRankValue`),
+    };
+  });
+}
+
+function parseStageRanks(value: unknown): PlaylogJudgeRank['stageRanks'] {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new PlaylogParseError('chart.judgeRank.stageRanks: expected an array');
+  }
+  return value.map((entry, index) => {
+    const path = `chart.judgeRank.stageRanks[${index}]`;
+    const record = expectRecord(entry, path);
+    const table = record.table;
+    if (table !== 'chart' && table !== 'lr2-nonstop') {
+      throw new PlaylogParseError(`${path}.table: expected 'chart' or 'lr2-nonstop'`);
+    }
+    return {
+      timeUs: expectFiniteNumber(record.timeUs, `${path}.timeUs`),
+      rank: expectFiniteNumber(record.rank, `${path}.rank`),
+      table,
     };
   });
 }
@@ -511,7 +545,7 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     parsed.judgeRuleset = play.judgeRuleset;
   }
   if (play.randomDraws !== undefined) {
-    parsed.randomDraws = parseRandomDraws(play.randomDraws);
+    parsed.randomDraws = parseRandomDraws(play.randomDraws, 'play.randomDraws');
   }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
@@ -559,29 +593,6 @@ function parseCourseStage(course: Record<string, unknown>): PlaylogCourseStage {
       maxCombo: expectNonNegativeInteger(carry.maxCombo, 'play.course.carryIn.maxCombo'),
     };
   }
+  if (course.rate !== undefined) parsed.rate = expectFiniteNumber(course.rate, 'play.course.rate');
   return parsed;
-}
-
-const RANDOM_DRAW_COMMANDS: ReadonlySet<string> = new Set(['RANDOM', 'SETRANDOM', 'SWITCH', 'SETSWITCH']);
-
-function parseRandomDraws(value: unknown): RandomDraw[] {
-  if (!Array.isArray(value)) {
-    throw new PlaylogParseError('play.randomDraws: expected an array');
-  }
-  return value.map((entry: unknown, index): RandomDraw => {
-    const path = `play.randomDraws[${index}]`;
-    const draw = expectRecord(entry, path);
-    const { command, range, value: drawn } = draw;
-    if (typeof command !== 'string' || !RANDOM_DRAW_COMMANDS.has(command)) {
-      throw new PlaylogParseError(`${path}.command: expected 'RANDOM' | 'SETRANDOM' | 'SWITCH' | 'SETSWITCH'`);
-    }
-    if (typeof range !== 'number' || !Number.isInteger(range) || range < 1) {
-      throw new PlaylogParseError(`${path}.range: expected a positive integer`);
-    }
-    const fixed = command === 'SETRANDOM' || command === 'SETSWITCH';
-    if (typeof drawn !== 'number' || !Number.isInteger(drawn) || drawn < 1 || (fixed ? range !== 1 : drawn > range)) {
-      throw new PlaylogParseError(`${path}.value: expected an integer in 1..range (range 1 for a #SET… line)`);
-    }
-    return { command: command as RandomDraw['command'], range, value: drawn };
-  });
 }

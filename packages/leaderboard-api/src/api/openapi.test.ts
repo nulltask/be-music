@@ -11,6 +11,12 @@ describe('OpenAPI document', () => {
     expect(Object.keys(spec.paths ?? {}).sort()).toEqual([
       '/charts/{chartFingerprint}/leaderboard',
       '/charts/{chartFingerprint}/leaderboard/me',
+      '/course-scores',
+      '/course-scores/{id}',
+      '/course-scores/{id}/playlog',
+      '/courses/{courseFingerprint}',
+      '/courses/{courseFingerprint}/leaderboard',
+      '/courses/{courseFingerprint}/leaderboard/me',
       '/me',
       '/me/avatar',
       '/scores',
@@ -21,6 +27,11 @@ describe('OpenAPI document', () => {
     const ranking = spec.paths?.['/charts/{chartFingerprint}/leaderboard']?.get;
     // The query parameters come from the validator the route runs.
     expect(ranking?.parameters?.map((parameter) => ('name' in parameter ? parameter.name : undefined))).toEqual(
+      expect.arrayContaining(['ruleset', 'assisted', 'anonymous', 'played', 'offset', 'limit']),
+    );
+    // A course ranking takes the same filters as a chart's.
+    const courseRanking = spec.paths?.['/courses/{courseFingerprint}/leaderboard']?.get;
+    expect(courseRanking?.parameters?.map((parameter) => ('name' in parameter ? parameter.name : undefined))).toEqual(
       expect.arrayContaining(['ruleset', 'assisted', 'anonymous', 'played', 'offset', 'limit']),
     );
     // Committed next to the package so API changes show up in review; refresh it with `vp test run -u`.

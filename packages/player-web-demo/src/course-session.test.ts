@@ -3,7 +3,7 @@ import { parseBeatorajaCourseData } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import { describe, expect, test } from 'vite-plus/test';
-import { CourseSession, courseRecordKey } from './course-session.ts';
+import { buildCourseResultSummary, CourseSession, courseRecordKey } from './course-session.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
@@ -82,6 +82,17 @@ describe('CourseSession', () => {
     expect(session.nextStage()!.courseInfo.stageIndex).toBe(1);
   });
 
+  test('records a stage given up with ESC and ends the course there', () => {
+    const session = new CourseSession(course([]));
+    session.recordStage(stageLog({}));
+    const givenUp = stageLog({ gauge: { type: 'GRADE', final: 70, cleared: true } });
+    givenUp.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', aborted: true };
+    session.giveUp(givenUp);
+    expect(session.finished).toBe(true);
+    expect(session.stagesPlayed).toBe(2);
+    expect(session.nextStage()).toBeUndefined();
+  });
+
   test('ends on a failed stage and after the last stage', () => {
     const failing = new CourseSession(course());
     expect(
@@ -99,6 +110,34 @@ describe('CourseSession', () => {
     expect(new CourseSession(course()).recordStage(undefined)).toBe('finished');
   });
 
+  test('builds the course play log with each unreached stage’s facts and chart fingerprint', () => {
+    const session = new CourseSession(course());
+    const failed = stageLog({ gauge: { type: 'GRADE', final: 0, cleared: false, failedMidPlay: true } });
+    failed.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', course: { kind: 'grade' } };
+    session.recordStage(failed);
+    const seen: Array<number | undefined> = [];
+    const log = session.buildPlaylog(
+      (song) => {
+        seen.push(song.chart.sourceFormat === 'bms' ? song.chart.bms.lnMode : undefined);
+        return {
+          sourceFormat: 'bms',
+          laneMode: '7keys',
+          lnMode: 3,
+          judgeRank: { percent: 75 },
+          notes: { normal: 10, long: { 1: 0, 2: 0, 3: 0 } },
+        };
+      },
+      { chartFingerprintOf: (song) => `bmfp0:${song.id}` },
+    );
+    expect(log.stages[0]).toMatchObject({ played: true });
+    expect(log.stages.slice(1)).toMatchObject([
+      { played: false, md5: MD5[1], chartFingerprint: 'bmfp0:b' },
+      { played: false, md5: MD5[2], chartFingerprint: 'bmfp0:c' },
+    ]);
+    // The unreached stages are read as the course plays them: the HCN constraint applied.
+    expect(seen).toEqual([3, 3]);
+  });
+
   test('refuses a course with a missing stage', () => {
     expect(() => new CourseSession({ ...course(), playable: false })).toThrow('not in the collection');
   });
@@ -107,5 +146,40 @@ describe('CourseSession', () => {
     const a = courseRecordKey(course(['MIRROR', 'GAUGE_LR2']));
     expect(a).toBe(courseRecordKey(course(['GAUGE_LR2', 'MIRROR'])));
     expect(a).toBe(`course:grade:gauge_lr2+grade_mirror:${MD5.join(',')}`);
+  });
+});
+
+describe('buildCourseResultSummary', () => {
+  test('reads the course result as one run', () => {
+    const summary = buildCourseResultSummary({
+      ruleset: 'beatoraja',
+      judge: { pgreat: 50, great: 20, good: 5, bad: 2, poor: 3, emptyPoor: 1 },
+      fast: 7,
+      slow: 9,
+      exScore: 120,
+      noteCount: 90,
+      missCount: 16,
+      maxCombo: 40,
+      djLevel: 'B',
+      gauge: { type: 'CLASS', final: 36.5, cleared: true },
+      stagesPlayed: 3,
+      lamp: 'NORMAL',
+      stages: [],
+    });
+    expect(summary).toMatchObject({
+      total: 90,
+      perfect: 50,
+      great: 20,
+      good: 5,
+      bad: 2,
+      poor: 3,
+      emptyPoor: 1,
+      fast: 7,
+      slow: 9,
+      exScore: 120,
+      score: 120,
+      gauge: { type: 'CLASS', current: 36.5, cleared: true },
+      course: { maxCombo: 40 },
+    });
   });
 });

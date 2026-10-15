@@ -1,3 +1,4 @@
+import type { PlayerSummary } from '@be-music/player/core/engine';
 import {
   createCoursePlaylog,
   type RulesetChartFacts,
@@ -66,8 +67,6 @@ export class CourseSession {
   nextStage(): CourseStagePlan | undefined {
     if (this.ended) return undefined;
     const index = this.logs.length;
-    const stage = this.course.stages[index]!;
-    const song = stage.song!;
     const course: PlaylogCourseStage = resolveCourseStageSettings(this.course.definition);
     const previous = this.logs.at(-1)?.results?.native;
     if (previous !== undefined) {
@@ -78,15 +77,26 @@ export class CourseSession {
       };
     }
     const constraints = this.course.definition.constraints;
-    const chart = applyCourseLongNoteConstraint(song.chart, constraints);
     return {
       index,
       stageCount: this.course.stages.length,
-      song: chart === song.chart ? song : { ...song, chart },
+      song: this.stageSong(index),
       course,
       courseInfo: resolveSceneCourseInfo(this.course, index),
       hiSpeedLocked: isCourseHiSpeedLocked(constraints),
     };
+  }
+
+  /** Every stage's song as the course plays it, in order (what a played stage's fingerprints describe). */
+  stageSongs(): BrowserSongEntry[] {
+    return this.course.stages.map((_stage, index) => this.stageSong(index));
+  }
+
+  /** A stage's song as the course plays it: its chart with the course's long-note constraint applied. */
+  private stageSong(index: number): BrowserSongEntry {
+    const song = this.course.stages[index]!.song!;
+    const chart = applyCourseLongNoteConstraint(song.chart, this.course.definition.constraints);
+    return chart === song.chart ? song : { ...song, chart };
   }
 
   /** The lane option the course lets a stage play with, in place of the player's pick. */
@@ -115,23 +125,42 @@ export class CourseSession {
   }
 
   /**
-   * The course play log: the stages played, then the facts of every stage the run never reached (`factsOf` resolves a
-   * stage chart's ruleset facts, e.g. `resolveChartRulesetFacts`).
+   * Records the stage the player gave up with ESC (its play log is marked `play.aborted`) and ends the course: a course
+   * given up is a failed run, as LR2 records it. A stage without a play log just ends the course.
+   */
+  giveUp(playlog: BeMusicPlaylog | undefined): void {
+    if (this.ended) return;
+    if (playlog?.results?.native !== undefined) this.logs.push(playlog);
+    this.ended = true;
+  }
+
+  /**
+   * The course play log: the stages played, then every stage the run never reached with its chart facts (`factsOf`,
+   * e.g. `resolveChartRulesetFacts`) and its chart fingerprint (`chartFingerprintOf`, which keys the course on the
+   * Leaderboard). Both read the stage's song as the course plays it (its long-note constraint applied), as a played
+   * stage's log does.
    */
   buildPlaylog(
     factsOf: (song: BrowserSongEntry) => RulesetChartFacts,
-    options: { createdAt?: string; recorder?: BeMusicPlaylog['recorder'] } = {},
+    options: {
+      createdAt?: string;
+      recorder?: BeMusicPlaylog['recorder'];
+      chartFingerprintOf?: (song: BrowserSongEntry) => string | undefined;
+    } = {},
   ): BeMusicCoursePlaylog {
     const { definition } = this.course;
-    const stages: PlaylogCourseStageEntry[] = this.course.stages.map((stage, index) => {
+    const stages: PlaylogCourseStageEntry[] = this.course.stages.map((_stage, index) => {
       const playlog = this.logs[index];
       if (playlog !== undefined) return { played: true, playlog };
       const ref = definition.stages[index];
+      const song = this.stageSong(index);
+      const chartFingerprint = options.chartFingerprintOf?.(song);
       return {
         played: false,
-        facts: factsOf(stage.song!),
+        facts: factsOf(song),
         ...(ref?.sha256 !== undefined ? { sha256: ref.sha256 } : {}),
         ...(ref?.md5 !== undefined ? { md5: ref.md5 } : {}),
+        ...(chartFingerprint !== undefined ? { chartFingerprint } : {}),
       };
     });
     return createCoursePlaylog({
@@ -199,5 +228,37 @@ export function buildCourseResultData(
     judgeRuleset: lastStage?.played === true ? (lastStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2',
     fast: result.fast,
     slow: result.slow,
+  };
+}
+
+/**
+ * The course result as a beatoraja result skin reads one run (`PlayerSummary`): the course's summed judgments, its
+ * EX score (beatoraja's score) and the gauge the course ended on. beatoraja keeps the course score the same way
+ * (`CourseResult` sums the stage scores).
+ */
+export function buildCourseResultSummary(result: PlaylogCourseResult): PlayerSummary {
+  return {
+    total: result.noteCount,
+    perfect: result.judge.pgreat,
+    great: result.judge.great,
+    good: result.judge.good,
+    bad: result.judge.bad,
+    poor: result.judge.poor,
+    emptyPoor: result.judge.emptyPoor,
+    fast: result.fast,
+    slow: result.slow,
+    exScore: result.exScore,
+    score: result.exScore,
+    gauge: {
+      type: result.gauge.type,
+      current: result.gauge.final,
+      max: 100,
+      initial: 100,
+      clearThreshold: 0,
+      effectiveTotal: 0,
+      cleared: result.gauge.cleared,
+      survival: true,
+    },
+    course: { combo: 0, maxCombo: result.maxCombo },
   };
 }

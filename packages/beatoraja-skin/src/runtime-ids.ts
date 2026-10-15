@@ -496,6 +496,54 @@ export const BEATORAJA_OP = {
   /** Cursor is on a playable bar (song OR grade). Used by chrome that's the same across both. */
   PLAYABLEBAR: 5,
 
+  // ─── Course ops (SkinProperty `OPTION_GRADEBAR_*` / `OPTION_COURSE_*` / `OPTION_MODE_COURSE`) ──
+  // The `GRADEBAR_*` ops light on the select screen for the focused course's constraints
+  // (`BooleanPropertyFactory.createCourseDataConstraintProperty`); the stage ops and `MODE_COURSE`
+  // light outside the select screen while a course runs (`createCourseStageProperty`,
+  // `createCourseFinalStageProperty`, `mode_course`).
+  /** SkinProperty `OPTION_GRADEBAR_CLASS` — the focused course has the `CLASS` constraint. */
+  GRADEBAR_CLASS: 1002,
+  /** SkinProperty `OPTION_GRADEBAR_MIRROR`. */
+  GRADEBAR_MIRROR: 1003,
+  /** SkinProperty `OPTION_GRADEBAR_RANDOM`. */
+  GRADEBAR_RANDOM: 1004,
+  /** SkinProperty `OPTION_GRADEBAR_NOSPEED`. */
+  GRADEBAR_NOSPEED: 1005,
+  /** SkinProperty `OPTION_GRADEBAR_NOGOOD`. */
+  GRADEBAR_NOGOOD: 1006,
+  /** SkinProperty `OPTION_GRADEBAR_NOGREAT`. */
+  GRADEBAR_NOGREAT: 1007,
+  /** SkinProperty `OPTION_GRADEBAR_GAUGE_LR2`. */
+  GRADEBAR_GAUGE_LR2: 1010,
+  /** SkinProperty `OPTION_GRADEBAR_GAUGE_5KEYS`. */
+  GRADEBAR_GAUGE_5KEYS: 1011,
+  /** SkinProperty `OPTION_GRADEBAR_GAUGE_7KEYS`. */
+  GRADEBAR_GAUGE_7KEYS: 1012,
+  /** SkinProperty `OPTION_GRADEBAR_GAUGE_9KEYS`. */
+  GRADEBAR_GAUGE_9KEYS: 1013,
+  /** SkinProperty `OPTION_GRADEBAR_GAUGE_24KEYS`. */
+  GRADEBAR_GAUGE_24KEYS: 1014,
+  /** SkinProperty `OPTION_GRADEBAR_LN`. */
+  GRADEBAR_LN: 1015,
+  /** SkinProperty `OPTION_GRADEBAR_CN`. */
+  GRADEBAR_CN: 1016,
+  /** SkinProperty `OPTION_GRADEBAR_HCN`. */
+  GRADEBAR_HCN: 1017,
+  /** SkinProperty `OPTION_RANDOMCOURSEBAR` — the cursor is on a random-course bar. */
+  RANDOMCOURSEBAR: 1031,
+  /** SkinProperty `OPTION_COURSE_STAGE1` — stage 1 of a course is played and is not the last one. */
+  COURSE_STAGE1: 280,
+  /** SkinProperty `OPTION_COURSE_STAGE2`. */
+  COURSE_STAGE2: 281,
+  /** SkinProperty `OPTION_COURSE_STAGE3`. */
+  COURSE_STAGE3: 282,
+  /** SkinProperty `OPTION_COURSE_STAGE4`. */
+  COURSE_STAGE4: 283,
+  /** SkinProperty `OPTION_COURSE_STAGE_FINAL` — the last stage of a course. */
+  COURSE_STAGE_FINAL: 289,
+  /** SkinProperty `OPTION_MODE_COURSE` — a course is running. */
+  MODE_COURSE: 290,
+
   // ─── Chart keys ops (prop.lua `_*keysong = 160-164` etc.) ─────────────────────────────────
   // Set to indicate which chart variant is being played. Skins use these to gate per-keys
   // chrome elements (e.g. show 7K-specific lane backgrounds only on _7keysong).
@@ -1233,6 +1281,13 @@ export const BEATORAJA_TEXT = {
   SUBARTIST: 15,
   /** prop.lua `fullartist = 16` (`artist` + `" "` + `subartist`). */
   FULLARTIST: 16,
+  /**
+   * SkinProperty `STRING_COURSE1_TITLE = 150`: the title of course stage 1. Stages 2-10 follow at 151-159
+   * (`STRING_COURSE10_TITLE = 159`), on the select screen for the focused course and elsewhere for the running one.
+   */
+  COURSE1_TITLE: 150,
+  /** SkinProperty `STRING_COURSE10_TITLE = 159`: the last course stage title slot. */
+  COURSE10_TITLE: 159,
   /** prop.lua `searchword = 30`. The select scene's current search query. */
   SEARCHWORD: 30,
   /** prop.lua `skin_name = 50`. The mounted skin's `header.name`. */

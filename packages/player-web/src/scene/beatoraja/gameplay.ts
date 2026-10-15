@@ -22,6 +22,7 @@
 // The gameplay scene layers authored skin chrome, scrolling notes, markers, BGA still/video textures, judge popups,
 // key-beam glows, LN hold effects, and HUD text on top of the same engine-driven state.
 
+import { withBeatorajaCourseStageOps, type SceneCourseInfo } from './course.ts';
 import { DEFAULT_BEATORAJA_FADEOUT_MS } from '../../skin/beatoraja/scene-transition.ts';
 import { Container, Graphics, Text, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';
@@ -224,6 +225,10 @@ export interface PixiBeatorajaGameplayViewOptions {
    * next play. Not fired for {@link PixiBeatorajaGameplayView.setHiSpeed} writes, which come from the host.
    */
   onHiSpeedChange?: (hiSpeed: number) => void;
+  /** The running course stage, for its ops and strings (`withBeatorajaCourseStageOps`); judging follows the engine. */
+  courseInfo?: SceneCourseInfo;
+  /** A course's `no_speed`: the arrow keys do nothing and an engine-shortcut change is set back. */
+  hiSpeedLocked?: boolean;
 }
 
 export class PixiBeatorajaGameplayView implements PixiScene {
@@ -357,7 +362,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // the resolver falls back to the catch-all alternative, which silently mismatches when the
     // skin's default layout isn't the user's preference (e.g. compact-BGA setting selected but
     // BGA paints at full-layout coordinates).
-    const skinConfigOps = buildBaseOpSet(options.skinConfig?.option);
+    const skinConfigOps = withBeatorajaCourseStageOps(buildBaseOpSet(options.skinConfig?.option), options.courseInfo);
 
     // Adapter is constructed first so the skin view can route ref/text resolvers through it. The clock
     // captures `getNowMs` as a closure that reads `this.startMs`, which is set at `enter()` time — until
@@ -386,6 +391,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       skinHeaderName: options.skin.name,
       skinHeaderAuthor: options.skin.author,
       directoryLabel: options.directoryLabel,
+      ...(options.courseInfo !== undefined ? { courseInfo: options.courseInfo } : {}),
       laneHeight: lanecoverSliderRange,
       judgeComboMetrics,
     });
@@ -806,7 +812,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     if (this.disposed) return;
 
     // 1. Adapter: swap base ops while keeping runtime state.
-    const skinConfigOps = buildBaseOpSet(opts.skinConfig?.option);
+    const skinConfigOps = withBeatorajaCourseStageOps(buildBaseOpSet(opts.skinConfig?.option), this.options.courseInfo);
     this.adapter.setBaseOps(skinConfigOps);
     // Re-seed the per-name custom offsets against the new skin's `header.offset[]` schema —
     // entries from the previous skin that no longer exist in the new schema are dropped, the
@@ -1100,9 +1106,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // every note draw. The signal is a function; calling it without an argument returns the latest.
       if (this.stateSignals) {
         const hs = this.stateSignals.highSpeed();
-        if (Number.isFinite(hs) && hs > 0 && hs !== this.hiSpeed) {
-          // Changed through the engine (its Option + lane key shortcut) — the arrow keys and `setHiSpeed` update
-          // `this.hiSpeed` together with the signal, so they never land here.
+        // A change here came through the engine's Option + lane-key shortcut (the arrow keys and `setHiSpeed` update
+        // `this.hiSpeed` with the signal); a course's `no_speed` sets it back.
+        if (Number.isFinite(hs) && hs > 0 && hs !== this.hiSpeed && this.options.hiSpeedLocked === true) {
+          this.stateSignals.setHighSpeed(this.hiSpeed);
+        } else if (Number.isFinite(hs) && hs > 0 && hs !== this.hiSpeed) {
           this.hiSpeed = hs;
           this.scrollHiSpeed.retarget(hs, performance.now());
           const reported = snapHiSpeed(hs);
@@ -1288,7 +1296,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    * Clamped to [HISPEED_MIN, HISPEED_MAX] so users can't soft-lock with hispeed=0 or runaway.
    */
   private adjustHiSpeed(delta: number): void {
-    if (!Number.isFinite(delta) || delta === 0) return;
+    if (!Number.isFinite(delta) || delta === 0 || this.options.hiSpeedLocked === true) return;
     const next = snapHiSpeed(this.hiSpeed + delta);
     if (next === undefined || next === this.hiSpeed) return;
     this.hiSpeed = next;

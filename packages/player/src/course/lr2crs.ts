@@ -1,4 +1,4 @@
-import { type CourseDefinition, type CourseKind, createCourseStageRef } from './definition.ts';
+import { type CourseDefinition, type CourseKind, createCourseStageRef, type NonstopConnection } from './definition.ts';
 import { decodeCourseText, parseCourseXml } from './text.ts';
 
 /**
@@ -12,6 +12,28 @@ const LR2_MAX_COURSE_STAGES = 10;
 /** The length of the metadata block that opens an LR2 course hash, and of each stage MD5 after it. */
 const LR2_HASH_BLOCK = 32;
 
+/** LR2's NONSTOP connections by their `courseKeys` digit (`0`-`5`). */
+export const LR2_NONSTOP_CONNECTIONS: readonly NonstopConnection[] = [
+  'fade',
+  'fade-fit',
+  'cut',
+  'cut-fit',
+  'blank1',
+  'blank2',
+];
+
+/**
+ * The NONSTOP connections an LR2 course hash header names: characters 0-9 (`courseKeys`, OpenLR2 `LR2f.cpp`
+ * L18083-L18087), one per stage, each the connection after that stage. LR2 only ever writes `0`-`5` (its select-screen
+ * buttons cycle through them); any other character reads as `fade`, LR2's default.
+ */
+export function parseLr2NonstopConnections(header: string): NonstopConnection[] {
+  return Array.from({ length: 10 }, (_, index) => {
+    const digit = header.charCodeAt(index) - 0x30;
+    return LR2_NONSTOP_CONNECTIONS[digit] ?? 'fade';
+  });
+}
+
 /**
  * Parses an LR2 `.lr2crs` file: an XML `<courselist>` of `<course>` elements, each with `title`, `line` (key mode),
  * `type` and `hash`. Field names are matched case-sensitively, as LR2 does.
@@ -19,6 +41,7 @@ const LR2_HASH_BLOCK = 32;
  * - `hash` is a 32-character header (char 10 is the course type) followed by one 32-character chart MD5 per stage;
  *   LR2 keeps the first ten.
  * - `type` 0 / 1 / 2 is EXPERT / NONSTOP / GRADE (OpenLR2). Without a `type` element the header's char 10 is used.
+ * - A NONSTOP course reads its connections from the header's chars 0-9 ({@link parseLr2NonstopConnections}).
  * - A grade course gets beatoraja's reading of an LR2 grade: MIRROR allowed and the LR2 gauge
  *   (`grade_mirror`, `gauge_lr2`), the constraints jbmstable-parser gives a table's legacy `grade` list.
  *
@@ -57,6 +80,7 @@ export function parseLr2CourseFile(input: Uint8Array | string): CourseDefinition
       source: { format: 'lr2crs', type, header, hash },
     };
     if (Number.isInteger(line) && line > 0) course.keyMode = line;
+    if (kind === 'nonstop') course.connections = parseLr2NonstopConnections(header).slice(0, stages.length - 1);
     courses.push(course);
   }
   return courses;
