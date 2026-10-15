@@ -1,6 +1,8 @@
+// Pixi's event mixin (`eventMode`, `isInteractive`) is installed by its events entry; nothing else loads it in Node.
+import 'pixi.js/events';
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
-import type { Container, Text, Texture } from 'pixi.js';
+import { EventBoundary, Matrix, type Container, type Sprite, type Text, type Texture } from 'pixi.js';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BrowserCourseEntry, BrowserSongEntry } from '../../collection/types.ts';
@@ -79,6 +81,34 @@ describe('PixiBeatorajaSelectScene disposal', () => {
     expect(internals.searchPromptText).toBeDefined();
     expect(internals.searchPromptText).not.toBe(oldPrompt);
 
+    scene.dispose();
+  });
+});
+
+describe('PixiBeatorajaSelectScene row clicks', () => {
+  it('hits the row hit sprite, not the list layer, through the title text above it', () => {
+    const scene = new PixiBeatorajaSelectScene({
+      skin: makeSkin(),
+      textures: fakeTextureCache(),
+      songs: [],
+      onSongPicked: () => undefined,
+    });
+    const internals = scene as unknown as SelectSceneInternals & { rowHitAreas: (Sprite | undefined)[] };
+    const hit = internals.rowHitAreas.find((sprite): sprite is Sprite => sprite !== undefined)!;
+    const label = internals.rowLabels.find((text): text is Text => text !== undefined)!;
+    // No song lists no rows, so lay one row out by hand: the title text over the left of the row's hit sprite.
+    hit.visible = true;
+    hit.position.set(0, 0);
+    hit.setSize(200, 40);
+    label.visible = true;
+    label.text = 'Title';
+    label.position.set(10, 20);
+    // Nothing renders here, so bring the world transforms the hit test reads up to date by hand.
+    for (const node of [internals.listLayer, hit, label]) {
+      node.worldTransform.copyFrom(node.getGlobalTransform(new Matrix(), false));
+    }
+    const boundary = new EventBoundary(internals.listLayer);
+    expect(boundary.hitTest(15, 20)).toBe(hit);
     scene.dispose();
   });
 });

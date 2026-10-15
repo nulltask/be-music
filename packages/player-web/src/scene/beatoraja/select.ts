@@ -691,7 +691,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // list (background, frame) paints behind the labels; chrome declared after (cursor highlight,
     // info panels, decorative overlays) paints on top. Skins that omit the anchor get the
     // top-of-stack fallback (legacy behavior).
-    this.listLayer.eventMode = 'static';
+    //
+    // `passive`, not `static`: Pixi hit-tests the children of an interactive container as interactive too, so the row
+    // label above a row's hit sprite would take a click on the title text and hand it to this (listener-less) layer.
+    // Passive leaves each child to its own mode: only the row hit sprites are hit.
+    this.listLayer.eventMode = 'passive';
     this.view.container.addChildAt(this.listLayer, this.view.songListLayerInsertIndex);
 
     this.songList = parseBeatorajaSongList(options.skin);
