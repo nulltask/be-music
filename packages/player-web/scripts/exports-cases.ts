@@ -8,6 +8,7 @@ import type {
   BeatorajaSourceBundle,
 } from '@be-music/beatoraja-skin';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData } from '@be-music/player/course';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -41,6 +42,27 @@ const BENCH_COLLECTION = {
   songs: [BENCH_SONG],
   errors: [],
 } satisfies playerWebCoreApi.BrowserSongCollection;
+const BENCH_SONG_MD5 = '0123456789abcdef0123456789abcdef';
+const BENCH_COURSE_DEFINITION = parseBeatorajaCourseData({
+  name: 'Bench Dan',
+  hash: [{ md5: BENCH_SONG_MD5 }],
+  constraint: ['MIRROR', 'GAUGE_LR2', 'NO_SPEED', 'HCN'],
+})!;
+const BENCH_COURSE_GROUPS = [{ label: 'Bench', courses: [BENCH_COURSE_DEFINITION] }];
+const BENCH_HASHED_SONGS = [{ song: BENCH_SONG, md5: BENCH_SONG_MD5 }];
+const BENCH_COURSE_LOOKUP = playerWebCoreApi.createSongHashLookup(BENCH_HASHED_SONGS);
+const BENCH_COURSE_ENTRY = playerWebCoreApi.resolveCourseFolders(BENCH_COURSE_GROUPS, BENCH_COURSE_LOOKUP)[0]!
+  .courses![0]!;
+const BENCH_COURSE_INFO = playerWebCoreApi.resolveSceneCourseInfo(BENCH_COURSE_ENTRY, 0);
+const BENCH_RANDOM_COURSE = parseBeatorajaRandomCourseData({
+  name: 'Bench Random',
+  stage: [{ sql: 'level >= 0' }],
+  constraint: ['GAUGE_LR2'],
+})!;
+const BENCH_RANDOM_ENTRY = playerWebCoreApi.createRandomCourseEntry('Bench#r0', BENCH_RANDOM_COURSE);
+const BENCH_LR2CRS_BYTES = new TextEncoder().encode(
+  `<?xml version="1.0"?><courselist><course><title>Bench</title><line>7</line><type>2</type><hash>${'0'.repeat(32)}${BENCH_SONG_MD5}</hash></course></courselist>`,
+);
 const BENCH_SCORE = {
   total: 100,
   perfect: 60,
@@ -436,6 +458,92 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       });
       recorder.isActive();
       recorder.dispose();
+    },
+  });
+  define('player-web.isCourseFilePath', {
+    run: () => {
+      playerWebCoreApi.isCourseFilePath('Songs/dan.lr2crs');
+      playerWebCoreApi.isCourseFilePath('beatoraja/course/dan.json');
+      playerWebCoreApi.isCourseFilePath('beatoraja/folder/default.json');
+      playerWebCoreApi.isCourseFilePath('Songs/Bench/info.json');
+    },
+  });
+  define('player-web.readCourseFile', {
+    run: () => {
+      playerWebCoreApi.readCourseFile('Songs/dan.lr2crs', BENCH_LR2CRS_BYTES);
+    },
+  });
+  define('player-web.createSongHashLookup', {
+    run: () => {
+      playerWebCoreApi.createSongHashLookup(BENCH_HASHED_SONGS);
+    },
+  });
+  define('player-web.resolveCourseFolders', {
+    run: () => {
+      playerWebCoreApi.resolveCourseFolders(BENCH_COURSE_GROUPS, BENCH_COURSE_LOOKUP);
+    },
+  });
+  define('player-web.resolveCourseStageSettings', {
+    run: () => {
+      playerWebCoreApi.resolveCourseStageSettings(BENCH_COURSE_DEFINITION);
+    },
+  });
+  define('player-web.resolveCourseLaneOption', {
+    run: () => {
+      playerWebCoreApi.resolveCourseLaneOption(BENCH_COURSE_DEFINITION.constraints, 'RANDOM');
+      playerWebCoreApi.resolveCourseLaneOption(BENCH_COURSE_DEFINITION.constraints, 'MIRROR');
+    },
+  });
+  define('player-web.isCourseHiSpeedLocked', {
+    run: () => {
+      playerWebCoreApi.isCourseHiSpeedLocked(BENCH_COURSE_DEFINITION.constraints);
+    },
+  });
+  define('player-web.applyCourseLongNoteConstraint', {
+    run: () => {
+      playerWebCoreApi.applyCourseLongNoteConstraint(BENCH_SONG.chart, BENCH_COURSE_DEFINITION.constraints);
+    },
+  });
+  define('player-web.createRandomCourseEntry', {
+    run: () => {
+      playerWebCoreApi.createRandomCourseEntry('Bench#r0', BENCH_RANDOM_COURSE);
+    },
+  });
+  define('player-web.createCourseSongRecord', {
+    run: () => {
+      const record = playerWebCoreApi.createCourseSongRecord(BENCH_SONG, { md5: BENCH_SONG_MD5 });
+      void record.level;
+    },
+  });
+  define('player-web.drawBrowserRandomCourse', {
+    run: () => {
+      playerWebCoreApi.drawBrowserRandomCourse(BENCH_RANDOM_ENTRY, BENCH_HASHED_SONGS, () => 0);
+    },
+  });
+  define('player-web.resolveSceneCourseInfo', {
+    run: () => {
+      playerWebCoreApi.resolveSceneCourseInfo(BENCH_COURSE_ENTRY, 0);
+    },
+  });
+  define('player-web.resolveLr2CourseOps', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseOps(BENCH_COURSE_INFO);
+    },
+  });
+  define('player-web.resolveLr2CourseNumber', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseNumber(250, BENCH_COURSE_INFO);
+    },
+  });
+  define('player-web.resolveLr2CourseText', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseText(150, BENCH_COURSE_INFO);
+      playerWebCoreApi.resolveLr2CourseText(170, BENCH_COURSE_INFO);
+    },
+  });
+  define('player-web.lr2ShowsCourseCombo', {
+    run: () => {
+      playerWebCoreApi.lr2ShowsCourseCombo('grade');
     },
   });
   define('player-web.findBeatorajaThemeBgm', {
