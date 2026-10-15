@@ -297,4 +297,23 @@ describe('computeResultOps', () => {
       expect(ops.has(RESULT_DYNAMIC_OPS.DIFFICULTY_NORMAL)).toBe(true);
     });
   });
+
+  describe('course', () => {
+    const course = { kind: 'grade' as const, title: 'Dan', stages: [{ title: 'A' }, { title: 'B' }] };
+
+    it('lights the course and kind ops on the course result', () => {
+      const ops = computeResultOps(makeResult(), makeSkin(), course);
+      expect([290, 293].every((op) => ops.has(op))).toBe(true);
+      expect(ops.has(280) || ops.has(289)).toBe(false);
+    });
+
+    it("adds the stage op on a course stage's result", () => {
+      expect(computeResultOps(makeResult(), makeSkin(), { ...course, stageIndex: 0 }).has(280)).toBe(true);
+      expect(computeResultOps(makeResult(), makeSkin(), { ...course, stageIndex: 1 }).has(289)).toBe(true);
+    });
+
+    it('lights no course op outside a course', () => {
+      expect(computeResultOps(makeResult(), makeSkin()).has(290)).toBe(false);
+    });
+  });
 });
