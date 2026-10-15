@@ -94,6 +94,9 @@ Courses play through the same select → play → result scenes. See [Courses an
   - They are read with `readCourseFile` (`@be-music/player-web/collection`).
   - The demo hashes the library's chart files (cached per song) and matches each stage by SHA-256, then MD5 (`resolveCourseFolders`).
   - Course files dropped on their own match against the songs already loaded.
+  - A difficulty table's courses can be imported by URL: Debug Menu → Library & records → **Course table URL**, then **Import courses**. The URL may be the table page (its `bmstable` meta names the header) or the header JSON. The demo fetches it with `fetchTableHeaderCourses` (`@be-music/player/course`, see [Loading a table from its URL](./course.md#loading-a-table-from-its-url)); the song list behind `data_url` is not loaded.
+  - The table becomes one course group labelled with its name. Importing a table again, or another source with the same label, replaces that group. Imported URLs are remembered in `localStorage` and imported again on the next visit.
+  - Known limitation: the browser fetches the table directly, so a table whose server does not send CORS headers (`Access-Control-Allow-Origin`) cannot be imported; many tables do not. The status line then says the site could not be fetched. A header JSON served from an origin that allows cross-origin reads (or from the demo's own origin) imports.
   - beatoraja's command-folder file (`folder/*.json`) adds its random courses: each folder with any becomes a course folder. A random course is listed with its stage titles (or filters), lights beatoraja's `OPTION_RANDOMCOURSEBAR` (1031), and draws its stages from the library when it is started (`drawBrowserRandomCourse`). A stage that matches no chart leaves the course unstarted with a status message.
 - **Select:**
   - Each course file is a folder bar listed after the song folders. Inside it, every course is a course bar (`BrowserBrowseEntry` `kind: 'course'`).

@@ -74,6 +74,24 @@ The table header (`header.json`) carries courses the way jbmstable-parser reads 
 
 A course takes its stages from `charts` (full table elements, which may carry `sha256`) or from `md5`. One whose charts lack a hash is skipped. The header's `mode` (`beat-7k`, `popn-9k`, …) sets `keyMode`.
 
+#### Loading a table from its URL
+
+A difficulty table is usually shared as the URL of its HTML page, which names the header in `<meta name="bmstable" content="header.json">`. `fetchTableHeaderCourses(url, fetchText)` loads the courses from that page URL or from the header JSON URL itself:
+
+```mermaid
+flowchart TD
+  url["table URL"] -->|fetchText| body["response body"]
+  body -->|JSON object| header["header.json"]
+  body -->|HTML| meta["resolveTableHeaderUrl<br/>(bmstable meta)"]
+  meta -->|fetchText| header
+  header -->|parseTableHeaderCourses| result["label + courses"]
+```
+
+- `resolveTableHeaderUrl(pageUrl, html)` finds the `bmstable` meta (attribute order, quoting and case do not matter) and resolves its `content` against the page URL. It gives `undefined` when the page has none.
+- The label is the header's `name`, else its `symbol`, else the host of the URL. The course groups are flattened into one list.
+- Only the header is fetched. The song list behind `data_url` is not read.
+- The caller passes `fetchText`, so the module stays runtime-neutral: a browser host wraps `fetch`, a CLI can read from disk or the network. Fetch errors propagate; a page without a header, or a header that is not a JSON object, throws.
+
 ### beatoraja random courses
 
 beatoraja's command-folder file (`folder/default.json`, `BarManager.CommandFolder`) can hold **random courses** (`rcourse`, [`RandomCourseData`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/RandomCourseData.java)). Each stage is an SQL `WHERE` clause over the song database instead of a chart, and the stages are drawn when the course starts. `parseBeatorajaCommandFolderFile` reads them into `RandomCourseDefinition`s, one group per folder that has any.
