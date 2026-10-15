@@ -15,6 +15,7 @@
   - the playlog chart facts
   - the note list the engine prepares for play
   - the LR2 / beatoraja / IIDX simulator results for three fixed input streams: `missed` (no input), `perfect` (every note on time), and `offset` (presses cycled across every judge window, with every 7th note skipped)
+  - next to them, under `engine`, the live engine's summary (plus its max combo) from replaying the same stream through `manualPlay` under each judge ruleset
 
 Times are integer microseconds and beats are rounded to 1e-6, so floating-point noise never shows up as a diff.
 
@@ -30,6 +31,8 @@ pnpm test:regression -u
 
 A diff in an expected file is not automatically a bug. When the change is intended, regenerate with `-u` and review the diff in the pull request like code. Adding a chart to `examples/test` adds an expected file automatically.
 
-## Why live engine results are not pinned
+## Engine replays
 
-The engine runs once per variant with no input, only to capture the note list it prepares. Play outcomes come from the pure ruleset simulators. The live engine judges on a wall-clock tick loop, and its replay summary still shifts between runs and between playback speeds (the gauge order around the 100 % clamp, and trailing releases dropped once the loop ends). Pinning it would make this suite flaky. Engine/simulator agreement on curated cases is covered by `packages/player/src/playlog/equivalence.test.ts`.
+The engine first runs once per variant with no input, to capture the note list it prepares; the input streams are built from it. Each stream is then replayed through `manualPlay` at 64x speed under every judge ruleset. A replay steps the deterministic judge core on a fixed 1 ms chart-time grid (`advanceJudgeCoreReplay`), so its outcome does not depend on tick timing or speed and can be pinned like any other stage. `engine-determinism.test.ts` replays every stream again at 1024x and requires the same summaries and the same re-recorded input streams; repeat runs at 64x are covered by the corpus itself, since every run is compared against the same files. Charts run concurrently because replays mostly wait on their tick loop.
+
+The engine results are pinned as they are, next to the simulator results for the same stream. Where the two disagree, the expected file shows it; agreement is not this suite's job but `packages/player/src/playlog/equivalence.test.ts`'s, on curated cases.
