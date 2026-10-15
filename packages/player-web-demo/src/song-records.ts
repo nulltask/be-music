@@ -35,7 +35,7 @@ export interface SongRecordPlay {
   lamp: BeMusicClearLamp;
   exScore: number;
   maxCombo: number;
-  /** BAD + POOR (empty POORs excluded — they never cost a note). */
+  /** BP: BAD + POOR + empty POOR, as LR2 (`LR2body.exe` adds an empty POOR to its POOR count), beatoraja and the Leaderboard count it. */
   missCount: number;
 }
 
@@ -45,7 +45,7 @@ export function songRecordPlayFromResult(data: PixiGameplayResultData): SongReco
     lamp: data.lamp ?? (data.cleared ? 'NORMAL' : 'FAILED'),
     exScore: data.score.exScore,
     maxCombo: data.maxCombo,
-    missCount: data.score.bad + data.score.poor,
+    missCount: data.score.bad + data.score.poor + data.score.emptyPoor,
   };
 }
 
@@ -54,7 +54,10 @@ export function songRecordPlayFromResult(data: PixiGameplayResultData): SongReco
  * (beatoraja): the lamp comes from the same `resolveClearLamp` rule the LR2 / default result uses.
  */
 export function songRecordPlayFromSummary(
-  summary: Pick<PlayerSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore' | 'gauge'>,
+  summary: Pick<
+    PlayerSummary,
+    'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'emptyPoor' | 'exScore' | 'gauge'
+  >,
   maxCombo: number,
   ruleset?: 'lr2' | 'beatoraja' | 'iidx',
 ): SongRecordPlay {
@@ -68,7 +71,7 @@ export function songRecordPlayFromSummary(
     }),
     exScore: summary.exScore,
     maxCombo,
-    missCount: summary.bad + summary.poor,
+    missCount: summary.bad + summary.poor + summary.emptyPoor,
   };
 }
 
@@ -135,7 +138,10 @@ export function courseStagePlayFromResult(data: PixiGameplayResultData): SongRec
 
 /** {@link courseStagePlayFromResult} for a play whose result is its engine summary (beatoraja). */
 export function courseStagePlayFromSummary(
-  summary: Pick<PlayerSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore' | 'gauge'>,
+  summary: Pick<
+    PlayerSummary,
+    'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'emptyPoor' | 'exScore' | 'gauge'
+  >,
   maxCombo: number,
 ): SongRecordPlay {
   const play = songRecordPlayFromSummary(summary, maxCombo);
