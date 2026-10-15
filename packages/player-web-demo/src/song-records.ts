@@ -81,6 +81,63 @@ export function playRecordKey(
 }
 
 /**
+ * The key an EXPERT / GRADE course stage also updates its chart's record under, or `undefined` when it leaves the
+ * chart's record alone: an auto play, a replay and a play at another tempo, as for a single play
+ * ({@link playRecordKey}). A NONSTOP run's stitched play has no stage chart to record.
+ */
+export function courseStageRecordKey(
+  song: Pick<BrowserSongEntry, 'chartPath'>,
+  chartSha256: string | undefined,
+  play: { autoPlay: boolean; replay: boolean; tempo: number },
+): string | undefined {
+  return playRecordKey(song, chartSha256, { ...play, course: false });
+}
+
+/** The lamps from FULL COMBO up: the only ones a course stage writes into its chart's record. */
+const FULL_COMBO_LAMPS: ReadonlySet<BeMusicClearLamp> = new Set(['FULL_COMBO', 'PERFECT', 'MAX']);
+
+/**
+ * Merges a course stage's play into its chart's record, as LR2 keeps an EXPERT / GRADE stage (OpenLR2 L9043-L9192):
+ * the higher EX score and max combo and the lower BP count, and the FULL COMBO lamp (PERFECT and MAX too) when the stage
+ * earned one, but neither the clear lamp nor the play count. A chart without a record gets one at `NO_PLAY` (or the
+ * full-combo lamp) without a play count.
+ */
+export function mergeCourseStageRecord(
+  previous: BeMusicSongRecord | undefined,
+  play: SongRecordPlay,
+): BeMusicSongRecord {
+  const lamp = previous?.lamp ?? 'NO_PLAY';
+  const record: BeMusicSongRecord = {
+    ...previous,
+    lamp: FULL_COMBO_LAMPS.has(play.lamp) && clearLampRank(play.lamp) > clearLampRank(lamp) ? play.lamp : lamp,
+    exScore: Math.max(previous?.exScore ?? 0, play.exScore),
+    maxCombo: Math.max(previous?.maxCombo ?? 0, play.maxCombo),
+    missCount: previous?.missCount === undefined ? play.missCount : Math.min(previous.missCount, play.missCount),
+  };
+  return record;
+}
+
+/**
+ * What a course stage's result contributes to its chart's record: as {@link songRecordPlayFromResult}, with the notes a
+ * stage that failed mid-way never judged counted in its BP, as LR2 counts them (OpenLR2 L9105-L9113).
+ */
+export function courseStagePlayFromResult(data: PixiGameplayResultData): SongRecordPlay {
+  const play = songRecordPlayFromResult(data);
+  const { total, perfect, great, good, bad, poor } = data.score;
+  return { ...play, missCount: play.missCount + Math.max(0, total - (perfect + great + good + bad + poor)) };
+}
+
+/** {@link courseStagePlayFromResult} for a play whose result is its engine summary (beatoraja). */
+export function courseStagePlayFromSummary(
+  summary: Pick<PlayerSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore' | 'gauge'>,
+  maxCombo: number,
+): SongRecordPlay {
+  const play = songRecordPlayFromSummary(summary, maxCombo);
+  const judged = summary.perfect + summary.great + summary.good + summary.bad + summary.poor;
+  return { ...play, missCount: play.missCount + Math.max(0, summary.total - judged) };
+}
+
+/**
  * Merges `play` into `previous`: the better lamp, the higher EX score and max combo, the lower miss count, and one more
  * play. Every best is kept independently, as LR2 and beatoraja do — the best EX score may come from a different play
  * than the best lamp.
