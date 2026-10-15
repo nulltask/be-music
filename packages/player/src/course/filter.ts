@@ -206,8 +206,12 @@ const RESERVED = new Set(['and', 'or', 'not', 'in', 'like', 'between', 'is', 'nu
 
 class Parser {
   private index = 0;
+  // A plain field, not a constructor parameter property: Node's type stripping (the bench runner) rejects those.
+  private readonly tokens: Token[];
 
-  constructor(private readonly tokens: Token[]) {}
+  constructor(tokens: Token[]) {
+    this.tokens = tokens;
+  }
 
   parse(): CourseSongFilterExpr {
     const expr = this.or();
