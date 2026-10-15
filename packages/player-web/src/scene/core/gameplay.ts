@@ -100,7 +100,13 @@ import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker
 import { advanceCourseCombo, createCourseCombo, type CourseComboState } from './course-combo.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { nonstopBpmAt, type NonstopStitchMap } from '@be-music/player/course';
-import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
+import {
+  createNonstopStageMixer,
+  resolveNonstopStretchRates,
+  type NonstopFitMode,
+  type NonstopStageMixer,
+} from '../../runtime/nonstop-audio.ts';
+import { timeStretchAudioBuffer } from '../../runtime/time-stretch.ts';
 import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
@@ -588,6 +594,11 @@ export interface CoreGameplayViewOptions {
    * and its background sound fades at the stage seams.
    */
   nonstop?: NonstopStitchMap;
+  /**
+   * How a NONSTOP FIT stage follows the previous stage's tempo: `pitch` (default, as LR2) plays its samples at the FIT
+   * rate, `master-tempo` stretches them to the new tempo and keeps their pitch.
+   */
+  nonstopFitMode?: NonstopFitMode;
   /** The hi-speed cannot be changed during play (a course's `no_speed` constraint). */
   hiSpeedLocked?: boolean;
   /**
@@ -2745,6 +2756,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // walks the prefixed form first when set so a chart authored as `wav/` + bare `kick.wav` references resolves the
     // file as `wav/kick.wav`.
     const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
+    // Master Tempo: a FIT stage's samples are stretched to its new tempo once, here, and then play at their own pitch.
+    const masterTempo = this.options.nonstop !== undefined && this.options.nonstopFitMode === 'master-tempo';
+    const stretchRates = masterTempo
+      ? resolveNonstopStretchRates(this.options.nonstop!, chart.resources.wav, (path) =>
+          normalizePath(path).toLowerCase(),
+        )
+      : undefined;
     await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
       if (this.disposed || !this.source || !this.song || !this.audioContext) return;
       // Audio-aware asset lookup: charts almost universally declare `.wav` paths but archives often ship `.ogg` /
@@ -2766,7 +2784,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // `playSample` continue to look up by the chart's `#WAV` value.
         const decoded = await this.audioContext.decodeAudioData(bytes.slice().buffer);
         if (this.disposed) return;
-        this.decodedSamples.set(normalizePath(path).toLowerCase(), decoded);
+        const cacheKey = normalizePath(path).toLowerCase();
+        const stretchRate = stretchRates?.get(cacheKey);
+        this.decodedSamples.set(
+          cacheKey,
+          stretchRate !== undefined ? timeStretchAudioBuffer(this.audioContext, decoded, stretchRate) : decoded,
+        );
       } catch {
         // Browsers vary in codec support; unsupported samples are skipped. `decodeAudioData` also rejects when the
         // AudioContext is closed mid-decode (e.g. ESC pressed during loading) — the catch swallows that as well so
@@ -2781,7 +2804,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.nonstopMixer?.dispose();
       this.nonstopMixer =
         this.options.nonstop !== undefined
-          ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop)
+          ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop, {
+              masterTempo: this.options.nonstopFitMode === 'master-tempo',
+            })
           : undefined;
       this.webAudioSession = createWebAudioSession({
         audioContext: this.audioContext,

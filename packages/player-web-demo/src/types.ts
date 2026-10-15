@@ -146,6 +146,11 @@ export interface DemoGuiState {
    */
   nonstopPlacement: 'intended' | 'lr2';
   /**
+   * How a NONSTOP FIT stage follows the previous stage's tempo: `'pitch'` (the default, as LR2) plays its sound faster or
+   * slower so the pitch moves too; `'master-tempo'` stretches the sound and keeps its pitch, like a CDJ's Master Tempo.
+   */
+  nonstopFitMode: 'pitch' | 'master-tempo';
+  /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
    * in anonymously the first time (docs/leaderboard.md). Toggled from the Debug Menu's "Submit to Leaderboard"
    * checkbox and latched at song start like the auto-save.
