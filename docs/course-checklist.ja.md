@@ -1,0 +1,61 @@
+[English version](./course-checklist.md)
+
+# コースのブラウザ確認
+
+Web デモのコース機能を、スキンの種類ごとに手で確かめる手順です。単体テストでは届かない、シーン、画面の切り替え、音を確かめます。コースの流れや、その途中で通るシーンを変えたら実行し、結果をこのページの最後に記録します。規則そのものは [course.ja.md](./course.ja.md)、シーンは [player-web.ja.md](./player-web.ja.md) にあります。
+
+## 準備
+
+1. **テスト用データ。** `node scripts/course-checklist/fixtures.ts <dir>` で、`<dir>/songs` に小さな BMS ライブラリを作ります。Fixture A〜G（無入力で遊ぶとゲージが尽きる密な Fixture D を含む）と 5 鍵の譜面、`songs/courses/fixture-courses.lr2crs`（FIX GRADE、FIX EXPERT、FIX NONSTOP、FIX GRADE FAIL）です。5 曲の上限の警告を確かめる `<dir>/seven-stages.lr2crs` も作ります。
+2. **スキン。** 標準のスキンは何も要りません。LR2 は標準のテーマと効果音（`LR2files/Theme/LR2` と `LR2files/Sound`）を、beatoraja は任意のスキン（前回は ModernChic）を使います。`packages/player-web-demo/src/main.ts` の `EXTRA_SKINS_ENABLED` が `false` の間、デモは LR2 と beatoraja のテーマを読み込みません。確認の間だけ手元で `true` にし、コミットはしません。
+3. **開発サーバー。** デモは専用のポートで動かします（`pnpm --filter @be-music/player-web-demo run dev --port 5199 --strictPort`）。既定のポートで遊んでいるセッションに触れないためです。
+4. **ファイルのドロップ。** 人が確かめるなら、フォルダをページにドラッグすれば済みます。ブラウザの自動操作ではドロップできないので、`node scripts/course-checklist/serve.ts fixtures=<dir>/songs extra=<dir> lr2theme=<LR2files の親> beatoraja=<スキンのフォルダ>`（ポート 5299）で配信し、ページのコンソールから擬似的にドロップします。
+
+   ```js
+   window.fakeDrop = async (root, prefix = '', keep = () => true) => {
+     const list = (await (await fetch(`http://127.0.0.1:5299/__list?root=${root}`)).json()).filter(keep);
+     const files = await Promise.all(
+       list.map(async (rel) => {
+         const url = `http://127.0.0.1:5299/__file?root=${root}&path=${encodeURIComponent(rel)}`;
+         const path = prefix ? `${prefix}/${rel}` : rel;
+         const file = new File([await (await fetch(url)).arrayBuffer()], path.split('/').pop());
+         Object.defineProperty(file, 'webkitRelativePath', { value: path });
+         return file;
+       }),
+     );
+     const event = new Event('drop', { cancelable: true });
+     Object.defineProperty(event, 'dataTransfer', { value: { items: [], files, types: ['Files'] } });
+     window.dispatchEvent(event);
+     return files.length;
+   };
+   // await fakeDrop('fixtures', 'fixtures'); await fakeDrop('lr2theme');
+   // await fakeDrop('extra', '', (path) => path === 'seven-stages.lr2crs');
+   ```
+
+5. **キー。** ブラウザペインのキー操作はレーンに届きません。`window` に `code` 付きの `KeyboardEvent`（`Escape`、`Enter` など）を送ります。落ちる場合の確認は無入力の手動プレイで足り、ほかは AUTO で確かめられます。
+
+## 確認項目
+
+各項目を、標準・LR2・beatoraja のスキンで確かめます。
+
+| #   | 項目                             | 確かめること                                                                                                                                                                                                                           |
+| --- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | コースのフォルダとバー           | MY COURSES / MY NONSTOP / MY DAN と、ドロップした `.lr2crs` のフォルダにコースが並ぶ。コースバーにステージが出て、遊んだあとは自己ベストのランプとトロフィーが出る。曲が欠けたコースは、選ぶと理由を表示する。                         |
+| 2   | 段位（AUTO と手動）              | コースのゲージでステージが進み、ゲージを持ち越す。AUTO では LR2 と同じく最後以外のステージの結果を飛ばす。コースの結果がコース用の曲とともに出る。LR2 の段位では配置が OFF に、EASY が GROOVE になり、終わるとプレイヤーの設定に戻る。 |
+| 3   | EXPERT                           | EXPERT のゲージで同じ流れになる。                                                                                                                                                                                                      |
+| 4   | NONSTOP（両方の配置）            | つないだ 1 本の譜面になる。通常の結果画面にクリア / 失敗の曲が流れる。R でつなぎ直して遊び直せる。プレイ中はテンポとピッチ維持の設定がロックされる。beatoraja では標準のシーンで遊ぶ。                                                 |
+| 5   | ステージの途中でゲージが尽きる   | 音と画面がフェードアウトしてから結果が出る。                                                                                                                                                                                           |
+| 6   | ステージ中の ESC                 | 1 曲目でも、コースは落ちたプレイとしてコースの結果に進み、投げたステージの判定も数える（FIX GRADE FAIL を無入力で遊び、POOR が数個出たら ESC。AUTO で 2 曲目の途中に ESC）。                                                           |
+| 7   | ステージ中にキャンバスをクリック | ステージがやり直しにならない。                                                                                                                                                                                                         |
+| 8   | 選曲画面に戻る                   | 段位、EXPERT、NONSTOP のあと、カーソルがコースバーにある。                                                                                                                                                                             |
+| 9   | コース作成                       | NONSTOP / EXPERT / GRADE、5 曲の上限、キーモードを揃える規則、制約の編集、名前の変更、削除、`.lr2crs` と beatoraja の `.json` への書き出し。Save と Cancel は何をしたか表示する。                                                      |
+| 10  | 5 曲の上限の警告                 | `seven-stages.lr2crs` をドロップすると、先頭の 5 ステージとして読んだと表示する。                                                                                                                                                      |
+| 11  | コンソール                       | コースの流れによるエラーがない（手元でリーダーボード API を動かしていなければ 502 が返るのは想定どおり）。                                                                                                                             |
+
+be-music の不具合ではないもの：LR2 標準のコース結果スキン（`courseresult_normal.csv`）は POOR の欄に 113 番（BAD）の数値を読むので、そこの POOR は 0 のままです。
+
+## 実行記録
+
+| 日付       | コミット   | 結果                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-16 | `e1bdc6bb` | 1〜5、7、9〜11 は合格。不合格で、その後直したもの：手動で 1 曲目に ESC を押すと結果も記録もなく選曲画面に戻り、投げたステージの判定が抜けた（標準と LR2。シーンがエンジンを中断していなかった）。LR2 のコース結果で `course_clear` / `course_fail` ではなく `clear` / `fail` が流れた。NONSTOP のあと（標準と LR2）と、どのコースのあとも（beatoraja）、カーソルがコースバーに戻らなかった。 |

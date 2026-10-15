@@ -14,6 +14,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Browser player implementation notes](./player-web.md)
 - [Play log (play history) specification](./playlog.md)
 - [Courses and dan certification](./course.md)
+- [Course browser checklist](./course-checklist.md)
 - [Be-Music Fingerprint specification](./fingerprint-spec.md)
 - [Leaderboard design](./leaderboard.md)
 - [LR2 skin implementation notes](./lr2-skin.md)

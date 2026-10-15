@@ -14,6 +14,7 @@
 - [Browser player 実装メモ](player-web.ja.md)
 - [プレイログ（プレイ履歴）仕様](playlog.ja.md)
 - [コースと段位認定](course.ja.md)
+- [コースのブラウザ確認](course-checklist.ja.md)
 - [Be-Music Fingerprint 仕様](fingerprint-spec.ja.md)
 - [Leaderboard 設計](leaderboard.ja.md)
 - [LR2 skin 実装メモ](lr2-skin.ja.md)
