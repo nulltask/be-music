@@ -520,16 +520,16 @@
           "engine": {
             "lr2": {
               "total": 12,
-              "perfect": 5,
-              "fast": 0,
+              "perfect": 6,
+              "fast": 1,
               "slow": 3,
-              "great": 2,
+              "great": 3,
               "good": 1,
-              "bad": 2,
+              "bad": 0,
               "poor": 2,
               "emptyPoor": 0,
-              "exScore": 12,
-              "score": 104166,
+              "exScore": 15,
+              "score": 129166,
               "gauge": {
                 "current": 100,
                 "max": 100,
@@ -541,20 +541,20 @@
                 "survival": false,
                 "failedMidPlay": false
               },
-              "maxCombo": 4
+              "maxCombo": 6
             },
             "beatoraja": {
               "total": 12,
-              "perfect": 5,
-              "fast": 0,
+              "perfect": 6,
+              "fast": 1,
               "slow": 3,
-              "great": 2,
+              "great": 3,
               "good": 1,
-              "bad": 3,
+              "bad": 1,
               "poor": 1,
               "emptyPoor": 0,
-              "exScore": 12,
-              "score": 12,
+              "exScore": 15,
+              "score": 15,
               "gauge": {
                 "current": 100,
                 "max": 100,
@@ -566,7 +566,7 @@
                 "survival": false,
                 "failedMidPlay": false
               },
-              "maxCombo": 4
+              "maxCombo": 6
             },
             "iidx": {
               "total": 19,

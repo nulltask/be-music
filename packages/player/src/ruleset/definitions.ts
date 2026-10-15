@@ -41,7 +41,7 @@ export type BeatorajaJudgeAlgorithm = 'combo' | 'duration' | 'lowest' | 'score';
 
 /** How a ruleset plays the chart's long notes. */
 export type LongNoteStyle =
-  /** LR2: every long note is an LN — one deferred judgment, early release = BAD. */
+  /** LR2: every long note is an LN — one deferred judgment (see {@link LnEarlyReleaseRule} for a release before the tail). */
   | 'ln'
   /** beatoraja: per-note lnMode decides LN (1) vs CN (2) vs HCN (3). */
   | 'per-note'
@@ -57,6 +57,18 @@ export type LongNoteStyle =
  *   shortly before or after does nothing.
  */
 export type MineTrigger = 'press-or-hold' | 'hold';
+
+/**
+ * How an LN (long-note mode 1) let go before its tail is judged. The LN's single judgment is otherwise the head's,
+ * confirmed when the tail is reached.
+ *
+ * - `'head-unless-beyond-good'` — LR2 (OpenLR2 `ProcLongnote`, `LR2f.cpp:7612-7621`): a release more than the GOOD
+ *   window before the tail is a BAD; a later one keeps the head's judgment.
+ * - `'worse-of-head-and-tail'` — beatoraja (`JudgeManager` L533-545): the release is judged against the long-note-end
+ *   windows and the LN takes the worse of that and the head; when that is BAD or worse and the release came before
+ *   the tail, it is a BAD.
+ */
+export type LnEarlyReleaseRule = 'head-unless-beyond-good' | 'worse-of-head-and-tail';
 
 export interface GaugeGutsStep {
   /** Gauge value below (or at, when `inclusive`) which the damage multiplier applies. */
@@ -99,6 +111,8 @@ export interface RulesetConfig {
   /** LR2: a long-note head is never judged as a LATE bad — the press is ignored instead. */
   ignoreLateBadOnLnHead: boolean;
   longNoteStyle: LongNoteStyle;
+  /** How an LN released before its tail is judged (see {@link LnEarlyReleaseRule}). */
+  lnEarlyRelease: LnEarlyReleaseRule;
   /** IIDX: a BAD / POOR on a charge-note head skips the tail judgment entirely. */
   headBadSkipsTail: boolean;
   comboBreaksOnEmptyPoor: boolean;
@@ -702,6 +716,7 @@ export function resolveRuleset(
       multiBad: true,
       ignoreLateBadOnLnHead: true,
       longNoteStyle: 'ln',
+      lnEarlyRelease: 'head-unless-beyond-good',
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor: false,
       mineTrigger: 'press-or-hold',
@@ -731,6 +746,7 @@ export function resolveRuleset(
       multiBad: false,
       ignoreLateBadOnLnHead: false,
       longNoteStyle: 'per-note',
+      lnEarlyRelease: 'worse-of-head-and-tail',
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
@@ -755,6 +771,8 @@ export function resolveRuleset(
     multiBad: false,
     ignoreLateBadOnLnHead: false,
     longNoteStyle: 'charge',
+    // IIDX plays no LN (every long note is a charge note), so this never applies.
+    lnEarlyRelease: 'worse-of-head-and-tail',
     headBadSkipsTail: true,
     comboBreaksOnEmptyPoor: false,
     // IIDX has no mines; LR2's model stands in until there is evidence otherwise.

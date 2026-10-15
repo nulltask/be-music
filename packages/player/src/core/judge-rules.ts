@@ -1,7 +1,14 @@
 import type { LongNoteStyle } from '../ruleset/definitions.ts';
 import { classifyRulesetJudge, RULESET_JUDGE_NONE } from '../ruleset/judge.ts';
 import type { JudgeWindowSetUs } from '../ruleset/definitions.ts';
-import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from '../ruleset/long-note.ts';
+import {
+  isChargeLongNoteMode,
+  resolveEffectiveLongNoteMode,
+  resolveLnEarlyRelease,
+  type LnJudgeIndex,
+  type LnTimedJudge,
+} from '../ruleset/long-note.ts';
+import type { RulesetConfig } from '../ruleset/definitions.ts';
 import type { LongNoteMode, TimedPlayableNote } from '../playable-notes.ts';
 import type { JudgeKind } from './scoring.ts';
 import type { PlayerUiLongNoteMode } from './ui-signal-bus.ts';
@@ -75,6 +82,26 @@ export function combineLongNoteJudges(head: TimedManualJudge, tail: TimedManualJ
     return tail;
   }
   return Math.abs(head.signedDeltaMs) >= Math.abs(tail.signedDeltaMs) ? head : tail;
+}
+
+const LN_JUDGE_KINDS: readonly JudgeKind[] = ['PERFECT', 'GREAT', 'GOOD', 'BAD', 'POOR'];
+
+/**
+ * The single judgment of an LN released before its tail, by the ruleset's rule ({@link resolveLnEarlyRelease}).
+ * `releaseDeltaMs` is the release against the tail in the engine's convention (negative = before the tail).
+ */
+export function resolveLongNoteEarlyReleaseJudge(
+  ruleset: Pick<RulesetConfig, 'lnEarlyRelease'>,
+  head: TimedManualJudge,
+  releaseDeltaMs: number,
+  endWindows: JudgeWindowSetUs,
+): TimedManualJudge {
+  const toRuleset = (judge: TimedManualJudge): LnTimedJudge => ({
+    judge: resolveJudgeSeverity(judge.kind) as LnJudgeIndex,
+    dmUs: -judge.signedDeltaMs * 1000,
+  });
+  const released = resolveLnEarlyRelease(ruleset, toRuleset(head), -releaseDeltaMs * 1000, endWindows);
+  return { kind: LN_JUDGE_KINDS[released.judge]!, signedDeltaMs: -released.dmUs / 1000 };
 }
 
 /** True when a playable note carries a tail — a long / charge note rather than a single hit. */

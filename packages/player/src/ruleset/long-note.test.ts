@@ -5,7 +5,19 @@ import {
   isMultiBadCollectorTarget,
   longNoteOwesTailMiss,
   resolveEffectiveLongNoteMode,
+  resolveLnEarlyRelease,
 } from './long-note.ts';
+import type { JudgeWindowSetUs } from './definitions.ts';
+
+/** Symmetric end windows: PGREAT ±20 ms, GREAT ±60 ms, GOOD ±150 ms, BAD ±250 ms. */
+const END_WINDOWS: JudgeWindowSetUs = {
+  judges: [
+    [-20_000, 20_000],
+    [-60_000, 60_000],
+    [-150_000, 150_000],
+    [-250_000, 250_000],
+  ],
+};
 
 describe('ruleset long-note rules', () => {
   test('resolveEffectiveLongNoteMode maps the chart mode through the ruleset style', () => {
@@ -50,5 +62,39 @@ describe('ruleset long-note rules', () => {
     expect(ignoresLateLongNoteHeadBad(lr2, 3, true, 2)).toBe(false);
     expect(ignoresLateLongNoteHeadBad(lr2, 3, true, undefined)).toBe(false);
     expect(ignoresLateLongNoteHeadBad({ ignoreLateBadOnLnHead: false }, 3, true, 1)).toBe(false);
+  });
+
+  describe('resolveLnEarlyRelease', () => {
+    const lr2 = { lnEarlyRelease: 'head-unless-beyond-good' } as const;
+    const beatoraja = { lnEarlyRelease: 'worse-of-head-and-tail' } as const;
+    const pgreatHead = { judge: 0, dmUs: 5_000 } as const;
+
+    test('LR2 keeps the head judgment for a release inside the GOOD window', () => {
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 1, END_WINDOWS)).toEqual(pgreatHead);
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 100_000, END_WINDOWS)).toEqual(pgreatHead);
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 150_000, END_WINDOWS)).toEqual(pgreatHead);
+    });
+
+    test('LR2 BADs a release more than the GOOD window before the tail', () => {
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 150_001, END_WINDOWS)).toEqual({ judge: 3, dmUs: 150_001 });
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 2_000_000, END_WINDOWS)).toEqual({ judge: 3, dmUs: 2_000_000 });
+    });
+
+    test('beatoraja takes the worse of the head and the release', () => {
+      expect(resolveLnEarlyRelease(beatoraja, pgreatHead, 1, END_WINDOWS)).toEqual(pgreatHead);
+      expect(resolveLnEarlyRelease(beatoraja, pgreatHead, 100_000, END_WINDOWS)).toEqual({ judge: 2, dmUs: 100_000 });
+      expect(resolveLnEarlyRelease(beatoraja, { judge: 1, dmUs: -50_000 }, 10_000, END_WINDOWS)).toEqual({
+        judge: 1,
+        dmUs: -50_000,
+      });
+    });
+
+    test('beatoraja BADs a release that lands BAD or outside every window before the tail', () => {
+      expect(resolveLnEarlyRelease(beatoraja, pgreatHead, 200_000, END_WINDOWS)).toEqual({ judge: 3, dmUs: 200_000 });
+      expect(resolveLnEarlyRelease(beatoraja, pgreatHead, 2_000_000, END_WINDOWS)).toEqual({
+        judge: 3,
+        dmUs: 2_000_000,
+      });
+    });
   });
 });

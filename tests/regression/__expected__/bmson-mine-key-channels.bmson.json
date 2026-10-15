@@ -631,16 +631,16 @@
           "engine": {
             "lr2": {
               "total": 6,
-              "perfect": 2,
+              "perfect": 3,
               "fast": 1,
               "slow": 2,
               "great": 2,
               "good": 1,
-              "bad": 1,
+              "bad": 0,
               "poor": 0,
               "emptyPoor": 0,
-              "exScore": 6,
-              "score": 108333,
+              "exScore": 8,
+              "score": 141666,
               "gauge": {
                 "current": 100,
                 "max": 100,
@@ -652,7 +652,7 @@
                 "survival": false,
                 "failedMidPlay": false
               },
-              "maxCombo": 3
+              "maxCombo": 6
             },
             "beatoraja": {
               "total": 7,
