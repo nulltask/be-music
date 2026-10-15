@@ -1,23 +1,7 @@
-import { gzipSync } from 'node:zlib';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
-import {
-  createCoursePlaylog,
-  resolveChartRulesetFacts,
-  simulatePlaylog,
-  type BeMusicCoursePlaylog,
-  type BeMusicPlaylog,
-  type PlaylogCourseStageEntry,
-  type RulesetChartFacts,
-} from '@be-music/player/playlog';
-import {
-  makeChart,
-  makePlaylog,
-  ORIGIN,
-  signInAnonymously,
-  startTestBindings,
-  type TestChart,
-} from '../test/support.ts';
+import { ORIGIN, signInAnonymously, startTestBindings } from '../test/support.ts';
+import { courseBody, courseRun, submitCourse as postCourse, stageChart, type CourseOutcome } from '../test/courses.ts';
 import { createApp } from './app.ts';
 import { openDatabase } from './db/client.ts';
 import { course, courseScore, score } from './db/schema.ts';
@@ -39,6 +23,8 @@ const app = createApp({
 const fetchApp = (path: string, init?: RequestInit): Promise<Response> =>
   Promise.resolve(app.request(`${ORIGIN}${path}`, init, env));
 
+const submitCourse = (cookie: string | undefined, body: Uint8Array<ArrayBuffer>) => postCourse(fetchApp, cookie, body);
+
 beforeAll(async () => {
   ({ env, dispose } = await startTestBindings());
 });
@@ -46,110 +32,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await dispose();
 });
-
-const COURSE = { name: 'Test Dan', kind: 'grade' as const, constraints: ['grade_mirror', 'gauge_lr2'], trophies: [] };
-const STAGE_COURSE = { kind: 'grade' as const, gaugeSet: 'lr2' as const };
-
-/** Ten notes on lane 11, told apart by `lane` (where the last two fall). */
-function stageChart(lane: string): TestChart {
-  return makeChart(['#00111:01010101', '#00211:01010101', `#003${lane}:0101`]);
-}
-
-/** An unreached stage's facts, as the client derives them from the stage chart. */
-const factsOf = (chart: TestChart): RulesetChartFacts => resolveChartRulesetFacts(chart.json);
-
-interface RunOptions {
-  gauge?: BeMusicPlaylog['play']['gauge'];
-  play?: Partial<BeMusicPlaylog['play']>;
-  /** Changes a stage log after its carry-in is set. */
-  tamper?: (stage: BeMusicPlaylog, index: number) => void;
-}
-
-/**
- * A course run over `charts`: stage `i` hits `hits[i]` of its ten notes, carrying in what the previous stage left as the
- * LR2 simulation sees it (as the engine would have); the charts past `hits` are unreached.
- */
-function courseRun(charts: readonly TestChart[], hits: readonly number[], options: RunOptions = {}) {
-  const stages: PlaylogCourseStageEntry[] = [];
-  let previous: ReturnType<typeof simulatePlaylog> | undefined;
-  for (const [index, chart] of charts.entries()) {
-    if (index >= hits.length) {
-      stages.push({ played: false, facts: factsOf(chart), chartFingerprint: chart.chartFingerprint });
-      continue;
-    }
-    const carryIn =
-      previous === undefined
-        ? undefined
-        : { gauge: previous.gauge.final, combo: previous.course!.combo, maxCombo: previous.course!.maxCombo };
-    const playlog = makePlaylog(chart, {
-      noteCount: 10,
-      hits: hits[index]!,
-      play: {
-        gauge: options.gauge ?? 'GROOVE',
-        course: { ...STAGE_COURSE, ...(carryIn !== undefined ? { carryIn } : {}) },
-        ...options.play,
-      },
-    });
-    previous = simulatePlaylog(playlog, { ruleset: 'lr2' });
-    options.tamper?.(playlog, index);
-    stages.push({ played: true, playlog });
-  }
-  return createCoursePlaylog({ course: COURSE, stages, createdAt: '2026-10-15T00:00:00.000Z' });
-}
-
-/**
- * The body of a course run over `charts`: the documents of each played stage, and the chart of each unreached one
- * (`stageCharts` overrides them).
- */
-function courseBody(
-  log: BeMusicCoursePlaylog,
-  charts: readonly TestChart[],
-  withChartDocuments = true,
-  stageCharts?: ReadonlyArray<{ stage: number; chart: unknown }>,
-) {
-  const played = log.stages.filter((entry) => entry.played).length;
-  return gzipBody({
-    coursePlaylog: log,
-    stages: charts.slice(0, played).map((chart) => ({
-      playDocument: chart.playDocument,
-      ...(withChartDocuments ? { chartDocument: chart.chartDocument } : {}),
-    })),
-    stageCharts:
-      stageCharts ?? charts.flatMap((chart, stage) => (stage >= played ? [{ stage, chart: chart.json }] : [])),
-  });
-}
-
-function gzipBody(body: unknown): Uint8Array<ArrayBuffer> {
-  return Uint8Array.from(gzipSync(JSON.stringify(body)));
-}
-
-function submitCourse(cookie: string | undefined, body: Uint8Array<ArrayBuffer>): Promise<Response> {
-  return fetchApp('/api/v0/course-scores', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'content-encoding': 'gzip',
-      ...(cookie !== undefined ? { cookie } : {}),
-    },
-    body,
-  });
-}
-
-interface CourseOutcome {
-  courseScoreId: string;
-  courseFingerprint: string;
-  results: Array<{
-    ruleset: string;
-    exScore: number;
-    noteCount: number;
-    clearLamp: number;
-    missCount: number;
-    stagesPlayed: number;
-    rank: number;
-    players: number;
-    improved: { exScore: boolean; lamp: boolean; missCount: boolean };
-  }>;
-}
 
 describe('POST /api/v0/course-scores', () => {
   const charts = [stageChart('12'), stageChart('13'), stageChart('14')];
@@ -368,6 +250,55 @@ describe('course read endpoints', () => {
       results: [{ ruleset: 'lr2', exScore: 36 }, { ruleset: 'beatoraja' }, { ruleset: 'iidx' }],
     });
     expect((await fetchApp('/api/v0/course-scores/nothing')).status).toBe(404);
+  });
+});
+
+describe('course trophies and stage figures', () => {
+  const charts = [stageChart('19'), stageChart('1A')];
+  const trophies = [
+    { name: 'silvermedal', missRate: 20, scoreRate: 80 },
+    { name: 'goldmedal', missRate: 0, scoreRate: 100 },
+  ];
+  const run = (hits: number[]) => courseBody(courseRun(charts, hits, { course: { trophies } }), charts);
+
+  test('keep each run’s stages and the best trophy, a tie keeping the earlier run', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const silver = (await (await submitCourse(cookie, run([10, 8]))).json()) as CourseOutcome;
+    const lr2 = silver.results.find((result) => result.ruleset === 'lr2')!;
+    expect(lr2).toMatchObject({ trophy: 'silvermedal', improved: { trophy: true } });
+
+    const detail = (await (await fetchApp(`/api/v0/course-scores/${silver.courseScoreId}`)).json()) as {
+      results: Array<{ ruleset: string; trophyRank: number; stages: Array<Record<string, unknown>> }>;
+    };
+    const stored = detail.results.find((result) => result.ruleset === 'lr2')!;
+    expect(stored.trophyRank).toBe(1);
+    expect(stored.stages).toHaveLength(2);
+    expect(stored.stages[0]).toMatchObject({ exScore: 20, noteCount: 10, missCount: 0, cleared: true });
+    expect(stored.stages[1]).toMatchObject({ exScore: 16, noteCount: 10, missCount: 2 });
+
+    const gold = (await (await submitCourse(cookie, run([10, 10]))).json()) as CourseOutcome;
+    expect(gold.results.find((result) => result.ruleset === 'lr2')).toMatchObject({
+      trophy: 'goldmedal',
+      improved: { trophy: true },
+    });
+    const again = (await (await submitCourse(cookie, run([10, 9]))).json()) as CourseOutcome;
+    expect(again.results.find((result) => result.ruleset === 'lr2')).toMatchObject({
+      trophy: 'silvermedal',
+      improved: { trophy: false },
+    });
+
+    const path = `/api/v0/courses/${encodeURIComponent(gold.courseFingerprint)}/leaderboard`;
+    const mine = await fetchApp(`${path}/me?ruleset=lr2`, { headers: { cookie } });
+    expect(await mine.json()).toMatchObject({
+      exScore: 40,
+      playCount: 3,
+      trophy: 'goldmedal',
+      trophyScoreId: gold.courseScoreId,
+    });
+    const ranking = (await (await fetchApp(`${path}?ruleset=lr2&anonymous=1`)).json()) as {
+      entries: Array<Record<string, unknown>>;
+    };
+    expect(ranking.entries[0]).toMatchObject({ noteCount: 20, trophy: 'goldmedal', trophyScoreId: gold.courseScoreId });
   });
 });
 

@@ -82,9 +82,11 @@ export async function loadCourseScoreDetail(db: Database, id: string, viewerId: 
         maxCombo: row.maxCombo,
         stagesPlayed: row.stagesPlayed,
         trophy: row.trophy,
+        trophyRank: row.trophyRank,
         gaugeType: row.gaugeType,
         gaugeFinal: row.gaugeFinal,
         judges: row.judges,
+        stages: row.stages ?? null,
       }))
       .sort(byRulesetOrder),
   };
@@ -123,5 +125,7 @@ export async function loadMyCourseRank(
     clearLamp: mine.bestLamp,
     missCount: mine.minMiss,
     playCount: mine.playCount,
+    trophy: mine.bestTrophy,
+    trophyScoreId: mine.bestTrophyScoreId,
   };
 }
