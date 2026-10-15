@@ -125,6 +125,16 @@ export class CourseSession {
   }
 
   /**
+   * Records the stage the player gave up with ESC (its play log is marked `play.aborted`) and ends the course: a course
+   * given up is a failed run, as LR2 records it. A stage without a play log just ends the course.
+   */
+  giveUp(playlog: BeMusicPlaylog | undefined): void {
+    if (this.ended) return;
+    if (playlog?.results?.native !== undefined) this.logs.push(playlog);
+    this.ended = true;
+  }
+
+  /**
    * The course play log: the stages played, then every stage the run never reached with its chart facts (`factsOf`,
    * e.g. `resolveChartRulesetFacts`) and its chart fingerprint (`chartFingerprintOf`, which keys the course on the
    * Leaderboard). Both read the stage's song as the course plays it (its long-note constraint applied), as a played
