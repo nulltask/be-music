@@ -15,7 +15,8 @@ export default defineConfig(({ mode }) => {
       name: `be-music-leaderboard${suffix}`,
       compatibilityDate: '2026-10-01',
       compatibilityFlags: ['nodejs_compat'],
-      entrypoint: './src/index.ts',
+      // Bundled by Vite+ (`build:worker`, vite.worker.config.ts) from src/index.ts.
+      entrypoint: './dist/worker.js',
       workersDev: false,
       previewUrls: false,
       observability: { enabled: true },
