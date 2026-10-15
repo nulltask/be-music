@@ -339,6 +339,18 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     });
   };
 
+  // A replay of an auto-played log follows its tempo changes as its chart time reaches each, as a manual replay does.
+  const replayTempoChanges = options.replayTempoChanges ?? [];
+  let replayTempoChangeIndex = 0;
+  const followReplayTempoChanges = (nowSec: number): void => {
+    while (replayTempoChangeIndex < replayTempoChanges.length) {
+      const change = replayTempoChanges[replayTempoChangeIndex]!;
+      if (change.timeUs / 1_000_000 > nowSec) return;
+      replayTempoChangeIndex += 1;
+      changeTempo(change.tempo);
+    }
+  };
+
   const togglePause = (): void => {
     togglePlaybackPause({
       playbackClock,
@@ -526,6 +538,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           continue;
         }
 
+        followReplayTempoChanges(tempoClock.chartSecondsAt(nowMs));
         const scheduledMs = chartClock.scheduledMs();
         const nowSec = tempoClock.chartSecondsAt(nowMs);
         const scheduledSec = tempoClock.chartSecondsAt(scheduledMs);
@@ -605,6 +618,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         summary,
         maxCombo: autoJudge.scoreTracker.maxCombo,
         aborted: interruptedReason === 'escape',
+        // Where an ESC stopped the play, as a manual play records it, so a course counts the stage's time up to there.
+        ...(interruptedReason === 'escape' ? { abortedAtSeconds: Math.max(0, resolveAutoCommandSeconds()) } : {}),
       }),
     );
   }
