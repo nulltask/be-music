@@ -135,6 +135,20 @@ describe('pickBeatorajaThemeBgmPaths', () => {
     expect(pickBeatorajaThemeBgmPaths(['bgm/course_clear.wav'])).toEqual({ courseClear: 'bgm/course_clear.wav' });
   });
 
+  it('takes a stem from the sound set folder over the same stem elsewhere', () => {
+    // ModernChic: a voice clip named clear.ogg sorts before the sound set's own clear.ogg.
+    expect(
+      pickBeatorajaThemeBgmPaths([
+        'ModernChic/Root/sounds/vo/tsumugi/clear/clear.ogg',
+        'ModernChic/Root/sounds/vo/tsumugi/clear/failed.ogg',
+        'ModernChic/Sound/clear.ogg',
+        'ModernChic/Sound/fail.ogg',
+      ]),
+    ).toEqual({ clear: 'ModernChic/Sound/clear.ogg', fail: 'ModernChic/Sound/fail.ogg' });
+    // With no folder holding more of the slots, the shallowest file wins.
+    expect(pickBeatorajaThemeBgmPaths(['a/b/c/clear.wav', 'a/clear.wav'])).toEqual({ clear: 'a/clear.wav' });
+  });
+
   it('does not reuse one file for two slots', () => {
     expect(pickBeatorajaThemeBgmPaths(['sound/resultclose.wav'])).toEqual({ result: 'sound/resultclose.wav' });
   });

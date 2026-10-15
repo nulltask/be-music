@@ -210,21 +210,45 @@ const BGM_SLOT_STEMS: Record<keyof BeatorajaThemeBgm, string> = {
  * listed before `clear.wav` / `result.wav` cannot take their place.
  */
 export function pickBeatorajaThemeBgmPaths(paths: Iterable<string>): Partial<Record<keyof BeatorajaThemeBgm, string>> {
-  const audio: Array<{ path: string; stem: string }> = [];
+  const audio: Array<{ path: string; stem: string; dir: string; depth: number }> = [];
   for (const path of paths) {
     const lower = path.toLowerCase();
     if (!BGM_AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext))) continue;
     // Match on the file's basename — `sound/decide.wav` and `<theme-root>/decide.wav` and
     // `LR2files/Sound/<theme>/decide.wav` all count.
-    const base = lower.slice(lower.lastIndexOf('/') + 1);
-    audio.push({ path, stem: base.slice(0, base.lastIndexOf('.')) });
+    const slash = lower.lastIndexOf('/');
+    const base = lower.slice(slash + 1);
+    const dir = slash >= 0 ? lower.slice(0, slash) : '';
+    audio.push({ path, stem: base.slice(0, base.lastIndexOf('.')), dir, depth: lower.split('/').length });
   }
   const slots = Object.keys(BGM_SLOT_STEMS) as Array<keyof BeatorajaThemeBgm>;
+  const slotStems = new Set(Object.values(BGM_SLOT_STEMS));
+  // beatoraja plays these from one sound set, a folder holding `clear.wav` and the rest (`SystemSoundManager`), so a
+  // stem that also turns up elsewhere (ModernChic's voice clip `Root/sounds/vo/<voice>/clear/clear.ogg`) loses to the
+  // one in the folder holding the most of the slots' files, then to the shallowest.
+  const slotFilesByDir = new Map<string, Set<string>>();
+  for (const file of audio) {
+    if (!slotStems.has(file.stem)) continue;
+    const stems = slotFilesByDir.get(file.dir) ?? new Set<string>();
+    stems.add(file.stem);
+    slotFilesByDir.set(file.dir, stems);
+  }
+  const setSize = (file: { dir: string }): number => slotFilesByDir.get(file.dir)?.size ?? 0;
   const picked: Partial<Record<keyof BeatorajaThemeBgm, string>> = {};
   const taken = new Set<string>();
   // Exact stems first, across every slot, so a loose match can never claim a file another slot names exactly.
   for (const slot of slots) {
-    const match = audio.find((file) => file.stem === BGM_SLOT_STEMS[slot] && !taken.has(file.path));
+    let match: (typeof audio)[number] | undefined;
+    for (const file of audio) {
+      if (file.stem !== BGM_SLOT_STEMS[slot] || taken.has(file.path)) continue;
+      if (
+        match === undefined ||
+        setSize(file) > setSize(match) ||
+        (setSize(file) === setSize(match) && file.depth < match.depth)
+      ) {
+        match = file;
+      }
+    }
     if (match === undefined) continue;
     picked[slot] = match.path;
     taken.add(match.path);
