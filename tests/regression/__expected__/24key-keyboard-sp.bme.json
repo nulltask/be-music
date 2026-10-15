@@ -890,16 +890,16 @@
               "total": 100,
               "perfect": 33,
               "fast": 20,
-              "slow": 25,
+              "slow": 33,
               "great": 22,
-              "good": 23,
-              "bad": 8,
+              "good": 31,
+              "bad": 0,
               "poor": 14,
               "emptyPoor": 0,
               "exScore": 88,
               "score": 88,
               "gauge": {
-                "current": 67,
+                "current": 76,
                 "max": 100,
                 "clearThreshold": 80,
                 "initial": 20,
@@ -909,7 +909,7 @@
                 "survival": false,
                 "failedMidPlay": false
               },
-              "maxCombo": 22
+              "maxCombo": 24
             },
             "iidx": {
               "total": 104,

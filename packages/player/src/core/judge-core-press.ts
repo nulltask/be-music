@@ -6,6 +6,7 @@ import { ignoresLateLongNoteHeadBad, isChargeLongNoteMode, isMultiBadCollectorTa
 import { preferJudgeCandidate, type JudgeSelectionCandidate } from '../ruleset/selection.ts';
 import {
   isLongPlayableNote,
+  judgeDeltaUs,
   resolveManualTimedJudge,
   resolveRulesetLongNoteMode,
   toUiLongNoteMode,
@@ -53,7 +54,7 @@ function selectPressCandidate(
   const { config } = state;
   const { ruleset, scorableNotes } = config;
   const reachSeconds = maxJudgeReachSeconds(config, nowSec);
-  const inputTimeUs = nowSec * 1e6;
+  const inputTimeUs = Math.round(nowSec * 1e6);
   let best: TimedPlayableNote | undefined;
   let bestSelection: JudgeSelectionCandidate | undefined;
   // `scorableNotes` is sorted by time, so the scan visits candidates in the ascending order the selection algorithms
@@ -71,7 +72,7 @@ function selectPressCandidate(
       continue;
     }
     const windows = judgeWindowsFor(config, note.channel, note.seconds);
-    const judge = classifyRulesetJudge((note.seconds - nowSec) * 1e6, windows);
+    const judge = classifyRulesetJudge(judgeDeltaUs(note.seconds, nowSec), windows);
     if (judge === RULESET_JUDGE_NONE) {
       continue;
     }
@@ -85,8 +86,8 @@ function selectPressCandidate(
       continue;
     }
     const selection: JudgeSelectionCandidate = {
-      noteTimeUs: note.seconds * 1e6,
-      dmUs: (note.seconds - nowSec) * 1e6,
+      noteTimeUs: Math.round(note.seconds * 1e6),
+      dmUs: judgeDeltaUs(note.seconds, nowSec),
       judge,
       windows,
     };
@@ -134,7 +135,7 @@ function applyMultiBadCollector(
       continue;
     }
     const windows = judgeWindowsFor(config, note.channel, note.seconds);
-    const dmUs = (note.seconds - nowSec) * 1e6;
+    const dmUs = judgeDeltaUs(note.seconds, nowSec);
     const bad = windows.judges[3];
     const good = windows.judges[2];
     if (dmUs < bad[0] || dmUs > bad[1]) {
@@ -186,7 +187,7 @@ function hasEmptyPoorReferenceNote(state: JudgeCoreState, channels: ReadonlySet<
       if (noteSeconds === undefined) {
         continue;
       }
-      const dmUs = (noteSeconds - nowSec) * 1e6;
+      const dmUs = judgeDeltaUs(noteSeconds, nowSec);
       if (dmUs >= missWindow[0] && dmUs <= missWindow[1]) {
         return true;
       }

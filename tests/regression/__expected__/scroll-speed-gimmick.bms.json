@@ -706,7 +706,7 @@
               "good": 6,
               "bad": 0,
               "poor": 9,
-              "emptyPoor": 2,
+              "emptyPoor": 4,
               "exScore": 36,
               "score": 36,
               "gauge": {
