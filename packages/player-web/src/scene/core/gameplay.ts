@@ -72,12 +72,7 @@ import {
 } from './note-draw-window.ts';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import {
-  loadAssetBytes,
-  resolveChartBgaAsset,
-  resolveChartAudioAsset,
-  resolveChartPlayVariant,
-} from '../../collection/collection.ts';
+import { loadAssetBytes, resolveChartBgaAsset, resolveChartPlayVariant } from '../../collection/collection.ts';
 import { loadTextureFromBytes, loadVideoTextureFromBytes } from '../../media/textures.ts';
 import {
   type AudioBusChannel,
@@ -86,7 +81,6 @@ import {
   type CompressorParams,
   type TunableCompressor,
   type CompressorStage,
-  buildAudioBus,
   sanitizeBusVolume,
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
@@ -105,8 +99,6 @@ import {
   clampPlayTempo,
   elapsedToChartSeconds,
   resolveSamplePlaybackRate,
-  resolveSampleStretchRates,
-  stretchDecodedSamples,
   stretchSlicePlayback,
   type TempoPitchMode,
   type TimeStretchAlgorithm,
@@ -118,12 +110,11 @@ import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
 import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
-import { createWebAudioSession, decodedSampleKey, type WebAudioSession } from '../../runtime/web-audio-session.ts';
+import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
+import { collectChartVolumeMultipliers, createPlayAudioGraph, loadPlaySamples } from '../../chart/play-audio.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import {
-  collectBmsExWavVolumeMultipliers,
-  collectBmsWavCmdVolumeMultipliers,
   parseBmsBga,
   parseBmsSwBga,
   pickSwitchingBgaFrame,
@@ -131,7 +122,6 @@ import {
   resolveChart,
   resolveChartMainBpm,
   resolveChartReferenceBpm,
-  volWavToLinearGain,
   type BmsSwitchingBga,
   type RandomDraws,
   type ResolvedChart,
@@ -266,7 +256,6 @@ export const KEY_ON_FADE_OUT_MS = 120;
  */
 const KEY_ON_FLASH_HOLD_MS = 60;
 
-const AUDIO_DECODE_CONCURRENCY = 8;
 const BGA_DECODE_CONCURRENCY = 4;
 
 /**
@@ -1053,7 +1042,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
-   * chart by {@link prepareSong} via the shared `collectBmsWavCmdVolumeMultipliers` helper, looked up on every
+   * chart by {@link prepareSong} via the shared `collectChartVolumeMultipliers` helper, looked up on every
    * `playSample` / `playSampleByKey` so a slot with no `#WAVCMD` directive returns `undefined` and the fast path (no
    * extra GainNode) takes over.
    *
@@ -2324,21 +2313,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     );
     this.resolvedChart = resolved;
     this.randomDraws = randomDraws;
-    // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides (0..127 byte). Collect once now so every
-    // subsequent `playSample{,ByKey}` is a single Map lookup; slots without an entry fall through to the unity-gain
-    // fast path. Pitch / loop bytes are skipped — the helper only emits volume multipliers.
-    this.wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(resolved.bms.wavCmds, resolveBmsBase(resolved));
-    // BMS spec — `#EXWAVxx [flags] params filename` declares an extended WAV slot with optional pan / volume /
-    // frequency. Apply the volume side here so the existing per-trigger `connectSampleNodeWithWavCmdGain` splices the
-    // `#EXWAV` attenuation in alongside any `#WAVCMD 01 xx vv` value. Pan / freq are deliberately skipped — they need a
-    // StereoPannerNode / playbackRate split that the current graph doesn't yet wire up.
-    const exWavMultipliers = collectBmsExWavVolumeMultipliers(resolved.bms.exWav);
-    for (const [slot, multiplier] of exWavMultipliers) {
-      // Compose multiplicatively with `#WAVCMD` so authors who use both directives on the same slot get the combined
-      // attenuation rather than one silently overriding the other.
-      const previous = this.wavCmdVolumeMultipliers.get(slot) ?? 1;
-      this.wavCmdVolumeMultipliers.set(slot, previous * multiplier);
-    }
+    // BMS spec — `#WAVCMD 01 xx vv` and `#EXWAVxx` per-slot volumes, collected once so every sample trigger is a single
+    // Map lookup; slots without an entry take the unity-gain fast path.
+    this.wavCmdVolumeMultipliers = collectChartVolumeMultipliers(resolved);
     // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an animated BGA slot. Pre-parse every entry now so
     // per-frame BGA composition stays a single `Map.get` plus `pickSwitchingBgaFrame` (no per-frame regex / split).
     this.switchingBgas.clear();
@@ -2721,31 +2698,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (!this.source || !this.song) {
       return;
     }
-    // `latencyHint: 'interactive'` asks the browser for the lowest round-trip latency it can offer — at the cost of CPU
-    // efficiency vs `'playback'`. For a rhythm game the trade-off is right: keypress → sample audible delay is the
-    // player's primary perception of "responsiveness", and we'd rather burn a few extra cycles than land samples on a
-    // 20–30 ms late. Browsers that don't honor the hint silently ignore it.
-    this.audioContext = new AudioContext({ latencyHint: 'interactive' });
-    // AudioContext starts in `suspended` state on most browsers until a user gesture, and the *first* `node.start()`
-    // call on a still-suspended context can sit in the queue for ~30ms while the browser ramps the audio graph up.
-    // Calling `resume()` here — we're inside the user-gesture chain that started the play session — pre-warms it so the
-    // very first sample fires at baseline latency. Errors (no-gesture / already-running) are swallowed because both are
-    // harmless.
-    void this.audioContext.resume().catch(() => undefined);
-    // Surface the device-reported latency so the player has visibility into how much "free" delay the audio stack is
-    // adding before our schedule even begins. `baseLatency` is "how late the audio graph commits a buffer" (driver /
-    // hardware buffer headroom); `outputLatency` (when populated) tracks the OS audio queue. Combined they form the
-    // floor of "press → hear" latency we can't optimize away from JS.
-    const ctx = this.audioContext;
-    log.info('AudioContext ready', {
-      sampleRate: ctx.sampleRate,
-      state: ctx.state,
-      baseLatencyMs: typeof ctx.baseLatency === 'number' ? +(ctx.baseLatency * 1000).toFixed(2) : 'n/a',
-      outputLatencyMs:
-        typeof (ctx as { outputLatency?: number }).outputLatency === 'number'
-          ? +((ctx as { outputLatency: number }).outputLatency * 1000).toFixed(2)
-          : 'n/a',
-    });
     // Build the audio bus. See `audio-bus.ts` for the full architecture; in short:
     //
     // key sources → keyMixer → keyComp ↘ masterComp → makeup → destination ('split') BGM sources → bgmMixer → bgmComp ↗
@@ -2755,78 +2707,38 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // in-flight `BufferSourceNode`s — important because hundreds of one-shots come and go per second on dense charts.
     this.audioCompressorMode = this.options.audioCompressorMode ?? 'split';
     const initialMode: CompressorMode = this.options.audioCompressor === false ? 'off' : this.audioCompressorMode;
-    this.audioBus = buildAudioBus(this.audioContext, initialMode, {
+    // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
+    const chart = this.resolvedChart ?? this.song.chart;
+    // The AudioContext, the bus and `#VOLWAV` are built, and the samples decoded, as the beatoraja prep does
+    // (`chart/play-audio.ts`).
+    const graph = createPlayAudioGraph(chart, initialMode, {
       initialStages: this.options.audioCompressorStages,
       initialVolumes: this.audioVolumes,
       initialCompressorParams: this.audioCompressorParams,
     });
+    this.audioContext = graph.audioContext;
+    this.audioBus = graph.audioBus;
     // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
     this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
     this.audioBus.outputNode.connect(this.audioAnalyzer.input);
-    // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
-    const chart = this.resolvedChart ?? this.song.chart;
-    // BMS `#VOLWAV n` declares the chart's master volume scaling (100 = unity, 80 = 80 % loud), applied only for
-    // 0 < n < 200 as beatoraja does. Applying it here means every sample triggered for THIS chart (key bus, BGM bus,
-    // every compressor mode) flows through the single dedicated stage in the bus and the recorder captures the
-    // post-`#VOLWAV` signal, matching the CLI renderer. Charts that omit `#VOLWAV` stay at unity.
-    this.audioBus.setMasterGain(volWavToLinearGain(chart.bms.volWav));
-    // BMS spec: `#WAVxx` slot index is base-36 (`00..ZZ`), so a chart can declare up to 1296 unique samples. An earlier
-    // revision capped this preload at the first 256 entries, which silently dropped audio for any sample referenced by
-    // a slot 100+ on dense charts (a typical "Lunatic Crave"-tier chart easily hits 500+ unique WAVs). The parser
-    // already enforces the spec ceiling, so iterating every declared path here is safe; memory on a fully-populated
-    // chart is at most ~1300 decoded buffers, dominated by the underlying PCM rather than any per-entry overhead.
-    const wavPaths = Object.values(chart.resources.wav).filter((path): path is string => typeof path === 'string');
-    // BMS spec — `#PATH_WAV <prefix>` declares a sub-directory the chart's WAVs live under. The audio asset resolver
-    // walks the prefixed form first when set so a chart authored as `wav/` + bare `kick.wav` references resolves the
-    // file as `wav/kick.wav`.
-    const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
+    const pitchMode = this.options.tempoPitchMode ?? 'pitch';
     // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
     // play at their own pitch.
-    const pitchMode = this.options.tempoPitchMode ?? 'pitch';
-    const stretchRates =
-      pitchMode === 'keep-pitch'
-        ? resolveSampleStretchRates(chart.resources.wav, decodedSampleKey, this.tempo, this.options.nonstop)
-        : undefined;
-    await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
-      if (this.disposed || !this.source || !this.song || !this.audioContext) return;
-      // Audio-aware asset lookup: charts almost universally declare `.wav` paths but archives often ship `.ogg` /
-      // `.mp3`. Try the codec fallback chain (opus → ogg → mp3 → wav → original). Audio entries are stored as lazy
-      // `File` references in the source map (the drop pipeline defers their byte load to keep gigabytes of WAV
-      // samples out of memory), so `loadAssetBytes` is the unwrap step that actually calls `arrayBuffer()` on demand
-      // for THIS chart. The bounded worker pool prevents hundreds of browser audio decoders from allocating PCM at
-      // once on dense charts.
-      const entry = resolveChartAudioAsset(this.source, this.song.chartPath, path, {
-        pathPrefix: pathWavPrefix,
-      });
-      const bytes = await loadAssetBytes(entry);
-      if (this.disposed || !this.audioContext) return;
-      if (!bytes) {
-        return;
-      }
-      try {
-        // Cache key is the chart-declared path (not the actually loaded codec path) so `playSampleByKey` /
-        // `playSample` continue to look up by the chart's `#WAV` value.
-        const decoded = await this.audioContext.decodeAudioData(bytes.slice().buffer);
-        if (this.disposed) return;
-        this.decodedSamples.set(decodedSampleKey(path), decoded);
-      } catch {
-        // Browsers vary in codec support; unsupported samples are skipped. `decodeAudioData` also rejects when the
-        // AudioContext is closed mid-decode (e.g. ESC pressed during loading) — the catch swallows that as well so
-        // dispose can complete cleanly.
-      }
+    const stretched = await loadPlaySamples({
+      audioContext: this.audioContext,
+      chart,
+      source: this.source,
+      chartPath: this.song.chartPath,
+      samples: this.decodedSamples,
+      tempo: this.tempo,
+      tempoPitchMode: pitchMode,
+      tempoStretchAlgorithm: this.options.tempoStretchAlgorithm ?? 'signalsmith',
+      ...(this.options.nonstop !== undefined ? { nonstop: this.options.nonstop } : {}),
+      isCancelled: () => this.disposed,
     });
-    if (stretchRates !== undefined && stretchRates.size > 0 && this.audioContext) {
-      await stretchDecodedSamples(
-        this.audioContext,
-        this.decodedSamples,
-        stretchRates,
-        this.options.tempoStretchAlgorithm ?? 'signalsmith',
-        () => this.disposed,
-      );
-      // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
-      if (this.bmsonSlicePlayback !== undefined) {
-        this.bmsonSlicePlayback = stretchSlicePlayback(this.bmsonSlicePlayback, this.tempo);
-      }
+    // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
+    if (stretched && this.bmsonSlicePlayback !== undefined) {
+      this.bmsonSlicePlayback = stretchSlicePlayback(this.bmsonSlicePlayback, this.tempo);
     }
     // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
     // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
