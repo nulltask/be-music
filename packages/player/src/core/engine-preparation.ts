@@ -1,9 +1,7 @@
-import type { ResolvedPlayChart, ResolvePlayChartOptions } from './engine-types.ts';
 import {
   drawRandomOutcomes,
   firesBeforeTempoReversal,
   hasControlFlow,
-  resolveChart,
   type RandomDraws,
   type ResolvedChart,
 } from '@be-music/chart';
@@ -12,9 +10,10 @@ import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { type LaneBinding } from './lane-layout.ts';
 import { type PlayerUiSignalBus } from './ui-signal-bus.ts';
-import { rulesetChartFactsFromChart, type RulesetChartFacts, type RulesetConfig } from '../ruleset/index.ts';
-import { initializePlayerUiRuntime, preparePlaybackChart } from './bootstrap.ts';
+import { type RulesetConfig } from '../ruleset/index.ts';
+import { initializePlayerUiRuntime } from './bootstrap.ts';
 import { createAudioSessionIfEnabled } from './engine-audio.ts';
+import { resolveChartRulesetFacts, resolveEngineChart, resolvePlayChart } from './play-chart.ts';
 import { delay } from './engine-clock.ts';
 import {
   type AudioSession,
@@ -25,6 +24,9 @@ import {
   type PlayerOptions,
   type RandomPatternSelection,
 } from './engine-types.ts';
+
+// The chart-side steps of a play are runtime-neutral and live in `play-chart.ts`; the engine re-exports them.
+export { resolveChartRulesetFacts, resolveEngineChart, resolvePlayChart };
 
 /**
  * Play preparation: chart resolution for play, load progress, and the UI / audio runtime start-up.
@@ -284,16 +286,6 @@ export async function initializePlaybackRuntimeResources(params: {
 }
 
 /**
- * The hosts' single control-flow step: draws `source`'s `#RANDOM` / `#SWITCH` outcomes once (or takes
- * `options.randomDraws`) and resolves the chart with them. Every consumer of the play — the scene, the engine, the
- * result screen, the play log — then works from the returned chart and draws, so nothing rolls `#RANDOM` again.
- */
-export function resolvePlayChart(source: BeMusicJson, options: ResolvePlayChartOptions = {}): ResolvedPlayChart {
-  const randomDraws = options.randomDraws ?? drawRandomOutcomes(source, options.random ?? Math.random);
-  return { chart: resolveBmsControlFlowWithDraws(source, randomDraws), randomDraws };
-}
-
-/**
  * Draws `json`'s `#RANDOM` / `#SWITCH` outcomes with `randomSource` and resolves the chart with them, reporting the
  * `#RANDOM` / `#SETRANDOM` patterns for the summary. Shorthand for `drawRandomOutcomes` + `resolveBmsControlFlowWithDraws`.
  */
@@ -313,19 +305,6 @@ function resolvePlaybackControlFlow(json: BeMusicJson, draws: RandomDraws): Cont
     resolvedJson: hasControlFlow(json) ? resolveBmsControlFlowWithDraws(json, draws) : cloneJson(json),
     randomPatterns: randomPatternsFromDraws(draws),
   };
-}
-
-/**
- * The engine's Resolved layer for a play: `resolveChart` over the control-flow-resolved chart, with the host's lane mode
- * inputs and long-note inference. Timing, triggers, timelines and chart facts all come from it.
- */
-export function resolveEngineChart(resolvedJson: BeMusicJson, options: PlayerOptions): ResolvedChart {
-  return resolveChart(resolvedJson, {
-    randomDraws: options.randomDraws,
-    chartPath: options.laneModeExtension,
-    playVariant: options.playVariant,
-    inferBmsLnTypeWhenMissing: Boolean(options.inferBmsLnTypeWhenMissing),
-  });
 }
 
 export function resolvePlayerChart(json: BeMusicJson, options: PlayerOptions): ControlFlowResolutionResult {
@@ -430,17 +409,4 @@ export async function settleMaybeAsyncWithTimeout(
     return true;
   }
   return settleWithTimeout(Promise.resolve(task), timeoutMs);
-}
-
-/**
- * The ruleset facts of a chart a host has not played: what a course result needs to count the notes of a stage the
- * run never reached. `#RANDOM` / `#SWITCH` take their first branch, so the count is the same every time.
- */
-export function resolveChartRulesetFacts(
-  json: BeMusicJson,
-  options: Pick<PlayerOptions, 'laneModeExtension' | 'playVariant' | 'inferBmsLnTypeWhenMissing'> = {},
-): RulesetChartFacts {
-  const { chart, randomDraws } = resolvePlayChart(json, { random: () => 0 });
-  const resolved = resolveEngineChart(chart, { ...options, randomDraws });
-  return rulesetChartFactsFromChart(chart, preparePlaybackChart(resolved, options));
 }
