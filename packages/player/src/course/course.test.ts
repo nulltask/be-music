@@ -117,7 +117,8 @@ describe('parseLr2CourseFile', () => {
       name: '発狂初段',
       kind: 'grade',
       stages: [{ md5: MD5_A }, { md5: MD5_B }],
-      constraints: ['grade_mirror', 'gauge_lr2'],
+      // LR2 turns the lane options off for a GRADE course (Main.cpp M1124-M1125).
+      constraints: ['grade', 'gauge_lr2'],
       trophies: [],
       release: true,
       keyMode: 7,

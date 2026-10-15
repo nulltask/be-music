@@ -51,7 +51,8 @@ XML の `<courselist>` に、`title`、`line`（キーモード）、`type`、`h
 - **文字コード**：BOM、XML 宣言の `encoding`、厳密な UTF-8、Shift_JIS の順に判定します（`decodeCourseText`）。
 - **`hash`**：32 文字のヘッダーに続き、ステージごとに 32 文字の譜面 MD5 が並びます。LR2 が読むのは最大 10 ステージで（OpenLR2 `LR2f.cpp` L18078-L18081）、NONSTOP コースは先頭の 5 ステージだけを遊びます（L25857-L25858）。そのため NONSTOP コースはその 5 ステージとして読みます。ヘッダーの 10 文字目がコースの種類です。
 - **`type`**：OpenLR2 にならい（`expert` / `nonstop` / `grade` テーブルとスキンの op 291-293）、`0` が EXPERT、`1` が NONSTOP、`2` が GRADE です。`type` 要素がなければヘッダーの 10 文字目を使います。
-- **制約**：この形式には制約の欄がありません。GRADE のコースには `grade_mirror` と `gauge_lr2` を付けます。jbmstable-parser が表の旧形式 `grade` リストに付けるのと同じ読み方で、LR2 の段位は MIRROR を許すというコミュニティでの理解に基づきます。LR2 自身のオプション制限は逆コンパイル結果からは確認できません。
+- **制約**：この形式には制約の欄がありません。GRADE のコースには `grade` と `gauge_lr2` を付けます。LR2 は GRADE コースの開始時に両サイドのレーンオプションをオフにする（[Main.cpp M1124-M1170](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1124-L1170)）ので、正規しか使えません。表の旧形式 `grade` リストは jbmstable-parser の読み方どおり `grade_mirror` のままです。
+- **LR2 のその他のリセット**：同じ処理で、EASY と G-ATTACK のゲージは GROOVE になり、HIDDEN / SUDDEN、アシスト（オートスクラッチなど）、BATTLE、DP の FLIP、プレイテンポ（ピッチ）、追加の変化オプションがオフになります。LR2 はこれを設定に書き込みますが、ホストはコースのステージにだけ適用するので、プレイヤーの設定はコースの後に戻ります（`@be-music/player-web/collection` の `isLr2GradeCourse`、`resolveLr2GradeCoursePlaySettings`）。対象は `.lr2crs` から読んだ GRADE コースとコース作成で作った GRADE コースで、表や beatoraja の段位は対象外です。
 - ステージがない、ステージの hash が不正、種類が未知のコースは読み飛ばします。
 
 ### beatoraja の `course/*.json`
@@ -170,10 +171,10 @@ stateDiagram-v2
 ```
 
 - **曲の追加。** `appendCourseDraftStage` は `CourseDraft` の末尾に曲を足します。曲は 5 曲まで（`LR2_COURSE_MAKER_MAX_STAGES`）で、すべて 1 曲目と同じキーモードである必要があり、譜面の MD5 で記録します。同じ曲を 2 回入れても構いません。`removeLastCourseDraftStage` は、LR2 の右クリックと同じく最後の曲を外します。
-- **保存。** `finishCourseDraft` は、作成中のコースを `parseLr2CourseFile` が読み戻すのと同じ形の `CourseDefinition` にします。NONSTOP コースには、ステージ 1-5 の後ろに既定のつなぎ方（LR2 のボタン 268）が入ります。GRADE コースは LR2 の段位として読みます（`grade_mirror`、`gauge_lr2`）。
+- **保存。** `finishCourseDraft` は、作成中のコースを `parseLr2CourseFile` が読み戻すのと同じ形の `CourseDefinition` にします。NONSTOP コースには、ステージ 1-5 の後ろに既定のつなぎ方（LR2 のボタン 268）が入ります。GRADE コースは LR2 の段位として読みます（`grade`、`gauge_lr2`）。
 - **ハッシュ。** `buildLr2CourseHash` は、LR2 の 32 文字のヘッダー（ステージ 1-10 それぞれの後のつなぎ方を `0`-`5` で、10 文字目に種類、残りは 0）と各ステージの MD5 を書きます。LR2 は 28-31 文字目にプレイヤーのパスワードの MD5 の先頭 4 文字を入れますが、ブラウザにはパスワードがないので `0` のままです。
 - **編集。** `withNonstopConnection` は、あるステージの後のつなぎ方を変えます（LR2 のボタン 240-248。`stepLr2NonstopConnection` の順に、右半分で +1、左半分で -1 進みます）。LR2 はコースの長さにかかわらず、ステージ 1-9 のつなぎ方を持ちます。
-- **縛り。** LR2 のコース作成には縛りを設定する手段がありません（オプション禁止のボタンは実装されませんでした）。そのため、作ったコースは `defaultCourseMakerConstraints` の縛りになります（GRADE は LR2 の段位として MIRROR 可・LR2 ゲージ、ほかは縛りなし）。ホストが beatoraja のコースエディタのように縛りを設定することもできます。作成中は `CourseDraft.constraints`、作った後は `withCourseConstraints` で、グループごとに 1 つに正規化します。
+- **縛り。** LR2 のコース作成には縛りを設定する手段がありません（オプション禁止のボタンは実装されませんでした）。そのため、作ったコースは `defaultCourseMakerConstraints` の縛りになります（GRADE は LR2 の段位としてレーンオプションなし・LR2 ゲージ、ほかは縛りなし）。ホストが beatoraja のコースエディタのように縛りを設定することもできます。作成中は `CourseDraft.constraints`、作った後は `withCourseConstraints` で、グループごとに 1 つに正規化します。
 - **共有。** `serializeLr2CourseFile` は、コースを UTF-8 の `.lr2crs` に書きます。`parseLr2CourseFile` で読み戻すと同じコースになりますが、この形式には縛りを書く場所がありません。`serializeBeatorajaCourseFile` は縛りを残したまま beatoraja の `course/*.json` を書きます（beatoraja にない NONSTOP コースは含めません）。
 
 `CourseMaker`（`@be-music/player-web/collection`）は、ホストのためにプレイヤーのコースと作成中のコースを持ちます。`resolveCourseMakerFolders` は、LR2 と同じくそれらを並べます。種類ごとにコースフォルダが 1 つあり、その中にコースが並んで、最後に NEW COURSE バーが来ます。

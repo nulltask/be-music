@@ -103,7 +103,7 @@ test('restores saved courses without reporting a change', async () => {
 test('sets the constraints of the course being made and of a saved one', async () => {
   const courses = maker();
   courses.start('grade');
-  expect(courses.draft?.constraints).toEqual(['grade_mirror', 'gauge_lr2']);
+  expect(courses.draft?.constraints).toEqual(['grade', 'gauge_lr2']);
   courses.setConstraints(['grade', 'no_speed']);
   await courses.append(SEVEN[0]!);
   const saved = courses.finish()!;

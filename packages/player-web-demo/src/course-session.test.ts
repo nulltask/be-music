@@ -1,5 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
-import { parseBeatorajaCourseData } from '@be-music/player/course';
+import { parseBeatorajaCourseData, parseLr2CourseFile } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import type { BeMusicSongRecord } from '@be-music/player-web/skin';
@@ -321,5 +321,42 @@ describe('joinCourseStageHistories', () => {
   test('shares the width evenly when no stage has a length', () => {
     const joined = joinCourseStageHistories([], [0, 0]);
     expect(joined.gaugeHistory.map((sample) => sample.progress)).toEqual([0, 0.5, 0.5, 1]);
+  });
+});
+
+describe('CourseSession.playSettings', () => {
+  const picks = {
+    random1P: 'RANDOM' as const,
+    random2P: 'MIRROR' as const,
+    dpFlip: true,
+    gauge: 'EASY' as const,
+    hiddenSudden1P: 'SUDDEN' as const,
+    hiddenSudden2P: 'OFF' as const,
+    autoScratch1P: true,
+    autoScratch2P: false,
+    tempo: 0.9,
+  };
+
+  test('resets an LR2 GRADE course’s stage to what LR2 allows, lane options included', () => {
+    const definition = parseLr2CourseFile(
+      `<courselist><course><title>Dan</title><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${MD5[0]}</hash></course></courselist>`,
+    )[0]!;
+    const session = new CourseSession({ ...course(), definition });
+    expect(session.playSettings(picks)).toEqual({
+      random1P: 'OFF',
+      random2P: 'OFF',
+      dpFlip: false,
+      gauge: 'GROOVE',
+      hiddenSudden1P: 'OFF',
+      hiddenSudden2P: 'OFF',
+      autoScratch1P: false,
+      autoScratch2P: false,
+      tempo: 1,
+    });
+  });
+
+  test('applies only the lane-option constraint to another course', () => {
+    const session = new CourseSession(course(['MIRROR']));
+    expect(session.playSettings(picks)).toEqual({ ...picks, random1P: 'OFF', random2P: 'OFF', dpFlip: false });
   });
 });

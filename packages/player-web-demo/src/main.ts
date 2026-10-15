@@ -3277,9 +3277,23 @@ class PlayerWebDemoApp {
     }
 
     // 3. Audio + BGA prep — owns the AudioContext for this play. The play tempo is read once, here, for the prep and the
-    // engine alike.
-    const tempoPercent = this.guiState.tempoPercent;
-    const tempo = tempoFromPercent(tempoPercent);
+    // engine alike. A course stage plays with what its course allows (its lane-option constraint's FLIP, and an LR2
+    // GRADE course's resets: EASY gauge to GROOVE, auto scratch, FLIP and the tempo off).
+    const picked = {
+      random1P: this.guiState.random1P,
+      random2P: this.guiState.random2P,
+      dpFlip: this.guiState.dpFlip,
+      gauge: this.guiState.gauge,
+      hiddenSudden1P: 'OFF' as const,
+      hiddenSudden2P: 'OFF' as const,
+      autoScratch1P: this.guiState.autoScratch1P,
+      autoScratch2P: this.guiState.autoScratch2P,
+      tempo: tempoFromPercent(this.guiState.tempoPercent),
+    };
+    const played =
+      courseStage !== undefined && this.courseSession !== undefined ? this.courseSession.playSettings(picked) : picked;
+    const tempo = played.tempo;
+    const tempoPercent = tempo === 1 ? 0 : this.guiState.tempoPercent;
     const source = resolveSongSource(this.collection, song);
     if (!source) {
       this.setStatus(`Beatoraja gameplay: no source for ${song.title}`);
@@ -3366,15 +3380,8 @@ class PlayerWebDemoApp {
       // DP flip — when the user enabled it via the Play options (Debug Menu / LR2 select panel, two-way synced
       // into `guiState`) AND the chart is a DP variant (10 / 14 keys), the chart's lane channels mirror at
       // construction. SP charts pass through unchanged because they have no 2P channels to swap with.
-      // A course stage plays with the FLIP its lane-option constraint allows.
-      dpFlip:
-        courseStage !== undefined && this.courseSession !== undefined
-          ? this.courseSession.laneOptions({
-              random1P: this.guiState.random1P,
-              random2P: this.guiState.random2P,
-              dpFlip: this.guiState.dpFlip,
-            }).dpFlip
-          : this.guiState.dpFlip,
+      // A course stage plays with the FLIP its course allows.
+      dpFlip: played.dpFlip,
       initialHiSpeed: this.guiState.hiSpeed,
       onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
       ...(courseStage !== undefined
@@ -3388,11 +3395,11 @@ class PlayerWebDemoApp {
         // The play tempo the prep readied the audio and BGA for; the engine judges in chart time.
         speed: tempo,
         judgeRuleset: this.guiState.judgeRuleset,
-        autoScratch: this.guiState.autoScratch1P || this.guiState.autoScratch2P,
-        gauge: this.guiState.gauge,
+        autoScratch: played.autoScratch1P || played.autoScratch2P,
+        gauge: played.gauge,
         ...(courseStage !== undefined ? { course: courseStage.course } : {}),
         recordPlaylog: {
-          gauge: this.guiState.gauge,
+          gauge: played.gauge,
           ...(chartHashes !== undefined ? { chartSha256: chartHashes.sha256, chartMd5: chartHashes.md5 } : {}),
           recorder: PLAYLOG_RECORDER,
         },
@@ -4912,25 +4919,36 @@ class PlayerWebDemoApp {
     const nonstop = overrides.nonstop;
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay, ...(replay !== undefined ? { replay } : {}) } };
+    // A course limits the lane options (both sides and DP FLIP) to what its constraint allows (`grade` none,
+    // `grade_mirror` MIRROR, ...), a NONSTOP course's stitched play included, and an LR2 GRADE course also turns off
+    // what LR2 turns off when one starts (EASY gauge, HIDDEN / SUDDEN, auto scratch, FLIP, the tempo).
+    const picked = {
+      random1P: this.guiState.random1P,
+      random2P: this.guiState.random2P,
+      dpFlip: this.guiState.dpFlip,
+      gauge: this.guiState.gauge,
+      hiddenSudden1P: playOptions?.hiddenSudden1P ?? ('OFF' as const),
+      hiddenSudden2P: playOptions?.hiddenSudden2P ?? ('OFF' as const),
+      autoScratch1P: this.guiState.autoScratch1P,
+      autoScratch2P: this.guiState.autoScratch2P,
+      tempo: replay !== undefined ? (replay.play.tempo ?? 1) : tempoFromPercent(this.guiState.tempoPercent),
+    };
+    const lanes =
+      this.courseSession !== undefined && courseStage !== undefined
+        ? this.courseSession.playSettings(picked)
+        : nonstop !== undefined
+          ? { ...picked, ...resolveCourseLaneOptions(nonstop.course.definition.constraints, picked) }
+          : picked;
+    const tempo = lanes.tempo;
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
     // course instead.
     // A play at another tempo is practice: it is not ranked, and leaves the records alone too.
-    const tempo = replay !== undefined ? (replay.play.tempo ?? 1) : tempoFromPercent(this.guiState.tempoPercent);
     this.activePlayRecordKey = playRecordKey(song, overrides.chartHashes?.sha256, {
       autoPlay,
       replay: replay !== undefined,
       course: courseStage !== undefined || nonstop !== undefined,
       tempo,
     });
-    // A course limits the lane options (both sides and DP FLIP) to what its constraint allows (`grade` none,
-    // `grade_mirror` MIRROR, ...), a NONSTOP course's stitched play included.
-    const picked = { random1P: this.guiState.random1P, random2P: this.guiState.random2P, dpFlip: this.guiState.dpFlip };
-    const lanes =
-      this.courseSession !== undefined && courseStage !== undefined
-        ? this.courseSession.laneOptions(picked)
-        : nonstop !== undefined
-          ? resolveCourseLaneOptions(nonstop.course.definition.constraints, picked)
-          : picked;
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
       // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
@@ -4945,19 +4963,19 @@ class PlayerWebDemoApp {
       bgaSize: playOptions?.bgaSize,
       scoreGraph: playOptions?.scoreGraph,
       hsFix: playOptions?.hsFix,
-      hiddenSudden1P: playOptions?.hiddenSudden1P,
-      hiddenSudden2P: playOptions?.hiddenSudden2P,
+      hiddenSudden1P: lanes.hiddenSudden1P,
+      hiddenSudden2P: lanes.hiddenSudden2P,
       shutter: playOptions?.shutter,
       laneCover: playOptions?.laneCover,
       // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge / judge ruleset govern
       // judging and the gauge readout, and the lane transforms stay off because the view re-applies the recorded
       // arrangement directly (see `PixiGameplayViewOptions.replay`).
-      autoScratch1P: replay !== undefined ? replay.play.autoScratch : this.guiState.autoScratch1P,
-      autoScratch2P: replay !== undefined ? false : this.guiState.autoScratch2P,
+      autoScratch1P: replay !== undefined ? replay.play.autoScratch : lanes.autoScratch1P,
+      autoScratch2P: replay !== undefined ? false : lanes.autoScratch2P,
       dpFlip: replay !== undefined ? false : lanes.dpFlip,
       random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
       random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,
-      gauge: replay !== undefined ? replay.play.gauge : this.guiState.gauge,
+      gauge: replay !== undefined ? replay.play.gauge : lanes.gauge,
       ...(courseStage !== undefined
         ? { course: courseStage.course, courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }
         : {}),

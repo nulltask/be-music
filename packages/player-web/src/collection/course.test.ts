@@ -1,6 +1,6 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
-import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData } from '@be-music/player/course';
+import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData, parseLr2CourseFile } from '@be-music/player/course';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createCourseSongRecord,
@@ -11,7 +11,9 @@ import {
   isCourseHiSpeedLocked,
   readCourseFile,
   resolveCourseFolders,
+  isLr2GradeCourse,
   resolveCourseLaneOptions,
+  resolveLr2GradeCoursePlaySettings,
   type CourseLaneOption,
   resolveCourseStageSettings,
 } from './course.ts';
@@ -275,5 +277,44 @@ describe('course stage settings', () => {
   test('isCourseHiSpeedLocked reads no_speed', () => {
     expect(isCourseHiSpeedLocked(['no_speed'])).toBe(true);
     expect(isCourseHiSpeedLocked(['grade'])).toBe(false);
+  });
+});
+
+describe('LR2 GRADE course resets', () => {
+  const lr2 = parseLr2CourseFile(
+    `<courselist><course><title>Dan</title><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${MD5_A}</hash></course></courselist>`,
+  )[0]!;
+  const picks = {
+    gauge: 'EASY' as const,
+    hiddenSudden1P: 'SUDDEN' as const,
+    hiddenSudden2P: 'HID+SUD' as const,
+    autoScratch1P: true,
+    autoScratch2P: true,
+    dpFlip: true,
+    tempo: 1.2,
+    random1P: 'MIRROR' as const,
+  };
+
+  test('tells an LR2 GRADE course from a table or beatoraja grade', () => {
+    expect(isLr2GradeCourse(lr2)).toBe(true);
+    expect(isLr2GradeCourse({ ...lr2, kind: 'expert' })).toBe(false);
+    expect(isLr2GradeCourse({ kind: 'grade', source: { format: 'table', legacyGrade: true } })).toBe(false);
+  });
+
+  test('turns off what LR2 turns off when a GRADE course starts, keeping the rest', () => {
+    expect(resolveLr2GradeCoursePlaySettings(lr2, picks)).toEqual({
+      gauge: 'GROOVE',
+      hiddenSudden1P: 'OFF',
+      hiddenSudden2P: 'OFF',
+      autoScratch1P: false,
+      autoScratch2P: false,
+      dpFlip: false,
+      tempo: 1,
+      random1P: 'MIRROR',
+    });
+    // HARD and DEATH stay.
+    expect(resolveLr2GradeCoursePlaySettings(lr2, { ...picks, gauge: 'HARD' }).gauge).toBe('HARD');
+    // Another course keeps every pick.
+    expect(resolveLr2GradeCoursePlaySettings({ ...lr2, kind: 'expert' }, picks)).toBe(picks);
   });
 });
