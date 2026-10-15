@@ -82,6 +82,17 @@ describe('CourseSession', () => {
     expect(session.nextStage()!.courseInfo.stageIndex).toBe(1);
   });
 
+  test('records a stage given up with ESC and ends the course there', () => {
+    const session = new CourseSession(course([]));
+    session.recordStage(stageLog({}));
+    const givenUp = stageLog({ gauge: { type: 'GRADE', final: 70, cleared: true } });
+    givenUp.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', aborted: true };
+    session.giveUp(givenUp);
+    expect(session.finished).toBe(true);
+    expect(session.stagesPlayed).toBe(2);
+    expect(session.nextStage()).toBeUndefined();
+  });
+
   test('ends on a failed stage and after the last stage', () => {
     const failing = new CourseSession(course());
     expect(
