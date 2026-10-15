@@ -66,6 +66,7 @@ import {
   splitDroppedSongAndThemeFiles,
   createSongHashLookup,
   isCourseFilePath,
+  drawBrowserRandomCourse,
   readCourseFile,
   resolveCourseFolders,
   type BrowserCourseEntry,
@@ -1992,13 +1993,17 @@ class PlayerWebDemoApp {
     for (const file of files) {
       const path = file.webkitRelativePath || file.name;
       try {
-        const group = readCourseFile(path, new Uint8Array(await file.arrayBuffer()));
-        if (group === undefined) {
+        const groups = readCourseFile(path, new Uint8Array(await file.arrayBuffer()));
+        if (groups.length === 0) {
           dropLog.warn(`skipped (no course): ${path}`);
           continue;
         }
-        this.courseGroups.push(group);
-        dropLog.info(`course file: ${path} · courses=${group.courses.length}`);
+        this.courseGroups.push(...groups);
+        for (const group of groups) {
+          dropLog.info(
+            `course file: ${path} · ${group.label} · courses=${group.courses.length} random=${group.randomCourses?.length ?? 0}`,
+          );
+        }
       } catch (error) {
         dropLog.warn(`skipped (course read failed): ${path}`, error);
       }
@@ -2019,11 +2024,28 @@ class PlayerWebDemoApp {
     };
   }
 
-  /** Starts a course from its first stage. */
-  private startCourse(course: BrowserCourseEntry): void {
-    if (!course.playable) return;
+  /**
+   * Starts a course from its first stage. A beatoraja random course first draws its stages from the library (each
+   * stage filter against the songs and their chart hashes); a stage that finds no chart leaves it unstarted.
+   */
+  private async startCourse(entry: BrowserCourseEntry): Promise<void> {
+    if (!entry.playable) return;
+    let course = entry;
+    if (entry.random !== undefined) {
+      const candidates = await Promise.all(
+        this.collection.songs.map(async (song) => ({ song, ...(await this.resolveChartHashes(song)) })),
+      );
+      const drawn = drawBrowserRandomCourse(entry, candidates, Math.random);
+      if (!drawn.ok) {
+        this.setStatus(
+          `${entry.definition.name}: stage ${drawn.stage + 1} ${drawn.reason === 'no-candidates' ? 'matches no chart' : `has an invalid filter (${drawn.error ?? ''})`}`,
+        );
+        return;
+      }
+      course = drawn.course;
+    }
     this.courseSession = new CourseSession(course);
-    void this.playNextCourseStage();
+    await this.playNextCourseStage();
   }
 
   /** Plays the running course's next stage, or shows the course result when it is over. */
@@ -3191,7 +3213,7 @@ class PlayerWebDemoApp {
       skinAudio: this.beatorajaSkinAudio,
       songs: this.collection.songs,
       ...(this.collection.courseFolders !== undefined ? { courseFolders: this.collection.courseFolders } : {}),
-      onCoursePicked: (course: BrowserCourseEntry) => this.startCourse(course),
+      onCoursePicked: (course: BrowserCourseEntry) => void this.startCourse(course),
       // Pass the collection so the scene's `ChartPreviewEngine` can resolve each focused
       // song's `BrowserSongAssetSource` and play `#PREVIEW` audio (or fall back to in-place
       // chart playback) on cursor settle. Without this, the beatoraja select runs silent on
@@ -4220,7 +4242,7 @@ class PlayerWebDemoApp {
       },
       onCourseSelected: (course: BrowserCourseEntry) => {
         void this.selectView?.playDecideSound();
-        this.startCourse(course);
+        void this.startCourse(course);
       },
       onSearchActivate: () => this.search.openFromPointer(),
     };
