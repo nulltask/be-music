@@ -1,6 +1,7 @@
 /**
  * The Debug Menu's play tempo settings: the tempo slider (-50 % .. +50 %), how a tempo change sounds (also for NONSTOP
- * FIT stages) and the keep-pitch stretcher. Remembered in `localStorage` and read once per play, at its start.
+ * FIT stages) and the keep-pitch stretcher. Remembered in `localStorage` and read once per play, at its start; with the
+ * pitch following the tempo, the slider also changes the running play's tempo ({@link allowsLiveTempo}).
  */
 
 /** `localStorage` key of the play tempo settings. */
@@ -37,6 +38,23 @@ export function clampTempoPercent(value: unknown): number {
 /** The play tempo multiplier (`tempo` / `speed`) of a slider percent: -20 → 0.8. */
 export function tempoFromPercent(percent: number): number {
   return (100 + clampTempoPercent(percent)) / 100;
+}
+
+/** The slider percent of a play tempo multiplier: 0.8 → -20. */
+export function tempoPercentFromTempo(tempo: number): number {
+  return clampTempoPercent(Math.round((tempo - 1) * 100));
+}
+
+/**
+ * Whether the tempo slider changes a running play's tempo live: only when the pitch follows the tempo (kept pitch
+ * stretched the samples to the tempo they loaded at), for a play the player drives (not a replay, which follows its
+ * log), at the slider's tempo (not a course stage the course turned the tempo off for).
+ */
+export function allowsLiveTempo(
+  settings: Pick<PlayTempoSettings, 'tempoPercent' | 'tempoPitchMode'>,
+  play: { replay: boolean; tempo: number },
+): boolean {
+  return settings.tempoPitchMode === 'pitch' && !play.replay && play.tempo === tempoFromPercent(settings.tempoPercent);
 }
 
 /** The tempo for a status line (`tempo -20%`, `tempo +5%`), or `undefined` at the chart's own tempo. */
