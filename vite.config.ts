@@ -1,9 +1,5 @@
 import { builtinModules } from 'node:module';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite-plus';
-
-const rootDir = dirname(fileURLToPath(import.meta.url));
+import { defaultClientConditions, defaultServerConditions, defineConfig } from 'vite-plus';
 
 const workspacePackages = [
   'utils',
@@ -20,46 +16,6 @@ const workspacePackages = [
   'editor',
   'player-web',
 ] as const;
-
-const workspaceAliases = [
-  // Subpath aliases must come first because Vite resolves aliases by string prefix
-  // and `@be-music/utils` would otherwise capture `@be-music/utils/core`.
-  {
-    find: '@be-music/audio-renderer/triggers',
-    replacement: resolve(rootDir, 'packages/audio-renderer/src/core/triggers.ts'),
-  },
-  { find: '@be-music/player/playable-notes', replacement: resolve(rootDir, 'packages/player/src/playable-notes.ts') },
-  { find: '@be-music/player/audio-sink', replacement: resolve(rootDir, 'packages/player/src/audio-sink.ts') },
-  {
-    find: '@be-music/player/image-resize-algorithm',
-    replacement: resolve(rootDir, 'packages/player/src/image-resize-algorithm.ts'),
-  },
-  { find: '@be-music/player/judging', replacement: resolve(rootDir, 'packages/player/src/judging.ts') },
-  { find: '@be-music/player/playlog', replacement: resolve(rootDir, 'packages/player/src/playlog/index.ts') },
-  { find: '@be-music/player/state-signals', replacement: resolve(rootDir, 'packages/player/src/state-signals.ts') },
-  { find: '@be-music/player/utils', replacement: resolve(rootDir, 'packages/player/src/utils.ts') },
-  { find: '@be-music/player/core', replacement: resolve(rootDir, 'packages/player/src/core') },
-  { find: '@be-music/player-web/runtime', replacement: resolve(rootDir, 'packages/player-web/src/runtime/index.ts') },
-  { find: '@be-music/player-web/scenes', replacement: resolve(rootDir, 'packages/player-web/src/scene/index.ts') },
-  {
-    find: '@be-music/player-web/collection',
-    replacement: resolve(rootDir, 'packages/player-web/src/collection/index.ts'),
-  },
-  { find: '@be-music/utils/core', replacement: resolve(rootDir, 'packages/utils/src/core.ts') },
-  { find: '@be-music/utils/cli-path', replacement: resolve(rootDir, 'packages/utils/src/cli-path.ts') },
-  { find: '@be-music/utils/log', replacement: resolve(rootDir, 'packages/utils/src/log.ts') },
-  {
-    find: '@be-music/utils/optional-node-module',
-    replacement: resolve(rootDir, 'packages/utils/src/optional-node-module.ts'),
-  },
-  { find: '@be-music/utils/path', replacement: resolve(rootDir, 'packages/utils/src/path.ts') },
-  { find: '@be-music/utils/pcm', replacement: resolve(rootDir, 'packages/utils/src/pcm.ts') },
-  { find: '@be-music/utils/workerize', replacement: resolve(rootDir, 'packages/utils/src/workerize.ts') },
-  ...workspacePackages.map((name) => ({
-    find: `@be-music/${name}`,
-    replacement: resolve(rootDir, `packages/${name}/src/index.ts`),
-  })),
-];
 
 /**
  * Layering (docs/architecture.md): the chart model, the IR, the parser and the engine's core / play-log / ruleset
@@ -121,8 +77,18 @@ const workspaceProjects = workspacePackages.map((name) => ({
 }));
 
 export default defineConfig({
+  // Workspace imports resolve to TypeScript sources through each package's `exports` `source` condition, so
+  // `package.json` `exports` is the only list of entry points: a new subpath needs just a `"source"` entry there
+  // (listed before `"types"`, which `customConditions` in tsconfig.typecheck.json relies on). Setting conditions
+  // replaces Vite's defaults, so they are spread back in. Tests run in the `ssr` (Node) environment, where Vitest's own
+  // default drops `module` because a `module` build is not always native ESM that Node can load.
   resolve: {
-    alias: workspaceAliases,
+    conditions: ['source', ...defaultClientConditions],
+  },
+  ssr: {
+    resolve: {
+      conditions: ['source', ...defaultServerConditions.filter((condition) => condition !== 'module')],
+    },
   },
   test: {
     environment: 'node',

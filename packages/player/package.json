@@ -11,103 +11,103 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./playable-notes": {
-      "types": "./dist/playable-notes.d.ts",
       "source": "./src/playable-notes.ts",
+      "types": "./dist/playable-notes.d.ts",
       "default": "./dist/playable-notes.js"
     },
     "./playlog": {
-      "types": "./dist/playlog.d.ts",
       "source": "./src/playlog/index.ts",
+      "types": "./dist/playlog.d.ts",
       "default": "./dist/playlog.js"
     },
     "./audio-sink": {
-      "types": "./dist/audio-sink.d.ts",
       "source": "./src/audio-sink.ts",
+      "types": "./dist/audio-sink.d.ts",
       "default": "./dist/audio-sink.js"
     },
     "./image-resize-algorithm": {
-      "types": "./dist/image-resize-algorithm.d.ts",
       "source": "./src/image-resize-algorithm.ts",
+      "types": "./dist/image-resize-algorithm.d.ts",
       "default": "./dist/image-resize-algorithm.js"
     },
     "./judging": {
-      "types": "./dist/judging.d.ts",
       "source": "./src/judging.ts",
+      "types": "./dist/judging.d.ts",
       "default": "./dist/judging.js"
     },
     "./state-signals": {
-      "types": "./dist/state-signals.d.ts",
       "source": "./src/state-signals.ts",
+      "types": "./dist/state-signals.d.ts",
       "default": "./dist/state-signals.js"
     },
     "./utils": {
-      "types": "./dist/utils.d.ts",
       "source": "./src/utils.ts",
+      "types": "./dist/utils.d.ts",
       "default": "./dist/utils.js"
     },
     "./core/groove-gauge": {
-      "types": "./dist/core/groove-gauge.d.ts",
       "source": "./src/core/groove-gauge.ts",
+      "types": "./dist/core/groove-gauge.d.ts",
       "default": "./dist/core/groove-gauge.js"
     },
     "./core/bga-timeline": {
-      "types": "./dist/core/bga-timeline.d.ts",
       "source": "./src/core/bga-timeline.ts",
+      "types": "./dist/core/bga-timeline.d.ts",
       "default": "./dist/core/bga-timeline.js"
     },
     "./core/engine": {
-      "types": "./dist/core/engine.d.ts",
       "source": "./src/core/engine.ts",
+      "types": "./dist/core/engine.d.ts",
       "default": "./dist/core/engine.js"
     },
     "./core/high-speed-control": {
-      "types": "./dist/core/high-speed-control.d.ts",
       "source": "./src/core/high-speed-control.ts",
+      "types": "./dist/core/high-speed-control.d.ts",
       "default": "./dist/core/high-speed-control.js"
     },
     "./core/input-signal-bus": {
-      "types": "./dist/core/input-signal-bus.d.ts",
       "source": "./src/core/input-signal-bus.ts",
+      "types": "./dist/core/input-signal-bus.d.ts",
       "default": "./dist/core/input-signal-bus.js"
     },
     "./core/judge-window": {
-      "types": "./dist/core/judge-window.d.ts",
       "source": "./src/core/judge-window.ts",
+      "types": "./dist/core/judge-window.d.ts",
       "default": "./dist/core/judge-window.js"
     },
     "./core/lane-layout": {
-      "types": "./dist/core/lane-layout.d.ts",
       "source": "./src/core/lane-layout.ts",
+      "types": "./dist/core/lane-layout.d.ts",
       "default": "./dist/core/lane-layout.js"
     },
     "./core/scoring": {
-      "types": "./dist/core/scoring.d.ts",
       "source": "./src/core/scoring.ts",
+      "types": "./dist/core/scoring.d.ts",
       "default": "./dist/core/scoring.js"
     },
     "./core/scroll-distance": {
-      "types": "./dist/core/scroll-distance.d.ts",
       "source": "./src/core/scroll-distance.ts",
+      "types": "./dist/core/scroll-distance.d.ts",
       "default": "./dist/core/scroll-distance.js"
     },
     "./core/timeline": {
-      "types": "./dist/core/timeline.d.ts",
       "source": "./src/core/timeline.ts",
+      "types": "./dist/core/timeline.d.ts",
       "default": "./dist/core/timeline.js"
     },
     "./core/ui-options": {
-      "types": "./dist/core/ui-options.d.ts",
       "source": "./src/core/ui-options.ts",
+      "types": "./dist/core/ui-options.d.ts",
       "default": "./dist/core/ui-options.js"
     },
     "./core/ui-signal-bus": {
-      "types": "./dist/core/ui-signal-bus.d.ts",
       "source": "./src/core/ui-signal-bus.ts",
+      "types": "./dist/core/ui-signal-bus.d.ts",
       "default": "./dist/core/ui-signal-bus.js"
     }
   },
