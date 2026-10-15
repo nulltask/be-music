@@ -85,6 +85,37 @@ The demo treats a device whose primary pointer is a finger (`(pointer: coarse)`,
 - Folder walking and file reads use bounded concurrency and progress callbacks so large folders can load without flooding the browser's FileSystem APIs or UI update loop.
 - Parse errors are accumulated in the collection instead of aborting the whole drop.
 
+## Courses and dan certification
+
+Courses play through the same select → play → result scenes. See [Courses and dan certification](./course.md) for the rules.
+
+- **Loading:**
+  - A drop can carry course files: LR2 `.lr2crs` anywhere, beatoraja course JSON under a `course/` folder.
+  - They are read with `readCourseFile` (`@be-music/player-web/collection`).
+  - The demo hashes the library's chart files (cached per song) and matches each stage by SHA-256, then MD5 (`resolveCourseFolders`).
+  - Course files dropped on their own match against the songs already loaded.
+- **Select:**
+  - Each course file is a folder bar listed after the song folders. Inside it, every course is a course bar (`BrowserBrowseEntry` `kind: 'course'`).
+  - A course with a stage missing from the collection is listed but cannot be started.
+  - Skins:
+    - The be-music skins show the course name, its stage count and the missing stages.
+    - LR2 skins use the `courseFolder` and `course` bar bodies.
+    - beatoraja skins light `GRADEBAR` (op 3) and draw the `bar-grade` frame, or `bar-nosong` when a stage is missing.
+- **Play:**
+  - The stages play in order. Each stage runs with `PlayerOptions.course`: the course kind, its gauge set and judge constraint, and the gauge value and course combo the previous stage left.
+  - Dismissing a stage's result starts the next stage. With **Course: skip stage results** on (Debug Menu → Play options), the next stage starts as soon as a stage ends, and only the course result is shown.
+  - A stage whose gauge empties ends the course.
+  - ESC gives the course up, and F5 / quick retry is off.
+  - The course constraints are applied:
+    - lane options are limited (`grade` none, `grade_mirror` MIRROR, `grade_random` the random family);
+    - `no_speed` locks the hi-speed;
+    - `ln` / `cn` / `hcn` set the long-note mode of charts that leave it undefined.
+- **Result:**
+  - After the last stage, or the failed one, the result scene shows the course as one run: summed judgments, the course max combo, the final gauge and the course lamp.
+  - The course play log (`*.bmcourse.json`, see [playlog.md](./playlog.md#course-play-logs)) is auto-downloaded when play-log auto-save is on.
+  - The best lamp, EX score, max combo and BP are kept per course.
+  - Stage results count for the course, not for the single charts, and are not submitted to the leaderboard.
+
 ## LR2 skin and theme support
 
 The core parser handles LR2 CSV skin files for select, decide, gameplay, and result scenes.

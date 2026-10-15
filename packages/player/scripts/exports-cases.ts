@@ -38,6 +38,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.resolveJudgeWindowsMs(fixtures.sampleBmsJson, 250);
     },
   });
+  define('player.resolveChartRulesetFacts', {
+    run: (fixtures) => {
+      playerApi.resolveChartRulesetFacts(fixtures.sampleBmsJson);
+    },
+  });
   define('player.extractPlayableNotes', {
     run: (fixtures) => {
       playerApi.extractPlayableNotes(fixtures.sampleBmsJson, { inferBmsLnTypeWhenMissing: true });
@@ -303,6 +308,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.playlog.resolveCourseLamp', {
     run: () => {
       playlogApi.resolveCourseLamp('beatoraja', benchStageResult, 'GROOVE');
+    },
+  });
+  define('player.playlog.resolveCoursePlaylogFilename', {
+    run: () => {
+      playlogApi.resolveCoursePlaylogFilename(benchCourseLog);
     },
   });
   define('player.playlog.resolveCourseTrophy', {

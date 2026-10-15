@@ -84,6 +84,37 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 - folder walking と file read は bounded concurrency と progress callback を使い、大きな folder でも browser の FileSystem API や UI update loop を過剰に詰まらせないようにします。
 - parse error は drop 全体を abort せず、collection に蓄積します。
 
+## コースと段位認定
+
+コースも、選曲 → プレイ → 結果の同じシーンで遊びます。規則は [コースと段位認定](./course.ja.md) を参照してください。
+
+- **読み込み：**
+  - ドロップにはコースファイルを含められます。LR2 の `.lr2crs` はどこに置いてもよく、beatoraja のコース JSON は `course/` フォルダの下に置きます。
+  - 読み込みには `readCourseFile`（`@be-music/player-web/collection`）を使います。
+  - デモはライブラリの譜面ファイルのハッシュを計算し（曲ごとにキャッシュ）、各ステージを SHA-256、次に MD5 で照合します（`resolveCourseFolders`）。
+  - コースファイルだけをドロップした場合は、読み込み済みの曲と照合します。
+- **選曲：**
+  - コースファイル 1 つが、曲フォルダの後に並ぶフォルダバー 1 つになります。その中では各コースがコースバー（`BrowserBrowseEntry` の `kind: 'course'`）です。
+  - コレクションにないステージを含むコースは、一覧には出ますが開始できません。
+  - スキンごとの表示：
+    - be-music スキンは、コース名・ステージ数・欠けているステージ数を表示します。
+    - LR2 スキンは `courseFolder` と `course` のバー本体を使います。
+    - beatoraja スキンは `GRADEBAR`（op 3）を点け、`bar-grade` の枠を描きます。ステージが欠けていれば `bar-nosong` を描きます。
+- **プレイ：**
+  - ステージを順に遊びます。各ステージには `PlayerOptions.course` を渡します。中身は、コースの種類、ゲージの表の組と判定の制約、前のステージが残したゲージ値とコースのコンボです。
+  - ステージの結果を閉じると次のステージが始まります。**Course: skip stage results**（Debug Menu → Play options）をオンにすると、ステージの終了後すぐに次のステージが始まり、結果はコースの結果だけを表示します。
+  - ゲージが尽きたステージでコースは終わります。
+  - ESC でコースをやめられ、F5 / クイックリトライは使えません。
+  - コースの制約を適用します：
+    - レーンオプションを制限します（`grade` はなし、`grade_mirror` は MIRROR、`grade_random` はランダム系）。
+    - `no_speed` ではハイスピードを固定します。
+    - `ln` / `cn` / `hcn` は、ロングノートのモードを定めていない譜面に適用します。
+- **結果：**
+  - 最後のステージ、またはゲージが尽きたステージの後に、結果画面がコース全体を 1 回分として表示します。表示するのは合計の判定、コースの最大コンボ、最終ゲージ、コースのランプです。
+  - プレイ履歴の自動保存がオンなら、コースのプレイログ（`*.bmcourse.json`、[playlog.ja.md](./playlog.ja.md#コースのプレイログ) を参照）をダウンロードします。
+  - 最高のランプ、EX スコア、最大コンボ、BP をコースごとに保存します。
+  - ステージの結果は単曲ではなくコースの記録になり、リーダーボードにも送りません。
+
 ## LR2 skin と theme support
 
 core parser は LR2 CSV skin file を select、decide、gameplay、result scene 向けに扱います。

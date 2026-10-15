@@ -51,7 +51,7 @@ import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-time
 import { createBeatAtSecondsResolverFromTimingResolver } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
-import type { BeMusicPlaylog, PlaylogRecordingOptions } from '@be-music/player/playlog';
+import type { BeMusicPlaylog, PlaylogCourseStage, PlaylogRecordingOptions } from '@be-music/player/playlog';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
 import {
   advanceDrawCursor,
@@ -566,6 +566,13 @@ export interface CoreGameplayViewOptions {
    * consumes the 1P value and applies it to the single shared gauge.
    */
   gauge?: 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
+  /**
+   * The play is one stage of a course (`PlayerOptions.course`): it runs on the ruleset's course gauge, from the state the
+   * previous stage left. Recorded into the play log, which then replays on its own.
+   */
+  course?: PlaylogCourseStage;
+  /** The hi-speed cannot be changed during play (a course's `no_speed` constraint). */
+  hiSpeedLocked?: boolean;
   /**
    * When true (default), the audio bus runs through dynamics compressors that soften clipping when many BMS samples
    * fire simultaneously (jacks, dense BGM stacks). Set to `false` to bypass every compressor and feed sample sources
@@ -3037,6 +3044,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * even finer steps if HISPEED_STEP shrinks again later.
    */
   private adjustHiSpeed(delta: number): void {
+    if (this.options.hiSpeedLocked === true) return;
     const next = snapHiSpeed(this.hiSpeed + delta);
     if (next === undefined || next === this.hiSpeed) return;
     this.hiSpeed = next;
@@ -5099,6 +5107,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // ruleset's gauge line-up and runs its curve, so HARD really drains and DEATH really ends the run.
         // `resolveSelectedGauge` prefers the replay's recorded pick, so a played-back log runs its original gauge.
         gauge: this.resolveSelectedGauge(),
+        ...(this.options.replay === undefined && this.options.course !== undefined
+          ? { course: this.options.course }
+          : {}),
         // The engine reports the ruleset after applying the judge ruleset, the debug window override, and (for a
         // replay) the recorded settings below, so the windows skins see are the ones the run is judged with.
         onRulesetResolved: (info) => this.applyResolvedRuleset(info),
