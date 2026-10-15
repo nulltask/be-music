@@ -3,6 +3,14 @@ import type { GrooveGaugeType } from '../core/groove-gauge.ts';
 import type { LongNoteMode } from '../playable-notes.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
 import {
+  parsePlaylogTempoChanges,
+  parsePlaylogViewChanges,
+  parsePlaylogViewState,
+  type PlaylogTempoChange,
+  type PlaylogViewChange,
+  type PlaylogViewState,
+} from './view.ts';
+import {
   expectFiniteNumber,
   expectNonNegativeInteger,
   expectRecord,
@@ -182,9 +190,16 @@ export interface PlaylogPlay {
    * The play tempo (`PlayerOptions.speed`): the chart, its audio and the play clock ran `tempo` times as fast (0.5 to
    * 1.5 in the web player). Judgments and input times stay in chart time, so a re-simulation is unaffected; a replay
    * plays back at the same tempo. Absent = 1, and on a log re-recorded from a replay (`replayInputs`), whose speed only
-   * sets how fast it is re-driven. A play at another tempo is a practice play and is not ranked.
+   * sets how fast it is re-driven. A play at another tempo is a practice play and is not ranked. This is the tempo at
+   * the start; {@link tempoChanges} lists the changes during the play.
    */
   tempo?: number;
+  /** Tempo changes during the play, in chart-time order (the web player lets the tempo change mid-play). */
+  tempoChanges?: PlaylogTempoChange[];
+  /** What the player saw at the start: hi-speed, hi-speed fix, lane covers and lift. Judgments do not depend on it. */
+  view?: PlaylogViewState;
+  /** Changes to {@link view} during the play, in chart-time order. */
+  viewChanges?: PlaylogViewChange[];
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
   native?: Record<string, string | number | boolean | null>;
 }
@@ -562,6 +577,15 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     const tempo = expectFiniteNumber(play.tempo, 'play.tempo');
     if (!(tempo > 0)) throw new PlaylogParseError('play.tempo: expected a positive number');
     if (tempo !== 1) parsed.tempo = tempo;
+  }
+  if (play.tempoChanges !== undefined) {
+    const changes = parsePlaylogTempoChanges(play.tempoChanges, 'play.tempoChanges');
+    if (changes.length > 0) parsed.tempoChanges = changes;
+  }
+  if (play.view !== undefined) parsed.view = parsePlaylogViewState(expectRecord(play.view, 'play.view'), 'play.view');
+  if (play.viewChanges !== undefined) {
+    const changes = parsePlaylogViewChanges(play.viewChanges, 'play.viewChanges');
+    if (changes.length > 0) parsed.viewChanges = changes;
   }
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');

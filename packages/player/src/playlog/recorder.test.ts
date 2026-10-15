@@ -447,3 +447,32 @@ describe('playlog recorder', () => {
     expect(playlog.chart.title).toBe('My Song');
   });
 });
+
+describe('view and tempo changes', () => {
+  test('records the starting view, view changes and tempo changes in chart time, and parses them back', async () => {
+    const { parsePlaylog, serializePlaylog } = await import('./format.ts');
+    const recorder = createPlaylogRecorder(
+      makeRecorderOptions({
+        play: {
+          mode: 'manual',
+          autoScratch: false,
+          tempo: 0.9,
+          view: { hiSpeed: 2, covers: [{ side: '1P', sudden: 0.2, hidden: 0, lift: 0 }] },
+        },
+      }),
+    );
+    recorder.recordViewChange(1.5, { hiSpeed: 2.5 });
+    recorder.recordViewChange(2, {});
+    recorder.recordTempoChange(1, 0.9);
+    recorder.recordTempoChange(2.25, 1.1);
+    const playlog = recorder.finalize({ summary: makeSummary() });
+    expect(playlog.play).toMatchObject({
+      tempo: 0.9,
+      view: { hiSpeed: 2, covers: [{ side: '1P', sudden: 0.2, hidden: 0, lift: 0 }] },
+      // An empty change and a change to the tempo already in force are dropped.
+      viewChanges: [{ timeUs: 1_500_000, hiSpeed: 2.5 }],
+      tempoChanges: [{ timeUs: 2_250_000, tempo: 1.1 }],
+    });
+    expect(parsePlaylog(serializePlaylog(playlog)).play).toEqual(playlog.play);
+  });
+});

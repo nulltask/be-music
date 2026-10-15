@@ -356,6 +356,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             : undefined,
         });
       },
+      onViewChange: (change) => playlogRecorder?.recordViewChange(resolveAutoCommandSeconds(), change),
       logInterrupt: !uiEnabled
         ? (reason) => {
             const interruptSeconds = resolveAutoInterruptSeconds();

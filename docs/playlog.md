@@ -44,7 +44,12 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    judging), `tempo` (the play tempo, `PlayerOptions.speed`, when it was not 1: the chart, its audio and the clock ran
    `tempo` times as fast; judgments and input times stay in chart time, so a re-simulation ignores it and a replay plays
    back at it; absent = 1, and on a log re-recorded from a replay, whose speed only sets how fast it is re-driven; such a
-   practice play is not ranked), `course` for a course stage (its kind, the course's gauge set and judge constraint, and `carryIn`: the
+   practice play is not ranked; it is the tempo at the start, and `tempoChanges` lists `{ timeUs, tempo }` changes
+   during the play, any of which other than 1 also makes it practice), `view` and `viewChanges` (what the player saw:
+   the hi-speed, the hi-speed fix, the visible time in ms and each side's lane cover as fractions of the lane height —
+   `sudden`, `hidden`, `lift` — at the start, then every change in chart time; a host sends changes as
+   `{ kind: 'view' }` input commands; judgments do not depend on them, and a replay or ghost reproduces as much of them
+   as its viewer picks, `PlaylogViewReplay`), `course` for a course stage (its kind, the course's gauge set and judge constraint, and `carryIn`: the
    gauge value, course combo and course max combo the previous stage left), and `randomDraws`: the play's `#RANDOM` /
    `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes as a `RandomDraws` value (`@be-music/chart`), one
    `{ command, range, value }` entry per such line of the chart in file order. They are the
