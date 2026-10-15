@@ -89,6 +89,38 @@ flowchart LR
 - **Drawing.** `drawRandomCourse(definition, candidates, random)` follows `RandomCourseData.lotterySongDatas`. Each stage draws uniformly from what its filter selects; a stage without a filter draws from the previous stage's selection (every chart for the first). With `distinct`, a chart already drawn is drawn again, unless every candidate is taken. The result is a fixed course: `grade` when the definition has a lane-option constraint, else `expert`. `random` is injected, so a draw is reproducible.
 - **Failure.** A stage whose filter does not parse, or selects nothing, stops the draw and is reported (`RandomCourseDrawFailure`).
 
+## NONSTOP courses
+
+An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBmsFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). NONSTOP is LR2-only and BMS-only. This section covers how the stages are placed; playing the stitched chart is not built yet.
+
+**Connections.** Each stage but the last has a connection to the next, stored in the first ten characters of the course hash (`courseKeys`, `0`-`5`) and read by `parseLr2NonstopConnections` into `CourseDefinition.connections`:
+
+| Digit | Connection | Placement after it                                             | Sound                      |
+| ----- | ---------- | -------------------------------------------------------------- | -------------------------- |
+| 0     | `fade`     | next first note within 0.5 measure                             | 10 s fade-out, 5 s fade-in |
+| 1     | `fade-fit` | as `fade`, next stage time-stretched to this stage's final BPM | 5 s fade-in                |
+| 2     | `cut`      | as `fade`                                                      | 0.2 s cross-cut            |
+| 3     | `cut-fit`  | as `cut`, time-stretched                                       | 0.2 s cross-cut            |
+| 4     | `blank1`   | within 1.5 measures                                            | 5 s fade-in                |
+| 5     | `blank2`   | no cut, after a gap of more than 5 s                           | none                       |
+
+**Placement** (`planNonstopCourse`, with `createNonstopStageTiming` reading a stage chart):
+
+```mermaid
+flowchart LR
+  last["stage k: last note"] --> line["nearest bar line<br/>(boundary)"]
+  line --> start["stage k+1 starts<br/>at the boundary"]
+  start --> cut["cut leading measures<br/>until the first note is close"]
+  cut --> shift["move earlier by<br/>the measures cut"]
+```
+
+- A stage hands over at the bar line nearest its last visible note, the earlier one on a tie ([L26432-L26458](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26432-L26458)). After `blank2`, at the first bar line more than 5 s later.
+- The next stage starts at that line. Its leading measures are cut while its first note is 0.5 measure or more past the line (the binary compares `>=`; OpenLR2 reads `>`), more than 1.5 after `blank1`, and not at all after `blank2` ([L26888-L26960](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26888-L26960)). The stage is then moved earlier by the time of the measures cut.
+- After a `-fit` connection the stage is time-stretched by the previous stage's final BPM over its `#BPM`; LR2 also changes the keysounds' pitch by that factor.
+- The positions LR2 keeps as 32-bit floats are rounded the same way. OpenLR2 truncates the previous stage's last-measure time to an integer; the binary keeps it a float.
+
+**LR2 placement.** `planNonstopCourse(..., { placement: 'lr2' })` follows the binary exactly, including what looks like a bug. LR2 never updates its `lastMeasure` after cutting a stage, so from the third stage on a stage starts at the previous stage's line _before_ that stage was cut: its time origin runs on by the previous cut at its own BPM and measure-0 length, and it is then cut by both. The result matches the intended placement while the tempo and measure lengths stay the same, and moves the stage when its first measures differ (by the previous cut × the difference). This placement also takes the first note as LR2's loader reads it: the first visible note in file order, lowered by any object on a later line. The default `'intended'` placement starts each stage where the previous one was placed and takes the first visible note.
+
 ## Finding the stages
 
 `resolveCourseStages(course, lookup)` matches each stage to a local chart: by SHA-256 when the stage has one, else by MD5, as beatoraja's `TableBar` does. A stage carrying both falls back to its MD5 when no chart has the SHA-256. A course with a missing stage is still listed, but it is not `playable`; LR2 shows such a stage as a song you do not own, and beatoraja refuses to start the course.

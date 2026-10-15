@@ -52,6 +52,13 @@ export interface CourseTrophy {
   scoreRate: number;
 }
 
+/**
+ * How a NONSTOP course goes from one stage to the next (LR2's `courseKeys`, the first ten characters of a `.lr2crs`
+ * hash, `0`-`5` in this order): the sound fades out over 10 s / in over 5 s (`fade`) or cuts over 0.2 s (`cut`), the
+ * `-fit` forms also time-stretch the next stage to the previous one's BPM, and `blank1` / `blank2` leave a gap.
+ */
+export type NonstopConnection = 'fade' | 'fade-fit' | 'cut' | 'cut-fit' | 'blank1' | 'blank2';
+
 /** Where a course definition came from. */
 export type CourseSource =
   | { format: 'lr2crs'; type: number; header: string; hash: string }
@@ -71,6 +78,8 @@ export interface CourseDefinition {
   release: boolean;
   /** Key mode the course is meant for (LR2 `line`, table `mode`), when the source says. */
   keyMode?: number;
+  /** A NONSTOP course's connection after each stage but the last (see {@link NonstopConnection}). */
+  connections?: NonstopConnection[];
   source: CourseSource;
 }
 
