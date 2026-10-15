@@ -146,7 +146,7 @@ flowchart LR
   - 数値 250-259 はステージのレベル、テキスト 150-154 はステージのタイトル、160-164 はそのサブタイトル、170 はコース名です。
   - EXPERT と GRADE のコースでは、数値 104 / 105（コンボ、最大コンボ）と判定の横のコンボ（`#DST_NOWCOMBO`）がコース全体を数えます。前のステージが残したコンボは、最初に途切れるまで続きます（OpenLR2 L2019-L2034、L2516）。
   - コースのステージでは、LR2 のコース用ゲージと同じく、ゲージの種類の op が赤ゲージ（43 / 45）になります。
-  - EXPERT と GRADE のコースの結果は、テーマにコースリザルト用スキン（`#INFORMATION` の type 15）があればそれで、なければ結果のスキンで表示します。BGM は `courseclear` / `coursefail` を流し、なければ `clear` / `fail` を流します。NONSTOP は、LR2 と同じく結果のスキンで表示し、`clear` / `fail` を流します。
+  - EXPERT と GRADE のコースの結果は、テーマにコースリザルト用スキン（`#INFORMATION` の type 15）があればそれで、なければ結果のスキンで表示します。BGM はサウンドセットの `#COURSECLEAR` / `#COURSEFAIL`（標準では `course_clear` / `course_fail`）を流し、なければ `clear` / `fail` を流します。NONSTOP は、LR2 と同じく結果のスキンで表示し、`clear` / `fail` を流します。
 - **beatoraja スキン**（beatoraja のプレイと結果のシーンに `courseInfo` を渡します。beatoraja の `BooleanPropertyFactory` / `StringPropertyFactory` に合わせています）：
   - 選曲：コースバーは `GRADEBAR`（3。beatoraja の `RandomCourseBar` は `GradeBar` ではないので、ランダムコースでは代わりに `OPTION_RANDOMCOURSEBAR`（1031））、開始できるときは `PLAYABLEBAR`（5）、制約ごとの `OPTION_GRADEBAR_*` op（1002-1007、1010-1017）を点けます。文字列 150-159 にはステージの曲名を出し、コレクションにないステージは `(no song) <曲名>` とします。
   - プレイとステージの結果では `MODE_COURSE`（290）とステージの op を点けます。最後ではない 1〜4 ステージ目は 280-283、最後のステージは 289 です。文字列 150-159 は遊んでいるコースのステージ名です。
