@@ -101,7 +101,8 @@ In the browser player:
   the song started govern that play.
 - The Debug Menu's **Play options** folder covers the recorded play settings: auto play, judge windows
   (LR2 / beatoraja / IIDX), gauge, Random 1P/2P, DP flip, and auto scratch. Where the LR2 select scene's
-  PLAY OPTION panel has a counterpart, the two surfaces two-way sync.
+  PLAY OPTION panel has a counterpart, the two surfaces two-way sync. Its **Replay / ghost** subfolder picks what a
+  replay reproduces of the recorded view ([What the player saw](#what-the-player-saw)).
 
 ## Compat rulesets
 
@@ -148,6 +149,36 @@ recorded branches: the browser's core gameplay scene resolves with them itself (
 them whose new draw rolls differently from the recorded run, cannot be re-aligned: the replay fails with a status
 message instead of playing a mismatched chart. Replay always runs on the LR2 / default gameplay path regardless of
 which skin family recorded the log.
+
+## What the player saw
+
+`play.view` and `play.viewChanges` record the view, apart from what was judged, in units every scene shares:
+
+| field          | unit                                                                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hiSpeed`      | The scroll multiplier the scene drew with, on its own scale (the built-in and LR2 scenes fold HS-FIX into it).                                                                                                         |
+| `hiSpeedScale` | The scale `hiSpeed` is on: `be-music` (built-in and LR2 scenes, `PIXELS_PER_BEAT × hiSpeed` design pixels per beat) or `beatoraja` (a lane is four beats at 1). Absent means the viewer's own.                         |
+| `hsFix`        | The HS-FIX mode of the built-in and LR2 scenes (`OFF`, `MAXBPM`, …); the beatoraja scene records none.                                                                                                                 |
+| `visibleMs`    | How long a note stays visible below SUDDEN+, in whole ms (the white number; × 0.6 is the green number), at the chart's main BPM and without `#SCROLL` / `#SPEED`.                                                      |
+| `covers`       | Per play side with lanes, fractions (0 to 1) of the lane height: `sudden` from the top, `hidden` just above the judgement line, `lift` how far the judgement line is raised. The built-in and LR2 scenes draw no LIFT. |
+
+The beatoraja scene's HIDDEN cover is a ratio of the lane above the lift, so it records `ratio × (1 − lift)`. Its `visibleMs` leaves the lift out, as beatoraja's own duration does.
+
+**Recording.** Every gameplay scene (built-in, LR2, beatoraja) passes the view at the start as `recordPlaylog.view` and samples the view every frame. `createPlaylogViewCoalescer` turns the samples into changes: only the fields that changed (`diffPlaylogView`, the full cover of a side whose cover changed), at most one every 100 ms, so a wheel spin or a held key records a few changes, not one per frame. The scene sends each change as a `{ kind: 'view', change }` input command, and the engine stamps it with the chart time it drains the command at. On the built-in and LR2 scenes the hi-speed changes during a play (the arrow keys, a host's `setHiSpeed`); the covers are fixed per play, and the first change carries `visibleMs` once the lanes are laid out. On the beatoraja scene the hi-speed, lane cover, lift and HIDDEN cover all change (the arrow keys, the engine's Option + lane-key shortcut, PageUp / PageDown, the wheel, Home / End, H / J / K, and the skin's cover buttons 330-332).
+
+**Replay.** A replay shows the recorded view along the playhead: `resolvePlaylogViewAt` at the playhead's chart time, then `resolveReplayView` against the viewer's own settings with the viewer's `PlaylogViewReplay` (`tempo`, `hiSpeed`, `covers` for SUDDEN+ / HIDDEN+, `lift`; all on by default). What a toggle leaves off stays the viewer's own. The hi-speed follows `resolveReplayHiSpeed`:
+
+```mermaid
+flowchart TD
+  toggle{hiSpeed on?} -->|no| own[Viewer's own]
+  toggle -->|yes| scale{Same scale?}
+  scale -->|yes| recorded[Recorded hiSpeed]
+  scale -->|no| visible{visibleMs recorded?}
+  visible -->|yes| match[Hi-speed showing visibleMs]
+  visible -->|no| recorded
+```
+
+On the same scale (or a log without `hiSpeedScale`) the replay draws the recorded hi-speed as it was drawn, HS-FIX included, and does not apply the viewer's HS-FIX on top. Across scales a hi-speed number means another speed, so the replay works out the hi-speed that shows the recorded visible time with its own lane height and the SUDDEN+ it shows (`resolveHiSpeedForVisibleMs` on the built-in and LR2 scenes). Replays run on the built-in and LR2 scenes, which draw no LIFT, so the `lift` toggle has nothing to show there yet; the `tempo` toggle governs the recorded tempo (`play.tempo`, `play.tempoChanges`). The browser player has no ghost display yet; a ghost would read the view the same way.
 
 ## Re-deriving LR2 / beatoraja / IIDX results
 
