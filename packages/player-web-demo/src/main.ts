@@ -4750,12 +4750,13 @@ class PlayerWebDemoApp {
         void this.selectView?.playDecideSound();
         void this.showDecide(song, { autoPlay: true });
       },
+      // A course with a missing stage comes here too: it does not start (no decide cue), and the status line says why.
       onCourseSelected: (course: BrowserCourseEntry) => {
-        void this.selectView?.playDecideSound();
+        if (course.playable) void this.selectView?.playDecideSound();
         void this.startCourse(course);
       },
       onCourseAutoPlay: (course: BrowserCourseEntry) => {
-        void this.selectView?.playDecideSound();
+        if (course.playable) void this.selectView?.playDecideSound();
         void this.startCourse(course, { autoPlay: true });
       },
       onSearchActivate: () => this.search.openFromPointer(),
