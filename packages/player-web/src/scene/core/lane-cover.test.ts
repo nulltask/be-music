@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
-import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
+import { fillLaneCover, resolveGreenNumber, resolveHiSpeedForVisibleMs, resolveNoteVisibleMs } from './lane-cover.ts';
 
 const blank = (): BeMusicLaneCover => ({ side: '1P', sudden: 9, hidden: 9, lift: 9 });
 
@@ -69,5 +69,18 @@ describe('resolveGreenNumber', () => {
     expect(resolveGreenNumber(2000)).toBe(1200);
     expect(resolveGreenNumber(1001)).toBe(601);
     expect(resolveGreenNumber(0)).toBe(0);
+  });
+});
+
+describe('resolveHiSpeedForVisibleMs', () => {
+  it('inverts resolveNoteVisibleMs', () => {
+    const visibleMs = resolveNoteVisibleMs(480, 0.25, 0, 120 * 2.5, 150);
+    expect(resolveHiSpeedForVisibleMs(480, 0.25, 0, 120, 150, visibleMs)).toBeCloseTo(2.5, 9);
+  });
+
+  it('is undefined when nothing is uncovered or an input is not positive', () => {
+    expect(resolveHiSpeedForVisibleMs(480, 1, 0, 120, 150, 500)).toBeUndefined();
+    expect(resolveHiSpeedForVisibleMs(480, 0, 0, 120, 0, 500)).toBeUndefined();
+    expect(resolveHiSpeedForVisibleMs(480, 0, 0, 120, 150, 0)).toBeUndefined();
   });
 });
