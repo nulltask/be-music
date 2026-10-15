@@ -220,6 +220,8 @@ A course stage runs on the ruleset's course gauge, not on the single-chart gauge
 
 A survival gauge that empties ends the play there (`PlayerOptions.endOnFailure`, default `true`), so a course stage ends the moment its gauge empties, and the course is failed. The judgment that emptied the gauge is the last one counted.
 
+A stage given up with ESC also ends the course as a failed run. This departs from LR2 on purpose: `LR2body.exe` shows the given-up stage's result as FAILED and, when the gauge is still at 2 % or more and stages remain, goes on to the next stage (the course lamp is FAILED in the end, since a stage was left unplayed); with no GOOD or better judged it returns to the select screen without saving. be-music treats ESC as giving up the course.
+
 A course stage cannot be ranked as a single-chart play: `checkPlaylogEligibility` rejects it as `course-stage`.
 
 ### The course result
