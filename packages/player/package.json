@@ -20,6 +20,11 @@
       "types": "./dist/playable-notes.d.ts",
       "default": "./dist/playable-notes.js"
     },
+    "./course": {
+      "source": "./src/course/index.ts",
+      "types": "./dist/course.d.ts",
+      "default": "./dist/course.js"
+    },
     "./playlog": {
       "source": "./src/playlog/index.ts",
       "types": "./dist/playlog.d.ts",
