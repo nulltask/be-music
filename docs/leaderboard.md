@@ -232,6 +232,9 @@ turning a play document's positions and timeline into note times that match the 
   (`play.tempo` other than 1, the web player's tempo slider) are refused as `tempo`: they are practice, as beatoraja's
   frequency trainer does not save its scores. **Failed plays** (the gauge
   emptied) are stored and count as plays.
+- **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear and BP leaves empty
+  POORs out (OpenLR2 L2593-L2600, L9649-L9657); beatoraja and IIDX count empty POORs in BP and give DEATH (`HAZARD`) an
+  EX HARD lamp. Migration `0012` rewrote the `lr2` results stored before this rule.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
   play that was not aborted, cleared or not.
