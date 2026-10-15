@@ -18,6 +18,7 @@ import { createScoreTracker } from './scoring.ts';
 import { resolveRuleset, rulesetChartFactsFromChart } from '../ruleset/index.ts';
 import { createAutoJudgeState, isAutoJudgeSettled, runAutoJudgeStep, type AutoJudgeInput } from './auto-judge-core.ts';
 import { clampToReversal } from './judge-core.ts';
+import { courseStageCarryCombo, courseStageRulesetOptions } from '../playlog/rulesets.ts';
 import { createPlaylogRecorder } from '../playlog/recorder.ts';
 import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
 import { createInitialPlayerSummary, preparePlaybackChart } from './bootstrap.ts';
@@ -126,6 +127,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     {
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
+      ...(options.course !== undefined ? { course: courseStageRulesetOptions(options.course) } : {}),
     },
   );
   reportResolvedRuleset(options, autoRuleset);
@@ -136,10 +138,16 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     { ruleset: autoRuleset, scorableNotes, landmineNotes, invisibleNotes, keyLabels: keyMap, reversalSeconds },
     {
       ...createInitialPlayerSummary(autoRuleset, autoRuleset.noteCount),
-      scoreTracker: createScoreTracker({ moneyScore: autoRuleset.moneyScore }),
+      scoreTracker: createScoreTracker({
+        moneyScore: autoRuleset.moneyScore,
+        ...(options.course !== undefined ? { course: courseStageCarryCombo(options.course) } : {}),
+      }),
     },
   );
   const summary: PlayerSummary = autoJudge.summary;
+  if (autoJudge.scoreTracker.course !== undefined) {
+    summary.course = autoJudge.scoreTracker.course;
+  }
   // AUTO plays never have manual inputs, but recording still snapshots the resolved chart + play settings so an
   // auto run produces a structurally complete playlog (simulators treat an empty input stream as all-miss; the
   // cached native result carries the actual AUTO outcome).
@@ -164,6 +172,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
+            ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
             gauge: selectedGauge,
           },

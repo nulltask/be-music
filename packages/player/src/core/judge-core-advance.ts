@@ -37,6 +37,7 @@ import {
   toJudgeClock,
   toJudgeUs,
   windowTablesAt,
+  isJudgingClosed,
 } from './judge-core-score.ts';
 import {
   type ActiveLongNoteState,
@@ -106,6 +107,9 @@ function detonateLandmine(
     return;
   }
   const { config } = state;
+  if (isJudgingClosed(state)) {
+    return;
+  }
   const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, config.idBase, config.sourceFormat);
   const landmineExplosionEvent = resolveLandmineExplosionEvent(landmine.event, config.wavResources);
   if (landmineExplosionEvent) {
@@ -380,6 +384,9 @@ function startAutoScratchNote(
 }
 
 function applyAutoPerfect(state: JudgeCoreState, channel: string, seconds: number, emit: JudgeCoreEffectSink): void {
+  if (isJudgingClosed(state)) {
+    return;
+  }
   applyJudgeToSummary(state.summary, 'PERFECT', state.scoreTracker);
   applyGaugeJudge(state, seconds, 'PERFECT', emit);
   emit({ kind: 'poor-bga', action: 'clear', seconds });
@@ -457,6 +464,9 @@ function applyExpiredScorableJudgements(
     startHcnPassing(state, note, atUs);
     if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
       note.visibleUntilBeat = note.endBeat;
+    }
+    if (isJudgingClosed(state)) {
+      continue;
     }
     applyJudgeToSummary(state.summary, 'POOR', state.scoreTracker);
     applyGaugeJudge(state, referenceSeconds, 'POOR', emit, 'miss');
@@ -876,6 +886,10 @@ export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): num
  */
 export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, emit: JudgeCoreEffectSink): void {
   const { config } = state;
+  if (isJudgingClosed(state)) {
+    // A play that ended on failure leaves the rest of the chart unjudged; no end-of-play rule applies.
+    return;
+  }
   const { ruleset, reversalSeconds } = config;
   // Settle every timed judgment still pending — misses, tails, AUTO SCRATCH, mines, Hell Charge ticks — each at its
   // own instant, as the play-log simulator does when its clock runs out.

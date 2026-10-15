@@ -60,7 +60,7 @@ const LONG_AND_MINE = chart(
 function createCore(
   json: BeMusicJson,
   ruleset: PlaylogRulesetId = 'lr2',
-  options: { autoScratch?: boolean; judgeMsPerChartSecond?: number } = {},
+  options: { autoScratch?: boolean; judgeMsPerChartSecond?: number; endOnFailure?: boolean } = {},
 ): JudgeCoreState {
   const source = structuredClone(json);
   const resolved = resolveChart(source);
@@ -78,6 +78,7 @@ function createCore(
       ),
       autoScratch: options.autoScratch ?? false,
       judgeMsPerChartSecond: options.judgeMsPerChartSecond ?? 1000,
+      endOnFailure: options.endOnFailure ?? false,
       wavResources: source.resources.wav,
       idBase: resolveBmsBase(source),
       sourceFormat: source.sourceFormat,

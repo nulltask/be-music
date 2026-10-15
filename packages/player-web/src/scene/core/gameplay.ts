@@ -5115,11 +5115,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           ? {
               // Replay playback — feed the recorded input stream; the engine ignores live lane input, and the run
               // records no new play-log (replaying a replay would only duplicate the file). Auto scratch, the
-              // judge ruleset, and the debug judge-window override are restored from the log so the judging setup
-              // matches the recording.
+              // judge ruleset, the debug judge-window override, the end-on-failure flag and the course stage are
+              // restored from the log so the judging setup matches the recording.
               replayInputs: this.options.replay.inputs,
               autoScratch: this.options.replay.play.autoScratch,
               judgeRuleset: this.options.replay.play.judgeRuleset ?? 'lr2',
+              // Logs from before plays ended on failure kept judging to the end; replay them that way.
+              endOnFailure: this.options.replay.play.endOnFailure === true,
+              ...(this.options.replay.play.course !== undefined ? { course: this.options.replay.play.course } : {}),
               ...(this.options.replay.play.judgeWindowOverrideMs !== undefined
                 ? { judgeWindowMs: this.options.replay.play.judgeWindowOverrideMs }
                 : {}),

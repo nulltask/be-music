@@ -39,8 +39,10 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
    lane-arrangement options that produced the resolved chart, the live judge-window ruleset (`judgeRuleset`,
    absent = `'lr2'`), the debug judge-window override, an ESC flag (`aborted`, with `abortedAtUs`: the chart time the judge had settled
-   through when the play was aborted, where re-simulations stop instead of missing the rest of the chart), and
-   `randomDraws`: the play's `#RANDOM` /
+   through when the play was aborted, where re-simulations stop instead of missing the rest of the chart),
+   `endOnFailure` (the play ended the moment its survival gauge emptied; absent on logs from before that, which kept
+   judging), `course` for a course stage (its kind, the course's gauge set and judge constraint, and `carryIn`: the
+   gauge value, course combo and course max combo the previous stage left), and `randomDraws`: the play's `#RANDOM` /
    `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes as a `RandomDraws` value (`@be-music/chart`), one
    `{ command, range, value }` entry per such line of the chart in file order. They are the
    `PlayerOptions.randomDraws` the engine played with: every host draws once per play (`resolvePlayChart` in

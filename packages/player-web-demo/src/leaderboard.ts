@@ -146,7 +146,7 @@ export function describeLeaderboardResult(result: LeaderboardSubmitResult, playe
 export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation, { ok: true }>['reason']): string {
   switch (reason) {
     case 'not-rankable':
-      return 'Leaderboard: not submitted (auto play and aborted runs are not ranked)';
+      return 'Leaderboard: not submitted (auto play, aborted runs and course stages are not ranked)';
     case 'missing-fingerprint':
       return 'Leaderboard: not submitted (this play log has no chart fingerprint)';
     case 'fingerprint-mismatch':

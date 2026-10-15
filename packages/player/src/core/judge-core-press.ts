@@ -1,3 +1,4 @@
+import { breakTrackedCombo } from './scoring.ts';
 import { findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import { findLaneSoundCandidate, lowerBoundBySeconds } from '../judging.ts';
 import type { TimedPlayableNote } from '../playable-notes.ts';
@@ -34,6 +35,7 @@ import {
   setCombo,
   toJudgeClock,
   toJudgeUs,
+  isJudgingClosed,
 } from './judge-core-score.ts';
 import {
   type JudgeCoreEffectSink,
@@ -467,11 +469,14 @@ function applyPressDuringLongNote(
  */
 function chargeEmptyPoor(state: JudgeCoreState, nowSec: number, emit: JudgeCoreEffectSink): void {
   const { ruleset } = state.config;
+  if (isJudgingClosed(state)) {
+    return;
+  }
   state.summary.emptyPoor += 1;
   applyGaugeJudge(state, nowSec, 'EMPTY_POOR', emit, 'empty-poor');
   if (ruleset.comboBreaksOnEmptyPoor) {
     // The score tracker keeps the combo the max combo is measured on, so it breaks too.
-    state.scoreTracker.combo = 0;
+    breakTrackedCombo(state.scoreTracker);
     setCombo(state, nowSec, 0, 'judge', emit, 'POOR');
   }
   emit({ kind: 'record-empty-poor' });

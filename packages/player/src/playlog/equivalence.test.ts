@@ -826,6 +826,76 @@ describe('engine / simulator equivalence', () => {
     expect(simulated.judge).toMatchObject({ bad: summary.bad, poor: summary.poor, emptyPoor: summary.emptyPoor });
   });
 
+  // A play that ends on failure stops scoring at the judgment that emptied its survival gauge; a press after it counts
+  // for nothing on either side.
+  test.each(RULESETS)('%s: a play ending on failure stops scoring on both sides', async (ruleset) => {
+    const json = chart(
+      Array.from({ length: 24 }, (_, index) => ({
+        measure: 1 + Math.floor(index / 8),
+        channel: '11',
+        position: [index % 8, 8] as const,
+        value: '01',
+      })),
+    );
+    // Every note missed until the last one, pressed on time.
+    const inputs = [down(0, 3_875_000, '11'), up(1, 3_900_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { gauge: 'HARD' });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.play.endOnFailure).toBe(true);
+    expect(summary.gauge?.failedMidPlay).toBe(true);
+    expect(summary.perfect).toBe(0);
+    expect(summary.poor).toBeLessThan(24);
+    expect(simulated.judge).toMatchObject({ pgreat: summary.perfect, poor: summary.poor });
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+    // A log without the flag (or a re-simulation told otherwise) keeps judging to the end: every note gets a verdict.
+    const kept = simulatePlaylog(playlog, { ruleset, endOnFailure: false }).judge;
+    expect(kept.pgreat + kept.great + kept.good + kept.bad + kept.poor).toBe(24);
+  });
+
+  // A course stage starts from the state the previous stage left: its gauge value and the course-wide combo.
+  test.each(RULESETS)('%s: a course stage carries in its gauge and combo on both sides', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 4], value: '01' },
+      { measure: 1, channel: '12', position: [1, 4], value: '01' },
+      { measure: 1, channel: '13', position: [2, 4], value: '01' },
+      { measure: 2, channel: '14', position: [0, 1], value: '01' },
+    ]);
+    const inputs = [
+      down(0, 1_000_000, '11'),
+      up(1, 1_050_000, '11'),
+      down(2, 1_250_000, '12'),
+      up(3, 1_300_000, '12'),
+      down(4, 2_000_000, '14'),
+      up(5, 2_050_000, '14'),
+    ];
+    const course = { kind: 'grade' as const, carryIn: { gauge: 41.5, combo: 7, maxCombo: 9 } };
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { course });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.play.course).toEqual(course);
+    expect(summary.gauge?.initial).toBe(41.5);
+    // Two hits extend the carried combo to 9, the missed third note breaks it, the fourth starts it again.
+    expect(summary.course).toEqual({ combo: 1, maxCombo: 9 });
+    expect(simulated.course).toEqual(summary.course);
+    expect(playlog.results?.native?.course).toEqual(summary.course);
+    expect(simulated.gauge).toMatchObject({ type: summary.gauge?.type, final: summary.gauge?.current });
+  });
+
+  // beatoraja's NO_GREAT: GREAT and GOOD take the PGREAT window, so a press just outside PGREAT is a BAD.
+  test.each(RULESETS)('%s: a no-great course stage judges outside PGREAT as BAD on both sides', async (ruleset) => {
+    const json = chart([{ measure: 1, channel: '11', position: [0, 1], value: '01' }]);
+    const inputs = [down(0, 1_040_000, '11'), up(1, 1_090_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { course: { kind: 'grade', judge: 'no-great' } });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.bad).toBe(1);
+    expect(simulated.judge.bad).toBe(1);
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 

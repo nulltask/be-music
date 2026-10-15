@@ -65,6 +65,8 @@ function makePlaylog(): BeMusicPlaylog {
       ],
       aborted: true,
       abortedAtUs: 1_234_567,
+      endOnFailure: true,
+      course: { kind: 'grade', gaugeSet: 'lr2', judge: 'no-good', carryIn: { gauge: 62.4, combo: 31, maxCombo: 120 } },
       native: { hiSpeed: 2.5, skin: 'default', assist: false, memo: null },
     },
     results: {
@@ -79,6 +81,7 @@ function makePlaylog(): BeMusicPlaylog {
         score: 100000,
         djLevel: 'AA',
         gauge: { type: 'HARD', final: 0, cleared: false, failedMidPlay: true },
+        course: { combo: 0, maxCombo: 120 },
       },
     },
   };
@@ -190,6 +193,27 @@ describe('playlog format', () => {
         }),
       ),
     ).toThrow(/^clock:/);
+  });
+
+  test('reads a course stage without a carry-in and rejects malformed course fields', () => {
+    const first = parsePlaylog(
+      corrupt((value) => {
+        value.play.course = { kind: 'expert' };
+      }),
+    );
+    expect(first.play.course).toEqual({ kind: 'expert' });
+    for (const [mutate, message] of [
+      [(value: any) => (value.play.course.kind = 'dan'), "play.course.kind: expected 'grade' | 'expert' | 'nonstop'"],
+      [(value: any) => (value.play.course.gaugeSet = '8k'), 'play.course.gaugeSet'],
+      [(value: any) => (value.play.course.judge = 'no-bad'), 'play.course.judge'],
+      [
+        (value: any) => (value.play.course.carryIn.combo = -1),
+        'play.course.carryIn.combo: expected a non-negative integer',
+      ],
+      [(value: any) => (value.play.course.carryIn.gauge = 'full'), 'play.course.carryIn.gauge'],
+    ] as const) {
+      expect(() => parsePlaylog(corrupt(mutate))).toThrow(message);
+    }
   });
 
   test('reports the field path of structural problems', () => {

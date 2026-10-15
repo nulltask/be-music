@@ -1,4 +1,10 @@
 import { resolveBmsJudgeWindowsMsForPercent, bmsExRankValueToJudgeRankPercent } from '../core/judge-window.ts';
+import {
+  applyCourseJudgeConstraint,
+  resolveCourseGauge,
+  resolveCourseGaugeId,
+  type RulesetCourseOptions,
+} from './course.ts';
 import { countBaseNotes, type RulesetChartFacts } from './facts.ts';
 import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from './long-note.ts';
 
@@ -174,6 +180,11 @@ export interface ResolveRulesetOptions {
   judgeWindowOverrideMs?: number;
   /** beatoraja note-selection algorithm (default `'combo'`, beatoraja's own default). */
   judgeAlgorithm?: BeatorajaJudgeAlgorithm;
+  /**
+   * The play is a course stage: it runs on the ruleset's course gauge (see `resolveCourseGauge`), starting from the
+   * value carried in, and under the course's judge constraint.
+   */
+  course?: RulesetCourseOptions;
 }
 
 const scale = (windows: { pgreat: number; great: number; good: number; bad: number }): JudgeWindowSetUs => ({
@@ -703,17 +714,35 @@ export function resolveRuleset(
   options: ResolveRulesetOptions = {},
 ): RulesetConfig {
   const baseNotes = countBaseNotes(chart.notes);
-  const gaugeId = options.gauge ?? resolveDefaultGaugeId(rulesetId, options.selectedGauge ?? 'GROOVE');
+  const { course } = options;
+  const selectedGauge = options.selectedGauge ?? 'GROOVE';
+  const gaugeId =
+    options.gauge ??
+    (course === undefined
+      ? resolveDefaultGaugeId(rulesetId, selectedGauge)
+      : resolveCourseGaugeId(rulesetId, course.kind, selectedGauge));
   const overrideBadMs = options.judgeWindowOverrideMs;
+  const constrain = (tables: RulesetWindowTables): RulesetWindowTables =>
+    applyCourseJudgeConstraint(tables, course?.judge);
+  const courseGauge = (total: number): GaugeSpec | undefined =>
+    course === undefined
+      ? undefined
+      : resolveCourseGauge(
+          rulesetId,
+          gaugeId,
+          course,
+          chart.laneMode,
+          resolveLr2HardDamageMultiplier(total, baseNotes),
+        );
 
   if (rulesetId === 'lr2') {
     const noteCount = countRulesetNotes(chart, 'ln');
     const effectiveTotal = resolveEffectiveTotal('lr2', chart, baseNotes);
     const timeline = chart.judgeRank.timeline ?? [];
-    const staticTables = resolveLr2WindowTables(chart.judgeRank.percent, overrideBadMs);
+    const staticTables = constrain(resolveLr2WindowTables(chart.judgeRank.percent, overrideBadMs));
     const timelineTables = timeline.map((change) => ({
       timeUs: change.timeUs,
-      tables: resolveLr2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs),
+      tables: constrain(resolveLr2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs)),
     }));
     return {
       id: 'lr2/0',
@@ -741,7 +770,7 @@ export function resolveRuleset(
       comboBreaksOnEmptyPoor: false,
       mineTrigger: 'press-or-hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
-      gauge: resolveLr2Gauge(gaugeId, effectiveTotal, baseNotes),
+      gauge: courseGauge(effectiveTotal) ?? resolveLr2Gauge(gaugeId, effectiveTotal, baseNotes),
       noteCount,
       effectiveTotal,
       moneyScore: true,
@@ -752,7 +781,7 @@ export function resolveRuleset(
   if (rulesetId === 'beatoraja') {
     const noteCount = countRulesetNotes(chart, 'per-note');
     const effectiveTotal = resolveEffectiveTotal('beatoraja', chart, baseNotes);
-    const tables = resolveBeatorajaWindowTables(chart);
+    const tables = constrain(resolveBeatorajaWindowTables(chart));
     const mode = resolveBeatorajaMode(chart.laneMode);
     // FIVEKEYS / PMS break combo on an empty POOR (JudgeProperty combo[MS] = false).
     const comboBreaksOnEmptyPoor = mode === BEATORAJA_MODES.FIVEKEYS || mode === BEATORAJA_MODES.PMS;
@@ -772,7 +801,7 @@ export function resolveRuleset(
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
-      gauge: resolveBeatorajaGauge(gaugeId, effectiveTotal, baseNotes),
+      gauge: courseGauge(effectiveTotal) ?? resolveBeatorajaGauge(gaugeId, effectiveTotal, baseNotes),
       noteCount,
       effectiveTotal,
       moneyScore: false,
@@ -782,11 +811,12 @@ export function resolveRuleset(
 
   const noteCount = countRulesetNotes(chart, 'charge');
   const effectiveTotal = resolveEffectiveTotal('iidx', chart, baseNotes);
+  const iidxTables = constrain(IIDX_WINDOWS);
   return {
     id: 'iidx/0',
     rulesetId: 'iidx',
-    windows: IIDX_WINDOWS,
-    windowsAt: () => IIDX_WINDOWS,
+    windows: iidxTables,
+    windowsAt: () => iidxTables,
     selection: 'lowest',
     multiBad: false,
     ignoreLateBadOnLnHead: false,
@@ -800,7 +830,7 @@ export function resolveRuleset(
     // IIDX has no mines; LR2's model stands in until there is evidence otherwise.
     mineTrigger: 'press-or-hold',
     hcnTick: { heldJudge: 0, heldRate: 1, releasedJudge: 5, releasedRate: 1 },
-    gauge: resolveIidxGauge(gaugeId, noteCount),
+    gauge: courseGauge(effectiveTotal) ?? resolveIidxGauge(gaugeId, noteCount),
     noteCount,
     effectiveTotal,
     moneyScore: false,

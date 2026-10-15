@@ -19,6 +19,7 @@ import {
   BE_MUSIC_PLAYLOG_VERSION,
   type BeMusicPlaylog,
   type PlaylogChart,
+  type PlaylogCourseStage,
   type PlaylogInputAction,
   type PlaylogInputEvent,
   type PlaylogNote,
@@ -56,6 +57,10 @@ export interface PlaylogRecorderPlaySettings {
   judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
   /** The play's `#RANDOM` / `#SWITCH` outcomes (`PlayerOptions.randomDraws`). Recorded when non-empty. */
   randomDraws?: RandomDraws;
+  /** The play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`). Recorded when true. */
+  endOnFailure?: boolean;
+  /** The course stage the play was (`PlayerOptions.course`). */
+  course?: PlaylogCourseStage;
   native?: Record<string, string | number | boolean | null>;
 }
 
@@ -175,6 +180,8 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
         play.aborted = true;
         if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
       }
+      if (options.play.endOnFailure === true) play.endOnFailure = true;
+      if (options.play.course !== undefined) play.course = structuredClone(options.play.course);
       if (options.play.native !== undefined) play.native = options.play.native;
 
       const createdAt = (options.now?.() ?? new Date()).toISOString();
@@ -379,6 +386,9 @@ function buildNativeResult(
   }
   if (moneyScore) {
     result.score = summary.score;
+  }
+  if (summary.course !== undefined) {
+    result.course = { combo: summary.course.combo, maxCombo: summary.course.maxCombo };
   }
   return result;
 }

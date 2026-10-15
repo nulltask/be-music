@@ -53,6 +53,11 @@ export interface JudgeCoreConfig {
    * judgments stay a pure function of the inputs' chart times. See docs/bms-spec.md "Negative BPM".
    */
   reversalSeconds?: number;
+  /**
+   * The play ends the moment a survival gauge empties (`PlayerOptions.endOnFailure`): from the judgment that emptied
+   * it on, nothing is scored (see `isJudgingClosed`).
+   */
+  endOnFailure: boolean;
 }
 
 /** The play's running result — the same shape as the engine's public `PlayerSummary`. */

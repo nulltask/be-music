@@ -260,6 +260,23 @@ describe('playlog recorder', () => {
     });
   });
 
+  test('finalize records a course stage, the end-on-failure flag and the course combo the stage left', () => {
+    const course = { kind: 'grade', carryIn: { gauge: 55, combo: 3, maxCombo: 40 } } as const;
+    const recorder = createPlaylogRecorder(
+      makeRecorderOptions({ play: { mode: 'manual', autoScratch: false, endOnFailure: true, course } }),
+    );
+    const playlog = recorder.finalize({ summary: makeSummary({ course: { combo: 8, maxCombo: 40 } }) });
+
+    expect(playlog.play).toMatchObject({ endOnFailure: true, course });
+    expect(playlog.play.course).not.toBe(course);
+    expect(playlog.results?.native?.course).toEqual({ combo: 8, maxCombo: 40 });
+    // Without the flag nothing is written: older logs read as "kept judging".
+    const plain = createPlaylogRecorder(
+      makeRecorderOptions({ play: { mode: 'manual', autoScratch: false, endOnFailure: false } }),
+    );
+    expect(plain.finalize({ summary: makeSummary() }).play.endOnFailure).toBeUndefined();
+  });
+
   test('finalize defaults: GROOVE gauge, maxCombo 0, declared gauge when the summary has none', () => {
     const recorder = createPlaylogRecorder(makeRecorderOptions());
     const playlog = recorder.finalize({ summary: makeSummary() });
