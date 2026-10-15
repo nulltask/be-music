@@ -4,6 +4,7 @@ import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './
 import {
   classifyRulesetJudge,
   ignoresLateLongNoteHeadBad,
+  noteLateReachUs,
   isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
   longNoteOwesTailMiss,
@@ -287,7 +288,7 @@ class PlaylogSimulation {
         isLong,
         judged: false,
         holding: false,
-        missDeadlineUs: note.timeUs + judgeWindowLateReachUs(noteWindows),
+        missDeadlineUs: note.timeUs + noteLateReachUs(this.config, noteWindows, longStyle),
       };
       if (isLong) {
         simNote.endTimeUs = note.endTimeUs;
@@ -370,8 +371,10 @@ class PlaylogSimulation {
       } else {
         for (let index = lane.sweepCursor; index < lane.notes.length; index += 1) {
           const note = lane.notes[index]!;
-          if (note.missDeadlineUs >= untilUs) break;
-          if (!note.judged && !note.holding) {
+          // Deadlines are not monotonic along a lane (an LR2 LN head reaches only its GOOD leg), so the scan runs on
+          // note times and tests each deadline.
+          if (note.timeUs >= untilUs) break;
+          if (!note.judged && !note.holding && note.missDeadlineUs < untilUs) {
             events.push({ timeUs: note.missDeadlineUs, kind: 'miss', lane, note });
           }
         }
