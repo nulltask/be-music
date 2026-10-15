@@ -67,13 +67,18 @@ describe('checkCoursePlaylogEligibility', () => {
     });
   });
 
-  test('rejects auto play and an aborted stage, naming the stage', () => {
+  test('rejects auto play, naming the stage', () => {
     expect(checkCoursePlaylogEligibility(courseLog([stage('bmfp0:a'), stage('bmfp0:b', { mode: 'auto' })]))).toEqual({
       eligible: false,
       reason: 'auto-play',
       stage: 1,
     });
-    expect(checkCoursePlaylogEligibility(courseLog([stage('bmfp0:a', { aborted: true })]))).toEqual({
+  });
+
+  test('accepts a course given up on its last played stage as a failed run, and no other abort', () => {
+    const givenUp = courseLog([stage('bmfp0:a'), stage('bmfp0:b', { aborted: true }), unreached('bmfp0:c')]);
+    expect(checkCoursePlaylogEligibility(givenUp)).toMatchObject({ eligible: true });
+    expect(checkCoursePlaylogEligibility(courseLog([stage('bmfp0:a', { aborted: true }), stage('bmfp0:b')]))).toEqual({
       eligible: false,
       reason: 'aborted',
       stage: 0,
