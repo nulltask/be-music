@@ -253,7 +253,8 @@ with its own rankings per ruleset, and never as single-chart plays.
 
 - **Course identity.** A course is keyed by its **course fingerprint** (`bmcourse0:<sha256>`,
   `computeCourseFingerprint` in `@be-music/player/playlog`): its kind, its constraints (normalized and sorted) and its
-  stages' chart fingerprints in order. The name and trophies are left out, so the same course read from a `.lr2crs`,
+  stages' chart fingerprints in order, and for a NONSTOP course its connections and placement mode, which decide the
+  stitched chart. The name and trophies are left out, so the same course read from a `.lr2crs`,
   a beatoraja course file or a table shares one board whenever its charts match. A random course is keyed by the
   stages it drew. A failed run is keyed too: the course play log carries the chart fingerprint of every stage it never
   reached ([playlog.md](./playlog.md#course-play-logs)).

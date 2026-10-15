@@ -182,10 +182,14 @@ export class CourseSession {
  * The key a course's best record is kept under: the course kind, its constraints and its stages' chart hashes in
  * order (SHA-256 when the course names one, else MD5), like beatoraja keys course scores on the stage hashes.
  */
-export function courseRecordKey(course: BrowserCourseEntry): string {
+export function courseRecordKey(course: BrowserCourseEntry, placement: 'intended' | 'lr2' = 'intended'): string {
   const { definition } = course;
   const stages = definition.stages.map((stage) => stage.sha256 ?? stage.md5 ?? '').join(',');
-  return `course:${definition.kind}:${[...definition.constraints].sort().join('+')}:${stages}`;
+  const key = `course:${definition.kind}:${[...definition.constraints].sort().join('+')}:${stages}`;
+  if (definition.kind !== 'nonstop') return key;
+  // A NONSTOP course's connections and placement decide the chart that is played, as in its course fingerprint.
+  const connections = (definition.connections ?? []).slice(0, Math.max(0, definition.stages.length - 1));
+  return `${key}:${connections.join('+')}:${placement}`;
 }
 
 /**

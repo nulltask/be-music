@@ -2393,7 +2393,8 @@ class PlayerWebDemoApp {
       return;
     }
     // A run at another tempo is practice: no record.
-    if (!isCourseRunAtAnotherTempo(courseLog)) this.recordCourseResult(courseRecordKey(nonstop.course), native);
+    if (!isCourseRunAtAnotherTempo(courseLog))
+      this.recordCourseResult(courseRecordKey(nonstop.course, nonstop.prepared.placement), native);
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
     this.leaderboard.maybeSubmitCourse(
