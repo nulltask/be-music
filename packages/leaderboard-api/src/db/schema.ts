@@ -383,6 +383,9 @@ export const courseScore = sqliteTable(
   (table) => [
     index('course_score_user_course_idx').on(table.userId, table.courseFingerprint),
     index('course_score_course_created_idx').on(table.courseFingerprint, table.createdAt),
+    // The latest course runs, everyone's and one player's (`loadRecentCourseRuns`).
+    index('course_score_created_idx').on(table.createdAt, table.id),
+    index('course_score_user_created_idx').on(table.userId, table.createdAt),
   ],
 );
 

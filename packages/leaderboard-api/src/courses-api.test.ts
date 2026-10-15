@@ -374,6 +374,55 @@ describe('PATCH /api/v0/course-scores/:id', () => {
   });
 });
 
+describe('GET /api/v0/course-scores', () => {
+  const charts = [stageChart('1D'), stageChart('1E')];
+
+  test('lists the latest runs, anonymous ones on request and hidden ones only to their player', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const { handle } = (await (await fetchApp('/api/v0/me', { headers: { cookie } })).json()) as { handle: string };
+    const shown = (await (
+      await submitCourse(cookie, courseBody(courseRun(charts, [10, 8]), charts))
+    ).json()) as CourseOutcome;
+    const hidden = (await (
+      await submitCourse(cookie, courseBody(courseRun(charts, [10, 6]), charts))
+    ).json()) as CourseOutcome;
+    await fetchApp(`/api/v0/course-scores/${hidden.courseScoreId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ hidden: true }),
+    });
+    type Runs = { runs: Array<{ id: string; hidden: boolean; courseName: string; stageCount: number; rank: number }> };
+    const ids = async (query: string, viewer?: string) =>
+      (
+        (await (
+          await fetchApp(
+            `/api/v0/course-scores?ruleset=lr2&limit=100${query}`,
+            viewer !== undefined ? { headers: { cookie: viewer } } : undefined,
+          )
+        ).json()) as Runs
+      ).runs
+        .filter((run) => run.id === shown.courseScoreId || run.id === hidden.courseScoreId)
+        .map((run) => run.id);
+
+    expect(await ids('')).toEqual([]);
+    expect(await ids('&anonymous=1')).toEqual([shown.courseScoreId]);
+    expect(await ids(`&player=${handle}`)).toEqual([shown.courseScoreId]);
+    // Their own player sees both, the newest first, while their account is anonymous.
+    expect(await ids('', cookie)).toEqual([hidden.courseScoreId, shown.courseScoreId]);
+
+    const listed = ((await (await fetchApp(`/api/v0/course-scores?ruleset=lr2&player=${handle}`)).json()) as Runs).runs;
+    expect(listed[0]).toMatchObject({
+      id: shown.courseScoreId,
+      courseName: 'Test Dan',
+      stageCount: 2,
+      hidden: false,
+      exScore: 36,
+      rank: 1,
+      players: 1,
+    });
+  });
+});
+
 describe('reassignScores', () => {
   test('moves course runs to the linked account and rebuilds its course bests', async () => {
     const { reassignScores } = await import('./scores/reassign.ts');
