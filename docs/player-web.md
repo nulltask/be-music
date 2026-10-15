@@ -94,6 +94,7 @@ Courses play through the same select → play → result scenes. See [Courses an
   - They are read with `readCourseFile` (`@be-music/player-web/collection`).
   - The demo hashes the library's chart files (cached per song) and matches each stage by SHA-256, then MD5 (`resolveCourseFolders`).
   - Course files dropped on their own match against the songs already loaded.
+  - beatoraja's command-folder file (`folder/*.json`) adds its random courses: each folder with any becomes a course folder. A random course is listed with its stage titles (or filters), lights beatoraja's `OPTION_RANDOMCOURSEBAR` (1031), and draws its stages from the library when it is started (`drawBrowserRandomCourse`). A stage that matches no chart leaves the course unstarted with a status message.
 - **Select:**
   - Each course file is a folder bar listed after the song folders. Inside it, every course is a course bar (`BrowserBrowseEntry` `kind: 'course'`).
   - A course with a stage missing from the collection is listed but cannot be started.
