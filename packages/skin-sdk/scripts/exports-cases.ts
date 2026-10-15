@@ -21,6 +21,28 @@ const BENCH_SONG = {
   chart: BENCH_CHART,
 } satisfies skinSdkApi.BrowserSongEntry;
 const BENCH_STATS = skinSdkApi.resolveSongStats(BENCH_SONG);
+const BENCH_COURSE_ENTRY = {
+  kind: 'course',
+  course: {
+    id: 'Bench#0',
+    definition: {
+      name: 'Bench Dan',
+      kind: 'grade',
+      stages: [],
+      constraints: ['grade_mirror', 'gauge_lr2'],
+      trophies: [],
+      release: true,
+      source: { format: 'beatoraja-json' },
+    },
+    stages: [{ title: 'Bench', song: BENCH_SONG }, { title: 'Missing' }],
+    playable: false,
+  },
+} satisfies skinSdkApi.BrowserBrowseEntry;
+const BENCH_BROWSE_ENTRIES: readonly skinSdkApi.BrowserBrowseEntry[] = [
+  { kind: 'song', song: BENCH_SONG },
+  { kind: 'folder', folder: { label: 'Bench', songs: [BENCH_SONG] } },
+  BENCH_COURSE_ENTRY,
+];
 const BENCH_SCORE = {
   total: 100,
   perfect: 60,
@@ -404,6 +426,21 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
   define('skin-sdk.validateBeMusicSkinSettings', {
     run: () => {
       skinSdkApi.validateBeMusicSkinSettings(BENCH_SETTINGS);
+    },
+  });
+  define('skin-sdk.browseEntryTitle', {
+    run: () => {
+      for (const entry of BENCH_BROWSE_ENTRIES) skinSdkApi.browseEntryTitle(entry);
+    },
+  });
+  define('skin-sdk.browseEntryCount', {
+    run: () => {
+      for (const entry of BENCH_BROWSE_ENTRIES) skinSdkApi.browseEntryCount(entry);
+    },
+  });
+  define('skin-sdk.browseEntryBadge', {
+    run: () => {
+      for (const entry of BENCH_BROWSE_ENTRIES) skinSdkApi.browseEntryBadge(entry);
     },
   });
 }
