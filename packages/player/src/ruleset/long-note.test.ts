@@ -1,11 +1,27 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  addHcnPassing,
   ignoresLateLongNoteHeadBad,
+  noteLateReachUs,
   isChargeLongNoteMode,
   isMultiBadCollectorTarget,
   longNoteOwesTailMiss,
   resolveEffectiveLongNoteMode,
+  HCN_TICK_US,
+  HcnTickCounter,
+  resolveLnEarlyRelease,
 } from './long-note.ts';
+import type { JudgeWindowSetUs } from './definitions.ts';
+
+/** Symmetric end windows: PGREAT ±20 ms, GREAT ±60 ms, GOOD ±150 ms, BAD ±250 ms. */
+const END_WINDOWS: JudgeWindowSetUs = {
+  judges: [
+    [-20_000, 20_000],
+    [-60_000, 60_000],
+    [-150_000, 150_000],
+    [-250_000, 250_000],
+  ],
+};
 
 describe('ruleset long-note rules', () => {
   test('resolveEffectiveLongNoteMode maps the chart mode through the ruleset style', () => {
@@ -50,5 +66,113 @@ describe('ruleset long-note rules', () => {
     expect(ignoresLateLongNoteHeadBad(lr2, 3, true, 2)).toBe(false);
     expect(ignoresLateLongNoteHeadBad(lr2, 3, true, undefined)).toBe(false);
     expect(ignoresLateLongNoteHeadBad({ ignoreLateBadOnLnHead: false }, 3, true, 1)).toBe(false);
+  });
+
+  test('noteLateReachUs stops an LR2 LN head at its late GOOD leg', () => {
+    const lr2 = { ignoreLateBadOnLnHead: true };
+    const windows = {
+      judges: [
+        [-15_000, 15_000],
+        [-30_000, 30_000],
+        [-60_000, 60_000],
+        [-200_000, 200_000],
+      ],
+    } as unknown as JudgeWindowSetUs;
+    expect(noteLateReachUs(lr2, windows, 1)).toBe(60_000);
+    expect(noteLateReachUs(lr2, windows, undefined)).toBe(200_000);
+    expect(noteLateReachUs(lr2, windows, 2)).toBe(200_000);
+    expect(noteLateReachUs({ ignoreLateBadOnLnHead: false }, windows, 1)).toBe(200_000);
+  });
+
+  test('addHcnPassing chains passings by tail and drops a head judged after its tail', () => {
+    interface Link {
+      id: string;
+      endUs: number;
+      next?: Link;
+    }
+    const ids = (head: Link | undefined): string[] => {
+      const out: string[] = [];
+      for (let link = head; link !== undefined; link = link.next) out.push(link.id);
+      return out;
+    };
+    const later: Link = { id: 'later', endUs: 3_000 };
+    let chain = addHcnPassing<Link>(undefined, later, 2_000);
+    expect(ids(chain)).toEqual(['later']);
+    // An earlier note still passing goes ahead of the one judged early.
+    chain = addHcnPassing(chain, { id: 'earlier', endUs: 1_500 }, 1_000);
+    expect(ids(chain)).toEqual(['earlier', 'later']);
+    // A head missed after its tail passed never ticks.
+    chain = addHcnPassing(chain, { id: 'missed', endUs: 1_200 }, 1_200);
+    expect(ids(chain)).toEqual(['earlier', 'later']);
+    chain = addHcnPassing(chain, { id: 'last', endUs: 4_000 }, 3_500);
+    expect(ids(chain)).toEqual(['earlier', 'later', 'last']);
+  });
+
+  describe('resolveLnEarlyRelease', () => {
+    const lr2 = { lnEarlyRelease: 'head-unless-beyond-good' } as const;
+    const beatoraja = { lnEarlyRelease: 'worse-of-head-and-tail' } as const;
+    const pgreatHead = { judge: 0, dmUs: 5_000 } as const;
+
+    test('LR2 keeps the head judgment for a release inside the GOOD window', () => {
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 1, END_WINDOWS)).toEqual(pgreatHead);
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 100_000, END_WINDOWS)).toEqual(pgreatHead);
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 150_000, END_WINDOWS)).toEqual(pgreatHead);
+    });
+
+    test('LR2 BADs a release more than the GOOD window before the tail', () => {
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 150_001, END_WINDOWS)).toEqual({ judge: 3, dmUs: 150_001 });
+      expect(resolveLnEarlyRelease(lr2, pgreatHead, 2_000_000, END_WINDOWS)).toEqual({ judge: 3, dmUs: 2_000_000 });
+    });
+
+    test('beatoraja takes the worse of the head and the release', () => {
+      expect(resolveLnEarlyRelease(beatoraja, pgreatHead, 1, END_WINDOWS)).toEqual(pgreatHead);
+      expect(resolveLnEarlyRelease(beatoraja, pgreatHead, 100_000, END_WINDOWS)).toEqual({ judge: 2, dmUs: 100_000 });
+      expect(resolveLnEarlyRelease(beatoraja, { judge: 1, dmUs: -50_000 }, 10_000, END_WINDOWS)).toEqual({
+        judge: 1,
+        dmUs: -50_000,
+      });
+    });
+
+    test('beatoraja BADs a release that lands BAD or outside every window before the tail', () => {
+      expect(resolveLnEarlyRelease(beatoraja, pgreatHead, 200_000, END_WINDOWS)).toEqual({ judge: 3, dmUs: 200_000 });
+      expect(resolveLnEarlyRelease(beatoraja, pgreatHead, 2_000_000, END_WINDOWS)).toEqual({
+        judge: 3,
+        dmUs: 2_000_000,
+      });
+    });
+  });
+
+  describe('HcnTickCounter', () => {
+    const run = (counter: HcnTickCounter, untilUs: number): Array<[boolean, number]> => {
+      const ticks: Array<[boolean, number]> = [];
+      counter.advance(untilUs, (gain, atUs) => ticks.push([gain, atUs]));
+      return ticks;
+    };
+
+    test('a lane losing from the start ticks once the counter is past -200 ms, then every 200 ms', () => {
+      const counter = new HcnTickCounter(1_000_000);
+      expect(run(counter, 1_200_001)).toEqual([]);
+      expect(run(counter, 1_600_001)).toEqual([
+        [false, 1_200_001],
+        [false, 1_400_001],
+      ]);
+    });
+
+    test('gaining starts from where the counter stands and leftover time carries over', () => {
+      const counter = new HcnTickCounter(0);
+      counter.setGaining(true, 0, () => undefined);
+      expect(run(counter, 150_000)).toEqual([]);
+      counter.setGaining(false, 150_000, () => undefined);
+      // From +150 ms the counter needs 350 ms more to pass -200 ms.
+      expect(counter.nextTickUs()).toBe(150_000 + 350_001);
+      expect(run(counter, 600_000)).toEqual([[false, 500_001]]);
+    });
+
+    test('a tick exactly at the limit waits for time to move past it', () => {
+      const counter = new HcnTickCounter(0);
+      counter.setGaining(true, 0, () => undefined);
+      expect(run(counter, HCN_TICK_US + 1)).toEqual([]);
+      expect(run(counter, HCN_TICK_US + 2)).toEqual([[true, HCN_TICK_US + 1]]);
+    });
   });
 });

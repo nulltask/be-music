@@ -191,6 +191,9 @@ bmson `key_channels` (beatoraja's hidden notes) are read as invisible notes, and
 
 FREE ZONE (`17` / `27`) is treated as a note with a 1 beat ending.
 It is excluded from the normal score/gauge target and treated as a keysound fallback and a drawing aid target.
+It has no judging effect: a scratch press during it is judged as any other press and can charge an empty `POOR`, as in
+LR2 and beatoraja (both drop channel `17` / `27` from 7-key and 14-key charts) and IIDX (which never had FREE ZONE; it
+belongs to beatmania 1st / 2ndMIX).
 This only applies to the IIDX families — under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are
 ordinary key columns, so they keep whatever length the chart authored (a plain tap stays a tap).
 
@@ -343,6 +346,12 @@ After changing the dynamic judgment width, use the new `BAD` width for the next 
 - Determination of expiration of mines/invisible notes
 - Determining the end point of a long note
 
+Each judgment reads the width in force at its own instant, as LR2 reads its one global `judgetime[]`: a press (the
+candidate search, its classification, the multi-BAD collector, a mine's press leg, a press on a held long note) uses the
+width at the press, and a release (an LN's early release, a charge note's tail) the width at the release. A note's miss
+deadline and a charge tail's late window use the width at the note and at the tail, and a mine's entry and settling
+the width at the mine. The engine and the play-log simulator read the same instants.
+
 ### bmson initial judgment width
 
 bmson determines the judgment width using the following priority order.
@@ -438,8 +447,7 @@ Empty POOR mirrors LR2's phantom-press behaviour:
 If a keysound fallback exists, play it first.
 The fallback is the latest same-lane WAV whose early `BAD` window has already opened, so a blank press between two notes keeps playing the previous WAV until the next note's judgment window begins.
 The next note's WAV is never used before that window opens.
-After the fallback, if the channel sits in a FREE ZONE, suppress empty POOR and return — FREE ZONE is the author's explicit "press here for ambience" region, not a phantom press.
-The LN repeat-suppress window after a long-note release is treated the same way (the input is the intended tail re-tap, not phantom).
+Without key-state input (a terminal that sends no release events, so key repeat re-sends the key that played a long note), a note-less press on a lane before the tail of a long note it played is treated the same way. With key-state input (kitty keyboard protocol, browsers, replays) there is no such window: every press is a real press and is judged as LR2 and beatoraja judge it.
 
 ### Landmine
 
@@ -572,7 +580,7 @@ Long notes derived from `#mmm51-69` are counted the same way as `#LNOBJ` ones.
 
 The chart's `#LNMODE` is a request, not a decision — the ruleset maps it to what it actually plays:
 
-- `lr2` (`ln`): every long note is an LN, whatever `#LNMODE` says. One deferred judgment, early release is a `BAD`.
+- `lr2` (`ln`): every long note is an LN, whatever `#LNMODE` says. One deferred judgment; a release more than the `GOOD` window before the tail is a `BAD`.
 - `beatoraja` (`per-note`): honours the chart — `1` is an LN, `2` a CN, `3` an HCN.
 - `iidx` (`charge`): every long note is a charge note, an HCN where the chart says `3`. A `BAD` or `POOR` on the
   head cancels the tail judgment entirely.
@@ -588,14 +596,38 @@ However, the final decision timing depends on `#LNMODE`.
 
 The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's raw `#LNMODE`.
 
-- Mode `1` (LN): the head judgment is held and confirmed once, at the end point. Releasing midway makes it a `BAD`
-  at that point and stops the lane sound.
+- Mode `1` (LN): the head judgment is held and confirmed once, at the end point. Releasing before the end point
+  stops the lane sound and settles the LN at once, by the ruleset (`lnEarlyRelease`): `lr2` makes a release more than
+  the `GOOD` window before the tail a `BAD` and otherwise keeps the head judgment (OpenLR2 `ProcLongnote`);
+  `beatoraja` takes the worse of the head and the release judged against the long-note-end windows, and makes it a
+  `BAD` when that is `BAD` or worse (`JudgeManager` L533-545). Under `lr2` the head has no late `BAD`: it is missed
+  once time moves past its late `GOOD` leg, and a press after that judges whatever else is in reach (OpenLR2
+  `ProcLongnote`, LR2f.cpp:7542).
 - Mode `2` (CN): the head scores immediately on the press. The tail is judged on the RELEASE — against the exact
   release instant, not the frame that noticed it — and contributes a second judgment. Holding past the end point
-  is not yet a judgment: the player has until the tail's late window closes to let go. The lane sound stops on
-  release.
-- Mode `3` (HCN): as mode `2`, plus the gauge keeps draining while the hold is broken. Reaching the end point with
-  the hold broken makes the tail a `POOR`.
+  is not yet a judgment: the player has until the tail's late window closes to let go. Still holding when it
+  closes makes the tail a missed `POOR` (beatoraja's `CN end poor`). The lane sound stops on release.
+- Mode `3` (HCN): judged exactly as mode `2` (the tail on the release), plus beatoraja's gauge ticks
+  (`JudgeManager` L289-L340, `HcnTickCounter`). From the later of the start point and the head's judgment (pressed, or
+  missed) until the end point passes, a signed counter runs up while the lane gains — a key on it is down, or the
+  tail was released at `GOOD` or better — and down otherwise. Each time it passes +200 ms the gauge gains one tick
+  (beatoraja: `GREAT` ×0.5 of the judge table); each time it passes −200 ms it loses one (`BAD` ×0.5). The ticks
+  keep running after an early release, so pressing the lane again before the end point gains once more. Only the note
+  crossing the judge line ticks (`JudgeManager` L235-L242): one judged early waits until the one ahead of it on the
+  lane has passed, and a head missed only after its end point passed has no ticks. AUTO SCRATCH lanes have none.
+
+A release is settled at its own instant. The one exception is the ruleset's long-note release margin
+(`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release
+that would score an early `BAD` or worse before the tail waits 200 ms (for an LN the timing is the head's when the head
+was further off than the release, so a late `BAD` head settles at once), and pressing the lane again inside it resumes the hold as
+if it had never been let go. LR2, IIDX and beatoraja's other modes have no margin. Only input without release events
+(a terminal without the kitty keyboard protocol) still treats a press as held for 120 ms after its last repeat.
+
+A press on a lane whose long note is held (a second key bound to the lane, such as the turntable's other direction)
+never judges another note on that lane: the lane's current note is the long note. What it does instead is the
+ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head again when the press falls within its `BAD` window and
+charges an empty `POOR` otherwise (OpenLR2 `ProcLongnote`); `beatoraja` ignores it as a re-press (`JudgeManager`
+L355-377), and `iidx` does the same.
 
 A long note the player never touched owes one `POOR` for the head, plus a second for the tail under charge modes —
 except under IIDX, where the cancelled tail owes nothing.
@@ -608,7 +640,7 @@ one `PGREAT` under LN styles, two (head and tail) under charge styles.
 ### AUTO SCRATCH
 
 `AUTO SCRATCH` is a mode that automatically processes only the scratch lane (`16` / `26`) on the manual loop.
-The confirmation timing of long note is the end point, same as `AUTO`.
+An LN-style long note scores its one `PGREAT` at the end point; a charge note scores its head's `PGREAT` at the start point and its tail's at the end point, as beatoraja's autoplay does. The scratch lanes are the play mode's (`scratch` lanes of the play-mode table), so channel `16` / `26` is an ordinary key in the 9 KEY BME-type layout and the keyboard modes.
 
 ## Behavior by mode
 
@@ -623,7 +655,7 @@ No judgment window or manual input candidate search is used.
 ### `MANUAL`
 
 `MANUAL` selects the most appropriate candidate note within the `BAD` window from the set of lanes corresponding to the input token.
-If there are no candidates, the runtime may play the latest same-lane keysound whose early `BAD` window has already opened, then applies LR2-compatible empty POOR unless the channel is FREE ZONE or the input falls inside the long-note repeat-suppress window.
+If there are no candidates, the runtime may play the latest same-lane keysound whose early `BAD` window has already opened, then applies LR2-compatible empty POOR unless, without key-state input, the press falls before the tail of a long note played on that lane.
 It does not play the next pending lane keysound before that note's judgment window opens.
 
 In manual input, objects that pass the `BAD` window without any note input are automatically set to `POOR`.
@@ -783,9 +815,9 @@ A negative `#BPMxx` referenced through channel 08 (truncated to an integer first
 
 - Timing stays monotonic: the resolver integrates |BPM|, so every note keeps a forward `seconds` and audio scheduling is unaffected before the reversal.
 - From the reversal on, the engine publishes `displayBeat = 2 × beat(reversal) − beat(now)` on the UI frame — a mirror in chart-position space, as LR2 draws it. The TUI grid and the web scenes scroll from it, so the chart visibly runs backwards at the post-reversal tempo (pausing through post-reversal STOPs, following later BPM changes, pinning at the chart head if it rewinds past the start) while the status clock and summary stay on the true clock.
-- Presses keep being judged on the mirrored clock `t' = 2 × reversal − now`: notes around the reversal stay hittable just after it, empty POORs fire while the lane's next note is within the ruleset's empty-POOR reach of `t'`, and there is no miss sweep past the reversal. A hold spanning the reversal BADs on release and stays open otherwise. Mines freeze at the reversal.
+- Presses keep being judged on the mirrored clock `t' = 2 × reversal − now`: notes around the reversal stay hittable just after it, empty POORs fire while the lane's next note is within the ruleset's empty-POOR reach of `t'`, and there is no miss sweep past the reversal. A hold spanning the reversal BADs on release and stays open otherwise. Mines freeze at the reversal; a press at the reversal instant itself still detonates a mine within its PGREAT reach.
 - Realtime audio freezes with LR2's event pump: BGM / keysound triggers behind the reversal never fire, while BGM and BGA on the reversal tick itself still do (LR2's op order). BGA cues stop changing; a movie that is already playing keeps running. NOWBPM holds `|trunc(BPM)|` of the negative value.
-- The run ends at the chart's precomputed end time (a documented deviation — real LR2 soft-locks until ESC). If scorable notes are left unjudged — post-reversal notes, open holds — the gauge drops to 0 and the run is FAILED, as LR2 zeroes HP when such a play is left. Playlogs record `chart.reversalTimeUs` so re-simulations apply the same mirrored clock and result.
+- The run ends at the chart's precomputed end time (a documented deviation — real LR2 soft-locks until ESC). If scorable notes are left unjudged — post-reversal notes, open holds, an AUTO SCRATCH long note whose tail lies past the reversal — the gauge drops to 0 and the run is FAILED, as LR2 zeroes HP when such a play is left. Playlogs record `chart.reversalTimeUs` so re-simulations apply the same mirrored clock and result.
 
 ### Non-TUI output
 

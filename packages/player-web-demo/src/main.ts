@@ -2745,6 +2745,7 @@ class PlayerWebDemoApp {
         randomDraws: prep.randomDraws,
         judgeRuleset: this.guiState.judgeRuleset,
         autoScratch: this.guiState.autoScratch1P || this.guiState.autoScratch2P,
+        gauge: this.guiState.gauge,
         recordPlaylog: {
           gauge: this.guiState.gauge,
           ...(chartHashes !== undefined ? { chartSha256: chartHashes.sha256, chartMd5: chartHashes.md5 } : {}),

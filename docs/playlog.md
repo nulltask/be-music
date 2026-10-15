@@ -38,7 +38,9 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
    lane-arrangement options that produced the resolved chart, the live judge-window ruleset (`judgeRuleset`,
-   absent = `'lr2'`), the debug judge-window override, an ESC flag, and `randomDraws`: the play's `#RANDOM` /
+   absent = `'lr2'`), the debug judge-window override, an ESC flag (`aborted`, with `abortedAtUs`: the chart time the judge had settled
+   through when the play was aborted, where re-simulations stop instead of missing the rest of the chart), and
+   `randomDraws`: the play's `#RANDOM` /
    `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes as a `RandomDraws` value (`@be-music/chart`), one
    `{ command, range, value }` entry per such line of the chart in file order. They are the
    `PlayerOptions.randomDraws` the engine played with: every host draws once per play (`resolvePlayChart` in
@@ -48,8 +50,11 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    entry no control-flow line could have made. It is omitted for charts without control flow.
 
 Judgments, EX-SCORE, combo, and gauge values live only in **`results`** — a regenerable cache keyed by ruleset id
-(`native` holds the engine's own summary at record time). Because the canonical data is the input stream, a later
-fix to any ruleset re-scores every previously recorded play without re-recording anything.
+(`native` holds the engine's own result at record time). Every entry has the same shape: `noteCount` is the ruleset's
+judgment count (a charge note counts twice), `djLevel` is always set, `score` only under a ruleset with a money score
+(LR2), `gauge.final` is the unrounded gauge value and `gauge.failedMidPlay` marks a survival gauge that hit bottom. The
+engine and the simulators reach the same entry for the same inputs. Because the canonical data is the input stream, a
+later fix to any ruleset re-scores every previously recorded play without re-recording anything.
 
 Timestamps are integer microseconds relative to chart zero (the same t = 0 the engine's note timing uses).
 
