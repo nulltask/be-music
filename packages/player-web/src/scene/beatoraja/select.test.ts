@@ -3,7 +3,8 @@ import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import type { Container, Text, Texture } from 'pixi.js';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
-import type { BrowserCourseEntry } from '../../collection/types.ts';
+import type { BrowserCourseEntry, BrowserSongEntry } from '../../collection/types.ts';
+import { createEmptyJson } from '@be-music/json';
 import { lnModeDirectiveToIndex, PixiBeatorajaSelectScene } from './select.ts';
 
 function fakeTextureCache(): BeatorajaTextureCache {
@@ -136,6 +137,46 @@ describe('PixiBeatorajaSelectScene course bars', () => {
     internals.activateCurrentEntry();
     expect(picked).toEqual([missing]);
     expect(cues).toEqual(['cancel']);
+    scene.dispose();
+  });
+
+  it('snapshots the live cursor inside the course folder and restores it', () => {
+    const courses = [course('first', true), course('second', true), course('third', true)];
+    const { scene } = sceneInCourseFolder(courses, () => undefined);
+    (scene as unknown as { moveCursor(delta: number): void }).moveCursor(2);
+    const snapshot = scene.captureSnapshot();
+    expect(snapshot.folderPath).toEqual(['Dan']);
+    expect(snapshot.cursorStack).toEqual([0, 2]);
+    scene.dispose();
+
+    const restored = new PixiBeatorajaSelectScene({
+      skin: makeSkin(),
+      textures: fakeTextureCache(),
+      songs: [],
+      courseFolders: [{ label: 'Dan', songs: [], courses }],
+      onSongPicked: () => undefined,
+      restoreSnapshot: snapshot,
+    });
+    expect((restored as unknown as { currentIndex: number }).currentIndex).toBe(2);
+    restored.dispose();
+  });
+
+  it('snapshots the live cursor inside a song folder and at the root', () => {
+    const song = (id: string, directoryLabel: string): BrowserSongEntry =>
+      ({ id, title: id, directoryLabel, fileLabel: `${id}.bms`, chart: createEmptyJson() }) as BrowserSongEntry;
+    const songs = [song('a', 'one'), song('b', 'two'), song('c', 'two'), song('d', 'two')];
+    const scene = new PixiBeatorajaSelectScene({
+      skin: makeSkin(),
+      textures: fakeTextureCache(),
+      songs,
+      onSongPicked: () => undefined,
+    });
+    const internals = scene as unknown as { moveCursor(delta: number): void; activateCurrentEntry(): void };
+    internals.moveCursor(1);
+    expect(scene.captureSnapshot().cursorStack).toEqual([1]);
+    internals.activateCurrentEntry();
+    internals.moveCursor(2);
+    expect(scene.captureSnapshot()).toMatchObject({ folderPath: ['two'], cursorStack: [1, 2] });
     scene.dispose();
   });
 
