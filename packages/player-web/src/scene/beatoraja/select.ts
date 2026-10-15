@@ -31,6 +31,8 @@
 //   - Search / sort / random song picks
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
 
+import { resolveSceneCourseInfo } from '../course-info.ts';
+import { resolveBeatorajaCourseConstraintOps, resolveBeatorajaCourseText } from './course.ts';
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/chart';
 import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSongListLayout } from '@be-music/beatoraja-skin';
@@ -1071,6 +1073,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       ops.add(BEATORAJA_OP.FOLDERBAR);
     } else if (entry.kind === 'course') {
       ops.add(BEATORAJA_OP.GRADEBAR);
+      // The course's constraints (`OPTION_GRADEBAR_CLASS` … `_HCN`).
+      for (const op of resolveBeatorajaCourseConstraintOps(entry.course.definition.constraints)) ops.add(op);
     } else {
       ops.add(BEATORAJA_OP.SONGBAR);
       ops.add(BEATORAJA_OP.PLAYABLEBAR);
@@ -1210,6 +1214,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // fallback per upstream — they just return `""` when no song is focused.
     const focusedFolderEntry = this.entries[this.currentIndex];
     const focusedFolderLabel = focusedFolderEntry?.kind === 'folder' ? focusedFolderEntry.folder.label : undefined;
+    // A focused course bar names its stages on 150-159, marking the ones the collection lacks.
+    if (focusedFolderEntry?.kind === 'course') {
+      const { course } = focusedFolderEntry;
+      const missingStages = new Set(course.stages.flatMap((stage, index) => (stage.song === undefined ? [index] : [])));
+      const courseText = resolveBeatorajaCourseText(refOp, resolveSceneCourseInfo(course), { missingStages });
+      if (courseText !== undefined) return courseText;
+    }
     switch (refOp) {
       case BEATORAJA_TEXT.TITLE:
         // Folder bar → folder label (upstream `StringPropertyFactory.java:77-78`).

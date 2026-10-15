@@ -443,6 +443,17 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreApi.findBeatorajaThemeBgm(BENCH_BEATORAJA_THEME_BUNDLE);
     },
   });
+  define('player-web.pickBeatorajaThemeBgmPaths', {
+    run: () => {
+      playerWebCoreApi.pickBeatorajaThemeBgmPaths([
+        'sound/course_clear.wav',
+        'sound/clear.wav',
+        'sound/fail.ogg',
+        'sound/resultclose.wav',
+        'sound/decide_v2.wav',
+      ]);
+    },
+  });
   define('player-web.flipRectToPixi', {
     run: () => {
       playerWebCoreApi.flipRectToPixi({ x: 10, y: 20, w: 100, h: 50 }, 720);
