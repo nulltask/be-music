@@ -28,6 +28,23 @@ LR2 never shipped keyboard-mode play skins, so `24` / `48` KEY charts borrow a `
 The parser keeps select, decide, play, and result data in one `Lr2Skin` shape.
 Consumers read only the fields that make sense for their scene.
 
+## Courses
+
+LR2 has a scene of its own for the result of a whole course: `#INFORMATION` type 15, conventionally under `CourseResult/`. `loadLr2ThemeSkinsFromFiles` loads it as `courseResultSkin`, along with the course-result jingles `courseclear` / `coursefail` from the theme's `Sound/` folder. A `result` lookup never picks it.
+
+LR2 reads a skin each time its scene starts, so an `#IF` block can test state that holds for the whole scene. In a course that means the course ops (OpenLR2 `LR2f.cpp` L5403-L5444):
+
+| Op              | Meaning                                           |
+| --------------- | ------------------------------------------------- |
+| 280-288         | Stage 1-9 is played and is not the last one       |
+| 289             | The last stage                                    |
+| 290             | A course: the selected bar, or the running course |
+| 291 / 292 / 293 | Its kind: NONSTOP / EXPERT / GRADE                |
+
+The theme is parsed once, with these ops off. `Lr2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` parses one of its skins again from the files already read, with extra ops held true while `#IF` / `#ELSEIF` are evaluated (`LoadLr2SkinOptions.parseOps`). `pickLr2PlaySkinVariant` names the play-skin variant a chart plays on, so a host can parse that skin again for a course stage.
+
+The values a course skin reads (numbers 250-259, texts 150-170, the course combo on 104 / 105) are scene state; `@be-music/player-web` supplies them. See [Courses and dan certification](./player-web.md#courses-and-dan-certification).
+
 ## Parsed directives
 
 Implemented directives include:

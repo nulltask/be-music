@@ -4,6 +4,7 @@ import type { Lr2SkinInputFile } from './file-lookup.ts';
 import {
   loadLr2ThemeSkinsFromFiles,
   pickLr2PlaySkin,
+  pickLr2PlaySkinVariant,
   pickLr2SystemSoundFile,
   pickLr2ThemeBgmFile,
   summarizeLr2PlaySkins,
@@ -68,6 +69,13 @@ describe('LR2 play-skin helpers', () => {
 
   test('pickLr2PlaySkin returns undefined when no play skin is available', () => {
     expect(pickLr2PlaySkin({}, songWithChannels(['11']))).toBeUndefined();
+  });
+
+  test('pickLr2PlaySkinVariant names the variant pickLr2PlaySkin plays on', () => {
+    const skins: Lr2PlaySkinMap = { '7': skin('7K'), '10': skin('10K') };
+    expect(pickLr2PlaySkinVariant(skins, songWithChannels(['18']))).toBe('7');
+    expect(pickLr2PlaySkinVariant(skins, songWithChannels(['28']))).toBe('10');
+    expect(pickLr2PlaySkinVariant({}, songWithChannels(['11']))).toBeUndefined();
   });
 
   test('summarizeLr2PlaySkins formats loaded variants', () => {
@@ -188,6 +196,35 @@ describe('loadLr2ThemeSkinsFromFiles progress events', () => {
     // Every event after the prelude carries a sub-task label (`play/7K`, `select`, `bgm/decide`, …) — handy for the UI.
     const labeled = themeEvents.slice(1);
     expect(labeled.every((event) => typeof event.label === 'string' && event.label.length > 0)).toBe(true);
+  });
+
+  test('loads the course-result skin and re-parses skins with extra parse ops', async () => {
+    const text = (path: string, rows: string[]): Lr2SkinInputFile => {
+      const bytes = new TextEncoder().encode(rows.join('\n'));
+      return { webkitRelativePath: path, name: path.split('/').pop()!, arrayBuffer: async () => bytes.buffer };
+    };
+    const image = (name: string): string[] => [
+      `#IMAGE,${name}.png`,
+      '#SRC_IMAGE,0,0,0,0,10,10,1,1,0,0',
+      '#DST_IMAGE,0,0,0,0,10,10,0,255,255,255,255',
+    ];
+    const imagesOf = (loaded: Lr2Skin | undefined): string[] =>
+      loaded?.images.map((element) => element.source.imagePath) ?? [];
+    const theme = await loadLr2ThemeSkinsFromFiles([
+      text('LR2files/Theme/T/Play/play_7.lr2skin', [
+        '#INFORMATION,0,T,a,t.bmp',
+        '#IF,290',
+        ...image('course'),
+        '#ELSE',
+        ...image('single'),
+        '#ENDIF',
+      ]),
+      text('LR2files/Theme/T/CourseResult/courseresult.lr2skin', ['#INFORMATION,15,T,a,t.bmp', ...image('cr')]),
+    ]);
+    expect(imagesOf(theme.courseResultSkin)).toEqual(['cr.png']);
+    expect(imagesOf(theme.resultSkin)).toEqual([]);
+    expect(imagesOf(theme.playSkins['7'])).toEqual(['single.png']);
+    expect(imagesOf(theme.loadSkin({ kind: 'play', playVariant: '7', parseOps: [290] }))).toEqual(['course.png']);
   });
 
   test('survives without an onProgress callback', async () => {

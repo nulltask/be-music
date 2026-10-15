@@ -882,6 +882,20 @@ describe('loadLr2SkinFromSourceFiles', () => {
     });
   });
 
+  describe('parseOps', () => {
+    it('takes #IF blocks gated on the extra parse-time ops', () => {
+      // A course stage's ops (290 = in a course, 289 = final stage) gate whole blocks; LR2 reads the skin at each
+      // stage, so the host parses it again with them.
+      const files = new Map<string, Uint8Array>([
+        ['skin/main.csv', lines('#IF,290', '#INCLUDE,course.csv', '#ELSE', '#INCLUDE,single.csv', '#ENDIF')],
+        ['skin/course.csv', imageCsv('course')],
+        ['skin/single.csv', imageCsv('single')],
+      ]);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['single.png']);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { parseOps: [290, 289] }))).toEqual(['course.png']);
+    });
+  });
+
   // -- #SRC_GAUGECHART_* / #SRC_SCORECHART -------------------------- These directives extend the `#SRC_*` template
   // with four extra columns (field_w, field_h, start, end) that drive the polyline chart-area sizing and reveal
   // animation on the result screen. Verifying the parser captures them correctly is critical because the renderer uses
