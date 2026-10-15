@@ -210,6 +210,31 @@ export function diffPlaylogView(previous: PlaylogViewState, next: PlaylogViewSta
   return changed ? change : undefined;
 }
 
+/**
+ * `view` at the precision a play log records it, so float noise (`0.09999999999999999` for a cover of 0.1 computed as
+ * `ratio × (1 - lift)`) neither lands in the log nor counts as a change: the hi-speed on the 1/1000 grid hosts step
+ * it on, the visible time to whole ms, and each cover part to 4 decimals (1/10000 of the lane height). Scenes round
+ * the view they record with this.
+ */
+export function roundPlaylogView(view: PlaylogViewState): PlaylogViewState {
+  const rounded: PlaylogViewState = { ...view };
+  if (view.hiSpeed !== undefined) rounded.hiSpeed = roundTo(view.hiSpeed, 1000);
+  if (view.visibleMs !== undefined) rounded.visibleMs = Math.round(view.visibleMs);
+  if (view.covers !== undefined) {
+    rounded.covers = view.covers.map((cover) => ({
+      side: cover.side,
+      sudden: roundTo(cover.sudden, 10_000),
+      hidden: roundTo(cover.hidden, 10_000),
+      lift: roundTo(cover.lift, 10_000),
+    }));
+  }
+  return rounded;
+}
+
+function roundTo(value: number, steps: number): number {
+  return Math.round(value * steps) / steps;
+}
+
 /** Folds a live view into the view changes a play log records: {@link createPlaylogViewCoalescer}. */
 export interface PlaylogViewCoalescer {
   /**

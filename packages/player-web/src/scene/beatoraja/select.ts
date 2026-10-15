@@ -97,8 +97,12 @@ export interface PixiBeatorajaSelectSceneOptions {
   songs: ReadonlyArray<BrowserSongEntry>;
   /** Course folders, listed after the song folders at the root (see `resolveCourseFolders`). */
   courseFolders?: ReadonlyArray<BrowserFolderNode>;
-  /** The player started a course bar whose every stage is in the collection. */
-  onCoursePicked?: (course: BrowserCourseEntry) => void;
+  /**
+   * The player started a course bar. A course with a stage missing from the collection (`playable: false`) is handed
+   * over too, so the host can say why it does not start. `autoPlay` is set when AUTO PLAY (act 16) started it: every
+   * stage plays itself.
+   */
+  onCoursePicked?: (course: BrowserCourseEntry, options?: { autoPlay?: boolean }) => void;
   /** Initial highlighted index (within the song list at root). Defaults to 0. */
   initialIndex?: number;
   /**
@@ -687,7 +691,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // list (background, frame) paints behind the labels; chrome declared after (cursor highlight,
     // info panels, decorative overlays) paints on top. Skins that omit the anchor get the
     // top-of-stack fallback (legacy behavior).
-    this.listLayer.eventMode = 'static';
+    //
+    // `passive`, not `static`: Pixi hit-tests the children of an interactive container as interactive too, so the row
+    // label above a row's hit sprite would take a click on the title text and hand it to this (listener-less) layer.
+    // Passive leaves each child to its own mode: only the row hit sprites are hit.
+    this.listLayer.eventMode = 'passive';
     this.view.container.addChildAt(this.listLayer, this.view.songListLayerInsertIndex);
 
     this.songList = parseBeatorajaSongList(options.skin);
@@ -777,7 +785,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   captureSnapshot(): PixiBeatorajaSelectSceneSnapshot {
     return {
       folderPath: this.folderStack.map((folder) => folder.label),
-      cursorStack: this.cursorStack.slice(0, this.folderStack.length + 1),
+      // The deepest entry is the live cursor: `cursorStack` keeps the parents' cursors only (its last slot is the `0`
+      // pushed on entering the folder and is not updated as the cursor moves).
+      cursorStack: [...this.cursorStack.slice(0, this.folderStack.length), this.currentIndex],
       keymodeFilter: this.keymodeFilter,
       sortMode: this.sortMode,
       lnModeOverride: this.lnModeOverride,
@@ -1605,6 +1615,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.buttonPressedAt.set(act, performance.now());
     const entry = this.entries[this.currentIndex];
     const song = entry?.kind === 'song' ? entry.song : entry?.kind === 'folder' ? entry.folder.songs[0] : undefined;
+    // PLAY / AUTO PLAY on a course bar start the course (`MusicSelector` reads the course bar the same way).
+    if ((act === 15 || act === 16) && entry?.kind === 'course') {
+      this.pickCourse(entry.course, act === 16);
+      return;
+    }
     switch (act) {
       case 15: // PLAY (user's default mode)
         if (song !== undefined) {
@@ -2597,6 +2612,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.refreshRowVisuals();
   }
 
+  /**
+   * Hands a course bar to the host. `MusicSelector` does not start a course with a missing stage ("Some of songs not
+   * found"): it plays the cancel cue, and the host is still told so it can say which stages are missing.
+   */
+  private pickCourse(course: BrowserCourseEntry, autoPlay = false): void {
+    const picked = this.options.onCoursePicked;
+    this.playSystemSound(picked !== undefined && course.playable ? 'decide' : 'cancel');
+    if (autoPlay) picked?.(course, { autoPlay: true });
+    else picked?.(course);
+  }
+
   private activateCurrentEntry(): void {
     const entry = this.entries[this.currentIndex];
     if (entry === undefined) return;
@@ -2612,13 +2638,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       return;
     }
     if (entry.kind === 'course') {
-      // `MusicSelector`: a course with a missing stage is not started ("Some of songs not found").
-      if (!entry.course.playable || this.options.onCoursePicked === undefined) {
-        this.playSystemSound('cancel');
-        return;
-      }
-      this.playSystemSound('decide');
-      this.options.onCoursePicked(entry.course);
+      this.pickCourse(entry.course);
       return;
     }
     // eslint-disable-next-line no-console

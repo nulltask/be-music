@@ -591,6 +591,11 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       this.cyclePlayOption('gauge2P', GAUGE_CYCLE);
       return;
     }
+    // PLAY / AUTOPLAY on a course bar start the course, as the built-in scene's PLAY / AUTO do.
+    if ((type === 15 || type === 16) && this.focusedCourse() !== undefined) {
+      this.launchFocusedSong(type === 16);
+      return;
+    }
     const focused = this.focusedSong();
     if (!focused) return;
     if (type === 15) {

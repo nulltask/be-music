@@ -1,7 +1,12 @@
+// Pixi's event mixin (`eventMode`, `isInteractive`) is installed by its events entry; nothing else loads it in Node.
+import 'pixi.js/events';
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
-import type { Container, Text, Texture } from 'pixi.js';
+import { EventBoundary, Matrix, type Container, type Sprite, type Text, type Texture } from 'pixi.js';
+import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
+import type { BrowserCourseEntry, BrowserSongEntry } from '../../collection/types.ts';
+import { createEmptyJson } from '@be-music/json';
 import { lnModeDirectiveToIndex, PixiBeatorajaSelectScene } from './select.ts';
 
 function fakeTextureCache(): BeatorajaTextureCache {
@@ -80,6 +85,34 @@ describe('PixiBeatorajaSelectScene disposal', () => {
   });
 });
 
+describe('PixiBeatorajaSelectScene row clicks', () => {
+  it('hits the row hit sprite, not the list layer, through the title text above it', () => {
+    const scene = new PixiBeatorajaSelectScene({
+      skin: makeSkin(),
+      textures: fakeTextureCache(),
+      songs: [],
+      onSongPicked: () => undefined,
+    });
+    const internals = scene as unknown as SelectSceneInternals & { rowHitAreas: (Sprite | undefined)[] };
+    const hit = internals.rowHitAreas.find((sprite): sprite is Sprite => sprite !== undefined)!;
+    const label = internals.rowLabels.find((text): text is Text => text !== undefined)!;
+    // No song lists no rows, so lay one row out by hand: the title text over the left of the row's hit sprite.
+    hit.visible = true;
+    hit.position.set(0, 0);
+    hit.setSize(200, 40);
+    label.visible = true;
+    label.text = 'Title';
+    label.position.set(10, 20);
+    // Nothing renders here, so bring the world transforms the hit test reads up to date by hand.
+    for (const node of [internals.listLayer, hit, label]) {
+      node.worldTransform.copyFrom(node.getGlobalTransform(new Matrix(), false));
+    }
+    const boundary = new EventBoundary(internals.listLayer);
+    expect(boundary.hitTest(15, 20)).toBe(hit);
+    scene.dispose();
+  });
+});
+
 describe('lnModeDirectiveToIndex', () => {
   it('maps the 1-based `#LNMODE` values onto the 0-based LNMODE button index', () => {
     expect(lnModeDirectiveToIndex(1)).toBe(0);
@@ -91,5 +124,103 @@ describe('lnModeDirectiveToIndex', () => {
     expect(lnModeDirectiveToIndex(undefined)).toBe(0);
     expect(lnModeDirectiveToIndex(0)).toBe(0);
     expect(lnModeDirectiveToIndex(4)).toBe(0);
+  });
+});
+
+describe('PixiBeatorajaSelectScene course bars', () => {
+  const course = (id: string, playable: boolean): BrowserCourseEntry =>
+    ({
+      id,
+      definition: { name: id, kind: 'grade', stages: [], constraints: [], trophies: [] },
+      stages: [{ title: 'a' }],
+      playable,
+    }) as unknown as BrowserCourseEntry;
+
+  type CourseSceneInternals = { activateCurrentEntry(): void; handleButtonAction(act: number): void };
+
+  /** A scene with one course folder, opened, and the decide / cancel cues it plays. */
+  function sceneInCourseFolder(
+    courses: BrowserCourseEntry[],
+    onCoursePicked: (course: BrowserCourseEntry, options?: { autoPlay?: boolean }) => void,
+  ) {
+    const cues: string[] = [];
+    const scene = new PixiBeatorajaSelectScene({
+      skin: makeSkin(),
+      textures: fakeTextureCache(),
+      songs: [],
+      courseFolders: [{ label: 'Dan', songs: [], courses }],
+      onSongPicked: () => undefined,
+      onCoursePicked,
+      systemSoundPaths: { decide: 'decide', cancel: 'cancel', folderOpen: 'open' },
+      skinAudio: { play: (path: string) => void cues.push(path) } as unknown as BeatorajaSkinAudio,
+    });
+    const internals = scene as unknown as CourseSceneInternals;
+    internals.activateCurrentEntry();
+    cues.length = 0;
+    return { scene, internals, cues };
+  }
+
+  it('hands a course with a missing stage to the host with the cancel cue, so the host can say why', () => {
+    const picked: BrowserCourseEntry[] = [];
+    const missing = course('missing', false);
+    const { scene, internals, cues } = sceneInCourseFolder([missing], (entry) => picked.push(entry));
+    internals.activateCurrentEntry();
+    expect(picked).toEqual([missing]);
+    expect(cues).toEqual(['cancel']);
+    scene.dispose();
+  });
+
+  it('snapshots the live cursor inside the course folder and restores it', () => {
+    const courses = [course('first', true), course('second', true), course('third', true)];
+    const { scene } = sceneInCourseFolder(courses, () => undefined);
+    (scene as unknown as { moveCursor(delta: number): void }).moveCursor(2);
+    const snapshot = scene.captureSnapshot();
+    expect(snapshot.folderPath).toEqual(['Dan']);
+    expect(snapshot.cursorStack).toEqual([0, 2]);
+    scene.dispose();
+
+    const restored = new PixiBeatorajaSelectScene({
+      skin: makeSkin(),
+      textures: fakeTextureCache(),
+      songs: [],
+      courseFolders: [{ label: 'Dan', songs: [], courses }],
+      onSongPicked: () => undefined,
+      restoreSnapshot: snapshot,
+    });
+    expect((restored as unknown as { currentIndex: number }).currentIndex).toBe(2);
+    restored.dispose();
+  });
+
+  it('snapshots the live cursor inside a song folder and at the root', () => {
+    const song = (id: string, directoryLabel: string): BrowserSongEntry =>
+      ({ id, title: id, directoryLabel, fileLabel: `${id}.bms`, chart: createEmptyJson() }) as BrowserSongEntry;
+    const songs = [song('a', 'one'), song('b', 'two'), song('c', 'two'), song('d', 'two')];
+    const scene = new PixiBeatorajaSelectScene({
+      skin: makeSkin(),
+      textures: fakeTextureCache(),
+      songs,
+      onSongPicked: () => undefined,
+    });
+    const internals = scene as unknown as { moveCursor(delta: number): void; activateCurrentEntry(): void };
+    internals.moveCursor(1);
+    expect(scene.captureSnapshot().cursorStack).toEqual([1]);
+    internals.activateCurrentEntry();
+    internals.moveCursor(2);
+    expect(scene.captureSnapshot()).toMatchObject({ folderPath: ['two'], cursorStack: [1, 2] });
+    scene.dispose();
+  });
+
+  it('starts the focused course from PLAY (act 15) and AUTO PLAY (act 16)', () => {
+    const picked: Array<[string, { autoPlay?: boolean } | undefined]> = [];
+    const dan = course('dan', true);
+    const { scene, internals, cues } = sceneInCourseFolder([dan], (entry, options) => picked.push([entry.id, options]));
+    internals.handleButtonAction(15);
+    internals.handleButtonAction(16);
+    expect(picked).toEqual([
+      ['dan', undefined],
+      ['dan', { autoPlay: true }],
+    ]);
+    expect(cues).toEqual(['decide', 'decide']);
+    scene.dispose();
   });
 });

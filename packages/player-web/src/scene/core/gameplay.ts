@@ -49,6 +49,7 @@ import {
   DEFAULT_PLAYLOG_VIEW_REPLAY,
   resolveReplayHiSpeed,
   resolveReplayView,
+  roundPlaylogView,
   type BeMusicPlaylog,
   type PlaylogCourseStage,
   type PlaylogLaneCover,
@@ -148,7 +149,7 @@ import {
   PIXELS_PER_BEAT,
   PLAYFIELD,
 } from '../gameplay-constants.ts';
-import { HiSpeedTransition, snapHiSpeed } from '../hi-speed.ts';
+import { HiSpeedTransition, snapHiSpeed, stepPlayerHiSpeed } from '../hi-speed.ts';
 import {
   buildSkinBgaFrame,
   pickActiveBgaCue,
@@ -1269,6 +1270,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private hsFixMultiplier = 1;
   /**
+   * The hi-speed on the player's own scale: {@link hiSpeed} without the HS-FIX multiplier. It is what the player picked
+   * (the select panel and the host show it), so the HUD's hi-speed readout shows it too, and the hotkey steps it.
+   */
+  protected playerHiSpeed = this.hiSpeed;
+  /**
    * The scroll factor notes, bar lines and long notes are positioned with: it glides to each new {@link hiSpeed} over
    * `HISPEED_TRANSITION_MS` (wall clock) instead of jumping, while the HUD / readouts show the new target at once.
    * Visual only — judging never reads it.
@@ -1388,6 +1394,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // float-drift failure mode of repeated +0.1 steps) lands on the canonical grid value the in-game adjust hotkey
       // would produce.
       this.hiSpeed = snapHiSpeed(options.initialHiSpeed) ?? this.hiSpeed;
+      this.playerHiSpeed = this.hiSpeed;
       this.scrollHiSpeed.jump(this.hiSpeed);
     }
     this.autoPauseOnBlur = options.autoPauseOnBlur ?? false;
@@ -3034,12 +3041,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private adjustHiSpeed(delta: number): void {
     if (this.options.hiSpeedLocked === true) return;
-    const next = snapHiSpeed(this.hiSpeed + delta);
-    if (next === undefined || next === this.hiSpeed) return;
-    this.hiSpeed = next;
-    this.scrollHiSpeed.retarget(next, performance.now());
-    const reported = snapHiSpeed(next / this.hsFixMultiplier);
-    if (reported !== undefined) this.options.onHiSpeedChange?.(reported);
+    // The step moves the player's hi-speed (on their own scale, as the readout shows it); HS-FIX scales the drawn one.
+    const next = stepPlayerHiSpeed(this.playerHiSpeed, delta, this.hsFixMultiplier);
+    if (next === undefined || next.player === this.playerHiSpeed) return;
+    this.playerHiSpeed = next.player;
+    this.hiSpeed = next.drawn;
+    this.scrollHiSpeed.retarget(next.drawn, performance.now());
+    this.options.onHiSpeedChange?.(next.player);
   }
 
   /**
@@ -3048,12 +3056,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Snapped and clamped like the in-game hotkey; non-finite values are ignored.
    */
   public setHiSpeed(value: number): void {
-    const base = snapHiSpeed(value);
-    if (base === undefined) return;
-    const next = snapHiSpeed(base * this.hsFixMultiplier);
-    if (next === undefined || next === this.hiSpeed) return;
-    this.hiSpeed = next;
-    this.scrollHiSpeed.retarget(next, performance.now());
+    const next = stepPlayerHiSpeed(value, 0, this.hsFixMultiplier);
+    if (next === undefined) return;
+    this.playerHiSpeed = next.player;
+    if (next.drawn === this.hiSpeed) return;
+    this.hiSpeed = next.drawn;
+    this.scrollHiSpeed.retarget(next.drawn, performance.now());
   }
 
   /**
@@ -4308,7 +4316,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       songGenre: this.song?.genre,
       // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBpm`.
       bpm: this.displayBpm(seconds) ?? bpm,
-      hiSpeed: this.hiSpeed,
+      // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
+      hiSpeed: this.playerHiSpeed,
       score: this.score.score,
       exScore: this.score.exScore,
       exScoreMax: total * 2,
@@ -4412,8 +4421,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     };
     // The visible time at the main BPM without `#SCROLL`, so another scale's replay can match it.
     const visibleMs = this.resolveVisibleMs(covers[0], this.chartBpmRange?.mainBpm, 1);
-    if (visibleMs !== undefined && visibleMs > 0) view.visibleMs = Math.round(visibleMs);
-    return view;
+    if (visibleMs !== undefined && visibleMs > 0) view.visibleMs = visibleMs;
+    // At the play log's precision, so cover fractions record without float noise.
+    return roundPlaylogView(view);
   }
 
   /** The view the recorded play log starts from (`play.view`); later changes go through {@link updatePlaylogView}. */
@@ -4461,6 +4471,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const next = hiSpeed === undefined ? undefined : snapHiSpeed(hiSpeed);
     if (next === undefined || next === this.hiSpeed) return;
     this.hiSpeed = next;
+    this.playerHiSpeed = snapHiSpeed(next / this.hsFixMultiplier) ?? this.playerHiSpeed;
     this.scrollHiSpeed.retarget(next, performance.now());
   }
 

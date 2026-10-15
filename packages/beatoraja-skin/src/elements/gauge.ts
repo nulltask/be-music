@@ -85,6 +85,10 @@ export function gaugeExBase(mode: number): number {
  * rulesets — LR2 names its recovery gauge `GROOVE` and its instant-death gauge `DEATH`, beatoraja calls the same
  * two `NORMAL` and `HAZARD`, and IIDX spells assisted easy with the `-ED-` suffix — so every spelling maps onto the
  * one beatoraja slab that renders it. Unknown ids and `undefined` fall back to `NORMAL` (= 2), beatoraja's default.
+ *
+ * A course stage's gauge maps onto beatoraja's class gauges: `CLASS` / `EXCLASS` / `EXHARDCLASS` as they are, and
+ * LR2's course gauges by their line — `GRADE`, `COURSE` and `COURSE-EASY` to `CLASS`, the `-HARD` ones to `EXCLASS`
+ * and the `-DEATH` ones to `EXHARDCLASS`.
  */
 export function beatorajaGaugeModeFromString(type: string | undefined): BeatorajaGaugeMode {
   switch (type) {
@@ -100,6 +104,19 @@ export function beatorajaGaugeModeFromString(type: string | undefined): Beatoraj
     case 'DEATH':
     case 'HAZARD':
       return BEATORAJA_GAUGE_MODE.HAZARD;
+    case 'CLASS':
+    case 'GRADE':
+    case 'COURSE':
+    case 'COURSE-EASY':
+      return BEATORAJA_GAUGE_MODE.CLASS;
+    case 'EXCLASS':
+    case 'GRADE-HARD':
+    case 'COURSE-HARD':
+      return BEATORAJA_GAUGE_MODE.EXCLASS;
+    case 'EXHARDCLASS':
+    case 'GRADE-DEATH':
+    case 'COURSE-DEATH':
+      return BEATORAJA_GAUGE_MODE.EXHARDCLASS;
     case 'GROOVE':
     case 'NORMAL':
     default:
