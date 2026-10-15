@@ -16,6 +16,7 @@ import {
   expectRecord,
   expectString,
   optionalString,
+  parseRandomDraws,
   parseRecorder,
   parseResults,
   PlaylogParseError,
@@ -601,6 +602,9 @@ function parseNonstopRun(run: Record<string, unknown>): PlaylogNonstopRun {
     };
     if (stage.windowEndUs !== undefined) {
       parsed.windowEndUs = expectFiniteNumber(stage.windowEndUs, `${path}.windowEndUs`);
+    }
+    if (stage.randomDraws !== undefined) {
+      parsed.randomDraws = parseRandomDraws(stage.randomDraws, `${path}.randomDraws`);
     }
     return parsed;
   });
