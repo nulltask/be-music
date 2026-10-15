@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeMusicResultData } from './result-data.ts';
-import { resolveResultLamp, resolveResultTrackRows } from './result-track.ts';
+import { resolveResultLamp, resolveResultTrackRows, resolveResultVerdict } from './result-track.ts';
 
 function score(partial: Partial<BeMusicResultData['score']>): BeMusicResultData['score'] {
   return { total: 100, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 0, score: 0, ...partial };
@@ -54,5 +54,17 @@ describe('resolveResultTrackRows', () => {
     const rows = resolveResultTrackRows({ song: bare, score: score({}) });
     expect(rows[1]!.value).toBe('-');
     expect(rows[2]!.value).toBe('-');
+  });
+});
+
+describe('resolveResultVerdict', () => {
+  it('reads STAGE CLEAR / FAILED for one play', () => {
+    expect(resolveResultVerdict({ cleared: true })).toBe('STAGE CLEAR');
+    expect(resolveResultVerdict({ cleared: false })).toBe('FAILED');
+  });
+
+  it('reads COURSE CLEAR / COURSE FAILED for a course result', () => {
+    expect(resolveResultVerdict({ cleared: true, courseResult: true })).toBe('COURSE CLEAR');
+    expect(resolveResultVerdict({ cleared: false, courseResult: true })).toBe('COURSE FAILED');
   });
 });

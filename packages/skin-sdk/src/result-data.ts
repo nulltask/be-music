@@ -59,6 +59,12 @@ export interface BeMusicResultData {
   lamp?: BeMusicClearLamp;
   /** Gauge the play ran on, as the ruleset names it (`GROOVE`, `HARD`, `EX-HARD`, …). */
   gaugeType?: string;
+  /**
+   * The result of a whole EXPERT / GRADE course rather than one chart: `score` and the judgments sum the stages played,
+   * `playSeconds` adds up their play time, and the verdict reads `COURSE CLEAR` / `COURSE FAILED` (see
+   * {@link resolveResultVerdict}). Absent for a single play, a course stage and a NONSTOP run (one stitched play).
+   */
+  courseResult?: boolean;
   /** Compat ruleset that judged the play (`lr2` / `beatoraja` / `iidx`). */
   judgeRuleset?: string;
   /** FAST (early) and SLOW (late) GREAT / GOOD counts. */
