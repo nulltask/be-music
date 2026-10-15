@@ -810,6 +810,22 @@ describe('engine / simulator equivalence', () => {
     expect(simulated.judge).toMatchObject({ poor: summary.poor, good: summary.good, great: summary.great });
   });
 
+  // At BPM 177 the note sits at 1.3559322… s, recorded as 1 355 932 µs. A press exactly 200 000 µs earlier is on LR2's
+  // BAD edge, though the float seconds put it 0.2000002 s away: the press scan must reach it in whole microseconds.
+  test('lr2: a press on the BAD edge in whole microseconds judges the note on both sides', async () => {
+    const json = chart([{ measure: 1, channel: '11', position: [0, 1], value: '01' }]);
+    json.metadata.bpm = 177;
+    const inputs = [down(0, 1_155_932, '11'), up(1, 1_200_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(playlog.chart.notes[0]!.timeUs).toBe(1_355_932);
+    expect(summary.bad).toBe(1);
+    expect(summary.emptyPoor).toBe(0);
+    expect(simulated.judge).toMatchObject({ bad: summary.bad, poor: summary.poor, emptyPoor: summary.emptyPoor });
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
