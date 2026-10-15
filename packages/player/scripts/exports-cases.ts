@@ -259,6 +259,67 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.simulatePlaylogRulesets(BENCH_PLAYLOG);
     },
   });
+  const benchCourseInfo = {
+    name: 'Dan',
+    kind: 'grade' as const,
+    constraints: ['grade_mirror', 'gauge_lr2'],
+    trophies: [{ name: 'gold', missRate: 5, scoreRate: 80 }],
+  };
+  const benchCourseLog = playlogApi.createCoursePlaylog({
+    course: benchCourseInfo,
+    stages: [
+      { played: true, playlog: BENCH_PLAYLOG },
+      { played: true, playlog: BENCH_PLAYLOG },
+    ],
+  });
+  const benchCourseText = playlogApi.serializeCoursePlaylog(benchCourseLog);
+  const benchStageResult = playlogApi.simulatePlaylog(BENCH_PLAYLOG, { ruleset: 'lr2' });
+  define('player.playlog.aggregateCourseResult', {
+    run: () => {
+      playlogApi.aggregateCourseResult(
+        'lr2/0',
+        benchCourseInfo,
+        [benchStageResult, benchStageResult],
+        [10, 10],
+        'GROOVE',
+      );
+    },
+  });
+  define('player.playlog.createCoursePlaylog', {
+    run: () => {
+      playlogApi.createCoursePlaylog({ course: benchCourseInfo, stages: [{ played: true, playlog: BENCH_PLAYLOG }] });
+    },
+  });
+  define('player.playlog.extractCourseStage', {
+    run: () => {
+      playlogApi.extractCourseStage(benchCourseLog, 1);
+    },
+  });
+  define('player.playlog.parseCoursePlaylog', {
+    run: () => {
+      playlogApi.parseCoursePlaylog(benchCourseText);
+    },
+  });
+  define('player.playlog.resolveCourseLamp', {
+    run: () => {
+      playlogApi.resolveCourseLamp('beatoraja', benchStageResult, 'GROOVE');
+    },
+  });
+  define('player.playlog.resolveCourseTrophy', {
+    run: () => {
+      playlogApi.resolveCourseTrophy(benchCourseInfo.trophies, { missCount: 4, exScore: 170, noteCount: 100 });
+    },
+  });
+  define('player.playlog.serializeCoursePlaylog', {
+    run: () => {
+      playlogApi.serializeCoursePlaylog(benchCourseLog);
+    },
+  });
+  define('player.playlog.simulateCoursePlaylog', {
+    run: () => {
+      playlogApi.simulateCoursePlaylog(benchCourseLog, { ruleset: 'lr2' });
+    },
+  });
   define('player.playlog.computeScoreRate', {
     run: () => {
       playlogApi.computeScoreRate({ total: 1000, exScore: 1650 });
