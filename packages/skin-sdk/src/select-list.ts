@@ -49,12 +49,14 @@ export function browseEntryTitle(entry: BrowserBrowseEntry): string {
 
 /**
  * The count a row shows in place of a song's facts: a folder's charts (or courses, for a course folder), or a course's
- * stages with how many are missing from the collection. `undefined` for a song row.
+ * stages with how many are missing from the collection (`random` for a random course, whose stages are drawn on start).
+ * `undefined` for a song row.
  */
 export function browseEntryCount(entry: BrowserBrowseEntry): string | undefined {
   if (entry.kind === 'song') return undefined;
   if (entry.kind === 'course') {
     const stages = entry.course.stages.length;
+    if (entry.course.random !== undefined) return `${stages} stage${stages === 1 ? '' : 's'} · random`;
     const missing = entry.course.stages.filter((stage) => stage.song === undefined).length;
     return `${stages} stage${stages === 1 ? '' : 's'}${missing > 0 ? ` · ${missing} missing` : ''}`;
   }
