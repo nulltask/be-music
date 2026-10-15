@@ -6,6 +6,7 @@ import type { AppEnv } from '../app.ts';
 import { loadCourseDetail, loadCourseScoreDetail, loadMyCourseRank } from '../courses/detail.ts';
 import { loadCourseRanking } from '../courses/ranking.ts';
 import { submitCourseScore } from '../courses/submit.ts';
+import { setCourseScoreHidden } from '../courses/visibility.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { isOn } from '../http/query.ts';
 import {
@@ -14,10 +15,12 @@ import {
   courseScoreResponse,
   courseSubmissionBody,
   courseSubmissionResponse,
+  courseVisibilityBody,
   errorResponse,
   myCourseRankResponse,
   myRankQuery,
   rankingQuery,
+  scoreVisibilityResponse,
 } from './schemas.ts';
 
 const json = (description: string, schema: Parameters<typeof resolver>[0]) => ({
@@ -52,8 +55,8 @@ const COURSE_REJECTIONS = [
 
 /**
  * The course routes of `/api/v0` (docs/leaderboard.md section 6.1): submitting a course run, a course, its ranking, my
- * rank on it, and one run. Mounted on the version's own router, so they share its session middleware and its OpenAPI
- * document.
+ * rank on it, one run, and hiding a run. Mounted on the version's own router, so they share its session middleware and
+ * its OpenAPI document.
  */
 export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number; newId: () => string }): void {
   const { now, newId } = options;
@@ -149,6 +152,31 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
       const detail = await loadCourseScoreDetail(c.get('db'), c.req.param('id'), c.get('userId'));
       if (detail === undefined) return c.json({ error: 'not-found' }, 404);
       return c.json(detail);
+    },
+  );
+
+  v0.patch(
+    '/course-scores/:id',
+    describeRoute({
+      tags: ['Courses'],
+      summary: 'Hide or show my course run',
+      description:
+        'A hidden run is kept, but leaves the course rankings, the personal bests, the figures and every list, and only its player can open it. The player’s bests on the course, the trophy best included, are rebuilt from the runs still shown.',
+      responses: {
+        200: json('The run’s visibility after the change.', scoreVisibilityResponse),
+        401: signInRequired,
+        403: json('Someone else ran it.', errorResponse(['not-your-score'])),
+        404: notFound('The run'),
+      },
+    }),
+    validator('json', courseVisibilityBody),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      const id = c.req.param('id');
+      const result = await setCourseScoreHidden(c.get('db'), id, userId, c.req.valid('json').hidden, now());
+      if (!result.ok) return c.json({ error: result.error }, result.status);
+      return c.json({ id, hidden: result.hidden });
     },
   );
 
