@@ -153,9 +153,10 @@ export function resolveCourseLamp(
     ruleset === 'lr2'
       ? pick === 'EASY'
         ? 'EASY'
-        : pick === 'HARD' || pick === 'DEATH'
+        : pick === 'HARD'
           ? 'HARD'
-          : 'NORMAL'
+          : // LR2 awards HARD only for its HARD-family gauges: a DEATH clear is NORMAL (OpenLR2 L2593-L2600).
+            'NORMAL'
       : (COURSE_GAUGE_LAMPS[result.gauge.type] ?? 'NORMAL');
   if (result.noteCount > 0 && result.maxCombo >= result.noteCount) {
     const { great, good } = result.judge;
@@ -222,7 +223,9 @@ export function aggregateCourseResult(
     maxCombo: last?.course?.maxCombo ?? last?.maxCombo ?? 0,
     gauge,
   };
-  const missCount = judge.bad + judge.poor + judge.emptyPoor + Math.max(0, noteCount - judged);
+  // LR2 leaves empty POORs out of BP (OpenLR2 L9649-L9657); beatoraja and IIDX count them.
+  const missCount =
+    judge.bad + judge.poor + (ruleset === 'lr2' ? 0 : judge.emptyPoor) + Math.max(0, noteCount - judged);
   const result: PlaylogCourseResult = {
     ruleset,
     judge,
@@ -337,7 +340,7 @@ function nonstopCourseResult(
     slow: run.slow,
     exScore: run.exScore,
     noteCount,
-    missCount: judge.bad + judge.poor + judge.emptyPoor + Math.max(0, noteCount - judged),
+    missCount: judge.bad + judge.poor + (run.ruleset === 'lr2' ? 0 : judge.emptyPoor) + Math.max(0, noteCount - judged),
     maxCombo: run.maxCombo,
     djLevel: resolveIidxRankLabel(run.exScore, noteCount),
     gauge,
