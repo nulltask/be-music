@@ -161,6 +161,8 @@ import { buildCourseResultData, CourseSession, courseRecordKey, type CourseStage
 import {
   describeCourseTableImportError,
   importCourseTable,
+  isTableHeaderFilePath,
+  readTableHeaderFile,
   mergeCourseGroup,
   normalizeCourseTableUrl,
   readStoredCourseTableUrls,
@@ -1774,6 +1776,10 @@ class PlayerWebDemoApp {
     files = files.filter((file) => !isCourseFilePath(file.webkitRelativePath || file.name));
     const courseGroupCount = this.courseGroups.length;
     await this.readCourseFiles(courseFiles);
+    // A saved difficulty-table header stands in for a table whose site cannot be fetched from here.
+    const tableHeaders = await this.readTableHeaderFiles(files.filter((file) => isTableHeaderFilePath(file.name)));
+    files = files.filter((file) => !tableHeaders.has(file));
+    courseFiles.push(...tableHeaders);
     if (files.length === 0 && courseFiles.length > 0) {
       if (this.courseGroups.length > courseGroupCount) {
         await this.refreshCourseFolders();
@@ -2008,6 +2014,21 @@ class PlayerWebDemoApp {
   }
 
   /** Reads dropped course files into `courseGroups`; a file that holds no valid course is skipped with a warning. */
+  /** Reads dropped `header.json` files that are difficulty-table headers into `courseGroups`; returns the ones read. */
+  private async readTableHeaderFiles(files: readonly BrowserDroppedFile[]): Promise<Set<BrowserDroppedFile>> {
+    const read = new Set<BrowserDroppedFile>();
+    for (const file of files) {
+      const path = file.webkitRelativePath || file.name;
+      const folder = path.replaceAll('\\', '/').split('/').slice(-2, -1)[0] ?? 'table';
+      const group = readTableHeaderFile(new TextDecoder().decode(await file.arrayBuffer()), folder);
+      if (group === undefined) continue;
+      this.courseGroups = mergeCourseGroup(this.courseGroups, group);
+      read.add(file);
+      dropLog.info(`table header: ${path} · ${group.label} · courses=${group.courses.length}`);
+    }
+    return read;
+  }
+
   private async readCourseFiles(files: readonly BrowserDroppedFile[]): Promise<void> {
     for (const file of files) {
       const path = file.webkitRelativePath || file.name;
