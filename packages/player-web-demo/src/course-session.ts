@@ -1,3 +1,4 @@
+import type { PlayerSummary } from '@be-music/player/core/engine';
 import {
   createCoursePlaylog,
   type RulesetChartFacts,
@@ -199,5 +200,37 @@ export function buildCourseResultData(
     judgeRuleset: lastStage?.played === true ? (lastStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2',
     fast: result.fast,
     slow: result.slow,
+  };
+}
+
+/**
+ * The course result as a beatoraja result skin reads one run (`PlayerSummary`): the course's summed judgments, its
+ * EX score (beatoraja's score) and the gauge the course ended on. beatoraja keeps the course score the same way
+ * (`CourseResult` sums the stage scores).
+ */
+export function buildCourseResultSummary(result: PlaylogCourseResult): PlayerSummary {
+  return {
+    total: result.noteCount,
+    perfect: result.judge.pgreat,
+    great: result.judge.great,
+    good: result.judge.good,
+    bad: result.judge.bad,
+    poor: result.judge.poor,
+    emptyPoor: result.judge.emptyPoor,
+    fast: result.fast,
+    slow: result.slow,
+    exScore: result.exScore,
+    score: result.exScore,
+    gauge: {
+      type: result.gauge.type,
+      current: result.gauge.final,
+      max: 100,
+      initial: 100,
+      clearThreshold: 0,
+      effectiveTotal: 0,
+      cleared: result.gauge.cleared,
+      survival: true,
+    },
+    course: { combo: 0, maxCombo: result.maxCombo },
   };
 }

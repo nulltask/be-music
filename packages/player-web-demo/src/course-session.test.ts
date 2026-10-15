@@ -3,7 +3,7 @@ import { parseBeatorajaCourseData } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import { describe, expect, test } from 'vite-plus/test';
-import { CourseSession, courseRecordKey } from './course-session.ts';
+import { buildCourseResultSummary, CourseSession, courseRecordKey } from './course-session.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
@@ -107,5 +107,40 @@ describe('CourseSession', () => {
     const a = courseRecordKey(course(['MIRROR', 'GAUGE_LR2']));
     expect(a).toBe(courseRecordKey(course(['GAUGE_LR2', 'MIRROR'])));
     expect(a).toBe(`course:grade:gauge_lr2+grade_mirror:${MD5.join(',')}`);
+  });
+});
+
+describe('buildCourseResultSummary', () => {
+  test('reads the course result as one run', () => {
+    const summary = buildCourseResultSummary({
+      ruleset: 'beatoraja',
+      judge: { pgreat: 50, great: 20, good: 5, bad: 2, poor: 3, emptyPoor: 1 },
+      fast: 7,
+      slow: 9,
+      exScore: 120,
+      noteCount: 90,
+      missCount: 16,
+      maxCombo: 40,
+      djLevel: 'B',
+      gauge: { type: 'CLASS', final: 36.5, cleared: true },
+      stagesPlayed: 3,
+      lamp: 'NORMAL',
+      stages: [],
+    });
+    expect(summary).toMatchObject({
+      total: 90,
+      perfect: 50,
+      great: 20,
+      good: 5,
+      bad: 2,
+      poor: 3,
+      emptyPoor: 1,
+      fast: 7,
+      slow: 9,
+      exScore: 120,
+      score: 120,
+      gauge: { type: 'CLASS', current: 36.5, cleared: true },
+      course: { maxCombo: 40 },
+    });
   });
 });
