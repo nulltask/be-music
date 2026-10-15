@@ -2,7 +2,7 @@
 // ordering, merging a finished play into a record, and persistence across reloads.
 
 import type { PlayerSummary } from '@be-music/player/core/engine';
-import type { BeMusicCoursePlaylog } from '@be-music/player/playlog';
+import { playedAtAnotherTempo, type BeMusicCoursePlaylog } from '@be-music/player/playlog';
 import type { BrowserSongEntry } from '@be-music/player-web/collection';
 import { resolveClearLamp, type PixiGameplayResultData } from '@be-music/player-web/scenes';
 import type { BeMusicClearLamp, BeMusicSongRecord } from '@be-music/player-web/skin';
@@ -168,11 +168,11 @@ export function mergeSongRecord(previous: BeMusicSongRecord | undefined, play: S
 }
 
 /**
- * Whether a course run played a stage at another tempo (`play.tempo`): such a run is practice, so it leaves the course's
- * record alone, as a single play at another tempo leaves the chart's.
+ * Whether a course run played a stage at another tempo at any point (`play.tempo`, `play.tempoChanges`): such a run
+ * is practice, so it leaves the course's record alone, as a single play at another tempo leaves the chart's.
  */
 export function isCourseRunAtAnotherTempo(courseLog: Pick<BeMusicCoursePlaylog, 'stages'>): boolean {
-  return courseLog.stages.some((entry) => entry.played && (entry.playlog.play.tempo ?? 1) !== 1);
+  return courseLog.stages.some((entry) => entry.played && playedAtAnotherTempo(entry.playlog.play));
 }
 
 /**
