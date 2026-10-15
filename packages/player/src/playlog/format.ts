@@ -15,7 +15,17 @@ import type { LongNoteMode } from '../playable-notes.ts';
  * Events that share a timestamp are ordered by `seq` — sort key is always `(timeUs, seq)`.
  */
 export const BE_MUSIC_PLAYLOG_FORMAT = 'be-music-playlog';
-export const BE_MUSIC_PLAYLOG_VERSION = 1;
+/**
+ * The playlog format's revision. `0` while the format is still being defined: it may change incompatibly without the
+ * number moving. The first stable revision will be `1`.
+ */
+export const BE_MUSIC_PLAYLOG_VERSION = 0;
+
+/**
+ * Revisions {@link parsePlaylog} still reads. Logs were stamped `1` before the format was marked unstable; their shape is
+ * the same, so they parse as revision `0`.
+ */
+const LEGACY_PLAYLOG_VERSIONS: ReadonlySet<unknown> = new Set([1]);
 
 /** Recommended file suffix for serialized playlogs (JSON payload). */
 export const PLAYLOG_FILE_SUFFIX = '.bmplay.json';
@@ -261,7 +271,7 @@ export function parsePlaylog(source: unknown): BeMusicPlaylog {
   if (root.format !== BE_MUSIC_PLAYLOG_FORMAT) {
     throw new PlaylogParseError(`format: expected '${BE_MUSIC_PLAYLOG_FORMAT}', got ${JSON.stringify(root.format)}`);
   }
-  if (root.version !== BE_MUSIC_PLAYLOG_VERSION) {
+  if (root.version !== BE_MUSIC_PLAYLOG_VERSION && !LEGACY_PLAYLOG_VERSIONS.has(root.version)) {
     throw new PlaylogParseError(`version: unsupported version ${JSON.stringify(root.version)}`);
   }
   const clock = expectRecord(root.clock, 'clock');

@@ -979,7 +979,7 @@ function makeBenchSong(): playerWebCoreApi.BrowserSongEntry {
 function makeBenchPlaylog(): playerWebCoreApi.BeMusicPlaylog {
   return {
     format: 'be-music-playlog',
-    version: 1,
+    version: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
     clock: { unit: 'us', origin: 'chart-zero' },
     chart: {

@@ -1037,7 +1037,7 @@ describe('player', () => {
 
     expect(playlog).toBeDefined();
     expect(playlog!.format).toBe('be-music-playlog');
-    expect(playlog!.version).toBe(1);
+    expect(playlog!.version).toBe(0);
     expect(playlog!.clock).toEqual({ unit: 'us', origin: 'chart-zero' });
     expect(playlog!.chart.title).toBe('Playlog Test');
     expect(playlog!.chart.total).toBe(300);

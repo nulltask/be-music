@@ -104,7 +104,7 @@ export function makePlaylog(
   }
   return {
     format: 'be-music-playlog',
-    version: 1,
+    version: 0,
     createdAt: '2026-10-13T00:00:00.000Z',
     clock: { unit: 'us', origin: 'chart-zero' },
     chart: {
