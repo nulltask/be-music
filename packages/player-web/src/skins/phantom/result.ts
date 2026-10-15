@@ -29,6 +29,7 @@ import {
   resolveResultTrackRows,
   rollUpValue,
   stageProgress,
+  resolveResultVerdict,
 } from '@be-music/skin-sdk';
 import {
   alignCapCenter,
@@ -222,9 +223,12 @@ export function renderPhantomResult(frame: PixiResultFrame): void {
   header.g.poly(teeth).fill(PHANTOM_RED);
   header.g.rect(0, 45, designWidth, 1).fill(PHANTOM_WHITE);
   const verdict = group('verdict');
-  verdict.g.poly(parallelogramPoints(22, 12, 150, 28, 10)).fill(cleared ? PHANTOM_WHITE : PHANTOM_RED);
-  verdict.g.poly(parallelogramPoints(RESULT_MARGIN, 7, 150, 28, 10)).fill(cleared ? PHANTOM_RED : PHANTOM_WHITE);
-  addText(verdict.root, cleared ? 'STAGE CLEAR' : 'FAILED', 96, 21, {
+  // A course result's longer verdict (COURSE FAILED) gets a wider tag; the emblem follows its end.
+  const verdictText = resolveResultVerdict(result);
+  const tagW = verdictText.length > 11 ? 192 : 150;
+  verdict.g.poly(parallelogramPoints(22, 12, tagW, 28, 10)).fill(cleared ? PHANTOM_WHITE : PHANTOM_RED);
+  verdict.g.poly(parallelogramPoints(RESULT_MARGIN, 7, tagW, 28, 10)).fill(cleared ? PHANTOM_RED : PHANTOM_WHITE);
+  addText(verdict.root, verdictText, RESULT_MARGIN + 5 + tagW / 2, 21, {
     ...display(20, cleared ? PHANTOM_WHITE : PHANTOM_RED),
     letterSpacing: 1.5,
     anchorX: 0.5,
@@ -234,10 +238,10 @@ export function renderPhantomResult(frame: PixiResultFrame): void {
   const glint = (seconds % 3.2) / 0.45;
   if (elapsed > 800 && glint <= 1) {
     verdict.g
-      .poly(parallelogramPoints(RESULT_MARGIN + glint * 136, 7, 12, 28, 10))
+      .poly(parallelogramPoints(RESULT_MARGIN + glint * (tagW - 14), 7, 12, 28, 10))
       .fill({ color: cleared ? PHANTOM_WHITE : PHANTOM_RED, alpha: 0.55 });
   }
-  drawNoteEmblem(verdict.g, 194, 29, 24, PHANTOM_WHITE, PHANTOM_RED);
+  drawNoteEmblem(verdict.g, 44 + tagW, 29, 24, PHANTOM_WHITE, PHANTOM_RED);
   slam(verdict.root, 120, 92, 21, 2.6);
 
   // Rank panel slides in from the left; the burst pops, then the letter stamps down on it.

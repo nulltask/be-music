@@ -213,7 +213,7 @@ A course stage runs on the ruleset's course gauge, not on the single-chart gauge
 
 ### Carried state
 
-- **Gauge**: the next stage starts at the gauge value the previous stage ended on (`results.native.gauge.final`).
+- **Gauge**: the next stage starts at the gauge value the previous stage ended on (`results.native.gauge.final`). `resolveCourseStageStartGauge` (`@be-music/player/playlog`) names the course gauge and the value a stage starts on before the engine runs, so a host shows that gauge from the stage's READY phase and starts its result graph there.
 - **Course combo**: each stage keeps its own combo and max combo, as LR2 and beatoraja do, plus a course-wide combo that runs across stages and breaks where the stage combo breaks (`PlayerSummary.course`, `results.*.course`). The next stage carries in that combo and the course max combo.
 
 ### Ending on failure

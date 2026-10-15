@@ -5,6 +5,7 @@ import {
   type BeMusicResultData,
   type BeMusicResultFrame,
   type BeMusicSurface,
+  resolveResultVerdict,
 } from '@be-music/skin-sdk';
 import { resolvePortraitResult } from './layout.ts';
 import { ACCENT, DANGER, INK, MUTED, PANEL, stat, text } from './theme.ts';
@@ -25,7 +26,7 @@ export function drawResult(surface: BeMusicSurface<'2d'>, frame: BeMusicResultFr
   }
   const { result, nowMs } = frame;
 
-  text(ctx, result.cleared ? 'STAGE CLEAR' : 'FAILED', MARGIN, 28, {
+  text(ctx, resolveResultVerdict(result), MARGIN, 28, {
     size: 20,
     weight: 800,
     color: result.cleared ? ACCENT : DANGER,
@@ -103,7 +104,7 @@ function drawPortraitResult(
   const { result, nowMs } = frame;
   const grid = resolvePortraitResult(width, height);
 
-  text(ctx, result.cleared ? 'STAGE CLEAR' : 'FAILED', grid.rank.x, grid.verdictY, {
+  text(ctx, resolveResultVerdict(result), grid.rank.x, grid.verdictY, {
     size: 20,
     weight: 800,
     color: result.cleared ? ACCENT : DANGER,

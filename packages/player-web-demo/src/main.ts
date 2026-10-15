@@ -2501,9 +2501,11 @@ class PlayerWebDemoApp {
       }
     }
     // LR2 (and the built-in result) shows the last stage's graph.
-    await this.showResult(buildCourseResultData(session.course, result, courseLog, session.stageHistories.at(-1)), {
-      course: courseInfo,
-    });
+    const playSeconds = session.playSeconds;
+    await this.showResult(
+      buildCourseResultData(session.course, result, courseLog, session.stageHistories.at(-1), { playSeconds }),
+      { course: courseInfo },
+    );
   }
 
   /**

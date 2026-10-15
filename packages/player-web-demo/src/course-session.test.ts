@@ -1,10 +1,16 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseBeatorajaCourseData, parseLr2CourseFile, type NonstopConnection } from '@be-music/player/course';
-import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
+import type {
+  BeMusicCoursePlaylog,
+  BeMusicPlaylog,
+  PlaylogCourseResult,
+  PlaylogRulesetResult,
+} from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import type { BeMusicSongRecord } from '@be-music/player-web/skin';
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  buildCourseResultData,
   buildCourseResultSummary,
   CourseSession,
   courseRecordKey,
@@ -176,6 +182,16 @@ describe('CourseSession', () => {
     expect(session.stageHistories).toEqual([history, { gaugeHistory: [], scoreHistory: [] }]);
   });
 
+  test('adds up the play time of the stages played, a given-up stage up to where it was left', () => {
+    const session = new CourseSession(course([]));
+    session.recordStage(stageLog({}), { gaugeHistory: [], scoreHistory: [], playSeconds: 92.5 });
+    const givenUp = stageLog({});
+    givenUp.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', aborted: true, abortedAtUs: 30_250_000 };
+    session.giveUp(givenUp);
+    expect(session.playSeconds).toBeCloseTo(122.75);
+    expect(new CourseSession(course([])).playSeconds).toBe(0);
+  });
+
   test('refuses a course with a missing stage', () => {
     expect(() => new CourseSession({ ...course(), playable: false })).toThrow('not in the collection');
   });
@@ -233,6 +249,52 @@ describe('buildCourseResultSummary', () => {
       gauge: { type: 'CLASS', current: 36.5, cleared: true },
       course: { maxCombo: 40 },
     });
+  });
+});
+
+describe('buildCourseResultData', () => {
+  const result: PlaylogCourseResult = {
+    ruleset: 'lr2',
+    judge: { pgreat: 36, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
+    fast: 0,
+    slow: 0,
+    exScore: 72,
+    noteCount: 36,
+    missCount: 0,
+    maxCombo: 36,
+    djLevel: 'AAA',
+    gauge: { type: 'GRADE', final: 100, cleared: true },
+    stagesPlayed: 3,
+    lamp: 'MAX',
+    stages: [],
+  };
+  const courseLog = (judgeRuleset?: 'lr2' | 'beatoraja'): BeMusicCoursePlaylog => {
+    const playlog = stageLog({});
+    playlog.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...(judgeRuleset ? { judgeRuleset } : {}) };
+    return { stages: [{ played: true, playlog }] } as unknown as BeMusicCoursePlaylog;
+  };
+
+  test('shows LR2 courses on the stage results’ 200000 scale and the stages’ play time', () => {
+    const data = buildCourseResultData(course([]), result, courseLog(), undefined, { playSeconds: 241.5 });
+    expect(data.score).toMatchObject({ exScore: 72, score: 200000 });
+    expect(data.playSeconds).toBe(241.5);
+    expect(data.courseResult).toBe(true);
+  });
+
+  test('keeps the EX score where the ruleset scores with it', () => {
+    expect(buildCourseResultData(course([]), result, courseLog('beatoraja')).score.score).toBe(72);
+  });
+
+  test('reads a NONSTOP run as one play, timed by the stitched play', () => {
+    const base = course([]);
+    const nonstop: BrowserCourseEntry = { ...base, definition: { ...base.definition, kind: 'nonstop' } };
+    const data = buildCourseResultData(nonstop, result, courseLog(), {
+      gaugeHistory: [],
+      scoreHistory: [],
+      playSeconds: 180,
+    });
+    expect(data.playSeconds).toBe(180);
+    expect(data.courseResult).toBeUndefined();
   });
 });
 

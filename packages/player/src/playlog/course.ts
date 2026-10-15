@@ -2,11 +2,12 @@ import type { GrooveGaugeType } from '../core/groove-gauge.ts';
 import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { resolveRuleset, type PlaylogRulesetId } from '../ruleset/index.ts';
-import type { RulesetCourseKind } from '../ruleset/course.ts';
+import { resolveCourseGauge, resolveCourseGaugeId, type RulesetCourseKind } from '../ruleset/course.ts';
 import {
   BE_MUSIC_PLAYLOG_VERSION,
   parsePlaylog,
   type BeMusicPlaylog,
+  type PlaylogCourseStage,
   type PlaylogJudgeCounts,
   type PlaylogRecorderInfo,
   type PlaylogRulesetResult,
@@ -21,7 +22,7 @@ import {
   parseResults,
   PlaylogParseError,
 } from './parse.ts';
-import { resolveRulesetConfig } from './rulesets.ts';
+import { courseStageRulesetOptions, resolveRulesetConfig } from './rulesets.ts';
 import { simulatePlaylog, type SimulatePlaylogOptions } from './simulate.ts';
 import type { PlaylogNonstopRun } from './nonstop.ts';
 import { LR2_NONSTOP_CONNECTIONS } from '../course/lr2crs.ts';
@@ -164,6 +165,34 @@ export function resolveCourseLamp(
   }
   const top = TOP_LAMP[ruleset] ?? 'FULL_COMBO';
   return LAMP_ORDER.indexOf(lamp) > LAMP_ORDER.indexOf(top) ? top : lamp;
+}
+
+/** The gauge a course stage starts on (see {@link resolveCourseStageStartGauge}). */
+export interface CourseStageStartGauge {
+  /** The ruleset's course gauge id (`GRADE`, `COURSE-EASY`, `CLASS`, …), as the engine reports it. */
+  type: string;
+  /** The value the stage starts from: the gauge carried in, or the gauge's start (100) on the first stage. */
+  initial: number;
+  max: number;
+  /** The clear border (0: a course gauge clears unless it empties). */
+  border: number;
+  survival: boolean;
+}
+
+/**
+ * The gauge a course stage starts on, before the engine has run a frame: its course gauge id and the value carried in
+ * from the previous stage. A host shows it during the stage's READY phase and seeds the result graph with it, so
+ * neither starts on the single-chart gauge. The judging values, which depend on the chart, are left out.
+ */
+export function resolveCourseStageStartGauge(
+  rulesetId: PlaylogRulesetId,
+  course: PlaylogCourseStage,
+  selectedGauge: string,
+): CourseStageStartGauge {
+  const gaugeId = resolveCourseGaugeId(rulesetId, course.kind, selectedGauge);
+  // The lane mode and the HARD damage multiplier only pick the judging values, which this leaves out.
+  const spec = resolveCourseGauge(rulesetId, gaugeId, courseStageRulesetOptions(course), '7', 1);
+  return { type: spec.id, initial: spec.initial, max: spec.max, border: spec.border, survival: spec.survival };
 }
 
 /**

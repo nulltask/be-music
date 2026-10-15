@@ -1,4 +1,5 @@
 import type { PlayerSummary } from '@be-music/player/core/engine';
+import { resolveLr2MoneyScore } from '@be-music/player/core/scoring';
 import {
   createCoursePlaylog,
   resolveCourseTrophy,
@@ -33,6 +34,8 @@ const EMPTY_HISTORY: CourseStageHistory = { gaugeHistory: [], scoreHistory: [] }
 export interface CourseStageHistory {
   gaugeHistory: readonly GaugeHistorySample[];
   scoreHistory: readonly ScoreHistorySample[];
+  /** The stage's play time in seconds (its result's `playSeconds`), when known. */
+  playSeconds?: number;
 }
 
 /** The player's picks a course may override for a stage (see {@link CourseSession.playSettings}). */
@@ -172,9 +175,18 @@ export class CourseSession {
     if (this.ended) return;
     if (playlog?.results?.native !== undefined) {
       this.logs.push(playlog);
-      this.histories.push(EMPTY_HISTORY);
+      // No polylines for a stage given up, but its play time runs up to where it was left.
+      const abortedAtUs = playlog.play?.abortedAtUs;
+      this.histories.push(
+        abortedAtUs !== undefined ? { ...EMPTY_HISTORY, playSeconds: abortedAtUs / 1e6 } : EMPTY_HISTORY,
+      );
     }
     this.ended = true;
+  }
+
+  /** The play time of every stage played, in seconds: what the course result shows as its PLAY TIME. */
+  get playSeconds(): number {
+    return this.histories.reduce((sum, history) => sum + Math.max(0, history.playSeconds ?? 0), 0);
   }
 
   /** The polylines of every stage played, in order (a stage given up has none). */
@@ -337,15 +349,31 @@ export function joinCourseStageHistories(
  * The course result as the result scene shows one run: the course's summed judgments, BP, course max combo and final
  * gauge, under the course's name (the first stage's chart supplies the song images). `history` is the graph it draws:
  * LR2 shows the last stage's (its result clears the graph at each stage start, OpenLR2 L24151).
+ *
+ * SCORE reads on the stage results' scale: LR2's money score over the course's notes (out of 200000, as LR2 keeps a
+ * course's best), else the EX score. PLAY TIME is `playSeconds` (the stages' play time, {@link CourseSession.playSeconds}),
+ * else `history.playSeconds` (a NONSTOP run passes its stitched play's result). An EXPERT / GRADE course is marked
+ * `courseResult` (its verdict reads COURSE CLEAR / COURSE FAILED); a NONSTOP run is one play on the result skin.
  */
 export function buildCourseResultData(
   course: BrowserCourseEntry,
   result: PlaylogCourseResult,
   courseLog: BeMusicCoursePlaylog,
   history: CourseStageHistory = EMPTY_HISTORY,
+  options: { playSeconds?: number } = {},
 ): PixiGameplayResultData {
   const first = course.stages[0]!.song!;
   const lastStage = [...courseLog.stages].reverse().find((entry) => entry.played);
+  const judgeRuleset = lastStage?.played === true ? (lastStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2';
+  const score =
+    judgeRuleset === 'lr2'
+      ? resolveLr2MoneyScore({
+          total: result.noteCount,
+          perfect: result.judge.pgreat,
+          great: result.judge.great,
+          good: result.judge.good,
+        })
+      : result.exScore;
   return {
     score: {
       total: result.noteCount,
@@ -356,12 +384,12 @@ export function buildCourseResultData(
       poor: result.judge.poor,
       emptyPoor: result.judge.emptyPoor,
       exScore: result.exScore,
-      score: result.exScore,
+      score,
     },
     maxCombo: result.maxCombo,
     gauge: result.gauge.final,
     cleared: result.gauge.cleared,
-    playSeconds: 0,
+    playSeconds: options.playSeconds ?? history.playSeconds ?? 0,
     song: {
       ...first,
       id: `course:${course.id}`,
@@ -373,9 +401,10 @@ export function buildCourseResultData(
     scoreHistory: [...history.scoreHistory],
     lamp: result.lamp,
     gaugeType: result.gauge.type,
-    judgeRuleset: lastStage?.played === true ? (lastStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2',
+    judgeRuleset,
     fast: result.fast,
     slow: result.slow,
+    ...(course.definition.kind !== 'nonstop' ? { courseResult: true } : {}),
   };
 }
 
