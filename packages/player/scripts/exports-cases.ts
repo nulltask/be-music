@@ -647,6 +647,26 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.resolveReplayView(benchView, { hiSpeed: 1 }, playlogApi.DEFAULT_PLAYLOG_VIEW_REPLAY);
     },
   });
+  define('player.playlog.resolveReplayHiSpeed', {
+    run: () => {
+      playlogApi.resolveReplayHiSpeed(
+        { ...benchView, hiSpeedScale: 'beatoraja', visibleMs: 400 },
+        'be-music',
+        (ms) => 1000 / ms,
+      );
+    },
+  });
+  define('player.playlog.diffPlaylogView', {
+    run: () => {
+      playlogApi.diffPlaylogView(benchView, { ...benchView, hiSpeed: 2.5 });
+    },
+  });
+  define('player.playlog.createPlaylogViewCoalescer', {
+    run: () => {
+      const coalescer = playlogApi.createPlaylogViewCoalescer(benchView);
+      coalescer.observe({ ...benchView, hiSpeed: 2.5 }, 0);
+    },
+  });
   define('player.playlog.parsePlaylogViewState', {
     run: () => {
       playlogApi.parsePlaylogViewState(benchView, 'play.view');

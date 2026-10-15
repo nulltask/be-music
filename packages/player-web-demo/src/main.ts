@@ -165,6 +165,7 @@ import {
   type PlayerSummary,
   type ResolvedPlayChart,
 } from '@be-music/player/core/engine';
+import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
 import {
   resolveCoursePlaylogFilename,
   serializeCoursePlaylog,
@@ -878,6 +879,8 @@ class PlayerWebDemoApp {
       nonstopPlacement: 'intended',
       // The play tempo, its pitch handling and the keep-pitch stretcher, remembered from the last visit.
       ...readStoredPlayTempoSettings(),
+      // What a replay reproduces of the recorded view, remembered from the last visit.
+      replayView: readStoredReplayView(),
       // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
       submitToLeaderboard: false,
       // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
@@ -1300,7 +1303,9 @@ class PlayerWebDemoApp {
     gui.add(this.guiState, 'openFiles').name('Open files (ZIP / play log)');
     // Folders in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
     // library, capturing a play, the Leaderboard, then the developer settings.
-    this.buildPlayOptionsFolder(addFolder(gui, DEBUG_MENU_FOLDERS.playOptions));
+    const playOptions = addFolder(gui, DEBUG_MENU_FOLDERS.playOptions);
+    this.buildPlayOptionsFolder(playOptions);
+    this.buildReplayViewFolder(addFolder(playOptions, DEBUG_MENU_FOLDERS.replayView));
     this.buildTempoFolder(addFolder(gui, DEBUG_MENU_FOLDERS.tempo));
     this.buildCourseFolder(addFolder(gui, DEBUG_MENU_FOLDERS.course));
     this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
@@ -1411,6 +1416,18 @@ class PlayerWebDemoApp {
   /**
    * The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
    */
+  /**
+   * Replay / ghost: which of what a play log recorded the player seeing a replay shows (the tempo, the hi-speed,
+   * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own. Read when a play starts, so disabled during one.
+   */
+  private buildReplayViewFolder(folder: GUI): void {
+    const remember = () => storeReplayView(this.guiState.replayView);
+    const labels = { tempo: 'Tempo', hiSpeed: 'Hi-speed', covers: 'SUDDEN+ / HIDDEN+', lift: 'LIFT' } as const;
+    for (const key of ['tempo', 'hiSpeed', 'covers', 'lift'] as const) {
+      this.trackPlayOption(folder.add(this.guiState.replayView, key).name(labels[key]).onChange(remember));
+    }
+  }
+
   private buildTempoFolder(folder: GUI): void {
     const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
     // The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
@@ -5019,6 +5036,8 @@ class PlayerWebDemoApp {
         : {}),
       playlogRecorder: PLAYLOG_RECORDER,
       replay,
+      // What the replay shows of the recorded view (the Debug Menu's "Replay / ghost" toggles, latched at song start).
+      replayView: { ...this.guiState.replayView },
       audioVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
       audioCompressorParams: this.resolveCompressorParamOverrides(),
       audioCompressor: this.guiState.compressor,

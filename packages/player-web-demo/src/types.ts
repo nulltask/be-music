@@ -1,4 +1,5 @@
 import type { SkinFamilyId, loadTextureFromBytes } from '@be-music/player-web/skin';
+import type { PlaylogViewReplay } from '@be-music/player/playlog';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 
 /**
@@ -146,6 +147,12 @@ export interface DemoGuiState extends PlayTempoSettings {
    * LR2's binary does, including its third-stage start offset (`planNonstopCourse`).
    */
   nonstopPlacement: 'intended' | 'lr2';
+  /**
+   * Which of what a play log recorded the player seeing a replay or ghost reproduces (tempo, hi-speed, SUDDEN+ /
+   * HIDDEN+, LIFT), the rest staying the viewer's own: the Debug Menu's "Play options / Replay / ghost" toggles, all on
+   * by default, remembered across visits and latched at song start.
+   */
+  replayView: PlaylogViewReplay;
   /** `tempoPercent` / `tempoPitchMode` / `tempoStretchAlgorithm`: see {@link PlayTempoSettings}. */
   /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing

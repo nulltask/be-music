@@ -57,6 +57,7 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 
 - **トップレベル:** Status（読み取り専用）、Open folder、Open files (ZIP / play log)。Open files では譜面の ZIP アーカイブ（`?music=` と同じ読み込み）や、リプレイするプレイログ（`*.bmplay.json`）を選べます。Open folder はフォルダー選択ダイアログを使い、ドロップと同じ経路で読み込みます。
 - **Play options**（既定で開く）: Auto play、Gauge、Random 1P / 2P、DP flip、Auto scratch 1P / 2P、Hi-speed。Hi-speed（その場で反映）以外は曲の開始時に確定し、プレイ中は無効になります。
+  - **Replay / ghost**（既定で閉じる）: Tempo、Hi-speed、SUDDEN+ / HIDDEN+、LIFT — 記録したプレイヤーが見ていたもののうち、リプレイで再現するもの。それ以外は自分の設定のままです。既定ですべてオンで、次回以降も保持され、曲の開始時に確定し、プレイ中は無効になります。シーンには `replayView`（`PlaylogViewReplay`）として渡ります。
 - **Tempo**（既定で開く）: Tempo (%)、Pitch、Keep-pitch stretcher（[プレイテンポ](#プレイテンポ) を参照）。曲の開始時に確定し、プレイ中は無効になります。
 - **Course**（既定で開く）: Skip stage results、My courses…、NONSTOP placement（曲の開始時に確定し、プレイ中は無効）、Table URL と Import table courses。
 - **Skin & display**（既定で閉じる）: Skin system（Built-in / LR2 / beatoraja。スキン未読み込みのものを選ぶとドロップを促す）、Built-in skin、Skin effects、Play layout、Judged notes、Toggle fullscreen、LR2 theme（LR2 theme を含む drop の後）、**Beatoraja skins**（シーンごとの選択。beatoraja theme の読み込み中だけ表示）、**Skin settings**（組み込みスキンに設定がある場合）、**Add skin**。
@@ -337,6 +338,7 @@ pnpm bench -- --packages player-web
 - chart の自然終了時は、短い post-chart delay を置いてから result scene を開きます。視覚的に result へ遷移しても、残っている gameplay audio tail は中断しません。
 - gameplay recorder は WebM output を書き出し、active recording が gameplay bus の破棄前に flush されるよう、scene disposal より前に stop / finalization を終えます。
 - リプレイ再生を除く毎プレイでプレイログ（`*.bmplay.json` 入力リプレイ — 解決済み譜面、生の押下/解放列、プレイ設定。[playlog.ja.md](./playlog.ja.md) 参照）を記録します。demo は result scene のマウント時に自動ダウンロードし、Debug Menu の「Library & records」フォルダにある「Auto-save play history」チェックボックス（デフォルト OFF。曲開始時にラッチされ、プレイ中は disabled）で制御します。`bms-playlog` CLI がこのファイルから LR2 / beatoraja / IIDX のリザルトを再現します。プレイログをページへドロップすると、対応する楽曲がロード済みの場合に記録されたランをリプレイ再生します。
+- どのゲームプレイシーンも、プレイヤーが見ていたもの（`play.view`、`play.viewChanges`）を記録します。そのスケールでのハイスピード、HS-FIX、メイン BPM での表示時間、各サイドの SUDDEN+ / HIDDEN+ / LIFT で、変更は `{ kind: 'view' }` コマンドとして 100 ms に高々 1 回送ります。LR2 / default のシーンでのリプレイは、`replayView` オプションが求める範囲でその見え方を再生位置に沿って表示します。同じスケール（LR2 / default のシーンは共通）で遊ばれたなら記録されたハイスピード、そうでなければ記録された表示時間になるハイスピードと、記録されたカバーです。単位と規則は [playlog.ja.md](./playlog.ja.md#プレイヤーが見ていたもの) を参照してください。
 - Debug Menu の Leaderboard フォルダにある「Submit to Leaderboard」（デフォルト OFF。自動保存と同じく曲開始時にラッチ）をオンにすると、終了した手動プレイを result scene のマウント時に Leaderboard（[leaderboard.ja.md](./leaderboard.ja.md)）へ送信します。demo は初回に匿名でログインし、楽曲の譜面からプレイの fingerprint ドキュメントを作り直してログと照合してから送り、サーバーに求められたら chart document を付けて再送し、順位をステータス行に表示します。デプロイ先の Worker は `/api/*` と `/leaderboard/*` を Service Binding で Leaderboard の Worker に転送し、`pnpm player:web` はローカルの Leaderboard（`pnpm --filter @be-music/leaderboard-api run dev`、または `LEADERBOARD_DEV_ORIGIN`）にプロキシします。
 - アカウントは匿名で始まります（最初の送信で匿名ログインします）。「Create passkey (keep this account)」でそのアカウントに passkey を登録すると、プレイは匿名フィルタの陰ではなく handle で一覧に載るようになります。「Sign in with passkey」で別のブラウザーからそのアカウントにログインすると、そのブラウザーの匿名のプレイはこのアカウントに移ります。
 
