@@ -99,6 +99,34 @@ describe('CourseSession', () => {
     expect(new CourseSession(course()).recordStage(undefined)).toBe('finished');
   });
 
+  test('builds the course play log with each unreached stage’s facts and chart fingerprint', () => {
+    const session = new CourseSession(course());
+    const failed = stageLog({ gauge: { type: 'GRADE', final: 0, cleared: false, failedMidPlay: true } });
+    failed.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', course: { kind: 'grade' } };
+    session.recordStage(failed);
+    const seen: Array<number | undefined> = [];
+    const log = session.buildPlaylog(
+      (song) => {
+        seen.push(song.chart.sourceFormat === 'bms' ? song.chart.bms.lnMode : undefined);
+        return {
+          sourceFormat: 'bms',
+          laneMode: '7keys',
+          lnMode: 3,
+          judgeRank: { percent: 75 },
+          notes: { normal: 10, long: { 1: 0, 2: 0, 3: 0 } },
+        };
+      },
+      { chartFingerprintOf: (song) => `bmfp0:${song.id}` },
+    );
+    expect(log.stages[0]).toMatchObject({ played: true });
+    expect(log.stages.slice(1)).toMatchObject([
+      { played: false, md5: MD5[1], chartFingerprint: 'bmfp0:b' },
+      { played: false, md5: MD5[2], chartFingerprint: 'bmfp0:c' },
+    ]);
+    // The unreached stages are read as the course plays them: the HCN constraint applied.
+    expect(seen).toEqual([3, 3]);
+  });
+
   test('refuses a course with a missing stage', () => {
     expect(() => new CourseSession({ ...course(), playable: false })).toThrow('not in the collection');
   });
