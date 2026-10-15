@@ -359,6 +359,11 @@ function startAutoScratchNote(
       endSeconds,
     });
     insertPendingAutoLongNote(state.pendingAutoScratchLongNotes, note, endSeconds);
+    if (longNoteScoresTail(config.ruleset.longNoteStyle, note)) {
+      // Charge modes judge the head and the tail separately: auto scratch clears the head now, the tail at the tail
+      // (beatoraja's autoplay).
+      applyAutoPerfect(state, note.channel, referenceSeconds, emit);
+    }
     emit({
       kind: 'ui',
       command: {
@@ -411,14 +416,8 @@ function completeAutoScratchLongNote(
     event: pending.note.event,
     endSeconds: pending.endSeconds,
   });
+  // The LN's one judgment, or a charge note's tail (its head was cleared at the head).
   applyAutoPerfect(state, pending.note.channel, referenceSeconds, emit);
-  if (longNoteScoresTail(state.config.ruleset.longNoteStyle, pending.note)) {
-    // Charge modes judge the head and the tail separately; the turntable's auto-scratch clears both.
-    applyJudgeToSummary(state.summary, 'PERFECT', state.scoreTracker);
-    applyGaugeJudge(state, referenceSeconds, 'PERFECT', emit);
-    setCombo(state, referenceSeconds, state.combo + 1, 'judge', emit, 'PERFECT', pending.note.channel);
-    emit({ kind: 'judge-combo', judge: 'PERFECT', combo: state.combo, channel: pending.note.channel });
-  }
   // Pair the `hold-lane-until-beat` emitted at the head so the LN-hold timer / lane laser fade out at the tail.
   emit({ kind: 'ui', command: { kind: 'long-note-end', channel: pending.note.channel, outcome: 'complete' } });
   emit({ kind: 'ui', command: { kind: 'release-lane', channel: pending.note.channel } });
