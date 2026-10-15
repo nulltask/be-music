@@ -27,6 +27,11 @@ export function resolveTableModeKeys(mode: unknown): number | undefined {
   return typeof mode === 'string' && Object.hasOwn(TABLE_MODE_KEYS, mode) ? TABLE_MODE_KEYS[mode] : undefined;
 }
 
+/** A stage's title, or beatoraja's `course N` for one without (`CourseData.validate`). */
+function stageTitle(title: unknown, index: number): string {
+  return typeof title === 'string' && title.length > 0 ? title : `course ${index + 1}`;
+}
+
 function parseTableCourse(value: unknown, legacy: boolean, keyMode: number | undefined): CourseDefinition | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const data = value as Record<string, unknown>;
@@ -34,7 +39,8 @@ function parseTableCourse(value: unknown, legacy: boolean, keyMode: number | und
   if (!legacy && Array.isArray(data.charts)) {
     for (const chart of data.charts) {
       if (chart === null || typeof chart !== 'object') continue;
-      const stage = createCourseStageRef(chart as Record<string, unknown>);
+      const fields = chart as Record<string, unknown>;
+      const stage = createCourseStageRef({ ...fields, title: stageTitle(fields.title, stages.length) });
       // beatoraja drops the whole course when one of its charts has no hash (`SongData.validate`).
       if (stage === undefined) return undefined;
       stages.push(stage);
@@ -42,7 +48,7 @@ function parseTableCourse(value: unknown, legacy: boolean, keyMode: number | und
   } else if (Array.isArray(data.md5)) {
     for (const md5 of data.md5) {
       if (typeof md5 !== 'string') continue;
-      const stage = createCourseStageRef({ md5 });
+      const stage = createCourseStageRef({ md5, title: stageTitle(undefined, stages.length) });
       if (stage === undefined) return undefined;
       stages.push(stage);
     }
