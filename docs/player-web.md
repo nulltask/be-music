@@ -137,7 +137,7 @@ Courses play through the same select → play → result scenes. See [Courses an
 - **Result:**
   - After the last stage, or the failed one, the result scene shows the course as one run: summed judgments, the course max combo, the final gauge and the course lamp.
   - The course play log (`*.bmcourse.json`, see [playlog.md](./playlog.md#course-play-logs)) is auto-downloaded when play-log auto-save is on.
-  - The best lamp, EX score, max combo and BP are kept per course. A run played with AUTO on any stage (or a NONSTOP run played with AUTO) keeps no record, as an auto play keeps none for a chart.
+  - The best lamp, EX score, max combo and BP are kept per course and shown on its course bar: LR2 skins light the bar's lamp ops (100-105) and draw its `#SRC_BAR_LAMP` (song bars draw theirs from the chart records too), beatoraja skins light its `CLEAR_LAMP_*` op, and the be-music skins' course card names the best lamp and the trophy the bests earn (as beatoraja's `GradeBar` works it out: best EX score and fewest BP, cleared or not). A run played with AUTO on any stage (or a NONSTOP run played with AUTO) keeps no record, as an auto play keeps none for a chart.
   - Stage results count for the course, not for the single charts, and are not submitted to the leaderboard.
 - **LR2 skins** (`SceneCourseInfo`, passed as `courseInfo` to the LR2 select, gameplay and result scenes):
   - Ops: a course bar on the select screen lights 3 (course bar), 5 when every stage is in the collection, 290 and its kind's op (291 NONSTOP, 292 EXPERT, 293 GRADE). During a course, play and result add the stage op: 280-288 for stages 1-9 that are not the last, 289 for the last.

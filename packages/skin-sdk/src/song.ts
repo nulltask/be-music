@@ -108,3 +108,13 @@ export interface BeMusicSongRecord {
   /** How many times the chart was played. */
   playCount?: number;
 }
+
+/**
+ * The player's best record on a course, as a host keeps it: the course's best lamp, EX score, max combo and BP over its
+ * runs, plus the best trophy those bests earn (beatoraja's `GradeBar.getTrophy`, worked out from the best EX score and
+ * the fewest BP, which may come from different runs).
+ */
+export interface BeMusicCourseRecord extends BeMusicSongRecord {
+  /** The best trophy's name (e.g. `goldmedal`), when the course has trophies and the bests earn one. */
+  trophy?: string;
+}
