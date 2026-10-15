@@ -728,6 +728,32 @@ describe('engine / simulator equivalence', () => {
     expect(simulated.gauge.final).toBe(summary.gauge?.current);
   });
 
+  // LR2 misses an LN head once time moves past its late GOOD leg — before a plain note just ahead of it on the same
+  // lane runs out of its late BAD leg.
+  test('lr2: an LN head missed before the note ahead of it agrees on both sides', async () => {
+    const json = chart(
+      [
+        { measure: 1, channel: '11', position: [0, 200], value: '01' },
+        { measure: 1, channel: '11', position: [17, 200], value: '01' },
+        { measure: 1, channel: '11', position: [100, 200], value: 'AA' },
+        { measure: 2, channel: '12', position: [0, 1], value: '01' },
+      ],
+      1,
+    );
+    json.bms.lnObjs = ['AA'];
+    // No input between the BAD press and the LN head's deadline, so the next advance spans that deadline.
+    const inputs = [down(0, 1_091_000, '11'), down(1, 1_170_000, '12'), up(2, 1_180_000, '12'), up(3, 1_190_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(summary.bad).toBe(1);
+    expect(summary.poor).toBe(2);
+    expect(simulated.judge.bad).toBe(summary.bad);
+    expect(simulated.judge.poor).toBe(summary.poor);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 

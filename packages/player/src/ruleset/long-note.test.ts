@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   ignoresLateLongNoteHeadBad,
+  noteLateReachUs,
   isChargeLongNoteMode,
   isMultiBadCollectorTarget,
   longNoteOwesTailMiss,
@@ -64,6 +65,22 @@ describe('ruleset long-note rules', () => {
     expect(ignoresLateLongNoteHeadBad(lr2, 3, true, 2)).toBe(false);
     expect(ignoresLateLongNoteHeadBad(lr2, 3, true, undefined)).toBe(false);
     expect(ignoresLateLongNoteHeadBad({ ignoreLateBadOnLnHead: false }, 3, true, 1)).toBe(false);
+  });
+
+  test('noteLateReachUs stops an LR2 LN head at its late GOOD leg', () => {
+    const lr2 = { ignoreLateBadOnLnHead: true };
+    const windows = {
+      judges: [
+        [-15_000, 15_000],
+        [-30_000, 30_000],
+        [-60_000, 60_000],
+        [-200_000, 200_000],
+      ],
+    } as unknown as JudgeWindowSetUs;
+    expect(noteLateReachUs(lr2, windows, 1)).toBe(60_000);
+    expect(noteLateReachUs(lr2, windows, undefined)).toBe(200_000);
+    expect(noteLateReachUs(lr2, windows, 2)).toBe(200_000);
+    expect(noteLateReachUs({ ignoreLateBadOnLnHead: false }, windows, 1)).toBe(200_000);
   });
 
   describe('resolveLnEarlyRelease', () => {

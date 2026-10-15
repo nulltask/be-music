@@ -600,7 +600,9 @@ The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's
   stops the lane sound and settles the LN at once, by the ruleset (`lnEarlyRelease`): `lr2` makes a release more than
   the `GOOD` window before the tail a `BAD` and otherwise keeps the head judgment (OpenLR2 `ProcLongnote`);
   `beatoraja` takes the worse of the head and the release judged against the long-note-end windows, and makes it a
-  `BAD` when that is `BAD` or worse (`JudgeManager` L533-545).
+  `BAD` when that is `BAD` or worse (`JudgeManager` L533-545). Under `lr2` the head has no late `BAD`: it is missed
+  once time moves past its late `GOOD` leg, and a press after that judges whatever else is in reach (OpenLR2
+  `ProcLongnote`, LR2f.cpp:7542).
 - Mode `2` (CN): the head scores immediately on the press. The tail is judged on the RELEASE — against the exact
   release instant, not the frame that noticed it — and contributes a second judgment. Holding past the end point
   is not yet a judgment: the player has until the tail's late window closes to let go. Still holding when it

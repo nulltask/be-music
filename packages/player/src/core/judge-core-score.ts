@@ -1,7 +1,7 @@
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import type { JudgeWindowSetUs, RulesetConfig, RulesetWindowTables } from '../ruleset/definitions.ts';
 import { judgeWindowEarlyReachUs, judgeWindowLateReachUs, selectJudgeWindowSet } from '../ruleset/judge.ts';
-import { longNoteOwesTailMiss } from '../ruleset/long-note.ts';
+import { longNoteOwesTailMiss, noteLateReachUs } from '../ruleset/long-note.ts';
 import type { GaugeJudgeIndex } from '../ruleset/gauge.ts';
 import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import { isLongPlayableNote, resolveRulesetLongNoteMode, type TimedManualJudge } from './judge-rules.ts';
@@ -101,7 +101,16 @@ export function badWindowSeconds(config: JudgeCoreConfig): number {
  * already scrolled past under the old rank. The play-log simulator freezes the same per-note deadline.
  */
 export function resolveMissDeadlineSeconds(config: JudgeCoreConfig, note: TimedPlayableNote): number {
-  return judgeWindowLateReachUs(judgeWindowsFor(config, note.channel, note.seconds)) / 1e6;
+  return resolveNoteLateReachUs(config, note) / 1e6;
+}
+
+function resolveNoteLateReachUs(config: JudgeCoreConfig, note: TimedPlayableNote): number {
+  const { ruleset } = config;
+  return noteLateReachUs(
+    ruleset,
+    judgeWindowsFor(config, note.channel, note.seconds),
+    resolveRulesetLongNoteMode(ruleset.longNoteStyle, note),
+  );
 }
 
 /**
@@ -114,7 +123,7 @@ export function toJudgeUs(seconds: number): number {
 
 /** The microsecond past which a note can no longer be pressed: it is missed once time has moved beyond it. */
 export function resolveMissDeadlineUs(config: JudgeCoreConfig, note: TimedPlayableNote): number {
-  return toJudgeUs(note.seconds) + judgeWindowLateReachUs(judgeWindowsFor(config, note.channel, note.seconds));
+  return toJudgeUs(note.seconds) + resolveNoteLateReachUs(config, note);
 }
 
 /** Channel order, the tie-break for timed judgments that fall on the same microsecond. */

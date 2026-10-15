@@ -1,5 +1,5 @@
 import type { JudgeWindowSetUs, LongNoteStyle, RulesetConfig } from './definitions.ts';
-import { classifyRulesetJudge, RULESET_JUDGE_NONE, type RulesetJudgeIndex } from './judge.ts';
+import { classifyRulesetJudge, judgeWindowLateReachUs, RULESET_JUDGE_NONE, type RulesetJudgeIndex } from './judge.ts';
 
 /**
  * Long-note and multi-note rules that both the live engine (`core/judge-core.ts`) and the play-log simulator
@@ -60,6 +60,26 @@ export function ignoresLateLongNoteHeadBad(
   playedMode: RulesetLongNoteMode | undefined,
 ): boolean {
   return ruleset.ignoreLateBadOnLnHead && judge === 3 && late && playedMode === 1;
+}
+
+/**
+ * How far after a note a press can still judge it (µs) — past this the note is missed. An LN head under LR2 has no
+ * late BAD ({@link ignoresLateLongNoteHeadBad}), so it is missed once time moves past its late GOOD leg (OpenLR2
+ * `ProcLongnote`, LR2f.cpp:7542); every other note reaches as far as its windows do.
+ */
+export function noteLateReachUs(
+  ruleset: Pick<RulesetConfig, 'ignoreLateBadOnLnHead'>,
+  set: JudgeWindowSetUs,
+  playedMode: RulesetLongNoteMode | undefined,
+): number {
+  if (!ruleset.ignoreLateBadOnLnHead || playedMode !== 1) {
+    return judgeWindowLateReachUs(set);
+  }
+  let reach = 0;
+  for (const window of set.judges.slice(0, 3)) {
+    if (-window[0] > reach) reach = -window[0];
+  }
+  return reach;
 }
 
 /** A judgment index best to worst, 0 PGREAT … 3 BAD, 4 POOR. */
