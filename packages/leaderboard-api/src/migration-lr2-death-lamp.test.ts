@@ -42,14 +42,14 @@ async function submit(cookie: string, body: Uint8Array<ArrayBuffer>): Promise<vo
 }
 
 async function runMigration(): Promise<void> {
-  const text = await readFile(join(import.meta.dirname, '..', 'migrations', '0012_lr2_bp_and_death_lamp.sql'), 'utf8');
+  const text = await readFile(join(import.meta.dirname, '..', 'migrations', '0012_lr2_death_lamp.sql'), 'utf8');
   for (const statement of text.split('--> statement-breakpoint')) {
     const sql = statement.replace(/^\s*--.*$/gmu, '').trim();
     if (sql.length > 0) await env.DB.prepare(sql).run();
   }
 }
 
-describe('migration 0012: LR2 BP and DEATH lamp', () => {
+describe('migration 0012: LR2 DEATH lamp', () => {
   test('rewrites stored LR2 results and re-picks the LR2 bests', async () => {
     const cookie = await signInAnonymously(fetchApp);
     const chart = makeChart(['#00111:01010101', '#00211:01010101', '#00311:0101']);
@@ -63,8 +63,8 @@ describe('migration 0012: LR2 BP and DEATH lamp', () => {
     ).results.map((row) => row.id);
     const [first, second] = ids as [string, string];
 
-    // Put the stored figures back the way the old rules computed them: the second play had 5 empty POORs counted in
-    // its BP, and the first was a DEATH clear stored as EX HARD (6), the second a HARD clear (5).
+    // Put the stored figures back the way the old rules computed them: the first was a DEATH clear stored as EX HARD (6),
+    // the second a HARD clear (5) whose 5 empty POORs count in its BP, as LR2 counts them.
     const db = env.DB;
     await db
       .prepare(
@@ -95,11 +95,12 @@ describe('migration 0012: LR2 BP and DEATH lamp', () => {
     ).results;
     const of = (id: string) => results.find((row) => row.score_id === id)!;
     expect(of(first)).toMatchObject({ miss_count: 2, clear_lamp: 4 });
-    expect(of(second)).toMatchObject({ miss_count: 1, clear_lamp: 5 });
+    // BP is left as stored: LR2 counts empty POORs in it.
+    expect(of(second)).toMatchObject({ miss_count: 6, clear_lamp: 5 });
     const best = await db
       .prepare("SELECT * FROM `best_score` WHERE `ruleset` = 'lr2'")
       .first<{ best_lamp: number; best_lamp_score_id: string; min_miss: number; min_miss_score_id: string }>();
-    expect(best).toMatchObject({ best_lamp: 5, best_lamp_score_id: second, min_miss: 1, min_miss_score_id: second });
+    expect(best).toMatchObject({ best_lamp: 5, best_lamp_score_id: second, min_miss: 2, min_miss_score_id: first });
     // Other rulesets are left alone.
     expect(await db.prepare("SELECT * FROM `best_score` WHERE `ruleset` = 'beatoraja'").first()).toEqual(
       beatorajaBefore,

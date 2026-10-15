@@ -57,7 +57,7 @@ export function resolveClearLamp(result: PlaylogRulesetResult, ruleset: PlaylogR
 
 /**
  * The lamp a cleared run's gauge earns. LR2 awards HARD only for its HARD-family gauges and NORMAL for every other one
- * but EASY, so a DEATH clear is NORMAL there (OpenLR2 `LR2f.cpp` L2593-L2600, L1842-L1853); beatoraja and IIDX keep
+ * but EASY, so a DEATH clear is NORMAL there (LR2body.exe CheckClear @0x405da0, CheckCourseClear @0x4086d0); beatoraja and IIDX keep
  * theirs.
  */
 export function gaugeLamp(gaugeType: string, ruleset: PlaylogRulesetId): ClearLamp {
@@ -66,11 +66,11 @@ export function gaugeLamp(gaugeType: string, ruleset: PlaylogRulesetId): ClearLa
 }
 
 /**
- * Miss count (BP): BADs and missed POORs, plus empty POORs where the ruleset counts them. beatoraja and IIDX do; LR2 does
- * not (OpenLR2 `LR2f.cpp` L9649-L9657).
+ * Miss count (BP): BADs, missed POORs and empty POORs, as LR2 and beatoraja count it. LR2 adds an empty POOR to its POOR
+ * count (LR2body.exe ApplyJudgeNote @0x4061f1), so its BP includes them too.
  */
-export function resolveMissCount(result: PlaylogRulesetResult, ruleset: PlaylogRulesetId): number {
-  return result.judge.bad + result.judge.poor + (ruleset === 'lr2' ? 0 : result.judge.emptyPoor);
+export function resolveMissCount(result: PlaylogRulesetResult): number {
+  return result.judge.bad + result.judge.poor + result.judge.emptyPoor;
 }
 
 /**

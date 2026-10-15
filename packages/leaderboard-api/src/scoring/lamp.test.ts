@@ -58,12 +58,9 @@ describe('resolveClearLamp', () => {
 });
 
 describe('resolveMissCount', () => {
-  test('counts BADs and missed POORs, and empty POORs except under LR2', () => {
-    const played = result({ type: 'GROOVE', cleared: true }, { bad: 2, poor: 3, emptyPoor: 4 });
-    expect(resolveMissCount(played, 'beatoraja')).toBe(9);
-    expect(resolveMissCount(played, 'iidx')).toBe(9);
-    // LR2 leaves empty POORs out of BP.
-    expect(resolveMissCount(played, 'lr2')).toBe(5);
+  test('counts BADs, missed POORs and empty POORs, LR2 included', () => {
+    // LR2 adds an empty POOR to its POOR count, so its BP includes them like beatoraja's.
+    expect(resolveMissCount(result({ type: 'GROOVE', cleared: true }, { bad: 2, poor: 3, emptyPoor: 4 }))).toBe(9);
   });
 });
 
