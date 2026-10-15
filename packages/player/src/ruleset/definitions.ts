@@ -1,4 +1,10 @@
-import { resolveBmsJudgeWindowsMsForPercent, bmsExRankValueToJudgeRankPercent } from '../core/judge-window.ts';
+import {
+  bmsExRankValueToJudgeRankPercent,
+  resolveBmsJudgeWindowsMsForPercent,
+  resolveBmsRankJudgeRankPercent,
+  resolveLr2NonstopRankWindowsMs,
+  type JudgeWindowsMs,
+} from '../core/judge-window.ts';
 import {
   applyCourseJudgeConstraint,
   resolveCourseGauge,
@@ -208,7 +214,10 @@ const lr2LongNoteEnd = (windows: { good: number; bad: number }): JudgeWindowSetU
 });
 
 function resolveLr2WindowTables(percent: number, overrideBadMs: number | undefined): RulesetWindowTables {
-  const windows = resolveBmsJudgeWindowsMsForPercent(percent, overrideBadMs);
+  return lr2WindowTables(resolveBmsJudgeWindowsMsForPercent(percent, overrideBadMs));
+}
+
+function lr2WindowTables(windows: JudgeWindowsMs): RulesetWindowTables {
   const note = scale(windows);
   const longEnd = lr2LongNoteEnd(windows);
   return { note, scratch: note, longNoteEnd: longEnd, longScratchEnd: longEnd };
@@ -740,10 +749,21 @@ export function resolveRuleset(
     const effectiveTotal = resolveEffectiveTotal('lr2', chart, baseNotes);
     const timeline = chart.judgeRank.timeline ?? [];
     const staticTables = constrain(resolveLr2WindowTables(chart.judgeRank.percent, overrideBadMs));
-    const timelineTables = timeline.map((change) => ({
-      timeUs: change.timeUs,
-      tables: constrain(resolveLr2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs)),
-    }));
+    const timelineTables = [
+      ...timeline.map((change) => ({
+        timeUs: change.timeUs,
+        tables: constrain(resolveLr2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs)),
+      })),
+      // A stitched NONSTOP chart's later stages (`RulesetStageRank`); stable after the `#EXRANKxx` changes on a tie.
+      ...(chart.judgeRank.stageRanks ?? []).map((change) => ({
+        timeUs: change.timeUs,
+        tables: constrain(
+          change.table === 'lr2-nonstop'
+            ? lr2WindowTables(resolveLr2NonstopRankWindowsMs(change.rank, overrideBadMs))
+            : resolveLr2WindowTables(resolveBmsRankJudgeRankPercent(change.rank), overrideBadMs),
+        ),
+      })),
+    ].sort((left, right) => left.timeUs - right.timeUs);
     return {
       id: 'lr2/0',
       rulesetId: 'lr2',

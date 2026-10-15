@@ -158,19 +158,27 @@ export interface NonstopBgaStage {
   bgaFadeOut?: { start: number; end: number };
 }
 
-/** A stage's own base and layer BGA cues, the stitched timeline's cues split by the stage that owns each BMP key. */
+/**
+ * A stage's own base, layer and POOR BGA cues, the stitched timeline's cues split by the stage that owns each BMP key.
+ */
 export interface NonstopStageBgaTimeline {
   base: BgaCue[];
   layer: BgaCue[];
+  poor: BgaCue[];
 }
 
 /**
- * Splits a stitched NONSTOP chart's base and layer BGA cues by stage (its stitched BMP keys are per stage), as LR2 keeps
- * a BGA layer per stage (OpenLR2 `LR2f.cpp` L12726-L12780). A cue that clears the layer (no key) goes to the stage
- * whose window it falls in.
+ * Splits a stitched NONSTOP chart's base, layer and POOR BGA cues by stage (its stitched BMP keys are per stage), as
+ * LR2 keeps a base, layer and POOR image per stage (OpenLR2 `LR2f.cpp` L12726-L12780). A cue that clears a layer (no
+ * key) goes to the stage whose window it falls in.
+ *
+ * LR2 draws one stage's three images each frame: `LR2body.exe` 0x4350df picks the stage by the crossfade weights
+ * (`bgaMixer`) and copies its base, layer and POOR image into the ones it draws, so a miss shows the POOR image of the
+ * stage on screen, never a `#BMP00` fallback. The scenes draw each stage's stack at its crossfade opacity instead of
+ * picking one at random, and a stage's POOR image replaces that stage's base and layer.
  */
 export function splitNonstopBgaTimeline(
-  timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[] },
+  timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor?: readonly BgaCue[] },
   stages: readonly NonstopBgaStage[],
 ): NonstopStageBgaTimeline[] {
   const stageOfKey = new Map<string, number>();
@@ -179,9 +187,9 @@ export function splitNonstopBgaTimeline(
     const index = stages.findIndex((stage) => seconds < stage.windowEnd);
     return index < 0 ? stages.length - 1 : index;
   };
-  const split = stages.map((): NonstopStageBgaTimeline => ({ base: [], layer: [] }));
-  for (const track of ['base', 'layer'] as const) {
-    for (const cue of timeline[track]) {
+  const split = stages.map((): NonstopStageBgaTimeline => ({ base: [], layer: [], poor: [] }));
+  for (const track of ['base', 'layer', 'poor'] as const) {
+    for (const cue of timeline[track] ?? []) {
       const stage = (cue.bmpKey !== undefined ? stageOfKey.get(cue.bmpKey) : undefined) ?? stageAt(cue.seconds);
       split[stage]?.[track].push(cue);
     }

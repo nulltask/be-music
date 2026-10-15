@@ -136,6 +136,30 @@ describe('stitchNonstopCourse', () => {
     expect(stitched.notes).toHaveLength(resolveChart(stageA).notes.length + 2);
   });
 
+  test("maps each stage's BPM readout and judge rank", () => {
+    const rankedB = { ...stageB, metadata: { ...stageB.metadata, rank: 1 } };
+    const intended = stitchNonstopCourse([{ chart: stageA }, { chart: rankedB }], { connections: ['fade'] });
+    if (!intended.ok) throw new Error('stitch failed');
+    const [a, b] = intended.map.stages.map((stage) => stage.placement);
+    expect(intended.chart.metadata.bpm).toBe(150);
+    expect(intended.map.tempo).toEqual([
+      { seconds: 0, bpm: 120 },
+      { seconds: a!.boundarySeconds, bpm: 180 },
+    ]);
+    // Halfway between stage A's last note and stage B's first, which both land on the 8 s line.
+    expect(intended.map.stageRanks).toHaveLength(1);
+    expect(intended.map.stageRanks[0]).toMatchObject({ rank: 1, table: 'chart' });
+    expect(intended.map.stageRanks[0]!.seconds).toBeCloseTo(8, 6);
+
+    const lr2 = stitchNonstopCourse([{ chart: stageA }, { chart: rankedB }], {
+      connections: ['fade'],
+      placement: 'lr2',
+    });
+    if (!lr2.ok) throw new Error('stitch failed');
+    expect(lr2.map.tempo[1]).toEqual({ seconds: b!.offsetSeconds, bpm: 180 });
+    expect(lr2.map.stageRanks).toEqual([{ seconds: b!.offsetSeconds, rank: 1, table: 'lr2-nonstop' }]);
+  });
+
   test('refuses bmson stages and a course past the key space', () => {
     expect(stitchNonstopCourse([{ chart: createEmptyJson('bmson') }], { connections: [] })).toEqual({
       ok: false,

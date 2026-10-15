@@ -4,11 +4,26 @@ import {
   bmsExRankValueToJudgeRankPercent,
   resolveBmsJudgeWindowsMsForExRankValue,
   resolveBmsJudgeWindowsMsForPercent,
+  resolveBmsRankJudgeRankPercent,
   resolveJudgeRankPercent,
+  resolveLr2NonstopRankWindowsMs,
   resolveJudgeWindowsMs,
 } from './judge-window.ts';
 
 describe('judge-window', () => {
+  test('resolveBmsRankJudgeRankPercent maps #RANK onto the percent axis, NORMAL outside 0-3', () => {
+    expect([0, 1, 2, 3, 4, 5, -1, 1.7].map(resolveBmsRankJudgeRankPercent)).toEqual([25, 50, 75, 100, 75, 75, 75, 50]);
+  });
+
+  test("resolveLr2NonstopRankWindowsMs reads LR2's NONSTOP rank table", () => {
+    expect(resolveLr2NonstopRankWindowsMs(0)).toEqual({ pgreat: 12, great: 24, good: 60, bad: 200 });
+    expect(resolveLr2NonstopRankWindowsMs(1)).toEqual({ pgreat: 15, great: 30, good: 80, bad: 200 });
+    expect(resolveLr2NonstopRankWindowsMs(2)).toEqual({ pgreat: 18, great: 40, good: 100, bad: 200 });
+    expect(resolveLr2NonstopRankWindowsMs(3)).toEqual({ pgreat: 21, great: 60, good: 120, bad: 200 });
+    expect(resolveLr2NonstopRankWindowsMs(4)).toEqual({ pgreat: 18, great: 40, good: 100, bad: 200 });
+    expect(resolveLr2NonstopRankWindowsMs(3, 50)).toEqual({ pgreat: 21, great: 50, good: 50, bad: 50 });
+  });
+
   test('BMS: #RANK maps onto the measured LR2 windows with a fixed ±200ms BAD gate', () => {
     const expectations: Array<[number, number, number, number]> = [
       [0, 8, 24, 40], // VERY HARD

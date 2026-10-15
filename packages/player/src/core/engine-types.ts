@@ -126,6 +126,20 @@ export interface PlayerPlaySettings {
    * the play log (`play.course`), so the stage replays on its own.
    */
   course?: PlaylogCourseStage;
+  /**
+   * The judge rank changes of a stitched LR2 NONSTOP chart's later stages (`NonstopStitchMap.stageRanks` from
+   * `@be-music/player/course`), in chart seconds: from each change on, the windows of that stage's `#RANK`. Applied under
+   * the LR2 ruleset only (as `#EXRANKxx`) and recorded into the play log (`chart.judgeRank.stageRanks`), so a replay
+   * and a re-simulation judge with them.
+   */
+  stageRanks?: ReadonlyArray<PlayerStageRank>;
+}
+
+/** One judge rank change of {@link PlayerPlaySettings.stageRanks}. */
+export interface PlayerStageRank {
+  seconds: number;
+  rank: number;
+  table: 'chart' | 'lr2-nonstop';
 }
 
 /**
