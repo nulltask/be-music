@@ -2,8 +2,15 @@ import { createEmptyJson } from '@be-music/json';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
+import type { BeMusicSongRecord } from '@be-music/player-web/skin';
 import { describe, expect, test } from 'vite-plus/test';
-import { buildCourseResultSummary, CourseSession, courseRecordKey, skipsCourseStageResult } from './course-session.ts';
+import {
+  buildCourseResultSummary,
+  CourseSession,
+  courseRecordKey,
+  lookupCourseRecord,
+  skipsCourseStageResult,
+} from './course-session.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
@@ -206,5 +213,45 @@ describe('skipsCourseStageResult', () => {
     expect(skipsCourseStageResult({ skipStageResults: false, autoPlay: true, courseGoesOn: true })).toBe(true);
     expect(skipsCourseStageResult({ skipStageResults: false, autoPlay: true, courseGoesOn: false })).toBe(false);
     expect(skipsCourseStageResult({ skipStageResults: false, autoPlay: false, courseGoesOn: true })).toBe(false);
+  });
+});
+
+describe('lookupCourseRecord', () => {
+  const dan = (): BrowserCourseEntry => {
+    const entry = course(['MIRROR']);
+    return {
+      ...entry,
+      definition: {
+        ...entry.definition,
+        trophies: [
+          { name: 'bronzemedal', missRate: 10, scoreRate: 50 },
+          { name: 'goldmedal', missRate: 2.5, scoreRate: 85 },
+        ],
+      },
+    };
+  };
+
+  test('reads the record kept under the course key, with the trophy its bests earn', () => {
+    const records = new Map<string, BeMusicSongRecord>([
+      [courseRecordKey(dan()), { lamp: 'FAILED', exScore: 52, missCount: 0 }],
+    ]);
+    // 30 notes: 52 / 60 = 86.7 % score, no BP. beatoraja grants trophies on the bests, cleared or not.
+    expect(lookupCourseRecord(dan(), records)).toEqual({
+      lamp: 'FAILED',
+      exScore: 52,
+      missCount: 0,
+      trophy: 'goldmedal',
+    });
+    records.set(courseRecordKey(dan()), { lamp: 'NORMAL', exScore: 40, missCount: 3 });
+    expect(lookupCourseRecord(dan(), records)?.trophy).toBe('bronzemedal');
+  });
+
+  test('has no record for a course never played, a random course or a NEW COURSE bar', () => {
+    const records = new Map([[courseRecordKey(dan()), { lamp: 'HARD' as const }]]);
+    expect(lookupCourseRecord(course(['GAUGE_LR2']), records)).toBeUndefined();
+    expect(lookupCourseRecord({ ...dan(), newCourse: true }, records)).toBeUndefined();
+    const random = { ...dan(), random: { name: 'r', stages: [], constraints: [], trophies: [] } };
+    expect(lookupCourseRecord(random as unknown as BrowserCourseEntry, records)).toBeUndefined();
+    expect(lookupCourseRecord(dan(), records)).toEqual({ lamp: 'HARD' });
   });
 });

@@ -1,6 +1,7 @@
 import type { PlayerSummary } from '@be-music/player/core/engine';
 import {
   createCoursePlaylog,
+  resolveCourseTrophy,
   type RulesetChartFacts,
   type BeMusicCoursePlaylog,
   type BeMusicPlaylog,
@@ -17,6 +18,7 @@ import {
   type CourseLaneOption,
 } from '@be-music/player-web/collection';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
+import type { BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/player-web/skin';
 
 /** What the next stage of a running course plays: its chart (with the course's long-note constraint applied) and settings. */
 export interface CourseStagePlan {
@@ -203,6 +205,29 @@ export function courseRecordKey(course: BrowserCourseEntry): string {
   const { definition } = course;
   const stages = definition.stages.map((stage) => stage.sha256 ?? stage.md5 ?? '').join(',');
   return `course:${definition.kind}:${[...definition.constraints].sort().join('+')}:${stages}`;
+}
+
+/**
+ * The player's best record on a course bar, read from the records under {@link courseRecordKey}, with the trophy its
+ * bests earn: beatoraja's `GradeBar.getTrophy` takes the best EX score and the fewest BP (which may come from different
+ * runs) over the course's notes, whether the run cleared or not. A random course bar (its stages are drawn on start)
+ * and a NEW COURSE bar have no record.
+ */
+export function lookupCourseRecord(
+  course: BrowserCourseEntry,
+  records: { get(key: string): BeMusicSongRecord | undefined },
+): BeMusicCourseRecord | undefined {
+  if (course.random !== undefined || course.newCourse === true) return undefined;
+  const record = records.get(courseRecordKey(course));
+  if (record === undefined) return undefined;
+  const noteCount = course.stages.reduce((sum, stage) => sum + (stage.song?.totalNotes ?? 0), 0);
+  if (record.exScore === undefined || record.missCount === undefined || noteCount <= 0) return record;
+  const trophy = resolveCourseTrophy(course.definition.trophies, {
+    exScore: record.exScore,
+    missCount: record.missCount,
+    noteCount,
+  });
+  return trophy !== undefined ? { ...record, trophy } : record;
 }
 
 /**

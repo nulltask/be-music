@@ -35,6 +35,7 @@ import type {
   BeMusicSelectSort,
   BeMusicSkin,
   BeMusicSongRecord,
+  BeMusicCourseRecord,
 } from '../../skin/be-music/types.ts';
 import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
@@ -477,6 +478,12 @@ export interface CoreSongSelectViewOptions {
    * song then reads as never played.
    */
   resolveSongRecord?: (song: BrowserSongEntry) => BeMusicSongRecord | undefined;
+  /**
+   * Looks up the player's best record on a course bar, for a be-music skin's `frame.courseRecord(course)` and an LR2
+   * skin's course-bar lamp. Return `undefined` for a course never played (and for a random course or a NEW COURSE bar).
+   * Called while the skin draws, so it should be a cheap lookup.
+   */
+  resolveCourseRecord?: (course: BrowserCourseEntry) => BeMusicCourseRecord | undefined;
 }
 
 /** Design-canvas size a skin family's theme renders the select frame into. */
@@ -2631,6 +2638,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       this.songImages = songImages;
       this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin, {
         resolveSongRecord: this.options.resolveSongRecord,
+        resolveCourseRecord: this.options.resolveCourseRecord,
         songImage: songImages.lookup,
         settings: this.beMusicSkinSettings,
         renderer: this.host?.app.renderer,

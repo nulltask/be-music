@@ -27,6 +27,7 @@ import type {
   BeMusicSkinSettingValues,
   BeMusicSongImageLookup,
   BeMusicSongRecord,
+  BeMusicCourseRecord,
   BeMusicStage,
   BeMusicSurface,
   BeMusicSurfaceContextMap,
@@ -46,6 +47,7 @@ const NO_SONG_IMAGE: BeMusicSongImageLookup = () => undefined;
 
 /** Hosts that keep no play records report every song as never played. */
 const NO_SONG_RECORD = (): BeMusicSongRecord | undefined => undefined;
+const NO_COURSE_RECORD = (): BeMusicCourseRecord | undefined => undefined;
 
 /**
  * The player's stored values for a skin's settings, keyed by setting id, as a host persisted them. Bindings check them
@@ -386,7 +388,7 @@ export class BeMusicGameplayBinding {
  */
 export type BeMusicSelectSceneFrame = Omit<
   BeMusicSelectFrame,
-  'revision' | 'audio' | 'hit' | 'pointer' | 'songRecord' | 'songImage' | 'settings' | 'listScroll'
+  'revision' | 'audio' | 'hit' | 'pointer' | 'songRecord' | 'courseRecord' | 'songImage' | 'settings' | 'listScroll'
 >;
 
 /**
@@ -404,6 +406,7 @@ export class BeMusicSelectBinding {
   private readonly hitPool: ChildPool;
   private settings: BeMusicSkinSettingValues;
   private readonly songRecord: BeMusicSelectFrame['songRecord'];
+  private readonly courseRecord: NonNullable<BeMusicSelectFrame['courseRecord']>;
   private readonly songImage: BeMusicSongImageLookup;
   /** `frame.listScroll`: how far the list is pulled past its resting place, in design pixels (see `setListScroll`). */
   private listScroll = 0;
@@ -419,7 +422,7 @@ export class BeMusicSelectBinding {
 
   /**
    * `resolveSongRecord` looks up the player's best record on a song for `frame.songRecord`; without one every song
-   * reads as never played. `songImage` resolves song images for `frame.songImage` (call {@link invalidate} when one
+   * reads as never played; `resolveCourseRecord` does the same for a course bar (`frame.courseRecord`). `songImage` resolves song images for `frame.songImage` (call {@link invalidate} when one
    * arrives); without one every image reads as unavailable. `settings` are the player's stored values for the skin's
    * settings; without them the skin draws with its defaults.
    * `renderer` is the player's Pixi renderer: a Pixi-kit skin draws through it.
@@ -428,6 +431,7 @@ export class BeMusicSelectBinding {
     skin: BeMusicSkin,
     options: {
       resolveSongRecord?: BeMusicSelectFrame['songRecord'];
+      resolveCourseRecord?: BeMusicSelectFrame['courseRecord'];
       songImage?: BeMusicSongImageLookup;
       settings?: BeMusicStoredSkinSettings;
       renderer?: Renderer;
@@ -437,6 +441,7 @@ export class BeMusicSelectBinding {
     this.surface = new SkinSurface(skin, options.renderer);
     this.outroMs = skin.select.outroMs ?? 0;
     this.songRecord = options.resolveSongRecord ?? NO_SONG_RECORD;
+    this.courseRecord = options.resolveCourseRecord ?? NO_COURSE_RECORD;
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.backLayer.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
@@ -506,6 +511,7 @@ export class BeMusicSelectBinding {
       listScroll: this.listScroll,
       pointer,
       songRecord: this.songRecord,
+      courseRecord: this.courseRecord,
       songImage: this.songImage,
       settings: this.settings,
       hit: (x, y, w, h, action, cursor = 'pointer') => {

@@ -5,6 +5,7 @@ import type {
   Lr2BarBodySlot,
   Lr2BarFlashElement,
   Lr2BarLevelKind,
+  Lr2BarLampSource,
   Lr2BarLevelSource,
   Lr2BarTitleElement,
   Lr2ButtonElement,
@@ -31,7 +32,13 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from '../select-ops.ts';
+import {
+  computeSelectOps,
+  resolveKeyModeOp,
+  resolveLr2BarLampKind,
+  resolveLr2LampOp,
+  SELECT_DYNAMIC_OPS,
+} from '../select-ops.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
 import { resolveSceneCourseInfo, type SceneCourseInfo } from '../course-info.ts';
 import {
@@ -226,12 +233,14 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    * every stage is in the collection, and the course ops (290 and its kind's op).
    */
   private computeOps(skin: Lr2Skin): ReadonlySet<number> {
+    const song = this.focusedSong();
     const ops = computeSelectOps(
-      this.focusedSong(),
+      song,
       this.panelStates,
       this.playOptions,
       skin.customOptions,
       this.collection,
+      song !== undefined ? this.options.resolveSongRecord?.(song)?.lamp : undefined,
     );
     const course = this.focusedCourse();
     const maker = this.options.courseMaker;
@@ -243,6 +252,9 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     if (course === undefined) return withCourse;
     withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_COURSE);
     if (course.playable) withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_PLAYABLE);
+    // The course's best lamp (ops 100-105), from the player's record on it as LR2 keeps one per course.
+    withCourse.delete(SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED);
+    withCourse.add(resolveLr2LampOp(this.options.resolveCourseRecord?.(course)?.lamp));
     resolveLr2CourseOps(resolveSceneCourseInfo(course)).forEach((op) => withCourse.add(op));
     return withCourse;
   }
@@ -1168,10 +1180,35 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       if (isCenter && layout.flash) {
         this.drawBarFlash(layout.flash, dst);
       }
-      // BAR_LAMP / BAR_RANK: skipped for now because we don't yet persist clear-history per song. Once a score record
-      // exists, pick `layout.lamps[scoreLamp]` / `layout.ranks[scoreRank]` and render via the same offset-by-bar
-      // formula as BAR_TITLE.
+      // BAR_LAMP: a song or course bar's best lamp from the player's records, placed relative to the bar like
+      // BAR_TITLE. BAR_RANK is not drawn yet.
+      if (entry !== undefined && layout.lamps.length > 0 && layout.lampDestination !== undefined) {
+        this.drawBarLamp(entry, dst, layout.lamps, layout.lampDestination);
+      }
     }
+  }
+
+  /**
+   * Draws the `#SRC_BAR_LAMP` of a song or course bar for its best lamp (LR2 draws NO PLAY too, as its own lamp). A skin
+   * without that lamp's art draws nothing; folder bars have no lamp here.
+   */
+  private drawBarLamp(
+    entry: BrowserBrowseEntry,
+    bar: Lr2DestinationRect,
+    lamps: ReadonlyArray<Lr2BarLampSource>,
+    lampDst: Lr2DestinationRect,
+  ): void {
+    if (entry.kind === 'folder') return;
+    const record =
+      entry.kind === 'song'
+        ? this.options.resolveSongRecord?.(entry.song)
+        : this.options.resolveCourseRecord?.(entry.course);
+    const kind = resolveLr2BarLampKind(record?.lamp);
+    const lamp = lamps.find((source) => source.kind === kind);
+    if (lamp === undefined) return;
+    const absoluteDst: Lr2DestinationRect = { ...lampDst, x: bar.x + lampDst.x, y: bar.y + lampDst.y };
+    const sprite = this.makeSlicedSprite(lamp.source, absoluteDst, `bar-lamp[${kind}]`);
+    if (sprite) this.listLayer.addChild(sprite);
   }
 
   /**

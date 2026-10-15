@@ -1,4 +1,4 @@
-import type { BrowserBrowseEntry, BrowserCourseEntry } from './song.ts';
+import type { BeMusicCourseRecord, BrowserBrowseEntry, BrowserCourseEntry } from './song.ts';
 
 /** One row of the select list to draw this frame. */
 export interface SelectListRow {
@@ -85,12 +85,25 @@ const COURSE_KIND_LABELS = { grade: 'DAN', expert: 'COURSE', nonstop: 'NONSTOP' 
 
 /**
  * What a select card shows for a focused course bar in place of a song: the course's name, a line naming its kind and
- * its stage count (or `make a course` on a NEW COURSE bar), and its stage titles in order.
+ * its stage count (or `make a course` on a NEW COURSE bar), and its stage titles in order. With the player's `record`
+ * on the course (`frame.courseRecord`), the line also names its best lamp and trophy (`DAN · 4 stages · HARD ·
+ * goldmedal`); a lamp of `NO_PLAY` is left out.
  */
-export function describeCourseCard(course: BrowserCourseEntry): { title: string; detail: string; stages: string[] } {
+export function describeCourseCard(
+  course: BrowserCourseEntry,
+  record?: BeMusicCourseRecord,
+): { title: string; detail: string; stages: string[] } {
   const title = course.definition.name;
   if (course.newCourse === true) return { title, detail: 'make a course', stages: [] };
   const kind = course.random !== undefined ? 'RANDOM COURSE' : COURSE_KIND_LABELS[course.definition.kind];
   const count = browseEntryCount({ kind: 'course', course }) ?? '';
-  return { title, detail: `${kind} · ${count}`, stages: course.stages.map((stage) => stage.title) };
+  const best = [
+    record !== undefined && record.lamp !== 'NO_PLAY' ? record.lamp.replaceAll('_', ' ') : undefined,
+    record?.trophy,
+  ].filter((part): part is string => part !== undefined);
+  return {
+    title,
+    detail: [`${kind} · ${count}`, ...best].join(' · '),
+    stages: course.stages.map((stage) => stage.title),
+  };
 }

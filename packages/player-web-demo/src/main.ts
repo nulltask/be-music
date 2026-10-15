@@ -172,6 +172,7 @@ import {
   buildCourseResultSummary,
   CourseSession,
   courseRecordKey,
+  lookupCourseRecord,
   skipsCourseStageResult,
   type CourseStagePlan,
 } from './course-session.ts';
@@ -3646,6 +3647,11 @@ class PlayerWebDemoApp {
         const record = this.lookupSongRecord(song);
         return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
       },
+      // A course bar's lamp comes from the course's record, kept under the course's key.
+      resolveCourseLampOp: (course) => {
+        const record = lookupCourseRecord(course, this.songRecords);
+        return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
+      },
       // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
       // `-101 BACKBMP` / `-102 BANNER`). The scene calls this on every focus change and
       // caches by song-id; default beatoraja's select.json paints `-102 BANNER` as the
@@ -4642,6 +4648,7 @@ class PlayerWebDemoApp {
         this.refreshPlayOptionControllers();
       },
       resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
+      resolveCourseRecord: (course: BrowserCourseEntry) => lookupCourseRecord(course, this.songRecords),
       onSongSelected: (song: BrowserSongEntry) => {
         if (this.addSongToCourseBeingMade(song)) return;
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
