@@ -136,6 +136,24 @@ describe('stitchNonstopCourse', () => {
     expect(stitched.notes).toHaveLength(resolveChart(stageA).notes.length + 2);
   });
 
+  test("maps each stage's BPM readout", () => {
+    const intended = stitchNonstopCourse([{ chart: stageA }, { chart: stageB }], { connections: ['fade'] });
+    if (!intended.ok) throw new Error('stitch failed');
+    const [a, b] = intended.map.stages.map((stage) => stage.placement);
+    expect(intended.chart.metadata.bpm).toBe(150);
+    expect(intended.map.tempo).toEqual([
+      { seconds: 0, bpm: 120 },
+      { seconds: a!.boundarySeconds, bpm: 180 },
+    ]);
+
+    const lr2 = stitchNonstopCourse([{ chart: stageA }, { chart: stageB }], {
+      connections: ['fade'],
+      placement: 'lr2',
+    });
+    if (!lr2.ok) throw new Error('stitch failed');
+    expect(lr2.map.tempo[1]).toEqual({ seconds: b!.offsetSeconds, bpm: 180 });
+  });
+
   test('refuses bmson stages and a course past the key space', () => {
     expect(stitchNonstopCourse([{ chart: createEmptyJson('bmson') }], { connections: [] })).toEqual({
       ok: false,

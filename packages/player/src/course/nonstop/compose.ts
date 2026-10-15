@@ -14,6 +14,7 @@ import {
   type NonstopPlanOptions,
   type NonstopStagePlacement,
 } from './plan.ts';
+import { resolveNonstopTempo, type NonstopTempoPoint } from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
 
 /** One stage to stitch: its BMS chart with control flow resolved, and whether it is a `.pms` chart. */
@@ -64,6 +65,11 @@ export interface NonstopStitchStage {
 
 export interface NonstopStitchMap {
   stages: NonstopStitchStage[];
+  /**
+   * What the BPM readouts show over the play ({@link resolveNonstopTempo}, look it up with `nonstopBpmAt`): each
+   * stage's own BPM, scaled by its FIT rate, where the stitched chart itself runs at 150 BPM.
+   */
+  tempo: NonstopTempoPoint[];
 }
 
 export type StitchNonstopResult =
@@ -213,10 +219,19 @@ export function stitchNonstopCourse(
   if (first.rank !== undefined) chart.metadata.rank = first.rank;
   if (last.total !== undefined) chart.metadata.total = last.total;
 
+  const readouts = stages.map((stage, index) => ({
+    tempo: resolved[index]!.timing.tempoPoints.map((point) => ({
+      seconds: point.seconds,
+      bpm: point.displayBpm ?? point.bpm,
+    })),
+    headerBpm: stage.chart.metadata.bpm,
+  }));
+
   return {
     ok: true,
     chart,
     map: {
+      tempo: resolveNonstopTempo(readouts, placements, options),
       stages: placements.map((placement, index) => {
         const after = index < placements.length - 1 ? (options.connections[index] ?? 'fade') : undefined;
         const before = index > 0 ? (options.connections[index - 1] ?? 'fade') : undefined;
