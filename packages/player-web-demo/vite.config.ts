@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { readFile, realpath } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { defineConfig, type Plugin } from 'vite-plus';
+import { defaultClientConditions, defineConfig, type Plugin } from 'vite-plus';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 const repositoryDir = resolve(import.meta.dirname, '../..');
@@ -421,102 +421,8 @@ function acknowledgementsPlugin(roots: string[]): Plugin {
   };
 }
 
-interface WorkspaceAlias {
-  find: string;
-  replacement: string;
-}
-
-function workspaceRootAliasPlugin(entries: readonly WorkspaceAlias[]): Plugin {
-  return {
-    name: 'be-music:resolve-workspace-root-aliases',
-    enforce: 'pre',
-    resolveId(source) {
-      const entry = entries.find((candidate) => candidate.find === source);
-      return entry?.replacement ?? null;
-    },
-  };
-}
-
-// Vite/Rolldown string aliases are prefix matches, so root package aliases must stay out of `resolve.alias`; otherwise
-// `@be-music/utils` can shadow `@be-music/utils/optional-node-module` and resolve to `src/index.ts/optional-node-module`.
-//
-// `@be-music/utils` / `@be-music/audio-renderer` / `@be-music/player` keep Node-facing code behind subpath exports or
-// lazy dynamic imports. Browser imports stay on the browser-safe paths below; disk-facing functions such as
-// `renderChartFile` are not called from the demo runtime.
-const workspaceSubpathAliases: WorkspaceAlias[] = [
-  {
-    find: '@be-music/audio-renderer/triggers',
-    replacement: resolve(repositoryDir, 'packages/audio-renderer/src/core/triggers.ts'),
-  },
-  {
-    find: '@be-music/player/playable-notes',
-    replacement: resolve(repositoryDir, 'packages/player/src/playable-notes.ts'),
-  },
-  {
-    find: '@be-music/player/judging',
-    replacement: resolve(repositoryDir, 'packages/player/src/judging.ts'),
-  },
-  {
-    find: '@be-music/player/playlog',
-    replacement: resolve(repositoryDir, 'packages/player/src/playlog/index.ts'),
-  },
-  {
-    find: '@be-music/player/state-signals',
-    replacement: resolve(repositoryDir, 'packages/player/src/state-signals.ts'),
-  },
-  { find: '@be-music/player/core', replacement: resolve(repositoryDir, 'packages/player/src/core') },
-  { find: '@be-music/utils/core', replacement: resolve(repositoryDir, 'packages/utils/src/core.ts') },
-  { find: '@be-music/utils/cli-path', replacement: resolve(repositoryDir, 'packages/utils/src/cli-path.ts') },
-  { find: '@be-music/utils/log', replacement: resolve(repositoryDir, 'packages/utils/src/log.ts') },
-  // Browser-safe by design: Node built-ins load lazily inside the fallback path only (see the module header).
-  {
-    find: '@be-music/utils/optional-node-module',
-    replacement: resolve(repositoryDir, 'packages/utils/src/optional-node-module.ts'),
-  },
-  { find: '@be-music/utils/path', replacement: resolve(repositoryDir, 'packages/utils/src/path.ts') },
-  { find: '@be-music/utils/pcm', replacement: resolve(repositoryDir, 'packages/utils/src/pcm.ts') },
-  // Longer subpaths must precede the main `@be-music/player-web` alias — Vite resolves aliases via `startsWith`, so a
-  // shorter prefix match would shadow them and try to load e.g. `packages/player-web/src/index.ts/scenes` as a file.
-  {
-    find: '@be-music/player-web/scenes',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/scene/index.ts'),
-  },
-  {
-    find: '@be-music/player-web/skin',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/skin/index.ts'),
-  },
-  {
-    find: '@be-music/player-web/chart',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/chart/index.ts'),
-  },
-  {
-    find: '@be-music/player-web/collection',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/collection/index.ts'),
-  },
-  {
-    find: '@be-music/player-web/runtime',
-    replacement: resolve(repositoryDir, 'packages/player-web/src/runtime/index.ts'),
-  },
-];
-
-const workspaceRootAliases: WorkspaceAlias[] = [
-  { find: '@be-music/player', replacement: resolve(repositoryDir, 'packages/player/src/index.ts') },
-  { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
-  { find: '@be-music/audio-renderer', replacement: resolve(repositoryDir, 'packages/audio-renderer/src/index.ts') },
-  { find: '@be-music/beatoraja-skin', replacement: resolve(repositoryDir, 'packages/beatoraja-skin/src/index.ts') },
-  { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },
-  { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },
-  { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },
-  { find: '@be-music/parser', replacement: resolve(repositoryDir, 'packages/parser/src/index.ts') },
-  { find: '@be-music/player-web', replacement: resolve(repositoryDir, 'packages/player-web/src/index.ts') },
-  { find: '@be-music/skin-sdk', replacement: resolve(repositoryDir, 'packages/skin-sdk/src/index.ts') },
-];
-
-const workspaceAliases = [...workspaceSubpathAliases, ...workspaceRootAliases];
-
 export default defineConfig({
   plugins: [
-    workspaceRootAliasPlugin(workspaceRootAliases),
     // ts-ebml (used by `makeWebmSeekable` for the recording post-process) reaches into Node's `Buffer` and `events`
     // module from its CJS dependency chain (`ebml`, `ebml-block`, `int64-buffer`). Vite leaves those unpolyfilled by
     // default, which surfaces in the browser as `Cannot read properties of undefined (reading 'readVint')` the moment
@@ -560,12 +466,15 @@ export default defineConfig({
   define: {
     __BE_MUSIC_BUILD__: JSON.stringify(resolveBuildCommit()),
   },
+  // Workspace packages resolve to their TypeScript sources through the `source` condition in each `package.json`
+  // `exports`, the same way as the root config. They are linked rather than installed, so the dependency optimizer
+  // leaves them alone. Browser imports stay on browser-safe entry points: Node-facing code in `@be-music/utils` /
+  // `@be-music/audio-renderer` / `@be-music/player` sits behind subpath exports or lazy dynamic imports.
   resolve: {
-    alias: workspaceSubpathAliases,
+    conditions: ['source', ...defaultClientConditions],
   },
   optimizeDeps: {
     exclude: [
-      ...workspaceAliases.map((entry) => entry.find),
       // ffmpeg.wasm (BGA-video transcode fallback) ships a Worker its `FFmpeg` class spawns via `new Worker(new
       // URL("./worker.js", import.meta.url))`. Vite's pre-bundler would rewrite the package into
       // `.vite/deps/@ffmpeg_ffmpeg.js`, which makes that relative `./worker.js` URL miss because the worker file
