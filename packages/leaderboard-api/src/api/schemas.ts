@@ -67,7 +67,22 @@ export const courseSubmissionBody = v.object({
         ),
       }),
     ),
-    'The fingerprint documents of each played stage, in the order the stages were played.',
+    'The fingerprint documents of each played stage, in the order the stages were played. Empty for a NONSTOP run, whose stages are rebuilt from `stageCharts`.',
+  ),
+  stageCharts: v.optional(
+    described(
+      v.array(
+        v.object({
+          stage: described(v.pipe(v.number(), v.integer(), v.minValue(0)), 'The course stage, zero-based.'),
+          chart: described(
+            v.unknown(),
+            'The stage chart as loaded (`BeMusicJson`, `#RANDOM` still in); it must hash to the stage’s chart fingerprint. Used to verify the run, never stored.',
+          ),
+          pms: v.optional(described(v.boolean(), 'Whether the chart is a `.pms` file (a lane-mode input).')),
+        }),
+      ),
+      'The charts of the stages the server rebuilds: every stage the run never reached (their notes count as BP), and every stage of a NONSTOP run (stitched again to verify the play).',
+    ),
   ),
 });
 

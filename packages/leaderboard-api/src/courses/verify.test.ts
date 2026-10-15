@@ -74,3 +74,43 @@ describe('checkCourseRun', () => {
     });
   });
 });
+
+describe('a NONSTOP run', () => {
+  /** A NONSTOP run whose stitched play is `stitched`; its two cut-out stages carry no settings of their own. */
+  function nonstopRun(constraints: string[], stitched: BeMusicPlaylog) {
+    const cut = stage({ kind: 'nonstop' });
+    const log = createCoursePlaylog({
+      course: { name: 'Nonstop', kind: 'nonstop', constraints, trophies: [] },
+      stages: [cut, cut].map((playlog) => ({ played: true as const, playlog })),
+      nonstop: {
+        connections: ['cut'],
+        placement: 'intended',
+        playlog: stitched,
+        stages: [
+          { offsetUs: 0, windowStartUs: 0, windowEndUs: 3_000_000, rate: 1 },
+          { offsetUs: 2_000_000, windowStartUs: 3_000_000, rate: 1 },
+        ],
+        noteStages: stitched.chart.notes.map((note) => (note.timeUs < 3_000_000 ? 0 : 1)),
+      },
+    });
+    return { log, simulated: simulateCoursePlaylog(log, { ruleset: 'lr2' }) };
+  }
+
+  test('is judged under the ruleset of its stitched play', () => {
+    const { log } = nonstopRun([], stage({ kind: 'nonstop' }, { judgeRuleset: 'iidx' }));
+    expect(resolveCoursePlayedRuleset(log)).toBe('iidx');
+  });
+
+  test('checks only the stitched play against the constraints, given up or not', () => {
+    const settings: PlaylogCourseStage = { kind: 'nonstop', gaugeSet: 'lr2' };
+    const cleared = nonstopRun(['gauge_lr2', 'grade'], stage(settings));
+    expect(checkCourseRun(cleared.log, cleared.simulated)).toEqual({ ok: true });
+    const givenUp = nonstopRun(['gauge_lr2'], stage(settings, { aborted: true, abortedAtUs: 2_000_000 }));
+    expect(checkCourseRun(givenUp.log, givenUp.simulated)).toEqual({ ok: true });
+    const mirrored = nonstopRun(['gauge_lr2', 'grade'], stage(settings, { randomLane: { p1: 'MIRROR' } }));
+    expect(checkCourseRun(mirrored.log, mirrored.simulated)).toEqual({
+      ok: false,
+      reason: 'course-constraint-mismatch',
+    });
+  });
+});

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import {
   createCoursePlaylog,
+  resolveChartRulesetFacts,
   simulatePlaylog,
   type BeMusicCoursePlaylog,
   type BeMusicPlaylog,
@@ -54,13 +55,8 @@ function stageChart(lane: string): TestChart {
   return makeChart(['#00111:01010101', '#00211:01010101', `#003${lane}:0101`]);
 }
 
-const FACTS: RulesetChartFacts = {
-  sourceFormat: 'bms',
-  laneMode: '7keys',
-  lnMode: 1,
-  judgeRank: { percent: 75 },
-  notes: { normal: 10, long: { 1: 0, 2: 0, 3: 0 } },
-};
+/** An unreached stage's facts, as the client derives them from the stage chart. */
+const factsOf = (chart: TestChart): RulesetChartFacts => resolveChartRulesetFacts(chart.json);
 
 interface RunOptions {
   gauge?: BeMusicPlaylog['play']['gauge'];
@@ -78,7 +74,7 @@ function courseRun(charts: readonly TestChart[], hits: readonly number[], option
   let previous: ReturnType<typeof simulatePlaylog> | undefined;
   for (const [index, chart] of charts.entries()) {
     if (index >= hits.length) {
-      stages.push({ played: false, facts: FACTS, chartFingerprint: chart.chartFingerprint });
+      stages.push({ played: false, facts: factsOf(chart), chartFingerprint: chart.chartFingerprint });
       continue;
     }
     const carryIn =
@@ -101,19 +97,30 @@ function courseRun(charts: readonly TestChart[], hits: readonly number[], option
   return createCoursePlaylog({ course: COURSE, stages, createdAt: '2026-10-15T00:00:00.000Z' });
 }
 
-function courseBody(log: BeMusicCoursePlaylog, charts: readonly TestChart[], withChartDocuments = true) {
+/**
+ * The body of a course run over `charts`: the documents of each played stage, and the chart of each unreached one
+ * (`stageCharts` overrides them).
+ */
+function courseBody(
+  log: BeMusicCoursePlaylog,
+  charts: readonly TestChart[],
+  withChartDocuments = true,
+  stageCharts?: ReadonlyArray<{ stage: number; chart: unknown }>,
+) {
   const played = log.stages.filter((entry) => entry.played).length;
-  return Uint8Array.from(
-    gzipSync(
-      JSON.stringify({
-        coursePlaylog: log,
-        stages: charts.slice(0, played).map((chart) => ({
-          playDocument: chart.playDocument,
-          ...(withChartDocuments ? { chartDocument: chart.chartDocument } : {}),
-        })),
-      }),
-    ),
-  );
+  return gzipBody({
+    coursePlaylog: log,
+    stages: charts.slice(0, played).map((chart) => ({
+      playDocument: chart.playDocument,
+      ...(withChartDocuments ? { chartDocument: chart.chartDocument } : {}),
+    })),
+    stageCharts:
+      stageCharts ?? charts.flatMap((chart, stage) => (stage >= played ? [{ stage, chart: chart.json }] : [])),
+  });
+}
+
+function gzipBody(body: unknown): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(gzipSync(JSON.stringify(body)));
 }
 
 function submitCourse(cookie: string | undefined, body: Uint8Array<ArrayBuffer>): Promise<Response> {
@@ -280,6 +287,36 @@ describe('POST /api/v0/course-scores', () => {
     const response = await submitCourse(cookie, courseBody(log, charts));
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'missing-fingerprint', detail: 'stage 3' });
+  });
+
+  test('checks an unreached stage against its chart, so a failed run cannot understate its notes', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    // Assisted, so it is not the failed run another test submitted.
+    const failed = () => courseRun(charts, [10, 0], { gauge: 'DEATH', play: { autoScratch: true } });
+
+    const withoutChart = await submitCourse(cookie, courseBody(failed(), charts, true, []));
+    expect(withoutChart.status).toBe(422);
+    expect(await withoutChart.json()).toEqual({ error: 'stage-chart-required', detail: 'stage 3' });
+
+    const otherChart = await submitCourse(
+      cookie,
+      courseBody(failed(), charts, true, [{ stage: 2, chart: charts[0]!.json }]),
+    );
+    expect(await otherChart.json()).toEqual({ error: 'stage-chart-fingerprint-mismatch', detail: 'stage 3' });
+
+    const notAChart = await submitCourse(
+      cookie,
+      courseBody(failed(), charts, true, [{ stage: 2, chart: { notes: [] } }]),
+    );
+    expect(await notAChart.json()).toEqual({ error: 'stage-chart-invalid', detail: 'stage 3' });
+
+    // Two notes fewer would have taken two misses off the run.
+    const understated = failed();
+    const last = understated.stages[2]!;
+    if (!last.played) last.facts = { ...last.facts, notes: { ...last.facts.notes, normal: 8 } };
+    const response = await submitCourse(cookie, courseBody(understated, charts));
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'course-stage-facts-mismatch', detail: 'stage 3' });
   });
 });
 
