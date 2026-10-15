@@ -692,6 +692,11 @@ class PlayerWebDemoApp {
    * the user's position.
    */
   private lastSelectNavigation: PixiSongSelectNavigation | undefined;
+  /**
+   * Where the select screen was when a course started. A later stage starts with no select screen up, so the course
+   * keeps this to put the cursor back on the course bar once it is over.
+   */
+  private courseReturnNavigation: PixiSongSelectNavigation | undefined;
   /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
   private activeSkinSystem: SkinFamilyOverride = EXTRA_SKINS_ENABLED ? 'auto' : 'default';
   /** The skin system the "Drop a skin" prompt asked for, until a drop answers it or it is cancelled. */
@@ -2241,6 +2246,7 @@ class PlayerWebDemoApp {
       return;
     }
     if (!entry.playable) return;
+    this.courseReturnNavigation = this.selectView?.getNavigation() ?? this.lastSelectNavigation;
     let course = entry;
     if (entry.random !== undefined) {
       const candidates = await Promise.all(
@@ -4459,6 +4465,11 @@ class PlayerWebDemoApp {
   }
 
   private async showSelect(): Promise<void> {
+    // Back from a course: the cursor returns to the course bar it was started from.
+    if (this.courseReturnNavigation !== undefined && this.courseSession === undefined) {
+      this.lastSelectNavigation = this.courseReturnNavigation;
+      this.courseReturnNavigation = undefined;
+    }
     this.elements.shell.classList.remove('playing');
     this.unlockPlaylogOptions();
     // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
