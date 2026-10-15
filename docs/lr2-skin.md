@@ -30,7 +30,9 @@ Consumers read only the fields that make sense for their scene.
 
 ## Courses
 
-LR2 has a scene of its own for the result of a whole course: `#INFORMATION` type 15, conventionally under `CourseResult/`. `loadLr2ThemeSkinsFromFiles` loads it as `courseResultSkin`, along with the course-result jingles `courseclear` / `coursefail` from the theme's `Sound/` folder. A `result` lookup never picks it.
+LR2 has a scene of its own for the result of a whole course: `#INFORMATION` type 15, conventionally under `CourseResult/`. `loadLr2ThemeSkinsFromFiles` loads it as `courseResultSkin`, along with the course-result jingles. A `result` lookup never picks it.
+
+LR2 finds its BGM and system sounds through the sound set, `LR2files/Sound/*.lr2ss`, which names each file: the stock `lr2.lr2ss` maps `#COURSECLEAR` / `#COURSEFAIL` to `Sound/lr2/course_clear.wav` / `course_fail.wav`. `loadLr2ThemeSkinsFromFiles` reads the dropped sound set (`lr2.lr2ss` first) for the select / decide BGM, the clear / fail / course jingles and the cursor, folder and option sounds, filling a `*` folder with its `#CUSTOMFILE` default and taking another audio extension when the named file is missing. Without a sound set, or for a file it does not name, it looks the stem up under `Sound/lr2/` (`course_clear` or `courseclear` for the course jingles).
 
 LR2 reads a skin each time its scene starts, so an `#IF` block can test state that holds for the whole scene. In a course that means the course ops (OpenLR2 `LR2f.cpp` L5403-L5444):
 
