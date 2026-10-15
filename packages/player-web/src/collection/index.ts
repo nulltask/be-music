@@ -9,6 +9,7 @@
  */
 export * from './collection.ts';
 export * from './course.ts';
+export * from './course-maker.ts';
 export * from './nonstop.ts';
 export * from './chart-hash.ts';
 export * from './md5.ts';

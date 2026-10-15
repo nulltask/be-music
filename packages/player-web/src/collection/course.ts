@@ -88,6 +88,27 @@ export function createSongHashLookup(
 }
 
 /**
+ * A course with its stages matched to local charts: a stage not in the collection keeps the course file's title for it
+ * (or a placeholder) and makes the course unplayable.
+ */
+export function resolveCourseEntry(
+  id: string,
+  definition: CourseDefinition,
+  lookup: CourseChartLookup<BrowserSongEntry>,
+): BrowserCourseEntry {
+  const resolved = resolveCourseStages(definition, lookup);
+  return {
+    id,
+    definition,
+    stages: resolved.stages.map((stage) => ({
+      title: stage.chart?.title ?? stage.ref.title ?? 'NOT FOUND',
+      ...(stage.chart !== undefined ? { song: stage.chart } : {}),
+    })),
+    playable: resolved.playable,
+  };
+}
+
+/**
  * One folder bar per course group, each listing its courses with their stages matched to local charts. A stage not
  * in the collection keeps the course file's title for it (or a placeholder), and makes its course unplayable. Groups
  * with no course are dropped.
@@ -102,18 +123,7 @@ export function resolveCourseFolders(
       label: group.label,
       songs: [],
       courses: [
-        ...group.courses.map((definition, index): BrowserCourseEntry => {
-          const resolved = resolveCourseStages(definition, lookup);
-          return {
-            id: `${group.label}#${index}`,
-            definition,
-            stages: resolved.stages.map((stage) => ({
-              title: stage.chart?.title ?? stage.ref.title ?? 'NOT FOUND',
-              ...(stage.chart !== undefined ? { song: stage.chart } : {}),
-            })),
-            playable: resolved.playable,
-          };
-        }),
+        ...group.courses.map((definition, index) => resolveCourseEntry(`${group.label}#${index}`, definition, lookup)),
         ...(group.randomCourses ?? []).map((random, index) =>
           createRandomCourseEntry(`${group.label}#r${index}`, random),
         ),

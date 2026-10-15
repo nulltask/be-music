@@ -572,6 +572,54 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       );
     },
   });
+  const benchDraft = {
+    kind: 'nonstop' as const,
+    name: 'Bench',
+    stages: [{ md5: BENCH_SONG_MD5, keyMode: 7, title: 'Bench' }],
+  };
+  define('player-web.resolveLr2CourseDraftInfo', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseDraftInfo(benchDraft, 'Type the course title');
+    },
+  });
+  define('player-web.resolveLr2CourseMakerOps', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseMakerOps(benchDraft);
+      playerWebCoreApi.resolveLr2CourseMakerOps(undefined, 3);
+    },
+  });
+  define('player-web.resolveLr2CourseMakerText', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseMakerText(198, 'cut');
+    },
+  });
+  define('player-web.resolveLr2CourseMakerAction', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseMakerAction(230);
+      playerWebCoreApi.resolveLr2CourseMakerAction(244);
+    },
+  });
+  define('player-web.resolveLr2CourseMakerButtonState', {
+    run: () => {
+      playerWebCoreApi.resolveLr2CourseMakerButtonState(240, BENCH_COURSE_INFO, 'fade');
+      playerWebCoreApi.resolveLr2CourseMakerButtonState(268, undefined, 'blank1');
+    },
+  });
+  define('player-web.resolveCourseEntry', {
+    run: () => {
+      playerWebCoreApi.resolveCourseEntry('Bench#0', BENCH_COURSE_DEFINITION, BENCH_COURSE_LOOKUP);
+    },
+  });
+  define('player-web.createNewCourseEntry', {
+    run: () => {
+      playerWebCoreApi.createNewCourseEntry('nonstop');
+    },
+  });
+  define('player-web.resolveCourseMakerFolders', {
+    run: () => {
+      playerWebCoreApi.resolveCourseMakerFolders([BENCH_COURSE_DEFINITION], BENCH_COURSE_LOOKUP);
+    },
+  });
   define('player-web.lr2ShowsCourseCombo', {
     run: () => {
       playerWebCoreApi.lr2ShowsCourseCombo('grade');

@@ -32,9 +32,15 @@ import {
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
 import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from '../select-ops.ts';
-import { resolveSceneCourseInfo } from '../course-info.ts';
+import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
+import { resolveSceneCourseInfo, type SceneCourseInfo } from '../course-info.ts';
 import {
   resolveLr2CourseConnectionText,
+  resolveLr2CourseDraftInfo,
+  resolveLr2CourseMakerAction,
+  resolveLr2CourseMakerButtonState,
+  resolveLr2CourseMakerOps,
+  resolveLr2CourseMakerText,
   resolveLr2CourseNumber,
   resolveLr2CourseOps,
   resolveLr2CourseText,
@@ -199,6 +205,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     // inside each `isDestinationVisible` call) lets us: 1. Reflect the focused song's chart features (LN, BPM change,
     // BACKBMP presence, …) onto static frame elements that LR2 skins gate with op 70..195. 2. Avoid recomputing the
     // same `Set` per element.
+    this.syncCourseMakerTimers();
     const ops = this.perf.time('computeOps', () => this.computeOps(skin));
     this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, ops));
     this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, ops));
@@ -227,8 +234,13 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       this.collection,
     );
     const course = this.focusedCourse();
-    if (course === undefined) return ops;
+    const maker = this.options.courseMaker;
+    if (course === undefined && maker === undefined) return ops;
     const withCourse = new Set(ops);
+    if (maker !== undefined) {
+      resolveLr2CourseMakerOps(maker.draft, course?.stages.length).forEach((op) => withCourse.add(op));
+    }
+    if (course === undefined) return withCourse;
     withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_COURSE);
     if (course.playable) withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_PLAYABLE);
     resolveLr2CourseOps(resolveSceneCourseInfo(course)).forEach((op) => withCourse.add(op));
@@ -396,7 +408,13 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       const dst = this.evaluateElementDst(button);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       if (!containsPoint(dst, virtualX, virtualY)) continue;
-      this.dispatchButtonClick(button);
+      // LR2's value buttons step up on their right half and down on their left half (`ButtonByInput`).
+      const rect = normalizeRect(dst);
+      this.dispatchButtonClick(button, virtualX >= rect.x + rect.w / 2 ? 1 : -1);
+      return true;
+    }
+    if (this.options.courseMaker !== undefined && this.hitsCourseName(skin, ops, virtualX, virtualY)) {
+      this.options.onCourseNameActivate?.();
       return true;
     }
     for (const text of skin.texts) {
@@ -440,8 +458,9 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    * Other types are no-ops for now. Filter / sort / panel buttons (types 1..12) land here too once their state machines
    * exist.
    */
-  private dispatchButtonClick(button: Lr2ButtonElement): void {
+  private dispatchButtonClick(button: Lr2ButtonElement, direction: 1 | -1 = 1): void {
     const type = button.type;
+    if (this.dispatchCourseMakerButton(type, direction)) return;
     // Panel-toggle buttons (LR2 button_type 1..9). Don't require a focused song — the LR2 default skin's "OPTION"
     // launcher is always clickable, even before any chart is selected.
     if (type >= 1 && type <= 9) {
@@ -576,6 +595,42 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
   }
 
   /**
+   * Runs an LR2 course-maker button (see `resolveLr2CourseMakerAction`) against the host's {@link CourseMaker}: finish /
+   * cancel the course being made, delete the selected course of the player's own, or step a NONSTOP connection.
+   * Returns whether `type` is such a button.
+   */
+  private dispatchCourseMakerButton(type: number, direction: 1 | -1): boolean {
+    const maker = this.options.courseMaker;
+    const action = resolveLr2CourseMakerAction(type);
+    if (maker === undefined || action === undefined) return false;
+    const course = this.focusedCourse();
+    const own = course?.editable === true && maker.owns(course.definition) ? course.definition : undefined;
+    if (action.kind === 'finish') maker.finish();
+    else if (action.kind === 'cancel') maker.cancel();
+    else if (action.kind === 'default-connection') maker.stepDefaultConnection(direction);
+    // LR2 asks before it deletes (`isDeletingCourse`); the host confirms and calls `CourseMaker.deleteCourse`.
+    else if (own !== undefined && action.kind === 'delete') this.options.onCourseDeleteRequest?.(own);
+    else if (own !== undefined && action.kind === 'connection') maker.stepConnection(own, action.slot, direction);
+    this.render();
+    return true;
+  }
+
+  private focusedCourseInfo(): SceneCourseInfo | undefined {
+    const course = this.focusedCourse();
+    return course !== undefined ? resolveSceneCourseInfo(course) : undefined;
+  }
+
+  /** Whether a click lands on the course name (text 170) while it can be edited: making a course, or on one's own. */
+  private hitsCourseName(skin: Lr2Skin, ops: ReadonlySet<number>, x: number, y: number): boolean {
+    if (this.options.courseMaker?.draft === undefined && this.focusedCourse()?.editable !== true) return false;
+    return skin.texts.some((text) => {
+      if (text.st !== 170 || !this.isPanelOpen(text.panel)) return false;
+      const dst = this.evaluateElementDst(text);
+      return isDestinationVisible(dst, ops, this.timerActive) && containsPoint(dst, x, y);
+    });
+  }
+
+  /**
    * Returns the per-frame interpolated DST for an element with a keyframe sequence. For static elements (single
    * keyframe or none) this is a no-op that returns `element.destination`.
    *
@@ -639,9 +694,31 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     if (timer >= 31 && timer <= 39) {
       return this.timerStartedAt.has(timer);
     }
+    // Course-maker timers: 17 runs while a course is being made, 18 from when it was saved or cancelled.
+    if (timer === 17 || timer === 18) {
+      return this.timerStartedAt.has(timer);
+    }
     // Play timers (40+) etc. stay inactive on the select scene.
     return false;
   };
+
+  /** Whether a course was being made at the last render, to start timer 17 / 18 as making starts and ends. */
+  private makingCourse = false;
+
+  /** Starts LR2's timer 17 when making a course begins (OpenLR2 L12151) and timer 18 when it ends (L11067, L11090). */
+  private syncCourseMakerTimers(): void {
+    const making = this.options.courseMaker?.draft !== undefined;
+    if (making === this.makingCourse) return;
+    this.makingCourse = making;
+    const now = performance.now();
+    if (making) {
+      this.timerStartedAt.set(17, now);
+      this.timerStartedAt.delete(18);
+    } else {
+      this.timerStartedAt.delete(17);
+      this.timerStartedAt.set(18, now);
+    }
+  }
 
   /**
    * Renders the skin's static `#IMAGE` decorations (background, frame panels, banner area, etc.) plus the song-info
@@ -744,6 +821,10 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     const focusedSong = this.focusedSong();
     const focusedCourseEntry = this.focusedCourse();
     const focusedCourse = focusedCourseEntry !== undefined ? resolveSceneCourseInfo(focusedCourseEntry) : undefined;
+    // While a course is being made, its songs and name take the course texts (150-170) over from the selected bar.
+    const maker = this.options.courseMaker;
+    const draft = maker?.draft;
+    const textCourse = draft !== undefined ? resolveLr2CourseDraftInfo(draft, COURSE_NAME_PROMPT) : focusedCourse;
 
     // Walk the pre-sorted chrome entry list and dispatch by kind. The order, layer choice, and the entry list itself
     // are all static for a given skin (skin shape doesn't change between frames), so we cache the merged sorted list in
@@ -790,10 +871,13 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
               ? this.searchEditing
                 ? ''
                 : this.searchText
-              : ((focusedCourse !== undefined
-                  ? (resolveLr2CourseText(entry.element.st, focusedCourse) ??
-                    resolveLr2CourseConnectionText(entry.element.st, focusedCourse))
+              : ((textCourse !== undefined ? resolveLr2CourseText(entry.element.st, textCourse) : undefined) ??
+                (focusedCourse !== undefined
+                  ? resolveLr2CourseConnectionText(entry.element.st, focusedCourse)
                   : resolveLr2SongConnectionText(entry.element.st)) ??
+                (maker !== undefined
+                  ? resolveLr2CourseMakerText(entry.element.st, maker.defaultConnection)
+                  : undefined) ??
                 resolveSelectText(entry.element.st, focusedSong, this.playOptions));
           if (value === undefined || value.length === 0) break;
           layer.addChild(
@@ -999,7 +1083,16 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     if (cellWidth <= 0 || cellHeight <= 0) {
       return;
     }
-    const stateIndex = resolveButtonStateIndex(button.type, divx * divy, this.playOptions);
+    const stateIndex = Math.min(
+      (this.options.courseMaker !== undefined
+        ? resolveLr2CourseMakerButtonState(
+            button.type,
+            this.focusedCourseInfo(),
+            this.options.courseMaker.defaultConnection,
+          )
+        : undefined) ?? resolveButtonStateIndex(button.type, divx * divy, this.playOptions),
+      divx * divy - 1,
+    );
     const cellX = stateIndex % divx;
     const cellY = Math.floor(stateIndex / divx);
     const cellTexture =
