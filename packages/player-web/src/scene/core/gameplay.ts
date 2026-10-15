@@ -81,6 +81,7 @@ import { JudgeTimingLog } from './judge-timing-log.ts';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { advanceCourseCombo, createCourseCombo, type CourseComboState } from './course-combo.ts';
+import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { nonstopBpmAt, type NonstopStitchMap } from '@be-music/player/course';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
@@ -678,25 +679,6 @@ export interface CoreGameplayDisposeOptions {
    * graph alive briefly in that path instead of closing the AudioContext as part of visual teardown.
    */
   preserveAudioTail?: boolean;
-}
-
-/**
- * Placeholder gauge state for the frames before the engine reports one. Values match the LR2 groove defaults so the
- * bar does not visibly jump when the first real frame lands; everything real arrives via `summary.gauge`.
- */
-function createPlaceholderGaugeState(type: GrooveGaugeType = 'GROOVE'): PlayerGaugeSummary {
-  const survival = type === 'HARD' || type === 'DEATH';
-  return {
-    current: survival ? 100 : 20,
-    max: 100,
-    clearThreshold: survival ? 0 : 80,
-    initial: survival ? 100 : 20,
-    effectiveTotal: 0,
-    cleared: survival,
-    type,
-    survival,
-    failedMidPlay: false,
-  };
 }
 
 /**
@@ -2495,8 +2477,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
     // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
     // per PG/GR.
-    this.gaugeState = createPlaceholderGaugeState(this.resolveSelectedGauge());
-    // Now that the gauge has its starting value (LR2 default 20 %), seed the polyline history so the result-screen
+    this.gaugeState = createPlaceholderGaugeState(this.resolveSelectedGauge(), this.resolveCourseStartGaugeInput());
+    // Now that the gauge has its starting value (LR2 default 20 %, a course stage's carried-in gauge), seed the polyline history so the result-screen
     // graph starts at the correct origin instead of the first judge's value.
     this.gaugeHistory.push({ progress: 0, value: this.gaugeState.current });
     this.scoreHistory.push({ progress: 0, exScore: 0 });
@@ -2537,6 +2519,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   protected resolveSelectedGauge(): GrooveGaugeType {
     return this.options.replay?.play.gauge ?? this.options.gauge ?? 'GROOVE';
+  }
+
+  /** The course stage the play runs (a replay's recorded one wins), with its ruleset, for the placeholder gauge. */
+  private resolveCourseStartGaugeInput(): Parameters<typeof createPlaceholderGaugeState>[1] {
+    const stage = this.options.replay !== undefined ? this.options.replay.play.course : this.options.course;
+    if (stage === undefined) return undefined;
+    const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
+    return { stage, ruleset };
   }
 
   /**
