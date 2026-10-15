@@ -63,6 +63,8 @@ import {
 export interface PixiBeatorajaResultSceneOptions {
   /** Result skin (`header.type === 7`). */
   skin: BeatorajaSkin;
+  /** The judge ruleset the play ran under: keeps the clear lamp to that game's own lamps (see `resolveClearLamp`). */
+  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
   textures: BeatorajaTextureCache;
   fonts?: BeatorajaFontCache;
   /** Confirmed user picks for the skin's `property[]`. */
@@ -328,7 +330,16 @@ export class PixiBeatorajaResultScene implements PixiScene {
     const cleared = summary.gauge?.cleared ?? false;
     ops.add(cleared ? BEATORAJA_OP.RESULT_CLEAR : BEATORAJA_OP.RESULT_FAIL);
     // The lamp every family resolves a play to (`resolveClearLamp`): a clear with every note a PERFECT is MAX.
-    ops.add(beatorajaClearLampOp(resolveClearLamp({ cleared, score: summary, gaugeType: summary.gauge?.type })));
+    ops.add(
+      beatorajaClearLampOp(
+        resolveClearLamp({
+          cleared,
+          score: summary,
+          gaugeType: summary.gauge?.type,
+          ...(this.options.judgeRuleset !== undefined ? { ruleset: this.options.judgeRuleset } : {}),
+        }),
+      ),
+    );
 
     // *_EXIST gates — same logic as the live adapter, but evaluated once against the final
     // counters (no per-frame refresh needed).
