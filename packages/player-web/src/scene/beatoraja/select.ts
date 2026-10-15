@@ -97,7 +97,10 @@ export interface PixiBeatorajaSelectSceneOptions {
   songs: ReadonlyArray<BrowserSongEntry>;
   /** Course folders, listed after the song folders at the root (see `resolveCourseFolders`). */
   courseFolders?: ReadonlyArray<BrowserFolderNode>;
-  /** The player started a course bar whose every stage is in the collection. */
+  /**
+   * The player started a course bar. A course with a stage missing from the collection (`playable: false`) is handed
+   * over too, so the host can say why it does not start.
+   */
   onCoursePicked?: (course: BrowserCourseEntry) => void;
   /** Initial highlighted index (within the song list at root). Defaults to 0. */
   initialIndex?: number;
@@ -2597,6 +2600,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.refreshRowVisuals();
   }
 
+  /**
+   * Hands a course bar to the host. `MusicSelector` does not start a course with a missing stage ("Some of songs not
+   * found"): it plays the cancel cue, and the host is still told so it can say which stages are missing.
+   */
+  private pickCourse(course: BrowserCourseEntry): void {
+    const picked = this.options.onCoursePicked;
+    this.playSystemSound(picked !== undefined && course.playable ? 'decide' : 'cancel');
+    picked?.(course);
+  }
+
   private activateCurrentEntry(): void {
     const entry = this.entries[this.currentIndex];
     if (entry === undefined) return;
@@ -2612,13 +2625,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       return;
     }
     if (entry.kind === 'course') {
-      // `MusicSelector`: a course with a missing stage is not started ("Some of songs not found").
-      if (!entry.course.playable || this.options.onCoursePicked === undefined) {
-        this.playSystemSound('cancel');
-        return;
-      }
-      this.playSystemSound('decide');
-      this.options.onCoursePicked(entry.course);
+      this.pickCourse(entry.course);
       return;
     }
     // eslint-disable-next-line no-console

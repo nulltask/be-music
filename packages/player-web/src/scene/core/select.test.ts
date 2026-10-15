@@ -1,6 +1,7 @@
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import {
+  CoreSongSelectView,
   cycleSkinPlayOptionValue,
   DEFAULT_PLAY_OPTIONS,
   HISPEED_MAX,
@@ -10,7 +11,12 @@ import {
   wrappedCursorDelta,
 } from './select.ts';
 import type { PixiPlayOptions } from './select.ts';
-import type { BrowserBrowseEntry, BrowserCourseEntry, BrowserSongEntry } from '../../collection/types.ts';
+import type {
+  BrowserBrowseEntry,
+  BrowserCourseEntry,
+  BrowserFolderNode,
+  BrowserSongEntry,
+} from '../../collection/types.ts';
 
 /**
  * Builds a minimal `BrowserSongEntry` for tests. Only the fields `matchesSearchQuery` consults are populated; the rest
@@ -239,5 +245,39 @@ describe('resolveSelectNavigation', () => {
 
   it('gives up when no saved folder matches', () => {
     expect(resolveSelectNavigation(collection, { folderPath: ['gone'], selectedIndex: 0 })).toBeUndefined();
+  });
+});
+
+describe('CoreSongSelectView course bars', () => {
+  const course = (playable: boolean): BrowserCourseEntry =>
+    ({
+      id: 'dan#0',
+      definition: { name: 'Dan', kind: 'grade', stages: [], constraints: [], trophies: [] },
+      stages: [{ title: 'a' }],
+      playable,
+    }) as unknown as BrowserCourseEntry;
+
+  type CourseBarView = {
+    browseStack: BrowserFolderNode[];
+    selectedIndex: number;
+    activateEntry(entry: BrowserBrowseEntry): void;
+    launchFocusedSong(autoPlay: boolean): void;
+  };
+
+  /** A view (not mounted, so nothing renders) with the cursor on `entry` inside its course folder. */
+  function viewOnCourse(entry: BrowserCourseEntry, options: ConstructorParameters<typeof CoreSongSelectView>[0]) {
+    const view = new CoreSongSelectView(options) as unknown as CourseBarView;
+    view.browseStack = [{ label: 'Dan', songs: [], courses: [entry] }];
+    view.selectedIndex = 0;
+    return view;
+  }
+
+  it('hands a course with a missing stage to the host, which says why it does not start', () => {
+    const selected: BrowserCourseEntry[] = [];
+    const missing = course(false);
+    const view = viewOnCourse(missing, { onCourseSelected: (picked) => selected.push(picked) });
+    view.activateEntry({ kind: 'course', course: missing });
+    view.launchFocusedSong(false);
+    expect(selected).toEqual([missing, missing]);
   });
 });
