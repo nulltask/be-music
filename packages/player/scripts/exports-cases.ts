@@ -556,6 +556,15 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.resolveCoursePlaylogFilename(benchCourseLog);
     },
   });
+  define('player.playlog.resolveCourseStageStartGauge', {
+    run: () => {
+      playlogApi.resolveCourseStageStartGauge(
+        'lr2',
+        { kind: 'grade', carryIn: { gauge: 64, combo: 0, maxCombo: 0 } },
+        'GROOVE',
+      );
+    },
+  });
   define('player.playlog.resolveCourseTrophy', {
     run: () => {
       playlogApi.resolveCourseTrophy(benchCourseInfo.trophies, { missCount: 4, exScore: 170, noteCount: 100 });
