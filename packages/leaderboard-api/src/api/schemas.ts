@@ -324,3 +324,10 @@ export const myCourseRankResponse = v.object({
   trophy: described(v.nullable(v.string()), 'My best trophy on the course, by name.'),
   trophyScoreId: described(v.nullable(v.string()), 'The course run that earned it.'),
 });
+
+export const courseVisibilityBody = v.object({
+  hidden: described(
+    v.boolean(),
+    'Hide the run (`true`): it leaves the course rankings, the personal bests, the figures and every list, and only its player can open it. `false` shows it again.',
+  ),
+});

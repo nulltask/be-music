@@ -302,6 +302,61 @@ describe('course trophies and stage figures', () => {
   });
 });
 
+describe('PATCH /api/v0/course-scores/:id', () => {
+  const charts = [stageChart('1B'), stageChart('1C')];
+  const trophies = [
+    { name: 'silvermedal', missRate: 20, scoreRate: 80 },
+    { name: 'goldmedal', missRate: 0, scoreRate: 100 },
+  ];
+  const run = (hits: number[]) => courseBody(courseRun(charts, hits, { course: { trophies } }), charts);
+  const setHidden = (id: string, hidden: boolean, cookie?: string) =>
+    fetchApp(`/api/v0/course-scores/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', ...(cookie !== undefined ? { cookie } : {}) },
+      body: JSON.stringify({ hidden }),
+    });
+
+  test('a player hides a run and shows it again; hidden, it leaves the ranking and the bests', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const first = (await (await submitCourse(cookie, run([10, 8]))).json()) as CourseOutcome;
+    const best = (await (await submitCourse(cookie, run([10, 10]))).json()) as CourseOutcome;
+    const path = `/api/v0/courses/${encodeURIComponent(best.courseFingerprint)}/leaderboard`;
+    const mine = async () => (await fetchApp(`${path}/me?ruleset=lr2`, { headers: { cookie } })).json();
+
+    expect((await setHidden(best.courseScoreId, true)).status).toBe(401);
+    const other = await signInAnonymously(fetchApp);
+    const notYours = await setHidden(best.courseScoreId, true, other);
+    expect(notYours.status).toBe(403);
+    expect(await notYours.json()).toEqual({ error: 'not-your-score' });
+    expect((await setHidden('nothing', true, cookie)).status).toBe(404);
+
+    const hidden = await setHidden(best.courseScoreId, true, cookie);
+    expect(await hidden.json()).toEqual({ id: best.courseScoreId, hidden: true });
+    // The bests come back from the run still shown, the trophy best with them.
+    expect(await mine()).toMatchObject({
+      exScore: 36,
+      exScoreId: first.courseScoreId,
+      playCount: 1,
+      trophy: 'silvermedal',
+      trophyScoreId: first.courseScoreId,
+    });
+    const ranking = (await (await fetchApp(`${path}?ruleset=lr2&anonymous=1`)).json()) as {
+      entries: Array<{ exScoreId: string }>;
+    };
+    expect(ranking.entries.map((entry) => entry.exScoreId)).toEqual([first.courseScoreId]);
+    // Only its player can open a hidden run.
+    expect((await fetchApp(`/api/v0/course-scores/${best.courseScoreId}`)).status).toBe(404);
+    expect((await fetchApp(`/api/v0/course-scores/${best.courseScoreId}`, { headers: { cookie: other } })).status).toBe(
+      404,
+    );
+    const own = await fetchApp(`/api/v0/course-scores/${best.courseScoreId}`, { headers: { cookie } });
+    expect(await own.json()).toMatchObject({ hidden: true });
+
+    await setHidden(best.courseScoreId, false, cookie);
+    expect(await mine()).toMatchObject({ exScore: 40, playCount: 2, trophy: 'goldmedal' });
+  });
+});
+
 describe('reassignScores', () => {
   test('moves course runs to the linked account and rebuilds its course bests', async () => {
     const { reassignScores } = await import('./scores/reassign.ts');
