@@ -276,6 +276,34 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // beatoraja's five-key rule breaks the combo on an empty POOR, and the max combo has to see that break.
+  test.each(RULESETS)('%s: an empty POOR between hits agrees on the max combo', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      { measure: 3, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    const inputs = [
+      down(0, 1_000_000, '11'),
+      up(1, 1_040_000, '11'),
+      down(2, 1_600_000, '11'),
+      up(3, 1_640_000, '11'),
+      down(4, 2_000_000, '11'),
+      up(5, 2_040_000, '11'),
+      down(6, 3_000_000, '11'),
+      up(7, 3_040_000, '11'),
+    ];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.emptyPoor).toBe(simulated.judge.emptyPoor);
+    expect(playlog.results?.native?.maxCombo).toBe(simulated.maxCombo);
+    if (ruleset === 'beatoraja') {
+      expect(simulated.maxCombo).toBe(2);
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 

@@ -289,6 +289,8 @@ export function handleLanePress(
     state.summary.emptyPoor += 1;
     applyGaugeJudge(state, nowSec, 'EMPTY_POOR', emit, 'empty-poor');
     if (ruleset.comboBreaksOnEmptyPoor) {
+      // The score tracker keeps the combo the max combo is measured on, so it breaks too.
+      state.scoreTracker.combo = 0;
       setCombo(state, nowSec, 0, 'judge', emit, 'POOR');
     }
     emit({ kind: 'record-empty-poor' });
