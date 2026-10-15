@@ -719,7 +719,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         this.keymodeFilter === 0
           ? options.songs
           : options.songs.filter((song) => keymodeImagesetIndex(safeResolveChartVariant(song)) === this.keymodeFilter);
-      const rootFolders = groupSongsByFolder(filtered);
+      // The root lists the course folders after the song folders, as `refreshEntries` does, so a cursor left in a
+      // course folder (the select scene is mounted again after every course) comes back to its course bar.
+      const rootFolders = [...groupSongsByFolder(filtered), ...(options.courseFolders ?? [])];
       let currentFolders: ReadonlyArray<BrowserFolderNode> = rootFolders;
       for (const label of snapshot.folderPath) {
         const match = currentFolders.find((f) => f.label === label);
