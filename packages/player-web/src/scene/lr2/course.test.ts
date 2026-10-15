@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { SceneCourseInfo } from '../course-info.ts';
-import { lr2ShowsCourseCombo, resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
+import {
+  lr2ShowsCourseCombo,
+  resolveLr2CourseConnectionText,
+  resolveLr2CourseNumber,
+  resolveLr2CourseOps,
+  resolveLr2CourseText,
+  resolveLr2NonstopStage,
+} from './course.ts';
 
 function course(stageCount: number, stageIndex?: number, kind: SceneCourseInfo['kind'] = 'grade'): SceneCourseInfo {
   return {
@@ -62,5 +69,30 @@ describe('lr2ShowsCourseCombo', () => {
     expect(lr2ShowsCourseCombo('grade')).toBe(true);
     expect(lr2ShowsCourseCombo('expert')).toBe(true);
     expect(lr2ShowsCourseCombo('nonstop')).toBe(false);
+  });
+});
+
+describe('resolveLr2CourseConnectionText', () => {
+  it('names the NONSTOP connections on 171-179 and shows DISABLE for other courses', () => {
+    const nonstop: SceneCourseInfo = { ...course(3), kind: 'nonstop', connections: ['cut', 'blank1', 'fade-fit'] };
+    expect(resolveLr2CourseConnectionText(171, nonstop)).toBe('CUT');
+    expect(resolveLr2CourseConnectionText(172, nonstop)).toBe('BLANK1');
+    expect(resolveLr2CourseConnectionText(173, nonstop)).toBe('FADE+FIT');
+    expect(resolveLr2CourseConnectionText(179, nonstop)).toBe('FADE');
+    expect(resolveLr2CourseConnectionText(171, course(3))).toBe('DISABLE');
+    expect(resolveLr2CourseConnectionText(170, nonstop)).toBeUndefined();
+  });
+});
+
+describe('resolveLr2NonstopStage', () => {
+  it('moves on only at stages that follow a BLANK connection', () => {
+    const stages = [
+      { windowStart: 0, lr2StageMarker: false },
+      { windowStart: 20, lr2StageMarker: false },
+      { windowStart: 40, lr2StageMarker: true },
+    ];
+    expect(resolveLr2NonstopStage(stages, 10)).toBe(0);
+    expect(resolveLr2NonstopStage(stages, 30)).toBe(0);
+    expect(resolveLr2NonstopStage(stages, 45)).toBe(2);
   });
 });
