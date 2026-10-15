@@ -1148,7 +1148,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * SP charts only ever populate the `'1P'` slot, so the global `lastJudge` / `lastJudgeUntil` aliases above keep their
    * existing behavior for the fallback `renderText` path.
    */
-  protected judgeSideState: Record<'1P' | '2P', { judge: JudgeKind | ''; until: number; combo: number }> = {
+  protected judgeSideState: Record<
+    '1P' | '2P',
+    { judge: JudgeKind | ''; until: number; combo: number; courseCombo?: number }
+  > = {
     '1P': { judge: '', until: 0, combo: 0 },
     '2P': { judge: '', until: 0, combo: 0 },
   };
@@ -3545,10 +3548,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.onThemeEvent({ kind: 'judge', side, at: this.playClock() });
     // Snapshot the verdict + combo for this side so DP rendering shows each lane group's *own* combo number — frozen at
     // the moment that side last hit a note — rather than mirroring the global running combo on both sides.
+    // A course stage also snapshots the course combo, which an LR2 skin shows there during an expert or grade course.
     this.judgeSideState[side] = {
       judge,
       until,
       combo: this.tracker.combo,
+      ...(this.courseCombo !== undefined ? { courseCombo: this.courseCombo.combo } : {}),
     };
     // POOR / BAD judgements briefly swap the base BGA for the chart's POOR BGA. We trigger the same window for `BAD`
     // because the LR2 spec doesn't distinguish the two for the BGA channel.

@@ -143,7 +143,7 @@ Courses play through the same select → play → result scenes. See [Courses an
   - Ops: a course bar on the select screen lights 3 (course bar), 5 when every stage is in the collection, 290 and its kind's op (291 NONSTOP, 292 EXPERT, 293 GRADE). During a course, play and result add the stage op: 280-288 for stages 1-9 that are not the last, 289 for the last.
   - A course stage plays on the play skin parsed again with those ops (`Lr2ThemeSkins.loadSkin`), as LR2 reads a skin at each stage. The stage results and the course result do the same with their skins.
   - Numbers 250-259 read the stage levels; texts 150-154 the stage titles, 160-164 their subtitles and 170 the course title.
-  - In an expert or grade course, numbers 104 / 105 (combo, max combo) count the whole course: the combo the previous stage left runs on until the first break.
+  - In an expert or grade course, numbers 104 / 105 (combo, max combo) and the combo next to the judgement (`#DST_NOWCOMBO`) count the whole course: the combo the previous stage left runs on until the first break (OpenLR2 L2019-L2034, L2516).
   - The gauge-type ops report the red gauge (43 / 45) for a course stage, as LR2 does for its course gauge.
   - The course result shows on the theme's course-result skin (`#INFORMATION` type 15) when it has one, else on the result skin, and plays `courseclear` / `coursefail`, falling back to `clear` / `fail`.
 - **beatoraja skins** (`courseInfo` on the beatoraja gameplay and result scenes; beatoraja `BooleanPropertyFactory` / `StringPropertyFactory`):

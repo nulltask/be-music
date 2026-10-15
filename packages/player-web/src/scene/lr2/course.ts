@@ -60,6 +60,18 @@ export function lr2ShowsCourseCombo(kind: CourseKind): boolean {
   return kind === 'expert' || kind === 'grade';
 }
 
+/**
+ * The combo an LR2 skin shows next to the judgement (`#DST_NOWCOMBO`): the course combo during an expert or grade
+ * course, as LR2 draws `now_combo_course` there (OpenLR2 L2019-L2034, L2516), else the stage's own combo.
+ */
+export function resolveLr2JudgeCombo(
+  stageCombo: number,
+  courseCombo: number | undefined,
+  kind: CourseKind | undefined,
+): number {
+  return kind !== undefined && courseCombo !== undefined && lr2ShowsCourseCombo(kind) ? courseCombo : stageCombo;
+}
+
 /** LR2's names of the NONSTOP connections (its `option_str[20]`), as the select screen shows them. */
 const LR2_CONNECTION_LABELS: Readonly<Record<NonstopConnection, string>> = {
   fade: 'FADE',
