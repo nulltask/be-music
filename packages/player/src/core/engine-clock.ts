@@ -94,10 +94,6 @@ export function createPlaybackClock(source: PlaybackClockSource, startOffsetMs =
   };
 }
 
-export function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
-  return Math.max(0, (elapsedMs / 1000) * speed);
-}
-
 /**
  * Adjusts a drain-time playback timestamp backwards by the wall-clock delta between the OS-level press event and
  * now, so judging a queued lane-input resolves against the player's actual press timing rather than the engine's

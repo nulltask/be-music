@@ -13,6 +13,7 @@ import { type JudgeWindowRuleset } from './judge-window.ts';
 import { type LongNoteStyle, type PlaylogRulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type PlaylogRecordingOptions } from '../playlog/recorder.ts';
 import type { BeMusicPlaylog, PlaylogCourseStage, PlaylogInputEvent } from '../playlog/format.ts';
+import type { PlaylogTempoChange } from '../playlog/view.ts';
 import { type PreparedPlaybackChartData } from './bootstrap.ts';
 
 /**
@@ -199,6 +200,13 @@ export interface PlayerPlayRuntime {
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onLoadComplete?: () => void;
   onHighSpeedChange?: (highSpeed: number) => void;
+  /**
+   * Called when the play tempo changes during the play (a `{ kind: 'tempo' }` input command, or a replay following
+   * {@link PlayerPlayRecording.replayTempoChanges}), with the new tempo and the chart second it took effect at. Chart time
+   * stays continuous across the change and runs at the new tempo from then on; a host with its own clock follows it
+   * from that chart second.
+   */
+  onTempoChange?: (change: PlayerTempoChange) => void;
   onResolvedChart?: (json: BeMusicJson) => void;
   /**
    * Called once, before playback starts, with the ruleset the play is judged under — after `judgeRuleset`,
@@ -295,6 +303,12 @@ export interface PlayerPlayRecording {
    * against (`preparedChart`, or a chart remapped to the log's note arrangement).
    */
   replayInputs?: readonly PlaylogInputEvent[];
+  /**
+   * The tempo changes a replay follows (`play.tempoChanges` of its log, in chart time), on top of `speed` as the tempo
+   * at the start (`play.tempo`). Each takes effect once the replay's chart time reaches it, as a live `{ kind: 'tempo' }`
+   * command would. Only `manualPlay` with {@link replayInputs} reads it; it changes no judgment.
+   */
+  replayTempoChanges?: readonly PlaylogTempoChange[];
 }
 
 /**
@@ -303,6 +317,14 @@ export interface PlayerPlayRecording {
  */
 export interface PlayerOptions
   extends PlayerPlaySettings, PlayerPlayRuntime, PlayerPlayTuning, PlayerPlayDebug, PlayerPlayRecording {}
+
+/** A tempo change during a play; see {@link PlayerOptions.onTempoChange}. */
+export interface PlayerTempoChange {
+  /** The new tempo (chart seconds per clock second). */
+  tempo: number;
+  /** The chart second the change took effect at. */
+  seconds: number;
+}
 
 /** The judging setup a play resolved to; see {@link PlayerOptions.onRulesetResolved}. */
 export interface PlayerRulesetInfo {
@@ -406,6 +428,12 @@ export interface AudioSession {
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
   stopChannel?: (channel: string) => void;
+  /**
+   * The play tempo changed during the play (see {@link PlayerOptions.onTempoChange}): samples started from now on, and
+   * the ones still playing, follow the new tempo as far as the backend can. The engine's clock re-anchors itself, so a
+   * backend without it keeps playing at the tempo it started with.
+   */
+  setTempo?: (tempo: number) => void;
 }
 
 /**

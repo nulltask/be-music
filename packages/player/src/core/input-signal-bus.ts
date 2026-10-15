@@ -16,6 +16,12 @@ export type PlayerInputCommand =
    * drains the command. It changes no judgment.
    */
   | { kind: 'view'; change: PlaylogViewState }
+  /**
+   * The host changed the play tempo (`PlayerOptions.speed`) during the play: the engine re-anchors its clock at the
+   * chart time it drains the command, runs at `tempo` from there on and records the change in the play log. Inputs and
+   * judgments stay in chart time.
+   */
+  | { kind: 'tempo'; tempo: number }
   | {
       kind: 'lane-input';
       tokens: string[];
