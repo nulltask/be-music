@@ -21,6 +21,7 @@ import {
   type BeMusicSelectLayout,
   type BrowserBrowseEntry,
   type BrowserSongEntry,
+  describeCourseCard,
   formatPlayVariantLabel,
   resolveSongRowFacts,
   stageProgress,
@@ -250,8 +251,10 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     });
 
     // Focused chart.
-    const songTitle = song?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || '';
+    const course =
+      song === undefined && frame.focusedCourse !== undefined ? describeCourseCard(frame.focusedCourse) : undefined;
+    const songTitle = song?.title ?? course?.title ?? 'No chart selected';
+    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const position =
       entries.length > 0
         ? `No. ${String(Math.min(frame.selectedIndex + 1, entries.length)).padStart(3, '0')} / ${String(entries.length).padStart(3, '0')}`

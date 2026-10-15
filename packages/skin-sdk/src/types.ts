@@ -3,7 +3,13 @@ import type { BeMusicAudioFrame } from './audio.ts';
 import type { BeMusicPlayOptions } from './play-options.ts';
 import type { BeMusicResultData, GaugeHistorySample, ScoreHistorySample } from './result-data.ts';
 import type { BeMusicSkinSetting, BeMusicSkinSettingValues } from './settings.ts';
-import type { BeMusicSongImageKind, BeMusicSongRecord, BrowserBrowseEntry, BrowserSongEntry } from './song.ts';
+import type {
+  BeMusicSongImageKind,
+  BeMusicSongRecord,
+  BrowserBrowseEntry,
+  BrowserCourseEntry,
+  BrowserSongEntry,
+} from './song.ts';
 
 /**
  * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
@@ -637,6 +643,11 @@ export interface BeMusicSelectFrame {
    */
   listScroll: number;
   focusedSong: BrowserSongEntry | undefined;
+  /**
+   * The course bar under the cursor (`undefined` on a song or folder bar, and from hosts that predate it). PLAY and
+   * AUTO start it; {@link describeCourseCard} gives the lines a card shows for it.
+   */
+  focusedCourse?: BrowserCourseEntry;
   /** Current folder label (or search label), `undefined` at the library root. */
   folderLabel: string | undefined;
   searchQuery: string;

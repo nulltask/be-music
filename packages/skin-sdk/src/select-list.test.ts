@@ -1,5 +1,11 @@
 import { describe, expect, it, test } from 'vite-plus/test';
-import { browseEntryBadge, browseEntryCount, browseEntryTitle, selectListRows } from './select-list.ts';
+import {
+  browseEntryBadge,
+  browseEntryCount,
+  browseEntryTitle,
+  describeCourseCard,
+  selectListRows,
+} from './select-list.ts';
 import type { BrowserCourseEntry, BrowserSongEntry } from './song.ts';
 
 const entries = Array.from({ length: 20 }, (_, index) => index);
@@ -96,6 +102,13 @@ describe('browse entry row text', () => {
     const newCourse = { ...course, stages: [], newCourse: true } as unknown as BrowserCourseEntry;
     expect(browseEntryCount({ kind: 'course', course: newCourse })).toBe('make a course');
     expect(browseEntryBadge({ kind: 'course', course: newCourse })).toBe('NEW');
+    expect(describeCourseCard(newCourse)).toEqual({ title: 'Dan', detail: 'make a course', stages: [] });
+    expect(describeCourseCard(course)).toEqual({
+      title: 'Dan',
+      detail: 'DAN · 2 stages · 1 missing',
+      stages: course.stages.map((stage) => stage.title),
+    });
+    expect(describeCourseCard(random).detail).toBe('RANDOM COURSE · 2 stages · random');
     expect(
       browseEntryCount({ kind: 'folder', folder: { label: 'mine', songs: [], courses: [course, newCourse] } }),
     ).toBe('1 course');

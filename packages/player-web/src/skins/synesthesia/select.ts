@@ -54,6 +54,7 @@ import {
   type BeMusicSelectLayout,
   type BrowserBrowseEntry,
   type BrowserSongEntry,
+  describeCourseCard,
   formatPlayVariantLabel,
   resolveSongStats,
   hash01,
@@ -594,8 +595,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
       addSkinText(layer, text, x, y, options);
 
-    const songTitle = song?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || '';
+    // A focused course takes the song's place: its name, then its kind and stage count.
+    const course =
+      song === undefined && frame.focusedCourse !== undefined ? describeCourseCard(frame.focusedCourse) : undefined;
+    const songTitle = song?.title ?? course?.title ?? 'No chart selected';
+    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
     const playLevelNumber =
       song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
@@ -785,7 +789,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       addSkinText(layer, text, x, y, options);
     const label = (fill: number = SYN_DIM): SkinTextOptions => ({ ...labelStyle(fill), size: 10 });
 
-    const songArtist = song?.artist || song?.subtitle || '';
+    const course =
+      song === undefined && frame.focusedCourse !== undefined ? describeCourseCard(frame.focusedCourse) : undefined;
+    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
     const playLevelNumber =
       song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
@@ -832,7 +838,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         alpha: 1 - slide,
       });
     }
-    addText(song?.title ?? 'No chart selected', left + slide * 24, card.y + 30, {
+    addText(song?.title ?? course?.title ?? 'No chart selected', left + slide * 24, card.y + 30, {
       size: 18,
       weight: '500',
       fill: SYN_WHITE,

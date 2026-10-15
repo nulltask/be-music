@@ -1,4 +1,4 @@
-import type { BrowserBrowseEntry } from './song.ts';
+import type { BrowserBrowseEntry, BrowserCourseEntry } from './song.ts';
 
 /** One row of the select list to draw this frame. */
 export interface SelectListRow {
@@ -79,4 +79,18 @@ export function browseEntryBadge(entry: BrowserBrowseEntry): string {
     return entry.course.definition.kind === 'grade' ? 'DAN' : 'CRS';
   }
   return entry.song.playLevel !== undefined ? String(entry.song.playLevel) : '-';
+}
+
+const COURSE_KIND_LABELS = { grade: 'DAN', expert: 'COURSE', nonstop: 'NONSTOP' } as const;
+
+/**
+ * What a select card shows for a focused course bar in place of a song: the course's name, a line naming its kind and
+ * its stage count (or `make a course` on a NEW COURSE bar), and its stage titles in order.
+ */
+export function describeCourseCard(course: BrowserCourseEntry): { title: string; detail: string; stages: string[] } {
+  const title = course.definition.name;
+  if (course.newCourse === true) return { title, detail: 'make a course', stages: [] };
+  const kind = course.random !== undefined ? 'RANDOM COURSE' : COURSE_KIND_LABELS[course.definition.kind];
+  const count = browseEntryCount({ kind: 'course', course }) ?? '';
+  return { title, detail: `${kind} · ${count}`, stages: course.stages.map((stage) => stage.title) };
 }
