@@ -30,6 +30,8 @@ export interface EngineDriverAudioContext {
   bmsonSlicePlayback?: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback>;
   /** A stitched NONSTOP chart's per-stage rates and fades (`createNonstopStageMixer`). */
   stageMixer?: WebAudioStageMixer;
+  /** Every sample's playback rate (`WebAudioSessionContext.playbackRate`): the play tempo when its pitch moves. */
+  playbackRate?: number;
 }
 
 /**
@@ -119,6 +121,7 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
       wavCmdVolumeMultipliers: audio.wavCmdVolumeMultipliers,
       bmsonSlicePlayback: audio.bmsonSlicePlayback,
       ...(audio.stageMixer !== undefined ? { stageMixer: audio.stageMixer } : {}),
+      ...(audio.playbackRate !== undefined ? { playbackRate: audio.playbackRate } : {}),
     });
   };
   const createInputRuntime = createWebInputRuntimeFactory({

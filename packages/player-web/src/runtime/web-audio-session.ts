@@ -77,6 +77,11 @@ export interface WebAudioSessionContext {
    * the pitch), and a stage's background voices go through its fade instead of straight to the BGM bus.
    */
   stageMixer?: WebAudioStageMixer;
+  /**
+   * The playback rate of every sample (`resolveSamplePlaybackRate`): the play tempo when a tempo change moves the pitch,
+   * 1 when the samples were stretched to it. A NONSTOP stage's rate multiplies with it. Defaults to 1.
+   */
+  playbackRate?: number;
 }
 
 /**
@@ -128,6 +133,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   const { audioContext, audioBus, chart, decodedSamples, wavCmdVolumeMultipliers, bmsonSlicePlayback, stageMixer } =
     context;
   const resolveChartStartContextTime = context.getChartStartContextTime ?? (() => 0);
+  const basePlaybackRate = context.playbackRate !== undefined && context.playbackRate > 0 ? context.playbackRate : 1;
   const sampleIdBase = resolveBmsBase(chart);
   /** Active BufferSource per `#WAVxx` slot. Used to honor bmson `c = true` (skip retrigger of a still-playing sample)
    *  and to wipe the slot once the source ends naturally. */
@@ -168,12 +174,13 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const node = audioContext.createBufferSource();
     node.buffer = buffer;
     const stage = stageMixer?.stageOf(sampleKey);
+    let rate = basePlaybackRate;
     if (stage !== undefined) {
-      const rate = stageMixer!.rate(stage);
-      if (rate !== 1) node.playbackRate.value = rate;
+      rate *= stageMixer!.rate(stage);
       // A stage's background voices go through its fade; the player's keysounds stay on the key bus.
       if (bus === audioBus.bgmMixer) bus = stageMixer!.bgmInput(stage) ?? bus;
     }
+    if (rate !== 1) node.playbackRate.value = rate;
     let gain: GainNode | undefined;
     const combinedGain = (wavCmdVolumeMultipliers.get(sampleKey) ?? 1) * dynamicGain;
     if (combinedGain !== 1) {

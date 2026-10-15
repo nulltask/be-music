@@ -100,13 +100,18 @@ import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker
 import { advanceCourseCombo, createCourseCombo, type CourseComboState } from './course-combo.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { nonstopBpmAt, type NonstopStitchMap } from '@be-music/player/course';
+import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import {
-  createNonstopStageMixer,
-  resolveNonstopStretchRates,
-  type NonstopFitMode,
-  type NonstopStageMixer,
-} from '../../runtime/nonstop-audio.ts';
-import { stretchAudioBuffers, type TimeStretchAlgorithm } from '../../runtime/time-stretch.ts';
+  chartToElapsedSeconds,
+  clampPlayTempo,
+  elapsedToChartSeconds,
+  resolveSamplePlaybackRate,
+  resolveSampleStretchRates,
+  stretchDecodedSamples,
+  stretchSlicePlayback,
+  type TempoPitchMode,
+  type TimeStretchAlgorithm,
+} from '../../runtime/play-tempo.ts';
 import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
@@ -595,12 +600,18 @@ export interface CoreGameplayViewOptions {
    */
   nonstop?: NonstopStitchMap;
   /**
-   * How a NONSTOP FIT stage follows the previous stage's tempo: `pitch` (default, as LR2) plays its samples at the FIT
-   * rate, `keep-pitch` stretches them to the new tempo and keeps their pitch.
+   * The play tempo, 0.5 to 1.5 (`clampPlayTempo`; default 1): the play clock, its audio, the scroll, the BGA and the
+   * chart-time lead-out run `tempo` times as fast, while judging stays in chart time (the engine's `speed`). A replay
+   * plays at the tempo its log recorded (`play.tempo`) instead. A NONSTOP FIT stage's rate multiplies with it.
    */
-  nonstopFitMode?: NonstopFitMode;
+  tempo?: number;
+  /**
+   * How a tempo change sounds, for {@link tempo} and NONSTOP FIT stages alike: `pitch` (default, as LR2) plays the
+   * samples faster or slower, `keep-pitch` stretches them to the new tempo when they load and keeps their pitch.
+   */
+  tempoPitchMode?: TempoPitchMode;
   /** The time stretcher keep pitch uses: `signalsmith` (default, Signalsmith Stretch) or `wsola`. */
-  nonstopStretchAlgorithm?: TimeStretchAlgorithm;
+  tempoStretchAlgorithm?: TimeStretchAlgorithm;
   /** The hi-speed cannot be changed during play (a course's `no_speed` constraint). */
   hiSpeedLocked?: boolean;
   /**
@@ -939,6 +950,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private audioContextStartTime = 0;
   /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
   private nonstopMixer: NonstopStageMixer | undefined;
+  /** The play tempo ({@link CoreGameplayViewOptions.tempo}, or a replay's recorded one): chart seconds per clock second. */
+  protected readonly tempo: number;
   protected paused = false;
   private pauseTime = 0;
   private pauseTotal = 0;
@@ -1337,6 +1350,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   public constructor(options: TOptions = {} as TOptions) {
     this.options = options;
     this.beMusicSkinSettings = options.beMusicSkinSettings;
+    // A replay plays back at the tempo it was played at.
+    this.tempo = clampPlayTempo(options.replay !== undefined ? (options.replay.play.tempo ?? 1) : options.tempo);
     if (options.initialHiSpeed !== undefined && Number.isFinite(options.initialHiSpeed)) {
       // Snap to the same 1/1000 grid `adjustHiSpeed` uses so a host-supplied `1.5000000000000002` (the obvious
       // float-drift failure mode of repeated +0.1 steps) lands on the canonical grid value the in-game adjust hotkey
@@ -2123,14 +2138,17 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const audioTailChart = this.resolvedChart ?? this.song?.chart;
     const audioTailCleanupDelayMs =
       preserveAudioTail && audioTailChart !== undefined
-        ? resolveGameplayAudioTailCleanupDelayMs({
-            chart: audioTailChart,
-            notes: this.notes,
-            autoSampleTriggers: this.autoSampleTriggers,
-            decodedSamples: this.decodedSamples,
-            bmsonSlicePlayback: this.bmsonSlicePlayback,
-            currentSeconds: this.currentSeconds(),
-          })
+        ? chartToElapsedSeconds(
+            resolveGameplayAudioTailCleanupDelayMs({
+              chart: audioTailChart,
+              notes: this.notes,
+              autoSampleTriggers: this.autoSampleTriggers,
+              decodedSamples: this.decodedSamples,
+              bmsonSlicePlayback: this.bmsonSlicePlayback,
+              currentSeconds: this.currentSeconds(),
+            }),
+            this.tempo,
+          )
         : 0;
     const webAudioSession = this.webAudioSession;
     this.webAudioSession = undefined;
@@ -2758,13 +2776,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // walks the prefixed form first when set so a chart authored as `wav/` + bare `kick.wav` references resolves the
     // file as `wav/kick.wav`.
     const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
-    // Keep pitch: a FIT stage's samples are stretched to its new tempo once, here, and then play at their own pitch.
-    const keepPitch = this.options.nonstop !== undefined && this.options.nonstopFitMode === 'keep-pitch';
-    const stretchRates = keepPitch
-      ? resolveNonstopStretchRates(this.options.nonstop!, chart.resources.wav, (path) =>
-          normalizePath(path).toLowerCase(),
-        )
-      : undefined;
+    // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
+    // play at their own pitch.
+    const pitchMode = this.options.tempoPitchMode ?? 'pitch';
+    const stretchRates =
+      pitchMode === 'keep-pitch'
+        ? resolveSampleStretchRates(
+            chart.resources.wav,
+            (path) => normalizePath(path).toLowerCase(),
+            this.tempo,
+            this.options.nonstop,
+          )
+        : undefined;
     await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
       if (this.disposed || !this.source || !this.song || !this.audioContext) return;
       // Audio-aware asset lookup: charts almost universally declare `.wav` paths but archives often ship `.ogg` /
@@ -2793,7 +2816,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // dispose can complete cleanly.
       }
     });
-    if (stretchRates !== undefined && stretchRates.size > 0) await this.stretchNonstopSamples(stretchRates);
+    if (stretchRates !== undefined && stretchRates.size > 0 && this.audioContext) {
+      await stretchDecodedSamples(
+        this.audioContext,
+        this.decodedSamples,
+        stretchRates,
+        this.options.tempoStretchAlgorithm ?? 'signalsmith',
+        () => this.disposed,
+      );
+      // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
+      if (this.bmsonSlicePlayback !== undefined) {
+        this.bmsonSlicePlayback = stretchSlicePlayback(this.bmsonSlicePlayback, this.tempo);
+      }
+    }
     // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
     // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
     // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
@@ -2803,7 +2838,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.nonstopMixer =
         this.options.nonstop !== undefined
           ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop, {
-              keepPitch: this.options.nonstopFitMode === 'keep-pitch',
+              keepPitch: pitchMode === 'keep-pitch',
+              tempo: this.tempo,
             })
           : undefined;
       this.webAudioSession = createWebAudioSession({
@@ -2814,29 +2850,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
         bmsonSlicePlayback: this.bmsonSlicePlayback,
         ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
+        playbackRate: this.samplePlaybackRate(),
       });
     }
   }
 
-  /**
-   * Keep pitch: stretches each FIT stage's decoded samples to the stage's tempo in place, keeping their pitch. The
-   * samples of one rate are stretched together (one Signalsmith Stretch render per stage).
-   */
-  private async stretchNonstopSamples(rates: ReadonlyMap<string, number>): Promise<void> {
-    const byRate = new Map<number, string[]>();
-    for (const [path, rate] of rates) {
-      if (this.decodedSamples.has(path)) byRate.set(rate, [...(byRate.get(rate) ?? []), path]);
-    }
-    for (const [rate, paths] of byRate) {
-      if (this.disposed || !this.audioContext) return;
-      const stretched = await stretchAudioBuffers(
-        this.audioContext,
-        paths.map((path) => this.decodedSamples.get(path)!),
-        rate,
-        this.options.nonstopStretchAlgorithm ?? 'signalsmith',
-      );
-      paths.forEach((path, index) => this.decodedSamples.set(path, stretched[index]!));
-    }
+  /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
+  private samplePlaybackRate(): number {
+    return resolveSamplePlaybackRate(this.options.tempoPitchMode ?? 'pitch', this.tempo);
   }
 
   /**
@@ -3735,12 +3756,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   protected currentSeconds(): number {
     if (this.audioContext && this.audioContextStartTime > 0) {
-      return Math.max(0, this.audioContext.currentTime - this.audioContextStartTime);
+      return Math.max(0, elapsedToChartSeconds(this.audioContext.currentTime - this.audioContextStartTime, this.tempo));
     }
-    if (this.paused) {
-      return Math.max(0, (this.pauseTime - this.startTime - this.pauseTotal) / 1000);
-    }
-    return Math.max(0, (performance.now() - this.startTime - this.pauseTotal) / 1000);
+    const nowMs = this.paused ? this.pauseTime : performance.now();
+    return Math.max(0, elapsedToChartSeconds((nowMs - this.startTime - this.pauseTotal) / 1000, this.tempo));
   }
 
   private publishJudge(judge: JudgeKind, seconds: number, channel?: string): void {
@@ -4348,6 +4367,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const cueSeconds = cue?.seconds ?? 0;
     this.bgaActiveVideos[track] = { key: key!, cueSeconds };
     const offset = Math.max(0, seconds - cueSeconds);
+    // The video runs at the play tempo, so its time stays the chart time since its cue.
+    handle.video.playbackRate = this.tempo;
     try {
       handle.video.currentTime = Math.min(offset, Math.max(0, handle.video.duration - 0.05) || offset);
     } catch {
@@ -4365,7 +4386,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private resolveChartMs(): number | undefined {
     if (this.startTime === 0) return undefined;
-    if (Number.isFinite(this.startTime)) return performance.now() - this.startTime;
+    if (Number.isFinite(this.startTime)) return elapsedToChartSeconds(performance.now() - this.startTime, this.tempo);
     return Math.min(-1, this.playClock() - this.sceneStartTime - this.scheduledIntroMs);
   }
 
@@ -5222,6 +5243,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         bmsonSlicePlayback: this.bmsonSlicePlayback,
         // The engine plays through its own session: a stitched NONSTOP chart's stage rates (FIT) and fades go with it.
         ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
+        playbackRate: this.samplePlaybackRate(),
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
       ui: callbacks,
@@ -5259,6 +5281,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
         // engine's default 1.5 s lead-in on top.
         leadInMs: 0,
+        // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time.
+        speed: this.tempo,
         // Forward AUTO SCRATCH: engine has a single boolean rather than per-side, so either-side AUTO SCRATCH
         // turns scratch auto on for both 16 / 26 channels. That's a per-side fidelity loss for rare DP charts
         // where only one player's scratch should auto-spin (the demo's lil-gui surfaces them as two separate
@@ -5429,7 +5453,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // `currentSeconds() === frame.currentSeconds` from now on. Subsequent frames don't re-anchor — both
     // clocks tick on the AudioContext now, so the offset stays locked.
     if (!this.sharedEngineClockAnchored && frame.currentSeconds > 0 && this.audioContext) {
-      this.audioContextStartTime = this.audioContext.currentTime - frame.currentSeconds;
+      this.audioContextStartTime =
+        this.audioContext.currentTime - chartToElapsedSeconds(frame.currentSeconds, this.tempo);
       this.sharedEngineClockAnchored = true;
       this.nonstopMixer?.schedule(this.audioContextStartTime);
     }
@@ -5637,7 +5662,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (this.disposed || this.chartEnded) return;
     this.chartEnded = true;
     this.playMoments.outroAtMs ??= this.playClock();
-    const delayMs = resolvePostChartResultDelayMs(this.notes, this.timingResolver, this.currentSeconds());
+    // The lead-out is chart time: at another tempo it takes 1 / tempo as long.
+    const delayMs = chartToElapsedSeconds(
+      resolvePostChartResultDelayMs(this.notes, this.timingResolver, this.currentSeconds()),
+      this.tempo,
+    );
     // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
     // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
     // charts whose non-note tail has already carried us past the target.
