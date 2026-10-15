@@ -15,7 +15,7 @@ export type CourseRunRejection =
   | 'course-constraint-mismatch'
   /** A stage's recorded carry-in is not the state the previous stage, re-simulated, left; or a stage was played after one that failed. */
   | 'course-carry-in-mismatch'
-  /** The run stopped before the last stage without failing one: given up, not failed. */
+  /** The run stopped before the last stage without failing one or being given up on its last stage played. */
   | 'aborted';
 
 export type CourseRunCheck = { ok: true } | { ok: false; reason: CourseRunRejection; stage?: number };
@@ -64,7 +64,7 @@ function stageFailed(result: PlaylogRulesetResult): boolean {
  * - every stage after the first carried in exactly the state the previous stage, re-simulated, left (gauge, course
  *   combo and max combo), and the first carried in nothing;
  * - no stage was played after one that failed, and a run that stopped before the last stage stopped because its last
- *   stage failed. Anything else was given up (ESC), which is refused like an aborted single play.
+ *   stage played failed or was given up (ESC, `play.aborted`). A course given up is a failed run, as LR2 records it.
  */
 export function checkCourseRun(courseLog: BeMusicCoursePlaylog, simulated: PlaylogCourseResult): CourseRunCheck {
   const expected = expectedStageSettings(courseLog.course.constraints);
@@ -103,7 +103,8 @@ export function checkCourseRun(courseLog: BeMusicCoursePlaylog, simulated: Playl
     }
   }
   const last = simulated.stages.at(-1);
-  if (played.length < courseLog.stages.length && (last === undefined || !stageFailed(last))) {
+  const givenUp = played.at(-1)?.play.aborted === true;
+  if (played.length < courseLog.stages.length && !givenUp && (last === undefined || !stageFailed(last))) {
     return { ok: false, reason: 'aborted', stage: played.length - 1 };
   }
   return { ok: true };

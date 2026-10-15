@@ -62,8 +62,9 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
         'Submits a course play log with the fingerprint documents of each played stage. The body is JSON, ' +
         'gzip-compressed (`Content-Encoding: gzip`). Every played stage is checked like a single play, the run is ' +
         're-simulated under every ruleset, and each stage’s carry-in must be the state the previous stage, ' +
-        're-simulated, left. A run that stopped before the last stage must have failed there: a run given up is ' +
-        'refused as `aborted`. A course run creates no chart scores. The same run submitted again by the same ' +
+        're-simulated, left. A run given up with ESC on its last stage played is a failed run; one that stopped ' +
+        'before the last stage otherwise must have failed there, or it is refused as `aborted`. A course run ' +
+        'creates no chart scores. The same run submitted again by the same ' +
         'account answers 200 with the stored result. Rejections name the stage at fault in `detail` when there is one.',
       requestBody: { required: true, content: { 'application/json': { schema: resolver(courseSubmissionBody) } } },
       responses: {

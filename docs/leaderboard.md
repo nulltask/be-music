@@ -264,9 +264,9 @@ with its own rankings per ruleset, and never as single-chart plays.
   is re-simulated under `lr2`, `beatoraja` and `iidx` with `simulateCoursePlaylog`; the client's cached results are
   ignored.
 - **Failed and abandoned runs.** A run that failed a stage is stored and ranked like a failed play: its unreached
-  stages' notes count as BP. A run that stopped before its last stage **without** failing one was given up with ESC,
-  and is refused as `aborted`, like an ESC abort of a single play. The demo never sends one: giving up a course drops
-  the run.
+  stages' notes count as BP. A run given up with ESC counts as a failed run too, as LR2 records it: its last played
+  stage may carry `play.aborted`, the run fails whatever its gauge, and the rest of that stage and the unreached
+  stages count as BP. An ESC abort on any earlier stage is still refused as `aborted`.
 - **NONSTOP runs are not ranked yet.** A NONSTOP course is played as one stitched chart, which has no chart document
   of its own to verify, so a course log with `nonstop` is refused as `nonstop`.
 - **Figures and bests.** Per ruleset: EX score, lamp (the course lamp on the chart lamp scale), BP, course max combo,
@@ -515,7 +515,6 @@ application, HonoX or Nuxt can take over; the shared data-access functions keep 
 - **Rate limits**: the numbers in section 8 are proposals.
 - **Ghost visibility**: ghosts always public is proposed.
 - **Uploaded OG cards**: size limit and validation details.
-- **Courses**: an abandoned (ESC) run is refused; should it instead count as a failed run, as LR2 records it? The
-  unreached stages' note counts come from the client's chart facts, which the server cannot check, so a run could
+- **Courses**: the unreached stages' note counts come from the client's chart facts, which the server cannot check, so a run could
   lower its BP by understating them. Course pages, hiding course runs, course play log downloads and a course trophy
   best are not built yet.

@@ -2101,18 +2101,22 @@ class PlayerWebDemoApp {
   }
 
   /** The course result of a NONSTOP run: its course log built from the stitched play, kept and shown as one run. */
-  private async showNonstopCourseResult(nonstop: NonstopPlay, result: PixiGameplayResultData): Promise<void> {
-    if (result.playlog === undefined) {
-      await this.showResult(result);
+  private async showNonstopCourseResult(
+    nonstop: NonstopPlay,
+    playlog: BeMusicPlaylog | undefined,
+    fallback?: PixiGameplayResultData,
+  ): Promise<void> {
+    if (playlog === undefined) {
+      await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    const courseLog = buildNonstopCoursePlaylog(nonstop.course, nonstop.prepared, result.playlog, {
+    const courseLog = buildNonstopCoursePlaylog(nonstop.course, nonstop.prepared, playlog, {
       createdAt: new Date().toISOString(),
       recorder: PLAYLOG_RECORDER,
     });
     const native = courseLog.results?.native;
     if (native === undefined) {
-      await this.showResult(result);
+      await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
     this.recordCourseResult(courseRecordKey(nonstop.course), native);
@@ -3010,6 +3014,8 @@ class PlayerWebDemoApp {
     // 4. Mount the gameplay view.
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay } };
+    // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
+    let givingUp = false;
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
       skin: skinLoad.skin,
       textures,
@@ -3064,11 +3070,28 @@ class PlayerWebDemoApp {
       // bindings instead of POPN-9, which silently drops lane 6+ keys.
       chartPath: song.chartPath,
       onExit: () => {
-        // ESC gives a running course up.
-        if (courseStage !== undefined) this.courseSession = undefined;
+        // ESC gives a running course up: the run is kept as a failed one, with the stage given up recorded once the
+        // engine settles (its play log carries `play.aborted`).
+        const view = this.beatorajaGameplayView;
+        if (courseStage !== undefined && this.courseSession !== undefined) {
+          const session = this.courseSession;
+          givingUp = true;
+          const settled = Promise.race([
+            view?.awaitCompletion()?.catch(() => undefined),
+            new Promise((resolve) => setTimeout(resolve, 2000)),
+          ]);
+          void this.finishBeatorajaGameplayThen(async () => {
+            await settled;
+            session.giveUp(view?.getPlaylog());
+            this.courseSession = session;
+            await this.showCourseResult();
+          });
+          return;
+        }
         void this.finishBeatorajaGameplayThen(() => this.showSelect());
       },
       onComplete: (summary, maxCombo, history) => {
+        if (givingUp) return;
         // Result skin (`type = 7`) when the bundle ships one — otherwise jump back to select.
         // `finishBeatorajaGameplayThen` drops the gameplay scene first so the result scene gets a
         // clean stage; the result scene mounts in the `then` branch. `history` carries the
@@ -3103,6 +3126,7 @@ class PlayerWebDemoApp {
         // `PlayerInterruptedError` lands here for the ESC path — it's the expected exit for "user
         // pressed ESC mid-chart". Treat it as a clean exit.
         gameplayLog.info('beatoraja engine ended', { error: (error as Error).message });
+        if (givingUp) return;
         void this.finishBeatorajaGameplayThen(() => this.showSelect());
       },
     });
@@ -4593,13 +4617,29 @@ class PlayerWebDemoApp {
       showInvisibleNotes: this.guiState.showInvisibleNotes,
       judgedNoteDisplay: this.guiState.judgedNoteDisplay,
       onExit: () => {
-        // ESC gives a running course up.
-        if (courseStage !== undefined) this.courseSession = undefined;
+        // ESC gives a running course up: the run is kept as a failed one (as LR2 records it), with the stage given up
+        // recorded once the engine hands its play log over.
+        const view = this.gameplayView;
+        if (courseStage !== undefined && this.courseSession !== undefined) {
+          const session = this.courseSession;
+          void this.finishGameplayThen(async () => {
+            session.giveUp(await view?.waitForPlaylog());
+            this.courseSession = session;
+            await this.showCourseResult();
+          });
+          return;
+        }
+        if (nonstop !== undefined) {
+          void this.finishGameplayThen(async () => {
+            await this.showNonstopCourseResult(nonstop, await view?.waitForPlaylog());
+          });
+          return;
+        }
         void this.finishGameplayThen(() => this.showSelect());
       },
       onChartFinished: (result: PixiGameplayResultData) => {
         if (nonstop !== undefined) {
-          void this.finishGameplayThen(() => this.showNonstopCourseResult(nonstop, result));
+          void this.finishGameplayThen(() => this.showNonstopCourseResult(nonstop, result.playlog, result));
           return;
         }
         // A course stage with stage results skipped goes straight on to the next stage (or the course result).

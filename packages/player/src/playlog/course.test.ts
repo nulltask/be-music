@@ -163,6 +163,34 @@ function carryFrom(log: BeMusicPlaylog): PlaylogCourseStage['carryIn'] {
 }
 
 describe('course play logs', () => {
+  test('a course given up with ESC counts as a failed run, whatever the gauge', async () => {
+    const first = await playStage(
+      presses(() => true),
+      { kind: 'grade' },
+    );
+    const second = await playStage(
+      presses(() => true),
+      { kind: 'grade', carryIn: carryFrom(first) },
+    );
+    // Given up halfway through the last stage: the notes after 1.5 s were never judged.
+    second.play.aborted = true;
+    second.play.abortedAtUs = 1_500_000;
+    second.inputs = second.inputs.filter((input) => input.timeUs < 1_500_000);
+    const log = createCoursePlaylog({
+      course: COURSE,
+      stages: [
+        { played: true, playlog: first },
+        { played: true, playlog: second },
+      ],
+    });
+    const simulated = simulateCoursePlaylog(log, { ruleset: 'lr2' });
+    expect(simulated.gauge.cleared).toBe(false);
+    expect(simulated.lamp).toBe('FAILED');
+    expect(simulated.stagesPlayed).toBe(2);
+    expect(simulated.missCount).toBeGreaterThan(0);
+    expect(log.results?.native?.lamp).toBe('FAILED');
+  });
+
   test('a cleared course re-simulates to the result the engine recorded', async () => {
     const first = await playStage(
       presses((index) => index !== 3),
