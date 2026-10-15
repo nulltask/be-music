@@ -304,7 +304,7 @@ beatoraja play skins are a display choice, not a ruleset, so they follow the sam
 
 ## HS-FIX
 
-The play option's HS-FIX modes keep LR2's buttons and follow beatoraja's fixed hi-speed modes (`LaneRenderer.init`). The hi-speed the player sets is the one they want at the chart's reference BPM (`#BASEBPM`, else the start BPM); HS-FIX rescales it so that the scroll at another BPM feels like that.
+The play option's HS-FIX modes keep LR2's buttons and follow beatoraja's fixed hi-speed modes (`LaneRenderer.init`). The hi-speed the player sets is the one they want at the chart's reference BPM (`#BASEBPM`, else the start BPM); HS-FIX rescales it so that the scroll at another BPM feels like that. The in-play HI-SPEED readouts show that hi-speed, as the select panel does, and ArrowUp / ArrowDown step it by 0.1; HS-FIX rescales only the scroll.
 
 | be-music   | Pegs the hi-speed to                                                                     | beatoraja                                                      |
 | ---------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------- |

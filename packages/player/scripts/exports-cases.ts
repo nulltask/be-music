@@ -666,6 +666,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player.playlog.roundPlaylogView', {
+    run: () => {
+      playlogApi.roundPlaylogView({ ...benchView, hiSpeed: 2.5000000000000004 });
+    },
+  });
   define('player.playlog.diffPlaylogView', {
     run: () => {
       playlogApi.diffPlaylogView(benchView, { ...benchView, hiSpeed: 2.5 });

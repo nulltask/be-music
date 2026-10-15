@@ -407,7 +407,10 @@ export interface CoreSongSelectViewOptions {
    * the gameplay's `autoPlay` flag.
    */
   onSongAutoPlay?: (song: BrowserSongEntry) => void;
-  /** The player started a course bar whose every stage is in the collection (or a NEW COURSE bar). */
+  /**
+   * The player started a course bar (or a NEW COURSE bar). A course with a stage missing from the collection
+   * (`playable: false`) is handed over too, so the host can say why it does not start.
+   */
   onCourseSelected?: (course: BrowserCourseEntry) => void;
   /** The player started a course with AUTO: every stage plays itself. Falls back to `onCourseSelected` when unset. */
   onCourseAutoPlay?: (course: BrowserCourseEntry) => void;
@@ -1230,13 +1233,13 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * Three call sites use this — keyboard Enter, skin-mode click, fallback-row click — so factoring it here keeps their
    * semantics identical.
    */
-  /** Opens a folder bar, starts a song bar, or starts a course bar (a course with a missing stage cannot start). */
+  /** Opens a folder bar, starts a song bar, or hands a course bar to the host (see `onCourseSelected`). */
   protected activateEntry(entry: BrowserBrowseEntry): void {
     if (entry.kind === 'folder') {
       this.enterFolder(entry.folder);
     } else if (entry.kind === 'song') {
       this.launchSong(entry.song);
-    } else if (entry.course.playable && this.launchAt === undefined) {
+    } else if (this.launchAt === undefined) {
       this.options.onCourseSelected?.(entry.course);
     }
   }
@@ -2668,11 +2671,14 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     if (LIST_PLAY_OPTIONS.has(key)) this.snapCursorAfterFilterChange();
   }
 
-  /** PLAY / AUTO: starts the focused song, or the focused course (a course with a missing stage cannot start). */
-  private launchFocusedSong(autoPlay: boolean): void {
+  /**
+   * PLAY / AUTO: starts the focused song, or hands the focused course to the host (which refuses a course with a
+   * missing stage and says why).
+   */
+  protected launchFocusedSong(autoPlay: boolean): void {
     const course = this.focusedCourse();
     if (course !== undefined) {
-      if (!course.playable || this.launchAt !== undefined) return;
+      if (this.launchAt !== undefined) return;
       if (autoPlay && this.options.onCourseAutoPlay !== undefined) this.options.onCourseAutoPlay(course);
       else this.options.onCourseSelected?.(course);
       return;

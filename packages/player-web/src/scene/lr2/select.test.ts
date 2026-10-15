@@ -1,8 +1,13 @@
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
-import { DEFAULT_PLAY_OPTIONS, isInsideLr2DefaultSearchBox } from './select.ts';
+import { DEFAULT_PLAY_OPTIONS, isInsideLr2DefaultSearchBox, PixiSongSelectView } from './select.ts';
 import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from '../select-ops.ts';
-import type { BrowserBrowseEntry, BrowserSongEntry } from '../../collection/types.ts';
+import type {
+  BrowserBrowseEntry,
+  BrowserCourseEntry,
+  BrowserFolderNode,
+  BrowserSongEntry,
+} from '../../collection/types.ts';
 
 /**
  * Builds a minimal `BrowserSongEntry` for tests. Only the fields `matchesSearchQuery` consults are populated; the rest
@@ -69,5 +74,31 @@ describe('isInsideLr2DefaultSearchBox', () => {
   it('does not apply the hardcoded fallback to custom design sizes', () => {
     expect(isInsideLr2DefaultSearchBox({ width: 640, height: 480, x: 460, y: 561 })).toBe(false);
     expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 800, x: 460, y: 561 })).toBe(false);
+  });
+});
+
+describe('PixiSongSelectView PLAY / AUTOPLAY buttons', () => {
+  it('start the focused course bar (button types 15 / 16)', () => {
+    const dan = {
+      id: 'dan#0',
+      definition: { name: 'Dan', kind: 'grade', stages: [], constraints: [], trophies: [] },
+      stages: [{ title: 'a' }],
+      playable: true,
+    } as unknown as BrowserCourseEntry;
+    const started: string[] = [];
+    // Not mounted, so nothing renders; the cursor sits on the course bar inside its course folder.
+    const view = new PixiSongSelectView({
+      onCourseSelected: () => started.push('play'),
+      onCourseAutoPlay: () => started.push('auto'),
+    }) as unknown as {
+      browseStack: BrowserFolderNode[];
+      selectedIndex: number;
+      dispatchButtonClick(button: { type: number }): void;
+    };
+    view.browseStack = [{ label: 'Dan', songs: [], courses: [dan] }];
+    view.selectedIndex = 0;
+    view.dispatchButtonClick({ type: 15 });
+    view.dispatchButtonClick({ type: 16 });
+    expect(started).toEqual(['play', 'auto']);
   });
 });

@@ -166,6 +166,7 @@ import {
   type ResolvedPlayChart,
 } from '@be-music/player/core/engine';
 import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
+import { resolveResultViewJingles } from './result-jingles.ts';
 import {
   resolveCoursePlaylogFilename,
   serializeCoursePlaylog,
@@ -3711,7 +3712,8 @@ class PlayerWebDemoApp {
       skinAudio: this.beatorajaSkinAudio,
       songs: this.collection.songs,
       ...(this.collection.courseFolders !== undefined ? { courseFolders: this.collection.courseFolders } : {}),
-      onCoursePicked: (course: BrowserCourseEntry) => void this.startCourse(course),
+      onCoursePicked: (course: BrowserCourseEntry, options?: { autoPlay?: boolean }) =>
+        void this.startCourse(course, options),
       // Pass the collection so the scene's `ChartPreviewEngine` can resolve each focused
       // song's `BrowserSongAssetSource` and play `#PREVIEW` audio (or fall back to in-place
       // chart playback) on cursor settle. Without this, the beatoraja select runs silent on
@@ -4750,12 +4752,13 @@ class PlayerWebDemoApp {
         void this.selectView?.playDecideSound();
         void this.showDecide(song, { autoPlay: true });
       },
+      // A course with a missing stage comes here too: it does not start (no decide cue), and the status line says why.
       onCourseSelected: (course: BrowserCourseEntry) => {
-        void this.selectView?.playDecideSound();
+        if (course.playable) void this.selectView?.playDecideSound();
         void this.startCourse(course);
       },
       onCourseAutoPlay: (course: BrowserCourseEntry) => {
-        void this.selectView?.playDecideSound();
+        if (course.playable) void this.selectView?.playDecideSound();
         void this.startCourse(course, { autoPlay: true });
       },
       onSearchActivate: () => this.search.openFromPointer(),
@@ -5364,10 +5367,17 @@ class PlayerWebDemoApp {
           : undefined;
     const sharedResultOptions = {
       collection: this.collection,
-      // The course result plays LR2's course jingles, falling back to the result ones.
-      clearBgm: (presentation.courseJingles ? this.courseClearBgmBytes : undefined) ?? this.clearBgmBytes,
-      failBgm: (presentation.courseJingles ? this.courseFailBgmBytes : undefined) ?? this.failBgmBytes,
-      resultBgm: this.resultBgmBytes,
+      // The active theme's jingles: a beatoraja theme's when its result falls back to this view (a NONSTOP course).
+      ...resolveResultViewJingles(resultFamily, presentation.courseJingles, {
+        lr2: {
+          clear: this.clearBgmBytes,
+          fail: this.failBgmBytes,
+          result: this.resultBgmBytes,
+          courseClear: this.courseClearBgmBytes,
+          courseFail: this.courseFailBgmBytes,
+        },
+        beatoraja: this.beatorajaThemeBgm,
+      }),
       onContinue: () => {
         if (courseStage && this.courseSession !== undefined) {
           // The next stage does not tear the result view down, and a live one would keep taking its clicks and keys
