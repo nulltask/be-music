@@ -341,6 +341,32 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // `#EXRANK` changes are recorded whatever ruleset the play ran under, so re-simulating a beatoraja or IIDX log under
+  // LR2 uses the windows an LR2 play of the same inputs used.
+  test.each(['beatoraja', 'iidx'] as const)(
+    'a %s log re-simulates under lr2 with the #EXRANK changes',
+    async (ruleset) => {
+      const json = chart([
+        { measure: 1, channel: 'A0', position: [0, 1], value: '01' },
+        { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      ]);
+      json.bms.exRank['01'] = '25';
+      const inputs = [down(0, 2_040_000, '11'), up(1, 2_080_000, '11')];
+
+      const played = await replay(json, inputs, ruleset);
+      const lr2 = await replay(json, inputs, 'lr2');
+      const resimulated = simulatePlaylog(played.playlog, { ruleset: 'lr2' });
+
+      expect(played.playlog.chart.judgeRank.timeline).toHaveLength(1);
+      expect([
+        resimulated.judge.pgreat,
+        resimulated.judge.great,
+        resimulated.judge.good,
+        resimulated.judge.bad,
+      ]).toEqual([lr2.summary.perfect, lr2.summary.great, lr2.summary.good, lr2.summary.bad]);
+    },
+  );
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
