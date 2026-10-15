@@ -1,6 +1,6 @@
 import type { NonstopStitchMap } from '@be-music/player/course';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { createNonstopStageMixer, nonstopFadeCurve } from './nonstop-audio.ts';
+import { createNonstopStageMixer, nonstopFadeCurve, resolveNonstopStretchRates } from './nonstop-audio.ts';
 
 function fakeContext(currentTime = 0) {
   const gains: Array<{
@@ -94,5 +94,20 @@ describe('createNonstopStageMixer', () => {
     expect(gains[1]!.gain.setValueAtTime).toHaveBeenCalledWith(0, 3);
     mixer.dispose();
     expect(gains.every((gain) => gain.disconnect.mock.calls.length === 1)).toBe(true);
+  });
+});
+
+describe('Master Tempo', () => {
+  test('plays every stage at its own speed once its samples are stretched', () => {
+    const { context } = fakeContext();
+    const mixer = createNonstopStageMixer(context, {} as AudioNode, MAP, { masterTempo: true });
+    expect([mixer.rate(0), mixer.rate(1)]).toEqual([1, 1]);
+  });
+
+  test('stretches the samples of the stages a FIT connection retimes', () => {
+    const rates = resolveNonstopStretchRates(MAP, { '01': 's0/A.wav', '02': 's0/b.wav', '03': 's1/Kick.WAV' }, (path) =>
+      path.toLowerCase(),
+    );
+    expect([...rates]).toEqual([['s1/kick.wav', 1.25]]);
   });
 });

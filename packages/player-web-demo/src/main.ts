@@ -819,6 +819,7 @@ class PlayerWebDemoApp {
       autoSavePlaylog: false,
       courseAutoAdvance: false,
       nonstopPlacement: 'intended',
+      nonstopFitMode: 'pitch',
       // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
       submitToLeaderboard: false,
       // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
@@ -1305,6 +1306,12 @@ class PlayerWebDemoApp {
       .name('Course: NONSTOP placement')
       .onChange((value: DemoGuiState['nonstopPlacement']) => {
         this.guiState.nonstopPlacement = value;
+      });
+    folder
+      .add(this.guiState, 'nonstopFitMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Master Tempo': 'master-tempo' })
+      .name('Course: NONSTOP FIT')
+      .onChange((value: DemoGuiState['nonstopFitMode']) => {
+        this.guiState.nonstopFitMode = value;
       });
     trackPlayOption(
       folder
@@ -4693,6 +4700,7 @@ class PlayerWebDemoApp {
             course: resolveCourseStageSettings(nonstop.course.definition),
             courseInfo: resolveSceneCourseInfo(nonstop.course, 0),
             nonstop: nonstop.prepared.map,
+            nonstopFitMode: this.guiState.nonstopFitMode,
           }
         : {}),
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),

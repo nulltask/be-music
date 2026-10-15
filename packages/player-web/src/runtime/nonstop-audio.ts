@@ -45,6 +45,7 @@ export function createNonstopStageMixer(
   audioContext: BaseAudioContext,
   destination: AudioNode,
   map: NonstopStitchMap,
+  options: { masterTempo?: boolean } = {},
 ): NonstopStageMixer {
   const stageOfKey = new Map<string, number>();
   map.stages.forEach((stage, index) => stage.wavKeys.forEach((key) => stageOfKey.set(key, index)));
@@ -65,7 +66,8 @@ export function createNonstopStageMixer(
   };
   return {
     stageOf: (sampleKey) => stageOfKey.get(sampleKey),
-    rate: (stage) => map.stages[stage]?.placement.rate ?? 1,
+    // With Master Tempo the samples were stretched to the stage's tempo already ({@link resolveNonstopStretchRates}).
+    rate: (stage) => (options.masterTempo === true ? 1 : (map.stages[stage]?.placement.rate ?? 1)),
     bgmInput: (stage) => gains[stage],
     schedule: (chartStart) => {
       map.stages.forEach((stage, index) => {
@@ -86,4 +88,33 @@ export function createNonstopStageMixer(
       }
     },
   };
+}
+
+/**
+ * How a stitched NONSTOP chart's FIT stages follow the previous stage's tempo: `pitch` plays their samples faster or
+ * slower, so the pitch moves with the tempo (LR2, a turntable, a CDJ without Master Tempo); `master-tempo` stretches
+ * the samples in time and keeps their pitch (a CDJ's Master Tempo).
+ */
+export type NonstopFitMode = 'pitch' | 'master-tempo';
+
+/**
+ * The samples a Master Tempo play stretches: each FIT stage's sample paths (as `normalizePath` lowercases them for the
+ * decoded-sample cache) with the stage's rate. Stages played at their own tempo are left out. `wav` is the stitched
+ * chart's `#WAV` table; `normalize` is the cache's path key.
+ */
+export function resolveNonstopStretchRates(
+  map: NonstopStitchMap,
+  wav: Readonly<Record<string, string | undefined>>,
+  normalize: (path: string) => string,
+): Map<string, number> {
+  const rates = new Map<string, number>();
+  for (const stage of map.stages) {
+    const rate = stage.placement.rate;
+    if (rate === 1 || !(rate > 0)) continue;
+    for (const key of stage.wavKeys) {
+      const path = wav[key];
+      if (path !== undefined) rates.set(normalize(path), rate);
+    }
+  }
+  return rates;
 }
