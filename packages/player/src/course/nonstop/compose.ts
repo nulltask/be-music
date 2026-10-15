@@ -46,7 +46,10 @@ export interface NonstopStitchStage {
   /** The stitched seconds the stage owns: its notes, bar lines and STOPs fall in `[windowStart, windowEnd)`. */
   windowStart: number;
   windowEnd: number;
-  /** The stitched WAV / BMP keys that belong to this stage, for its sound bus and BGA layer. */
+  /**
+   * The stitched WAV / BMP keys that belong to this stage (those without a file included), for its sound bus and BGA
+   * layer, and to tell which stage a note comes from.
+   */
   wavKeys: string[];
   bmpKeys: string[];
   /** Fades of the stage's background sound (LR2 fades the stage BGM channel; keysounds play at full level). */
@@ -149,21 +152,26 @@ export function stitchNonstopCourse(
     const window = windows[index]!;
     // Every source key gets its own stitched key, even one without a file (it then stays silent), so two stages'
     // keys never meet.
+    const known = new Set<string>();
     const wav = (key: string): string | undefined => {
       const stitched = wavKeys.keyFor(index, key);
-      const path = source.resources.wav[key];
-      if (stitched !== undefined && path !== undefined && chart.resources.wav[stitched] === undefined) {
-        chart.resources.wav[stitched] = assetPath(index, 'wav', path);
+      if (stitched === undefined) return undefined;
+      if (!known.has(`w${stitched}`)) {
+        known.add(`w${stitched}`);
         stageWav[index]!.push(stitched);
+        const path = source.resources.wav[key];
+        if (path !== undefined) chart.resources.wav[stitched] = assetPath(index, 'wav', path);
       }
       return stitched;
     };
     const bmp = (key: string): string | undefined => {
       const stitched = bmpKeys.keyFor(index, key);
-      const path = source.resources.bmp[key];
-      if (stitched !== undefined && path !== undefined && chart.resources.bmp[stitched] === undefined) {
-        chart.resources.bmp[stitched] = assetPath(index, 'bmp', path);
+      if (stitched === undefined) return undefined;
+      if (!known.has(`b${stitched}`)) {
+        known.add(`b${stitched}`);
         stageBmp[index]!.push(stitched);
+        const path = source.resources.bmp[key];
+        if (path !== undefined) chart.resources.bmp[stitched] = assetPath(index, 'bmp', path);
       }
       return stitched;
     };
