@@ -14,8 +14,10 @@ import {
   applyCourseLongNoteConstraint,
   isCourseHiSpeedLocked,
   resolveCourseLaneOptions,
+  resolveLr2GradeCoursePlaySettings,
   resolveCourseStageSettings,
   type CourseLaneOptions,
+  type Lr2GradeResetSettings,
 } from '@be-music/player-web/collection';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import type {
@@ -32,6 +34,9 @@ export interface CourseStageHistory {
   gaugeHistory: readonly GaugeHistorySample[];
   scoreHistory: readonly ScoreHistorySample[];
 }
+
+/** The player's picks a course may override for a stage (see {@link CourseSession.playSettings}). */
+export interface CourseStagePlaySettings extends CourseLaneOptions, Lr2GradeResetSettings {}
 
 /** What the next stage of a running course plays: its chart (with the course's long-note constraint applied) and settings. */
 export interface CourseStagePlan {
@@ -119,6 +124,17 @@ export class CourseSession {
   /** The lane options (both sides and DP FLIP) the course lets a stage play with, in place of the player's picks. */
   laneOptions(picked: CourseLaneOptions): CourseLaneOptions {
     return resolveCourseLaneOptions(this.course.definition.constraints, picked);
+  }
+
+  /**
+   * The settings a stage plays with in place of the player's picks: the lane options the course allows
+   * ({@link laneOptions}), then, on an LR2 GRADE course, LR2's resets (EASY gauge to GROOVE; HIDDEN / SUDDEN, auto
+   * scratch, FLIP and the tempo off; `resolveLr2GradeCoursePlaySettings`). The player's own settings are left as they
+   * are, so they come back after the course.
+   */
+  playSettings(picked: CourseStagePlaySettings): CourseStagePlaySettings {
+    const { definition } = this.course;
+    return resolveLr2GradeCoursePlaySettings(definition, { ...picked, ...this.laneOptions(picked) });
   }
 
   /**

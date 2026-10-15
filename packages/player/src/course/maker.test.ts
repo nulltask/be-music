@@ -84,7 +84,7 @@ describe('finishCourseDraft', () => {
   });
 
   it('reads like an LR2 grade course, and refuses an empty course', () => {
-    expect(finishCourseDraft(draftOf('grade', 1))?.constraints).toEqual(['grade_mirror', 'gauge_lr2']);
+    expect(finishCourseDraft(draftOf('grade', 1))?.constraints).toEqual(['grade', 'gauge_lr2']);
     expect(finishCourseDraft(draftOf('expert', 0))).toBeUndefined();
   });
 });
@@ -154,9 +154,9 @@ describe('serializeLr2CourseFile', () => {
 
 describe('course constraints', () => {
   it('starts a grade as an LR2 grade and the other kinds unconstrained', () => {
-    expect(defaultCourseMakerConstraints('grade')).toEqual(['grade_mirror', 'gauge_lr2']);
+    expect(defaultCourseMakerConstraints('grade')).toEqual(['grade', 'gauge_lr2']);
     expect(defaultCourseMakerConstraints('expert')).toEqual([]);
-    expect(finishCourseDraft(draftOf('grade', 1))!.constraints).toEqual(['grade_mirror', 'gauge_lr2']);
+    expect(finishCourseDraft(draftOf('grade', 1))!.constraints).toEqual(['grade', 'gauge_lr2']);
   });
 
   it('takes the constraints picked while making, one per group', () => {

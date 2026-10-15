@@ -512,6 +512,27 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       });
     },
   });
+  define('player-web.isLr2GradeCourse', {
+    run: () => {
+      playerWebCoreApi.isLr2GradeCourse(BENCH_COURSE_DEFINITION);
+    },
+  });
+  define('player-web.resolveLr2GradeCoursePlaySettings', {
+    run: () => {
+      playerWebCoreApi.resolveLr2GradeCoursePlaySettings(
+        { kind: 'grade', source: { format: 'lr2crs', type: 2, header: '0'.repeat(32), hash: '0'.repeat(64) } },
+        {
+          gauge: 'EASY',
+          hiddenSudden1P: 'SUDDEN',
+          hiddenSudden2P: 'OFF',
+          autoScratch1P: true,
+          autoScratch2P: false,
+          dpFlip: true,
+          tempo: 1.1,
+        },
+      );
+    },
+  });
   define('player-web.isCourseHiSpeedLocked', {
     run: () => {
       playerWebCoreApi.isCourseHiSpeedLocked(BENCH_COURSE_DEFINITION.constraints);

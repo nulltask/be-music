@@ -16,6 +16,7 @@ import {
   type RandomCourseDrawFailure,
 } from '@be-music/player/course';
 import type { PlaylogCourseStage } from '@be-music/player/playlog';
+import type { BeMusicGaugeType, BeMusicHiddenSudden } from '../skin/be-music/types.ts';
 import { resolveChartBpmRange } from '../chart/bpm-range.ts';
 import { resolveChartPlayVariant } from './collection.ts';
 import type { BrowserCourseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
@@ -309,6 +310,53 @@ export function resolveCourseLaneOptions(
     };
   }
   return { ...picked };
+}
+
+/**
+ * Whether a course is an LR2 GRADE course: one read from a `.lr2crs` file or made with the course maker. LR2 resets
+ * the player's play options when such a course starts ({@link resolveLr2GradeCoursePlaySettings}); a difficulty
+ * table's grade or a beatoraja course is not one.
+ */
+export function isLr2GradeCourse(definition: Pick<CourseDefinition, 'kind' | 'source'>): boolean {
+  return definition.kind === 'grade' && definition.source.format === 'lr2crs';
+}
+
+/** The play settings LR2 resets when a GRADE course starts. */
+export interface Lr2GradeResetSettings {
+  gauge: BeMusicGaugeType;
+  hiddenSudden1P: BeMusicHiddenSudden;
+  hiddenSudden2P: BeMusicHiddenSudden;
+  autoScratch1P: boolean;
+  autoScratch2P: boolean;
+  dpFlip: boolean;
+  /** The play tempo (1 = the chart's own). */
+  tempo: number;
+}
+
+/**
+ * The settings an LR2 GRADE course plays its stages with (OpenLR2 `Main.cpp` M1124-M1170, which LR2 applies when the
+ * course starts): an EASY gauge pick plays on GROOVE (LR2 also moves G-ATTACK there), HIDDEN / SUDDEN, the assists (auto
+ * scratch), DP FLIP and the play tempo (LR2's pitch) are turned off. A course that is not an LR2 GRADE course
+ * ({@link isLr2GradeCourse}) keeps the settings. The lane options are reset by the course's `grade` constraint
+ * ({@link resolveCourseLaneOptions}). LR2 writes the resets into its config; a host applies them to the course's
+ * stages only, so the player's own settings come back afterwards.
+ */
+export function resolveLr2GradeCoursePlaySettings<T extends Lr2GradeResetSettings>(
+  definition: Pick<CourseDefinition, 'kind' | 'source'>,
+  settings: T,
+): T {
+  // Spread over `settings` so the other fields a host carries along pass through.
+  if (!isLr2GradeCourse(definition)) return settings;
+  return {
+    ...settings,
+    gauge: settings.gauge === 'EASY' ? 'GROOVE' : settings.gauge,
+    hiddenSudden1P: 'OFF',
+    hiddenSudden2P: 'OFF',
+    autoScratch1P: false,
+    autoScratch2P: false,
+    dpFlip: false,
+    tempo: 1,
+  };
 }
 
 /** Whether the course forbids changing the hi-speed during play (`no_speed`). */
