@@ -62,6 +62,11 @@ describe('prepareLeaderboardSubmission', () => {
       ok: false,
       reason: 'not-rankable',
     });
+    // A play at another tempo is practice: skipped, with its own reason for the status line.
+    expect(prepareLeaderboardSubmission(recordedPlaylog({ tempo: 0.8 }), SOURCE, CHART_PATH)).toEqual({
+      ok: false,
+      reason: 'tempo',
+    });
     const withoutFingerprint = recordedPlaylog();
     delete withoutFingerprint.chart.playFingerprint;
     expect(prepareLeaderboardSubmission(withoutFingerprint, SOURCE, CHART_PATH)).toEqual({
@@ -182,6 +187,7 @@ describe('describeSkippedSubmission', () => {
     expect(describeSkippedSubmission('not-rankable')).toBe(
       'Leaderboard: not submitted (auto play, aborted runs and course stages are not ranked)',
     );
+    expect(describeSkippedSubmission('tempo')).toMatch(/another tempo is practice/);
     expect(describeSkippedSubmission('missing-fingerprint')).toMatch(/no chart fingerprint/);
     expect(describeSkippedSubmission('fingerprint-mismatch')).toMatch(/does not match/);
   });
@@ -292,6 +298,7 @@ describe('course submissions', () => {
 
   test('describeSkippedCourseSubmission names why a run was not sent', () => {
     expect(describeSkippedCourseSubmission('not-rankable')).toMatch(/auto play and aborted stages/);
+    expect(describeSkippedCourseSubmission('tempo')).toMatch(/another tempo is practice/);
     expect(describeSkippedCourseSubmission('missing-fingerprint')).toMatch(/no fingerprint/);
     expect(describeSkippedCourseSubmission('fingerprint-mismatch')).toMatch(/does not match/);
   });

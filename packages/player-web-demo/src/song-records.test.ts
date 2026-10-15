@@ -3,6 +3,7 @@ import type { PixiGameplayResultData } from '@be-music/player-web/scenes';
 import {
   CLEAR_LAMP_ORDER,
   clearLampRank,
+  isCourseRunAtAnotherTempo,
   mergeSongRecord,
   parseSongRecords,
   serializeSongRecords,
@@ -104,5 +105,21 @@ describe('parseSongRecords / serializeSongRecords', () => {
       },
     });
     expect([...parseSongRecords(raw)]).toEqual([['ok', { lamp: 'HARD', playCount: 4 }]]);
+  });
+});
+
+describe('isCourseRunAtAnotherTempo', () => {
+  const played = (tempo?: number) =>
+    ({ played: true, playlog: { play: tempo === undefined ? {} : { tempo } } }) as unknown as Parameters<
+      typeof isCourseRunAtAnotherTempo
+    >[0]['stages'][number];
+  const unreached = { played: false, facts: {} } as unknown as ReturnType<typeof played>;
+
+  it('flags a run with any stage played at another tempo', () => {
+    expect(isCourseRunAtAnotherTempo({ stages: [played(), played(0.8), unreached] })).toBe(true);
+  });
+
+  it('keeps a run played at the charts’ own tempo', () => {
+    expect(isCourseRunAtAnotherTempo({ stages: [played(), played(1), unreached] })).toBe(false);
   });
 });

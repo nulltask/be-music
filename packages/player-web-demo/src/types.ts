@@ -1,4 +1,5 @@
 import type { SkinFamilyId, loadTextureFromBytes } from '@be-music/player-web/skin';
+import type { PlayTempoSettings } from './play-tempo-settings.ts';
 
 /**
  * DOM handles passed into the `PlayerWebDemoApp` constructor. The lookups happen once at boot in `main.ts`; the app
@@ -54,7 +55,7 @@ export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
  * `controller.updateDisplay()` and the GUI reflects the new value. Function members are bound to the host so `this`
  * keeps its meaning when lil-gui invokes them.
  */
-export interface DemoGuiState {
+export interface DemoGuiState extends PlayTempoSettings {
   autoPlay: boolean;
   /** Id of the be-music skin the default (no-theme) family renders with. Persisted in `localStorage`. */
   builtInSkin: string;
@@ -145,13 +146,7 @@ export interface DemoGuiState {
    * LR2's binary does, including its third-stage start offset (`planNonstopCourse`).
    */
   nonstopPlacement: 'intended' | 'lr2';
-  /**
-   * How a NONSTOP FIT stage follows the previous stage's tempo: `'pitch'` (the default, as LR2) plays its sound faster or
-   * slower so the pitch moves too; `'keep-pitch'` stretches the sound and keeps its pitch.
-   */
-  nonstopFitMode: 'pitch' | 'keep-pitch';
-  /** The time stretcher keep pitch uses: Signalsmith Stretch (the default) or WSOLA. */
-  nonstopStretchAlgorithm: 'signalsmith' | 'wsola';
+  /** `tempoPercent` / `tempoPitchMode` / `tempoStretchAlgorithm`: see {@link PlayTempoSettings}. */
   /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
    * in anonymously the first time (docs/leaderboard.md). Toggled from the Debug Menu's "Submit to Leaderboard"
