@@ -8,9 +8,9 @@
   "scripts": {
     "prepare": "node --experimental-strip-types scripts/generate.ts",
     "generate": "node scripts/generate.ts",
-    "dev": "node scripts/generate.ts && cf dev",
-    "deploy": "node scripts/generate.ts && cf deploy",
-    "deploy:preview": "node scripts/generate.ts && cf deploy --mode preview",
+    "dev": "node scripts/generate.ts && pnpm run build:worker && cf dev",
+    "deploy": "node scripts/generate.ts && pnpm run build:worker && cf deploy",
+    "deploy:preview": "node scripts/generate.ts && pnpm run build:worker && cf deploy --mode preview",
     "secrets:preview": "node scripts/put-secrets.ts preview",
     "secrets:production": "node scripts/put-secrets.ts production",
     "db:generate": "drizzle-kit generate",
@@ -21,7 +21,8 @@
     "build:css": "node scripts/build-css.ts",
     "build:icons": "node scripts/build-icons.ts",
     "build:fonts": "node scripts/build-fonts.ts",
-    "build:client": "node scripts/build-client.ts"
+    "build:client": "node scripts/build-client.ts",
+    "build:worker": "vp build --config vite.worker.config.ts"
   },
   "dependencies": {
     "@be-music/chart": "workspace:*",

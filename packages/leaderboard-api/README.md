@@ -26,10 +26,14 @@ Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, and OG cards.
 
 ## Setup
 
-Workspace packages are bundled from their `dist`, so build them first:
+The Worker is bundled by Vite+ into `dist/worker.js` (`build:worker`, configured in `vite.worker.config.ts`), which is
+the entrypoint `cloudflare.config.ts` deploys. It reads the workspace packages' sources through their `source` export
+condition, so they need no build of their own. `cf` bundles its entrypoint with its own esbuild, which knows nothing of
+that condition; it only re-reads the finished bundle. `dev` and the deploys run `build:worker` first. After changing
+`src/` while `cf dev` runs, rebuild and `cf dev` reloads:
 
 ```bash
-pnpm run build
+pnpm --filter @be-music/leaderboard-api run build:worker
 ```
 
 The resources already exist in the be-music account (D1 and R2 in APAC, one of each per environment); their D1 ids
