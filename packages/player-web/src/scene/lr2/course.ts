@@ -1,4 +1,4 @@
-import type { CourseKind, NonstopConnection } from '@be-music/player/course';
+import type { CourseDraft, CourseKind, NonstopConnection } from '@be-music/player/course';
 import type { SceneCourseInfo } from '../course-info.ts';
 
 /**
@@ -95,3 +95,80 @@ export function resolveLr2NonstopStage(
   });
   return shown;
 }
+
+/**
+ * LR2's course-maker ops (OpenLR2 L5779-L5808): 571 while a course is being made, 572 otherwise, and 590 + the number
+ * of songs added so far (590-599) while making. When not making, 580 + N (580-589) light while the selected course has
+ * more than N stages. (OpenLR2 marks 571 / 572 as falling through to the next case, a decompilation artefact; this
+ * follows the evident intent.)
+ */
+export const LR2_COURSE_MAKER_OPS = { STAGES_OVER: 580, MAKING: 571, NOT_MAKING: 572, SONGS_ADDED: 590 } as const;
+
+export function resolveLr2CourseMakerOps(draft: CourseDraft | undefined, selectedStageCount = 0): number[] {
+  if (draft !== undefined) {
+    return [LR2_COURSE_MAKER_OPS.MAKING, LR2_COURSE_MAKER_OPS.SONGS_ADDED + Math.min(draft.stages.length, 9)];
+  }
+  const ops: number[] = [LR2_COURSE_MAKER_OPS.NOT_MAKING];
+  for (let count = 0; count < Math.min(selectedStageCount, 10); count += 1)
+    ops.push(LR2_COURSE_MAKER_OPS.STAGES_OVER + count);
+  return ops;
+}
+
+/**
+ * The course a select skin shows while one is being made: LR2 draws the songs added so far on texts 150-154 / 160-164
+ * and the name being typed on text 170 (`namePrompt` while it is empty), in place of the selected bar's course
+ * (OpenLR2 L8408-L8414).
+ */
+export function resolveLr2CourseDraftInfo(draft: CourseDraft, namePrompt = ''): SceneCourseInfo {
+  return {
+    kind: draft.kind,
+    title: draft.name.length > 0 ? draft.name : namePrompt,
+    stages: draft.stages.map((stage) => ({ title: stage.title ?? '' })),
+  };
+}
+
+/** LR2 text 198: the connection a new NONSTOP course gets (its `config.course.defaultconnection`). */
+export function resolveLr2CourseMakerText(st: number, defaultConnection: NonstopConnection): string | undefined {
+  return st === 198 ? LR2_CONNECTION_LABELS[defaultConnection] : undefined;
+}
+
+/** What an LR2 select button does to the player's courses (OpenLR2 L11063-L11137). */
+export type Lr2CourseMakerAction =
+  | { kind: 'finish' }
+  | { kind: 'cancel' }
+  | { kind: 'delete' }
+  | { kind: 'connection'; slot: number }
+  | { kind: 'default-connection' };
+
+/**
+ * The course-maker action of an LR2 select button type: 230 finishes the course being made, 231 cancels it, 233 deletes
+ * the selected course, 240-248 step the connection after stage 1-9 of the selected NONSTOP course and 268 the default
+ * connection. `undefined` for any other button.
+ */
+export function resolveLr2CourseMakerAction(type: number): Lr2CourseMakerAction | undefined {
+  if (type === 230) return { kind: 'finish' };
+  if (type === 231) return { kind: 'cancel' };
+  if (type === 233) return { kind: 'delete' };
+  if (type >= 240 && type <= 248) return { kind: 'connection', slot: type - 240 };
+  if (type === 268) return { kind: 'default-connection' };
+  return undefined;
+}
+
+/**
+ * The cell an LR2 select button draws for the player's courses: buttons 240-248 show the selected NONSTOP course's
+ * connection after stage 1-9 and 268 the default connection, each by its index in LR2's order (`ButtonByInput` draws the
+ * value it edits). `undefined` for other buttons.
+ */
+export function resolveLr2CourseMakerButtonState(
+  type: number,
+  course: SceneCourseInfo | undefined,
+  defaultConnection: NonstopConnection,
+): number | undefined {
+  const action = resolveLr2CourseMakerAction(type);
+  if (action?.kind === 'default-connection') return LR2_CONNECTION_ORDER.indexOf(defaultConnection);
+  if (action?.kind !== 'connection') return undefined;
+  if (course?.kind !== 'nonstop') return 0;
+  return Math.max(0, LR2_CONNECTION_ORDER.indexOf(course.connections?.[action.slot] ?? 'fade'));
+}
+
+const LR2_CONNECTION_ORDER = Object.keys(LR2_CONNECTION_LABELS) as NonstopConnection[];

@@ -55,12 +55,14 @@ export function browseEntryTitle(entry: BrowserBrowseEntry): string {
 export function browseEntryCount(entry: BrowserBrowseEntry): string | undefined {
   if (entry.kind === 'song') return undefined;
   if (entry.kind === 'course') {
+    if (entry.course.newCourse === true) return 'make a course';
     const stages = entry.course.stages.length;
     if (entry.course.random !== undefined) return `${stages} stage${stages === 1 ? '' : 's'} · random`;
     const missing = entry.course.stages.filter((stage) => stage.song === undefined).length;
     return `${stages} stage${stages === 1 ? '' : 's'}${missing > 0 ? ` · ${missing} missing` : ''}`;
   }
-  const courses = entry.folder.courses;
+  // A NEW COURSE bar is not a course.
+  const courses = entry.folder.courses?.filter((course) => course.newCourse !== true);
   if (courses !== undefined) return `${courses.length} course${courses.length === 1 ? '' : 's'}`;
   const charts = entry.folder.songs.length;
   return `${charts} chart${charts === 1 ? '' : 's'}`;
@@ -72,6 +74,9 @@ export function browseEntryCount(entry: BrowserBrowseEntry): string | undefined 
  */
 export function browseEntryBadge(entry: BrowserBrowseEntry): string {
   if (entry.kind === 'folder') return 'DIR';
-  if (entry.kind === 'course') return entry.course.definition.kind === 'grade' ? 'DAN' : 'CRS';
+  if (entry.kind === 'course') {
+    if (entry.course.newCourse === true) return 'NEW';
+    return entry.course.definition.kind === 'grade' ? 'DAN' : 'CRS';
+  }
   return entry.song.playLevel !== undefined ? String(entry.song.playLevel) : '-';
 }

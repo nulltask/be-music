@@ -60,6 +60,13 @@ export interface BrowserCourseEntry {
   playable: boolean;
   /** Set on a random course: the definition its stages are drawn from. */
   random?: RandomCourseDefinition;
+  /**
+   * LR2's NEW COURSE bar, closing a list of the player's own courses: deciding it starts making a course of
+   * `definition.kind` (no stages yet). A host routes it through its course-select callback.
+   */
+  newCourse?: true;
+  /** A course the player made: it can be renamed and deleted, and a NONSTOP one's connections edited. */
+  editable?: true;
 }
 
 /**
