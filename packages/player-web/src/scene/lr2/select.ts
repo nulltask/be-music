@@ -1,7 +1,5 @@
 import { Color, Container, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import type {
-  Lr2BarBodyKind,
-  Lr2BarBodySource,
   Lr2BarBodySlot,
   Lr2BarFlashElement,
   Lr2BarLevelKind,
@@ -32,6 +30,7 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
+import { pickLr2BarBody } from './bar-body.ts';
 import {
   computeSelectOps,
   resolveKeyModeOp,
@@ -1159,7 +1158,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       if (!isDestinationVisible(dst, ops, this.timerActive)) {
         continue;
       }
-      const body = pickBarBody(layout.bodies, entry);
+      const body = pickLr2BarBody(layout.bodies, entry);
       if (body) {
         const texture = this.skinTextures.get(body.source.imagePath);
         if (texture) {
@@ -1458,36 +1457,6 @@ export function isInsideLr2DefaultSearchBox(input: Lr2DefaultSearchBoxHitTestInp
 function containsPoint(rect: Lr2DestinationRect, x: number, y: number): boolean {
   const r = normalizeRect(rect);
   return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-}
-
-/**
- * Picks the bar-body sprite definition for a slot. Maps the entry kind onto the matching `#SRC_BAR_BODY` art — a folder
- * of courses gets the course-folder body, a course bar the course body — falling back to a `'song'` body when the skin
- * doesn't define that variant, and finally the first available body. Slots with no entry (i.e. out-of-range when the cursor is near the start / end of the list)
- * still get a body sprite so the empty slats keep rendering — that matches LR2's behavior where the rail draws even
- * past the end of the song list.
- */
-function pickBarBody(
-  bodies: ReadonlyArray<Lr2BarBodySource>,
-  entry: BrowserBrowseEntry | undefined,
-): Lr2BarBodySource | undefined {
-  if (bodies.length === 0) {
-    return undefined;
-  }
-  const kind: Lr2BarBodyKind =
-    entry?.kind === 'folder'
-      ? entry.folder.courses !== undefined
-        ? 'courseFolder'
-        : 'folder'
-      : entry?.kind === 'course'
-        ? 'course'
-        : 'song';
-  return (
-    bodies.find((body) => body.kind === kind) ??
-    (kind === 'courseFolder' ? bodies.find((body) => body.kind === 'folder') : undefined) ??
-    bodies.find((body) => body.kind === 'song') ??
-    bodies[0]
-  );
 }
 
 /**

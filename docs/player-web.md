@@ -121,7 +121,7 @@ Courses play through the same select → play → result scenes. See [Courses an
   - A course with a stage missing from the collection is listed but cannot be started.
   - Skins:
     - The be-music skins show the course name, its stage count and the missing stages.
-    - LR2 skins use the `courseFolder` and `course` bar bodies.
+    - LR2 skins use the `courseFolder` and `course` bar bodies, and for a NEW COURSE bar and a random course the `courseCreate` (7) and `randomCourse` (9) bodies, falling back to `course` (8).
     - beatoraja skins light `GRADEBAR` (op 3) and draw the `bar-grade` frame, or `bar-nosong` when a stage is missing.
 - **Play:**
   - Starting a course shows the decide screen once, before the first stage, naming the course as LR2's does (the selected bar's title); backing out of it drops the course. A NONSTOP course's quick retry skips it, as LR2's does.
