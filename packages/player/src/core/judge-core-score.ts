@@ -1,7 +1,8 @@
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import type { JudgeWindowSetUs, RulesetConfig, RulesetWindowTables } from '../ruleset/definitions.ts';
 import { judgeWindowEarlyReachUs, judgeWindowLateReachUs, selectJudgeWindowSet } from '../ruleset/judge.ts';
-import { longNoteOwesTailMiss } from '../ruleset/long-note.ts';
+import { longNoteOwesTailMiss, noteLateReachUs } from '../ruleset/long-note.ts';
+import type { GaugeJudgeIndex } from '../ruleset/gauge.ts';
 import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import { isLongPlayableNote, resolveRulesetLongNoteMode, type TimedManualJudge } from './judge-rules.ts';
 import { applyJudgeToSummary, type JudgeKind } from './scoring.ts';
@@ -100,7 +101,34 @@ export function badWindowSeconds(config: JudgeCoreConfig): number {
  * already scrolled past under the old rank. The play-log simulator freezes the same per-note deadline.
  */
 export function resolveMissDeadlineSeconds(config: JudgeCoreConfig, note: TimedPlayableNote): number {
-  return judgeWindowLateReachUs(judgeWindowsFor(config, note.channel, note.seconds)) / 1e6;
+  return resolveNoteLateReachUs(config, note) / 1e6;
+}
+
+function resolveNoteLateReachUs(config: JudgeCoreConfig, note: TimedPlayableNote): number {
+  const { ruleset } = config;
+  return noteLateReachUs(
+    ruleset,
+    judgeWindowsFor(config, note.channel, note.seconds),
+    resolveRulesetLongNoteMode(ruleset.longNoteStyle, note),
+  );
+}
+
+/**
+ * A chart instant in whole microseconds, the play log's clock. Timed judgments (tails, misses, auto notes, mines) are
+ * scheduled on it, so the engine and the play-log simulator see the same instants and the same ties.
+ */
+export function toJudgeUs(seconds: number): number {
+  return Math.round(seconds * 1e6);
+}
+
+/** The microsecond past which a note can no longer be pressed: it is missed once time has moved beyond it. */
+export function resolveMissDeadlineUs(config: JudgeCoreConfig, note: TimedPlayableNote): number {
+  return toJudgeUs(note.seconds) + resolveNoteLateReachUs(config, note);
+}
+
+/** Channel order, the tie-break for timed judgments that fall on the same microsecond. */
+export function compareJudgeChannels(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 // ---- score ----------------------------------------------------------------------------------------------------
@@ -141,6 +169,34 @@ export function applyGaugeDelta(
     kind: 'gauge',
     seconds,
     reason,
+    delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
+  });
+}
+
+/**
+ * One Hell Charge tick on the gauge (see `HcnTickCounter`): the ruleset's held tick while the lane gains, its released
+ * tick while it loses (beatoraja: GREAT ×0.5 and BAD ×0.5 of the judge table).
+ */
+export function applyHcnGaugeTick(
+  state: JudgeCoreState,
+  seconds: number,
+  gain: boolean,
+  emit: JudgeCoreEffectSink,
+): void {
+  const tick = state.config.ruleset.hcnTick;
+  const previousGauge = state.summary.gauge?.current;
+  state.applyGaugeTick(
+    (gain ? tick.heldJudge : tick.releasedJudge) as GaugeJudgeIndex,
+    gain ? tick.heldRate : tick.releasedRate,
+  );
+  const nextGauge = state.summary.gauge?.current;
+  if (previousGauge === nextGauge) {
+    return;
+  }
+  emit({
+    kind: 'gauge',
+    seconds,
+    reason: gain ? 'hold-gain' : 'hold-drain',
     delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
   });
 }

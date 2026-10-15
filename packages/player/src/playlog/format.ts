@@ -145,6 +145,11 @@ export interface PlaylogPlay {
   randomDraws?: RandomDraw[];
   /** True when the play ended early (ESC). The input stream stops at the abort point. */
   aborted?: boolean;
+  /**
+   * Chart time (µs) the judge had settled through when the play was aborted: everything due before it was judged,
+   * nothing from it on. Re-simulations stop there instead of missing the rest of the chart. Absent on older logs.
+   */
+  abortedAtUs?: number;
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
   native?: Record<string, string | number | boolean | null>;
 }
@@ -483,6 +488,7 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     parsed.randomDraws = parseRandomDraws(play.randomDraws);
   }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
+  if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');
     const copied: Record<string, string | number | boolean | null> = {};

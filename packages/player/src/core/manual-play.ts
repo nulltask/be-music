@@ -92,9 +92,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const judgeRuleset: JudgeWindowRuleset = options.judgeRuleset ?? 'lr2';
   const resolvedChart = resolveEngineChart(resolvedJson, options);
   const timingResolver = resolvedChart.timing;
-  // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
-  // non-LR2 rulesets keep their initial windows for the whole chart.
-  const dynamicJudgeRankChanges = judgeRuleset === 'lr2' ? resolvedChart.judgeRank.changes : [];
+  // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
+  // IIDX keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
+  // be re-simulated under LR2 with the windows LR2 would have used.
+  const dynamicJudgeRankChanges = resolvedChart.judgeRank.changes;
   const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedChart);
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
@@ -122,7 +123,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     renderNotes,
     laneBindings,
     laneDisplayMode,
-    activeFreeZoneChannels,
     scorableNotes,
     inputTokenToChannels,
   } = playbackChart;
@@ -138,11 +138,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
   );
 
+  // The gauge the play runs on and the play log records: one value, so a re-simulation runs the same gauge. A host that
+  // only declared it for the log (`recordPlaylog.gauge`) gets it played too.
+  const selectedGauge = options.gauge ?? options.recordPlaylog?.gauge;
   const ruleset = resolveRuleset(
     rulesetChartFactsFromChart(resolvedJson, playbackChart, dynamicJudgeRankChanges),
     judgeRuleset,
     {
-      ...(options.gauge !== undefined ? { selectedGauge: options.gauge } : {}),
+      ...(selectedGauge !== undefined ? { selectedGauge } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
     },
   );
@@ -160,7 +163,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       landmineNotes,
       invisibleNotes,
       laneSoundNotes,
-      freeZoneChannels: activeFreeZoneChannels,
       scratchChannels: scratchPlayableChannels,
       autoScratch: autoScratchEnabled,
       // Live play runs the hold-grace windows on the playback clock (wall-clock milliseconds). A replay has no wall
@@ -185,6 +187,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         const { chartSha256, chartMd5, recorder, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
         return createPlaylogRecorder({
           json: resolvedJson,
+          moneyScore: ruleset.moneyScore,
           chart: playbackChart,
           chartSha256,
           chartMd5,
@@ -201,6 +204,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             judgeRuleset: options.judgeRuleset,
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
             ...hostPlaySettings,
+            gauge: selectedGauge,
           },
         });
       })()
@@ -556,8 +560,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     });
   };
 
-  // Replay playback — recorded play-log inputs re-driven at their exact chart-relative timestamps on the judge core's
-  // fixed chart-time grid (`advanceJudgeCoreReplay`), so the replayed judgments are independent of tick timing.
+  // Replay playback — recorded play-log inputs re-driven at their exact chart-relative timestamps, stepping the judge
+  // core from one judgment instant to the next (`advanceJudgeCoreReplay`), so the replayed judgments are independent
+  // of tick timing.
   const replay = options.replayInputs !== undefined ? createJudgeCoreReplay(options.replayInputs) : undefined;
 
   // A held play (`holdAfterChart`) runs past its horizon until the host ends it.
@@ -661,7 +666,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       if (playlogRecorder) {
         options.onPlaylogRecorded?.(
-          playlogRecorder.finalize({ summary, maxCombo: judgeCore.scoreTracker.maxCombo, aborted: true }),
+          playlogRecorder.finalize({
+            summary,
+            maxCombo: judgeCore.scoreTracker.maxCombo,
+            aborted: true,
+            abortedAtSeconds: judgeCore.advancedThroughSeconds,
+          }),
         );
       }
       writeOutput(renderSummary(summary, ruleset.moneyScore));

@@ -13,6 +13,8 @@ export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
     'playlog.parsePlaylog': playlogApi.parsePlaylog,
     'playlog.simulatePlaylog': playlogApi.simulatePlaylog,
     'playlog.simulatePlaylogRulesets': playlogApi.simulatePlaylogRulesets,
+    'playlog.computeScoreRate': playlogApi.computeScoreRate,
+    'playlog.resolveIidxRankLabel': playlogApi.resolveIidxRankLabel,
   },
   registerCases: registerPlayerExportsCases,
 };
