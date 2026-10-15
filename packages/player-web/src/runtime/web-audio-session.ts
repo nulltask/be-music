@@ -5,6 +5,7 @@ import {
   parseBmsDynamicVolumeGain,
   usesMonophonicWavPlayback,
 } from '@be-music/chart';
+import type { WebAudioStageMixer } from './nonstop-audio.ts';
 import {
   normalizeChannel,
   normalizeObjectKey,
@@ -71,6 +72,11 @@ export interface WebAudioSessionContext {
    * renderer and judge if the host's renderer references a different anchor.
    */
   getChartStartContextTime?: () => number;
+  /**
+   * A stitched NONSTOP chart's stages (`createNonstopStageMixer`): each sample plays at its stage's rate (FIT changes
+   * the pitch), and a stage's background voices go through its fade instead of straight to the BGM bus.
+   */
+  stageMixer?: WebAudioStageMixer;
 }
 
 /**
@@ -119,7 +125,8 @@ export interface WebAudioSession extends AudioSession {
  * of the most recent `BufferSourceNode` triggered for that channel and calls `node.stop()` when asked.
  */
 export function createWebAudioSession(context: WebAudioSessionContext): WebAudioSession {
-  const { audioContext, audioBus, chart, decodedSamples, wavCmdVolumeMultipliers, bmsonSlicePlayback } = context;
+  const { audioContext, audioBus, chart, decodedSamples, wavCmdVolumeMultipliers, bmsonSlicePlayback, stageMixer } =
+    context;
   const resolveChartStartContextTime = context.getChartStartContextTime ?? (() => 0);
   const sampleIdBase = resolveBmsBase(chart);
   /** Active BufferSource per `#WAVxx` slot. Used to honor bmson `c = true` (skip retrigger of a still-playing sample)
@@ -153,13 +160,20 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   const buildSourceNode = (
     sampleKey: string,
     path: string,
-    bus: GainNode,
+    bus: AudioNode,
     dynamicGain: number,
   ): WebAudioSourceHandle | undefined => {
     const buffer = decodedSamples.get(normalizePath(path).toLowerCase());
     if (!buffer) return undefined;
     const node = audioContext.createBufferSource();
     node.buffer = buffer;
+    const stage = stageMixer?.stageOf(sampleKey);
+    if (stage !== undefined) {
+      const rate = stageMixer!.rate(stage);
+      if (rate !== 1) node.playbackRate.value = rate;
+      // A stage's background voices go through its fade; the player's keysounds stay on the key bus.
+      if (bus === audioBus.bgmMixer) bus = stageMixer!.bgmInput(stage) ?? bus;
+    }
     let gain: GainNode | undefined;
     const combinedGain = (wavCmdVolumeMultipliers.get(sampleKey) ?? 1) * dynamicGain;
     if (combinedGain !== 1) {

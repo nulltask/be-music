@@ -460,6 +460,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       recorder.dispose();
     },
   });
+  define('player-web.createNonstopAssets', {
+    run: () => {
+      const assets = playerWebCoreApi.createNonstopAssets([
+        { chart: BENCH_SONG.chart, source: BENCH_SOURCE, chartPath: BENCH_SONG.chartPath },
+        { chart: BENCH_SONG.chart, source: BENCH_SOURCE, chartPath: BENCH_SONG.chartPath },
+      ]);
+      assets.assetPath(0, 'wav', 'kick.wav');
+      assets.assetPath(1, 'bmp', 'banner.png');
+    },
+  });
   define('player-web.isCourseFilePath', {
     run: () => {
       playerWebCoreApi.isCourseFilePath('Songs/dan.lr2crs');
