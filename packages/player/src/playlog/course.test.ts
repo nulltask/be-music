@@ -54,7 +54,9 @@ describe('course results', () => {
     };
     expect(resolveCourseLamp('lr2', base, 'GROOVE')).toBe('NORMAL');
     expect(resolveCourseLamp('lr2', base, 'EASY')).toBe('EASY');
-    expect(resolveCourseLamp('lr2', base, 'DEATH')).toBe('HARD');
+    expect(resolveCourseLamp('lr2', base, 'HARD')).toBe('HARD');
+    // LR2 awards HARD only for its HARD-family gauges: a DEATH clear is NORMAL.
+    expect(resolveCourseLamp('lr2', base, 'DEATH')).toBe('NORMAL');
     expect(resolveCourseLamp('beatoraja', { ...base, gauge: { ...base.gauge, type: 'EXHARDCLASS' } }, 'GROOVE')).toBe(
       'EX_HARD',
     );

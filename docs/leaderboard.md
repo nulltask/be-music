@@ -232,6 +232,8 @@ turning a play document's positions and timeline into note times that match the 
   (`play.tempo` other than 1, the web player's tempo slider) are refused as `tempo`: they are practice, as beatoraja's
   frequency trainer does not save its scores. **Failed plays** (the gauge
   emptied) are stored and count as plays.
+- **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear (LR2body.exe `CheckClear`);
+  beatoraja and IIDX give DEATH (`HAZARD`) an EX HARD lamp. Every ruleset counts empty POORs in BP, LR2 included. Migration `0012` rewrote the `lr2` results stored before this rule.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
   play that was not aborted, cleared or not.
@@ -250,7 +252,8 @@ with its own rankings per ruleset, and never as single-chart plays.
 
 - **Course identity.** A course is keyed by its **course fingerprint** (`bmcourse0:<sha256>`,
   `computeCourseFingerprint` in `@be-music/player/playlog`): its kind, its constraints (normalized and sorted) and its
-  stages' chart fingerprints in order. The name and trophies are left out, so the same course read from a `.lr2crs`,
+  stages' chart fingerprints in order, and for a NONSTOP course its connections and placement mode, which decide the
+  stitched chart. The name and trophies are left out, so the same course read from a `.lr2crs`,
   a beatoraja course file or a table shares one board whenever its charts match. A random course is keyed by the
   stages it drew. A failed run is keyed too: the course play log carries the chart fingerprint of every stage it never
   reached ([playlog.md](./playlog.md#course-play-logs)).

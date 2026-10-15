@@ -273,7 +273,7 @@ flowchart TD
 - `chart/play-audio.ts` builds the play's AudioContext and bus (with `#VOLWAV`), decodes the `#WAV` samples under the key the audio session looks them up by, stretches them for a keep-pitch tempo, and folds the `#WAVCMD` / `#EXWAV` volumes.
 - `chart/play-bga.ts` picks the BGA resources a play needs (`#BMPxx`, bmson `bga.header`, the sources of `#BGAxx` sub-regions, the implicit `#BMP00` POOR image for the LR2 view), decodes stills through the shared texture loader and videos through the video loader, keys the BMS layer track's black out, and cuts the sub-region views.
 - `scene/play-ending.ts` times the end of a play: a lead-out of about two measures after the last note, in chart time, then the theme or skin fade-out; a play cut short by its gauge emptying skips the lead-out and fades its sound and picture for at least 1.5 s.
-- `resolveClearLamp` is the one clear-lamp rule. The beatoraja result and select show it through `beatorajaClearLampOp`, and the demo records every family's plays with it.
+- `resolveClearLamp` is the one clear-lamp rule. The beatoraja result and select show it through `beatorajaClearLampOp`, and the demo records every family's plays with it. It keeps the lamp to the judge ruleset's own set: under LR2 and IIDX a full combo is the top lamp (no PERFECT or MAX), and under LR2 a DEATH clear is NORMAL, as on the Leaderboard.
 
 ## Note visibility
 

@@ -1,5 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
-import { parseBeatorajaCourseData, parseLr2CourseFile } from '@be-music/player/course';
+import { parseBeatorajaCourseData, parseLr2CourseFile, type NonstopConnection } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import type { BeMusicSongRecord } from '@be-music/player-web/skin';
@@ -184,6 +184,20 @@ describe('CourseSession', () => {
     const a = courseRecordKey(course(['MIRROR', 'GAUGE_LR2']));
     expect(a).toBe(courseRecordKey(course(['GAUGE_LR2', 'MIRROR'])));
     expect(a).toBe(`course:grade:gauge_lr2+grade_mirror:${MD5.join(',')}`);
+  });
+
+  test('courseRecordKey keys a NONSTOP course by its connections and placement', () => {
+    const base = course([]);
+    const nonstop = (connections: NonstopConnection[]): BrowserCourseEntry => ({
+      ...base,
+      definition: { ...base.definition, kind: 'nonstop', connections },
+    });
+    const key = courseRecordKey(nonstop(['fade', 'cut', 'blank1']), 'intended');
+    expect(key).toBe(courseRecordKey(nonstop(['fade', 'cut', 'blank1', 'blank2']), 'intended'));
+    expect(key).not.toBe(courseRecordKey(nonstop(['cut', 'cut', 'blank1']), 'intended'));
+    expect(key).not.toBe(courseRecordKey(nonstop(['fade', 'cut', 'blank1']), 'lr2'));
+    // Other course kinds have no connections, so the placement does not split them.
+    expect(courseRecordKey(base, 'lr2')).toBe(courseRecordKey(base));
   });
 });
 
