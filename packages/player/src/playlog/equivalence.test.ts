@@ -384,6 +384,24 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // A press on a lane whose long note was already let go is an ordinary press: no window after the release, and no
+  // waiting for the tail, keeps it from charging an empty POOR.
+  test.each(RULESETS)('%s: a press after an LN was let go is judged as any other press', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 3, channel: '11', position: [0, 1], value: 'AA' },
+      { measure: 3, channel: '11', position: [1, 4], value: '01' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    const inputs = [down(0, 1_000_000, '11'), up(1, 1_500_000, '11'), down(2, 2_900_000, '11'), up(3, 2_950_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.emptyPoor).toBe(simulated.judge.emptyPoor);
+    expect(summary.emptyPoor).toBe(1);
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 

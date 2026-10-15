@@ -256,8 +256,10 @@ export function handleLanePress(
       // Active LN re-tap inside the hold-grace window — input is part of the sustain, not a phantom press.
       return;
     }
-    if (isLongNoteRepeatSuppressedInput(state, candidateChannels, nowSec)) {
-      // LN repeat-suppress window — same intent as the hold path above, just on the cooldown side.
+    if (!state.keyStateInput && isLongNoteRepeatSuppressedInput(state, candidateChannels, nowSec)) {
+      // LN repeat-suppress window — terminal key repeat without release events re-sends the key that played a long
+      // note, so a note-less press on its lane before the tail is not a phantom. With key-state input every press is a
+      // real press and is judged as LR2 and beatoraja judge it.
       return;
     }
     const fallback = findLaneSoundCandidate(
