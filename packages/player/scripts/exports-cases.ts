@@ -224,6 +224,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseApi.createNonstopStageTiming(benchNonstopChart);
     },
   });
+  const benchNonstopInputs = [benchNonstopChart, benchNonstopChart, benchNonstopChart].map((chart) => ({ chart }));
+  define('player.course.stitchNonstopCourse', {
+    run: () => {
+      courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
+    },
+  });
   define('player.course.planNonstopCourse', {
     run: () => {
       courseApi.planNonstopCourse(benchNonstopStages, ['fade', 'cut-fit', 'blank1']);
