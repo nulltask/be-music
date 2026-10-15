@@ -92,9 +92,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const judgeRuleset: JudgeWindowRuleset = options.judgeRuleset ?? 'lr2';
   const resolvedChart = resolveEngineChart(resolvedJson, options);
   const timingResolver = resolvedChart.timing;
-  // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
-  // non-LR2 rulesets keep their initial windows for the whole chart.
-  const dynamicJudgeRankChanges = judgeRuleset === 'lr2' ? resolvedChart.judgeRank.changes : [];
+  // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
+  // IIDX keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
+  // be re-simulated under LR2 with the windows LR2 would have used.
+  const dynamicJudgeRankChanges = resolvedChart.judgeRank.changes;
   const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedChart);
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
