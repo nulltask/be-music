@@ -65,9 +65,10 @@ describe('mergeSongRecord', () => {
 describe('songRecordPlayFromResult', () => {
   const score = { total: 10, perfect: 5, great: 2, good: 1, bad: 1, poor: 1, emptyPoor: 4, exScore: 12, score: 0 };
 
-  it('reads the lamp, EX score, max combo, and BAD + POOR', () => {
+  it('reads the lamp, EX score, max combo, and BAD + POOR + empty POOR', () => {
     const data = { score, maxCombo: 6, cleared: true, lamp: 'EASY' } as PixiGameplayResultData;
-    expect(songRecordPlayFromResult(data)).toEqual({ lamp: 'EASY', exScore: 12, maxCombo: 6, missCount: 2 });
+    // Empty POORs count in BP, as LR2, beatoraja and the Leaderboard count them.
+    expect(songRecordPlayFromResult(data)).toEqual({ lamp: 'EASY', exScore: 12, maxCombo: 6, missCount: 6 });
   });
 
   it('falls back to the gauge verdict without a lamp', () => {
@@ -163,6 +164,7 @@ describe('songRecordPlayFromSummary', () => {
     good: 0,
     bad: 0,
     poor: 0,
+    emptyPoor: 0,
     exScore: 20,
     gauge: { type: 'HARD', cleared: true },
   } as Parameters<typeof songRecordPlayFromSummary>[0];
@@ -171,9 +173,9 @@ describe('songRecordPlayFromSummary', () => {
     expect(songRecordPlayFromSummary(summary, 10)).toEqual({ lamp: 'MAX', exScore: 20, maxCombo: 10, missCount: 0 });
   });
 
-  it('records a failed gauge as FAILED and counts BAD + POOR as misses', () => {
-    const failed = { ...summary, perfect: 6, bad: 1, poor: 3, gauge: { type: 'HARD', cleared: false } };
-    expect(songRecordPlayFromSummary(failed as typeof summary, 4)).toMatchObject({ lamp: 'FAILED', missCount: 4 });
+  it('records a failed gauge as FAILED and counts BAD + POOR + empty POOR as misses', () => {
+    const failed = { ...summary, perfect: 6, bad: 1, poor: 3, emptyPoor: 2, gauge: { type: 'HARD', cleared: false } };
+    expect(songRecordPlayFromSummary(failed as typeof summary, 4)).toMatchObject({ lamp: 'FAILED', missCount: 6 });
   });
 });
 
@@ -242,7 +244,8 @@ describe('course stage records', () => {
       cleared: false,
       lamp: 'FAILED',
     } as unknown as PixiGameplayResultData;
-    expect(courseStagePlayFromResult(data)).toEqual({ lamp: 'FAILED', exScore: 70, maxCombo: 20, missCount: 55 });
+    // BAD + POOR + empty POOR (6), plus the 50 notes never judged.
+    expect(courseStagePlayFromResult(data)).toEqual({ lamp: 'FAILED', exScore: 70, maxCombo: 20, missCount: 56 });
     const summary = {
       total: 100,
       perfect: 30,
@@ -250,9 +253,10 @@ describe('course stage records', () => {
       good: 5,
       bad: 2,
       poor: 3,
+      emptyPoor: 1,
       exScore: 70,
       gauge: { type: 'GRADE', cleared: false },
     } as Parameters<typeof courseStagePlayFromSummary>[0];
-    expect(courseStagePlayFromSummary(summary, 20)).toMatchObject({ lamp: 'FAILED', missCount: 55 });
+    expect(courseStagePlayFromSummary(summary, 20)).toMatchObject({ lamp: 'FAILED', missCount: 56 });
   });
 });
