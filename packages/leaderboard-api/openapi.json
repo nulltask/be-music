@@ -2990,6 +2990,60 @@
         ]
       }
     },
+    "/course-scores/{id}/playlog": {
+      "get": {
+        "operationId": "getCourseScoresByIdPlaylog",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "A course run’s play log",
+        "description": "The stored course play log (`be-music-course-playlog`), gzip-compressed. Anyone can read a shown run’s; only its player a hidden one’s.",
+        "responses": {
+          "200": {
+            "description": "The course play log (docs/playlog.md).",
+            "content": {
+              "application/json": {}
+            }
+          },
+          "404": {
+            "description": "The run or its play log does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      }
+    },
     "/courses/{courseFingerprint}": {
       "get": {
         "operationId": "getCoursesByCourseFingerprint",

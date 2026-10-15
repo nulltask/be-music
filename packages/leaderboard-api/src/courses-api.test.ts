@@ -1,3 +1,4 @@
+import { gunzipSync } from 'node:zlib';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import { ORIGIN, signInAnonymously, startTestBindings } from '../test/support.ts';
@@ -351,8 +352,24 @@ describe('PATCH /api/v0/course-scores/:id', () => {
     );
     const own = await fetchApp(`/api/v0/course-scores/${best.courseScoreId}`, { headers: { cookie } });
     expect(await own.json()).toMatchObject({ hidden: true });
+    // Its play log too: only its player reads it, and no shared cache keeps it.
+    const playlogPath = `/api/v0/course-scores/${best.courseScoreId}/playlog`;
+    expect((await fetchApp(playlogPath)).status).toBe(404);
+    const ownLog = await fetchApp(playlogPath, { headers: { cookie } });
+    expect(ownLog.status).toBe(200);
+    expect(ownLog.headers.get('cache-control')).toBe('private');
 
     await setHidden(best.courseScoreId, false, cookie);
+    const shownLog = await fetchApp(playlogPath);
+    expect(shownLog.status).toBe(200);
+    expect(shownLog.headers.get('content-encoding')).toBe('gzip');
+    expect(shownLog.headers.get('cache-control')).toContain('public');
+    const log = JSON.parse(gunzipSync(new Uint8Array(await shownLog.arrayBuffer())).toString('utf8')) as {
+      format: string;
+      course: { name: string };
+    };
+    expect(log).toMatchObject({ format: 'be-music-course-playlog', course: { name: 'Test Dan' } });
+    expect((await fetchApp('/api/v0/course-scores/nothing/playlog')).status).toBe(404);
     expect(await mine()).toMatchObject({ exScore: 40, playCount: 2, trophy: 'goldmedal' });
   });
 });

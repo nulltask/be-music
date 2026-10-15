@@ -3,7 +3,12 @@ import { describeRoute, resolver, validator } from 'hono-openapi';
 import { parseCoursePlaylog, PlaylogParseError, serializeCoursePlaylog } from '@be-music/player/playlog';
 import * as v from 'valibot';
 import type { AppEnv } from '../app.ts';
-import { loadCourseDetail, loadCourseScoreDetail, loadMyCourseRank } from '../courses/detail.ts';
+import {
+  loadCourseDetail,
+  loadCoursePlaylogAccess,
+  loadCourseScoreDetail,
+  loadMyCourseRank,
+} from '../courses/detail.ts';
 import { loadCourseRanking } from '../courses/ranking.ts';
 import { submitCourseScore } from '../courses/submit.ts';
 import { setCourseScoreHidden } from '../courses/visibility.ts';
@@ -55,8 +60,8 @@ const COURSE_REJECTIONS = [
 
 /**
  * The course routes of `/api/v0` (docs/leaderboard.md section 6.1): submitting a course run, a course, its ranking, my
- * rank on it, one run, and hiding a run. Mounted on the version's own router, so they share its session middleware and
- * its OpenAPI document.
+ * rank on it, one run, its play log, and hiding a run. Mounted on the version's own router, so they share its session
+ * middleware and its OpenAPI document.
  */
 export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number; newId: () => string }): void {
   const { now, newId } = options;
@@ -152,6 +157,35 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
       const detail = await loadCourseScoreDetail(c.get('db'), c.req.param('id'), c.get('userId'));
       if (detail === undefined) return c.json({ error: 'not-found' }, 404);
       return c.json(detail);
+    },
+  );
+
+  v0.get(
+    '/course-scores/:id/playlog',
+    describeRoute({
+      tags: ['Courses'],
+      summary: 'A course run’s play log',
+      description:
+        'The stored course play log (`be-music-course-playlog`), gzip-compressed. Anyone can read a shown run’s; only its player a hidden one’s.',
+      responses: {
+        200: { description: 'The course play log (docs/playlog.md).', content: { 'application/json': {} } },
+        404: notFound('The run or its play log'),
+      },
+    }),
+    async (c) => {
+      const access = await loadCoursePlaylogAccess(c.get('db'), c.req.param('id'), c.get('userId'));
+      if (access === undefined) return c.json({ error: 'not-found' }, 404);
+      const object = await c.env.BLOBS.get(access.key);
+      if (object === null) return c.json({ error: 'not-found' }, 404);
+      return new Response(object.body, {
+        headers: {
+          'content-type': 'application/json',
+          'content-encoding': 'gzip',
+          // As a play's log: a stored log never changes.
+          'cache-control': access.public ? 'public, max-age=31536000, immutable' : 'private',
+        },
+        encodeBody: 'manual',
+      });
     },
   );
 

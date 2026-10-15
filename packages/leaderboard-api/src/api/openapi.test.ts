@@ -13,6 +13,7 @@ describe('OpenAPI document', () => {
       '/charts/{chartFingerprint}/leaderboard/me',
       '/course-scores',
       '/course-scores/{id}',
+      '/course-scores/{id}/playlog',
       '/courses/{courseFingerprint}',
       '/courses/{courseFingerprint}/leaderboard',
       '/courses/{courseFingerprint}/leaderboard/me',
