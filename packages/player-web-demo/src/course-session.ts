@@ -176,10 +176,8 @@ export class CourseSession {
     if (playlog?.results?.native !== undefined) {
       this.logs.push(playlog);
       // No polylines for a stage given up, but its play time runs up to where it was left.
-      const abortedAtUs = playlog.play?.abortedAtUs;
-      this.histories.push(
-        abortedAtUs !== undefined ? { ...EMPTY_HISTORY, playSeconds: abortedAtUs / 1e6 } : EMPTY_HISTORY,
-      );
+      const playSeconds = resolveGivenUpPlaySeconds(playlog);
+      this.histories.push(playSeconds !== undefined ? { ...EMPTY_HISTORY, playSeconds } : EMPTY_HISTORY);
     }
     this.ended = true;
   }
@@ -236,6 +234,25 @@ export class CourseSession {
       ...(options.recorder !== undefined ? { recorder: options.recorder } : {}),
     });
   }
+}
+
+/**
+ * The play time of a stage given up with ESC: up to where the engine stopped it (`play.abortedAtUs`), or, for a stage
+ * left after its chart had settled (every note judged, the play complete), up to its last note. `undefined` when the log
+ * says neither.
+ */
+export function resolveGivenUpPlaySeconds(
+  playlog: Partial<Pick<BeMusicPlaylog, 'play' | 'chart'>>,
+): number | undefined {
+  const abortedAtUs = playlog.play?.abortedAtUs;
+  if (abortedAtUs !== undefined) return Math.max(0, abortedAtUs) / 1e6;
+  if (playlog.play?.aborted === true) return undefined;
+  let lastUs: number | undefined;
+  for (const note of playlog.chart?.notes ?? []) {
+    const endUs = note.endTimeUs ?? note.timeUs;
+    if (lastUs === undefined || endUs > lastUs) lastUs = endUs;
+  }
+  return lastUs !== undefined ? Math.max(0, lastUs) / 1e6 : undefined;
 }
 
 /**

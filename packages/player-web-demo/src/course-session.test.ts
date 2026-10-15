@@ -18,6 +18,7 @@ import {
   lookupCourseRecord,
   resolveResultPresentation,
   skipsCourseStageResult,
+  resolveGivenUpPlaySeconds,
 } from './course-session.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
@@ -190,6 +191,23 @@ describe('CourseSession', () => {
     session.giveUp(givenUp);
     expect(session.playSeconds).toBeCloseTo(122.75);
     expect(new CourseSession(course([])).playSeconds).toBe(0);
+  });
+
+  test('counts a stage left after its chart settled up to its last note', () => {
+    const settled = {
+      play: { mode: 'manual' as const, autoScratch: false, gauge: 'GROOVE' as const },
+      chart: {
+        notes: [
+          { id: 0, channel: '11', type: 'normal' as const, timeUs: 1_000_000 },
+          { id: 1, channel: '12', type: 'long' as const, timeUs: 2_000_000, endTimeUs: 9_500_000 },
+          { id: 2, channel: '13', type: 'normal' as const, timeUs: 8_000_000 },
+        ],
+      },
+    } as unknown as BeMusicPlaylog;
+    expect(resolveGivenUpPlaySeconds(settled)).toBe(9.5);
+    // An abort without its time says nothing.
+    expect(resolveGivenUpPlaySeconds({ play: { ...settled.play, aborted: true } })).toBeUndefined();
+    expect(resolveGivenUpPlaySeconds({ play: { ...settled.play, aborted: true, abortedAtUs: 3_000_000 } })).toBe(3);
   });
 
   test('refuses a course with a missing stage', () => {
