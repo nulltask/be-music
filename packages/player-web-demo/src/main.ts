@@ -23,6 +23,7 @@ import {
   HISPEED_MIN,
   HISPEED_STEP,
   snapHiSpeed,
+  beatorajaClearLampOp,
   type BeatorajaSelectSystemSoundPaths,
   type PixiGameplayResultData,
   type PixiPlayOptions,
@@ -126,7 +127,6 @@ import {
   buildDefaultSkinConfigFiles,
   buildDefaultSkinConfigOptions,
   bundleBeatorajaSources,
-  computeClearLampOp,
   expandBeatorajaWildcard,
   loadBeatorajaSkin,
   normalizeBeatorajaFonts,
@@ -140,8 +140,11 @@ import {
   isCourseRunAtAnotherTempo,
   mergeSongRecord,
   readStoredSongRecords,
+  playRecordKey,
   songRecordKey,
   songRecordPlayFromResult,
+  songRecordPlayFromSummary,
+  type SongRecordPlay,
   storeSongRecords,
 } from './song-records.ts';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
@@ -194,7 +197,6 @@ interface NonstopPlay {
 import demoPackageJson from '../package.json' with { type: 'json' };
 
 const dropLog = logger('drop');
-const recordLog = logger('record');
 const gameplayLog = logger('gameplay');
 const resolutionLog = logger('render-resolution');
 const fullscreenLog = logger('fullscreen');
@@ -269,9 +271,9 @@ import {
 } from './silent-mode-playback.ts';
 import {
   RECORD_LABEL,
-  STOP_RECORDING_LABEL,
   captureScreenshot,
   finalizeRecordingIfActive,
+  startArmedRecording,
   toggleRecording,
   type RecordingDeps,
 } from './recording-controller.ts';
@@ -534,16 +536,6 @@ class PlayerWebDemoApp {
    */
   private beatorajaSelectBgmPath: string | undefined;
   /**
-   * In-session per-song clear-lamp memory (audit 2.18). Keyed by `BrowserSongEntry.id` so
-   * each completed run updates the lamp the next time the user lands on that song in the
-   * select list. We don't persist across page reloads (no score DB on the web port today),
-   * but within a session the lamp icons gradually populate as the user plays charts.
-   *
-   * Stored as the resolved `BEATORAJA_OP.CLEAR_LAMP_*` op rather than a domain enum so the
-   * select scene's lookup stays a single map read with no per-frame translation.
-   */
-  private readonly beatorajaSessionLampOps = new Map<string, number>();
-  /**
    * Loop-playable BGM bytes for the song-select scene (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
    * Forwarded to `PixiSongSelectView` via the constructor option on first mount and via `setSelectBgm` on subsequent
    * theme drops mid-session.
@@ -594,6 +586,8 @@ class PlayerWebDemoApp {
   private currentBeatorajaPlayVariant: BeatorajaPlayableVariant | undefined;
   /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
   private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
+  /** The chart path {@link beatorajaGameplayPrep} was prepared for. */
+  private beatorajaGameplayPrepChartPath: string | undefined;
   /**
    * The most recently resolved chart for a beatoraja run, paired with the song's `chartPath` so
    * subsequent stages can verify the cached chart still matches the song they're handling.
@@ -1510,6 +1504,7 @@ class PlayerWebDemoApp {
       .name('Enabled')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressor(value);
+        this.beatorajaGameplayPrep?.audioBus.setMode(value ? this.compressorMode : 'off');
         this.refreshCompressorStageVisibility();
       });
     const stages = addFolder(compressor, DEBUG_MENU_FOLDERS.compressorStages);
@@ -1519,18 +1514,21 @@ class PlayerWebDemoApp {
       .name('Key')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('key', value);
+        this.beatorajaGameplayPrep?.audioBus.setStageEnabled('key', value);
       });
     stages
       .add(this.guiState, 'compressorBgm')
       .name('BGM')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('bgm', value);
+        this.beatorajaGameplayPrep?.audioBus.setStageEnabled('bgm', value);
       });
     stages
       .add(this.guiState, 'compressorMaster')
       .name('Master')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('master', value);
+        this.beatorajaGameplayPrep?.audioBus.setStageEnabled('master', value);
       });
     this.buildCompressorTuningGui(compressor);
   }
@@ -1817,7 +1815,6 @@ class PlayerWebDemoApp {
       sceneHost: this.sceneHost,
       recordController: this.recordController,
       getActiveGameplay: () => this.gameplayView ?? this.beatorajaGameplayView,
-      isLr2GameplayRecording: () => this.gameplayView?.isRecording() ?? false,
       getAutoRecordArmed: () => this.autoRecordArmed,
       setAutoRecordArmed: (value) => {
         this.autoRecordArmed = value;
@@ -2539,9 +2536,16 @@ class PlayerWebDemoApp {
     return this.songRecords.get(songRecordKey(song, hashes?.sha256));
   }
 
+  /** Records the running play's result under its chart, when the play counts ({@link playRecordKey}). */
+  private recordActivePlay(play: SongRecordPlay): void {
+    if (this.activePlayRecordKey === undefined) return;
+    this.recordSongResult(this.activePlayRecordKey, play);
+    this.activePlayRecordKey = undefined;
+  }
+
   /** Folds a finished play into its chart's best record and persists the records. */
-  private recordSongResult(key: string, data: PixiGameplayResultData): void {
-    this.songRecords.set(key, mergeSongRecord(this.songRecords.get(key), songRecordPlayFromResult(data)));
+  private recordSongResult(key: string, play: SongRecordPlay): void {
+    this.songRecords.set(key, mergeSongRecord(this.songRecords.get(key), play));
     storeSongRecords(this.songRecords);
   }
 
@@ -3270,9 +3274,12 @@ class PlayerWebDemoApp {
     try {
       // Reuse the chart the decide scene resolved IFF it belongs to the song we're about to play, so decide and
       // gameplay show and play the same `#RANDOM` branches. When the cached chart is for a different `chartPath`
-      // (= the player reached gameplay via a path that bypassed decide), the prep resolves the chart itself.
+      // (= the player reached gameplay via a path that bypassed decide), the prep resolves the chart itself. A course
+      // stage always resolves its own: its chart carries the course's long-note constraint (`CourseSession.stageSong`).
       const preResolved =
-        this.lastBeatorajaChart?.chartPath === song.chartPath ? this.lastBeatorajaChart.resolved : undefined;
+        courseStage === undefined && this.lastBeatorajaChart?.chartPath === song.chartPath
+          ? this.lastBeatorajaChart.resolved
+          : undefined;
       prep = await prepareBeatorajaGameplayChart({
         song,
         source,
@@ -3280,6 +3287,12 @@ class PlayerWebDemoApp {
         audioBusOptions: {
           initialVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
           initialCompressorParams: this.resolveCompressorParamOverrides(),
+          // The Debug Menu's per-stage compressor toggles, as the LR2 / default play takes them.
+          initialStages: {
+            key: this.guiState.compressorKey,
+            bgm: this.guiState.compressorBgm,
+            master: this.guiState.compressorMaster,
+          },
         },
         ...(preResolved !== undefined ? { preResolved } : {}),
         bgaTranscode: {
@@ -3297,6 +3310,7 @@ class PlayerWebDemoApp {
       return;
     }
     this.beatorajaGameplayPrep = prep;
+    this.beatorajaGameplayPrepChartPath = song.chartPath;
 
     // Decode the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps so play-scene destinations
     // referencing the synthetic ids (-100 / -101 / -102) can paint them. ModernChic's lane
@@ -3307,6 +3321,13 @@ class PlayerWebDemoApp {
     // 4. Mount the gameplay view.
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay } };
+    // The same record rule as the LR2 / default play (`playRecordKey`).
+    this.activePlayRecordKey = playRecordKey(song, chartHashes?.sha256, {
+      autoPlay,
+      replay: false,
+      course: courseStage !== undefined,
+      tempo,
+    });
     // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
     let givingUp = false;
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
@@ -3408,6 +3429,7 @@ class PlayerWebDemoApp {
             this.unlockPlaylogOptions();
             return;
           }
+          this.recordActivePlay(songRecordPlayFromSummary(summary, maxCombo));
           const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
           if (!mounted) await this.showSelect();
           // Auto-save fires even when the theme ships no result skin — falling back to select
@@ -3436,20 +3458,7 @@ class PlayerWebDemoApp {
     // Consume the "user pressed Record on the select screen" flag. Same flow as the LR2
     // gameplay path — `autoRecordArmed` is set when the user clicks the Record button
     // before picking a song; the next gameplay mount kicks the recorder off automatically.
-    if (this.autoRecordArmed) {
-      this.autoRecordArmed = false;
-      const controller = this.recordController;
-      controller?.domElement.classList.remove('arming');
-      try {
-        this.beatorajaGameplayView.startRecording({ format: this.recordingFormat });
-        controller?.domElement.classList.add('recording');
-        controller?.name(STOP_RECORDING_LABEL);
-        this.setStatus('Recording…');
-      } catch (error) {
-        controller?.name(RECORD_LABEL);
-        recordLog.warn('auto-start failed', error);
-      }
-    }
+    startArmedRecording(this.recordingDeps());
 
     // Skin-options panel for the play skin's `property[]` / `filepath[]`. Live edits flow through
     // `applyBeatorajaPlaySkinConfig` → `replaceSkin` so the chrome rebuilds without tearing down
@@ -3623,10 +3632,12 @@ class PlayerWebDemoApp {
       // a single AudioContext mixes them down. The scene starts the loop on enter and stops
       // it on exit; transitioning into decide / play tears it down cleanly.
       selectBgmPath: this.beatorajaSelectBgmPath,
-      // In-session lamp lookup — completed runs in this session light the focused song bar's
-      // lamp icon. Without this every bar reported as `CLEAR_LAMP_NOPLAY` regardless of how
-      // many times the user cleared the chart in the same session (audit 2.18).
-      resolveSongLampOp: (song) => this.beatorajaSessionLampOps.get(song.id),
+      // The bar's lamp comes from the persisted records every family writes (`lookupSongRecord`), lit through the
+      // same lamp rule the other families' selects show.
+      resolveSongLampOp: (song) => {
+        const record = this.lookupSongRecord(song);
+        return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
+      },
       // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
       // `-101 BACKBMP` / `-102 BANNER`). The scene calls this on every focus change and
       // caches by song-id; default beatoraja's select.json paints `-102 BANNER` as the
@@ -3977,7 +3988,9 @@ class PlayerWebDemoApp {
           void this.sceneHost.setScene(undefined).then(() => {
             this.beatorajaDecideScene?.dispose();
             this.beatorajaDecideScene = undefined;
-            void (then !== undefined ? then.start() : this.playSongBeatoraja(song, overrides));
+            // Through `playSong`, so the gameplay family is picked as on every other path (the decide skin's family
+            // need not be the play's).
+            void (then !== undefined ? then.start() : this.playSong(song, overrides));
           });
         }),
       onCancel: () =>
@@ -4016,26 +4029,6 @@ class PlayerWebDemoApp {
     if (bundle === undefined) return false;
     // The course result (`course.result`) shows on the theme's COURSE_RESULT skin, falling back to its result skin.
     const courseResult = course?.result === true;
-
-    // Stash the run's clear-lamp into the in-session map (audit 2.18) so the next time the
-    // user lands on this song in the select scene the bar's lamp icon lights up. Cleared
-    // runs replace any previous lamp; a failed retry of a previously-cleared chart should
-    // not downgrade the lamp.
-    const newLamp = computeClearLampOp({
-      cleared: summary.gauge?.cleared ?? false,
-      perfect: summary.perfect,
-      great: summary.great,
-      good: summary.good,
-      bad: summary.bad,
-      poor: summary.poor,
-      total: summary.total,
-      gaugeType: summary.gauge?.type,
-    });
-    const previousLamp = this.beatorajaSessionLampOps.get(song.id);
-    // A course's results count for the course, not for the single chart.
-    if (course === undefined && (newLamp !== BEATORAJA_OP.CLEAR_LAMP_FAILED || previousLamp === undefined)) {
-      this.beatorajaSessionLampOps.set(song.id, newLamp);
-    }
 
     // Same fix as decide — fall back to the discovery's `theme.resultSkin` rather than
     // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default
@@ -4503,18 +4496,23 @@ class PlayerWebDemoApp {
       // `chartPath ⇒ chart` association even on the rare path where the prep had to fall back to
       // a fresh resolve (e.g. gameplay reached without going through decide). The audio / BGA
       // resources owned by `prep` still get released by `dispose()`.
-      const chartPath = this.lastBeatorajaChart?.chartPath;
+      // Stamped with the path the prep was made for, never the previous cache's: a course stage of another chart must
+      // not leave its chart under that chart's path.
+      const chartPath = this.beatorajaGameplayPrepChartPath;
       if (chartPath !== undefined) {
         const { chart, randomDraws } = this.beatorajaGameplayPrep;
         this.lastBeatorajaChart = { resolved: { chart, randomDraws }, chartPath };
       }
       void this.beatorajaGameplayPrep.dispose();
       this.beatorajaGameplayPrep = undefined;
+      this.beatorajaGameplayPrepChartPath = undefined;
     }
   }
 
   /** Sequence beatoraja-gameplay teardown → caller-supplied transition (mirrors `finishGameplayThen`). */
   private async finishBeatorajaGameplayThen(then: () => void | Promise<void>): Promise<void> {
+    // As `finishGameplayThen`: an in-flight recording is saved before the scene (and its AudioContext) goes away.
+    await finalizeRecordingIfActive(this.recordingDeps());
     await this.sceneHost.setScene(undefined);
     this.disposeBeatorajaGameplay();
     await then();
@@ -4768,10 +4766,8 @@ class PlayerWebDemoApp {
     }
     // A be-music skin's decide screen hands over to the LR2 / default gameplay preloaded below, so it is skipped when
     // the play itself runs on a beatoraja theme.
-    const beMusicDecide =
-      decideFamily === 'default' &&
-      this.beMusicSkin.decide !== undefined &&
-      pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) !== 'beatoraja';
+    const playsOnBeatoraja = this.playsOnBeatoraja(song, {});
+    const beMusicDecide = decideFamily === 'default' && this.beMusicSkin.decide !== undefined && !playsOnBeatoraja;
     if (!beMusicDecide && (decideFamily === 'default' || !this.decideSkin)) {
       // No decide splash: a be-music skin without one, or an LR2-only setup that didn't ship a decide skin. The select
       // view's `playDecideSound` already fired so the audio cue still plays.
@@ -4787,8 +4783,9 @@ class PlayerWebDemoApp {
     // Build the gameplay view eagerly and kick off its heavy load (chart parse, audio decode, BGA preload) IN PARALLEL
     // with the Decide animation. The Decide splash typically runs ~3 s; chart asset decoding is mostly done by the time
     // the splash auto-advances, so the hand-off to gameplay becomes instant instead of dropping a frozen frame.
-    // A course starts its own play once the splash is done, so nothing is preloaded for it.
-    const preloaded = then === undefined ? this.preloadGameplay(song, overrides) : undefined;
+    // A course starts its own play once the splash is done, so nothing is preloaded for it; nor for a play on the
+    // beatoraja scene, which prepares its own chart once the splash is done (`playSong`).
+    const preloaded = then === undefined && !playsOnBeatoraja ? this.preloadGameplay(song, overrides) : undefined;
     let advanced = false;
     const advance = (then: () => void): void => {
       // Idempotent — the auto-advance timer, key input, and pointer click can all race; whichever lands first wins and
@@ -4806,7 +4803,7 @@ class PlayerWebDemoApp {
             void start();
             return;
           }
-          void this.startGameplayAfterDecide(song, preloaded);
+          void this.startGameplayAfterDecide(song, preloaded, overrides);
         }),
       onCancel: () =>
         advance(() => {
@@ -4884,10 +4881,12 @@ class PlayerWebDemoApp {
     // course instead.
     // A play at another tempo is practice: it is not ranked, and leaves the records alone too.
     const tempo = replay !== undefined ? (replay.play.tempo ?? 1) : tempoFromPercent(this.guiState.tempoPercent);
-    this.activePlayRecordKey =
-      autoPlay || replay !== undefined || courseStage !== undefined || nonstop !== undefined || tempo !== 1
-        ? undefined
-        : songRecordKey(song, overrides.chartHashes?.sha256);
+    this.activePlayRecordKey = playRecordKey(song, overrides.chartHashes?.sha256, {
+      autoPlay,
+      replay: replay !== undefined,
+      course: courseStage !== undefined || nonstop !== undefined,
+      tempo,
+    });
     // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...), a
     // NONSTOP course's stitched play included.
     const courseLane = (picked: typeof this.guiState.random1P): typeof this.guiState.random1P =>
@@ -5039,7 +5038,11 @@ class PlayerWebDemoApp {
    * promise: when the user dismisses Decide before chart audio has finished decoding, the splash's last frame stays on
    * screen until prepare resolves — visually a brief hold rather than the previous frozen-frame freeze.
    */
-  private async startGameplayAfterDecide(song: BrowserSongEntry, preloaded: Promise<void>): Promise<void> {
+  private async startGameplayAfterDecide(
+    song: BrowserSongEntry,
+    preloaded: Promise<void>,
+    overrides: { autoPlay?: boolean },
+  ): Promise<void> {
     try {
       await preloaded;
     } catch (error) {
@@ -5048,7 +5051,7 @@ class PlayerWebDemoApp {
       this.gameplayView = undefined;
       this.decideView?.dispose();
       this.decideView = undefined;
-      await this.playSong(song);
+      await this.playSong(song, overrides);
       return;
     }
     if (!this.gameplayView) return;
@@ -5060,20 +5063,24 @@ class PlayerWebDemoApp {
     this.setStatus(describePlayingStatus(song.title, { tempoPercent: this.guiState.tempoPercent }));
     this.lockPlaylogOptionsForPlay();
     this.gameplayView.start();
-    if (this.autoRecordArmed) {
-      this.autoRecordArmed = false;
-      const controller = this.recordController;
-      controller?.domElement.classList.remove('arming');
-      try {
-        this.gameplayView.startRecording({ format: this.recordingFormat });
-        controller?.domElement.classList.add('recording');
-        controller?.name(STOP_RECORDING_LABEL);
-        this.setStatus('Recording…');
-      } catch (error) {
-        controller?.name(RECORD_LABEL);
-        recordLog.warn('auto-start failed', error);
-      }
-    }
+    startArmedRecording(this.recordingDeps());
+  }
+
+  /**
+   * Whether a play of `song` runs on the beatoraja gameplay scene: the gameplay family says so, and the play is neither
+   * a replay nor a stitched NONSTOP chart (those play on the LR2 / default scenes, which carry the play-log arrangement
+   * remap and the per-stage audio and BGA). Every path into gameplay — `playSong`, and the decide splash deciding what
+   * to preload — asks this one question.
+   */
+  private playsOnBeatoraja(
+    song: BrowserSongEntry,
+    overrides: { replay?: BeMusicPlaylog; nonstop?: NonstopPlay },
+  ): boolean {
+    return (
+      pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) === 'beatoraja' &&
+      overrides.replay === undefined &&
+      overrides.nonstop === undefined
+    );
   }
 
   private async playSong(
@@ -5090,8 +5097,7 @@ class PlayerWebDemoApp {
     // `'auto'` keeps the legacy preference (beatoraja → LR2 → default). Replay playback always stays on the
     // LR2/default path — that's where the play-log arrangement remap and `replayInputs` are wired.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
-    // A stitched NONSTOP chart plays on the LR2 / default scenes, which carry its per-stage audio and BGA.
-    if (gameplayFamily === 'beatoraja' && overrides.replay === undefined && overrides.nonstop === undefined) {
+    if (this.playsOnBeatoraja(song, overrides)) {
       await this.playSongBeatoraja(song, overrides);
       return;
     }
@@ -5141,21 +5147,7 @@ class PlayerWebDemoApp {
     // requires the gameplay AudioContext to exist, which only happens after `mount`. Failing here is non-fatal: the
     // select-screen click already nudged the user that capture would start; if it doesn't (codec missing / no
     // MediaRecorder), the surfaced error replaces the armed status without breaking gameplay.
-    if (this.autoRecordArmed) {
-      this.autoRecordArmed = false;
-      const controller = this.recordController;
-      controller?.domElement.classList.remove('arming');
-      try {
-        this.gameplayView.startRecording({ format: this.recordingFormat });
-        controller?.domElement.classList.add('recording');
-        controller?.name(STOP_RECORDING_LABEL);
-        this.setStatus('Recording…');
-      } catch (error) {
-        controller?.name(RECORD_LABEL);
-        recordLog.warn('auto-start failed', error);
-        this.setStatus(`Recording unavailable: ${(error as Error).message}`);
-      }
-    }
+    startArmedRecording(this.recordingDeps());
   }
 
   /**
@@ -5247,10 +5239,7 @@ class PlayerWebDemoApp {
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
     this.setStatus(`Result: ${data.song.title}`);
-    if (this.activePlayRecordKey !== undefined) {
-      this.recordSongResult(this.activePlayRecordKey, data);
-      this.activePlayRecordKey = undefined;
-    }
+    this.recordActivePlay(songRecordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one.
     if (mode.course === undefined && !courseStage) {
       this.maybeAutoSavePlaylog(data.playlog);

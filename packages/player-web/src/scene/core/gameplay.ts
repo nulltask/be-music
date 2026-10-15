@@ -1,14 +1,4 @@
-import {
-  Application,
-  Container,
-  Graphics,
-  Rectangle,
-  Text,
-  TextStyle,
-  Texture,
-  VideoSource,
-  type Sprite,
-} from 'pixi.js';
+import { Application, Container, Graphics, Text, TextStyle, Texture, VideoSource, type Sprite } from 'pixi.js';
 // Side-effect import: registers Pixi's `PrepareSystem` on the renderer so {@link CoreGameplayView.preparePixiUpload}
 // can drive eager GPU uploads. Pixi v8 deliberately ships the prepare module out of the default bundle (it's a
 // large optional system that not every app needs); the import has to land before any `Application.init` runs that
@@ -70,15 +60,10 @@ import {
   resolveReversedDrawClock,
   type NoteDrawWindow,
 } from './note-draw-window.ts';
-import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
+import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import {
-  loadAssetBytes,
-  resolveChartBgaAsset,
-  resolveChartAudioAsset,
-  resolveChartPlayVariant,
-} from '../../collection/collection.ts';
-import { loadTextureFromBytes, loadVideoTextureFromBytes } from '../../media/textures.ts';
+import { resolveChartPlayVariant } from '../../collection/collection.ts';
+import { loadPlayBga, resolvePoorBgaFallbackKey } from '../../chart/play-bga.ts';
 import {
   type AudioBusChannel,
   type AudioBusHandle,
@@ -86,7 +71,6 @@ import {
   type CompressorParams,
   type TunableCompressor,
   type CompressorStage,
-  buildAudioBus,
   sanitizeBusVolume,
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
@@ -105,8 +89,6 @@ import {
   clampPlayTempo,
   elapsedToChartSeconds,
   resolveSamplePlaybackRate,
-  resolveSampleStretchRates,
-  stretchDecodedSamples,
   stretchSlicePlayback,
   type TempoPitchMode,
   type TimeStretchAlgorithm,
@@ -118,20 +100,17 @@ import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
 import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
-import { createWebAudioSession, decodedSampleKey, type WebAudioSession } from '../../runtime/web-audio-session.ts';
+import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
+import { collectChartVolumeMultipliers, createPlayAudioGraph, loadPlaySamples } from '../../chart/play-audio.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
-import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import {
-  collectBmsExWavVolumeMultipliers,
-  collectBmsWavCmdVolumeMultipliers,
-  parseBmsBga,
   parseBmsSwBga,
   pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
   resolveChart,
   resolveChartMainBpm,
   resolveChartReferenceBpm,
-  volWavToLinearGain,
   type BmsSwitchingBga,
   type RandomDraws,
   type ResolvedChart,
@@ -151,8 +130,6 @@ import {
 import { HiSpeedTransition, snapHiSpeed } from '../hi-speed.ts';
 import {
   buildSkinBgaFrame,
-  collectBgaTextureLoadKeys,
-  isVideoExtension,
   pickActiveBgaCue,
   pickActiveBgaKey,
   resolveBgaImageRect,
@@ -173,7 +150,8 @@ import type {
   SkinlessGameplayChromeRuntime,
   SkinlessGameplayJudgeState,
 } from '../gameplay-chrome.ts';
-import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
+import { resolveGameplayAudioTailCleanupDelayMs } from './gameplay-result-delay.ts';
+import { resolvePlayEnding } from '../play-ending.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
 import type {
   BeMusicBomb,
@@ -265,9 +243,6 @@ export const KEY_ON_FADE_OUT_MS = 120;
  * register visually as a deliberate "tap" without lingering through the next note.
  */
 const KEY_ON_FLASH_HOLD_MS = 60;
-
-const AUDIO_DECODE_CONCURRENCY = 8;
-const BGA_DECODE_CONCURRENCY = 4;
 
 /**
  * One rectangle the chart's BGA is composited into. The core scene paints into the default-family BGA rect; themes
@@ -400,9 +375,6 @@ const DEFAULT_THEME_TIMING: GameplayThemeTiming = {
  */
 const BE_MUSIC_ENTER_FADE_MS = 400;
 const BE_MUSIC_THEME_TIMING: GameplayThemeTiming = { ...DEFAULT_THEME_TIMING, fadeOutMs: 450 };
-
-/** How long a failed play's sound and picture fade out at least, before its result shows. */
-const FAILED_FADE_OUT_MS = 1500;
 
 /**
  * Scene moments a theme can react to (the LR2 family stamps its skin timers from these). `at` is the
@@ -1053,7 +1025,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
-   * chart by {@link prepareSong} via the shared `collectBmsWavCmdVolumeMultipliers` helper, looked up on every
+   * chart by {@link prepareSong} via the shared `collectChartVolumeMultipliers` helper, looked up on every
    * `playSample` / `playSampleByKey` so a slot with no `#WAVCMD` directive returns `undefined` and the fast path (no
    * extra GainNode) takes over.
    *
@@ -2324,21 +2296,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     );
     this.resolvedChart = resolved;
     this.randomDraws = randomDraws;
-    // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides (0..127 byte). Collect once now so every
-    // subsequent `playSample{,ByKey}` is a single Map lookup; slots without an entry fall through to the unity-gain
-    // fast path. Pitch / loop bytes are skipped — the helper only emits volume multipliers.
-    this.wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(resolved.bms.wavCmds, resolveBmsBase(resolved));
-    // BMS spec — `#EXWAVxx [flags] params filename` declares an extended WAV slot with optional pan / volume /
-    // frequency. Apply the volume side here so the existing per-trigger `connectSampleNodeWithWavCmdGain` splices the
-    // `#EXWAV` attenuation in alongside any `#WAVCMD 01 xx vv` value. Pan / freq are deliberately skipped — they need a
-    // StereoPannerNode / playbackRate split that the current graph doesn't yet wire up.
-    const exWavMultipliers = collectBmsExWavVolumeMultipliers(resolved.bms.exWav);
-    for (const [slot, multiplier] of exWavMultipliers) {
-      // Compose multiplicatively with `#WAVCMD` so authors who use both directives on the same slot get the combined
-      // attenuation rather than one silently overriding the other.
-      const previous = this.wavCmdVolumeMultipliers.get(slot) ?? 1;
-      this.wavCmdVolumeMultipliers.set(slot, previous * multiplier);
-    }
+    // BMS spec — `#WAVCMD 01 xx vv` and `#EXWAVxx` per-slot volumes, collected once so every sample trigger is a single
+    // Map lookup; slots without an entry take the unity-gain fast path.
+    this.wavCmdVolumeMultipliers = collectChartVolumeMultipliers(resolved);
     // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an animated BGA slot. Pre-parse every entry now so
     // per-frame BGA composition stays a single `Map.get` plus `pickSwitchingBgaFrame` (no per-frame regex / split).
     this.switchingBgas.clear();
@@ -2562,10 +2522,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
     // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
     // black POOR plate on misses for charts that rely on this convention.
-    const poorBmp00 = resolved.resources.bmp['00'];
-    const shouldUsePoorBmp00Fallback =
-      typeof resolved.bms.poorBga !== 'string' && typeof poorBmp00 === 'string' && poorBmp00.length > 0;
-    this.poorBgaFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;
+    this.poorBgaFallbackKey = resolvePoorBgaFallbackKey(resolved);
     this.poorBgaFallbackUntilSeconds = this.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
     this.hasBga =
       this.bgaTimeline.base.length > 0 || this.bgaTimeline.layer.length > 0 || this.bgaTimeline.poor.length > 0;
@@ -2721,31 +2678,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (!this.source || !this.song) {
       return;
     }
-    // `latencyHint: 'interactive'` asks the browser for the lowest round-trip latency it can offer — at the cost of CPU
-    // efficiency vs `'playback'`. For a rhythm game the trade-off is right: keypress → sample audible delay is the
-    // player's primary perception of "responsiveness", and we'd rather burn a few extra cycles than land samples on a
-    // 20–30 ms late. Browsers that don't honor the hint silently ignore it.
-    this.audioContext = new AudioContext({ latencyHint: 'interactive' });
-    // AudioContext starts in `suspended` state on most browsers until a user gesture, and the *first* `node.start()`
-    // call on a still-suspended context can sit in the queue for ~30ms while the browser ramps the audio graph up.
-    // Calling `resume()` here — we're inside the user-gesture chain that started the play session — pre-warms it so the
-    // very first sample fires at baseline latency. Errors (no-gesture / already-running) are swallowed because both are
-    // harmless.
-    void this.audioContext.resume().catch(() => undefined);
-    // Surface the device-reported latency so the player has visibility into how much "free" delay the audio stack is
-    // adding before our schedule even begins. `baseLatency` is "how late the audio graph commits a buffer" (driver /
-    // hardware buffer headroom); `outputLatency` (when populated) tracks the OS audio queue. Combined they form the
-    // floor of "press → hear" latency we can't optimize away from JS.
-    const ctx = this.audioContext;
-    log.info('AudioContext ready', {
-      sampleRate: ctx.sampleRate,
-      state: ctx.state,
-      baseLatencyMs: typeof ctx.baseLatency === 'number' ? +(ctx.baseLatency * 1000).toFixed(2) : 'n/a',
-      outputLatencyMs:
-        typeof (ctx as { outputLatency?: number }).outputLatency === 'number'
-          ? +((ctx as { outputLatency: number }).outputLatency * 1000).toFixed(2)
-          : 'n/a',
-    });
     // Build the audio bus. See `audio-bus.ts` for the full architecture; in short:
     //
     // key sources → keyMixer → keyComp ↘ masterComp → makeup → destination ('split') BGM sources → bgmMixer → bgmComp ↗
@@ -2755,78 +2687,38 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // in-flight `BufferSourceNode`s — important because hundreds of one-shots come and go per second on dense charts.
     this.audioCompressorMode = this.options.audioCompressorMode ?? 'split';
     const initialMode: CompressorMode = this.options.audioCompressor === false ? 'off' : this.audioCompressorMode;
-    this.audioBus = buildAudioBus(this.audioContext, initialMode, {
+    // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
+    const chart = this.resolvedChart ?? this.song.chart;
+    // The AudioContext, the bus and `#VOLWAV` are built, and the samples decoded, as the beatoraja prep does
+    // (`chart/play-audio.ts`).
+    const graph = createPlayAudioGraph(chart, initialMode, {
       initialStages: this.options.audioCompressorStages,
       initialVolumes: this.audioVolumes,
       initialCompressorParams: this.audioCompressorParams,
     });
+    this.audioContext = graph.audioContext;
+    this.audioBus = graph.audioBus;
     // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
     this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
     this.audioBus.outputNode.connect(this.audioAnalyzer.input);
-    // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
-    const chart = this.resolvedChart ?? this.song.chart;
-    // BMS `#VOLWAV n` declares the chart's master volume scaling (100 = unity, 80 = 80 % loud), applied only for
-    // 0 < n < 200 as beatoraja does. Applying it here means every sample triggered for THIS chart (key bus, BGM bus,
-    // every compressor mode) flows through the single dedicated stage in the bus and the recorder captures the
-    // post-`#VOLWAV` signal, matching the CLI renderer. Charts that omit `#VOLWAV` stay at unity.
-    this.audioBus.setMasterGain(volWavToLinearGain(chart.bms.volWav));
-    // BMS spec: `#WAVxx` slot index is base-36 (`00..ZZ`), so a chart can declare up to 1296 unique samples. An earlier
-    // revision capped this preload at the first 256 entries, which silently dropped audio for any sample referenced by
-    // a slot 100+ on dense charts (a typical "Lunatic Crave"-tier chart easily hits 500+ unique WAVs). The parser
-    // already enforces the spec ceiling, so iterating every declared path here is safe; memory on a fully-populated
-    // chart is at most ~1300 decoded buffers, dominated by the underlying PCM rather than any per-entry overhead.
-    const wavPaths = Object.values(chart.resources.wav).filter((path): path is string => typeof path === 'string');
-    // BMS spec — `#PATH_WAV <prefix>` declares a sub-directory the chart's WAVs live under. The audio asset resolver
-    // walks the prefixed form first when set so a chart authored as `wav/` + bare `kick.wav` references resolves the
-    // file as `wav/kick.wav`.
-    const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
+    const pitchMode = this.options.tempoPitchMode ?? 'pitch';
     // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
     // play at their own pitch.
-    const pitchMode = this.options.tempoPitchMode ?? 'pitch';
-    const stretchRates =
-      pitchMode === 'keep-pitch'
-        ? resolveSampleStretchRates(chart.resources.wav, decodedSampleKey, this.tempo, this.options.nonstop)
-        : undefined;
-    await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
-      if (this.disposed || !this.source || !this.song || !this.audioContext) return;
-      // Audio-aware asset lookup: charts almost universally declare `.wav` paths but archives often ship `.ogg` /
-      // `.mp3`. Try the codec fallback chain (opus → ogg → mp3 → wav → original). Audio entries are stored as lazy
-      // `File` references in the source map (the drop pipeline defers their byte load to keep gigabytes of WAV
-      // samples out of memory), so `loadAssetBytes` is the unwrap step that actually calls `arrayBuffer()` on demand
-      // for THIS chart. The bounded worker pool prevents hundreds of browser audio decoders from allocating PCM at
-      // once on dense charts.
-      const entry = resolveChartAudioAsset(this.source, this.song.chartPath, path, {
-        pathPrefix: pathWavPrefix,
-      });
-      const bytes = await loadAssetBytes(entry);
-      if (this.disposed || !this.audioContext) return;
-      if (!bytes) {
-        return;
-      }
-      try {
-        // Cache key is the chart-declared path (not the actually loaded codec path) so `playSampleByKey` /
-        // `playSample` continue to look up by the chart's `#WAV` value.
-        const decoded = await this.audioContext.decodeAudioData(bytes.slice().buffer);
-        if (this.disposed) return;
-        this.decodedSamples.set(decodedSampleKey(path), decoded);
-      } catch {
-        // Browsers vary in codec support; unsupported samples are skipped. `decodeAudioData` also rejects when the
-        // AudioContext is closed mid-decode (e.g. ESC pressed during loading) — the catch swallows that as well so
-        // dispose can complete cleanly.
-      }
+    const stretched = await loadPlaySamples({
+      audioContext: this.audioContext,
+      chart,
+      source: this.source,
+      chartPath: this.song.chartPath,
+      samples: this.decodedSamples,
+      tempo: this.tempo,
+      tempoPitchMode: pitchMode,
+      tempoStretchAlgorithm: this.options.tempoStretchAlgorithm ?? 'signalsmith',
+      ...(this.options.nonstop !== undefined ? { nonstop: this.options.nonstop } : {}),
+      isCancelled: () => this.disposed,
     });
-    if (stretchRates !== undefined && stretchRates.size > 0 && this.audioContext) {
-      await stretchDecodedSamples(
-        this.audioContext,
-        this.decodedSamples,
-        stretchRates,
-        this.options.tempoStretchAlgorithm ?? 'signalsmith',
-        () => this.disposed,
-      );
-      // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
-      if (this.bmsonSlicePlayback !== undefined) {
-        this.bmsonSlicePlayback = stretchSlicePlayback(this.bmsonSlicePlayback, this.tempo);
-      }
+    // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
+    if (stretched && this.bmsonSlicePlayback !== undefined) {
+      this.bmsonSlicePlayback = stretchSlicePlayback(this.bmsonSlicePlayback, this.tempo);
     }
     // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
     // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
@@ -2870,114 +2762,29 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (!song || !source || !this.hasBga) {
       return;
     }
-    // Build a map of `bmpKey → file path` covering both BMS-style ids and bmson `bga.header[].name`s. The bmson header
-    // carries the actual resource name; the id-keyed `resources.bmp` map is fed from BMS `#BMPxx` directives (and
-    // ignored for bmson charts).
-    const refs = new Map<string, string>();
     // Use the control-flow-resolved chart so #IF-gated BMP / bga header declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? song.chart;
-    // Partition the referenced BMP keys by which track(s) they appear in. The base + POOR tracks share decode settings
-    // (no chroma key, since they sit at the bottom of the BGA composite); the layer track gets a black→transparent
-    // decode so the foreground can punch through. `collectBgaTextureLoadKeys` also pulls in the source BMPs for referenced
-    // `#BGAxx` sub-region aliases — without those, BGA+ charts can have a timeline cue but no decoded source texture.
-    const { base: baseTrackKeys, layer: layerTrackKeys } = collectBgaTextureLoadKeys(
+    // Loaded as the beatoraja prep loads them (`chart/play-bga.ts`): base + POOR textures keep their blacks, the layer
+    // track's are keyed out for BMS, videos get one texture for both tracks, and `#BGAxx` sub-regions become views.
+    await loadPlayBga({
       chart,
-      this.bgaTimeline,
-      this.poorBgaFallbackKey,
-    );
-    const referencedKeys = new Set<string>([...baseTrackKeys, ...layerTrackKeys]);
-    for (const [id, path] of Object.entries(chart.resources.bmp)) {
-      if (typeof path === 'string' && referencedKeys.has(id)) {
-        refs.set(id, path);
-      }
-    }
-    for (const entry of chart.bmson.bga.header) {
-      if (referencedKeys.has(entry.name)) {
-        refs.set(entry.name, entry.name);
-      }
-    }
-    await runWithConcurrency([...refs.entries()], BGA_DECODE_CONCURRENCY, async ([key, path]) => {
-      if (this.disposed) return;
-      // BMP / video assets are stored as lazy `File` references in the song bundle. Read on demand so memory stays
-      // low while browsing — the bytes only land in the heap for BGA assets actually referenced by the focused chart.
-      // Use the image-aware resolver so charts that declare `#BMPxx foo.bmp` but ship `foo.png` (or `.jpg` / `.gif`)
-      // still find the asset; video extensions fall through to the original path verbatim. Decoding is bounded because
-      // image/video decoders allocate native memory outside the JS heap; fanning every BGA out at once can kill the
-      // Chrome renderer before any decode promise rejects.
-      const resolved = resolveChartBgaAsset(source, song.chartPath, path);
-      const bytes = await loadAssetBytes(resolved?.entry);
-      if (this.disposed) return;
-      if (!bytes) {
-        return;
-      }
-      const usedAsBase = baseTrackKeys.has(key);
-      const usedAsLayer = layerTrackKeys.has(key);
-      try {
-        if (isVideoExtension(path)) {
-          // Video BGA — wraps a `<video>` element in a Pixi texture. The same texture handle is used on both tracks
-          // (no chroma-key on layer; black-keying a moving video looks worse than just letting the artist's blacks
-          // show).
-          // The file found may be a re-encode under another extension (`_bga.mpg` → `_bga.mp4`): name it as found.
-          const handle = await loadVideoTextureFromBytes(resolved?.path ?? path, bytes, {
-            maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
-            useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
-          });
-          if (!handle) return;
-          // Late-arriving video decode after the player ESC'd back to the song select — drop the texture / video
-          // immediately so we don't leak it onto a dead app.
-          if (this.disposed) {
-            try {
-              handle.video.pause();
-              handle.video.removeAttribute('src');
-              handle.video.load();
-            } catch {
-              // Best effort; the video will be GC'd anyway.
-            }
-            URL.revokeObjectURL(handle.objectUrl);
-            try {
-              handle.texture.destroy(true);
-            } catch {
-              // Already-destroyed Pixi resources throw; swallow.
-            }
-            return;
-          }
-          this.bgaVideos.set(key, { video: handle.video, objectUrl: handle.objectUrl });
-          if (usedAsBase) this.bgaTextures.set(key, handle.texture);
-          if (usedAsLayer) this.bgaLayerTextures.set(key, handle.texture);
-          return;
-        }
-        if (usedAsBase) {
-          const texture = await loadTextureFromBytes(path, bytes);
-          if (this.disposed) {
-            texture?.destroy(true);
-            return;
-          }
-          if (texture) {
-            this.bgaTextures.set(key, texture);
-          }
-        }
-        if (usedAsLayer) {
-          // BMS' layer track (`#xxx07`) chroma-keys pure black pixels by convention so the foreground composites over
-          // the base BGA. The bmson 1.0.0 spec breaks explicitly with that: "Unlike BMS Layer Channel #xxx07, black
-          // pixels will not be made transparent." Bmson layer authors deliver pre-multiplied / alpha- channel artwork
-          // and expect blacks to render as black. Gate the chroma-key on chart source so BMS-derived layers keep the
-          // historical blend while bmson layers come through untouched.
-          const keyOutBlack = chart.sourceFormat !== 'bmson';
-          const texture = await loadTextureFromBytes(path, bytes, { keyOutBlack });
-          if (this.disposed) {
-            texture?.destroy(true);
-            return;
-          }
-          if (texture) {
-            this.bgaLayerTextures.set(key, texture);
-          }
-        }
-      } catch {
-        // Decode failures (corrupt files, unsupported encodings) are skipped silently so the rest of the chart still
-        // renders.
-      }
+      source,
+      chartPath: song.chartPath,
+      timeline: this.bgaTimeline,
+      poorFallbackKey: this.poorBgaFallbackKey,
+      into: {
+        textures: this.bgaTextures,
+        layerTextures: this.bgaLayerTextures,
+        videos: this.bgaVideos,
+        subRegionOrigins: this.bgaSubRegionOrigins,
+      },
+      transcode: {
+        maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
+        useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
+      },
+      tempo: this.tempo,
+      isCancelled: () => this.disposed,
     });
-    this.registerSubRegionBgaTextures(chart);
     if (this.disposed) return;
     // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
     // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
@@ -2986,47 +2793,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     await this.preparePixiUpload(this.bgaTextures.values());
     if (this.disposed) return;
     await this.preparePixiUpload(this.bgaLayerTextures.values());
-  }
-
-  /**
-   * Builds Pixi sub-textures for every `#BGAxx YY x1 y1 x2 y2 dx dy` directive after the source `#BMPYY` images have
-   * finished loading. Each sub-region BGA aliases slot `xx` to a frame- cropped view of slot `YY`, so a chart that
-   * authors `#BGA01 02 0 0 256 256 0 0` makes BGA cues for `01` render the corresponding portion of `#BMP02` rather
-   * than failing the texture lookup.
-   *
-   * Both the base and layer texture maps are populated so a sub-region aliased into either track resolves correctly.
-   * Texture sources are reused across slots — Pixi releases the underlying GPU resource only when the last referencing
-   * sub-texture is destroyed, which `dispose()` handles via `destroyUniqueTextures`.
-   */
-  private registerSubRegionBgaTextures(chart: BeMusicJson): void {
-    const base = resolveBmsBase(chart);
-    for (const [bgaSlot, raw] of Object.entries(chart.bms.bga)) {
-      const normalizedBgaSlot = normalizeObjectKey(bgaSlot, base);
-      const parsed = parseBmsBga(raw, base);
-      if (!parsed) continue;
-      const frameWidth = parsed.ex - parsed.sx;
-      const frameHeight = parsed.ey - parsed.sy;
-      if (frameWidth <= 0 || frameHeight <= 0) continue;
-      const sourceBase = this.bgaTextures.get(parsed.sourceBmp);
-      const sourceLayer = this.bgaLayerTextures.get(parsed.sourceBmp);
-      const seed = sourceBase ?? sourceLayer;
-      if (!seed) {
-        // Source `#BMPYY` failed to load (or was never declared); the BGA cue for this slot will silently no-op rather
-        // than fall back to a misleading full-frame render.
-        continue;
-      }
-      // Reuse the loaded image source — Pixi treats a `Texture` sharing a `source` plus a different `frame` rectangle
-      // as a cheap view, no extra GPU upload. Keeping `frame` in pixel coordinates that match the source image size
-      // guarantees the crop the chart author intended.
-      const frame = new Rectangle(parsed.sx, parsed.sy, frameWidth, frameHeight);
-      this.bgaSubRegionOrigins.set(normalizedBgaSlot, { x: parsed.dx, y: parsed.dy });
-      if (sourceBase && !this.bgaTextures.has(normalizedBgaSlot)) {
-        this.bgaTextures.set(normalizedBgaSlot, new Texture({ source: sourceBase.source, frame }));
-      }
-      if (sourceLayer && !this.bgaLayerTextures.has(normalizedBgaSlot)) {
-        this.bgaLayerTextures.set(normalizedBgaSlot, new Texture({ source: sourceLayer.source, frame }));
-      }
-    }
   }
 
   /**
@@ -5664,17 +5430,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (this.disposed || this.chartEnded) return;
     this.chartEnded = true;
     this.playMoments.outroAtMs ??= this.playClock();
-    // A play cut short by its gauge emptying (a course stage, a HARD gauge ending on failure) ends at once: its sound
-    // fades out as the screen goes dark, then the result shows. A gauge that emptied but played on to the end does not.
-    const now = this.currentSeconds();
-    const failed = finalSummary?.gauge?.failedMidPlay === true && this.notes.some((note) => note.seconds > now);
-    // The lead-out is chart time: at another tempo it takes 1 / tempo as long.
-    const delayMs = failed
-      ? 0
-      : chartToElapsedSeconds(
-          resolvePostChartResultDelayMs(this.notes, this.timingResolver, this.currentSeconds()),
-          this.tempo,
-        );
+    // The end-of-play policy both gameplay families share (`scene/play-ending.ts`): a lead-out after the last note, or —
+    // for a play cut short by its gauge emptying — no lead-out and a sound + picture fade-out before the result.
+    const ending = resolvePlayEnding({
+      summary: finalSummary,
+      notes: this.notes,
+      timing: this.timingResolver,
+      currentSeconds: this.currentSeconds(),
+      tempo: this.tempo,
+      themeFadeOutMs: this.themeTiming.fadeOutMs,
+    });
     // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
     // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
     // charts whose non-note tail has already carried us past the target.
@@ -5706,9 +5471,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           };
           this.chartEndHold?.abort();
         },
-        failed ? { fadeAudio: true, minFadeOutMs: FAILED_FADE_OUT_MS } : { fadeAudio: false },
+        { fadeAudio: ending.fadeAudio, minFadeOutMs: ending.fadeOutMs },
       );
-    }, delayMs);
+    }, ending.leadOutMs);
   }
 }
 

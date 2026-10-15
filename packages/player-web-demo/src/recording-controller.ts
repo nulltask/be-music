@@ -37,8 +37,6 @@ export interface RecordingDeps {
   readonly recordController: Controller | undefined;
   /** Whichever gameplay view is mounted right now, or `undefined` when neither family is active. */
   getActiveGameplay(): GameplayRecorder | undefined;
-  /** LR2-only probe for `finalizeRecordingIfActive` — preserves the historical asymmetry (audit later). */
-  isLr2GameplayRecording(): boolean;
   getAutoRecordArmed(): boolean;
   setAutoRecordArmed(value: boolean): void;
   /** Snapshot of the recording filename stem at call time; the demo updates it per chart in `playSong`. */
@@ -203,13 +201,34 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
  * Stop the in-flight recording (if any) before a gameplay-view dispose. Sequencing matters: `MediaRecorder.stop()`
  * waits for a `'stop'` event from its source stream — disposing the gameplay view first kills the AudioContext that
  * feeds it, so the recorder never sees the event and the save never finalizes. Caller-side: invoke this BEFORE
- * disposing the gameplay view.
- *
- * Note (preserved from the original method): only checks the LR2 gameplay view via `isLr2GameplayRecording`, not the
- * beatoraja one — preserves the historical asymmetry. Audit later when consolidating the two recording paths.
+ * disposing the gameplay view, whichever family it belongs to.
  */
 export async function finalizeRecordingIfActive(deps: RecordingDeps): Promise<void> {
-  if (deps.isLr2GameplayRecording()) {
+  if (deps.getActiveGameplay()?.isRecording() === true) {
     await toggleRecording(deps);
+  }
+}
+
+/**
+ * Starts the recording armed from song select (the Record button pressed with no play up) on the gameplay view that just
+ * mounted, whichever family it belongs to. Call it once the view's AudioContext exists. A failure is not fatal: the
+ * play goes on and the status says why nothing is recorded.
+ */
+export function startArmedRecording(deps: RecordingDeps): void {
+  if (!deps.getAutoRecordArmed()) return;
+  const gameplay = deps.getActiveGameplay();
+  if (gameplay === undefined) return;
+  deps.setAutoRecordArmed(false);
+  const controller = deps.recordController;
+  controller?.domElement.classList.remove('arming');
+  try {
+    gameplay.startRecording({ format: deps.getRecordingFormat() });
+    controller?.domElement.classList.add('recording');
+    controller?.name(STOP_RECORDING_LABEL);
+    deps.setStatus('Recording…');
+  } catch (error) {
+    controller?.name(RECORD_LABEL);
+    recordLog.warn('auto-start failed', error);
+    deps.setStatus(`Recording unavailable: ${(error as Error).message}`);
   }
 }

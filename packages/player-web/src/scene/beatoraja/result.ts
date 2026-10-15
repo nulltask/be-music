@@ -27,7 +27,6 @@ import {
   BEATORAJA_OP,
   BEATORAJA_TEXT,
   buildBaseOpSet,
-  computeClearLampOp,
   computeGenericRankOp,
   computeJudgeExistOps,
   computeRankOp,
@@ -37,6 +36,7 @@ import {
 } from '@be-music/beatoraja-skin';
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
+import { beatorajaClearLampOp, resolveClearLamp } from './clear-lamp.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
 import { resolveChartTotalReadout } from '../../chart/beatoraja/meta.ts';
@@ -327,18 +327,8 @@ export class PixiBeatorajaResultScene implements PixiScene {
     // gauge-type discrimination — those are independent of the gauge curve.
     const cleared = summary.gauge?.cleared ?? false;
     ops.add(cleared ? BEATORAJA_OP.RESULT_CLEAR : BEATORAJA_OP.RESULT_FAIL);
-    ops.add(
-      computeClearLampOp({
-        cleared,
-        perfect: summary.perfect,
-        great: summary.great,
-        good: summary.good,
-        bad: summary.bad,
-        poor: summary.poor,
-        total: summary.total,
-        gaugeType: summary.gauge?.type,
-      }),
-    );
+    // The lamp every family resolves a play to (`resolveClearLamp`): a clear with every note a PERFECT is MAX.
+    ops.add(beatorajaClearLampOp(resolveClearLamp({ cleared, score: summary, gaugeType: summary.gauge?.type })));
 
     // *_EXIST gates — same logic as the live adapter, but evaluated once against the final
     // counters (no per-frame refresh needed).
