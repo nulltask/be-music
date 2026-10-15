@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  addHcnPassing,
   ignoresLateLongNoteHeadBad,
   noteLateReachUs,
   isChargeLongNoteMode,
@@ -81,6 +82,30 @@ describe('ruleset long-note rules', () => {
     expect(noteLateReachUs(lr2, windows, undefined)).toBe(200_000);
     expect(noteLateReachUs(lr2, windows, 2)).toBe(200_000);
     expect(noteLateReachUs({ ignoreLateBadOnLnHead: false }, windows, 1)).toBe(200_000);
+  });
+
+  test('addHcnPassing chains passings by tail and drops a head judged after its tail', () => {
+    interface Link {
+      id: string;
+      endUs: number;
+      next?: Link;
+    }
+    const ids = (head: Link | undefined): string[] => {
+      const out: string[] = [];
+      for (let link = head; link !== undefined; link = link.next) out.push(link.id);
+      return out;
+    };
+    const later: Link = { id: 'later', endUs: 3_000 };
+    let chain = addHcnPassing<Link>(undefined, later, 2_000);
+    expect(ids(chain)).toEqual(['later']);
+    // An earlier note still passing goes ahead of the one judged early.
+    chain = addHcnPassing(chain, { id: 'earlier', endUs: 1_500 }, 1_000);
+    expect(ids(chain)).toEqual(['earlier', 'later']);
+    // A head missed after its tail passed never ticks.
+    chain = addHcnPassing(chain, { id: 'missed', endUs: 1_200 }, 1_200);
+    expect(ids(chain)).toEqual(['earlier', 'later']);
+    chain = addHcnPassing(chain, { id: 'last', endUs: 4_000 }, 3_500);
+    expect(ids(chain)).toEqual(['earlier', 'later', 'last']);
   });
 
   describe('resolveLnEarlyRelease', () => {

@@ -1,7 +1,7 @@
 import type { BeMusicEvent } from '@be-music/json';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import { judgeWindowLateReachUs, pgreatWindowReachUs } from '../ruleset/judge.ts';
-import { HcnTickCounter, isChargeLongNoteMode } from '../ruleset/long-note.ts';
+import { addHcnPassing, HcnTickCounter, isChargeLongNoteMode } from '../ruleset/long-note.ts';
 import {
   combineLongNoteJudges,
   insertPendingAutoLongNote,
@@ -40,6 +40,7 @@ import {
 } from './judge-core-score.ts';
 import {
   type ActiveLongNoteState,
+  type HcnPassingState,
   type JudgeCoreEffectSink,
   type JudgeCoreState,
   LANDMINE_EXPLOSION_SAMPLE_KEY,
@@ -509,16 +510,19 @@ function finalizeActiveLongNote(
   atSeconds: number,
   emit: JudgeCoreEffectSink,
 ): void {
-  const passing = state.hcnPassing.get(channel);
-  const settlesPassingNote = passing !== undefined && passing.note === state.activeLongNotes.get(channel)?.note;
-  if (settlesPassingNote && isGoodOrBetter(judge.kind)) {
+  const heldNote = state.activeLongNotes.get(channel)?.note;
+  let passing = state.hcnPassing.get(channel);
+  while (passing !== undefined && passing.note !== heldNote) {
+    passing = passing.next;
+  }
+  if (passing !== undefined && isGoodOrBetter(judge.kind)) {
     // A Hell Charge tail released at GOOD or better keeps its lane gaining until the tail passes.
     passing.tailGood = true;
   }
   state.activeLongNotes.delete(channel);
   state.longHoldUntilMs.delete(channel);
   state.longHoldReleaseSeconds.delete(channel);
-  if (settlesPassingNote) {
+  if (passing !== undefined) {
     setHcnGaining(state, channel, toJudgeUs(atSeconds), emit);
   }
   // Pair the head's `hold-lane-until-beat` so the renderer fades the LN-hold timer and lane laser out right here.
@@ -554,23 +558,30 @@ export function startHcnPassing(state: JudgeCoreState, note: TimedPlayableNote, 
   if (config.autoScratch && config.scratchChannels.has(note.channel)) {
     return;
   }
+  for (let passing = state.hcnPassing.get(note.channel); passing !== undefined; passing = passing.next) {
+    if (passing.note === note) {
+      return;
+    }
+  }
   const startUs = Math.max(toJudgeUs(note.seconds), judgedUs);
   const counter = new HcnTickCounter(startUs);
   counter.setGaining(isLaneDown(state, note.channel), startUs, () => undefined);
-  state.hcnPassing.set(note.channel, { note, endUs: toJudgeUs(endSeconds), counter, tailGood: false });
+  const passing: HcnPassingState = { note, endUs: toJudgeUs(endSeconds), counter, tailGood: false };
+  const chain = addHcnPassing(state.hcnPassing.get(note.channel), passing, startUs);
+  if (chain !== undefined) {
+    state.hcnPassing.set(note.channel, chain);
+  }
 }
 
 /** Re-reads whether a lane with a passing Hell Charge note gains (a key on it is down, or its tail went well). */
 export function setHcnGaining(state: JudgeCoreState, channel: string, atUs: number, emit: JudgeCoreEffectSink): void {
-  const passing = state.hcnPassing.get(channel);
-  if (passing === undefined) {
-    return;
+  for (let passing = state.hcnPassing.get(channel); passing !== undefined; passing = passing.next) {
+    passing.counter.setGaining(
+      passing.tailGood || isLaneDown(state, channel),
+      Math.min(atUs, passing.endUs),
+      (gain, tickUs) => applyHcnGaugeTick(state, tickUs / 1e6, gain, emit),
+    );
   }
-  passing.counter.setGaining(
-    passing.tailGood || isLaneDown(state, channel),
-    Math.min(atUs, passing.endUs),
-    (gain, tickUs) => applyHcnGaugeTick(state, tickUs / 1e6, gain, emit),
-  );
 }
 
 function isLaneDown(state: JudgeCoreState, channel: string): boolean {
@@ -584,12 +595,18 @@ function isLaneDown(state: JudgeCoreState, channel: string): boolean {
 /** Runs every passing Hell Charge note's ticks up to `nowUs` (channel order), and ends those whose tail has passed. */
 function advanceHcnPassing(state: JudgeCoreState, nowUs: number, emit: JudgeCoreEffectSink): void {
   const passings = [...state.hcnPassing.entries()].sort(([left], [right]) => compareJudgeChannels(left, right));
-  for (const [channel, passing] of passings) {
-    passing.counter.advance(Math.min(nowUs, passing.endUs), (gain, tickUs) =>
-      applyHcnGaugeTick(state, tickUs / 1e6, gain, emit),
-    );
-    if (nowUs > passing.endUs) {
-      state.hcnPassing.delete(channel);
+  for (const [channel, first] of passings) {
+    for (let passing: HcnPassingState | undefined = first; passing !== undefined; passing = passing.next) {
+      passing.counter.advance(Math.min(nowUs, passing.endUs), (gain, tickUs) =>
+        applyHcnGaugeTick(state, tickUs / 1e6, gain, emit),
+      );
+      if (nowUs <= passing.endUs) {
+        state.hcnPassing.set(channel, passing);
+        break;
+      }
+      if (passing.next === undefined) {
+        state.hcnPassing.delete(channel);
+      }
     }
   }
 }

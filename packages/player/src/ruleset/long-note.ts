@@ -164,6 +164,35 @@ export class HcnTickCounter {
   }
 }
 
+/** A Hell Charge note passing the judge line, chained to the lane's next one judged before this one has passed. */
+export interface HcnPassingLink<T> {
+  /** The tail's microsecond: the ticks stop there. */
+  endUs: number;
+  next?: T;
+}
+
+/**
+ * Adds a Hell Charge passing that ticks from `startUs` to a lane's chain (ordered by tail) and returns the chain's new
+ * head. beatoraja ticks the HCN that is crossing the judge line (`JudgeManager` L235-L242, L307), so a note judged
+ * early queues behind the one still passing, and a head judged only after its tail passed (missed late) never ticks:
+ * then the chain comes back unchanged.
+ */
+export function addHcnPassing<T extends HcnPassingLink<T>>(
+  head: T | undefined,
+  passing: T,
+  startUs: number,
+): T | undefined {
+  if (startUs >= passing.endUs) {
+    return head;
+  }
+  if (head === undefined || passing.endUs < head.endUs) {
+    passing.next = head;
+    return passing;
+  }
+  head.next = addHcnPassing(head.next, passing, startUs);
+  return head;
+}
+
 /** The note a press consumed, as the multi-BAD collector sees it. Times are in any one unit, compared only. */
 export interface MultiBadConsumedNote {
   time: number;

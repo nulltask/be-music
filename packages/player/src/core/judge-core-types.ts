@@ -82,6 +82,8 @@ export interface HcnPassingState {
   counter: HcnTickCounter;
   /** The tail was released at GOOD or better: the lane gains until the tail passes, held or not. */
   tailGood: boolean;
+  /** The lane's next Hell Charge note, judged before this one has passed: it ticks once this one's tail passes. */
+  next?: HcnPassingState;
 }
 
 /** A long note whose head was hit and whose tail is not resolved yet. */
