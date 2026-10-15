@@ -71,6 +71,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
 - [プレイログ（プレイ履歴）仕様](docs/playlog.ja.md)
+- [コースと段位認定](docs/course.ja.md)
 - [be-music スキンの作り方](docs/be-music-skin.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)

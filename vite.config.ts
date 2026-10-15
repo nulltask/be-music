@@ -28,6 +28,7 @@ const runtimeNeutralSources = [
   'packages/json/src/**/*.ts',
   'packages/parser/src/**/*.ts',
   'packages/player/src/core/**/*.ts',
+  'packages/player/src/course/**/*.ts',
   'packages/player/src/playlog/**/*.ts',
   'packages/player/src/ruleset/**/*.ts',
 ];

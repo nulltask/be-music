@@ -8,6 +8,7 @@ export default defineConfig({
       index: 'src/index.ts',
       'audio-sink': 'src/audio-sink.ts',
       'image-resize-algorithm': 'src/image-resize-algorithm.ts',
+      course: 'src/course/index.ts',
       judging: 'src/judging.ts',
       'playable-notes': 'src/playable-notes.ts',
       playlog: 'src/playlog/index.ts',

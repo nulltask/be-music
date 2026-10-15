@@ -1,4 +1,5 @@
 import * as playerApi from '@be-music/player';
+import * as courseApi from '@be-music/player/course';
 import * as judgingApi from '@be-music/player/judging';
 import * as playlogApi from '@be-music/player/playlog';
 import { registerPlayerExportsCases } from '../../../packages/player/scripts/exports-cases.ts';
@@ -7,6 +8,7 @@ import type { BenchmarkPackageDefinition } from '../exports.types.ts';
 export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
   module: {
     ...(playerApi as Record<string, unknown>),
+    ...Object.fromEntries(Object.entries(courseApi).map(([name, value]) => [`course.${name}`, value])),
     'judging.findClosestCandidateInWindow': judgingApi.findClosestCandidateInWindow,
     'playlog.checkPlaylogEligibility': playlogApi.checkPlaylogEligibility,
     'playlog.serializePlaylog': playlogApi.serializePlaylog,

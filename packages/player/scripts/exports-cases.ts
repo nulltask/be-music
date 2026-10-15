@@ -1,5 +1,6 @@
 import { resolveChart } from '@be-music/chart';
 import * as playerApi from '@be-music/player';
+import * as courseApi from '@be-music/player/course';
 import * as judgingApi from '@be-music/player/judging';
 import * as playlogApi from '@be-music/player/playlog';
 import type { PlayerOptions } from '@be-music/player';
@@ -141,6 +142,96 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.PlayerInterruptedError', {
     run: () => {
       new playerApi.PlayerInterruptedError('escape');
+    },
+  });
+  const benchMd5 = '0123456789abcdef0123456789abcdef';
+  const benchSha256 = 'a'.repeat(64);
+  const benchLr2Course = `<courselist><course><title>Dan</title><line>7</line><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${benchMd5.repeat(4)}</hash></course></courselist>`;
+  const benchBeatorajaCourse = {
+    name: 'Dan',
+    hash: [{ md5: benchMd5, title: 'one' }, { sha256: benchSha256 }],
+    constraint: ['MIRROR', 'GAUGE_LR2', 'LN'],
+    trophy: [{ name: 'gold', missrate: 2.5, scorerate: 85 }],
+  };
+  const benchTableHeader = {
+    mode: 'beat-7k',
+    course: [
+      [{ name: 'sl0', constraint: ['grade_mirror', 'gauge_lr2'], md5: [benchMd5, benchMd5, benchMd5, benchMd5] }],
+    ],
+  };
+  const benchCourse = courseApi.parseBeatorajaCourseData(benchBeatorajaCourse)!;
+  define('player.course.courseConstraintGroup', {
+    run: () => {
+      courseApi.courseConstraintGroup('gauge_lr2');
+    },
+  });
+  define('player.course.parseCourseConstraint', {
+    run: () => {
+      courseApi.parseCourseConstraint('GAUGE_24KEYS');
+    },
+  });
+  define('player.course.normalizeCourseConstraints', {
+    run: () => {
+      courseApi.normalizeCourseConstraints(['grade_mirror', 'CLASS', 'no_good', 'gauge_lr2', 'ln']);
+    },
+  });
+  define('player.course.isClassCourseConstraints', {
+    run: () => {
+      courseApi.isClassCourseConstraints(['gauge_lr2', 'grade_mirror']);
+    },
+  });
+  define('player.course.normalizeCourseTrophies', {
+    run: () => {
+      courseApi.normalizeCourseTrophies(benchBeatorajaCourse.trophy);
+    },
+  });
+  define('player.course.createCourseStageRef', {
+    run: () => {
+      courseApi.createCourseStageRef({ md5: benchMd5, title: 'one' });
+    },
+  });
+  define('player.course.decodeCourseText', {
+    run: () => {
+      courseApi.decodeCourseText(new TextEncoder().encode(benchLr2Course));
+    },
+  });
+  define('player.course.parseLr2CourseFile', {
+    run: () => {
+      courseApi.parseLr2CourseFile(benchLr2Course);
+    },
+  });
+  define('player.course.parseBeatorajaCourseData', {
+    run: () => {
+      courseApi.parseBeatorajaCourseData(benchBeatorajaCourse);
+    },
+  });
+  define('player.course.parseBeatorajaCourseFile', {
+    run: () => {
+      courseApi.parseBeatorajaCourseFile(JSON.stringify([benchBeatorajaCourse]));
+    },
+  });
+  define('player.course.parseBeatorajaRandomCourseData', {
+    run: () => {
+      courseApi.parseBeatorajaRandomCourseData({
+        name: 'R',
+        stage: [{ sql: 'level = 12' }, {}],
+        rconstraint: ['distinct'],
+      });
+    },
+  });
+  define('player.course.resolveTableModeKeys', {
+    run: () => {
+      courseApi.resolveTableModeKeys('beat-7k');
+    },
+  });
+  define('player.course.parseTableHeaderCourses', {
+    run: () => {
+      courseApi.parseTableHeaderCourses(benchTableHeader);
+    },
+  });
+  define('player.course.resolveCourseStages', {
+    run: () => {
+      courseApi.resolveCourseStages(benchCourse, { bySha256: () => 'chart', byMd5: () => 'chart' });
     },
   });
   define('player.playlog.checkPlaylogEligibility', {
