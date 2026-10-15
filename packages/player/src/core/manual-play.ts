@@ -498,6 +498,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             : undefined,
         });
       },
+      onViewChange: (change) => playlogRecorder?.recordViewChange(resolveManualCommandSeconds(), change),
       onUnhandledCommand: (command) => {
         // Replay playback drives the lanes from the recorded input stream — live lane / key-state input must not
         // interleave with it (pause / high-speed / interrupt still arrive through the standard command path).

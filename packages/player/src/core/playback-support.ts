@@ -1,3 +1,4 @@
+import type { PlaylogViewState } from '../playlog/view.ts';
 import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/chart';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { applyHighSpeedControlAction, type HighSpeedControlAction } from './high-speed-control.ts';
@@ -171,6 +172,8 @@ export function consumePlaybackInputCommands(params: {
   setInterruptedReason: (reason: InterruptCommand['reason']) => void;
   onTogglePause: () => void;
   onHighSpeedAction: (action: HighSpeedControlAction | undefined) => void;
+  /** A view change to record (`{ kind: 'view' }`). */
+  onViewChange?: (change: PlaylogViewState) => void;
   onUnhandledCommand?: (command: PlayerInputCommand) => void;
   logInterrupt?: (reason: InterruptCommand['reason']) => void;
 }): void {
@@ -180,6 +183,7 @@ export function consumePlaybackInputCommands(params: {
     setInterruptedReason,
     onTogglePause,
     onHighSpeedAction,
+    onViewChange,
     onUnhandledCommand,
     logInterrupt,
   } = params;
@@ -199,6 +203,10 @@ export function consumePlaybackInputCommands(params: {
     }
     if (command.kind === 'high-speed') {
       onHighSpeedAction(command.action);
+      continue;
+    }
+    if (command.kind === 'view') {
+      onViewChange?.(command.change);
       continue;
     }
     onUnhandledCommand?.(command);

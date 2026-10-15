@@ -1,3 +1,4 @@
+import type { PlaylogTempoChange, PlaylogViewChange, PlaylogViewState } from './view.ts';
 import {
   computeChartFingerprint,
   computePlayFingerprint,
@@ -63,6 +64,8 @@ export interface PlaylogRecorderPlaySettings {
   course?: PlaylogCourseStage;
   /** The play tempo (`PlayerOptions.speed`). Recorded when it is not 1. */
   tempo?: number;
+  /** What the player sees at the start (`PlayerOptions.recordPlaylog.view`): hi-speed, covers and lift. */
+  view?: PlaylogViewState;
   native?: Record<string, string | number | boolean | null>;
 }
 
@@ -78,7 +81,7 @@ export interface PlaylogRecorderPlaySettings {
  */
 export type PlaylogRecordingOptions = Pick<
   PlaylogRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'native'
+  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native'
 > & {
   chartSha256?: string;
   chartMd5?: string;
@@ -136,6 +139,10 @@ export interface PlaylogRecorder {
   ): void;
   /** Counts an LR2-style empty POOR — cached into the native result for diagnostics. */
   recordEmptyPoor(): void;
+  /** Records a view change (hi-speed, covers, lift) at a chart time. An empty change is dropped. */
+  recordViewChange(timeSeconds: number, change: PlaylogViewState): void;
+  /** Records a tempo change at a chart time. A change to the tempo already in force is dropped. */
+  recordTempoChange(timeSeconds: number, tempo: number): void;
   finalize(input: PlaylogRecorderFinalizeInput): BeMusicPlaylog;
 }
 
@@ -144,6 +151,9 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
   const inputs: PlaylogInputEvent[] = [];
   let seq = 0;
   let emptyPoorCount = 0;
+  const viewChanges: PlaylogViewChange[] = [];
+  const tempoChanges: PlaylogTempoChange[] = [];
+  let currentTempo = options.play.tempo ?? 1;
 
   return {
     recordInput: (action, timeSeconds, tokens, channels): void => {
@@ -164,6 +174,18 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
     },
     recordEmptyPoor: (): void => {
       emptyPoorCount += 1;
+    },
+    recordViewChange: (timeSeconds, change): void => {
+      const entries = Object.entries(change).filter(([, value]) => value !== undefined);
+      if (entries.length === 0) return;
+      const recorded: PlaylogViewChange = { timeUs: secondsToMicroseconds(timeSeconds), ...change };
+      if (change.covers !== undefined) recorded.covers = change.covers.map((cover) => ({ ...cover }));
+      viewChanges.push(recorded);
+    },
+    recordTempoChange: (timeSeconds, tempo): void => {
+      if (!(tempo > 0) || tempo === currentTempo) return;
+      currentTempo = tempo;
+      tempoChanges.push({ timeUs: secondsToMicroseconds(timeSeconds), tempo });
     },
     finalize: ({ summary, maxCombo, aborted, abortedAtSeconds }): BeMusicPlaylog => {
       const play: PlaylogPlay = {
@@ -187,6 +209,9 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
       if (options.play.endOnFailure === true) play.endOnFailure = true;
       if (options.play.course !== undefined) play.course = structuredClone(options.play.course);
       if (options.play.tempo !== undefined && options.play.tempo !== 1) play.tempo = options.play.tempo;
+      if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
+      if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
+      if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);
       if (options.play.native !== undefined) play.native = options.play.native;
 
       const createdAt = (options.now?.() ?? new Date()).toISOString();

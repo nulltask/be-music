@@ -1,3 +1,4 @@
+import { playedAtAnotherTempo } from './view.ts';
 import type { BeMusicPlaylog } from './format.ts';
 
 /** Assists a rankable play may use; a ranking lists assisted plays apart. */
@@ -25,7 +26,7 @@ export function checkPlaylogEligibility(playlog: BeMusicPlaylog): PlaylogEligibi
   if (playlog.play.aborted === true) {
     return { eligible: false, reason: 'aborted' };
   }
-  if (playlog.play.tempo !== undefined && playlog.play.tempo !== 1) {
+  if (playedAtAnotherTempo(playlog.play)) {
     return { eligible: false, reason: 'tempo' };
   }
   if (playlog.play.course !== undefined) {

@@ -609,6 +609,50 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       });
     },
   });
+  const benchView = { hiSpeed: 2, hsFix: 'MAIN', covers: [{ side: '1P' as const, sudden: 0.2, hidden: 0, lift: 0.1 }] };
+  const benchViewChanges = [
+    { timeUs: 1_000_000, hiSpeed: 2.5 },
+    { timeUs: 2_000_000, covers: [{ side: '1P' as const, sudden: 0.3, hidden: 0, lift: 0.1 }] },
+  ];
+  const benchTempoChanges = [
+    { timeUs: 1_000_000, tempo: 1.25 },
+    { timeUs: 2_000_000, tempo: 1 },
+  ];
+  define('player.playlog.resolvePlaylogViewAt', {
+    run: () => {
+      playlogApi.resolvePlaylogViewAt(benchView, benchViewChanges, 1_500_000);
+    },
+  });
+  define('player.playlog.resolvePlaylogTempoAt', {
+    run: () => {
+      playlogApi.resolvePlaylogTempoAt(1, benchTempoChanges, 1_500_000);
+    },
+  });
+  define('player.playlog.playedAtAnotherTempo', {
+    run: () => {
+      playlogApi.playedAtAnotherTempo({ tempoChanges: benchTempoChanges });
+    },
+  });
+  define('player.playlog.resolveReplayView', {
+    run: () => {
+      playlogApi.resolveReplayView(benchView, { hiSpeed: 1 }, playlogApi.DEFAULT_PLAYLOG_VIEW_REPLAY);
+    },
+  });
+  define('player.playlog.parsePlaylogViewState', {
+    run: () => {
+      playlogApi.parsePlaylogViewState(benchView, 'play.view');
+    },
+  });
+  define('player.playlog.parsePlaylogViewChanges', {
+    run: () => {
+      playlogApi.parsePlaylogViewChanges(benchViewChanges, 'play.viewChanges');
+    },
+  });
+  define('player.playlog.parsePlaylogTempoChanges', {
+    run: () => {
+      playlogApi.parsePlaylogTempoChanges(benchTempoChanges, 'play.tempoChanges');
+    },
+  });
   define('player.playlog.computeCourseFingerprint', {
     run: () => {
       playlogApi.computeCourseFingerprint({

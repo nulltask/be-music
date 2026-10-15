@@ -1,4 +1,5 @@
 import { signal } from 'alien-signals';
+import type { PlaylogViewState } from '../playlog/view.ts';
 import type { HighSpeedControlAction } from './high-speed-control.ts';
 
 type WritableSignal<T> = {
@@ -10,6 +11,11 @@ export type PlayerInputCommand =
   | { kind: 'interrupt'; reason: 'escape' | 'ctrl-c' | 'restart' }
   | { kind: 'toggle-pause' }
   | { kind: 'high-speed'; action: HighSpeedControlAction }
+  /**
+   * The host's view changed (hi-speed, covers, lift): the engine records it in the play log at the chart time it
+   * drains the command. It changes no judgment.
+   */
+  | { kind: 'view'; change: PlaylogViewState }
   | {
       kind: 'lane-input';
       tokens: string[];
