@@ -593,6 +593,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       },
     ],
   });
+  define('player.playlog.createCourseFingerprintDocument', {
+    run: () => {
+      playlogApi.createCourseFingerprintDocument({
+        kind: 'nonstop',
+        constraints: [],
+        stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c'],
+        nonstop: { connections: ['cut'], placement: 'intended' },
+      });
+    },
+  });
   define('player.playlog.computeCourseFingerprint', {
     run: () => {
       playlogApi.computeCourseFingerprint({

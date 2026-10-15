@@ -4,6 +4,8 @@ import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { createCoursePlaylog, parseCoursePlaylog, serializeCoursePlaylog } from './course.ts';
 import {
   computeCourseFingerprint,
+  createCourseFingerprintDocument,
+  type CourseFingerprintInput,
   computeCoursePlaylogFingerprint,
   resolveCourseStageChartFingerprints,
 } from './course-fingerprint.ts';
@@ -37,14 +39,21 @@ function stageLog(chartFingerprint: string | undefined): BeMusicPlaylog {
 }
 
 describe('computeCourseFingerprint', () => {
-  test('hashes the kind, the sorted constraints and the stage charts in order', () => {
-    const fingerprint = computeCourseFingerprint({
-      kind: 'grade',
+  test('hashes the RFC 8785 form of the course document', () => {
+    const input = {
+      kind: 'grade' as const,
       constraints: ['grade_mirror', 'gauge_lr2'],
       stageChartFingerprints: ['bmfp0:a', 'bmfp0:b'],
+    };
+    expect(createCourseFingerprintDocument(input)).toEqual({
+      v: 'bmcourse0',
+      kind: 'grade',
+      constraints: ['gauge_lr2', 'grade_mirror'],
+      stages: ['bmfp0:a', 'bmfp0:b'],
     });
-    expect(fingerprint).toBe(
-      `bmcourse0:${sha256Hex('{"kind":"grade","constraints":["gauge_lr2","grade_mirror"],"stages":["bmfp0:a","bmfp0:b"]}')}`,
+    // Keys sorted, no whitespace.
+    expect(computeCourseFingerprint(input)).toBe(
+      `bmcourse0:${sha256Hex('{"constraints":["gauge_lr2","grade_mirror"],"kind":"grade","stages":["bmfp0:a","bmfp0:b"],"v":"bmcourse0"}')}`,
     );
   });
 
@@ -85,11 +94,50 @@ describe('computeCourseFingerprint', () => {
     expect(nonstop(['cut'])).not.toBe(base);
     expect(nonstop(['fade'], 'lr2')).not.toBe(base);
     expect(nonstop(['fade', 'cut'])).toBe(base);
+    // A seam the course does not name is stitched as `fade`, so it is keyed as one.
+    expect(nonstop([])).toBe(base);
+    expect(
+      createCourseFingerprintDocument({
+        kind: 'nonstop',
+        constraints: [],
+        stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c'],
+        nonstop: { connections: ['cut'], placement: 'lr2' },
+      }).nonstop,
+    ).toEqual({ connections: ['cut', 'fade'], placement: 'lr2' });
     // Other kinds ignore it, so their fingerprints are what they were.
     const expert = { kind: 'expert' as const, constraints: [], stageChartFingerprints: stages };
     expect(computeCourseFingerprint({ ...expert, nonstop: { connections: ['cut'], placement: 'lr2' } })).toBe(
       computeCourseFingerprint(expert),
     );
+  });
+});
+
+describe('golden course fingerprints (bmcourse0)', () => {
+  // Pinned values: a change to any of them changes every stored course key. Under a stable version, updating one means
+  // bumping the version (docs/fingerprint-spec.md).
+  test.each([
+    [
+      'grade',
+      { kind: 'grade', constraints: ['MIRROR', 'GAUGE_LR2'], stageChartFingerprints: ['bmfp0:a', 'bmfp0:b'] },
+      'bmcourse0:82fb50db317e47fb09055175c9529d86568d43561359e05ac5febdddac325f96',
+    ],
+    [
+      'expert',
+      { kind: 'expert', constraints: [], stageChartFingerprints: ['bmfp0:a'] },
+      'bmcourse0:30901132f2b861db0e42388c1abc31879b9195fa400d20cda6f185ba9aadb4c6',
+    ],
+    [
+      'nonstop',
+      {
+        kind: 'nonstop',
+        constraints: [],
+        stageChartFingerprints: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c'],
+        nonstop: { connections: ['cut-fit'], placement: 'intended' },
+      },
+      'bmcourse0:488fd2163f590facad49757c979e6b41cae07bc94d75459eb2e2629c1a2b43f0',
+    ],
+  ] as const)('%s', (_name, input, expected) => {
+    expect(computeCourseFingerprint(input as CourseFingerprintInput)).toBe(expected);
   });
 });
 

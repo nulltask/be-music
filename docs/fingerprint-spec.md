@@ -279,3 +279,46 @@ The `bmfp0` prefix names the algorithm version. Fingerprints are only comparable
 ## 7. Play logs
 
 The play log records the chart fingerprint of the chart as `chart.chartFingerprint`, the play fingerprint of what was played as `chart.playFingerprint`, and the play's `#RANDOM` / `#SWITCH` outcomes as `play.randomDraws`, its `RandomDraws` (see [playlog.md](./playlog.md)). The chart fingerprint is the one to group plays by: every play of a chart shares it, whatever its `#RANDOM` lines rolled. A verifier with the chart file re-resolves it with those draws (`resolveBmsControlFlowWithDraws(json, randomDraws)`, which rejects draws that were not drawn for the chart) and recomputes the play fingerprint with the chart's extension. `createPlaylogRecorder` in `@be-music/player` computes both from the source chart — the chart as loaded, which a host that resolves `#RANDOM` or rewrites lanes itself passes as `recordPlaylog.sourceChart`, otherwise the chart the engine was handed — resolved with the play's draws for the play fingerprint, so lane options (RANDOM / MIRROR / DP FLIP) do not change either. Without a source chart the draws were drawn for, the play fingerprint comes from the chart the engine played and the chart fingerprint is omitted unless the play has no draws. Its lane-mode input is the engine's `laneModeExtension`; without one, a 9 KEY play stands in for `.pms`. The draws are the engine's `PlayerOptions.randomDraws`: every host draws once per play (`resolvePlayChart`) and hands the same draws to the engine, which records them, and a replay passes the log's draws back the same way.
+
+## 8. Course fingerprint
+
+A course (a dan course, an expert or NONSTOP course, a beatoraja course or a table's course) is identified by its **course fingerprint**, built on the chart fingerprints of its stages with the same rules as `bmfp`: what plays alike is written alike, the document is canonical JSON, and the version is part of both the document and the output.
+
+```mermaid
+flowchart LR
+  input["kind, constraints,<br/>stage chart fingerprints,<br/>NONSTOP connections + placement"] --> doc["course document<br/>(normalized)"]
+  doc --> jcs["RFC 8785 text"]
+  jcs --> hash["bmcourse0:&lt;sha256&gt;"]
+```
+
+### 8.1 Document
+
+```json
+{
+  "v": "bmcourse0",
+  "kind": "nonstop",
+  "constraints": [],
+  "stages": ["bmfp0:…", "bmfp0:…", "bmfp0:…"],
+  "nonstop": { "connections": ["cut-fit", "fade"], "placement": "intended" }
+}
+```
+
+| Field         | Rule                                                                                                                                                                                                                                                                 |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v`           | The version, `"bmcourse0"`.                                                                                                                                                                                                                                          |
+| `kind`        | `grade`, `expert` or `nonstop` (`RulesetCourseKind`).                                                                                                                                                                                                                |
+| `constraints` | The constraints as `normalizeCourseConstraints` reads them: beatoraja enum names (`MIRROR`) become table-header names (`grade_mirror`), unknown names are dropped, one per group is kept as beatoraja keeps it; then deduplicated and sorted.                        |
+| `stages`      | Each stage's chart fingerprint (section 1), in stage order. A random course is keyed by the stages it drew.                                                                                                                                                          |
+| `nonstop`     | NONSTOP courses only. `connections` has exactly one entry per seam (stages − 1): a connection listed after the last stage joins nothing and is dropped, and a seam the course does not name is `fade`, as the stitcher reads it. `placement` is `intended` or `lr2`. |
+
+Left out, because they do not change what is played: the course name, the trophies, the `release` flag, and the stitching rule version a NONSTOP play log records (`nonstop.stitch`, so a fix to the stitching keeps the course's board; [playlog.md](./playlog.md#course-play-logs)).
+
+### 8.2 Output and versioning
+
+```
+bmcourse0:<lowercase hex SHA-256 of the RFC 8785 text of the document>
+```
+
+Every value is a string or a list of strings, so the RFC 8785 text is the document with its keys sorted and no whitespace. Like `bmfp0`, `bmcourse0` is the development version and may change without a version bump; a course fingerprint also changes whenever a stage's chart fingerprint does. From the first stable version on, any change to the document of an existing course needs a new version. `packages/player/src/playlog/course-fingerprint.test.ts` pins golden values for this.
+
+`createCourseFingerprintDocument(input)` and `computeCourseFingerprint(input)` in `@be-music/player/playlog` implement this section, with `canonicalizeJsonValue` and `sha256Hex` from `@be-music/chart`; `computeCoursePlaylogFingerprint(log)` reads the input from a course play log.

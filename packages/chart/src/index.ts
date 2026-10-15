@@ -133,6 +133,7 @@ export {
   type FingerprintTotal,
 } from './fingerprint.ts';
 export { resolveChartMainBpm, type MainBpmChart } from './main-bpm.ts';
+export { canonicalizeJsonValue } from './fingerprint-document.ts';
 export { sha256Hex } from './sha256.ts';
 
 export interface BeatResolver {
