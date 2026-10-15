@@ -20,6 +20,7 @@ export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
     'playlog.extractCourseStage': playlogApi.extractCourseStage,
     'playlog.parseCoursePlaylog': playlogApi.parseCoursePlaylog,
     'playlog.resolveCourseLamp': playlogApi.resolveCourseLamp,
+    'playlog.resolveCoursePlaylogFilename': playlogApi.resolveCoursePlaylogFilename,
     'playlog.resolveCourseTrophy': playlogApi.resolveCourseTrophy,
     'playlog.serializeCoursePlaylog': playlogApi.serializeCoursePlaylog,
     'playlog.simulateCoursePlaylog': playlogApi.simulateCoursePlaylog,

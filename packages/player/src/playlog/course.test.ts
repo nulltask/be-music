@@ -7,6 +7,7 @@ import {
   createCoursePlaylog,
   extractCourseStage,
   parseCoursePlaylog,
+  resolveCoursePlaylogFilename,
   resolveCourseLamp,
   resolveCourseTrophy,
   serializeCoursePlaylog,
@@ -228,6 +229,29 @@ describe('course play logs', () => {
     const simulated = simulateCoursePlaylog(log, { ruleset: 'lr2' });
     expect(simulated).toMatchObject({ stagesPlayed: 2, missCount: 16, lamp: 'FAILED', judge: native.judge });
     expect(parseCoursePlaylog(JSON.parse(serializeCoursePlaylog(log)))).toEqual(log);
+  });
+
+  test('resolveCoursePlaylogFilename names the file after the course and the time', () => {
+    const log = createCoursePlaylog({
+      course: { ...COURSE, name: 'Dan: 1/2 ' },
+      stages: [
+        {
+          played: false,
+          facts: {
+            sourceFormat: 'bms',
+            laneMode: '7-key-sp',
+            lnMode: 1,
+            judgeRank: { percent: 75 },
+            notes: { normal: 1, long: { 1: 0, 2: 0, 3: 0 } },
+          },
+        },
+      ],
+      createdAt: '2026-10-15T01:02:03.004Z',
+    });
+    expect(resolveCoursePlaylogFilename(log)).toBe('Dan 1 2-2026-10-15T01-02-03-004Z.bmcourse.json');
+    expect(resolveCoursePlaylogFilename({ ...log, createdAt: undefined, course: { ...log.course, name: '' } })).toBe(
+      'course-unknown-time.bmcourse.json',
+    );
   });
 
   test('parseCoursePlaylog names the stage and field of a structural problem', () => {

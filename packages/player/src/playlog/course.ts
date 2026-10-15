@@ -329,6 +329,26 @@ export function serializeCoursePlaylog(courseLog: BeMusicCoursePlaylog): string 
   return JSON.stringify(courseLog);
 }
 
+/**
+ * Suggested filename for a course play log: `<course name>-<timestamp>.bmcourse.json`, with filesystem-hostile
+ * characters stripped. `when` defaults to the log's own `createdAt`.
+ */
+export function resolveCoursePlaylogFilename(courseLog: BeMusicCoursePlaylog, when?: Date): string {
+  const stem =
+    courseLog.course.name
+      .normalize('NFKC')
+      .replace(/[\\/:*?"<>|]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60) || 'course';
+  const source = when ?? (courseLog.createdAt !== undefined ? new Date(courseLog.createdAt) : undefined);
+  const timestamp =
+    source !== undefined && Number.isFinite(source.getTime())
+      ? source.toISOString().replace(/[:.]/g, '-')
+      : 'unknown-time';
+  return `${stem}-${timestamp}${COURSE_PLAYLOG_FILE_SUFFIX}`;
+}
+
 const COURSE_KINDS: ReadonlySet<string> = new Set(['grade', 'expert', 'nonstop']);
 const COURSE_LAMPS: ReadonlySet<string> = new Set(LAMP_ORDER);
 

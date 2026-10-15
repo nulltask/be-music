@@ -31,6 +31,7 @@ export { manualPlay } from './manual-play.ts';
 export {
   formatRandomPatternSummary,
   resolveBmsControlFlowForPlayback,
+  resolveChartRulesetFacts,
   resolvePlayChart,
 } from './engine-preparation.ts';
 export { resolveBgmHeadroomGain, shouldUseAutoMixBgmHeadroomControl } from './engine-audio.ts';

@@ -12,8 +12,8 @@ import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { type LaneBinding } from './lane-layout.ts';
 import { type PlayerUiSignalBus } from './ui-signal-bus.ts';
-import { type RulesetConfig } from '../ruleset/index.ts';
-import { initializePlayerUiRuntime } from './bootstrap.ts';
+import { rulesetChartFactsFromChart, type RulesetChartFacts, type RulesetConfig } from '../ruleset/index.ts';
+import { initializePlayerUiRuntime, preparePlaybackChart } from './bootstrap.ts';
 import { createAudioSessionIfEnabled } from './engine-audio.ts';
 import { delay } from './engine-clock.ts';
 import {
@@ -430,4 +430,17 @@ export async function settleMaybeAsyncWithTimeout(
     return true;
   }
   return settleWithTimeout(Promise.resolve(task), timeoutMs);
+}
+
+/**
+ * The ruleset facts of a chart a host has not played: what a course result needs to count the notes of a stage the
+ * run never reached. `#RANDOM` / `#SWITCH` take their first branch, so the count is the same every time.
+ */
+export function resolveChartRulesetFacts(
+  json: BeMusicJson,
+  options: Pick<PlayerOptions, 'laneModeExtension' | 'playVariant' | 'inferBmsLnTypeWhenMissing'> = {},
+): RulesetChartFacts {
+  const { chart, randomDraws } = resolvePlayChart(json, { random: () => 0 });
+  const resolved = resolveEngineChart(chart, { ...options, randomDraws });
+  return rulesetChartFactsFromChart(chart, preparePlaybackChart(resolved, options));
 }
