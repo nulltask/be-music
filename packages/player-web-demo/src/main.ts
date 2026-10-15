@@ -194,7 +194,12 @@ import {
   rememberCourseTableUrl,
 } from './course-table-import.ts';
 import { buildNonstopCoursePlaylog, prepareNonstopCourse, type PreparedNonstopCourse } from './nonstop-course.ts';
-import { LR2_COURSE_MAKER_MAX_STAGES, type CourseDefinition } from '@be-music/player/course';
+import {
+  countLr2UnplayedStages,
+  LR2_COURSE_MAKER_MAX_STAGES,
+  LR2_MAX_PLAYED_STAGES,
+  type CourseDefinition,
+} from '@be-music/player/course';
 import { CourseMakerPanel } from './course-maker-panel.ts';
 import { loadMadeCourses, saveMadeCourses } from './course-maker-store.ts';
 
@@ -2167,6 +2172,17 @@ class PlayerWebDemoApp {
         for (const group of groups) {
           dropLog.info(
             `course file: ${path} · ${group.label} · courses=${group.courses.length} random=${group.randomCourses?.length ?? 0}`,
+          );
+        }
+        // LR2 plays only the first five stages of a course, so an `.lr2crs` course listing more is read cut short.
+        const cutShort = groups
+          .flatMap((group) => group.courses)
+          .filter((course) => countLr2UnplayedStages(course) > 0);
+        if (cutShort.length > 0) {
+          const names = cutShort.map((course) => course.name || '(untitled)').join(', ');
+          dropLog.warn(`course file: ${path} · read as the first ${LR2_MAX_PLAYED_STAGES} stages LR2 plays: ${names}`);
+          this.setStatus(
+            `${path}: ${cutShort.length} course(s) list more than ${LR2_MAX_PLAYED_STAGES} stages; LR2 plays only the first ${LR2_MAX_PLAYED_STAGES}, so the rest were left out`,
           );
         }
       } catch (error) {

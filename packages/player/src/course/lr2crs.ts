@@ -90,3 +90,14 @@ export function parseLr2CourseFile(input: Uint8Array | string): CourseDefinition
   }
   return courses;
 }
+
+/**
+ * How many stages an `.lr2crs` course lists past the five LR2 plays ({@link LR2_MAX_PLAYED_STAGES}), which
+ * {@link parseLr2CourseFile} leaves out: its `hash` still holds them. `0` for a course of five stages or fewer and for a
+ * course from another format, so a host can tell the player that a course was cut short.
+ */
+export function countLr2UnplayedStages(course: CourseDefinition): number {
+  if (course.source.format !== 'lr2crs') return 0;
+  const listed = Math.floor(course.source.hash.length / LR2_HASH_BLOCK) - 1;
+  return Math.max(0, listed - course.stages.length);
+}

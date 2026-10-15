@@ -311,6 +311,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseApi.parseLr2CourseFile(benchLr2Course);
     },
   });
+  const benchLr2Parsed = courseApi.parseLr2CourseFile(benchLr2Course)[0]!;
+  define('player.course.countLr2UnplayedStages', {
+    run: () => {
+      courseApi.countLr2UnplayedStages(benchLr2Parsed);
+    },
+  });
   const benchDraftStage = { md5: 'a'.repeat(32), keyMode: 7, title: 'Song' };
   const benchDraft = { kind: 'nonstop' as const, name: 'Bench', stages: [benchDraftStage, benchDraftStage] };
   const benchMadeCourse = courseApi.finishCourseDraft(benchDraft)!;

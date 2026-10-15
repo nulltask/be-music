@@ -12,6 +12,7 @@ import {
   parseBeatorajaCourseFile,
   parseBeatorajaRandomCourseData,
   parseCourseConstraint,
+  countLr2UnplayedStages,
   parseLr2CourseFile,
   parseLr2NonstopConnections,
   parseTableHeaderCourses,
@@ -340,5 +341,12 @@ describe('LR2 stage limit', () => {
     );
     // LR2 clamps every course type, not only NONSTOP.
     expect(expert!.stages.map((stage) => stage.md5)).toEqual(md5s.slice(0, 5));
+    // The left-out stage is still counted, so a host can say the course was cut short.
+    expect(countLr2UnplayedStages(expert!)).toBe(1);
+    const [short] = parseLr2CourseFile(
+      `<courselist><course><title>S</title><type>0</type><hash>${header}${md5s.slice(0, 5).join('')}</hash></course></courselist>`,
+    );
+    expect(countLr2UnplayedStages(short!)).toBe(0);
+    expect(countLr2UnplayedStages({ ...expert!, source: { format: 'beatoraja-json' } })).toBe(0);
   });
 });
