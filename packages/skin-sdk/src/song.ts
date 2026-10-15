@@ -1,4 +1,5 @@
 import type { BeMusicJson } from '@be-music/json';
+import type { CourseDefinition } from '@be-music/player/course';
 
 /** Where a song came from: a dropped directory, a zip, or loose files. */
 export type BrowserSongSourceKind = 'directory' | 'zip' | 'files';
@@ -31,15 +32,38 @@ export interface BrowserSongEntry {
 export interface BrowserFolderNode {
   label: string;
   songs: readonly BrowserSongEntry[];
+  /** A course folder (a course file, or one group of a difficulty table's courses) lists courses instead of songs. */
+  courses?: readonly BrowserCourseEntry[];
+}
+
+/** One stage of a course in the collection: the local chart it resolved to, if any. */
+export interface BrowserCourseStage {
+  /** The chart's title, or the course file's title for a stage that is not in the collection. */
+  title: string;
+  song?: BrowserSongEntry;
 }
 
 /**
- * One entry in the bar list when navigating the song collection. A select view either shows folder bars (when at the
- * root) or song bars (when inside a folder).
+ * A course in the collection: its definition (from `@be-music/player/course`) with each stage matched to a local
+ * chart. A course with a missing stage is listed but cannot be started.
+ */
+export interface BrowserCourseEntry {
+  /** Stable within a session: the folder label and the course's index in it. */
+  id: string;
+  definition: CourseDefinition;
+  stages: readonly BrowserCourseStage[];
+  /** Every stage was found locally. */
+  playable: boolean;
+}
+
+/**
+ * One entry in the bar list when navigating the song collection. A select view shows folder bars at the root and song
+ * bars inside a song folder, or course bars inside a course folder.
  */
 export type BrowserBrowseEntry =
   | { kind: 'folder'; folder: BrowserFolderNode }
-  | { kind: 'song'; song: BrowserSongEntry };
+  | { kind: 'song'; song: BrowserSongEntry }
+  | { kind: 'course'; course: BrowserCourseEntry };
 
 /** A song image a host can hand a skin: the chart's `#STAGEFILE`, `#BANNER`, or `#BACKBMP`. */
 export type BeMusicSongImageKind = 'stageFile' | 'banner' | 'backBmp';

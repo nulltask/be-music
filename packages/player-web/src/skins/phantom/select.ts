@@ -32,6 +32,9 @@ import {
   resolveSongRowFacts,
   stageProgress,
   selectListRows,
+  browseEntryBadge,
+  browseEntryCount,
+  browseEntryTitle,
 } from '@be-music/skin-sdk';
 import {
   addHitArea,
@@ -579,17 +582,19 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     const active = entryIndex === frame.selectedIndex;
     const song = entry.kind === 'song' ? entry.song : undefined;
     const folder = entry.kind === 'folder' ? entry.folder : undefined;
-    const titleText = song?.title ?? folder?.label ?? '';
+    const titleText = browseEntryTitle(entry);
     const keyText = song ? formatPlayVariantLabel(song).replace(' KEYS', '') : 'DIR';
     // One line per row: the title (and artist) on the left; on the right the facts a player checks before picking —
     // gimmick tags, note count, length and tempo range in fixed columns, so they line up down the list. Folders show
     // their size instead.
     const facts = song ? resolveSongRowFacts(song) : undefined;
-    const metaText = facts
-      ? `${facts.bpm} BPM`
-      : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
+    const metaText = facts ? `${facts.bpm} BPM` : (browseEntryCount(entry) ?? '');
     const playLevelText =
-      song?.playLevel !== undefined ? String(song.playLevel) : folder ? String(folder.songs.length) : '-';
+      song?.playLevel !== undefined
+        ? String(song.playLevel)
+        : folder
+          ? String(folder.courses?.length ?? folder.songs.length)
+          : browseEntryBadge(entry);
     // The focused row slides out to the left like a pulled card; the rest stay racked against the well. On entry the
     // rows fly in from the right one after another.
     const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;
