@@ -195,8 +195,12 @@ export class CourseMakerPanel {
 
   private readonly maker: CourseMaker;
 
-  constructor(maker: CourseMaker) {
+  /** Reports what the card's buttons did on the host's status line. */
+  private readonly onStatus: ((text: string) => void) | undefined;
+
+  constructor(maker: CourseMaker, options: { onStatus?: (text: string) => void } = {}) {
     this.maker = maker;
+    this.onStatus = options.onStatus;
     this.card = element('aside', { className: 'course-maker-card' });
     this.card.hidden = true;
     this.card.setAttribute('aria-label', 'Course maker');
@@ -292,7 +296,10 @@ export class CourseMakerPanel {
       connection: element('div'),
       constraints: element('div'),
       removeLast: button('Remove last', 'account-dialog-quiet', () => this.maker.removeLast()),
-      save: button('Save', 'account-dialog-primary', () => this.maker.finish()),
+      save: button('Save', 'account-dialog-primary', () => {
+        const saved = this.maker.finish();
+        if (saved !== undefined) this.onStatus?.(`Saved the course "${saved.name}"`);
+      }),
     };
     this.card.replaceChildren(
       element('header', {}, [parts.title, parts.hint]),
@@ -302,7 +309,10 @@ export class CourseMakerPanel {
       parts.constraints,
       element('div', { className: 'course-maker-buttons' }, [
         parts.removeLast,
-        button('Cancel', 'account-dialog-quiet', () => this.maker.cancel()),
+        button('Cancel', 'account-dialog-quiet', () => {
+          this.maker.cancel();
+          this.onStatus?.('Stopped making the course');
+        }),
         parts.save,
       ]),
     );

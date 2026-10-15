@@ -185,6 +185,7 @@ import {
   courseDecideSong,
   describeNonstopPrepareFailure,
   describeRandomCourseDrawFailure,
+  describeUnplayableCourse,
   planCourseStart,
   resolveCourseRecordUpdate,
   resolveGameplayExit,
@@ -974,7 +975,7 @@ class PlayerWebDemoApp {
 
   public start(): void {
     this.buildGui();
-    this.courseMakerPanel = new CourseMakerPanel(this.courseMaker);
+    this.courseMakerPanel = new CourseMakerPanel(this.courseMaker, { onStatus: (text) => this.setStatus(text) });
     void loadMadeCourses().then(async (made) => {
       this.courseMaker.restore(made);
       if (made.courses.length > 0 && this.collection.songs.length > 0) await this.refreshMadeCourses();
@@ -2327,7 +2328,10 @@ class PlayerWebDemoApp {
       this.setStatus('Making a course: decide songs to add them, then save');
       return;
     }
-    if (plan.action === 'unplayable') return;
+    if (plan.action === 'unplayable') {
+      this.setStatus(describeUnplayableCourse(entry));
+      return;
+    }
     this.courseReturnNavigation = this.selectView?.getNavigation() ?? this.lastSelectNavigation;
     let course = entry;
     if (plan.action === 'draw') {

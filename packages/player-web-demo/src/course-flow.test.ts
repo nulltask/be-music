@@ -8,6 +8,7 @@ import {
   courseRecordPlay,
   describeNonstopPrepareFailure,
   describeRandomCourseDrawFailure,
+  describeUnplayableCourse,
   planCourseStart,
   resolveCourseRecordUpdate,
   resolveGameplayExit,
@@ -95,6 +96,14 @@ describe('courseDecideSong', () => {
 });
 
 describe('failure messages', () => {
+  test('say how many stages of an unplayable course are missing', () => {
+    const missingOne = course({ playable: false, stages: [{ title: 'a', song: song('a') }, { title: 'x' }] });
+    expect(describeUnplayableCourse(missingOne)).toBe('Dan: 1 stage is not in the collection');
+    expect(describeUnplayableCourse(course({ playable: false, stages: [{ title: 'x' }, { title: 'y' }] }))).toBe(
+      'Dan: 2 stages are not in the collection',
+    );
+  });
+
   test('say which stage of a random course could not be drawn, and why', () => {
     expect(describeRandomCourseDrawFailure('R', { ok: false, stage: 1, reason: 'no-candidates' })).toBe(
       'R: stage 2 matches no chart',

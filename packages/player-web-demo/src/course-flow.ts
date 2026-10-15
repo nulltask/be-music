@@ -38,6 +38,13 @@ export function courseDecideSong(course: BrowserCourseEntry, first: BrowserSongE
   return { ...stage, title: course.definition.name };
 }
 
+/** The status line for a course that cannot start because some of its stages are not in the collection. */
+export function describeUnplayableCourse(course: BrowserCourseEntry): string {
+  const missing = course.stages.filter((stage) => stage.song === undefined).length;
+  const count = missing === 1 ? '1 stage is' : `${missing} stages are`;
+  return `${course.definition.name}: ${count} not in the collection`;
+}
+
 /** The status line for a random course whose stages could not be drawn. */
 export function describeRandomCourseDrawFailure(name: string, failure: RandomCourseDrawFailure): string {
   const why =
