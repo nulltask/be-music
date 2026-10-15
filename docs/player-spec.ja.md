@@ -590,8 +590,8 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
   AUTO SCRATCH のレーンには刻みはありません。
 
 離鍵はその瞬間に確定します。例外はルールセットのロングノート離鍵マージン（`longNoteReleaseMarginUs`、beatoraja の
-`longnoteMargin` / `longscratchMargin`）で、beatoraja の PMS ルールでは、終点より前の離鍵が `BAD` 以下になる場合に
-確定を 200 ms 待ち、その間にレーンを押し直すと離さなかったものとしてホールドを続けます。LR2、IIDX、beatoraja の
+`longnoteMargin` / `longscratchMargin`）で、beatoraja の PMS ルールでは、終点より前の離鍵が早い側の `BAD` 以下になる場合に
+確定を 200 ms 待ち（LN では始点の方が離鍵よりずれていれば始点のタイミングを使うため、遅い `BAD` の始点はすぐ確定します）、その間にレーンを押し直すと離さなかったものとしてホールドを続けます。LR2、IIDX、beatoraja の
 ほかのモードにはマージンがありません。離鍵イベントのない入力（kitty キーボードプロトコルのない端末）に限り、押下を
 最後のリピートから 120 ms 押されているものとみなします。
 

@@ -617,7 +617,8 @@ The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's
 
 A release is settled at its own instant. The one exception is the ruleset's long-note release margin
 (`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release
-that would score `BAD` or worse before the tail waits 200 ms, and pressing the lane again inside it resumes the hold as
+that would score an early `BAD` or worse before the tail waits 200 ms (for an LN the timing is the head's when the head
+was further off than the release, so a late `BAD` head settles at once), and pressing the lane again inside it resumes the hold as
 if it had never been let go. LR2, IIDX and beatoraja's other modes have no margin. Only input without release events
 (a terminal without the kitty keyboard protocol) still treats a press as held for 120 ms after its last repeat.
 
