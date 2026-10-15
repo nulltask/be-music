@@ -606,6 +606,12 @@ that would score `BAD` or worse before the tail waits 200 ms, and pressing the l
 if it had never been let go. LR2, IIDX and beatoraja's other modes have no margin. Only input without release events
 (a terminal without the kitty keyboard protocol) still treats a press as held for 120 ms after its last repeat.
 
+A press on a lane whose long note is held (a second key bound to the lane, such as the turntable's other direction)
+never judges another note on that lane: the lane's current note is the long note. What it does instead is the
+ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head again when the press falls within its `BAD` window and
+charges an empty `POOR` otherwise (OpenLR2 `ProcLongnote`); `beatoraja` ignores it as a re-press (`JudgeManager`
+L355-377), and `iidx` does the same.
+
 A long note the player never touched owes one `POOR` for the head, plus a second for the tail under charge modes —
 except under IIDX, where the cancelled tail owes nothing.
 

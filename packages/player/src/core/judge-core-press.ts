@@ -7,6 +7,7 @@ import { preferJudgeCandidate, type JudgeSelectionCandidate } from '../ruleset/s
 import {
   isLongPlayableNote,
   judgeDeltaUs,
+  RULESET_JUDGE_KINDS,
   resolveLongNoteEarlyReleaseJudge,
   resolveManualTimedJudge,
   resolveRulesetLongNoteMode,
@@ -262,10 +263,22 @@ export function handleLanePress(
   // selection, timing deltas, windows, the lane keysound and the empty-POOR reach all read `judgeSec`, while the
   // judgments, logs, gauge history and UI cues keep the true `nowSec`.
   const judgeSec = toJudgeClock(config, nowSec);
+  // With key-state input a lane whose long note is held is pressed again by another key bound to it: its current note
+  // is the long note, so the press never judges another note there; the ruleset says what it does instead.
+  const heldLongNoteChannels = state.keyStateInput
+    ? [...candidateChannels].filter((channel) => state.activeLongNotes.has(channel) && !resumedChannels.has(channel))
+    : [];
+  for (const channel of heldLongNoteChannels) {
+    applyPressDuringLongNote(state, channel, judgeSec, nowSec, emit);
+  }
   const judgedChannels =
-    resumedChannels.size === 0
+    resumedChannels.size === 0 && heldLongNoteChannels.length === 0
       ? candidateChannels
-      : new Set([...candidateChannels].filter((channel) => !resumedChannels.has(channel)));
+      : new Set(
+          [...candidateChannels].filter(
+            (channel) => !resumedChannels.has(channel) && !heldLongNoteChannels.includes(channel),
+          ),
+        );
   if (judgedChannels.size === 0) {
     return;
   }
@@ -305,29 +318,7 @@ export function handleLanePress(
       // No note in the ruleset's miss window — the press is harmless: only the lane keysound plays.
       return;
     }
-    // Empty POOR (空POOR): a phantom press near a note but outside every judgable window. It costs gauge and fires the
-    // POOR cue without consuming the note, so it never reaches EX-SCORE. Repeatable per note (LR2's
-    // `MissCondition.ALWAYS`). Whether it breaks the combo is the ruleset's call.
-    state.summary.emptyPoor += 1;
-    applyGaugeJudge(state, nowSec, 'EMPTY_POOR', emit, 'empty-poor');
-    if (ruleset.comboBreaksOnEmptyPoor) {
-      // The score tracker keeps the combo the max combo is measured on, so it breaks too.
-      state.scoreTracker.combo = 0;
-      setCombo(state, nowSec, 0, 'judge', emit, 'POOR');
-    }
-    emit({ kind: 'record-empty-poor' });
-    emit({ kind: 'poor-bga', action: 'trigger', seconds: nowSec });
-    emit({
-      kind: 'trace',
-      name: 'judge',
-      seconds: nowSec,
-      fields: [
-        ['result', 'EMPTY_POOR'],
-        ['reason', 'empty-poor'],
-      ],
-    });
-    // The UI maps this back to the LR2 `'poor'` skin slot (NOWJUDGE 0/1 share one kind in our model).
-    emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo });
+    chargeEmptyPoor(state, nowSec, emit);
     return;
   }
 
@@ -430,6 +421,62 @@ export function handleLanePress(
     emit,
   );
   collectMultiBad();
+}
+
+/**
+ * A press on a lane whose long note is held, by the ruleset's {@link PressDuringLongNoteRule}: LR2 judges the LN's head
+ * again when the press is within its BAD window and charges an empty POOR otherwise; beatoraja and IIDX ignore it.
+ */
+function applyPressDuringLongNote(
+  state: JudgeCoreState,
+  channel: string,
+  judgeSec: number,
+  nowSec: number,
+  emit: JudgeCoreEffectSink,
+): void {
+  const { config } = state;
+  if (config.ruleset.pressDuringLongNote === 'ignore') {
+    return;
+  }
+  const hold = state.activeLongNotes.get(channel)!;
+  if (hold.mode === 1 && !hold.headScored) {
+    const dmUs = judgeDeltaUs(hold.note.seconds, judgeSec);
+    const judge = classifyRulesetJudge(dmUs, judgeWindowsFor(config, channel, judgeSec));
+    if (judge !== RULESET_JUDGE_NONE) {
+      hold.headJudge = { kind: RULESET_JUDGE_KINDS[judge], signedDeltaMs: -dmUs / 1000 };
+      return;
+    }
+  }
+  chargeEmptyPoor(state, nowSec, emit);
+}
+
+/**
+ * Empty POOR (空POOR): a phantom press near a note but outside every judgable window. It costs gauge and fires the POOR
+ * cue without consuming the note, so it never reaches EX-SCORE. Repeatable per note (LR2's `MissCondition.ALWAYS`).
+ * Whether it breaks the combo is the ruleset's call.
+ */
+function chargeEmptyPoor(state: JudgeCoreState, nowSec: number, emit: JudgeCoreEffectSink): void {
+  const { ruleset } = state.config;
+  state.summary.emptyPoor += 1;
+  applyGaugeJudge(state, nowSec, 'EMPTY_POOR', emit, 'empty-poor');
+  if (ruleset.comboBreaksOnEmptyPoor) {
+    // The score tracker keeps the combo the max combo is measured on, so it breaks too.
+    state.scoreTracker.combo = 0;
+    setCombo(state, nowSec, 0, 'judge', emit, 'POOR');
+  }
+  emit({ kind: 'record-empty-poor' });
+  emit({ kind: 'poor-bga', action: 'trigger', seconds: nowSec });
+  emit({
+    kind: 'trace',
+    name: 'judge',
+    seconds: nowSec,
+    fields: [
+      ['result', 'EMPTY_POOR'],
+      ['reason', 'empty-poor'],
+    ],
+  });
+  // The UI maps this back to the LR2 `'poor'` skin slot (NOWJUDGE 0/1 share one kind in our model).
+  emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo });
 }
 
 export function handleLaneRelease(

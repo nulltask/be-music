@@ -534,10 +534,16 @@ class PlaylogSimulation {
     for (const lane of pressed) {
       lane.held = true;
     }
-    // Pressing a lane whose release is waiting out the margin resumes its hold: that press judges nothing else.
+    // Pressing a lane whose release is waiting out the margin resumes its hold: that press judges nothing else. A lane
+    // whose long note is held (pressed by another key bound to it) judges no other note either: its current note is
+    // the long note, and the ruleset says what the press does instead.
     const lanes = pressed.filter((lane) => {
-      if (lane.hold?.pendingRelease === undefined) return true;
-      lane.hold.pendingRelease = undefined;
+      if (lane.hold === undefined) return true;
+      if (lane.hold.pendingRelease !== undefined) {
+        lane.hold.pendingRelease = undefined;
+      } else {
+        this.applyPressDuringLongNote(lane, lane.hold, timeUs);
+      }
       return false;
     });
     if (lanes.length === 0) {
@@ -568,6 +574,23 @@ class PlaylogSimulation {
       // Only scoreable judgments (PGREAT..BAD) consume a note, so the judge is a real window index here.
       this.applyMultiBad(lanes, timeUs, windows, note, selected.judge as RulesetJudgeIndex);
     }
+  }
+
+  /** The ruleset's {@link RulesetConfig.pressDuringLongNote}: LR2 re-judges the LN head or charges an empty POOR. */
+  private applyPressDuringLongNote(lane: SimLane, hold: ActiveHold, timeUs: number): void {
+    if (this.config.pressDuringLongNote === 'ignore') {
+      return;
+    }
+    if (hold.note.longStyle === 1) {
+      const dmUs = hold.note.timeUs - timeUs;
+      const judge = classifyJudge(dmUs, selectJudgeWindowSet(this.config.windowsAt(timeUs), { scratch: lane.scratch }));
+      if (judge !== JUDGE_NONE) {
+        hold.headJudge = judge;
+        hold.headDmUs = dmUs;
+        return;
+      }
+    }
+    this.applyJudge(JUDGE_EMPTY_POOR, undefined);
   }
 
   private handleUp(input: PlaylogInputEvent): void {
