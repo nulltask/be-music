@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { parseLr2CourseFile } from './lr2crs.ts';
+import { parseBeatorajaCourseFile, serializeBeatorajaCourseFile } from './beatoraja.ts';
 import {
   appendCourseDraftStage,
+  defaultCourseMakerConstraints,
+  withCourseConstraints,
   buildLr2CourseHash,
   createCourseDraft,
   finishCourseDraft,
@@ -146,5 +149,46 @@ describe('serializeLr2CourseFile', () => {
       },
     ]);
     expect(parseLr2CourseFile(text).map((course) => course.name)).toEqual(['Table']);
+  });
+});
+
+describe('course constraints', () => {
+  it('starts a grade as an LR2 grade and the other kinds unconstrained', () => {
+    expect(defaultCourseMakerConstraints('grade')).toEqual(['grade_mirror', 'gauge_lr2']);
+    expect(defaultCourseMakerConstraints('expert')).toEqual([]);
+    expect(finishCourseDraft(draftOf('grade', 1))!.constraints).toEqual(['grade_mirror', 'gauge_lr2']);
+  });
+
+  it('takes the constraints picked while making, one per group', () => {
+    const draft = { ...draftOf('expert', 1), constraints: ['grade_random', 'no_speed', 'grade', 'hcn'] as const };
+    expect(finishCourseDraft({ ...draft, constraints: [...draft.constraints] })!.constraints).toEqual([
+      'grade_random',
+      'no_speed',
+      'hcn',
+    ]);
+  });
+
+  it("replaces a saved course's constraints", () => {
+    const course = finishCourseDraft(draftOf('grade', 2))!;
+    expect(withCourseConstraints(course, ['grade', 'gauge_7k', 'no_good']).constraints).toEqual([
+      'grade',
+      'gauge_7k',
+      'no_good',
+    ]);
+  });
+
+  it('writes a beatoraja course file that keeps them, leaving NONSTOP out', () => {
+    const grade = withCourseConstraints(finishCourseDraft({ ...draftOf('grade', 2), name: 'Dan' })!, [
+      'grade',
+      'gauge_7k',
+    ]);
+    const nonstop = finishCourseDraft(draftOf('nonstop', 2))!;
+    const [read, ...rest] = parseBeatorajaCourseFile(serializeBeatorajaCourseFile([grade, nonstop]));
+    expect(rest).toEqual([]);
+    expect(read).toMatchObject({ name: 'Dan', kind: 'grade', constraints: ['grade', 'gauge_7k'] });
+    expect(read!.stages.map((stage) => [stage.md5, stage.title])).toEqual([
+      [MD5[0], 'Song 1'],
+      [MD5[1], 'Song 2'],
+    ]);
   });
 });

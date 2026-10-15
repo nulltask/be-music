@@ -354,6 +354,26 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseApi.withNonstopConnection(benchMadeCourse, 0, 'blank1');
     },
   });
+  define('player.course.defaultCourseMakerConstraints', {
+    run: () => {
+      courseApi.defaultCourseMakerConstraints('grade');
+    },
+  });
+  define('player.course.withCourseConstraints', {
+    run: () => {
+      courseApi.withCourseConstraints(benchMadeCourse, ['grade', 'gauge_7k', 'no_speed']);
+    },
+  });
+  define('player.course.courseConstraintEnumName', {
+    run: () => {
+      courseApi.courseConstraintEnumName('grade_mirror');
+    },
+  });
+  define('player.course.serializeBeatorajaCourseFile', {
+    run: () => {
+      courseApi.serializeBeatorajaCourseFile([benchMadeCourse]);
+    },
+  });
   define('player.course.serializeLr2CourseFile', {
     run: () => {
       courseApi.serializeLr2CourseFile([benchMadeCourse]);

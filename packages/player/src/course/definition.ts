@@ -139,6 +139,11 @@ const ENUM_CONSTRAINTS: Readonly<Record<string, CourseConstraint>> = {
   HCN: 'hcn',
 };
 
+/** beatoraja's enum constant name of a constraint (`grade_mirror` → `MIRROR`), as its `course/*.json` files write it. */
+export function courseConstraintEnumName(constraint: CourseConstraint): string {
+  return Object.keys(ENUM_CONSTRAINTS).find((name) => ENUM_CONSTRAINTS[name] === constraint)!;
+}
+
 /** The group a constraint belongs to: only one constraint per group applies. */
 export function courseConstraintGroup(constraint: CourseConstraint): CourseConstraintGroup {
   return CONSTRAINT_GROUPS[constraint];
