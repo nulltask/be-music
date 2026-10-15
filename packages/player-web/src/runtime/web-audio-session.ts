@@ -169,7 +169,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     bus: AudioNode,
     dynamicGain: number,
   ): WebAudioSourceHandle | undefined => {
-    const buffer = decodedSamples.get(normalizePath(path).toLowerCase());
+    const buffer = decodedSamples.get(decodedSampleKey(path));
     if (!buffer) return undefined;
     const node = audioContext.createBufferSource();
     node.buffer = buffer;
@@ -449,4 +449,13 @@ export function startSampleNode(
   } else {
     node.start();
   }
+}
+
+/**
+ * The key a `#WAV` path's decoded sample is cached under for {@link createWebAudioSession}: the path normalized
+ * (`\\` → `/`, `.` / `..` / empty segments resolved) and lower-cased. Every host that fills `decodedSamples` uses it, so
+ * `./kick.wav`, `../common/kick.wav` or a differently-cased path finds its buffer.
+ */
+export function decodedSampleKey(path: string): string {
+  return normalizePath(path).toLowerCase();
 }

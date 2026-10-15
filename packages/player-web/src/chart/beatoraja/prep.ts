@@ -63,7 +63,7 @@ import { logger } from '../../logger.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
 import { isVideoExtension, toBrowserBgaTimeline } from '../../scene/core/gameplay-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
+import { decodedSampleKey, type WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 import {
   clampPlayTempo,
   resolveSamplePlaybackRate,
@@ -173,7 +173,7 @@ export async function prepareBeatorajaGameplayChart(
     if (!bytes) return;
     try {
       const decoded = await audioContext.decodeAudioData(bytes.slice().buffer);
-      decodedSamples.set(normalizePath(path), decoded);
+      decodedSamples.set(decodedSampleKey(path), decoded);
     } catch (error) {
       // Browsers vary in codec support; unsupported samples are silently skipped (matches LR2 behavior).
       log.debug('decode skipped', { path, error });
@@ -187,7 +187,7 @@ export async function prepareBeatorajaGameplayChart(
     await stretchDecodedSamples(
       audioContext,
       decodedSamples,
-      resolveSampleStretchRates(chart.resources.wav, normalizePath, tempo),
+      resolveSampleStretchRates(chart.resources.wav, decodedSampleKey, tempo),
       options.tempoStretchAlgorithm ?? 'signalsmith',
     );
   }
@@ -339,12 +339,4 @@ export async function prepareBeatorajaGameplayChart(
     bga: { textures: bgaTextures, cues, videoElements: bgaVideoElements },
     dispose,
   };
-}
-
-/**
- * Lower-cased + slash-normalized path key matching the LR2 path's convention. Keeps audio lookups
- * consistent across drag-and-drop archives whose entries vary in case.
- */
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/').toLowerCase();
 }

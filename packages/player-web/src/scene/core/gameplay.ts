@@ -74,7 +74,6 @@ import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurre
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import {
   loadAssetBytes,
-  normalizePath,
   resolveChartBgaAsset,
   resolveChartAudioAsset,
   resolveChartPlayVariant,
@@ -119,7 +118,7 @@ import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
 import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
-import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
+import { createWebAudioSession, decodedSampleKey, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import {
@@ -2781,12 +2780,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const pitchMode = this.options.tempoPitchMode ?? 'pitch';
     const stretchRates =
       pitchMode === 'keep-pitch'
-        ? resolveSampleStretchRates(
-            chart.resources.wav,
-            (path) => normalizePath(path).toLowerCase(),
-            this.tempo,
-            this.options.nonstop,
-          )
+        ? resolveSampleStretchRates(chart.resources.wav, decodedSampleKey, this.tempo, this.options.nonstop)
         : undefined;
     await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
       if (this.disposed || !this.source || !this.song || !this.audioContext) return;
@@ -2809,7 +2803,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // `playSample` continue to look up by the chart's `#WAV` value.
         const decoded = await this.audioContext.decodeAudioData(bytes.slice().buffer);
         if (this.disposed) return;
-        this.decodedSamples.set(normalizePath(path).toLowerCase(), decoded);
+        this.decodedSamples.set(decodedSampleKey(path), decoded);
       } catch {
         // Browsers vary in codec support; unsupported samples are skipped. `decodeAudioData` also rejects when the
         // AudioContext is closed mid-decode (e.g. ESC pressed during loading) — the catch swallows that as well so
