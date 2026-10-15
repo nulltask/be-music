@@ -3972,7 +3972,9 @@ class PlayerWebDemoApp {
           void this.sceneHost.setScene(undefined).then(() => {
             this.beatorajaDecideScene?.dispose();
             this.beatorajaDecideScene = undefined;
-            void (then !== undefined ? then.start() : this.playSongBeatoraja(song, overrides));
+            // Through `playSong`, so the gameplay family is picked as on every other path (the decide skin's family
+            // need not be the play's).
+            void (then !== undefined ? then.start() : this.playSong(song, overrides));
           });
         }),
       onCancel: () =>
@@ -4745,10 +4747,8 @@ class PlayerWebDemoApp {
     }
     // A be-music skin's decide screen hands over to the LR2 / default gameplay preloaded below, so it is skipped when
     // the play itself runs on a beatoraja theme.
-    const beMusicDecide =
-      decideFamily === 'default' &&
-      this.beMusicSkin.decide !== undefined &&
-      pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) !== 'beatoraja';
+    const playsOnBeatoraja = this.playsOnBeatoraja(song, {});
+    const beMusicDecide = decideFamily === 'default' && this.beMusicSkin.decide !== undefined && !playsOnBeatoraja;
     if (!beMusicDecide && (decideFamily === 'default' || !this.decideSkin)) {
       // No decide splash: a be-music skin without one, or an LR2-only setup that didn't ship a decide skin. The select
       // view's `playDecideSound` already fired so the audio cue still plays.
@@ -4764,8 +4764,9 @@ class PlayerWebDemoApp {
     // Build the gameplay view eagerly and kick off its heavy load (chart parse, audio decode, BGA preload) IN PARALLEL
     // with the Decide animation. The Decide splash typically runs ~3 s; chart asset decoding is mostly done by the time
     // the splash auto-advances, so the hand-off to gameplay becomes instant instead of dropping a frozen frame.
-    // A course starts its own play once the splash is done, so nothing is preloaded for it.
-    const preloaded = then === undefined ? this.preloadGameplay(song, overrides) : undefined;
+    // A course starts its own play once the splash is done, so nothing is preloaded for it; nor for a play on the
+    // beatoraja scene, which prepares its own chart once the splash is done (`playSong`).
+    const preloaded = then === undefined && !playsOnBeatoraja ? this.preloadGameplay(song, overrides) : undefined;
     let advanced = false;
     const advance = (then: () => void): void => {
       // Idempotent — the auto-advance timer, key input, and pointer click can all race; whichever lands first wins and
@@ -4783,7 +4784,7 @@ class PlayerWebDemoApp {
             void start();
             return;
           }
-          void this.startGameplayAfterDecide(song, preloaded);
+          void this.startGameplayAfterDecide(song, preloaded, overrides);
         }),
       onCancel: () =>
         advance(() => {
@@ -5018,7 +5019,11 @@ class PlayerWebDemoApp {
    * promise: when the user dismisses Decide before chart audio has finished decoding, the splash's last frame stays on
    * screen until prepare resolves — visually a brief hold rather than the previous frozen-frame freeze.
    */
-  private async startGameplayAfterDecide(song: BrowserSongEntry, preloaded: Promise<void>): Promise<void> {
+  private async startGameplayAfterDecide(
+    song: BrowserSongEntry,
+    preloaded: Promise<void>,
+    overrides: { autoPlay?: boolean },
+  ): Promise<void> {
     try {
       await preloaded;
     } catch (error) {
@@ -5027,7 +5032,7 @@ class PlayerWebDemoApp {
       this.gameplayView = undefined;
       this.decideView?.dispose();
       this.decideView = undefined;
-      await this.playSong(song);
+      await this.playSong(song, overrides);
       return;
     }
     if (!this.gameplayView) return;
@@ -5040,6 +5045,23 @@ class PlayerWebDemoApp {
     this.lockPlaylogOptionsForPlay();
     this.gameplayView.start();
     startArmedRecording(this.recordingDeps());
+  }
+
+  /**
+   * Whether a play of `song` runs on the beatoraja gameplay scene: the gameplay family says so, and the play is neither
+   * a replay nor a stitched NONSTOP chart (those play on the LR2 / default scenes, which carry the play-log arrangement
+   * remap and the per-stage audio and BGA). Every path into gameplay — `playSong`, and the decide splash deciding what
+   * to preload — asks this one question.
+   */
+  private playsOnBeatoraja(
+    song: BrowserSongEntry,
+    overrides: { replay?: BeMusicPlaylog; nonstop?: NonstopPlay },
+  ): boolean {
+    return (
+      pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) === 'beatoraja' &&
+      overrides.replay === undefined &&
+      overrides.nonstop === undefined
+    );
   }
 
   private async playSong(
@@ -5056,8 +5078,7 @@ class PlayerWebDemoApp {
     // `'auto'` keeps the legacy preference (beatoraja → LR2 → default). Replay playback always stays on the
     // LR2/default path — that's where the play-log arrangement remap and `replayInputs` are wired.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
-    // A stitched NONSTOP chart plays on the LR2 / default scenes, which carry its per-stage audio and BGA.
-    if (gameplayFamily === 'beatoraja' && overrides.replay === undefined && overrides.nonstop === undefined) {
+    if (this.playsOnBeatoraja(song, overrides)) {
       await this.playSongBeatoraja(song, overrides);
       return;
     }
