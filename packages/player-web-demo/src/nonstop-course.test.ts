@@ -1,10 +1,12 @@
+import { resolveChart } from '@be-music/chart';
 import { parseChart } from '@be-music/parser';
 import { manualPlay } from '@be-music/player';
 import { parseLr2CourseFile } from '@be-music/player/course';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicPlaylog, PlaylogInputEvent } from '@be-music/player/playlog';
 import { simulatePlaylog } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongAssetSource, BrowserSongEntry } from '@be-music/player-web/collection';
 import { describe, expect, test } from 'vite-plus/test';
+import { courseStageChartFingerprint, prepareCourseLeaderboardSubmission } from './leaderboard.ts';
 import { buildNonstopCoursePlaylog, prepareNonstopCourse } from './nonstop-course.ts';
 
 const MD5 = ['1', '2'].map((digit) => digit.repeat(32));
@@ -50,6 +52,17 @@ function course(): BrowserCourseEntry {
   };
 }
 
+/** Presses every note of `chart` dead on. */
+function presses(chart: BrowserSongEntry['chart']): PlaylogInputEvent[] {
+  const events: PlaylogInputEvent[] = [];
+  for (const note of resolveChart(chart).notes) {
+    const timeUs = Math.round(note.seconds * 1_000_000);
+    events.push({ seq: 0, timeUs, action: 'down', channels: [note.channel] });
+    events.push({ seq: 0, timeUs: timeUs + 40_000, action: 'up', channels: [note.channel] });
+  }
+  return events.sort((left, right) => left.timeUs - right.timeUs).map((event, seq) => ({ ...event, seq }));
+}
+
 const sourceOf = (entry: BrowserSongEntry) => [STAGE_A, STAGE_B].find((stage) => stage.song.id === entry.id)?.source;
 
 describe('prepareNonstopCourse', () => {
@@ -72,7 +85,11 @@ describe('prepareNonstopCourse', () => {
 
 describe('buildNonstopCoursePlaylog', () => {
   test('records the stitched play with each stage cut out of it', async () => {
-    const prepared = prepareNonstopCourse(course(), { sourceOf, random: () => 0 });
+    const prepared = prepareNonstopCourse(course(), {
+      sourceOf,
+      random: () => 0,
+      chartFingerprintOf: courseStageChartFingerprint,
+    });
     if (!prepared.ok) throw new Error(prepared.reason);
     const chart = prepared.prepared.song.chart;
     let playlog: BeMusicPlaylog | undefined;
@@ -81,7 +98,7 @@ describe('buildNonstopCoursePlaylog', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
-      auto: true,
+      replayInputs: presses(chart),
       course: { kind: 'nonstop' },
       recordPlaylog: {},
       onPlaylogRecorded: (recorded) => {
@@ -98,5 +115,17 @@ describe('buildNonstopCoursePlaylog', () => {
     expect(second!.played && second!.playlog.chart.notes).toHaveLength(3);
     expect(log.results?.native).toMatchObject({ noteCount: 6, stagesPlayed: 2 });
     expect(simulatePlaylog(log.nonstop!.playlog, { ruleset: 'lr2' }).noteCount).toBe(6);
+    // Each stage names its chart, which keys the course on the Leaderboard.
+    expect(log.stages.map((entry) => entry.played && entry.playlog.chart.chartFingerprint)).toEqual(
+      [STAGE_A, STAGE_B].map(({ song: entry }) => courseStageChartFingerprint(entry)),
+    );
+
+    // The Leaderboard gets every stage chart to stitch again, and no documents.
+    const submission = prepareCourseLeaderboardSubmission(
+      log,
+      [STAGE_A, STAGE_B].map(({ song: entry }) => ({ chart: entry.chart, chartPath: entry.chartPath })),
+    );
+    expect(submission).toMatchObject({ ok: true, submission: { stages: [] } });
+    expect(submission.ok && submission.submission.stageCharts.map((stage) => stage.stage)).toEqual([0, 1]);
   });
 });

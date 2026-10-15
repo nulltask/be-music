@@ -169,7 +169,8 @@ export class LeaderboardPanel {
   /**
    * Sends a finished course run to the Leaderboard when "Submit to Leaderboard" was on when its last stage started, as
    * {@link maybeSubmit} does for one play. `stageSongs` are the course's stages as it played them, in order (their
-   * charts rebuild each played stage's fingerprint documents). The course rank goes to the status line.
+   * charts rebuild each played stage's fingerprint documents, and go to the server for the stages it rebuilds: the
+   * unreached ones, and all of a NONSTOP run). The course rank goes to the status line.
    */
   maybeSubmitCourse(coursePlaylog: BeMusicCoursePlaylog, stageSongs: readonly BrowserSongEntry[]): void {
     if (!this.submitThisPlay) return;
@@ -182,8 +183,9 @@ export class LeaderboardPanel {
       return;
     }
     const firstStage = coursePlaylog.stages[0];
-    // Every stage of a ranked run is judged under one ruleset (the server refuses mixed ones).
-    const playedRuleset = firstStage?.played === true ? (firstStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2';
+    // Every stage of a ranked run is judged under one ruleset (the server refuses mixed ones); a NONSTOP run was one play.
+    const judged = coursePlaylog.nonstop?.playlog ?? (firstStage?.played === true ? firstStage.playlog : undefined);
+    const playedRuleset = judged?.play.judgeRuleset ?? 'lr2';
     void submitCourseToLeaderboard(prepared.submission, { client: describeSubmittingClient(this.host.recorder) })
       .then((result) => {
         this.host.setStatus(describeCourseLeaderboardResult(result, playedRuleset));
