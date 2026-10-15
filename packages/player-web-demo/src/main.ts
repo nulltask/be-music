@@ -465,6 +465,8 @@ class PlayerWebDemoApp {
   private courseGroups: CourseDefinitionGroup[] = [];
   /** The course being played, between its stages. */
   private courseSession: CourseSession | undefined;
+  /** Set when a course was started with AUTO (`true`), so its every stage plays itself; `undefined` follows the menu. */
+  private courseAutoPlay: boolean | undefined;
   /** The player's own courses and the course being made (LR2's course maker), kept in IndexedDB. */
   private readonly courseMaker = new CourseMaker({
     md5Of: async (song) => (await this.resolveChartHashes(song))?.md5,
@@ -2229,7 +2231,9 @@ class PlayerWebDemoApp {
    * Starts a course from its first stage. A beatoraja random course first draws its stages from the library (each
    * stage filter against the songs and their chart hashes); a stage that finds no chart leaves it unstarted.
    */
-  private async startCourse(entry: BrowserCourseEntry): Promise<void> {
+  private async startCourse(entry: BrowserCourseEntry, options: { autoPlay?: boolean } = {}): Promise<void> {
+    // AUTO on a course bar plays every stage itself; PLAY follows the Debug Menu's auto play.
+    this.courseAutoPlay = options.autoPlay;
     // A NEW COURSE bar starts making a course of its folder's kind; songs decided from now on join it.
     if (entry.newCourse === true) {
       this.courseMaker.start(entry.definition.kind);
@@ -2307,7 +2311,11 @@ class PlayerWebDemoApp {
         prepared.prepared.source,
       ],
     };
-    const play = () => this.playSong(prepared.prepared.song, { nonstop: { course, prepared: prepared.prepared } });
+    const play = () =>
+      this.playSong(prepared.prepared.song, {
+        nonstop: { course, prepared: prepared.prepared },
+        ...(this.courseAutoPlay !== undefined ? { autoPlay: this.courseAutoPlay } : {}),
+      });
     // The decide screen names the course (the stitched song's title); a quick retry skips it, as LR2's does.
     if (options.decide === true) {
       await this.showDecide(prepared.prepared.song, {}, { start: play });
@@ -2356,7 +2364,10 @@ class PlayerWebDemoApp {
       return;
     }
     this.setStatus(`${session.course.definition.name}: stage ${stage.index + 1} / ${stage.stageCount}`);
-    await this.playSong(stage.song, { courseStage: stage });
+    await this.playSong(stage.song, {
+      courseStage: stage,
+      ...(this.courseAutoPlay !== undefined ? { autoPlay: this.courseAutoPlay } : {}),
+    });
   }
 
   /**
@@ -4575,6 +4586,10 @@ class PlayerWebDemoApp {
       onCourseSelected: (course: BrowserCourseEntry) => {
         void this.selectView?.playDecideSound();
         void this.startCourse(course);
+      },
+      onCourseAutoPlay: (course: BrowserCourseEntry) => {
+        void this.selectView?.playDecideSound();
+        void this.startCourse(course, { autoPlay: true });
       },
       onSearchActivate: () => this.search.openFromPointer(),
       courseMaker: this.courseMaker,
