@@ -343,6 +343,12 @@ After changing the dynamic judgment width, use the new `BAD` width for the next 
 - Determination of expiration of mines/invisible notes
 - Determining the end point of a long note
 
+Each judgment reads the width in force at its own instant, as LR2 reads its one global `judgetime[]`: a press (the
+candidate search, its classification, the multi-BAD collector, a mine's press leg, a press on a held long note) uses the
+width at the press, and a release (an LN's early release, a charge note's tail) the width at the release. A note's miss
+deadline and a charge tail's late window use the width at the note and at the tail, and a mine's entry and settling
+the width at the mine. The engine and the play-log simulator read the same instants.
+
 ### bmson initial judgment width
 
 bmson determines the judgment width using the following priority order.

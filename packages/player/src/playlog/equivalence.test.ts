@@ -559,6 +559,37 @@ describe('engine / simulator equivalence', () => {
     expect(simulated.gauge.final).toBeLessThan(resolveRulesetConfig(playlog, ruleset).gauge.initial);
   });
 
+  // LR2 judges with the widths in force at the moment it judges: a press with the windows of the press, a release with
+  // the windows of the release, even when `#EXRANK` narrows them before the note or the tail.
+  test.each(RULESETS)('%s: #EXRANK changes apply at the instant of the press or release', async (ruleset) => {
+    const press = chart([
+      { measure: 1, channel: 'A0', position: [0, 1], value: '01' },
+      { measure: 1, channel: '11', position: [1, 20], value: '01' },
+    ]);
+    press.bms.exRank['01'] = '25';
+    const pressed = await replay(press, [down(0, 900_000, '11'), up(1, 940_000, '11')], ruleset);
+    const pressSimulated = simulatePlaylog(pressed.playlog, { ruleset });
+    expect([pressed.summary.bad, pressed.summary.emptyPoor]).toEqual([
+      pressSimulated.judge.bad,
+      pressSimulated.judge.emptyPoor,
+    ]);
+
+    const release = longNoteChart(1);
+    release.events.push({ measure: 1, channel: 'A0', position: [19, 20], value: '01' });
+    release.bms.exRank['01'] = '25';
+    const released = await replay(release, [down(0, 1_000_000, '11'), up(1, 1_920_000, '11')], ruleset);
+    const releaseSimulated = simulatePlaylog(released.playlog, { ruleset });
+    expect([released.summary.perfect, released.summary.bad]).toEqual([
+      releaseSimulated.judge.pgreat,
+      releaseSimulated.judge.bad,
+    ]);
+
+    if (ruleset === 'lr2') {
+      expect(pressed.summary.bad).toBe(1);
+      expect(released.summary.perfect).toBe(1);
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 

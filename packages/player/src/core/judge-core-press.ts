@@ -78,7 +78,8 @@ function selectPressCandidate(
     if (note.judged || !candidateChannels.has(note.channel)) {
       continue;
     }
-    const windows = judgeWindowsFor(config, note.channel, note.seconds);
+    // The windows in force at the press, as LR2 reads its judge widths (`#EXRANK` can change them mid-chart).
+    const windows = judgeWindowsFor(config, note.channel, nowSec);
     const judge = classifyRulesetJudge(judgeDeltaUs(note.seconds, nowSec), windows);
     if (judge === RULESET_JUDGE_NONE) {
       continue;
@@ -141,7 +142,8 @@ function applyMultiBadCollector(
     if (state.activeLongNotes.get(note.channel)?.note === note) {
       continue;
     }
-    const windows = judgeWindowsFor(config, note.channel, note.seconds);
+    // The windows in force at the press, as LR2 reads its judge widths (`#EXRANK` can change them mid-chart).
+    const windows = judgeWindowsFor(config, note.channel, nowSec);
     const dmUs = judgeDeltaUs(note.seconds, nowSec);
     const bad = windows.judges[3];
     const good = windows.judges[2];
@@ -529,7 +531,7 @@ function resolveLongNoteReleaseMarginMs(state: JudgeCoreState, channel: string, 
     return 0;
   }
   const releaseDeltaMs = (judgeSec - hold.endSeconds) * 1000;
-  const endWindows = judgeWindowsFor(config, channel, hold.endSeconds, true);
+  const endWindows = judgeWindowsFor(config, channel, judgeSec, true);
   const judge =
     hold.mode === 1
       ? resolveLongNoteEarlyReleaseJudge(config.ruleset, hold.headJudge, releaseDeltaMs, endWindows)

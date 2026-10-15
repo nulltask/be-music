@@ -500,8 +500,11 @@ class PlaylogSimulation {
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
         if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
-        const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
-        if (mine.timeUs - earlyUs > timeUs) break;
+        // Mines further ahead than any PGREAT reach cannot be hit.
+        if (mine.timeUs - timeUs > 1_000_000) break;
+        // The PGREAT window in force at the press, as LR2 reads it (`#EXRANK` can change it).
+        const [lateUs, earlyUs] = pgreatWindowReachUs(this.config.windowsAt(timeUs).note);
+        if (mine.timeUs - earlyUs > timeUs) continue;
         if (!mine.applied && timeUs - mine.timeUs <= lateUs) this.detonateMine(mine);
       }
     }
@@ -561,7 +564,8 @@ class PlaylogSimulation {
       return;
     }
     if (minePressLegLive) {
-      this.detonateMinesOnPress(lanes, timeUs);
+      // Every pressed lane's key goes down, whatever the press then judges.
+      this.detonateMinesOnPress(pressed, timeUs);
     }
 
     const selected = this.selectCandidate(lanes, timeUs, windows);
@@ -689,7 +693,11 @@ class PlaylogSimulation {
       return;
     }
     note.holding = true;
-    const endWindows = selectJudgeWindowSet(this.config.windows, { scratch: note.scratch, longNoteEnd: true });
+    // The tail's late window as it stands at the tail, like a note's miss deadline at the note.
+    const endWindows = selectJudgeWindowSet(this.config.windowsAt(note.endTimeUs!), {
+      scratch: note.scratch,
+      longNoteEnd: true,
+    });
     lane.hold = {
       note,
       tailMissDeadlineUs: note.endTimeUs! + judgeWindowLateReachUs(endWindows),
