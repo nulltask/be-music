@@ -439,7 +439,6 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     const y = listTop + visibleIndex * rowHeight;
     const active = entryIndex === frame.selectedIndex;
     const song = entry.kind === 'song' ? entry.song : undefined;
-    const folder = entry.kind === 'folder' ? entry.folder : undefined;
     const introT = stageProgress(
       frame.nowMs - frame.sceneStartedAt,
       100 + Math.max(0, visibleIndex) * INTRO_STAGGER_MS,
