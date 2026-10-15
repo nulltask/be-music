@@ -201,7 +201,7 @@ export function resolveCourseGauge(
 }
 
 function collapseWindows(set: JudgeWindowSetUs, constraint: CourseJudgeConstraint): JudgeWindowSetUs {
-  const [pgreat, great, good, bad] = set.judges;
+  const [pgreat, great, , bad] = set.judges;
   const judges: JudgeWindowSetUs['judges'] =
     constraint === 'no-great' ? [pgreat, pgreat, pgreat, bad] : [pgreat, great, great, bad];
   return { ...set, judges };
