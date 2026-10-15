@@ -1,5 +1,10 @@
+import { logger } from '../logger.ts';
+import { layoutStretchBatch, packStretchBatch, unpackStretchBatch } from './time-stretch-batch.ts';
+
+const log = logger('time-stretch');
+
 /**
- * Time stretching that keeps the pitch (a CDJ's Master Tempo), for a NONSTOP stage whose FIT connection changes its
+ * Time stretching that keeps the pitch, for a NONSTOP stage whose FIT connection changes its
  * tempo: WSOLA (waveform-similarity overlap-add). Each output frame is a Hann-windowed input frame taken near where the
  * new tempo puts it, shifted by up to {@link SEARCH_SECONDS} to the offset whose waveform best continues the previous
  * frame, so the overlaps add up without phase cancellation.
@@ -83,11 +88,46 @@ function mono(channels: readonly Float32Array[]): Float32Array {
   return mix;
 }
 
-/** `buffer` stretched by {@link timeStretchChannels} into a new buffer of `context`. */
-export function timeStretchAudioBuffer(context: BaseAudioContext, buffer: AudioBuffer, rate: number): AudioBuffer {
-  const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) => buffer.getChannelData(index));
-  const stretched = timeStretchChannels(channels, buffer.sampleRate, rate);
-  const result = context.createBuffer(stretched.length, stretched[0]!.length, buffer.sampleRate);
-  stretched.forEach((channel, index) => result.copyToChannel(channel, index));
-  return result;
+/** The time stretcher a keep-pitch play uses. */
+export type TimeStretchAlgorithm = 'wsola' | 'signalsmith';
+
+/** Silence between samples stretched together, longer than a stretcher's frames. */
+const BATCH_GAP_SECONDS = 0.5;
+
+/**
+ * `buffers` played `rate` times as fast at their own pitch, as new buffers of `context`. `wsola` stretches each one with
+ * {@link timeStretchChannels}; `signalsmith` stretches them together with Signalsmith Stretch (laid end to end, see
+ * `layoutStretchBatch`), falling back to WSOLA where it cannot run.
+ */
+export async function stretchAudioBuffers(
+  context: BaseAudioContext,
+  buffers: readonly AudioBuffer[],
+  rate: number,
+  algorithm: TimeStretchAlgorithm,
+): Promise<AudioBuffer[]> {
+  const samples = buffers.map((buffer) =>
+    Array.from({ length: buffer.numberOfChannels }, (_, index) => buffer.getChannelData(index)),
+  );
+  const sampleRate = buffers[0]?.sampleRate ?? context.sampleRate;
+  let stretched: Float32Array<ArrayBuffer>[][] | undefined;
+  if (algorithm === 'signalsmith' && buffers.length > 0) {
+    try {
+      const layout = layoutStretchBatch(
+        samples.map((channels) => channels[0]!.length),
+        Math.round(BATCH_GAP_SECONDS * sampleRate),
+      );
+      const channelCount = Math.min(2, Math.max(...samples.map((channels) => channels.length)));
+      const batch = packStretchBatch(samples, layout, channelCount);
+      const { signalsmithStretchChannels } = await import('./time-stretch-signalsmith.ts');
+      stretched = unpackStretchBatch(await signalsmithStretchChannels(batch, sampleRate, rate), layout, samples, rate);
+    } catch (error) {
+      log.warn('Signalsmith Stretch unavailable; stretching with WSOLA', error);
+    }
+  }
+  stretched ??= samples.map((channels) => timeStretchChannels(channels, sampleRate, rate));
+  return stretched.map((channels) => {
+    const buffer = context.createBuffer(channels.length, channels[0]!.length, sampleRate);
+    channels.forEach((channel, index) => buffer.copyToChannel(channel, index));
+    return buffer;
+  });
 }

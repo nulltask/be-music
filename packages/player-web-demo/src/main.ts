@@ -820,6 +820,7 @@ class PlayerWebDemoApp {
       courseAutoAdvance: false,
       nonstopPlacement: 'intended',
       nonstopFitMode: 'pitch',
+      nonstopStretchAlgorithm: 'signalsmith',
       // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
       submitToLeaderboard: false,
       // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
@@ -1308,10 +1309,16 @@ class PlayerWebDemoApp {
         this.guiState.nonstopPlacement = value;
       });
     folder
-      .add(this.guiState, 'nonstopFitMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Master Tempo': 'master-tempo' })
+      .add(this.guiState, 'nonstopFitMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Keep pitch': 'keep-pitch' })
       .name('Course: NONSTOP FIT')
       .onChange((value: DemoGuiState['nonstopFitMode']) => {
         this.guiState.nonstopFitMode = value;
+      });
+    folder
+      .add(this.guiState, 'nonstopStretchAlgorithm', { 'Signalsmith Stretch': 'signalsmith', WSOLA: 'wsola' })
+      .name('Course: keep-pitch stretcher')
+      .onChange((value: DemoGuiState['nonstopStretchAlgorithm']) => {
+        this.guiState.nonstopStretchAlgorithm = value;
       });
     trackPlayOption(
       folder
@@ -4701,6 +4708,7 @@ class PlayerWebDemoApp {
             courseInfo: resolveSceneCourseInfo(nonstop.course, 0),
             nonstop: nonstop.prepared.map,
             nonstopFitMode: this.guiState.nonstopFitMode,
+            nonstopStretchAlgorithm: this.guiState.nonstopStretchAlgorithm,
           }
         : {}),
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
