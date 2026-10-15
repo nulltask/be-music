@@ -1,19 +1,25 @@
+import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart';
 import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
 import {
   classifyRulesetJudge,
   ignoresLateLongNoteHeadBad,
+  noteLateReachUs,
+  addHcnPassing,
   isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
   longNoteOwesTailMiss,
   pgreatWindowReachUs,
   preferJudgeCandidate,
   resolveEffectiveLongNoteMode,
+  HcnTickCounter,
+  resolveLnEarlyRelease,
   RULESET_JUDGE_NONE,
   RulesetGauge,
   selectJudgeWindowSet,
   type GaugeJudgeIndex,
   type JudgeSelectionCandidate,
+  type LnJudgeIndex,
   type RulesetJudgeIndex,
 } from '../ruleset/index.ts';
 import {
@@ -68,6 +74,19 @@ export function simulatePlaylogRulesets(
   return results;
 }
 
+/** At one instant: tails, then auto notes, then misses, then mines (see `advanceTime`). */
+const TIMED_EVENT_ORDER = {
+  'ln-complete': 0,
+  'hold-deadline': 0,
+  'release-settle': 0,
+  'hcn-tick': 0.5,
+  auto: 1,
+  miss: 2,
+  'mine-enter': 3,
+  mine: 3,
+  'mine-settle': 3,
+} as const;
+
 // Judge indices follow beatoraja: 0 PG / 1 GR / 2 GD / 3 BD / 4 missed POOR / 5 empty POOR.
 const JUDGE_PGREAT = 0;
 const JUDGE_GREAT = 1;
@@ -86,6 +105,15 @@ type JudgeClassification = GaugeJudgeIndex | typeof JUDGE_NONE;
 
 type SimLongStyle = 1 | 2 | 3;
 
+interface SimHcnPassing {
+  note: SimNote;
+  endUs: number;
+  counter: HcnTickCounter;
+  tailGood: boolean;
+  /** The lane's next Hell Charge note, judged before this one has passed. */
+  next?: SimHcnPassing;
+}
+
 interface SimNote {
   timeUs: number;
   endTimeUs?: number;
@@ -95,6 +123,8 @@ interface SimNote {
   longStyle?: SimLongStyle;
   judged: boolean;
   holding: boolean;
+  /** AUTO: a charge note's head was cleared; its tail clears at the tail. */
+  autoHeadDone?: boolean;
   /** Miss-sweep deadline (input time past which the head can no longer be judged). */
   missDeadlineUs: number;
 }
@@ -114,8 +144,11 @@ interface ActiveHold {
   /** IIDX charge heads that BAD/POOR'd skip the tail — such notes never become holds. */
   /** Held-past-end deadline for charge tails. */
   tailMissDeadlineUs: number;
-  /** Signed HCN tick accumulator (µs). */
-  hcnCounterUs: number;
+  /**
+   * A release waiting out the ruleset's long-note release margin: settled with `judge` at `atUs` unless the lane is
+   * pressed again first, which resumes the hold.
+   */
+  pendingRelease?: { atUs: number; judge: GaugeJudgeIndex; dmUs: number };
 }
 
 interface SimLane {
@@ -126,6 +159,13 @@ interface SimLane {
   sweepCursor: number;
   mineCursor: number;
   held: boolean;
+  /**
+   * The keys holding the lane down now (`''` for an input recorded without tokens). Mines ask whether ANY key on the
+   * lane is down, so a second key keeps the lane down while the first is released, as the engine's lane history does.
+   */
+  downTokens: Set<string>;
+  /** The Hell Charge notes passing the lane, in tail order, while their gauge ticks run (see `HcnTickCounter`). */
+  passing?: SimHcnPassing;
   hold?: ActiveHold;
   /** Auto-played lane (AUTO mode or AUTO SCRATCH): every note resolves PGREAT on schedule. */
   auto: boolean;
@@ -152,10 +192,13 @@ class PlaylogSimulation {
   private lastAdvanceUs = Number.NEGATIVE_INFINITY;
   private readonly playlog: BeMusicPlaylog;
   private readonly config: RulesetConfig;
+  /** The scratch lanes of the play mode the log was played in (none in PMS and the keyboard modes). */
+  private readonly scratchChannels: ReadonlySet<string>;
 
   constructor(playlog: BeMusicPlaylog, config: RulesetConfig) {
     this.playlog = playlog;
     this.config = config;
+    this.scratchChannels = resolveScratchChannels(playlog.chart.laneMode);
     this.gauge = new RulesetGauge(config.gauge);
     this.buildLanes();
   }
@@ -179,8 +222,11 @@ class PlaylogSimulation {
         this.handleUp(judged);
       }
     }
-    this.advanceTime(Number.POSITIVE_INFINITY);
-    if (reversalUs !== undefined && this.hasOutstandingNotes()) {
+    // An ESC abort stops judging where the engine stopped: nothing left in the chart is missed, and the end-of-play
+    // rules (the reversal's HP = 0 included) never run.
+    const abortedAtUs = this.playlog.play.aborted === true ? this.playlog.play.abortedAtUs : undefined;
+    this.advanceTime(abortedAtUs ?? Number.POSITIVE_INFINITY);
+    if (reversalUs !== undefined && abortedAtUs === undefined && this.hasOutstandingNotes()) {
       // LR2 zeroes HP when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`): a reversed run that
       // leaves notes past the reversal behind — open holds included — is always FAILED.
       this.gauge.drainToZero();
@@ -204,7 +250,7 @@ class PlaylogSimulation {
       djLevel: resolveIidxRankLabel(this.exScore, this.config.noteCount),
       gauge: {
         type: this.config.gauge.id,
-        final: Math.round(this.gauge.value * 100) / 100,
+        final: this.gauge.value,
         cleared: this.gauge.cleared(),
       },
     };
@@ -252,7 +298,7 @@ class PlaylogSimulation {
         isLong,
         judged: false,
         holding: false,
-        missDeadlineUs: note.timeUs + judgeWindowLateReachUs(noteWindows),
+        missDeadlineUs: note.timeUs + noteLateReachUs(this.config, noteWindows, longStyle),
       };
       if (isLong) {
         simNote.endTimeUs = note.endTimeUs;
@@ -269,7 +315,7 @@ class PlaylogSimulation {
   private laneFor(channel: string, autoPlay: boolean, autoScratch: boolean): SimLane {
     let lane = this.lanes.get(channel);
     if (!lane) {
-      const scratch = channel === '16' || channel === '26';
+      const scratch = this.scratchChannels.has(channel);
       lane = {
         channel,
         scratch,
@@ -278,6 +324,7 @@ class PlaylogSimulation {
         sweepCursor: 0,
         mineCursor: 0,
         held: false,
+        downTokens: new Set(),
         auto: autoPlay || (autoScratch && scratch),
         autoCursor: 0,
       };
@@ -301,10 +348,20 @@ class PlaylogSimulation {
     }
     interface TimedEvent {
       timeUs: number;
-      kind: 'miss' | 'mine-enter' | 'mine' | 'mine-settle' | 'hold-deadline' | 'auto';
+      kind:
+        | 'ln-complete'
+        | 'hold-deadline'
+        | 'release-settle'
+        | 'hcn-tick'
+        | 'auto'
+        | 'miss'
+        | 'mine-enter'
+        | 'mine'
+        | 'mine-settle';
       lane: SimLane;
       note?: SimNote;
       mine?: SimMine;
+      gain?: boolean;
     }
     const events: TimedEvent[] = [];
     for (const lane of this.lanes.values()) {
@@ -312,22 +369,35 @@ class PlaylogSimulation {
         for (let index = lane.autoCursor; index < lane.notes.length; index += 1) {
           const note = lane.notes[index]!;
           if (note.timeUs >= untilUs) break;
-          // LN-style longs score once at the tail; everything else at the head. (Charge-style auto applies the
-          // head and tail PGREATs together at the head — a simplification that only shifts gauge gain earlier.)
-          const autoAt = note.isLong && note.longStyle === 1 ? note.endTimeUs! : note.timeUs;
+          // LN-style longs score once at the tail; a charge note scores its head at the head and its tail at the tail
+          // (beatoraja's autoplay); a tap at its time.
+          if (note.isLong && note.longStyle !== 1 && !note.autoHeadDone) {
+            events.push({ timeUs: note.timeUs, kind: 'auto', lane, note });
+          }
+          const autoAt = note.isLong ? note.endTimeUs! : note.timeUs;
           if (autoAt >= untilUs) continue;
           events.push({ timeUs: autoAt, kind: 'auto', lane, note });
         }
       } else {
         for (let index = lane.sweepCursor; index < lane.notes.length; index += 1) {
           const note = lane.notes[index]!;
-          if (note.missDeadlineUs >= untilUs) break;
-          if (!note.judged && !note.holding) {
+          // Deadlines are not monotonic along a lane (an LR2 LN head reaches only its GOOD leg), so the scan runs on
+          // note times and tests each deadline.
+          if (note.timeUs >= untilUs) break;
+          if (!note.judged && !note.holding && note.missDeadlineUs < untilUs) {
             events.push({ timeUs: note.missDeadlineUs, kind: 'miss', lane, note });
           }
         }
         if (lane.hold && lane.hold.tailMissDeadlineUs < untilUs) {
           events.push({ timeUs: lane.hold.tailMissDeadlineUs, kind: 'hold-deadline', lane, note: lane.hold.note });
+        }
+        const pending = lane.hold?.pendingRelease;
+        if (lane.hold && pending && pending.atUs < untilUs) {
+          events.push({ timeUs: pending.atUs, kind: 'release-settle', lane, note: lane.hold.note });
+        }
+        if (lane.hold && lane.hold.note.longStyle === 1 && lane.hold.note.endTimeUs! < untilUs) {
+          // An LN held to its tail confirms its deferred head judgment there, in time order with everything else.
+          events.push({ timeUs: lane.hold.note.endTimeUs!, kind: 'ln-complete', lane, note: lane.hold.note });
         }
       }
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
@@ -349,18 +419,53 @@ class PlaylogSimulation {
         if (due(settleUs)) events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
       }
     }
-    events.sort((left, right) => left.timeUs - right.timeUs);
+    // Hell Charge ticks, including those of a head missed in this span: no input falls inside it, so the miss is
+    // certain and its ticks run from the deadline on.
+    for (const lane of this.lanes.values()) {
+      if (lane.auto) continue;
+      for (let index = lane.sweepCursor; index < lane.notes.length; index += 1) {
+        const note = lane.notes[index]!;
+        if (note.timeUs >= untilUs) break;
+        if (
+          note.isLong &&
+          note.longStyle === 3 &&
+          !note.judged &&
+          !note.holding &&
+          note.missDeadlineUs >= this.lastAdvanceUs &&
+          note.missDeadlineUs < untilUs
+        ) {
+          this.startHcnPassing(lane, note, note.missDeadlineUs);
+        }
+      }
+      for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
+        passing.counter.advance(Math.min(untilUs, passing.endUs), (gain, atUs) =>
+          events.push({ timeUs: atUs, kind: 'hcn-tick', lane, gain }),
+        );
+        lane.passing = passing.endUs >= untilUs ? passing : passing.next;
+        if (passing.endUs >= untilUs) break;
+      }
+    }
+
+    // One instant settles tails first, then auto notes, then misses, then mines, each in channel order — the order the
+    // engine's judge core settles them in.
+    events.sort(
+      (left, right) =>
+        left.timeUs - right.timeUs ||
+        TIMED_EVENT_ORDER[left.kind] - TIMED_EVENT_ORDER[right.kind] ||
+        (left.lane.channel < right.lane.channel ? -1 : left.lane.channel > right.lane.channel ? 1 : 0),
+    );
 
     for (const event of events) {
       if (event.kind === 'auto') {
         const note = event.note!;
         if (note.judged) continue;
+        if (note.isLong && note.longStyle !== 1 && !note.autoHeadDone) {
+          note.autoHeadDone = true;
+          this.applyJudge(JUDGE_PGREAT, undefined);
+          continue;
+        }
         note.judged = true;
         this.applyJudge(JUDGE_PGREAT, undefined);
-        if (note.isLong && note.longStyle !== 1) {
-          // Charge styles judge head and tail; auto play scores both as PGREAT.
-          this.applyJudge(JUDGE_PGREAT, undefined);
-        }
       } else if (event.kind === 'miss') {
         const note = event.note!;
         if (note.judged || note.holding) continue;
@@ -372,33 +477,37 @@ class PlaylogSimulation {
         }
       } else if (event.kind === 'mine' || event.kind === 'mine-enter') {
         // Held as it enters the window (LR2) or as it crosses the line (every ruleset).
-        if (event.lane.held) this.detonateMine(event.mine!);
+        if (event.lane.downTokens.size > 0) this.detonateMine(event.mine!);
       } else if (event.kind === 'mine-settle') {
         event.mine!.applied = true;
+      } else if (event.kind === 'hcn-tick') {
+        this.applyHcnTick(event.gain!);
+      } else if (event.kind === 'release-settle') {
+        const lane = event.lane;
+        const hold = lane.hold;
+        if (!hold || hold.note !== event.note || !hold.pendingRelease) continue;
+        lane.hold = undefined;
+        hold.note.holding = false;
+        hold.note.judged = true;
+        this.applyJudge(hold.pendingRelease.judge, hold.pendingRelease.dmUs);
+      } else if (event.kind === 'ln-complete') {
+        const lane = event.lane;
+        const hold = lane.hold;
+        if (!hold || hold.note !== event.note) continue;
+        lane.hold = undefined;
+        hold.note.holding = false;
+        hold.note.judged = true;
+        this.applyJudge(hold.headJudge ?? JUDGE_BAD, hold.headDmUs);
       } else {
         // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / IIDX).
         const lane = event.lane;
         const hold = lane.hold;
         if (!hold || hold.note !== event.note) continue;
-        this.integrateHcn(lane, event.timeUs);
         lane.hold = undefined;
         hold.note.holding = false;
         hold.note.judged = true;
         this.applyJudge(JUDGE_MISS_POOR, undefined);
       }
-    }
-
-    // LN (style 1) holds confirm their deferred head judgment once the tail time is reached while still held.
-    for (const lane of this.lanes.values()) {
-      const hold = lane.hold;
-      if (hold && hold.note.longStyle === 1 && hold.note.endTimeUs! < untilUs) {
-        this.integrateHcn(lane, hold.note.endTimeUs!);
-        lane.hold = undefined;
-        hold.note.holding = false;
-        hold.note.judged = true;
-        this.applyJudge(hold.headJudge ?? JUDGE_BAD, hold.headDmUs);
-      }
-      this.integrateHcn(lane, untilUs);
     }
 
     // Advance sweep cursors past settled notes.
@@ -429,9 +538,8 @@ class PlaylogSimulation {
   private detonateMine(mine: SimMine): void {
     if (mine.applied) return;
     mine.applied = true;
-    if (mine.damage > 0) {
-      this.gauge.applyRawDelta(-mine.damage);
-    }
+    // Applied even at 0 damage, as the engine does: the raw path still settles a gauge sitting on its floor.
+    this.gauge.applyRawDelta(-mine.damage);
   }
 
   /** LR2: a press with a mine inside the PGREAT window of the line detonates it (before the press judges a note). */
@@ -442,35 +550,46 @@ class PlaylogSimulation {
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
         if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
-        const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
-        if (mine.timeUs - earlyUs > timeUs) break;
+        // Mines further ahead than any PGREAT reach cannot be hit.
+        if (mine.timeUs - timeUs > 1_000_000) break;
+        // The PGREAT window in force at the press, as LR2 reads it (`#EXRANK` can change it).
+        const [lateUs, earlyUs] = pgreatWindowReachUs(this.config.windowsAt(timeUs).note);
+        if (mine.timeUs - earlyUs > timeUs) continue;
         if (!mine.applied && timeUs - mine.timeUs <= lateUs) this.detonateMine(mine);
       }
     }
   }
 
-  /** Integrates the beatoraja-model HCN hold ticks for a lane up to `untilUs`. */
-  private integrateHcn(lane: SimLane, untilUs: number): void {
-    const hold = lane.hold;
-    if (!hold || hold.note.longStyle !== 3) return;
-    const from = Math.max(hold.note.timeUs, this.lastAdvanceUs === Number.NEGATIVE_INFINITY ? 0 : this.lastAdvanceUs);
-    const to = Math.min(untilUs, hold.note.endTimeUs!);
-    if (!(to > from)) return;
-    let dt = to - from;
-    const tick = this.config.hcnTickUs;
-    if (lane.held) {
-      hold.hcnCounterUs += dt;
-      while (hold.hcnCounterUs > tick) {
-        this.gauge.applyJudge(this.config.hcnTick.heldJudge as GaugeJudgeIndex, this.config.hcnTick.heldRate);
-        hold.hcnCounterUs -= tick;
-      }
-    } else {
-      hold.hcnCounterUs -= dt;
-      while (hold.hcnCounterUs < -tick) {
-        this.gauge.applyJudge(this.config.hcnTick.releasedJudge as GaugeJudgeIndex, this.config.hcnTick.releasedRate);
-        hold.hcnCounterUs += tick;
-      }
+  /**
+   * Starts the gauge ticks of a Hell Charge note whose head was judged at `judgedUs` (pressed, or missed at its
+   * deadline), as the engine does: from the later of the head and that instant until the tail passes.
+   */
+  private startHcnPassing(lane: SimLane, note: SimNote, judgedUs: number): void {
+    if (lane.auto || !note.isLong || note.longStyle !== 3) return;
+    for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
+      if (passing.note === note) return;
     }
+    const startUs = Math.max(note.timeUs, judgedUs);
+    const counter = new HcnTickCounter(startUs);
+    counter.setGaining(lane.downTokens.size > 0, startUs, () => undefined);
+    lane.passing = addHcnPassing(lane.passing, { note, endUs: note.endTimeUs!, counter, tailGood: false }, startUs);
+  }
+
+  /** Re-reads whether a lane's passing Hell Charge note gains: a key on it is down, or its tail went well. */
+  private setHcnGaining(lane: SimLane, atUs: number): void {
+    for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
+      passing.counter.setGaining(passing.tailGood || lane.downTokens.size > 0, Math.min(atUs, passing.endUs), (gain) =>
+        this.applyHcnTick(gain),
+      );
+    }
+  }
+
+  private applyHcnTick(gain: boolean): void {
+    const tick = this.config.hcnTick;
+    this.gauge.applyJudge(
+      (gain ? tick.heldJudge : tick.releasedJudge) as GaugeJudgeIndex,
+      gain ? tick.heldRate : tick.releasedRate,
+    );
   }
 
   // ---- input handling ----------------------------------------------------------------------------------------
@@ -478,15 +597,34 @@ class PlaylogSimulation {
   private handleDown(input: PlaylogInputEvent, minePressLegLive: boolean): void {
     const timeUs = input.timeUs;
     const windows = this.config.windowsAt(timeUs);
-    const lanes = this.resolveInputLanes(input);
-    for (const lane of lanes) {
+    const pressed = this.resolveInputLanes(input);
+    for (const lane of pressed) {
       lane.held = true;
+      if (input.tokens === undefined || input.tokens.length === 0) {
+        lane.downTokens.add('');
+      } else {
+        for (const token of input.tokens) lane.downTokens.add(token);
+      }
+      this.setHcnGaining(lane, timeUs);
     }
+    // Pressing a lane whose release is waiting out the margin resumes its hold: that press judges nothing else. A lane
+    // whose long note is held (pressed by another key bound to it) judges no other note either: its current note is
+    // the long note, and the ruleset says what the press does instead.
+    const lanes = pressed.filter((lane) => {
+      if (lane.hold === undefined) return true;
+      if (lane.hold.pendingRelease !== undefined) {
+        lane.hold.pendingRelease = undefined;
+      } else {
+        this.applyPressDuringLongNote(lane, lane.hold, timeUs);
+      }
+      return false;
+    });
     if (lanes.length === 0) {
       return;
     }
     if (minePressLegLive) {
-      this.detonateMinesOnPress(lanes, timeUs);
+      // Every pressed lane's key goes down, whatever the press then judges.
+      this.detonateMinesOnPress(pressed, timeUs);
     }
 
     const selected = this.selectCandidate(lanes, timeUs, windows);
@@ -502,6 +640,7 @@ class PlaylogSimulation {
     const { note, lane, dmUs } = selected;
     if (note.isLong) {
       this.startLongNote(lane, note, selected.judge, dmUs);
+      this.startHcnPassing(lane, note, timeUs);
     } else {
       note.judged = true;
       this.applyJudge(selected.judge, dmUs);
@@ -512,38 +651,83 @@ class PlaylogSimulation {
     }
   }
 
+  /** The ruleset's {@link RulesetConfig.pressDuringLongNote}: LR2 re-judges the LN head or charges an empty POOR. */
+  private applyPressDuringLongNote(lane: SimLane, hold: ActiveHold, timeUs: number): void {
+    if (this.config.pressDuringLongNote === 'ignore') {
+      return;
+    }
+    if (hold.note.longStyle === 1) {
+      const dmUs = hold.note.timeUs - timeUs;
+      const judge = classifyJudge(dmUs, selectJudgeWindowSet(this.config.windowsAt(timeUs), { scratch: lane.scratch }));
+      if (judge !== JUDGE_NONE) {
+        hold.headJudge = judge;
+        hold.headDmUs = dmUs;
+        return;
+      }
+    }
+    this.applyJudge(JUDGE_EMPTY_POOR, undefined);
+  }
+
   private handleUp(input: PlaylogInputEvent): void {
     const timeUs = input.timeUs;
     for (const lane of this.resolveInputLanes(input)) {
       lane.held = false;
+      if (input.tokens === undefined || input.tokens.length === 0) {
+        lane.downTokens.clear();
+      } else {
+        for (const token of input.tokens) lane.downTokens.delete(token);
+        // An unnamed press is released by any release of the lane.
+        lane.downTokens.delete('');
+      }
       const hold = lane.hold;
-      if (!hold) continue;
-      this.integrateHcn(lane, timeUs);
+      if (!hold) {
+        this.setHcnGaining(lane, timeUs);
+        continue;
+      }
       const note = hold.note;
       const endWindows = selectJudgeWindowSet(this.config.windowsAt(timeUs), {
         scratch: note.scratch,
         longNoteEnd: true,
       });
       const dmUs = note.endTimeUs! - timeUs;
-      const endJudge = classifyJudge(dmUs, endWindows);
+      let released: { judge: GaugeJudgeIndex; dmUs: number };
+      if (note.longStyle === 1) {
+        // LN: the ruleset decides how a release before the tail combines with the deferred head judgment.
+        const headJudge = hold.headJudge ?? JUDGE_BAD;
+        released = resolveLnEarlyRelease(
+          this.config,
+          {
+            judge: (headJudge > JUDGE_MISS_POOR ? JUDGE_MISS_POOR : headJudge) as LnJudgeIndex,
+            dmUs: hold.headDmUs ?? 0,
+          },
+          dmUs,
+          endWindows,
+        );
+      } else {
+        // CN / HCN tail: judged by the release timing; early releases beyond the windows are POOR.
+        const endJudge = classifyJudge(dmUs, endWindows);
+        released = { judge: endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge, dmUs };
+      }
+      const marginUs = note.scratch
+        ? this.config.longNoteReleaseMarginUs.scratch
+        : this.config.longNoteReleaseMarginUs.note;
+      if (marginUs > 0 && released.judge >= JUDGE_BAD && released.dmUs > 0) {
+        // beatoraja: a release that would score BAD or worse before the tail waits out the margin (`releasetime`).
+        hold.pendingRelease = { atUs: timeUs + marginUs, ...released };
+        this.setHcnGaining(lane, timeUs);
+        continue;
+      }
       lane.hold = undefined;
       note.holding = false;
       note.judged = true;
-      if (note.longStyle === 1) {
-        // LN: worse of head and tail; an early release outside the GOOD reach is a BAD.
-        const tailJudge: GaugeJudgeIndex = endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge;
-        const headJudge: GaugeJudgeIndex = hold.headJudge ?? JUDGE_BAD;
-        let judge: GaugeJudgeIndex = worseJudge(tailJudge, headJudge);
-        if (judge >= JUDGE_BAD && dmUs > 0) {
-          judge = JUDGE_BAD;
+      this.applyJudge(released.judge, released.dmUs);
+      for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
+        if (passing.note === note && released.judge <= JUDGE_GOOD) {
+          // A Hell Charge tail released at GOOD or better keeps its lane gaining until the tail passes.
+          passing.tailGood = true;
         }
-        const worseDm = hold.headDmUs !== undefined && Math.abs(hold.headDmUs) > Math.abs(dmUs) ? hold.headDmUs : dmUs;
-        this.applyJudge(judge > JUDGE_MISS_POOR ? JUDGE_MISS_POOR : judge, worseDm);
-      } else {
-        // CN / HCN tail: judged by the release timing; early releases beyond the windows are POOR.
-        const judge = endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge;
-        this.applyJudge(judge, dmUs);
       }
+      this.setHcnGaining(lane, timeUs);
     }
   }
 
@@ -567,7 +751,6 @@ class PlaylogSimulation {
         headJudge: judge,
         headDmUs: dmUs,
         tailMissDeadlineUs: Number.POSITIVE_INFINITY,
-        hcnCounterUs: 0,
       };
       return;
     }
@@ -579,11 +762,14 @@ class PlaylogSimulation {
       return;
     }
     note.holding = true;
-    const endWindows = selectJudgeWindowSet(this.config.windows, { scratch: note.scratch, longNoteEnd: true });
+    // The tail's late window as it stands at the tail, like a note's miss deadline at the note.
+    const endWindows = selectJudgeWindowSet(this.config.windowsAt(note.endTimeUs!), {
+      scratch: note.scratch,
+      longNoteEnd: true,
+    });
     lane.hold = {
       note,
       tailMissDeadlineUs: note.endTimeUs! + judgeWindowLateReachUs(endWindows),
-      hcnCounterUs: 0,
     };
   }
 
@@ -726,9 +912,10 @@ class PlaylogSimulation {
       this.combo = 0;
     }
     if (dmUs !== undefined && (judgeIndex === JUDGE_GREAT || judgeIndex === JUDGE_GOOD)) {
+      // A delta of exactly 0 is neither, as in the engine (it is always inside PGREAT, so this is only consistency).
       if (dmUs > 0) {
         this.fast += 1;
-      } else {
+      } else if (dmUs < 0) {
         this.slow += 1;
       }
     }
@@ -741,13 +928,31 @@ function classifyJudge(dmUs: number, set: JudgeWindowSetUs): JudgeClassification
   return judge === RULESET_JUDGE_NONE ? JUDGE_NONE : judge;
 }
 
-/** The worse (numerically larger) of two judgments — the judge indices are ordered best-to-worst. */
-function worseJudge(left: GaugeJudgeIndex, right: GaugeJudgeIndex): GaugeJudgeIndex {
-  return left >= right ? left : right;
-}
-
 function windowSetFor(candidate: SelectionCandidate, windows: RulesetWindowTables): JudgeWindowSetUs {
   return selectJudgeWindowSet(windows, { scratch: candidate.lane.scratch });
+}
+
+/** Play-mode layout per leading key count, for lane-mode strings that are not a layout label (`'7keys'`, `'14K'`). */
+const LAYOUT_BY_KEY_COUNT: Readonly<Record<string, PlayModeLayoutId>> = {
+  '5': '5',
+  '7': '7',
+  '9': '9-pms',
+  '10': '10',
+  '14': '14',
+  '24': '24',
+  '48': '48',
+};
+
+/**
+ * The scratch lanes of a recorded lane mode: the lanes the play-mode table marks `scratch` in the layout the engine
+ * played (`PlaylogChart.laneMode` is its label), the same set the engine binds as scratch. Other spellings resolve by
+ * their leading key count, as the ruleset reads the lane mode, with 7 KEY for anything else.
+ */
+function resolveScratchChannels(laneMode: string): ReadonlySet<string> {
+  const layout =
+    Object.values(PLAY_MODE_LAYOUTS).find((candidate) => candidate.label === laneMode) ??
+    PLAY_MODE_LAYOUTS[LAYOUT_BY_KEY_COUNT[/^\d+/.exec(laneMode)?.[0] ?? ''] ?? '7'];
+  return new Set(layout.lanes.filter((lane) => lane.kind === 'scratch').map((lane) => lane.channel));
 }
 
 /**

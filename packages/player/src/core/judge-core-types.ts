@@ -2,6 +2,8 @@ import type { BeMusicEvent, BeMusicSourceFormat } from '@be-music/json';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import type { PlaylogInputEvent } from '../playlog/format.ts';
 import type { RulesetConfig } from '../ruleset/definitions.ts';
+import type { GaugeJudgeIndex } from '../ruleset/gauge.ts';
+import type { HcnTickCounter } from '../ruleset/long-note.ts';
 import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import type { LaneHoldHistory } from './lane-hold.ts';
 import { type PendingAutoLongNoteState, type TimedManualJudge } from './judge-rules.ts';
@@ -16,19 +18,6 @@ import type { PlayerGaugeSummary, PlayerUiCommand } from './ui-signal-bus.ts';
 export const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
 /** How long each further key event (or a held kitty key) keeps a long note held. */
 export const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
-/** Chart-time grid a replay advances its judge state on, between and alongside the replayed inputs. */
-export const REPLAY_JUDGE_STEP_SECONDS = 0.001;
-/**
- * Per-second gauge drain while a Hell-Charge LN (mode 3) is NOT held during its body. Upstream
- * `JudgeManager.java:324-340` integrates 0.5 % per 200 ms tick = 2.5 %/s; the core integrates the same rate
- * continuously, which gives the same total over the same elapsed time.
- */
-export const HELL_CHARGE_GAUGE_DRAIN_PER_SECOND = 2.5;
-/**
- * Per-second gauge GAIN while a Hell-Charge LN (mode 3) is held cleanly. Upstream `JudgeManager.java:324-329` calls
- * `gauge.update(1, 0.5f)` per 200 ms tick = 2.5 %/s.
- */
-export const HELL_CHARGE_GAUGE_GAIN_PER_SECOND = 2.5;
 /** Slack added to "has chart time reached X" checks so float noise never holds an event back by one step. */
 export const JUDGE_TIME_EPSILON_SECONDS = 1e-6;
 /** `#WAV00` — the sample a mine explosion plays, when the chart defines one. */
@@ -43,8 +32,6 @@ export interface JudgeCoreConfig {
   invisibleNotes: TimedPlayableNote[];
   /** Notes whose keysound a note-less press plays (LR2 lane-sound hold). */
   laneSoundNotes: readonly TimedPlayableNote[];
-  /** FREE ZONE channels: a note-less press there plays its keysound and never charges an empty POOR. */
-  freeZoneChannels: ReadonlySet<string>;
   /** Scratch lanes (`16` / `26` and their mapped equivalents) — they read the scratch window tables. */
   scratchChannels: ReadonlySet<string>;
   /** AUTO SCRATCH: the core plays the scratch lanes itself and ignores input on them. */
@@ -81,8 +68,22 @@ export interface JudgeCoreScore {
   scoreTracker: ScoreTracker;
   applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
   applyGaugeDelta: (delta: number) => void;
+  /** One Hell Charge tick: a judge-table entry at a rate (beatoraja's `gauge.update(judge, rate)`). */
+  applyGaugeTick: (judge: GaugeJudgeIndex, rate: number) => void;
   /** Empties the gauge for good (LR2's `HP = 0` when a reversed play ends with notes outstanding). */
   drainGaugeToZero: () => void;
+}
+
+/** A Hell Charge note passing the judge line: its gauge ticks run from its judged head until its tail passes. */
+export interface HcnPassingState {
+  note: TimedPlayableNote;
+  /** The tail's microsecond: the counter stops there. */
+  endUs: number;
+  counter: HcnTickCounter;
+  /** The tail was released at GOOD or better: the lane gains until the tail passes, held or not. */
+  tailGood: boolean;
+  /** The lane's next Hell Charge note, judged before this one has passed: it ticks once this one's tail passes. */
+  next?: HcnPassingState;
 }
 
 /** A long note whose head was hit and whose tail is not resolved yet. */
@@ -91,8 +92,6 @@ export interface ActiveLongNoteState {
   note: TimedPlayableNote;
   mode: 1 | 2 | 3;
   headJudge: TimedManualJudge;
-  /** Last chart second the HCN gain / drain integration has accounted for (mode 3 only). */
-  gaugeDrainCursorSeconds: number;
   audioStopped: boolean;
   /**
    * True when `headJudge` has ALREADY been applied to the score (charge modes judge the head on the press). The
@@ -108,6 +107,7 @@ export interface JudgeCoreState {
   readonly scoreTracker: ScoreTracker;
   readonly applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
   readonly applyGaugeDelta: (delta: number) => void;
+  readonly applyGaugeTick: (judge: GaugeJudgeIndex, rate: number) => void;
   readonly drainGaugeToZero: () => void;
   combo: number;
   /** Lanes whose key is down (kitty key-state input and replays; plain terminals only send presses). */
@@ -126,6 +126,8 @@ export interface JudgeCoreState {
    * Until then a press counts as held for {@link LONG_NOTE_REPEAT_HOLD_GRACE_MS}.
    */
   keyStateInput: boolean;
+  /** The latest instant (true clock, seconds) the timed judgments were advanced to — an ESC abort stops there. */
+  advancedThroughSeconds: number;
   readonly pendingAutoScratchLongNotes: PendingAutoLongNoteState[];
   readonly autoScratchNotes: readonly TimedPlayableNote[];
   /** Per-lane sorted note times — the reference notes a phantom press is measured against for an empty POOR. */
@@ -133,6 +135,13 @@ export interface JudgeCoreState {
   autoScratchCursor: number;
   scorableMissCursor: number;
   landmineExpireCursor: number;
+  /**
+   * How far each unsettled mine has been checked: 1 once its LR2 PGREAT-window entry, 2 once its crossing of the judge
+   * line. A mine is settled (judged) after its last check.
+   */
+  readonly landminePhases: Map<TimedLandmineNote, number>;
+  /** The Hell Charge note passing each lane, while its gauge ticks run. */
+  readonly hcnPassing: Map<string, HcnPassingState>;
   invisibleExpireCursor: number;
   remainingScorableNotes: number;
   remainingLandmineNotes: number;

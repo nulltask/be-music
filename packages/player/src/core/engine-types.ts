@@ -186,10 +186,10 @@ export interface PlayerOptions {
   onLog?: (entry: LogEntry) => void;
   writeOutput?: (text: string) => void;
   /**
-   * Host-declared play settings merged into the recorded play-log (`gauge`, `randomLane`, `dpFlip`, `native`).
-   * The engine itself knows mode / auto-scratch / judge-window override; everything host-side (which gauge the
-   * player picked, which lane shuffle produced `preparedChart`, ...) arrives through this bag. Only meaningful
-   * together with {@link onPlaylogRecorded}.
+   * Host-declared play settings merged into the recorded play-log (`randomLane`, `dpFlip`, `native`, ...). The engine
+   * itself knows mode / auto-scratch / judge-window override; everything host-side (which lane shuffle produced
+   * `preparedChart`, ...) arrives through this bag. `gauge` here is a fallback for {@link gauge}: the play runs on, and
+   * the log records, one gauge. Only meaningful together with {@link onPlaylogRecorded}.
    */
   recordPlaylog?: PlaylogRecordingOptions;
   /**
@@ -213,7 +213,7 @@ export interface PlayerOptions {
   /**
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
-   * Defaults to `'GROOVE'`.
+   * Defaults to `recordPlaylog.gauge`, then `'GROOVE'`. The play log records the gauge the play ran on.
    */
   gauge?: GrooveGaugeType;
   /**

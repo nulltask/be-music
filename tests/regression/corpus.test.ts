@@ -6,22 +6,26 @@ import { resolveChartPlayVariant, resolveChartReferenceBpm } from '@be-music/cha
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import { parseChart, parseChartFile } from '@be-music/parser';
 import type { RandomDraws } from '@be-music/chart';
-import { manualPlay, resolvePlayChart } from '@be-music/player';
+import { resolvePlayChart } from '@be-music/player';
 import { extractTimedNotes } from '@be-music/player/playable-notes';
-import {
-  simulatePlaylogRulesets,
-  type BeMusicPlaylog,
-  type PlaylogInputEvent,
-  type PlaylogNote,
-  type PlaylogRulesetResult,
-} from '@be-music/player/playlog';
+import { simulatePlaylogRulesets, type PlaylogNote, type PlaylogRulesetResult } from '@be-music/player/playlog';
 import { stringifyBms, stringifyBmson } from '@be-music/stringifier';
 import { describe, expect, test } from 'vite-plus/test';
+import {
+  buildScenarios,
+  ENGINE_REPLAY_SPEED,
+  findEngineSimulatorMismatches,
+  replayEngine,
+  replayEngineRulesets,
+  round6,
+  summarizeEngineReplay,
+} from './play-scenarios.ts';
 
 /**
  * Regression corpus: every chart in `examples/test` is pushed through the whole pipeline — parse, `#RANDOM` resolution,
- * timing, sample triggers, the engine's prepared note list, the three ruleset simulators under fixed input streams,
- * and stringify — and the observable output of each stage is pinned in `__expected__/<chart>.json`.
+ * timing, sample triggers, the engine's prepared note list, the three ruleset simulators and the live engine's replays
+ * under fixed input streams, and stringify — and the observable output of each stage is pinned in
+ * `__expected__/<chart>.json`.
  *
  * The unit tests next to each source file assert what a function should do. This suite records what the toolchain
  * currently DOES on real chart files, so a refactor that moves logic between packages fails here the moment any
@@ -39,18 +43,7 @@ const RANDOM_VARIANTS: ReadonlyArray<{ id: string; random: () => number }> = [
   { id: 'random-high', random: () => 0.999_999_9 },
 ];
 
-/**
- * Press offsets cycled per note in the `offset` scenario, chosen to land in every LR2 window from PGREAT to a missed
- * POOR on both the FAST and the SLOW side.
- */
-const OFFSET_SCENARIO_US = [0, 12_000, -12_000, 30_000, -30_000, 70_000, -70_000, 150_000] as const;
-/** Every Nth scorable note is left unpressed in the `offset` scenario. */
-const OFFSET_SCENARIO_SKIP_EVERY = 7;
-/** How long a tap is held, capped so it never runs into the lane's next press. */
-const TAP_HOLD_US = 40_000;
-
 const roundUs = (seconds: number): number => Math.round(seconds * 1_000_000);
-const round6 = (value: number): number => Math.round(value * 1_000_000) / 1_000_000;
 
 describe('regression corpus', async () => {
   const charts = (await readdir(fixtureDir))
@@ -62,8 +55,10 @@ describe('regression corpus', async () => {
     expect(charts.length).toBeGreaterThanOrEqual(25);
   });
 
+  // Charts run concurrently: almost all of a chart's time goes to engine replays waiting on their tick loop, and the
+  // longest charts need several seconds of it.
   for (const name of charts) {
-    test(name, async () => {
+    test.concurrent(name, { timeout: 60_000 }, async ({ expect }) => {
       const expected = await buildExpected(resolve(fixtureDir, name), name);
       await expect(`${JSON.stringify(expected, null, 2)}\n`).toMatchFileSnapshot(`__expected__/${name}.json`);
     });
@@ -154,26 +149,28 @@ async function buildResolvedExpected(
   const { chart: json, randomDraws } = resolvePlayChart(parsed, { random });
   const timing = createTimingResolver(json);
 
-  // The engine runs once, with no input, purely to snapshot the note list it prepares for play (lane transforms,
-  // long-note modes, mine damage, FREE ZONE). Play outcomes come from the ruleset simulators instead: the engine
-  // judges on a wall-clock tick loop, and its replay summary still shifts between runs (gauge order around the
-  // 100 % clamp, trailing releases dropped once the loop ends), so pinning it here would make this suite flaky.
-  // Engine/simulator agreement is `packages/player/src/playlog/equivalence.test.ts`'s job.
-  const playlog = await recordNoInputPlaylog(json, randomDraws);
+  // A no-input run snapshots the note list the engine prepares for play (lane transforms, long-note modes, mine
+  // damage, FREE ZONE); the scenarios' input streams are built from it. Each stream is then judged twice per ruleset:
+  // by the pure simulator and by the live engine replaying it. Both are pinned side by side, and the two must agree on
+  // every chart: `packages/player/src/playlog/equivalence.test.ts` reduces each rule to a minimal case, while this
+  // catches whatever combination of rules a real chart reaches that no minimal case covered.
+  const { playlog } = await replayEngine(json, { randomDraws, inputs: [], speed: ENGINE_REPLAY_SPEED });
   const notes = playlog.chart.notes;
-  const scenarios: Record<string, PlaylogInputEvent[]> = {
-    missed: [],
-    perfect: buildInputs(
-      notes,
-      () => 0,
-      () => false,
-    ),
-    offset: buildInputs(
-      notes,
-      (index) => OFFSET_SCENARIO_US[index % OFFSET_SCENARIO_US.length]!,
-      (index) => index % OFFSET_SCENARIO_SKIP_EVERY === OFFSET_SCENARIO_SKIP_EVERY - 1,
-    ),
-  };
+  const play: Record<string, unknown> = {};
+  for (const [id, inputs] of Object.entries(buildScenarios(notes))) {
+    const simulated = simulatePlaylogRulesets({ ...playlog, inputs });
+    const replays = await replayEngineRulesets(json, { randomDraws, inputs, speed: ENGINE_REPLAY_SPEED });
+    for (const { ruleset, replay } of replays) {
+      expect(findEngineSimulatorMismatches(replay, simulated[ruleset]!), `${path} ${id} ${ruleset}`).toEqual([]);
+    }
+    play[id] = {
+      inputs: inputs.length,
+      ...Object.fromEntries(
+        Object.entries(simulated).map(([ruleset, result]) => [ruleset, roundRulesetResult(result)]),
+      ),
+      engine: Object.fromEntries(replays.map(({ ruleset, replay }) => [ruleset, summarizeEngineReplay(replay)])),
+    };
+  }
 
   const { notes: _notes, ...chartFacts } = playlog.chart;
   return {
@@ -195,20 +192,7 @@ async function buildResolvedExpected(
     ),
     playlogChart: chartFacts,
     notes: notes.map(formatPlaylogNote),
-    play: Object.fromEntries(
-      Object.entries(scenarios).map(([id, inputs]) => [
-        id,
-        {
-          inputs: inputs.length,
-          ...Object.fromEntries(
-            Object.entries(simulatePlaylogRulesets({ ...playlog, inputs })).map(([ruleset, result]) => [
-              ruleset,
-              roundRulesetResult(result),
-            ]),
-          ),
-        },
-      ]),
-    ),
+    play,
   };
 }
 
@@ -226,75 +210,6 @@ function formatRandomPatterns(draws: RandomDraws): string[] {
   return draws
     .filter((draw) => draw.command === 'RANDOM' || draw.command === 'SETRANDOM')
     .map((draw) => (draw.command === 'SETRANDOM' ? `${draw.value}/${draw.value}` : `${draw.value}/${draw.range}`));
-}
-
-async function recordNoInputPlaylog(json: BeMusicJson, randomDraws: RandomDraws): Promise<BeMusicPlaylog> {
-  let playlog: BeMusicPlaylog | undefined;
-  await manualPlay(json, {
-    randomDraws,
-    speed: 64,
-    leadInMs: 0,
-    audio: false,
-    tui: false,
-    writeOutput: () => {},
-    replayInputs: [],
-    recordPlaylog: {},
-    onPlaylogRecorded: (recorded) => {
-      playlog = recorded;
-    },
-  });
-  if (playlog === undefined) {
-    throw new Error('manualPlay finished without recording a playlog');
-  }
-  return playlog;
-}
-
-/**
- * Builds a replay input stream that presses every scorable note on its own lane. `offsetUs` shifts a note's press
- * (and, for long notes, its release) and `skip` leaves a note unpressed; both are keyed by the note's index among
- * the pressable notes so the stream is deterministic. Presses on one lane never overlap: a press waits for the
- * lane's previous release, and a tap is released before the lane's next press.
- */
-function buildInputs(
-  notes: readonly PlaylogNote[],
-  offsetUs: (index: number) => number,
-  skip: (index: number) => boolean,
-): PlaylogInputEvent[] {
-  const pressable = notes.filter((note) => note.type !== 'mine' && note.type !== 'invisible');
-  const byChannel = new Map<string, Array<{ note: PlaylogNote; index: number }>>();
-  pressable.forEach((note, index) => {
-    if (skip(index)) {
-      return;
-    }
-    const lane = byChannel.get(note.channel) ?? [];
-    lane.push({ note, index });
-    byChannel.set(note.channel, lane);
-  });
-
-  const events: Array<Omit<PlaylogInputEvent, 'seq'>> = [];
-  for (const [channel, lane] of byChannel) {
-    let lastUpUs = Number.NEGATIVE_INFINITY;
-    lane.forEach(({ note, index }, position) => {
-      const offset = offsetUs(index);
-      const downUs = Math.max(note.timeUs + offset, lastUpUs + 1);
-      const next = lane[position + 1];
-      const nextDownUs = next === undefined ? Number.POSITIVE_INFINITY : next.note.timeUs + offsetUs(next.index);
-      const naturalUpUs = note.endTimeUs === undefined ? downUs + TAP_HOLD_US : note.endTimeUs + offset;
-      const upUs = Math.max(downUs + 1, Math.min(naturalUpUs, nextDownUs - 1));
-      events.push({ timeUs: downUs, action: 'down', channels: [channel] });
-      events.push({ timeUs: upUs, action: 'up', channels: [channel] });
-      lastUpUs = upUs;
-    });
-  }
-
-  // Releases sort ahead of presses that share a timestamp, then lanes in channel order, so `seq` is stable.
-  events.sort(
-    (left, right) =>
-      left.timeUs - right.timeUs ||
-      (left.action === right.action ? 0 : left.action === 'up' ? -1 : 1) ||
-      left.channels[0]!.localeCompare(right.channels[0]!),
-  );
-  return events.map((event, seq) => ({ seq, ...event }));
 }
 
 function roundRulesetResult(result: PlaylogRulesetResult): PlaylogRulesetResult {

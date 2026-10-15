@@ -73,7 +73,6 @@ function createCore(
       landmineNotes: prepared.landmineNotes,
       invisibleNotes: prepared.invisibleNotes,
       laneSoundNotes: prepared.laneSoundNotes,
-      freeZoneChannels: prepared.activeFreeZoneChannels,
       scratchChannels: new Set(
         prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
       ),
@@ -198,7 +197,8 @@ describe('judge core', () => {
     stepJudgeCore(state, press(1, '11'));
     expect(state.activeLongNotes.has('11')).toBe(true);
     stepJudgeCore(state, advance(1.4));
-    stepJudgeCore(state, {
+    // With key-state input the release settles the LN itself, at its own instant.
+    const effects = stepJudgeCore(state, {
       kind: 'release',
       channels: new Set(['11']),
       tokens: [],
@@ -206,7 +206,6 @@ describe('judge core', () => {
       nowMs: 1500,
       recordSec: 1.5,
     });
-    const effects = stepJudgeCore(state, advance(1.6));
 
     expect(state.summary.bad).toBe(1);
     expect(state.activeLongNotes.size).toBe(0);
@@ -454,7 +453,10 @@ describe('judge core', () => {
     );
     expect([...mapped]).toEqual(['11']);
 
+    // Timed judgments fall due once time has moved past their microsecond.
     stepJudgeCore(state, advance(2.25));
+    expect(state.config.scorableNotes.find((note) => note.channel === '16')!.judged).toBe(false);
+    stepJudgeCore(state, advance(2.250001));
     expect(state.config.scorableNotes.find((note) => note.channel === '16')!.judged).toBe(true);
     expect(state.summary.perfect).toBe(1);
   });
@@ -465,8 +467,9 @@ describe('judge core', () => {
     const effects = stepJudgeCore(state, { kind: 'finish', totalSeconds: 4 });
 
     expect(state.summary.poor).toBe(5);
-    expect(isJudgeCoreSettled(state)).toBe(false); // finish does not retire the counters, the driver stops anyway
-    expect(effects.at(-1)).toEqual({ kind: 'frame', seconds: 4 });
+    expect(isJudgeCoreSettled(state)).toBe(true); // finish settles every pending timed judgment at its own instant
+    // Each note is missed at its own deadline, as the play-log simulator does, rather than charged in one batch.
+    expect(effects.filter((effect) => effect.kind === 'judge-combo')).toHaveLength(5);
   });
 
   test('the judge clock mirrors past an LR2 negative-BPM reversal, and the pump clamps strictly below it', () => {
