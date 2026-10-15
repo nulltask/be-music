@@ -157,7 +157,13 @@ import {
   type BeMusicCoursePlaylog,
   type PlaylogCourseResult,
 } from '@be-music/player/playlog';
-import { buildCourseResultData, CourseSession, courseRecordKey, type CourseStagePlan } from './course-session.ts';
+import {
+  buildCourseResultData,
+  buildCourseResultSummary,
+  CourseSession,
+  courseRecordKey,
+  type CourseStagePlan,
+} from './course-session.ts';
 import demoPackageJson from '../package.json' with { type: 'json' };
 
 const dropLog = logger('drop');
@@ -2080,9 +2086,22 @@ class PlayerWebDemoApp {
     }
     this.recordCourseResult(courseRecordKey(session.course), result);
     this.maybeAutoSaveCoursePlaylog(courseLog);
-    await this.showResult(buildCourseResultData(session.course, result, courseLog), {
-      course: resolveSceneCourseInfo(session.course),
-    });
+    const courseInfo = resolveSceneCourseInfo(session.course);
+    // A beatoraja theme shows the course result on its COURSE_RESULT skin (or its result skin).
+    if (pickActiveFamilyForScene(this.familyDispatchState(), 'result') === 'beatoraja') {
+      const mounted = await this.showBeatorajaResult(
+        session.course.stages[0]!.song!,
+        buildCourseResultSummary(result),
+        result.maxCombo,
+        { scoreHistory: [], gaugeHistory: [], timingHistory: [] },
+        { info: courseInfo, result: true },
+      );
+      if (mounted) {
+        this.unlockPlaylogOptions();
+        return;
+      }
+    }
+    await this.showResult(buildCourseResultData(session.course, result, courseLog), { course: courseInfo });
   }
 
   /**
@@ -2915,6 +2934,9 @@ class PlayerWebDemoApp {
       dpFlip: this.guiState.dpFlip,
       initialHiSpeed: this.guiState.hiSpeed,
       onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
+      ...(courseStage !== undefined
+        ? { courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }
+        : {}),
       // Judge-window ruleset + auto scratch + play-log extras ride the engine-options passthrough — the beatoraja
       // scene forwards them onto the shared engine and merges `recordPlaylog` with its own fields.
       engineOptions: {
@@ -2961,7 +2983,10 @@ class PlayerWebDemoApp {
             this.courseSession.recordStage(playlog);
             // With stage results skipped, go straight on to the next stage (or the course result).
             const mounted =
-              !this.guiState.courseAutoAdvance && (await this.showBeatorajaResult(song, summary, maxCombo, history));
+              !this.guiState.courseAutoAdvance &&
+              (await this.showBeatorajaResult(song, summary, maxCombo, history, {
+                info: this.courseSession.courseInfo,
+              }));
             if (!mounted) this.continueCourse();
             this.unlockPlaylogOptions();
             return;
@@ -3560,9 +3585,12 @@ class PlayerWebDemoApp {
       gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
       timingHistory: ReadonlyArray<{ deltaMs: number; kind: string }>;
     },
+    course?: { info: SceneCourseInfo; result?: boolean },
   ): Promise<boolean> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return false;
+    // The course result (`course.result`) shows on the theme's COURSE_RESULT skin, falling back to its result skin.
+    const courseResult = course?.result === true;
 
     // Stash the run's clear-lamp into the in-session map (audit 2.18) so the next time the
     // user lands on this song in the select scene the bar's lamp icon lights up. Cleared
@@ -3579,7 +3607,8 @@ class PlayerWebDemoApp {
       gaugeType: summary.gauge?.type,
     });
     const previousLamp = this.beatorajaSessionLampOps.get(song.id);
-    if (newLamp !== BEATORAJA_OP.CLEAR_LAMP_FAILED || previousLamp === undefined) {
+    // A course's results count for the course, not for the single chart.
+    if (course === undefined && (newLamp !== BEATORAJA_OP.CLEAR_LAMP_FAILED || previousLamp === undefined)) {
       this.beatorajaSessionLampOps.set(song.id, newLamp);
     }
 
@@ -3587,11 +3616,15 @@ class PlayerWebDemoApp {
     // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default
     // in the Debug Menu (which clears the override) actually mounts the discovery default
     // instead of silently picking whatever theme happens to iterate first.
-    const resultCandidates = bundle.theme.entries.filter((entry) => entry.header.type === BEATORAJA_SKIN_TYPE.RESULT);
+    const resultType =
+      courseResult && bundle.theme.courseResultSkin !== undefined
+        ? BEATORAJA_SKIN_TYPE.COURSE_RESULT
+        : BEATORAJA_SKIN_TYPE.RESULT;
+    const resultCandidates = bundle.theme.entries.filter((entry) => entry.header.type === resultType);
     const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
-      BEATORAJA_SKIN_TYPE.RESULT,
+      resultType,
       resultCandidates,
-      bundle.theme.resultSkin,
+      resultType === BEATORAJA_SKIN_TYPE.COURSE_RESULT ? bundle.theme.courseResultSkin : bundle.theme.resultSkin,
     );
     if (selectedEntry === undefined) return false;
 
@@ -3647,8 +3680,10 @@ class PlayerWebDemoApp {
     const chartImages = await this.loadBeatorajaChartImages(song);
 
     let dismissed = false;
-    // R on the result plays the same chart again — only offered when the recorded play start is this chart's.
-    const retry = this.lastPlay?.song.id === song.id ? this.lastPlay : undefined;
+    // R on the result plays the same chart again — only offered when the recorded play start is this chart's, and
+    // never in a course (beatoraja disables quick retry there).
+    const retry = course === undefined && this.lastPlay?.song.id === song.id ? this.lastPlay : undefined;
+    const cleared = summary.gauge?.cleared ?? false;
     this.beatorajaResultScene = new PixiBeatorajaResultScene({
       skin: result.skin,
       textures,
@@ -3660,7 +3695,10 @@ class PlayerWebDemoApp {
       // reference is snapshot into `lastBeatorajaChart` for use here. We only forward when the
       // cached chart matches the song the result scene is rendering — otherwise the bpmgraph
       // would plot the wrong chart's BPM curve.
-      chart: this.lastBeatorajaChart?.chartPath === song.chartPath ? this.lastBeatorajaChart.resolved.chart : undefined,
+      chart:
+        !courseResult && this.lastBeatorajaChart?.chartPath === song.chartPath
+          ? this.lastBeatorajaChart.resolved.chart
+          : undefined,
       summary,
       maxCombo,
       scoreHistory: history.scoreHistory,
@@ -3670,9 +3708,16 @@ class PlayerWebDemoApp {
       // Pick the outcome-specific jingle when one was discovered, falling back to the generic
       // `result` slot. Beatoraja themes that ship a single result BGM authoredit as `result.*`,
       // while themes that distinguish clear / fail (most reference themes) ship dedicated tracks.
+      // The course result plays `course_clear` / `course_fail`, falling back to the result ones as beatoraja does.
       bgmBytes:
-        ((summary.gauge?.cleared ?? false) ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
+        (courseResult
+          ? cleared
+            ? this.beatorajaThemeBgm.courseClear
+            : this.beatorajaThemeBgm.courseFail
+          : undefined) ??
+        (cleared ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
         this.beatorajaThemeBgm.result,
+      ...(course !== undefined ? { courseInfo: course.info } : {}),
       skinAudio: this.beatorajaSkinAudio,
       onContinue: () => {
         if (dismissed) return;
@@ -3680,7 +3725,7 @@ class PlayerWebDemoApp {
         void this.sceneHost.setScene(undefined).then(() => {
           this.beatorajaResultScene?.dispose();
           this.beatorajaResultScene = undefined;
-          if (this.continueCourse()) return;
+          if (!courseResult && this.continueCourse()) return;
           void this.showSelect();
         });
       },
@@ -3700,7 +3745,7 @@ class PlayerWebDemoApp {
     });
     await this.sceneHost.setScene(this.beatorajaResultScene);
     this.setStatus(
-      `Result (beatoraja): ${song.title} · score=${summary.score} ex=${summary.exScore} maxCombo=${maxCombo}`,
+      `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · score=${summary.score} ex=${summary.exScore} maxCombo=${maxCombo}`,
     );
     return true;
   }
