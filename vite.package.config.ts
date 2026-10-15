@@ -37,8 +37,8 @@ export function createPackageConfig(options: CreatePackageConfigOptions): PackUs
 
   return {
     entry,
-    // `tsconfig.json` is the package's type-check project (tests, `paths` into sibling sources); declarations are
-    // emitted from the narrower build project instead.
+    // `tsconfig.json` is the package's type-check project (tests, sibling sources through the `source` export
+    // condition); declarations are emitted from the narrower build project, which resolves siblings to their `dist`.
     tsconfig: resolve(options.packageDir, 'tsconfig.build.json'),
     clean: true,
     dts: true,

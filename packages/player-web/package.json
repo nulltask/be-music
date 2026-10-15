@@ -11,33 +11,33 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./scenes": {
-      "types": "./dist/scenes.d.ts",
       "source": "./src/scene/index.ts",
+      "types": "./dist/scenes.d.ts",
       "default": "./dist/scenes.js"
     },
     "./skin": {
-      "types": "./dist/skin.d.ts",
       "source": "./src/skin/index.ts",
+      "types": "./dist/skin.d.ts",
       "default": "./dist/skin.js"
     },
     "./chart": {
-      "types": "./dist/chart.d.ts",
       "source": "./src/chart/index.ts",
+      "types": "./dist/chart.d.ts",
       "default": "./dist/chart.js"
     },
     "./collection": {
-      "types": "./dist/collection.d.ts",
       "source": "./src/collection/index.ts",
+      "types": "./dist/collection.d.ts",
       "default": "./dist/collection.js"
     },
     "./runtime": {
-      "types": "./dist/runtime.d.ts",
       "source": "./src/runtime/index.ts",
+      "types": "./dist/runtime.d.ts",
       "default": "./dist/runtime.js"
     }
   },

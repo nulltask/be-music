@@ -50,7 +50,6 @@ interface SeaTargetConfig {
   embeddedNodeModules?: EmbeddedNodeModuleRoot[];
   optionalExternalModules?: string[];
   bundleBanner?: string;
-  aliases?: Record<string, string>;
 }
 
 const TARGET_NAMES = ['player', 'audio-renderer'] as const;
@@ -78,54 +77,11 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
     ],
     optionalExternalModules: ['node-web-audio-api', '@uwx/libav.js-fat'],
     bundleBanner: SEA_WORKER_BANNER,
-    aliases: {
-      '@be-music/audio-renderer/triggers': resolve(repositoryDir, 'packages/audio-renderer/src/core/triggers.ts'),
-      '@be-music/audio-renderer': resolve(repositoryDir, 'packages/audio-renderer/src/index.ts'),
-      '@be-music/chart': resolve(repositoryDir, 'packages/chart/src/index.ts'),
-      '@be-music/json': resolve(repositoryDir, 'packages/json/src/index.ts'),
-      '@be-music/parser': resolve(repositoryDir, 'packages/parser/src/index.ts'),
-      '@be-music/player/playable-notes': resolve(repositoryDir, 'packages/player/src/playable-notes.ts'),
-      '@be-music/player/audio-sink': resolve(repositoryDir, 'packages/player/src/audio-sink.ts'),
-      '@be-music/player/image-resize-algorithm': resolve(
-        repositoryDir,
-        'packages/player/src/image-resize-algorithm.ts',
-      ),
-      '@be-music/player/state-signals': resolve(repositoryDir, 'packages/player/src/state-signals.ts'),
-      '@be-music/player/utils': resolve(repositoryDir, 'packages/player/src/utils.ts'),
-      '@be-music/player/core': resolve(repositoryDir, 'packages/player/src/core'),
-      '@be-music/player': resolve(repositoryDir, 'packages/player/src/index.ts'),
-      // Subpath aliases must come before the package-root alias — Vite picks the first matching entry, so a
-      // bare `@be-music/utils` alias would shadow `@be-music/utils/core` (= `packages/utils/src/index.ts/core`,
-      // invalid). Each subpath here mirrors a `package.json` `exports` entry plus the in-tree TS source.
-      '@be-music/utils/cli-path': resolve(repositoryDir, 'packages/utils/src/cli-path.ts'),
-      '@be-music/utils/core': resolve(repositoryDir, 'packages/utils/src/core.ts'),
-      '@be-music/utils/log': resolve(repositoryDir, 'packages/utils/src/log.ts'),
-      '@be-music/utils/optional-node-module': resolve(repositoryDir, 'packages/utils/src/optional-node-module.ts'),
-      '@be-music/utils/path': resolve(repositoryDir, 'packages/utils/src/path.ts'),
-      '@be-music/utils/pcm': resolve(repositoryDir, 'packages/utils/src/pcm.ts'),
-      '@be-music/utils/workerize': resolve(repositoryDir, 'packages/utils/src/workerize.ts'),
-      '@be-music/utils': resolve(repositoryDir, 'packages/utils/src/index.ts'),
-    },
   },
   'audio-renderer': {
     packageDir: resolve(repositoryDir, 'packages/audio-renderer'),
     outputBaseName: 'be-music-audio-render',
     bundleBanner: SEA_WORKER_BANNER,
-    aliases: {
-      '@be-music/chart': resolve(repositoryDir, 'packages/chart/src/index.ts'),
-      '@be-music/json': resolve(repositoryDir, 'packages/json/src/index.ts'),
-      '@be-music/parser': resolve(repositoryDir, 'packages/parser/src/index.ts'),
-      // Same subpath-before-root order as the player target above. audio-renderer imports `@be-music/utils/
-      // core` for `extname` / `isAbortError` and `@be-music/utils/path` for `resolveFirstExistingPath`.
-      '@be-music/utils/cli-path': resolve(repositoryDir, 'packages/utils/src/cli-path.ts'),
-      '@be-music/utils/core': resolve(repositoryDir, 'packages/utils/src/core.ts'),
-      '@be-music/utils/log': resolve(repositoryDir, 'packages/utils/src/log.ts'),
-      '@be-music/utils/optional-node-module': resolve(repositoryDir, 'packages/utils/src/optional-node-module.ts'),
-      '@be-music/utils/path': resolve(repositoryDir, 'packages/utils/src/path.ts'),
-      '@be-music/utils/pcm': resolve(repositoryDir, 'packages/utils/src/pcm.ts'),
-      '@be-music/utils/workerize': resolve(repositoryDir, 'packages/utils/src/workerize.ts'),
-      '@be-music/utils': resolve(repositoryDir, 'packages/utils/src/index.ts'),
-    },
   },
 };
 
@@ -233,57 +189,15 @@ function buildExternalModules(optionalExternalModules: string[]): string[] {
   return [...modules];
 }
 
-function createWorkspaceAliasPlugin(aliases?: Record<string, string>) {
-  if (!aliases) {
-    return undefined;
-  }
-
-  // Iterate longest-prefix-first so a request like `@be-music/player/core/ui-options` matches the
-  // `@be-music/player/core` alias before the shorter `@be-music/player` one. Object iteration order
-  // already preserves the order specified in `SEA_TARGETS`, but sorting by length makes the contract
-  // explicit and survives a future map literal reorder.
-  const entries = Object.entries(aliases).sort(([a], [b]) => b.length - a.length);
-  // The plugin needs `this.resolve` access (provided by Rollup at call time) so the `async resolveId`
-  // method can delegate extension / index resolution to Rollup's downstream resolvers. Returning a bare
-  // path like `packages/player/src/core/ui-options` would otherwise fail because `@rollup/plugin-alias`
-  // bypasses the rest of the resolution pipeline once a plugin returns a string from `resolveId`.
-  return {
-    name: 'be-music-sea-workspace-alias',
-    async resolveId(
-      this: {
-        resolve: (id: string, importer?: string, options?: { skipSelf?: boolean }) => Promise<{ id: string } | null>;
-      },
-      source: string,
-    ): Promise<string | null> {
-      for (const [find, replacement] of entries) {
-        let target: string | undefined;
-        if (source === find) {
-          target = replacement;
-        } else if (source.startsWith(`${find}/`)) {
-          target = `${replacement}/${source.slice(find.length + 1)}`;
-        }
-        if (target !== undefined) {
-          // Delegate extension resolution (`.ts`, `.js`, `.tsx`, etc.) and index lookup to Rollup's
-          // built-in resolver. `skipSelf: true` prevents infinite recursion through this plugin.
-          const resolved = await this.resolve(target, undefined, { skipSelf: true });
-          return resolved?.id ?? target;
-        }
-      }
-      return null;
-    },
-  };
-}
-
 async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<void> {
-  const workspaceAliasPlugin = createWorkspaceAliasPlugin(config.aliases);
   await build({
     configFile: false,
     resolve: {
-      ...(config.aliases ? { alias: config.aliases } : {}),
       // The SEA bundle runs in Node, but `build()` uses the client environment whose default conditions and
       // main fields prefer `browser` entries. That silently swapped in pino/browser (whose `flush` is a noop,
-      // hanging the logger close and writing no NDJSON) and isoworker's Web Worker implementation.
-      conditions: [...defaultServerConditions],
+      // hanging the logger close and writing no NDJSON) and isoworker's Web Worker implementation. `source` bundles
+      // the workspace packages from their TypeScript sources through each `package.json` `exports`.
+      conditions: ['source', ...defaultServerConditions],
       mainFields: [...defaultServerMainFields],
     },
     build: {
@@ -298,7 +212,6 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
         fileName: () => 'sea-entry.cjs',
       },
       rollupOptions: {
-        plugins: workspaceAliasPlugin ? [workspaceAliasPlugin] : undefined,
         external: buildExternalModules(config.optionalExternalModules ?? []),
         output: {
           banner: config.bundleBanner,

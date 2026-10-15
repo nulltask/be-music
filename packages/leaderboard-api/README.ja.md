@@ -23,10 +23,14 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 
 ## 準備
 
-ワークスペースのパッケージは `dist` からバンドルされるので、先にビルドします。
+Worker は Vite+ で `dist/worker.js` にバンドルします（`build:worker`、設定は `vite.worker.config.ts`）。これが
+`cloudflare.config.ts` がデプロイするエントリポイントです。ワークスペースのパッケージは `source` エクスポート条件で
+ソースを直接読むので、個別のビルドは要りません。`cf` は自前の esbuild でエントリポイントをバンドルしますが、この条件を
+知らないので、出来上がったバンドルを読み直すだけにしています。`dev` とデプロイは先に `build:worker` を実行します。
+`cf dev` の実行中に `src/` を変えたら作り直すと、`cf dev` が読み込み直します。
 
 ```bash
-pnpm run build
+pnpm --filter @be-music/leaderboard-api run build:worker
 ```
 
 リソースは be-music のアカウントに作成済みです（D1 と R2 を APAC に、環境ごとに 1 つずつ）。D1 の id は
