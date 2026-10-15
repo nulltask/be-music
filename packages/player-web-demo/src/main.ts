@@ -248,12 +248,14 @@ import { InlineSearch } from './inline-search.ts';
 import { parseRecordingFormatKey, recordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
 import { readStoredHiSpeed, storeHiSpeed } from './hi-speed-storage.ts';
 import {
+  allowsLiveTempo,
   describePlayingStatus,
   readStoredPlayTempoSettings,
   storePlayTempoSettings,
   TEMPO_PERCENT_MAX,
   TEMPO_PERCENT_MIN,
   tempoFromPercent,
+  tempoPercentFromTempo,
 } from './play-tempo-settings.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
@@ -778,6 +780,10 @@ class PlayerWebDemoApp {
   private readonly playOptionControllers: Controller[] = [];
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link rememberHiSpeed}. */
   private hiSpeedController: Controller | undefined;
+  /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
+  private tempoController: Controller | undefined;
+  /** Whether the running play takes the tempo slider live (`allowsLiveTempo` at its start). */
+  private liveTempoPlay = false;
   /** Per-entry chart-file hash cache (`null` = lookup failed) — see {@link resolveChartHashes}. */
   private readonly chartHashCache = new Map<string, ChartFileHashes | null>();
   /** In-flight {@link resolveChartHashes} lookups, so a chart is hashed once however often it is asked for. */
@@ -1433,12 +1439,19 @@ class PlayerWebDemoApp {
     // The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
     // Read when a play starts, so they are disabled during one; a play at another tempo is practice (not ranked, no
     // records).
+    // With the pitch following the tempo, the slider stays enabled during a play and changes its tempo live.
     const rememberTempo = () => storePlayTempoSettings(this.guiState);
-    trackPlayOption(
+    this.tempoController = trackPlayOption(
       folder
         .add(this.guiState, 'tempoPercent', TEMPO_PERCENT_MIN, TEMPO_PERCENT_MAX, 1)
         .name('Tempo (%)')
-        .onChange(rememberTempo),
+        .onChange(() => {
+          rememberTempo();
+          if (!this.liveTempoPlay) return;
+          const tempo = tempoFromPercent(this.guiState.tempoPercent);
+          this.gameplayView?.setTempo(tempo);
+          this.beatorajaGameplayView?.setTempo(tempo);
+        }),
     );
     trackPlayOption(
       folder
@@ -3423,8 +3436,10 @@ class PlayerWebDemoApp {
       engineOptions: {
         // The draws `prep.chart` was resolved with: the engine plays that chart as is and names them in its summary.
         randomDraws: prep.randomDraws,
-        // The play tempo the prep readied the audio and BGA for; the engine judges in chart time.
+        // The play tempo the prep readied the audio and BGA for; the engine judges in chart time. In pitch mode the
+        // tempo slider changes it live (`setTempo`).
         speed: tempo,
+        onTempoChange: (change) => this.followLiveTempo(change.tempo),
         judgeRuleset: this.guiState.judgeRuleset,
         autoScratch: played.autoScratch1P || played.autoScratch2P,
         gauge: played.gauge,
@@ -3521,7 +3536,7 @@ class PlayerWebDemoApp {
     this.currentBeatorajaPlayVariant = variant;
     await this.sceneHost.setScene(this.beatorajaGameplayView);
     this.setStatus(describePlayingStatus(song.title, { family: 'beatoraja', tempoPercent }));
-    this.lockPlaylogOptionsForPlay();
+    this.lockPlaylogOptionsForPlay(allowsLiveTempo(this.guiState, { replay: false, tempo }));
 
     // Consume the "user pressed Record on the select screen" flag. Same flow as the LR2
     // gameplay path — `autoRecordArmed` is set when the user clicks the Record button
@@ -4965,7 +4980,10 @@ class PlayerWebDemoApp {
       hiddenSudden2P: playOptions?.hiddenSudden2P ?? ('OFF' as const),
       autoScratch1P: this.guiState.autoScratch1P,
       autoScratch2P: this.guiState.autoScratch2P,
-      tempo: replay !== undefined ? (replay.play.tempo ?? 1) : tempoFromPercent(this.guiState.tempoPercent),
+      tempo:
+        replay !== undefined && this.guiState.replayView.tempo
+          ? (replay.play.tempo ?? 1)
+          : tempoFromPercent(this.guiState.tempoPercent),
     };
     const lanes =
       this.courseSession !== undefined && courseStage !== undefined
@@ -5030,6 +5048,8 @@ class PlayerWebDemoApp {
       tempo,
       tempoPitchMode: this.guiState.tempoPitchMode,
       tempoStretchAlgorithm: this.guiState.tempoStretchAlgorithm,
+      // A tempo change during the play (the tempo slider in pitch mode, or a replay following its log).
+      onTempoChange: (changed: number) => this.followLiveTempo(changed),
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
       ...(overrides.chartHashes !== undefined
         ? { chartSha256: overrides.chartHashes.sha256, chartMd5: overrides.chartHashes.md5 }
@@ -5170,7 +5190,12 @@ class PlayerWebDemoApp {
     this.decideView?.dispose();
     this.decideView = undefined;
     this.setStatus(describePlayingStatus(song.title, { tempoPercent: this.guiState.tempoPercent }));
-    this.lockPlaylogOptionsForPlay();
+    this.lockPlaylogOptionsForPlay(
+      allowsLiveTempo(this.guiState, {
+        replay: this.lastPlay?.overrides.replay !== undefined,
+        tempo: this.gameplayView.getTempo(),
+      }),
+    );
     this.gameplayView.start();
     startArmedRecording(this.recordingDeps());
   }
@@ -5244,13 +5269,13 @@ class PlayerWebDemoApp {
         ? await this.resolveChartHashes(song)
         : undefined;
     this.gameplayView = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
-    // A replay plays at its recorded tempo.
+    // A replay plays at its recorded tempo, unless the Replay / ghost options keep the viewer's own.
     const tempoPercent =
-      overrides.replay !== undefined
-        ? Math.round(((overrides.replay.play.tempo ?? 1) - 1) * 100)
-        : this.guiState.tempoPercent;
+      overrides.replay !== undefined ? tempoPercentFromTempo(this.gameplayView.getTempo()) : this.guiState.tempoPercent;
     this.setStatus(describePlayingStatus(song.title, { tempoPercent }));
-    this.lockPlaylogOptionsForPlay();
+    this.lockPlaylogOptionsForPlay(
+      allowsLiveTempo(this.guiState, { replay: overrides.replay !== undefined, tempo: this.gameplayView.getTempo() }),
+    );
     await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));
     // Consume the "user pressed Record on the select screen" flag now that gameplay is mounted — `startRecording`
     // requires the gameplay AudioContext to exist, which only happens after `mount`. Failing here is non-fatal: the
@@ -5386,17 +5411,37 @@ class PlayerWebDemoApp {
    * are rejected by keeping the controls disabled until {@link unlockPlaylogOptions} runs (result mounted or back
    * at select).
    */
-  private lockPlaylogOptionsForPlay(): void {
+  private lockPlaylogOptionsForPlay(liveTempo = false): void {
     this.activePlayAutoSavePlaylog = this.guiState.autoSavePlaylog;
     this.playlogSaveController?.disable();
     this.leaderboard.lockForPlay();
     for (const controller of this.playOptionControllers) {
       controller.disable();
     }
+    // The tempo slider changes this play's tempo live (`allowsLiveTempo`).
+    this.liveTempoPlay = liveTempo;
+    if (liveTempo) this.tempoController?.enable();
+  }
+
+  /**
+   * Follows a tempo change during the play: the status line shows the new tempo, and a play that ran at another tempo
+   * at any point is practice, so it leaves the records alone (the Leaderboard refuses its log as `tempo`).
+   */
+  private followLiveTempo(tempo: number): void {
+    const title = this.lastPlay?.song.title;
+    if (title !== undefined) {
+      const family = this.beatorajaGameplayView !== undefined ? 'beatoraja' : undefined;
+      this.setStatus(describePlayingStatus(title, { family, tempoPercent: tempoPercentFromTempo(tempo) }));
+    }
+    if (tempo !== 1) {
+      this.activePlayRecordKey = undefined;
+      this.activeStageRecordKey = undefined;
+    }
   }
 
   /** Re-enables the playlog option controllers once no play is in flight. */
   private unlockPlaylogOptions(): void {
+    this.liveTempoPlay = false;
     this.playlogSaveController?.enable();
     this.leaderboard.unlock();
     for (const controller of this.playOptionControllers) {

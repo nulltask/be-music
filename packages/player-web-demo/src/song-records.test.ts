@@ -128,6 +128,14 @@ describe('isCourseRunAtAnotherTempo', () => {
     expect(isCourseRunAtAnotherTempo({ stages: [played(), played(0.8), unreached] })).toBe(true);
   });
 
+  it('flags a run with a stage whose tempo changed during the play', () => {
+    const changed = {
+      played: true,
+      playlog: { play: { tempoChanges: [{ timeUs: 1_000_000, tempo: 1.1 }] } },
+    } as unknown as ReturnType<typeof played>;
+    expect(isCourseRunAtAnotherTempo({ stages: [played(), changed] })).toBe(true);
+  });
+
   it('keeps a run played at the charts’ own tempo', () => {
     expect(isCourseRunAtAnotherTempo({ stages: [played(), played(1), unreached] })).toBe(false);
   });

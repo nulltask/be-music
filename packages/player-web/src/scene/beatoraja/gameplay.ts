@@ -65,6 +65,8 @@ import type { BgaCue } from '../core/gameplay-bga.ts';
 import type { Texture } from 'pixi.js';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { PlayerOptions, PlayerSummary } from '@be-music/player/core/engine';
+import { setVideoPlaybackTempo } from '../../runtime/play-tempo.ts';
+import { LiveTempo } from '../live-tempo.ts';
 import {
   createPlaylogViewCoalescer,
   type BeMusicPlaylog,
@@ -328,6 +330,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private readonly endingNotes: ReadonlyArray<PlayEndingNote>;
   private readonly endingTiming: ReturnType<typeof resolveChart>['timing'];
   private exitRequested = false;
+  /** The play tempo in force (`engineOptions.speed`, then every live change) and the changes asked for. */
+  private readonly liveTempo: LiveTempo;
   /**
    * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`).
    * Hosts read it back through {@link getPlaylog} after `onComplete` fires.
@@ -369,6 +373,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.laneTimelines = this.scrollMapper ? createBeatorajaLaneTimelines(effectiveChart) : undefined;
     const resolved = resolveChart(effectiveChart, { inferBmsLnTypeWhenMissing: true });
     this.tempoReversal = resolved.reversal;
+    this.liveTempo = new LiveTempo(options.engineOptions?.speed ?? 1, options.audio.playbackRateFollowsTempo === true);
     this.endingNotes = resolved.notes;
     this.endingTiming = resolved.timing;
     this.skinAudioRenderContext = {
@@ -595,6 +600,12 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         onPlaylogRecorded: (playlog) => {
           this.playlog = playlog;
         },
+        // A live tempo change (`setTempo`): the BGA videos follow it.
+        onTempoChange: (change) => {
+          this.liveTempo.tempo = change.tempo;
+          setVideoPlaybackTempo(this.options.bgaVideoElements?.values() ?? [], change.tempo);
+          this.options.engineOptions?.onTempoChange?.(change);
+        },
         // Keys stay live after the last note: the lead-out and the skin's fade-out run once the chart settles, and the
         // play ends (handing the host its summary) after them.
         holdAfterChart: {
@@ -604,6 +615,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       },
       onInputSignalsReady: ({ inputSignals }) => {
         this.inputSignals = inputSignals;
+        this.liveTempo.attach(inputSignals);
         // The engine input bus is up — stamp the `startinput` timer so chrome gated on it (input-active
         // indicators, etc.) becomes visible.
         this.adapter.markStartInput();
@@ -700,7 +712,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       notes: this.endingNotes,
       timing: this.endingTiming,
       currentSeconds: this.currentFrame?.currentSeconds ?? 0,
-      tempo: this.options.engineOptions?.speed ?? 1,
+      tempo: this.liveTempo.tempo,
       themeFadeOutMs: resolveFadeoutMs(this.options.skin.fadeout),
     });
     this.ending = ending;
@@ -1411,6 +1423,16 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.hiSpeed = next;
     this.scrollHiSpeed.retarget(next, performance.now());
     this.stateSignals?.setHighSpeed(next);
+  }
+
+  /** The play tempo in force. */
+  getTempo(): number {
+    return this.liveTempo.tempo;
+  }
+
+  /** Changes the play tempo live in pitch mode (`audio.playbackRateFollowsTempo`); returns whether it was taken. */
+  setTempo(tempo: number): boolean {
+    return !this.disposed && this.liveTempo.request(tempo);
   }
 
   /**

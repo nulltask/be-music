@@ -32,6 +32,8 @@ export interface EngineDriverAudioContext {
   stageMixer?: WebAudioStageMixer;
   /** Every sample's playback rate (`WebAudioSessionContext.playbackRate`): the play tempo when its pitch moves. */
   playbackRate?: number;
+  /** {@link playbackRate} is the play tempo and follows a live tempo change (`pitch` mode). */
+  playbackRateFollowsTempo?: boolean;
 }
 
 /**
@@ -122,6 +124,7 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
       bmsonSlicePlayback: audio.bmsonSlicePlayback,
       ...(audio.stageMixer !== undefined ? { stageMixer: audio.stageMixer } : {}),
       ...(audio.playbackRate !== undefined ? { playbackRate: audio.playbackRate } : {}),
+      ...(audio.playbackRateFollowsTempo === true ? { playbackRateFollowsTempo: true } : {}),
     });
   };
   const createInputRuntime = createWebInputRuntimeFactory({

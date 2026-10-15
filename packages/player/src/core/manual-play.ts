@@ -9,6 +9,7 @@ import { createPlayerInputSignalBus } from './input-signal-bus.ts';
 import { createInputWakeUp } from './input-wakeup.ts';
 import {
   applyPlaybackHighSpeedAction,
+  applyPlaybackTempoChange,
   consumePlaybackInputCommands,
   createNoopPlaybackStateLogger,
   createUiFramePublisher,
@@ -37,7 +38,6 @@ import {
   createAudioPlaybackClockSource,
   createPlaybackClock,
   delay,
-  elapsedMsToGameSeconds,
   PAUSE_POLL_INTERVAL_MS,
   REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS,
   resolveJudgeNowMsFromPressedAt,
@@ -45,6 +45,7 @@ import {
   waitPreciseOrInput,
 } from './engine-clock.ts';
 import { createJudgeEffectHandler } from './engine-effects.ts';
+import { createTempoClock } from './tempo-clock.ts';
 import {
   collectRealtimeAudioVolumeEvents,
   disposeAudioSessionSafely,
@@ -91,6 +92,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
   const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
+  // The play tempo over the play clock: `speed` at the start, re-anchored by every tempo change during the play.
+  const tempoClock = createTempoClock(speed);
   const judgeRuleset: JudgeWindowRuleset = options.judgeRuleset ?? 'lr2';
   const resolvedChart = resolveEngineChart(resolvedJson, options);
   const timingResolver = resolvedChart.timing;
@@ -169,9 +172,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       laneSoundNotes,
       scratchChannels: scratchPlayableChannels,
       autoScratch: autoScratchEnabled,
-      // Live play runs the hold-grace windows on the playback clock (wall-clock milliseconds). A replay has no wall
-      // clock to honour: its millisecond domain is chart time, which keeps every judgment independent of `speed`.
-      judgeMsPerChartSecond: replayMode ? 1000 : 1000 / speed,
+      // Live play runs the hold-grace windows on the playback clock (wall-clock milliseconds) at the tempo it started
+      // at; after a tempo change, on chart time at that tempo (`TempoClock.initialTempoMsAt`), so the domain stays
+      // linear in chart time. A replay has no wall clock to honour: its millisecond domain is chart time, which keeps
+      // every judgment independent of `speed`.
+      judgeMsPerChartSecond: replayMode ? 1000 : 1000 / tempoClock.initialTempo,
       wavResources,
       idBase,
       sourceFormat: resolvedJson.sourceFormat,
@@ -392,7 +397,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       ...dynamicJudgeRankChanges.map((change) => maxJudgeReachSeconds(judgeCore.config, change.seconds)),
       ...(options.stageRanks ?? []).map((change) => maxJudgeReachSeconds(judgeCore.config, change.seconds)),
     );
-  const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
+  // On the play clock, so a tempo change during the play moves it.
+  const horizonMs = (): number => tempoClock.clockMsAt(totalSeconds) + leadInMs + maxBadWindowMs + 1000;
   let endedOnFailure = false;
   let interruptedReason: PlayerInterruptReason | undefined;
   let realtimeAudioVolumeEventIndex = 0;
@@ -465,14 +471,46 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       onStateChange: !uiEnabled
         ? (state, nowMs) => {
             writeRuntimeEventLog(writeOutput, 'playback-state', [
-              ['time', formatSeconds(elapsedMsToGameSeconds(nowMs, speed))],
+              ['time', formatSeconds(tempoClock.chartSecondsAt(nowMs))],
               ['state', state],
             ]);
           }
         : undefined,
     });
   };
-  const resolveManualCommandSeconds = (): number => elapsedMsToGameSeconds(playbackClock.nowMs(), speed);
+  const resolveManualCommandSeconds = (): number => tempoClock.chartSecondsAt(playbackClock.nowMs());
+  const changeTempo = (tempo: number): void => {
+    applyPlaybackTempoChange({
+      tempoClock,
+      nowMs: playbackClock.nowMs(),
+      tempo,
+      setAudioTempo: (next) => audioSession?.setTempo?.(next),
+      // A replay's tempo only sets how fast it is re-driven: its re-recorded log carries none.
+      recordTempoChange: (seconds, next) => {
+        if (!replayMode) playlogRecorder?.recordTempoChange(seconds, next);
+      },
+      onTempoChange: (change) => {
+        if (!uiEnabled) {
+          writeRuntimeEventLog(writeOutput, 'tempo-change', [
+            ['time', formatSeconds(change.seconds)],
+            ['value', `x${change.tempo}`],
+          ]);
+        }
+        options.onTempoChange?.(change);
+      },
+    });
+  };
+  // A replay follows its log's tempo changes as its chart time reaches each.
+  const replayTempoChanges = replayMode ? (options.replayTempoChanges ?? []) : [];
+  let replayTempoChangeIndex = 0;
+  const followReplayTempoChanges = (nowSec: number): void => {
+    while (replayTempoChangeIndex < replayTempoChanges.length) {
+      const change = replayTempoChanges[replayTempoChangeIndex]!;
+      if (change.timeUs / 1_000_000 > nowSec) return;
+      replayTempoChangeIndex += 1;
+      changeTempo(change.tempo);
+    }
+  };
 
   const consumeInputCommands = (): void => {
     consumePlaybackInputCommands({
@@ -499,6 +537,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         });
       },
       onViewChange: (change) => playlogRecorder?.recordViewChange(resolveManualCommandSeconds(), change),
+      onTempoChange: changeTempo,
       onUnhandledCommand: (command) => {
         // Replay playback drives the lanes from the recorded input stream — live lane / key-state input must not
         // interleave with it (pause / high-speed / interrupt still arrive through the standard command path).
@@ -537,10 +576,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
               kind: 'release',
               channels: releasedChannels,
               tokens: command.releaseTokens,
-              nowSec: elapsedMsToGameSeconds(releaseNowMs, speed),
-              nowMs: releaseNowMs,
+              nowSec: tempoClock.chartSecondsAt(releaseNowMs),
+              nowMs: tempoClock.initialTempoMsAt(releaseNowMs),
               // The play log records the release at the key event's own instant, like a press.
-              recordSec: elapsedMsToGameSeconds(resolveJudgeNowMsFromPressedAt(releaseNowMs, command.pressedAt), speed),
+              recordSec: tempoClock.chartSecondsAt(resolveJudgeNowMsFromPressedAt(releaseNowMs, command.pressedAt)),
             });
           }
           return;
@@ -556,8 +595,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         // means the judge resolves against the player's true press timing instead of the engine's drain time —
         // up to ~16 ms of artificial late-bias is removed on the 60 Hz tick. See `resolveJudgeNowMsFromPressedAt`
         // for the defensive bounds (negative / >50 ms deltas fall back to drain semantics).
-        const nowMs = resolveJudgeNowMsFromPressedAt(playbackClock.nowMs(), command.pressedAt);
-        const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+        const pressedAtMs = resolveJudgeNowMsFromPressedAt(playbackClock.nowMs(), command.pressedAt);
+        const nowSec = tempoClock.chartSecondsAt(pressedAtMs);
         if (!uiEnabled) {
           writeRuntimeEventLog(writeOutput, 'input', [
             ['time', formatSeconds(nowSec)],
@@ -565,10 +604,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             ['tokens', command.tokens.join(',')],
           ]);
         }
-        const scheduledSec = elapsedMsToGameSeconds(playbackClock.scheduledMs(), speed);
+        const scheduledSec = tempoClock.chartSecondsAt(playbackClock.scheduledMs());
         triggerRealtimeAudioVolumeEvents(scheduledSec);
         playbackEventTracer.flushUntil(nowSec);
-        handleMappedInputTokens(command.tokens, nowMs, nowSec);
+        handleMappedInputTokens(command.tokens, tempoClock.initialTempoMsAt(pressedAtMs), nowSec);
       },
       logInterrupt: !uiEnabled
         ? (reason) => {
@@ -590,7 +629,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const hold = options.holdAfterChart;
   let settled = false;
   const pastHorizon = (): boolean => {
-    if (playbackClock.nowMs() < horizon) return false;
+    if (playbackClock.nowMs() < horizonMs()) return false;
     if (hold === undefined || hold.signal.aborted) return true;
     if (!settled) {
       settled = true;
@@ -607,16 +646,17 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       const nowMs = playbackClock.nowMs();
       if (playbackClock.isPaused()) {
-        const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+        const nowSec = tempoClock.chartSecondsAt(nowMs);
         publishUiFrame(nowSec, beatAtSeconds(nowSec));
         // Resume / ESC arrive as input commands; cutting the poll short on input arrival makes pause-resume
         // feel instantaneous instead of after one ~16 ms poll boundary.
         await waitPreciseOrInput(PAUSE_POLL_INTERVAL_MS, inputWakeUp);
         continue;
       }
+      followReplayTempoChanges(tempoClock.chartSecondsAt(nowMs));
       const scheduledMs = playbackClock.scheduledMs();
-      const nowSec = elapsedMsToGameSeconds(nowMs, speed);
-      const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
+      const nowSec = tempoClock.chartSecondsAt(nowMs);
+      const scheduledSec = tempoClock.chartSecondsAt(scheduledMs);
       const nowBeat = beatAtSeconds(nowSec);
       if (replay) {
         advanceJudgeCoreReplay(judgeCore, replay, nowSec, applyJudgeEffect);
@@ -627,7 +667,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       triggerNonPlayableRealtimeAudioEvents(scheduledSec);
 
       if (!replay) {
-        stepJudge({ kind: 'advance', nowSec, nowMs });
+        stepJudge({ kind: 'advance', nowSec, nowMs: tempoClock.initialTempoMsAt(nowMs) });
       }
       publishUiFrame(nowSec, nowBeat);
 

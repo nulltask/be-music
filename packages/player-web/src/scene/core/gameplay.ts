@@ -20,11 +20,14 @@ import {
   type ScoreTracker,
 } from '@be-music/player/core/scoring';
 import {
+  createTempoClock,
   PlayerInterruptedError,
   preparePlaybackChart,
   resolvePlayChart,
   type PreparedPlaybackChartData,
   type PlayerSummary,
+  type PlayerTempoChange,
+  type TempoClock,
 } from '@be-music/player/core/engine';
 import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
 import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
@@ -97,12 +100,16 @@ import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { nonstopBpmAt, type NonstopStitchMap } from '@be-music/player/course';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
+import { LiveTempo } from '../live-tempo.ts';
 import {
   chartToElapsedSeconds,
   clampPlayTempo,
-  elapsedToChartSeconds,
+  resolveReplayTempo,
   resolveSamplePlaybackRate,
+  setVideoPlaybackTempo,
   stretchSlicePlayback,
+  supportsLiveTempoChange,
+  type ReplayTempo,
   type TempoPitchMode,
   type TimeStretchAlgorithm,
 } from '../../runtime/play-tempo.ts';
@@ -596,9 +603,12 @@ export interface CoreGameplayViewOptions {
   /**
    * The play tempo, 0.5 to 1.5 (`clampPlayTempo`; default 1): the play clock, its audio, the scroll, the BGA and the
    * chart-time lead-out run `tempo` times as fast, while judging stays in chart time (the engine's `speed`). A replay
-   * plays at the tempo its log recorded (`play.tempo`) instead. A NONSTOP FIT stage's rate multiplies with it.
+   * plays at the tempo its log recorded (`play.tempo`) instead. A NONSTOP FIT stage's rate multiplies with it. In `pitch`
+   * mode it can change during the play ({@link CoreGameplayView.setTempo}).
    */
   tempo?: number;
+  /** Fires when the play tempo changed during the play (`setTempo`, or a replay following its log), with the new one. */
+  onTempoChange?: (tempo: number) => void;
   /**
    * How a tempo change sounds, for {@link tempo} and NONSTOP FIT stages alike: `pitch` (default, as LR2) plays the
    * samples faster or slower, `keep-pitch` stretches them to the new tempo when they load and keeps their pitch.
@@ -925,8 +935,20 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private audioContextStartTime = 0;
   /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
   private nonstopMixer: NonstopStageMixer | undefined;
-  /** The play tempo ({@link CoreGameplayViewOptions.tempo}, or a replay's recorded one): chart seconds per clock second. */
-  protected readonly tempo: number;
+  /**
+   * The play tempo in force ({@link CoreGameplayViewOptions.tempo}, or a replay's recorded one, then every live change):
+   * chart seconds per clock second.
+   */
+  protected tempo: number;
+  /** The tempo a replay plays at and the changes it follows (`resolveReplayTempo`). */
+  private readonly replayTempo: ReplayTempo | undefined;
+  /**
+   * The play tempo over the view's clock (seconds since `audioContextStartTime`, in ms): re-anchored at the chart second
+   * of every change the engine reports, so the view's chart time stays the engine's.
+   */
+  private tempoClock: TempoClock;
+  /** The live tempo changes asked for ({@link setTempo}), pushed to the engine (held until its input bus is up). */
+  private readonly liveTempo: LiveTempo;
   protected paused = false;
   private pauseTime = 0;
   private pauseTotal = 0;
@@ -1344,8 +1366,23 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   public constructor(options: TOptions = {} as TOptions) {
     this.options = options;
     this.beMusicSkinSettings = options.beMusicSkinSettings;
-    // A replay plays back at the tempo it was played at.
-    this.tempo = clampPlayTempo(options.replay !== undefined ? (options.replay.play.tempo ?? 1) : options.tempo);
+    // A replay plays back at the tempo it was played at, unless its viewer keeps their own (`replayView.tempo`).
+    this.replayTempo =
+      options.replay !== undefined
+        ? resolveReplayTempo(options.replay.play, {
+            ownTempo: options.tempo,
+            pitchMode: options.tempoPitchMode ?? 'pitch',
+            // The recorded tempo timeline only when the viewer's replay options reproduce the tempo (default on).
+            reproduce: (options.replayView ?? DEFAULT_PLAYLOG_VIEW_REPLAY).tempo,
+          })
+        : undefined;
+    this.tempo = this.replayTempo?.tempo ?? clampPlayTempo(options.tempo);
+    this.tempoClock = createTempoClock(this.tempo);
+    // Only in pitch mode (kept pitch stretched the samples to the tempo they loaded at), and not for a replay.
+    this.liveTempo = new LiveTempo(
+      this.tempo,
+      options.replay === undefined && supportsLiveTempoChange(options.tempoPitchMode ?? 'pitch'),
+    );
     if (options.initialHiSpeed !== undefined && Number.isFinite(options.initialHiSpeed)) {
       // Snap to the same 1/1000 grid `adjustHiSpeed` uses so a host-supplied `1.5000000000000002` (the obvious
       // float-drift failure mode of repeated +0.1 steps) lands on the canonical grid value the in-game adjust hotkey
@@ -2146,6 +2183,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     this.sharedEngineSignals = undefined;
     this.sharedEngineInputSignals = undefined;
+    this.liveTempo.attach(undefined);
     this.sharedEngineClockAnchored = false;
     this.sharedEnginePromise = undefined;
     const preserveAudioTail = options.preserveAudioTail === true && this.chartEnded;
@@ -3577,10 +3615,45 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   protected currentSeconds(): number {
     if (this.audioContext && this.audioContextStartTime > 0) {
-      return Math.max(0, elapsedToChartSeconds(this.audioContext.currentTime - this.audioContextStartTime, this.tempo));
+      return this.tempoClock.chartSecondsAt((this.audioContext.currentTime - this.audioContextStartTime) * 1000);
     }
     const nowMs = this.paused ? this.pauseTime : performance.now();
-    return Math.max(0, elapsedToChartSeconds((nowMs - this.startTime - this.pauseTotal) / 1000, this.tempo));
+    return this.tempoClock.chartSecondsAt(nowMs - this.startTime - this.pauseTotal);
+  }
+
+  /** The play tempo in force: the one the play started at, or the last change. */
+  public getTempo(): number {
+    return this.tempo;
+  }
+
+  /**
+   * Changes the play tempo during the play (clamped by `clampPlayTempo`). Only in `pitch` mode: the samples follow it
+   * through their playback rate, playing ones included, and so do the BGA videos and a NONSTOP chart's fades. Keep
+   * pitch stretched the samples to the tempo they loaded at, and a replay follows its log, so both refuse it. The
+   * engine applies it at the chart time it takes the command and records it in the play log; the view follows from the
+   * chart second the engine reports. Returns whether the change was taken.
+   */
+  public setTempo(tempo: number): boolean {
+    return !this.disposed && this.liveTempo.request(tempo);
+  }
+
+  /** Follows a tempo change the engine made: the view's clock, the BGA videos, the NONSTOP fades and the host. */
+  private followTempoChange(change: PlayerTempoChange): void {
+    if (this.disposed) return;
+    this.tempo = change.tempo;
+    this.tempoClock.setTempoAtChartSeconds(change.seconds, change.tempo);
+    setVideoPlaybackTempo(
+      [...this.bgaVideos.values()].map((handle) => handle.video),
+      change.tempo,
+    );
+    if (this.audioContext && this.audioContextStartTime > 0) {
+      const chartStart = this.audioContextStartTime;
+      this.nonstopMixer?.retime(
+        this.currentSeconds(),
+        (seconds) => chartStart + this.tempoClock.clockMsAt(seconds) / 1000,
+      );
+    }
+    this.options.onTempoChange?.(change.tempo);
   }
 
   private publishJudge(judge: JudgeKind, seconds: number, channel?: string): void {
@@ -4193,7 +4266,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private resolveChartMs(): number | undefined {
     if (this.startTime === 0) return undefined;
-    if (Number.isFinite(this.startTime)) return elapsedToChartSeconds(performance.now() - this.startTime, this.tempo);
+    if (Number.isFinite(this.startTime))
+      return this.tempoClock.chartSecondsAt(performance.now() - this.startTime) * 1000;
     return Math.min(-1, this.playClock() - this.sceneStartTime - this.scheduledIntroMs);
   }
 
@@ -5132,6 +5206,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // The engine plays through its own session: a stitched NONSTOP chart's stage rates (FIT) and fades go with it.
         ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
         playbackRate: this.samplePlaybackRate(),
+        playbackRateFollowsTempo: supportsLiveTempoChange(this.options.tempoPitchMode ?? 'pitch'),
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
       ui: callbacks,
@@ -5139,6 +5214,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         this.sharedEngineInputSignals = signals.inputSignals;
         this.sharedEngineInterrupt = undefined;
         this.sharedEngineChartSettled = false;
+        // A tempo asked for while the engine was starting.
+        this.liveTempo.attach(signals.inputSignals);
       },
       // Listen on the window (default) so the runtime sees keyboard events regardless of which DOM element
       // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
@@ -5171,8 +5248,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
         // engine's default 1.5 s lead-in on top.
         leadInMs: 0,
-        // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time.
+        // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time. A change during the
+        // play comes back through `onTempoChange`, at the chart second the engine took it.
         speed: this.tempo,
+        onTempoChange: (change) => this.followTempoChange(change),
         // Forward AUTO SCRATCH: engine has a single boolean rather than per-side, so either-side AUTO SCRATCH
         // turns scratch auto on for both 16 / 26 channels. That's a per-side fidelity loss for rare DP charts
         // where only one player's scratch should auto-spin (the demo's lil-gui surfaces them as two separate
@@ -5229,6 +5308,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
               // judge ruleset, the debug judge-window override, the end-on-failure flag and the course stage are
               // restored from the log so the judging setup matches the recording.
               replayInputs: this.options.replay.inputs,
+              // The tempo changes of the play, followed as the replay reaches them (`resolveReplayTempo`).
+              ...(this.replayTempo !== undefined && this.replayTempo.changes.length > 0
+                ? { replayTempoChanges: this.replayTempo.changes }
+                : {}),
               autoScratch: this.options.replay.play.autoScratch,
               judgeRuleset: this.options.replay.play.judgeRuleset ?? 'lr2',
               // Logs from before plays ended on failure kept judging to the end; replay them that way.
@@ -5349,7 +5432,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // clocks tick on the AudioContext now, so the offset stays locked.
     if (!this.sharedEngineClockAnchored && frame.currentSeconds > 0 && this.audioContext) {
       this.audioContextStartTime =
-        this.audioContext.currentTime - chartToElapsedSeconds(frame.currentSeconds, this.tempo);
+        this.audioContext.currentTime - this.tempoClock.clockMsAt(frame.currentSeconds) / 1000;
       this.sharedEngineClockAnchored = true;
       this.nonstopMixer?.schedule(this.audioContextStartTime);
     }

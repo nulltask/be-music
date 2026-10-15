@@ -9,6 +9,7 @@ import { createPlayerInputSignalBus } from './input-signal-bus.ts';
 import { createInputWakeUp } from './input-wakeup.ts';
 import {
   applyPlaybackHighSpeedAction,
+  applyPlaybackTempoChange,
   consumePlaybackInputCommands,
   createNoopPlaybackStateLogger,
   createUiFramePublisher,
@@ -27,7 +28,6 @@ import {
   createAudioPlaybackClockSource,
   createPlaybackClock,
   delay,
-  elapsedMsToGameSeconds,
   PAUSE_POLL_INTERVAL_MS,
   type PlaybackClock,
   REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS,
@@ -35,6 +35,7 @@ import {
   waitPreciseOrInput,
 } from './engine-clock.ts';
 import { createJudgeEffectHandler } from './engine-effects.ts';
+import { createTempoClock } from './tempo-clock.ts';
 import {
   collectRealtimeAudioVolumeEvents,
   disposeAudioSessionSafely,
@@ -80,6 +81,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
   const speed = options.speed ?? 1;
+  // The play tempo over the play clock: `speed` at the start, re-anchored by every tempo change during the play.
+  const tempoClock = createTempoClock(speed);
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const resolvedChart = resolveEngineChart(resolvedJson, options);
@@ -313,9 +316,28 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   let realtimeAudioVolumeEventIndex = 0;
   let realtimeAudioTriggerIndex = 0;
   const resolveAutoCommandSeconds = (): number =>
-    playbackClock ? elapsedMsToGameSeconds(playbackClock.nowMs(), speed) : 0;
+    playbackClock ? tempoClock.chartSecondsAt(playbackClock.nowMs()) : 0;
   const resolveAutoInterruptSeconds = (): number | undefined =>
-    playbackClock ? elapsedMsToGameSeconds(playbackClock.nowMs(), speed) : undefined;
+    playbackClock ? tempoClock.chartSecondsAt(playbackClock.nowMs()) : undefined;
+  const changeTempo = (tempo: number): void => {
+    applyPlaybackTempoChange({
+      tempoClock,
+      // Before the chart starts (the lead-in) a change sets the tempo it starts at.
+      nowMs: playbackClock?.nowMs() ?? 0,
+      tempo,
+      setAudioTempo: (next) => audioSession?.setTempo?.(next),
+      recordTempoChange: (seconds, next) => playlogRecorder?.recordTempoChange(seconds, next),
+      onTempoChange: (change) => {
+        if (!uiEnabled) {
+          writeRuntimeEventLog(writeOutput, 'tempo-change', [
+            ['time', formatSeconds(change.seconds)],
+            ['value', `x${change.tempo}`],
+          ]);
+        }
+        options.onTempoChange?.(change);
+      },
+    });
+  };
 
   const togglePause = (): void => {
     togglePlaybackPause({
@@ -325,7 +347,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       onStateChange: !uiEnabled
         ? (state, nowMs) => {
             writeRuntimeEventLog(writeOutput, 'playback-state', [
-              ['time', formatSeconds(elapsedMsToGameSeconds(nowMs, speed))],
+              ['time', formatSeconds(tempoClock.chartSecondsAt(nowMs))],
               ['state', state],
             ]);
           }
@@ -357,6 +379,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         });
       },
       onViewChange: (change) => playlogRecorder?.recordViewChange(resolveAutoCommandSeconds(), change),
+      onTempoChange: changeTempo,
       logInterrupt: !uiEnabled
         ? (reason) => {
             const interruptSeconds = resolveAutoInterruptSeconds();
@@ -485,8 +508,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         }
       };
 
-      const playbackHorizonMs = (totalSeconds * 1000) / speed + 1000;
-      while (chartClock.nowMs() < playbackHorizonMs) {
+      // On the play clock, so a tempo change during the play moves it.
+      while (chartClock.nowMs() < tempoClock.clockMsAt(totalSeconds) + 1000) {
         consumeInputCommands();
         if (interruptedReason) {
           break;
@@ -494,7 +517,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
 
         const nowMs = chartClock.nowMs();
         if (chartClock.isPaused()) {
-          const nowSec = elapsedMsToGameSeconds(nowMs, speed);
+          const nowSec = tempoClock.chartSecondsAt(nowMs);
           publishUiFrame(nowSec, beatAtSeconds(nowSec));
           // While paused, the only useful inputs are toggle-pause (resume) and interrupt — both processed
           // by the next iteration's `consumeInputCommands`. Cutting the poll short on input arrival makes
@@ -504,8 +527,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         }
 
         const scheduledMs = chartClock.scheduledMs();
-        const nowSec = elapsedMsToGameSeconds(nowMs, speed);
-        const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
+        const nowSec = tempoClock.chartSecondsAt(nowMs);
+        const scheduledSec = tempoClock.chartSecondsAt(scheduledMs);
         playbackEventTracer.flushUntil(nowSec);
         // Queue audio against the write head, then judge and render against what is actually audible.
         triggerRealtimeAudioVolumeEvents(scheduledSec);
@@ -535,7 +558,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         triggerRealtimeAudioEvents(totalSeconds);
         triggerAutoPlayableNoteAudio(totalSeconds);
         stepAutoJudge({ kind: 'reach', nowSec: totalSeconds });
-        const totalScheduledMs = (totalSeconds * 1000) / speed;
+        const totalScheduledMs = tempoClock.clockMsAt(totalSeconds);
         const totalWaitMs = Math.max(0, totalScheduledMs - chartClock.nowMs());
         if (totalWaitMs > 0) {
           // Trailing wait for chart end. ESC during this window should still abort promptly, so race the
