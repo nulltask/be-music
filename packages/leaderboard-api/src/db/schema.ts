@@ -329,3 +329,115 @@ export const bestScore = sqliteTable(
     index('best_score_ranking_idx').on(table.chartFingerprint, table.ruleset, table.assisted, table.bestEx),
   ],
 );
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Courses (docs/leaderboard.md section 6.1)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * A course, keyed by its course fingerprint (`bmcourse0:…`, `computeCourseFingerprint`): its kind, its constraints and
+ * its stages' chart fingerprints in order. The name is the one the first run was submitted with; the same course read
+ * from another source (a `.lr2crs`, a beatoraja file, a table) shares the row whatever it is called there.
+ */
+export const course = sqliteTable('course', {
+  courseFingerprint: text('course_fingerprint').primaryKey(),
+  name: text('name').notNull(),
+  kind: text('kind', { enum: ['grade', 'expert', 'nonstop'] }).notNull(),
+  /** The constraints as the fingerprint reads them: normalized and sorted (JSON array). */
+  constraints: text('constraints', { mode: 'json' }).$type<string[]>().notNull(),
+  /** Each stage's chart fingerprint, in order (JSON array). */
+  stageChartFingerprints: text('stage_chart_fingerprints', { mode: 'json' }).$type<string[]>().notNull(),
+  ...timestamps,
+});
+
+/** One accepted course run. Its per-ruleset figures live in `course_score_result`; it creates no chart scores. */
+export const courseScore = sqliteTable(
+  'course_score',
+  {
+    id: text('id').primaryKey(),
+    submissionId: text('submission_id').notNull().unique(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    courseFingerprint: text('course_fingerprint')
+      .notNull()
+      .references(() => course.courseFingerprint),
+    playedRuleset: text('played_ruleset', { enum: RULESET_IDS }).notNull(),
+    /** The gauge the player picked on the last stage played, which the course lamp follows. */
+    gauge: text('gauge').notNull(),
+    assisted: integer('assisted', { mode: 'boolean' }).notNull(),
+    assistFlags: text('assist_flags', { mode: 'json' }).$type<string[]>().notNull(),
+    /** The lowest verification layer its stages passed (`L3`, `L4`, ...). */
+    verification: text('verification').notNull(),
+    /** Stages the run played; the rest were never reached. */
+    stagesPlayed: integer('stages_played').notNull(),
+    recordedBy: text('recorded_by', { mode: 'json' }).$type<Record<string, string>>(),
+    submittedBy: text('submitted_by'),
+    serverEngine: text('server_engine').notNull(),
+    playlogKey: text('playlog_key').notNull(),
+    /** Hidden by its player, as `score.hidden`. */
+    hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+    ...timestamps,
+  },
+  (table) => [
+    index('course_score_user_course_idx').on(table.userId, table.courseFingerprint),
+    index('course_score_course_created_idx').on(table.courseFingerprint, table.createdAt),
+  ],
+);
+
+/** The figures of one course run under one ruleset (every run is simulated under all three). */
+export const courseScoreResult = sqliteTable(
+  'course_score_result',
+  {
+    courseScoreId: text('course_score_id')
+      .notNull()
+      .references(() => courseScore.id, { onDelete: 'cascade' }),
+    ruleset: text('ruleset', { enum: RULESET_IDS }).notNull(),
+    rulesetRevision: text('ruleset_revision').notNull(),
+    exScore: integer('ex_score').notNull(),
+    /** Judgment notes over every stage, reached or not. */
+    noteCount: integer('note_count').notNull(),
+    clearLamp: integer('clear_lamp').notNull(),
+    /** BP, with every note the run never judged. */
+    missCount: integer('miss_count').notNull(),
+    maxCombo: integer('max_combo').notNull(),
+    /** Stages reached under this ruleset (a stage can empty one ruleset's gauge and not another's). */
+    stagesPlayed: integer('stages_played').notNull(),
+    /** The best trophy the run earned, by name. */
+    trophy: text('trophy'),
+    gaugeType: text('gauge_type').notNull(),
+    gaugeFinal: real('gauge_final').notNull(),
+    judges: text('judges', { mode: 'json' }).$type<Record<string, number>>().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.courseScoreId, table.ruleset] })],
+);
+
+/** Personal bests per player, course, ruleset and assist class, beatoraja style, as `best_score` keeps them for charts. */
+export const courseBestScore = sqliteTable(
+  'course_best_score',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    courseFingerprint: text('course_fingerprint')
+      .notNull()
+      .references(() => course.courseFingerprint),
+    ruleset: text('ruleset', { enum: RULESET_IDS }).notNull(),
+    assisted: integer('assisted', { mode: 'boolean' }).notNull(),
+    bestEx: integer('best_ex').notNull(),
+    bestExScoreId: text('best_ex_score_id').notNull(),
+    bestExAt: integer('best_ex_at', { mode: 'timestamp_ms' }).notNull(),
+    bestLamp: integer('best_lamp').notNull(),
+    bestLampScoreId: text('best_lamp_score_id').notNull(),
+    minMiss: integer('min_miss').notNull(),
+    minMissScoreId: text('min_miss_score_id').notNull(),
+    playCount: integer('play_count').notNull(),
+    /** Whether the player ran the course under this ruleset at least once. */
+    playedHere: integer('played_here', { mode: 'boolean' }).notNull().default(false),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.courseFingerprint, table.ruleset, table.assisted] }),
+    index('course_best_score_ranking_idx').on(table.courseFingerprint, table.ruleset, table.assisted, table.bestEx),
+  ],
+);
