@@ -2,6 +2,8 @@ import { BEATORAJA_OP, BEATORAJA_TEXT } from '@be-music/beatoraja-skin';
 import type { CourseConstraint } from '@be-music/player/course';
 import type { SceneCourseInfo } from '../course-info.ts';
 
+export type { SceneCourseInfo };
+
 const CONSTRAINT_OPS: Partial<Record<CourseConstraint, number>> = {
   grade: BEATORAJA_OP.GRADEBAR_CLASS,
   grade_mirror: BEATORAJA_OP.GRADEBAR_MIRROR,
@@ -41,6 +43,15 @@ export function resolveBeatorajaCourseStageOps(course: SceneCourseInfo): number[
   if (index === undefined) return ops;
   if (index >= course.stages.length - 1) ops.push(BEATORAJA_OP.COURSE_STAGE_FINAL);
   else if (index <= 3) ops.push(BEATORAJA_OP.COURSE_STAGE1 + index);
+  return ops;
+}
+
+/**
+ * Adds {@link resolveBeatorajaCourseStageOps} to a scene's static op set when the play is a course stage (`course`
+ * given); returns the same set.
+ */
+export function withBeatorajaCourseStageOps(ops: Set<number>, course: SceneCourseInfo | undefined): Set<number> {
+  if (course !== undefined) for (const op of resolveBeatorajaCourseStageOps(course)) ops.add(op);
   return ops;
 }
 
