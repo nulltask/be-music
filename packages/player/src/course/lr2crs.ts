@@ -9,6 +9,9 @@ const LR2_COURSE_KINDS: Readonly<Record<number, CourseKind>> = { 0: 'expert', 1:
 /** LR2 reads at most ten stages from a course hash (OpenLR2 `LR2f.cpp` L18078-L18081). */
 const LR2_MAX_COURSE_STAGES = 10;
 
+/** LR2's chart loader stitches at most five stages of a NONSTOP course (OpenLR2 `LR2f.cpp` L25857-L25858). */
+export const LR2_MAX_NONSTOP_STAGES = 5;
+
 /** The length of the metadata block that opens an LR2 course hash, and of each stage MD5 after it. */
 const LR2_HASH_BLOCK = 32;
 
@@ -39,7 +42,7 @@ export function parseLr2NonstopConnections(header: string): NonstopConnection[] 
  * `type` and `hash`. Field names are matched case-sensitively, as LR2 does.
  *
  * - `hash` is a 32-character header (char 10 is the course type) followed by one 32-character chart MD5 per stage;
- *   LR2 keeps the first ten.
+ *   LR2 keeps the first ten, and plays only the first five of a NONSTOP course ({@link LR2_MAX_NONSTOP_STAGES}).
  * - `type` 0 / 1 / 2 is EXPERT / NONSTOP / GRADE (OpenLR2). Without a `type` element the header's char 10 is used.
  * - A NONSTOP course reads its connections from the header's chars 0-9 ({@link parseLr2NonstopConnections}).
  * - A grade course gets beatoraja's reading of an LR2 grade: MIRROR allowed and the LR2 gauge
@@ -61,7 +64,11 @@ export function parseLr2CourseFile(input: Uint8Array | string): CourseDefinition
     const type = typeText === undefined || typeText === '' ? Number.NaN : Number(typeText);
     const kind = LR2_COURSE_KINDS[type];
     if (kind === undefined) continue;
-    const stageCount = Math.min(Math.floor(hash.length / LR2_HASH_BLOCK) - 1, LR2_MAX_COURSE_STAGES);
+    // A NONSTOP course plays only its first five stages, so the course is read as those five.
+    const stageCount = Math.min(
+      Math.floor(hash.length / LR2_HASH_BLOCK) - 1,
+      kind === 'nonstop' ? LR2_MAX_NONSTOP_STAGES : LR2_MAX_COURSE_STAGES,
+    );
     const stages = [];
     for (let index = 0; index < stageCount; index += 1) {
       const start = LR2_HASH_BLOCK * (index + 1);
