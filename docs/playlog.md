@@ -190,8 +190,11 @@ Options: `--ruleset=lr2,beatoraja,iidx|all`, `--gauge=<id>` (ruleset-scoped gaug
 
 ## Versioning
 
-`format: "be-music-playlog"`, `version: 1`. Unknown extra fields are ignored on parse so minor additions stay
-readable; incompatible changes bump `version`. Ruleset result ids carry their own revision (`lr2/0` etc.).
+`format: "be-music-playlog"`, `version: 0`. Revision `0` is the development revision: the format is still being
+defined and may change incompatibly without `version` moving. The first stable revision will be `1`. Logs stamped
+`version: 1` before the format was marked unstable have the same shape and still parse, as revision `0`. Unknown extra
+fields are ignored on parse so minor additions stay readable. Ruleset result ids carry their own revision (`lr2/0`
+etc.).
 
 Revision `0` is the development revision: the rulesets are still being aligned with their sources, so their rules
 may change between releases without a bump, and a `/0` result cached by one release can differ from what a later
