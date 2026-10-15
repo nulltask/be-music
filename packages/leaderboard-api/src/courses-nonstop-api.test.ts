@@ -221,6 +221,11 @@ describe('POST /api/v0/course-scores with a NONSTOP run', () => {
     blank.nonstop!.connections = ['blank2'];
     expect(await (await submit(cookie, blank)).json()).toEqual({ error: 'nonstop-chart-mismatch' });
 
+    // A run stitched by rules this server does not know cannot be rebuilt.
+    const future = structuredClone(log);
+    future.nonstop!.stitch = 99;
+    expect(await (await submit(cookie, future)).json()).toEqual({ error: 'nonstop-stitch-unsupported' });
+
     const reassigned = structuredClone(log);
     reassigned.nonstop!.noteStages = reassigned.nonstop!.noteStages.map(() => 0);
     expect(await (await submit(cookie, reassigned)).json()).toEqual({ error: 'nonstop-stage-mismatch' });

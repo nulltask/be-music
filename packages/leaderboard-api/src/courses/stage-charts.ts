@@ -2,6 +2,7 @@ import { computeChartFingerprint, computePlayFingerprint } from '@be-music/chart
 import {
   applyCourseLongNoteConstraint,
   normalizeCourseConstraints,
+  NONSTOP_STITCH_VERSIONS,
   stitchNonstopCourse,
 } from '@be-music/player/course';
 import {
@@ -39,6 +40,8 @@ export type StageChartRejection =
   | 'stage-chart-fingerprint-mismatch'
   /** An unreached stage's facts are not the stage chart's (its note count would be wrong). */
   | 'course-stage-facts-mismatch'
+  /** The NONSTOP run was stitched by rules (`nonstop.stitch`) this server cannot rebuild. */
+  | 'nonstop-stitch-unsupported'
   /** The stage charts, stitched again, are not the chart the NONSTOP play was recorded on. */
   | 'nonstop-chart-mismatch'
   /** The NONSTOP run's stage map (placements, note stages, stages reached) is not what the stitched chart gives. */
@@ -145,8 +148,8 @@ const sameStage = (left: PlaylogNonstopStage, right: PlaylogNonstopStage): boole
 /**
  * Rebuilds a NONSTOP run's stitched chart from its stage charts, as the host stitched it: each stage chart (checked
  * against its chart fingerprint) resolved with the `#RANDOM` draws its stage recorded, the course's long-note constraint
- * applied, and the stages stitched with the recorded connections and placement (`stitchNonstopCourse`, which is
- * deterministic). The stitched play (`nonstop.playlog`) must have been recorded on that chart — its play fingerprint
+ * applied, and the stages stitched with the recorded connections, placement and stitching rules (`stitchNonstopCourse`,
+ * which is deterministic; rules this server does not know are refused). The stitched play (`nonstop.playlog`) must have been recorded on that chart — its play fingerprint
  * must be the rebuilt chart's — and the run's stage map must be the one the rebuilt chart gives: the stage placements,
  * which stage each note belongs to, and how many stages the play reached (the cut-out stages the log lists).
  */
@@ -156,6 +159,9 @@ export function checkNonstopStageCharts(
   options: { playFingerprint: string; ruleset: PlaylogRulesetId },
 ): StageChartCheck {
   const run = courseLog.nonstop!;
+  // A log from before the version was recorded was stitched by the first rules.
+  const stitch = run.stitch ?? 1;
+  if (!NONSTOP_STITCH_VERSIONS.includes(stitch)) return { ok: false, reason: 'nonstop-stitch-unsupported' };
   const loaded = loadStageCharts(
     courseLog,
     inputs,
@@ -175,7 +181,11 @@ export function checkNonstopStageCharts(
   }
   let stitched: ReturnType<typeof stitchNonstopCourse>;
   try {
-    stitched = stitchNonstopCourse(stageInputs, { connections: run.connections, placement: run.placement });
+    stitched = stitchNonstopCourse(stageInputs, {
+      connections: run.connections,
+      placement: run.placement,
+      stitch,
+    });
   } catch {
     return { ok: false, reason: 'nonstop-chart-mismatch' };
   }

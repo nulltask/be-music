@@ -286,7 +286,8 @@ play document の位置とタイムラインから、エンジンと一致する
   （`nonstop.playlog`）です。`stitchNonstopCourse` は決定的なので、サーバーはステージの譜面から、クライアントと
   まったく同じようにつないだ譜面を作り直します。各ステージの譜面はそのステージの譜面フィンガープリントになる必要が
   あり、ステージが記録した `#RANDOM` の抽選結果（`nonstop.stages[].randomDraws`）で解決し、コースの LN 制約を当て
-  （`applyCourseLongNoteConstraint`）、記録したつなぎ方と配置でつなぎます。つないだプレイはその譜面で記録されたもの
+  （`applyCourseLongNoteConstraint`）、記録したつなぎ方・配置・結合規則の版（`nonstop.stitch`。ないときは版 1。
+  サーバーの知らない版は `nonstop-stitch-unsupported`）でつなぎます。つないだプレイはその譜面で記録されたもの
   でなければならず（プレイフィンガープリントが作り直した譜面のものと一致する。`nonstop-chart-mismatch`）、ステージの
   対応も作り直したものと一致する必要があります。ステージの配置、各ノーツのステージ、プレイが到達したステージ数です
   （`nonstop-stage-mismatch`）。つないだプレイは単曲と同じ対象確認を通り、コースの制約に従う必要があります。すべての
@@ -344,7 +345,7 @@ flowchart TD
   charts["ステージの譜面"] --> fp{"それぞれ chartFingerprint<br/>になるか"}
   fp -->|はい| resolve["記録した抽選結果で<br/>resolvePlayChart"]
   resolve --> ln["applyCourseLongNoteConstraint"]
-  ln --> stitch["stitchNonstopCourse<br/>つなぎ方、配置"]
+  ln --> stitch["stitchNonstopCourse<br/>つなぎ方、配置、版"]
   stitch --> same{"プレイフィンガープリントが<br/>nonstop.playlog と一致するか"}
   same -->|はい| map{"ステージの対応が<br/>作り直したものと一致するか"}
   map -->|はい| sim["つないだプレイで<br/>simulateCoursePlaylog"]

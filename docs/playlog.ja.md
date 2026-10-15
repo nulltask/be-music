@@ -201,6 +201,7 @@ flowchart TD
 
 - `nonstop.playlog`：つないだ譜面のプレイの記録そのものです。判定されたのはこのプレイなので、`simulateCoursePlaylog` はコースの結果をここから出します。判定、ゲージ、最大コンボはこのプレイのもので、BP には判定されなかったノーツをすべて数えます。
 - `nonstop.connections` と `nonstop.placement`：譜面をどうつないだか。
+- `nonstop.stitch`：譜面をつないだ結合規則の版（`NONSTOP_STITCH_VERSION`）。結合規則が変わっても、つないだ譜面を同じように作り直せるようにするためのものです。記録する前のログにはなく、版 1 として読みます。コースのフィンガープリントには含めないので、結合処理を直してもそのコースのランキングは変わりません。
 - `nonstop.stages`：各ステージがプレイのどこにあったか（`offsetUs`、担当区間 `windowStartUs` / `windowEndUs`、FIT の `rate`）と、つなぐ前にそのステージの譜面を解決した `#RANDOM` / `#SWITCH` の抽選結果（`randomDraws`。単曲の `play.randomDraws` と同じ形で、制御構文のない譜面では省きます）。ステージの譜面とこの抽選結果があれば、つないだ譜面を作り直せます。
 - `nonstop.noteStages`：プレイの各ノーツがどのステージのものか（ノーツ id ごと）。`resolveNonstopNoteStages` が、つないだ譜面のステージ別のキーから求めます。
 

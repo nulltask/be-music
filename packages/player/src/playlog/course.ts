@@ -592,6 +592,9 @@ function parseNonstopRun(run: Record<string, unknown>): PlaylogNonstopRun {
   if (run.placement !== 'intended' && run.placement !== 'lr2') {
     throw new PlaylogParseError(`nonstop.placement: expected 'intended' | 'lr2'`);
   }
+  if (run.stitch !== undefined && !(Number.isInteger(run.stitch) && (run.stitch as number) >= 1)) {
+    throw new PlaylogParseError('nonstop.stitch: expected a positive integer');
+  }
   let playlog: BeMusicPlaylog;
   try {
     playlog = parsePlaylog(run.playlog);
@@ -629,6 +632,7 @@ function parseNonstopRun(run: Record<string, unknown>): PlaylogNonstopRun {
   return {
     connections: [...(run.connections as PlaylogNonstopRun['connections'])],
     placement: run.placement,
+    ...(run.stitch !== undefined ? { stitch: run.stitch as number } : {}),
     playlog,
     stages,
     noteStages: [...(noteStages as number[])],
