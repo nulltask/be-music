@@ -34,23 +34,23 @@ describe('resolveBeatorajaCourseConstraintOps', () => {
 });
 
 describe('resolveBeatorajaCourseBarOps', () => {
-  const bar = (random: boolean): BrowserCourseEntry =>
+  const bar = (random: boolean, playable = true): BrowserCourseEntry =>
     ({
       id: 'dan#0',
       definition: { name: 'Dan', kind: 'grade', stages: [], constraints: ['grade_mirror'], trophies: [] },
       stages: [{ title: 'a' }],
-      playable: true,
+      playable,
       ...(random ? { random: { name: 'Dan', stages: [], constraints: [], trophies: [] } } : {}),
     }) as unknown as BrowserCourseEntry;
 
-  it('lights the course bar, its constraints and its best lamp', () => {
-    expect(resolveBeatorajaCourseBarOps(bar(false), 106)).toEqual([3, 1003, 106]);
-    // A course never played reads NO PLAY.
-    expect(resolveBeatorajaCourseBarOps(bar(false))).toEqual([3, 1003, 100]);
+  it('lights the course bar, PLAYABLEBAR, its constraints and its best lamp', () => {
+    expect(resolveBeatorajaCourseBarOps(bar(false), 106)).toEqual([3, 5, 1003, 106]);
+    // A course never played reads NO PLAY; one with a missing stage is not playable.
+    expect(resolveBeatorajaCourseBarOps(bar(false, false))).toEqual([3, 1003, 100]);
   });
 
-  it('lights the random-course bar op and never a lamp on a random course', () => {
-    expect(resolveBeatorajaCourseBarOps(bar(true), 106)).toEqual([3, 1031, 1003, 100]);
+  it('lights the random-course bar op but not GRADEBAR, and never a lamp, on a random course', () => {
+    expect(resolveBeatorajaCourseBarOps(bar(true), 106)).toEqual([1031, 5, 1003, 100]);
   });
 });
 
