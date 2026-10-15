@@ -67,8 +67,16 @@ describe('CourseSession', () => {
     expect(first.course).toEqual({ kind: 'grade', gaugeSet: 'lr2' });
     // The HCN constraint applies to a chart that leaves its long-note mode undefined.
     expect(first.song.chart.sourceFormat === 'bms' && first.song.chart.bms.lnMode).toBe(3);
-    expect(session.laneOption('RANDOM')).toBe('OFF');
-    expect(session.laneOption('MIRROR')).toBe('MIRROR');
+    expect(session.laneOptions({ random1P: 'RANDOM', random2P: 'RANDOM', dpFlip: true })).toEqual({
+      random1P: 'OFF',
+      random2P: 'OFF',
+      dpFlip: false,
+    });
+    expect(session.laneOptions({ random1P: 'MIRROR', random2P: 'OFF', dpFlip: false })).toEqual({
+      random1P: 'MIRROR',
+      random2P: 'MIRROR',
+      dpFlip: true,
+    });
 
     expect(
       session.recordStage(

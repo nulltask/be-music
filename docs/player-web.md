@@ -131,7 +131,7 @@ Courses play through the same select → play → result scenes. See [Courses an
   - A stage whose gauge empties ends the course.
   - ESC gives the course up: the run is kept as a failed one (as LR2 records it) and the course result follows. F5 / quick retry is off.
   - The course constraints are applied:
-    - lane options are limited (`grade` none, `grade_mirror` MIRROR, `grade_random` the random family);
+    - lane options are limited as beatoraja's `MusicSelector` limits them (`resolveCourseLaneOptions`): `grade` turns both sides and DP FLIP off, `grade_mirror` keeps a 1P MIRROR and then plays 2P on MIRROR with FLIP on (any other pick turns them all off), and `grade_random` keeps the random family on each side;
     - `no_speed` locks the hi-speed (and on a beatoraja theme the lane cover, lift and HIDDEN cover);
     - `ln` / `cn` / `hcn` set the long-note mode of charts that leave it undefined.
 - **Result:**

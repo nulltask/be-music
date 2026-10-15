@@ -13,9 +13,9 @@ import { resolveSceneCourseInfo, type PixiGameplayResultData, type SceneCourseIn
 import {
   applyCourseLongNoteConstraint,
   isCourseHiSpeedLocked,
-  resolveCourseLaneOption,
+  resolveCourseLaneOptions,
   resolveCourseStageSettings,
-  type CourseLaneOption,
+  type CourseLaneOptions,
 } from '@be-music/player-web/collection';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import type {
@@ -116,9 +116,9 @@ export class CourseSession {
     return chart === song.chart ? song : { ...song, chart };
   }
 
-  /** The lane option the course lets a stage play with, in place of the player's pick. */
-  laneOption(picked: CourseLaneOption): CourseLaneOption {
-    return resolveCourseLaneOption(this.course.definition.constraints, picked);
+  /** The lane options (both sides and DP FLIP) the course lets a stage play with, in place of the player's picks. */
+  laneOptions(picked: CourseLaneOptions): CourseLaneOptions {
+    return resolveCourseLaneOptions(this.course.definition.constraints, picked);
   }
 
   /**

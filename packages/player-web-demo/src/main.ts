@@ -71,7 +71,7 @@ import {
   readCourseFile,
   resolveCourseFolders,
   resolveCourseMakerFolders,
-  resolveCourseLaneOption,
+  resolveCourseLaneOptions,
   resolveCourseStageSettings,
   CourseMaker,
   createCourseSongRecord,
@@ -3366,7 +3366,15 @@ class PlayerWebDemoApp {
       // DP flip — when the user enabled it via the Play options (Debug Menu / LR2 select panel, two-way synced
       // into `guiState`) AND the chart is a DP variant (10 / 14 keys), the chart's lane channels mirror at
       // construction. SP charts pass through unchanged because they have no 2P channels to swap with.
-      dpFlip: this.guiState.dpFlip,
+      // A course stage plays with the FLIP its lane-option constraint allows.
+      dpFlip:
+        courseStage !== undefined && this.courseSession !== undefined
+          ? this.courseSession.laneOptions({
+              random1P: this.guiState.random1P,
+              random2P: this.guiState.random2P,
+              dpFlip: this.guiState.dpFlip,
+            }).dpFlip
+          : this.guiState.dpFlip,
       initialHiSpeed: this.guiState.hiSpeed,
       onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
       ...(courseStage !== undefined
@@ -4914,13 +4922,14 @@ class PlayerWebDemoApp {
       course: courseStage !== undefined || nonstop !== undefined,
       tempo,
     });
-    // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...), a
-    // NONSTOP course's stitched play included.
-    const courseLane = (picked: typeof this.guiState.random1P): typeof this.guiState.random1P =>
+    // A course limits the lane options (both sides and DP FLIP) to what its constraint allows (`grade` none,
+    // `grade_mirror` MIRROR, ...), a NONSTOP course's stitched play included.
+    const picked = { random1P: this.guiState.random1P, random2P: this.guiState.random2P, dpFlip: this.guiState.dpFlip };
+    const lanes =
       this.courseSession !== undefined && courseStage !== undefined
-        ? this.courseSession.laneOption(picked)
+        ? this.courseSession.laneOptions(picked)
         : nonstop !== undefined
-          ? resolveCourseLaneOption(nonstop.course.definition.constraints, picked)
+          ? resolveCourseLaneOptions(nonstop.course.definition.constraints, picked)
           : picked;
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
@@ -4945,9 +4954,9 @@ class PlayerWebDemoApp {
       // arrangement directly (see `PixiGameplayViewOptions.replay`).
       autoScratch1P: replay !== undefined ? replay.play.autoScratch : this.guiState.autoScratch1P,
       autoScratch2P: replay !== undefined ? false : this.guiState.autoScratch2P,
-      dpFlip: replay !== undefined ? false : this.guiState.dpFlip,
-      random1P: replay !== undefined ? ('OFF' as const) : courseLane(this.guiState.random1P),
-      random2P: replay !== undefined ? ('OFF' as const) : courseLane(this.guiState.random2P),
+      dpFlip: replay !== undefined ? false : lanes.dpFlip,
+      random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
+      random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,
       gauge: replay !== undefined ? replay.play.gauge : this.guiState.gauge,
       ...(courseStage !== undefined
         ? { course: courseStage.course, courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }

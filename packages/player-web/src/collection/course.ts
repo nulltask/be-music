@@ -269,20 +269,46 @@ export function resolveCourseStageSettings(definition: CourseDefinition): Omit<P
 /** The lane options a host offers, as the select screen names them. */
 export type CourseLaneOption = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
 
+/** The lane options of a play: each side's lane option and DP FLIP. */
+export interface CourseLaneOptions {
+  random1P: CourseLaneOption;
+  random2P: CourseLaneOption;
+  dpFlip: boolean;
+}
+
+/** beatoraja's random options up to index 5 (`grade_random` keeps them): here all but SCATTER. */
+function isPlainRandomFamily(option: CourseLaneOption): boolean {
+  return option !== 'SCATTER';
+}
+
 /**
- * The lane option a course allows in place of the one the player picked (beatoraja `MusicSelector._readCourse`):
- * `grade` forces OFF, `grade_mirror` keeps MIRROR and resets anything else to OFF, `grade_random` keeps the plain random
- * family (beatoraja's options up to index 5 — RANDOM and S-RANDOM here) and MIRROR. A course without a lane-option
- * constraint keeps the pick.
+ * The lane options a course allows in place of the ones the player picked (beatoraja `MusicSelector._readCourse`):
+ *
+ * - `grade` turns both sides and DP FLIP off;
+ * - `grade_mirror` keeps a 1P MIRROR and then plays 2P on MIRROR with FLIP on; any other 1P pick turns both sides and
+ *   FLIP off;
+ * - `grade_random` keeps the plain random family (beatoraja's options up to index 5: MIRROR, RANDOM, S-RANDOM here) on
+ *   each side, turns anything else off, and leaves FLIP alone.
+ *
+ * A course without a lane-option constraint keeps the picks.
  */
-export function resolveCourseLaneOption(
+export function resolveCourseLaneOptions(
   constraints: readonly CourseConstraint[],
-  picked: CourseLaneOption,
-): CourseLaneOption {
-  if (constraints.includes('grade')) return 'OFF';
-  if (constraints.includes('grade_mirror')) return picked === 'MIRROR' ? 'MIRROR' : 'OFF';
-  if (constraints.includes('grade_random')) return picked === 'SCATTER' ? 'OFF' : picked;
-  return picked;
+  picked: CourseLaneOptions,
+): CourseLaneOptions {
+  const off: CourseLaneOptions = { random1P: 'OFF', random2P: 'OFF', dpFlip: false };
+  if (constraints.includes('grade')) return off;
+  if (constraints.includes('grade_mirror')) {
+    return picked.random1P === 'MIRROR' ? { random1P: 'MIRROR', random2P: 'MIRROR', dpFlip: true } : off;
+  }
+  if (constraints.includes('grade_random')) {
+    return {
+      random1P: isPlainRandomFamily(picked.random1P) ? picked.random1P : 'OFF',
+      random2P: isPlainRandomFamily(picked.random2P) ? picked.random2P : 'OFF',
+      dpFlip: picked.dpFlip,
+    };
+  }
+  return { ...picked };
 }
 
 /** Whether the course forbids changing the hi-speed during play (`no_speed`). */

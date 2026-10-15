@@ -11,7 +11,8 @@ import {
   isCourseHiSpeedLocked,
   readCourseFile,
   resolveCourseFolders,
-  resolveCourseLaneOption,
+  resolveCourseLaneOptions,
+  type CourseLaneOption,
   resolveCourseStageSettings,
 } from './course.ts';
 import type { BrowserSongEntry } from './types.ts';
@@ -244,13 +245,31 @@ describe('course stage settings', () => {
     expect(resolveCourseStageSettings({ ...course, kind: 'expert', constraints: [] })).toEqual({ kind: 'expert' });
   });
 
-  test('resolveCourseLaneOption follows the lane-option constraint', () => {
-    expect(resolveCourseLaneOption(['grade'], 'MIRROR')).toBe('OFF');
-    expect(resolveCourseLaneOption(['grade_mirror'], 'MIRROR')).toBe('MIRROR');
-    expect(resolveCourseLaneOption(['grade_mirror'], 'RANDOM')).toBe('OFF');
-    expect(resolveCourseLaneOption(['grade_random'], 'S-RANDOM')).toBe('S-RANDOM');
-    expect(resolveCourseLaneOption(['grade_random'], 'SCATTER')).toBe('OFF');
-    expect(resolveCourseLaneOption(['gauge_lr2'], 'SCATTER')).toBe('SCATTER');
+  test('resolveCourseLaneOptions follows the lane-option constraint on both sides and DP FLIP', () => {
+    const picked = (random1P: CourseLaneOption, random2P: CourseLaneOption = 'RANDOM', dpFlip = true) => ({
+      random1P,
+      random2P,
+      dpFlip,
+    });
+    const off = { random1P: 'OFF', random2P: 'OFF', dpFlip: false };
+    // CLASS turns every lane option and FLIP off.
+    expect(resolveCourseLaneOptions(['grade'], picked('MIRROR'))).toEqual(off);
+    // MIRROR: a 1P MIRROR plays 2P on MIRROR with FLIP on; anything else turns them all off.
+    expect(resolveCourseLaneOptions(['grade_mirror'], picked('MIRROR', 'OFF', false))).toEqual({
+      random1P: 'MIRROR',
+      random2P: 'MIRROR',
+      dpFlip: true,
+    });
+    expect(resolveCourseLaneOptions(['grade_mirror'], picked('RANDOM', 'MIRROR'))).toEqual(off);
+    // RANDOM keeps the plain random family on each side and leaves FLIP alone.
+    expect(resolveCourseLaneOptions(['grade_random'], picked('S-RANDOM', 'SCATTER'))).toEqual({
+      random1P: 'S-RANDOM',
+      random2P: 'OFF',
+      dpFlip: true,
+    });
+    expect(resolveCourseLaneOptions(['gauge_lr2'], picked('SCATTER', 'MIRROR', true))).toEqual(
+      picked('SCATTER', 'MIRROR', true),
+    );
   });
 
   test('isCourseHiSpeedLocked reads no_speed', () => {
