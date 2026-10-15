@@ -123,7 +123,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     renderNotes,
     laneBindings,
     laneDisplayMode,
-    activeFreeZoneChannels,
     scorableNotes,
     inputTokenToChannels,
   } = playbackChart;
