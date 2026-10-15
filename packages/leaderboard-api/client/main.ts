@@ -86,11 +86,17 @@ const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
   },
 };
 
-/** Hides the play the button names, or shows it again, then reloads its page. */
+/** Hides the play or the course run the button names, or shows it again, then reloads its page. */
 async function setScoreHidden(button: HTMLButtonElement, hidden: boolean): Promise<void> {
-  const id = button.dataset.scoreId;
-  if (id === undefined) return;
-  const result = await callAccountApi(`/api/v0/scores/${encodeURIComponent(id)}`, {
+  const { scoreId, courseScoreId } = button.dataset;
+  const path =
+    courseScoreId !== undefined
+      ? `/api/v0/course-scores/${encodeURIComponent(courseScoreId)}`
+      : scoreId !== undefined
+        ? `/api/v0/scores/${encodeURIComponent(scoreId)}`
+        : undefined;
+  if (path === undefined) return;
+  const result = await callAccountApi(path, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ hidden }),

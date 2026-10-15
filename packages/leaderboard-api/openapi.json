@@ -3343,13 +3343,25 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "laneMode": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Lane mode (`7keys`, `14keys`, ...), null while unknown."
                           }
                         },
                         "required": [
                           "chartFingerprint",
                           "title",
                           "artist",
-                          "playLevel"
+                          "playLevel",
+                          "laneMode"
                         ]
                       }
                     },

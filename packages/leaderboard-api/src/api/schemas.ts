@@ -249,6 +249,7 @@ export const courseResponse = v.object({
       title: described(v.nullable(v.string()), 'Null while the server has not seen the chart played.'),
       artist: v.nullable(v.string()),
       playLevel: v.nullable(v.string()),
+      laneMode: described(v.nullable(v.string()), 'Lane mode (`7keys`, `14keys`, ...), null while unknown.'),
     }),
   ),
   createdAt: epochMs('When the first run was accepted'),

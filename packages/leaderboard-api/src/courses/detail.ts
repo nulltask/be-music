@@ -11,7 +11,13 @@ export interface CourseDetail {
   name: string;
   kind: string;
   constraints: string[];
-  stages: Array<{ chartFingerprint: string; title: string | null; artist: string | null; playLevel: string | null }>;
+  stages: Array<{
+    chartFingerprint: string;
+    title: string | null;
+    artist: string | null;
+    playLevel: string | null;
+    laneMode: string | null;
+  }>;
   createdAt: number;
 }
 
@@ -28,6 +34,7 @@ export async function loadCourseDetail(db: Database, courseFingerprint: string):
             title: chart.title,
             artist: chart.artist,
             playLevel: chart.playLevel,
+            laneMode: chart.laneMode,
           })
           .from(chart)
           .where(inArray(chart.chartFingerprint, [...new Set(found.stageChartFingerprints)]));
@@ -44,6 +51,7 @@ export async function loadCourseDetail(db: Database, courseFingerprint: string):
         title: known?.title ?? null,
         artist: known?.artist ?? null,
         playLevel: known?.playLevel ?? null,
+        laneMode: known?.laneMode ?? null,
       };
     }),
     createdAt: found.createdAt.getTime(),
