@@ -106,7 +106,7 @@ export function findEngineSimulatorMismatches(engine: EngineReplay, simulated: P
   const simulatedFields = flattenResult(simulatedResult);
   return [...new Set([...engineFields.keys(), ...simulatedFields.keys()])]
     .filter((field) => engineFields.get(field) !== simulatedFields.get(field))
-    .map((field) => `${field} ${engineFields.get(field)}/${simulatedFields.get(field)}`);
+    .map((field) => `${field} ${String(engineFields.get(field))}/${String(simulatedFields.get(field))}`);
 }
 
 function flattenResult(value: object, prefix = ''): Map<string, unknown> {
