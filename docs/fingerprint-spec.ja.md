@@ -279,3 +279,46 @@ bmfp0:<正規 JSON のバイト列の SHA-256 を小文字 16 進で表したも
 ## 7. プレイログ
 
 プレイログは、譜面の譜面 fingerprint を `chart.chartFingerprint` に、遊んだ内容のプレイ fingerprint を `chart.playFingerprint` に、このプレイの `#RANDOM` / `#SWITCH` の結果を `RandomDraws` として `play.randomDraws` に記録します（[playlog.ja.md](./playlog.ja.md) を参照）。プレイを譜面ごとにまとめるには譜面 fingerprint を使います。`#RANDOM` 行が何を引いても、同じ譜面のプレイはすべて同じ値を持ちます。譜面ファイルを持つ検証者は、その draws で譜面を解決し直し（`resolveBmsControlFlowWithDraws(json, randomDraws)`。その譜面のために引かれていない draws は拒否します）、譜面の拡張子でプレイ fingerprint を計算し直せます。`@be-music/player` の `createPlaylogRecorder` は、どちらも元の譜面（読み込んだままの譜面。`#RANDOM` を自分で解決したりレーンを書き換えたりするホストは `recordPlaylog.sourceChart` で渡し、渡さなければエンジンが受け取った譜面です）から計算し、プレイ fingerprint はプレイの draws で解決した譜面から求めるので、レーンオプション（RANDOM / MIRROR / DP FLIP）はどちらも変えません。draws がその譜面のために引かれたものでない、または元の譜面が無いときは、プレイ fingerprint はエンジンが遊んだ譜面から求め、譜面 fingerprint はプレイが draws を持たない場合を除いて省きます。レーン構成の入力にはエンジンの `laneModeExtension` を使い、それがなければ 9 KEY のプレイを `.pms` の代わりとします。draws はエンジンの `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`resolvePlayChart`）、同じ draws をエンジンに渡してエンジンが記録し、リプレイはログの draws を同じように渡し直します。
+
+## 8. コース fingerprint
+
+コース（段位、EXPERT、NONSTOP、beatoraja のコース、難易度表のコース）は **コース fingerprint** で識別します。各ステージの譜面 fingerprint を材料にし、`bmfp` と同じ規則に従います。同じに遊ぶものは同じに書き、ドキュメントは正規化した JSON にして、バージョンをドキュメントと出力の両方に含めます。
+
+```mermaid
+flowchart LR
+  input["種類、制約、<br/>ステージの譜面 fingerprint、<br/>NONSTOP のつなぎ方と配置"] --> doc["コースのドキュメント<br/>（正規化）"]
+  doc --> jcs["RFC 8785 のテキスト"]
+  jcs --> hash["bmcourse0:&lt;sha256&gt;"]
+```
+
+### 8.1 ドキュメント
+
+```json
+{
+  "v": "bmcourse0",
+  "kind": "nonstop",
+  "constraints": [],
+  "stages": ["bmfp0:…", "bmfp0:…", "bmfp0:…"],
+  "nonstop": { "connections": ["cut-fit", "fade"], "placement": "intended" }
+}
+```
+
+| フィールド    | 規則                                                                                                                                                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v`           | バージョン。`"bmcourse0"`。                                                                                                                                                                                                                                               |
+| `kind`        | `grade`、`expert`、`nonstop` のいずれか（`RulesetCourseKind`）。                                                                                                                                                                                                          |
+| `constraints` | `normalizeCourseConstraints` の読み方で正規化した制約。beatoraja の enum 名（`MIRROR`）は表ヘッダーの名前（`grade_mirror`）に読み替え、未知の名前は捨て、同じグループは beatoraja と同じく 1 つだけ残します。そのうえで重複を除いて並べ替えます。                         |
+| `stages`      | 各ステージの譜面 fingerprint（1 章）をステージ順に並べたもの。ランダムコースは抽選したステージで表します。                                                                                                                                                                |
+| `nonstop`     | NONSTOP コースだけ。`connections` はつなぎ目ごとにちょうど 1 つ（ステージ数 − 1 個）です。最後のステージの後に書かれたつなぎ方は何もつながないので捨て、コースが書いていないつなぎ目は、結合処理の読み方どおり `fade` にします。`placement` は `intended` か `lr2` です。 |
+
+遊ぶ内容を変えないので、次は含めません。コース名、トロフィー、`release` フラグ、NONSTOP のプレイログが記録する結合規則の版（`nonstop.stitch`。結合処理を直してもそのコースのランキングが分かれないようにするため。[playlog.ja.md](./playlog.ja.md#コースのプレイログ)）。
+
+### 8.2 出力とバージョン
+
+```
+bmcourse0:<ドキュメントの RFC 8785 テキストの SHA-256（小文字 16 進）>
+```
+
+値はすべて文字列か文字列のリストなので、RFC 8785 のテキストは、キーを並べ替えて空白をなくしたドキュメントになります。`bmfp0` と同じく `bmcourse0` は開発版で、バージョンを上げずに変わることがあります。ステージの譜面 fingerprint が変われば、コース fingerprint も変わります。最初の安定版からは、既存のコースのドキュメントを変える変更には新しいバージョンが必要です。`packages/player/src/playlog/course-fingerprint.test.ts` で golden の値を固定しています。
+
+この章は `@be-music/player/playlog` の `createCourseFingerprintDocument(input)` と `computeCourseFingerprint(input)` が実装し、`@be-music/chart` の `canonicalizeJsonValue` と `sha256Hex` を使います。`computeCoursePlaylogFingerprint(log)` はコースのプレイログから入力を読みます。

@@ -1,9 +1,9 @@
-import { sha256Hex } from '@be-music/chart';
-import { normalizeCourseConstraints, type NonstopConnection } from '../course/definition.ts';
+import { canonicalizeJsonValue, sha256Hex } from '@be-music/chart';
+import { normalizeCourseConstraints, type CourseConstraint, type NonstopConnection } from '../course/definition.ts';
 import type { RulesetCourseKind } from '../ruleset/course.ts';
 import type { BeMusicCoursePlaylog } from './course.ts';
 
-/** The version prefix of a course fingerprint. Version `0`, like `bmfp0`, may still change between releases. */
+/** The version of the course fingerprint. Version `0`, like `bmfp0`, may still change between releases. */
 export const COURSE_FINGERPRINT_VERSION = 'bmcourse0';
 
 /** What identifies a course: its kind, its constraints and its stages' charts, in order. */
@@ -21,31 +21,56 @@ export interface CourseFingerprintInput {
 }
 
 /**
- * The course fingerprint (`bmcourse0:<sha256>`): a hash of the course kind, its constraints and its stages' chart
- * fingerprints in order. The constraints are normalized first (beatoraja's enum names read as their table-header names,
- * unknown names dropped, one per group as beatoraja keeps them) and sorted, and the course's name and trophies are left
- * out, so the same course read from a `.lr2crs`, a beatoraja course file or a difficulty table gets one fingerprint
- * whenever its charts match. A random course, once its stages are drawn, is keyed like a fixed one. A NONSTOP course
- * also includes its connections and placement mode (`input.nonstop`), which decide the chart that is played.
+ * The canonical course fingerprint document (see `docs/fingerprint-spec.md`, "Course fingerprint"). Every field is a
+ * string or a list of strings, so the document has one JSON form under RFC 8785.
  */
-export function computeCourseFingerprint(input: CourseFingerprintInput): string {
+export interface CourseFingerprintDocument {
+  v: typeof COURSE_FINGERPRINT_VERSION;
+  kind: RulesetCourseKind;
+  /** The normalized constraint names, sorted. */
+  constraints: CourseConstraint[];
+  /** The stages' chart fingerprints, in stage order. */
+  stages: string[];
+  /** A NONSTOP course only: one connection per seam (stages − 1 of them), and the placement mode. */
+  nonstop?: { connections: NonstopConnection[]; placement: 'intended' | 'lr2' };
+}
+
+/** The connection the stitcher reads for a seam the course does not name (`StitchNonstopOptions.connections`). */
+const DEFAULT_NONSTOP_CONNECTION: NonstopConnection = 'fade';
+
+/**
+ * Builds the canonical document a course fingerprint hashes. What plays alike is written alike:
+ *
+ * - the constraints are normalized (beatoraja's enum names read as their table-header names, unknown names dropped,
+ *   one per group as beatoraja keeps them), deduplicated and sorted;
+ * - a NONSTOP course lists exactly one connection per seam: one listed after the last stage joins nothing and is
+ *   dropped, and a seam the course does not name is `fade`, as the stitcher reads it;
+ * - other kinds carry no `nonstop`, whatever the input says;
+ * - the name, trophies and `release` flag are not inputs at all.
+ */
+export function createCourseFingerprintDocument(input: CourseFingerprintInput): CourseFingerprintDocument {
   const constraints = [...new Set(normalizeCourseConstraints(input.constraints))].sort();
   const stages = [...input.stageChartFingerprints];
-  // Only the connections between the stages count: one listed after the last stage joins nothing.
-  const nonstop =
-    input.kind === 'nonstop' && input.nonstop !== undefined
-      ? {
-          connections: input.nonstop.connections.slice(0, Math.max(0, stages.length - 1)),
-          placement: input.nonstop.placement,
-        }
-      : undefined;
-  const canonical = JSON.stringify({
-    kind: input.kind,
-    constraints,
-    stages,
-    ...(nonstop !== undefined ? { nonstop } : {}),
-  });
-  return `${COURSE_FINGERPRINT_VERSION}:${sha256Hex(canonical)}`;
+  const document: CourseFingerprintDocument = { v: COURSE_FINGERPRINT_VERSION, kind: input.kind, constraints, stages };
+  if (input.kind === 'nonstop' && input.nonstop !== undefined) {
+    const seams = Math.max(0, stages.length - 1);
+    const connections = Array.from(
+      { length: seams },
+      (_seam, index) => input.nonstop!.connections[index] ?? DEFAULT_NONSTOP_CONNECTION,
+    );
+    document.nonstop = { connections, placement: input.nonstop.placement };
+  }
+  return document;
+}
+
+/**
+ * The course fingerprint (`bmcourse0:<sha256>`): the SHA-256 of the course's {@link createCourseFingerprintDocument
+ * document} serialized with the JSON Canonicalization Scheme (RFC 8785), as `bmfp` hashes a chart's. The same course read
+ * from a `.lr2crs`, a beatoraja course file or a difficulty table gets one fingerprint whenever its charts match, and a
+ * random course, once its stages are drawn, is keyed like a fixed one.
+ */
+export function computeCourseFingerprint(input: CourseFingerprintInput): string {
+  return `${COURSE_FINGERPRINT_VERSION}:${sha256Hex(canonicalizeJsonValue(createCourseFingerprintDocument(input)))}`;
 }
 
 /**
