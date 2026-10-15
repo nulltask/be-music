@@ -107,9 +107,10 @@ export function resolveLongNoteEarlyReleaseJudge(
 ): TimedManualJudge {
   const toRuleset = (judge: TimedManualJudge): LnTimedJudge => ({
     judge: resolveJudgeSeverity(judge.kind) as LnJudgeIndex,
-    dmUs: -judge.signedDeltaMs * 1000,
+    dmUs: Math.round(-judge.signedDeltaMs * 1000),
   });
-  const released = resolveLnEarlyRelease(ruleset, toRuleset(head), -releaseDeltaMs * 1000, endWindows);
+  // Whole microseconds, like every other window comparison (see `judgeDeltaUs`).
+  const released = resolveLnEarlyRelease(ruleset, toRuleset(head), Math.round(-releaseDeltaMs * 1000), endWindows);
   return { kind: LN_JUDGE_KINDS[released.judge]!, signedDeltaMs: -released.dmUs / 1000 };
 }
 

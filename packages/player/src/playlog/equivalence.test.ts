@@ -253,6 +253,29 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // An LN released exactly on a long-note-end window edge, at a BPM whose note times are not exact in float seconds.
+  test.each(RULESETS)('%s: an LN released on a window edge agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+    json.metadata.bpm = 140;
+    const probe = await replay(json, [down(0, 0, '19')], ruleset);
+    const head = probe.playlog.chart.notes.find((note) => note.channel === '11')!;
+    const endWindows = resolveRulesetConfig(probe.playlog, ruleset).windows.longNoteEnd.judges;
+
+    for (const [, earlyEdgeUs] of endWindows) {
+      const inputs = [down(0, head.timeUs, '11'), up(1, head.endTimeUs! - earlyEdgeUs, '11')];
+      const { summary, playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor], `${earlyEdgeUs} µs`).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.great,
+        simulated.judge.good,
+        simulated.judge.bad,
+        simulated.judge.poor,
+      ]);
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
