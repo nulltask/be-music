@@ -60,6 +60,8 @@ const MAP: NonstopStitchMap = {
       lr2StageMarker: false,
     },
   ],
+  tempo: [],
+  stageRanks: [],
 };
 
 describe('nonstopFadeCurve', () => {

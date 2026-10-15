@@ -231,7 +231,7 @@ describe('NONSTOP BGA', () => {
     { windowStart: 20, windowEnd: Number.POSITIVE_INFINITY, bmpKeys: ['03'], bgaFadeIn: { start: 17, end: 20 } },
   ];
 
-  it('splits the cues by the stage that owns each BMP key', () => {
+  it('splits the base, layer and POOR cues by the stage that owns each BMP key', () => {
     const split = splitNonstopBgaTimeline(
       {
         base: [
@@ -243,6 +243,11 @@ describe('NONSTOP BGA', () => {
           { seconds: 2, bmpKey: '02' },
           { seconds: 25, bmpKey: undefined },
         ],
+        poor: [
+          { seconds: 0, bmpKey: '01' },
+          { seconds: 17, bmpKey: '03' },
+          { seconds: 21, bmpKey: undefined },
+        ],
       },
       stages,
     );
@@ -252,8 +257,16 @@ describe('NONSTOP BGA', () => {
         { seconds: 19, bmpKey: '02' },
       ],
       layer: [{ seconds: 2, bmpKey: '02' }],
+      poor: [{ seconds: 0, bmpKey: '01' }],
     });
-    expect(split[1]).toEqual({ base: [{ seconds: 18, bmpKey: '03' }], layer: [{ seconds: 25, bmpKey: undefined }] });
+    expect(split[1]).toEqual({
+      base: [{ seconds: 18, bmpKey: '03' }],
+      layer: [{ seconds: 25, bmpKey: undefined }],
+      poor: [
+        { seconds: 17, bmpKey: '03' },
+        { seconds: 21, bmpKey: undefined },
+      ],
+    });
   });
 
   it('crossfades the stages over 3 s around the boundary', () => {
