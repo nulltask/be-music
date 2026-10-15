@@ -282,7 +282,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const graphW = graphBox.x + graphBox.w - 14 - graphX;
   const graphH = (grid.graphsBottom - grid.graphsTop - 24) / 2;
   glass(graphs.g, graphBox.x, graphBox.y, graphBox.w, graphBox.h, accent);
-  label('GROOVE GAUGE', graphX, graphBox.y + 12, graphs.root);
+  label(`${(result.gaugeType ?? 'GROOVE').toUpperCase()} GAUGE`, graphX, graphBox.y + 12, graphs.root);
   label('EX SCORE', graphX, grid.graphsTop + graphH + 12, graphs.root);
   const draw = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + 150, ROLL_MS + 300));
   filament(

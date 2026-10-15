@@ -181,7 +181,10 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
 
   // Graphs as ruled lines.
   rule(326, 244, 294, 600);
-  text(decode('09 GROOVE GAUGE', 600, 5), 326, 252, { ...mono(), alpha: fadeIn(600) });
+  text(decode(`09 ${(result.gaugeType ?? 'GROOVE').toUpperCase()} GAUGE`, 600, 5), 326, 252, {
+    ...mono(),
+    alpha: fadeIn(600),
+  });
   text(decode('10 EX SCORE', 640, 6), 326, 338, { ...mono(), alpha: fadeIn(640) });
   const draw = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + 150, ROLL_MS + 300));
   plot(
