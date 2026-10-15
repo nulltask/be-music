@@ -265,7 +265,7 @@ flowchart TD
 - `chart/play-audio.ts` は、プレイの AudioContext と bus を作り（`#VOLWAV` を含む）、`#WAV` のサンプルを audio session が引くキーでデコードし、ピッチを保つテンポのときは伸縮し、`#WAVCMD` / `#EXWAV` の音量をまとめます。
 - `chart/play-bga.ts` は、プレイに要る BGA リソース（`#BMPxx`、bmson の `bga.header`、`#BGAxx` の切り出し元、LR2 view では暗黙の `#BMP00` POOR 画像）を選び、静止画は共通のテクスチャローダーで、動画は動画ローダーでデコードし、BMS の layer の黒を抜き、切り出し領域のビューを作ります。
 - `scene/play-ending.ts` は、プレイの終わりの時間を決めます。最後のノートのあと譜面時刻で約 2 小節の余韻を置き、テーマや skin のフェードアウトに入ります。ゲージが尽きて途中で終わったプレイは余韻を置かず、音と画面を 1.5 秒以上かけてフェードアウトします。
-- `resolveClearLamp` がクリアランプの唯一の規則です。beatoraja のリザルトと選曲は `beatorajaClearLampOp` を通してこれを表示し、demo はどの family のプレイもこれで記録します。
+- `resolveClearLamp` がクリアランプの唯一の規則です。beatoraja のリザルトと選曲は `beatorajaClearLampOp` を通してこれを表示し、demo はどの family のプレイもこれで記録します。判定のルールセットのランプに合わせ、LR2 と IIDX ではフルコンボが最上位（PERFECT・MAX なし）、LR2 では DEATH でのクリアを NORMAL にします。リーダーボードと同じです。
 
 ## ノートの表示範囲
 

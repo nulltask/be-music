@@ -33,7 +33,8 @@ describe('resolveClearLamp', () => {
     ['NORMAL', 'beatoraja', ClearLamp.NORMAL],
     ['HARD', 'iidx', ClearLamp.HARD],
     ['EX-HARD', 'beatoraja', ClearLamp.EX_HARD],
-    ['DEATH', 'lr2', ClearLamp.EX_HARD],
+    ['DEATH', 'lr2', ClearLamp.NORMAL],
+    ['DEATH', 'beatoraja', ClearLamp.EX_HARD],
     ['HAZARD', 'beatoraja', ClearLamp.EX_HARD],
     ['SOMETHING-NEW', 'lr2', ClearLamp.NORMAL],
   ] as const)('a cleared %s gauge under %s gives lamp %i', (type, ruleset, lamp) => {
@@ -57,7 +58,8 @@ describe('resolveClearLamp', () => {
 });
 
 describe('resolveMissCount', () => {
-  test('counts BADs, missed POORs and empty POORs', () => {
+  test('counts BADs, missed POORs and empty POORs, LR2 included', () => {
+    // LR2 adds an empty POOR to its POOR count, so its BP includes them like beatoraja's.
     expect(resolveMissCount(result({ type: 'GROOVE', cleared: true }, { bad: 2, poor: 3, emptyPoor: 4 }))).toBe(9);
   });
 });
@@ -69,5 +71,14 @@ describe('toCourseClearLamp', () => {
     expect(toCourseClearLamp('NORMAL')).toBe(ClearLamp.NORMAL);
     expect(toCourseClearLamp('EX_HARD')).toBe(ClearLamp.EX_HARD);
     expect(toCourseClearLamp('MAX')).toBe(ClearLamp.MAX);
+  });
+});
+
+describe('LR2 gauge lamps', () => {
+  test('a DEATH clear is NORMAL under LR2 and EX HARD elsewhere', () => {
+    const death = result({ type: 'DEATH', cleared: true }, { bad: 1 });
+    expect(resolveClearLamp(death, 'lr2')).toBe(ClearLamp.NORMAL);
+    expect(resolveClearLamp(death, 'beatoraja')).toBe(ClearLamp.EX_HARD);
+    expect(resolveClearLamp(result({ type: 'HARD', cleared: true }, { bad: 1 }), 'lr2')).toBe(ClearLamp.HARD);
   });
 });

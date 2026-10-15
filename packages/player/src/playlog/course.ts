@@ -153,9 +153,10 @@ export function resolveCourseLamp(
     ruleset === 'lr2'
       ? pick === 'EASY'
         ? 'EASY'
-        : pick === 'HARD' || pick === 'DEATH'
+        : pick === 'HARD'
           ? 'HARD'
-          : 'NORMAL'
+          : // LR2 awards HARD only for its HARD-family gauges: a DEATH clear is NORMAL (LR2body.exe CheckCourseClear @0x4086d0).
+            'NORMAL'
       : (COURSE_GAUGE_LAMPS[result.gauge.type] ?? 'NORMAL');
   if (result.noteCount > 0 && result.maxCombo >= result.noteCount) {
     const { great, good } = result.judge;

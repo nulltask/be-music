@@ -2406,9 +2406,9 @@ class PlayerWebDemoApp {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    // A run at another tempo is practice: no record.
     // An auto-played run or one at another tempo leaves the record alone.
-    if (courseRunKeepsRecord(courseLog)) this.recordCourseResult(courseRecordKey(nonstop.course), native);
+    if (courseRunKeepsRecord(courseLog))
+      this.recordCourseResult(courseRecordKey(nonstop.course, nonstop.prepared.placement), native);
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
     this.leaderboard.maybeSubmitCourse(
@@ -3494,7 +3494,7 @@ class PlayerWebDemoApp {
             this.unlockPlaylogOptions();
             return;
           }
-          this.recordActivePlay(songRecordPlayFromSummary(summary, maxCombo));
+          this.recordActivePlay(songRecordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset));
           const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
           if (!mounted) await this.showSelect();
           // Auto-save fires even when the theme ships no result skin — falling back to select
@@ -3705,7 +3705,7 @@ class PlayerWebDemoApp {
       },
       // A course bar's lamp comes from the course's record, kept under the course's key.
       resolveCourseLampOp: (course) => {
-        const record = lookupCourseRecord(course, this.songRecords);
+        const record = lookupCourseRecord(course, this.songRecords, this.guiState.nonstopPlacement);
         return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
       },
       // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
@@ -4173,6 +4173,7 @@ class PlayerWebDemoApp {
     const retry = course === undefined && this.lastPlay?.song.id === song.id ? this.lastPlay : undefined;
     const cleared = summary.gauge?.cleared ?? false;
     this.beatorajaResultScene = new PixiBeatorajaResultScene({
+      judgeRuleset: this.guiState.judgeRuleset,
       skin: result.skin,
       textures,
       fonts,
@@ -4704,7 +4705,8 @@ class PlayerWebDemoApp {
         this.refreshPlayOptionControllers();
       },
       resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
-      resolveCourseRecord: (course: BrowserCourseEntry) => lookupCourseRecord(course, this.songRecords),
+      resolveCourseRecord: (course: BrowserCourseEntry) =>
+        lookupCourseRecord(course, this.songRecords, this.guiState.nonstopPlacement),
       onSongSelected: (song: BrowserSongEntry) => {
         if (this.addSongToCourseBeingMade(song)) return;
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after

@@ -56,10 +56,16 @@ export function songRecordPlayFromResult(data: PixiGameplayResultData): SongReco
 export function songRecordPlayFromSummary(
   summary: Pick<PlayerSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore' | 'gauge'>,
   maxCombo: number,
+  ruleset?: 'lr2' | 'beatoraja' | 'iidx',
 ): SongRecordPlay {
   const cleared = summary.gauge?.cleared ?? false;
   return {
-    lamp: resolveClearLamp({ cleared, score: summary, gaugeType: summary.gauge?.type }),
+    lamp: resolveClearLamp({
+      cleared,
+      score: summary,
+      gaugeType: summary.gauge?.type,
+      ...(ruleset ? { ruleset } : {}),
+    }),
     exScore: summary.exScore,
     maxCombo,
     missCount: summary.bad + summary.poor,

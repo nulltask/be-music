@@ -38,3 +38,22 @@ describe('resolveClearLamp', () => {
     expect(resolveClearLamp({ cleared: true, score: score(0, 0, 0, 0), gaugeType: 'HARD' })).toBe('HARD');
   });
 });
+
+describe('resolveClearLamp under a ruleset', () => {
+  it('LR2 and IIDX stop at FULL COMBO, beatoraja keeps PERFECT and MAX', () => {
+    const max = score(100, 0, 0);
+    expect(resolveClearLamp({ cleared: true, score: max, ruleset: 'lr2' })).toBe('FULL_COMBO');
+    expect(resolveClearLamp({ cleared: true, score: max, ruleset: 'iidx' })).toBe('FULL_COMBO');
+    expect(resolveClearLamp({ cleared: true, score: max, ruleset: 'beatoraja' })).toBe('MAX');
+    expect(resolveClearLamp({ cleared: true, score: max })).toBe('MAX');
+  });
+
+  it('a DEATH clear is NORMAL under LR2 only', () => {
+    const missed = score(90, 0, 0);
+    expect(resolveClearLamp({ cleared: true, score: missed, gaugeType: 'DEATH', ruleset: 'lr2' })).toBe('NORMAL');
+    expect(resolveClearLamp({ cleared: true, score: missed, gaugeType: 'DEATH', ruleset: 'beatoraja' })).toBe(
+      'EX_HARD',
+    );
+    expect(resolveClearLamp({ cleared: true, score: missed, gaugeType: 'HARD', ruleset: 'lr2' })).toBe('HARD');
+  });
+});
