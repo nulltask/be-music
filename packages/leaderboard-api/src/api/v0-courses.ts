@@ -9,15 +9,15 @@ import { submitCourseScore } from '../courses/submit.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { isOn } from '../http/query.ts';
 import {
+  courseRankingResponse,
   courseResponse,
   courseScoreResponse,
   courseSubmissionBody,
   courseSubmissionResponse,
   errorResponse,
+  myCourseRankResponse,
   myRankQuery,
-  myRankResponse,
   rankingQuery,
-  rankingResponse,
 } from './schemas.ts';
 
 const json = (description: string, schema: Parameters<typeof resolver>[0]) => ({
@@ -173,8 +173,8 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
       tags: ['Courses'],
       summary: 'A course’s ranking',
       description:
-        'Players by best course EX-Score under one ruleset, ranked like a chart; ties share a rank. `exScoreId` is the course run that set it.',
-      responses: { 200: json('A page of the ranking.', rankingResponse) },
+        'Players by best course EX-Score under one ruleset, ranked like a chart; ties share a rank. `exScoreId` is the course run that set it, and `trophy` the best trophy each player earned.',
+      responses: { 200: json('A page of the ranking.', courseRankingResponse) },
     }),
     validator('query', rankingQuery),
     async (c) => {
@@ -199,9 +199,9 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
     describeRoute({
       tags: ['Courses'],
       summary: 'My rank on a course',
-      description: 'My best on the course and my rank among every player, anonymous ones included.',
+      description: 'My bests on the course (trophy included) and my rank among every player, anonymous ones included.',
       responses: {
-        200: json('My rank.', myRankResponse),
+        200: json('My rank.', myCourseRankResponse),
         401: signInRequired,
         404: json('I have not run the course under these filters.', errorResponse(['not-played'])),
       },

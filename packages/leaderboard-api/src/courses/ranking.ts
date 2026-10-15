@@ -2,7 +2,7 @@ import { and, asc, count, desc, eq, gt, type SQL } from 'drizzle-orm';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import { avatarUrl } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
-import { courseBestScore, profile, user } from '../db/schema.ts';
+import { courseBestScore, courseScoreResult, profile, user } from '../db/schema.ts';
 
 /** A course ranking's filters, as `RankingFilter` for charts. */
 export interface CourseRankingFilter {
@@ -23,11 +23,16 @@ export interface CourseRankingEntry {
   avatarUrl: string;
   exScore: number;
   exScoreId: string;
+  /** The course's judgment notes under the ruleset (the best EX run's), the DJ LEVEL's scale. */
+  noteCount: number;
   clearLamp: number;
   missCount: number;
   playCount: number;
   playedHere: boolean;
   achievedAt: number;
+  /** The best trophy and the run that earned it. */
+  trophy: string | null;
+  trophyScoreId: string | null;
 }
 
 function filterConditions(filter: CourseRankingFilter): SQL[] {
@@ -58,15 +63,25 @@ export async function loadCourseRanking(
       avatarKey: profile.avatarKey,
       exScore: courseBestScore.bestEx,
       exScoreId: courseBestScore.bestExScoreId,
+      noteCount: courseScoreResult.noteCount,
       clearLamp: courseBestScore.bestLamp,
       missCount: courseBestScore.minMiss,
       playCount: courseBestScore.playCount,
       playedHere: courseBestScore.playedHere,
       achievedAt: courseBestScore.bestExAt,
+      trophy: courseBestScore.bestTrophy,
+      trophyScoreId: courseBestScore.bestTrophyScoreId,
     })
     .from(courseBestScore)
     .innerJoin(user, eq(user.id, courseBestScore.userId))
     .innerJoin(profile, eq(profile.userId, courseBestScore.userId))
+    .innerJoin(
+      courseScoreResult,
+      and(
+        eq(courseScoreResult.courseScoreId, courseBestScore.bestExScoreId),
+        eq(courseScoreResult.ruleset, courseBestScore.ruleset),
+      ),
+    )
     .where(and(...filterConditions(filter)))
     .orderBy(desc(courseBestScore.bestEx), asc(courseBestScore.bestExAt), asc(profile.handle))
     .limit(page.limit)

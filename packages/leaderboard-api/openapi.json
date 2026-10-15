@@ -2165,12 +2165,16 @@
                               },
                               "missCount": {
                                 "type": "boolean"
+                              },
+                              "trophy": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
                               "exScore",
                               "lamp",
-                              "missCount"
+                              "missCount",
+                              "trophy"
                             ],
                             "description": "Which personal bests on the course this run improved."
                           }
@@ -2287,12 +2291,16 @@
                               },
                               "missCount": {
                                 "type": "boolean"
+                              },
+                              "trophy": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
                               "exScore",
                               "lamp",
-                              "missCount"
+                              "missCount",
+                              "trophy"
                             ],
                             "description": "Which personal bests on the course this run improved."
                           }
@@ -2658,6 +2666,10 @@
                               }
                             ]
                           },
+                          "trophyRank": {
+                            "type": "integer",
+                            "description": "Where the trophy stands in the run’s course definition, easiest first: 1 for the first, 0 for none."
+                          },
                           "gaugeType": {
                             "type": "string"
                           },
@@ -2674,6 +2686,65 @@
                               "type": "number"
                             },
                             "description": "Judgment counts over the stages played."
+                          },
+                          "stages": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "exScore": {
+                                      "type": "integer"
+                                    },
+                                    "noteCount": {
+                                      "type": "integer"
+                                    },
+                                    "missCount": {
+                                      "type": "integer",
+                                      "description": "BP, with the notes the stage never judged."
+                                    },
+                                    "maxCombo": {
+                                      "type": "integer"
+                                    },
+                                    "judges": {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      },
+                                      "description": "Judgment counts, with `fast` and `slow`."
+                                    },
+                                    "gaugeType": {
+                                      "type": "string"
+                                    },
+                                    "gaugeFinal": {
+                                      "type": "number",
+                                      "description": "Gauge the stage ended on, in percent."
+                                    },
+                                    "cleared": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "exScore",
+                                    "noteCount",
+                                    "missCount",
+                                    "maxCombo",
+                                    "judges",
+                                    "gaugeType",
+                                    "gaugeFinal",
+                                    "cleared"
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Each reached stage’s own figures, in order; null for runs stored before they were kept."
                           }
                         },
                         "required": [
@@ -2686,9 +2757,11 @@
                           "maxCombo",
                           "stagesPlayed",
                           "trophy",
+                          "trophyRank",
                           "gaugeType",
                           "gaugeFinal",
-                          "judges"
+                          "judges",
+                          "stages"
                         ]
                       }
                     }
@@ -2900,7 +2973,7 @@
           "Courses"
         ],
         "summary": "A course’s ranking",
-        "description": "Players by best course EX-Score under one ruleset, ranked like a chart; ties share a rank. `exScoreId` is the course run that set it.",
+        "description": "Players by best course EX-Score under one ruleset, ranked like a chart; ties share a rank. `exScoreId` is the course run that set it, and `trophy` the best trophy each player earned.",
         "responses": {
           "200": {
             "description": "A page of the ranking.",
@@ -2935,7 +3008,7 @@
                           },
                           "exScoreId": {
                             "type": "string",
-                            "description": "The score that set the best EX-Score."
+                            "description": "The course run that set the best EX-Score."
                           },
                           "clearLamp": {
                             "type": "integer",
@@ -2955,6 +3028,32 @@
                           "achievedAt": {
                             "type": "integer",
                             "description": "When the best EX-Score was set (epoch ms)."
+                          },
+                          "noteCount": {
+                            "type": "integer",
+                            "description": "Judgment notes of the course under this ruleset, the DJ LEVEL’s scale."
+                          },
+                          "trophy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The best trophy the player earned on the course, by name."
+                          },
+                          "trophyScoreId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The course run that earned it."
                           }
                         },
                         "required": [
@@ -2969,7 +3068,10 @@
                           "missCount",
                           "playCount",
                           "playedHere",
-                          "achievedAt"
+                          "achievedAt",
+                          "noteCount",
+                          "trophy",
+                          "trophyScoreId"
                         ]
                       }
                     },
@@ -3122,7 +3224,7 @@
           "Courses"
         ],
         "summary": "My rank on a course",
-        "description": "My best on the course and my rank among every player, anonymous ones included.",
+        "description": "My bests on the course (trophy included) and my rank among every player, anonymous ones included.",
         "responses": {
           "200": {
             "description": "My rank.",
@@ -3153,6 +3255,28 @@
                     },
                     "playCount": {
                       "type": "integer"
+                    },
+                    "trophy": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "My best trophy on the course, by name."
+                    },
+                    "trophyScoreId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The course run that earned it."
                     }
                   },
                   "required": [
@@ -3162,7 +3286,9 @@
                     "exScoreId",
                     "clearLamp",
                     "missCount",
-                    "playCount"
+                    "playCount",
+                    "trophy",
+                    "trophyScoreId"
                   ]
                 }
               }

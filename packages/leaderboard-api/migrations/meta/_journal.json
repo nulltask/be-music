@@ -71,6 +71,13 @@
       "when": 1792058437206,
       "tag": "0009_course_rankings",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792068007220,
+      "tag": "0010_course_trophies_and_stages",
+      "breakpoints": true
     }
   ]
 }
