@@ -4,10 +4,7 @@ import type { PlaylogCourseInfo, PlaylogRulesetResult } from '@be-music/player/p
 export interface CourseStageFigures {
   exScore: number;
   noteCount: number;
-  /**
-   * BP: BADs and POORs (and empty POORs, except under LR2, which does not count them), plus the notes the stage never
-   * judged (it failed before them).
-   */
+  /** BP: BADs, POORs and empty POORs, plus the notes the stage never judged (it failed before them). */
   missCount: number;
   maxCombo: number;
   /** Judgment counts, with `fast` and `slow`. */
@@ -25,11 +22,7 @@ export function toCourseStageFigures(result: PlaylogRulesetResult): CourseStageF
   return {
     exScore: result.exScore,
     noteCount: result.noteCount,
-    missCount:
-      judge.bad +
-      judge.poor +
-      (result.ruleset === 'lr2' ? 0 : judge.emptyPoor) +
-      Math.max(0, result.noteCount - judged),
+    missCount: judge.bad + judge.poor + judge.emptyPoor + Math.max(0, result.noteCount - judged),
     maxCombo: result.maxCombo,
     judges: { ...judge, fast: result.fast, slow: result.slow },
     gaugeType: result.gauge.type,

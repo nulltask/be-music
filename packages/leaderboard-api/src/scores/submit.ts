@@ -112,7 +112,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   const playedRuleset = input.playlog.play.judgeRuleset ?? 'lr2';
   const figures = simulated.map(({ ruleset, result }) => {
     const lamp = resolveClearLamp(result, ruleset);
-    const missCount = resolveMissCount(result, ruleset);
+    const missCount = resolveMissCount(result);
     const current = currentBests.get(ruleset);
     const update = mergeBestScores(current, { scoreId, playedAt: now, exScore: result.exScore, lamp, missCount });
     const playedHere = (current?.playedHere ?? false) || playedRuleset === ruleset;
