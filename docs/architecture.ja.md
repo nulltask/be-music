@@ -6,25 +6,26 @@
 
 be-music は譜面を 2 つの層で読みます。**Source 層**はファイルに何が書いてあるかを表し、**Resolved 層**はプレイヤーが何を演奏するかを表します。前者を後者に変える関数は `resolveChart` の 1 つだけで、フォーマットの既定値と de facto の読み方は、すべてこの関数か、この関数が呼ぶヘルパーで適用します。利用側は Resolved 層を読み、フォーマットを解釈し直しません。
 
-```text
- .bms / .bme / .pms / .bmson / .json
-            │  @be-music/parser (parseChart, parseBms, parseBmson)
-            ▼
- BeMusicJson ─────────────────────────────── Source 層 (@be-music/json)
-            │  drawRandomOutcomes(chart, random)  → RandomDraws      (@be-music/chart)
-            │  resolveBmsControlFlowWithDraws(chart, draws)          (@be-music/parser)
-            │    (ホスト: resolvePlayChart(chart) → { chart, randomDraws }, @be-music/player)
-            ▼
- 制御構文を解決した BeMusicJson
-            │  resolveChart(chart, { randomDraws, chartPath, playVariant, inferBmsLnTypeWhenMissing })
-            ▼
- ResolvedChart ───────────────────────────── Resolved 層 (@be-music/chart)
-            │
-            ├─ @be-music/player        エンジンの準備 (preparePlaybackChart)、ルールセットの事実、プレイログ
-            ├─ @be-music/audio-renderer renderJson
-            ├─ @be-music/player-tui     譜面一覧、プレビューの署名、BGA、UI worker
-            ├─ @be-music/player-web     ゲームプレイシーン、beatoraja の準備、音声プレビュー、曲コレクション
-            └─ @be-music/skin-sdk       曲の情報
+```mermaid
+flowchart TD
+  files[".bms / .bme / .pms / .bmson / .json"]
+  source["BeMusicJson<br/><i>Source 層 (@be-music/json)</i>"]
+  flat["制御構文を解決した BeMusicJson"]
+  resolved["ResolvedChart<br/><i>Resolved 層 (@be-music/chart)</i>"]
+  player["@be-music/player<br/>エンジンの準備 (preparePlaybackChart)、ルールセットの事実、プレイログ"]
+  renderer["@be-music/audio-renderer<br/>renderJson"]
+  tui["@be-music/player-tui<br/>譜面一覧、プレビューの署名、BGA、UI worker"]
+  web["@be-music/player-web<br/>ゲームプレイシーン、beatoraja の準備、音声プレビュー、曲コレクション"]
+  skin["@be-music/skin-sdk<br/>曲の情報"]
+
+  files -->|"@be-music/parser<br/>parseChart, parseBms, parseBmson"| source
+  source -->|"drawRandomOutcomes(chart, random) → RandomDraws (@be-music/chart)<br/>resolveBmsControlFlowWithDraws(chart, draws) (@be-music/parser)<br/>ホスト: resolvePlayChart(chart) → { chart, randomDraws } (@be-music/player)"| flat
+  flat -->|"resolveChart(chart, { randomDraws, chartPath, playVariant, inferBmsLnTypeWhenMissing })"| resolved
+  resolved --> player
+  resolved --> renderer
+  resolved --> tui
+  resolved --> web
+  resolved --> skin
 ```
 
 ## Source 層
@@ -97,22 +98,32 @@ be-music は譜面を 2 つの層で読みます。**Source 層**はファイル
 
 `@be-music/player` のエンジン（[`core/`](../packages/player/src/core)）は、決定的な判定コアと、その周りのドライバでできています。
 
-```text
-            時計 / キー入力 / 記録済みのプレイログ
-                          │
-   manual-play.ts ────────┼──────── auto-play.ts                 ドライバ
-                          ▼
-      step(state, input) → effects                               判定コア
-   judge-core.ts (+ judge-core-{types,score,advance,press}.ts)   (手動プレイ)
-   auto-judge-core.ts                                            (AUTO プレイ)
-                          │
-                          ▼
-   engine-effects.ts → 音声セッション、UI のバス、プレイログ、TUI なしのトレース
+```mermaid
+flowchart TD
+  inputs(["時計 / キー入力 / 記録済みのプレイログ"])
+  subgraph drivers["ドライバ"]
+    manual["manual-play.ts"]
+    auto["auto-play.ts"]
+  end
+  subgraph core["判定コア"]
+    judge["judge-core.ts<br/>(+ judge-core-{types,score,advance,press}.ts)<br/><i>手動プレイ</i>"]
+    autoJudge["auto-judge-core.ts<br/><i>AUTO プレイ</i>"]
+  end
+  effects["engine-effects.ts"]
+  host(["音声セッション、UI のバス、プレイログ、TUI なしのトレース"])
+
+  inputs --> manual
+  inputs --> auto
+  manual -->|"step(state, input)"| judge
+  auto -->|"step(state, input)"| autoJudge
+  judge -->|effects| effects
+  autoJudge -->|effects| effects
+  effects --> host
 ```
 
 - **判定コア**は、判定を決めるものすべてを明示的な状態オブジェクトに持ちます。ノートの選択、ルールセットの判定幅、ロングノートの保持と終端、HCN のゲージ増減、地雷、オートスクラッチ、見逃し、コンボ、スコア、ゲージです。`runJudgeCoreStep(state, input, emit)`（または effect を配列で返す `stepJudgeCore(state, input)`）は、譜面上の秒で時刻を付けた入力（`advance`、`press`、`hold`、`release`、`finish`）を 1 つ適用し、起きたことを effect として報告します。音の再生と停止、ゲージ・コンボ・ロングノートの変化、UI への合図、プレイログへの記録、トレースの行です。コアは時計を読まず、タイマーを設定せず、入出力もしません。そのため、同じ状態と同じ入力からは常に同じ effect が出ます。`auto-judge-core.ts` は AUTO プレイについて同じことをします。LR2 の負の BPM による反転は、譜面のデータ（`ResolvedChart.reversal` から得た `reversalSeconds`）としてコアに渡ります。反転より後では見逃しと地雷の処理を止め、押下と離鍵は入力自身の譜面時刻から求めた鏡映クロック `2R − now` で判定します。
 - **ドライバ**（`manualPlay`、`autoPlay`）は、時計、入力ランタイム、音声のスケジューリング、ポーズと HIGH-SPEED を受け持ち、コアの effect を `engine-effects.ts` を通してホストに伝えます。ライブのプレイでは、再生の時計からフレームごとと、キー入力のたびにコアを進めます。リプレイ（`PlayerOptions.replayInputs`）では、`advanceJudgeCoreReplay` がコアをある瞬間から次の瞬間へ進めます。進める先は、記録された各入力のマイクロ秒と、各時刻つき判定（LN の終点、見逃しの期限、AUTO SCRATCH のノート、地雷の判定。`nextTimedJudgmentUs` が求める）の 1 マイクロ秒後です。そのため、リプレイの判定はティックのタイミングや `speed` に左右されません。
-- **時刻つき判定**は、その整数マイクロ秒（playlog の時計）を時間が過ぎたときに確定します。同じ瞬間では、LN の終点、AUTO SCRATCH のノート、見逃し、地雷の順に、それぞれチャンネル順で確定します。見逃しは各ノートそれぞれの期限で判定します。playlog シミュレータも同じ判定を同じ順で扱うので、ゲージが上限・下限で頭打ちになる場合も、両者はゲージに同じ順で到達します。
+- **時刻つき判定**は、その整数マイクロ秒（playlog の時計）を時間が過ぎたときに確定します。同じ瞬間では、ロングノートの終点と保留していた離鍵、Hell Charge のゲージの刻み、AUTO SCRATCH のノート、見逃し、地雷の順に、それぞれチャンネル順で確定します。見逃しは各ノートそれぞれの期限で判定します。`finish` は残っている判定をすべて同じように進めてからプレイ終了時の規則を適用し、ESC での中断は判定が済んだ時点で止まります（playlog には `play.abortedAtUs` として記録します）。playlog シミュレータも同じ判定を同じ順で扱うので、ゲージが上限・下限で頭打ちになる場合も、両者はゲージに同じ順で到達します。
 - **共有する規則**：判定コアとプレイログのシミュレータ（`playlog/simulate.ts`）の両方が使う規則は、ルールセットに置いています。判定幅と分類（`ruleset/judge.ts`）、候補の選択（`ruleset/selection.ts`）、ゲージ（`ruleset/gauge.ts`）、ロングノートの規則（ルールセットが演奏するモード、見逃したチャージノート終端の POOR、LR2 の LN 始点の遅い BAD、マルチ BAD の絞り込み。`ruleset/long-note.ts`）です。シミュレータはマイクロ秒単位の独自のイベントキューを持つので、同じ入力列で両者が同じ判定になることは `playlog/equivalence.test.ts` が確かめます。
 - **ドライバ側のサービス**はドライバの横に置いています。`engine-preparation.ts`（演奏用の譜面の解決、読み込みの進捗、ランタイムの起動）、`engine-audio.ts`（組み込みの Node 用音声セッションとミックス）、`engine-clock.ts`、`engine-trace.ts`（TUI なしの出力）、`engine-types.ts`（公開する型）です。`engine.ts` は公開用の入口で、分割の前後で export は変わっていません。
 
