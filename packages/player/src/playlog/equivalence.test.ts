@@ -609,6 +609,29 @@ describe('engine / simulator equivalence', () => {
     expect(summary.emptyPoor).toBe(1);
   });
 
+  // AUTO SCRATCH clears a charge note's head at the head and its tail at the tail, as beatoraja's autoplay does, so a
+  // miss in between breaks the combo between them.
+  test.each(RULESETS)('%s: AUTO SCRATCH clears a charge note head and tail at their own times', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '16', position: [0, 1], value: '01' },
+      { measure: 3, channel: '16', position: [0, 1], value: 'AA' },
+      { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      { measure: 4, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    json.bms.lnMode = 2;
+    const inputs = [down(0, 4_000_000, '11'), up(1, 4_040_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { autoScratch: true });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.perfect).toBe(simulated.judge.pgreat);
+    expect(playlog.results?.native?.maxCombo).toBe(simulated.maxCombo);
+    if (ruleset === 'beatoraja') {
+      expect(simulated.maxCombo).toBe(2);
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 

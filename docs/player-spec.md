@@ -631,7 +631,7 @@ one `PGREAT` under LN styles, two (head and tail) under charge styles.
 ### AUTO SCRATCH
 
 `AUTO SCRATCH` is a mode that automatically processes only the scratch lane (`16` / `26`) on the manual loop.
-The confirmation timing of long note is the end point, same as `AUTO`.
+An LN-style long note scores its one `PGREAT` at the end point; a charge note scores its head's `PGREAT` at the start point and its tail's at the end point, as beatoraja's autoplay does. The scratch lanes are the play mode's (`scratch` lanes of the play-mode table), so channel `16` / `26` is an ordinary key in the 9 KEY BME-type layout and the keyboard modes.
 
 ## Behavior by mode
 

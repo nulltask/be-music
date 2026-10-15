@@ -110,6 +110,8 @@ interface SimNote {
   longStyle?: SimLongStyle;
   judged: boolean;
   holding: boolean;
+  /** AUTO: a charge note's head was cleared; its tail clears at the tail. */
+  autoHeadDone?: boolean;
   /** Miss-sweep deadline (input time past which the head can no longer be judged). */
   missDeadlineUs: number;
 }
@@ -349,9 +351,12 @@ class PlaylogSimulation {
         for (let index = lane.autoCursor; index < lane.notes.length; index += 1) {
           const note = lane.notes[index]!;
           if (note.timeUs >= untilUs) break;
-          // LN-style longs score once at the tail; everything else at the head. (Charge-style auto applies the
-          // head and tail PGREATs together at the head — a simplification that only shifts gauge gain earlier.)
-          const autoAt = note.isLong && note.longStyle === 1 ? note.endTimeUs! : note.timeUs;
+          // LN-style longs score once at the tail; a charge note scores its head at the head and its tail at the tail
+          // (beatoraja's autoplay); a tap at its time.
+          if (note.isLong && note.longStyle !== 1 && !note.autoHeadDone) {
+            events.push({ timeUs: note.timeUs, kind: 'auto', lane, note });
+          }
+          const autoAt = note.isLong ? note.endTimeUs! : note.timeUs;
           if (autoAt >= untilUs) continue;
           events.push({ timeUs: autoAt, kind: 'auto', lane, note });
         }
@@ -407,12 +412,13 @@ class PlaylogSimulation {
       if (event.kind === 'auto') {
         const note = event.note!;
         if (note.judged) continue;
+        if (note.isLong && note.longStyle !== 1 && !note.autoHeadDone) {
+          note.autoHeadDone = true;
+          this.applyJudge(JUDGE_PGREAT, undefined);
+          continue;
+        }
         note.judged = true;
         this.applyJudge(JUDGE_PGREAT, undefined);
-        if (note.isLong && note.longStyle !== 1) {
-          // Charge styles judge head and tail; auto play scores both as PGREAT.
-          this.applyJudge(JUDGE_PGREAT, undefined);
-        }
       } else if (event.kind === 'miss') {
         const note = event.note!;
         if (note.judged || note.holding) continue;
