@@ -2,6 +2,8 @@
 import { HelpTip } from './components/help-tip.tsx';
 import { openDatabase } from '../db/client.ts';
 import { RecentScoresList } from './components/lists.tsx';
+import { CourseRunsList } from './components/course-lists.tsx';
+import { loadRecentCourseRuns } from '../courses/runs.ts';
 import { Details, DistributionCard, JudgeTotalsCard, Stats } from './components/cards.tsx';
 import { Avatar, LocalTime, SectionHeading, Tag } from './components/basics.tsx';
 import { loadPlayer, loadRecentScores } from './data.ts';
@@ -33,7 +35,8 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
     return notFound(c, 'player');
   }
   const ruleset = displayRuleset(c);
-  const [stats, scores] = await Promise.all([
+  const owner = c.get('viewer')?.handle === player.handle ? { ownerUserId: c.get('viewer')!.userId } : {};
+  const [stats, scores, runs] = await Promise.all([
     loadPlayerStats(db, player.userId, ruleset),
     loadRecentScores(db, {
       limit: RECENT_LIMIT,
@@ -41,9 +44,11 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
       includeAnonymous: true,
       // Plays of charts not listed yet show only on the player's own page, to them.
       includeUnlisted: false,
-      ...(c.get('viewer')?.handle === player.handle ? { ownerUserId: c.get('viewer')!.userId } : {}),
+      ...owner,
       handle: player.handle,
     }),
+    // Their course runs, the hidden ones only to them.
+    loadRecentCourseRuns(db, { limit: RECENT_LIMIT, ruleset, includeAnonymous: true, ...owner, handle: player.handle }),
   ]);
   c.header('cache-control', PAGE_CACHE);
   const t = pageMessages(c);
@@ -120,6 +125,12 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
           empty={t.player.empty}
         />
       </section>
+      {runs.length > 0 ? (
+        <section class="space-y-3" aria-labelledby="latest-runs">
+          <SectionHeading id="latest-runs">{t.player.latestRuns}</SectionHeading>
+          <CourseRunsList runs={runs} showPlayer={false} empty="" />
+        </section>
+      ) : null}
     </Layout>,
   );
 }

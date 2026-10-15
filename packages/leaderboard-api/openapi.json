@@ -2165,12 +2165,16 @@
                               },
                               "missCount": {
                                 "type": "boolean"
+                              },
+                              "trophy": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
                               "exScore",
                               "lamp",
-                              "missCount"
+                              "missCount",
+                              "trophy"
                             ],
                             "description": "Which personal bests on the course this run improved."
                           }
@@ -2287,12 +2291,16 @@
                               },
                               "missCount": {
                                 "type": "boolean"
+                              },
+                              "trophy": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
                               "exScore",
                               "lamp",
-                              "missCount"
+                              "missCount",
+                              "trophy"
                             ],
                             "description": "Which personal bests on the course this run improved."
                           }
@@ -2529,6 +2537,228 @@
             }
           }
         }
+      },
+      "get": {
+        "operationId": "getCourseScores",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "The latest course runs",
+        "description": "Newest first, with their figures under one ruleset. Anonymous players’ runs come in with `anonymous`, or for one `player`; hidden runs are listed only to their own player.",
+        "responses": {
+          "200": {
+            "description": "The runs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "integer",
+                            "description": "When the run was accepted (epoch ms)."
+                          },
+                          "courseFingerprint": {
+                            "type": "string"
+                          },
+                          "courseName": {
+                            "type": "string"
+                          },
+                          "courseKind": {
+                            "enum": [
+                              "grade",
+                              "expert",
+                              "nonstop"
+                            ],
+                            "type": "string"
+                          },
+                          "stageCount": {
+                            "type": "integer",
+                            "description": "Stages of the course."
+                          },
+                          "handle": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "anonymous": {
+                            "type": "boolean"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          },
+                          "playedRuleset": {
+                            "enum": [
+                              "lr2",
+                              "beatoraja",
+                              "iidx"
+                            ],
+                            "type": "string",
+                            "description": "Ruleset the figures are simulated under."
+                          },
+                          "assisted": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean",
+                            "description": "Hidden by its player: listed only to the player."
+                          },
+                          "exScore": {
+                            "type": "integer"
+                          },
+                          "noteCount": {
+                            "type": "integer"
+                          },
+                          "clearLamp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Clear lamp: 0 NO PLAY, 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 CLEAR, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX."
+                          },
+                          "missCount": {
+                            "type": "integer"
+                          },
+                          "stagesPlayed": {
+                            "type": "integer",
+                            "description": "Stages reached under this ruleset."
+                          },
+                          "trophy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "description": "Where the run’s EX-Score stands among the other players’ bests on the course."
+                          },
+                          "players": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "createdAt",
+                          "courseFingerprint",
+                          "courseName",
+                          "courseKind",
+                          "stageCount",
+                          "handle",
+                          "displayName",
+                          "anonymous",
+                          "avatarUrl",
+                          "playedRuleset",
+                          "assisted",
+                          "hidden",
+                          "exScore",
+                          "noteCount",
+                          "clearLamp",
+                          "missCount",
+                          "stagesPlayed",
+                          "trophy",
+                          "rank",
+                          "players"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "runs"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ruleset",
+            "schema": {
+              "enum": [
+                "lr2",
+                "beatoraja",
+                "iidx"
+              ],
+              "type": "string"
+            },
+            "required": true,
+            "description": "Ruleset the figures are simulated under."
+          },
+          {
+            "in": "query",
+            "name": "player",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only this player’s runs, by handle; anonymous or not."
+          },
+          {
+            "in": "query",
+            "name": "anonymous",
+            "schema": {
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ],
+              "type": "string",
+              "default": "0"
+            },
+            "description": "Include anonymous players’ runs."
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": "50"
+            },
+            "description": "Runs to return."
+          }
+        ]
       }
     },
     "/course-scores/{id}": {
@@ -2658,6 +2888,10 @@
                               }
                             ]
                           },
+                          "trophyRank": {
+                            "type": "integer",
+                            "description": "Where the trophy stands in the run’s course definition, easiest first: 1 for the first, 0 for none."
+                          },
                           "gaugeType": {
                             "type": "string"
                           },
@@ -2674,6 +2908,65 @@
                               "type": "number"
                             },
                             "description": "Judgment counts over the stages played."
+                          },
+                          "stages": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "exScore": {
+                                      "type": "integer"
+                                    },
+                                    "noteCount": {
+                                      "type": "integer"
+                                    },
+                                    "missCount": {
+                                      "type": "integer",
+                                      "description": "BP, with the notes the stage never judged."
+                                    },
+                                    "maxCombo": {
+                                      "type": "integer"
+                                    },
+                                    "judges": {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      },
+                                      "description": "Judgment counts, with `fast` and `slow`."
+                                    },
+                                    "gaugeType": {
+                                      "type": "string"
+                                    },
+                                    "gaugeFinal": {
+                                      "type": "number",
+                                      "description": "Gauge the stage ended on, in percent."
+                                    },
+                                    "cleared": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "exScore",
+                                    "noteCount",
+                                    "missCount",
+                                    "maxCombo",
+                                    "judges",
+                                    "gaugeType",
+                                    "gaugeFinal",
+                                    "cleared"
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Each reached stage’s own figures, in order; null for runs stored before they were kept."
                           }
                         },
                         "required": [
@@ -2686,9 +2979,11 @@
                           "maxCombo",
                           "stagesPlayed",
                           "trophy",
+                          "trophyRank",
                           "gaugeType",
                           "gaugeFinal",
-                          "judges"
+                          "judges",
+                          "stages"
                         ]
                       }
                     }
@@ -2713,6 +3008,227 @@
           },
           "404": {
             "description": "The run does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patchCourseScoresById",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "Hide or show my course run",
+        "description": "A hidden run is kept, but leaves the course rankings, the personal bests, the figures and every list, and only its player can open it. The player’s bests on the course, the trophy best included, are rebuilt from the runs still shown.",
+        "responses": {
+          "200": {
+            "description": "The run’s visibility after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "hidden": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "hidden"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "data": {}
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Someone else ran it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-your-score"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The run does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hidden": {
+                    "type": "boolean",
+                    "description": "Hide the run (`true`): it leaves the course rankings, the personal bests, the figures and every list, and only its player can open it. `false` shows it again."
+                  }
+                },
+                "required": [
+                  "hidden"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/course-scores/{id}/playlog": {
+      "get": {
+        "operationId": "getCourseScoresByIdPlaylog",
+        "tags": [
+          "Courses"
+        ],
+        "summary": "A course run’s play log",
+        "description": "The stored course play log (`be-music-course-playlog`), gzip-compressed. Anyone can read a shown run’s; only its player a hidden one’s.",
+        "responses": {
+          "200": {
+            "description": "The course play log (docs/playlog.md).",
+            "content": {
+              "application/json": {}
+            }
+          },
+          "404": {
+            "description": "The run or its play log does not exist.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2827,13 +3343,25 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "laneMode": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Lane mode (`7keys`, `14keys`, ...), null while unknown."
                           }
                         },
                         "required": [
                           "chartFingerprint",
                           "title",
                           "artist",
-                          "playLevel"
+                          "playLevel",
+                          "laneMode"
                         ]
                       }
                     },
@@ -2900,7 +3428,7 @@
           "Courses"
         ],
         "summary": "A course’s ranking",
-        "description": "Players by best course EX-Score under one ruleset, ranked like a chart; ties share a rank. `exScoreId` is the course run that set it.",
+        "description": "Players by best course EX-Score under one ruleset, ranked like a chart; ties share a rank. `exScoreId` is the course run that set it, and `trophy` the best trophy each player earned.",
         "responses": {
           "200": {
             "description": "A page of the ranking.",
@@ -2935,7 +3463,7 @@
                           },
                           "exScoreId": {
                             "type": "string",
-                            "description": "The score that set the best EX-Score."
+                            "description": "The course run that set the best EX-Score."
                           },
                           "clearLamp": {
                             "type": "integer",
@@ -2955,6 +3483,32 @@
                           "achievedAt": {
                             "type": "integer",
                             "description": "When the best EX-Score was set (epoch ms)."
+                          },
+                          "noteCount": {
+                            "type": "integer",
+                            "description": "Judgment notes of the course under this ruleset, the DJ LEVEL’s scale."
+                          },
+                          "trophy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The best trophy the player earned on the course, by name."
+                          },
+                          "trophyScoreId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The course run that earned it."
                           }
                         },
                         "required": [
@@ -2969,7 +3523,10 @@
                           "missCount",
                           "playCount",
                           "playedHere",
-                          "achievedAt"
+                          "achievedAt",
+                          "noteCount",
+                          "trophy",
+                          "trophyScoreId"
                         ]
                       }
                     },
@@ -3122,7 +3679,7 @@
           "Courses"
         ],
         "summary": "My rank on a course",
-        "description": "My best on the course and my rank among every player, anonymous ones included.",
+        "description": "My bests on the course (trophy included) and my rank among every player, anonymous ones included.",
         "responses": {
           "200": {
             "description": "My rank.",
@@ -3153,6 +3710,28 @@
                     },
                     "playCount": {
                       "type": "integer"
+                    },
+                    "trophy": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "My best trophy on the course, by name."
+                    },
+                    "trophyScoreId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The course run that earned it."
                     }
                   },
                   "required": [
@@ -3162,7 +3741,9 @@
                     "exScoreId",
                     "clearLamp",
                     "missCount",
-                    "playCount"
+                    "playCount",
+                    "trophy",
+                    "trophyScoreId"
                   ]
                 }
               }

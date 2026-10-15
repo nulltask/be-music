@@ -3,21 +3,32 @@ import { describeRoute, resolver, validator } from 'hono-openapi';
 import { parseCoursePlaylog, PlaylogParseError, serializeCoursePlaylog } from '@be-music/player/playlog';
 import * as v from 'valibot';
 import type { AppEnv } from '../app.ts';
-import { loadCourseDetail, loadCourseScoreDetail, loadMyCourseRank } from '../courses/detail.ts';
+import {
+  loadCourseDetail,
+  loadCoursePlaylogAccess,
+  loadCourseScoreDetail,
+  loadMyCourseRank,
+} from '../courses/detail.ts';
 import { loadCourseRanking } from '../courses/ranking.ts';
+import { loadRecentCourseRuns } from '../courses/runs.ts';
 import { submitCourseScore } from '../courses/submit.ts';
+import { setCourseScoreHidden } from '../courses/visibility.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { isOn } from '../http/query.ts';
 import {
+  courseRankingResponse,
   courseResponse,
+  courseRunsQuery,
+  courseRunsResponse,
   courseScoreResponse,
   courseSubmissionBody,
   courseSubmissionResponse,
+  courseVisibilityBody,
   errorResponse,
+  myCourseRankResponse,
   myRankQuery,
-  myRankResponse,
   rankingQuery,
-  rankingResponse,
+  scoreVisibilityResponse,
 } from './schemas.ts';
 
 const json = (description: string, schema: Parameters<typeof resolver>[0]) => ({
@@ -52,8 +63,8 @@ const COURSE_REJECTIONS = [
 
 /**
  * The course routes of `/api/v0` (docs/leaderboard.md section 6.1): submitting a course run, a course, its ranking, my
- * rank on it, and one run. Mounted on the version's own router, so they share its session middleware and its OpenAPI
- * document.
+ * rank on it, the latest runs, one run, its play log, and hiding a run. Mounted on the version's own router, so they
+ * share its session middleware and its OpenAPI document.
  */
 export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number; newId: () => string }): void {
   const { now, newId } = options;
@@ -153,6 +164,84 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
   );
 
   v0.get(
+    '/course-scores',
+    describeRoute({
+      tags: ['Courses'],
+      summary: 'The latest course runs',
+      description:
+        'Newest first, with their figures under one ruleset. Anonymous players’ runs come in with `anonymous`, or for one `player`; hidden runs are listed only to their own player.',
+      responses: { 200: json('The runs.', courseRunsResponse) },
+    }),
+    validator('query', courseRunsQuery),
+    async (c) => {
+      const query = c.req.valid('query');
+      const userId = c.get('userId');
+      const runs = await loadRecentCourseRuns(c.get('db'), {
+        limit: query.limit,
+        ruleset: query.ruleset,
+        includeAnonymous: isOn(query.anonymous) || query.player !== undefined,
+        ...(userId !== undefined ? { ownerUserId: userId } : {}),
+        ...(query.player !== undefined ? { handle: query.player.toLowerCase() } : {}),
+      });
+      return c.json({ runs });
+    },
+  );
+
+  v0.get(
+    '/course-scores/:id/playlog',
+    describeRoute({
+      tags: ['Courses'],
+      summary: 'A course run’s play log',
+      description:
+        'The stored course play log (`be-music-course-playlog`), gzip-compressed. Anyone can read a shown run’s; only its player a hidden one’s.',
+      responses: {
+        200: { description: 'The course play log (docs/playlog.md).', content: { 'application/json': {} } },
+        404: notFound('The run or its play log'),
+      },
+    }),
+    async (c) => {
+      const access = await loadCoursePlaylogAccess(c.get('db'), c.req.param('id'), c.get('userId'));
+      if (access === undefined) return c.json({ error: 'not-found' }, 404);
+      const object = await c.env.BLOBS.get(access.key);
+      if (object === null) return c.json({ error: 'not-found' }, 404);
+      return new Response(object.body, {
+        headers: {
+          'content-type': 'application/json',
+          'content-encoding': 'gzip',
+          // As a play's log: a stored log never changes.
+          'cache-control': access.public ? 'public, max-age=31536000, immutable' : 'private',
+        },
+        encodeBody: 'manual',
+      });
+    },
+  );
+
+  v0.patch(
+    '/course-scores/:id',
+    describeRoute({
+      tags: ['Courses'],
+      summary: 'Hide or show my course run',
+      description:
+        'A hidden run is kept, but leaves the course rankings, the personal bests, the figures and every list, and only its player can open it. The player’s bests on the course, the trophy best included, are rebuilt from the runs still shown.',
+      responses: {
+        200: json('The run’s visibility after the change.', scoreVisibilityResponse),
+        401: signInRequired,
+        403: json('Someone else ran it.', errorResponse(['not-your-score'])),
+        404: notFound('The run'),
+      },
+    }),
+    validator('json', courseVisibilityBody),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      const id = c.req.param('id');
+      const result = await setCourseScoreHidden(c.get('db'), id, userId, c.req.valid('json').hidden, now());
+      if (!result.ok) return c.json({ error: result.error }, result.status);
+      return c.json({ id, hidden: result.hidden });
+    },
+  );
+
+  v0.get(
     '/courses/:courseFingerprint',
     describeRoute({
       tags: ['Courses'],
@@ -173,8 +262,8 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
       tags: ['Courses'],
       summary: 'A course’s ranking',
       description:
-        'Players by best course EX-Score under one ruleset, ranked like a chart; ties share a rank. `exScoreId` is the course run that set it.',
-      responses: { 200: json('A page of the ranking.', rankingResponse) },
+        'Players by best course EX-Score under one ruleset, ranked like a chart; ties share a rank. `exScoreId` is the course run that set it, and `trophy` the best trophy each player earned.',
+      responses: { 200: json('A page of the ranking.', courseRankingResponse) },
     }),
     validator('query', rankingQuery),
     async (c) => {
@@ -199,9 +288,9 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
     describeRoute({
       tags: ['Courses'],
       summary: 'My rank on a course',
-      description: 'My best on the course and my rank among every player, anonymous ones included.',
+      description: 'My bests on the course (trophy included) and my rank among every player, anonymous ones included.',
       responses: {
-        200: json('My rank.', myRankResponse),
+        200: json('My rank.', myCourseRankResponse),
         401: signInRequired,
         404: json('I have not run the course under these filters.', errorResponse(['not-played'])),
       },

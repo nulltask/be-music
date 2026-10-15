@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { RULESET_IDS } from '../rulesets.ts';
+import type { CourseStageFigures } from '../courses/figures.ts';
 import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 const timestamps = {
@@ -382,6 +383,9 @@ export const courseScore = sqliteTable(
   (table) => [
     index('course_score_user_course_idx').on(table.userId, table.courseFingerprint),
     index('course_score_course_created_idx').on(table.courseFingerprint, table.createdAt),
+    // The latest course runs, everyone's and one player's (`loadRecentCourseRuns`).
+    index('course_score_created_idx').on(table.createdAt, table.id),
+    index('course_score_user_created_idx').on(table.userId, table.createdAt),
   ],
 );
 
@@ -405,6 +409,13 @@ export const courseScoreResult = sqliteTable(
     stagesPlayed: integer('stages_played').notNull(),
     /** The best trophy the run earned, by name. */
     trophy: text('trophy'),
+    /**
+     * Where that trophy stands in the run's course definition, which lists its trophies easiest first: 1 for the first,
+     * 0 for none (`courseTrophyRank`). It orders the trophies of one course's runs for the trophy best.
+     */
+    trophyRank: integer('trophy_rank').notNull().default(0),
+    /** Each reached stage's own figures, in order (`CourseStageFigures`); null for runs stored before they were kept. */
+    stages: text('stages', { mode: 'json' }).$type<CourseStageFigures[]>(),
     gaugeType: text('gauge_type').notNull(),
     gaugeFinal: real('gauge_final').notNull(),
     judges: text('judges', { mode: 'json' }).$type<Record<string, number>>().notNull(),
@@ -431,6 +442,11 @@ export const courseBestScore = sqliteTable(
     bestLampScoreId: text('best_lamp_score_id').notNull(),
     minMiss: integer('min_miss').notNull(),
     minMissScoreId: text('min_miss_score_id').notNull(),
+    /** The best trophy, by name, and the run that earned it; null until a run earns one. */
+    bestTrophy: text('best_trophy'),
+    /** `course_score_result.trophy_rank` of the best trophy: 0 for none. */
+    bestTrophyRank: integer('best_trophy_rank').notNull().default(0),
+    bestTrophyScoreId: text('best_trophy_score_id'),
     playCount: integer('play_count').notNull(),
     /** Whether the player ran the course under this ruleset at least once. */
     playedHere: integer('played_here', { mode: 'boolean' }).notNull().default(false),
