@@ -166,6 +166,7 @@ import {
   type ResolvedPlayChart,
 } from '@be-music/player/core/engine';
 import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
+import { resolveResultViewJingles } from './result-jingles.ts';
 import {
   resolveCoursePlaylogFilename,
   serializeCoursePlaylog,
@@ -5366,10 +5367,17 @@ class PlayerWebDemoApp {
           : undefined;
     const sharedResultOptions = {
       collection: this.collection,
-      // The course result plays LR2's course jingles, falling back to the result ones.
-      clearBgm: (presentation.courseJingles ? this.courseClearBgmBytes : undefined) ?? this.clearBgmBytes,
-      failBgm: (presentation.courseJingles ? this.courseFailBgmBytes : undefined) ?? this.failBgmBytes,
-      resultBgm: this.resultBgmBytes,
+      // The active theme's jingles: a beatoraja theme's when its result falls back to this view (a NONSTOP course).
+      ...resolveResultViewJingles(resultFamily, presentation.courseJingles, {
+        lr2: {
+          clear: this.clearBgmBytes,
+          fail: this.failBgmBytes,
+          result: this.resultBgmBytes,
+          courseClear: this.courseClearBgmBytes,
+          courseFail: this.courseFailBgmBytes,
+        },
+        beatoraja: this.beatorajaThemeBgm,
+      }),
       onContinue: () => {
         if (courseStage && this.courseSession !== undefined) {
           // The next stage does not tear the result view down, and a live one would keep taking its clicks and keys
