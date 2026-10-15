@@ -20,11 +20,14 @@ export interface DebugMenuFolder {
 }
 
 /**
- * Every folder of the Debug Menu, top to bottom. Everyday folders start open; skin detail, the library tools, capture,
+ * Every folder of the Debug Menu, top to bottom. Everyday folders (play options, tempo, course) start open; skin detail,
+ * the library tools, capture,
  * the Leaderboard and the developer settings start closed. Nested folders sit under the folder named in their key.
  */
 export const DEBUG_MENU_FOLDERS = {
   playOptions: { title: 'Play options', open: true },
+  tempo: { title: 'Tempo', open: true },
+  course: { title: 'Course', open: true },
   skin: { title: 'Skin & display', open: false },
   beatorajaSkins: { title: 'Beatoraja skins', open: true },
   skinSettings: { title: 'Skin settings', open: true },

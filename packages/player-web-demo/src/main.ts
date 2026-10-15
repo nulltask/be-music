@@ -1279,9 +1279,11 @@ class PlayerWebDemoApp {
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open folder');
     gui.add(this.guiState, 'openFiles').name('Open files (ZIP / play log)');
-    // Folders in the order a session uses them: how to play, how it looks and sounds, the library, capturing a play,
-    // the Leaderboard, then the developer settings.
+    // Folders in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
+    // library, capturing a play, the Leaderboard, then the developer settings.
     this.buildPlayOptionsFolder(addFolder(gui, DEBUG_MENU_FOLDERS.playOptions));
+    this.buildTempoFolder(addFolder(gui, DEBUG_MENU_FOLDERS.tempo));
+    this.buildCourseFolder(addFolder(gui, DEBUG_MENU_FOLDERS.course));
     this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
     this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
     this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
@@ -1311,11 +1313,18 @@ class PlayerWebDemoApp {
    * edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). All of them are latched
    * at song start and DISABLED during a play — mid-song changes never apply.
    */
+  /**
+   * Options read when a play starts, which are disabled while one runs (`lockPlaylogOptionsForPlay`); returns the
+   * controller.
+   */
+  private trackPlayOption(controller: Controller): Controller {
+    this.playOptionControllers.push(controller);
+    return controller;
+  }
+
+  /** How the player plays: auto play, hi-speed, gauge, lane options and assists. */
   private buildPlayOptionsFolder(folder: GUI): void {
-    const trackPlayOption = (controller: Controller): Controller => {
-      this.playOptionControllers.push(controller);
-      return controller;
-    };
+    const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
     trackPlayOption(
       folder
         .add(this.guiState, 'autoPlay')
@@ -1331,43 +1340,6 @@ class PlayerWebDemoApp {
         .onChange((value: DemoGuiState['gauge']) => {
           this.selectView?.setPlayOptions({ gauge1P: value });
         }),
-    );
-    folder
-      .add(this.guiState, 'courseAutoAdvance')
-      .name('Course: skip stage results')
-      .onChange((value: boolean) => {
-        this.guiState.courseAutoAdvance = value;
-      });
-    folder.add({ open: () => this.courseMakerPanel?.openManager() }, 'open').name('Course: my courses…');
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
-        .name('Course: NONSTOP placement')
-        .onChange((value: DemoGuiState['nonstopPlacement']) => {
-          this.guiState.nonstopPlacement = value;
-        }),
-    );
-    // The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
-    // Read when a play starts, so they are disabled during one; a play at another tempo is practice (not ranked, no
-    // records).
-    const rememberTempo = () => storePlayTempoSettings(this.guiState);
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'tempoPercent', TEMPO_PERCENT_MIN, TEMPO_PERCENT_MAX, 1)
-        .name('Tempo (%)')
-        .onChange(rememberTempo),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'tempoPitchMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Keep pitch': 'keep-pitch' })
-        .name('Tempo: pitch')
-        .onChange(rememberTempo),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'tempoStretchAlgorithm', { 'Signalsmith Stretch': 'signalsmith', WSOLA: 'wsola' })
-        .name('Tempo: keep-pitch stretcher')
-        .onChange(rememberTempo),
     );
     trackPlayOption(
       folder
@@ -1415,13 +1387,72 @@ class PlayerWebDemoApp {
       .add(this.guiState, 'hiSpeed', HISPEED_MIN, HISPEED_MAX, HISPEED_STEP)
       .name('Hi-speed')
       .onChange((value: number) => this.rememberHiSpeed(value, 'menu'));
-    // Judge-window ruleset — no in-skin counterpart; the Debug Menu is its only surface. Window widths only (note
-    // selection / empty POOR / LN mechanics / gauge stay LR2-aligned — see docs/playlog.md).
+  }
+
+  /**
+   * The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
+   */
+  private buildTempoFolder(folder: GUI): void {
+    const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
+    // The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
+    // Read when a play starts, so they are disabled during one; a play at another tempo is practice (not ranked, no
+    // records).
+    const rememberTempo = () => storePlayTempoSettings(this.guiState);
     trackPlayOption(
       folder
-        .add(this.guiState, 'judgeRuleset', { LR2: 'lr2', beatoraja: 'beatoraja', IIDX: 'iidx' })
-        .name('Judge windows'),
+        .add(this.guiState, 'tempoPercent', TEMPO_PERCENT_MIN, TEMPO_PERCENT_MAX, 1)
+        .name('Tempo (%)')
+        .onChange(rememberTempo),
     );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'tempoPitchMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Keep pitch': 'keep-pitch' })
+        .name('Pitch')
+        .onChange(rememberTempo),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'tempoStretchAlgorithm', { 'Signalsmith Stretch': 'signalsmith', WSOLA: 'wsola' })
+        .name('Keep-pitch stretcher')
+        .onChange(rememberTempo),
+    );
+  }
+
+  /**
+   * Courses: whether stage results show, the player's own courses, the NONSTOP placement, and importing a difficulty
+   * table's courses from its URL (remembered and imported again on load).
+   */
+  private buildCourseFolder(folder: GUI): void {
+    const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
+    folder
+      .add(this.guiState, 'courseAutoAdvance')
+      .name('Skip stage results')
+      .onChange((value: boolean) => {
+        this.guiState.courseAutoAdvance = value;
+      });
+    folder.add({ open: () => this.courseMakerPanel?.openManager() }, 'open').name('My courses…');
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
+        .name('NONSTOP placement')
+        .onChange((value: DemoGuiState['nonstopPlacement']) => {
+          this.guiState.nonstopPlacement = value;
+        }),
+    );
+    // Courses from a difficulty table's page (or header JSON) URL; the URL is remembered and imported again on load.
+    const courseTable = {
+      url: '',
+      import: () => {
+        const url = normalizeCourseTableUrl(courseTable.url);
+        if (url === undefined) {
+          this.setStatus('Enter a difficulty-table URL first');
+          return;
+        }
+        void this.importCourseTables([url], true);
+      },
+    };
+    folder.add(courseTable, 'url').name('Table URL');
+    folder.add(courseTable, 'import').name('Import table courses');
   }
 
   /**
@@ -1623,20 +1654,6 @@ class PlayerWebDemoApp {
     library.add(urls, 'music').name('Music ZIP URL');
     if (EXTRA_SKINS_ENABLED) library.add(urls, 'skin').name('Skin ZIP URL');
     library.add(urls, 'load').name('Load from URLs');
-    // Courses from a difficulty table's page (or header JSON) URL; the URL is remembered and imported again on load.
-    const courseTable = {
-      url: '',
-      import: () => {
-        const url = normalizeCourseTableUrl(courseTable.url);
-        if (url === undefined) {
-          this.setStatus('Enter a difficulty-table URL first');
-          return;
-        }
-        void this.importCourseTables([url], true);
-      },
-    };
-    library.add(courseTable, 'url').name('Course table URL');
-    library.add(courseTable, 'import').name('Import courses');
     // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
     // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
     // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
@@ -1714,6 +1731,14 @@ class PlayerWebDemoApp {
 
   /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
   private buildDeveloperFolder(developer: GUI): void {
+    // Judge-window ruleset — no in-skin counterpart; the Debug Menu is its only surface. Window widths only (note
+    // selection / empty POOR / LN mechanics / gauge stay LR2-aligned — see docs/playlog.md).
+    this.trackPlayOption(
+      developer
+        .add(this.guiState, 'judgeRuleset', { LR2: 'lr2', beatoraja: 'beatoraja', IIDX: 'iidx' })
+        .name('Judge windows'),
+    );
+
     developer
       .add(this.guiState, 'autoPauseOnBlur')
       .name('Auto pause on blur')
