@@ -61,61 +61,40 @@ export interface CreatePlayerInputRuntimeContext {
   inputTokenToChannels: ReadonlyMap<string, readonly string[]>;
 }
 
-export interface PlayerOptions {
+/**
+ * Play settings: what decides the judgments and the score, or which chart / branch is played. Plain serializable
+ * values, and the set a play log has to carry to reproduce a play (see "Engine options by category" in
+ * docs/architecture.md for the ones it does not record yet). The engine does not read `auto`: the host picks
+ * `autoPlay` or `manualPlay`.
+ */
+export interface PlayerPlaySettings {
   auto?: boolean;
   autoScratch?: boolean;
-  inferBmsLnTypeWhenMissing?: boolean;
-  showInvisibleNotes?: boolean;
-  compressor?: boolean;
-  compressorThresholdDb?: number;
-  compressorRatio?: number;
-  compressorAttackMs?: number;
-  compressorReleaseMs?: number;
-  compressorMakeupDb?: number;
-  limiter?: boolean;
-  limiterCeilingDb?: number;
-  limiterReleaseMs?: number;
+  /**
+   * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
+   * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
+   * Defaults to `recordPlaylog.gauge`, then `'GROOVE'`. The play log records the gauge the play ran on.
+   */
+  gauge?: GrooveGaugeType;
+  /**
+   * Judge-window ruleset for manual play: `'lr2'` (default — the engine's LR2-aligned windows), `'beatoraja'`
+   * (SEVENKEYS windows scaled by beatoraja's judgerank), or `'iidx'` (fixed ±16.67/±33.33/±116.67/±250 ms).
+   * Only the WINDOW WIDTHS switch — note selection, empty-POOR, long-note mechanics, and the gauge stay on the
+   * engine's LR2-aligned semantics (the playlog simulators are the full per-ruleset reproduction). Dynamic
+   * `#EXRANKxx` changes are an LR2 concept and only apply under `'lr2'`. Recorded into the playlog
+   * (`play.judgeRuleset`) so replays re-apply the same windows.
+   */
+  judgeRuleset?: JudgeWindowRuleset;
+  /**
+   * The `#RANDOM` / `#SWITCH` outcomes of this play (`resolvePlayChart`, or `drawRandomOutcomes` from
+   * `@be-music/chart`). With a chart the host already resolved, these are the draws it was resolved with and only feed
+   * the RANDOM summary. With a chart that still carries `bms.controlFlow` (e.g. replaying a play log against the source
+   * chart), the engine resolves it exactly once with these draws. The engine never draws itself: a chart with control
+   * flow and no draws is rejected with a `TypeError`.
+   */
+  randomDraws?: RandomDraws;
   speed?: number;
-  uiFps?: number;
-  tuiVisibleNotesLimit?: number;
-  tuiNoteHeight?: TuiNoteHeight;
-  imageResizeAlgorithm?: ImageResizeAlgorithm;
-  highSpeed?: number;
-  judgeWindowMs?: number;
-  debugActiveAudio?: boolean;
-  leadInMs?: number;
-  audio?: boolean;
-  volume?: number;
-  bgmVolume?: number;
-  playVolume?: number;
-  audioBaseDir?: string;
-  /**
-   * Debug aid — synthesizes a short sine tone for `#WAVxx` references whose file is missing or fails to decode.
-   * The spec-compliant default is silence (LR2 / beatoraja play nothing for a broken keysound reference); enable
-   * this only in test rigs / chart debugging where hearing that a trigger fired matters.
-   */
-  missingSampleToneSeconds?: number;
-  audioTailSeconds?: number;
-  audioOffsetMs?: number;
-  audioHeadPaddingMs?: number;
-  audioLeadMs?: number;
-  audioLeadMaxMs?: number;
-  audioLeadStepUpMs?: number;
-  audioLeadStepDownMs?: number;
-  tui?: boolean;
-  videoBgaStreaming?: boolean;
-  signal?: AbortSignal;
-  /**
-   * Keeps a manual play open after its chart is over, so the player's keys still light the lanes (and the chart's
-   * remaining background sounds still play) while the host shows its outro. When the chart is over — every note judged
-   * and the judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then
-   * ends normally (its summary and play log as usual; aborting this signal is not an interrupt). Without it a play ends
-   * as soon as its chart is over. Auto play ignores it.
-   */
-  holdAfterChart?: { signal: AbortSignal; onSettled?: () => void };
-  onLoadProgress?: (progress: PlayerLoadProgress) => void;
-  onLoadComplete?: () => void;
-  onHighSpeedChange?: (highSpeed: number) => void;
+  inferBmsLnTypeWhenMissing?: boolean;
   /**
    * The chart file's extension (`.bms` / `.bme` / `.pms` / ...). Feeds the extension rules of the shared lane-mode rule
    * (`resolveChartPlayVariant` from `@be-music/chart`): `.pms` is 9 KEY. Every other extension leaves the decision to the
@@ -135,6 +114,13 @@ export interface PlayerOptions {
    * which long-note notation the chart uses.
    */
   playVariant?: ChartPlayVariant;
+}
+
+/**
+ * Play runtime: the host services the engine runs on — adapter factories, the abort signal, callbacks and
+ * output sinks, and the chart data a host prepared itself. Functions and live objects, never serialized.
+ */
+export interface PlayerPlayRuntime {
   /**
    * Pre-built playback chart data the host wants the engine to use verbatim instead of running its own
    * `preparePlaybackChartData` pass. When provided, the engine treats the supplied {@link PreparedPlaybackChartData}
@@ -174,21 +160,94 @@ export interface PlayerOptions {
    * through to the Node sink, which is what every existing TUI / test path already relies on.
    */
   createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
+  signal?: AbortSignal;
   /**
-   * The `#RANDOM` / `#SWITCH` outcomes of this play (`resolvePlayChart`, or `drawRandomOutcomes` from
-   * `@be-music/chart`). With a chart the host already resolved, these are the draws it was resolved with and only feed
-   * the RANDOM summary. With a chart that still carries `bms.controlFlow` (e.g. replaying a play log against the source
-   * chart), the engine resolves it exactly once with these draws. The engine never draws itself: a chart with control
-   * flow and no draws is rejected with a `TypeError`.
+   * Keeps a manual play open after its chart is over, so the player's keys still light the lanes (and the chart's
+   * remaining background sounds still play) while the host shows its outro. When the chart is over — every note judged
+   * and the judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then
+   * ends normally (its summary and play log as usual; aborting this signal is not an interrupt). Without it a play ends
+   * as soon as its chart is over. Auto play ignores it.
    */
-  randomDraws?: RandomDraws;
+  holdAfterChart?: { signal: AbortSignal; onSettled?: () => void };
+  audioBaseDir?: string;
+  onLoadProgress?: (progress: PlayerLoadProgress) => void;
+  onLoadComplete?: () => void;
+  onHighSpeedChange?: (highSpeed: number) => void;
   onResolvedChart?: (json: BeMusicJson) => void;
+  /**
+   * Called once, before playback starts, with the ruleset the play is judged under — after `judgeRuleset`,
+   * `judgeWindowMs`, and (for a replay) the recorded settings were applied. Lets a host show the windows the engine
+   * actually uses instead of re-deriving them. Under LR2 a mid-chart `#EXRANKxx` can narrow or widen the windows
+   * later; `windows` is the table in force at the start of the chart.
+   */
+  onRulesetResolved?: (info: PlayerRulesetInfo) => void;
   onLog?: (entry: LogEntry) => void;
   writeOutput?: (text: string) => void;
+}
+
+/**
+ * Play tuning: audio, latency and rendering knobs. They change how the play sounds and looks, never what is
+ * judged (`audioOffsetMs` moves the judge clock against live input, but recorded inputs are already on chart
+ * time). The engine does not read `tui` or `audioTailSeconds`.
+ */
+export interface PlayerPlayTuning {
+  audio?: boolean;
+  volume?: number;
+  bgmVolume?: number;
+  playVolume?: number;
+  compressor?: boolean;
+  compressorThresholdDb?: number;
+  compressorRatio?: number;
+  compressorAttackMs?: number;
+  compressorReleaseMs?: number;
+  compressorMakeupDb?: number;
+  limiter?: boolean;
+  limiterCeilingDb?: number;
+  limiterReleaseMs?: number;
+  leadInMs?: number;
+  audioOffsetMs?: number;
+  audioHeadPaddingMs?: number;
+  audioTailSeconds?: number;
+  audioLeadMs?: number;
+  audioLeadMaxMs?: number;
+  audioLeadStepUpMs?: number;
+  audioLeadStepDownMs?: number;
+  highSpeed?: number;
+  uiFps?: number;
+  tui?: boolean;
+  tuiVisibleNotesLimit?: number;
+  tuiNoteHeight?: TuiNoteHeight;
+  imageResizeAlgorithm?: ImageResizeAlgorithm;
+  videoBgaStreaming?: boolean;
+}
+
+/**
+ * Play debug: diagnostic overrides. `judgeWindowMs` changes the judgments (the play log records it as
+ * `play.judgeWindowOverrideMs`); the others only change what is shown or heard. The engine does not read
+ * `showInvisibleNotes`.
+ */
+export interface PlayerPlayDebug {
+  judgeWindowMs?: number;
+  debugActiveAudio?: boolean;
+  showInvisibleNotes?: boolean;
+  /**
+   * Debug aid — synthesizes a short sine tone for `#WAVxx` references whose file is missing or fails to decode.
+   * The spec-compliant default is silence (LR2 / beatoraja play nothing for a broken keysound reference); enable
+   * this only in test rigs / chart debugging where hearing that a trigger fired matters.
+   */
+  missingSampleToneSeconds?: number;
+}
+
+/**
+ * Play recording: play-log capture and replay. `recordPlaylog` declares the host-side settings the log records
+ * (`gauge`, `randomLane`, `dpFlip`, `native`) next to the chart identity, and `replayInputs` re-drives a
+ * recorded input stream.
+ */
+export interface PlayerPlayRecording {
   /**
    * Host-declared play settings merged into the recorded play-log (`randomLane`, `dpFlip`, `native`, ...). The engine
    * itself knows mode / auto-scratch / judge-window override; everything host-side (which lane shuffle produced
-   * `preparedChart`, ...) arrives through this bag. `gauge` here is a fallback for {@link gauge}: the play runs on, and
+   * `preparedChart`, ...) arrives through this bag. `gauge` here is a fallback for {@link PlayerPlaySettings.gauge}: the play runs on, and
    * the log records, one gauge. Only meaningful together with {@link onPlaylogRecorded}.
    */
   recordPlaylog?: PlaylogRecordingOptions;
@@ -202,21 +261,6 @@ export interface PlayerOptions {
    */
   onPlaylogRecorded?: (playlog: BeMusicPlaylog) => void;
   /**
-   * Judge-window ruleset for manual play: `'lr2'` (default — the engine's LR2-aligned windows), `'beatoraja'`
-   * (SEVENKEYS windows scaled by beatoraja's judgerank), or `'iidx'` (fixed ±16.67/±33.33/±116.67/±250 ms).
-   * Only the WINDOW WIDTHS switch — note selection, empty-POOR, long-note mechanics, and the gauge stay on the
-   * engine's LR2-aligned semantics (the playlog simulators are the full per-ruleset reproduction). Dynamic
-   * `#EXRANKxx` changes are an LR2 concept and only apply under `'lr2'`. Recorded into the playlog
-   * (`play.judgeRuleset`) so replays re-apply the same windows.
-   */
-  judgeRuleset?: JudgeWindowRuleset;
-  /**
-   * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
-   * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
-   * Defaults to `recordPlaylog.gauge`, then `'GROOVE'`. The play log records the gauge the play ran on.
-   */
-  gauge?: GrooveGaugeType;
-  /**
    * Replay playback: a recorded play-log input stream (`playlog.inputs`) `manualPlay` re-drives DETERMINISTICALLY.
    * Each event fires at its exact chart-relative microsecond timestamp (no wall-clock jitter — the judge timestamp
    * is the recorded one), so replaying a log against the same resolved chart reproduces the original judgments.
@@ -225,14 +269,14 @@ export interface PlayerOptions {
    * against (`preparedChart`, or a chart remapped to the log's note arrangement).
    */
   replayInputs?: readonly PlaylogInputEvent[];
-  /**
-   * Called once, before playback starts, with the ruleset the play is judged under — after `judgeRuleset`,
-   * `judgeWindowMs`, and (for a replay) the recorded settings were applied. Lets a host show the windows the engine
-   * actually uses instead of re-deriving them. Under LR2 a mid-chart `#EXRANKxx` can narrow or widen the windows
-   * later; `windows` is the table in force at the start of the chart.
-   */
-  onRulesetResolved?: (info: PlayerRulesetInfo) => void;
 }
+
+/**
+ * Options of `autoPlay` / `manualPlay`: the union of the five categories above. Every field belongs to exactly one
+ * of them (`engine-types.test.ts` enforces it), so a new option has to be classified when it is added.
+ */
+export interface PlayerOptions
+  extends PlayerPlaySettings, PlayerPlayRuntime, PlayerPlayTuning, PlayerPlayDebug, PlayerPlayRecording {}
 
 /** The judging setup a play resolved to; see {@link PlayerOptions.onRulesetResolved}. */
 export interface PlayerRulesetInfo {

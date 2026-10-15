@@ -127,6 +127,35 @@ flowchart TD
 - **共有する規則**：判定コアとプレイログのシミュレータ（`playlog/simulate.ts`）の両方が使う規則は、ルールセットに置いています。判定幅と分類（`ruleset/judge.ts`）、候補の選択（`ruleset/selection.ts`）、ゲージ（`ruleset/gauge.ts`）、ロングノートの規則（ルールセットが演奏するモード、見逃したチャージノート終端の POOR、LR2 の LN 始点の遅い BAD、マルチ BAD の絞り込み。`ruleset/long-note.ts`）です。シミュレータはマイクロ秒単位の独自のイベントキューを持つので、同じ入力列で両者が同じ判定になることは `playlog/equivalence.test.ts` が確かめます。
 - **ドライバ側のサービス**はドライバの横に置いています。`engine-preparation.ts`（演奏用の譜面の解決、読み込みの進捗、ランタイムの起動）、`engine-audio.ts`（組み込みの Node 用音声セッションとミックス）、`engine-clock.ts`、`engine-trace.ts`（TUI なしの出力）、`engine-types.ts`（公開する型）です。`engine.ts` は公開用の入口で、分割の前後で export は変わっていません。
 
+## エンジンのオプションの分類
+
+`PlayerOptions` は、[`engine-types.ts`](../packages/player/src/core/engine-types.ts) にある 5 つの分類の型を合わせたものです。どのフィールドもちょうど 1 つの分類に属し、そうでなければ `engine-types.test.ts` が型検査で失敗します。`PlayerPlaySettings` は、将来の `play(chart, settings, runtime)` API でシリアライズできる `settings` になり、プレイを再現するためにプレイログが記録すべき集合になる予定です。
+
+| 分類                                                                | フィールド                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PlayerPlaySettings`：判定・スコア・譜面を決める                    | `auto`、`autoScratch`、`gauge`、`judgeRuleset`、`randomDraws`、`speed`、`inferBmsLnTypeWhenMissing`、`laneModeExtension`、`playVariant`                                                                                                                                                                                                                                                                                                                                                             |
+| `PlayerPlayRuntime`：ホストのサービス、コールバック、実行中のデータ | `preparedChart`、`createUiRuntime`、`createInputRuntime`、`createAudioSession`、`signal`、`holdAfterChart`、`audioBaseDir`、`onLoadProgress`、`onLoadComplete`、`onHighSpeedChange`、`onResolvedChart`、`onRulesetResolved`、`onLog`、`writeOutput`                                                                                                                                                                                                                                                 |
+| `PlayerPlayTuning`：音声・遅延・描画の調整                          | `audio`、`volume`、`bgmVolume`、`playVolume`、`compressor`、`compressorThresholdDb`、`compressorRatio`、`compressorAttackMs`、`compressorReleaseMs`、`compressorMakeupDb`、`limiter`、`limiterCeilingDb`、`limiterReleaseMs`、`leadInMs`、`audioOffsetMs`、`audioHeadPaddingMs`、`audioTailSeconds`、`audioLeadMs`、`audioLeadMaxMs`、`audioLeadStepUpMs`、`audioLeadStepDownMs`、`highSpeed`、`uiFps`、`tui`、`tuiVisibleNotesLimit`、`tuiNoteHeight`、`imageResizeAlgorithm`、`videoBgaStreaming` |
+| `PlayerPlayDebug`：診断用の上書き                                   | `judgeWindowMs`（判定が変わる）、`debugActiveAudio`、`showInvisibleNotes`、`missingSampleToneSeconds`                                                                                                                                                                                                                                                                                                                                                                                               |
+| `PlayerPlayRecording`：プレイログの記録とリプレイ                   | `recordPlaylog`、`onPlaylogRecorded`、`replayInputs`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+分類が微妙なフィールド：
+
+- `auto`、`tui`、`audioTailSeconds`、`showInvisibleNotes` はエンジンが読みません。`autoPlay` と `manualPlay` のどちらを使うかはホストが選び、プレイログの `play.mode` はドライバから決まります。
+- `preparedChart` はレーンオプションを適用した後の譜面を運びます。これは設定ではなく譜面なので、将来の API では `chart` 引数に入ります。それまではランタイムの分類に置きます。
+- `audioBaseDir` はただの文字列ですが、ホストのファイルの場所を指すのでランタイムとして扱います。
+- `audioOffsetMs` はライブの押下に対して判定の時計をずらすので、ライブの判定を動かすことがあります。記録される入力はすでに譜面時刻なので、リプレイには必要ありません。
+- `highSpeed` はスクロールだけを変えます。それでもホストはログの `play.native` に残せます。
+- `recordPlaylog` は、設定である `gauge`、`randomLane`、`dpFlip`、`native` を、譜面の識別情報（`chartSha256`、`chartMd5`、`sourceChart`、`recorder`）と一緒に宣言します。
+
+プレイログ（[`playlog/format.ts`](../packages/player/src/playlog/format.ts) の `PlaylogPlay`）が記録していないもの：
+
+- `speed` は記録されません。離鍵イベントのない入力（kitty キーボードプロトコルのない端末）はロングノートの保持猶予を再生の時計（譜面の 1 秒あたり `1000 / speed` ms）で数えますが、リプレイには離鍵イベントがあるので猶予を使いません。そのため、そうした入力で 1.0 以外の速度で遊んだプレイは、リプレイで判定が変わることがあります。
+- `inferBmsLnTypeWhenMissing` は記録されません。`chart.notes` はこれが作ったロングノートを持ちますが、元の譜面に対してリプレイするには同じフラグが必要です。
+- `laneModeExtension` と `playVariant` は、結果の `chart.laneMode` と、フィンガープリントのレーンモードの入力としてしか記録されません。元の譜面に対してリプレイするには、同じレーンモードと、beatoraja ではモードごとの同じ判定幅を得るためにこれらが必要です。
+
+対応するオプションがないプレイログのフィールド：`play.mode`（ドライバ）、`play.randomLane` と `play.dpFlip`（ホストのレーンオプション。`preparedChart` で適用し、`recordPlaylog` で宣言します）、`play.native`、`play.aborted` / `play.abortedAtUs`（結果）。
+
 ## 層の規則とサイズの上限
 
 `pnpm run check` は、フォーマット・lint・型のほかに、構造に関する次の規則を検査します。
