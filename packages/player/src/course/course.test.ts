@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
+import { createEmptyJson } from '@be-music/json';
 import {
+  applyCourseLongNoteConstraint,
   courseConstraintGroup,
   createCourseStageRef,
   decodeCourseText,
@@ -293,5 +295,23 @@ describe('resolveCourseStages', () => {
     expect(resolved.stages.map((stage) => stage.chart)).toEqual(['chart S', 'chart A', undefined]);
     expect(resolved.playable).toBe(false);
     expect(resolveCourseStages({ ...course, stages: course.stages.slice(0, 2) }, lookup).playable).toBe(true);
+  });
+});
+
+describe('applyCourseLongNoteConstraint', () => {
+  test('sets the mode only on charts that leave it undefined', () => {
+    const bms = createEmptyJson('bms');
+    expect(
+      applyCourseLongNoteConstraint(bms, ['hcn']).sourceFormat === 'bms' && applyCourseLongNoteConstraint(bms, ['hcn']),
+    ).toMatchObject({
+      bms: { lnMode: 3 },
+    });
+    expect(bms.bms.lnMode).toBeUndefined();
+    const declared = createEmptyJson('bms');
+    declared.bms.lnMode = 1;
+    expect(applyCourseLongNoteConstraint(declared, ['cn'])).toBe(declared);
+    expect(applyCourseLongNoteConstraint(bms, ['grade'])).toBe(bms);
+    const bmson = createEmptyJson('bmson');
+    expect(applyCourseLongNoteConstraint(bmson, ['cn'])).toMatchObject({ bmson: { info: { lnType: 2 } } });
   });
 });
