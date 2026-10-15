@@ -23,6 +23,7 @@ import {
   HISPEED_MIN,
   HISPEED_STEP,
   snapHiSpeed,
+  beatorajaClearLampOp,
   type BeatorajaSelectSystemSoundPaths,
   type PixiGameplayResultData,
   type PixiPlayOptions,
@@ -126,7 +127,6 @@ import {
   buildDefaultSkinConfigFiles,
   buildDefaultSkinConfigOptions,
   bundleBeatorajaSources,
-  computeClearLampOp,
   expandBeatorajaWildcard,
   loadBeatorajaSkin,
   normalizeBeatorajaFonts,
@@ -140,8 +140,11 @@ import {
   isCourseRunAtAnotherTempo,
   mergeSongRecord,
   readStoredSongRecords,
+  playRecordKey,
   songRecordKey,
   songRecordPlayFromResult,
+  songRecordPlayFromSummary,
+  type SongRecordPlay,
   storeSongRecords,
 } from './song-records.ts';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
@@ -532,16 +535,6 @@ class PlayerWebDemoApp {
    * preview clips and navigation cues).
    */
   private beatorajaSelectBgmPath: string | undefined;
-  /**
-   * In-session per-song clear-lamp memory (audit 2.18). Keyed by `BrowserSongEntry.id` so
-   * each completed run updates the lamp the next time the user lands on that song in the
-   * select list. We don't persist across page reloads (no score DB on the web port today),
-   * but within a session the lamp icons gradually populate as the user plays charts.
-   *
-   * Stored as the resolved `BEATORAJA_OP.CLEAR_LAMP_*` op rather than a domain enum so the
-   * select scene's lookup stays a single map read with no per-frame translation.
-   */
-  private readonly beatorajaSessionLampOps = new Map<string, number>();
   /**
    * Loop-playable BGM bytes for the song-select scene (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
    * Forwarded to `PixiSongSelectView` via the constructor option on first mount and via `setSelectBgm` on subsequent
@@ -2537,9 +2530,16 @@ class PlayerWebDemoApp {
     return this.songRecords.get(songRecordKey(song, hashes?.sha256));
   }
 
+  /** Records the running play's result under its chart, when the play counts ({@link playRecordKey}). */
+  private recordActivePlay(play: SongRecordPlay): void {
+    if (this.activePlayRecordKey === undefined) return;
+    this.recordSongResult(this.activePlayRecordKey, play);
+    this.activePlayRecordKey = undefined;
+  }
+
   /** Folds a finished play into its chart's best record and persists the records. */
-  private recordSongResult(key: string, data: PixiGameplayResultData): void {
-    this.songRecords.set(key, mergeSongRecord(this.songRecords.get(key), songRecordPlayFromResult(data)));
+  private recordSongResult(key: string, play: SongRecordPlay): void {
+    this.songRecords.set(key, mergeSongRecord(this.songRecords.get(key), play));
     storeSongRecords(this.songRecords);
   }
 
@@ -3305,6 +3305,13 @@ class PlayerWebDemoApp {
     // 4. Mount the gameplay view.
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay } };
+    // The same record rule as the LR2 / default play (`playRecordKey`).
+    this.activePlayRecordKey = playRecordKey(song, chartHashes?.sha256, {
+      autoPlay,
+      replay: false,
+      course: courseStage !== undefined,
+      tempo,
+    });
     // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
     let givingUp = false;
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
@@ -3406,6 +3413,7 @@ class PlayerWebDemoApp {
             this.unlockPlaylogOptions();
             return;
           }
+          this.recordActivePlay(songRecordPlayFromSummary(summary, maxCombo));
           const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
           if (!mounted) await this.showSelect();
           // Auto-save fires even when the theme ships no result skin — falling back to select
@@ -3608,10 +3616,12 @@ class PlayerWebDemoApp {
       // a single AudioContext mixes them down. The scene starts the loop on enter and stops
       // it on exit; transitioning into decide / play tears it down cleanly.
       selectBgmPath: this.beatorajaSelectBgmPath,
-      // In-session lamp lookup — completed runs in this session light the focused song bar's
-      // lamp icon. Without this every bar reported as `CLEAR_LAMP_NOPLAY` regardless of how
-      // many times the user cleared the chart in the same session (audit 2.18).
-      resolveSongLampOp: (song) => this.beatorajaSessionLampOps.get(song.id),
+      // The bar's lamp comes from the persisted records every family writes (`lookupSongRecord`), lit through the
+      // same lamp rule the other families' selects show.
+      resolveSongLampOp: (song) => {
+        const record = this.lookupSongRecord(song);
+        return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
+      },
       // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
       // `-101 BACKBMP` / `-102 BANNER`). The scene calls this on every focus change and
       // caches by song-id; default beatoraja's select.json paints `-102 BANNER` as the
@@ -4001,26 +4011,6 @@ class PlayerWebDemoApp {
     if (bundle === undefined) return false;
     // The course result (`course.result`) shows on the theme's COURSE_RESULT skin, falling back to its result skin.
     const courseResult = course?.result === true;
-
-    // Stash the run's clear-lamp into the in-session map (audit 2.18) so the next time the
-    // user lands on this song in the select scene the bar's lamp icon lights up. Cleared
-    // runs replace any previous lamp; a failed retry of a previously-cleared chart should
-    // not downgrade the lamp.
-    const newLamp = computeClearLampOp({
-      cleared: summary.gauge?.cleared ?? false,
-      perfect: summary.perfect,
-      great: summary.great,
-      good: summary.good,
-      bad: summary.bad,
-      poor: summary.poor,
-      total: summary.total,
-      gaugeType: summary.gauge?.type,
-    });
-    const previousLamp = this.beatorajaSessionLampOps.get(song.id);
-    // A course's results count for the course, not for the single chart.
-    if (course === undefined && (newLamp !== BEATORAJA_OP.CLEAR_LAMP_FAILED || previousLamp === undefined)) {
-      this.beatorajaSessionLampOps.set(song.id, newLamp);
-    }
 
     // Same fix as decide — fall back to the discovery's `theme.resultSkin` rather than
     // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default
@@ -4871,10 +4861,12 @@ class PlayerWebDemoApp {
     // course instead.
     // A play at another tempo is practice: it is not ranked, and leaves the records alone too.
     const tempo = replay !== undefined ? (replay.play.tempo ?? 1) : tempoFromPercent(this.guiState.tempoPercent);
-    this.activePlayRecordKey =
-      autoPlay || replay !== undefined || courseStage !== undefined || nonstop !== undefined || tempo !== 1
-        ? undefined
-        : songRecordKey(song, overrides.chartHashes?.sha256);
+    this.activePlayRecordKey = playRecordKey(song, overrides.chartHashes?.sha256, {
+      autoPlay,
+      replay: replay !== undefined,
+      course: courseStage !== undefined || nonstop !== undefined,
+      tempo,
+    });
     // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...), a
     // NONSTOP course's stitched play included.
     const courseLane = (picked: typeof this.guiState.random1P): typeof this.guiState.random1P =>
@@ -5207,10 +5199,7 @@ class PlayerWebDemoApp {
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
     this.setStatus(`Result: ${data.song.title}`);
-    if (this.activePlayRecordKey !== undefined) {
-      this.recordSongResult(this.activePlayRecordKey, data);
-      this.activePlayRecordKey = undefined;
-    }
+    this.recordActivePlay(songRecordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one.
     if (mode.course === undefined && !courseStage) {
       this.maybeAutoSavePlaylog(data.playlog);
