@@ -93,6 +93,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.resolvePlayChart(fixtures.controlFlowJson, { random: () => 0.42 });
     },
   });
+  define('player.playlog.resolveChartRulesetFacts', {
+    run: (fixtures) => {
+      playlogApi.resolveChartRulesetFacts(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.playlog.resolvePlayChart', {
+    run: (fixtures) => {
+      playlogApi.resolvePlayChart(fixtures.controlFlowJson, { random: () => 0.42 });
+    },
+  });
   define('player.preparePlaybackChartData', {
     run: (fixtures) => {
       playerApi.preparePlaybackChartData(
@@ -228,6 +238,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.course.stitchNonstopCourse', {
     run: () => {
       courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
+    },
+  });
+  define('player.course.applyCourseLongNoteConstraint', {
+    run: () => {
+      courseApi.applyCourseLongNoteConstraint(benchNonstopChart, ['cn']);
     },
   });
   const benchStitched = courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
@@ -416,6 +431,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.course.parseTableHeaderCourses', {
     run: () => {
       courseApi.parseTableHeaderCourses(benchTableHeader);
+    },
+  });
+  const benchTablePageUrl = 'https://example.com/table/table.html';
+  const benchTablePage = `<html><head><meta charset="utf-8"><meta content="header.json" name="bmstable"></head></html>`;
+  const benchTableHeaderText = JSON.stringify({ name: 'Bench table', ...benchTableHeader });
+  // A stub instead of the network: benchmarks must not fetch.
+  const benchTableFetch = async (url: string): Promise<string> =>
+    url === benchTablePageUrl ? benchTablePage : benchTableHeaderText;
+  define('player.course.resolveTableHeaderUrl', {
+    run: () => {
+      courseApi.resolveTableHeaderUrl(benchTablePageUrl, benchTablePage);
+    },
+  });
+  define('player.course.fetchTableHeaderCourses', {
+    run: async () => {
+      await courseApi.fetchTableHeaderCourses(benchTablePageUrl, benchTableFetch);
     },
   });
   define('player.course.resolveCourseStages', {

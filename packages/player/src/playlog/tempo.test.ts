@@ -73,6 +73,24 @@ describe('play tempo', () => {
     expect(summary!.perfect + summary!.great).toBeGreaterThan(0);
   }, 20_000);
 
+  test('a replay records no tempo: its speed only sets how fast it is re-driven', async () => {
+    const live = await playAt(1, [tap(500), escape(1200)]);
+    let replayed: BeMusicPlaylog | undefined;
+    await manualPlay(chart(), {
+      speed: 8,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: () => undefined,
+      replayInputs: live.playlog.inputs,
+      recordPlaylog: {},
+      onPlaylogRecorded: (recorded) => {
+        replayed = recorded;
+      },
+    });
+    expect(replayed?.play).not.toHaveProperty('tempo');
+  });
+
   test('a play at tempo 1 records no tempo', async () => {
     const { playlog } = await playAt(1, [escape(100)]);
     expect(playlog.play).not.toHaveProperty('tempo');

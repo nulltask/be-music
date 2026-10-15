@@ -25,7 +25,9 @@ import { identifyPlay, type SubmissionDeps } from '../scores/submit.ts';
 import { mergeBestScores } from '../scoring/best.ts';
 import { toCourseClearLamp, type ClearLamp } from '../scoring/lamp.ts';
 import { loadCourseBestScores, toCourseBestScoreRow } from './bests.ts';
+import { courseTrophyRank, mergeCourseTrophy, toCourseStageFigures } from './figures.ts';
 import { countCoursePlayers, rankOfCourseExScore } from './ranking.ts';
+import { checkNonstopStageCharts, checkUnreachedStageCharts, type StageChartInput } from './stage-charts.ts';
 import { checkCourseRun, resolveCoursePlayedRuleset } from './verify.ts';
 
 /** The fingerprint documents of one played stage, in the order the stages were played. */
@@ -39,8 +41,10 @@ export interface CourseSubmissionInput {
   courseLog: BeMusicCoursePlaylog;
   /** The course play log as stored (canonical JSON text). */
   courseLogText: string;
-  /** One entry per played stage. */
+  /** One entry per played stage; none for a NONSTOP run, whose stages are rebuilt from {@link stageCharts}. */
   stages: readonly CourseStageDocuments[];
+  /** The charts of the stages the server rebuilds: every unreached stage, and every stage of a NONSTOP run. */
+  stageCharts?: readonly StageChartInput[];
   submittedBy?: string;
 }
 
@@ -56,7 +60,7 @@ export interface CourseRulesetOutcome {
   trophy: string | null;
   rank: number;
   players: number;
-  improved: { exScore: boolean; lamp: boolean; missCount: boolean };
+  improved: { exScore: boolean; lamp: boolean; missCount: boolean; trophy: boolean };
 }
 
 export type CourseSubmissionOutcome =
@@ -70,10 +74,12 @@ export type CourseSubmissionOutcome =
 
 /**
  * Accepts one course run (docs/leaderboard.md section 6.1). Each played stage passes the checks a single play does
- * (eligibility, fingerprint documents, chart registration), the run is re-simulated under every ruleset with
- * `simulateCoursePlaylog`, and `checkCourseRun` refuses runs whose stages do not follow from each other or that were
- * given up. A course run creates no chart scores. Rejections never write anything; the course play log goes to R2
- * before the D1 batch, as for single plays.
+ * (eligibility, fingerprint documents, chart registration), each unreached stage's chart backs up its facts
+ * (`checkUnreachedStageCharts`), the run is re-simulated under every ruleset with `simulateCoursePlaylog`, and
+ * `checkCourseRun` refuses runs whose stages do not follow from each other or that were given up. A NONSTOP run is
+ * verified on its stitched play instead: the server stitches the stage charts again (`checkNonstopStageCharts`) and the
+ * play must have been recorded on that chart. A course run creates no chart scores. Rejections never write anything;
+ * the course play log goes to R2 before the D1 batch, as for single plays.
  */
 export async function submitCourseScore(
   deps: SubmissionDeps,
@@ -88,11 +94,17 @@ export async function submitCourseScore(
   const { courseFingerprint, assistFlags } = eligibility;
   const assisted = assistFlags.length > 0;
   const playedLogs = courseLog.stages.flatMap((entry) => (entry.played ? [entry.playlog] : []));
-  if (input.stages.length !== playedLogs.length) {
+  const nonstop =
+    courseLog.nonstop !== undefined && eligibility.nonstop !== undefined ? eligibility.nonstop : undefined;
+  if (input.stages.length !== (nonstop !== undefined ? 0 : playedLogs.length)) {
     return { status: 'rejected', httpStatus: 400, reason: 'invalid-submission' };
   }
 
-  const submissionId = await sha256Hex(identifyCourseRun(courseFingerprint, playedLogs, eligibility.stages));
+  const submissionId = await sha256Hex(
+    nonstop !== undefined
+      ? identifyNonstopRun(courseFingerprint, courseLog.nonstop!.playlog, nonstop.playFingerprint)
+      : identifyCourseRun(courseFingerprint, playedLogs, eligibility.stages),
+  );
   const existing = await db.query.courseScore.findFirst({ where: eq(courseScore.submissionId, submissionId) });
   if (existing !== undefined && existing.userId !== input.userId) {
     return { status: 'rejected', httpStatus: 409, reason: 'play-already-submitted' };
@@ -118,6 +130,15 @@ export async function submitCourseScore(
   if (playedRuleset === undefined) {
     return { status: 'rejected', httpStatus: 422, reason: 'course-ruleset-mismatch' };
   }
+  const stageCharts = input.stageCharts ?? [];
+  const charts =
+    nonstop !== undefined
+      ? checkNonstopStageCharts(courseLog, stageCharts, {
+          playFingerprint: nonstop.playFingerprint,
+          ruleset: playedRuleset,
+        })
+      : checkUnreachedStageCharts(courseLog, stageCharts);
+  if (!charts.ok) return { status: 'rejected', httpStatus: 422, reason: charts.reason, ...stageOf(charts.stage) };
   const simulated = new Map<PlaylogRulesetId, PlaylogCourseResult>(
     RULESET_IDS.map((ruleset) => [ruleset, simulateCoursePlaylog(courseLog, { ruleset })]),
   );
@@ -148,13 +169,24 @@ export async function submitCourseScore(
       lamp,
       missCount: result.missCount,
     });
+    const trophyRank = courseTrophyRank(courseLog.course.trophies, result.trophy);
+    const trophy = mergeCourseTrophy(current?.trophy, {
+      scoreId: courseScoreId,
+      trophy: result.trophy ?? null,
+      rank: trophyRank,
+    });
     const playedHere = (current?.playedHere ?? false) || playedRuleset === ruleset;
-    return { ruleset, result, lamp, update, playedHere };
+    return { ruleset, result, lamp, update, trophyRank, trophy, playedHere };
   });
 
-  const lastPlayed = playedLogs.at(-1)!;
+  // A NONSTOP run's gauge is its stitched play's.
+  const lastPlayed = courseLog.nonstop?.playlog ?? playedLogs.at(-1)!;
   const statements: BatchItem<'sqlite'>[] = [
-    ...playedLogs.flatMap((playlog, index) => playedChartStatements(db, playlog, playedCharts[index]!, now)),
+    // A NONSTOP run registers no stage charts: its cut-out stages carry the stitched play's judge rank and TOTAL, not
+    // their charts' own.
+    ...(nonstop !== undefined
+      ? []
+      : playedLogs.flatMap((playlog, index) => playedChartStatements(db, playlog, playedCharts[index]!, now))),
     db
       .insert(course)
       .values({
@@ -179,6 +211,7 @@ export async function submitCourseScore(
       gauge: lastPlayed.play.gauge,
       assisted,
       assistFlags,
+      // A NONSTOP run's charts were all rebuilt here from the stage charts, which hash to their chart fingerprints.
       verification: playedCharts.every((played) => played.verification === 'L4') ? 'L4' : 'L3',
       stagesPlayed: playedLogs.length,
       recordedBy: courseLog.recorder !== undefined ? { ...courseLog.recorder } : null,
@@ -188,7 +221,7 @@ export async function submitCourseScore(
       createdAt: new Date(now),
       updatedAt: new Date(now),
     }),
-    ...figures.map(({ ruleset, result, lamp }) =>
+    ...figures.map(({ ruleset, result, lamp, trophyRank }) =>
       db.insert(courseScoreResult).values({
         courseScoreId,
         ruleset,
@@ -200,15 +233,18 @@ export async function submitCourseScore(
         maxCombo: result.maxCombo,
         stagesPlayed: result.stagesPlayed,
         trophy: result.trophy ?? null,
+        trophyRank,
+        stages: result.stages.map(toCourseStageFigures),
         gaugeType: result.gauge.type,
         gaugeFinal: result.gauge.final,
         judges: { ...result.judge, fast: result.fast, slow: result.slow },
       }),
     ),
-    ...figures.map(({ ruleset, update, playedHere }) => {
+    ...figures.map(({ ruleset, update, trophy, playedHere }) => {
       const row = toCourseBestScoreRow(
         { userId: input.userId, courseFingerprint, ruleset, assisted },
         update.next,
+        trophy.next,
         playedHere,
         now,
       );
@@ -229,7 +265,7 @@ export async function submitCourseScore(
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 
   const results = await Promise.all(
-    figures.map(async ({ ruleset, result, lamp, update }): Promise<CourseRulesetOutcome> => {
+    figures.map(async ({ ruleset, result, lamp, update, trophy }): Promise<CourseRulesetOutcome> => {
       const filter = { courseFingerprint, ruleset, assisted, includeAnonymous: true, playedHereOnly: false };
       const [rank, players] = await Promise.all([
         rankOfCourseExScore(db, filter, update.next.bestEx),
@@ -247,7 +283,7 @@ export async function submitCourseScore(
         trophy: result.trophy ?? null,
         rank,
         players,
-        improved: update.improved,
+        improved: { ...update.improved, trophy: trophy.improved },
       };
     }),
   );
@@ -267,6 +303,15 @@ export function identifyCourseRun(
     courseFingerprint,
     stages: playedLogs.map((playlog, index) => identifyPlay(playlog, stages[index]!.playFingerprint)),
   });
+}
+
+/** {@link identifyCourseRun} for a NONSTOP run: the course and its stitched play, as `identifyPlay` identifies it. */
+export function identifyNonstopRun(
+  courseFingerprint: string,
+  playlog: BeMusicPlaylog,
+  playFingerprint: string,
+): string {
+  return JSON.stringify({ courseFingerprint, nonstop: identifyPlay(playlog, playFingerprint) });
 }
 
 function stageOf(stage: number | undefined): { stage?: number } {
@@ -316,7 +361,7 @@ async function loadCourseOutcomes(
         trophy: row.trophy,
         rank,
         players,
-        improved: { exScore: false, lamp: false, missCount: false },
+        improved: { exScore: false, lamp: false, missCount: false, trophy: false },
       };
     }),
   );
