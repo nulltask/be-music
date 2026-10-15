@@ -3711,7 +3711,8 @@ class PlayerWebDemoApp {
       skinAudio: this.beatorajaSkinAudio,
       songs: this.collection.songs,
       ...(this.collection.courseFolders !== undefined ? { courseFolders: this.collection.courseFolders } : {}),
-      onCoursePicked: (course: BrowserCourseEntry) => void this.startCourse(course),
+      onCoursePicked: (course: BrowserCourseEntry, options?: { autoPlay?: boolean }) =>
+        void this.startCourse(course, options),
       // Pass the collection so the scene's `ChartPreviewEngine` can resolve each focused
       // song's `BrowserSongAssetSource` and play `#PREVIEW` audio (or fall back to in-place
       // chart playback) on cursor settle. Without this, the beatoraja select runs silent on
