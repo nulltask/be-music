@@ -191,6 +191,9 @@ bmson `key_channels` (beatoraja's hidden notes) are read as invisible notes, and
 
 FREE ZONE (`17` / `27`) is treated as a note with a 1 beat ending.
 It is excluded from the normal score/gauge target and treated as a keysound fallback and a drawing aid target.
+It has no judging effect: a scratch press during it is judged as any other press and can charge an empty `POOR`, as in
+LR2 and beatoraja (both drop channel `17` / `27` from 7-key and 14-key charts) and IIDX (which never had FREE ZONE; it
+belongs to beatmania 1st / 2ndMIX).
 This only applies to the IIDX families — under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are
 ordinary key columns, so they keep whatever length the chart authored (a plain tap stays a tap).
 
@@ -444,7 +447,6 @@ Empty POOR mirrors LR2's phantom-press behaviour:
 If a keysound fallback exists, play it first.
 The fallback is the latest same-lane WAV whose early `BAD` window has already opened, so a blank press between two notes keeps playing the previous WAV until the next note's judgment window begins.
 The next note's WAV is never used before that window opens.
-After the fallback, if the channel sits in a FREE ZONE, suppress empty POOR and return — FREE ZONE is the author's explicit "press here for ambience" region, not a phantom press.
 Without key-state input (a terminal that sends no release events, so key repeat re-sends the key that played a long note), a note-less press on a lane before the tail of a long note it played is treated the same way. With key-state input (kitty keyboard protocol, browsers, replays) there is no such window: every press is a real press and is judged as LR2 and beatoraja judge it.
 
 ### Landmine
@@ -644,7 +646,7 @@ No judgment window or manual input candidate search is used.
 ### `MANUAL`
 
 `MANUAL` selects the most appropriate candidate note within the `BAD` window from the set of lanes corresponding to the input token.
-If there are no candidates, the runtime may play the latest same-lane keysound whose early `BAD` window has already opened, then applies LR2-compatible empty POOR unless the channel is FREE ZONE or, without key-state input, the press falls before the tail of a long note played on that lane.
+If there are no candidates, the runtime may play the latest same-lane keysound whose early `BAD` window has already opened, then applies LR2-compatible empty POOR unless, without key-state input, the press falls before the tail of a long note played on that lane.
 It does not play the next pending lane keysound before that note's judgment window opens.
 
 In manual input, objects that pass the `BAD` window without any note input are automatically set to `POOR`.

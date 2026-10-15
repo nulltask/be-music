@@ -73,7 +73,6 @@ function createCore(
       landmineNotes: prepared.landmineNotes,
       invisibleNotes: prepared.invisibleNotes,
       laneSoundNotes: prepared.laneSoundNotes,
-      freeZoneChannels: prepared.activeFreeZoneChannels,
       scratchChannels: new Set(
         prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
       ),

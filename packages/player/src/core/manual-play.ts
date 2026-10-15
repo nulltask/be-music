@@ -164,7 +164,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       landmineNotes,
       invisibleNotes,
       laneSoundNotes,
-      freeZoneChannels: activeFreeZoneChannels,
       scratchChannels: scratchPlayableChannels,
       autoScratch: autoScratchEnabled,
       // Live play runs the hold-grace windows on the playback clock (wall-clock milliseconds). A replay has no wall

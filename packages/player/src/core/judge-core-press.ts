@@ -311,10 +311,6 @@ export function handleLanePress(
         seconds: nowSec,
         channel: fallback.channel,
       });
-      if (config.freeZoneChannels.has(fallback.channel)) {
-        // Free zone keysound — authored for empty-press playback. No POOR cue; this is intended audio.
-        return;
-      }
     }
     if (!hasEmptyPoorReferenceNote(state, judgedChannels, judgeSec)) {
       // No note in the ruleset's miss window — the press is harmless: only the lane keysound plays.
