@@ -237,6 +237,33 @@ LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。d
 scene は `enter()`, `exit()`, `dispose()` を実装します。
 `exit()` は transition 向けに一時的な listener と ticker work を外し、`dispose()` は scene 所有 resource を恒久的に解放します。
 
+### gameplay family が共有するもの
+
+LR2 / default の gameplay view と beatoraja の gameplay view は、描画はそれぞれの skin で行いますが、プレイの音、見た目、終わり方を決める処理は 1 か所にまとめてあり、両者がずれることはありません。
+
+```mermaid
+flowchart TD
+  subgraph shared [共有モジュール]
+    audio[chart/play-audio.ts]
+    bga[chart/play-bga.ts]
+    ending[scene/play-ending.ts]
+    lamp[resolveClearLamp]
+  end
+  core[LR2 / default の gameplay view] --> audio
+  core --> bga
+  core --> ending
+  prep[prepareBeatorajaGameplayChart] --> audio
+  prep --> bga
+  bview[beatoraja の gameplay view] --> ending
+  bview --> prep
+  lamp --> results[リザルトと記録]
+```
+
+- `chart/play-audio.ts` は、プレイの AudioContext と bus を作り（`#VOLWAV` を含む）、`#WAV` のサンプルを audio session が引くキーでデコードし、ピッチを保つテンポのときは伸縮し、`#WAVCMD` / `#EXWAV` の音量をまとめます。
+- `chart/play-bga.ts` は、プレイに要る BGA リソース（`#BMPxx`、bmson の `bga.header`、`#BGAxx` の切り出し元、LR2 view では暗黙の `#BMP00` POOR 画像）を選び、静止画は共通のテクスチャローダーで、動画は動画ローダーでデコードし、BMS の layer の黒を抜き、切り出し領域のビューを作ります。
+- `scene/play-ending.ts` は、プレイの終わりの時間を決めます。最後のノートのあと譜面時刻で約 2 小節の余韻を置き、テーマや skin のフェードアウトに入ります。ゲージが尽きて途中で終わったプレイは余韻を置かず、音と画面を 1.5 秒以上かけてフェードアウトします。
+- `resolveClearLamp` がクリアランプの唯一の規則です。beatoraja のリザルトと選曲は `beatorajaClearLampOp` を通してこれを表示し、demo はどの family のプレイもこれで記録します。
+
 ## ノートの表示範囲
 
 描画は判定 ruleset に含まれないため、ruleset は描画に関わりません。gameplay view は、どのノート・地雷・小節線をどこに描くかを 2 つの規則のどちらかで決めます（[`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)）。
