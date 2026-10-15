@@ -228,9 +228,16 @@ export interface PixiBeatorajaGameplayViewOptions {
   onHiSpeedChange?: (hiSpeed: number) => void;
   /** The running course stage, for its ops and strings (`withBeatorajaCourseStageOps`); judging follows the engine. */
   courseInfo?: SceneCourseInfo;
-  /** A course's `no_speed`: the arrow keys do nothing and an engine-shortcut change is set back. */
+  /**
+   * A course's `no_speed`, as beatoraja's `ControlInputProcessor` takes it: the hi-speed, the lane cover, the lift and
+   * the HIDDEN cover cannot change during play. Their keys, the wheel and the skin's cover buttons do nothing, and an
+   * engine-shortcut hi-speed change is set back.
+   */
   hiSpeedLocked?: boolean;
 }
+
+/** The keys that move the lane cover (PageUp / PageDown), the lift (Home / End) and the HIDDEN cover (H / J / K). */
+const COVER_KEYS: ReadonlySet<string> = new Set(['PageUp', 'PageDown', 'Home', 'End', 'h', 'H', 'j', 'J', 'k', 'K']);
 
 export class PixiBeatorajaGameplayView implements PixiScene {
   readonly root: Container = new Container();
@@ -1042,6 +1049,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    * handlers depending on the active scene.
    */
   private handleCoverButton(act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }): void {
+    // A course's `no_speed` locks the covers too.
+    if (this.options.hiSpeedLocked === true) return;
     const direction = modifiers?.shift === true ? -1 : 1;
     const STEP = 0.05;
     switch (act) {
@@ -1268,6 +1277,12 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // Lanecover position — `PageUp` / `PageDown` step the cover by 1% per press, holding `Shift`
     // bumps it to 5% for coarse adjustment. Mirrors beatoraja's lanecover hotkey behaviour;
     // `PageUp` raises the cover (more lane visible), `PageDown` lowers it (more cover).
+    // A course's `no_speed` locks the lane cover, the lift and the HIDDEN cover as well as the hi-speed (beatoraja
+    // `ControlInputProcessor`): their keys do nothing.
+    if (this.options.hiSpeedLocked === true && COVER_KEYS.has(event.key)) {
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'PageUp' || event.key === 'PageDown') {
       event.preventDefault();
       const step = (event.shiftKey ? 0.05 : 0.01) * (event.key === 'PageUp' ? -1 : 1);
@@ -1376,6 +1391,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private readonly handleWheel = (event: WheelEvent): void => {
     if (event.deltaY === 0) return;
     event.preventDefault();
+    if (this.options.hiSpeedLocked === true) return;
     const direction = event.deltaY > 0 ? 1 : -1;
     const magnitude = event.shiftKey ? 0.025 : 0.005;
     this.adapter.adjustLanecover(direction * magnitude);

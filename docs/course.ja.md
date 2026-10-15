@@ -34,7 +34,7 @@ flowchart LR
 | `grade`                                                          | `CLASS`                      | option   | 段位コース。レーンオプションなし。                   |
 | `grade_mirror`                                                   | `MIRROR`                     | option   | 段位コース。MIRROR は可。                            |
 | `grade_random`                                                   | `RANDOM`                     | option   | 段位コース。ランダム系オプションも可。               |
-| `no_speed`                                                       | `NO_SPEED`                   | speed    | プレイ中のハイスピード変更を禁止。                   |
+| `no_speed`                                                       | `NO_SPEED`                   | speed    | プレイ中のハイスピード・カバー類の変更を禁止。       |
 | `no_good`                                                        | `NO_GOOD`                    | judge    | GOOD 判定なし。                                      |
 | `no_great`                                                       | `NO_GREAT`                   | judge    | GREAT と GOOD の判定なし。                           |
 | `gauge_lr2` / `gauge_5k` / `gauge_7k` / `gauge_9k` / `gauge_24k` | `GAUGE_LR2` … `GAUGE_24KEYS` | gauge    | 使う段位ゲージの表の組。                             |

@@ -34,7 +34,7 @@ flowchart LR
 | `grade`                                                          | `CLASS`                      | option   | Dan course; no lane option.                        |
 | `grade_mirror`                                                   | `MIRROR`                     | option   | Dan course; MIRROR allowed.                        |
 | `grade_random`                                                   | `RANDOM`                     | option   | Dan course; random options allowed.                |
-| `no_speed`                                                       | `NO_SPEED`                   | speed    | No hi-speed change during play.                    |
+| `no_speed`                                                       | `NO_SPEED`                   | speed    | No hi-speed (or lane cover, lift, HIDDEN) change.  |
 | `no_good`                                                        | `NO_GOOD`                    | judge    | No GOOD window.                                    |
 | `no_great`                                                       | `NO_GREAT`                   | judge    | No GREAT or GOOD window.                           |
 | `gauge_lr2` / `gauge_5k` / `gauge_7k` / `gauge_9k` / `gauge_24k` | `GAUGE_LR2` … `GAUGE_24KEYS` | gauge    | Which class-gauge table set the course uses.       |
