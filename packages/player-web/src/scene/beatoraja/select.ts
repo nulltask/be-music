@@ -781,7 +781,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   captureSnapshot(): PixiBeatorajaSelectSceneSnapshot {
     return {
       folderPath: this.folderStack.map((folder) => folder.label),
-      cursorStack: this.cursorStack.slice(0, this.folderStack.length + 1),
+      // The deepest entry is the live cursor: `cursorStack` keeps the parents' cursors only (its last slot is the `0`
+      // pushed on entering the folder and is not updated as the cursor moves).
+      cursorStack: [...this.cursorStack.slice(0, this.folderStack.length), this.currentIndex],
       keymodeFilter: this.keymodeFilter,
       sortMode: this.sortMode,
       lnModeOverride: this.lnModeOverride,
