@@ -5,10 +5,14 @@ import type { BeMusicSkin, BeMusicSurfaceContextKind } from './types.ts';
  * The skin API revision this build of the player implements. Skins record the revision they were written against in
  * `apiVersion`; a host refuses skins from a revision it doesn't support.
  */
-export const BE_MUSIC_SKIN_API_VERSION = 1;
+export const BE_MUSIC_SKIN_API_VERSION = 0;
 
-/** Skin API revisions this host can run. */
-const SUPPORTED_API_VERSIONS: ReadonlySet<number> = new Set([BE_MUSIC_SKIN_API_VERSION]);
+/**
+ * Skin API revisions this host can run. `0` while the skin API is still being defined: it may change incompatibly
+ * without the number moving, and the first stable revision will be `1`. Skins built before the API was marked unstable
+ * declare `1` for the same API, so they still run.
+ */
+const SUPPORTED_API_VERSIONS: ReadonlySet<number> = new Set([BE_MUSIC_SKIN_API_VERSION, 1]);
 
 /** Whether this host can run a skin written against `apiVersion`. */
 export function isSupportedBeMusicSkinApiVersion(apiVersion: number): boolean {
