@@ -35,6 +35,7 @@ const COURSE_REJECTIONS = [
   'aborted',
   'missing-fingerprint',
   'not-a-course-run',
+  'nonstop',
   'play-document-not-a-document',
   'play-document-fingerprint-mismatch',
   'chart-document-not-a-document',
