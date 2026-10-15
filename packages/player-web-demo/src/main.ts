@@ -416,6 +416,12 @@ async function waitForDefaultUiFonts(): Promise<void> {
   }
 }
 
+/** What a decide screen leads to instead of playing its song: a course's first stage, and what backing out undoes. */
+interface DecideContinuation {
+  start: () => Promise<void>;
+  cancel?: () => void;
+}
+
 class PlayerWebDemoApp {
   private readonly collectionStore = new BrowserSongCollectionStore();
   /**
@@ -2153,18 +2159,36 @@ class PlayerWebDemoApp {
       course = drawn.course;
     }
     if (course.definition.kind === 'nonstop') {
-      await this.startNonstopCourse(course);
+      await this.startNonstopCourse(course, { decide: true });
       return;
     }
-    this.courseSession = new CourseSession(course);
-    await this.playNextCourseStage();
+    const session = new CourseSession(course);
+    this.courseSession = session;
+    // LR2 shows the decide screen once, before the first stage (a stage after it starts from the previous result).
+    const first = course.stages[0]?.song;
+    if (first === undefined) {
+      await this.playNextCourseStage();
+      return;
+    }
+    // The splash names the selected bar, the course, as LR2's does; the first stage's chart supplies the rest.
+    const { subtitle: _subtitle, artist: _artist, genre: _genre, ...stage } = first;
+    await this.showDecide(
+      { ...stage, title: course.definition.name },
+      {},
+      {
+        start: () => this.playNextCourseStage(),
+        cancel: () => {
+          if (this.courseSession === session) this.courseSession = undefined;
+        },
+      },
+    );
   }
 
   /**
    * Starts a NONSTOP course: its stages are stitched into one chart (`prepareNonstopCourse`) played from their own
    * files, as LR2 plays a NONSTOP course in one go. Quick retry stitches and plays it again.
    */
-  private async startNonstopCourse(course: BrowserCourseEntry): Promise<void> {
+  private async startNonstopCourse(course: BrowserCourseEntry, options: { decide?: boolean } = {}): Promise<void> {
     const hashes = new Map<string, ChartFileHashes>();
     for (const stage of course.stages) {
       if (stage.song === undefined) continue;
@@ -2189,7 +2213,13 @@ class PlayerWebDemoApp {
         prepared.prepared.source,
       ],
     };
-    await this.playSong(prepared.prepared.song, { nonstop: { course, prepared: prepared.prepared } });
+    const play = () => this.playSong(prepared.prepared.song, { nonstop: { course, prepared: prepared.prepared } });
+    // The decide screen names the course (the stitched song's title); a quick retry skips it, as LR2's does.
+    if (options.decide === true) {
+      await this.showDecide(prepared.prepared.song, {}, { start: play });
+      return;
+    }
+    await play();
   }
 
   /** The course result of a NONSTOP run: its course log built from the stitched play, kept and shown as one run. */
@@ -3647,7 +3677,11 @@ class PlayerWebDemoApp {
    * `playSongBeatoraja`; the difference is whether the user sees an animated chrome between
    * select and gameplay.
    */
-  private async showBeatorajaDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<boolean> {
+  private async showBeatorajaDecide(
+    song: BrowserSongEntry,
+    overrides: { autoPlay?: boolean },
+    then?: DecideContinuation,
+  ): Promise<boolean> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return false;
 
@@ -3734,7 +3768,8 @@ class PlayerWebDemoApp {
     // `prepareBeatorajaGameplayChart` as `preResolved` by `playSongBeatoraja`, so nothing draws a second time.
     const resolved = resolvePlayChart(song.chart);
     const resolvedChart = resolved.chart;
-    this.lastBeatorajaChart = { resolved, chartPath: song.chartPath };
+    // A course resolves each stage's chart itself when the stage starts.
+    if (then === undefined) this.lastBeatorajaChart = { resolved, chartPath: song.chartPath };
 
     // Idempotency gate — `onContinue` and the auto-advance timer can race in theory; whichever
     // lands first wins. Same pattern as the LR2 decide path.
@@ -3769,7 +3804,7 @@ class PlayerWebDemoApp {
           void this.sceneHost.setScene(undefined).then(() => {
             this.beatorajaDecideScene?.dispose();
             this.beatorajaDecideScene = undefined;
-            void this.playSongBeatoraja(song, overrides);
+            void (then !== undefined ? then.start() : this.playSongBeatoraja(song, overrides));
           });
         }),
       onCancel: () =>
@@ -3778,6 +3813,7 @@ class PlayerWebDemoApp {
           void this.sceneHost.setScene(undefined).then(() => {
             this.beatorajaDecideScene?.dispose();
             this.beatorajaDecideScene = undefined;
+            then?.cancel?.();
             void this.showSelect();
           });
         }),
@@ -4533,14 +4569,19 @@ class PlayerWebDemoApp {
    * The decide view runs alongside the select view's AudioContext — `playDecideSound` was already fired at song-pick
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
    */
-  private async showDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
+  private async showDecide(
+    song: BrowserSongEntry,
+    overrides: { autoPlay?: boolean } = {},
+    then?: DecideContinuation,
+  ): Promise<void> {
+    const start = then?.start ?? (() => this.playSong(song, overrides));
     // Family dispatch for the decide splash. Note this is decoupled from the gameplay family pick: a user can be
     // playing in LR2 mode and have a beatoraja-only decide skin, or vice versa. The decide splash is a one-shot
     // overlay so each scene transition consults the family helper afresh.
     const decideFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'decide', song);
     if (decideFamily === 'beatoraja') {
-      const mounted = await this.showBeatorajaDecide(song, overrides);
-      if (!mounted) await this.playSong(song, overrides);
+      const mounted = await this.showBeatorajaDecide(song, overrides, then);
+      if (!mounted) await start();
       return;
     }
     // A be-music skin's decide screen hands over to the LR2 / default gameplay preloaded below, so it is skipped when
@@ -4552,7 +4593,7 @@ class PlayerWebDemoApp {
     if (!beMusicDecide && (decideFamily === 'default' || !this.decideSkin)) {
       // No decide splash: a be-music skin without one, or an LR2-only setup that didn't ship a decide skin. The select
       // view's `playDecideSound` already fired so the audio cue still plays.
-      await this.playSong(song, overrides);
+      await start();
       return;
     }
     await this.ensureHostMounted();
@@ -4564,7 +4605,8 @@ class PlayerWebDemoApp {
     // Build the gameplay view eagerly and kick off its heavy load (chart parse, audio decode, BGA preload) IN PARALLEL
     // with the Decide animation. The Decide splash typically runs ~3 s; chart asset decoding is mostly done by the time
     // the splash auto-advances, so the hand-off to gameplay becomes instant instead of dropping a frozen frame.
-    const preloaded = this.preloadGameplay(song, overrides);
+    // A course starts its own play once the splash is done, so nothing is preloaded for it.
+    const preloaded = then === undefined ? this.preloadGameplay(song, overrides) : undefined;
     let advanced = false;
     const advance = (then: () => void): void => {
       // Idempotent — the auto-advance timer, key input, and pointer click can all race; whichever lands first wins and
@@ -4576,6 +4618,12 @@ class PlayerWebDemoApp {
     const callbacks = {
       onContinue: () =>
         advance(() => {
+          if (preloaded === undefined) {
+            this.decideView?.dispose();
+            this.decideView = undefined;
+            void start();
+            return;
+          }
           void this.startGameplayAfterDecide(song, preloaded);
         }),
       onCancel: () =>
@@ -4583,6 +4631,7 @@ class PlayerWebDemoApp {
           // User backed out of the splash — abandon the prepared gameplay scene before falling back to the select view.
           this.gameplayView?.dispose();
           this.gameplayView = undefined;
+          then?.cancel?.();
           void this.showSelect();
         }),
     };
