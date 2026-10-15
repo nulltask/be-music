@@ -666,7 +666,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       if (playlogRecorder) {
         options.onPlaylogRecorded?.(
-          playlogRecorder.finalize({ summary, maxCombo: judgeCore.scoreTracker.maxCombo, aborted: true }),
+          playlogRecorder.finalize({
+            summary,
+            maxCombo: judgeCore.scoreTracker.maxCombo,
+            aborted: true,
+            abortedAtSeconds: judgeCore.advancedThroughSeconds,
+          }),
         );
       }
       writeOutput(renderSummary(summary, ruleset.moneyScore));

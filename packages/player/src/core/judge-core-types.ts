@@ -124,6 +124,8 @@ export interface JudgeCoreState {
    * Until then a press counts as held for {@link LONG_NOTE_REPEAT_HOLD_GRACE_MS}.
    */
   keyStateInput: boolean;
+  /** The latest instant (true clock, seconds) the timed judgments were advanced to — an ESC abort stops there. */
+  advancedThroughSeconds: number;
   readonly pendingAutoScratchLongNotes: PendingAutoLongNoteState[];
   readonly autoScratchNotes: readonly TimedPlayableNote[];
   /** Per-lane sorted note times — the reference notes a phantom press is measured against for an empty POOR. */

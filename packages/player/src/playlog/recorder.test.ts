@@ -232,7 +232,7 @@ describe('playlog recorder', () => {
         type: 'GROOVE',
       },
     });
-    const playlog = recorder.finalize({ summary, maxCombo: 5, aborted: true });
+    const playlog = recorder.finalize({ summary, maxCombo: 5, aborted: true, abortedAtSeconds: 1.2345674 });
 
     expect(playlog.play).toEqual({
       mode: 'manual',
@@ -241,6 +241,7 @@ describe('playlog recorder', () => {
       randomLane: { p1: 'MIRROR' },
       dpFlip: true,
       aborted: true,
+      abortedAtUs: 1_234_567,
       native: { hiSpeed: 2 },
     });
     expect(playlog.results).toEqual({

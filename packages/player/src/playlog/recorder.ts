@@ -114,6 +114,8 @@ export interface PlaylogRecorderFinalizeInput {
   summary: PlayerSummary;
   maxCombo?: number;
   aborted?: boolean;
+  /** Chart seconds the judge had settled through when the play was aborted. */
+  abortedAtSeconds?: number;
 }
 
 export interface PlaylogRecorder {
@@ -154,7 +156,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
     recordEmptyPoor: (): void => {
       emptyPoorCount += 1;
     },
-    finalize: ({ summary, maxCombo, aborted }): BeMusicPlaylog => {
+    finalize: ({ summary, maxCombo, aborted, abortedAtSeconds }): BeMusicPlaylog => {
       const play: PlaylogPlay = {
         mode: options.play.mode,
         autoScratch: options.play.autoScratch,
@@ -169,7 +171,10 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
       if (options.play.randomDraws !== undefined && options.play.randomDraws.length > 0) {
         play.randomDraws = options.play.randomDraws.map((draw) => ({ ...draw }));
       }
-      if (aborted === true) play.aborted = true;
+      if (aborted === true) {
+        play.aborted = true;
+        if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
+      }
       if (options.play.native !== undefined) play.native = options.play.native;
 
       const createdAt = (options.now?.() ?? new Date()).toISOString();

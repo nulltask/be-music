@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import { manualPlay } from '../index.ts';
 import type { PlayerOptions, PlayerSummary } from '../core/engine.ts';
 import { resolveRulesetConfig, simulatePlaylog } from './simulate.ts';
+import { createScheduledInputRuntime } from '../test-support/player-fixtures.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from './format.ts';
 import type { PlaylogRulesetId } from '../ruleset/index.ts';
 
@@ -700,6 +701,31 @@ describe('engine / simulator equivalence', () => {
     const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
 
     expect(summary.gauge?.current).toBe(simulated.gauge.final);
+  });
+
+  // An ESC abort stops judging where the engine stopped; the rest of the chart is neither missed nor failed.
+  test.each(RULESETS)('%s: an aborted play stops judging at the abort on both sides', async (ruleset) => {
+    const json = chart(
+      Array.from({ length: 12 }, (_, index) => ({
+        measure: index + 1,
+        channel: '11',
+        position: [0, 1] as const,
+        value: '01',
+      })),
+    );
+    const { summary, playlog } = await replay(json, [down(0, 1_000_000, '11'), up(1, 1_040_000, '11')], ruleset, {
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.play.aborted).toBe(true);
+    expect(playlog.play.abortedAtUs).toBeGreaterThan(1_040_000);
+    expect(summary.poor).toBeLessThan(11);
+    expect(simulated.judge.poor).toBe(summary.poor);
+    expect(simulated.judge.pgreat).toBe(summary.perfect);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
   });
 
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
