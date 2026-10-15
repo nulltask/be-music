@@ -138,11 +138,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
   );
 
+  // The gauge the play runs on and the play log records: one value, so a re-simulation runs the same gauge. A host that
+  // only declared it for the log (`recordPlaylog.gauge`) gets it played too.
+  const selectedGauge = options.gauge ?? options.recordPlaylog?.gauge;
   const ruleset = resolveRuleset(
     rulesetChartFactsFromChart(resolvedJson, playbackChart, dynamicJudgeRankChanges),
     judgeRuleset,
     {
-      ...(options.gauge !== undefined ? { selectedGauge: options.gauge } : {}),
+      ...(selectedGauge !== undefined ? { selectedGauge } : {}),
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
     },
   );
@@ -201,6 +204,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             judgeRuleset: options.judgeRuleset,
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
             ...hostPlaySettings,
+            gauge: selectedGauge,
           },
         });
       })()
