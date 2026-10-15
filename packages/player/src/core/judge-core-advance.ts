@@ -246,7 +246,8 @@ export function detonateLandminesOnPress(
     if (landmine.judged || !channels.has(landmine.channel)) {
       continue;
     }
-    const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, landmine.seconds).note);
+    // LR2 reads the PGREAT window in force at the press (`#EXRANK` can change it).
+    const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, nowSec).note);
     if (mineUs - pgreatEarlyUs <= nowUs && nowUs - mineUs <= pgreatLateUs) {
       detonateLandmine(state, landmine, nowSec, emit);
     }
@@ -612,7 +613,7 @@ export function advanceJudgeState(
           config.ruleset,
           hold.headJudge,
           (tailJudgeSeconds - hold.endSeconds) * 1000,
-          judgeWindowsFor(config, channel, hold.endSeconds, true),
+          judgeWindowsFor(config, channel, tailJudgeSeconds, true),
         ),
         tailAtSeconds,
         emit,
@@ -693,7 +694,7 @@ export function advanceJudgeState(
               hold,
               resolveManualTimedJudge(
                 (tailJudgeSeconds - hold.endSeconds) * 1000,
-                judgeWindowsFor(config, channel, hold.endSeconds, true),
+                judgeWindowsFor(config, channel, tailJudgeSeconds, true),
               ),
             );
       finalizeActiveLongNote(state, channel, finalJudge, tailAtSeconds, emit);
@@ -711,7 +712,7 @@ export function advanceJudgeState(
           hold,
           resolveManualTimedJudge(
             (tailJudgeSeconds - hold.endSeconds) * 1000,
-            judgeWindowsFor(config, channel, hold.endSeconds, true),
+            judgeWindowsFor(config, channel, tailJudgeSeconds, true),
           ),
         ),
         tailAtSeconds,
