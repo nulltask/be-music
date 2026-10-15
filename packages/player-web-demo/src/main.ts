@@ -27,6 +27,9 @@ import {
   type PixiGameplayResultData,
   type PixiPlayOptions,
   type PixiSongSelectNavigation,
+  resolveLr2CourseOps,
+  resolveSceneCourseInfo,
+  type SceneCourseInfo,
 } from '@be-music/player-web/scenes';
 import {
   BeatorajaSkinAudioPlayer,
@@ -103,11 +106,13 @@ import {
   discoverLr2Themes,
   loadLr2ThemeSkinsFromFiles,
   pickLr2PlaySkin,
+  pickLr2PlaySkinVariant,
   summarizeLr2PlaySkins,
   type Lr2DiscoveredTheme,
   type Lr2PlaySkinMap,
   type Lr2PlayVariant,
   type Lr2Skin,
+  type Lr2ThemeSkins,
 } from '@be-music/lr2-skin';
 import {
   BEATORAJA_OP,
@@ -421,6 +426,13 @@ class PlayerWebDemoApp {
   private courseSession: CourseSession | undefined;
   private selectSkin: Lr2Skin | undefined;
   private resultSkin: Lr2Skin | undefined;
+  /** LR2 course-result skin (`#INFORMATION` type 15); the course result falls back to {@link resultSkin} without it. */
+  private courseResultSkin: Lr2Skin | undefined;
+  /**
+   * Re-parses one of the mounted LR2 theme's skins with extra parse-time ops (`Lr2ThemeSkins.loadSkin`): a course stage
+   * plays on its skins parsed with the course ops, as LR2 reads a skin at each scene start.
+   */
+  private loadLr2ThemeSkin: Lr2ThemeSkins['loadSkin'] | undefined;
   /**
    * LR2 Decide-screen skin (the brief splash between song select and gameplay). Loaded from
    * `Theme/<name>/Decide/decide.lr2skin` by `loadLr2ThemeSkinsFromFiles`. When undefined, the host skips the splash and
@@ -483,6 +495,9 @@ class PlayerWebDemoApp {
   private clearBgmBytes: Uint8Array | undefined;
   private failBgmBytes: Uint8Array | undefined;
   private resultBgmBytes: Uint8Array | undefined;
+  /** LR2 course-result jingles (`courseclear` / `coursefail`); the course result falls back to the clear / fail ones. */
+  private courseClearBgmBytes: Uint8Array | undefined;
+  private courseFailBgmBytes: Uint8Array | undefined;
   /**
    * One-shot song-decided sound bytes (`LR2files/Bgm/<theme>/decide.wav`). Played by
    * `PixiSongSelectView.playDecideSound` on the select → gameplay transition.
@@ -2028,6 +2043,19 @@ class PlayerWebDemoApp {
   }
 
   /**
+   * An LR2 skin for a course scene: the theme's skin parsed again with the course ops (290 + kind, 280-289 for a stage),
+   * so its `#IF` blocks gated on them are taken as LR2 would. Falls back to the skin as mounted.
+   */
+  private courseLr2Skin(
+    mounted: Lr2Skin | undefined,
+    courseInfo: SceneCourseInfo,
+    options: Omit<Parameters<Lr2ThemeSkins['loadSkin']>[0], 'parseOps'>,
+  ): Lr2Skin | undefined {
+    if (mounted === undefined || this.loadLr2ThemeSkin === undefined) return mounted;
+    return this.loadLr2ThemeSkin({ ...options, parseOps: resolveLr2CourseOps(courseInfo) }) ?? mounted;
+  }
+
+  /**
    * The course result: the course play log built from the stages played, its native result shown on the result scene
    * as one run, saved (when auto-save is on) and kept as the course's best record.
    */
@@ -2052,7 +2080,9 @@ class PlayerWebDemoApp {
     }
     this.recordCourseResult(courseRecordKey(session.course), result);
     this.maybeAutoSaveCoursePlaylog(courseLog);
-    await this.showResult(buildCourseResultData(session.course, result, courseLog), { course: true });
+    await this.showResult(buildCourseResultData(session.course, result, courseLog), {
+      course: resolveSceneCourseInfo(session.course),
+    });
   }
 
   /**
@@ -2241,12 +2271,16 @@ class PlayerWebDemoApp {
     Object.assign(this.playSkins, loadedTheme.playSkins);
     this.selectSkin = loadedTheme.selectSkin;
     this.resultSkin = loadedTheme.resultSkin;
+    this.courseResultSkin = loadedTheme.courseResultSkin;
+    this.loadLr2ThemeSkin = loadedTheme.loadSkin;
     this.decideSkin = loadedTheme.decideSkin;
     this.selectBgmBytes = loadedTheme.selectBgm?.bytes;
     this.decideBgmBytes = loadedTheme.decideBgm?.bytes;
     this.clearBgmBytes = loadedTheme.clearBgm?.bytes;
     this.failBgmBytes = loadedTheme.failBgm?.bytes;
     this.resultBgmBytes = loadedTheme.resultBgm?.bytes;
+    this.courseClearBgmBytes = loadedTheme.courseClearBgm?.bytes;
+    this.courseFailBgmBytes = loadedTheme.courseFailBgm?.bytes;
     this.systemSoundBundle = {
       cursorMove: loadedTheme.systemSounds.cursorMove?.bytes,
       folderOpen: loadedTheme.systemSounds.folderOpen?.bytes,
@@ -4383,7 +4417,9 @@ class PlayerWebDemoApp {
       random1P: replay !== undefined ? ('OFF' as const) : courseLane(this.guiState.random1P),
       random2P: replay !== undefined ? ('OFF' as const) : courseLane(this.guiState.random2P),
       gauge: replay !== undefined ? replay.play.gauge : this.guiState.gauge,
-      ...(courseStage !== undefined ? { course: courseStage.course, hiSpeedLocked: courseStage.hiSpeedLocked } : {}),
+      ...(courseStage !== undefined
+        ? { course: courseStage.course, courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }
+        : {}),
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
       ...(overrides.chartHashes !== undefined
         ? { chartSha256: overrides.chartHashes.sha256, chartMd5: overrides.chartHashes.md5 }
@@ -4527,7 +4563,15 @@ class PlayerWebDemoApp {
     // skin even if one is loaded. `buildLr2GameplayView` then constructs `DefaultPixiGameplayView` when the skin
     // is undefined and `PixiGameplayView` otherwise; see `preloadGameplay` for the matching call shape (both feed
     // the same helper so option marshalling stays in one place).
-    const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
+    const playSkin =
+      gameplayFamily !== 'lr2'
+        ? undefined
+        : overrides.courseStage !== undefined
+          ? this.courseLr2Skin(pickLr2PlaySkin(this.playSkins, song), overrides.courseStage.courseInfo, {
+              kind: 'play',
+              playVariant: pickLr2PlaySkinVariant(this.playSkins, song),
+            })
+          : pickLr2PlaySkin(this.playSkins, song);
     // Chart-file hash for the recorded play-log (skipped for replays — they record nothing).
     const chartHashes = overrides.replay === undefined ? await this.resolveChartHashes(song) : undefined;
     this.gameplayView = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
@@ -4568,26 +4612,42 @@ class PlayerWebDemoApp {
     await transition();
   }
 
-  private async showResult(data: PixiGameplayResultData, mode: { course?: boolean } = {}): Promise<void> {
+  /**
+   * Mounts the result scene for a play, or — with `mode.course` — for a whole course (the course result, shown on the
+   * LR2 theme's course-result skin when it has one).
+   */
+  private async showResult(data: PixiGameplayResultData, mode: { course?: SceneCourseInfo } = {}): Promise<void> {
     await this.ensureHostMounted();
     this.resultView?.dispose();
     // A stage of a running course: its play log carries the course on, and dismissing its result plays the next stage.
-    const courseStage = mode.course !== true && this.courseSession !== undefined;
+    const courseStage = mode.course === undefined && this.courseSession !== undefined;
     if (courseStage) this.courseSession!.recordStage(data.playlog);
     // Family dispatch for result. We currently only model the LR2 / default split here — the beatoraja result
     // scene is constructed inside `playSongBeatoraja`'s onComplete handler, not via `showResult`, so this method
     // never sees the `'beatoraja'` family. Pick the LR2 result skin only when the family pick says so; defaulting
     // strips the slot even if the loaded theme has a result skin.
     const resultFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'result');
-    const lr2ResultSkin = resultFamily === 'lr2' ? this.resultSkin : undefined;
+    // A course's results show the course on the skin (LR2 ops 280-293, texts 150-170): a stage's result at its stage,
+    // the course result on the course-result skin, each parsed again with the course ops.
+    const courseInfo = mode.course ?? (courseStage ? this.courseSession!.courseInfo : undefined);
+    const mountedResultSkin = mode.course !== undefined ? (this.courseResultSkin ?? this.resultSkin) : this.resultSkin;
+    const lr2ResultSkin =
+      resultFamily !== 'lr2'
+        ? undefined
+        : courseInfo === undefined
+          ? mountedResultSkin
+          : this.courseLr2Skin(mountedResultSkin, courseInfo, {
+              kind: mode.course !== undefined && this.courseResultSkin !== undefined ? 'courseResult' : 'result',
+            });
     // R on the result plays the same chart again — only offered when the recorded play start is this chart's, and
     // never in a course (LR2 and beatoraja disable quick retry there).
     const retry =
-      mode.course !== true && !courseStage && this.lastPlay?.song.id === data.song.id ? this.lastPlay : undefined;
+      mode.course === undefined && !courseStage && this.lastPlay?.song.id === data.song.id ? this.lastPlay : undefined;
     const sharedResultOptions = {
       collection: this.collection,
-      clearBgm: this.clearBgmBytes,
-      failBgm: this.failBgmBytes,
+      // The course result plays LR2's course jingles, falling back to the result ones.
+      clearBgm: (mode.course !== undefined ? this.courseClearBgmBytes : undefined) ?? this.clearBgmBytes,
+      failBgm: (mode.course !== undefined ? this.courseFailBgmBytes : undefined) ?? this.failBgmBytes,
       resultBgm: this.resultBgmBytes,
       onContinue: () => {
         if (courseStage && this.continueCourse()) return;
@@ -4606,7 +4666,11 @@ class PlayerWebDemoApp {
         : {}),
     };
     this.resultView = lr2ResultSkin
-      ? new PixiResultView({ skin: lr2ResultSkin, ...sharedResultOptions })
+      ? new PixiResultView({
+          skin: lr2ResultSkin,
+          ...sharedResultOptions,
+          ...(courseInfo !== undefined ? { courseInfo } : {}),
+        })
       : new DefaultPixiResultView({
           ...sharedResultOptions,
           beMusicSkin: this.beMusicSkin,
@@ -4622,7 +4686,7 @@ class PlayerWebDemoApp {
       this.activePlayRecordKey = undefined;
     }
     // A course's stages are saved and ranked as the course, not one by one.
-    if (mode.course !== true && !courseStage) {
+    if (mode.course === undefined && !courseStage) {
       this.maybeAutoSavePlaylog(data.playlog);
       this.leaderboard.maybeSubmit(data.playlog, data.song);
     }

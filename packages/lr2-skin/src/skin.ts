@@ -1068,6 +1068,12 @@ export interface LoadLr2SkinOptions {
    * scoring (7K-preferred) if no file matches the requested variant.
    */
   playVariant?: Lr2PlayVariant;
+  /**
+   * Ops to hold true while the skin's `#IF` / `#ELSEIF` chains are evaluated, on top of the parse-time defaults. LR2
+   * reads a skin each time its scene starts, so a scene state that never changes during the scene (a course stage's
+   * ops 280-293, say) can gate whole `#IF` blocks; pass them here to parse the skin as LR2 would for that state.
+   */
+  parseOps?: Iterable<number>;
 }
 
 export async function loadLr2SkinFromFiles(
@@ -1199,7 +1205,7 @@ export function loadLr2SkinFromSourceFiles(
     customOptions: [],
     customFiles: [],
     customFileLookup: new Map(),
-    trueOps: defaultParseOps(),
+    trueOps: new Set([...defaultParseOps(), ...(options.parseOps ?? [])]),
     timing: {},
     scratchFlip: {
       flipSide: false,

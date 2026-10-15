@@ -1,0 +1,66 @@
+import { describe, expect, it } from 'vite-plus/test';
+import type { SceneCourseInfo } from '../course-info.ts';
+import { lr2ShowsCourseCombo, resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
+
+function course(stageCount: number, stageIndex?: number, kind: SceneCourseInfo['kind'] = 'grade'): SceneCourseInfo {
+  return {
+    kind,
+    title: 'Dan',
+    stages: Array.from({ length: stageCount }, (_, index) => ({
+      title: `Song ${index + 1}`,
+      ...(index === 0 ? { subtitle: '[ANOTHER]' } : {}),
+      level: 10 + index,
+    })),
+    ...(stageIndex !== undefined ? { stageIndex } : {}),
+  };
+}
+
+describe('resolveLr2CourseOps', () => {
+  it('lights the course and kind ops on the select screen', () => {
+    expect(resolveLr2CourseOps(course(4))).toEqual([290, 293]);
+    expect(resolveLr2CourseOps(course(4, undefined, 'nonstop'))).toEqual([290, 291]);
+    expect(resolveLr2CourseOps(course(4, undefined, 'expert'))).toEqual([290, 292]);
+  });
+
+  it('lights 280 + index for a stage that is not the last, 289 for the last', () => {
+    expect(resolveLr2CourseOps(course(4, 0))).toEqual([290, 293, 280]);
+    expect(resolveLr2CourseOps(course(4, 2))).toEqual([290, 293, 282]);
+    expect(resolveLr2CourseOps(course(4, 3))).toEqual([290, 293, 289]);
+    expect(resolveLr2CourseOps(course(1, 0))).toEqual([290, 293, 289]);
+  });
+
+  it('has no stage op past the ninth stage unless it is the last', () => {
+    expect(resolveLr2CourseOps(course(10, 8))).toEqual([290, 293, 288]);
+    expect(resolveLr2CourseOps(course(11, 9))).toEqual([290, 293]);
+    expect(resolveLr2CourseOps(course(10, 9))).toEqual([290, 293, 289]);
+  });
+});
+
+describe('resolveLr2CourseNumber', () => {
+  it('reads the stage levels on 250-259', () => {
+    expect(resolveLr2CourseNumber(250, course(3))).toBe(10);
+    expect(resolveLr2CourseNumber(252, course(3))).toBe(12);
+    expect(resolveLr2CourseNumber(253, course(3))).toBeUndefined();
+    expect(resolveLr2CourseNumber(104, course(3))).toBeUndefined();
+  });
+});
+
+describe('resolveLr2CourseText', () => {
+  it('reads stage titles, subtitles and the course title', () => {
+    expect(resolveLr2CourseText(150, course(3))).toBe('Song 1');
+    expect(resolveLr2CourseText(152, course(3))).toBe('Song 3');
+    expect(resolveLr2CourseText(153, course(3))).toBe('');
+    expect(resolveLr2CourseText(160, course(3))).toBe('[ANOTHER]');
+    expect(resolveLr2CourseText(161, course(3))).toBe('');
+    expect(resolveLr2CourseText(170, course(3))).toBe('Dan');
+    expect(resolveLr2CourseText(10, course(3))).toBeUndefined();
+  });
+});
+
+describe('lr2ShowsCourseCombo', () => {
+  it('counts the whole course in expert and grade courses only', () => {
+    expect(lr2ShowsCourseCombo('grade')).toBe(true);
+    expect(lr2ShowsCourseCombo('expert')).toBe(true);
+    expect(lr2ShowsCourseCombo('nonstop')).toBe(false);
+  });
+});

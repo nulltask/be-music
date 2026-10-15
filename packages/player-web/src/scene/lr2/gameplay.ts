@@ -62,6 +62,7 @@ import {
   resolveNumberValue,
 } from './gameplay-hud.ts';
 import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
+import { lr2ShowsCourseCombo, resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 import {
   CoreGameplayView,
   KEY_ON_FADE_OUT_MS,
@@ -659,7 +660,14 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     this.runtimeOps.add(this.options.autoScratch1P ? 55 : 54);
     this.runtimeOps.add(this.options.autoScratch2P ? 57 : 56);
     // Gauge type (42 / 43 1P, 44 / 45 2P) — fixed for the run; `updateGaugeOps` only refreshes the percentage buckets.
-    computeGaugeTypeOps(this.resolveSelectedGauge()).forEach((op) => this.runtimeOps.add(op));
+    // A course stage runs on the course gauge, which LR2 reports as the red one (OpenLR2 L4613-L4628).
+    computeGaugeTypeOps(this.options.course !== undefined ? 'HARD' : this.resolveSelectedGauge()).forEach((op) =>
+      this.runtimeOps.add(op),
+    );
+    // Course ops (290 + kind, 280-289 for the stage) while a course stage is played.
+    if (this.options.courseInfo !== undefined) {
+      resolveLr2CourseOps(this.options.courseInfo).forEach((op) => this.runtimeOps.add(op));
+    }
     // Score graph (38 / 39).
     this.runtimeOps.add(this.options.scoreGraph ? 39 : 38);
     // BGA on/off (40 / 41). With AUTOPLAY_ONLY we mirror LR2: the BGA is "on" only when autoplay is also engaged.
@@ -1330,21 +1338,27 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       if (!this.isDestinationVisible(number.destination)) {
         continue;
       }
-      const value = resolveNumberValue(
-        number.source.num,
-        this.score,
-        this.song,
-        this.gaugeState.current,
-        this.tracker.combo,
-        this.hiSpeed,
-        this.currentSeconds(),
-        this.displayedScore,
-        this.fps,
-        // NOWBPM freezes at the reversal value (LR2's frozen pump holds |BPM| there) — see `nowBpm`.
-        this.nowBpm(this.currentSeconds()),
-        this.resolveSongDurationSeconds(),
-        this.maxCombo,
-      );
+      const courseInfo = this.options.courseInfo;
+      // In an expert or grade course the combo numbers count the whole course.
+      const courseCombo =
+        courseInfo !== undefined && lr2ShowsCourseCombo(courseInfo.kind) ? this.courseCombo : undefined;
+      const value =
+        (courseInfo !== undefined ? resolveLr2CourseNumber(number.source.num, courseInfo) : undefined) ??
+        resolveNumberValue(
+          number.source.num,
+          this.score,
+          this.song,
+          this.gaugeState.current,
+          courseCombo?.combo ?? this.tracker.combo,
+          this.hiSpeed,
+          this.currentSeconds(),
+          this.displayedScore,
+          this.fps,
+          // NOWBPM freezes at the reversal value (LR2's frozen pump holds |BPM| there) — see `nowBpm`.
+          this.nowBpm(this.currentSeconds()),
+          this.resolveSongDurationSeconds(),
+          courseCombo?.maxCombo ?? this.maxCombo,
+        );
       if (value === undefined) {
         continue;
       }
@@ -1797,6 +1811,9 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     if (!song) {
       return undefined;
     }
+    const courseText =
+      this.options.courseInfo !== undefined ? resolveLr2CourseText(st, this.options.courseInfo) : undefined;
+    if (courseText !== undefined) return courseText;
     const subartists = song.chart.bmson.info?.subartists?.join(' / ');
     switch (st) {
       case 1:

@@ -31,7 +31,9 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import { computeSelectOps, resolveKeyModeOp } from '../select-ops.ts';
+import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from '../select-ops.ts';
+import { resolveSceneCourseInfo } from '../course-info.ts';
+import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 import {
   Lr2ChartGraphicTextureStore,
   Lr2SkinTextureStore,
@@ -187,9 +189,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     // inside each `isDestinationVisible` call) lets us: 1. Reflect the focused song's chart features (LN, BPM change,
     // BACKBMP presence, …) onto static frame elements that LR2 skins gate with op 70..195. 2. Avoid recomputing the
     // same `Set` per element.
-    const ops = this.perf.time('computeOps', () =>
-      computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions, skin.customOptions, this.collection),
-    );
+    const ops = this.perf.time('computeOps', () => this.computeOps(skin));
     this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, ops));
     this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, ops));
     // Empty-state hint — shown over the skin when nothing was loaded, so the user understands they need to drop
@@ -204,9 +204,11 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    * and collapses when empty, so a narrow one is widened (to the LR2 default theme's box on that theme). The default
    * theme's box stands in when no such text is visible.
    */
-  protected override designSearchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
-    const skin = this.options.skin;
-    if (skin === undefined || this.themeDesignSize === undefined) return undefined;
+  /**
+   * The select ops for the bar under the cursor. A course bar lights the course-bar op (3), the playable op (5) when
+   * every stage is in the collection, and the course ops (290 and its kind's op).
+   */
+  private computeOps(skin: Lr2Skin): ReadonlySet<number> {
     const ops = computeSelectOps(
       this.focusedSong(),
       this.panelStates,
@@ -214,6 +216,19 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       skin.customOptions,
       this.collection,
     );
+    const course = this.focusedCourse();
+    if (course === undefined) return ops;
+    const withCourse = new Set(ops);
+    withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_COURSE);
+    if (course.playable) withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_PLAYABLE);
+    resolveLr2CourseOps(resolveSceneCourseInfo(course)).forEach((op) => withCourse.add(op));
+    return withCourse;
+  }
+
+  protected override designSearchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
+    const skin = this.options.skin;
+    if (skin === undefined || this.themeDesignSize === undefined) return undefined;
+    const ops = this.computeOps(skin);
     const isDefaultTheme = skin.width === 1280 && skin.height === 720;
     for (const text of skin.texts) {
       if (text.st !== 30 || !this.isPanelOpen(text.panel)) continue;
@@ -364,13 +379,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    * the user actually sees, not a static endpoint).
    */
   private handleSkinHitTest(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
-    const ops = computeSelectOps(
-      this.focusedSong(),
-      this.panelStates,
-      this.playOptions,
-      skin.customOptions,
-      this.collection,
-    );
+    const ops = this.computeOps(skin);
     for (const button of skin.buttons) {
       if (button.click !== 1) continue;
       if (!this.isPanelOpen(button.panel)) continue;
@@ -723,6 +732,8 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     // folder past the first, because the cursor index there refers to a position WITHIN that folder, not a global
     // offset.
     const focusedSong = this.focusedSong();
+    const focusedCourseEntry = this.focusedCourse();
+    const focusedCourse = focusedCourseEntry !== undefined ? resolveSceneCourseInfo(focusedCourseEntry) : undefined;
 
     // Walk the pre-sorted chrome entry list and dispatch by kind. The order, layer choice, and the entry list itself
     // are all static for a given skin (skin shape doesn't change between frames), so we cache the merged sorted list in
@@ -749,7 +760,10 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
           // shown here, which matches LR2's behavior off-stage.
           const dst = this.evaluateElementDst(entry.element);
           if (!isDestinationVisible(dst, ops, this.timerActive)) break;
-          const value = resolveSelectNumber(entry.element.source.num, focusedSong, this.playOptions);
+          const value =
+            (focusedCourse !== undefined
+              ? resolveLr2CourseNumber(entry.element.source.num, focusedCourse)
+              : undefined) ?? resolveSelectNumber(entry.element.source.num, focusedSong, this.playOptions);
           if (value === undefined) break;
           renderNumberElement(containerSpriteSink(layer), entry.element, value, skinTextures, dst);
           break;
@@ -766,7 +780,8 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
               ? this.searchEditing
                 ? ''
                 : this.searchText
-              : resolveSelectText(entry.element.st, focusedSong, this.playOptions);
+              : ((focusedCourse !== undefined ? resolveLr2CourseText(entry.element.st, focusedCourse) : undefined) ??
+                resolveSelectText(entry.element.st, focusedSong, this.playOptions));
           if (value === undefined || value.length === 0) break;
           layer.addChild(
             makeLr2TextSprite(value, entry.element, dst, {

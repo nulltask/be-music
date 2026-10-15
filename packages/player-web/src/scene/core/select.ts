@@ -1850,6 +1850,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     return entry?.kind === 'song' ? entry.song : undefined;
   }
 
+  /** Returns the course under the cursor, or `undefined` when the cursor is on a folder or song bar. */
+  protected focusedCourse(): BrowserCourseEntry | undefined {
+    const entry = this.currentEntries()[this.selectedIndex];
+    return entry?.kind === 'course' ? entry.course : undefined;
+  }
+
   /**
    * Renders a centered hint over the skin layer when no songs are loaded so the user understands the empty bar list
    * isn't a bug. Drawn straight onto `skinLayer` — same coordinate space as the static frame — so it scales with the

@@ -29,6 +29,8 @@ import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import type { PixiGameplayResultData } from '../core/result-data.ts';
 import { CoreResultView, type CoreResultViewOptions } from '../core/result.ts';
 import { resolveKeyModeOp } from '../select-ops.ts';
+import type { SceneCourseInfo } from '../course-info.ts';
+import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 
 /**
  * LR2 result scene. Layers LR2's result-skin rendering on top of {@link CoreResultView}, which owns the mount / ticker /
@@ -164,6 +166,12 @@ export interface PixiResultViewOptions extends CoreResultViewOptions {
    * the fallback panel is drawn instead.
    */
   skin?: Lr2Skin;
+  /**
+   * The course this result belongs to: a stage of a running course (with its `stageIndex`) or, on the course result,
+   * the whole course. Lights the course ops (290 + kind, 280-289 for a stage) and feeds the course numbers and texts
+   * (250-259, 150-170).
+   */
+  courseInfo?: SceneCourseInfo;
 }
 
 /**
@@ -214,7 +222,7 @@ export class PixiResultView extends CoreResultView {
   protected override renderTheme(): boolean {
     const skin = this.options.skin;
     if (!skin || !this.result) return false;
-    const ops = computeResultOps(this.result, skin);
+    const ops = computeResultOps(this.result, skin, this.options.courseInfo);
     this.renderSkin(skin, ops);
     // No empty-state hint here — the skin's own artwork covers the whole canvas. If a skin author wired a result skin
     // but no #IMAGE / #TEXT to display, that's their decision.
@@ -279,7 +287,10 @@ export class PixiResultView extends CoreResultView {
     for (const number of skin.numbers) {
       const dst = this.evaluateElementDst(number);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const value = resolveResultNumber(number.source.num, this.result);
+      const course = this.options.courseInfo;
+      const value =
+        (course !== undefined ? resolveLr2CourseNumber(number.source.num, course) : undefined) ??
+        resolveResultNumber(number.source.num, this.result);
       if (value === undefined) continue;
       work.push({
         order: number.declarationOrder,
@@ -298,7 +309,10 @@ export class PixiResultView extends CoreResultView {
     for (const text of skin.texts) {
       const dst = this.evaluateElementDst(text);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const value = resolveResultText(text.st, this.result);
+      const course = this.options.courseInfo;
+      const value =
+        (course !== undefined ? resolveLr2CourseText(text.st, course) : undefined) ??
+        resolveResultText(text.st, this.result);
       if (value === undefined || value.length === 0) continue;
       work.push({
         order: text.declarationOrder,
@@ -605,8 +619,13 @@ export class PixiResultView extends CoreResultView {
  * - **Updated flags** (op 330/331/332/335) — until score history persists, every play is treated as an update so the
  *   LR2 default skin's congratulatory artwork shows.
  * - **Result flip** (op 350/351) — toggled from the played skin's `scratchFlip.flipResult`.
+ * - **Course** (op 290 + kind, 280-289 for a stage) — when the result belongs to a course.
  */
-export function computeResultOps(data: PixiGameplayResultData, skin: Lr2Skin): ReadonlySet<number> {
+export function computeResultOps(
+  data: PixiGameplayResultData,
+  skin: Lr2Skin,
+  course?: SceneCourseInfo,
+): ReadonlySet<number> {
   const ops = new Set<number>(RESULT_BASE_OPS);
   // CUSTOMOPTION defaults declared by the loaded skin — same idiom as `computeSelectOps` (see `select-ops.ts`) and
   // `PixiGameplayView.initializeRuntimeOps`. Without this, every `#IF,N` block gated on a CUSTOMOPTION's default
@@ -652,6 +671,7 @@ export function computeResultOps(data: PixiGameplayResultData, skin: Lr2Skin): R
     ops.add(RESULT_DYNAMIC_OPS.RESULT_FLIP_ENABLED);
   }
 
+  if (course !== undefined) resolveLr2CourseOps(course).forEach((op) => ops.add(op));
   return ops;
 }
 
