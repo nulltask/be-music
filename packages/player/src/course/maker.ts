@@ -1,4 +1,11 @@
-import { type CourseDefinition, type CourseKind, createCourseStageRef, type NonstopConnection } from './definition.ts';
+import {
+  type CourseConstraint,
+  type CourseDefinition,
+  type CourseKind,
+  createCourseStageRef,
+  type NonstopConnection,
+  normalizeCourseConstraints,
+} from './definition.ts';
 import { LR2_NONSTOP_CONNECTIONS, parseLr2NonstopConnections } from './lr2crs.ts';
 
 /** LR2's course maker takes at most five songs (OpenLR2 `LR2f.cpp` L12221-L12229: `count <= 4` before adding). */
@@ -24,6 +31,24 @@ export interface CourseDraft {
   kind: CourseKind;
   name: string;
   stages: CourseDraftStage[];
+  /** beatoraja's course constraints; absent, the course gets {@link defaultCourseMakerConstraints}. */
+  constraints?: CourseConstraint[];
+}
+
+/**
+ * The constraints a made course starts with: an LR2 grade reads as beatoraja's reading of one (MIRROR allowed, the LR2
+ * gauge; `grade_mirror`, `gauge_lr2`), and the other kinds have none.
+ */
+export function defaultCourseMakerConstraints(kind: CourseKind): CourseConstraint[] {
+  return kind === 'grade' ? ['grade_mirror', 'gauge_lr2'] : [];
+}
+
+/** A course with its constraints replaced (normalized: known names only, one per group). */
+export function withCourseConstraints(
+  course: CourseDefinition,
+  constraints: readonly CourseConstraint[],
+): CourseDefinition {
+  return { ...course, constraints: normalizeCourseConstraints(constraints) };
 }
 
 /** Why a song cannot join a course being made. */
@@ -94,7 +119,7 @@ function lr2CourseDefinition(
         ...(stage.artist !== undefined ? { artist: stage.artist } : {}),
       })!,
     ),
-    constraints: kind === 'grade' ? ['grade_mirror', 'gauge_lr2'] : [],
+    constraints: defaultCourseMakerConstraints(kind),
     trophies: [],
     release: true,
     source: { format: 'lr2crs', type: LR2_COURSE_TYPES[kind], header, hash },
@@ -116,7 +141,8 @@ export function finishCourseDraft(
   if (draft.stages.length === 0) return undefined;
   const connection = options.defaultConnection ?? 'fade';
   const keys = Array.from({ length: 10 }, (_, index) => (index < LR2_COURSE_MAKER_MAX_STAGES ? connection : 'fade'));
-  return lr2CourseDefinition(draft.name, draft.kind, draft.stages, draft.stages[0]?.keyMode, keys);
+  const course = lr2CourseDefinition(draft.name, draft.kind, draft.stages, draft.stages[0]?.keyMode, keys);
+  return draft.constraints !== undefined ? withCourseConstraints(course, draft.constraints) : course;
 }
 
 /**
@@ -159,7 +185,8 @@ function escapeXml(text: string): string {
 /**
  * Writes LR2 courses as a `.lr2crs` file: a UTF-8 `<courselist>` that `parseLr2CourseFile` reads back into the same
  * courses. Courses that did not come from an LR2 hash (`source.format !== 'lr2crs'`) are rebuilt from their stage
- * MD5s, and skipped when a stage has none.
+ * MD5s, and skipped when a stage has none. The format has no room for constraints: LR2 reads a GRADE course back with
+ * {@link defaultCourseMakerConstraints} and any other course with none (`serializeBeatorajaCourseFile` keeps them).
  */
 export function serializeLr2CourseFile(courses: readonly CourseDefinition[]): string {
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<courselist>'];

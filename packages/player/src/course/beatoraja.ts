@@ -1,6 +1,7 @@
 import {
   type CourseDefinition,
   type CourseStageRef,
+  courseConstraintEnumName,
   createCourseStageRef,
   isClassCourseConstraints,
   normalizeCourseConstraints,
@@ -124,4 +125,30 @@ export function parseBeatorajaCommandFolderFile(input: Uint8Array | string): Bea
   const folders: BeatorajaRandomCourseFolder[] = [];
   for (const folder of Array.isArray(json) ? json : [json]) collectRandomCourseFolders(folder, [], folders);
   return folders;
+}
+
+/**
+ * Writes courses as a beatoraja `course/*.json` file (an array of `CourseData`) that `parseBeatorajaCourseFile` reads
+ * back: each stage's `md5` / `sha256` and title, the constraints by beatoraja's enum names, the trophies and `release`.
+ * beatoraja has no NONSTOP course, so NONSTOP courses are left out.
+ */
+export function serializeBeatorajaCourseFile(courses: readonly CourseDefinition[]): string {
+  const data = courses
+    .filter((course) => course.kind !== 'nonstop')
+    .map((course) => ({
+      name: course.name,
+      hash: course.stages.map((stage) => ({
+        ...(stage.title !== undefined ? { title: stage.title } : {}),
+        ...(stage.md5 !== undefined ? { md5: stage.md5 } : {}),
+        ...(stage.sha256 !== undefined ? { sha256: stage.sha256 } : {}),
+      })),
+      constraint: course.constraints.map(courseConstraintEnumName),
+      trophy: course.trophies.map((trophy) => ({
+        name: trophy.name,
+        missrate: trophy.missRate,
+        scorerate: trophy.scoreRate,
+      })),
+      release: course.release,
+    }));
+  return `${JSON.stringify(data, null, 2)}\n`;
 }
