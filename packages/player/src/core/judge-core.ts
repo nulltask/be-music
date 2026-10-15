@@ -1,5 +1,5 @@
 import type { PlaylogInputEvent } from '../playlog/format.ts';
-import { advanceJudgeState, finishJudgeState } from './judge-core-advance.ts';
+import { advanceJudgeState, finishJudgeState, nextTimedJudgmentUs } from './judge-core-advance.ts';
 import { handleLanePress, handleLaneRelease } from './judge-core-press.ts';
 import {
   type JudgeCoreConfig,
@@ -8,7 +8,6 @@ import {
   type JudgeCoreInput,
   type JudgeCoreScore,
   type JudgeCoreState,
-  REPLAY_JUDGE_STEP_SECONDS,
 } from './judge-core-types.ts';
 
 /**
@@ -22,7 +21,7 @@ import {
  * state and the same inputs always produce the same effects. Drivers own the rest:
  *
  * - live play (`manualPlay`) steps it from the playback clock once per frame and on every key event;
- * - a replay steps it on a fixed chart-time grid merged with the recorded inputs ({@link advanceJudgeCoreReplay}),
+ * - a replay steps it from one judgment instant to the next, merged with the recorded inputs ({@link advanceJudgeCoreReplay}),
  *   so its judgments do not depend on tick timing or `speed`.
  *
  * Effects are delivered synchronously through a sink, so a driver that reads the shared {@link JudgeCoreState.summary}
@@ -50,6 +49,7 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     scoreTracker: score.scoreTracker,
     applyGaugeJudge: score.applyGaugeJudge,
     applyGaugeDelta: score.applyGaugeDelta,
+    applyGaugeTick: score.applyGaugeTick,
     drainGaugeToZero: score.drainGaugeToZero,
     combo: 0,
     heldChannels: new Set(),
@@ -59,6 +59,7 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     longNoteSuppressUntilSeconds: new Map(),
     laneHolds: new Map(),
     keyStateInput: false,
+    advancedThroughSeconds: 0,
     pendingAutoScratchLongNotes: [],
     autoScratchNotes: config.autoScratch
       ? config.scorableNotes.filter((note) => config.scratchChannels.has(note.channel))
@@ -67,6 +68,8 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     autoScratchCursor: 0,
     scorableMissCursor: 0,
     landmineExpireCursor: 0,
+    landminePhases: new Map(),
+    hcnPassing: new Map(),
     invisibleExpireCursor: 0,
     remainingScorableNotes: config.scorableNotes.length,
     remainingLandmineNotes: config.landmineNotes.length,
@@ -160,9 +163,10 @@ export function resolveJudgeInputChannels(
 export interface JudgeCoreReplay {
   readonly events: readonly PlaylogInputEvent[];
   cursor: number;
-  stepIndex: number;
   /** The chart second the judge state has been advanced to. */
   judgedThroughSeconds: number;
+  /** The same instant in whole microseconds. */
+  judgedThroughUs: number;
 }
 
 /** Sorts a play log's inputs into replay order. */
@@ -170,8 +174,8 @@ export function createJudgeCoreReplay(inputs: readonly PlaylogInputEvent[]): Jud
   return {
     events: [...inputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq),
     cursor: 0,
-    stepIndex: 0,
     judgedThroughSeconds: Number.NEGATIVE_INFINITY,
+    judgedThroughUs: Number.NEGATIVE_INFINITY,
   };
 }
 
@@ -223,12 +227,13 @@ function processReplayEventsUntil(
 }
 
 /**
- * Advances a replay's judge state up to `untilSec` on a fixed chart-time grid ({@link REPLAY_JUDGE_STEP_SECONDS})
- * merged with the replay events' own timestamps. The state is stepped to each event's instant BEFORE the event is
- * applied, so a release resolves its long note before a later press on that lane can refresh the hold, and misses,
- * tails and presses reach the gauge in chart-time order — the gauge clamps at its bounds, so the order of judgments
- * is part of the result. Steps past the last grid point at or before `untilSec` wait for the next call, keeping the
- * step times (and with them every judgment) independent of how the calls are spaced.
+ * Advances a replay's judge state up to `untilSec`, stepping from one instant to the next: to each replay event's own
+ * microsecond, and to the microsecond after each timed judgment ({@link nextTimedJudgmentUs}) — a tail, a miss
+ * deadline, an AUTO SCRATCH note, a mine check — so every step settles the judgments of exactly one instant, in the
+ * order the play-log simulator settles them. The state is stepped to each event's instant BEFORE the event is applied,
+ * so a release resolves its long note before a later press on that lane can refresh the hold, and misses, tails and
+ * presses reach the gauge in chart-time order — the gauge clamps at its bounds, so the order of judgments is part of
+ * the result. The steps depend only on the chart and the inputs, never on how the calls are spaced.
  */
 export function advanceJudgeCoreReplay(
   state: JudgeCoreState,
@@ -237,20 +242,23 @@ export function advanceJudgeCoreReplay(
   emit: JudgeCoreEffectSink,
 ): void {
   const msPerSecond = state.config.judgeMsPerChartSecond;
+  const untilUs = Math.round(untilSec * 1e6);
   for (;;) {
     const nextEvent = replay.events[replay.cursor];
-    const nextEventSec = nextEvent === undefined ? Number.POSITIVE_INFINITY : nextEvent.timeUs / 1_000_000;
-    const nextGridSec = (replay.stepIndex + 1) * REPLAY_JUDGE_STEP_SECONDS;
-    const stepSec = Math.min(nextEventSec, nextGridSec);
-    if (stepSec > untilSec) {
+    const nextEventUs = nextEvent === undefined ? Number.POSITIVE_INFINITY : nextEvent.timeUs;
+    const stepUs = Math.min(nextEventUs, nextTimedJudgmentUs(state, replay.judgedThroughUs) + 1);
+    if (!(stepUs <= untilUs)) {
+      if (untilUs > replay.judgedThroughUs) {
+        replay.judgedThroughUs = untilUs;
+        replay.judgedThroughSeconds = untilSec;
+      }
       return;
     }
-    if (nextGridSec <= nextEventSec) {
-      replay.stepIndex += 1;
-    }
+    const stepSec = stepUs / 1e6;
     advanceJudgeState(state, stepSec, stepSec * msPerSecond, emit);
+    replay.judgedThroughUs = stepUs;
     replay.judgedThroughSeconds = stepSec;
-    if (nextEventSec <= stepSec) {
+    if (nextEventUs <= stepUs) {
       processReplayEventsUntil(state, replay, stepSec, emit);
     }
   }

@@ -1,8 +1,9 @@
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { manualPlay } from '../index.ts';
-import type { PlayerSummary } from '../core/engine.ts';
-import { simulatePlaylog } from './simulate.ts';
+import type { PlayerOptions, PlayerSummary } from '../core/engine.ts';
+import { resolveRulesetConfig, simulatePlaylog } from './simulate.ts';
+import { createScheduledInputRuntime } from '../test-support/player-fixtures.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from './format.ts';
 import type { PlaylogRulesetId } from '../ruleset/index.ts';
 
@@ -25,16 +26,18 @@ async function replay(
   json: BeMusicJson,
   inputs: readonly PlaylogInputEvent[],
   ruleset: PlaylogRulesetId,
+  extra: PlayerOptions = {},
 ): Promise<ReplayRun> {
   let playlog: BeMusicPlaylog | undefined;
   const summary = await manualPlay(json, {
+    ...extra,
     speed: 16,
     leadInMs: 0,
     audio: false,
     tui: false,
     judgeRuleset: ruleset,
     replayInputs: inputs,
-    recordPlaylog: {},
+    recordPlaylog: extra.recordPlaylog ?? {},
     onPlaylogRecorded: (recorded) => {
       playlog = recorded;
     },
@@ -205,6 +208,622 @@ describe('engine / simulator equivalence', () => {
       simulated.judge.poor,
     ]);
     expect(summary.exScore).toBe(simulated.exScore);
+  });
+
+  // An LN let go just before its tail — e.g. a hand freeing the key for a tap that sits right on the tail — is not a
+  // BAD: LR2 keeps the head judgment inside the GOOD window, beatoraja takes the worse of head and release.
+  test.each(RULESETS)('%s: releasing an LN just before its tail agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+
+    for (const earlyUs of [1, 50_000]) {
+      const inputs = [down(0, 1_000_000, '11'), up(1, 2_000_000 - earlyUs, '11')];
+      const { summary, playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor], `${earlyUs} µs`).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.great,
+        simulated.judge.good,
+        simulated.judge.bad,
+        simulated.judge.poor,
+      ]);
+      expect(summary.bad, `${earlyUs} µs`).toBe(0);
+      if (ruleset === 'lr2') {
+        expect(summary.perfect, `${earlyUs} µs`).toBe(1);
+      }
+    }
+  });
+
+  // A press exactly on a window edge: the playlog clock is whole microseconds, and a note at BPM 140 sits at a time
+  // whose float seconds do not subtract to an exact delta, so the engine must judge the rounded delta as the
+  // simulator does instead of landing a hair outside the edge.
+  test.each(RULESETS)('%s: a press on a window edge agrees on both sides', async (ruleset) => {
+    const json = chart([{ measure: 1, channel: '11', position: [0, 1], value: '01' }]);
+    json.metadata.bpm = 140;
+    const probe = await replay(json, [], ruleset);
+    const noteUs = probe.playlog.chart.notes[0]!.timeUs;
+    const [lateEdgeUs, earlyEdgeUs] = resolveRulesetConfig(probe.playlog, ruleset).windows.note.judges[2];
+
+    for (const pressUs of [noteUs - lateEdgeUs, noteUs - earlyEdgeUs]) {
+      const { summary, playlog } = await replay(json, [down(0, pressUs, '11'), up(1, pressUs + 40_000, '11')], ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.good, summary.bad], `press at ${pressUs} µs`).toEqual([1, 0]);
+      expect([summary.good, summary.bad], `press at ${pressUs} µs`).toEqual([
+        simulated.judge.good,
+        simulated.judge.bad,
+      ]);
+    }
+  });
+
+  // An LN released exactly on a long-note-end window edge, at a BPM whose note times are not exact in float seconds.
+  test.each(RULESETS)('%s: an LN released on a window edge agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+    json.metadata.bpm = 140;
+    const probe = await replay(json, [down(0, 0, '19')], ruleset);
+    const head = probe.playlog.chart.notes.find((note) => note.channel === '11')!;
+    const endWindows = resolveRulesetConfig(probe.playlog, ruleset).windows.longNoteEnd.judges;
+
+    for (const [, earlyEdgeUs] of endWindows) {
+      const inputs = [down(0, head.timeUs, '11'), up(1, head.endTimeUs! - earlyEdgeUs, '11')];
+      const { summary, playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor], `${earlyEdgeUs} µs`).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.great,
+        simulated.judge.good,
+        simulated.judge.bad,
+        simulated.judge.poor,
+      ]);
+    }
+  });
+
+  // beatoraja's five-key rule breaks the combo on an empty POOR, and the max combo has to see that break.
+  test.each(RULESETS)('%s: an empty POOR between hits agrees on the max combo', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      { measure: 3, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    const inputs = [
+      down(0, 1_000_000, '11'),
+      up(1, 1_040_000, '11'),
+      down(2, 1_600_000, '11'),
+      up(3, 1_640_000, '11'),
+      down(4, 2_000_000, '11'),
+      up(5, 2_040_000, '11'),
+      down(6, 3_000_000, '11'),
+      up(7, 3_040_000, '11'),
+    ];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.emptyPoor).toBe(simulated.judge.emptyPoor);
+    expect(playlog.results?.native?.maxCombo).toBe(simulated.maxCombo);
+    if (ruleset === 'beatoraja') {
+      expect(simulated.maxCombo).toBe(2);
+    }
+  });
+
+  // Channel 16 is a key, not a scratch, in the BME-type 9 KEY layout and the keyboard modes: AUTO SCRATCH must leave
+  // it to the player on both sides.
+  test.each(RULESETS)('%s: AUTO SCRATCH leaves channel 16 alone where it is a key', async (ruleset) => {
+    for (const playVariant of ['9', '24'] as const) {
+      const channels =
+        playVariant === '9' ? ['11', '12', '13', '14', '15', '16', '17', '18', '19'] : ['11', '16', '1A'];
+      const json = chart(channels.map((channel) => ({ measure: 1, channel, position: [0, 1], value: '01' })));
+      const inputs = [down(0, 1_000_000, '11'), up(1, 1_040_000, '11')];
+
+      const { summary, playlog } = await replay(json, inputs, ruleset, { autoScratch: true, playVariant });
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.poor], playVariant).toEqual([simulated.judge.pgreat, simulated.judge.poor]);
+      expect(summary.perfect, playVariant).toBe(1);
+    }
+  });
+
+  // The play log must record the gauge the engine ran, whichever option the host set it through.
+  test.each(RULESETS)('%s: the recorded gauge is the gauge the engine ran', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    const inputs = [down(0, 1_000_000, '11'), up(1, 1_040_000, '11')];
+
+    for (const extra of [{ gauge: 'HARD' }, { recordPlaylog: { gauge: 'HARD' } }] as const) {
+      const { summary, playlog } = await replay(json, inputs, ruleset, extra);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect(playlog.play.gauge, JSON.stringify(extra)).toBe('HARD');
+      expect(summary.gauge?.type, JSON.stringify(extra)).toBe(simulated.gauge.type);
+      expect(summary.gauge?.current, JSON.stringify(extra)).toBeCloseTo(simulated.gauge.final, 2);
+    }
+  });
+
+  // `#EXRANK` changes are recorded whatever ruleset the play ran under, so re-simulating a beatoraja or IIDX log under
+  // LR2 uses the windows an LR2 play of the same inputs used.
+  test.each(['beatoraja', 'iidx'] as const)(
+    'a %s log re-simulates under lr2 with the #EXRANK changes',
+    async (ruleset) => {
+      const json = chart([
+        { measure: 1, channel: 'A0', position: [0, 1], value: '01' },
+        { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      ]);
+      json.bms.exRank['01'] = '25';
+      const inputs = [down(0, 2_040_000, '11'), up(1, 2_080_000, '11')];
+
+      const played = await replay(json, inputs, ruleset);
+      const lr2 = await replay(json, inputs, 'lr2');
+      const resimulated = simulatePlaylog(played.playlog, { ruleset: 'lr2' });
+
+      expect(played.playlog.chart.judgeRank.timeline).toHaveLength(1);
+      expect([
+        resimulated.judge.pgreat,
+        resimulated.judge.great,
+        resimulated.judge.good,
+        resimulated.judge.bad,
+      ]).toEqual([lr2.summary.perfect, lr2.summary.great, lr2.summary.good, lr2.summary.bad]);
+    },
+  );
+
+  // Holding a charge note past its tail's late window is a missed POOR, not a BAD at the window's edge.
+  test.each(RULESETS)('%s: a charge tail held past its late window agrees on both sides', async (ruleset) => {
+    for (const lnMode of [2, 3] as const) {
+      const json = longNoteChart(lnMode);
+      const inputs = [down(0, 1_000_000, '11'), up(1, 3_000_000, '11')];
+      const { summary, playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.bad, summary.poor], `#LNMODE ${lnMode}`).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.bad,
+        simulated.judge.poor,
+      ]);
+      expect(summary.bad, `#LNMODE ${lnMode}`).toBe(0);
+    }
+  });
+
+  // A press on a lane whose long note was already let go is an ordinary press: no window after the release, and no
+  // waiting for the tail, keeps it from charging an empty POOR.
+  test.each(RULESETS)('%s: a press after an LN was let go is judged as any other press', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 3, channel: '11', position: [0, 1], value: 'AA' },
+      { measure: 3, channel: '11', position: [1, 4], value: '01' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    const inputs = [down(0, 1_000_000, '11'), up(1, 1_500_000, '11'), down(2, 2_900_000, '11'), up(3, 2_950_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.emptyPoor).toBe(simulated.judge.emptyPoor);
+    expect(summary.emptyPoor).toBe(1);
+  });
+
+  // Misses are settled at each note's own deadline: a key note whose window closes before an earlier scratch note's
+  // (beatoraja's scratch BAD window reaches 10 ms further) is missed first, so a hit between the two deadlines starts a
+  // new combo instead of extending the old one.
+  test.each(RULESETS)('%s: misses settle in deadline order across lanes', async (ruleset) => {
+    const at = (channel: string, us: number) => ({
+      measure: 0,
+      channel,
+      position: [us, 1_000_000] as const,
+      value: '01',
+    });
+    const probe = await replay(chart([at('11', 1_000_000), at('16', 1_000_000)], 3), [], ruleset);
+    const { windows } = resolveRulesetConfig(probe.playlog, ruleset);
+    const keyLateUs = -windows.note.judges[3][0];
+    const scratchLateUs = -windows.scratch.judges[3][0];
+    const keyNoteUs = 400_000 + Math.max(0, scratchLateUs - keyLateUs) / 2;
+    const pressUs = keyNoteUs + keyLateUs + 1_000;
+
+    const json = chart([at('13', 100_000), at('16', 400_000), at('11', keyNoteUs), at('12', pressUs)], 3);
+    const inputs = [
+      down(0, 100_000, '13'),
+      up(1, 120_000, '13'),
+      down(2, pressUs, '12'),
+      up(3, pressUs + 20_000, '12'),
+    ];
+    const { playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.results?.native?.maxCombo).toBe(simulated.maxCombo);
+    if (ruleset === 'beatoraja') {
+      expect(simulated.maxCombo).toBe(1);
+    }
+  });
+
+  // An LN held to its tail settles at the tail, before a miss that falls due a moment later on another lane, so the
+  // tail extends the combo before the miss breaks it.
+  test.each(RULESETS)('%s: an LN tail settles before a later miss', async (ruleset) => {
+    const json = longNoteChart(1);
+    json.events.push(
+      { measure: 1, channel: '12', position: [1, 2], value: '01' },
+      { measure: 2, channel: '13', position: [1, 2000], value: '01' },
+    );
+    const inputs = [down(0, 1_000_000, '11'), down(1, 1_500_000, '12'), up(2, 1_520_000, '12'), up(3, 2_500_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.results?.native?.maxCombo).toBe(simulated.maxCombo);
+    expect(summary.gauge?.current).toBe(simulated.gauge.final);
+    if (ruleset === 'lr2') {
+      expect(simulated.maxCombo).toBe(2);
+    }
+  });
+
+  // beatoraja's PMS rule lets a BAD early release wait 200 ms before it settles; pressing again inside it resumes the
+  // long note. Every other release settles at once.
+  test.each(RULESETS)('%s: a re-press inside the release margin agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+    json.events.push({ measure: 4, channel: '22', position: [0, 1], value: '01' });
+    const inputs = [down(0, 1_000_000, '11'), up(1, 1_500_000, '11'), down(2, 1_600_000, '11'), up(3, 2_000_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { playVariant: '9' });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect([summary.perfect, summary.bad, summary.poor, summary.emptyPoor]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.bad,
+      simulated.judge.poor,
+      simulated.judge.emptyPoor,
+    ]);
+    if (ruleset === 'beatoraja') {
+      expect([summary.perfect, summary.bad]).toEqual([1, 0]);
+    }
+  });
+
+  // A release settles its long note at the release, before a press on another lane at the same instant.
+  test.each(RULESETS)('%s: a release settles before a press at the same instant', async (ruleset) => {
+    for (const lnMode of [1, 2] as const) {
+      const json = longNoteChart(lnMode);
+      json.events.push({ measure: 1, channel: '12', position: [1, 2], value: '01' });
+      const inputs = [
+        down(0, 1_000_000, '11'),
+        up(1, 1_500_000, '11'),
+        down(2, 1_500_000, '12'),
+        up(3, 1_520_000, '12'),
+      ];
+
+      const { playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect(playlog.results?.native?.maxCombo, `#LNMODE ${lnMode}`).toBe(simulated.maxCombo);
+    }
+  });
+
+  // A second key pressing a lane whose long note is held never judges the lane's next note: LR2 charges an empty POOR,
+  // beatoraja and IIDX ignore the press.
+  test.each(RULESETS)('%s: a second key on a held long note agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+    json.events.push({ measure: 2, channel: '11', position: [1, 20], value: '01' });
+    const inputs = [down(0, 1_000_000, '11'), down(1, 1_980_000, '11'), up(2, 2_000_000, '11'), up(3, 2_100_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect([summary.perfect, summary.poor, summary.emptyPoor]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.poor,
+      simulated.judge.emptyPoor,
+    ]);
+    expect(summary.emptyPoor).toBe(ruleset === 'lr2' ? 1 : 0);
+  });
+
+  // LR2 judges an LN head again when a second key presses inside its BAD window.
+  test.each(RULESETS)('%s: a second key near the LN head agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(1);
+    const inputs = [down(0, 950_000, '11'), down(1, 1_005_000, '11'), up(2, 2_000_000, '11'), up(3, 2_010_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect([summary.perfect, summary.great, summary.good, summary.bad]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.great,
+      simulated.judge.good,
+      simulated.judge.bad,
+    ]);
+    if (ruleset === 'lr2') {
+      expect(summary.perfect).toBe(1);
+    }
+  });
+
+  // A lane held by two keys stays down while either is: releasing the first before a mine crosses still detonates it.
+  test.each(RULESETS)('%s: a mine crossing a lane held by a second key agrees on both sides', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: 'D1', position: [0, 1], value: '0A' },
+      { measure: 3, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    const key = (seq: number, timeUs: number, action: 'down' | 'up', token: string): PlaylogInputEvent => ({
+      seq,
+      timeUs,
+      action,
+      channels: ['11'],
+      tokens: [token],
+    });
+    const inputs = [
+      key(0, 500_000, 'down', 'a'),
+      key(1, 600_000, 'down', 'b'),
+      key(2, 700_000, 'up', 'a'),
+      key(3, 1_500_000, 'up', 'b'),
+    ];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.gauge?.current).toBe(simulated.gauge.final);
+    expect(simulated.gauge.final).toBeLessThan(resolveRulesetConfig(playlog, ruleset).gauge.initial);
+  });
+
+  // LR2 judges with the widths in force at the moment it judges: a press with the windows of the press, a release with
+  // the windows of the release, even when `#EXRANK` narrows them before the note or the tail.
+  test.each(RULESETS)('%s: #EXRANK changes apply at the instant of the press or release', async (ruleset) => {
+    const press = chart([
+      { measure: 1, channel: 'A0', position: [0, 1], value: '01' },
+      { measure: 1, channel: '11', position: [1, 20], value: '01' },
+    ]);
+    press.bms.exRank['01'] = '25';
+    const pressed = await replay(press, [down(0, 900_000, '11'), up(1, 940_000, '11')], ruleset);
+    const pressSimulated = simulatePlaylog(pressed.playlog, { ruleset });
+    expect([pressed.summary.bad, pressed.summary.emptyPoor]).toEqual([
+      pressSimulated.judge.bad,
+      pressSimulated.judge.emptyPoor,
+    ]);
+
+    const release = longNoteChart(1);
+    release.events.push({ measure: 1, channel: 'A0', position: [19, 20], value: '01' });
+    release.bms.exRank['01'] = '25';
+    const released = await replay(release, [down(0, 1_000_000, '11'), up(1, 1_920_000, '11')], ruleset);
+    const releaseSimulated = simulatePlaylog(released.playlog, { ruleset });
+    expect([released.summary.perfect, released.summary.bad]).toEqual([
+      releaseSimulated.judge.pgreat,
+      releaseSimulated.judge.bad,
+    ]);
+
+    if (ruleset === 'lr2') {
+      expect(pressed.summary.bad).toBe(1);
+      expect(released.summary.perfect).toBe(1);
+    }
+  });
+
+  // FREE ZONE has no judging effect in any reference (LR2 and beatoraja drop channel 17 from 7-key charts; IIDX never had
+  // it): a scratch press there is an ordinary press, and charges an empty POOR when a scratch note is in reach.
+  test.each(RULESETS)('%s: a scratch press in a FREE ZONE is judged as any other press', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '17', position: [0, 1], value: '01' },
+      { measure: 1, channel: '16', position: [3, 4], value: '01' },
+      { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '18', position: [0, 1], value: '01' },
+    ]);
+    // A scratch key resolves to the scratch lane and its FREE ZONE alias, as the play log records it.
+    const inputs = [down(0, 1_300_000, '16', '17'), up(1, 1_320_000, '16', '17')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { playVariant: '7' });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.emptyPoor).toBe(simulated.judge.emptyPoor);
+    expect(summary.emptyPoor).toBe(1);
+  });
+
+  // AUTO SCRATCH clears a charge note's head at the head and its tail at the tail, as beatoraja's autoplay does, so a
+  // miss in between breaks the combo between them.
+  test.each(RULESETS)('%s: AUTO SCRATCH clears a charge note head and tail at their own times', async (ruleset) => {
+    const json = chart([
+      { measure: 1, channel: '16', position: [0, 1], value: '01' },
+      { measure: 3, channel: '16', position: [0, 1], value: 'AA' },
+      { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      { measure: 4, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    json.bms.lnMode = 2;
+    const inputs = [down(0, 4_000_000, '11'), up(1, 4_040_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset, { autoScratch: true });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.perfect).toBe(simulated.judge.pgreat);
+    expect(playlog.results?.native?.maxCombo).toBe(simulated.maxCombo);
+    if (ruleset === 'beatoraja') {
+      expect(simulated.maxCombo).toBe(2);
+    }
+  });
+
+  // Hell Charge notes run beatoraja's 200 ms gauge ticks from the judged head until the tail passes, gaining while a
+  // key is down on the lane (or after a GOOD-or-better tail) and draining otherwise; the tail is judged at the release.
+  test.each(RULESETS)('%s: Hell Charge gauge ticks agree on both sides', async (ruleset) => {
+    const json = chart([
+      { measure: 0, channel: '12', position: [1, 2], value: '01' },
+      { measure: 0, channel: '12', position: [3, 4], value: '01' },
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 3, channel: '11', position: [0, 1], value: 'AA' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    json.bms.lnMode = 3;
+    const scenarios: Record<string, PlaylogInputEvent[]> = {
+      held: [down(0, 1_000_000, '11'), up(1, 3_000_000, '11')],
+      released: [down(0, 1_000_000, '11'), up(1, 1_200_000, '11'), down(2, 1_400_000, '11'), up(3, 3_000_000, '11')],
+      never: [],
+      'released well': [down(0, 1_000_000, '11'), up(1, 2_950_000, '11')],
+    };
+
+    for (const [name, inputs] of Object.entries(scenarios)) {
+      const { summary, playlog } = await replay(json, inputs, ruleset, { gauge: 'HARD' });
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor], name).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.great,
+        simulated.judge.good,
+        simulated.judge.bad,
+        simulated.judge.poor,
+      ]);
+      expect(playlog.results?.native?.maxCombo, name).toBe(simulated.maxCombo);
+      expect(summary.gauge?.current, name).toBe(simulated.gauge.final);
+    }
+  });
+
+  // An AUTO SCRATCH long note whose tail lies past an LR2 negative-BPM reversal is never cleared: the run ends with it
+  // outstanding, which LR2 fails by emptying the gauge.
+  test('lr2: an AUTO SCRATCH long note across a reversal agrees on both sides', async () => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '16', position: [1, 2], value: '01' },
+      { measure: 2, channel: '08', position: [0, 1], value: '02' },
+      { measure: 3, channel: '16', position: [0, 1], value: 'AA' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    json.resources.bpm['02'] = -240;
+    const inputs = [down(0, 1_000_000, '11'), up(1, 1_040_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'lr2', { autoScratch: true });
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(summary.gauge?.current).toBe(simulated.gauge.final);
+    expect(summary.gauge?.current).toBe(0);
+  });
+
+  // LR2's mine press leg is live up to the reversal instant itself.
+  test('lr2: a press at the reversal instant detonates a mine just before it on both sides', async () => {
+    const json = chart([
+      { measure: 1, channel: 'D1', position: [99, 100], value: '0A' },
+      { measure: 2, channel: '08', position: [0, 1], value: '02' },
+      { measure: 1, channel: '12', position: [0, 1], value: '01' },
+    ]);
+    json.resources.bpm['02'] = -240;
+    const inputs = [down(0, 2_000_000, '11'), up(1, 2_010_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(summary.gauge?.current).toBe(simulated.gauge.final);
+  });
+
+  // An ESC abort stops judging where the engine stopped; the rest of the chart is neither missed nor failed.
+  test.each(RULESETS)('%s: an aborted play stops judging at the abort on both sides', async (ruleset) => {
+    const json = chart(
+      Array.from({ length: 12 }, (_, index) => ({
+        measure: index + 1,
+        channel: '11',
+        position: [0, 1] as const,
+        value: '01',
+      })),
+    );
+    const { summary, playlog } = await replay(json, [down(0, 1_000_000, '11'), up(1, 1_040_000, '11')], ruleset, {
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(playlog.play.aborted).toBe(true);
+    expect(playlog.play.abortedAtUs).toBeGreaterThan(1_040_000);
+    expect(summary.poor).toBeLessThan(11);
+    expect(simulated.judge.poor).toBe(summary.poor);
+    expect(simulated.judge.pgreat).toBe(summary.perfect);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+  });
+
+  // LR2 misses an LN head once time moves past its late GOOD leg — before a plain note just ahead of it on the same
+  // lane runs out of its late BAD leg.
+  test('lr2: an LN head missed before the note ahead of it agrees on both sides', async () => {
+    const json = chart(
+      [
+        { measure: 1, channel: '11', position: [0, 200], value: '01' },
+        { measure: 1, channel: '11', position: [17, 200], value: '01' },
+        { measure: 1, channel: '11', position: [100, 200], value: 'AA' },
+        { measure: 2, channel: '12', position: [0, 1], value: '01' },
+      ],
+      1,
+    );
+    json.bms.lnObjs = ['AA'];
+    // No input between the BAD press and the LN head's deadline, so the next advance spans that deadline.
+    const inputs = [down(0, 1_091_000, '11'), down(1, 1_170_000, '12'), up(2, 1_180_000, '12'), up(3, 1_190_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(summary.bad).toBe(1);
+    expect(summary.poor).toBe(2);
+    expect(simulated.judge.bad).toBe(summary.bad);
+    expect(simulated.judge.poor).toBe(summary.poor);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+  });
+
+  // beatoraja holds an early release back only when the LN's judgment is BAD or worse AND early; a late BAD head
+  // settles at once, so pressing again right away is a fresh press (here an empty POOR on the note ahead).
+  test('beatoraja: an LN with a late BAD head settles its release at once on both sides', async () => {
+    const json = chart([
+      { measure: 1, channel: '13', position: [0, 1], value: '01' },
+      { measure: 1, channel: '13', position: [1, 2], value: 'AA' },
+      { measure: 1, channel: '13', position: [4, 5], value: '01' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    const inputs = [down(0, 1_150_000, '13'), up(1, 1_490_000, '13'), down(2, 1_490_001, '13'), up(3, 1_600_000, '13')];
+
+    const { summary, playlog } = await replay(json, inputs, 'beatoraja', { playVariant: '9' });
+    const simulated = simulatePlaylog(playlog, { ruleset: 'beatoraja' });
+
+    expect(summary.bad).toBe(1);
+    expect(summary.emptyPoor).toBe(1);
+    expect(simulated.judge.emptyPoor).toBe(summary.emptyPoor);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+  });
+
+  // beatoraja ticks the Hell Charge note crossing the judge line. Pressing the lane's next HCN early, before the one
+  // ahead of it is missed, must not let that late miss take over the lane's ticks.
+  test('beatoraja: an HCN pressed early keeps its ticks when the one ahead is missed', async () => {
+    const json = chart(
+      [
+        { measure: 1, channel: '11', position: [0, 12], value: '01' },
+        { measure: 1, channel: '11', position: [1, 12], value: 'AA' },
+        { measure: 1, channel: '11', position: [2, 12], value: '01' },
+        { measure: 2, channel: '11', position: [0, 1], value: 'AA' },
+        // Plain notes, never pressed, take the gauge well below its ceiling first.
+        ...Array.from({ length: 4 }, (_, index) => ({
+          measure: 0,
+          channel: '12',
+          position: [index, 4] as const,
+          value: '01',
+        })),
+      ],
+      3,
+    );
+    json.bms.lnObjs = ['AA'];
+    json.bms.lnMode = 3;
+    // A low #TOTAL keeps each judgment's gauge step small, so the ticks show.
+    json.metadata.total = 20;
+    // The first HCN (1.0-1.083 s) is never pressed. The press lands after its tail but before its miss deadline, and
+    // judges the second (1.167-2.0 s) early, so the first one's miss comes after the second started ticking.
+    const inputs = [down(0, 1_120_000, '11'), up(1, 2_000_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'beatoraja');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'beatoraja' });
+
+    // The missed HCN's head and its tail, and the plain notes.
+    expect(summary.poor).toBe(6);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+    expect(simulated.judge).toMatchObject({ poor: summary.poor, good: summary.good, great: summary.great });
+  });
+
+  // At BPM 177 the note sits at 1.3559322… s, recorded as 1 355 932 µs. A press exactly 200 000 µs earlier is on LR2's
+  // BAD edge, though the float seconds put it 0.2000002 s away: the press scan must reach it in whole microseconds.
+  test('lr2: a press on the BAD edge in whole microseconds judges the note on both sides', async () => {
+    const json = chart([{ measure: 1, channel: '11', position: [0, 1], value: '01' }]);
+    json.metadata.bpm = 177;
+    const inputs = [down(0, 1_155_932, '11'), up(1, 1_200_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(playlog.chart.notes[0]!.timeUs).toBe(1_355_932);
+    expect(summary.bad).toBe(1);
+    expect(summary.emptyPoor).toBe(0);
+    expect(simulated.judge).toMatchObject({ bad: summary.bad, poor: summary.poor, emptyPoor: summary.emptyPoor });
   });
 
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {

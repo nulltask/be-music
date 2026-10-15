@@ -1,16 +1,18 @@
 import type { BeMusicEvent } from '@be-music/json';
-import type { TimedLandmineNote } from '../playable-notes.ts';
+import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import { judgeWindowLateReachUs, pgreatWindowReachUs } from '../ruleset/judge.ts';
-import { isChargeLongNoteMode } from '../ruleset/long-note.ts';
+import { addHcnPassing, HcnTickCounter, isChargeLongNoteMode } from '../ruleset/long-note.ts';
 import {
   combineLongNoteJudges,
   insertPendingAutoLongNote,
   longNoteScoresTail,
   resolveLoggedLongNoteMode,
   resolveLongNoteEndSeconds,
+  resolveLongNoteEarlyReleaseJudge,
   resolveManualTimedJudge,
   resolveRulesetLongNoteMode,
   toUiLongNoteMode,
+  type PendingAutoLongNoteState,
   type TimedManualJudge,
 } from './judge-rules.ts';
 import { resolveLandmineGaugeEffect } from './landmine.ts';
@@ -22,21 +24,23 @@ import {
   applyTailMissPoor,
   badWindowSeconds,
   clampToReversal,
+  applyHcnGaugeTick,
+  compareJudgeChannels,
   judgeWindowsFor,
   markInvisibleJudged,
   markLandmineJudged,
   markScorableJudged,
   noteOwesTailMiss,
   resolveMissDeadlineSeconds,
+  resolveMissDeadlineUs,
   setCombo,
   toJudgeClock,
+  toJudgeUs,
   windowTablesAt,
 } from './judge-core-score.ts';
 import {
   type ActiveLongNoteState,
-  HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
-  HELL_CHARGE_GAUGE_GAIN_PER_SECOND,
-  JUDGE_TIME_EPSILON_SECONDS,
+  type HcnPassingState,
   type JudgeCoreEffectSink,
   type JudgeCoreState,
   LANDMINE_EXPLOSION_SAMPLE_KEY,
@@ -129,12 +133,19 @@ function detonateLandmine(
   });
 }
 
+/** Upper bound (µs) on any ruleset's PGREAT reach, so a mine scan can stop at mines too far ahead to matter. */
+const LANDMINE_SCAN_AHEAD_US = 1_000_000;
+
 /**
- * Mines, by the ruleset's `mineTrigger`. LR2 (`'press-or-hold'`, LR2's own changelog, 080114
- * entry): a mine explodes when its lane's key is held as the mine crosses the judge line ("キー押したまま地雷通過"), or
- * on a press within the PGREAT window of the judge line ("ピカグレ範囲内でキーを押す"); mines that cross with the key up
- * are retired silently once the PGREAT window closes behind them. beatoraja (`'hold'`, `JudgeManager` L244): only the
- * key being down as the mine crosses counts, settled as soon as time has moved past the crossing. Runs on every advance and on every press.
+ * Mines, by the ruleset's `mineTrigger`. LR2 (`'press-or-hold'`, LR2's own changelog, 080114 entry): a mine explodes
+ * when its lane's key is down as the mine enters the PGREAT window or crosses the judge line ("キー押したまま地雷通過"),
+ * or on a press within the PGREAT window ("ピカグレ範囲内でキーを押す", {@link detonateLandminesOnPress}); it settles
+ * once the window closes behind it. beatoraja (`'hold'`, `JudgeManager` L244): only the key being down as the mine
+ * crosses counts, and the mine settles there.
+ *
+ * Each check is a timed judgment at its own microsecond (the entry, the crossing, the settling), taken once time has
+ * moved past it and in time order with the other mines, asking whether the lane was down at that instant. The play-log
+ * simulator schedules the same checks, so both detonate the same mines in the same order.
  */
 export function processLandminePassage(
   state: JudgeCoreState,
@@ -145,68 +156,101 @@ export function processLandminePassage(
   const { config } = state;
   const landmineNotes = config.landmineNotes;
   const reversalSeconds = config.reversalSeconds;
-  // Reach form keeps the early / late legs separate — nothing guarantees a ruleset's window table is symmetric.
-  const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, nowSec).note);
   const pressDetonates = config.ruleset.mineTrigger === 'press-or-hold';
-  // Under the hold-only rule a mine is settled as soon as it crosses; LR2 waits for the PGREAT window to close.
-  const settleAfterSeconds = pressDetonates ? pgreatLateUs / 1e6 : 0;
-  const pgreatEarlySeconds = pgreatEarlyUs / 1e6;
-  while (state.landmineExpireCursor < landmineNotes.length) {
-    const landmine = landmineNotes[state.landmineExpireCursor]!;
-    if (landmine.judged) {
-      state.landmineExpireCursor += 1;
-      continue;
-    }
+  const nowUs = toJudgeUs(nowSec);
+  const due: Array<{ atUs: number; landmine: TimedLandmineNote; phase: 1 | 2 | 3 }> = [];
+  for (let index = state.landmineExpireCursor; index < landmineNotes.length; index += 1) {
+    const landmine = landmineNotes[index]!;
     if (reversalSeconds !== undefined && landmine.seconds >= reversalSeconds) {
       // Mines at or behind the LR2 reversal are frozen with the pump (#134) — they neither detonate nor retire.
       break;
     }
-    // Settled only once time has moved past the crossing (`<=` under the hold rule), so an input at the crossing's
-    // very instant is in, whichever order the driver applies it and the advance to that instant.
-    if (nowSec - landmine.seconds <= settleAfterSeconds) {
-      break;
-    }
-    // The PGREAT window can be narrower than a step, so a held-through mine may enter AND leave it between two
-    // passage calls. The hold-through leg therefore anchors to the crossing itself: once the mine is settled, detonate
-    // if the lane was down at the moment the mine crossed the judge line. A press AFTER the crossing never counts here:
-    // that is the press leg, and it already missed PGREAT.
-    const crossingMs = nowMs - (nowSec - landmine.seconds) * config.judgeMsPerChartSecond;
-    if (wasLaneDownAtMs(state, landmine.channel, crossingMs)) {
-      detonateLandmine(state, landmine, nowSec, emit);
-    } else {
-      markLandmineJudged(state, landmine);
-    }
-    state.landmineExpireCursor += 1;
-  }
-  if (!pressDetonates) {
-    return;
-  }
-  if (reversalSeconds !== undefined && nowSec >= reversalSeconds) {
-    // The press leg is dead past the reversal (#134). The crossing sweep above still ran so a PRE-reversal crossing
-    // whose PGREAT window closed on the far side of the reversal is not silently dropped.
-    return;
-  }
-  for (let index = state.landmineExpireCursor; index < landmineNotes.length; index += 1) {
-    const landmine = landmineNotes[index]!;
-    if (landmine.seconds - nowSec > pgreatEarlySeconds) {
-      break;
-    }
-    if (reversalSeconds !== undefined && landmine.seconds >= reversalSeconds) {
-      // The early reach must not detonate mines positioned behind the reversal (#134).
+    const mineUs = toJudgeUs(landmine.seconds);
+    if (mineUs - LANDMINE_SCAN_AHEAD_US >= nowUs) {
       break;
     }
     if (landmine.judged) {
       continue;
     }
-    // Held as the mine entered the PGREAT window, or held now (a press inside the window is the press leg).
-    const enterMs = nowMs - (nowSec - landmine.seconds + pgreatEarlySeconds) * config.judgeMsPerChartSecond;
-    if (
-      !wasLaneDownAtMs(state, landmine.channel, Math.min(enterMs, nowMs)) &&
-      !wasLaneDownAtMs(state, landmine.channel, nowMs)
-    ) {
+    // Reach form keeps the early / late legs separate — nothing guarantees a ruleset's window table is symmetric.
+    const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, landmine.seconds).note);
+    const phase = state.landminePhases.get(landmine) ?? 0;
+    if (pressDetonates && phase < 1 && mineUs - pgreatEarlyUs < nowUs) {
+      due.push({ atUs: mineUs - pgreatEarlyUs, landmine, phase: 1 });
+    }
+    if (phase < 2 && mineUs < nowUs) {
+      due.push({ atUs: mineUs, landmine, phase: 2 });
+    }
+    // Under the hold-only rule a mine settles as it crosses; LR2 waits for the PGREAT window to close.
+    const settleUs = pressDetonates ? mineUs + pgreatLateUs : mineUs;
+    if (settleUs < nowUs) {
+      due.push({ atUs: settleUs, landmine, phase: 3 });
+    }
+  }
+  due.sort(
+    (left, right) =>
+      left.atUs - right.atUs ||
+      compareJudgeChannels(left.landmine.channel, right.landmine.channel) ||
+      left.phase - right.phase,
+  );
+  for (const check of due) {
+    if (check.landmine.judged) {
       continue;
     }
-    detonateLandmine(state, landmine, nowSec, emit);
+    state.landminePhases.set(check.landmine, check.phase);
+    if (check.phase === 3) {
+      markLandmineJudged(state, check.landmine);
+      continue;
+    }
+    const atMs = nowMs - (nowSec - check.atUs / 1e6) * config.judgeMsPerChartSecond;
+    if (wasLaneDownAtMs(state, check.landmine.channel, atMs)) {
+      detonateLandmine(state, check.landmine, nowSec, emit);
+    }
+  }
+  while (state.landmineExpireCursor < landmineNotes.length && landmineNotes[state.landmineExpireCursor]!.judged) {
+    state.landmineExpireCursor += 1;
+  }
+}
+
+/**
+ * LR2's press leg (`mineTrigger: 'press-or-hold'`): a press detonates every unsettled mine on the pressed lanes whose
+ * PGREAT window contains it. Detonation never consumes the press: the note judgment still runs.
+ */
+export function detonateLandminesOnPress(
+  state: JudgeCoreState,
+  channels: ReadonlySet<string>,
+  nowSec: number,
+  emit: JudgeCoreEffectSink,
+): void {
+  const { config } = state;
+  if (config.ruleset.mineTrigger !== 'press-or-hold') {
+    return;
+  }
+  const reversalSeconds = config.reversalSeconds;
+  if (reversalSeconds !== undefined && toJudgeUs(nowSec) > toJudgeUs(reversalSeconds)) {
+    // The press leg is dead past the reversal (#134); a press at the reversal itself still counts.
+    return;
+  }
+  const landmineNotes = config.landmineNotes;
+  const nowUs = toJudgeUs(nowSec);
+  for (let index = state.landmineExpireCursor; index < landmineNotes.length; index += 1) {
+    const landmine = landmineNotes[index]!;
+    if (reversalSeconds !== undefined && landmine.seconds >= reversalSeconds) {
+      // The early reach must not detonate mines positioned behind the reversal (#134).
+      break;
+    }
+    const mineUs = toJudgeUs(landmine.seconds);
+    if (mineUs - LANDMINE_SCAN_AHEAD_US > nowUs) {
+      break;
+    }
+    if (landmine.judged || !channels.has(landmine.channel)) {
+      continue;
+    }
+    // LR2 reads the PGREAT window in force at the press (`#EXRANK` can change it).
+    const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, nowSec).note);
+    if (mineUs - pgreatEarlyUs <= nowUs && nowUs - mineUs <= pgreatLateUs) {
+      detonateLandmine(state, landmine, nowSec, emit);
+    }
   }
 }
 
@@ -229,57 +273,110 @@ function markExpiredInvisibleNotes(state: JudgeCoreState, referenceSeconds: numb
 
 // ---- auto scratch ---------------------------------------------------------------------------------------------
 
+/**
+ * AUTO SCRATCH: the scratch notes whose time has passed, and the auto-played long notes whose tail has, in time order
+ * (a tail before a head at the same instant, then channel order), each at its own microsecond.
+ */
 function applyAutoScratchJudgements(state: JudgeCoreState, referenceSeconds: number, emit: JudgeCoreEffectSink): void {
   const { config } = state;
-  if (!config.autoScratch) {
-    return;
-  }
-  const autoScratchNotes = state.autoScratchNotes;
-  while (state.autoScratchCursor < autoScratchNotes.length) {
-    const note = autoScratchNotes[state.autoScratchCursor]!;
-    if (note.judged) {
-      state.autoScratchCursor += 1;
-      continue;
+  const nowUs = toJudgeUs(referenceSeconds);
+  for (;;) {
+    const due: Array<{ atUs: number; channel: string; order: number; run: () => void }> = [];
+    for (const pending of state.pendingAutoScratchLongNotes) {
+      const atUs = toJudgeUs(pending.endSeconds);
+      if (atUs < nowUs) {
+        due.push({
+          atUs,
+          channel: pending.note.channel,
+          order: 0,
+          run: () => completeAutoScratchLongNote(state, pending, referenceSeconds, emit),
+        });
+      }
     }
-    if (referenceSeconds < note.seconds) {
+    if (config.autoScratch) {
+      const autoScratchNotes = state.autoScratchNotes;
+      for (let index = state.autoScratchCursor; index < autoScratchNotes.length; index += 1) {
+        const note = autoScratchNotes[index]!;
+        const atUs = toJudgeUs(note.seconds);
+        if (atUs >= nowUs) {
+          break;
+        }
+        if (note.judged) {
+          continue;
+        }
+        due.push({
+          atUs,
+          channel: note.channel,
+          order: 1,
+          run: () => startAutoScratchNote(state, note, referenceSeconds, emit),
+        });
+      }
+    }
+    if (due.length === 0) {
       break;
     }
-    state.autoScratchCursor += 1;
-    if (!markScorableJudged(state, note)) {
-      continue;
+    due.sort(
+      (left, right) =>
+        left.atUs - right.atUs || left.order - right.order || compareJudgeChannels(left.channel, right.channel),
+    );
+    for (const entry of due) {
+      entry.run();
     }
-    emit({ kind: 'sound', source: 'auto-scratch', event: note.event, seconds: note.seconds, channel: note.channel });
-    const endSeconds = resolveLongNoteEndSeconds(note);
-    emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
-    if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
-      note.visibleUntilBeat = note.endBeat;
-      emit({ kind: 'ui', command: { kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat } });
+    while (
+      state.autoScratchCursor < state.autoScratchNotes.length &&
+      state.autoScratchNotes[state.autoScratchCursor]!.judged
+    ) {
+      state.autoScratchCursor += 1;
     }
-    if (endSeconds !== undefined) {
-      emit({
-        kind: 'long-note',
-        seconds: note.seconds,
-        channel: note.channel,
-        state: 'start',
-        mode: resolveLoggedLongNoteMode(note),
-        event: note.event,
-        endSeconds,
-      });
-      insertPendingAutoLongNote(state.pendingAutoScratchLongNotes, note, endSeconds);
-      emit({
-        kind: 'ui',
-        command: {
-          kind: 'long-note-start',
-          channel: note.channel,
-          beat: note.beat,
-          mode: toUiLongNoteMode(resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) ?? 2),
-        },
-      });
-      continue;
-    }
-    applyAutoPerfect(state, note.channel, referenceSeconds, emit);
-    emit({ kind: 'poor-trace', action: 'clear', seconds: referenceSeconds });
   }
+}
+
+function startAutoScratchNote(
+  state: JudgeCoreState,
+  note: TimedPlayableNote,
+  referenceSeconds: number,
+  emit: JudgeCoreEffectSink,
+): void {
+  const { config } = state;
+  if (!markScorableJudged(state, note)) {
+    return;
+  }
+  emit({ kind: 'sound', source: 'auto-scratch', event: note.event, seconds: note.seconds, channel: note.channel });
+  const endSeconds = resolveLongNoteEndSeconds(note);
+  emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
+  if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
+    note.visibleUntilBeat = note.endBeat;
+    emit({ kind: 'ui', command: { kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat } });
+  }
+  if (endSeconds !== undefined) {
+    emit({
+      kind: 'long-note',
+      seconds: note.seconds,
+      channel: note.channel,
+      state: 'start',
+      mode: resolveLoggedLongNoteMode(note),
+      event: note.event,
+      endSeconds,
+    });
+    insertPendingAutoLongNote(state.pendingAutoScratchLongNotes, note, endSeconds);
+    if (longNoteScoresTail(config.ruleset.longNoteStyle, note)) {
+      // Charge modes judge the head and the tail separately: auto scratch clears the head now, the tail at the tail
+      // (beatoraja's autoplay).
+      applyAutoPerfect(state, note.channel, referenceSeconds, emit);
+    }
+    emit({
+      kind: 'ui',
+      command: {
+        kind: 'long-note-start',
+        channel: note.channel,
+        beat: note.beat,
+        mode: toUiLongNoteMode(resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) ?? 2),
+      },
+    });
+    return;
+  }
+  applyAutoPerfect(state, note.channel, referenceSeconds, emit);
+  emit({ kind: 'poor-trace', action: 'clear', seconds: referenceSeconds });
 }
 
 function applyAutoPerfect(state: JudgeCoreState, channel: string, seconds: number, emit: JudgeCoreEffectSink): void {
@@ -299,40 +396,31 @@ function applyAutoPerfect(state: JudgeCoreState, channel: string, seconds: numbe
   emit({ kind: 'judge-combo', judge: 'PERFECT', combo: state.combo, channel });
 }
 
-function drainPendingAutoScratchLongNotes(
+function completeAutoScratchLongNote(
   state: JudgeCoreState,
+  pending: PendingAutoLongNoteState,
   referenceSeconds: number,
   emit: JudgeCoreEffectSink,
 ): void {
-  const pendingNotes = state.pendingAutoScratchLongNotes;
-  const safeReferenceSeconds = Math.max(0, referenceSeconds) + JUDGE_TIME_EPSILON_SECONDS;
-  while (pendingNotes.length > 0) {
-    const pending = pendingNotes[0]!;
-    if (pending.endSeconds > safeReferenceSeconds) {
-      break;
-    }
-    pendingNotes.shift();
-    emit({
-      kind: 'long-note',
-      seconds: pending.endSeconds,
-      channel: pending.note.channel,
-      state: 'complete',
-      mode: resolveLoggedLongNoteMode(pending.note),
-      event: pending.note.event,
-      endSeconds: pending.endSeconds,
-    });
-    applyAutoPerfect(state, pending.note.channel, referenceSeconds, emit);
-    if (longNoteScoresTail(state.config.ruleset.longNoteStyle, pending.note)) {
-      // Charge modes judge the head and the tail separately; the turntable's auto-scratch clears both.
-      applyJudgeToSummary(state.summary, 'PERFECT', state.scoreTracker);
-      applyGaugeJudge(state, referenceSeconds, 'PERFECT', emit);
-      setCombo(state, referenceSeconds, state.combo + 1, 'judge', emit, 'PERFECT', pending.note.channel);
-      emit({ kind: 'judge-combo', judge: 'PERFECT', combo: state.combo, channel: pending.note.channel });
-    }
-    // Pair the `hold-lane-until-beat` emitted at the head so the LN-hold timer / lane laser fade out at the tail.
-    emit({ kind: 'ui', command: { kind: 'long-note-end', channel: pending.note.channel, outcome: 'complete' } });
-    emit({ kind: 'ui', command: { kind: 'release-lane', channel: pending.note.channel } });
+  const index = state.pendingAutoScratchLongNotes.indexOf(pending);
+  if (index < 0) {
+    return;
   }
+  state.pendingAutoScratchLongNotes.splice(index, 1);
+  emit({
+    kind: 'long-note',
+    seconds: pending.endSeconds,
+    channel: pending.note.channel,
+    state: 'complete',
+    mode: resolveLoggedLongNoteMode(pending.note),
+    event: pending.note.event,
+    endSeconds: pending.endSeconds,
+  });
+  // The LN's one judgment, or a charge note's tail (its head was cleared at the head).
+  applyAutoPerfect(state, pending.note.channel, referenceSeconds, emit);
+  // Pair the `hold-lane-until-beat` emitted at the head so the LN-hold timer / lane laser fade out at the tail.
+  emit({ kind: 'ui', command: { kind: 'long-note-end', channel: pending.note.channel, outcome: 'complete' } });
+  emit({ kind: 'ui', command: { kind: 'release-lane', channel: pending.note.channel } });
 }
 
 // ---- misses ---------------------------------------------------------------------------------------------------
@@ -344,19 +432,29 @@ function applyExpiredScorableJudgements(
 ): void {
   const { config } = state;
   const scorableNotes = config.scorableNotes;
-  while (state.scorableMissCursor < scorableNotes.length) {
-    const note = scorableNotes[state.scorableMissCursor]!;
-    if (note.judged) {
-      state.scorableMissCursor += 1;
-      continue;
-    }
-    if (referenceSeconds - note.seconds <= resolveMissDeadlineSeconds(config, note)) {
+  const nowUs = toJudgeUs(referenceSeconds);
+  // Every note past its own deadline, whatever lane it is on (the deadlines differ by lane and by `#EXRANK`), missed in
+  // time order and, at one instant, in channel order.
+  const due: Array<{ atUs: number; note: TimedPlayableNote }> = [];
+  for (let index = state.scorableMissCursor; index < scorableNotes.length; index += 1) {
+    const note = scorableNotes[index]!;
+    if (toJudgeUs(note.seconds) >= nowUs) {
       break;
     }
-    state.scorableMissCursor += 1;
+    if (note.judged) {
+      continue;
+    }
+    const deadlineUs = resolveMissDeadlineUs(config, note);
+    if (deadlineUs < nowUs) {
+      due.push({ atUs: deadlineUs, note });
+    }
+  }
+  due.sort((left, right) => left.atUs - right.atUs || compareJudgeChannels(left.note.channel, right.note.channel));
+  for (const { atUs, note } of due) {
     if (!markScorableJudged(state, note)) {
       continue;
     }
+    startHcnPassing(state, note, atUs);
     if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
       note.visibleUntilBeat = note.endBeat;
     }
@@ -398,6 +496,9 @@ function applyExpiredScorableJudgements(
       });
     }
   }
+  while (state.scorableMissCursor < scorableNotes.length && scorableNotes[state.scorableMissCursor]!.judged) {
+    state.scorableMissCursor += 1;
+  }
 }
 
 // ---- long notes -----------------------------------------------------------------------------------------------
@@ -409,9 +510,21 @@ function finalizeActiveLongNote(
   atSeconds: number,
   emit: JudgeCoreEffectSink,
 ): void {
+  const heldNote = state.activeLongNotes.get(channel)?.note;
+  let passing = state.hcnPassing.get(channel);
+  while (passing !== undefined && passing.note !== heldNote) {
+    passing = passing.next;
+  }
+  if (passing !== undefined && isGoodOrBetter(judge.kind)) {
+    // A Hell Charge tail released at GOOD or better keeps its lane gaining until the tail passes.
+    passing.tailGood = true;
+  }
   state.activeLongNotes.delete(channel);
   state.longHoldUntilMs.delete(channel);
   state.longHoldReleaseSeconds.delete(channel);
+  if (passing !== undefined) {
+    setHcnGaining(state, channel, toJudgeUs(atSeconds), emit);
+  }
   // Pair the head's `hold-lane-until-beat` so the renderer fades the LN-hold timer and lane laser out right here.
   emit({
     kind: 'ui',
@@ -423,6 +536,86 @@ function finalizeActiveLongNote(
   });
   emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
   applyResolvedManualJudge(state, channel, judge, atSeconds, emit);
+}
+
+// ---- Hell Charge gauge ticks -----------------------------------------------------------------------------------
+
+function isGoodOrBetter(kind: TimedManualJudge['kind']): boolean {
+  return kind === 'PERFECT' || kind === 'GREAT' || kind === 'GOOD';
+}
+
+/**
+ * Starts the gauge ticks of a Hell Charge note whose head was just judged at `judgedUs` (pressed, or missed at its
+ * deadline): they run from the later of the head and that instant until the tail passes. AUTO SCRATCH lanes have
+ * none.
+ */
+export function startHcnPassing(state: JudgeCoreState, note: TimedPlayableNote, judgedUs: number): void {
+  const { config } = state;
+  const endSeconds = resolveLongNoteEndSeconds(note);
+  if (endSeconds === undefined || resolveRulesetLongNoteMode(config.ruleset.longNoteStyle, note) !== 3) {
+    return;
+  }
+  if (config.autoScratch && config.scratchChannels.has(note.channel)) {
+    return;
+  }
+  for (let passing = state.hcnPassing.get(note.channel); passing !== undefined; passing = passing.next) {
+    if (passing.note === note) {
+      return;
+    }
+  }
+  const startUs = Math.max(toJudgeUs(note.seconds), judgedUs);
+  const counter = new HcnTickCounter(startUs);
+  counter.setGaining(isLaneDown(state, note.channel), startUs, () => undefined);
+  const passing: HcnPassingState = { note, endUs: toJudgeUs(endSeconds), counter, tailGood: false };
+  const chain = addHcnPassing(state.hcnPassing.get(note.channel), passing, startUs);
+  if (chain !== undefined) {
+    state.hcnPassing.set(note.channel, chain);
+  }
+}
+
+/** Re-reads whether a lane with a passing Hell Charge note gains (a key on it is down, or its tail went well). */
+export function setHcnGaining(state: JudgeCoreState, channel: string, atUs: number, emit: JudgeCoreEffectSink): void {
+  for (let passing = state.hcnPassing.get(channel); passing !== undefined; passing = passing.next) {
+    passing.counter.setGaining(
+      passing.tailGood || isLaneDown(state, channel),
+      Math.min(atUs, passing.endUs),
+      (gain, tickUs) => applyHcnGaugeTick(state, tickUs / 1e6, gain, emit),
+    );
+  }
+}
+
+function isLaneDown(state: JudgeCoreState, channel: string): boolean {
+  if (!state.keyStateInput) {
+    // Without release events a key is only known to be down while the long note it holds is unreleased.
+    return state.activeLongNotes.has(channel);
+  }
+  return (state.laneHolds.get(channel)?.activeTokens.size ?? 0) > 0;
+}
+
+/** Runs every passing Hell Charge note's ticks up to `nowUs` (channel order), and ends those whose tail has passed. */
+function advanceHcnPassing(state: JudgeCoreState, nowUs: number, emit: JudgeCoreEffectSink): void {
+  const passings = [...state.hcnPassing.entries()].sort(([left], [right]) => compareJudgeChannels(left, right));
+  for (const [channel, first] of passings) {
+    for (let passing: HcnPassingState | undefined = first; passing !== undefined; passing = passing.next) {
+      passing.counter.advance(Math.min(nowUs, passing.endUs), (gain, tickUs) =>
+        applyHcnGaugeTick(state, tickUs / 1e6, gain, emit),
+      );
+      if (nowUs <= passing.endUs) {
+        state.hcnPassing.set(channel, passing);
+        break;
+      }
+      if (passing.next === undefined) {
+        state.hcnPassing.delete(channel);
+      }
+    }
+  }
+}
+
+/** The microsecond past which a charge tail still held is a missed POOR: the tail's late window closes there. */
+function resolveChargeTailDeadlineUs(state: JudgeCoreState, channel: string, hold: ActiveLongNoteState): number {
+  return (
+    toJudgeUs(hold.endSeconds) + judgeWindowLateReachUs(judgeWindowsFor(state.config, channel, hold.endSeconds, true))
+  );
 }
 
 /**
@@ -470,6 +663,7 @@ export function advanceJudgeState(
   emit: JudgeCoreEffectSink,
 ): void {
   const { config } = state;
+  state.advancedThroughSeconds = Math.max(state.advancedThroughSeconds, nowSec);
   for (const channel of state.heldChannels) {
     if (!state.activeLongNotes.has(channel)) {
       continue;
@@ -481,7 +675,10 @@ export function advanceJudgeState(
   // a tail beyond R — a hold spanning the reversal stays open while held and BADs on release, as in LR2
   // (`LR2f.cpp:7613-7616`). Judgments, logs and UI cues keep the true clock.
   const judgeSec = toJudgeClock(config, nowSec);
-  for (const [channel, hold] of state.activeLongNotes.entries()) {
+  const judgeUs = toJudgeUs(judgeSec);
+  // Tails reached at one instant settle in channel order, the tie-break the play-log simulator uses.
+  const holds = [...state.activeLongNotes.entries()].sort(([left], [right]) => compareJudgeChannels(left, right));
+  for (const [channel, hold] of holds) {
     const holdUntilMs = state.longHoldUntilMs.get(channel);
     const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
     // The tail is judged against the release instant when there was one — a frame can be hundreds of chart
@@ -494,39 +691,27 @@ export function advanceJudgeState(
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
       }
+      // Let go before the tail: the ruleset decides whether that is a BAD or keeps (or worsens) the head judgment.
       finalizeActiveLongNote(
         state,
         channel,
-        { kind: 'BAD', signedDeltaMs: (tailJudgeSeconds - hold.endSeconds) * 1000 },
+        resolveLongNoteEarlyReleaseJudge(
+          config.ruleset,
+          hold.headJudge,
+          (tailJudgeSeconds - hold.endSeconds) * 1000,
+          judgeWindowsFor(config, channel, tailJudgeSeconds, true),
+        ),
         tailAtSeconds,
         emit,
       );
       continue;
     }
-    if (hold.mode === 3) {
-      const accumulateUntilSeconds = Math.min(judgeSec, hold.endSeconds);
-      if (accumulateUntilSeconds > hold.gaugeDrainCursorSeconds) {
-        const elapsedSeconds = accumulateUntilSeconds - hold.gaugeDrainCursorSeconds;
-        if (isHolding) {
-          // HCN GAIN — held cleanly through this step (upstream `gauge.update(1, 0.5f)` per 200 ms tick).
-          applyGaugeDelta(state, nowSec, elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND, 'hold-gain', emit);
-        } else {
-          // HCN DRAIN — hold broken during this step (upstream `gauge.update(3, 0.5f)` per 200 ms tick).
-          applyGaugeDelta(state, nowSec, -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND, 'hold-drain', emit);
-        }
-      }
-      hold.gaugeDrainCursorSeconds = accumulateUntilSeconds;
-      if (!isHolding && !hold.audioStopped) {
-        stopLongNoteSound(hold, channel, nowSec, 'break', emit);
-      }
-    }
-
-    if (judgeSec >= hold.endSeconds) {
+    // A tail settles once time has moved past it (whole microseconds, like every timed judgment).
+    if (judgeUs > toJudgeUs(hold.endSeconds)) {
       if (
         isChargeLongNoteMode(hold.mode) &&
         isHolding &&
-        judgeSec <
-          hold.endSeconds + judgeWindowLateReachUs(judgeWindowsFor(config, channel, hold.endSeconds, true)) / 1e6
+        judgeUs <= resolveChargeTailDeadlineUs(state, channel, hold)
       ) {
         // Charge modes judge the tail on the RELEASE. Still holding past the tail is not yet a judgment — the player
         // has until the tail's late window closes to let go, exactly as the play-log simulator models it.
@@ -545,20 +730,6 @@ export function advanceJudgeState(
         finalizeActiveLongNote(state, channel, hold.headJudge, nowSec, emit);
         continue;
       }
-      if (hold.mode === 3 && hold.endSeconds > hold.gaugeDrainCursorSeconds) {
-        // Catch the HCN accumulator up to the tail mark; the residual slice takes the current step's hold state.
-        const elapsedSeconds = hold.endSeconds - hold.gaugeDrainCursorSeconds;
-        applyGaugeDelta(
-          state,
-          nowSec,
-          isHolding
-            ? elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND
-            : -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
-          isHolding ? 'hold-gain' : 'hold-drain',
-          emit,
-        );
-        hold.gaugeDrainCursorSeconds = hold.endSeconds;
-      }
       emit({
         kind: 'long-note',
         seconds: nowSec,
@@ -568,21 +739,23 @@ export function advanceJudgeState(
         event: hold.note.event,
         endSeconds: hold.endSeconds,
       });
+      // A charge tail that was never let go is a missed POOR, whether the hold broke (HCN) or ran past the tail's late
+      // window: only a release is judged against the windows (beatoraja's `CN end poor`).
       const finalJudge =
-        hold.mode === 3 && !isHolding && releaseSeconds === undefined
+        isChargeLongNoteMode(hold.mode) && releaseSeconds === undefined
           ? resolveLongNoteTailJudge(hold, { kind: 'POOR', signedDeltaMs: (judgeSec - hold.endSeconds) * 1000 })
           : resolveLongNoteTailJudge(
               hold,
               resolveManualTimedJudge(
                 (tailJudgeSeconds - hold.endSeconds) * 1000,
-                judgeWindowsFor(config, channel, hold.endSeconds, true),
+                judgeWindowsFor(config, channel, tailJudgeSeconds, true),
               ),
             );
       finalizeActiveLongNote(state, channel, finalJudge, tailAtSeconds, emit);
       continue;
     }
 
-    if (hold.mode === 2 && holdUntilMs !== undefined && nowMs > holdUntilMs) {
+    if (isChargeLongNoteMode(hold.mode) && holdUntilMs !== undefined && nowMs > holdUntilMs) {
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
       }
@@ -593,7 +766,7 @@ export function advanceJudgeState(
           hold,
           resolveManualTimedJudge(
             (tailJudgeSeconds - hold.endSeconds) * 1000,
-            judgeWindowsFor(config, channel, hold.endSeconds, true),
+            judgeWindowsFor(config, channel, tailJudgeSeconds, true),
           ),
         ),
         tailAtSeconds,
@@ -602,7 +775,8 @@ export function advanceJudgeState(
     }
   }
 
-  drainPendingAutoScratchLongNotes(state, clampToReversal(config, nowSec), emit);
+  advanceHcnPassing(state, toJudgeUs(nowSec), emit);
+
   for (const [channel, suppressUntil] of state.longNoteSuppressUntilSeconds.entries()) {
     if (nowSec >= suppressUntil) {
       state.longNoteSuppressUntilSeconds.delete(channel);
@@ -619,6 +793,83 @@ export function advanceJudgeState(
 }
 
 /**
+ * The earliest microsecond, at or after `afterUs`, at which a timed judgment falls due: a long-note tail, a charge
+ * tail's late window or a release waiting to settle, an AUTO SCRATCH note or tail, a miss deadline, a mine check. A
+ * judgment falls due once time has moved past its microsecond, so a replay that steps to the microsecond after each
+ * settles one instant per step, in the same order as the play-log simulator. `Infinity` when nothing is pending.
+ */
+export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): number {
+  const { config } = state;
+  const reversalUs =
+    config.reversalSeconds === undefined ? Number.POSITIVE_INFINITY : toJudgeUs(config.reversalSeconds);
+  let next = Number.POSITIVE_INFINITY;
+  const consider = (atUs: number): void => {
+    if (atUs >= afterUs && atUs < next) {
+      next = atUs;
+    }
+  };
+  for (const [channel, hold] of state.activeLongNotes) {
+    const holdUntilMs = state.longHoldUntilMs.get(channel);
+    if (!state.heldChannels.has(channel) && holdUntilMs !== undefined && Number.isFinite(holdUntilMs)) {
+      consider(toJudgeUs(holdUntilMs / config.judgeMsPerChartSecond));
+    }
+    if (toJudgeUs(hold.endSeconds) >= reversalUs) {
+      // The mirrored judge clock never reaches a tail past the LR2 reversal.
+      continue;
+    }
+    consider(toJudgeUs(hold.endSeconds));
+    if (isChargeLongNoteMode(hold.mode)) {
+      consider(resolveChargeTailDeadlineUs(state, channel, hold));
+    }
+  }
+  for (const passing of state.hcnPassing.values()) {
+    consider(Math.min(passing.counter.nextTickUs(), passing.endUs));
+  }
+  for (const pending of state.pendingAutoScratchLongNotes) {
+    if (toJudgeUs(pending.endSeconds) < reversalUs) consider(toJudgeUs(pending.endSeconds));
+  }
+  if (config.autoScratch) {
+    for (let index = state.autoScratchCursor; index < state.autoScratchNotes.length; index += 1) {
+      const note = state.autoScratchNotes[index]!;
+      if (!note.judged && toJudgeUs(note.seconds) >= afterUs) {
+        if (toJudgeUs(note.seconds) < reversalUs) consider(toJudgeUs(note.seconds));
+        break;
+      }
+    }
+  }
+  const scorableNotes = config.scorableNotes;
+  for (let index = state.scorableMissCursor; index < scorableNotes.length; index += 1) {
+    const note = scorableNotes[index]!;
+    if (toJudgeUs(note.seconds) > next) {
+      break;
+    }
+    if (note.judged) {
+      continue;
+    }
+    const deadlineUs = resolveMissDeadlineUs(config, note);
+    if (deadlineUs < reversalUs) consider(deadlineUs);
+  }
+  const pressDetonates = config.ruleset.mineTrigger === 'press-or-hold';
+  const landmineNotes = config.landmineNotes;
+  for (let index = state.landmineExpireCursor; index < landmineNotes.length; index += 1) {
+    const landmine = landmineNotes[index]!;
+    const mineUs = toJudgeUs(landmine.seconds);
+    if (mineUs >= reversalUs || mineUs - LANDMINE_SCAN_AHEAD_US > next) {
+      break;
+    }
+    if (landmine.judged) {
+      continue;
+    }
+    const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, landmine.seconds).note);
+    const phase = state.landminePhases.get(landmine) ?? 0;
+    if (pressDetonates && phase < 1) consider(mineUs - pgreatEarlyUs);
+    if (phase < 2) consider(mineUs);
+    consider(pressDetonates ? mineUs + pgreatLateUs : mineUs);
+  }
+  return next;
+}
+
+/**
  * Safety net for notes the per-step sweep never reached (an audio tail that outran the loop, a hold still open at the
  * end). Counted from the notes themselves rather than from `summary.total`: the total is the ruleset's EX-SCORE
  * denominator, and under IIDX a missed charge note owes only ONE judgment even though it counts for two.
@@ -626,6 +877,17 @@ export function advanceJudgeState(
 export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, emit: JudgeCoreEffectSink): void {
   const { config } = state;
   const { ruleset, reversalSeconds } = config;
+  // Settle every timed judgment still pending — misses, tails, AUTO SCRATCH, mines, Hell Charge ticks — each at its
+  // own instant, as the play-log simulator does when its clock runs out.
+  for (let afterUs = Number.NEGATIVE_INFINITY; ;) {
+    const nextUs = nextTimedJudgmentUs(state, afterUs);
+    if (!Number.isFinite(nextUs)) {
+      break;
+    }
+    const stepSec = (nextUs + 1) / 1e6;
+    advanceJudgeState(state, stepSec, stepSec * config.judgeMsPerChartSecond, emit);
+    afterUs = nextUs + 1;
+  }
   let missingCount = 0;
   // Notes the LR2 negative-BPM reversal left unreachable (#134). LR2 never misses them — its mirrored judge clock
   // recedes before their deadline — and zeroes HP when the play ends with them outstanding.
@@ -643,6 +905,10 @@ export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, em
     if (noteOwesTailMiss(ruleset, note)) {
       missingCount += 1;
     }
+  }
+  if (reversalSeconds !== undefined && state.pendingAutoScratchLongNotes.length > 0) {
+    // An AUTO SCRATCH long note whose tail lies past the reversal is never cleared either.
+    outstandingPastReversal = true;
   }
   for (const hold of state.activeLongNotes.values()) {
     if (reversalSeconds !== undefined) {

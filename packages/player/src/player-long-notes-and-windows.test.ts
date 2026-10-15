@@ -196,7 +196,7 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
-      // The hold-drain / break events this asserts on are HCN mechanics, which only beatoraja runs.
+      // The hold-drain ticks this asserts on are an HCN mechanic, which only beatoraja runs.
       judgeRuleset: 'beatoraja',
       writeOutput: (text) => {
         output.push(text);
@@ -220,7 +220,7 @@ describe('player', () => {
       output.some(
         (line) =>
           line.includes('kind:long-note') &&
-          line.includes('state:break') &&
+          line.includes('state:release') &&
           line.includes('mode:3') &&
           line.includes('file:ln.wav'),
       ),
@@ -229,7 +229,7 @@ describe('player', () => {
       output.some(
         (line) =>
           line.includes('kind:sample-stop') &&
-          line.includes('reason:long-note-break') &&
+          line.includes('reason:long-note-release') &&
           line.includes('sample:01') &&
           line.includes('file:ln.wav'),
       ),
@@ -242,7 +242,8 @@ describe('player', () => {
     ).toBe(true);
     const resultLine = output.find((line) => line.includes('kind:result') && line.includes('reason:complete'));
     expect(resultLine).toBeDefined();
-    // One HCN is two judgments under beatoraja: the head scored on the press, the tail POORed by the broken hold.
+    // One HCN is two judgments under beatoraja: the head scored on the press, the tail POORed by the early release; the
+    // gauge then keeps draining in 200 ms ticks while the note passes with the lane up.
     expect(resultLine).toContain('total:2');
     expect(resultLine).toContain('great:1');
     expect(resultLine).toContain('poor:1');

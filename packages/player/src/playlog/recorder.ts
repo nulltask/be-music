@@ -11,6 +11,7 @@ import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
+import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
 import packageJson from '../../package.json' with { type: 'json' };
 import {
@@ -46,7 +47,7 @@ export type PlaylogRecorderChartData = Pick<
 export interface PlaylogRecorderPlaySettings {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
-  /** Selected gauge — declared by the host (the engine's own summary path always runs GROOVE today). */
+  /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordPlaylog.gauge`); `GROOVE` when neither is set. */
   gauge?: GrooveGaugeType;
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
@@ -97,6 +98,8 @@ export interface PlaylogRecorderOptions {
    */
   sourceChart?: BeMusicJson;
   play: PlaylogRecorderPlaySettings;
+  /** True when the ruleset the play ran under keeps LR2's money score; the native result then carries `score`. */
+  moneyScore?: boolean;
   /** Host application that records the play. `engine` is always overwritten with this package's version. */
   recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
@@ -111,6 +114,8 @@ export interface PlaylogRecorderFinalizeInput {
   summary: PlayerSummary;
   maxCombo?: number;
   aborted?: boolean;
+  /** Chart seconds the judge had settled through when the play was aborted. */
+  abortedAtSeconds?: number;
 }
 
 export interface PlaylogRecorder {
@@ -151,7 +156,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
     recordEmptyPoor: (): void => {
       emptyPoorCount += 1;
     },
-    finalize: ({ summary, maxCombo, aborted }): BeMusicPlaylog => {
+    finalize: ({ summary, maxCombo, aborted, abortedAtSeconds }): BeMusicPlaylog => {
       const play: PlaylogPlay = {
         mode: options.play.mode,
         autoScratch: options.play.autoScratch,
@@ -166,7 +171,10 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
       if (options.play.randomDraws !== undefined && options.play.randomDraws.length > 0) {
         play.randomDraws = options.play.randomDraws.map((draw) => ({ ...draw }));
       }
-      if (aborted === true) play.aborted = true;
+      if (aborted === true) {
+        play.aborted = true;
+        if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
+      }
       if (options.play.native !== undefined) play.native = options.play.native;
 
       const createdAt = (options.now?.() ?? new Date()).toISOString();
@@ -180,7 +188,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
         inputs,
         play,
         results: {
-          native: buildNativeResult(summary, maxCombo, emptyPoorCount, play.gauge, chart.noteCount),
+          native: buildNativeResult(summary, maxCombo, emptyPoorCount, play.gauge, options.moneyScore === true),
         },
       };
     },
@@ -340,8 +348,10 @@ function buildNativeResult(
   maxCombo: number | undefined,
   emptyPoorCount: number,
   declaredGauge: GrooveGaugeType,
-  noteCount: number,
+  moneyScore: boolean,
 ): PlaylogRulesetResult {
+  // Reported the way the simulators report a ruleset result: the judgment count as `noteCount`, the DJ LEVEL, a money
+  // score only where the ruleset has one, and the mid-play death flag.
   const result: PlaylogRulesetResult = {
     ruleset: PLAYLOG_NATIVE_RULESET_ID,
     judge: {
@@ -355,15 +365,21 @@ function buildNativeResult(
     fast: summary.fast,
     slow: summary.slow,
     exScore: summary.exScore,
-    noteCount,
+    noteCount: summary.total,
     maxCombo: maxCombo ?? 0,
-    score: summary.score,
+    djLevel: resolveIidxRankLabel(summary.exScore, summary.total),
     gauge: {
       type: summary.gauge?.type ?? declaredGauge,
       final: summary.gauge?.current ?? 0,
       cleared: summary.gauge?.cleared ?? false,
     },
   };
+  if (summary.gauge?.failedMidPlay === true) {
+    result.gauge.failedMidPlay = true;
+  }
+  if (moneyScore) {
+    result.score = summary.score;
+  }
   return result;
 }
 
