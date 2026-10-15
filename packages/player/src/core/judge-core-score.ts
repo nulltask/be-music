@@ -2,6 +2,7 @@ import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts'
 import type { JudgeWindowSetUs, RulesetConfig, RulesetWindowTables } from '../ruleset/definitions.ts';
 import { judgeWindowEarlyReachUs, judgeWindowLateReachUs, selectJudgeWindowSet } from '../ruleset/judge.ts';
 import { longNoteOwesTailMiss } from '../ruleset/long-note.ts';
+import type { GaugeJudgeIndex } from '../ruleset/gauge.ts';
 import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import { isLongPlayableNote, resolveRulesetLongNoteMode, type TimedManualJudge } from './judge-rules.ts';
 import { applyJudgeToSummary, type JudgeKind } from './scoring.ts';
@@ -159,6 +160,34 @@ export function applyGaugeDelta(
     kind: 'gauge',
     seconds,
     reason,
+    delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
+  });
+}
+
+/**
+ * One Hell Charge tick on the gauge (see `HcnTickCounter`): the ruleset's held tick while the lane gains, its released
+ * tick while it loses (beatoraja: GREAT ×0.5 and BAD ×0.5 of the judge table).
+ */
+export function applyHcnGaugeTick(
+  state: JudgeCoreState,
+  seconds: number,
+  gain: boolean,
+  emit: JudgeCoreEffectSink,
+): void {
+  const tick = state.config.ruleset.hcnTick;
+  const previousGauge = state.summary.gauge?.current;
+  state.applyGaugeTick(
+    (gain ? tick.heldJudge : tick.releasedJudge) as GaugeJudgeIndex,
+    gain ? tick.heldRate : tick.releasedRate,
+  );
+  const nextGauge = state.summary.gauge?.current;
+  if (previousGauge === nextGauge) {
+    return;
+  }
+  emit({
+    kind: 'gauge',
+    seconds,
+    reason: gain ? 'hold-gain' : 'hold-drain',
     delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
   });
 }

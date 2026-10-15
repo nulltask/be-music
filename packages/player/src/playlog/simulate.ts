@@ -10,6 +10,7 @@ import {
   pgreatWindowReachUs,
   preferJudgeCandidate,
   resolveEffectiveLongNoteMode,
+  HcnTickCounter,
   resolveLnEarlyRelease,
   RULESET_JUDGE_NONE,
   RulesetGauge,
@@ -76,6 +77,7 @@ const TIMED_EVENT_ORDER = {
   'ln-complete': 0,
   'hold-deadline': 0,
   'release-settle': 0,
+  'hcn-tick': 0.5,
   auto: 1,
   miss: 2,
   'mine-enter': 3,
@@ -131,8 +133,6 @@ interface ActiveHold {
   /** IIDX charge heads that BAD/POOR'd skip the tail — such notes never become holds. */
   /** Held-past-end deadline for charge tails. */
   tailMissDeadlineUs: number;
-  /** Signed HCN tick accumulator (µs). */
-  hcnCounterUs: number;
   /**
    * A release waiting out the ruleset's long-note release margin: settled with `judge` at `atUs` unless the lane is
    * pressed again first, which resumes the hold.
@@ -153,6 +153,8 @@ interface SimLane {
    * lane is down, so a second key keeps the lane down while the first is released, as the engine's lane history does.
    */
   downTokens: Set<string>;
+  /** The Hell Charge note passing the lane, while its gauge ticks run (see `HcnTickCounter`). */
+  passing?: { note: SimNote; endUs: number; counter: HcnTickCounter; tailGood: boolean };
   hold?: ActiveHold;
   /** Auto-played lane (AUTO mode or AUTO SCRATCH): every note resolves PGREAT on schedule. */
   auto: boolean;
@@ -336,6 +338,7 @@ class PlaylogSimulation {
         | 'ln-complete'
         | 'hold-deadline'
         | 'release-settle'
+        | 'hcn-tick'
         | 'auto'
         | 'miss'
         | 'mine-enter'
@@ -344,6 +347,7 @@ class PlaylogSimulation {
       lane: SimLane;
       note?: SimNote;
       mine?: SimMine;
+      gain?: boolean;
     }
     const events: TimedEvent[] = [];
     for (const lane of this.lanes.values()) {
@@ -399,6 +403,36 @@ class PlaylogSimulation {
         if (due(settleUs)) events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
       }
     }
+    // Hell Charge ticks, including those of a head missed in this span: no input falls inside it, so the miss is
+    // certain and its ticks run from the deadline on.
+    for (const lane of this.lanes.values()) {
+      if (lane.auto) continue;
+      const passed = new Set<SimNote>();
+      for (;;) {
+        if (!lane.passing) {
+          const missed = lane.notes.find(
+            (note) =>
+              !passed.has(note) &&
+              note.isLong &&
+              note.longStyle === 3 &&
+              !note.judged &&
+              !note.holding &&
+              note.missDeadlineUs >= this.lastAdvanceUs &&
+              note.missDeadlineUs < untilUs,
+          );
+          if (!missed) break;
+          this.startHcnPassing(lane, missed, missed.missDeadlineUs);
+        }
+        const passing = lane.passing!;
+        passed.add(passing.note);
+        passing.counter.advance(Math.min(untilUs, passing.endUs), (gain, atUs) =>
+          events.push({ timeUs: atUs, kind: 'hcn-tick', lane, gain }),
+        );
+        if (passing.endUs >= untilUs) break;
+        lane.passing = undefined;
+      }
+    }
+
     // One instant settles tails first, then auto notes, then misses, then mines, each in channel order — the order the
     // engine's judge core settles them in.
     events.sort(
@@ -433,6 +467,8 @@ class PlaylogSimulation {
         if (event.lane.downTokens.size > 0) this.detonateMine(event.mine!);
       } else if (event.kind === 'mine-settle') {
         event.mine!.applied = true;
+      } else if (event.kind === 'hcn-tick') {
+        this.applyHcnTick(event.gain!);
       } else if (event.kind === 'release-settle') {
         const lane = event.lane;
         const hold = lane.hold;
@@ -454,16 +490,11 @@ class PlaylogSimulation {
         const lane = event.lane;
         const hold = lane.hold;
         if (!hold || hold.note !== event.note) continue;
-        this.integrateHcn(lane, event.timeUs);
         lane.hold = undefined;
         hold.note.holding = false;
         hold.note.judged = true;
         this.applyJudge(JUDGE_MISS_POOR, undefined);
       }
-    }
-
-    for (const lane of this.lanes.values()) {
-      this.integrateHcn(lane, untilUs);
     }
 
     // Advance sweep cursors past settled notes.
@@ -516,28 +547,33 @@ class PlaylogSimulation {
     }
   }
 
-  /** Integrates the beatoraja-model HCN hold ticks for a lane up to `untilUs`. */
-  private integrateHcn(lane: SimLane, untilUs: number): void {
-    const hold = lane.hold;
-    if (!hold || hold.note.longStyle !== 3) return;
-    const from = Math.max(hold.note.timeUs, this.lastAdvanceUs === Number.NEGATIVE_INFINITY ? 0 : this.lastAdvanceUs);
-    const to = Math.min(untilUs, hold.note.endTimeUs!);
-    if (!(to > from)) return;
-    let dt = to - from;
-    const tick = this.config.hcnTickUs;
-    if (lane.held) {
-      hold.hcnCounterUs += dt;
-      while (hold.hcnCounterUs > tick) {
-        this.gauge.applyJudge(this.config.hcnTick.heldJudge as GaugeJudgeIndex, this.config.hcnTick.heldRate);
-        hold.hcnCounterUs -= tick;
-      }
-    } else {
-      hold.hcnCounterUs -= dt;
-      while (hold.hcnCounterUs < -tick) {
-        this.gauge.applyJudge(this.config.hcnTick.releasedJudge as GaugeJudgeIndex, this.config.hcnTick.releasedRate);
-        hold.hcnCounterUs += tick;
-      }
-    }
+  /**
+   * Starts the gauge ticks of a Hell Charge note whose head was judged at `judgedUs` (pressed, or missed at its
+   * deadline), as the engine does: from the later of the head and that instant until the tail passes.
+   */
+  private startHcnPassing(lane: SimLane, note: SimNote, judgedUs: number): void {
+    if (lane.auto || !note.isLong || note.longStyle !== 3 || lane.passing?.note === note) return;
+    const startUs = Math.max(note.timeUs, judgedUs);
+    const counter = new HcnTickCounter(startUs);
+    counter.setGaining(lane.downTokens.size > 0, startUs, () => undefined);
+    lane.passing = { note, endUs: note.endTimeUs!, counter, tailGood: false };
+  }
+
+  /** Re-reads whether a lane's passing Hell Charge note gains: a key on it is down, or its tail went well. */
+  private setHcnGaining(lane: SimLane, atUs: number): void {
+    const passing = lane.passing;
+    if (!passing) return;
+    passing.counter.setGaining(passing.tailGood || lane.downTokens.size > 0, Math.min(atUs, passing.endUs), (gain) =>
+      this.applyHcnTick(gain),
+    );
+  }
+
+  private applyHcnTick(gain: boolean): void {
+    const tick = this.config.hcnTick;
+    this.gauge.applyJudge(
+      (gain ? tick.heldJudge : tick.releasedJudge) as GaugeJudgeIndex,
+      gain ? tick.heldRate : tick.releasedRate,
+    );
   }
 
   // ---- input handling ----------------------------------------------------------------------------------------
@@ -553,6 +589,7 @@ class PlaylogSimulation {
       } else {
         for (const token of input.tokens) lane.downTokens.add(token);
       }
+      this.setHcnGaining(lane, timeUs);
     }
     // Pressing a lane whose release is waiting out the margin resumes its hold: that press judges nothing else. A lane
     // whose long note is held (pressed by another key bound to it) judges no other note either: its current note is
@@ -587,6 +624,7 @@ class PlaylogSimulation {
     const { note, lane, dmUs } = selected;
     if (note.isLong) {
       this.startLongNote(lane, note, selected.judge, dmUs);
+      this.startHcnPassing(lane, note, timeUs);
     } else {
       note.judged = true;
       this.applyJudge(selected.judge, dmUs);
@@ -626,8 +664,10 @@ class PlaylogSimulation {
         lane.downTokens.delete('');
       }
       const hold = lane.hold;
-      if (!hold) continue;
-      this.integrateHcn(lane, timeUs);
+      if (!hold) {
+        this.setHcnGaining(lane, timeUs);
+        continue;
+      }
       const note = hold.note;
       const endWindows = selectJudgeWindowSet(this.config.windowsAt(timeUs), {
         scratch: note.scratch,
@@ -658,12 +698,18 @@ class PlaylogSimulation {
       if (marginUs > 0 && released.judge >= JUDGE_BAD && released.dmUs > 0) {
         // beatoraja: a release that would score BAD or worse before the tail waits out the margin (`releasetime`).
         hold.pendingRelease = { atUs: timeUs + marginUs, ...released };
+        this.setHcnGaining(lane, timeUs);
         continue;
       }
       lane.hold = undefined;
       note.holding = false;
       note.judged = true;
       this.applyJudge(released.judge, released.dmUs);
+      if (lane.passing?.note === note && released.judge <= JUDGE_GOOD) {
+        // A Hell Charge tail released at GOOD or better keeps its lane gaining until the tail passes.
+        lane.passing.tailGood = true;
+      }
+      this.setHcnGaining(lane, timeUs);
     }
   }
 
@@ -687,7 +733,6 @@ class PlaylogSimulation {
         headJudge: judge,
         headDmUs: dmUs,
         tailMissDeadlineUs: Number.POSITIVE_INFINITY,
-        hcnCounterUs: 0,
       };
       return;
     }
@@ -707,7 +752,6 @@ class PlaylogSimulation {
     lane.hold = {
       note,
       tailMissDeadlineUs: note.endTimeUs! + judgeWindowLateReachUs(endWindows),
-      hcnCounterUs: 0,
     };
   }
 

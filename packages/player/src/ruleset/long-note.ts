@@ -92,6 +92,58 @@ export function resolveLnEarlyRelease(
   return { judge: judge >= 3 && dmUs > 0 ? 3 : judge, dmUs };
 }
 
+/** beatoraja's Hell Charge tick period (`JudgeManager.hcnmduration`, 200 ms). */
+export const HCN_TICK_US = 200_000;
+
+/**
+ * beatoraja's Hell Charge gauge ticks (`JudgeManager` L289-L340), shared by the engine and the play-log simulator.
+ *
+ * While an HCN passes the judge line (from its head, once the head is judged, until its tail) a signed counter runs:
+ * up while the lane gains (a key on it is down, or the tail was released at GOOD or better), down otherwise. Each time
+ * it passes +{@link HCN_TICK_US} the gauge gains one tick and the counter drops back by a period; each time it passes
+ * −{@link HCN_TICK_US} the gauge loses one. Whatever is left is dropped when the tail passes.
+ *
+ * Time is whole microseconds; a tick falls on the first microsecond the counter is beyond the period, and like every
+ * timed judgment it is reported once time has moved past it.
+ */
+export class HcnTickCounter {
+  private counterUs = 0;
+  private atUs: number;
+  private gaining = false;
+
+  constructor(startUs: number) {
+    this.atUs = startUs;
+  }
+
+  /** Runs the counter up to (not including) `untilUs`, reporting each tick: `gain` up or down, and its microsecond. */
+  advance(untilUs: number, onTick: (gain: boolean, atUs: number) => void): void {
+    while (this.atUs < untilUs) {
+      const tickAtUs = this.nextTickUs();
+      if (tickAtUs >= untilUs) {
+        this.counterUs += (this.gaining ? 1 : -1) * (untilUs - this.atUs);
+        this.atUs = untilUs;
+        return;
+      }
+      this.counterUs = this.gaining ? 1 : -1;
+      this.atUs = tickAtUs;
+      onTick(this.gaining, tickAtUs);
+    }
+  }
+
+  /** Switches between gaining and losing at `atUs`, after running the counter up to it. */
+  setGaining(gaining: boolean, atUs: number, onTick: (gain: boolean, atUs: number) => void): void {
+    this.advance(atUs, onTick);
+    this.gaining = gaining;
+  }
+
+  /** The microsecond of the next tick if nothing changes. */
+  nextTickUs(): number {
+    return this.gaining
+      ? this.atUs + (HCN_TICK_US - this.counterUs) + 1
+      : this.atUs + (this.counterUs + HCN_TICK_US) + 1;
+  }
+}
+
 /** The note a press consumed, as the multi-BAD collector sees it. Times are in any one unit, compared only. */
 export interface MultiBadConsumedNote {
   time: number;

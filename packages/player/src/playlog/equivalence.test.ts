@@ -632,6 +632,40 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // Hell Charge notes run beatoraja's 200 ms gauge ticks from the judged head until the tail passes, gaining while a
+  // key is down on the lane (or after a GOOD-or-better tail) and draining otherwise; the tail is judged at the release.
+  test.each(RULESETS)('%s: Hell Charge gauge ticks agree on both sides', async (ruleset) => {
+    const json = chart([
+      { measure: 0, channel: '12', position: [1, 2], value: '01' },
+      { measure: 0, channel: '12', position: [3, 4], value: '01' },
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 3, channel: '11', position: [0, 1], value: 'AA' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    json.bms.lnMode = 3;
+    const scenarios: Record<string, PlaylogInputEvent[]> = {
+      held: [down(0, 1_000_000, '11'), up(1, 3_000_000, '11')],
+      released: [down(0, 1_000_000, '11'), up(1, 1_200_000, '11'), down(2, 1_400_000, '11'), up(3, 3_000_000, '11')],
+      never: [],
+      'released well': [down(0, 1_000_000, '11'), up(1, 2_950_000, '11')],
+    };
+
+    for (const [name, inputs] of Object.entries(scenarios)) {
+      const { summary, playlog } = await replay(json, inputs, ruleset, { gauge: 'HARD' });
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor], name).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.great,
+        simulated.judge.good,
+        simulated.judge.bad,
+        simulated.judge.poor,
+      ]);
+      expect(playlog.results?.native?.maxCombo, name).toBe(simulated.maxCombo);
+      expect(summary.gauge?.current, name).toBe(simulated.gauge.final);
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
