@@ -6,7 +6,7 @@ import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from '../../col
 import { dirname } from '@be-music/utils/core';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
-import { resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
+import { courseMatchesKeysFilter, resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
 import { logger } from '../../logger.ts';
 import { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from '../hi-speed.ts';
 import type {
@@ -1646,7 +1646,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     if (this.playOptions.keysFilter !== 'ALL') {
       const targetOp = SELECT_KEYS_FILTER_TO_OP[this.playOptions.keysFilter];
-      filtered = filtered.filter((entry) => entry.kind !== 'song' || resolveKeyModeOp(entry.song) === targetOp);
+      // A course bar is listed under its key mode, as LR2 lists courses by their `line`.
+      filtered = filtered.filter((entry) =>
+        entry.kind === 'song'
+          ? resolveKeyModeOp(entry.song) === targetOp
+          : entry.kind !== 'course' || courseMatchesKeysFilter(entry.course, targetOp),
+      );
     }
     if (this.searchQuery.length > 0) {
       filtered = filtered.filter((entry) => matchesSearchQuery(entry, this.searchQuery));

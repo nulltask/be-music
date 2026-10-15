@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { DEFAULT_PLAY_OPTIONS } from './core/select.ts';
-import { computeSelectOps, resolveLr2BarLampKind, resolveLr2LampOp, SELECT_DYNAMIC_OPS } from './select-ops.ts';
+import {
+  computeSelectOps,
+  courseMatchesKeysFilter,
+  resolveLr2BarLampKind,
+  resolveLr2LampOp,
+  SELECT_DYNAMIC_OPS,
+} from './select-ops.ts';
 
 describe('resolveLr2BarLampKind', () => {
   it('folds the host lamps onto LR2’s six', () => {
@@ -32,5 +38,21 @@ describe('computeSelectOps', () => {
   it('lights NO PLAY without a focused bar', () => {
     const ops = computeSelectOps(undefined, new Set(), DEFAULT_PLAY_OPTIONS);
     expect(ops.has(SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED)).toBe(true);
+  });
+});
+
+describe('courseMatchesKeysFilter', () => {
+  it('lists a course under its own key mode only, as LR2 lists courses by line', () => {
+    const seven = { definition: { keyMode: 7 } };
+    expect(courseMatchesKeysFilter(seven, SELECT_DYNAMIC_OPS.KEYS_7)).toBe(true);
+    expect(courseMatchesKeysFilter(seven, SELECT_DYNAMIC_OPS.KEYS_14)).toBe(false);
+    expect(courseMatchesKeysFilter({ definition: { keyMode: 9 } }, SELECT_DYNAMIC_OPS.KEYS_9)).toBe(true);
+  });
+
+  it('keeps a course that names no key mode and a NEW COURSE bar', () => {
+    expect(courseMatchesKeysFilter({ definition: {} }, SELECT_DYNAMIC_OPS.KEYS_5)).toBe(true);
+    expect(courseMatchesKeysFilter({ definition: { keyMode: 7 }, newCourse: true }, SELECT_DYNAMIC_OPS.KEYS_5)).toBe(
+      true,
+    );
   });
 });

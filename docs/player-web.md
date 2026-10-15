@@ -119,6 +119,7 @@ Courses play through the same select → play → result scenes. See [Courses an
 - **Select:**
   - Each course file is a folder bar listed after the song folders. Inside it, every course is a course bar (`BrowserBrowseEntry` `kind: 'course'`).
   - A course with a stage missing from the collection is listed but cannot be started.
+  - On the LR2 and built-in selects the key-mode filter applies to course bars too, as LR2 lists courses by their key mode (OpenLR2 L18030-L18053): a course that names its key mode (`definition.keyMode`: LR2 `line`, a table's `mode`) is listed only under it, and one that names none stays listed.
   - Skins:
     - The be-music skins show the course name, its stage count and the missing stages.
     - LR2 skins use the `courseFolder` and `course` bar bodies, and for a NEW COURSE bar and a random course the `courseCreate` (7) and `randomCourse` (9) bodies, falling back to `course` (8).
