@@ -1,3 +1,5 @@
+import type { BrowserBrowseEntry } from './song.ts';
+
 /** One row of the select list to draw this frame. */
 export interface SelectListRow {
   /** Index into `frame.entries`. */
@@ -36,4 +38,38 @@ export function selectListRows(
     rows.push({ entryIndex, slot, alpha });
   }
   return rows;
+}
+
+/** The headline of a select-list row: a song's title, a folder's name, or a course's name. */
+export function browseEntryTitle(entry: BrowserBrowseEntry): string {
+  if (entry.kind === 'song') return entry.song.title;
+  if (entry.kind === 'course') return entry.course.definition.name;
+  return entry.folder.label;
+}
+
+/**
+ * The count a row shows in place of a song's facts: a folder's charts (or courses, for a course folder), or a course's
+ * stages with how many are missing from the collection. `undefined` for a song row.
+ */
+export function browseEntryCount(entry: BrowserBrowseEntry): string | undefined {
+  if (entry.kind === 'song') return undefined;
+  if (entry.kind === 'course') {
+    const stages = entry.course.stages.length;
+    const missing = entry.course.stages.filter((stage) => stage.song === undefined).length;
+    return `${stages} stage${stages === 1 ? '' : 's'}${missing > 0 ? ` · ${missing} missing` : ''}`;
+  }
+  const courses = entry.folder.courses;
+  if (courses !== undefined) return `${courses.length} course${courses.length === 1 ? '' : 's'}`;
+  const charts = entry.folder.songs.length;
+  return `${charts} chart${charts === 1 ? '' : 's'}`;
+}
+
+/**
+ * The short badge a row shows where a song shows its level: `DIR` for a folder, `DAN` for a dan course, `CRS` for
+ * another course, and the level (or `-`) for a song.
+ */
+export function browseEntryBadge(entry: BrowserBrowseEntry): string {
+  if (entry.kind === 'folder') return 'DIR';
+  if (entry.kind === 'course') return entry.course.definition.kind === 'grade' ? 'DAN' : 'CRS';
+  return entry.song.playLevel !== undefined ? String(entry.song.playLevel) : '-';
 }

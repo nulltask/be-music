@@ -8,6 +8,7 @@
  * Anything else under `collection/` (the case-insensitive file-lookup helpers) stays internal to the package.
  */
 export * from './collection.ts';
+export * from './course.ts';
 export * from './chart-hash.ts';
 export * from './md5.ts';
 export * from './types.ts';

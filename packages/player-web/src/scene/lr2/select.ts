@@ -259,11 +259,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
         }
         const entry = entries[target];
         if (!entry) return;
-        if (entry.kind === 'folder') {
-          this.enterFolder(entry.folder);
-        } else {
-          this.options.onSongSelected?.(entry.song);
-        }
+        this.activateEntry(entry);
         return;
       }
     }
@@ -1199,7 +1195,12 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     const y = bar.y + titleRect.y;
     const w = Math.max(1, titleRect.w);
     const h = Math.max(1, titleRect.h);
-    const primaryText = entry.kind === 'song' ? entry.song.title : entry.folder.label;
+    const primaryText =
+      entry.kind === 'song'
+        ? entry.song.title
+        : entry.kind === 'course'
+          ? entry.course.definition.name
+          : entry.folder.label;
     if (titleElement) {
       // Build a synthetic `Lr2TextElement` carrying just the fields `makeLr2TextSprite` reads — font index, alignment
       // (BAR_TITLE has no LR2-spec alignment field, so left-anchor is the conventional rendering), and the absolute
@@ -1298,9 +1299,9 @@ function containsPoint(rect: Lr2DestinationRect, x: number, y: number): boolean 
 }
 
 /**
- * Picks the bar-body sprite definition for a slot. Maps the entry kind (`'song'` / `'folder'`) onto the matching
- * `#SRC_BAR_BODY` art, falling back to a `'song'` body when the skin doesn't define a folder variant, and finally the
- * first available body. Slots with no entry (i.e. out-of-range when the cursor is near the start / end of the list)
+ * Picks the bar-body sprite definition for a slot. Maps the entry kind onto the matching `#SRC_BAR_BODY` art — a folder
+ * of courses gets the course-folder body, a course bar the course body — falling back to a `'song'` body when the skin
+ * doesn't define that variant, and finally the first available body. Slots with no entry (i.e. out-of-range when the cursor is near the start / end of the list)
  * still get a body sprite so the empty slats keep rendering — that matches LR2's behavior where the rail draws even
  * past the end of the song list.
  */
@@ -1311,8 +1312,20 @@ function pickBarBody(
   if (bodies.length === 0) {
     return undefined;
   }
-  const kind: Lr2BarBodyKind = entry?.kind === 'folder' ? 'folder' : 'song';
-  return bodies.find((body) => body.kind === kind) ?? bodies.find((body) => body.kind === 'song') ?? bodies[0];
+  const kind: Lr2BarBodyKind =
+    entry?.kind === 'folder'
+      ? entry.folder.courses !== undefined
+        ? 'courseFolder'
+        : 'folder'
+      : entry?.kind === 'course'
+        ? 'course'
+        : 'song';
+  return (
+    bodies.find((body) => body.kind === kind) ??
+    (kind === 'courseFolder' ? bodies.find((body) => body.kind === 'folder') : undefined) ??
+    bodies.find((body) => body.kind === 'song') ??
+    bodies[0]
+  );
 }
 
 /**

@@ -1,8 +1,10 @@
-import type { BrowserSongEntry, BrowserSongSourceKind } from '@be-music/skin-sdk';
+import type { BrowserFolderNode, BrowserSongEntry, BrowserSongSourceKind } from '@be-music/skin-sdk';
 import type { BrowserDroppedFile } from './dropped-file.ts';
 
 export type {
   BrowserBrowseEntry,
+  BrowserCourseEntry,
+  BrowserCourseStage,
   BrowserFolderNode,
   BrowserSongEntry,
   BrowserSongSourceKind,
@@ -34,6 +36,8 @@ export interface BrowserSongCollection {
   sources: BrowserSongAssetSource[];
   songs: BrowserSongEntry[];
   errors: Array<{ sourceId: string; path?: string; message: string }>;
+  /** Course folders (see `resolveCourseFolders`), listed after the song folders at the root of a select view. */
+  courseFolders?: BrowserFolderNode[];
 }
 
 /**
