@@ -1,5 +1,5 @@
 import type { BeMusicJson } from '@be-music/json';
-import type { CourseDefinition } from '@be-music/player/course';
+import type { CourseDefinition, RandomCourseDefinition } from '@be-music/player/course';
 
 /** Where a song came from: a dropped directory, a zip, or loose files. */
 export type BrowserSongSourceKind = 'directory' | 'zip' | 'files';
@@ -46,14 +46,20 @@ export interface BrowserCourseStage {
 /**
  * A course in the collection: its definition (from `@be-music/player/course`) with each stage matched to a local
  * chart. A course with a missing stage is listed but cannot be started.
+ *
+ * A beatoraja random course carries `random`: its stages are drawn from the collection when it is started, so
+ * `definition` has the course's name, kind and constraints but no stages yet, and each of `stages` has no `song` and
+ * shows the stage's title (or its filter, or `RANDOM`).
  */
 export interface BrowserCourseEntry {
   /** Stable within a session: the folder label and the course's index in it. */
   id: string;
   definition: CourseDefinition;
   stages: readonly BrowserCourseStage[];
-  /** Every stage was found locally. */
+  /** Every stage was found locally (for a random course: every stage filter can be evaluated). */
   playable: boolean;
+  /** Set on a random course: the definition its stages are drawn from. */
+  random?: RandomCourseDefinition;
 }
 
 /**
