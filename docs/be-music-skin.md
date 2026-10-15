@@ -291,13 +291,13 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 
 `result.draw(surface, frame)` receives a `BeMusicResultFrame`:
 
-- `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the play log. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, and `judgeTimings` (every timed judgement of the play).
+- `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the play log. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, `judgeTimings` (every timed judgement of the play), and `courseResult` (the result of a whole EXPERT / GRADE course: the stages summed).
 - `rankLabel` (IIDX DJ level) and `ratePercent`.
 - `elapsedMs` since the scene mounted, or `Infinity` once the player skipped the entrance.
 - `nowMs` and `effects`.
 - `settings` and `songImage`: see [Skin settings](#skin-settings) and [Song images](#song-images).
 
-`resolveResultLamp` and `resolveResultTrackRows` give the clear lamp and track rows the built-in skins show. `binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
+`resolveResultVerdict` (`STAGE CLEAR` / `FAILED`, or `COURSE CLEAR` / `COURSE FAILED` for a course result), `resolveResultLamp` and `resolveResultTrackRows` give the headline, clear lamp and track rows the built-in skins show. `binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
 
 ### Decide
 
@@ -361,7 +361,7 @@ settings: [
 | Moments       | `trackMoments` / `createMomentState` + `updateMoments` (every 100 combo, clear line, full combo, combo break; for the count-in, check whether `runtime.chartMs` is negative), `COMBO_MILESTONE`, `COMBO_BREAK_MIN`, `comboTier`, `momentProgress`, `impulse`, `punchScale`, `effectProfile`                                                                                  |
 | Loading       | `LOADING_WORD`, `loadingDots(nowMs)`, `LOADING_DOT_MS`                                                                                                                                                                                                                                                                                                                       |
 | Sound         | `audioDrive`, `bandAt`, `bandLevel`, `AUDIO_BAND_COUNT`, `SILENT_AUDIO`; see [Reacting to the music](#reacting-to-the-music)                                                                                                                                                                                                                                                 |
-| Result        | `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                                                                                                                                                                                                                                |
+| Result        | `resolveResultVerdict`, `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                                                                                                                                                                                                        |
 | Timing        | `binJudgeTimings`; see [Judgement timing](#judgement-timing)                                                                                                                                                                                                                                                                                                                 |
 | Settings      | `resolveBeMusicSkinSettings`, `validateBeMusicSkinSettings`; see [Skin settings](#skin-settings)                                                                                                                                                                                                                                                                             |
 | Song facts    | `resolveSongRowFacts`, `resolveSongStats`, `resolveSongTags`, `formatSongLength`, `formatBpmRange`, `formatPlayVariantLabel`                                                                                                                                                                                                                                                 |

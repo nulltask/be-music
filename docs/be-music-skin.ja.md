@@ -291,13 +291,13 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 
 `result.draw(surface, frame)` は `BeMusicResultFrame` を受け取ります。
 
-- `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、プレイログ。ホストが提供する場合は、`lamp`（クリアランプ: `FAILED`、クリアしたゲージ、`FULL_COMBO`、`PERFECT`、`MAX`）、`gaugeType`、`judgeRuleset`、`fast` / `slow`、`judgeTimings`（プレイ中のタイミング付き判定すべて）も入ります。
+- `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、プレイログ。ホストが提供する場合は、`lamp`（クリアランプ: `FAILED`、クリアしたゲージ、`FULL_COMBO`、`PERFECT`、`MAX`）、`gaugeType`、`judgeRuleset`、`fast` / `slow`、`judgeTimings`（プレイ中のタイミング付き判定すべて）、`courseResult`（EXPERT / GRADE コース全体の結果。ステージを合計したもの）も入ります。
 - `rankLabel`（IIDX の DJ LEVEL）、`ratePercent`。
 - `elapsedMs`: シーン開始からの経過。登場演出をスキップした後は `Infinity`。
 - `nowMs`、`effects`。
 - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
 
-`resolveResultLamp` と `resolveResultTrackRows` が、組み込みスキンの表示するクリアランプとトラック行を返します。`binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` でタイミングをヒストグラムにできます。
+`resolveResultVerdict`（`STAGE CLEAR` / `FAILED`、コースの結果なら `COURSE CLEAR` / `COURSE FAILED`）、`resolveResultLamp`、`resolveResultTrackRows` が、組み込みスキンの表示する見出し、クリアランプ、トラック行を返します。`binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` でタイミングをヒストグラムにできます。
 
 ### 決定画面
 
@@ -361,7 +361,7 @@ settings: [
 | 演出       | `trackMoments` / `createMomentState` + `updateMoments`（100 コンボごと、クリアライン、フルコンボ、コンボ切れ。カウントインは `runtime.chartMs` が負かどうかで判定）、`COMBO_MILESTONE`、`COMBO_BREAK_MIN`、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile`                                                                                                   |
 | ロード中   | `LOADING_WORD`、`loadingDots(nowMs)`、`LOADING_DOT_MS`                                                                                                                                                                                                                                                                                                                               |
 | サウンド   | `audioDrive`、`bandAt`、`bandLevel`、`AUDIO_BAND_COUNT`、`SILENT_AUDIO`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                                                                                                                                                                                 |
-| リザルト   | `resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                                                                                                                                                                                                                        |
+| リザルト   | `resolveResultVerdict`、`resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                                                                                                                                                                                                |
 | タイミング | `binJudgeTimings`。[判定タイミング](#判定タイミング)を参照                                                                                                                                                                                                                                                                                                                           |
 | 設定       | `resolveBeMusicSkinSettings`、`validateBeMusicSkinSettings`。[スキン設定](#スキン設定)を参照                                                                                                                                                                                                                                                                                         |
 | 曲情報     | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBpmRange`、`formatPlayVariantLabel`                                                                                                                                                                                                                                                         |
