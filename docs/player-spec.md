@@ -519,6 +519,12 @@ split.
   rule (a threshold for the recovery gauges, "never bottomed out" for the survival gauges).
 - The selected gauge governs the run. It is not a colour: HARD really drains, and a HARD run that bottoms out
   reports `failedMidPlay` and can no longer clear.
+- A survival gauge that empties ends the play there, as in LR2 and beatoraja (`PlayerOptions.endOnFailure`, default
+  `true`): the judgment that emptied it is the last one counted, and the play stops. With `endOnFailure: false` the run
+  keeps judging to the end of the chart on a dead gauge. The play log records the flag, so re-simulations stop at the
+  same judgment; logs from before it existed keep judging to the end.
+- A course stage (`PlayerOptions.course`) runs on the ruleset's course gauge instead, starting from the value the
+  previous stage left. See [Courses and dan certification](./course.md#playing-a-course-stage).
 - The tables live in [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts)
   and are applied through `RulesetGauge`. The shared engine is the authority for final score and summary values;
   browser scenes mirror `summary.gauge`.

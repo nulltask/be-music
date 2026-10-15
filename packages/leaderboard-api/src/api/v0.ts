@@ -213,12 +213,13 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
         413: json('The body is too large.', errorResponse(['body-too-large'])),
         415: json('Not gzip-compressed JSON.', errorResponse(['expected-json', 'unsupported-encoding'])),
         422: json(
-          'The play cannot be ranked: an auto or aborted play, a malformed play log, or a fingerprint document that ' +
-            'does not hash to the play log’s fingerprint.',
+          'The play cannot be ranked: an auto or aborted play, a course stage, a malformed play log, or a fingerprint ' +
+            'document that does not hash to the play log’s fingerprint.',
           errorResponse([
             'invalid-playlog',
             'auto-play',
             'aborted',
+            'course-stage',
             'missing-fingerprint',
             'play-document-not-a-document',
             'play-document-fingerprint-mismatch',

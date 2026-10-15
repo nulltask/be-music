@@ -1,6 +1,7 @@
 import type { RandomDraw } from '@be-music/chart';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
 import type { LongNoteMode } from '../playable-notes.ts';
+import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
 
 /**
  * be-music play-log ("playlog") format.
@@ -150,8 +151,36 @@ export interface PlaylogPlay {
    * nothing from it on. Re-simulations stop there instead of missing the rest of the chart. Absent on older logs.
    */
   abortedAtUs?: number;
+  /**
+   * True when the play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`): nothing after the
+   * judgment that emptied it counts. Absent on older logs, which kept judging to the end.
+   */
+  endOnFailure?: boolean;
+  /** Set when the play was one stage of a course: what the stage's rules and starting state were. */
+  course?: PlaylogCourseStage;
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
   native?: Record<string, string | number | boolean | null>;
+}
+
+/** The course context a stage was played in. A stage log replays on its own with it. */
+export interface PlaylogCourseStage {
+  kind: RulesetCourseKind;
+  /** The course's `gauge_*` constraint (beatoraja's class-gauge set), when it named one. */
+  gaugeSet?: CourseGaugeSet;
+  /** The course's `no_good` / `no_great` constraint. */
+  judge?: CourseJudgeConstraint;
+  /** The state the previous stage left. Absent for the first stage, which starts on a full gauge and no combo. */
+  carryIn?: PlaylogCourseCarry;
+}
+
+/** The state carried from one course stage into the next. */
+export interface PlaylogCourseCarry {
+  /** Gauge value in percent. */
+  gauge: number;
+  /** The course-wide combo running into the stage. */
+  combo: number;
+  /** The course-wide max combo so far. */
+  maxCombo: number;
 }
 
 export interface PlaylogJudgeCounts {
@@ -192,6 +221,8 @@ export interface PlaylogRulesetResult {
   /** IIDX DJ LEVEL label (`'AAA'`..`'F'`) where the ruleset defines one. */
   djLevel?: string;
   gauge: PlaylogGaugeResult;
+  /** For a course stage: the course-wide combo and max combo the stage left, which the next stage carries in. */
+  course?: { combo: number; maxCombo: number };
 }
 
 /**
@@ -489,6 +520,8 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
   }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
+  if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
+  if (play.course !== undefined) parsed.course = parseCourseStage(expectRecord(play.course, 'play.course'));
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');
     const copied: Record<string, string | number | boolean | null> = {};
@@ -500,6 +533,45 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     parsed.native = copied;
   }
   return parsed;
+}
+
+const COURSE_KINDS: ReadonlySet<string> = new Set(['grade', 'expert', 'nonstop']);
+const COURSE_GAUGE_SETS: ReadonlySet<string> = new Set(['lr2', '5k', '7k', '9k', '24k']);
+const COURSE_JUDGE_CONSTRAINTS: ReadonlySet<string> = new Set(['no-good', 'no-great']);
+
+function parseCourseStage(course: Record<string, unknown>): PlaylogCourseStage {
+  if (typeof course.kind !== 'string' || !COURSE_KINDS.has(course.kind)) {
+    throw new PlaylogParseError(`play.course.kind: expected 'grade' | 'expert' | 'nonstop'`);
+  }
+  const parsed: PlaylogCourseStage = { kind: course.kind as RulesetCourseKind };
+  if (course.gaugeSet !== undefined) {
+    if (typeof course.gaugeSet !== 'string' || !COURSE_GAUGE_SETS.has(course.gaugeSet)) {
+      throw new PlaylogParseError(`play.course.gaugeSet: expected 'lr2' | '5k' | '7k' | '9k' | '24k'`);
+    }
+    parsed.gaugeSet = course.gaugeSet as CourseGaugeSet;
+  }
+  if (course.judge !== undefined) {
+    if (typeof course.judge !== 'string' || !COURSE_JUDGE_CONSTRAINTS.has(course.judge)) {
+      throw new PlaylogParseError(`play.course.judge: expected 'no-good' | 'no-great'`);
+    }
+    parsed.judge = course.judge as CourseJudgeConstraint;
+  }
+  if (course.carryIn !== undefined) {
+    const carry = expectRecord(course.carryIn, 'play.course.carryIn');
+    parsed.carryIn = {
+      gauge: expectFiniteNumber(carry.gauge, 'play.course.carryIn.gauge'),
+      combo: expectNonNegativeInteger(carry.combo, 'play.course.carryIn.combo'),
+      maxCombo: expectNonNegativeInteger(carry.maxCombo, 'play.course.carryIn.maxCombo'),
+    };
+  }
+  return parsed;
+}
+
+function expectNonNegativeInteger(value: unknown, path: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new PlaylogParseError(`${path}: expected a non-negative integer`);
+  }
+  return value;
 }
 
 const RANDOM_DRAW_COMMANDS: ReadonlySet<string> = new Set(['RANDOM', 'SETRANDOM', 'SWITCH', 'SETSWITCH']);
@@ -558,6 +630,13 @@ function parseResults(results: Record<string, unknown>): Record<string, PlaylogR
     if (score !== undefined) result.score = score;
     const djLevel = optionalString(record.djLevel, `results.${key}.djLevel`);
     if (djLevel !== undefined) result.djLevel = djLevel;
+    if (record.course !== undefined) {
+      const course = expectRecord(record.course, `results.${key}.course`);
+      result.course = {
+        combo: expectFiniteNumber(course.combo, `results.${key}.course.combo`),
+        maxCombo: expectFiniteNumber(course.maxCombo, `results.${key}.course.maxCombo`),
+      };
+    }
     parsed[key] = result;
   }
   return parsed;
