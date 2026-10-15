@@ -194,7 +194,6 @@ interface NonstopPlay {
 import demoPackageJson from '../package.json' with { type: 'json' };
 
 const dropLog = logger('drop');
-const recordLog = logger('record');
 const gameplayLog = logger('gameplay');
 const resolutionLog = logger('render-resolution');
 const fullscreenLog = logger('fullscreen');
@@ -269,9 +268,9 @@ import {
 } from './silent-mode-playback.ts';
 import {
   RECORD_LABEL,
-  STOP_RECORDING_LABEL,
   captureScreenshot,
   finalizeRecordingIfActive,
+  startArmedRecording,
   toggleRecording,
   type RecordingDeps,
 } from './recording-controller.ts';
@@ -1817,7 +1816,6 @@ class PlayerWebDemoApp {
       sceneHost: this.sceneHost,
       recordController: this.recordController,
       getActiveGameplay: () => this.gameplayView ?? this.beatorajaGameplayView,
-      isLr2GameplayRecording: () => this.gameplayView?.isRecording() ?? false,
       getAutoRecordArmed: () => this.autoRecordArmed,
       setAutoRecordArmed: (value) => {
         this.autoRecordArmed = value;
@@ -3436,20 +3434,7 @@ class PlayerWebDemoApp {
     // Consume the "user pressed Record on the select screen" flag. Same flow as the LR2
     // gameplay path — `autoRecordArmed` is set when the user clicks the Record button
     // before picking a song; the next gameplay mount kicks the recorder off automatically.
-    if (this.autoRecordArmed) {
-      this.autoRecordArmed = false;
-      const controller = this.recordController;
-      controller?.domElement.classList.remove('arming');
-      try {
-        this.beatorajaGameplayView.startRecording({ format: this.recordingFormat });
-        controller?.domElement.classList.add('recording');
-        controller?.name(STOP_RECORDING_LABEL);
-        this.setStatus('Recording…');
-      } catch (error) {
-        controller?.name(RECORD_LABEL);
-        recordLog.warn('auto-start failed', error);
-      }
-    }
+    startArmedRecording(this.recordingDeps());
 
     // Skin-options panel for the play skin's `property[]` / `filepath[]`. Live edits flow through
     // `applyBeatorajaPlaySkinConfig` → `replaceSkin` so the chrome rebuilds without tearing down
@@ -4515,6 +4500,8 @@ class PlayerWebDemoApp {
 
   /** Sequence beatoraja-gameplay teardown → caller-supplied transition (mirrors `finishGameplayThen`). */
   private async finishBeatorajaGameplayThen(then: () => void | Promise<void>): Promise<void> {
+    // As `finishGameplayThen`: an in-flight recording is saved before the scene (and its AudioContext) goes away.
+    await finalizeRecordingIfActive(this.recordingDeps());
     await this.sceneHost.setScene(undefined);
     this.disposeBeatorajaGameplay();
     await then();
@@ -5060,20 +5047,7 @@ class PlayerWebDemoApp {
     this.setStatus(describePlayingStatus(song.title, { tempoPercent: this.guiState.tempoPercent }));
     this.lockPlaylogOptionsForPlay();
     this.gameplayView.start();
-    if (this.autoRecordArmed) {
-      this.autoRecordArmed = false;
-      const controller = this.recordController;
-      controller?.domElement.classList.remove('arming');
-      try {
-        this.gameplayView.startRecording({ format: this.recordingFormat });
-        controller?.domElement.classList.add('recording');
-        controller?.name(STOP_RECORDING_LABEL);
-        this.setStatus('Recording…');
-      } catch (error) {
-        controller?.name(RECORD_LABEL);
-        recordLog.warn('auto-start failed', error);
-      }
-    }
+    startArmedRecording(this.recordingDeps());
   }
 
   private async playSong(
@@ -5141,21 +5115,7 @@ class PlayerWebDemoApp {
     // requires the gameplay AudioContext to exist, which only happens after `mount`. Failing here is non-fatal: the
     // select-screen click already nudged the user that capture would start; if it doesn't (codec missing / no
     // MediaRecorder), the surfaced error replaces the armed status without breaking gameplay.
-    if (this.autoRecordArmed) {
-      this.autoRecordArmed = false;
-      const controller = this.recordController;
-      controller?.domElement.classList.remove('arming');
-      try {
-        this.gameplayView.startRecording({ format: this.recordingFormat });
-        controller?.domElement.classList.add('recording');
-        controller?.name(STOP_RECORDING_LABEL);
-        this.setStatus('Recording…');
-      } catch (error) {
-        controller?.name(RECORD_LABEL);
-        recordLog.warn('auto-start failed', error);
-        this.setStatus(`Recording unavailable: ${(error as Error).message}`);
-      }
-    }
+    startArmedRecording(this.recordingDeps());
   }
 
   /**
