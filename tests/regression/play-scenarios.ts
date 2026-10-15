@@ -1,7 +1,13 @@
 import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { manualPlay, type PlayerGrooveGaugeSummary, type PlayerSummary } from '@be-music/player';
-import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogNote, PlaylogRulesetId } from '@be-music/player/playlog';
+import type {
+  BeMusicPlaylog,
+  PlaylogInputEvent,
+  PlaylogNote,
+  PlaylogRulesetId,
+  PlaylogRulesetResult,
+} from '@be-music/player/playlog';
 
 /**
  * Fixed input scenarios and the engine replay driver shared by the regression suites. Every stream is a pure
@@ -89,6 +95,34 @@ export async function replayEngine(json: BeMusicJson, options: EngineReplayOptio
  * spends most of its time waiting for the next tick, and a replay is judged on the judge core's fixed chart-time grid,
  * so overlapping them only shortens the wall-clock time.
  */
+/**
+ * The fields on which an engine replay and the simulator disagree for one ruleset, as `field engine/simulator`, or an
+ * empty list when they agree. The simulator reports its final gauge rounded to 0.01, so the gauge is compared at that
+ * precision.
+ */
+export function findEngineSimulatorMismatches(engine: EngineReplay, simulated: PlaylogRulesetResult): string[] {
+  const { summary } = engine;
+  const pairs: Array<[string, unknown, unknown]> = [
+    ['pgreat', summary.perfect, simulated.judge.pgreat],
+    ['great', summary.great, simulated.judge.great],
+    ['good', summary.good, simulated.judge.good],
+    ['bad', summary.bad, simulated.judge.bad],
+    ['poor', summary.poor, simulated.judge.poor],
+    ['emptyPoor', summary.emptyPoor, simulated.judge.emptyPoor],
+    ['fast', summary.fast, simulated.fast],
+    ['slow', summary.slow, simulated.slow],
+    ['exScore', summary.exScore, simulated.exScore],
+    ['maxCombo', engine.playlog.results?.native?.maxCombo, simulated.maxCombo],
+    [
+      'gauge',
+      summary.gauge === undefined ? undefined : Math.round(summary.gauge.current * 100) / 100,
+      simulated.gauge.final,
+    ],
+    ['cleared', summary.gauge?.cleared, simulated.gauge.cleared],
+  ];
+  return pairs.filter(([, left, right]) => left !== right).map(([field, left, right]) => `${field} ${left}/${right}`);
+}
+
 export async function replayEngineRulesets(
   json: BeMusicJson,
   options: Omit<EngineReplayOptions, 'judgeRuleset'>,

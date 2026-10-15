@@ -14,6 +14,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   buildScenarios,
   ENGINE_REPLAY_SPEED,
+  findEngineSimulatorMismatches,
   replayEngine,
   replayEngineRulesets,
   round6,
@@ -150,26 +151,24 @@ async function buildResolvedExpected(
 
   // A no-input run snapshots the note list the engine prepares for play (lane transforms, long-note modes, mine
   // damage, FREE ZONE); the scenarios' input streams are built from it. Each stream is then judged twice per ruleset:
-  // by the pure simulator and by the live engine replaying it. Both are pinned side by side as they are — where they
-  // disagree the expected file shows it, and keeping them in agreement is `packages/player/src/playlog/
-  // equivalence.test.ts`'s job, not this suite's.
+  // by the pure simulator and by the live engine replaying it. Both are pinned side by side, and the two must agree on
+  // every chart: `packages/player/src/playlog/equivalence.test.ts` reduces each rule to a minimal case, while this
+  // catches whatever combination of rules a real chart reaches that no minimal case covered.
   const { playlog } = await replayEngine(json, { randomDraws, inputs: [], speed: ENGINE_REPLAY_SPEED });
   const notes = playlog.chart.notes;
   const play: Record<string, unknown> = {};
   for (const [id, inputs] of Object.entries(buildScenarios(notes))) {
+    const simulated = simulatePlaylogRulesets({ ...playlog, inputs });
+    const replays = await replayEngineRulesets(json, { randomDraws, inputs, speed: ENGINE_REPLAY_SPEED });
+    for (const { ruleset, replay } of replays) {
+      expect(findEngineSimulatorMismatches(replay, simulated[ruleset]!), `${path} ${id} ${ruleset}`).toEqual([]);
+    }
     play[id] = {
       inputs: inputs.length,
       ...Object.fromEntries(
-        Object.entries(simulatePlaylogRulesets({ ...playlog, inputs })).map(([ruleset, result]) => [
-          ruleset,
-          roundRulesetResult(result),
-        ]),
+        Object.entries(simulated).map(([ruleset, result]) => [ruleset, roundRulesetResult(result)]),
       ),
-      engine: Object.fromEntries(
-        (await replayEngineRulesets(json, { randomDraws, inputs, speed: ENGINE_REPLAY_SPEED })).map(
-          ({ ruleset, replay }) => [ruleset, summarizeEngineReplay(replay)],
-        ),
-      ),
+      engine: Object.fromEntries(replays.map(({ ruleset, replay }) => [ruleset, summarizeEngineReplay(replay)])),
     };
   }
 
