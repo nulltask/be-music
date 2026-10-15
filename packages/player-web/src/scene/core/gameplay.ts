@@ -150,7 +150,8 @@ import type {
   SkinlessGameplayChromeRuntime,
   SkinlessGameplayJudgeState,
 } from '../gameplay-chrome.ts';
-import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
+import { resolveGameplayAudioTailCleanupDelayMs } from './gameplay-result-delay.ts';
+import { resolvePlayEnding } from '../play-ending.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
 import type {
   BeMusicBomb,
@@ -374,9 +375,6 @@ const DEFAULT_THEME_TIMING: GameplayThemeTiming = {
  */
 const BE_MUSIC_ENTER_FADE_MS = 400;
 const BE_MUSIC_THEME_TIMING: GameplayThemeTiming = { ...DEFAULT_THEME_TIMING, fadeOutMs: 450 };
-
-/** How long a failed play's sound and picture fade out at least, before its result shows. */
-const FAILED_FADE_OUT_MS = 1500;
 
 /**
  * Scene moments a theme can react to (the LR2 family stamps its skin timers from these). `at` is the
@@ -5432,17 +5430,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (this.disposed || this.chartEnded) return;
     this.chartEnded = true;
     this.playMoments.outroAtMs ??= this.playClock();
-    // A play cut short by its gauge emptying (a course stage, a HARD gauge ending on failure) ends at once: its sound
-    // fades out as the screen goes dark, then the result shows. A gauge that emptied but played on to the end does not.
-    const now = this.currentSeconds();
-    const failed = finalSummary?.gauge?.failedMidPlay === true && this.notes.some((note) => note.seconds > now);
-    // The lead-out is chart time: at another tempo it takes 1 / tempo as long.
-    const delayMs = failed
-      ? 0
-      : chartToElapsedSeconds(
-          resolvePostChartResultDelayMs(this.notes, this.timingResolver, this.currentSeconds()),
-          this.tempo,
-        );
+    // The end-of-play policy both gameplay families share (`scene/play-ending.ts`): a lead-out after the last note, or —
+    // for a play cut short by its gauge emptying — no lead-out and a sound + picture fade-out before the result.
+    const ending = resolvePlayEnding({
+      summary: finalSummary,
+      notes: this.notes,
+      timing: this.timingResolver,
+      currentSeconds: this.currentSeconds(),
+      tempo: this.tempo,
+      themeFadeOutMs: this.themeTiming.fadeOutMs,
+    });
     // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
     // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
     // charts whose non-note tail has already carried us past the target.
@@ -5474,9 +5471,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           };
           this.chartEndHold?.abort();
         },
-        failed ? { fadeAudio: true, minFadeOutMs: FAILED_FADE_OUT_MS } : { fadeAudio: false },
+        { fadeAudio: ending.fadeAudio, minFadeOutMs: ending.fadeOutMs },
       );
-    }, delayMs);
+    }, ending.leadOutMs);
   }
 }
 

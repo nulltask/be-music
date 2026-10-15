@@ -42,7 +42,8 @@ import {
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { chartPlayVariantForBeatorajaVariant, type BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
 import { BeatorajaNoteLayer, beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat } from './notes.ts';
-import { createTimingResolver, type TempoReversalPoint } from '@be-music/chart';
+import { resolveChart, type TempoReversalPoint } from '@be-music/chart';
+import { playEndingFadeAlpha, resolvePlayEnding, type PlayEnding, type PlayEndingNote } from '../play-ending.ts';
 import { BeatorajaMarkerLayer } from './markers.ts';
 import {
   createBeatorajaLaneTimelines,
@@ -302,9 +303,15 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private engineSettled = false;
   /** Whether the skin's fade-out timer has been stamped (at the chart's end, or at the engine's stop). */
   private fadeoutStamped = false;
-  /** Holds the play open past the chart's end through the skin's fade-out (`holdAfterChart`). */
+  /** Holds the play open past the chart's end through the lead-out and the skin's fade-out (`holdAfterChart`). */
   private chartEndHold: AbortController | undefined;
-  private chartEndHoldTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The play's ending once it began (`scene/play-ending.ts`), its lead-out / fade-out timer, and the fade's start. */
+  private ending: PlayEnding | undefined;
+  private endingTimer: ReturnType<typeof setTimeout> | undefined;
+  private endingFadeStartedAt: number | undefined;
+  /** The chart's judged notes and tempo map, for the lead-out after the last note. */
+  private readonly endingNotes: ReadonlyArray<PlayEndingNote>;
+  private readonly endingTiming: ReturnType<typeof resolveChart>['timing'];
   private exitRequested = false;
   /**
    * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`).
@@ -345,7 +352,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.scrollHiSpeed.jump(this.hiSpeed);
     this.scrollMapper = createBeatorajaScrollMapper(effectiveChart);
     this.laneTimelines = this.scrollMapper ? createBeatorajaLaneTimelines(effectiveChart) : undefined;
-    this.tempoReversal = createTimingResolver(effectiveChart).reversal;
+    const resolved = resolveChart(effectiveChart, { inferBmsLnTypeWhenMissing: true });
+    this.tempoReversal = resolved.reversal;
+    this.endingNotes = resolved.notes;
+    this.endingTiming = resolved.timing;
     this.skinAudioRenderContext = {
       activeOps: new Set<number>(),
       getTimerStart: () => undefined,
@@ -570,17 +580,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         onPlaylogRecorded: (playlog) => {
           this.playlog = playlog;
         },
-        // Keys stay live after the last note: the skin's fade-out starts when the chart settles, and the play ends
-        // (handing the host its summary) once the fade-out has run.
+        // Keys stay live after the last note: the lead-out and the skin's fade-out run once the chart settles, and the
+        // play ends (handing the host its summary) after them.
         holdAfterChart: {
           signal: (this.chartEndHold = new AbortController()).signal,
-          onSettled: () => {
-            this.stampFadeout();
-            this.chartEndHoldTimer = setTimeout(
-              () => this.chartEndHold?.abort(),
-              resolveFadeoutMs(this.options.skin.fadeout),
-            );
-          },
+          onSettled: () => this.beginEnding(undefined, () => this.chartEndHold?.abort()),
         },
       },
       onInputSignalsReady: ({ inputSignals }) => {
@@ -627,19 +631,15 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     })
       .then((summary) => {
         this.engineSettled = true;
-        // End-of-chart fail declaration. Mid-play instant fail (HARD / DEATH gauge → 0) is
-        // already caught by the adapter's per-frame gauge-zero detector; calling `markFailed`
-        // here covers the GROOVE / EASY case where the chart finishes with the gauge below
-        // the clear threshold but never reached zero. The adapter's idempotent latch makes
-        // this safe to call regardless of which path tripped first — only the EARLIER stamp
-        // wins, so the failure animation runs from the fail moment, not the chart's last
-        // frame.
-        if (summary.gauge !== undefined && !summary.gauge.cleared) {
-          this.adapter.markFailed();
+        // End-of-chart fail declaration for a gauge that finished under its clear line without emptying (an emptied one
+        // was stamped by the adapter's per-frame detector; its idempotent latch keeps the earlier stamp).
+        if (summary.gauge !== undefined && !summary.gauge.cleared) this.adapter.markFailed();
+        // A play that ended on its own (auto play, a gauge emptied) runs its ending now; a held one already ran it.
+        if (this.ending === undefined && !this.exitRequested) {
+          this.beginEnding(summary, () => this.complete(summary));
+          return summary;
         }
-        if (!this.disposed) {
-          this.options.onComplete?.(summary, this.adapter.getMaxCombo(), this.adapter.getResultHistory());
-        }
+        this.complete(summary);
         return summary;
       })
       .catch((error) => {
@@ -652,6 +652,40 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       });
   }
 
+  /**
+   * Runs the end of the play as the LR2 / built-in view does (`resolvePlayEnding`): the lead-out after the last note,
+   * then the skin's fade-out — or, for a play cut short by its gauge emptying, at once a fade of the sound and the
+   * picture lasting at least `FAILED_FADE_OUT_MS` — then `done`.
+   */
+  private beginEnding(summary: PlayerSummary | undefined, done: () => void): void {
+    if (this.ending !== undefined || this.disposed) return;
+    const ending = resolvePlayEnding({
+      summary,
+      notes: this.endingNotes,
+      timing: this.endingTiming,
+      currentSeconds: this.currentFrame?.currentSeconds ?? 0,
+      tempo: this.options.engineOptions?.speed ?? 1,
+      themeFadeOutMs: resolveFadeoutMs(this.options.skin.fadeout),
+    });
+    this.ending = ending;
+    this.endingTimer = setTimeout(() => {
+      this.stampFadeout();
+      this.endingFadeStartedAt = performance.now();
+      if (ending.fadeAudio) this.options.audio.audioBus.fadeOutAudibleTo(0, ending.fadeOutMs);
+      this.endingTimer = setTimeout(() => {
+        this.endingTimer = undefined;
+        if (!this.disposed) done();
+      }, ending.fadeOutMs);
+    }, ending.leadOutMs);
+  }
+
+  /** Hands the host the play's final summary. */
+  private complete(summary: PlayerSummary): void {
+    if (!this.disposed) {
+      this.options.onComplete?.(summary, this.adapter.getMaxCombo(), this.adapter.getResultHistory());
+    }
+  }
+
   /** Stamps the skin's fade-out timer once, so the engine's stop after a held outro does not restart the fade. */
   private stampFadeout(): void {
     if (this.fadeoutStamped) return;
@@ -660,8 +694,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   }
 
   exit(): void {
-    if (this.chartEndHoldTimer !== undefined) clearTimeout(this.chartEndHoldTimer);
-    this.chartEndHoldTimer = undefined;
+    if (this.endingTimer !== undefined) clearTimeout(this.endingTimer);
+    this.endingTimer = undefined;
     if (this.tickerHandle && this.host) {
       this.host.app.ticker.remove(this.tickerHandle);
     }
@@ -1076,6 +1110,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // last fit (mount-time layout, window resize, dev-tools open). Cheap when nothing changed — the
     // setter early-outs when `(width, height)` matches the cached values.
     this.fitToStage();
+    // A failed play's picture fades with its sound (the skin draws its own fade-out on a normal end).
+    if (this.ending?.failed === true && this.endingFadeStartedAt !== undefined) {
+      const elapsed = performance.now() - this.endingFadeStartedAt;
+      this.view.container.alpha = playEndingFadeAlpha(elapsed, this.ending.fadeOutMs);
+    }
     // Cover indicator fade — emitted when the user taps H / J / K. Lingers fully visible for
     // 800ms then fades over the next 600ms. Single-Text node, cheap to update per frame.
     if (this.coverIndicatorText !== undefined && this.coverIndicatorText.visible) {
