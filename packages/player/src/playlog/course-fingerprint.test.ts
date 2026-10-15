@@ -71,6 +71,26 @@ describe('computeCourseFingerprint', () => {
     expect(fingerprint('grade', [], ['bmfp0:a', 'bmfp0:b'])).not.toBe(base);
     expect(fingerprint('grade', ['gauge_lr2'], ['bmfp0:b', 'bmfp0:a'])).not.toBe(base);
   });
+
+  test('tells NONSTOP courses apart by their connections and placement, not by a connection after the last stage', () => {
+    const stages = ['bmfp0:a', 'bmfp0:b'];
+    const nonstop = (connections: Array<'fade' | 'cut'>, placement: 'intended' | 'lr2' = 'intended') =>
+      computeCourseFingerprint({
+        kind: 'nonstop',
+        constraints: [],
+        stageChartFingerprints: stages,
+        nonstop: { connections, placement },
+      });
+    const base = nonstop(['fade']);
+    expect(nonstop(['cut'])).not.toBe(base);
+    expect(nonstop(['fade'], 'lr2')).not.toBe(base);
+    expect(nonstop(['fade', 'cut'])).toBe(base);
+    // Other kinds ignore it, so their fingerprints are what they were.
+    const expert = { kind: 'expert' as const, constraints: [], stageChartFingerprints: stages };
+    expect(computeCourseFingerprint({ ...expert, nonstop: { connections: ['cut'], placement: 'lr2' } })).toBe(
+      computeCourseFingerprint(expert),
+    );
+  });
 });
 
 describe('computeCoursePlaylogFingerprint', () => {
