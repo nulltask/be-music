@@ -4,10 +4,12 @@ import {
   COURSE_TABLE_URLS_STORAGE_KEY,
   describeCourseTableImportError,
   importCourseTable,
+  isTableHeaderFilePath,
   mergeCourseGroup,
   normalizeCourseTableUrl,
   parseStoredCourseTableUrls,
   readStoredCourseTableUrls,
+  readTableHeaderFile,
   rememberCourseTableUrl,
 } from './course-table-import.ts';
 
@@ -116,8 +118,37 @@ describe('importCourseTable', () => {
     );
   });
 
-  test('describes blocked fetches as a cross-origin failure', () => {
-    expect(describeCourseTableImportError(new TypeError('Failed to fetch'))).toMatch(/cross-origin/u);
+  test('describes a blocked fetch with what to do instead', () => {
+    expect(describeCourseTableImportError(new TypeError('Failed to fetch'))).toMatch(/drop it here/u);
     expect(describeCourseTableImportError(new Error('HTTP 404'))).toBe('Course table import failed: HTTP 404');
+  });
+});
+
+describe('saved table headers', () => {
+  const header = JSON.stringify({
+    name: 'Insane',
+    course: [[{ name: 'Dan 1', md5: [MD5_A], constraint: ['grade_mirror'] }]],
+  });
+
+  test('isTableHeaderFilePath matches header.json in any folder', () => {
+    expect(isTableHeaderFilePath('tables/insane/header.json')).toBe(true);
+    expect(isTableHeaderFilePath('HEADER.JSON')).toBe(true);
+    expect(isTableHeaderFilePath('skin/play.json')).toBe(false);
+  });
+
+  test('readTableHeaderFile reads the courses under the table name', () => {
+    const group = readTableHeaderFile(header, 'insane');
+    expect(group?.label).toBe('Insane');
+    expect(group?.courses.map((course) => course.name)).toEqual(['Dan 1']);
+    expect(readTableHeaderFile(JSON.stringify({ symbol: '★', course: JSON.parse(header).course }), 'x')?.label).toBe(
+      '★',
+    );
+    expect(readTableHeaderFile(JSON.stringify({ course: JSON.parse(header).course }), 'insane')?.label).toBe('insane');
+  });
+
+  test('readTableHeaderFile leaves files that are not table headers with courses', () => {
+    expect(readTableHeaderFile('not json', 'x')).toBeUndefined();
+    expect(readTableHeaderFile('[1]', 'x')).toBeUndefined();
+    expect(readTableHeaderFile(JSON.stringify({ name: 'No courses' }), 'x')).toBeUndefined();
   });
 });
