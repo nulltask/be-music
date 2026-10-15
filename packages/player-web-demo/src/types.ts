@@ -141,6 +141,11 @@ export interface DemoGuiState {
    */
   courseAutoAdvance: boolean;
   /**
+   * How a NONSTOP course places its stages: `'intended'` (the default) as LR2's loader means to, `'lr2'` exactly as
+   * LR2's binary does, including its third-stage start offset (`planNonstopCourse`).
+   */
+  nonstopPlacement: 'intended' | 'lr2';
+  /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
    * in anonymously the first time (docs/leaderboard.md). Toggled from the Debug Menu's "Submit to Leaderboard"
    * checkbox and latched at song start like the auto-save.

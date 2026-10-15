@@ -69,6 +69,7 @@ import {
   drawBrowserRandomCourse,
   readCourseFile,
   resolveCourseFolders,
+  resolveCourseStageSettings,
   type BrowserCourseEntry,
   type BrowserDroppedFile,
   type BrowserSongCollection,
@@ -166,6 +167,13 @@ import {
   courseRecordKey,
   type CourseStagePlan,
 } from './course-session.ts';
+import { buildNonstopCoursePlaylog, prepareNonstopCourse, type PreparedNonstopCourse } from './nonstop-course.ts';
+
+/** A NONSTOP course being played as its stitched chart. */
+interface NonstopPlay {
+  course: BrowserCourseEntry;
+  prepared: PreparedNonstopCourse;
+}
 import demoPackageJson from '../package.json' with { type: 'json' };
 
 const dropLog = logger('drop');
@@ -799,6 +807,7 @@ class PlayerWebDemoApp {
       // scene mounts.
       autoSavePlaylog: false,
       courseAutoAdvance: false,
+      nonstopPlacement: 'intended',
       // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
       submitToLeaderboard: false,
       // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
@@ -1273,6 +1282,12 @@ class PlayerWebDemoApp {
       .name('Course: skip stage results')
       .onChange((value: boolean) => {
         this.guiState.courseAutoAdvance = value;
+      });
+    folder
+      .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
+      .name('Course: NONSTOP placement')
+      .onChange((value: DemoGuiState['nonstopPlacement']) => {
+        this.guiState.nonstopPlacement = value;
       });
     trackPlayOption(
       folder
@@ -2045,8 +2060,66 @@ class PlayerWebDemoApp {
       }
       course = drawn.course;
     }
+    if (course.definition.kind === 'nonstop') {
+      await this.startNonstopCourse(course);
+      return;
+    }
     this.courseSession = new CourseSession(course);
     await this.playNextCourseStage();
+  }
+
+  /**
+   * Starts a NONSTOP course: its stages are stitched into one chart (`prepareNonstopCourse`) played from their own
+   * files, as LR2 plays a NONSTOP course in one go. Quick retry stitches and plays it again.
+   */
+  private async startNonstopCourse(course: BrowserCourseEntry): Promise<void> {
+    const hashes = new Map<string, ChartFileHashes>();
+    for (const stage of course.stages) {
+      if (stage.song === undefined) continue;
+      const found = await this.resolveChartHashes(stage.song);
+      if (found !== undefined) hashes.set(stage.song.id, found);
+    }
+    const prepared = prepareNonstopCourse(course, {
+      sourceOf: (song) => resolveSongSource(this.collection, song),
+      hashesOf: (song) => hashes.get(song.id),
+      placement: this.guiState.nonstopPlacement,
+    });
+    if (!prepared.ok) {
+      const stage = prepared.stage !== undefined ? ` (stage ${prepared.stage + 1})` : '';
+      this.setStatus(`${course.definition.name}: cannot stitch the NONSTOP course: ${prepared.reason}${stage}`);
+      return;
+    }
+    // The stitched chart loads its assets from a composite source; keep one at a time.
+    this.collection = {
+      ...this.collection,
+      sources: [
+        ...this.collection.sources.filter((source) => !source.id.startsWith('nonstop:')),
+        prepared.prepared.source,
+      ],
+    };
+    await this.playSong(prepared.prepared.song, { nonstop: { course, prepared: prepared.prepared } });
+  }
+
+  /** The course result of a NONSTOP run: its course log built from the stitched play, kept and shown as one run. */
+  private async showNonstopCourseResult(nonstop: NonstopPlay, result: PixiGameplayResultData): Promise<void> {
+    if (result.playlog === undefined) {
+      await this.showResult(result);
+      return;
+    }
+    const courseLog = buildNonstopCoursePlaylog(nonstop.course, nonstop.prepared, result.playlog, {
+      createdAt: new Date().toISOString(),
+      recorder: PLAYLOG_RECORDER,
+    });
+    const native = courseLog.results?.native;
+    if (native === undefined) {
+      await this.showResult(result);
+      return;
+    }
+    this.recordCourseResult(courseRecordKey(nonstop.course), native);
+    this.maybeAutoSaveCoursePlaylog(courseLog);
+    await this.showResult(buildCourseResultData(nonstop.course, native, courseLog), {
+      course: resolveSceneCourseInfo(nonstop.course),
+    });
   }
 
   /** Plays the running course's next stage, or shows the course result when it is over. */
@@ -4445,17 +4518,19 @@ class PlayerWebDemoApp {
       replay?: BeMusicPlaylog;
       chartHashes?: ChartFileHashes;
       courseStage?: CourseStagePlan;
+      nonstop?: NonstopPlay;
     },
   ): PixiGameplayView | DefaultPixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
+    const nonstop = overrides.nonstop;
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay, ...(replay !== undefined ? { replay } : {}) } };
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
     // course instead.
     this.activePlayRecordKey =
-      autoPlay || replay !== undefined || courseStage !== undefined
+      autoPlay || replay !== undefined || courseStage !== undefined || nonstop !== undefined
         ? undefined
         : songRecordKey(song, overrides.chartHashes?.sha256);
     // A course limits the lane options to what its constraint allows (`grade` none, `grade_mirror` MIRROR, ...).
@@ -4491,6 +4566,13 @@ class PlayerWebDemoApp {
       ...(courseStage !== undefined
         ? { course: courseStage.course, courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }
         : {}),
+      ...(nonstop !== undefined
+        ? {
+            course: resolveCourseStageSettings(nonstop.course.definition),
+            courseInfo: resolveSceneCourseInfo(nonstop.course, 0),
+            nonstop: nonstop.prepared.map,
+          }
+        : {}),
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
       ...(overrides.chartHashes !== undefined
         ? { chartSha256: overrides.chartHashes.sha256, chartMd5: overrides.chartHashes.md5 }
@@ -4516,6 +4598,10 @@ class PlayerWebDemoApp {
         void this.finishGameplayThen(() => this.showSelect());
       },
       onChartFinished: (result: PixiGameplayResultData) => {
+        if (nonstop !== undefined) {
+          void this.finishGameplayThen(() => this.showNonstopCourseResult(nonstop, result));
+          return;
+        }
         // A course stage with stage results skipped goes straight on to the next stage (or the course result).
         if (courseStage !== undefined && this.courseSession !== undefined && this.guiState.courseAutoAdvance) {
           void this.finishGameplayThen(async () => {
@@ -4530,6 +4616,11 @@ class PlayerWebDemoApp {
         void this.finishGameplayThen(() => this.showResult(result));
       },
       onRestart: () => {
+        // A NONSTOP course allows quick retry, as LR2 does (OpenLR2 L2854): stitch and play it again.
+        if (nonstop !== undefined) {
+          void this.finishGameplayThen(() => this.startNonstopCourse(nonstop.course));
+          return;
+        }
         // F5 restarts a single chart; in a course it gives the course up, as quick retry is off there.
         if (courseStage !== undefined) {
           this.courseSession = undefined;
@@ -4606,14 +4697,20 @@ class PlayerWebDemoApp {
 
   private async playSong(
     song: BrowserSongEntry,
-    overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog; courseStage?: CourseStagePlan } = {},
+    overrides: {
+      autoPlay?: boolean;
+      replay?: BeMusicPlaylog;
+      courseStage?: CourseStagePlan;
+      nonstop?: NonstopPlay;
+    } = {},
   ): Promise<void> {
     // Family dispatch for the gameplay scene. The Debug Menu's "Skin family" pick funnels through here so a user
     // override of `'lr2'` / `'default'` forces that family even when beatoraja is technically available, while
     // `'auto'` keeps the legacy preference (beatoraja → LR2 → default). Replay playback always stays on the
     // LR2/default path — that's where the play-log arrangement remap and `replayInputs` are wired.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
-    if (gameplayFamily === 'beatoraja' && overrides.replay === undefined) {
+    // A stitched NONSTOP chart plays on the LR2 / default scenes, which carry its per-stage audio and BGA.
+    if (gameplayFamily === 'beatoraja' && overrides.replay === undefined && overrides.nonstop === undefined) {
       await this.playSongBeatoraja(song, overrides);
       return;
     }
@@ -4643,8 +4740,12 @@ class PlayerWebDemoApp {
               playVariant: pickLr2PlaySkinVariant(this.playSkins, song),
             })
           : pickLr2PlaySkin(this.playSkins, song);
-    // Chart-file hash for the recorded play-log (skipped for replays — they record nothing).
-    const chartHashes = overrides.replay === undefined ? await this.resolveChartHashes(song) : undefined;
+    // Chart-file hash for the recorded play-log (skipped for replays — they record nothing — and for a stitched
+    // NONSTOP chart, which has no file).
+    const chartHashes =
+      overrides.replay === undefined && overrides.nonstop === undefined
+        ? await this.resolveChartHashes(song)
+        : undefined;
     this.gameplayView = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
     this.setStatus(`Playing: ${song.title}`);
     this.lockPlaylogOptionsForPlay();
