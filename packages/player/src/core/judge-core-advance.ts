@@ -575,8 +575,10 @@ export function advanceJudgeState(
         event: hold.note.event,
         endSeconds: hold.endSeconds,
       });
+      // A charge tail that was never let go is a missed POOR, whether the hold broke (HCN) or ran past the tail's late
+      // window: only a release is judged against the windows (beatoraja's `CN end poor`).
       const finalJudge =
-        hold.mode === 3 && !isHolding && releaseSeconds === undefined
+        isChargeLongNoteMode(hold.mode) && releaseSeconds === undefined
           ? resolveLongNoteTailJudge(hold, { kind: 'POOR', signedDeltaMs: (judgeSec - hold.endSeconds) * 1000 })
           : resolveLongNoteTailJudge(
               hold,

@@ -367,6 +367,23 @@ describe('engine / simulator equivalence', () => {
     },
   );
 
+  // Holding a charge note past its tail's late window is a missed POOR, not a BAD at the window's edge.
+  test.each(RULESETS)('%s: a charge tail held past its late window agrees on both sides', async (ruleset) => {
+    for (const lnMode of [2, 3] as const) {
+      const json = longNoteChart(lnMode);
+      const inputs = [down(0, 1_000_000, '11'), up(1, 3_000_000, '11')];
+      const { summary, playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      expect([summary.perfect, summary.bad, summary.poor], `#LNMODE ${lnMode}`).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.bad,
+        simulated.judge.poor,
+      ]);
+      expect(summary.bad, `#LNMODE ${lnMode}`).toBe(0);
+    }
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
