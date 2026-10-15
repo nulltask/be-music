@@ -211,8 +211,11 @@ class PlaylogSimulation {
         this.handleUp(judged);
       }
     }
-    this.advanceTime(Number.POSITIVE_INFINITY);
-    if (reversalUs !== undefined && this.hasOutstandingNotes()) {
+    // An ESC abort stops judging where the engine stopped: nothing left in the chart is missed, and the end-of-play
+    // rules (the reversal's HP = 0 included) never run.
+    const abortedAtUs = this.playlog.play.aborted === true ? this.playlog.play.abortedAtUs : undefined;
+    this.advanceTime(abortedAtUs ?? Number.POSITIVE_INFINITY);
+    if (reversalUs !== undefined && abortedAtUs === undefined && this.hasOutstandingNotes()) {
       // LR2 zeroes HP when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`): a reversed run that
       // leaves notes past the reversal behind — open holds included — is always FAILED.
       this.gauge.drainToZero();

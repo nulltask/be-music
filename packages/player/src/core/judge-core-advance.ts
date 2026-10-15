@@ -646,6 +646,7 @@ export function advanceJudgeState(
   emit: JudgeCoreEffectSink,
 ): void {
   const { config } = state;
+  state.advancedThroughSeconds = Math.max(state.advancedThroughSeconds, nowSec);
   for (const channel of state.heldChannels) {
     if (!state.activeLongNotes.has(channel)) {
       continue;

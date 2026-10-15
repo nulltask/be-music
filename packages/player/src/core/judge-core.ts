@@ -59,6 +59,7 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     longNoteSuppressUntilSeconds: new Map(),
     laneHolds: new Map(),
     keyStateInput: false,
+    advancedThroughSeconds: 0,
     pendingAutoScratchLongNotes: [],
     autoScratchNotes: config.autoScratch
       ? config.scorableNotes.filter((note) => config.scratchChannels.has(note.channel))
