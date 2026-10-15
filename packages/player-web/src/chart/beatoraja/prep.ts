@@ -1,20 +1,15 @@
-// Slim chart-asset preparation pipeline for the beatoraja gameplay path.
+// Chart-asset preparation for the beatoraja gameplay path: one awaited bundle (`EngineDriverAudioContext` + BGA) for
+// `PixiBeatorajaGameplayView`.
 //
-// `PixiGameplayView.prepare()` does the same job for the LR2 path, but its prep is deeply tied to view
-// state (private fields, deferred init across `prepareSong` / `prepareAudio` / `prepareBga`, mid-flight
-// `disposed` checks). Extracting it would be a 600-line refactor that risks LR2 regressions. Instead this
-// module reuses the same shared helpers (`@be-music/chart`, `@be-music/parser`, `@be-music/audio-renderer`,
-// `@be-music/player/core/bga-timeline`) to assemble a self-contained `EngineDriverAudioContext` + BGA
-// bundle for `PixiBeatorajaGameplayView`.
+// The audio and BGA preparation itself is shared with the LR2 / built-in view (`PixiGameplayView.prepare()`), so the two
+// families decode, stretch and key their assets the same way:
+//   - `chart/play-audio.ts` — AudioContext + bus (`#VOLWAV`), `#WAVxx` decode (keep-pitch stretch), `#WAVCMD` / `#EXWAV`.
+//   - `chart/play-bga.ts` — `#BMPxx` / bmson BGA images and videos, layer chroma key, `#BGAxx` sub-regions.
 //
-// What it covers:
+// This module adds what only the beatoraja path needs:
 //   - `#RANDOM` / `#SETRANDOM` / `#SWITCH` resolution (`resolvePlayChart`), unless the caller resolved already.
-//   - Web Audio bus + `AudioContext` construction (latency hint = 'interactive', master volume from
-//     `#VOLWAV`).
-//   - Per-`#WAVxx` slot decode → `decodedSamples`.
-//   - `#WAVCMD` + `#EXWAV` volume multipliers → `wavCmdVolumeMultipliers`.
 //   - bmson 1.0 sample slicing → `bmsonSlicePlayback`.
-//   - BGA timeline (`base` / `layer` / `poor`) + per-`#BMPxx` texture decode.
+//   - The BGA cue timeline (`base` / `layer` / `poor`).
 //
 // What it explicitly does NOT cover (the LR2 view handles these for itself; for beatoraja we use the
 // engine to drive playback so we don't need them on the prep side):
@@ -38,8 +33,7 @@
 //     // …play the chart…
 //     prep.dispose();   // closes the AudioContext + destroys BGA textures
 
-import { Texture } from 'pixi.js';
-import { runWithConcurrency } from '@be-music/utils/core';
+import type { Texture } from 'pixi.js';
 import { resolveChart } from '@be-music/chart';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { RandomDraws } from '@be-music/chart';
@@ -47,11 +41,12 @@ import { resolvePlayChart, type ResolvedPlayChart } from '@be-music/player/core/
 import { createBmsonSamplePlaybackMap } from '@be-music/audio-renderer/triggers';
 import type { AudioBusHandle, BuildAudioBusOptions, CompressorMode } from '../../runtime/audio-bus.ts';
 import type { EngineDriverAudioContext } from '../../runtime/engine-driver.ts';
-import { loadAssetBytes, resolveChartBgaAsset } from '../../collection/collection.ts';
-import { loadVideoTextureFromBytes, type VideoTranscodeOptions } from '../../media/textures.ts';
+import type { VideoTranscodeOptions } from '../../media/textures.ts';
+import { loadPlayBga, releaseVideo, type PlayBgaResources } from '../play-bga.ts';
+import { destroyUniqueTextures } from '../../scene/pixi-utils.ts';
 import { logger } from '../../logger.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
-import { isVideoExtension, toBrowserBgaTimeline } from '../../scene/core/gameplay-bga.ts';
+import { toBrowserBgaTimeline } from '../../scene/core/gameplay-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 import { collectChartVolumeMultipliers, createPlayAudioGraph, loadPlaySamples } from '../play-audio.ts';
@@ -64,8 +59,6 @@ import {
 } from '../../runtime/play-tempo.ts';
 
 const log = logger('beatoraja-prep');
-
-const BGA_DECODE_CONCURRENCY = 4;
 
 export interface PrepareBeatorajaGameplayChartOptions {
   song: BrowserSongEntry;
@@ -179,68 +172,29 @@ export async function prepareBeatorajaGameplayChart(
   // 6. BGA timeline.
   const cues = toBrowserBgaTimeline(resolved.bga);
 
-  // 7. BGA bitmap decode. Skips video extensions (we'd need WebCodecs / MSE plumbing to play them and
-  // the LR2 path's video pipeline isn't shared here yet).
-  const referencedKeys = new Set<string>();
-  for (const list of [cues.base, cues.layer, cues.poor]) {
-    for (const cue of list) {
-      if (cue.bmpKey !== undefined) referencedKeys.add(cue.bmpKey);
-    }
-  }
-  const bgaTextures = new Map<string, Texture>();
-  // Video-element map for keys whose `#BMPxx` resolves to a video file (mpg / mp4 / webm
-  // etc). The BGA layer pauses / plays / seeks these elements when their texture becomes
-  // active, mirroring beatoraja's video-BGA behavior. Empty when the chart only ships
-  // still-image BGAs.
-  const bgaVideoElements = new Map<string, HTMLVideoElement>();
-  // Object URLs created by the video loader — must be revoked at dispose to free the
-  // underlying memory (Blob references hang around forever otherwise). Stored in parallel
-  // with `bgaVideoElements` for symmetric cleanup.
-  const bgaVideoObjectUrls: string[] = [];
-  await runWithConcurrency([...referencedKeys], BGA_DECODE_CONCURRENCY, async (key) => {
-    const path = chart.resources.bmp[key];
-    if (typeof path !== 'string') return;
-    // The image / video resolver, as the LR2 path uses: it tries the other image extensions for a still, and the other
-    // video extensions for a video (`_bga.mpg` re-encoded to `_bga.mp4`), but never an image for a video.
-    const resolved = resolveChartBgaAsset(source, song.chartPath, path);
-    const bytes = await loadAssetBytes(resolved?.entry);
-    if (!bytes) return;
-    // Video paths route through the LR2-derived video loader. Browsers that can't
-    // natively decode the source codec fall through to the libav / ffmpeg.wasm
-    // transcode path inside `loadVideoTextureFromBytes`.
-    if (isVideoExtension(path)) {
-      try {
-        const handle = await loadVideoTextureFromBytes(resolved?.path ?? path, bytes, options.bgaTranscode);
-        if (handle === undefined) return;
-        handle.texture.label = `bga[${key}]:video`;
-        handle.video.muted = true;
-        handle.video.loop = false;
-        handle.video.playsInline = true;
-        // Start paused — the BGA layer triggers `.play()` when this key becomes the
-        // active cue. Seeking to 0 first guarantees frame-0 is already decoded so the
-        // first paint isn't black.
-        handle.video.pause();
-        // The video runs at the play tempo, so its time stays the chart time since its cue.
-        handle.video.defaultPlaybackRate = tempo;
-        handle.video.playbackRate = tempo;
-        bgaTextures.set(key, handle.texture);
-        bgaVideoElements.set(key, handle.video);
-        bgaVideoObjectUrls.push(handle.objectUrl);
-      } catch (error) {
-        log.debug('bga video decode skipped', { key, path, error });
-      }
-      return;
-    }
-    try {
-      const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
-      const bitmap = await createImageBitmap(blob);
-      const texture = Texture.from(bitmap);
-      texture.label = `bga[${key}]`;
-      bgaTextures.set(key, texture);
-    } catch (error) {
-      log.debug('bga decode skipped', { key, path, error });
-    }
+  // 7. BGA resources, loaded as the LR2 / built-in view loads them (`chart/play-bga.ts`): stills through the shared
+  // texture loader (TGA / DDS included), bmson `bga.header[]` images, `#BGAxx` sub-regions, and videos (with the
+  // transcode fallback) paused at the play tempo. The beatoraja BGA layer draws one sprite per frame, so a key drawn only
+  // on the layer track uses its layer texture.
+  const bga: PlayBgaResources = {
+    textures: new Map(),
+    layerTextures: new Map(),
+    videos: new Map(),
+    subRegionOrigins: new Map(),
+  };
+  await loadPlayBga({
+    chart,
+    source,
+    chartPath: song.chartPath,
+    timeline: cues,
+    into: bga,
+    ...(options.bgaTranscode !== undefined ? { transcode: options.bgaTranscode } : {}),
+    tempo,
   });
+  const bgaTextures = new Map<string, Texture>([...bga.layerTextures, ...bga.textures]);
+  const bgaVideoElements = new Map<string, HTMLVideoElement>(
+    [...bga.videos].map(([key, { video }]) => [key, video] as const),
+  );
 
   // 8. Package up.
   const audio: EngineDriverAudioContext = {
@@ -256,36 +210,14 @@ export async function prepareBeatorajaGameplayChart(
   const dispose = async (): Promise<void> => {
     if (disposed) return;
     disposed = true;
-    // Pause + clear src on every video element BEFORE destroying textures — destroying the
-    // VideoSource while the element is still playing leaves orphan frame requests on the
-    // browser's compositor thread.
-    for (const video of bgaVideoElements.values()) {
-      try {
-        video.pause();
-        video.src = '';
-        video.load();
-      } catch {
-        // Already-detached / disposed.
-      }
-    }
+    // Stop every video before destroying textures: a playing `VideoSource` leaves frame requests on the compositor.
+    for (const video of bga.videos.values()) releaseVideo(video);
+    bga.videos.clear();
     bgaVideoElements.clear();
-    for (const url of bgaVideoObjectUrls) {
-      try {
-        URL.revokeObjectURL(url);
-      } catch {
-        // Already revoked.
-      }
-    }
-    bgaVideoObjectUrls.length = 0;
-    for (const texture of bgaTextures.values()) {
-      try {
-        // BGA textures are exclusive to this chart; the gameplay view's BGA layer doesn't outlive
-        // `dispose()`, so destroying the underlying `TextureSource` is safe.
-        texture.destroy(true);
-      } catch {
-        // Already-destroyed textures are fine — Pixi v8 idempotently no-ops the second destroy.
-      }
-    }
+    // BGA textures are exclusive to this chart; sub-region views share their source's, so each is destroyed once.
+    destroyUniqueTextures([...bga.textures.values(), ...bga.layerTextures.values()]);
+    bga.textures.clear();
+    bga.layerTextures.clear();
     bgaTextures.clear();
     decodedSamples.clear();
     try {

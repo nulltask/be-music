@@ -1,14 +1,4 @@
-import {
-  Application,
-  Container,
-  Graphics,
-  Rectangle,
-  Text,
-  TextStyle,
-  Texture,
-  VideoSource,
-  type Sprite,
-} from 'pixi.js';
+import { Application, Container, Graphics, Text, TextStyle, Texture, VideoSource, type Sprite } from 'pixi.js';
 // Side-effect import: registers Pixi's `PrepareSystem` on the renderer so {@link CoreGameplayView.preparePixiUpload}
 // can drive eager GPU uploads. Pixi v8 deliberately ships the prepare module out of the default bundle (it's a
 // large optional system that not every app needs); the import has to land before any `Application.init` runs that
@@ -70,10 +60,10 @@ import {
   resolveReversedDrawClock,
   type NoteDrawWindow,
 } from './note-draw-window.ts';
-import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
+import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import { loadAssetBytes, resolveChartBgaAsset, resolveChartPlayVariant } from '../../collection/collection.ts';
-import { loadTextureFromBytes, loadVideoTextureFromBytes } from '../../media/textures.ts';
+import { resolveChartPlayVariant } from '../../collection/collection.ts';
+import { loadPlayBga, resolvePoorBgaFallbackKey } from '../../chart/play-bga.ts';
 import {
   type AudioBusChannel,
   type AudioBusHandle,
@@ -115,7 +105,6 @@ import { collectChartVolumeMultipliers, createPlayAudioGraph, loadPlaySamples } 
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import {
-  parseBmsBga,
   parseBmsSwBga,
   pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
@@ -141,8 +130,6 @@ import {
 import { HiSpeedTransition, snapHiSpeed } from '../hi-speed.ts';
 import {
   buildSkinBgaFrame,
-  collectBgaTextureLoadKeys,
-  isVideoExtension,
   pickActiveBgaCue,
   pickActiveBgaKey,
   resolveBgaImageRect,
@@ -255,8 +242,6 @@ export const KEY_ON_FADE_OUT_MS = 120;
  * register visually as a deliberate "tap" without lingering through the next note.
  */
 const KEY_ON_FLASH_HOLD_MS = 60;
-
-const BGA_DECODE_CONCURRENCY = 4;
 
 /**
  * One rectangle the chart's BGA is composited into. The core scene paints into the default-family BGA rect; themes
@@ -2539,10 +2524,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
     // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
     // black POOR plate on misses for charts that rely on this convention.
-    const poorBmp00 = resolved.resources.bmp['00'];
-    const shouldUsePoorBmp00Fallback =
-      typeof resolved.bms.poorBga !== 'string' && typeof poorBmp00 === 'string' && poorBmp00.length > 0;
-    this.poorBgaFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;
+    this.poorBgaFallbackKey = resolvePoorBgaFallbackKey(resolved);
     this.poorBgaFallbackUntilSeconds = this.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
     this.hasBga =
       this.bgaTimeline.base.length > 0 || this.bgaTimeline.layer.length > 0 || this.bgaTimeline.poor.length > 0;
@@ -2782,114 +2764,29 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (!song || !source || !this.hasBga) {
       return;
     }
-    // Build a map of `bmpKey → file path` covering both BMS-style ids and bmson `bga.header[].name`s. The bmson header
-    // carries the actual resource name; the id-keyed `resources.bmp` map is fed from BMS `#BMPxx` directives (and
-    // ignored for bmson charts).
-    const refs = new Map<string, string>();
     // Use the control-flow-resolved chart so #IF-gated BMP / bga header declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? song.chart;
-    // Partition the referenced BMP keys by which track(s) they appear in. The base + POOR tracks share decode settings
-    // (no chroma key, since they sit at the bottom of the BGA composite); the layer track gets a black→transparent
-    // decode so the foreground can punch through. `collectBgaTextureLoadKeys` also pulls in the source BMPs for referenced
-    // `#BGAxx` sub-region aliases — without those, BGA+ charts can have a timeline cue but no decoded source texture.
-    const { base: baseTrackKeys, layer: layerTrackKeys } = collectBgaTextureLoadKeys(
+    // Loaded as the beatoraja prep loads them (`chart/play-bga.ts`): base + POOR textures keep their blacks, the layer
+    // track's are keyed out for BMS, videos get one texture for both tracks, and `#BGAxx` sub-regions become views.
+    await loadPlayBga({
       chart,
-      this.bgaTimeline,
-      this.poorBgaFallbackKey,
-    );
-    const referencedKeys = new Set<string>([...baseTrackKeys, ...layerTrackKeys]);
-    for (const [id, path] of Object.entries(chart.resources.bmp)) {
-      if (typeof path === 'string' && referencedKeys.has(id)) {
-        refs.set(id, path);
-      }
-    }
-    for (const entry of chart.bmson.bga.header) {
-      if (referencedKeys.has(entry.name)) {
-        refs.set(entry.name, entry.name);
-      }
-    }
-    await runWithConcurrency([...refs.entries()], BGA_DECODE_CONCURRENCY, async ([key, path]) => {
-      if (this.disposed) return;
-      // BMP / video assets are stored as lazy `File` references in the song bundle. Read on demand so memory stays
-      // low while browsing — the bytes only land in the heap for BGA assets actually referenced by the focused chart.
-      // Use the image-aware resolver so charts that declare `#BMPxx foo.bmp` but ship `foo.png` (or `.jpg` / `.gif`)
-      // still find the asset; video extensions fall through to the original path verbatim. Decoding is bounded because
-      // image/video decoders allocate native memory outside the JS heap; fanning every BGA out at once can kill the
-      // Chrome renderer before any decode promise rejects.
-      const resolved = resolveChartBgaAsset(source, song.chartPath, path);
-      const bytes = await loadAssetBytes(resolved?.entry);
-      if (this.disposed) return;
-      if (!bytes) {
-        return;
-      }
-      const usedAsBase = baseTrackKeys.has(key);
-      const usedAsLayer = layerTrackKeys.has(key);
-      try {
-        if (isVideoExtension(path)) {
-          // Video BGA — wraps a `<video>` element in a Pixi texture. The same texture handle is used on both tracks
-          // (no chroma-key on layer; black-keying a moving video looks worse than just letting the artist's blacks
-          // show).
-          // The file found may be a re-encode under another extension (`_bga.mpg` → `_bga.mp4`): name it as found.
-          const handle = await loadVideoTextureFromBytes(resolved?.path ?? path, bytes, {
-            maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
-            useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
-          });
-          if (!handle) return;
-          // Late-arriving video decode after the player ESC'd back to the song select — drop the texture / video
-          // immediately so we don't leak it onto a dead app.
-          if (this.disposed) {
-            try {
-              handle.video.pause();
-              handle.video.removeAttribute('src');
-              handle.video.load();
-            } catch {
-              // Best effort; the video will be GC'd anyway.
-            }
-            URL.revokeObjectURL(handle.objectUrl);
-            try {
-              handle.texture.destroy(true);
-            } catch {
-              // Already-destroyed Pixi resources throw; swallow.
-            }
-            return;
-          }
-          this.bgaVideos.set(key, { video: handle.video, objectUrl: handle.objectUrl });
-          if (usedAsBase) this.bgaTextures.set(key, handle.texture);
-          if (usedAsLayer) this.bgaLayerTextures.set(key, handle.texture);
-          return;
-        }
-        if (usedAsBase) {
-          const texture = await loadTextureFromBytes(path, bytes);
-          if (this.disposed) {
-            texture?.destroy(true);
-            return;
-          }
-          if (texture) {
-            this.bgaTextures.set(key, texture);
-          }
-        }
-        if (usedAsLayer) {
-          // BMS' layer track (`#xxx07`) chroma-keys pure black pixels by convention so the foreground composites over
-          // the base BGA. The bmson 1.0.0 spec breaks explicitly with that: "Unlike BMS Layer Channel #xxx07, black
-          // pixels will not be made transparent." Bmson layer authors deliver pre-multiplied / alpha- channel artwork
-          // and expect blacks to render as black. Gate the chroma-key on chart source so BMS-derived layers keep the
-          // historical blend while bmson layers come through untouched.
-          const keyOutBlack = chart.sourceFormat !== 'bmson';
-          const texture = await loadTextureFromBytes(path, bytes, { keyOutBlack });
-          if (this.disposed) {
-            texture?.destroy(true);
-            return;
-          }
-          if (texture) {
-            this.bgaLayerTextures.set(key, texture);
-          }
-        }
-      } catch {
-        // Decode failures (corrupt files, unsupported encodings) are skipped silently so the rest of the chart still
-        // renders.
-      }
+      source,
+      chartPath: song.chartPath,
+      timeline: this.bgaTimeline,
+      poorFallbackKey: this.poorBgaFallbackKey,
+      into: {
+        textures: this.bgaTextures,
+        layerTextures: this.bgaLayerTextures,
+        videos: this.bgaVideos,
+        subRegionOrigins: this.bgaSubRegionOrigins,
+      },
+      transcode: {
+        maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
+        useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
+      },
+      tempo: this.tempo,
+      isCancelled: () => this.disposed,
     });
-    this.registerSubRegionBgaTextures(chart);
     if (this.disposed) return;
     // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
     // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
@@ -2898,47 +2795,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     await this.preparePixiUpload(this.bgaTextures.values());
     if (this.disposed) return;
     await this.preparePixiUpload(this.bgaLayerTextures.values());
-  }
-
-  /**
-   * Builds Pixi sub-textures for every `#BGAxx YY x1 y1 x2 y2 dx dy` directive after the source `#BMPYY` images have
-   * finished loading. Each sub-region BGA aliases slot `xx` to a frame- cropped view of slot `YY`, so a chart that
-   * authors `#BGA01 02 0 0 256 256 0 0` makes BGA cues for `01` render the corresponding portion of `#BMP02` rather
-   * than failing the texture lookup.
-   *
-   * Both the base and layer texture maps are populated so a sub-region aliased into either track resolves correctly.
-   * Texture sources are reused across slots — Pixi releases the underlying GPU resource only when the last referencing
-   * sub-texture is destroyed, which `dispose()` handles via `destroyUniqueTextures`.
-   */
-  private registerSubRegionBgaTextures(chart: BeMusicJson): void {
-    const base = resolveBmsBase(chart);
-    for (const [bgaSlot, raw] of Object.entries(chart.bms.bga)) {
-      const normalizedBgaSlot = normalizeObjectKey(bgaSlot, base);
-      const parsed = parseBmsBga(raw, base);
-      if (!parsed) continue;
-      const frameWidth = parsed.ex - parsed.sx;
-      const frameHeight = parsed.ey - parsed.sy;
-      if (frameWidth <= 0 || frameHeight <= 0) continue;
-      const sourceBase = this.bgaTextures.get(parsed.sourceBmp);
-      const sourceLayer = this.bgaLayerTextures.get(parsed.sourceBmp);
-      const seed = sourceBase ?? sourceLayer;
-      if (!seed) {
-        // Source `#BMPYY` failed to load (or was never declared); the BGA cue for this slot will silently no-op rather
-        // than fall back to a misleading full-frame render.
-        continue;
-      }
-      // Reuse the loaded image source — Pixi treats a `Texture` sharing a `source` plus a different `frame` rectangle
-      // as a cheap view, no extra GPU upload. Keeping `frame` in pixel coordinates that match the source image size
-      // guarantees the crop the chart author intended.
-      const frame = new Rectangle(parsed.sx, parsed.sy, frameWidth, frameHeight);
-      this.bgaSubRegionOrigins.set(normalizedBgaSlot, { x: parsed.dx, y: parsed.dy });
-      if (sourceBase && !this.bgaTextures.has(normalizedBgaSlot)) {
-        this.bgaTextures.set(normalizedBgaSlot, new Texture({ source: sourceBase.source, frame }));
-      }
-      if (sourceLayer && !this.bgaLayerTextures.has(normalizedBgaSlot)) {
-        this.bgaLayerTextures.set(normalizedBgaSlot, new Texture({ source: sourceLayer.source, frame }));
-      }
-    }
   }
 
   /**
