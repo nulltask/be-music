@@ -136,6 +136,11 @@ export interface DemoGuiState {
    */
   autoSavePlaylog: boolean;
   /**
+   * In a course, go straight on to the next stage instead of showing each stage's result (the course result still
+   * shows at the end). False (the default) shows every stage's result, as LR2 and beatoraja do.
+   */
+  courseAutoAdvance: boolean;
+  /**
    * When true (off by default), every finished play is sent to the Leaderboard when the result scene mounts — signing
    * in anonymously the first time (docs/leaderboard.md). Toggled from the Debug Menu's "Submit to Leaderboard"
    * checkbox and latched at song start like the auto-save.
