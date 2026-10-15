@@ -267,6 +267,8 @@ with its own rankings per ruleset, and never as single-chart plays.
   stages' notes count as BP. A run that stopped before its last stage **without** failing one was given up with ESC,
   and is refused as `aborted`, like an ESC abort of a single play. The demo never sends one: giving up a course drops
   the run.
+- **NONSTOP runs are not ranked yet.** A NONSTOP course is played as one stitched chart, which has no chart document
+  of its own to verify, so a course log with `nonstop` is refused as `nonstop`.
 - **Figures and bests.** Per ruleset: EX score, lamp (the course lamp on the chart lamp scale), BP, course max combo,
   stages reached and trophy. Bests are kept beatoraja style, as for charts (best EX score, best lamp, fewest BP, each
   pointing at its run), assisted runs apart. A course run creates no chart scores and no chart bests.
