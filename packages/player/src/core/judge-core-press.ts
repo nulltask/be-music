@@ -522,7 +522,7 @@ export function handleLaneRelease(
 
 /**
  * How long (ms on the judge's clock) a long note released at `nowSec` waits before it settles: the ruleset's release
- * margin when the release would score BAD or worse before the tail, 0 otherwise.
+ * margin when the release would score an early BAD or worse before the tail (`JudgeManager` L509, L537), 0 otherwise.
  */
 function resolveLongNoteReleaseMarginMs(state: JudgeCoreState, channel: string, nowSec: number): number {
   const { config } = state;
@@ -539,5 +539,8 @@ function resolveLongNoteReleaseMarginMs(state: JudgeCoreState, channel: string, 
     hold.mode === 1
       ? resolveLongNoteEarlyReleaseJudge(config.ruleset, hold.headJudge, releaseDeltaMs, endWindows)
       : resolveManualTimedJudge(releaseDeltaMs, endWindows);
-  return judge.kind === 'BAD' || judge.kind === 'POOR' ? (marginUs / 1e6) * config.judgeMsPerChartSecond : 0;
+  // beatoraja waits only when the judgment is BAD or worse AND its timing is early (`judge >= 3 && dmtime > 0`); an
+  // LN's timing is the head's when the head was further off than the release, so a late head settles at once.
+  const waits = (judge.kind === 'BAD' || judge.kind === 'POOR') && judge.signedDeltaMs < 0;
+  return waits ? (marginUs / 1e6) * config.judgeMsPerChartSecond : 0;
 }

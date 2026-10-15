@@ -754,6 +754,26 @@ describe('engine / simulator equivalence', () => {
     expect(simulated.gauge.final).toBe(summary.gauge?.current);
   });
 
+  // beatoraja holds an early release back only when the LN's judgment is BAD or worse AND early; a late BAD head
+  // settles at once, so pressing again right away is a fresh press (here an empty POOR on the note ahead).
+  test('beatoraja: an LN with a late BAD head settles its release at once on both sides', async () => {
+    const json = chart([
+      { measure: 1, channel: '13', position: [0, 1], value: '01' },
+      { measure: 1, channel: '13', position: [1, 2], value: 'AA' },
+      { measure: 1, channel: '13', position: [4, 5], value: '01' },
+    ]);
+    json.bms.lnObjs = ['AA'];
+    const inputs = [down(0, 1_150_000, '13'), up(1, 1_490_000, '13'), down(2, 1_490_001, '13'), up(3, 1_600_000, '13')];
+
+    const { summary, playlog } = await replay(json, inputs, 'beatoraja', { playVariant: '9' });
+    const simulated = simulatePlaylog(playlog, { ruleset: 'beatoraja' });
+
+    expect(summary.bad).toBe(1);
+    expect(summary.emptyPoor).toBe(1);
+    expect(simulated.judge.emptyPoor).toBe(summary.emptyPoor);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
+  });
+
   test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
     const json = longNoteChart(2);
 
