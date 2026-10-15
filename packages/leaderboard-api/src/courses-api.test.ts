@@ -245,15 +245,31 @@ describe('POST /api/v0/course-scores', () => {
       error: 'auto-play',
       detail: 'stage 1',
     });
-    const aborted = courseRun(charts, [10, 10, 10], {
+    // A stage given up before another one was played is not one run.
+    const abortedEarly = courseRun(charts, [10, 10, 10], {
       tamper: (stage, index) => {
-        if (index === 2) stage.play.aborted = true;
+        if (index === 0) stage.play.aborted = true;
       },
     });
-    expect(await (await submitCourse(cookie, courseBody(aborted, charts))).json()).toEqual({
+    expect(await (await submitCourse(cookie, courseBody(abortedEarly, charts))).json()).toEqual({
       error: 'aborted',
-      detail: 'stage 3',
+      detail: 'stage 1',
     });
+  });
+
+  test('stores a course given up with ESC as a failed run', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const givenUp = courseRun(charts, [10, 10], {
+      tamper: (stage, index) => {
+        if (index === 1) stage.play.aborted = true;
+      },
+    });
+    const response = await submitCourse(cookie, courseBody(givenUp, charts));
+    expect(response.status).toBe(201);
+    const lr2 = ((await response.json()) as CourseOutcome).results.find((result) => result.ruleset === 'lr2')!;
+    expect(lr2).toMatchObject({ clearLamp: ClearLamp.FAILED, stagesPlayed: 2 });
+    // The ten notes of the stage never reached count as misses.
+    expect(lr2.missCount).toBe(10);
   });
 
   test('refuses a course log without every stage chart fingerprint', async () => {
