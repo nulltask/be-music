@@ -15,10 +15,15 @@ import {
   type AccountActionResult,
 } from './account.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
+import type { BeMusicCoursePlaylog } from '@be-music/player/playlog';
 import {
+  describeCourseLeaderboardResult,
   describeLeaderboardResult,
+  describeSkippedCourseSubmission,
   describeSkippedSubmission,
+  prepareCourseLeaderboardSubmission,
   prepareLeaderboardSubmission,
+  submitCourseToLeaderboard,
   submitToLeaderboard,
 } from './leaderboard.ts';
 
@@ -158,6 +163,35 @@ export class LeaderboardPanel {
       .catch((error: unknown) => {
         this.host.warn('leaderboard submission failed', error);
         this.host.setStatus('Leaderboard: not submitted (network error)');
+      });
+  }
+
+  /**
+   * Sends a finished course run to the Leaderboard when "Submit to Leaderboard" was on when its last stage started, as
+   * {@link maybeSubmit} does for one play. `stageSongs` are the course's stages as it played them, in order (their
+   * charts rebuild each played stage's fingerprint documents). The course rank goes to the status line.
+   */
+  maybeSubmitCourse(coursePlaylog: BeMusicCoursePlaylog, stageSongs: readonly BrowserSongEntry[]): void {
+    if (!this.submitThisPlay) return;
+    const prepared = prepareCourseLeaderboardSubmission(
+      coursePlaylog,
+      stageSongs.map((song) => ({ chart: song.chart, chartPath: song.chartPath })),
+    );
+    if (!prepared.ok) {
+      this.host.setStatus(describeSkippedCourseSubmission(prepared.reason));
+      return;
+    }
+    const firstStage = coursePlaylog.stages[0];
+    // Every stage of a ranked run is judged under one ruleset (the server refuses mixed ones).
+    const playedRuleset = firstStage?.played === true ? (firstStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2';
+    void submitCourseToLeaderboard(prepared.submission, { client: describeSubmittingClient(this.host.recorder) })
+      .then((result) => {
+        this.host.setStatus(describeCourseLeaderboardResult(result, playedRuleset));
+        void this.refreshAccount();
+      })
+      .catch((error: unknown) => {
+        this.host.warn('leaderboard course submission failed', error);
+        this.host.setStatus('Leaderboard: course not submitted (network error)');
       });
   }
 
