@@ -99,7 +99,7 @@ import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { advanceCourseCombo, createCourseCombo, type CourseComboState } from './course-combo.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
-import type { NonstopStitchMap } from '@be-music/player/course';
+import { nonstopBpmAt, type NonstopStitchMap } from '@be-music/player/course';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
@@ -2599,6 +2599,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     );
   }
 
+  /**
+   * The BPM the readouts (NOWBPM, the HUD) show at `seconds`: for a stitched NONSTOP chart, whose scroll runs at a
+   * constant 150 BPM, the BPM of the stage being played, scaled by its FIT rate (`NonstopStitchMap.tempo`), as LR2
+   * shows it; otherwise {@link nowBpm}.
+   */
+  protected displayBpm(seconds: number): number | undefined {
+    const tempo = this.options.nonstop?.tempo;
+    return tempo !== undefined && tempo.length > 0 ? nonstopBpmAt(tempo, seconds) : this.nowBpm(seconds);
+  }
+
   protected currentBeat(seconds: number): number {
     // LR2 negative-BPM reversal (issue #134): past the first negative `#BPMxx` the chart *visually* scrolls backwards.
     // LR2 mirrors the chart POSITION around the reversal (`2 * pos(R) - pos(now)`), so the reverse scroll runs at the
@@ -4332,7 +4342,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       songTitle: this.song?.title,
       songArtist: this.song?.artist,
       songGenre: this.song?.genre,
-      bpm,
+      // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBpm`.
+      bpm: this.displayBpm(seconds) ?? bpm,
       hiSpeed: this.hiSpeed,
       score: this.score.score,
       exScore: this.score.exScore,
@@ -5207,6 +5218,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         gauge: this.resolveSelectedGauge(),
         ...(this.options.replay === undefined && this.options.course !== undefined
           ? { course: this.options.course }
+          : {}),
+        // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
+        ...(this.options.replay === undefined && this.options.nonstop !== undefined
+          ? { stageRanks: this.options.nonstop.stageRanks }
+          : {}),
+        ...(this.options.replay?.chart.judgeRank.stageRanks !== undefined
+          ? {
+              stageRanks: this.options.replay.chart.judgeRank.stageRanks.map((change) => ({
+                ...change,
+                seconds: change.timeUs / 1_000_000,
+              })),
+            }
           : {}),
         // The engine reports the ruleset after applying the judge ruleset, the debug window override, and (for a
         // replay) the recorded settings below, so the windows skins see are the ones the run is judged with.
