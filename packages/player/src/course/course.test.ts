@@ -129,7 +129,7 @@ describe('parseLr2CourseFile', () => {
   test('falls back to the header for the type, keeps ten stages and skips broken courses', () => {
     const many = Array.from({ length: 12 }, () => MD5_A).join('');
     const xml = `<courselist>
-      <course><title>N</title><hash>${header(1)}${many}</hash></course>
+      <course><title>N</title><hash>${header(2)}${many}</hash></course>
       <course><title>no stage</title><type>2</type><hash>${header(2)}</hash></course>
       <course><title>bad type</title><type>7</type><hash>${header(7)}${MD5_A}</hash></course>
       <course><title>bad hash</title><type>0</type><hash>${header(0)}${'z'.repeat(32)}</hash></course>
@@ -137,7 +137,7 @@ describe('parseLr2CourseFile', () => {
     </courselist>`;
     const courses = parseLr2CourseFile(new TextEncoder().encode(xml));
     expect(courses.map((course) => [course.name, course.kind, course.stages.length])).toEqual([
-      ['N', 'nonstop', 10],
+      ['N', 'grade', 10],
       ['', 'expert', 1],
     ]);
   });
@@ -313,5 +313,21 @@ describe('applyCourseLongNoteConstraint', () => {
     expect(applyCourseLongNoteConstraint(bms, ['grade'])).toBe(bms);
     const bmson = createEmptyJson('bmson');
     expect(applyCourseLongNoteConstraint(bmson, ['cn'])).toMatchObject({ bmson: { info: { lnType: 2 } } });
+  });
+});
+
+describe('LR2 NONSTOP stage limit', () => {
+  test('reads a NONSTOP course as its first five stages, as LR2 plays it', () => {
+    const md5s = ['1', '2', '3', '4', '5', '6'].map((digit) => digit.repeat(32));
+    const header = `${'0'.repeat(10)}1${'0'.repeat(21)}`;
+    const [nonstop] = parseLr2CourseFile(
+      `<courselist><course><title>N</title><type>1</type><hash>${header}${md5s.join('')}</hash></course></courselist>`,
+    );
+    expect(nonstop!.stages.map((stage) => stage.md5)).toEqual(md5s.slice(0, 5));
+    expect(nonstop!.connections).toHaveLength(4);
+    const [expert] = parseLr2CourseFile(
+      `<courselist><course><title>E</title><type>0</type><hash>${header}${md5s.join('')}</hash></course></courselist>`,
+    );
+    expect(expert!.stages).toHaveLength(6);
   });
 });
