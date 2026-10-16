@@ -169,12 +169,16 @@ describe('SelectSession list options', () => {
 });
 
 describe('SelectSession restore', () => {
-  it('puts the parent cursor back on the first folder bar', () => {
+  it('puts the parent cursor on the bar of the folder opened, so backing out lands on it', () => {
     const { session } = createSession();
     session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: ['pack'], cursors: [1, 0] });
+    // A snapshot that saved no parent cursor (a drop opening its folder) still backs out onto the folder.
+    session.setNavigation({ folderPath: ['pack'], cursors: [0, 0] });
     session.leaveFolder();
-    expect(focusedTitle(session)).toBe('other');
+    expect(focusedTitle(session)).toBe('pack');
+    session.setNavigation({ folderPath: ['courses'], cursors: [0, 1] });
+    session.leaveFolder();
+    expect(focusedTitle(session)).toBe('courses');
   });
 
   it('restores nothing when the saved folder is gone', () => {
