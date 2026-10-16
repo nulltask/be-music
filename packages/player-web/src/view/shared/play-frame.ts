@@ -1,16 +1,15 @@
 /**
- * The frame of the built-in and LR2 gameplay scenes (`CoreGameplayView`): the layer tree under the scene's root, its
- * fit to the screen with the design-rect clip and background, the fade in and out, and the per-frame pass that draws
- * the chrome, the BGA and the playfield into it.
+ * The frame of the built-in and LR2 play views: the layer tree under the view's root, its fit to the screen with the
+ * design-rect clip and background, the fade in and out, and the per-frame pass that draws the view's chrome
+ * (`PlayChrome`), the BGA and the playfield into it.
  *
- * The functions read and write the scene's state through {@link PlayFrameContext}; the scene passes itself.
+ * The functions read and write the view's state through {@link PlayFrameContext}; the play view passes itself.
  */
 
 import { resolveStageOrientation } from '@be-music/skin-sdk';
 import type { Application, Container, Graphics, Text } from 'pixi.js';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
-import type { GameplayStageSize } from '../../scene/core/gameplay-theme.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import {
   resolveDesignTextResolution,
   resolveScaledViewport,
@@ -27,15 +26,16 @@ import { renderLanes } from './playfield/lanes.ts';
 import { renderNotes } from './playfield/notes.ts';
 import { renderShutter } from './playfield/shutter.ts';
 import { renderText } from './playfield/text.ts';
+import type { PlayfieldStage } from '../types.ts';
 
 /** How long the play screen takes to fade up from black as it appears on a be-music skin. */
 const BE_MUSIC_ENTER_FADE_MS = 400;
 
-/** The scene's members the frame passes use: `CoreGameplayView`'s members of these names. */
+/** The view's members the frame passes use: a play view's members of these names. */
 export interface PlayFrameContext extends PlayfieldContext, BgaRendererContext {
   readonly options: Readonly<
     Pick<
-      CoreGameplayViewOptions,
+      PlaySessionOptions,
       'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'bga' | 'autoPlay' | 'nonstop'
     >
   >;
@@ -85,7 +85,7 @@ export function build(ctx: PlayFrameContext, host: PixiSceneHost): void {
   // The mask and design background only change shape with the stage (a rotation can switch a skin between its
   // landscape and portrait stages), so they are stamped here and restamped by `render` only when the stage changes,
   // skipping the per-frame rebuild that was contributing to the rAF handler's runtime.
-  stampDesignRect(ctx, ctx.theme.stageSize());
+  stampDesignRect(ctx, ctx.playfieldSkin.stage);
   // The gameplay scene owns its own pointerdown listener on the canvas itself (`this.focus`) and a window-level
   // keydown listener — none of the per-layer children need to participate in Pixi's interaction system. Marking
   // each render-only Container as `eventMode = 'none'` lets the interaction manager skip the entire subtree
@@ -111,9 +111,9 @@ export function build(ctx: PlayFrameContext, host: PixiSceneHost): void {
   ]) {
     layer.eventMode = 'none';
   }
-  // Theme sub-layers (e.g. the LR2 bitmap-text layer) must be parked inside `skinLayer` before the scene graph is
-  // assembled so their z-order matches the theme's own layering.
-  ctx.theme.attachThemeLayers();
+  // The view's own sub-layers (e.g. the LR2 bitmap-text layer) must be parked inside `skinLayer` before the scene graph
+  // is assembled so their z-order matches the skin's own layering.
+  ctx.chrome.attachLayers?.();
   ctx.designRoot.addChild(
     ctx.background,
     ctx.bgaLayer,
@@ -180,7 +180,8 @@ export function render(
 ): void {
   const screenWidth = ctx.app.screen.width;
   const screenHeight = ctx.app.screen.height;
-  const { width: designWidth, height: designHeight } = ctx.theme.stageSize();
+  const stage = ctx.playfieldSkin.stage;
+  const { width: designWidth, height: designHeight } = stage;
   const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
   setDesignTextResolution(resolveDesignTextResolution(viewport.scale, ctx.app.renderer.resolution));
   setDesignPixelRatio(viewport.scale * ctx.app.renderer.resolution);
@@ -194,11 +195,11 @@ export function render(
   }
   ctx.designRoot.position.set(viewport.x, viewport.y);
   ctx.designRoot.scale.set(viewport.scale);
-  stampDesignRect(ctx, ctx.theme.stageSize());
-  ctx.host?.setStageOrientation(resolveStageOrientation(ctx.theme.stageSize()));
+  stampDesignRect(ctx, stage);
+  ctx.host?.setStageOrientation(resolveStageOrientation(stage));
   applyExitFadeAlpha(ctx);
   ctx.audioFrame = audioFrame;
-  ctx.perf.time('renderSkin', () => ctx.theme.renderThemeLayer(designWidth, designHeight));
+  ctx.perf.time('renderSkin', () => ctx.chrome.draw(designWidth, designHeight));
   // LR2 negative-BPM reversal: the event pump stops firing BGA cues there, so the cue clock is clamped (freeze, not
   // rewind) while an already-playing movie keeps running on the true clock. All other `seconds` readers here
   // (progress ratio, time readouts, judge-until comparisons) stay on the true clock.
@@ -213,7 +214,7 @@ export function render(
 }
 
 /** Redraws the design clip mask and background for a stage of `size`, when it differs from the last one drawn. */
-function stampDesignRect(ctx: PlayFrameContext, size: GameplayStageSize): void {
+function stampDesignRect(ctx: PlayFrameContext, size: PlayfieldStage): void {
   if (size.width === ctx.stampedDesignWidth && size.height === ctx.stampedDesignHeight) return;
   ctx.stampedDesignWidth = size.width;
   ctx.stampedDesignHeight = size.height;

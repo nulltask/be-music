@@ -1,6 +1,6 @@
 /**
- * The constructor and dispose options of the built-in and LR2 gameplay scenes (`CoreGameplayView`): everything a host
- * sets for a play, whichever family paints it. `gameplay.ts` re-exports them.
+ * The options of a play session (`PlaySession`) and of its disposal: everything a host sets for a play, whichever family
+ * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
  */
 
 import type { GameplayLayoutMode } from '@be-music/skin-sdk';
@@ -16,43 +16,25 @@ import type { ResolvedPlayChart } from '@be-music/player/core/engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { TempoPitchMode, TimeStretchAlgorithm } from '../../runtime/play-tempo.ts';
-import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
-import type { SceneCourseInfo } from '../course-info.ts';
-import type { SkinlessGameplayChromeRenderer } from '../gameplay-chrome.ts';
-import type { PixiGameplayResultData } from './result-data.ts';
+import type { SceneCourseInfo } from '../../scene/course-info.ts';
+import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
+import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
 
 /**
- * Constructor options shared by every gameplay family. Theme families (LR2, …) extend this with their own skin fields;
- * everything here reaches the same engine / audio / BGA pipeline regardless of which family paints the chrome.
+ * The options of a play: the play options it judges and scrolls with, the tempo, the audio mix, the BGA, the drawing
+ * options its view reads, and the host's callbacks. Everything here reaches the same engine / audio / BGA pipeline
+ * whichever family draws the play.
  */
-export interface CoreGameplayViewOptions {
-  /**
-   * Skinless chrome renderer supplied by another skin family. When omitted the scene falls back to the be-music skin's
-   * own `gameplay.renderChrome`.
-   */
-  skinlessChromeRenderer?: SkinlessGameplayChromeRenderer;
-  /**
-   * be-music skin for everything the scene paints itself: lanes / notes / long notes / bombs whenever no theme
-   * supplies them, and (when `skinlessChromeRenderer` is omitted) the skinless HUD chrome. Defaults to the built-in
-   * Phantom skin.
-   */
-  beMusicSkin?: BeMusicSkin;
+export interface PlaySessionOptions {
   /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
   /**
    * Gameplay layout for the be-music skins. `'touch'` (for touch screens) spreads the lanes across most of the stage
-   * with a low judgement line and (on a landscape stage) no BGA; the 24 / 48 KEY modes, themes, and a host
-   * `skinlessChromeRenderer` keep the standard layout regardless. On a portrait screen a skin with a portrait stage
+   * with a low judgement line and (on a landscape stage) no BGA; the 24 / 48 KEY modes and LR2 skins keep the standard
+   * layout regardless. On a portrait screen a skin with a portrait stage
    * plays 5 / 7 / 9 KEY charts on it, in either mode. Defaults to `'standard'`.
    */
   layoutMode?: GameplayLayoutMode;
-  /**
-   * The player's stored values for the be-music skin's `settings`, keyed by setting id. They are checked against the
-   * skin's schema (`resolveBeMusicSkinSettings`: unknown ids dropped, invalid values replaced by the default, numbers
-   * clamped) and handed to the skin as `frame.settings`. Omit it to draw with the skin's defaults; change it live with
-   * `setBeMusicSkinSettings`.
-   */
-  beMusicSkinSettings?: Readonly<Record<string, unknown>>;
   onExit?: () => void;
   /**
    * Restart hook. Fired when the player presses the restart hotkey (`R` by default) — host should dispose this view and
@@ -62,7 +44,7 @@ export interface CoreGameplayViewOptions {
   onRestart?: () => void;
   /**
    * Natural-end hook. Fires once when the chart has finished playing (every playable note judged + a small audio tail
-   * buffer). The snapshot is the same payload {@link CoreGameplayView.getResultData} returns — passed eagerly so the
+   * buffer). The snapshot is the same payload `PlaySession.getResultData` returns — passed eagerly so the
    * host doesn't have to reach back into the soon-to-be-disposed gameplay view to read it. When this hook is supplied,
    * `onExit` is **not** called for natural completion; `onExit` is reserved for the user-initiated escape (ESC). Hosts
    * that don't want a result screen can leave this unset and rely on `onExit` for both paths (legacy behavior).
@@ -86,7 +68,7 @@ export interface CoreGameplayViewOptions {
   /**
    * Fires when the player changes the hi-speed during play (`ArrowUp` / `ArrowDown`), with the new value on the same
    * scale as {@link initialHiSpeed} — before any HS-FIX rescaling — so a host can remember it and seed the next play
-   * with it. Not fired for {@link CoreGameplayView.setHiSpeed} writes, which come from the host.
+   * with it. Not fired for `PlaySession.setHiSpeed` writes, which come from the host.
    */
   onHiSpeedChange?: (hiSpeed: number) => void;
   /**
@@ -211,7 +193,7 @@ export interface CoreGameplayViewOptions {
    * The play tempo, 0.5 to 1.5 (`clampPlayTempo`; default 1): the play clock, its audio, the scroll, the BGA and the
    * chart-time lead-out run `tempo` times as fast, while judging stays in chart time (the engine's `speed`). A replay
    * plays at the tempo its log recorded (`play.tempo`) instead. A NONSTOP FIT stage's rate multiplies with it. In `pitch`
-   * mode it can change during the play ({@link CoreGameplayView.setTempo}).
+   * mode it can change during the play (`PlaySession.setTempo`).
    */
   tempo?: number;
   /** Fires when the play tempo changed during the play (`setTempo`, or a replay following its log), with the new one. */
@@ -257,12 +239,12 @@ export interface CoreGameplayViewOptions {
   /**
    * Initial user volume per source bus — `key` (player keysounds) and `bgm` (auto-triggered BGM) — as linear gains
    * (1 = unity, clamped to `0..2`). Hosts with volume sliders pass the current UI values so a re-mounted gameplay keeps
-   * the user's balance; {@link CoreGameplayView.setAudioVolume} changes them live.
+   * the user's balance; `PlaySession.setAudioVolume` changes them live.
    */
   audioVolumes?: { key?: number; bgm?: number };
   /**
    * Parameter overrides per compressor (`key` / `bgm` / `master` in split mode, `legacy`), merged over the factory
-   * tuning. {@link CoreGameplayView.setAudioCompressorParams} retunes them live.
+   * tuning. `PlaySession.setAudioCompressorParams` retunes them live.
    */
   audioCompressorParams?: Partial<Record<TunableCompressor, Partial<CompressorParams>>>;
   /**
@@ -319,7 +301,7 @@ export interface CoreGameplayViewOptions {
   audio?: AudioService;
 }
 
-export interface CoreGameplayDisposeOptions {
+export interface PlayDisposeOptions {
   /**
    * Natural chart end can transition visually to result while a long final sample still rings out. Keep the Web Audio
    * graph alive briefly in that path instead of closing the AudioContext as part of visual teardown.

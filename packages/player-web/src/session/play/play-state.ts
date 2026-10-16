@@ -7,7 +7,7 @@
 import { reducePlayState, type PlayEvent, type PlayState } from '@be-music/scene-model';
 import type { HiSpeedTransition } from '../../scene/hi-speed.ts';
 
-/** The play's state and the scroll that follows its hi-speed: `CoreGameplayView`'s members of these names. */
+/** The play's state and the scroll that follows its hi-speed: the play session's members of these names. */
 export interface PlayStateContext {
   playState: PlayState;
   readonly scrollHiSpeed: HiSpeedTransition;

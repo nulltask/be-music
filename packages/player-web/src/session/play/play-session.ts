@@ -6,10 +6,9 @@
  * result. Each part takes the session as its context.
  *
  * The session draws nothing. What it needs of the view that draws it — the timing of its intro and fade-out, the scene
- * moments it animates against, the key-beam fade, the stage the touch lanes map onto and the GPU upload of the BGA —
- * comes through {@link PlaySessionTheme}. The built-in play view pairs with a session through `createPlayScene`
- * (`host/play.ts`), which reads a {@link PlayFrame} off it every tick; until the LR2 view moves onto the session too,
- * `CoreGameplayView` extends it and is its own view.
+ * moments it animates against, the key-beam fade, the stage the touch lanes map onto, the view's own loading and the GPU
+ * upload of the BGA — comes through {@link PlaySessionTheme}. `createPlayScene` (`host/play.ts`) pairs a session with the
+ * play view of the kit's family (built-in or LR2) and reads a `PlayFrame` off it every tick.
  */
 
 import { mirrorBeatAtTempoReversal } from '@be-music/audio-renderer/triggers';
@@ -38,9 +37,8 @@ import {
   supportsLiveTempoChange,
   type ReplayTempo,
 } from '../../runtime/play-tempo.ts';
-import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
-import type { GameplaySessionHooks, GameplayThemeTiming } from '../../scene/core/gameplay-theme.ts';
-import { resolveBeMusicLongNoteMode } from '../../scene/core/long-note-tracker.ts';
+import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
+import { resolveBeMusicLongNoteMode } from '../../view/shared/playfield/long-note-tracker.ts';
 import {
   DESIGN_HEIGHT,
   DESIGN_WIDTH,
@@ -50,11 +48,12 @@ import {
 import { resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { LiveTempo } from '../../scene/live-tempo.ts';
-import { staggerDestroyTextures } from '../../scene/pixi-utils.ts';
+import { releaseTexturesOnHost } from '../../scene/pixi-utils.ts';
 import { QuitHoldController } from '../../scene/quit-hold.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
+import type { PlayViewTiming } from '../../view/types.ts';
 import { prepareSong } from './play-chart.ts';
 import { beginExitSequence, getResultData } from './play-ending.ts';
 import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
@@ -71,38 +70,26 @@ import {
 } from './play-input.ts';
 import { disposeBgaVideos, disposePlayAudio, prepareAudio, prepareBga } from './play-media.ts';
 import { PlaySessionState } from './play-session-state.ts';
+import type { PlaySessionTheme } from './play-session-theme.ts';
 import { applyPlayEvent } from './play-state.ts';
 import { resolveLaneCovers, resolveVisibleMs } from './play-view-settings.ts';
 
 const log = logger('gameplay');
 
-/**
- * What a play session asks of the view that draws it: the view's timing (intro gates, fade-out, close), the scene
- * moments it animates against (`onThemeEvent`), how long a key beam fades, the stage the touch lanes map onto, and the
- * GPU upload of the textures the session loads (the BGA), which only the view's renderer can do.
- */
-export type PlaySessionTheme = GameplaySessionHooks & {
-  /** Uploads `textures` to the GPU now, so the first frame that draws them does not stall. */
-  uploadTextures?(textures: Iterable<Texture | undefined>): Promise<void>;
-};
-
-const NO_TIMING: GameplayThemeTiming = { loadEndOffsetMs: 0, playStartOffsetMs: 0, fadeOutMs: 0, closeMs: 0 };
+const NO_TIMING: PlayViewTiming = { loadEndOffsetMs: 0, playStartOffsetMs: 0, fadeOutMs: 0, closeMs: 0 };
 
 /** The theme of a session without a view: skinless timing, no moments heard, the default beam fade, LR2's stage. */
 const NO_THEME: PlaySessionTheme = {
-  onThemeEvent: () => {},
-  themeTiming: () => NO_TIMING,
-  resolveKeyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
-  stageSize: () => ({ width: DESIGN_WIDTH, height: DESIGN_HEIGHT }),
+  timing: () => NO_TIMING,
+  moment: () => {},
+  keyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
+  stage: () => ({ width: DESIGN_WIDTH, height: DESIGN_HEIGHT }),
 };
-
-/** The options a play session runs with: the play settings, the host's callbacks and the chart it may start from. */
-export type PlaySessionOptions = CoreGameplayViewOptions;
 
 /** The play session. See the module comment. */
 export class PlaySession extends PlaySessionState {
   /**
-   * The play tempo in force ({@link CoreGameplayViewOptions.tempo}, or a replay's recorded one, then every live change):
+   * The play tempo in force ({@link PlaySessionOptions.tempo}, or a replay's recorded one, then every live change):
    * chart seconds per clock second.
    */
   tempo: number;
@@ -196,8 +183,8 @@ export class PlaySession extends PlaySessionState {
       this.startTime = Number.POSITIVE_INFINITY;
       this.shown = true;
     }
-    this.onChartPrepared();
-    await this.prepareTheme();
+    // The view's own assets (an LR2 skin's images, fonts and timer spans) load now, before the samples decode.
+    await this.theme.prepareView?.();
     if (this.disposed) return;
     await prepareAudio(this);
     if (this.disposed) return;
@@ -208,15 +195,6 @@ export class PlaySession extends PlaySessionState {
       this.assetsLoading = false;
     });
   }
-
-  /** The chart is prepared ({@link load}); {@link shown} says whether the play shows already. */
-  protected onChartPrepared(): void {}
-
-  /**
-   * Loads the view's own assets (an LR2 theme's textures, fonts and timing spans) right after the chart is prepared and
-   * before audio decoding starts. Implementations should bail out early once {@link disposed} flips. Default: nothing.
-   */
-  protected async prepareTheme(): Promise<void> {}
 
   /**
    * The play goes on the stage: wires its keys (ESC / F5 / Space / arrows, the Backspace hold), touch lanes, canvas
@@ -247,14 +225,13 @@ export class PlaySession extends PlaySessionState {
     if (this.disposed) return;
     if (this.sceneStartTime !== 0) return;
     this.shown = true;
-    this.onShown();
     // The intro timeline comes from the theme (the LR2 family maps `#LOADSTART` / `#LOADEND` / `#PLAYSTART`). `start()`
     // only runs when `paused` is false and `pauseTotal` is still 0, so `playClock()` and `performance.now()` are
     // equivalent here — but seeding through `playClock()` keeps the animation clocks all in the same coordinate system
     // as the pause-aware reads further below.
     const now = this.playClock();
     this.sceneStartTime = now;
-    const { loadEndOffsetMs, playStartOffsetMs } = this.theme.themeTiming();
+    const { loadEndOffsetMs, playStartOffsetMs } = this.theme.timing();
     // Skinless / non-LR2 demos have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
     // of the built-in fallback frame still has room to land before notes begin.
     const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
@@ -266,7 +243,7 @@ export class PlaySession extends PlaySessionState {
     // Scene start fires immediately; load-end and play-start — the events that drive "READY" / chart-start cues — fire
     // later via the `Promise.all` gates below so they wait for the BGA preload too. Exit-phase events are deliberately
     // NOT raised here: `beginExitSequence` raises them at the actual transition moment (ESC / chart end).
-    this.theme.onThemeEvent({ kind: 'scene-start', at: now });
+    this.theme.moment({ kind: 'scene-start', at: now });
     // The `start()` invocation we belong to — captured so the gate handlers below can detect a dispose-and-re-mount and
     // bail out instead of mutating a fresh play's state.
     const sceneEpoch = this.sceneStartTime;
@@ -275,7 +252,7 @@ export class PlaySession extends PlaySessionState {
     void Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
       if (this.disposed) return;
       if (this.sceneStartTime !== sceneEpoch) return;
-      this.theme.onThemeEvent({ kind: 'load-end', at: this.playClock() });
+      this.theme.moment({ kind: 'load-end', at: this.playClock() });
     });
     // PLAY START gate — same pattern, but for the configured play-start (or fallback intro). Raises the theme's
     // play-start event (animation clock) and anchors the wall-clock + audio-context start times (chart-engine clock) so
@@ -283,7 +260,7 @@ export class PlaySession extends PlaySessionState {
     void Promise.all([bgaReady, this.delaySceneStage(introMs)]).then(() => {
       if (this.disposed) return;
       if (this.sceneStartTime !== sceneEpoch) return;
-      this.theme.onThemeEvent({ kind: 'play-start', at: this.playClock() });
+      this.theme.moment({ kind: 'play-start', at: this.playClock() });
       // `startTime` is consumed by `isIntroPlaying` and `currentSeconds`, both of which work in raw wall-clock units
       // (with `currentSeconds` subtracting `pauseTotal` explicitly), so it MUST stay on `performance.now()`.
       this.startTime = performance.now();
@@ -296,24 +273,14 @@ export class PlaySession extends PlaySessionState {
       launchSharedEngine(this);
     });
     this.host?.app.canvas.focus();
-    this.onStarted();
   }
-
-  /** The play shows from {@link start} on. */
-  protected onShown(): void {}
-
-  /** {@link start} has scheduled the intro. */
-  protected onStarted(): void {}
 
   private delaySceneStage(offsetMs: number): Promise<void> {
     return new Promise((resolve) => this.setSceneStageTimeout(resolve, Math.max(0, offsetMs)));
   }
 
-  /**
-   * Schedules `callback` after `offsetMs`, tracked so {@link dispose} cancels it. Themes use it for their own
-   * scene-stage timers (e.g. LR2 `#STARTINPUT`).
-   */
-  protected setSceneStageTimeout(callback: () => void, offsetMs: number): void {
+  /** Schedules `callback` after `offsetMs`, tracked so {@link dispose} cancels it. */
+  private setSceneStageTimeout(callback: () => void, offsetMs: number): void {
     let handle = 0;
     handle = window.setTimeout(
       () => {
@@ -503,7 +470,7 @@ export class PlaySession extends PlaySessionState {
    * Ends the play: its input, timers, BGA videos, recording, engine and audio (kept until the tail has rung out after a
    * natural end with `preserveAudioTail`), then the BGA textures, released over the next frames, and the per-song state.
    */
-  public dispose(options: CoreGameplayDisposeOptions = {}): void {
+  public dispose(options: PlayDisposeOptions = {}): void {
     if (this.disposed) return;
     this.disposed = true;
     this.detachInput();
@@ -519,7 +486,7 @@ export class PlaySession extends PlaySessionState {
    * Stops what runs on as the play is disposed: the exit and stage timers, the key flashes, the BGA videos, a
    * recording, the engine, and the audio graph (after its tail with `preserveAudioTail`). The textures stay.
    */
-  protected stopPlay(options: CoreGameplayDisposeOptions): void {
+  private stopPlay(options: PlayDisposeOptions): void {
     if (this.exitFadeOutHandle !== undefined) {
       window.clearTimeout(this.exitFadeOutHandle);
       this.exitFadeOutHandle = undefined;
@@ -555,34 +522,9 @@ export class PlaySession extends PlaySessionState {
    * Destroys `textures` a few per frame on the host's ticker (a macrotask loop without one), all at once when the host
    * itself is going: a sync sweep over a play's textures stalls the next scene's first frames on lower-end devices.
    */
-  protected releaseTextures(textures: readonly (Texture | undefined)[]): void {
-    if (textures.length === 0) return;
+  private releaseTextures(textures: readonly (Texture | undefined)[]): void {
     try {
-      const ticker = this.host?.app.ticker;
-      const hostIsDisposing = this.host?.isDisposed() === true;
-      const cleanup = staggerDestroyTextures(
-        textures,
-        ticker !== undefined
-          ? (callback) => {
-              ticker.add(callback);
-              return () => ticker.remove(callback);
-            }
-          : (callback) => {
-              let cancelled = false;
-              let timeout: ReturnType<typeof setTimeout> | undefined;
-              const loop = (): void => {
-                if (cancelled) return;
-                callback();
-                if (!cancelled) timeout = setTimeout(loop, 0);
-              };
-              timeout = setTimeout(loop, 0);
-              return () => {
-                cancelled = true;
-                if (timeout !== undefined) clearTimeout(timeout);
-              };
-            },
-      );
-      if (hostIsDisposing) cleanup.drain();
+      releaseTexturesOnHost(this.host, textures);
     } catch (error) {
       log.warn('texture cleanup threw', error);
     }
@@ -593,7 +535,7 @@ export class PlaySession extends PlaySessionState {
    * a little while after `dispose()` returns; clearing these keeps that short tail from pinning a full chart bundle,
    * decoded PCM and BGA timelines.
    */
-  protected clearPlay(): void {
+  private clearPlay(): void {
     this.decodedSamples.clear();
     this.bmsonSlicePlayback = undefined;
     this.autoSampleTriggers = [];
@@ -761,7 +703,7 @@ export class PlaySession extends PlaySessionState {
 
   /**
    * Sets the hi-speed from the host (e.g. a settings menu) during the play. `value` is on the scale of
-   * {@link CoreGameplayViewOptions.initialHiSpeed}: the chart's HS-FIX multiplier is applied on top, as at the start.
+   * {@link PlaySessionOptions.initialHiSpeed}: the chart's HS-FIX multiplier is applied on top, as at the start.
    * Snapped and clamped like the in-game hotkey; non-finite values are ignored.
    */
   public setHiSpeed(value: number): void {

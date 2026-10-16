@@ -1,12 +1,12 @@
 import { createHiSpeedState, createPlayState } from '@be-music/scene-model';
 import { describe, expect, it } from 'vite-plus/test';
-import { adjustHiSpeed } from '../../session/play/play-view-settings.ts';
-import { CoreGameplayView } from './gameplay.ts';
+import { PlaySession } from './play-session.ts';
+import { adjustHiSpeed } from './play-view-settings.ts';
 
-describe('CoreGameplayView hi-speed under HS-FIX', () => {
-  /** A view (not mounted) at the player's hi-speed 3.0 on a chart whose HS-FIX multiplier is 2/3. */
+describe('PlaySession hi-speed under HS-FIX', () => {
+  /** A play (not loaded) at the player's hi-speed 3.0 on a chart whose HS-FIX multiplier is 2/3. */
   function hsFixView(onHiSpeedChange: (hiSpeed: number) => void, locked = false) {
-    const view = new CoreGameplayView({ initialHiSpeed: 3, onHiSpeedChange });
+    const view = new PlaySession({ initialHiSpeed: 3, onHiSpeedChange });
     // What `prepareSong` leaves once the chart is prepared.
     view.playState = createPlayState({
       view: { hiSpeed: createHiSpeedState({ hiSpeed: 3, multiplier: 2 / 3, locked }) },
@@ -16,7 +16,7 @@ describe('CoreGameplayView hi-speed under HS-FIX', () => {
   }
 
   it('starts at the host-supplied hi-speed, snapped to the grid', () => {
-    const view = new CoreGameplayView({ initialHiSpeed: 1.5000000000000002 });
+    const view = new PlaySession({ initialHiSpeed: 1.5000000000000002 });
     expect(view.getHiSpeed()).toBe(1.5);
     expect(view.scrollHiSpeed.target).toBe(1.5);
   });

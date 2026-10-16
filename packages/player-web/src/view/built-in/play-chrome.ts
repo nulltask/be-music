@@ -1,5 +1,5 @@
 /**
- * The built-in play screen's chrome inputs (`CoreGameplayView`): the lane geometry of the built-in playfield for the
+ * The built-in play screen's chrome inputs (`BuiltInPlayView`): the lane geometry of the built-in playfield for the
  * loaded chart and the stage, and the runtime the skinless chrome (`skinlessChromeRenderer`, or a be-music skin's
  * `gameplay.renderChrome`) draws from each frame.
  *
@@ -12,7 +12,7 @@ import { resolveIidxRankLabel } from '@be-music/player/ruleset';
 import { resolveGameplayLaneGeometry, resolveGameplayLayout, type GameplayLayoutMode } from '@be-music/skin-sdk';
 import { recentJudgeTimings, resolveGreenNumber } from '@be-music/scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import type { Container } from 'pixi.js';
 import type {
   SkinlessGameplayChromeRenderer,
@@ -23,13 +23,13 @@ import type { ChildPool } from '../../scene/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { PlayfieldRuntime } from '../shared/playfield/context.ts';
 import type { BeMusicGameplayLayout, BeMusicStage } from '../../skin/be-music/types.ts';
-import type { GameplayBgaTarget, GameplayStageSize } from '../../scene/core/gameplay-theme.ts';
+import type { PlayfieldBgaTarget, PlayfieldStage } from '../types.ts';
 import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH } from '../../scene/gameplay-constants.ts';
 
 /** Default-family BGA rect: the fixed {@link BGA} square, drawn opaque and untinted. */
-const DEFAULT_BGA_TARGET: GameplayBgaTarget = createDefaultBgaTarget(BGA);
+const DEFAULT_BGA_TARGET: PlayfieldBgaTarget = createDefaultBgaTarget(BGA);
 
-function createDefaultBgaTarget(rect: { x: number; y: number; w: number; h: number }): GameplayBgaTarget {
+function createDefaultBgaTarget(rect: { x: number; y: number; w: number; h: number }): PlayfieldBgaTarget {
   return {
     x: rect.x,
     y: rect.y,
@@ -47,11 +47,11 @@ function createDefaultBgaTarget(rect: { x: number; y: number; w: number; h: numb
 }
 
 /** The LR2-compatible 640x480 canvas. */
-export const LEGACY_STAGE_SIZE: GameplayStageSize = { width: DESIGN_WIDTH, height: DESIGN_HEIGHT };
+export const LEGACY_STAGE_SIZE: PlayfieldStage = { width: DESIGN_WIDTH, height: DESIGN_HEIGHT };
 /** The 640x480 stage with the fixed default-family BGA square, for skins that declare no stage of their own. */
 const LEGACY_STAGE: BeMusicStage = { ...LEGACY_STAGE_SIZE, resolveBgaRect: () => ({ ...BGA }) };
 
-/** What {@link resolveLaneGeometry} lays the lanes out from, and its cache: `CoreGameplayView`'s members of these names. */
+/** What {@link resolveLaneGeometry} lays the lanes out from, and its cache: a play view's members of these names. */
 export interface LaneGeometryContext {
   readonly play: PlayfieldRuntime;
   readonly layoutMode: GameplayLayoutMode;
@@ -68,10 +68,10 @@ export interface LaneGeometryContext {
     | undefined;
 }
 
-/** What the skinless chrome's runtime is made from each frame: `CoreGameplayView`'s members of these names. */
+/** What the skinless chrome's runtime is made from each frame: a play view's members of these names. */
 export interface PlayChromeContext {
   readonly play: PlayfieldRuntime;
-  readonly options: Readonly<Pick<CoreGameplayViewOptions, 'autoPlay' | 'beMusicEffects'>>;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects'>>;
   readonly audioFrame: AudioFeatures | undefined;
 }
 
@@ -202,12 +202,12 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   };
 }
 
-/** What the built-in BGA rect is worked out from: `CoreGameplayView`'s members of these names. */
+/** What the built-in BGA rect is worked out from: a play view's members of these names. */
 export interface BgaTargetsContext extends LaneGeometryContext {
-  stageBgaTarget: GameplayBgaTarget | undefined;
+  stageBgaTarget: PlayfieldBgaTarget | undefined;
 }
 
-/** What the be-music chrome's layout is worked out from, and its cache: `CoreGameplayView`'s members of these names. */
+/** What the be-music chrome's layout is worked out from, and its cache: a play view's members of these names. */
 export interface BeMusicLayoutContext extends LaneGeometryContext {
   beMusicLayout:
     | {
@@ -219,8 +219,8 @@ export interface BeMusicLayoutContext extends LaneGeometryContext {
     | undefined;
 }
 
-/** The built-in BGA rect: `CoreGameplayView.collectBgaTargets`, unless a theme supplies its own. */
-export function collectBgaTargets(ctx: BgaTargetsContext, out: GameplayBgaTarget[]): void {
+/** The built-in BGA rect (`PlayfieldSkin.bgaTargets` of the built-in view). */
+export function collectBgaTargets(ctx: BgaTargetsContext, out: PlayfieldBgaTarget[]): void {
   const stage = ctx.beMusicStage;
   if (!stage) {
     out.push(DEFAULT_BGA_TARGET);

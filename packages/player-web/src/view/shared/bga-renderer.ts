@@ -1,9 +1,9 @@
 /**
- * The chart's BGA on the built-in and LR2 gameplay scenes (`CoreGameplayView`): composites the base, layer and POOR
- * images (or a stitched NONSTOP chart's per-stage stacks) into the theme's BGA rects, or hands them to a be-music skin
+ * The chart's BGA on the built-in and LR2 play screens: composites the base, layer and POOR
+ * images (or a stitched NONSTOP chart's per-stage stacks) into the skin's BGA rects, or hands them to a be-music skin
  * that composites the BGA itself, and keeps the BGA videos playing in step with their cues.
  *
- * The functions read and write the scene's state through {@link BgaRendererContext}; the scene passes itself.
+ * The functions read and write the scene's state through {@link BgaRendererContext}; the play view passes itself.
  */
 
 import { pickSwitchingBgaFrame, resolveBmsBmpArgb } from '@be-music/chart';
@@ -17,27 +17,27 @@ import {
   resolveNonstopBgaAlpha,
   type BgaCue,
 } from '../../scene/core/gameplay-bga.ts';
-import type { GameplayBgaTarget, GameplayThemeHooks } from '../../scene/core/gameplay-theme.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import type { ChildPool } from '../../scene/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { BeMusicImage } from '../../skin/be-music/types.ts';
+import type { PlayfieldBgaTarget, PlayfieldSkin } from '../types.ts';
 import type { PlayfieldRuntime } from './playfield/context.ts';
 
-/** The scene's members the BGA passes use: `CoreGameplayView`'s members of these names. */
+/** The view's members the BGA passes use: a play view's members of these names. */
 export interface BgaRendererContext {
   readonly play: PlayfieldRuntime;
-  readonly options: Readonly<Pick<CoreGameplayViewOptions, 'bga' | 'autoPlay' | 'nonstop'>>;
-  readonly theme: GameplayThemeHooks;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'bga' | 'autoPlay' | 'nonstop'>>;
+  readonly playfieldSkin: PlayfieldSkin;
   readonly bgaLayerPool: ChildPool;
-  readonly bgaTargetsScratch: GameplayBgaTarget[];
+  readonly bgaTargetsScratch: PlayfieldBgaTarget[];
   readonly skinBinding: BeMusicGameplayBinding | undefined;
   readonly skinBgaCrops: Map<Texture, ImageBitmap | null>;
 }
 
 /**
- * Composites the chart's BGA into the theme's BGA rectangles ({@link collectBgaTargets}; the default-family BGA
- * rectangle unless a theme supplies its own). Three layers stack from back to front: base (channel 04 / bmson `bga.events`), layer
+ * Composites the chart's BGA into the skin's BGA rectangles (`PlayfieldSkin.bgaTargets`; the default-family BGA
+ * rectangle unless a skin supplies its own). Three layers stack from back to front: base (channel 04 / bmson `bga.events`), layer
  * (channel 07 / 0A / bmson `layerEvents`), and a POOR override (channel 06 / `poorEvents`) that briefly replaces the
  * base while the player is inside the POOR-judgement window (`DEFAULT_POOR_BGA_DISPLAY_SECONDS`).
  *
@@ -67,9 +67,9 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
     ctx.bgaLayerPool.end();
     return;
   }
-  // Render into EVERY rectangle the theme reports this frame (a DP LR2 skin can show several at once).
+  // Render into EVERY rectangle the skin reports this frame (a DP LR2 skin can show several at once).
   const visibleBgas = ctx.bgaTargetsScratch;
-  ctx.theme.collectBgaTargets(visibleBgas);
+  ctx.playfieldSkin.bgaTargets(visibleBgas);
   if (visibleBgas.length === 0) {
     ctx.bgaLayerPool.end();
     return;

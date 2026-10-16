@@ -6,7 +6,7 @@ import { createPlayerStateSignals } from '@be-music/player/state-signals';
 import { createHiSpeedState, createPlayState, type PlayState } from '@be-music/scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserSongEntry } from '../../collection/types.ts';
-import { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
+import { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
 import { HiSpeedTransition } from '../../scene/hi-speed.ts';
 import { applyFinalSummary, drainSharedEngineSignals, type PlayEngineContext } from './play-engine.ts';
@@ -67,8 +67,8 @@ function createPlay(options: {
     bombStartedAt: new Map<string, number>(),
     bombJudge: new Map<string, string>(),
     theme: {
-      onThemeEvent: (event: { kind: string }) => events.push(event.kind),
-      resolveKeyOnFadeMs: () => 120,
+      moment: (event: { kind: string }) => events.push(event.kind),
+      keyOnFadeMs: () => 120,
     },
     playClock: () => clock.ms,
     currentSeconds: () => clock.seconds,

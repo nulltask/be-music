@@ -10,8 +10,7 @@ import type { Application, Texture } from 'pixi.js';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
-import type { GameplayBgaTarget, GameplayThemeHooks } from '../../scene/core/gameplay-theme.ts';
+import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import { KEY_ON_FADE_OUT_MS } from '../../scene/gameplay-constants.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
@@ -20,8 +19,7 @@ import type { BeMusicStage } from '../../skin/be-music/types.ts';
 import { PHANTOM_BOMB_DURATION_MS } from '../../skins/phantom/playfield.ts';
 import { build, render, type PlayFrameContext } from '../shared/play-frame.ts';
 import { PlayLayers } from '../shared/play-layers.ts';
-import { renderBombEffects } from '../shared/playfield/bombs.ts';
-import type { PlayfieldRuntime } from '../shared/playfield/context.ts';
+import type { PlayChrome, PlayfieldRuntime } from '../shared/playfield/context.ts';
 import { uploadTextures } from '../shared/texture-upload.ts';
 import type { IntentSink, PlayFrame, PlayIntent, PlayView, PlayViewTiming, PlayfieldSkin } from '../types.ts';
 import {
@@ -50,7 +48,7 @@ export const BUILT_IN_PLAY_TIMING: PlayViewTiming = {
 
 /** What the built-in play view draws with besides its kit: the options of the play that change what is drawn. */
 export type BuiltInPlayViewOptions = Pick<
-  CoreGameplayViewOptions,
+  PlaySessionOptions,
   'bga' | 'autoPlay' | 'nonstop' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'layoutMode'
 > & {
   /** Where the chart's files are, for the skin's song images. */
@@ -68,8 +66,8 @@ export class BuiltInPlayView
   public readonly options: BuiltInPlayViewOptions & { beMusicEffects?: BuiltInKit['effects'] };
   /** How the be-music skin answers the shared playfield. */
   public readonly playfieldSkin: PlayfieldSkin;
-  /** The shared playfield's hooks, from {@link playfieldSkin} and the be-music chrome. */
-  public readonly theme: GameplayThemeHooks;
+  /** The be-music skin's chrome around the shared playfield. */
+  public readonly chrome: PlayChrome;
   private kit: BuiltInKit;
 
   public constructor(kit: BuiltInKit, play: PlayfieldRuntime, options: BuiltInPlayViewOptions = {}) {
@@ -77,24 +75,8 @@ export class BuiltInPlayView
     this.kit = kit;
     this.options = { ...options, ...(kit.effects !== undefined ? { beMusicEffects: kit.effects } : {}) };
     this.playfieldSkin = createBuiltInPlayfieldSkin(this);
-    const skin = this.playfieldSkin;
-    this.theme = {
-      attachThemeLayers: () => {},
-      renderThemeLayer: () => renderBuiltInChrome(this, undefined),
-      themeTiming: () => this.timing,
-      stageSize: () => skin.stage,
-      themeOwnsPlayfield: () => skin.ownsLanes,
-      resolveThemeLaneRect: (channel, width, height) => skin.laneRect(channel, { width, height }),
-      // A be-music skin draws notes from data: no note cells, measure lines or text of a theme's own.
-      resolveThemeNoteCell: () => undefined,
-      renderThemeMeasureLines: () => false,
-      renderThemeText: () => {},
-      renderBombEffects: () => renderBombEffects(this),
-      resolveBombDurationMs: (channel) => skin.bombDurationMs(channel),
-      resolveKeyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
-      collectBgaTargets: (out) => skin.bgaTargets(out),
-      onThemeEvent: () => {},
-    };
+    // A be-music skin draws notes from data: no text of its own after the bombs, and nothing for a retired bomb.
+    this.chrome = { draw: () => renderBuiltInChrome(this, undefined) };
   }
 
   /** The host's `Application`; the view draws only once attached (or built for a host ahead of its first frame). */
@@ -229,7 +211,7 @@ function createBuiltInPlayfieldSkin(view: BuiltInPlayView): PlayfieldSkin {
     laneRect: () => undefined,
     noteCell: () => undefined,
     measureLines: () => undefined,
-    bgaTargets: (out) => collectBgaTargets(view, out as GameplayBgaTarget[]),
+    bgaTargets: (out) => collectBgaTargets(view, out),
     bombCell: () => undefined,
     bombDurationMs: () => view.skinBinding.bombDurationMs ?? PHANTOM_BOMB_DURATION_MS,
     keyOnFadeMs: () => KEY_ON_FADE_OUT_MS,

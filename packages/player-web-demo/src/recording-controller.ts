@@ -16,8 +16,8 @@ export const STOP_RECORDING_LABEL = '■ Stop recording';
 const recordLog = logger('record');
 
 /**
- * Common recording-API surface both gameplay views (LR2 `PixiGameplayView` and beatoraja `PixiBeatorajaGameplayView`)
- * expose. Narrowed type so {@link activeGameplayRecorder} can return a path-agnostic value the rest of the controller
+ * Common recording-API surface both gameplay paths (a built-in or LR2 play scene's `recording` and beatoraja's
+ * `PixiBeatorajaGameplayView`) expose. Narrowed type so {@link activeGameplayRecorder} can return a path-agnostic value the rest of the controller
  * acts on without branching by family.
  */
 export interface GameplayRecorder {

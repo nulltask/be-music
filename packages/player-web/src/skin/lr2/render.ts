@@ -11,7 +11,7 @@ import { isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import { createCachedCroppedTexture, type PixiCropRect } from '../pixi-texture.ts';
 
 /**
- * Shared LR2 sprite-rendering helpers used by both the gameplay view (`scene/lr2/gameplay.ts`) and the song-select view
+ * Shared LR2 sprite-rendering helpers used by both the play view (`view/lr2/play-elements.ts`) and the song-select view
  * (`scene/lr2/select.ts`).
  *
  * These helpers cover the parts of LR2's `#SRC_*` / `#DST_*` model that are screen-agnostic — sprite tinting,
@@ -20,7 +20,7 @@ import { createCachedCroppedTexture, type PixiCropRect } from '../pixi-texture.t
  */
 
 /**
- * Minimal interface for "where do I put this Sprite?". Pool-based callers (scene/lr2/gameplay's `ChildPool`) satisfy this
+ * Minimal interface for "where do I put this Sprite?". Pool-based callers (the play view's `ChildPool`) satisfy this
  * structurally with their `acquireSprite()` method; non-pooled scene renders wrap a layer `Container` via
  * {@link containerSpriteSink} so the same helpers work for both.
  */

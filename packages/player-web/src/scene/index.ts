@@ -18,8 +18,10 @@ export * from './course-info.ts';
 export * from './default/index.ts';
 
 // LR2 family — Lunatic Rave 2 skin-driven scenes.
-export * from './lr2/gameplay.ts';
 export * from './lr2/select.ts';
+
+// What a finished play hands its result screen (the play scene's `progress()` and `on.finish`).
+export type { GaugeHistorySample, PixiGameplayResultData, ScoreHistorySample } from './core/result-data.ts';
 
 // beatoraja family — beatoraja Lua skin-driven scenes.
 export * from './beatoraja/bga.ts';
