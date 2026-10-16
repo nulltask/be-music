@@ -22,8 +22,6 @@ export interface PlayControls {
   followReplayTempoChanges(nowSec: number): void;
   /** Records the view changes still on the input bus once the loop is over (sent as the play ended). */
   recordPendingViewChanges(): void;
-  /** The chart second a command takes effect at: the play clock's, or the chart's start before it runs. */
-  commandSeconds(): number;
   /** The interrupt the play received, if any. */
   readonly interruptedReason: PlayerInterruptReason | undefined;
 }
@@ -42,6 +40,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
   } = session;
   let highSpeed = session.highSpeed;
   let interruptedReason: PlayerInterruptReason | undefined;
+  // The chart second a command takes effect at: the play clock's, or the chart's start before it runs.
   const commandSeconds = (): number => (session.clock ? tempoClock.chartSecondsAt(session.clock.nowMs()) : 0);
 
   const togglePause = (): void => {
@@ -146,7 +145,6 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
     recordPendingViewChanges: () => {
       recordPendingViewChanges(inputSignals, playlogRecorder, Math.max(0, commandSeconds()));
     },
-    commandSeconds,
     get interruptedReason() {
       return interruptedReason;
     },

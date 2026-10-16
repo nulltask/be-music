@@ -70,14 +70,14 @@ describe('driver drift', () => {
     expect(manualWithChanges.summary).not.toEqual(manualWithoutChanges.summary);
   });
 
-  test('drift: ESC — manualPlay records where its judge stood as abortedAtUs, autoPlay the clock time of the ESC', async () => {
+  test('ESC — manual and auto play both record where their judge had settled as abortedAtUs', async () => {
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: [escape(1800)] });
     const auto = await observePlay({ driver: 'auto', chart: basicChart(), script: [escape(1800)] });
     expect(manual.playlog?.play.aborted).toBe(true);
     expect(auto.playlog?.play.aborted).toBe(true);
-    // Manual: the last tick before the ESC was drained (ticks every 1000 / 60 ms).
+    // The last tick before the ESC was drained (ticks every 1000 / 60 ms).
     expect(manual.playlog?.play.abortedAtUs).toBe(1_783_333);
-    expect(auto.playlog?.play.abortedAtUs).toBe(1_800_000);
+    expect(auto.playlog?.play.abortedAtUs).toBe(1_783_333);
   });
 
   test('drift: ESC — autoPlay’s no-TUI trace reports the play as complete', async () => {
