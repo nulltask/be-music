@@ -293,4 +293,21 @@ describe('PixiBeatorajaSelectScene list', () => {
     expect(shown()).toEqual(['Tenth Dan']);
     scene.dispose();
   });
+
+  it('orders the root folders by label under a sort, the course folders among them', () => {
+    const { scene, internals, shown } = sceneOf(
+      [makeChart('z', 'Zeta'), makeChart('b', 'Beta')],
+      [makeCourseFolder('Dan', [courseOf('First Dan')])],
+    );
+    expect(shown()).toEqual(['Beta', 'Zeta', 'Dan']);
+    // SORT steps DEFAULT → TITLE; the cursor stays on its folder bar.
+    internals.moveCursor(1);
+    internals.handleButtonAction(12);
+    expect(shown()).toEqual(['Beta', 'Dan', 'Zeta']);
+    expect((scene.getFocusedEntry() as { folder?: BrowserFolderNode }).folder?.label).toBe('Zeta');
+    // Back to DEFAULT (Shift steps back): the library's order again.
+    internals.handleButtonAction(12, { shift: true, ctrl: false, alt: false });
+    expect(shown()).toEqual(['Beta', 'Zeta', 'Dan']);
+    scene.dispose();
+  });
 });
