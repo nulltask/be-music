@@ -145,6 +145,10 @@ describe('createPlayScene', () => {
     const result = scene.progress();
     expect(result?.song.title).toBe('Chart');
     expect(result?.gaugeType).toBe('GROOVE');
+    // The gauge's clear border (in percent), which a beatoraja result skin shows with the TOTAL the engine reports
+    // (none before its first frame).
+    expect(result?.gaugeBorder).toBe(80);
+    expect(result?.gaugeTotal).toBeUndefined();
     scene.dispose();
   });
 
