@@ -73,7 +73,6 @@ import {
 } from './note-draw-window.ts';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import { loadPlayBga } from '../../chart/play-bga.ts';
 import {
   type AudioBusChannel,
   type AudioBusHandle,
@@ -93,15 +92,13 @@ import { advanceCourseCombo, type CourseComboState } from './course-combo.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { nonstopBpmAt, type NonstopStitchMap } from '@be-music/player/course';
-import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
+import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { LiveTempo } from '../live-tempo.ts';
 import {
   chartToElapsedSeconds,
   clampPlayTempo,
   resolveReplayTempo,
-  resolveSamplePlaybackRate,
   setVideoPlaybackTempo,
-  stretchSlicePlayback,
   supportsLiveTempoChange,
   type ReplayTempo,
   type TempoPitchMode,
@@ -116,8 +113,7 @@ import type { SceneIdentity } from '../../host/family-kit.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
 import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
-import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
-import { createPlayAudioGraph, loadPlaySamples } from '../../chart/play-audio.ts';
+import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import {
@@ -206,6 +202,12 @@ import {
 import { logger } from '../../logger.ts';
 import { QUIT_HOLD_KEY_CODE, QuitHoldController } from '../quit-hold.ts';
 import { isChannelOnSide, prepareSong } from '../../session/play/play-chart.ts';
+import {
+  disposeGameplayAudioGraphAfterDelay,
+  prepareAudio,
+  prepareBga,
+  samplePlaybackRate,
+} from '../../session/play/play-media.ts';
 
 const log = logger('gameplay');
 
@@ -1642,14 +1644,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     await this.prepareTheme();
     if (this.disposed) return;
-    await this.prepareAudio();
+    await prepareAudio.call(this);
     if (this.disposed) return;
     // BGA preload runs IN THE BACKGROUND — `prepare()` resolves here even if `prepareBga()` is still decoding videos.
     // The ffmpeg.wasm fallback for unsupported codecs (e.g. legacy `.mpg`) can take ~tens of seconds, and the user
     // wants the PLAY scene to transition in immediately and play its LR2 LOADING animation during that wait rather than
     // freezing the Decide splash. {@link start} gates the actual chart start (LR2 timer 40 → 41 / op 80 → 81) on
     // `bgaReadyPromise`, so notes still don't begin until the BGA is in place.
-    this.bgaReadyPromise = this.prepareBga().catch((error) => {
+    this.bgaReadyPromise = prepareBga.call(this).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
     void this.bgaReadyPromise.then(() => {
@@ -2503,127 +2505,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         return;
       }
     }
-  }
-
-  private async prepareAudio(): Promise<void> {
-    if (!this.source || !this.song) {
-      return;
-    }
-    // Build the audio bus. See `audio-bus.ts` for the full architecture; in short:
-    //
-    // key sources → keyMixer → keyComp ↘ masterComp → makeup → destination ('split') BGM sources → bgmMixer → bgmComp ↗
-    //
-    // 'legacy' collapses both buses onto a single compressor; 'off' bypasses every compressor stage. Sample sources
-    // always feed `keyMixer` / `bgmMixer`, never directly to the destination, so a mode switch never has to reconnect
-    // in-flight `BufferSourceNode`s — important because hundreds of one-shots come and go per second on dense charts.
-    this.audioCompressorMode = this.options.audioCompressorMode ?? 'split';
-    const initialMode: CompressorMode = this.options.audioCompressor === false ? 'off' : this.audioCompressorMode;
-    // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
-    const chart = this.resolvedChart ?? this.song.chart;
-    // The AudioContext, the bus and `#VOLWAV` are built, and the samples decoded, as the beatoraja prep does
-    // (`chart/play-audio.ts`).
-    const graph = createPlayAudioGraph(chart, initialMode, {
-      initialStages: this.options.audioCompressorStages,
-      initialVolumes: this.audioVolumes,
-      initialCompressorParams: this.audioCompressorParams,
-    });
-    this.audioContext = graph.audioContext;
-    this.audioBus = graph.audioBus;
-    // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
-    this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
-    this.audioBus.outputNode.connect(this.audioAnalyzer.input);
-    const pitchMode = this.options.tempoPitchMode ?? 'pitch';
-    // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
-    // play at their own pitch.
-    const stretched = await loadPlaySamples({
-      audioContext: this.audioContext,
-      chart,
-      source: this.source,
-      chartPath: this.song.chartPath,
-      samples: this.decodedSamples,
-      tempo: this.tempo,
-      tempoPitchMode: pitchMode,
-      tempoStretchAlgorithm: this.options.tempoStretchAlgorithm ?? 'signalsmith',
-      ...(this.options.nonstop !== undefined ? { nonstop: this.options.nonstop } : {}),
-      isCancelled: () => this.disposed,
-    });
-    // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
-    if (stretched && this.bmsonSlicePlayback !== undefined) {
-      this.bmsonSlicePlayback = stretchSlicePlayback(this.bmsonSlicePlayback, this.tempo);
-    }
-    // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
-    // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
-    // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
-    // it. See the field doc for why this beats keeping the audio plumbing inline on the view.
-    if (!this.disposed && this.audioContext && this.audioBus) {
-      this.nonstopMixer?.dispose();
-      this.nonstopMixer =
-        this.options.nonstop !== undefined
-          ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop, {
-              keepPitch: pitchMode === 'keep-pitch',
-              tempo: this.tempo,
-            })
-          : undefined;
-      this.webAudioSession = createWebAudioSession({
-        audioContext: this.audioContext,
-        audioBus: this.audioBus,
-        chart: this.resolvedChart ?? this.song!.chart,
-        decodedSamples: this.decodedSamples,
-        wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
-        bmsonSlicePlayback: this.bmsonSlicePlayback,
-        ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
-        playbackRate: this.samplePlaybackRate(),
-      });
-    }
-  }
-
-  /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
-  private samplePlaybackRate(): number {
-    return resolveSamplePlaybackRate(this.options.tempoPitchMode ?? 'pitch', this.tempo);
-  }
-
-  /**
-   * Decodes every BMP resource referenced by the chart's BGA timelines into a Pixi `Texture`, keyed by the same string
-   * the timeline cues reference. Loads run with bounded parallelism so a long preamble doesn't gate the playfield
-   * without fanning browser decoders out without limit.
-   */
-  private async prepareBga(): Promise<void> {
-    const song = this.song;
-    const source = this.source;
-    if (!song || !source || !this.hasBga) {
-      return;
-    }
-    // Use the control-flow-resolved chart so #IF-gated BMP / bga header declarations match the chosen #RANDOM branch.
-    const chart = this.resolvedChart ?? song.chart;
-    // Loaded as the beatoraja prep loads them (`chart/play-bga.ts`): base + POOR textures keep their blacks, the layer
-    // track's are keyed out for BMS, videos get one texture for both tracks, and `#BGAxx` sub-regions become views.
-    await loadPlayBga({
-      chart,
-      source,
-      chartPath: song.chartPath,
-      timeline: this.bgaTimeline,
-      poorFallbackKey: this.poorBgaFallbackKey,
-      into: {
-        textures: this.bgaTextures,
-        layerTextures: this.bgaLayerTextures,
-        videos: this.bgaVideos,
-        subRegionOrigins: this.bgaSubRegionOrigins,
-      },
-      transcode: {
-        maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
-        useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
-      },
-      tempo: this.tempo,
-      isCancelled: () => this.disposed,
-    });
-    if (this.disposed) return;
-    // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
-    // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
-    // forget from the prepareBga callsite — `bgaReadyPromise` already gates chart start, and adding the upload to
-    // its tail just lengthens that promise by the upload work, which is what we want.
-    await this.preparePixiUpload(this.bgaTextures.values());
-    if (this.disposed) return;
-    await this.preparePixiUpload(this.bgaLayerTextures.values());
   }
 
   /**
@@ -4962,7 +4843,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         bmsonSlicePlayback: this.bmsonSlicePlayback,
         // The engine plays through its own session: a stitched NONSTOP chart's stage rates (FIT) and fades go with it.
         ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
-        playbackRate: this.samplePlaybackRate(),
+        playbackRate: samplePlaybackRate.call(this),
         playbackRateFollowsTempo: supportsLiveTempoChange(this.options.tempoPitchMode ?? 'pitch'),
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
@@ -5448,26 +5329,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       );
     }, ending.leadOutMs);
   }
-}
-
-function disposeGameplayAudioGraphAfterDelay(
-  graph: {
-    session: WebAudioSession | undefined;
-    bus: AudioBusHandle | undefined;
-    context: AudioContext | undefined;
-  },
-  delayMs: number,
-): void {
-  const cleanup = (): void => {
-    void graph.session?.dispose();
-    graph.bus?.dispose();
-    void graph.context?.close();
-  };
-  if (delayMs <= 0) {
-    cleanup();
-    return;
-  }
-  window.setTimeout(cleanup, delayMs);
 }
 
 /**
