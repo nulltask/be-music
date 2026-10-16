@@ -11,7 +11,7 @@
 ```mermaid
 flowchart TD
   player["@be-music/player<br/>ルールセット・コース・記録・エンジン"]
-  model["@be-music/scene-model<br/>ライブラリ・ブラウズ・プレイオプション"]
+  model["@be-music/scene-model<br/>ライブラリ・ブラウズ・プレイオプション<br/>プレイ状態・プレイ結果・コース・効果音"]
   skins["skin-sdk・lr2-skin・beatoraja-skin<br/>モデルを各スキンの語彙へ写す"]
   sessions["@be-music/player-web<br/>シーンセッション・ファミリービュー"]
 
@@ -25,9 +25,9 @@ flowchart TD
 引きません。時刻と乱数は入力として受け取ります。`pnpm run check` が実行環境に依存しないコードの lint 規則でこれを
 守らせ、テストが `@be-music/chart`・`@be-music/json`・`@be-music/player` 以外に依存していないことを確かめます。
 
-モデルは、これまでの選曲シーンの振る舞いから導いています。標準 / LR2 のシーンと beatoraja のシーンで違っていた
+モデルは、これまでの各シーンの振る舞いから導いています。標準 / LR2 のシーンと beatoraja のシーンで違っていた
 ところは、互換性の方針に従って一つを選びました。LR2 の振る舞い、LR2 にない機能は beatoraja の振る舞いです。
-[振る舞いの選択](#振る舞いの選択) に一つずつ挙げています。
+[一覧の振る舞いの選択](#振る舞いの選択) と [プレイ状態の振る舞いの選択](#振る舞いの選択-1) に一つずつ挙げています。
 
 ## ライブラリ
 
@@ -175,18 +175,141 @@ export します。
   （`stepPlayerHiSpeed`。プレイヤーのハイスピードはその刻みで動き、描画に使う値はそれに譜面の HS-FIX 倍率を掛けた
   もの）、なめらかなスクロールの変化（`easeHiSpeed`・`HiSpeedTransition`）。
 
-## 選曲側のヘルパーの移動先
+## プレイ状態
 
-| ヘルパー                                                           | 移動前                              | 移動後                                                                   |
-| ------------------------------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------ |
-| `BrowserSongEntry`・`BrowserFolderNode`・`BrowserCourseEntry` など | `@be-music/skin-sdk`                | `LibraryChart`・`LibraryFolder`・`LibraryCourse` など（skin-sdk に別名） |
-| `BeMusicPlayOptions` とその値の型                                  | `@be-music/skin-sdk`                | `PlayOptions` など（skin-sdk に別名）                                    |
-| `groupSongsByFolder`・`resolveChartPlayVariant`                    | `player-web` の collection          | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（再 export）     |
-| `matchesSearchQuery`・`wrappedCursorDelta`                         | `player-web` のコアの選曲           | 同じ名前（再 export）                                                    |
-| コアの選曲のソートと難易度フィルター                               | `player-web` のコアの選曲（非公開） | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                     |
-| `resolveSelectNavigation`                                          | `player-web` のコアの選曲           | そのまま。`restoreBrowse` の上に実装                                     |
-| `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                         | `player-web` のコアの選曲           | 同じ名前（再 export）                                                    |
-| `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`           | `player-web` のコアの選曲           | `resolvePlayOptionValue`・`cyclePlayOptionValue`（旧名で再 export）      |
-| ハイスピードの範囲と刻み                                           | `player-web` の `scene/hi-speed.ts` | 同じ名前（再 export）                                                    |
+プレイ状態（`PlayState`）は、どのプレイ画面も読むプレイの状態です。進行中のゲージと EX スコアとそのグラフ、コンボと
+最大コンボ（コースのステージではコース全体のコンボも）、判定タイミングつきのすべての判定と判定ごとの早い / 遅いの数、
+そして見え方（ハイスピードとレーンカバー）です。状態はイミュータブルで、`reducePlayState` にイベントを渡して進めます。
+エンジンのフレームと判定、`trigger-poor-bga` コマンド（空 POOR。`playEventFromUiCommand` で変換）、最後の集計、
+プレイヤーとホストによるハイスピードとカバーの変更です。時計は読みません。譜面上の時刻とプレイの時計の時刻はイベントと
+一緒に渡します。
 
-各シーンはまだ自分の一覧の状態を持っています。Web ランタイムのシーンセッションがこれらのモデルへ移ります。
+```mermaid
+flowchart LR
+  engine["エンジン<br/>フレーム・判定・コマンド"]
+  input["プレイヤー・ホスト<br/>ハイスピード・カバー"]
+  reduce["reducePlayState"]
+  state["PlayState"]
+  toResult["playResultFromPlayState"]
+  result["PlayResult"]
+  views["ファミリービュー"]
+
+  engine --> reduce
+  input --> reduce
+  reduce --> state
+  state --> views
+  state --> toResult --> result --> views
+```
+
+- **グラフ**。プレイ開始時のゲージ（`createPlayState` で渡したもの、なければ最初のフレーム）から始まり、判定と空 POOR
+  のたびに、その譜面上の時刻の割合でゲージ（最大値に対する百分率）と EX スコアを記録します。結果はプレイが終わった
+  位置に最後の点を足します。
+- **コンボ**。エンジンが知らせるコンボで、最長のものを最大コンボとして保ちます。最後の集計がフルコンボ（すべてのノーツが
+  GOOD 以上で、BAD も POOR もない）なら、コンボは途切れていないので最大コンボはノーツ数です。コースのステージは、
+  引き継いだコースのコンボを進めます（`reduceCourseCombo`）。
+- **判定タイミング**。タイミングのある PERFECT〜POOR の判定を、プレイの時計の時刻とレーンとともに記録します。
+  `recentJudgeTimings` は実時間のメーター用の直近 64 件です（判定の一覧ごとに同じ配列を返します）。判定ごとの
+  早い / 遅いの数（beatoraja のもの）も数えます。
+- **ハイスピード**（`HiSpeedState`）。プレイヤー自身の尺度でのハイスピードと、ノーツの流れに使う描画用の値です。描画用は
+  プレイヤーの値に譜面の HS-FIX 倍率を掛けたものです（`resolveHsFixMultiplier`。MAXBPM・MINBPM・AVERAGE はその BPM で
+  プレイヤーのハイスピードになるように保ち、CONSTANT は当面 AVERAGE と同じ）。プレイヤーのキーはプレイヤーの値を動かし、
+  エンジンやリプレイが知らせる描画用の値はそのまま受け取ります。コースの `no_speed` はプレイヤーの変更を止めますが、
+  ホストの設定は効きます。
+- **レーンカバー**（サイドごとの `LaneCoverState`）。SUDDEN+・HIDDEN+・LIFT で、それぞれオフの間も高さを保ちます。
+  プレイは選曲画面のオプションから始まります（`laneCoversFromPlayOptions`。サイドごとの HIDDEN / SUDDEN、共通の
+  レーンカバーの高さ、LANE COVER のオンオフ）。プレイ中は、上げる（オンになる）、下げる（なくなるとオフ）、切り替える、
+  そのまま設定する（リプレイ）ができ、片方のサイドにもすべてのサイドにも効き、ハイスピードと一緒にロックされます。
+  `resolveLaneCover` は描かれるカバーをレーンに対する割合で返し、HIDDEN+ は LIFT より上の部分に対する割合にします。
+- **見え方の設定**。`resolvePlaylogView` はプレイログの単位での見え方です。シーンのハイスピードの尺度での描画用の
+  ハイスピード、HS-FIX、サイドごとのカバー、メイン BPM での表示時間（`resolveWhiteNumber`。指定した拍数の長さの
+  レーンに対する白数字で、beatoraja は 4 拍）です。`PlaylogViewCursor` はリプレイするログの見え方を再生位置に沿って
+  たどります。
+
+### 振る舞いの選択
+
+| 振る舞い                           | 標準 / LR2 のプレイ                         | beatoraja のプレイ                                            | モデル                                                         |
+| ---------------------------------- | ------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- |
+| グラフの始まり                     | 0 の位置に開始時のゲージ                    | なし                                                          | 0 の位置に開始時のゲージ                                       |
+| グラフの点                         | 判定ごと、空 POOR ごと                      | 判定ごと                                                      | 判定ごと、空 POOR ごと                                         |
+| グラフのゲージの値                 | ゲージの値のまま                            | 最大値に対する百分率                                          | 最大値に対する百分率（最大 100 のゲージでは同じ）              |
+| グラフの終わり                     | プレイが終わった位置に最後の点              | なし                                                          | プレイが終わった位置に最後の点                                 |
+| フルコンボの最大コンボ             | AUTO のときだけノーツ数                     | 知らされたコンボ                                              | どのプレイでもノーツ数                                         |
+| 記録する判定                       | PERFECT〜POOR、時刻とレーンつき。直近 64 件 | どの種類も、ずれと種類だけ。直近 50 件                        | PERFECT〜POOR、時刻とレーンつき。既定で直近 64 件              |
+| 判定ごとの早い / 遅い              | なし                                        | 数える                                                        | 数える（beatoraja。LR2 にはない）                              |
+| HS-FIX                             | 適用する                                    | 適用しない                                                    | 適用する（beatoraja のハイスピード固定。LR2 にはない）         |
+| ハイスピードのロック（`no_speed`） | キーは無視、ホストの設定は効く              | キーは無視、エンジンの変更は戻す、ホストの設定は効く          | プレイヤーとエンジンの変更は無視、ホストの設定は効く           |
+| 開始時のカバー                     | プレイオプションから                        | オフ                                                          | プレイオプションから（LR2）                                    |
+| プレイ中のカバー                   | 固定                                        | レーンカバー・LIFT・HIDDEN のキー、ホイール、ボタン。全サイド | beatoraja の調整（LR2 にはない）。片方のサイドかすべてのサイド |
+| HIDDEN+ を 0 まで下げたとき        | —                                           | キーではオンのまま、ボタンではオフ                            | オフ                                                           |
+| `no_speed` 中のカバー              | —                                           | ロック                                                        | ロック                                                         |
+| プレイログの表示時間               | レーンの高さから SUDDEN+ と LIFT を引く     | beatoraja の白数字（LIFT は見ない）                           | 白数字（LIFT は見ない）                                        |
+| プレイログの HS-FIX                | 記録する                                    | 記録しない                                                    | 設定されていれば記録する                                       |
+
+## プレイ結果
+
+`PlayResult` は、どの結果画面も読む唯一の結果の形です。単独のプレイ、コースのステージ、EXPERT / GRADE のコース全体、
+NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）のいずれも表します。スコアとゲージの判定、唯一の
+クリアランプの規則によるランプ、グラフ、判定タイミングと早い / 遅いの数、プレイログ、ステージやコースが属するコース
+（`course`、コースの表示用モデル）を持ちます。`@be-music/skin-sdk` はこれを `BeMusicResultData` として export します。
+
+- `playResultFromPlayState` はプレイの結果を最後のプレイ状態から読みます。
+- `playResultFromBeatoraja` は beatoraja のプレイ画面の `onComplete(summary, maxCombo, history)` を読みます。グラフに
+  他の画面と同じ始まりと終わりの点を足し、時刻のないタイミングの記録は `atMs` を 0 とします。
+  `beatorajaCompletionFromPlayResult` は beatoraja の結果スキン向けにその形へ戻します。
+- `playResultFromCourseRun` はコースの実行（`PlaylogCourseResult`）を 1 回のプレイとして読みます。合計したスコア、
+  LR2 ではコースのノーツに対する LR2 の点数、最初のステージの譜面の下のコース名、到達したステージ数とトロフィー
+  （`courseRun`）です。グラフは LR2 のコースの結果と同じく最後のステージのもので、`courseRun.stageHistories` に
+  beatoraja のつないだグラフ（`joinCourseStageHistories`）用の全ステージのグラフを残します。
+- `resolveResultPresentation` は結果の見せ方を LR2 と同じく決めます。コース全体はコース結果のスキンでコース用の
+  ジングル、クイックリトライなし。NONSTOP は単独のプレイとして見せます。
+
+コース全体の判定（COURSE CLEAR / COURSE FAILED）は `run: 'course'` から読み、これが `courseResult` フラグに代わります。
+
+## コースの表示用モデル
+
+`CourseView` は画面が見せるコースです。カーソルの下のバー、実行中のコースとそのステージ、結果のコースのいずれにも
+使い、種類、名前、ステージ（タイトル・サブタイトル・レベル・難易度）、プレイ中のステージ、NONSTOP のつなぎ方を
+持ちます（`resolveCourseView`）。`CourseComboState` はコースのステージのコース全体のコンボで、引き継いだ値から
+ステージのコンボとともに進み、最初に途切れたらステージのコンボに戻ります（`createCourseCombo`・`reduceCourseCombo`）。
+
+## 効果音セット
+
+テーマの音は `SystemSoundSet` で、スロットごとに 1 つの `SystemSound`（バイト列、テーマのファイル内のパス、または両方）
+を持ちます。選曲の効果音（`cursor`・`decide`・`cancel`・`folderOpen`・`folderClose`・`optionOpen`・`optionClose`・
+`optionChange`）、選曲の BGM と決定のジングル、結果のジングル（`clear`・`fail`・`result`・`courseClear`・`courseFail`）
+です。
+
+- `systemSoundSetFromLr2Theme` は LR2 テーマの読み込みで得た音（バイト列）を読みます。`LR2_SOUND_SET_SLOTS` は LR2 の
+  サウンドセットの各コマンドをスロットに対応させます（`SCRATCH` はカーソル、`PANEL_*` はオプションパネル）。
+- `systemSoundSetFromBeatoraja` は beatoraja テーマの効果音のパスと選曲 BGM のパス（テーマの音声で鳴らす）、
+  ジングル（バイト列）を読みます。beatoraja にはオプションパネルの効果音がなく、LR2 にはキャンセルの効果音がありません。
+- `resolveResultJingles` は、ジングルを持つ最初のセット（結果スキンを見せているテーマ、次にほかのテーマ）から結果の
+  ジングルをまとめて選びます。コース全体の結果はコース用のジングルを鳴らし、なければクリア / 失敗のものにします。
+  `resolveResultJingle` は判定で 1 つ選び、なければ汎用のものにします。
+- `browseSystemSound` は一覧のコマンドの結果に合わせた効果音です。カーソル、フォルダ、ルートで戻ったときのキャンセル、
+  ソートやフィルターで一覧が変わったときのオプション変更の音です。`startSystemSound` は譜面と遊べるコースには決定、
+  ステージが欠けたコースにはキャンセルの音です。
+
+## ヘルパーの移動先
+
+| ヘルパー                                                                         | 移動前                                       | 移動後                                                                   |
+| -------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------ |
+| `BrowserSongEntry`・`BrowserFolderNode`・`BrowserCourseEntry` など               | `@be-music/skin-sdk`                         | `LibraryChart`・`LibraryFolder`・`LibraryCourse` など（skin-sdk に別名） |
+| `BeMusicPlayOptions` とその値の型                                                | `@be-music/skin-sdk`                         | `PlayOptions` など（skin-sdk に別名）                                    |
+| `BeMusicResultData`・`GaugeHistorySample`・`ScoreHistorySample`                  | `@be-music/skin-sdk`                         | `PlayResult` など（skin-sdk に別名）                                     |
+| `BeMusicJudge`・`BeMusicSide`・`BeMusicJudgeTiming`・`BeMusicLaneCover`          | `@be-music/skin-sdk`                         | `Judge`・`PlaySide`・`JudgeTiming`・`LaneCover`（skin-sdk に別名）       |
+| `groupSongsByFolder`・`resolveChartPlayVariant`                                  | `player-web` の collection                   | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（再 export）     |
+| `matchesSearchQuery`・`wrappedCursorDelta`                                       | `player-web` のコアの選曲                    | 同じ名前（再 export）                                                    |
+| コアの選曲のソートと難易度フィルター                                             | `player-web` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                     |
+| `resolveSelectNavigation`                                                        | `player-web` のコアの選曲                    | そのまま。`restoreBrowse` の上に実装                                     |
+| `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                       | `player-web` のコアの選曲                    | 同じ名前（再 export）                                                    |
+| `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                         | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`（旧名で再 export）      |
+| ハイスピードの範囲と刻み                                                         | `player-web` の `scene/hi-speed.ts`          | 同じ名前（再 export）                                                    |
+| `SceneCourseInfo`・`resolveSceneCourseInfo`                                      | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名で再 export）                     |
+| `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                    | `player-web` の `scene/core/course-combo.ts` | 同じ名前（再 export）。`reduceCourseCombo` を追加                        |
+| `PlaylogViewCursor`・`resolveBeatorajaPlaylogView`                               | `player-web` の `scene/playlog-view.ts`      | 同じ名前（再 export）。`resolvePlaylogView` の上に実装                   |
+| `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation` | `player-web-demo` の `course-result.ts`      | `playResultFromCourseRun` など（旧名で再 export）                        |
+| `resolveResultViewJingles`                                                       | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                              |
+
+各シーンはまだ自分の一覧とプレイの状態を持っています（コアのプレイは `JudgeTimingLog` とカバー、beatoraja のランタイム
+アダプターは記録とカバー）。Web 実行層のシーンセッションがこれらのモデルへ移ります。

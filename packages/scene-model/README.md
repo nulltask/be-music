@@ -25,6 +25,15 @@ The models and the rules behind them are described in [Scene models](../../docs/
 - **Play options**: what the player picks before a play (`PlayOptions`), its defaults, each option's choices,
   validation of values set from untyped input (`resolvePlayOptionValue`, `resolvePlayOptions`), cycling
   (`cyclePlayOptionValue`), and the hi-speed range (`snapHiSpeed`, `stepPlayerHiSpeed`, `HiSpeedTransition`).
+- **Play state**: the running gauge and EX score with their graphs, the combo (and a course stage's course combo),
+  the timed judgments with early / late counts, the hi-speed under HS-FIX and the lane covers with LIFT and HIDDEN, as
+  one immutable state fed by the engine's frames and judgments (`PlayState`, `reducePlayState`), and the view in the
+  play log's units (`resolvePlaylogView`).
+- **Play result**: the one result payload for single plays, course stages, course runs and NONSTOP runs
+  (`PlayResult`), read from a play state, from the beatoraja scene's completion or from a course run.
+- **Course view**: the course a screen shows (`CourseView`, `resolveCourseView`) and the course-wide combo.
+- **System sounds**: a theme's cues and jingles by slot (`SystemSoundSet`), from an LR2 theme or a beatoraja theme, the
+  result jingle a run plays and the cue a browse command plays.
 
 ## Example
 
