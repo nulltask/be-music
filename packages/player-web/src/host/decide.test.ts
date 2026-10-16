@@ -1,4 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
+import { parseChart } from '@be-music/parser';
 import type { LibraryChart } from '@be-music/scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { AudioService } from '../runtime/audio-service.ts';
@@ -103,6 +104,24 @@ describe('createDecideScene', () => {
   it('is the built-in decide screen', () => {
     const { scene } = create();
     expect(scene.identity).toEqual({ kind: 'decide', family: 'built-in' });
+    scene.dispose();
+  });
+
+  it("hands on the chart's #RANDOM branches it drew for the play", () => {
+    const chart = parseChart(['#RANDOM 2', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'].join('\n'), 'bms');
+    const scene = createDecideScene(
+      { family: 'built-in', skin: phantomSkin },
+      {
+        chart: { ...CHART, chart },
+        sounds: {},
+        audio: createFakeAudio().service,
+        random: () => 0.9,
+        on: { continue: () => undefined, cancel: () => undefined },
+        keyTarget: NO_KEYS,
+      },
+    );
+    expect(scene.resolved.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 2 }]);
+    expect(scene.resolved.chart.events.map((event) => event.channel)).toEqual(['12']);
     scene.dispose();
   });
 

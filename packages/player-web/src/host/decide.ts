@@ -3,6 +3,7 @@
  * kit's family and returns the scene to show with `PixiSceneHost.setScene`.
  */
 
+import type { ResolvedPlayChart } from '@be-music/player/core/engine';
 import type { CourseView, LibraryChart, PlayOptions, SystemSoundSet } from '@be-music/scene-model';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
@@ -32,21 +33,30 @@ export interface DecideSceneOptions extends SessionSceneOptions {
   readonly audio: AudioService;
   /** How far the play prepared behind the screen has loaded, 0..1, read every frame. */
   readonly progress?: () => number | undefined;
+  /** The random source the chart's `#RANDOM` / `#SWITCH` branches are drawn with. Defaults to `Math.random`. */
+  readonly random?: () => number;
   /** Where the screen leads: the play (`continue`) or back to select (`cancel`); each fires once per entry. */
   readonly on: DecideSessionEvents;
 }
 
 /** The decide screen as a scene. */
 export interface DecideScene extends SessionScene<DecideFrame, DecideIntent> {
+  /**
+   * The chart as the play will play it: its `#RANDOM` / `#SWITCH` branches drawn once, when the scene was made, with the
+   * draws. The screen shows these branches; hand it to the play (`preResolved`) so the play plays them too.
+   */
+  readonly resolved: ResolvedPlayChart;
   /** Takes the player's new settings for the kit's skin; the next frame draws with them. */
   updateKit(kit: DecideSceneKit): void;
 }
 
 class BuiltInDecideScene extends SessionScene<DecideFrame, DecideIntent> implements DecideScene {
+  public readonly resolved: ResolvedPlayChart;
   private readonly decideView: BuiltInDecideView;
 
   public constructor(session: DecideSession, view: BuiltInDecideView, options: SessionSceneOptions) {
     super(session, view, options);
+    this.resolved = session.resolved;
     this.decideView = view;
   }
 
@@ -69,6 +79,7 @@ export function createDecideScene(kit: DecideSceneKit, options: DecideSceneOptio
     audio: options.audio,
     timing: view.timing,
     ...(options.progress !== undefined ? { progress: options.progress } : {}),
+    ...(options.random !== undefined ? { random: options.random } : {}),
     on: options.on,
   });
   return new BuiltInDecideScene(session, view, {
