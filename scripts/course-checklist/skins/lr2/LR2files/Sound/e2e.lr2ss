@@ -1,0 +1,15 @@
+// be-music course checklist fixture sound set (LR2). Every file is a short tone written by
+// scripts/course-checklist/fixtures.ts; the course jingles keep the stock set's names.
+#INFORMATION,10,BE-MUSIC E2E,be-music,
+#SELECT,LR2files\Bgm\e2e\select.wav,
+#DECIDE,LR2files\Bgm\e2e\decide.wav,
+#FOLDER_OPEN,LR2files\Sound\e2e\f-open.wav,
+#FOLDER_CLOSE,LR2files\Sound\e2e\f-close.wav,
+#PANEL_OPEN,LR2files\Sound\e2e\o-open.wav,
+#PANEL_CLOSE,LR2files\Sound\e2e\o-close.wav,
+#OPTION_CHANGE,LR2files\Sound\e2e\o-change.wav,
+#CLEAR,LR2files\Sound\e2e\clear.wav,
+#FAIL,LR2files\Sound\e2e\fail.wav,
+#SCRATCH,LR2files\Sound\e2e\scratch.wav,
+#COURSECLEAR,LR2files\Sound\e2e\course_clear.wav,
+#COURSEFAIL,LR2files\Sound\e2e\course_fail.wav,
