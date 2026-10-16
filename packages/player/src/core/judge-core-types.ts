@@ -58,6 +58,12 @@ export interface JudgeCoreConfig {
    * it on, nothing is scored (see `isJudgingClosed`).
    */
   endOnFailure: boolean;
+  /**
+   * The input reports key releases from its first key (`PlayerInputRuntime.reportsKeyReleases`): the core judges it as
+   * key-state input from the start ({@link JudgeCoreState.keyStateInput}) rather than from its first `hold` or
+   * `release`.
+   */
+  reportsKeyReleases?: boolean;
 }
 
 /** The play's running result — the same shape as the engine's public `PlayerSummary`. */
@@ -128,7 +134,8 @@ export interface JudgeCoreState {
   readonly laneHolds: Map<string, LaneHoldHistory>;
   /**
    * The host reports releases (key-state input, replays): lanes are down exactly between their presses and releases.
-   * Until then a press counts as held for {@link LONG_NOTE_REPEAT_HOLD_GRACE_MS}.
+   * Until then a press counts as held for {@link LONG_NOTE_REPEAT_HOLD_GRACE_MS}. Set from the start when the input
+   * declares its releases ({@link JudgeCoreConfig.reportsKeyReleases}), otherwise by the first `hold` or `release`.
    */
   keyStateInput: boolean;
   /** The latest instant (true clock, seconds) the timed judgments were advanced to — an ESC abort stops there. */
