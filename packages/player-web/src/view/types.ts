@@ -17,7 +17,6 @@ import type {
   HiSpeedCommand,
   Judge,
   LaneCoverCommand,
-  Library,
   LibraryChart,
   LibraryCourse,
   LibraryEntry,
@@ -28,6 +27,7 @@ import type {
   ResultPresentation,
 } from '@be-music/scene-model';
 import type { Container, Sprite, Texture } from 'pixi.js';
+import type { BrowserSongCollection } from '../collection/types.ts';
 import type { SceneFamily } from '../host/family-kit.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
 import type { PlayfieldRuntime } from './shared/playfield/context.ts';
@@ -102,26 +102,47 @@ export interface SelectRecords {
   course(course: LibraryCourse): BeMusicCourseRecord | undefined;
 }
 
+/**
+ * Something that happened on the select screen since the last frame, for the view's slides, timers and overlays. `atMs`
+ * is on the host clock.
+ */
+export type SelectViewEvent =
+  /**
+   * A browse command did something (`reduceBrowse`): the cursor moved, a folder opened or closed, the list changed. A
+   * one-bar step on a list of one bar reports a cursor event that stays on that bar, so the list still slides.
+   */
+  | { readonly kind: 'browse'; readonly event: BrowseEvent; readonly atMs: number }
+  /** An option panel opened or closed (LR2's timers 21-29 and 31-39 start then). */
+  | { readonly kind: 'panel'; readonly panel: number; readonly open: boolean; readonly atMs: number }
+  /** The README overlay scrolls by `delta` pixels (a key); the view clamps it to the text. */
+  | { readonly kind: 'readtext-scroll'; readonly delta: number };
+
 /** What the select screen draws. */
 export interface SelectFrame {
   readonly clock: SceneClock;
-  readonly library: Library;
+  /** The library, with the files of its charts (their images and text files). */
+  readonly library: BrowserSongCollection;
   readonly browse: BrowseState;
   /** The list shown (`browseEntries`) and the cursor in it (`browseCursor`). */
   readonly entries: readonly LibraryEntry[];
   readonly cursor: number;
-  /** What the last browse command did and when, for the list's slide and the folder animations. */
-  readonly lastBrowse?: { readonly event: BrowseEvent; readonly atMs: number };
+  /**
+   * Bumped whenever what the frame shows changed, besides the clock and the audio: a view rebuilds what it builds once
+   * per change when it changes.
+   */
+  readonly revision: number;
+  /** What happened since the last frame, oldest first. */
+  readonly events: readonly SelectViewEvent[];
   readonly playOptions: PlayOptions;
   /** The option panel open (LR2's panels 1-9), or none. */
   readonly panel?: number;
-  /** The course bar under the cursor, as a skin shows it. */
-  readonly focusedCourse?: CourseView;
   readonly records: SelectRecords;
   /** The host's text field is over the search box: the skin leaves the query to it. */
   readonly searchEditing: boolean;
-  /** When the player started the bar under the cursor: a skin's launch animation counts from it. */
+  /** When the player started the bar under the cursor: a skin's launch outro counts from it, and input waits. */
   readonly startedAtMs?: number;
+  /** The README overlay: the text file shown for a chart. */
+  readonly readText?: { readonly chart: LibraryChart; readonly text: string };
   /** The screen's music (BGM and chart preview), analysed for audio-reactive skins. */
   readonly audio: BeMusicAudioFrame;
 }
@@ -130,24 +151,39 @@ export interface SelectFrame {
 export type SelectIntent =
   /** Browse the list: move, jump to a clicked bar, pick at random, open, close, search, sort or filter, favourite. */
   | { readonly type: 'browse'; readonly command: BrowseCommand }
-  /** Start the bar under the cursor: play its chart or course (in AUTO with `autoPlay`), or open its folder. */
+  /** Take the bar under the cursor, as Enter and a click on a bar do: open its folder, or start its chart or course. */
+  | { readonly type: 'activate' }
+  /** Play the chart or course under the cursor (in AUTO with `autoPlay`): a skin's PLAY and AUTO buttons. */
   | { readonly type: 'start'; readonly autoPlay?: boolean }
-  /** Step a play option through its choices (`cyclePlayOptionValue`). */
+  /** Step a play option through its choices (`cyclePlayOptionValue`), or the hi-speed by its step. */
   | { readonly type: 'play-option'; readonly key: keyof PlayOptions; readonly step: number }
-  /** Open an option panel, or close the one open (`undefined`). */
+  /** Set a play option; a value outside its choices (or range) is ignored (`resolvePlayOptionValue`). */
+  | { readonly type: 'set-play-option'; readonly key: keyof PlayOptions; readonly value: unknown }
+  /** Open an option panel, closing the one open, or close it when it is the one open; `undefined` closes it. */
   | { readonly type: 'panel'; readonly panel: number | undefined }
   /** Edit the search: the host lays its text field over the skin's search box. */
   | { readonly type: 'search' }
-  /** Show the text file of the chart under the cursor. */
+  /** Show the text file of the chart under the cursor, or close the one shown. */
   | { readonly type: 'readtext' }
   /** The course maker: name the course being made, or delete the player's course under the cursor. */
   | { readonly type: 'course-maker'; readonly action: 'name' | 'delete' }
   /** Open the skin's options. */
   | { readonly type: 'skin-config' }
   /** Leave the select screen. */
-  | { readonly type: 'exit' };
+  | { readonly type: 'exit' }
+  /** The player touched the screen: a gesture the browser lets start sound with. */
+  | { readonly type: 'gesture' };
 
-export type SelectView = FamilyView<SelectFrame, SelectIntent>;
+/** A skin family's drawing of the select screen. */
+export interface SelectView extends FamilyView<SelectFrame, SelectIntent> {
+  /** How long the skin's launch outro plays before a started chart is handed on, in ms; `0` for none. */
+  readonly launchOutroMs: number;
+  /**
+   * Where the skin's search box is on the canvas, in CSS pixels from its top-left corner, or `undefined` when it has
+   * none (or nothing is drawn yet).
+   */
+  searchFieldRect(): { x: number; y: number; width: number; height: number } | undefined;
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Decide

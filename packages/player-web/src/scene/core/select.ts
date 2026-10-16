@@ -19,6 +19,7 @@ import {
   SORT_CYCLE,
   wrappedCursorDelta,
   type BrowseSnapshot,
+  type SystemSoundSet,
 } from '@be-music/scene-model';
 import { resolveLr2SelectTimers, type Lr2TimerUpdate } from '@be-music/lr2-skin/state';
 import { logger } from '../../logger.ts';
@@ -51,13 +52,13 @@ import type { BeMusicSelectBinding } from '../../skin/be-music/binding.ts';
 import type { SongImageCache } from '../../skin/be-music/song-images.ts';
 import { designRectToCanvas } from './viewport.ts';
 import type { BeMusicSelectLayout } from '@be-music/skin-sdk';
-import type { SelectReadTextContext } from '../../view/built-in/select-readtext.ts';
+import type { SelectReadTextContext } from './select-legacy/readtext.ts';
 import { renderEmptyStateHint, type SelectEmptyHintContext } from '../../view/built-in/select-empty-hint.ts';
-import { BuiltInSelectView, type BuiltInSelectViewContext } from '../../view/built-in/select-view.ts';
+import { LegacySelectView, type LegacySelectViewContext } from './select-legacy/view.ts';
 import { SelectPointer, type SelectPointerContext } from '../../session/select/select-pointer.ts';
-import { SelectSession, type SelectSessionContext } from '../../session/select/select-session.ts';
-import { SelectAudio, type SelectAudioContext } from '../../session/select/select-audio.ts';
-import { SelectKeys, type SelectKeysContext } from '../../session/select/select-keys.ts';
+import { LegacySelectSession, type LegacySelectSessionContext } from './select-legacy/session.ts';
+import { SelectAudio, type SelectAudioContext } from './select-legacy/audio.ts';
+import { SelectKeys, type SelectKeysContext } from './select-legacy/keys.ts';
 
 const log = logger('select');
 
@@ -244,10 +245,10 @@ const IDENTITY: SceneIdentity = { kind: 'select', family: 'built-in' };
 type SelectSceneContext = SelectReadTextContext &
   SelectEmptyHintContext &
   SelectPointerContext &
-  SelectSessionContext &
+  LegacySelectSessionContext &
   SelectKeysContext &
   SelectAudioContext &
-  BuiltInSelectViewContext;
+  LegacySelectViewContext;
 
 /**
  * Family-neutral song-select scene. Owns everything that doesn't depend on a particular skin format: the scene shown
@@ -262,10 +263,11 @@ type SelectSceneContext = SelectReadTextContext &
  * hooks: {@link themeDesignSize} decides whether the theme is active, and the remaining hooks prepare, render, hit-test
  * and dispose the theme's resources.
  *
- * The scene is made of parts that read and drive it through one context it builds ({@link createContext}): the browsing
- * (`session/select/select-session.ts`), the keyboard and the pointer (`select-keys.ts`, `select-pointer.ts`), the sound
- * (`select-audio.ts`) and the drawing (`view/built-in/select-view.ts`, with the README overlay and the empty-library
- * hint beside it). What a theme scene reads and calls stays here as protected members over those parts.
+ * The scene is made of parts that read and drive it through one context it builds ({@link createContext}): the browsing,
+ * the keyboard, the sound and the drawing with its README overlay (`select-legacy/`), the pointer
+ * (`session/select/select-pointer.ts`) and the empty-library hint (`view/built-in/select-empty-hint.ts`). What a theme
+ * scene reads and calls stays here as protected members over those parts. Only the LR2 select scene is still built on
+ * it: the built-in select screen is `createSelectScene`'s, a select session drawn by the built-in family view.
  */
 export class CoreSongSelectView<
   TOptions extends CoreSongSelectViewOptions = CoreSongSelectViewOptions,
@@ -276,16 +278,16 @@ export class CoreSongSelectView<
    * two-Application setups hit.
    */
   private host: PixiSceneHost | undefined;
-  /** The scene graph the host attaches to its stage while the select is showing (`BuiltInSelectView.root`). */
+  /** The scene graph the host attaches to its stage while the select is showing (`LegacySelectView.root`). */
   public get root(): Container {
     return this.view.root;
   }
   /** This scene as the parts it is made of read and drive it (see {@link createContext}). */
   private readonly context: SelectSceneContext = CoreSongSelectView.createContext(this);
   /** The drawing: the letterboxed design canvas, a theme's layers, the be-music skin and the README overlay. */
-  private readonly view: BuiltInSelectView = new BuiltInSelectView(this.context);
+  private readonly view: LegacySelectView = new LegacySelectView(this.context);
   /** The browsing: the folder stack and the cursor, the play options and the panels, the search, the launch. */
-  private readonly session: SelectSession = new SelectSession(this.context);
+  private readonly session: LegacySelectSession = new LegacySelectSession(this.context);
   /** The sound: the select BGM, the system cues and the chart preview. */
   private readonly audio: SelectAudio = new SelectAudio(this.context);
   /** The keyboard. */
@@ -364,8 +366,8 @@ export class CoreSongSelectView<
   }
 
   /**
-   * `scene` as the parts it is made of read and drive it (`SelectSessionContext`, `SelectKeysContext`,
-   * `SelectPointerContext`, `SelectAudioContext`, `BuiltInSelectViewContext`, `SelectReadTextContext`,
+   * `scene` as the parts it is made of read and drive it (`LegacySelectSessionContext`, `SelectKeysContext`,
+   * `SelectPointerContext`, `SelectAudioContext`, `LegacySelectViewContext`, `SelectReadTextContext`,
    * `SelectEmptyHintContext`): getters and methods over its own state and its parts, so that state keeps its access
    * modifiers.
    */
@@ -844,6 +846,66 @@ export class CoreSongSelectView<
     return this.visible;
   }
 
+  // The select scene's host API under `createSelectScene`'s names (`SelectScene`), so a host drives this scene and the
+  // built-in one alike until the LR2 select screen moves onto `createSelectScene` too.
+
+  /** {@link isVisible}, under `SessionScene`'s name. */
+  public get entered(): boolean {
+    return this.host !== undefined && this.visible && !this.disposed;
+  }
+
+  /** {@link getNavigation}, under `SelectScene`'s name. */
+  public snapshot(): BrowseSnapshot {
+    return this.getNavigation();
+  }
+
+  /** {@link getFocusedEntry}, under `SelectScene`'s name. */
+  public focused(): BrowserBrowseEntry | undefined {
+    return this.getFocusedEntry();
+  }
+
+  /** {@link setCollection}, under `SelectScene`'s name. */
+  public setLibrary(collection: BrowserSongCollection): void {
+    this.setCollection(collection);
+  }
+
+  /** {@link setNavigation}, under `SelectScene`'s name. */
+  public restore(snapshot: BrowseSnapshot): void {
+    this.setNavigation(snapshot);
+  }
+
+  /** {@link setSearchQuery}, under `SelectScene`'s name. */
+  public setSearch(text: string): void {
+    this.setSearchQuery(text);
+  }
+
+  /** {@link getSearchFieldRect}, under `SelectScene`'s name. */
+  public searchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
+    return this.getSearchFieldRect();
+  }
+
+  /** Redraws the bars and panels with the records as they are now, as `SelectScene.refreshRecords` does. */
+  public refreshRecords(): void {
+    if (this.host !== undefined && !this.disposed) this.render();
+  }
+
+  /**
+   * Takes a theme's sounds as a `SystemSoundSet` (by bytes): its select BGM, its decide jingle and its cues, for
+   * {@link setSelectBgm}, {@link setDecideBgm} and {@link setSystemSounds}.
+   */
+  public setSounds(sounds: SystemSoundSet): void {
+    this.setSelectBgm(sounds.selectBgm?.bytes);
+    this.setDecideBgm(sounds.decideBgm?.bytes);
+    this.setSystemSounds({
+      cursorMove: sounds.cursor?.bytes,
+      folderOpen: sounds.folderOpen?.bytes,
+      folderClose: sounds.folderClose?.bytes,
+      optionOpen: sounds.optionOpen?.bytes,
+      optionClose: sounds.optionClose?.bytes,
+      optionChange: sounds.optionChange?.bytes,
+    });
+  }
+
   public setCollection(collection: BrowserSongCollection): void {
     this.session.setCollection(collection);
   }
@@ -908,75 +970,75 @@ export class CoreSongSelectView<
   // The scene's state and operations as theme scenes (the LR2 select) read and call them, kept over the parts that now
   // hold them.
 
-  /** Theme chrome drawn behind the song list (`BuiltInSelectView.skinLayer`). */
+  /** Theme chrome drawn behind the song list (`LegacySelectView.skinLayer`). */
   protected get skinLayer(): Container {
     return this.view.skinLayer;
   }
 
-  /** Theme chrome drawn on top of the song list (`BuiltInSelectView.skinForegroundLayer`). */
+  /** Theme chrome drawn on top of the song list (`LegacySelectView.skinForegroundLayer`). */
   protected get skinForegroundLayer(): Container {
     return this.view.skinForegroundLayer;
   }
 
-  /** The song bars (`BuiltInSelectView.listLayer`). */
+  /** The song bars (`LegacySelectView.listLayer`). */
   protected get listLayer(): Container {
     return this.view.listLayer;
   }
 
-  /** The list's slide offset after a cursor move (`BuiltInSelectView.listScrollOffset`). */
+  /** The list's slide offset after a cursor move (`LegacySelectView.listScrollOffset`). */
   protected get listScrollOffset(): number {
     return this.view.listScrollOffset;
   }
 
-  /** The library (`SelectSession.collection`). */
+  /** The library (`LegacySelectSession.collection`). */
   protected get collection(): BrowserSongCollection {
     return this.session.collection;
   }
 
-  /** The cursor into {@link currentEntries} (`SelectSession.selectedIndex`). */
+  /** The cursor into {@link currentEntries} (`LegacySelectSession.selectedIndex`). */
   protected get selectedIndex(): number {
     return this.session.selectedIndex;
   }
 
-  /** The live play options (`SelectSession.playOptions`). */
+  /** The live play options (`LegacySelectSession.playOptions`). */
   protected get playOptions(): PixiPlayOptions {
     return this.session.playOptions;
   }
 
-  /** The LR2 option panels open (`SelectSession.panelStates`). */
+  /** The LR2 option panels open (`LegacySelectSession.panelStates`). */
   protected get panelStates(): Set<number> {
     return this.session.panelStates;
   }
 
-  /** The search query as typed (`SelectSession.searchText`). */
+  /** The search query as typed (`LegacySelectSession.searchText`). */
   protected get searchText(): string {
     return this.session.searchText;
   }
 
-  /** Whether the host's text field is over the search box (`SelectSession.searchEditing`). */
+  /** Whether the host's text field is over the search box (`LegacySelectSession.searchEditing`). */
   protected get searchEditing(): boolean {
     return this.session.searchEditing;
   }
 
-  /** When a launch whose be-music outro is still playing started (`SelectSession.launchAt`). */
+  /** When a launch whose be-music outro is still playing started (`LegacySelectSession.launchAt`). */
   protected get launchAt(): number | undefined {
     return this.session.launchAt;
   }
 
-  /** Whether an element gated on `panel` draws (`SelectSession.isPanelOpen`); an arrow, so it can be passed on. */
+  /** Whether an element gated on `panel` draws (`LegacySelectSession.isPanelOpen`); an arrow, so it can be passed on. */
   protected readonly isPanelOpen = (panel: number): boolean => this.session.isPanelOpen(panel);
 
-  /** The bars listed (`SelectSession.currentEntries`). */
+  /** The bars listed (`LegacySelectSession.currentEntries`). */
   protected currentEntries(): readonly BrowserBrowseEntry[] {
     return this.session.currentEntries();
   }
 
-  /** The song under the cursor (`SelectSession.focusedSong`). */
+  /** The song under the cursor (`LegacySelectSession.focusedSong`). */
   protected focusedSong(): BrowserSongEntry | undefined {
     return this.session.focusedSong();
   }
 
-  /** The course under the cursor (`SelectSession.focusedCourse`). */
+  /** The course under the cursor (`LegacySelectSession.focusedCourse`). */
   protected focusedCourse(): BrowserCourseEntry | undefined {
     return this.session.focusedCourse();
   }
@@ -986,37 +1048,37 @@ export class CoreSongSelectView<
     this.session.activateFocused();
   }
 
-  /** Moves the cursor `delta` bars in one move, wrapping past either end (`SelectSession.moveCursor`). */
+  /** Moves the cursor `delta` bars in one move, wrapping past either end (`LegacySelectSession.moveCursor`). */
   protected moveCursor(delta: number): void {
     this.session.moveCursor(delta);
   }
 
-  /** Opens or closes LR2 panel `which` (`SelectSession.togglePanel`). */
+  /** Opens or closes LR2 panel `which` (`LegacySelectSession.togglePanel`). */
   protected togglePanel(which: number): void {
     this.session.togglePanel(which);
   }
 
-  /** Steps the hi-speed (`SelectSession.adjustHiSpeed`). */
+  /** Steps the hi-speed (`LegacySelectSession.adjustHiSpeed`). */
   protected adjustHiSpeed(direction: 1 | -1): void {
     this.session.adjustHiSpeed(direction);
   }
 
-  /** Steps an enum play option through `cycle` (`SelectSession.cyclePlayOption`). */
+  /** Steps an enum play option through `cycle` (`LegacySelectSession.cyclePlayOption`). */
   protected cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void {
     this.session.cyclePlayOption(key, cycle);
   }
 
-  /** Sets a play option (`SelectSession.setPlayOption`). */
+  /** Sets a play option (`LegacySelectSession.setPlayOption`). */
   protected setPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
     this.session.setPlayOption(key, value);
   }
 
-  /** PLAY / AUTO on the bar under the cursor (`SelectSession.launchFocusedSong`). */
+  /** PLAY / AUTO on the bar under the cursor (`LegacySelectSession.launchFocusedSong`). */
   protected launchFocusedSong(autoPlay: boolean): void {
     this.session.launchFocusedSong(autoPlay);
   }
 
-  /** Hands `song` to the host (`SelectSession.launchSong`). */
+  /** Hands `song` to the host (`LegacySelectSession.launchSong`). */
   protected launchSong(song: BrowserSongEntry, autoPlay = false): void {
     this.session.launchSong(song, autoPlay);
   }
@@ -1026,7 +1088,7 @@ export class CoreSongSelectView<
     this.audio.refreshChartPreview();
   }
 
-  /** Draws one frame (`BuiltInSelectView.render`). */
+  /** Draws one frame (`LegacySelectView.render`). */
   protected render(): void {
     this.view.render();
   }

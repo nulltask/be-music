@@ -1,43 +1,57 @@
-import { describe, expect, it } from 'vite-plus/test';
-import type { CoreSongSelectViewOptions } from '../../scene/core/select.ts';
-import { SelectSession, type SelectSessionContext } from './select-session.ts';
+import {
+  DEFAULT_PLAY_OPTIONS,
+  type SystemSound,
+  type SystemSoundSet,
+  type SystemSoundSlot,
+} from '@be-music/scene-model';
+import { describe, expect, it, vi } from 'vite-plus/test';
+import { SILENT_AUDIO } from '../../runtime/audio-analysis.ts';
+import type { SelectFrame, SelectIntent } from '../../view/types.ts';
+import type { SessionKeyEvent } from '../session-scene.ts';
+import { SELECT_POLICIES } from './select-policy.ts';
+import { SelectSession, type SelectSessionEvents, type SelectSessionOptions } from './select-session.ts';
 import { makeChart, makeCollection, makeCourse, makeCourseFolder } from './test-support.ts';
 
-/** A session on a scene that draws nothing, recording the cues it plays. */
-function createSession(options: CoreSongSelectViewOptions = {}): { session: SelectSession; cues: string[] } {
-  const cues: string[] = [];
-  const ctx: SelectSessionContext = {
-    options,
-    disposed: false,
-    themeDesignSize: undefined,
-    beMusicRenderer: undefined,
-    beMusicNeedsFrame: false,
-    songImages: undefined,
-    render: () => {},
-    refreshChartPreview: () => {},
-    noteCursorChange: () => {},
-    playOneShotSound: async (name) => {
-      cues.push(name);
-    },
-    applyLr2Timers: () => {},
+const SLOTS: readonly SystemSoundSlot[] = [
+  'selectBgm',
+  'decideBgm',
+  'cursor',
+  'decide',
+  'cancel',
+  'folderOpen',
+  'folderClose',
+  'optionOpen',
+  'optionClose',
+  'optionChange',
+];
+
+/** A sound set with a sound of its own in every slot the select screen plays. */
+const SOUNDS: SystemSoundSet = Object.fromEntries(
+  SLOTS.map((slot, index) => [slot, { bytes: new Uint8Array([index]) }]),
+) as SystemSoundSet;
+
+/** The slot a sound of {@link SOUNDS} fills. */
+function slotOf(sound: SystemSound | string | undefined): string {
+  if (typeof sound === 'string') return sound;
+  return SLOTS.find((slot) => SOUNDS[slot] === sound) ?? 'unknown';
+}
+
+/** An audio service that records what the session asks of it. */
+function createAudio() {
+  return {
+    playBgm: vi.fn(async (..._args: unknown[]) => true),
+    stopBgm: vi.fn(),
+    playCue: vi.fn(async (..._args: unknown[]) => true),
+    playJingle: vi.fn(async (..._args: unknown[]) => true),
+    stopOwned: vi.fn(),
+    resume: vi.fn(),
+    preview: { focus: vi.fn(), stop: vi.fn(), playing: false },
+    analyzer: { sample: () => SILENT_AUDIO },
   };
-  return { session: new SelectSession(ctx), cues };
-}
-
-function titles(session: SelectSession): string[] {
-  return session.currentEntries().map((entry) => (entry.kind === 'song' ? entry.song.title : entry.kind));
-}
-
-/** The bar under the cursor: a chart's title, a folder's label or a course's name. */
-function focusedTitle(session: SelectSession): string | undefined {
-  const entry = session.focusedEntry();
-  if (entry === undefined) return undefined;
-  if (entry.kind === 'song') return entry.song.title;
-  return entry.kind === 'folder' ? entry.folder.label : entry.course.definition.name;
 }
 
 /** Two chart folders (`other`, `pack`) and a course folder, listed in that order at the root. */
-function makeLibrary() {
+function makeLibrary(files: Readonly<Record<string, Uint8Array>> = {}) {
   return makeCollection(
     [
       makeChart('a', 'pack', { playLevel: 3 }),
@@ -45,194 +59,370 @@ function makeLibrary() {
       makeChart('c', 'pack', { playLevel: 2 }),
       makeChart('x', 'other'),
     ],
-    [makeCourseFolder('courses', [makeCourse('one'), makeCourse('two'), makeCourse('three')])],
+    [makeCourseFolder('courses', [makeCourse('one'), makeCourse('two'), makeCourse('missing', { playable: false })])],
+    files,
   );
 }
 
-describe('SelectSession key filter', () => {
-  it('lists a 24-key chart under no key filter of LR2’s, rather than folding it onto 7 or 14 keys', () => {
-    const { session } = createSession();
-    session.setCollection(
-      makeCollection([
-        makeChart('seven', 'pack', { channels: ['11', '18'] }),
-        makeChart('fourteen', 'pack', { channels: ['11', '21', '28'] }),
-        makeChart('keyboard', 'pack', { modeHint: 'keyboard-24k' }),
-        makeChart('keyboard double', 'pack', { modeHint: 'keyboard-24k-double' }),
-      ]),
-    );
-    session.setPlayOptions({ keysFilter: 'KEYS_7' });
-    expect(titles(session)).toEqual(['seven']);
-    session.setPlayOptions({ keysFilter: 'KEYS_14' });
-    expect(titles(session)).toEqual(['fourteen']);
-    session.setPlayOptions({ keysFilter: 'ALL' });
-    expect(titles(session)).toEqual(['seven', 'fourteen', 'keyboard', 'keyboard double']);
-  });
-});
+type Started = { entry: string; autoPlay: boolean };
 
-describe('SelectSession browse position', () => {
-  it('restores a cursor inside a chart folder', () => {
-    const { session } = createSession();
-    session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: ['pack'], cursors: [1, 1] });
-    expect(session.browseStack.map((folder) => folder.label)).toEqual(['pack']);
-    expect(focusedTitle(session)).toBe('b');
+/** A session over `makeLibrary()` (unless given another), entered at 0 on a clock the test moves. */
+function createSession(
+  options: Partial<Omit<SelectSessionOptions, 'on' | 'audio'>> & { on?: Partial<SelectSessionEvents> } = {},
+) {
+  const audio = createAudio();
+  const started: Started[] = [];
+  let clock = 0;
+  const { on, ...rest } = options;
+  const session = new SelectSession({
+    library: makeLibrary(),
+    sounds: SOUNDS,
+    now: () => clock,
+    ...rest,
+    audio,
+    on: {
+      start: (entry, { autoPlay }) => {
+        started.push({
+          entry: entry.kind === 'song' ? entry.song.title : entry.course.definition.name,
+          autoPlay,
+        });
+      },
+      ...on,
+    },
+  });
+  session.enter(0);
+  let last: SelectFrame = session.frame(0);
+  const advance = (ms: number): SelectFrame => {
+    clock += ms;
+    last = session.frame(clock);
+    return last;
+  };
+  const key = (code: string, value = code): boolean => session.handleKey(keyEvent(code, value, clock));
+  const intent = (value: SelectIntent): void => session.dispatch(value);
+  const cues = (): string[] => audio.playCue.mock.calls.map(([sound]) => slotOf(sound as SystemSound));
+  return { session, audio, started, advance, key, intent, cues, frame: () => last };
+}
+
+function keyEvent(code: string, key: string, timeStamp: number): SessionKeyEvent {
+  return {
+    type: 'down',
+    code,
+    key,
+    repeat: false,
+    timeStamp,
+    shiftKey: false,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+  };
+}
+
+/** The bar under the cursor of `frame`: a chart's title, a folder's label or a course's name. */
+function focusedTitle(frame: SelectFrame): string | undefined {
+  const entry = frame.entries[frame.cursor];
+  if (entry === undefined) return undefined;
+  if (entry.kind === 'song') return entry.song.title;
+  return entry.kind === 'folder' ? entry.folder.label : entry.course.definition.name;
+}
+
+function titles(frame: SelectFrame): string[] {
+  return frame.entries.map((entry) =>
+    entry.kind === 'song' ? entry.song.title : entry.kind === 'folder' ? entry.folder.label : entry.course.id,
+  );
+}
+
+describe('SelectSession browsing', () => {
+  it('opens a library of one chart folder, and a saved position otherwise', () => {
+    const one = createSession({ library: makeCollection([makeChart('a', 'pack'), makeChart('b', 'pack')]) });
+    expect(one.frame().browse.path.map((folder) => folder.label)).toEqual(['pack']);
+    const saved = createSession({ browse: { folderPath: ['courses'], cursors: [2, 1] } });
+    expect(focusedTitle(saved.frame())).toBe('two');
   });
 
-  it('restores a cursor inside a course folder, clamped to its courses', () => {
-    const { session } = createSession();
-    session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: ['courses'], cursors: [2, 9] });
-    expect(session.browseStack.map((folder) => folder.label)).toEqual(['courses']);
-    expect(focusedTitle(session)).toBe('three');
+  it('moves, opens and backs out with the keys, sliding the list and playing the cues', () => {
+    const { key, advance, cues } = createSession();
+    expect(key('ArrowDown')).toBe(true);
+    let frame = advance(10);
+    expect(focusedTitle(frame)).toBe('pack');
+    expect(frame.events).toEqual([{ kind: 'browse', event: { kind: 'cursor', from: 0, to: 1, delta: 1 }, atMs: 0 }]);
+    key('Enter');
+    frame = advance(10);
+    expect(frame.browse.path.map((folder) => folder.label)).toEqual(['pack']);
+    expect(frame.events.map((event) => event.kind === 'browse' && event.event.kind)).toEqual(['folder-opened']);
+    key('Escape');
+    frame = advance(10);
+    expect(focusedTitle(frame)).toBe('pack');
+    // The cursor cue plays with every slide of the list, a folder opened or closed included.
+    expect(cues()).toEqual(['cursor', 'cursor', 'folderOpen', 'cursor', 'folderClose']);
+    // At the root there is nothing to back out of: the key stays the page's, and nothing plays.
+    expect(key('Escape')).toBe(false);
+    expect(advance(10).events).toEqual([]);
+    expect(cues()).toHaveLength(5);
   });
 
-  it('counts the course folders among the root bars', () => {
-    const { session } = createSession();
-    session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: [], cursors: [2] });
-    expect(focusedTitle(session)).toBe('courses');
+  it('slides a list of one bar on a step, with the cursor staying on it', () => {
+    const { key, intent, advance, cues } = createSession({ library: makeCollection([makeChart('a', 'pack')]) });
+    key('ArrowUp');
+    intent({ type: 'browse', command: { type: 'move', delta: 1 } });
+    const frame = advance(10);
+    expect(frame.events.map((event) => event.kind === 'browse' && event.event)).toEqual([
+      { kind: 'cursor', from: 0, to: 0, delta: -1 },
+      { kind: 'cursor', from: 0, to: 0, delta: 1 },
+    ]);
+    expect(cues()).toEqual(['cursor', 'cursor']);
   });
 
-  it('gives the position back as a snapshot it restores', () => {
-    const { session } = createSession();
-    session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: ['pack'], cursors: [1, 2] });
-    const snapshot = session.getNavigation();
-    expect(snapshot).toMatchObject({ folderPath: ['pack'], focusKey: 'chart:c' });
-    const { session: other } = createSession({ initialNavigation: snapshot });
-    other.setCollection(makeLibrary());
-    expect(other.browseStack.map((folder) => folder.label)).toEqual(['pack']);
-    expect(focusedTitle(other)).toBe('c');
+  it('jumps to a clicked bar and takes it, as a click on a bar does', () => {
+    const { intent, advance } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
+    intent({ type: 'browse', command: { type: 'jump', index: 2 } });
+    expect(focusedTitle(advance(10))).toBe('c');
+    const { intent: intentAtRoot, advance: advanceAtRoot } = createSession();
+    intentAtRoot({ type: 'browse', command: { type: 'jump', index: 1 } });
+    intentAtRoot({ type: 'activate' });
+    expect(advanceAtRoot(10).browse.path.map((folder) => folder.label)).toEqual(['pack']);
   });
 
-  it('opens a library of one chart folder when it has no position to restore', () => {
-    const { session } = createSession();
-    session.setCollection(makeCollection([makeChart('a', 'pack'), makeChart('b', 'pack')]));
-    expect(session.browseStack.map((folder) => folder.label)).toEqual(['pack']);
-    expect(focusedTitle(session)).toBe('a');
-  });
-
-  it('stays at the root, silently, on a back-out there', () => {
-    const { session, cues } = createSession();
-    session.setCollection(makeLibrary());
-    expect(session.leaveFolder()).toBe(false);
-    expect(cues).toEqual([]);
-    session.activateFocused();
-    expect(session.leaveFolder()).toBe(true);
-    expect(cues).toEqual(['folder-open', 'folder-close']);
+  it('leaves the screen at the root, with the cancel cue, under a policy that leaves', () => {
+    const exit = vi.fn();
+    const { key, cues } = createSession({ policy: SELECT_POLICIES.beatoraja, on: { exit } });
+    key('Escape');
+    expect(exit).toHaveBeenCalledTimes(1);
+    expect(cues()).toEqual(['cancel']);
   });
 });
 
 describe('SelectSession list options', () => {
-  it('keeps the cursor on the focused bar when the player changes the sort', () => {
-    const { session, cues } = createSession();
-    session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: ['pack'], cursors: [1, 2] });
-    expect(focusedTitle(session)).toBe('c');
-    session.setPlayOption('sort', 'LEVEL');
-    expect(titles(session)).toEqual(['b', 'c', 'a']);
-    expect(focusedTitle(session)).toBe('c');
-    expect(cues).toEqual(['option-change']);
+  it('keeps the cursor on its bar when the player or the host changes the sort or a filter', () => {
+    const playOptions = vi.fn();
+    const { session, intent, advance, cues } = createSession({
+      browse: { folderPath: ['pack'], cursors: [1, 2] },
+      on: { playOptions },
+    });
+    intent({ type: 'play-option', key: 'sort', step: 1 });
+    let frame = advance(10);
+    expect(frame.playOptions.sort).toBe('LEVEL');
+    expect(titles(frame)).toEqual(['b', 'c', 'a']);
+    expect(focusedTitle(frame)).toBe('c');
+    expect(playOptions).toHaveBeenCalledWith(expect.objectContaining({ sort: 'LEVEL' }));
+    expect(cues()).toEqual(['optionChange']);
+    session.setPlayOptions({ sort: 'TITLE', keysFilter: 'KEYS_7' });
+    frame = advance(10);
+    expect(focusedTitle(frame)).toBe('c');
+    // The host's change is not reported back, and plays no cue.
+    expect(playOptions).toHaveBeenCalledTimes(1);
+    expect(cues()).toEqual(['optionChange']);
   });
 
-  it('keeps the cursor on the focused bar when the host changes the sort or a filter', () => {
-    const { session } = createSession();
-    session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: ['pack'], cursors: [1, 0] });
-    session.setPlayOptions({ sort: 'LEVEL' });
-    expect(focusedTitle(session)).toBe('a');
-    session.setPlayOptions({ keysFilter: 'KEYS_7' });
-    expect(focusedTitle(session)).toBe('a');
-  });
-
-  it('keeps the cursor on the focused bar through a filter, and on its row when the filter takes the bar out', () => {
-    const { session } = createSession();
-    session.setCollection(
-      makeCollection([
-        makeChart('beginner', 'pack', { difficulty: 1 }),
-        makeChart('normal', 'pack', { difficulty: 2 }),
-        makeChart('hyper', 'pack', { difficulty: 3 }),
-        makeChart('another', 'pack', { difficulty: 4 }),
+  it('lists a 24-key chart under no key filter of LR2’s', () => {
+    const { session, advance } = createSession({
+      library: makeCollection([
+        makeChart('seven', 'pack'),
+        makeChart('keyboard', 'pack', { modeHint: 'keyboard-24k' }),
       ]),
-    );
-    session.setNavigation({ folderPath: ['pack'], cursors: [0, 2] });
-    session.cyclePlayOption('difficultyFilter', ['ALL', 'HYPER']);
-    expect(titles(session)).toEqual(['hyper']);
-    expect(focusedTitle(session)).toBe('hyper');
-    session.setPlayOption('difficultyFilter', 'ALL');
-    expect(focusedTitle(session)).toBe('hyper');
-    session.stepCursor(1);
-    session.setPlayOption('difficultyFilter', 'NORMAL');
-    // `another` is not a NORMAL chart: the cursor stays on the row it was on, clamped to the one bar listed.
-    expect(focusedTitle(session)).toBe('normal');
+    });
+    session.setPlayOptions({ keysFilter: 'KEYS_7' });
+    expect(titles(advance(10))).toEqual(['seven']);
+  });
+
+  it('ignores a skin’s value outside an option’s choices', () => {
+    const { intent, advance, cues } = createSession();
+    intent({ type: 'set-play-option', key: 'gauge1P', value: 'NOPE' });
+    intent({ type: 'set-play-option', key: 'gauge1P', value: 'HARD' });
+    expect(advance(10).playOptions.gauge1P).toBe('HARD');
+    expect(cues()).toEqual(['optionChange']);
   });
 });
 
-describe('SelectSession restore', () => {
-  it('puts the parent cursor on the bar of the folder opened, so backing out lands on it', () => {
-    const { session } = createSession();
-    session.setCollection(makeLibrary());
-    // A snapshot that saved no parent cursor (a drop opening its folder) still backs out onto the folder.
-    session.setNavigation({ folderPath: ['pack'], cursors: [0, 0] });
-    session.leaveFolder();
-    expect(focusedTitle(session)).toBe('pack');
-    session.setNavigation({ folderPath: ['courses'], cursors: [0, 1] });
-    session.leaveFolder();
-    expect(focusedTitle(session)).toBe('courses');
-  });
-
-  it('restores as far as the saved folders are still found, at the cursor saved there', () => {
-    const { session } = createSession();
-    session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: ['pack'], cursors: [1, 2] });
-    session.setNavigation({ folderPath: ['gone'], cursors: [2, 0] });
-    expect(session.browseStack).toEqual([]);
-    expect(focusedTitle(session)).toBe('courses');
-  });
-
-  it('puts the cursor back on the bar it was on when the list moved under it', () => {
-    const { session } = createSession();
+describe('SelectSession browse position', () => {
+  it('gives back a snapshot that restores the bar by its key, the search, and the parent cursor', () => {
+    const { session, advance } = createSession({ browse: { folderPath: ['courses'], cursors: [2, 1] } });
+    const snapshot = session.snapshot();
+    expect(snapshot).toMatchObject({ folderPath: ['courses'], focusKey: 'course:two' });
     const library = makeLibrary();
-    session.setCollection(library);
-    session.setNavigation({ folderPath: ['courses'], cursors: [2, 1] });
-    const snapshot = session.getNavigation();
-    expect(snapshot.focusKey).toBe('course:two');
-    // A course added before it (the player made one), as the course folders are listed again after a run.
     const [folder] = library.courseFolders!;
-    session.setCollection({
+    session.setLibrary({
       ...library,
       courseFolders: [makeCourseFolder('courses', [makeCourse('zero'), ...folder!.courses!])],
     });
-    session.setNavigation(snapshot);
-    expect(focusedTitle(session)).toBe('two');
+    session.restore(snapshot);
+    expect(focusedTitle(advance(10))).toBe('two');
+    session.restore({ folderPath: ['gone'], cursors: [1, 0] });
+    expect(focusedTitle(advance(10))).toBe('pack');
   });
 
-  it('brings the saved search back, and keeps the one in force when the snapshot names none', () => {
-    const { session } = createSession();
-    session.setCollection(makeLibrary());
-    session.setSearchQuery('x');
-    const snapshot = session.getNavigation();
-    session.setSearchQuery('');
-    session.setNavigation(snapshot);
-    expect(session.searchText).toBe('x');
-    expect(titles(session)).toEqual(['x']);
-    session.setNavigation({ folderPath: ['pack'], cursors: [1, 0] });
-    expect(session.searchText).toBe('x');
+  it('keeps the place over a new library, and redraws for the same one', () => {
+    const { session, advance } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 2] } });
+    const before = advance(10).revision;
+    session.setLibrary(session.frame(0).library);
+    expect(advance(10).revision).toBeGreaterThan(before);
+    session.setLibrary(makeLibrary());
+    expect(focusedTitle(advance(10))).toBe('c');
   });
 
-  it('keeps the sort and the filters in force over the ones a snapshot saved', () => {
-    const { session } = createSession();
-    session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: ['pack'], cursors: [1, 0] });
-    session.setPlayOptions({ sort: 'LEVEL' });
-    session.setNavigation({ ...session.getNavigation(), list: { sort: 'TITLE' } });
-    expect(titles(session)).toEqual(['b', 'c', 'a']);
+  it('searches, putting the cursor on the top of the new list', () => {
+    const { session, advance } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 2] } });
+    session.setSearch('C');
+    const frame = advance(10);
+    expect(titles(frame)).toEqual(['c']);
+    expect(frame.browse.searchText).toBe('C');
+  });
+});
+
+describe('SelectSession starting', () => {
+  it('hands the chart on and plays the decide cue and jingle, with no owner so they play out', () => {
+    const { key, audio, started, cues } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
+    key('Enter');
+    expect(started).toEqual([{ entry: 'a', autoPlay: false }]);
+    expect(cues()).toEqual(['decide']);
+    expect(audio.playJingle).toHaveBeenCalledWith(SOUNDS.decideBgm);
+    expect(audio.playCue.mock.calls.every((call) => call.length === 1)).toBe(true);
   });
 
-  it('opens a new library as far as its saved position is found, rather than its one folder', () => {
-    const { session } = createSession({ initialNavigation: { folderPath: ['gone'], cursors: [0, 3] } });
-    session.setCollection(makeCollection([makeChart('a', 'pack')], [makeCourseFolder('courses', [])]));
-    expect(session.browseStack).toEqual([]);
-    expect(focusedTitle(session)).toBe('pack');
+  it('plays no decide sound when the host starts no play, and the cancel cue for a course that cannot start', () => {
+    const { key, intent, audio, started, cues } = createSession({
+      browse: { folderPath: ['courses'], cursors: [2, 0] },
+      on: { start: () => false },
+    });
+    key('Enter');
+    expect(audio.playJingle).not.toHaveBeenCalled();
+    expect(cues()).toEqual([]);
+    key('ArrowUp');
+    intent({ type: 'start', autoPlay: true });
+    expect(cues()).toEqual(['cursor', 'cancel']);
+    expect(started).toEqual([]);
+  });
+
+  it('starts a course with AUTO from the skin’s button, and does nothing on a folder bar', () => {
+    const { intent, started } = createSession({ browse: { folderPath: ['courses'], cursors: [2, 1] } });
+    intent({ type: 'start', autoPlay: true });
+    expect(started).toEqual([{ entry: 'two', autoPlay: true }]);
+    const atRoot = createSession();
+    atRoot.intent({ type: 'start' });
+    expect(atRoot.started).toEqual([]);
+  });
+
+  it('waits for the skin’s launch outro before handing a chart on, ignoring input meanwhile', () => {
+    const { key, advance, started } = createSession({
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      launchOutroMs: () => 500,
+    });
+    advance(100);
+    key('Enter');
+    expect(advance(10).startedAtMs).toBe(100);
+    expect(key('ArrowDown')).toBe(false);
+    advance(480);
+    expect(started).toEqual([]);
+    const frame = advance(20);
+    expect(started).toEqual([{ entry: 'a', autoPlay: false }]);
+    expect(frame.startedAtMs).toBeUndefined();
+  });
+});
+
+describe('SelectSession sound', () => {
+  it('plays the select BGM as its own, under the cues, and stops it and the preview as the screen leaves', () => {
+    const { session, audio } = createSession();
+    expect(audio.playBgm).toHaveBeenCalledWith(SOUNDS.selectBgm, { owner: session, volume: 0.5 });
+    session.exit();
+    expect(audio.stopOwned).toHaveBeenCalledWith(session);
+  });
+
+  it('points the preview at the chart under the cursor, and not again at the same chart when the screen comes back', () => {
+    const { session, key, advance, audio } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
+    const focus = audio.preview.focus;
+    expect(focus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ song: expect.objectContaining({ id: 'a' }) }),
+      session,
+    );
+    session.exit();
+    session.enter(1000);
+    session.frame(1000);
+    // The preview stays silent on the chart played until the cursor moves, as the select scene always did.
+    expect(focus).toHaveBeenCalledTimes(1);
+    key('ArrowDown');
+    advance(10);
+    expect(focus).toHaveBeenCalledTimes(2);
+    expect(focus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ song: expect.objectContaining({ id: 'b' }) }),
+      session,
+    );
+  });
+
+  it('points the preview at the chart a search brings under the cursor', () => {
+    const { session, advance, audio } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
+    session.setSearch('c');
+    advance(10);
+    expect(audio.preview.focus).toHaveBeenCalledTimes(2);
+    expect(audio.preview.focus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ song: expect.objectContaining({ id: 'c' }) }),
+      session,
+    );
+  });
+
+  it('points the preview at nothing on a folder bar', () => {
+    const { key, advance, audio } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
+    key('Escape');
+    advance(10);
+    expect(audio.preview.focus).toHaveBeenLastCalledWith(undefined);
+  });
+});
+
+describe('SelectSession panels', () => {
+  it('opens and closes the play-options panel on Space and Escape, and steps its options on the lane keys', () => {
+    const playOptions = vi.fn();
+    const { key, advance, cues } = createSession({ on: { playOptions } });
+    key('Space', ' ');
+    let frame = advance(10);
+    expect(frame.panel).toBe(1);
+    expect(frame.events).toEqual([{ kind: 'panel', panel: 1, open: true, atMs: 0 }]);
+    key('KeyV', 'v');
+    key('KeyD', 'd');
+    frame = advance(10);
+    expect(frame.playOptions.hiSpeed).toBeCloseTo(DEFAULT_PLAY_OPTIONS.hiSpeed + 0.1);
+    expect(frame.playOptions.gauge1P).toBe('HARD');
+    expect(playOptions).toHaveBeenCalledTimes(2);
+    key('Escape');
+    frame = advance(10);
+    expect(frame.panel).toBeUndefined();
+    expect(cues()).toEqual(['optionOpen', 'optionChange', 'optionChange', 'optionClose']);
+  });
+
+  it('swaps one panel for another', () => {
+    const { intent, advance } = createSession();
+    intent({ type: 'panel', panel: 1 });
+    intent({ type: 'panel', panel: 2 });
+    const frame = advance(10);
+    expect(frame.panel).toBe(2);
+    expect(frame.events.map((event) => event.kind === 'panel' && [event.panel, event.open])).toEqual([
+      [1, true],
+      [1, false],
+      [2, true],
+    ]);
+  });
+});
+
+describe('SelectSession README overlay', () => {
+  it('shows the text file next to the chart, scrolls it on the keys and closes it on Enter', async () => {
+    const library = makeLibrary({ 'pack/readme.txt': new TextEncoder().encode('notes') });
+    const { intent, key, advance, cues } = createSession({
+      library,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+    });
+    intent({ type: 'readtext' });
+    await vi.waitFor(() => expect(advance(10).readText?.text).toBe('notes'));
+    key('ArrowDown');
+    expect(advance(10).events).toEqual([{ kind: 'readtext-scroll', delta: 36 }]);
+    key('Enter');
+    expect(advance(10).readText).toBeUndefined();
+    expect(cues()).toEqual(['optionOpen', 'optionClose']);
+  });
+
+  it('plays the option-change cue for a chart with no text file, and leaves a host’s readtext to the host', async () => {
+    const { intent, cues } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
+    intent({ type: 'readtext' });
+    await vi.waitFor(() => expect(cues()).toEqual(['optionChange']));
+    const readtext = vi.fn();
+    const hosted = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] }, on: { readtext } });
+    hosted.intent({ type: 'readtext' });
+    expect(readtext).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
   });
 });

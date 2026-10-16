@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { isInsideLr2DefaultSearchBox, PixiSongSelectView } from './select.ts';
 import { restoreBrowse } from '@be-music/scene-model';
-import type { SelectSession } from '../../session/select/select-session.ts';
+import type { LegacySelectSession } from '../core/select-legacy/session.ts';
 import { makeCollection, makeCourse, makeCourseFolder } from '../../session/select/test-support.ts';
 
 describe('isInsideLr2DefaultSearchBox', () => {
@@ -35,7 +35,7 @@ describe('PixiSongSelectView PLAY / AUTOPLAY buttons', () => {
       onCourseSelected: () => started.push('play'),
       onCourseAutoPlay: () => started.push('auto'),
     }) as unknown as {
-      session: SelectSession;
+      session: LegacySelectSession;
       dispatchButtonClick(button: { type: number }): void;
     };
     view.session.collection = makeCollection([], [makeCourseFolder('Dan', [makeCourse('dan#0')])]);

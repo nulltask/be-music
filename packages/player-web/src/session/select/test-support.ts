@@ -56,13 +56,17 @@ export function makeCourse(id: string, overrides: Partial<BrowserCourseEntry> = 
   return { id, definition, stages: [{ title: 'stage' }], playable: true, ...overrides };
 }
 
-/** A collection of `songs` with the course folders given, and no sources. */
+/**
+ * A collection of `songs` with the course folders given, its charts in one source (`test`) holding `files` (path to
+ * bytes).
+ */
 export function makeCollection(
   songs: readonly BrowserSongEntry[],
   courseFolders: readonly BrowserFolderNode[] = [],
+  files: Readonly<Record<string, Uint8Array>> = {},
 ): BrowserSongCollection {
   return {
-    sources: [],
+    sources: [{ id: 'test', kind: 'directory', label: 'test', files: new Map(Object.entries(files)) }],
     songs: [...songs],
     errors: [],
     ...(courseFolders.length > 0 ? { courseFolders: [...courseFolders] } : {}),
