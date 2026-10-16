@@ -347,11 +347,15 @@ describe('SelectSession sound', () => {
     );
   });
 
-  it('leaves the preview where it was on a search, until the cursor moves', () => {
+  it('points the preview at the chart a search brings under the cursor', () => {
     const { session, advance, audio } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] } });
     session.setSearch('c');
     advance(10);
-    expect(audio.preview.focus).toHaveBeenCalledTimes(1);
+    expect(audio.preview.focus).toHaveBeenCalledTimes(2);
+    expect(audio.preview.focus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ song: expect.objectContaining({ id: 'c' }) }),
+      session,
+    );
   });
 
   it('points the preview at nothing on a folder bar', () => {
