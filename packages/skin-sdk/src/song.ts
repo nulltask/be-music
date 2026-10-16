@@ -1,84 +1,40 @@
-import type { BeMusicJson } from '@be-music/json';
-import type { CourseDefinition, RandomCourseDefinition } from '@be-music/player/course';
 import type { BestRecord } from '@be-music/player/records';
 import type { ClearLamp } from '@be-music/player/ruleset';
+import type {
+  ChartSourceKind,
+  LibraryChart,
+  LibraryCourse,
+  LibraryCourseStage,
+  LibraryEntry,
+  LibraryFolder,
+} from '@be-music/scene-model';
 
-/** Where a song came from: a dropped directory, a zip, or loose files. */
-export type BrowserSongSourceKind = 'directory' | 'zip' | 'files';
+/** Where a chart came from: a dropped directory, a zip, or loose files (`ChartSourceKind` of `@be-music/scene-model`). */
+export type BrowserSongSourceKind = ChartSourceKind;
 
-/** One chart in the song collection: its metadata and the parsed chart. */
-export interface BrowserSongEntry {
-  id: string;
-  sourceId: string;
-  sourceLabel: string;
-  sourceKind: BrowserSongSourceKind;
-  chartPath: string;
-  directoryLabel: string;
-  fileLabel: string;
-  title: string;
-  subtitle?: string;
-  artist?: string;
-  genre?: string;
-  playLevel?: number | string;
-  bpm?: number;
-  /** The notes a play scores: judged notes without FREE ZONE tails; mines and invisible objects are not notes. */
-  totalNotes: number;
-  chart: BeMusicJson;
-}
+/** One chart in the library: its metadata and the parsed chart (`LibraryChart` of `@be-music/scene-model`). */
+export type BrowserSongEntry = LibraryChart;
 
 /**
- * One folder of songs surfaced by `groupSongsByFolder`. The label is the human-readable folder name (top-level
- * directory inside the source, falling back to the source label) and `songs` are all the BMS charts whose
- * `directoryLabel` resolves to it.
+ * One folder bar: a chart folder (`groupChartsByFolder`) or a course folder (`LibraryFolder` of
+ * `@be-music/scene-model`).
  */
-export interface BrowserFolderNode {
-  label: string;
-  songs: readonly BrowserSongEntry[];
-  /** A course folder (a course file, or one group of a difficulty table's courses) lists courses instead of songs. */
-  courses?: readonly BrowserCourseEntry[];
-}
+export type BrowserFolderNode = LibraryFolder;
 
-/** One stage of a course in the collection: the local chart it resolved to, if any. */
-export interface BrowserCourseStage {
-  /** The chart's title, or the course file's title for a stage that is not in the collection. */
-  title: string;
-  song?: BrowserSongEntry;
-}
+/** One stage of a course in the library: the local chart it resolved to, if any (`LibraryCourseStage`). */
+export type BrowserCourseStage = LibraryCourseStage;
 
 /**
- * A course in the collection: its definition (from `@be-music/player/course`) with each stage matched to a local
- * chart. A course with a missing stage is listed but cannot be started.
- *
- * A beatoraja random course carries `random`: its stages are drawn from the collection when it is started, so
- * `definition` has the course's name, kind and constraints but no stages yet, and each of `stages` has no `song` and
- * shows the stage's title (or its filter, or `RANDOM`).
+ * A course in the library: its definition with each stage matched to a local chart (`LibraryCourse` of
+ * `@be-music/scene-model`). A course with a missing stage is listed but cannot be started.
  */
-export interface BrowserCourseEntry {
-  /** Stable within a session: the folder label and the course's index in it. */
-  id: string;
-  definition: CourseDefinition;
-  stages: readonly BrowserCourseStage[];
-  /** Every stage was found locally (for a random course: every stage filter can be evaluated). */
-  playable: boolean;
-  /** Set on a random course: the definition its stages are drawn from. */
-  random?: RandomCourseDefinition;
-  /**
-   * LR2's NEW COURSE bar, closing a list of the player's own courses: deciding it starts making a course of
-   * `definition.kind` (no stages yet). A host routes it through its course-select callback.
-   */
-  newCourse?: true;
-  /** A course the player made: it can be renamed and deleted, and a NONSTOP one's connections edited. */
-  editable?: true;
-}
+export type BrowserCourseEntry = LibraryCourse;
 
 /**
- * One entry in the bar list when navigating the song collection. A select view shows folder bars at the root and song
- * bars inside a song folder, or course bars inside a course folder.
+ * One bar of the select list: folder bars at the root, chart bars inside a chart folder, course bars inside a course
+ * folder (`LibraryEntry` of `@be-music/scene-model`).
  */
-export type BrowserBrowseEntry =
-  | { kind: 'folder'; folder: BrowserFolderNode }
-  | { kind: 'song'; song: BrowserSongEntry }
-  | { kind: 'course'; course: BrowserCourseEntry };
+export type BrowserBrowseEntry = LibraryEntry;
 
 /** A song image a host can hand a skin: the chart's `#STAGEFILE`, `#BANNER`, or `#BACKBMP`. */
 export type BeMusicSongImageKind = 'stageFile' | 'banner' | 'backBmp';

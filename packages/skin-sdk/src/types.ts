@@ -1,4 +1,5 @@
 import type { ChartPlayVariant } from '@be-music/chart';
+import type { PlayOptionChoices } from '@be-music/scene-model';
 import type { BeMusicAudioFrame } from './audio.ts';
 import type { BeMusicPlayOptions } from './play-options.ts';
 import type { BeMusicResultData, GaugeHistorySample, ScoreHistorySample } from './result-data.ts';
@@ -611,10 +612,11 @@ export interface BeMusicSelectActions {
   toggleReadme(): void;
 }
 
-/** The values each play option can take, for options with a fixed set of choices (numeric ones are left out). */
-export type BeMusicPlayOptionChoices = {
-  readonly [K in keyof BeMusicPlayOptions]?: readonly BeMusicPlayOptions[K][];
-};
+/**
+ * The values each play option can take, for options with a fixed set of choices (numeric ones are left out):
+ * `PlayOptionChoices` of `@be-music/scene-model`.
+ */
+export type BeMusicPlayOptionChoices = PlayOptionChoices;
 
 /** Everything on the select screen this frame. */
 export interface BeMusicSelectFrame {

@@ -29,6 +29,7 @@ function createSnapshot(
       'audio-renderer': [],
       player: [],
       'player-tui': [],
+      'scene-model': [],
       'lr2-skin': [],
       'skin-sdk': [],
       'player-web': [],
