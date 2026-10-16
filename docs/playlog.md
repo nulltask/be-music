@@ -224,6 +224,14 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
   per-mode gauge tables other than SEVENKEYS (the 7K gauge constants are used for every mode).
 - Because the playlog stores the resolved chart, `#RANDOM` and lane-shuffle differences between players never
   affect re-simulation.
+- A play from input without key releases (a terminal without the kitty keyboard protocol) is judged live on
+  hold-grace windows: a repeated press keeps a long note held for a short window, a repeat on the lane of the long
+  note it is playing is no empty POOR, and a mine takes a key as down for the same window after each press. Its log
+  records each of those presses as a `down` and has no `up`, so a replay and the re-simulations read it as key-state
+  input — every key held from its press on, every repeat a new press — and agree with each other, but can judge it
+  differently from the live play (extra empty POORs, long notes held to their tails), at any tempo. Reproducing such
+  a play would need the log to say that its input had no releases and the simulators to model the hold-grace windows
+  (in the live play's clock domain); neither does yet.
 
 ## Course play logs
 
