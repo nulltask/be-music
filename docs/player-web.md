@@ -278,7 +278,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-What a scene shows is handed to it before it is shown: the options of `createDecideScene` for the built-in decide screen, `setTarget` on the LR2 and beatoraja decide scenes, the options of `createResultScene` for the built-in result screen, `setResult` on the LR2 and beatoraja result scenes, the song in `prepare(host, song, source)` on the gameplay scenes, and the constructor options for the rest.
+What a scene shows is handed to it before it is shown: the options of `createDecideScene` for the built-in and LR2 decide screens, `setTarget` on the beatoraja decide scene, the options of `createResultScene` for the built-in result screen, `setResult` on the LR2 and beatoraja result scenes, the song in `prepare(host, song, source)` on the gameplay scenes, and the constructor options for the rest.
 
 - **The select scene is kept alive.** The built-in and LR2 select scene stays across a decide, play and result: its `exit()` pauses the BGM, stops the chart preview (which keeps its focused chart) and the render loop, and it keeps its cursor, browse state and decoded BGM. Its input listeners stay attached and ignore input while it is off stage. Entering it again re-seeds its scene timers, so the skin's entrance plays again, and resumes the BGM and the preview. The beatoraja select scene is rebuilt from its snapshot instead.
 - **A play loads off stage.** `prepare()` parses the chart and decodes its audio without touching the stage or adding listeners, so the demo prepares the play behind a decide splash. When the splash is done, `setScene(play)` exits the decide scene and enters the play, then `start()` begins it; keys pressed during the splash reach only the splash. Without a splash the demo shows the play first, and a `prepare()` that runs while the play is showing draws the playfield in its loading state.
@@ -331,7 +331,7 @@ flowchart TD
 
 ## Scene sessions and family views
 
-The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). The built-in decide and result screens are on them ([The decide screen](#the-decide-screen), [The result screen](#the-result-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
+The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). The built-in and LR2 decide screens and the built-in result screen are on them ([The decide screen](#the-decide-screen), [The result screen](#the-result-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
 
 ```mermaid
 flowchart LR
@@ -391,13 +391,14 @@ flowchart LR
 
 ### The decide screen
 
-`createDecideScene(kit, options)` (`@be-music/player-web/scenes`) makes the built-in decide screen: a decide session (`session/decide/decide-session.ts`) drawn by the built-in decide view (`view/built-in/decide-view.ts`), as a `SessionScene` to show with `setScene`. The LR2 and beatoraja decide screens are still `PixiDecideView` and `PixiBeatorajaDecideScene`.
+`createDecideScene(kit, options)` (`@be-music/player-web/scenes`) makes the built-in and LR2 decide screens: a decide session (`session/decide/decide-session.ts`) drawn by the view of the kit's family, as a `SessionScene` to show with `setScene`. A built-in kit (`{ family: 'built-in', skin }`) is drawn by the built-in decide view (`view/built-in/decide-view.ts`), an LR2 kit (`{ family: 'lr2', skin }`, the theme's decide skin) by the LR2 decide view (`view/lr2/decide-view.ts`). The beatoraja decide screen is still `PixiBeatorajaDecideScene`.
 
 - **Options.** `chart` (the chart about to be played), `course` (the course stage, if any), `playOptions` (as the skin shows them), `source` (the chart's files, for the skin's images), `sounds` (the theme's `SystemSoundSet`), `audio` (the host's audio service), `progress` (how far the play behind the screen has loaded) and `on: { continue, cancel }`.
-- **Timing.** The session times the screen from the view's skin timing (`DecideView.timing`). Input opens after the input delay. The screen moves on to the play by itself once the auto advance is up; without one it waits for the player. A leaving screen fades out first, then calls `on.continue` (to the play) or `on.cancel` (back to select), once per entry. A be-music skin's screen takes input at once, moves on after its `decide.durationMs` (2000 ms by default) and has no fade-out.
+- **Timing.** The session times the screen from the view's skin timing (`DecideView.timing`). Input opens after the input delay. The screen moves on to the play by itself once the auto advance is up; without one it waits for the player. A leaving screen fades out first, then calls `on.continue` (to the play) or `on.cancel` (back to select), once per entry. A be-music skin's screen takes input at once, moves on after its `decide.durationMs` (2000 ms by default) and has no fade-out. An LR2 skin's screen takes input after its `#STARTINPUT` (1500 ms without one), moves on 1200 ms later and fades out over its `#FADEOUT`.
 - **Input.** Enter, Space and a click on the canvas continue once input is open. Escape backs out at any time, as LR2 lets it before `#STARTINPUT`. Auto-repeats are ignored, so the Enter still held from the select screen does not skip the screen.
-- **Sound.** The session plays the theme's decide jingle (`sounds.decideBgm`) through the audio service as the screen enters, as its owner, and stops it with `stopOwned` as the screen leaves the stage. The web demo still plays the decide jingle from the select screen as the chart is picked, so that it rings on into the play, and hands the decide screen no jingle.
-- **`#RANDOM`.** The session draws the chart's `#RANDOM` / `#SWITCH` branches once, when the scene is made, as beatoraja's decide screen does. `scene.resolved` is the resolved chart with its draws, to hand to the play (`preResolved`), and `DecideFrame.playChart` is the same chart for the view's graphs, so the screen shows the branches the play plays. The demo's LR2 / built-in play takes no resolved chart yet and draws its own; no built-in decide view draws the branches.
+- **LR2 drawing.** The LR2 view draws the decide skin over the chart's `#STAGEFILE` through `resolveLr2DecideState` (the chart's difficulty, key mode and texts, and the course's for a course stage). It reads LR2's timers off each frame: timer 0 from the entry, timer 1 from when input opens and timer 2 from when the screen starts leaving. The timer ids stay in the view.
+- **Sound.** The session plays the theme's decide jingle (`sounds.decideBgm`) through the audio service as the screen enters, as its owner, and stops it with `stopOwned` as the screen leaves the stage. The web demo hands the decide screen no jingle (`sounds: {}`), on every family; see [The decide jingle](#the-decide-jingle).
+- **`#RANDOM`.** The session draws the chart's `#RANDOM` / `#SWITCH` branches once, when the scene is made, as beatoraja's decide screen does. `scene.resolved` is the resolved chart with its draws, to hand to the play (`preResolved`), and `DecideFrame.playChart` is the same chart for the view's graphs, so the screen shows the branches the play plays. The demo's LR2 / built-in play takes no resolved chart yet and draws its own; neither the built-in nor the LR2 decide view draws the branches.
 - **Skin settings.** `updateKit(kit)` takes the player's new settings for the skin; the next frame draws with them.
 
 ```mermaid
@@ -411,6 +412,25 @@ stateDiagram-v2
 ```
 
 The web demo prepares the play behind the screen as before and shows it from `on.continue`.
+
+#### The decide jingle
+
+The decide jingle of an LR2 sound set (`#DECIDE`) lives in the built-in / LR2 select scene for now: the web demo plays it with the select scene's `playDecideSound` as the chart or the course is picked, on the select scene's own context, and the select scene's exit does not stop it. It rings on through the decide screen and into the play, as LR2's does, and it also plays where no decide screen shows (a theme without a decide skin). The beatoraja decide screen still plays its theme's decide sound itself.
+
+```mermaid
+sequenceDiagram
+  participant Demo
+  participant Select as Select scene
+  participant Decide as Decide scene
+  participant Play as Play scene
+  Demo->>Select: playDecideSound
+  Note right of Select: the jingle starts
+  Demo->>Decide: setScene, no jingle
+  Demo->>Play: setScene
+  Note over Select,Play: the jingle rings on until it ends
+```
+
+The decide session could play it (`sounds.decideBgm`), but as the decide scene's own sound, which `stopOwned` stops when the scene leaves: the jingle would be cut as the play starts. So the demo hands every decide screen `sounds: {}`. The jingle moves with the select screen (S4, the select session on the audio service): the select session will play it through the audio service without an owner, so it plays out across the scenes that follow.
 
 ### The result screen
 
