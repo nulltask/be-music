@@ -1,5 +1,5 @@
 import type { GaugeType } from '../ruleset/gauge-type.ts';
-import { resolveIidxRankLabel } from '../core/scoring.ts';
+import { resolveIidxRankLabel } from '../ruleset/score.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { resolveRuleset, type PlaylogRulesetId } from '../ruleset/index.ts';
 import { CLEAR_LAMPS, resolveCourseClearLamp, resolveMissCount, type ClearLamp } from '../ruleset/clear-lamp.ts';

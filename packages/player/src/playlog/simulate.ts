@@ -1,5 +1,5 @@
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart';
-import { resolveIidxRankLabel } from '../core/scoring.ts';
+import { resolveIidxRankLabel } from '../ruleset/score.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
 import {
   classifyRulesetJudge,

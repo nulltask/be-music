@@ -13,12 +13,12 @@ export * from './view.ts';
 // The chart a play was played on, rebuilt without the engine's audio driver: a verifier needs it to check what a log
 // claims about its chart (a course's unreached stages, a NONSTOP run's stitched chart).
 export { resolveChartRulesetFacts, resolvePlayChart } from '../core/play-chart.ts';
-// The score-rate / DJ Rank helpers a result (or a ranked play log's simulated result) is read with, so consumers
-// stay on this rules-side entry point instead of reaching into `core/scoring`.
+// The score-rate / DJ Rank helpers a result (or a ranked play log's simulated result) is read with, next to the
+// results. They are the ruleset's score vocabulary, which `@be-music/player/ruleset` exports in full.
 export {
   computeScoreRate,
   IIDX_RANK_LABELS,
   resolveIidxRankLabel,
   type IidxRankLabel,
   type ScoreSummary,
-} from '../core/scoring.ts';
+} from '../ruleset/score.ts';

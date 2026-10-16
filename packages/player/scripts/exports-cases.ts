@@ -850,6 +850,36 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetApi.isGaugeType('DEATH');
     },
   });
+  define('player.ruleset.createEmptyScore', {
+    run: () => {
+      rulesetApi.createEmptyScore(1000);
+    },
+  });
+  define('player.ruleset.computeScoreRate', {
+    run: () => {
+      rulesetApi.computeScoreRate({ total: 1000, exScore: 1650 });
+    },
+  });
+  define('player.ruleset.resolveIidxRankIndexFromScore', {
+    run: () => {
+      rulesetApi.resolveIidxRankIndexFromScore({ total: 1000, exScore: 1650 });
+    },
+  });
+  define('player.ruleset.resolveIidxRankLabel', {
+    run: () => {
+      rulesetApi.resolveIidxRankLabel(1650, 1000);
+    },
+  });
+  define('player.ruleset.resolveLr2MoneyScore', {
+    run: () => {
+      rulesetApi.resolveLr2MoneyScore({ total: 1000, perfect: 700, great: 250, good: 30 });
+    },
+  });
+  define('player.ruleset.resolveDisplayedPoor', {
+    run: () => {
+      rulesetApi.resolveDisplayedPoor({ poor: 5, emptyPoor: 2 }, true);
+    },
+  });
   define('player.playlog.resolveCourseLamp', {
     run: () => {
       playlogApi.resolveCourseLamp('beatoraja', benchStageResult, 'GROOVE');
