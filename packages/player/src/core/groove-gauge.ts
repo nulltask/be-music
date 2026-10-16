@@ -1,4 +1,3 @@
-import type { GaugeType } from '../ruleset/gauge-type.ts';
 import type { JudgeKind } from './scoring.ts';
 
 /**
@@ -11,6 +10,3 @@ import type { JudgeKind } from './scoring.ts';
 
 /** Judges that move the gauge. `'EMPTY_POOR'` is the input-on-an-empty-lane penalty, which is not a note judgment. */
 export type GrooveGaugeJudgeKind = JudgeKind | 'EMPTY_POOR';
-
-/** @deprecated The gauge type is the ruleset vocabulary's `GaugeType` (`@be-music/player/ruleset`). */
-export type GrooveGaugeType = GaugeType;
