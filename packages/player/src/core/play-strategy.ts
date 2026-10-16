@@ -49,8 +49,6 @@ export interface PlayJudge {
  * they are removed one by one.
  */
 export interface StrategyDrifts {
-  /** Records `tempo` and `tempoChanges` in a replay too. */
-  readonly recordsTempoInReplay: boolean;
   /** Follows `replayTempoChanges` outside a replay too. */
   readonly followsReplayTempoChangesAlways: boolean;
 }

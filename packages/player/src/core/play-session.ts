@@ -127,7 +127,7 @@ export async function createPlaySession(
   options: PlayerOptions,
   strategy: JudgeStrategy,
 ): Promise<PlaySession> {
-  const { mode, drifts } = strategy;
+  const { mode } = strategy;
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
@@ -222,7 +222,7 @@ export async function createPlaySession(
             gauge: selectedGauge,
             // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
             // fast it is re-driven, so it records none.
-            ...(speed !== 1 && (!replay || drifts.recordsTempoInReplay) ? { tempo: speed } : {}),
+            ...(speed !== 1 && !replay ? { tempo: speed } : {}),
           },
         });
       })()

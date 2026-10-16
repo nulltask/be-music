@@ -300,7 +300,9 @@ export interface PlayerPlayRecording {
    * is the recorded one), so replaying a log against the same resolved chart reproduces the original judgments.
    * While a replay is active, live lane / kitty input commands are ignored; pause, high-speed, and interrupt
    * commands keep working. The caller is responsible for mounting the SAME resolved chart the log was recorded
-   * against (`preparedChart`, or a chart remapped to the log's note arrangement).
+   * against (`preparedChart`, or a chart remapped to the log's note arrangement). `autoPlay` has no inputs to
+   * re-drive, but a replay of an AUTO-played log passes its (empty) inputs too: either way the play is a replay, so
+   * its `speed` and tempo changes only set how fast it is re-driven and a re-recorded log carries neither.
    */
   replayInputs?: readonly PlaylogInputEvent[];
   /**

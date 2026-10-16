@@ -76,7 +76,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
       setAudioTempo: (next) => audioSession?.setTempo?.(next),
       // A replay's tempo only sets how fast it is re-driven: its re-recorded log carries none.
       recordTempoChange: (seconds, next) => {
-        if (!session.replay || drifts.recordsTempoInReplay) playlogRecorder?.recordTempoChange(seconds, next);
+        if (!session.replay) playlogRecorder?.recordTempoChange(seconds, next);
       },
       onTempoChange: (change) => {
         if (!uiEnabled) {
