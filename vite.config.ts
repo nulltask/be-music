@@ -9,6 +9,7 @@ const workspacePackages = [
   'stringifier',
   'audio-renderer',
   'player',
+  'scene-model',
   'player-tui',
   'lr2-skin',
   'beatoraja-skin',
@@ -18,10 +19,10 @@ const workspacePackages = [
 ] as const;
 
 /**
- * Layering (docs/architecture.md): the chart model, the IR, the parser and the engine's core / play-log / ruleset
- * code run unchanged in the browser and in Node, so they import no Node built-in and read no DOM or Node-only global.
- * Runtime services reach them through adapters (`PlayerOptions.createAudioSession`, `createUiRuntime`, the parser's
- * `node-file.ts`) instead.
+ * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code and
+ * the scene models run unchanged in the browser and in Node, so they import no Node built-in and read no DOM or
+ * Node-only global. Runtime services reach them through adapters (`PlayerOptions.createAudioSession`,
+ * `createUiRuntime`, the parser's `node-file.ts`) instead.
  */
 const runtimeNeutralSources = [
   'packages/chart/src/**/*.ts',
@@ -32,6 +33,7 @@ const runtimeNeutralSources = [
   'packages/player/src/playlog/**/*.ts',
   'packages/player/src/records/**/*.ts',
   'packages/player/src/ruleset/**/*.ts',
+  'packages/scene-model/src/**/*.ts',
 ];
 /** Node / CLI entry points inside those trees: the runtime adapters the rule above points to. */
 const runtimeAdapterSources = ['packages/parser/src/cli.ts', 'packages/parser/src/node-file.ts'];

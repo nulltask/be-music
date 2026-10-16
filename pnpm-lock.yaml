@@ -54,6 +54,9 @@ importers:
       '@be-music/player-web':
         specifier: workspace:*
         version: link:packages/player-web
+      '@be-music/scene-model':
+        specifier: workspace:*
+        version: link:packages/scene-model
       '@be-music/skin-sdk':
         specifier: workspace:*
         version: link:packages/skin-sdk
@@ -428,6 +431,22 @@ importers:
       wrangler:
         specifier: ^4.145.0
         version: 4.145.0(@cloudflare/workers-types@5.20261008.1)(@types/node@26.6.1)
+
+  packages/scene-model:
+    dependencies:
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:../chart
+      '@be-music/json':
+        specifier: workspace:*
+        version: link:../json
+      '@be-music/player':
+        specifier: workspace:*
+        version: link:../player
+    devDependencies:
+      '@be-music/parser':
+        specifier: workspace:*
+        version: link:../parser
 
   packages/skin-sdk:
     dependencies:
