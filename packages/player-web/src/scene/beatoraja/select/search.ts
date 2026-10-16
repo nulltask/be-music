@@ -1,14 +1,15 @@
 /**
  * The beatoraja select scene's search input (`PixiBeatorajaSelectScene`): the `/` key mode that types the query key by
  * key (unless the host's own search field does the typing), and the prompt drawn over the skin while a query is typed or
- * applied, with the number of matches. The scene keeps the query and filters its list with {@link songMatchesQuery}.
+ * applied, with the number of matches. The scene keeps the query and filters its list with the browse model's search
+ * (`matchesSearchQuery`).
  *
  * The search reads the scene's state and calls back into it through {@link BeatorajaSelectSearchContext}; the select
  * scene passes it.
  */
 
 import { Text } from 'pixi.js';
-import type { BrowserBrowseEntry, BrowserSongEntry } from '../../../collection/types.ts';
+import type { BrowserBrowseEntry } from '../../../collection/types.ts';
 import type { BeatorajaPlaySkinView } from '../skin-view.ts';
 
 /** What the search reads and calls on the select scene: its fields and methods of these names. */
@@ -167,20 +168,4 @@ export class BeatorajaSelectSearch {
     this.searchPromptText.tint = this.ctx.searchQuery.length > 0 && this.ctx.entries.length === 0 ? 0xff8888 : 0xffe066;
     this.searchPromptText.visible = true;
   }
-}
-
-/**
- * Case-insensitive substring match against a song's text-searchable fields. The query is
- * pre-lowercased by the caller so this hot-path doesn't re-allocate per song. Returns true
- * when ANY field contains the query — title / artist / genre / subtitle. Mirrors
- * beatoraja's reference search which treats fields uniformly.
- */
-export function songMatchesQuery(song: BrowserSongEntry, lowerQuery: string): boolean {
-  const meta = song.chart.metadata;
-  const fields = [meta.title, meta.artist, meta.genre, meta.subtitle];
-  for (const field of fields) {
-    if (typeof field !== 'string' || field.length === 0) continue;
-    if (field.toLowerCase().includes(lowerQuery)) return true;
-  }
-  return false;
 }

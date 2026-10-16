@@ -273,4 +273,24 @@ describe('PixiBeatorajaSelectScene list', () => {
     expect(shown()).toEqual(['five-dan', 'any']);
     scene.dispose();
   });
+
+  it("searches a chart's file label too, by the trimmed text, and a course folder's courses by name", () => {
+    const { scene, internals, shown } = sceneOf(
+      [
+        { ...makeChart('lapis', 'Pack'), fileLabel: 'lapis [ANOTHER].bms' },
+        { ...makeChart('hikari', 'Pack'), fileLabel: 'hikari.bms' },
+      ],
+      [makeCourseFolder('Dan', [courseOf('First Dan'), courseOf('Tenth Dan')])],
+    );
+    scene.setSearchQuery('  another ');
+    expect(shown()).toEqual(['lapis']);
+    // A search of spaces only searches nothing: the root lists its folders.
+    scene.setSearchQuery('   ');
+    expect(shown()).toEqual(['Pack', 'Dan']);
+    internals.moveCursor(1);
+    internals.activateCurrentEntry();
+    scene.setSearchQuery('tenth');
+    expect(shown()).toEqual(['Tenth Dan']);
+    scene.dispose();
+  });
 });
