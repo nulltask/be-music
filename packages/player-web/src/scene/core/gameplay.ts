@@ -1936,6 +1936,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const signals = this.sharedEngineInputSignals;
     if (signals === undefined) return;
     this.sharedEngineInterrupt = reason;
+    this.flushPlaylogView();
     if (this.sharedEngineChartSettled) {
       this.chartEndHold?.abort();
       return;
@@ -4451,6 +4452,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (change !== undefined) signals.pushCommand({ kind: 'view', change });
   }
 
+  /** Sends the engine the view change still held back by the coalescer, as the play ends ({@link updatePlaylogView}). */
+  private flushPlaylogView(): void {
+    const signals = this.sharedEngineInputSignals;
+    if (this.replayViewCursor !== undefined || this.playlogViewCoalescer === undefined || signals === undefined) return;
+    if (this.laneX.size === 0) return;
+    const change = this.playlogViewCoalescer.flush(this.resolvePlaylogView());
+    if (change !== undefined) signals.pushCommand({ kind: 'view', change });
+  }
+
   /**
    * Shows a replay's recorded view over the viewer's own: the covers as recorded, and the hi-speed as recorded on this
    * scale, or matching the recorded visible time when it was played on another (`resolveReplayHiSpeed`).
@@ -5690,6 +5700,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           this.onHeldPlayEnded = () => {
             if (!this.disposed) finish();
           };
+          this.flushPlaylogView();
           this.chartEndHold?.abort();
         },
         { fadeAudio: ending.fadeAudio, minFadeOutMs: ending.fadeOutMs },
