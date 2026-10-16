@@ -356,8 +356,9 @@ export const BEATORAJA_OP = {
   P3_JUDGE_LATE: 1363,
 
   // ─── Live rank ops (prop.lua `_1p_aaa = 200` ... `_1p_f = 207`) ────────────────────────────
-  // Set live during gameplay, recomputed every frame from `summary.exScore` vs the chart's
-  // theoretical EX-score max. Beatoraja's IIDX-derived rank thresholds are (max = `total * 2`):
+  // Set live during gameplay from the EX score over the notes judged so far (beatoraja
+  // `createNowRank`, `resolveBeatorajaPlayScoreOps`); `computeRankOp` ranks a finished run over
+  // every note. Beatoraja's IIDX-derived rank thresholds are (max = notes × 2):
   //
   //   AAA = exScore / max >= 8/9   (~88.9%)
   //   AA  = exScore / max >= 7/9   (~77.8%)
