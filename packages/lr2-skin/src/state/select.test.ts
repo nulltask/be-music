@@ -125,6 +125,19 @@ describe('resolveLr2SelectState ops', () => {
     }
   });
 
+  it('lights LR2’s panel ops: 20 while no panel is open, 21-29 while panel 1-9 is, never the bar ops', () => {
+    const closed = resolveLr2SelectState({ options: DEFAULT_PLAY_OPTIONS, openPanels: [] }).ops;
+    expect(closed.has(LR2_OP.NO_PANEL)).toBe(true);
+    expect(closed.has(LR2_OP.PANEL1)).toBe(false);
+    const open = resolveLr2SelectState({ options: DEFAULT_PLAY_OPTIONS, openPanels: [1, 3] }).ops;
+    expect(open.has(LR2_OP.PANEL1)).toBe(true);
+    expect(open.has(LR2_OP.PANEL3)).toBe(true);
+    expect(open.has(LR2_OP.NO_PANEL)).toBe(false);
+    // Opening panel 1 or 3 lights neither the folder-bar op (1) nor the course-bar op (3).
+    expect(open.has(LR2_OP.FOLDER_BAR)).toBe(false);
+    expect(open.has(LR2_OP.COURSE_BAR)).toBe(false);
+  });
+
   it('lights the course maker’s ops', () => {
     const making = resolveLr2SelectState({
       options: DEFAULT_PLAY_OPTIONS,

@@ -18,6 +18,28 @@ export const LR2_OP = {
   /** The selected bar can be played: a song, or a course whose stages are all present. */
   PLAYABLE_BAR: 5,
 
+  // ─── Select: the option panels (OpenLR2 `LR2_skinobject.cpp` `GetOptionFlag_dst`) ───────────────────────────────
+  /** No option panel is open. */
+  NO_PANEL: 20,
+  /** Option panel 1 is open. Ops 21-29 are panels 1-9. */
+  PANEL1: 21,
+  /** Option panel 2 is open. */
+  PANEL2: 22,
+  /** Option panel 3 is open. */
+  PANEL3: 23,
+  /** Option panel 4 is open. */
+  PANEL4: 24,
+  /** Option panel 5 is open. */
+  PANEL5: 25,
+  /** Option panel 6 is open. */
+  PANEL6: 26,
+  /** Option panel 7 is open. */
+  PANEL7: 27,
+  /** Option panel 8 is open. */
+  PANEL8: 28,
+  /** Option panel 9 is open. */
+  PANEL9: 29,
+
   // ─── Play options (select, play, result) ────────────────────────────────────────────────────────────────────────
   /** BGA size NORMAL. */
   BGA_NORMAL: 30,
