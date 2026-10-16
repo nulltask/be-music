@@ -1,15 +1,17 @@
 /**
  * `@be-music/beatoraja-skin/scene` — maps the family-neutral scene models (`@be-music/scene-model`) to a beatoraja
  * skin's vocabulary: which ops are lit, what each number and text reads, which timers start and stop, the gauge, the
- * graphs and the live offsets, for the play, select and result screens, a running course, and the theme's system
- * sounds. Pure and deterministic: time, the clock and the frame rate come in as inputs, and no function reads a clock
- * or keeps state between calls (a few keep a cache keyed by the input they were given).
+ * graphs and the live offsets, for the play, select, decide and result screens, a running course, and the theme's
+ * system sounds. Pure and deterministic: time, the clock and the frame rate come in as inputs, and no function reads a
+ * clock or keeps state between calls (a few keep a cache keyed by the input they were given).
  *
  * - Play: {@link resolveBeatorajaPlayNumber}, {@link resolveBeatorajaPlayText}, {@link resolveBeatorajaPlayStartOps},
  *   {@link resolveBeatorajaPlayScoreOps}, {@link resolveBeatorajaCoverOps}, the timers as data
  *   ({@link resolveBeatorajaJudgeEffect}, {@link resolveBeatorajaLaneTimers}, {@link resolveBeatorajaFrameTimers}),
  *   the gauge ({@link resolveBeatorajaGaugeState}), the graphs and sliders, and the live offsets
  *   ({@link writeBeatorajaPlayOffset}).
+ * - Decide: {@link resolveBeatorajaDecideNumber}, {@link resolveBeatorajaDecideOps} and
+ *   {@link resolveBeatorajaDecideGraphValue}, from the chart about to be played and the play's loading progress.
  * - Result: {@link resolveBeatorajaResultNumber}, {@link resolveBeatorajaResultOps}, {@link resolveBeatorajaResultText}
  *   and its graphs, from a `PlayResult`.
  * - Select: {@link resolveBeatorajaSelectBarOps}, {@link resolveBeatorajaSelectNumber},
@@ -25,6 +27,7 @@ export * from './play-ops.ts';
 export * from './play-text.ts';
 export * from './play-timers.ts';
 export * from './play-graphs.ts';
+export * from './decide.ts';
 export * from './result.ts';
 export * from './select.ts';
 export * from './course.ts';

@@ -129,6 +129,7 @@ const BENCH_SONG: LibraryChart = {
   totalNotes: 1200,
   chart: { metadata: { difficulty: 4 } } as unknown as LibraryChart['chart'],
 };
+const BENCH_DECIDE: sceneApi.BeatorajaDecideInput = { chart: BENCH_SONG, progress: 0.5 };
 const BENCH_COURSE: LibraryCourse = {
   id: 'Dan#0',
   definition: {
@@ -402,6 +403,24 @@ export function registerBeatorajaSkinExportsCases(define: DefineBenchmarkCase): 
   define('beatoraja-skin.scene.writeBeatorajaPlayOffset', {
     run: () => {
       sceneApi.writeBeatorajaPlayOffset(OFFSET_HIDDEN_COVER, BENCH_OFFSET_INPUT, BENCH_OFFSET);
+    },
+  });
+
+  // Decide
+  define('beatoraja-skin.scene.resolveBeatorajaDecideNumber', {
+    run: () => {
+      sceneApi.resolveBeatorajaDecideNumber(BEATORAJA_NUM.PLAYLEVEL, BENCH_DECIDE);
+      sceneApi.resolveBeatorajaDecideNumber(BEATORAJA_NUM.LOADING_PROGRESS, BENCH_DECIDE);
+    },
+  });
+  define('beatoraja-skin.scene.resolveBeatorajaDecideOps', {
+    run: () => {
+      sceneApi.resolveBeatorajaDecideOps(BENCH_DECIDE);
+    },
+  });
+  define('beatoraja-skin.scene.resolveBeatorajaDecideGraphValue', {
+    run: () => {
+      sceneApi.resolveBeatorajaDecideGraphValue(102, BENCH_DECIDE);
     },
   });
 
