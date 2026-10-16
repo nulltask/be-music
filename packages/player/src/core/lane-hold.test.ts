@@ -5,7 +5,6 @@ import {
   recordLaneDown,
   recordLaneUp,
   wasLaneDownAt,
-  wasLanePressedWithin,
 } from './lane-hold.ts';
 
 describe('lane hold history', () => {
@@ -48,22 +47,11 @@ describe('lane hold history', () => {
     expect(wasLaneDownAt(history, 120)).toBe(true);
   });
 
-  test('presses are found within a span of time, the latest at or before its end deciding', () => {
-    const history = createLaneHoldHistory();
-    recordLaneDown(history, [], 100);
-    recordLaneDown(history, [], 300);
-    expect(wasLanePressedWithin(history, 0, 150)).toBe(true);
-    expect(wasLanePressedWithin(history, 120, 250)).toBe(false);
-    expect(wasLanePressedWithin(history, 200, 300)).toBe(true);
-    expect(wasLanePressedWithin(history, 0, 99)).toBe(false);
-  });
-
-  test('old spans and presses are dropped once they are well past', () => {
+  test('old spans are dropped once they are well past', () => {
     const history = createLaneHoldHistory();
     recordLaneDown(history, ['a'], 0);
     recordLaneUp(history, ['a'], 10);
     recordLaneDown(history, ['a'], 20 + LANE_HOLD_HISTORY_MS);
     expect(history.spans).toHaveLength(1);
-    expect(history.pressesMs).toEqual([20 + LANE_HOLD_HISTORY_MS]);
   });
 });

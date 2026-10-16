@@ -82,9 +82,8 @@ describe('createWebInputRuntime', () => {
   test('lane key press pushes a lane-input command followed by a kitty-state press for LN sustain tracking', () => {
     // The runtime emits BOTH commands on a single keydown:
     // - `lane-input` resolves the timing judge for the press itself.
-    // - `kitty-state` with `pressTokens` adds the channel to the engine's `activeKittyPressedChannels` set so
-    //   `longHoldUntilMsByChannel` keeps refreshing on every tick — without this, manual LNs BAD-fail ~380 ms
-    //   into the sustain because the engine can't tell the user is still holding the key.
+    // - `kitty-state` with `pressTokens` holds the lane down in the engine's judge until the key's release, so a
+    //   long note stays held while the user holds the key.
     const inputSignals = createPlayerInputSignalBus();
     const { target, dispatch } = makeMockTarget();
     const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });

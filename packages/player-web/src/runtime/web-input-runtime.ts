@@ -94,13 +94,11 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       tokens,
       pressedAt,
     });
-    // ALSO emit a kitty-state press so the engine adds the lane channel to `activeKittyPressedChannels`. The
-    // engine's tick loop only refreshes `longHoldUntilMsByChannel` for channels in that set — without it, every
-    // manual LN BAD/POOR-fails ~380 ms (`LONG_NOTE_INITIAL_HOLD_GRACE_MS`) into the sustain even while the user
-    // keeps the key held, because the engine can't tell the press is still active. The kitty-state press also
-    // promotes the lane laser from a brief `flash-lane` flicker to a sustained `press-lane` so the lane glow lasts
-    // the full hold (`applyEngineCommand` switches between the two on the view side). Browsers don't expose the
-    // Kitty protocol so we synthesize the event here from the regular keydown — release symmetry lives in
+    // ALSO emit a kitty-state press: it is what holds the lane down in the engine's judge (key-state input — a lane
+    // is down from its kitty-state press to its release), so a long note stays held for as long as the key is. It
+    // also promotes the lane laser from a brief `flash-lane` flicker to a sustained `press-lane` so the lane glow
+    // lasts the full hold (`applyEngineCommand` switches between the two on the view side). Browsers don't expose
+    // the Kitty protocol so we synthesize the event here from the regular keydown — release symmetry lives in
     // `handleKeyUp` below. `pressTokens` mirrors the raw token list (the engine resolves channels itself).
     options.inputSignals.pushCommand({
       kind: 'kitty-state',
@@ -119,9 +117,8 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     // `kitty-state` carries press / repeat / release sets so the engine can model held inputs precisely. Web
     // browsers don't expose Kitty-style protocol events, so we synthesize a minimal release-only shape — the
     // engine's LN release path keys on `releaseTokens` and ignores press / repeat in this case.
-    // `pressedAt` here represents the release event's timestamp (same wall-clock-ms domain as `lane-input`);
-    // the LN early-release window is wide (380 ms initial / 120 ms repeat), so this drift correction is less
-    // critical than for `lane-input`, but we forward it for symmetry and any future judges that consume it.
+    // `pressedAt` here represents the release event's timestamp (same wall-clock-ms domain as `lane-input`): the
+    // play log records the release at that instant, as it records a press.
     options.inputSignals.pushCommand({
       kind: 'kitty-state',
       pressTokens: [],
