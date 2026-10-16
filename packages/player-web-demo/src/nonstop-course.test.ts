@@ -1,13 +1,13 @@
 import { resolveChart } from '@be-music/chart';
 import { parseChart } from '@be-music/parser';
 import { manualPlay } from '@be-music/player';
-import { parseLr2CourseFile } from '@be-music/player/course';
+import { buildNonstopCoursePlaylog, parseLr2CourseFile } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '@be-music/player/playlog';
 import { simulatePlaylog } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongAssetSource, BrowserSongEntry } from '@be-music/player-web/collection';
 import { describe, expect, test } from 'vite-plus/test';
 import { courseStageChartFingerprint, prepareCourseLeaderboardSubmission } from './leaderboard.ts';
-import { buildNonstopCoursePlaylog, prepareNonstopCourse } from './nonstop-course.ts';
+import { prepareNonstopPlay } from './nonstop-course.ts';
 
 const MD5 = ['1', '2'].map((digit) => digit.repeat(32));
 
@@ -65,11 +65,12 @@ function presses(chart: BrowserSongEntry['chart']): PlaylogInputEvent[] {
 
 const sourceOf = (entry: BrowserSongEntry) => [STAGE_A, STAGE_B].find((stage) => stage.song.id === entry.id)?.source;
 
-describe('prepareNonstopCourse', () => {
+describe('prepareNonstopPlay', () => {
   test("stitches the stages into one song played from the stages' own files", () => {
-    const prepared = prepareNonstopCourse(course(), { sourceOf, random: () => 0 });
+    const prepared = prepareNonstopPlay(course(), { sourceOf, random: () => 0 });
     if (!prepared.ok) throw new Error(prepared.reason);
-    const { song: stitched, source, map, connections } = prepared.prepared;
+    const { song: stitched, source } = prepared.prepared;
+    const { map, connections } = prepared.prepared.stitched;
     expect(connections).toEqual(['cut']);
     expect(stitched).toMatchObject({ title: 'Nonstop', chartPath: 'nonstop.bms', sourceId: source.id, totalNotes: 6 });
     expect([...source.files.keys()].sort()).toEqual(['s0/a/a.wav', 's1/b/b.wav']);
@@ -79,16 +80,16 @@ describe('prepareNonstopCourse', () => {
   test('refuses a course with a stage missing from the collection', () => {
     const entry = course();
     entry.stages = [entry.stages[0]!, { title: 'gone' }];
-    expect(prepareNonstopCourse(entry, { sourceOf })).toEqual({ ok: false, reason: 'missing-stage', stage: 1 });
+    expect(prepareNonstopPlay(entry, { sourceOf })).toEqual({ ok: false, reason: 'missing-stage', stage: 1 });
   });
 });
 
-describe('buildNonstopCoursePlaylog', () => {
-  test('records the stitched play with each stage cut out of it', async () => {
-    const prepared = prepareNonstopCourse(course(), {
+describe('a NONSTOP run in the demo', () => {
+  test('records the stitched play with each stage cut out of it, named by its chart and file hashes', async () => {
+    const prepared = prepareNonstopPlay(course(), {
       sourceOf,
       random: () => 0,
-      chartFingerprintOf: courseStageChartFingerprint,
+      hashesOf: (song) => ({ md5: song.id.repeat(32) }),
     });
     if (!prepared.ok) throw new Error(prepared.reason);
     const chart = prepared.prepared.song.chart;
@@ -105,13 +106,13 @@ describe('buildNonstopCoursePlaylog', () => {
         playlog = recorded;
       },
     });
-    const log = buildNonstopCoursePlaylog(course(), prepared.prepared, playlog!, {
+    const log = buildNonstopCoursePlaylog(course().definition, prepared.prepared.stitched, playlog!, {
       createdAt: '2026-10-15T00:00:00.000Z',
     });
     expect(log.nonstop?.connections).toEqual(['cut']);
     expect(log.stages.map((entry) => entry.played)).toEqual([true, true]);
     const [first, second] = log.stages;
-    expect(first!.played && first!.playlog.chart.title).toBe('A');
+    expect(first!.played && first!.playlog.chart).toMatchObject({ title: 'A', md5: 'a'.repeat(32) });
     expect(second!.played && second!.playlog.chart.notes).toHaveLength(3);
     expect(log.results?.native).toMatchObject({ noteCount: 6, stagesPlayed: 2 });
     expect(simulatePlaylog(log.nonstop!.playlog, { ruleset: 'lr2' }).noteCount).toBe(6);

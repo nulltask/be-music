@@ -3,7 +3,7 @@ import type { BeMusicCoursePlaylog, PlaylogCourseResult } from '@be-music/player
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import { resolveSceneCourseInfo, type SceneCourseInfo } from '@be-music/player-web/scenes';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
-import type { NonstopPrepareFailure } from './nonstop-course.ts';
+import type { NonstopPlayFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, type SongRecordPlay } from './song-records.ts';
 
 /**
@@ -96,7 +96,7 @@ export function describeRandomCourseDrawFailure(name: string, failure: RandomCou
 /** The status line for a NONSTOP course that could not be stitched. */
 export function describeNonstopPrepareFailure(
   name: string,
-  failure: { reason: NonstopPrepareFailure; stage?: number },
+  failure: { reason: NonstopPlayFailure; stage?: number },
 ): string {
   const stage = failure.stage !== undefined ? ` (stage ${failure.stage + 1})` : '';
   return `${name}: cannot stitch the NONSTOP course: ${failure.reason}${stage}`;
