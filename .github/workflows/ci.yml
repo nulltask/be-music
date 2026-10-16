@@ -63,6 +63,7 @@ jobs:
               - 'packages/player/**'
               - 'packages/player-tui/**'
               - 'packages/lr2-skin/**'
+              - 'packages/beatoraja-skin/**'
               - 'packages/skin-sdk/**'
               - 'packages/player-web/**'
               - 'scripts/bench/**'

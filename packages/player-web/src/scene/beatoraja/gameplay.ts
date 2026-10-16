@@ -22,23 +22,22 @@
 // The gameplay scene layers authored skin chrome, scrolling notes, markers, BGA still/video textures, judge popups,
 // key-beam glows, LN hold effects, and HUD text on top of the same engine-driven state.
 
-import { withBeatorajaCourseStageOps, type SceneCourseInfo } from './course.ts';
+import type { SceneCourseInfo } from '../course-info.ts';
 import { computeAuthoredLaneBottomYPixi, readJudgeComboMetrics, resolveFadeoutMs } from './play-skin-metrics.ts';
 import { Container, Graphics, Text, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';
-import type {
-  BeatorajaImageElement,
-  BeatorajaImageId,
-  BeatorajaSkin,
-  BeatorajaSkinConfig,
-  BeatorajaSkinCustomOffset,
-} from '@be-music/beatoraja-skin';
 import {
   buildBaseOpSet,
   normalizeBeatorajaImages,
   normalizeBeatorajaNote,
   normalizeBeatorajaSliders,
+  type BeatorajaImageElement,
+  type BeatorajaImageId,
+  type BeatorajaSkin,
+  type BeatorajaSkinConfig,
+  type BeatorajaSkinCustomOffset,
 } from '@be-music/beatoraja-skin';
+import { withBeatorajaCourseStageOps } from '@be-music/beatoraja-skin/scene';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { chartPlayVariantForBeatorajaVariant, type BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
 import { BeatorajaNoteLayer, beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat } from './notes.ts';

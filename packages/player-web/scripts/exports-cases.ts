@@ -403,16 +403,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.describeSongCollection(BENCH_COLLECTION);
     },
   });
-  define('player-web.discoverBeatorajaSelectBgmPath', {
-    run: () => {
-      playerWebCoreApi.discoverBeatorajaSelectBgmPath(BENCH_BEATORAJA_FILES);
-    },
-  });
-  define('player-web.discoverBeatorajaSystemSoundPaths', {
-    run: () => {
-      playerWebCoreApi.discoverBeatorajaSystemSoundPaths(BENCH_BEATORAJA_FILES);
-    },
-  });
   define('player-web.dirname', {
     run: () => {
       playerWebCoreApi.dirname('Songs/Bench/main.bms');
@@ -523,17 +513,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreApi.findBeatorajaThemeBgm(BENCH_BEATORAJA_THEME_BUNDLE);
     },
   });
-  define('player-web.pickBeatorajaThemeBgmPaths', {
-    run: () => {
-      playerWebCoreApi.pickBeatorajaThemeBgmPaths([
-        'sound/course_clear.wav',
-        'sound/clear.wav',
-        'sound/fail.ogg',
-        'sound/resultclose.wav',
-        'sound/decide_v2.wav',
-      ]);
-    },
-  });
   define('player-web.flipRectToPixi', {
     run: () => {
       playerWebCoreApi.flipRectToPixi({ x: 10, y: 20, w: 100, h: 50 }, 720);
@@ -593,11 +572,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.loadBeatorajaThemeFromFiles', {
     run: async () => {
       await playerWebCoreApi.loadBeatorajaThemeFromFiles([]);
-    },
-  });
-  define('player-web.lnModeDirectiveToIndex', {
-    run: () => {
-      playerWebCoreApi.lnModeDirectiveToIndex(3);
     },
   });
   define('player-web.logger', {
@@ -786,11 +760,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.recordingFileExtension', {
     run: () => {
       playerWebCoreApi.recordingFileExtension('video/mp4;codecs=avc1,mp4a.40.2');
-    },
-  });
-  define('player-web.beatorajaClearLampOp', {
-    run: () => {
-      playerWebCoreApi.beatorajaClearLampOp('FULL_COMBO');
     },
   });
   define('player-web.chartPlayVariantForBeatorajaVariant', {
@@ -1016,11 +985,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.summarizeBeatorajaPlaySkins', {
     run: () => {
       playerWebCoreApi.summarizeBeatorajaPlaySkins(BENCH_BEATORAJA_PLAY_SKINS);
-    },
-  });
-  define('player-web.resolveResultGaugeState', {
-    run: () => {
-      playerWebCoreApi.resolveResultGaugeState({ type: 'CLASS', current: 64, max: 100, clearThreshold: 0 });
     },
   });
   define('player-web.resolveSelectNavigation', {

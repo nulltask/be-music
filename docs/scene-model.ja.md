@@ -312,4 +312,5 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `resolveResultViewJingles`                                                       | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                              |
 
 各シーンはまだ自分の一覧とプレイの状態を持っています（コアのプレイは `JudgeTimingLog` とカバー、beatoraja のランタイム
-アダプターは記録とカバー）。Web 実行層のシーンセッションがこれらのモデルへ移ります。
+アダプターは記録とカバー）。Web 実行層のシーンセッションがこれらのモデルへ移ります。スキンのパッケージはモデルを各スキンの
+語彙に写します。beatoraja の番号へは `@be-music/beatoraja-skin/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。

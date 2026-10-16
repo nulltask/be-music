@@ -9,7 +9,8 @@ const DEPENDENCIES = {
   player: ['chart', 'json', 'utils'],
   'skin-sdk': ['chart', 'json', 'player'],
   'beatoraja-skin': ['chart'],
-  'player-web': ['beatoraja-skin', 'player', 'skin-sdk'],
+  'theme-kit': ['chart'],
+  'player-web': ['beatoraja-skin', 'theme-kit', 'player', 'skin-sdk'],
   'leaderboard-api': ['player'],
 };
 
@@ -23,7 +24,11 @@ describe('resolveAffectedBenchPackages', () => {
   });
 
   test('follows dependencies through packages the benchmark does not measure', () => {
-    expect(resolveAffectedBenchPackages(['packages/beatoraja-skin/src/skin.ts'], DEPENDENCIES)).toEqual(['player-web']);
+    expect(resolveAffectedBenchPackages(['packages/theme-kit/src/skin.ts'], DEPENDENCIES)).toEqual(['player-web']);
+    expect(resolveAffectedBenchPackages(['packages/beatoraja-skin/src/skin.ts'], DEPENDENCIES)).toEqual([
+      'beatoraja-skin',
+      'player-web',
+    ]);
   });
 
   test('a leaf package measures only itself', () => {

@@ -611,10 +611,10 @@ export const BEATORAJA_OP = {
   NOW_E_1P: LR2_OP.UPDATED_RANK_E as typeof LR2_OP.UPDATED_RANK_E,
   NOW_F_1P: LR2_OP.UPDATED_RANK_F as typeof LR2_OP.UPDATED_RANK_F,
 
-  // ─── Score band ops (prop.lua `_1p_0_9 = 230` ... `_1p_100 = 240`, `_1p_border_or_more = 1240`) ──
-  // The active EX-score band. Many score-readout chrome elements gate on these. We set exactly
-  // one based on the EX-score percentage. LR2 defines 230-240 as ten-percent ranges of the 1P gauge
-  // (`LR2_OP.GAUGE_1P_*`, and `_1p_border_or_more` reads as the gauge's clear border).
+  // ─── 1P gauge range ops (prop.lua `_1p_0_9 = 230` ... `_1p_100 = 240`, `_1p_border_or_more = 1240`) ──
+  // The 1P gauge's tenth: exactly one of 230-240 is lit during a play, 240 for a full gauge (beatoraja
+  // `GaugeDrawCondition`, LR2's `LR2_OP.GAUGE_1P_*`). 1240 is lit while the gauge would clear: above 0 and at its
+  // border or more (`Gauge.isQualified`). Skins swap gauge-dependent chrome (a character's mood, a FEVER cue) on them.
   P1_BAND_0_9: LR2_OP.GAUGE_1P_0_9 as typeof LR2_OP.GAUGE_1P_0_9,
   P1_BAND_10_19: LR2_OP.GAUGE_1P_10_19 as typeof LR2_OP.GAUGE_1P_10_19,
   P1_BAND_20_29: LR2_OP.GAUGE_1P_20_29 as typeof LR2_OP.GAUGE_1P_20_29,
@@ -1048,8 +1048,11 @@ export const BEATORAJA_NUM = {
   // ─── Live-play block (100-116, 121-128, 135-136, 407, 410-427) ────────────────────────────────
   /** prop.lua `point = 100` — current run's score (NOT the best-ever record). */
   POINT: LR2_NUM.SCORE as typeof LR2_NUM.SCORE,
-  /** prop.lua `score2 = 101` — alias of `point` for skins that prefer the legacy name. */
-  SCORE2: 101,
+  /**
+   * prop.lua `score2 = 101` — the current run's EX score (`IntegerPropertyFactory.createScoreProperty`: the play's
+   * `getNowEXScore`, the result's new EX score), LR2's number 101.
+   */
+  SCORE2: LR2_NUM.EXSCORE as typeof LR2_NUM.EXSCORE,
   /** prop.lua `score_rate = 102` — EX-score percentage integer part. */
   SCORE_RATE: LR2_NUM.SCORE_RATE as typeof LR2_NUM.SCORE_RATE,
   /** prop.lua `score_rate_afterdot = 103` — EX-score percentage post-decimal digits. */
@@ -1144,6 +1147,27 @@ export const BEATORAJA_NUM = {
    * surface it through `value[]` ref 368. Sourced from `chart.metadata.total`.
    */
   BMS_TOTAL: 368,
+  /** SkinProperty `NUMBER_FOLDER_TOTALSONGS = 300`: the charts in the focused folder bar (select screen). */
+  FOLDER_TOTALSONGS: 300,
+  /** SkinProperty `NUMBER_TOTALNOTE_NORMAL = 350`: the focused chart's key taps. */
+  TOTALNOTE_NORMAL: 350,
+  /** SkinProperty `NUMBER_TOTALNOTE_LN = 351`: the focused chart's long notes on the keys. */
+  TOTALNOTE_LN: 351,
+  /** SkinProperty `NUMBER_TOTALNOTE_SCRATCH = 352`: the focused chart's scratch taps. */
+  TOTALNOTE_SCRATCH: 352,
+  /** SkinProperty `NUMBER_TOTALNOTE_BSS = 353`: the focused chart's long scratches. */
+  TOTALNOTE_BSS: 353,
+  /** SkinProperty `NUMBER_DENSITY_PEAK = 360` / `_AFTERDOT = 361`: the busiest second's notes. */
+  DENSITY_PEAK: 360,
+  DENSITY_PEAK_AFTERDOT: 361,
+  /** SkinProperty `NUMBER_DENSITY_END = 362` / `_AFTERDOT = 363`: the notes of the second with the last note. */
+  DENSITY_END: 362,
+  DENSITY_END_AFTERDOT: 363,
+  /** SkinProperty `NUMBER_DENSITY_AVERAGE = 364` / `_AFTERDOT = 365`: notes per second over the chart. */
+  DENSITY_AVERAGE: 364,
+  DENSITY_AVERAGE_AFTERDOT: 365,
+  /** SkinProperty `NUMBER_CLEAR = 370`: the focused chart's best clear lamp (0 NO PLAY … 10 MAX). */
+  CLEAR: 370,
   /**
    * Result-scene timing-statistics block (374-377). GdbG_Skin's result authors
    * `Avg X ms` / `Stdev X ms` text labels backed by these refs. ModernChic surfaces them on

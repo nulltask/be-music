@@ -1,9 +1,6 @@
-import { BEATORAJA_OP, BEATORAJA_TEXT } from '@be-music/beatoraja-skin';
 import type { CourseConstraint } from '@be-music/player/course';
-import type { BrowserCourseEntry } from '../../collection/types.ts';
-import type { SceneCourseInfo } from '../course-info.ts';
-
-export type { SceneCourseInfo };
+import type { CourseView, LibraryCourse } from '@be-music/scene-model';
+import { BEATORAJA_OP, BEATORAJA_TEXT } from '../runtime-ids.ts';
 
 const CONSTRAINT_OPS: Partial<Record<CourseConstraint, number>> = {
   grade: BEATORAJA_OP.GRADEBAR_CLASS,
@@ -36,11 +33,11 @@ export function resolveBeatorajaCourseConstraintOps(constraints: readonly Course
 /**
  * The ops a focused course bar lights on the select screen (beatoraja `BooleanPropertyFactory`): `OPTION_GRADEBAR` (3)
  * on a fixed course only (`instanceof GradeBar`), `OPTION_RANDOMCOURSEBAR` (1031) on a random course,
- * `OPTION_PLAYABLEBAR` (5) when the course can start (every stage in the collection, or every stage filter readable), one
+ * `OPTION_PLAYABLEBAR` (5) when the course can start (every stage in the library, or every stage filter readable), one
  * `OPTION_GRADEBAR_*` op per constraint, and the course's best lamp (`lampOp`, one of `CLEAR_LAMP_*`;
  * `CLEAR_LAMP_NOPLAY` without one, and always on a random course, which keeps no record).
  */
-export function resolveBeatorajaCourseBarOps(course: BrowserCourseEntry, lampOp?: number): number[] {
+export function resolveBeatorajaCourseBarOps(course: LibraryCourse, lampOp?: number): number[] {
   const ops: number[] = [course.random !== undefined ? BEATORAJA_OP.RANDOMCOURSEBAR : BEATORAJA_OP.GRADEBAR];
   if (course.playable) ops.push(BEATORAJA_OP.PLAYABLEBAR);
   ops.push(...resolveBeatorajaCourseConstraintOps(course.definition.constraints));
@@ -53,7 +50,7 @@ export function resolveBeatorajaCourseBarOps(course: BrowserCourseEntry, lampOp?
  * and for the stage being played `OPTION_COURSE_STAGE1-4` (280-283) when it is one of the first four and not the last,
  * or `OPTION_COURSE_STAGE_FINAL` (289) on the last.
  */
-export function resolveBeatorajaCourseStageOps(course: SceneCourseInfo): number[] {
+export function resolveBeatorajaCourseStageOps(course: CourseView): number[] {
   const ops: number[] = [BEATORAJA_OP.MODE_COURSE];
   const index = course.stageIndex;
   if (index === undefined) return ops;
@@ -63,27 +60,34 @@ export function resolveBeatorajaCourseStageOps(course: SceneCourseInfo): number[
 }
 
 /**
- * Adds {@link resolveBeatorajaCourseStageOps} to a scene's static op set when the play is a course stage (`course`
- * given); returns the same set.
+ * A scene's static op set with {@link resolveBeatorajaCourseStageOps} added when the play is a course stage (`course`
+ * given): a new set then, else the set given.
  */
-export function withBeatorajaCourseStageOps(ops: Set<number>, course: SceneCourseInfo | undefined): Set<number> {
-  if (course !== undefined) for (const op of resolveBeatorajaCourseStageOps(course)) ops.add(op);
-  return ops;
+export function withBeatorajaCourseStageOps(
+  ops: ReadonlySet<number>,
+  course: CourseView | undefined,
+): ReadonlySet<number> {
+  return course !== undefined ? new Set([...ops, ...resolveBeatorajaCourseStageOps(course)]) : ops;
 }
 
 /**
  * The course stage titles on strings 150-159 (beatoraja `StringPropertyFactory.createCoursetitle`). On the select
- * screen a stage missing from the collection reads `(no song) <title>`, as beatoraja marks a course bar's song it does
- * not have; a stage the course does not have reads empty. Returns `undefined` for other string ids.
+ * screen a stage missing from the library reads `(no song) <title>`, as beatoraja marks a course bar's song it does not
+ * have; a stage the course does not have reads empty. Returns `undefined` for other string ids.
  */
 export function resolveBeatorajaCourseText(
-  refOp: number,
-  course: SceneCourseInfo,
-  options: { missingStages?: ReadonlySet<number> } = {},
+  id: number,
+  course: CourseView,
+  options: { readonly missingStages?: ReadonlySet<number> } = {},
 ): string | undefined {
-  if (refOp < BEATORAJA_TEXT.COURSE1_TITLE || refOp > BEATORAJA_TEXT.COURSE10_TITLE) return undefined;
-  const index = refOp - BEATORAJA_TEXT.COURSE1_TITLE;
+  if (id < BEATORAJA_TEXT.COURSE1_TITLE || id > BEATORAJA_TEXT.COURSE10_TITLE) return undefined;
+  const index = id - BEATORAJA_TEXT.COURSE1_TITLE;
   const stage = course.stages[index];
   if (stage === undefined) return '';
   return options.missingStages?.has(index) === true ? `(no song) ${stage.title}` : stage.title;
+}
+
+/** The stages of a library course that are not in the library (by index), which its bar marks `(no song)`. */
+export function beatorajaMissingCourseStages(course: LibraryCourse): ReadonlySet<number> {
+  return new Set(course.stages.flatMap((stage, index) => (stage.song === undefined ? [index] : [])));
 }

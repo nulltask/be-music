@@ -14,6 +14,7 @@ export const PACKAGE_NAMES = [
   'scene-model',
   'player-tui',
   'lr2-skin',
+  'beatoraja-skin',
   'skin-sdk',
   'player-web',
 ] as const;

@@ -35,23 +35,3 @@ export function extractChartSubartist(chart: BeMusicJson | undefined): string {
   if (typeof bmsExtra === 'string' && bmsExtra.length > 0) return bmsExtra;
   return '';
 }
-
-/**
- * The chart TOTAL readout (beatoraja ref 368, `chart_totalgauge`). beatoraja reads it after
- * `BMSPlayerRule.validate`, i.e. the TOTAL the gauge actually runs on — a bmson `total` is a
- * percentage of the ruleset's default TOTAL and a missing `#TOTAL` is that default — so the
- * engine's resolved `effectiveTotal` wins whenever a gauge has been reported. Without one (before
- * the first frame) the chart header is shown as written. Floored, since the readout has no
- * fraction digits; `undefined` when there is nothing to show.
- */
-export function resolveChartTotalReadout(
-  chart: BeMusicJson | undefined,
-  gauge: { effectiveTotal: number } | undefined,
-): number | undefined {
-  const effectiveTotal = gauge?.effectiveTotal;
-  if (typeof effectiveTotal === 'number' && Number.isFinite(effectiveTotal) && effectiveTotal > 0) {
-    return Math.floor(effectiveTotal);
-  }
-  const total = chart?.metadata?.total;
-  return typeof total === 'number' && Number.isFinite(total) ? Math.floor(total) : undefined;
-}
