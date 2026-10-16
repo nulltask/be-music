@@ -717,12 +717,10 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     return resolveLr2LaneTimer(bank, this.resolveLr2Lane(channel));
   }
 
+  /** Whether an op holds. Op 999 is a `#CUSTOMOPTION` op like 900-998 (OpenLR2 `GetOptionFlag_dst`). */
   private isOpActive(op: number): boolean {
     if (op === 0) {
       return true;
-    }
-    if (op === 999) {
-      return false;
     }
     return this.runtimeOps.has(op);
   }
