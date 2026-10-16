@@ -1634,7 +1634,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Hidden until {@link start} fires, so a scene shown before the play begins draws nothing of it yet.
     this.root.visible = false;
     this.assetsLoading = true;
-    prepareSong.call(this, song);
+    prepareSong(this, song);
     if (this.entered) {
       // No splash covers the load window: hold the chart clock before its start (see `start()`) and draw the loading
       // playfield while assets decode, instead of a blank stage.
@@ -1644,14 +1644,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     await this.prepareTheme();
     if (this.disposed) return;
-    await prepareAudio.call(this);
+    await prepareAudio(this);
     if (this.disposed) return;
     // BGA preload runs IN THE BACKGROUND — `prepare()` resolves here even if `prepareBga()` is still decoding videos.
     // The ffmpeg.wasm fallback for unsupported codecs (e.g. legacy `.mpg`) can take ~tens of seconds, and the user
     // wants the PLAY scene to transition in immediately and play its LR2 LOADING animation during that wait rather than
     // freezing the Decide splash. {@link start} gates the actual chart start (LR2 timer 40 → 41 / op 80 → 81) on
     // `bgaReadyPromise`, so notes still don't begin until the BGA is in place.
-    this.bgaReadyPromise = prepareBga.call(this).catch((error) => {
+    this.bgaReadyPromise = prepareBga(this).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
     void this.bgaReadyPromise.then(() => {
@@ -4843,7 +4843,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         bmsonSlicePlayback: this.bmsonSlicePlayback,
         // The engine plays through its own session: a stitched NONSTOP chart's stage rates (FIT) and fades go with it.
         ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
-        playbackRate: samplePlaybackRate.call(this),
+        playbackRate: samplePlaybackRate(this),
         playbackRateFollowsTempo: supportsLiveTempoChange(this.options.tempoPitchMode ?? 'pitch'),
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
