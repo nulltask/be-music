@@ -3,7 +3,9 @@
  * session times the screen from its view's skin timing (`DecideView.timing`): input opens after the input delay, the
  * screen moves on to the play by itself after the auto advance, and a leaving screen fades out before the host hears
  * where it goes. Enter, Space or a click continue to the play once input is open; Escape backs out to select at any
- * time. The decide jingle plays through the audio service and stops when the screen leaves the stage.
+ * time, or once input is open when the skin's timing says so (beatoraja's). The screen shows how far the play behind
+ * it has loaded: the host's progress, else how much of the auto advance has gone by. The decide jingle plays through
+ * the audio service and stops when the screen leaves the stage.
  *
  * The session draws the chart's `#RANDOM` / `#SWITCH` branches once, when it is made ({@link DecideSession.resolved}):
  * the screen's graphs show those branches, and the host hands the same chart and draws to the play, so the play plays
@@ -59,7 +61,10 @@ export interface DecideSessionOptions {
   readonly audio: DecideAudio;
   /** When the screen takes input and how it leaves, as the view's skin authors it. */
   readonly timing: SceneViewTiming;
-  /** How far the play behind the screen has loaded, 0..1, read every frame; `undefined` while nothing loads. */
+  /**
+   * How far the play behind the screen has loaded, 0..1, read every frame; `undefined` while nothing loads. Without it
+   * the screen shows how much of its auto advance has gone by.
+   */
   readonly progress?: () => number | undefined;
   /** The random source the chart's `#RANDOM` / `#SWITCH` branches are drawn with, in `[0, 1)`. Defaults to `Math.random`. */
   readonly random?: () => number;
@@ -153,7 +158,7 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
       }
       this.completeLeaving(nowMs);
     }
-    const progress = clampProgress(this.options.progress?.());
+    const progress = this.progressAt(nowMs);
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       chart: this.options.chart,
@@ -167,16 +172,26 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
   }
 
   /**
-   * The player asked to continue or back out at `atMs`: continuing waits for input to open, backing out does not (LR2
-   * lets Escape leave its decide screen before `#STARTINPUT`).
+   * How far the play behind the screen has loaded at `nowMs`: the host's progress, else how much of the auto advance
+   * has gone by; `undefined` with neither.
+   */
+  private progressAt(nowMs: number): number | undefined {
+    const loaded = clampProgress(this.options.progress?.());
+    if (loaded !== undefined) return loaded;
+    const autoAdvanceMs = this.options.timing.autoAdvanceMs;
+    if (autoAdvanceMs === undefined || autoAdvanceMs <= 0) return undefined;
+    return clampProgress((nowMs - this.enteredAtMs) / autoAdvanceMs);
+  }
+
+  /**
+   * The player asked to continue or back out at `atMs`: continuing waits for input to open. Backing out does not (LR2
+   * lets Escape leave its decide screen before `#STARTINPUT`), unless the skin's timing holds Escape back too
+   * (beatoraja's `input` holds back every key).
    */
   private request(action: DecideKeyAction, atMs: number): void {
-    if (action === 'continue') {
-      if (Math.max(atMs, this.nowMs) < this.inputOpenAtMs) return;
-      this.leave('play', atMs);
-    } else {
-      this.leave('select', atMs);
-    }
+    const waitsForInput = action === 'continue' || this.options.timing.escapeWaitsForInput === true;
+    if (waitsForInput && Math.max(atMs, this.nowMs) < this.inputOpenAtMs) return;
+    this.leave(action === 'continue' ? 'play' : 'select', atMs);
     this.completeLeaving(Math.max(atMs, this.nowMs));
   }
 
