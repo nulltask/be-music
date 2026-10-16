@@ -6,9 +6,11 @@
  * constants and their primary sources are documented in `definitions.ts`.
  */
 export * from './facts.ts';
+export * from './clear-lamp.ts';
 export * from './course.ts';
 export * from './definitions.ts';
 export * from './gauge.ts';
+export * from './gauge-type.ts';
 export * from './judge.ts';
 export * from './selection.ts';
 export * from './chart-facts.ts';

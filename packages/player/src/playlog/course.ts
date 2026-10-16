@@ -1,7 +1,8 @@
-import type { GrooveGaugeType } from '../core/groove-gauge.ts';
+import type { GaugeType } from '../ruleset/gauge-type.ts';
 import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { resolveRuleset, type PlaylogRulesetId } from '../ruleset/index.ts';
+import { CLEAR_LAMPS, resolveCourseClearLamp, resolveMissCount, type ClearLamp } from '../ruleset/clear-lamp.ts';
 import { resolveCourseGauge, resolveCourseGaugeId, type RulesetCourseKind } from '../ruleset/course.ts';
 import {
   BE_MUSIC_PLAYLOG_VERSION,
@@ -82,8 +83,8 @@ export type PlaylogCourseStageEntry =
       facts: RulesetChartFacts;
     };
 
-/** The lamp a course run earns, on the same scale as single-chart lamps. */
-export type CourseClearLamp = 'FAILED' | 'EASY' | 'NORMAL' | 'HARD' | 'EX_HARD' | 'FULL_COMBO' | 'PERFECT' | 'MAX';
+/** The lamps a course run earns: every `ClearLamp` but NO PLAY and ASSIST EASY (no course gauge is an assist gauge). */
+export type CourseClearLamp = Exclude<ClearLamp, 'NO_PLAY' | 'ASSIST_EASY'>;
 
 export interface PlaylogCourseResult {
   ruleset: string;
@@ -110,61 +111,25 @@ export interface PlaylogCourseResult {
   stages: PlaylogRulesetResult[];
 }
 
-/** Course gauges → the lamp a clear earns, before the full-combo upgrades. */
-const COURSE_GAUGE_LAMPS: Readonly<Record<string, CourseClearLamp>> = {
-  CLASS: 'NORMAL',
-  EXCLASS: 'HARD',
-  EXHARDCLASS: 'EX_HARD',
-  'GRADE-HARD': 'HARD',
-  'GRADE-DEATH': 'HARD',
-  'COURSE-HARD': 'HARD',
-  'COURSE-DEATH': 'HARD',
-  'COURSE-EASY': 'EASY',
-};
-
-const TOP_LAMP: Readonly<Record<string, CourseClearLamp>> = { lr2: 'FULL_COMBO', beatoraja: 'MAX', iidx: 'FULL_COMBO' };
-const LAMP_ORDER: readonly CourseClearLamp[] = [
-  'FAILED',
-  'EASY',
-  'NORMAL',
-  'HARD',
-  'EX_HARD',
-  'FULL_COMBO',
-  'PERFECT',
-  'MAX',
-];
-
 /**
- * The lamp of a course run.
- *
- * - FAILED when a stage ended with its gauge empty or a stage was never reached (LR2 `CheckCourseClear`, beatoraja
- *   `MusicResult`).
- * - A FULL COMBO when the course max combo covers every note (Σ notes == course max combo, as both check), a PERFECT
- *   without a GOOD and a MAX with only PGREATs, capped at the ruleset's top lamp.
- * - Otherwise the gauge's lamp. LR2's lamp follows the player's gauge pick (option 3 EASY → EASY, HARD and DEATH →
- *   HARD, else GROOVE / NORMAL); beatoraja's follows the class gauge (CLASS NORMAL, EXCLASS HARD, EXHARDCLASS EX-HARD).
+ * The lamp of a course run, by the course clear-lamp rule (`resolveCourseClearLamp`): FAILED when a stage ended with its
+ * gauge empty or a stage was never reached; FULL COMBO, PERFECT or MAX when the course max combo covers every note;
+ * otherwise the gauge's lamp, LR2's by the player's gauge `pick` and beatoraja's by the class gauge.
  */
 export function resolveCourseLamp(
   ruleset: string,
   result: Pick<PlaylogCourseResult, 'judge' | 'noteCount' | 'maxCombo' | 'gauge'>,
-  pick: GrooveGaugeType,
+  pick: GaugeType,
 ): CourseClearLamp {
-  if (!result.gauge.cleared) return 'FAILED';
-  let lamp: CourseClearLamp =
-    ruleset === 'lr2'
-      ? pick === 'EASY'
-        ? 'EASY'
-        : pick === 'HARD'
-          ? 'HARD'
-          : // LR2 awards HARD only for its HARD-family gauges: a DEATH clear is NORMAL (LR2body.exe CheckCourseClear @0x4086d0).
-            'NORMAL'
-      : (COURSE_GAUGE_LAMPS[result.gauge.type] ?? 'NORMAL');
-  if (result.noteCount > 0 && result.maxCombo >= result.noteCount) {
-    const { great, good } = result.judge;
-    lamp = good > 0 ? 'FULL_COMBO' : great > 0 ? 'PERFECT' : 'MAX';
-  }
-  const top = TOP_LAMP[ruleset] ?? 'FULL_COMBO';
-  return LAMP_ORDER.indexOf(lamp) > LAMP_ORDER.indexOf(top) ? top : lamp;
+  return resolveCourseClearLamp({
+    ruleset,
+    cleared: result.gauge.cleared,
+    gauge: result.gauge.type,
+    gaugeType: pick,
+    noteCount: result.noteCount,
+    maxCombo: result.maxCombo,
+    judge: result.judge,
+  }) as CourseClearLamp;
 }
 
 /** The gauge a course stage starts on (see {@link resolveCourseStageStartGauge}). */
@@ -224,7 +189,7 @@ export function aggregateCourseResult(
   course: PlaylogCourseInfo,
   stageResults: readonly PlaylogRulesetResult[],
   stageNoteCounts: readonly number[],
-  pick: GrooveGaugeType,
+  pick: GaugeType,
 ): PlaylogCourseResult {
   const judge: PlaylogJudgeCounts = { pgreat: 0, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 };
   let fast = 0;
@@ -252,7 +217,7 @@ export function aggregateCourseResult(
     maxCombo: last?.course?.maxCombo ?? last?.maxCombo ?? 0,
     gauge,
   };
-  const missCount = judge.bad + judge.poor + judge.emptyPoor + Math.max(0, noteCount - judged);
+  const missCount = resolveMissCount(judge, noteCount - judged);
   const result: PlaylogCourseResult = {
     ruleset,
     judge,
@@ -311,7 +276,7 @@ export function simulateCoursePlaylog(
     return nonstopCourseResult(courseLog, simulatePlaylog(courseLog.nonstop.playlog, options), stageResults);
   }
   const stageResults: PlaylogRulesetResult[] = [];
-  let pick: GrooveGaugeType = 'GROOVE';
+  let pick: GaugeType = 'GROOVE';
   let previous: PlaylogRulesetResult | undefined;
   for (const entry of courseLog.stages) {
     if (!entry.played || (previous !== undefined && stageFailed(previous))) break;
@@ -367,7 +332,7 @@ function nonstopCourseResult(
     slow: run.slow,
     exScore: run.exScore,
     noteCount,
-    missCount: judge.bad + judge.poor + judge.emptyPoor + Math.max(0, noteCount - judged),
+    missCount: resolveMissCount(judge, noteCount - judged),
     maxCombo: run.maxCombo,
     djLevel: resolveIidxRankLabel(run.exScore, noteCount),
     gauge,
@@ -469,7 +434,10 @@ export function resolveCoursePlaylogFilename(courseLog: BeMusicCoursePlaylog, wh
 }
 
 const COURSE_KINDS: ReadonlySet<string> = new Set(['grade', 'expert', 'nonstop']);
-const COURSE_LAMPS: ReadonlySet<string> = new Set(LAMP_ORDER);
+/** The lamps a course run can earn ({@link CourseClearLamp}). */
+const COURSE_LAMPS: ReadonlySet<string> = new Set(
+  CLEAR_LAMPS.filter((lamp) => lamp !== 'NO_PLAY' && lamp !== 'ASSIST_EASY'),
+);
 
 function parseJudgeRankFacts(judgeRank: Record<string, unknown>, path: string): RulesetChartFacts['judgeRank'] {
   const parsed: RulesetChartFacts['judgeRank'] = { percent: expectFiniteNumber(judgeRank.percent, `${path}.percent`) };

@@ -13,7 +13,7 @@ import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import { resolveIidxRankLabel } from '../core/scoring.ts';
-import type { GrooveGaugeType } from '../core/groove-gauge.ts';
+import type { GaugeType } from '../ruleset/gauge-type.ts';
 import packageJson from '../../package.json' with { type: 'json' };
 import {
   BE_MUSIC_PLAYLOG_FORMAT,
@@ -50,7 +50,7 @@ export interface PlaylogRecorderPlaySettings {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordPlaylog.gauge`); `GROOVE` when neither is set. */
-  gauge?: GrooveGaugeType;
+  gauge?: GaugeType;
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
   judgeWindowOverrideMs?: number;
@@ -391,7 +391,7 @@ function buildNativeResult(
   summary: PlayerSummary,
   maxCombo: number | undefined,
   emptyPoorCount: number,
-  declaredGauge: GrooveGaugeType,
+  declaredGauge: GaugeType,
   moneyScore: boolean,
 ): PlaylogRulesetResult {
   // Reported the way the simulators report a ruleset result: the judgment count as `noteCount`, the DJ LEVEL, a money
