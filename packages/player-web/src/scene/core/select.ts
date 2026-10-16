@@ -19,6 +19,7 @@ import {
   SORT_CYCLE,
   wrappedCursorDelta,
   type BrowseSnapshot,
+  type SystemSoundSet,
 } from '@be-music/scene-model';
 import { resolveLr2SelectTimers, type Lr2TimerUpdate } from '@be-music/lr2-skin/state';
 import { logger } from '../../logger.ts';
@@ -843,6 +844,66 @@ export class CoreSongSelectView<
   /** Whether the select screen is showing: entered, and not exited for a decide / play / result screen since. */
   public isVisible(): boolean {
     return this.visible;
+  }
+
+  // The select scene's host API under `createSelectScene`'s names (`SelectScene`), so a host drives this scene and the
+  // built-in one alike until the LR2 select screen moves onto `createSelectScene` too.
+
+  /** {@link isVisible}, under `SessionScene`'s name. */
+  public get entered(): boolean {
+    return this.host !== undefined && this.visible && !this.disposed;
+  }
+
+  /** {@link getNavigation}, under `SelectScene`'s name. */
+  public snapshot(): BrowseSnapshot {
+    return this.getNavigation();
+  }
+
+  /** {@link getFocusedEntry}, under `SelectScene`'s name. */
+  public focused(): BrowserBrowseEntry | undefined {
+    return this.getFocusedEntry();
+  }
+
+  /** {@link setCollection}, under `SelectScene`'s name. */
+  public setLibrary(collection: BrowserSongCollection): void {
+    this.setCollection(collection);
+  }
+
+  /** {@link setNavigation}, under `SelectScene`'s name. */
+  public restore(snapshot: BrowseSnapshot): void {
+    this.setNavigation(snapshot);
+  }
+
+  /** {@link setSearchQuery}, under `SelectScene`'s name. */
+  public setSearch(text: string): void {
+    this.setSearchQuery(text);
+  }
+
+  /** {@link getSearchFieldRect}, under `SelectScene`'s name. */
+  public searchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
+    return this.getSearchFieldRect();
+  }
+
+  /** Redraws the bars and panels with the records as they are now, as `SelectScene.refreshRecords` does. */
+  public refreshRecords(): void {
+    if (this.host !== undefined && !this.disposed) this.render();
+  }
+
+  /**
+   * Takes a theme's sounds as a `SystemSoundSet` (by bytes): its select BGM, its decide jingle and its cues, for
+   * {@link setSelectBgm}, {@link setDecideBgm} and {@link setSystemSounds}.
+   */
+  public setSounds(sounds: SystemSoundSet): void {
+    this.setSelectBgm(sounds.selectBgm?.bytes);
+    this.setDecideBgm(sounds.decideBgm?.bytes);
+    this.setSystemSounds({
+      cursorMove: sounds.cursor?.bytes,
+      folderOpen: sounds.folderOpen?.bytes,
+      folderClose: sounds.folderClose?.bytes,
+      optionOpen: sounds.optionOpen?.bytes,
+      optionClose: sounds.optionClose?.bytes,
+      optionChange: sounds.optionChange?.bytes,
+    });
   }
 
   public setCollection(collection: BrowserSongCollection): void {

@@ -469,6 +469,23 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       scene.dispose();
     },
   });
+  define('player-web.createSelectScene', {
+    run: () => {
+      const scene = playerWebCoreApi.createSelectScene(
+        { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
+        {
+          library: { sources: [], songs: [BENCH_SONG], errors: [] },
+          sounds: { selectBgm: { bytes: BENCH_BYTES } },
+          audio: playerWebCoreApi.createAudioService({ createContext: () => undefined }),
+          on: { start: () => undefined },
+          keyTarget: BENCH_KEY_TARGET,
+          now: () => 0,
+        },
+      );
+      scene.snapshot();
+      scene.dispose();
+    },
+  });
   define('player-web.createSkinFamilyRegistry', {
     run: () => {
       const registry = playerWebCoreApi.createSkinFamilyRegistry([
