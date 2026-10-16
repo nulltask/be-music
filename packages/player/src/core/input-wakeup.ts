@@ -1,4 +1,5 @@
 import { effect } from 'alien-signals';
+import { getEngineScheduler } from './engine-clock.ts';
 import type { PlayerInputSignalBus } from './input-signal-bus.ts';
 
 /**
@@ -122,18 +123,6 @@ export function createInputWakeUp(inputSignals: PlayerInputSignalBus): InputWake
 }
 
 function scheduleInputTimeout(callback: () => void, timeoutMs: number): () => void {
-  if (timeoutMs > 0) {
-    const handle = setTimeout(callback, timeoutMs);
-    return () => clearTimeout(handle);
-  }
-  const timers = globalThis as {
-    setImmediate?: (callback: () => void) => unknown;
-    clearImmediate?: (handle: unknown) => void;
-  };
-  if (typeof timers.setImmediate === 'function') {
-    const handle = timers.setImmediate(callback);
-    return () => timers.clearImmediate?.(handle);
-  }
-  const handle = setTimeout(callback, 0);
-  return () => clearTimeout(handle);
+  const scheduler = getEngineScheduler();
+  return timeoutMs > 0 ? scheduler.setTimeout(callback, timeoutMs) : scheduler.setImmediate(callback);
 }
