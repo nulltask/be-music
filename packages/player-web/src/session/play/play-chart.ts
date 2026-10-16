@@ -129,27 +129,27 @@ export interface PlayChartContext {
   applyHsFix(resolver: TimingResolver, referenceBpmCandidate: number | undefined, mainBpm: number | undefined): void;
 }
 
-export function prepareSong(this: PlayChartContext, song: BrowserSongEntry): void {
+export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void {
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
   const { chart: resolved, randomDraws } = resolvePlayChart(
     song.chart,
-    this.options.replay?.play.randomDraws !== undefined ? { randomDraws: this.options.replay.play.randomDraws } : {},
+    ctx.options.replay?.play.randomDraws !== undefined ? { randomDraws: ctx.options.replay.play.randomDraws } : {},
   );
-  this.resolvedChart = resolved;
-  this.randomDraws = randomDraws;
+  ctx.resolvedChart = resolved;
+  ctx.randomDraws = randomDraws;
   // BMS spec — `#WAVCMD 01 xx vv` and `#EXWAVxx` per-slot volumes, collected once so every sample trigger is a single
   // Map lookup; slots without an entry take the unity-gain fast path.
-  this.wavCmdVolumeMultipliers = collectChartVolumeMultipliers(resolved);
+  ctx.wavCmdVolumeMultipliers = collectChartVolumeMultipliers(resolved);
   // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an animated BGA slot. Pre-parse every entry now so
   // per-frame BGA composition stays a single `Map.get` plus `pickSwitchingBgaFrame` (no per-frame regex / split).
-  this.switchingBgas.clear();
+  ctx.switchingBgas.clear();
   const base = resolveBmsBase(resolved);
   for (const [slot, raw] of Object.entries(resolved.bms.swBga)) {
     const parsed = parseBmsSwBga(raw, base);
     if (parsed) {
-      this.switchingBgas.set(slot, parsed);
+      ctx.switchingBgas.set(slot, parsed);
     }
   }
   // Build the chart's playable / landmine / invisible note arrays via the engine's own `preparePlaybackChartData`
@@ -182,26 +182,26 @@ export function prepareSong(this: PlayChartContext, song: BrowserSongEntry): voi
     playVariant: hostPlayVariant,
     inferBmsLnTypeWhenMissing: true,
   });
-  this.resolvedPlayChart = resolvedPlay;
+  ctx.resolvedPlayChart = resolvedPlay;
   // The invisible / keysound array is always prepared even when the overlay is off — so the lil-gui toggle can flip
   // the visualization on mid-song without a chart restart; the per-frame render loop is gated on
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
   const prepared = preparePlaybackChart(
     resolvedPlay,
-    { laneModeExtension: extractChartExtension(this.song?.chartPath) },
+    { laneModeExtension: extractChartExtension(ctx.song?.chartPath) },
     0,
   );
-  this.preparedChart = prepared;
-  this.touchTokenByChannel = undefined;
-  this.notes = prepared.notes;
-  this.mineNotes = prepared.landmineNotes;
-  this.invisibleNotes = prepared.invisibleNotes;
-  if (this.options.replay !== undefined) {
+  ctx.preparedChart = prepared;
+  ctx.touchTokenByChannel = undefined;
+  ctx.notes = prepared.notes;
+  ctx.mineNotes = prepared.landmineNotes;
+  ctx.invisibleNotes = prepared.invisibleNotes;
+  if (ctx.options.replay !== undefined) {
     // Replay playback — the recorded play-log carries the FINAL note arrangement (post-flip, post-shuffle), so
     // instead of re-rolling the lane transforms we re-apply the recorded channels onto the freshly prepared
     // notes. A mismatch means the loaded chart is not the one the log was recorded against (different `#RANDOM`
     // roll or a different file) — surface it as a prepare failure rather than replaying garbage.
-    const arranged = applyPlaylogArrangement(this.options.replay.chart.notes, prepared);
+    const arranged = applyPlaylogArrangement(ctx.options.replay.chart.notes, prepared);
     if (!arranged.ok) {
       throw new Error(`play-log replay chart mismatch: ${arranged.reason}`);
     }
@@ -209,14 +209,14 @@ export function prepareSong(this: PlayChartContext, song: BrowserSongEntry): voi
     // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk because we already iterate `notes` for sorting; SP
     // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
     // same visual lane after the flip.
-    if (this.options.dpFlip) {
-      for (const note of this.notes) {
+    if (ctx.options.dpFlip) {
+      for (const note of ctx.notes) {
         note.channel = flipDpChannel(note.channel);
       }
-      for (const mine of this.mineNotes) {
+      for (const mine of ctx.mineNotes) {
         mine.channel = flipDpChannel(mine.channel);
       }
-      for (const invisible of this.invisibleNotes) {
+      for (const invisible of ctx.invisibleNotes) {
         invisible.channel = flipDpChannel(invisible.channel);
       }
     }
@@ -226,31 +226,31 @@ export function prepareSong(this: PlayChartContext, song: BrowserSongEntry): voi
     // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
     // intact.
     applyRandomMode(
-      this.notes as Array<{ channel: string }>,
+      ctx.notes as Array<{ channel: string }>,
       resolveLaneOptionChannels('1P', hostPlayVariant),
-      this.options.random1P ?? 'OFF',
+      ctx.options.random1P ?? 'OFF',
       Math.random,
-      this.mineNotes as Array<{ channel: string }>,
-      this.invisibleNotes as Array<{ channel: string }>,
+      ctx.mineNotes as Array<{ channel: string }>,
+      ctx.invisibleNotes as Array<{ channel: string }>,
     );
     applyRandomMode(
-      this.notes as Array<{ channel: string }>,
+      ctx.notes as Array<{ channel: string }>,
       resolveLaneOptionChannels('2P', hostPlayVariant),
-      this.options.random2P ?? 'OFF',
+      ctx.options.random2P ?? 'OFF',
       Math.random,
-      this.mineNotes as Array<{ channel: string }>,
-      this.invisibleNotes as Array<{ channel: string }>,
+      ctx.mineNotes as Array<{ channel: string }>,
+      ctx.invisibleNotes as Array<{ channel: string }>,
     );
   }
-  this.maxLongNoteBeatSpan = this.notes.reduce((max, note) => {
+  ctx.maxLongNoteBeatSpan = ctx.notes.reduce((max, note) => {
     if (note.endBeat === undefined) {
       return max;
     }
     return Math.max(max, Math.max(0, note.endBeat - note.beat));
   }, 0);
-  this.chartLastNoteEndSeconds = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
-  this.songDurationSeconds = this.chartLastNoteEndSeconds;
-  this.chartEnded = false;
+  ctx.chartLastNoteEndSeconds = ctx.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
+  ctx.songDurationSeconds = ctx.chartLastNoteEndSeconds;
+  ctx.chartEnded = false;
   // Drop the previous chart's active-sample tracking. Stale entries would otherwise let a `c=true` note on the new
   // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
   // ends naturally.
@@ -258,8 +258,8 @@ export function prepareSong(this: PlayChartContext, song: BrowserSongEntry): voi
   // Lay out the whole keyboard of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY), not just the lanes
   // the chart happens to use, so a sparse chart still plays on full lanes. The variant also decides channel `17`
   // (a lane in 9 KEY, FREE ZONE in IIDX) and the 9 KEY layout the LR2 default 9-keys play skin expects.
-  this.chartPlayVariant = hostPlayVariant;
-  this.laneChannels = resolvePlayVariantLaneChannels(this.notes, this.chartPlayVariant);
+  ctx.chartPlayVariant = hostPlayVariant;
+  ctx.laneChannels = resolvePlayVariantLaneChannels(ctx.notes, ctx.chartPlayVariant);
   // Initialize from `prepared.scorableNotes.length` so the view's initial `score.total` matches the engine's
   // authoritative `summary.total` (= same `scorableNotes` filter, with Free-Zone channels excluded). Without
   // this, charts that use a Free-Zone channel had a renderer-side total larger than the engine's by the
@@ -267,39 +267,39 @@ export function prepareSong(this: PlayChartContext, song: BrowserSongEntry): voi
   // unreachable — combo could only ever climb to the engine's smaller scorable count, and the FC cue never
   // fired. `applyEngineFrame` still mirrors `summary.total` defensively each frame, but that's now a no-op
   // on the common path.
-  this.score = createEmptyScore(prepared.scorableNotes.length);
-  this.tracker = createScoreTracker();
-  this.courseCombo = this.options.course !== undefined ? createCourseCombo(this.options.course.carryIn) : undefined;
+  ctx.score = createEmptyScore(prepared.scorableNotes.length);
+  ctx.tracker = createScoreTracker();
+  ctx.courseCombo = ctx.options.course !== undefined ? createCourseCombo(ctx.options.course.carryIn) : undefined;
   // Reset the result-screen "MAX COMBO" tracker whenever a fresh chart is prepared — restart (R), song-pick from
   // select, etc. Otherwise the previous play's max would leak into the new one.
-  this.maxCombo = 0;
+  ctx.maxCombo = 0;
   // Wipe per-side judge / combo snapshots so a fresh chart doesn't briefly paint the previous play's verdict on its
   // first frame (the `until` chart-time is in the previous chart's coordinate system; comparing it to the new chart's
   // `currentSeconds()` would render stale state until the new play crosses that mark).
-  this.lastJudge = '';
-  this.lastJudgeUntil = 0;
-  this.judgeSideState = {
+  ctx.lastJudge = '';
+  ctx.lastJudgeUntil = 0;
+  ctx.judgeSideState = {
     '1P': { judge: '', until: 0, combo: 0 },
     '2P': { judge: '', until: 0, combo: 0 },
   };
   // Result-screen polyline histories. Seeding waits until after `gaugeState` is reinitialized below — at this point
   // we'd still be reading the **previous** play's gauge value.
-  this.gaugeHistory = [];
-  this.scoreHistory = [];
+  ctx.gaugeHistory = [];
+  ctx.scoreHistory = [];
   const resolver = resolvedPlay.timing;
-  this.timingResolver = resolver;
+  ctx.timingResolver = resolver;
   // Build a STOP-aware seconds→beat resolver for `currentBeat`.
-  this.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
+  ctx.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
   // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, or only ones at 1, so
   // the common case stays on the plain beat-diff path with no extra cost (and on its ruleset's drawing rules).
   const beatResolver = resolvedPlay.beatResolver;
   const scrollTimeline = resolvedPlay.scroll;
   const speedTimeline = resolvedPlay.speed;
-  this.scrollMapper = changesScrollRate(scrollTimeline, speedTimeline)
+  ctx.scrollMapper = changesScrollRate(scrollTimeline, speedTimeline)
     ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
     : undefined;
-  this.laneTimelineBeats = collectResolvedLaneTimelineBeats(resolvedPlay);
-  this.autoSampleTriggers = resolvedPlay.sampleTriggers
+  ctx.laneTimelineBeats = collectResolvedLaneTimelineBeats(resolvedPlay);
+  ctx.autoSampleTriggers = resolvedPlay.sampleTriggers
     .filter((trigger) => !isPlayableInputChannel(trigger.channel))
     .sort((left, right) => left.seconds - right.seconds);
   // bmson 1.0.0 slicing — for bmson charts, each `sound_channels[]` entry is a single audio file that gets sliced at
@@ -308,7 +308,7 @@ export function prepareSong(this: PlayChartContext, song: BrowserSongEntry): voi
   // per-event slice playback table; we wire it up here so the playable- note path (`playSample`) can look up the
   // offset / duration by event identity at trigger time. BMS / json charts skip the build (the map stays undefined)
   // since they have no slicing semantics — every note plays its WAV from the start.
-  this.bmsonSlicePlayback =
+  ctx.bmsonSlicePlayback =
     resolved.sourceFormat === 'bmson'
       ? createBmsonSamplePlaybackMap(
           resolved,
@@ -318,64 +318,63 @@ export function prepareSong(this: PlayChartContext, song: BrowserSongEntry): voi
           // session's `scheduleEvent` would fall back to "play whole WAV" for every BGM cue, regressing bmson
           // sliced-WAV authoring intent (each note's `audio_offset` / `slice_duration` window).
           [
-            ...this.notes.map((note) => note.event),
-            ...this.mineNotes.map((note) => note.event),
-            ...this.invisibleNotes.map((note) => note.event),
-            ...this.autoSampleTriggers.map((trigger) => trigger.event),
+            ...ctx.notes.map((note) => note.event),
+            ...ctx.mineNotes.map((note) => note.event),
+            ...ctx.invisibleNotes.map((note) => note.event),
+            ...ctx.autoSampleTriggers.map((trigger) => trigger.event),
           ],
           beatResolver,
         )
       : undefined;
-  this.songDurationSeconds = Math.max(this.chartLastNoteEndSeconds, this.autoSampleTriggers.at(-1)?.seconds ?? 0);
+  ctx.songDurationSeconds = Math.max(ctx.chartLastNoteEndSeconds, ctx.autoSampleTriggers.at(-1)?.seconds ?? 0);
   // BMS spec — `#BASEBPM N` declares the chart's reference BPM for HS-FIX calibration. The shared
   // `resolveChartReferenceBpm` helper prefers `#BASEBPM` over the chart's initial `#BPM` so a chart whose `#BPM` is
   // its peak / average rather than its scroll-feel reference still calibrates at the speed the author intended; falls
   // back to the parsed `metadata.bpm` and finally the song-list BPM hint when neither is present.
-  this.applyHsFix(resolver, resolveChartReferenceBpm(resolved, this.song?.bpm), resolveChartMainBpm(resolvedPlay));
+  ctx.applyHsFix(resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm), resolveChartMainBpm(resolvedPlay));
   // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
   // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
   // per PG/GR.
-  this.gaugeState = createPlaceholderGaugeState(this.resolveSelectedGauge(), resolveCourseStartGaugeInput.call(this));
+  ctx.gaugeState = createPlaceholderGaugeState(ctx.resolveSelectedGauge(), resolveCourseStartGaugeInput(ctx));
   // Now that the gauge has its starting value (LR2 default 20 %, a course stage's carried-in gauge), seed the polyline history so the result-screen
   // graph starts at the correct origin instead of the first judge's value.
-  this.gaugeHistory.push({ progress: 0, value: this.gaugeState.current });
-  this.scoreHistory.push({ progress: 0, exScore: 0 });
-  this.fastCount = 0;
-  this.slowCount = 0;
-  this.fullComboFired = false;
-  this.displayedScore = 0;
-  this.judgeTimings.clear();
-  this.longNotes.clear();
-  this.playMoments = {};
-  this.lanePressedAt.clear();
-  this.laneReleasedAt.clear();
-  this.chartBpmRange = resolveChartBpmRange(
+  ctx.gaugeHistory.push({ progress: 0, value: ctx.gaugeState.current });
+  ctx.scoreHistory.push({ progress: 0, exScore: 0 });
+  ctx.fastCount = 0;
+  ctx.slowCount = 0;
+  ctx.fullComboFired = false;
+  ctx.displayedScore = 0;
+  ctx.judgeTimings.clear();
+  ctx.longNotes.clear();
+  ctx.playMoments = {};
+  ctx.lanePressedAt.clear();
+  ctx.laneReleasedAt.clear();
+  ctx.chartBpmRange = resolveChartBpmRange(
     resolver.tempoPoints,
-    this.songDurationSeconds,
-    resolved.metadata.bpm > 0 ? resolved.metadata.bpm : this.song?.bpm,
+    ctx.songDurationSeconds,
+    resolved.metadata.bpm > 0 ? resolved.metadata.bpm : ctx.song?.bpm,
   );
-  this.autoScratchChannels = resolveAutoScratchEnabled.call(this)
+  ctx.autoScratchChannels = resolveAutoScratchEnabled(ctx)
     ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
     : new Set();
-  this.bgaTimeline = toBrowserBgaTimeline(resolvedPlay.bga);
-  this.nonstopBgaTimelines =
-    this.options.nonstop !== undefined
-      ? splitNonstopBgaTimeline(this.bgaTimeline, this.options.nonstop.stages)
+  ctx.bgaTimeline = toBrowserBgaTimeline(resolvedPlay.bga);
+  ctx.nonstopBgaTimelines =
+    ctx.options.nonstop !== undefined
+      ? splitNonstopBgaTimeline(ctx.bgaTimeline, ctx.options.nonstop.stages)
       : undefined;
   // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
   // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
   // black POOR plate on misses for charts that rely on this convention.
-  this.poorBgaFallbackKey = resolvePoorBgaFallbackKey(resolved);
-  this.poorBgaFallbackUntilSeconds = this.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
-  this.hasBga =
-    this.bgaTimeline.base.length > 0 || this.bgaTimeline.layer.length > 0 || this.bgaTimeline.poor.length > 0;
+  ctx.poorBgaFallbackKey = resolvePoorBgaFallbackKey(resolved);
+  ctx.poorBgaFallbackUntilSeconds = ctx.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
+  ctx.hasBga = ctx.bgaTimeline.base.length > 0 || ctx.bgaTimeline.layer.length > 0 || ctx.bgaTimeline.poor.length > 0;
 }
 
 /** The course stage the play runs (a replay's recorded one wins), with its ruleset, for the placeholder gauge. */
-function resolveCourseStartGaugeInput(this: PlayChartContext): Parameters<typeof createPlaceholderGaugeState>[1] {
-  const stage = this.options.replay !== undefined ? this.options.replay.play.course : this.options.course;
+function resolveCourseStartGaugeInput(ctx: PlayChartContext): Parameters<typeof createPlaceholderGaugeState>[1] {
+  const stage = ctx.options.replay !== undefined ? ctx.options.replay.play.course : ctx.options.course;
   if (stage === undefined) return undefined;
-  const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
+  const ruleset = ctx.options.replay?.play.judgeRuleset ?? ctx.options.judgeRuleset ?? 'lr2';
   return { stage, ruleset };
 }
 
@@ -383,9 +382,9 @@ function resolveCourseStartGaugeInput(this: PlayChartContext): Parameters<typeof
  * Whether the engine runs with auto-scratch, mirroring the `autoScratch` engine option: a replay's recorded flag, or
  * either side's toggle (the engine has one flag for both scratch lanes).
  */
-function resolveAutoScratchEnabled(this: PlayChartContext): boolean {
-  if (this.options.replay !== undefined) return this.options.replay.play.autoScratch === true;
-  return this.options.autoScratch1P === true || this.options.autoScratch2P === true;
+function resolveAutoScratchEnabled(ctx: PlayChartContext): boolean {
+  if (ctx.options.replay !== undefined) return ctx.options.replay.play.autoScratch === true;
+  return ctx.options.autoScratch1P === true || ctx.options.autoScratch2P === true;
 }
 
 /**

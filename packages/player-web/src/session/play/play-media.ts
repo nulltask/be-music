@@ -70,8 +70,8 @@ export interface PlayMediaContext {
   preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void>;
 }
 
-export async function prepareAudio(this: PlayMediaContext): Promise<void> {
-  if (!this.source || !this.song) {
+export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
+  if (!ctx.source || !ctx.song) {
     return;
   }
   // Build the audio bus. See `audio-bus.ts` for the full architecture; in short:
@@ -81,70 +81,70 @@ export async function prepareAudio(this: PlayMediaContext): Promise<void> {
   // 'legacy' collapses both buses onto a single compressor; 'off' bypasses every compressor stage. Sample sources
   // always feed `keyMixer` / `bgmMixer`, never directly to the destination, so a mode switch never has to reconnect
   // in-flight `BufferSourceNode`s — important because hundreds of one-shots come and go per second on dense charts.
-  this.audioCompressorMode = this.options.audioCompressorMode ?? 'split';
-  const initialMode: CompressorMode = this.options.audioCompressor === false ? 'off' : this.audioCompressorMode;
+  ctx.audioCompressorMode = ctx.options.audioCompressorMode ?? 'split';
+  const initialMode: CompressorMode = ctx.options.audioCompressor === false ? 'off' : ctx.audioCompressorMode;
   // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
-  const chart = this.resolvedChart ?? this.song.chart;
+  const chart = ctx.resolvedChart ?? ctx.song.chart;
   // The AudioContext, the bus and `#VOLWAV` are built, and the samples decoded, as the beatoraja prep does
   // (`chart/play-audio.ts`).
   const graph = createPlayAudioGraph(chart, initialMode, {
-    initialStages: this.options.audioCompressorStages,
-    initialVolumes: this.audioVolumes,
-    initialCompressorParams: this.audioCompressorParams,
+    initialStages: ctx.options.audioCompressorStages,
+    initialVolumes: ctx.audioVolumes,
+    initialCompressorParams: ctx.audioCompressorParams,
   });
-  this.audioContext = graph.audioContext;
-  this.audioBus = graph.audioBus;
+  ctx.audioContext = graph.audioContext;
+  ctx.audioBus = graph.audioBus;
   // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
-  this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
-  this.audioBus.outputNode.connect(this.audioAnalyzer.input);
-  const pitchMode = this.options.tempoPitchMode ?? 'pitch';
+  ctx.audioAnalyzer = new AudioAnalyzer(ctx.audioContext);
+  ctx.audioBus.outputNode.connect(ctx.audioAnalyzer.input);
+  const pitchMode = ctx.options.tempoPitchMode ?? 'pitch';
   // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
   // play at their own pitch.
   const stretched = await loadPlaySamples({
-    audioContext: this.audioContext,
+    audioContext: ctx.audioContext,
     chart,
-    source: this.source,
-    chartPath: this.song.chartPath,
-    samples: this.decodedSamples,
-    tempo: this.tempo,
+    source: ctx.source,
+    chartPath: ctx.song.chartPath,
+    samples: ctx.decodedSamples,
+    tempo: ctx.tempo,
     tempoPitchMode: pitchMode,
-    tempoStretchAlgorithm: this.options.tempoStretchAlgorithm ?? 'signalsmith',
-    ...(this.options.nonstop !== undefined ? { nonstop: this.options.nonstop } : {}),
-    isCancelled: () => this.disposed,
+    tempoStretchAlgorithm: ctx.options.tempoStretchAlgorithm ?? 'signalsmith',
+    ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
+    isCancelled: () => ctx.disposed,
   });
   // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
-  if (stretched && this.bmsonSlicePlayback !== undefined) {
-    this.bmsonSlicePlayback = stretchSlicePlayback(this.bmsonSlicePlayback, this.tempo);
+  if (stretched && ctx.bmsonSlicePlayback !== undefined) {
+    ctx.bmsonSlicePlayback = stretchSlicePlayback(ctx.bmsonSlicePlayback, ctx.tempo);
   }
   // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
   // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
   // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
   // it. See the field doc for why this beats keeping the audio plumbing inline on the view.
-  if (!this.disposed && this.audioContext && this.audioBus) {
-    this.nonstopMixer?.dispose();
-    this.nonstopMixer =
-      this.options.nonstop !== undefined
-        ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop, {
+  if (!ctx.disposed && ctx.audioContext && ctx.audioBus) {
+    ctx.nonstopMixer?.dispose();
+    ctx.nonstopMixer =
+      ctx.options.nonstop !== undefined
+        ? createNonstopStageMixer(ctx.audioContext, ctx.audioBus.bgmMixer, ctx.options.nonstop, {
             keepPitch: pitchMode === 'keep-pitch',
-            tempo: this.tempo,
+            tempo: ctx.tempo,
           })
         : undefined;
-    this.webAudioSession = createWebAudioSession({
-      audioContext: this.audioContext,
-      audioBus: this.audioBus,
-      chart: this.resolvedChart ?? this.song!.chart,
-      decodedSamples: this.decodedSamples,
-      wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
-      bmsonSlicePlayback: this.bmsonSlicePlayback,
-      ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
-      playbackRate: samplePlaybackRate.call(this),
+    ctx.webAudioSession = createWebAudioSession({
+      audioContext: ctx.audioContext,
+      audioBus: ctx.audioBus,
+      chart: ctx.resolvedChart ?? ctx.song!.chart,
+      decodedSamples: ctx.decodedSamples,
+      wavCmdVolumeMultipliers: ctx.wavCmdVolumeMultipliers,
+      bmsonSlicePlayback: ctx.bmsonSlicePlayback,
+      ...(ctx.nonstopMixer !== undefined ? { stageMixer: ctx.nonstopMixer } : {}),
+      playbackRate: samplePlaybackRate(ctx),
     });
   }
 }
 
 /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
-export function samplePlaybackRate(this: PlayMediaContext): number {
-  return resolveSamplePlaybackRate(this.options.tempoPitchMode ?? 'pitch', this.tempo);
+export function samplePlaybackRate(ctx: PlayMediaContext): number {
+  return resolveSamplePlaybackRate(ctx.options.tempoPitchMode ?? 'pitch', ctx.tempo);
 }
 
 /**
@@ -152,43 +152,43 @@ export function samplePlaybackRate(this: PlayMediaContext): number {
  * the timeline cues reference. Loads run with bounded parallelism so a long preamble doesn't gate the playfield
  * without fanning browser decoders out without limit.
  */
-export async function prepareBga(this: PlayMediaContext): Promise<void> {
-  const song = this.song;
-  const source = this.source;
-  if (!song || !source || !this.hasBga) {
+export async function prepareBga(ctx: PlayMediaContext): Promise<void> {
+  const song = ctx.song;
+  const source = ctx.source;
+  if (!song || !source || !ctx.hasBga) {
     return;
   }
   // Use the control-flow-resolved chart so #IF-gated BMP / bga header declarations match the chosen #RANDOM branch.
-  const chart = this.resolvedChart ?? song.chart;
+  const chart = ctx.resolvedChart ?? song.chart;
   // Loaded as the beatoraja prep loads them (`chart/play-bga.ts`): base + POOR textures keep their blacks, the layer
   // track's are keyed out for BMS, videos get one texture for both tracks, and `#BGAxx` sub-regions become views.
   await loadPlayBga({
     chart,
     source,
     chartPath: song.chartPath,
-    timeline: this.bgaTimeline,
-    poorFallbackKey: this.poorBgaFallbackKey,
+    timeline: ctx.bgaTimeline,
+    poorFallbackKey: ctx.poorBgaFallbackKey,
     into: {
-      textures: this.bgaTextures,
-      layerTextures: this.bgaLayerTextures,
-      videos: this.bgaVideos,
-      subRegionOrigins: this.bgaSubRegionOrigins,
+      textures: ctx.bgaTextures,
+      layerTextures: ctx.bgaLayerTextures,
+      videos: ctx.bgaVideos,
+      subRegionOrigins: ctx.bgaSubRegionOrigins,
     },
     transcode: {
-      maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
-      useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
+      maxLongEdgePx: ctx.options.bgaTranscodeMaxLongEdgePx,
+      useWebCodecs: ctx.options.bgaTranscodeUseWebCodecs,
     },
-    tempo: this.tempo,
-    isCancelled: () => this.disposed,
+    tempo: ctx.tempo,
+    isCancelled: () => ctx.disposed,
   });
-  if (this.disposed) return;
+  if (ctx.disposed) return;
   // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
   // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
   // forget from the prepareBga callsite — `bgaReadyPromise` already gates chart start, and adding the upload to
   // its tail just lengthens that promise by the upload work, which is what we want.
-  await this.preparePixiUpload(this.bgaTextures.values());
-  if (this.disposed) return;
-  await this.preparePixiUpload(this.bgaLayerTextures.values());
+  await ctx.preparePixiUpload(ctx.bgaTextures.values());
+  if (ctx.disposed) return;
+  await ctx.preparePixiUpload(ctx.bgaLayerTextures.values());
 }
 
 export function disposeGameplayAudioGraphAfterDelay(
