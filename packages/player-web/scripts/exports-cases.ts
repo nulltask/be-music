@@ -493,11 +493,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveCourseFolders(BENCH_COURSE_GROUPS, BENCH_COURSE_LOOKUP);
     },
   });
-  define('player-web.applyCourseLongNoteConstraint', {
-    run: () => {
-      playerWebCoreApi.applyCourseLongNoteConstraint(BENCH_SONG.chart, BENCH_COURSE_DEFINITION.constraints);
-    },
-  });
   define('player-web.createRandomCourseEntry', {
     run: () => {
       playerWebCoreApi.createRandomCourseEntry('Bench#r0', BENCH_RANDOM_COURSE);
