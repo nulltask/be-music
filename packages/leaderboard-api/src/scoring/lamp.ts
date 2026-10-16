@@ -38,10 +38,10 @@ const TOP_LAMP: Readonly<Record<PlaylogRulesetId, ClearLamp>> = {
 };
 
 /**
- * The clear lamp of one simulated result. A run that did not clear is FAILED whatever its judgments. A cleared run
- * without a BAD or a missed POOR is a FULL COMBO (empty POORs never break the combo here), without a GOOD also a
- * PERFECT, and with nothing but PGREATs a MAX, each capped at the ruleset's top lamp. An unknown gauge id counts as
- * NORMAL.
+ * The clear lamp of one simulated result. A run that did not clear is FAILED whatever its judgments. A cleared run with
+ * notes and without a BAD or a missed POOR is a FULL COMBO (empty POORs never break the combo here), without a GOOD also
+ * a PERFECT, and with nothing but PGREATs a MAX, each capped at the ruleset's top lamp. A chart without notes takes its
+ * gauge's lamp, as the client's result does. An unknown gauge id counts as NORMAL.
  */
 export function resolveClearLamp(result: PlaylogRulesetResult, ruleset: PlaylogRulesetId): ClearLamp {
   if (!result.gauge.cleared) {
@@ -49,7 +49,7 @@ export function resolveClearLamp(result: PlaylogRulesetResult, ruleset: PlaylogR
   }
   const { great, good, bad, poor } = result.judge;
   let lamp: ClearLamp = gaugeLamp(result.gauge.type, ruleset);
-  if (bad + poor === 0) {
+  if (result.noteCount > 0 && bad + poor === 0) {
     lamp = good > 0 ? ClearLamp.FULL_COMBO : great > 0 ? ClearLamp.PERFECT : ClearLamp.MAX;
   }
   return Math.min(lamp, TOP_LAMP[ruleset]) as ClearLamp;
