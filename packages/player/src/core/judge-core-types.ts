@@ -14,10 +14,6 @@ import type { PlayerGaugeSummary, PlayerUiCommand } from './ui-signal-bus.ts';
  * The judge core's state, inputs, effects and tuning constants (see `judge-core.ts`).
  */
 
-/** How long a fresh long-note press counts as held without further key events (terminal key repeat warm-up). */
-export const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
-/** How long each further key event (or a held kitty key) keeps a long note held. */
-export const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
 /** Slack added to "has chart time reached X" checks so float noise never holds an event back by one step. */
 export const JUDGE_TIME_EPSILON_SECONDS = 1e-6;
 /** `#WAV00` — the sample a mine explosion plays, when the chart defines one. */
@@ -37,8 +33,9 @@ export interface JudgeCoreConfig {
   /** AUTO SCRATCH: the core plays the scratch lanes itself and ignores input on them. */
   autoScratch: boolean;
   /**
-   * Scale of the millisecond domain (`nowMs`, hold-grace deadlines, last-press stamps) per chart second. Live play
-   * runs it on the playback clock (`1000 / speed`, wall-clock milliseconds); a replay runs it on chart time (`1000`).
+   * Scale of the millisecond domain (`nowMs`, release-margin deadlines, lane press / release stamps) per chart second.
+   * Live play runs it on the playback clock (`1000 / speed`, wall-clock milliseconds); a replay runs it on chart time
+   * (`1000`).
    */
   judgeMsPerChartSecond: number;
   /** `#WAVxx` table, for the mine explosion sample. */
@@ -58,12 +55,6 @@ export interface JudgeCoreConfig {
    * it on, nothing is scored (see `isJudgingClosed`).
    */
   endOnFailure: boolean;
-  /**
-   * The input reports key releases from its first key (`PlayerInputRuntime.reportsKeyReleases`): the core judges it as
-   * key-state input from the start ({@link JudgeCoreState.keyStateInput}) rather than from its first `hold` or
-   * `release`.
-   */
-  reportsKeyReleases?: boolean;
 }
 
 /** The play's running result — the same shape as the engine's public `PlayerSummary`. */
@@ -121,23 +112,21 @@ export interface JudgeCoreState {
   readonly applyGaugeTick: (judge: GaugeJudgeIndex, rate: number) => void;
   readonly drainGaugeToZero: () => void;
   combo: number;
-  /** Lanes whose key is down (kitty key-state input and replays; plain terminals only send presses). */
+  /**
+   * Lanes whose key is down: between a `hold` and a `release`. The core takes key-state input only — a driver whose
+   * input reports no releases infers them first (`play-key-inference.ts`) — so a press never holds a lane by itself.
+   */
   readonly heldChannels: Set<string>;
   readonly activeLongNotes: Map<string, ActiveLongNoteState>;
-  /** Millisecond deadline up to which each active long note counts as held. */
-  readonly longHoldUntilMs: Map<string, number>;
+  /**
+   * Millisecond each let-go long note settles at: at once (`-Infinity`), or once the ruleset's release margin has run
+   * out (beatoraja's `longnoteMargin`), until when pressing the lane again resumes the hold.
+   */
+  readonly longNoteSettleMs: Map<string, number>;
   /** Chart second each held long note was released at — its tail is judged against the release, not the tick. */
   readonly longHoldReleaseSeconds: Map<string, number>;
-  /** Until this chart second, a note-less press on the lane is part of a long note just played, not a phantom. */
-  readonly longNoteSuppressUntilSeconds: Map<string, number>;
   /** Each lane's press and release instants, for asking whether it was down when a mine crossed the line. */
   readonly laneHolds: Map<string, LaneHoldHistory>;
-  /**
-   * The host reports releases (key-state input, replays): lanes are down exactly between their presses and releases.
-   * Until then a press counts as held for {@link LONG_NOTE_REPEAT_HOLD_GRACE_MS}. Set from the start when the input
-   * declares its releases ({@link JudgeCoreConfig.reportsKeyReleases}), otherwise by the first `hold` or `release`.
-   */
-  keyStateInput: boolean;
   /** The latest instant (true clock, seconds) the timed judgments were advanced to — an ESC abort stops there. */
   advancedThroughSeconds: number;
   readonly pendingAutoScratchLongNotes: PendingAutoLongNoteState[];

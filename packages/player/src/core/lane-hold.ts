@@ -11,18 +11,16 @@ export interface LaneHoldHistory {
   readonly activeTokens: Set<string>;
   /** The lane's down spans, oldest first; the last one's `upMs` is `undefined` while the lane is down. */
   readonly spans: Array<{ downMs: number; upMs: number | undefined }>;
-  /** Every press instant, oldest first, for hosts that send no releases. */
-  readonly pressesMs: number[];
 }
 
-/** How long (ms) spans and presses are kept after they end. */
+/** How long (ms) spans are kept after they end. */
 export const LANE_HOLD_HISTORY_MS = 2000;
 
 /** The token an input without tokens is tracked under. */
 const UNNAMED_TOKEN = '';
 
 export function createLaneHoldHistory(): LaneHoldHistory {
-  return { activeTokens: new Set(), spans: [], pressesMs: [] };
+  return { activeTokens: new Set(), spans: [] };
 }
 
 function prune(history: LaneHoldHistory, atMs: number): void {
@@ -34,14 +32,10 @@ function prune(history: LaneHoldHistory, atMs: number): void {
     spanCount += 1;
   }
   if (spanCount > 0) history.spans.splice(0, spanCount);
-  let pressCount = 0;
-  while (pressCount < history.pressesMs.length - 1 && history.pressesMs[pressCount]! < horizonMs) pressCount += 1;
-  if (pressCount > 0) history.pressesMs.splice(0, pressCount);
 }
 
 /** A press at `atMs` by `tokens` (none: an unnamed input). */
 export function recordLaneDown(history: LaneHoldHistory, tokens: readonly string[], atMs: number): void {
-  history.pressesMs.push(atMs);
   prune(history, atMs);
   const wasDown = history.activeTokens.size > 0;
   if (tokens.length === 0) {
@@ -76,16 +70,6 @@ export function wasLaneDownAt(history: LaneHoldHistory, atMs: number): boolean {
     const span = history.spans[index]!;
     if (span.downMs > atMs) continue;
     return span.upMs === undefined || span.upMs > atMs;
-  }
-  return false;
-}
-
-/** Whether some press lies in `[fromMs, toMs]`. */
-export function wasLanePressedWithin(history: LaneHoldHistory, fromMs: number, toMs: number): boolean {
-  for (let index = history.pressesMs.length - 1; index >= 0; index -= 1) {
-    const pressMs = history.pressesMs[index]!;
-    if (pressMs > toMs) continue;
-    return pressMs >= fromMs;
   }
   return false;
 }

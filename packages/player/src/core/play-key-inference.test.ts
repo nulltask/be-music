@@ -63,7 +63,8 @@ function infer(judgeMsPerChartSecond = 1000) {
         `${input.kind} ${[...input.channels].join(',')}${at}${'inferred' in input && input.inferred ? ' inferred' : ''}`,
       );
     }
-    runJudgeCoreStep(state, input, () => undefined);
+    // The driver hands the inference every effect of the core.
+    runJudgeCoreStep(state, input, (effect) => inference.observe(effect));
   };
   const inference = createKeyStateInference(state, step);
   const press = (channel: string, seconds: number): void =>
