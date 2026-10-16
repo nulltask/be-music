@@ -49,7 +49,7 @@ export const LR2_OP = {
   AUTOPLAY_OFF: 32,
   /** AUTOPLAY is on. */
   AUTOPLAY_ON: 33,
-  /** GHOST is off. */
+  /** GHOST is off, or the judge is automatic (OpenLR2 `GetOptionFlag_dst`: `play_ghost` 0 or `autojudge` 2). */
   GHOST_OFF: 34,
   /** The score graph is off. */
   SCORE_GRAPH_OFF: 38,
@@ -393,7 +393,10 @@ export const LR2_OP = {
   RESULT_FLIP_OFF: 350,
   /** The played skin has `#FLIPRESULT`: the result screen swaps its sides. */
   RESULT_FLIP_ON: 351,
-  /** Key-config mode 7 / 14 KEYS; the stock result skin gates its per-key-mode panels on 400-402. */
+  /**
+   * The key-config screen is on its 7 / 14 KEYS page (OpenLR2 `config_keymode` 0, which persists to the screens after
+   * it); the stock result skin gates its per-key-mode panels on 400-402.
+   */
   KEY_CONFIG_7_14: 400,
   /** Key-config mode 9 KEYS. */
   KEY_CONFIG_9: 401,

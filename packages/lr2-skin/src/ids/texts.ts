@@ -57,7 +57,10 @@ export const LR2_TEXT = {
   PLAY_LEVEL_ALT: 27,
   /** Text 28: as `DIFFICULTY`. */
   DIFFICULTY_ALT: 28,
-  /** The play level of an INSANE chart. */
+  /**
+   * LR2's ex level: a level a player sets in LR2's song database, which LR2 draws in the INSANE bar-level digits
+   * (OpenLR2 `exlevel`). be-music keeps none and reads an INSANE chart's play level here.
+   */
   INSANE_LEVEL: 29,
 
   // ─── Select ─────────────────────────────────────────────────────────────────────────────────────────────────────
