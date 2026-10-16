@@ -57,7 +57,7 @@ Holding `Backspace` for 0.5 s during play quits it the same way `Esc` does; a ta
 The lil-gui **Debug Menu** (top-right, collapsed on arrival) puts the everyday controls first and groups the rest into folders. Every folder remembers whether it was left open or closed (`localStorage`, `be-music-demo.debug-menu-folders`); the panel itself always starts collapsed.
 
 - **Top level:** Status (read-only), Open folder, Open files (ZIP / play log). Open files picks chart ZIP archives (loaded like `?music=`) or a play log (`*.bmplay.json`) to replay; Open folder uses the folder picker and the same pipeline as a drop.
-- **Play options** (open): Auto play, Gauge, Random 1P / 2P, DP flip, Auto scratch 1P / 2P, Hi-speed. Everything but Hi-speed (which applies live) is latched at song start and disabled during a play.
+- **Play options** (open): Auto play, Gauge, Random 1P / 2P, DP flip, Auto scratch 1P / 2P, Sort, Key filter, Difficulty filter, Hi-speed. Everything but Hi-speed (which applies live) is latched at song start and disabled during a play. Sort and the two filters shape the built-in and LR2 select screens' list, and an LR2 skin's sort and filter buttons change them too.
   - **Replay / ghost** (closed): Tempo, Hi-speed, SUDDEN+ / HIDDEN+, LIFT — what a replay reproduces of what the recorded player saw; the rest stays your own. All on by default, remembered across visits, latched at song start and disabled during a play. The scenes get them as `replayView` (`PlaylogViewReplay`).
 - **Tempo** (open): Tempo (%), Pitch, Keep-pitch stretcher (see [Play tempo](#play-tempo)); latched at song start and disabled during a play, except Tempo (%) with the pitch following the tempo, which changes the play's tempo live.
 - **Course** (open): Skip stage results, My courses…, NONSTOP placement (latched at song start and disabled during a play), Table URL with Import table courses.
@@ -403,6 +403,16 @@ flowchart LR
   - `session/**` imports Pixi only for types, so a session runs in Node tests against a fake view;
   - `view/**` imports neither `@be-music/player/core/engine` nor `runtime/engine-driver` and the `runtime/web-*-runtime` modules;
   - `view/**` does not use `AudioContext` or `OfflineAudioContext`.
+
+### Browsing on the select screen
+
+The built-in and LR2 select screens browse the library with the browse model of `@be-music/scene-model` ([Browse](./scene-model.md#browse)). Their session (`session/select/select-session.ts`) keeps a `BrowseState`: the keys, the wheel, a swipe and a click on a bar go through `reduceBrowse`, the list drawn is `browseEntries`, and the folder and option cues come from `browseSystemSound`. The sort, the key filter and the difficulty filter stay in the play options (LR2's option panel, an LR2 skin's buttons, a be-music skin's play options, the host's `setPlayOptions`), and the list follows them.
+
+- **The list.** A sort or a filter change keeps the cursor on the bar it was on, or on its row, clamped, when the filter takes that bar out. A search change puts the cursor on the top. The key filter lists a chart under its own key mode, so a 24-key chart is listed only under ALL: LR2's key filter has no 24-key choice.
+- **The browse position.** `getNavigation()` is a `BrowseSnapshot` (`captureBrowse`), and `setNavigation` and the `initialNavigation` option take one back (`restoreBrowse`): the search it was saved with, the folders walked by label as far as they are still found, each parent cursor on the bar of the folder opened from it (so backing out lands on it), and the cursor on the saved bar, found by its key, while it is still listed. The sort and the filters in force are kept.
+- **The select policy.** What the model leaves to the screen is the family's select policy (`session/select/select-policy.ts`): on the built-in and LR2 screens a back-out at the root does nothing, and a library of one chart folder opens it when there is no position to restore.
+
+The web demo keeps the snapshot across a play, a course (the cursor comes back to the course bar) and a skin change, and opens a drop's folder with one. Its Debug Menu's Play options set the sort and the filters too.
 
 ### The decide screen
 

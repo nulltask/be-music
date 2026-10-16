@@ -50,10 +50,21 @@ export interface TestHookBar {
   trophy?: string;
 }
 
+/** How the select screen's list is shaped: its sort and filters (`@be-music/scene-model`'s names) and the search. */
+export interface TestHookList {
+  sort: string;
+  keysFilter: string;
+  difficultyFilter: string;
+  /** The search as typed; empty for none. */
+  search: string;
+}
+
 /** The select screen's cursor: the folders open, root first, and the bar under it. */
 export interface TestHookCursor {
   folderPath: string[];
   bar?: TestHookBar;
+  /** How the list is shaped (the built-in and LR2 select screens). */
+  list?: TestHookList;
 }
 
 /** The play on screen. */

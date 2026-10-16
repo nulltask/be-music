@@ -8,7 +8,6 @@
 
 import { GAUGE_TYPES } from '@be-music/player/ruleset';
 import { BOOLEAN_CYCLE, RANDOM_CYCLE } from '@be-music/scene-model';
-import type { BrowserBrowseEntry } from '../../collection/types.ts';
 import type { PixiPlayOptions } from '../../scene/core/select.ts';
 
 /**
@@ -32,17 +31,17 @@ export interface SelectKeysContext {
   readonly readTextOpen: boolean;
   /** The LR2 option panels open. */
   readonly panelStates: ReadonlySet<number>;
-  selectedIndex: number;
   startSelectBgm(): Promise<void>;
   togglePanel(which: number): void;
   closeReadText(): void;
   scrollReadText(delta: number): void;
   cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void;
   adjustHiSpeed(direction: 1 | -1): void;
-  currentEntries(): BrowserBrowseEntry[];
-  noteCursorChange(delta: number): void;
-  render(): void;
-  activateEntry(entry: BrowserBrowseEntry): void;
+  /** Moves the cursor one bar, wrapping past either end (`SelectSession.stepCursor`). */
+  stepCursor(direction: 1 | -1): void;
+  /** Opens the folder or starts the bar under the cursor (`SelectSession.activateFocused`). */
+  activateFocused(): void;
+  /** Backs out of the folder shown; `false` at the root (`SelectSession.leaveFolder`). */
   leaveFolder(): boolean;
 }
 
@@ -186,31 +185,18 @@ export class SelectKeys {
         return;
       }
     }
-    const entries = this.ctx.currentEntries();
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      if (entries.length === 0) return;
       // Wrap past the end → first entry. Matches LR2's circular bar list (the rail keeps scrolling forever in either
-      // direction). Pass `+1` directly to `noteCursorChange` rather than the `(new - old)` wrapped delta: with very
-      // short lists (2 / 3 entries) the wrap brings the cursor back to a lower index, which would otherwise drive the
-      // slide animation in the OPPOSITE direction of the keypress. The user pressed down, so the bars should always
-      // slide as if going down — every press, regardless of whether the cursor wraps.
-      this.ctx.selectedIndex = (this.ctx.selectedIndex + 1) % entries.length;
-      this.ctx.noteCursorChange(1);
-      this.ctx.render();
+      // direction). The slide always follows the key, even where the cursor wraps on a short list: the user pressed
+      // down, so the bars slide as if going down.
+      this.ctx.stepCursor(1);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      if (entries.length === 0) return;
-      // Symmetric to ArrowDown — pass `-1` directly so the slide animation always matches the keypress direction even
-      // when the cursor wraps from `0` to `entries.length - 1`.
-      this.ctx.selectedIndex = (this.ctx.selectedIndex - 1 + entries.length) % entries.length;
-      this.ctx.noteCursorChange(-1);
-      this.ctx.render();
+      this.ctx.stepCursor(-1);
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      const entry = entries[this.ctx.selectedIndex];
-      if (!entry) return;
-      this.ctx.activateEntry(entry);
+      this.ctx.activateFocused();
     } else if (event.key === 'Escape' || event.key === 'Backspace' || event.key === 'ArrowLeft') {
       // Pop one level up — Esc / Backspace / ← all back out of the current folder. No-op at the root so the user
       // doesn't get stuck on an "empty list" view by accident.

@@ -1,6 +1,7 @@
 import type { SkinFamilyId, loadTextureFromBytes } from '@be-music/player-web/skin';
 import type { PlaylogViewReplay } from '@be-music/player/playlog';
 import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
+import type { BrowseSort, DifficultyFilter, KeysFilter } from '@be-music/scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 
 /**
@@ -185,6 +186,13 @@ export interface DemoGuiState extends PlayTempoSettings {
   autoScratch1P: boolean;
   /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
   autoScratch2P: boolean;
+  /**
+   * The built-in and LR2 select screens' sort, key filter and difficulty filter. Two-way synced with an LR2 select
+   * skin's sort and filter buttons; the beatoraja select screen has its own MODE and SORT buttons.
+   */
+  sort: BrowseSort;
+  keysFilter: KeysFilter;
+  difficultyFilter: DifficultyFilter;
   /**
    * Explicit skin-family override picked from the Debug Menu dropdown. `'auto'` (default) keeps the legacy
    * priority — beatoraja if a beatoraja theme is loaded and covers the chart, otherwise LR2 (which itself falls
