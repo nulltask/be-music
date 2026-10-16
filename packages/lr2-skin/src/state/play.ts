@@ -267,8 +267,7 @@ function playText(st: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): string 
     case LR2_TEXT.PLAYER:
       return 'PLAYER';
   }
-  // The play screen draws no INSANE level.
-  return st === LR2_TEXT.INSANE_LEVEL ? undefined : resolveLr2ChartText(st, chart);
+  return resolveLr2ChartText(st, chart);
 }
 
 function playSlider(type: number, frame: Lr2PlayFrame): number {

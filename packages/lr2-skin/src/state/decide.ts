@@ -1,5 +1,5 @@
 import type { CourseView, LibraryChart } from '@be-music/scene-model';
-import { LR2_OP, LR2_TEXT } from '../ids/index.ts';
+import { LR2_OP } from '../ids/index.ts';
 import { resolveLr2ChartText, resolveLr2DifficultyOp, resolveLr2KeyModeOp } from './chart.ts';
 import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 import type { Lr2SceneState } from './scene-state.ts';
@@ -33,9 +33,7 @@ export function resolveLr2DecideState(input: Lr2DecideInput): Lr2SceneState {
     ops,
     number: (num) => (course !== undefined ? resolveLr2CourseNumber(num, course) : undefined),
     text: (st) =>
-      (course !== undefined ? resolveLr2CourseText(st, course) : undefined) ??
-      // The decide screen draws no INSANE level.
-      (st === LR2_TEXT.INSANE_LEVEL ? undefined : resolveLr2ChartText(st, chart)),
+      (course !== undefined ? resolveLr2CourseText(st, course) : undefined) ?? resolveLr2ChartText(st, chart),
     slider: () => undefined,
   };
 }
