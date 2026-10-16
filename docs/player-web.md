@@ -285,6 +285,66 @@ flowchart TD
 - `scene/play-ending.ts` times the end of a play: a lead-out of about two measures after the last note, in chart time, then the theme or skin fade-out; a play cut short by its gauge emptying skips the lead-out and fades its sound and picture for at least 1.5 s.
 - `resolveClearLamp` (`@be-music/player/ruleset`) is the one clear-lamp rule. Every result lamps a play with it: the LR2 / default result (and the LR2 result's lamp ops 101-105, on LR2's lamps), and the beatoraja result and select through `beatorajaClearLampOp`; the demo records every family's plays with it, and the Leaderboard ranks them with it. It keeps the lamp to the judge ruleset's own set: under LR2 and IIDX a full combo is the top lamp (no PERFECT or MAX), and under LR2 a DEATH clear is NORMAL.
 
+## Scene sessions and family views
+
+The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place; the scenes adopt them one screen at a time (decide, result, select, then play), and until then no scene uses them.
+
+```mermaid
+flowchart LR
+  subgraph scene["SessionScene (a PixiScene)"]
+    session[Scene session] -->|frame| view[Family view]
+    view -->|intent| session
+  end
+  ticker[Ticker] --> session
+  keys[Key events] --> session
+  session --> engine[Engine, audio]
+  view --> stage[Pixi stage]
+```
+
+- **Family kit** (`host/family-kit.ts`). What a host hands a scene, per family: `{ family: 'built-in', skin }` (a be-music skin and the player's settings for it), `{ family: 'lr2', skin }`, or `{ family: 'beatoraja', kit }` (one theme entry, loaded: skin, textures, fonts, options and the theme's files). The kits are `SelectKit`, `DecideKit`, `PlayKit` and `ResultKit`.
+- **Frames** (`view/types.ts`). On every tick the session gives its view a frame built over the scene models:
+  - `SelectFrame`: the library, the `BrowseState`, the list and its cursor, the play options and the records;
+  - `DecideFrame`: the chart, the course stage and the loading progress;
+  - `PlayFrame`: the `PlayState`, the chart time, the notes, the held lanes and the events since the last frame;
+  - `ResultFrame`: the `PlayResult` and how it is presented.
+- **Intents.** The view sends back what the player asked for, per scene:
+  - select: a browse command, start, a play option or a panel;
+  - decide: continue or cancel;
+  - play: a touch lane, the hi-speed, a cover, pause or quit;
+  - result: continue or retry.
+- **`FamilyView`**: `attach(host, emit)`, `draw(frame)`, `detach()` and `dispose()`. A detached view keeps what it loaded. The decide, play and result views also give their skin's timing: the input delay, the auto advance and the fade-out, and for the play, LR2's load-end, play-start, fade-out and close offsets.
+- **`SessionScene`** is the `PixiScene` made of a session and a view:
+  - `enter(host)` attaches the view, starts the session and draws a first frame.
+  - The ticker asks the session for a frame and has the view draw it.
+  - Key events go to the session as plain data, except while a text field has the focus. The view's intents go to the session while the scene is entered.
+  - `exit()` detaches both and keeps them for the next `enter`; `dispose()` ends them.
+- **`PlayfieldSkin`** is what a family's skin gives the shared playfield: the stage, the lanes, the note, measure-line and bomb images, and the effect lengths. It replaces the hooks that `CoreGameplayView` subclasses override:
+
+  | `CoreGameplayView` hook                                   | Replaced by                                                   |
+  | --------------------------------------------------------- | ------------------------------------------------------------- |
+  | `stageSize`                                               | `PlayfieldSkin.stage`                                         |
+  | `themeOwnsPlayfield`                                      | `PlayfieldSkin.ownsLanes`                                     |
+  | `resolveThemeLaneRect`                                    | `PlayfieldSkin.laneRect`                                      |
+  | `resolveThemeNoteCell`                                    | `PlayfieldSkin.noteCell`, by channel                          |
+  | `renderThemeMeasureLines`                                 | `PlayfieldSkin.measureLines`, placed by the playfield         |
+  | `collectBgaTargets`                                       | `PlayfieldSkin.bgaTargets`                                    |
+  | `renderBombEffects`                                       | `PlayfieldSkin.bombCell`                                      |
+  | `resolveBombDurationMs`                                   | `PlayfieldSkin.bombDurationMs`                                |
+  | `resolveKeyOnFadeMs`                                      | `PlayfieldSkin.keyOnFadeMs`, by channel                       |
+  | `themeTiming`                                             | `PlayView.timing`                                             |
+  | `onThemeEvent`                                            | `PlayFrame.events`, read in `draw`                            |
+  | `updateThemeState`, `renderThemeLayer`, `renderThemeText` | `FamilyView.draw`                                             |
+  | `attachThemeLayers`                                       | `FamilyView.attach`                                           |
+  | `prepareTheme`                                            | loading the `PlayKit` before the scene is made, then `attach` |
+  | `disposeTheme`                                            | `FamilyView.dispose`                                          |
+
+  The LR2 lane index and LR2 timer ids stay inside the LR2 view: the playfield asks by channel.
+
+- **Layering.** `pnpm run check` lints the new trees (Oxlint overrides in [`vite.config.ts`](../vite.config.ts)):
+  - `session/**` imports Pixi only for types, so a session runs in Node tests against a fake view;
+  - `view/**` imports neither `@be-music/player/core/engine` nor `runtime/engine-driver` and the `runtime/web-*-runtime` modules;
+  - `view/**` does not use `AudioContext` or `OfflineAudioContext`.
+
 ## Note visibility
 
 Drawing is not part of a judge ruleset, so the ruleset plays no part in it. The gameplay view picks one of two rule sets for which notes, mines and bar lines it draws and where ([`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)):

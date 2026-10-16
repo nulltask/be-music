@@ -277,6 +277,66 @@ flowchart TD
 - `scene/play-ending.ts` は、プレイの終わりの時間を決めます。最後のノートのあと譜面時刻で約 2 小節の余韻を置き、テーマや skin のフェードアウトに入ります。ゲージが尽きて途中で終わったプレイは余韻を置かず、音と画面を 1.5 秒以上かけてフェードアウトします。
 - `resolveClearLamp`（`@be-music/player/ruleset`）がクリアランプの唯一の規則です。どのリザルトもこれでプレイのランプを決めます。LR2 / 既定のリザルト（LR2 のリザルトのランプの op 101-105 も、LR2 のランプで）、`beatorajaClearLampOp` を通した beatoraja のリザルトと選曲です。demo はどの family のプレイもこれで記録し、リーダーボードもこれで順位付けします。判定のルールセットのランプに合わせ、LR2 と IIDX ではフルコンボが最上位（PERFECT・MAX なし）、LR2 では DEATH でのクリアを NORMAL にします。
 
+## シーンセッションとファミリービュー
+
+scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。それまではどの scene も使いません。
+
+```mermaid
+flowchart LR
+  subgraph scene["SessionScene（PixiScene）"]
+    session[シーンセッション] -->|フレーム| view[ファミリービュー]
+    view -->|インテント| session
+  end
+  ticker[ティッカー] --> session
+  keys[キーイベント] --> session
+  session --> engine[エンジン、音]
+  view --> stage[Pixi のステージ]
+```
+
+- **ファミリーキット**（`host/family-kit.ts`）。ホストが種類ごとに scene に渡すものです。`{ family: 'built-in', skin }`（be-music スキンとプレイヤーの設定値）、`{ family: 'lr2', skin }`、`{ family: 'beatoraja', kit }`（読み込んだテーマの 1 エントリ。スキン、テクスチャ、フォント、オプション、テーマのファイル）のどれかで、`SelectKit`・`DecideKit`・`PlayKit`・`ResultKit` があります。
+- **フレーム**（`view/types.ts`）。セッションはティックごとに、シーンモデルの上に組んだフレームをビューに渡します。
+  - `SelectFrame`: ライブラリ、`BrowseState`、一覧とカーソル、プレイオプション、記録
+  - `DecideFrame`: 譜面、コースのステージ、読み込みの進み具合
+  - `PlayFrame`: `PlayState`、譜面の時刻、ノート、押されているレーン、前のフレームからのできごと
+  - `ResultFrame`: `PlayResult` と、その見せ方
+- **インテント。** ビューは、プレイヤーが求めたことを scene ごとに返します。
+  - 選曲: 一覧の操作、開始、プレイオプション、パネル
+  - 決定: 進む、戻る
+  - プレイ: タッチのレーン、ハイスピード、カバー、一時停止、中断
+  - リザルト: 進む、リトライ
+- **`FamilyView`** は `attach(host, emit)`・`draw(frame)`・`detach()`・`dispose()` を持ちます。外したビューは読み込んだものを保ちます。決定・プレイ・リザルトのビューは、スキンのタイミングも渡します。入力までの待ち、自動で進むまでの時間、フェードアウトで、プレイなら LR2 の読み込み終了・譜面開始・フェードアウト・クローズのオフセットです。
+- **`SessionScene`** は、セッションとビューから作る `PixiScene` です。
+  - `enter(host)` でビューを付け、セッションを始め、最初のフレームを描きます。
+  - ティッカーがセッションにフレームを求め、ビューに描かせます。
+  - キーイベントは素のデータとしてセッションに渡します。テキスト欄にフォーカスがあるときは渡しません。ビューのインテントは、scene に入っている間だけセッションに渡します。
+  - `exit()` は両方を外し、次の `enter` のために保ちます。`dispose()` で両方を終えます。
+- **`PlayfieldSkin`** は、種類ごとのスキンが共通のプレイフィールドに渡すものです。ステージ、レーン、ノート・小節線・ボムの画像、エフェクトの長さです。`CoreGameplayView` のサブクラスが上書きしていたフックを置き換えます。
+
+  | `CoreGameplayView` のフック                               | 置き換え先                                               |
+  | --------------------------------------------------------- | -------------------------------------------------------- |
+  | `stageSize`                                               | `PlayfieldSkin.stage`                                    |
+  | `themeOwnsPlayfield`                                      | `PlayfieldSkin.ownsLanes`                                |
+  | `resolveThemeLaneRect`                                    | `PlayfieldSkin.laneRect`                                 |
+  | `resolveThemeNoteCell`                                    | `PlayfieldSkin.noteCell`（チャンネルで引く）             |
+  | `renderThemeMeasureLines`                                 | `PlayfieldSkin.measureLines`（配置はプレイフィールド）   |
+  | `collectBgaTargets`                                       | `PlayfieldSkin.bgaTargets`                               |
+  | `renderBombEffects`                                       | `PlayfieldSkin.bombCell`                                 |
+  | `resolveBombDurationMs`                                   | `PlayfieldSkin.bombDurationMs`                           |
+  | `resolveKeyOnFadeMs`                                      | `PlayfieldSkin.keyOnFadeMs`（チャンネルで引く）          |
+  | `themeTiming`                                             | `PlayView.timing`                                        |
+  | `onThemeEvent`                                            | `PlayFrame.events`（`draw` で読む）                      |
+  | `updateThemeState`、`renderThemeLayer`、`renderThemeText` | `FamilyView.draw`                                        |
+  | `attachThemeLayers`                                       | `FamilyView.attach`                                      |
+  | `prepareTheme`                                            | scene を作る前に `PlayKit` を読み込み、`attach` で初期化 |
+  | `disposeTheme`                                            | `FamilyView.dispose`                                     |
+
+  LR2 のレーン番号と LR2 のタイマー番号は LR2 のビューの中にとどめ、プレイフィールドはチャンネルで尋ねます。
+
+- **層の分け方。** `pnpm run check` は新しいツリーを lint します（[`vite.config.ts`](../vite.config.ts) の Oxlint の上書き設定）。
+  - `session/**` は Pixi を型にしか使いません。そのためセッションは、偽のビューを相手に Node のテストで動きます。
+  - `view/**` は `@be-music/player/core/engine`、`runtime/engine-driver`、`runtime/web-*-runtime` のどれも import しません。
+  - `view/**` は `AudioContext` も `OfflineAudioContext` も使いません。
+
 ## ノートの表示範囲
 
 描画は判定 ruleset に含まれないため、ruleset は描画に関わりません。gameplay view は、どのノート・地雷・小節線をどこに描くかを 2 つの規則のどちらかで決めます（[`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)）。
