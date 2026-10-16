@@ -14,13 +14,7 @@
  * - Courses: the course ops, numbers and texts of a `CourseView`, the course maker's ops, texts and buttons.
  */
 export type { Lr2Clock, Lr2SceneState, Lr2TimerUpdate } from './scene-state.ts';
-export {
-  LR2_KEYS_FILTER_OPS,
-  lr2CourseMatchesKeysFilter,
-  resolveLr2ChartFeatures,
-  resolveLr2KeyModeOp,
-  type Lr2ChartFeatures,
-} from './chart.ts';
+export { resolveLr2ChartFeatures, resolveLr2KeyModeOp, type Lr2ChartFeatures } from './chart.ts';
 export { resolveLr2BarLamp, resolveLr2LampOp } from './records.ts';
 export { resolveLr2DecideState, type Lr2DecideInput } from './decide.ts';
 export {
