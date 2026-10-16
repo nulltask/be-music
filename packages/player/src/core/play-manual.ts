@@ -11,28 +11,12 @@ import {
 import { resolveJudgeNowMsFromPressedAt } from './engine-clock.ts';
 import { formatJudgeWindowSet, printLaneMap, writeRuntimeEventLog } from './engine-trace.ts';
 import type { PlaySession } from './play-session.ts';
-import type { JudgeStrategy, PlayJudge, StrategyDrifts } from './play-strategy.ts';
+import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 
 /**
  * The manual judge strategy: the deterministic judge core (`judge-core.ts`) fed the play clock's time once per tick and
  * every key the player presses and releases, stamped with the instant it went down (`pressedAt`).
  */
-
-/** Manual play's drifts from the auto driver (see {@link StrategyDrifts}); the replay strategy shares them. */
-export const MANUAL_DRIFTS: StrategyDrifts = {
-  ignoresHoldAfterChart: false,
-  ignoresJudgeRankChanges: false,
-  abortsAtClockTime: false,
-  tracesEscapeAsComplete: false,
-  startsChartAfterLeadInEscape: true,
-  startsInputRuntimeAfterLeadIn: true,
-  horizon: 'lead-in-and-reach',
-  closingFrame: false,
-  queuesLaneKeysoundsAsRealtimeAudio: false,
-  omitsEndOnFailure: false,
-  recordsTempoInReplay: false,
-  followsReplayTempoChangesAlways: false,
-};
 
 /**
  * The judge core of a manual play or a replay. `judgeMsPerChartSecond` is the millisecond domain the hold-grace
@@ -194,7 +178,6 @@ function createManualJudge(session: PlaySession): PlayJudge {
 /** Manual play: the player's keys, judged live. */
 export const manualStrategy: JudgeStrategy = {
   mode: 'manual',
-  drifts: MANUAL_DRIFTS,
   estimatesActiveAudio: false,
   writeIntro: writeManualIntro,
   createJudge: createManualJudge,

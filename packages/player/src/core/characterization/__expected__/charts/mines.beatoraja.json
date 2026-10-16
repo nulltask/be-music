@@ -146,7 +146,7 @@
       "2600.000 release-lane 16"
     ],
     "frames": {
-      "count": 231,
+      "count": 232,
       "judged": [
         "490.000 seconds=0.49 note 11@0.5",
         "1006.667 seconds=1.006667 mine 11@1",
@@ -155,7 +155,7 @@
         "2000.000 seconds=2 note 12@2",
         "2516.667 seconds=2.516667 mine 16@2.5"
       ],
-      "last": "3683.333 seconds=3.683333 beat=7.366667"
+      "last": "3700.000 seconds=2.5 beat=5"
     },
     "host": [
       "0.000 ruleset beatoraja/0 per-note note={\"judges\":[[-15000,15000],[-37500,37500],[-75000,75000],[-112500,112500]],\"ms\":[-150000,500000]}",
@@ -262,7 +262,7 @@
       "2600.000 release-lane 16"
     ],
     "frames": {
-      "count": 223,
+      "count": 224,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "1016.667 seconds=1.016667 mine 11@1",
@@ -271,7 +271,7 @@
         "2000.000 seconds=2 note 12@2",
         "2516.667 seconds=2.516667 mine 16@2.5"
       ],
-      "last": "3683.333 seconds=3.683333 beat=7.366667"
+      "last": "3700.000 seconds=2.5 beat=5"
     },
     "host": [
       "0.000 ruleset beatoraja/0 per-note note={\"judges\":[[-15000,15000],[-37500,37500],[-75000,75000],[-112500,112500]],\"ms\":[-150000,500000]}",
@@ -288,7 +288,7 @@
   },
   "auto": {
     "outcome": "completed",
-    "endedAtMs": 2500,
+    "endedAtMs": 3700,
     "summary": {
       "total": 2,
       "perfect": 2,
@@ -319,7 +319,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja"},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"beatoraja","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -374,11 +374,9 @@
       "0.000 start",
       "0.000 trigger 01:01@0+0/1",
       "500.000 trigger 11:02@0+1/4",
-      "500.000 trigger 11:02@0+1/4",
       "2000.000 trigger 12:02@1+0/1",
-      "2000.000 trigger 12:02@1+0/1",
-      "2500.000 finish",
-      "2500.000 dispose"
+      "3700.000 finish",
+      "3700.000 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -387,16 +385,16 @@
     ],
     "ui": ["500.000 flash-lane 11","2000.000 flash-lane 12"],
     "frames": {
-      "count": 155,
+      "count": 226,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "1116.667 seconds=1.116667 mine 11@1",
         "1366.667 seconds=1.366667 mine 12@1.25",
         "1616.667 seconds=1.616667 mine 11@1.5",
         "2000.000 seconds=2 note 12@2",
-        "2500.000 seconds=2.5 mine 16@2.5"
+        "2616.667 seconds=2.616667 mine 16@2.5"
       ],
-      "last": "2500.000 seconds=2.5 beat=5"
+      "last": "3700.000 seconds=2.5 beat=5"
     },
     "host": [
       "0.000 ruleset beatoraja/0 per-note note={\"judges\":[[-15000,15000],[-37500,37500],[-75000,75000],[-112500,112500]],\"ms\":[-150000,500000]}",
@@ -404,9 +402,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "2500.000 input-runtime stop",
-      "2500.000 ui stop",
-      "2500.000 ui dispose"
+      "3700.000 input-runtime stop",
+      "3700.000 ui stop",
+      "3700.000 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":2.5}",

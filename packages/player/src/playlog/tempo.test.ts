@@ -177,7 +177,7 @@ describe('play tempo', () => {
     expect(summary.exScore).toBe(live.summary!.exScore);
   }, 20_000);
 
-  test('an auto play follows a replay’s tempo changes and records where ESC stopped it', async () => {
+  test('an auto replay follows its log’s tempo changes, and an auto play records where ESC stopped it', async () => {
     const audioTempos: number[] = [];
     const audioSession: AudioSession = {
       start: () => undefined,
@@ -195,11 +195,24 @@ describe('play tempo', () => {
       tui: false,
       writeOutput: () => undefined,
       createAudioSession: async () => audioSession,
+      // A replay of an AUTO-played log: its inputs are empty.
+      replayInputs: [],
       replayTempoChanges: [{ timeUs: 300_000, tempo: 2 }],
       onTempoChange: (change) => changes.push(change),
     });
     expect(changes.map((change) => change.tempo)).toEqual([2]);
     expect(audioTempos).toEqual([2]);
+    // A live AUTO play leaves them alone.
+    const liveChanges: PlayerTempoChange[] = [];
+    await autoPlay(chart(), {
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: () => undefined,
+      replayTempoChanges: [{ timeUs: 300_000, tempo: 2 }],
+      onTempoChange: (change) => liveChanges.push(change),
+    });
+    expect(liveChanges).toEqual([]);
 
     let given: BeMusicPlaylog | undefined;
     await autoPlay(chart(), {

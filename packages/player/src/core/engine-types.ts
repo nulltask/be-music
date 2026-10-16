@@ -189,11 +189,11 @@ export interface PlayerPlayRuntime {
   createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
   signal?: AbortSignal;
   /**
-   * Keeps a manual play open after its chart is over, so the player's keys still light the lanes (and the chart's
-   * remaining background sounds still play) while the host shows its outro. When the chart is over — every note judged
-   * and the judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then
-   * ends normally (its summary and play log as usual; aborting this signal is not an interrupt). Without it a play ends
-   * as soon as its chart is over. Auto play ignores it.
+   * Keeps a play open after its chart is over, so the player's keys still light the lanes (and the chart's remaining
+   * background sounds still play) while the host shows its outro. When the chart is over — every note judged and the
+   * judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then ends
+   * normally (its summary and play log as usual; aborting this signal is not an interrupt). Without it a play ends as
+   * soon as its chart is over. Manual, replay and AUTO play alike.
    */
   holdAfterChart?: { signal: AbortSignal; onSettled?: () => void };
   audioBaseDir?: string;
@@ -300,15 +300,24 @@ export interface PlayerPlayRecording {
    * is the recorded one), so replaying a log against the same resolved chart reproduces the original judgments.
    * While a replay is active, live lane / kitty input commands are ignored; pause, high-speed, and interrupt
    * commands keep working. The caller is responsible for mounting the SAME resolved chart the log was recorded
-   * against (`preparedChart`, or a chart remapped to the log's note arrangement).
+   * against (`preparedChart`, or a chart remapped to the log's note arrangement). `autoPlay` has no inputs to
+   * re-drive, but a replay of an AUTO-played log passes its (empty) inputs too: either way the play is a replay, so
+   * its `speed` and tempo changes only set how fast it is re-driven and a re-recorded log carries neither.
    */
   replayInputs?: readonly PlaylogInputEvent[];
   /**
    * The tempo changes a replay follows (`play.tempoChanges` of its log, in chart time), on top of `speed` as the tempo
    * at the start (`play.tempo`). Each takes effect once the replay's chart time reaches it, as a live `{ kind: 'tempo' }`
-   * command would. Only `manualPlay` with {@link replayInputs} reads it; it changes no judgment.
+   * command would. Read only in a replay ({@link replayInputs} set), by `manualPlay` and `autoPlay` alike; it changes no
+   * judgment.
    */
   replayTempoChanges?: readonly PlaylogTempoChange[];
+  /**
+   * Where the replayed play was aborted (`play.abortedAtUs` of a log with `play.aborted`), in chart microseconds: the
+   * replay judges up to it and stops there, as an ESC, as the play-log simulators stop there, instead of missing the
+   * rest of the chart. Read only in a replay ({@link replayInputs} set).
+   */
+  replayAbortedAtUs?: number;
 }
 
 /**

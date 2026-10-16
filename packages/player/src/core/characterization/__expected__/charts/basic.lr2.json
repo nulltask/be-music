@@ -229,7 +229,7 @@
       "3585.000 release-lane 11"
     ],
     "frames": {
-      "count": 305,
+      "count": 306,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "780.000 seconds=0.78 note 12@0.75",
@@ -243,7 +243,7 @@
         "3000.000 seconds=3 note 12@3",
         "3525.000 seconds=3.525 note 11@3.5"
       ],
-      "last": "4685.000 seconds=4.685 beat=9.37"
+      "last": "4701.667 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -411,7 +411,7 @@
       "3600.000 release-lane 11"
     ],
     "frames": {
-      "count": 284,
+      "count": 285,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "783.333 seconds=0.783333 note 12@0.75",
@@ -425,7 +425,7 @@
         "3000.000 seconds=3 note 12@3",
         "3533.333 seconds=3.533333 note 11@3.5"
       ],
-      "last": "4700.000 seconds=4.7 beat=9.4"
+      "last": "4716.667 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -442,7 +442,7 @@
   },
   "auto": {
     "outcome": "completed",
-    "endedAtMs": 3500,
+    "endedAtMs": 4716.667,
     "summary": {
       "total": 11,
       "perfect": 11,
@@ -473,7 +473,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"lr2"},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"lr2","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -529,32 +529,21 @@
       "0.000 start",
       "0.000 trigger 01:01@0+0/1",
       "500.000 trigger 11:02@0+1/4",
-      "500.000 trigger 11:02@0+1/4",
-      "750.000 trigger 12:03@0+3/8",
       "750.000 trigger 12:03@0+3/8",
       "1000.000 trigger 97:80@0+1/2",
       "1000.000 trigger 13:04@0+2/4",
-      "1000.000 trigger 13:04@0+2/4",
-      "1250.000 trigger 16:05@0+5/8",
       "1250.000 trigger 16:05@0+5/8",
       "1500.000 trigger 14:02@0+3/4",
       "1500.000 trigger 15:03@0+3/4",
-      "1500.000 trigger 14:02@0+3/4",
-      "1500.000 trigger 15:03@0+3/4",
-      "1750.000 trigger 18:04@0+7/8",
       "1750.000 trigger 18:04@0+7/8",
       "2000.000 trigger 98:C0@1+0/1",
       "2000.000 trigger 01:01@1+0/1",
       "2000.000 trigger 19:02@1+0/1",
-      "2000.000 trigger 19:02@1+0/1",
-      "2500.000 trigger 11:02@1+1/4",
       "2500.000 trigger 11:02@1+1/4",
       "3000.000 trigger 12:03@1+1/2",
-      "3000.000 trigger 12:03@1+1/2",
       "3500.000 trigger 11:02@1+3/4",
-      "3500.000 trigger 11:02@1+3/4",
-      "3500.000 finish",
-      "3500.000 dispose"
+      "4716.667 finish",
+      "4716.667 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -584,7 +573,7 @@
       "3500.000 flash-lane 11"
     ],
     "frames": {
-      "count": 224,
+      "count": 296,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "750.000 seconds=0.75 note 12@0.75",
@@ -598,7 +587,7 @@
         "3000.000 seconds=3 note 12@3",
         "3500.000 seconds=3.5 note 11@3.5"
       ],
-      "last": "3500.000 seconds=3.5 beat=7"
+      "last": "4716.667 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -606,9 +595,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "3500.000 input-runtime stop",
-      "3500.000 ui stop",
-      "3500.000 ui dispose"
+      "4716.667 input-runtime stop",
+      "4716.667 ui stop",
+      "4716.667 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",

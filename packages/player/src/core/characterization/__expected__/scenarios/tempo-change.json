@@ -230,7 +230,7 @@
       "6060.000 release-lane 11"
     ],
     "frames": {
-      "count": 457,
+      "count": 458,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "750.000 seconds=0.75 note 12@0.75",
@@ -244,7 +244,7 @@
         "5000.000 seconds=3 note 12@3",
         "6000.000 seconds=3.5 note 11@3.5"
       ],
-      "last": "7193.333 seconds=4.096667 beat=8.193333"
+      "last": "7210.000 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -410,7 +410,7 @@
       "6050.000 release-lane 11"
     ],
     "frames": {
-      "count": 432,
+      "count": 433,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "750.000 seconds=0.75 note 12@0.75",
@@ -424,7 +424,7 @@
         "4983.333 seconds=3 note 12@3",
         "5983.333 seconds=3.5 note 11@3.5"
       ],
-      "last": "7166.667 seconds=4.091667 beat=8.183333"
+      "last": "7183.333 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -442,7 +442,7 @@
   },
   "auto": {
     "outcome": "completed",
-    "endedAtMs": 3500,
+    "endedAtMs": 4716.667,
     "summary": {
       "total": 11,
       "perfect": 11,
@@ -473,7 +473,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE"},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","endOnFailure":true},
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -481,32 +481,21 @@
       "0.000 start",
       "0.000 trigger 01:01@0+0/1",
       "500.000 trigger 11:02@0+1/4",
-      "500.000 trigger 11:02@0+1/4",
-      "750.000 trigger 12:03@0+3/8",
       "750.000 trigger 12:03@0+3/8",
       "1000.000 trigger 97:80@0+1/2",
       "1000.000 trigger 13:04@0+2/4",
-      "1000.000 trigger 13:04@0+2/4",
-      "1250.000 trigger 16:05@0+5/8",
       "1250.000 trigger 16:05@0+5/8",
       "1500.000 trigger 14:02@0+3/4",
       "1500.000 trigger 15:03@0+3/4",
-      "1500.000 trigger 14:02@0+3/4",
-      "1500.000 trigger 15:03@0+3/4",
-      "1750.000 trigger 18:04@0+7/8",
       "1750.000 trigger 18:04@0+7/8",
       "2000.000 trigger 98:C0@1+0/1",
       "2000.000 trigger 01:01@1+0/1",
       "2000.000 trigger 19:02@1+0/1",
-      "2000.000 trigger 19:02@1+0/1",
-      "2500.000 trigger 11:02@1+1/4",
       "2500.000 trigger 11:02@1+1/4",
       "3000.000 trigger 12:03@1+1/2",
-      "3000.000 trigger 12:03@1+1/2",
       "3500.000 trigger 11:02@1+3/4",
-      "3500.000 trigger 11:02@1+3/4",
-      "3500.000 finish",
-      "3500.000 dispose"
+      "4716.667 finish",
+      "4716.667 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -536,7 +525,7 @@
       "3500.000 flash-lane 11"
     ],
     "frames": {
-      "count": 224,
+      "count": 296,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "750.000 seconds=0.75 note 12@0.75",
@@ -550,7 +539,7 @@
         "3000.000 seconds=3 note 12@3",
         "3500.000 seconds=3.5 note 11@3.5"
       ],
-      "last": "3500.000 seconds=3.5 beat=7"
+      "last": "4716.667 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -558,9 +547,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "3500.000 input-runtime stop",
-      "3500.000 ui stop",
-      "3500.000 ui dispose"
+      "4716.667 input-runtime stop",
+      "4716.667 ui stop",
+      "4716.667 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",
@@ -572,7 +561,7 @@
   },
   "autoFollowingTheLog": {
     "outcome": "completed",
-    "endedAtMs": 5983.333,
+    "endedAtMs": 7183.333,
     "summary": {
       "total": 11,
       "perfect": 11,
@@ -603,7 +592,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as auto)",
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","tempoChanges":[{"timeUs":1016667,"tempo":0.5}]},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","endOnFailure":true},
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -611,33 +600,22 @@
       "0.000 start",
       "0.000 trigger 01:01@0+0/1",
       "500.000 trigger 11:02@0+1/4",
-      "500.000 trigger 11:02@0+1/4",
-      "750.000 trigger 12:03@0+3/8",
       "750.000 trigger 12:03@0+3/8",
       "1000.000 trigger 97:80@0+1/2",
       "1000.000 trigger 13:04@0+2/4",
-      "1000.000 trigger 13:04@0+2/4",
       "1016.667 tempo 0.5",
       "1483.333 trigger 16:05@0+5/8",
-      "1483.333 trigger 16:05@0+5/8",
       "1983.333 trigger 14:02@0+3/4",
       "1983.333 trigger 15:03@0+3/4",
-      "1983.333 trigger 14:02@0+3/4",
-      "1983.333 trigger 15:03@0+3/4",
-      "2483.333 trigger 18:04@0+7/8",
       "2483.333 trigger 18:04@0+7/8",
       "2983.333 trigger 98:C0@1+0/1",
       "2983.333 trigger 01:01@1+0/1",
       "2983.333 trigger 19:02@1+0/1",
-      "2983.333 trigger 19:02@1+0/1",
-      "3983.333 trigger 11:02@1+1/4",
       "3983.333 trigger 11:02@1+1/4",
       "4983.333 trigger 12:03@1+1/2",
-      "4983.333 trigger 12:03@1+1/2",
       "5983.333 trigger 11:02@1+3/4",
-      "5983.333 trigger 11:02@1+3/4",
-      "5983.333 finish",
-      "5983.333 dispose"
+      "7183.333 finish",
+      "7183.333 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -667,7 +645,7 @@
       "5983.333 flash-lane 11"
     ],
     "frames": {
-      "count": 373,
+      "count": 444,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "750.000 seconds=0.75 note 12@0.75",
@@ -681,7 +659,7 @@
         "4983.333 seconds=3 note 12@3",
         "5983.333 seconds=3.5 note 11@3.5"
       ],
-      "last": "5983.333 seconds=3.5 beat=7"
+      "last": "7183.333 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -690,16 +668,16 @@
       "0.000 ui start",
       "0.000 input-runtime start",
       "1016.667 tempo x0.5 at 1.016667",
-      "5983.333 input-runtime stop",
-      "5983.333 ui stop",
-      "5983.333 ui dispose"
+      "7183.333 input-runtime stop",
+      "7183.333 ui stop",
+      "7183.333 ui dispose"
     ],
     "log": "(same as auto)",
     "output": "(same as manual)"
   },
   "autoWithCommand": {
     "outcome": "completed",
-    "endedAtMs": 6000,
+    "endedAtMs": 7200,
     "summary": {
       "total": 11,
       "perfect": 11,
@@ -730,7 +708,13 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as auto)",
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","tempoChanges":[{"timeUs":1000000,"tempo":0.5}]},
+      "play": {
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "endOnFailure": true,
+        "tempoChanges": [{"timeUs":1000000,"tempo":0.5}]
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -738,33 +722,22 @@
       "0.000 start",
       "0.000 trigger 01:01@0+0/1",
       "500.000 trigger 11:02@0+1/4",
-      "500.000 trigger 11:02@0+1/4",
-      "750.000 trigger 12:03@0+3/8",
       "750.000 trigger 12:03@0+3/8",
       "1000.000 trigger 97:80@0+1/2",
       "1000.000 trigger 13:04@0+2/4",
-      "1000.000 trigger 13:04@0+2/4",
       "1000.000 tempo 0.5",
       "1500.000 trigger 16:05@0+5/8",
-      "1500.000 trigger 16:05@0+5/8",
       "2000.000 trigger 14:02@0+3/4",
       "2000.000 trigger 15:03@0+3/4",
-      "2000.000 trigger 14:02@0+3/4",
-      "2000.000 trigger 15:03@0+3/4",
-      "2500.000 trigger 18:04@0+7/8",
       "2500.000 trigger 18:04@0+7/8",
       "3000.000 trigger 98:C0@1+0/1",
       "3000.000 trigger 01:01@1+0/1",
       "3000.000 trigger 19:02@1+0/1",
-      "3000.000 trigger 19:02@1+0/1",
-      "4000.000 trigger 11:02@1+1/4",
       "4000.000 trigger 11:02@1+1/4",
       "5000.000 trigger 12:03@1+1/2",
-      "5000.000 trigger 12:03@1+1/2",
       "6000.000 trigger 11:02@1+3/4",
-      "6000.000 trigger 11:02@1+3/4",
-      "6000.000 finish",
-      "6000.000 dispose"
+      "7200.000 finish",
+      "7200.000 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -794,7 +767,7 @@
       "6000.000 flash-lane 11"
     ],
     "frames": {
-      "count": 375,
+      "count": 446,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "750.000 seconds=0.75 note 12@0.75",
@@ -808,7 +781,7 @@
         "5000.000 seconds=3 note 12@3",
         "6000.000 seconds=3.5 note 11@3.5"
       ],
-      "last": "6000.000 seconds=3.5 beat=7"
+      "last": "7200.000 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -817,9 +790,9 @@
       "0.000 ui start",
       "0.000 input-runtime start",
       "1000.000 tempo x0.5 at 1",
-      "6000.000 input-runtime stop",
-      "6000.000 ui stop",
-      "6000.000 ui dispose"
+      "7200.000 input-runtime stop",
+      "7200.000 ui stop",
+      "7200.000 ui dispose"
     ],
     "log": "(same as auto)",
     "output": "(same as manual)"

@@ -1,32 +1,15 @@
 import { resolveAltModifierLabel } from '../utils.ts';
 import { createAutoJudgeState, isAutoJudgeSettled, runAutoJudgeStep, type AutoJudgeInput } from './auto-judge-core.ts';
 import { clampToReversal } from './judge-core.ts';
-import { TUI_FRAME_INTERVAL_MS, waitPreciseOrInput } from './engine-clock.ts';
 import { printLaneMap, writePlayableSampleTriggerEventLog } from './engine-trace.ts';
 import { createRealtimeAudioCursor } from './play-audio-cursor.ts';
 import type { PlaySession } from './play-session.ts';
-import type { JudgeStrategy, PlayJudge, StrategyDrifts } from './play-strategy.ts';
+import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 
 /**
  * The AUTO judge strategy: the auto judge core (`auto-judge-core.ts`) resolves every note as chart time reaches it,
  * and the strategy queues each note's keysound against the audio write head, ahead of its judgment.
  */
-
-/** AUTO play's drifts from manual play (see {@link StrategyDrifts}). */
-const AUTO_DRIFTS: StrategyDrifts = {
-  ignoresHoldAfterChart: true,
-  ignoresJudgeRankChanges: true,
-  abortsAtClockTime: true,
-  tracesEscapeAsComplete: true,
-  startsChartAfterLeadInEscape: false,
-  startsInputRuntimeAfterLeadIn: false,
-  horizon: 'chart-end',
-  closingFrame: true,
-  queuesLaneKeysoundsAsRealtimeAudio: true,
-  omitsEndOnFailure: true,
-  recordsTempoInReplay: true,
-  followsReplayTempoChangesAlways: true,
-};
 
 function writeAutoIntro(session: PlaySession): void {
   const { writeOutput, playbackChart } = session;
@@ -44,8 +27,7 @@ function writeAutoIntro(session: PlaySession): void {
 }
 
 function createAutoJudge(session: PlaySession): PlayJudge {
-  const { playbackChart, uiEnabled, writeOutput, wavResources, idBase, audioSession, totalSeconds, tempoClock } =
-    session;
+  const { playbackChart, uiEnabled, writeOutput, wavResources, idBase, audioSession, totalSeconds } = session;
   const { scorableNotes } = playbackChart;
   const autoJudge = createAutoJudgeState(
     {
@@ -93,18 +75,6 @@ function createAutoJudge(session: PlaySession): PlayJudge {
     judgedThroughSeconds: (tick) => tick.nowSec,
     isSettled: () => noteKeysounds.done && isAutoJudgeSettled(autoJudge),
     isClosed: () => false,
-    beforeFinish: async (wakeUp) => {
-      session.volumeChanges.triggerUntil(totalSeconds);
-      session.backgroundAudio.triggerUntil(totalSeconds);
-      noteKeysounds.triggerUntil(totalSeconds);
-      step({ kind: 'reach', nowSec: totalSeconds });
-      const totalWaitMs = Math.max(0, tempoClock.clockMsAt(totalSeconds) - (session.clock?.nowMs() ?? 0));
-      if (totalWaitMs > 0) {
-        // Trailing wait for the chart's end. ESC during it should still abort promptly, so race the sleep against the
-        // wake-up the same way the main tick does.
-        await waitPreciseOrInput(Math.min(totalWaitMs, TUI_FRAME_INTERVAL_MS), wakeUp);
-      }
-    },
     finish: () => step({ kind: 'finish', totalSeconds }),
     settledThroughSeconds: () => judgedThroughSeconds,
   };
@@ -113,7 +83,6 @@ function createAutoJudge(session: PlaySession): PlayJudge {
 /** AUTO play: every note played and judged PGREAT on time. */
 export const autoStrategy: JudgeStrategy = {
   mode: 'auto',
-  drifts: AUTO_DRIFTS,
   estimatesActiveAudio: true,
   writeIntro: writeAutoIntro,
   createJudge: createAutoJudge,

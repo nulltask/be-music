@@ -20,10 +20,12 @@ export interface PlayControls {
   consume(): void;
   /** Applies the replay's recorded tempo changes due by `nowSec`. */
   followReplayTempoChanges(nowSec: number): void;
+  /** Interrupts the play at chart second `seconds` (a replay reaching the instant its log was aborted at). */
+  interrupt(reason: PlayerInterruptReason, seconds: number): void;
+  /** The chart has started: applies a pause sent during the lead-in. */
+  chartStarted(): void;
   /** Records the view changes still on the input bus once the loop is over (sent as the play ended). */
   recordPendingViewChanges(): void;
-  /** The chart second a command takes effect at: the play clock's, or the chart's start before it runs. */
-  commandSeconds(): number;
   /** The interrupt the play received, if any. */
   readonly interruptedReason: PlayerInterruptReason | undefined;
 }
@@ -38,13 +40,19 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
     activeStateSignals,
     playlogRecorder,
     inputSignals,
-    strategy: { drifts },
   } = session;
   let highSpeed = session.highSpeed;
   let interruptedReason: PlayerInterruptReason | undefined;
+  // The chart second a command takes effect at: the play clock's, or the chart's start before it runs.
   const commandSeconds = (): number => (session.clock ? tempoClock.chartSecondsAt(session.clock.nowMs()) : 0);
 
+  // A pause sent during the lead-in holds the chart at its start.
+  let pauseAtStart = false;
   const togglePause = (): void => {
+    if (session.clock === undefined) {
+      pauseAtStart = !pauseAtStart;
+      return;
+    }
     togglePlaybackPause({
       playbackClock: session.clock,
       audioSession,
@@ -69,7 +77,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
       setAudioTempo: (next) => audioSession?.setTempo?.(next),
       // A replay's tempo only sets how fast it is re-driven: its re-recorded log carries none.
       recordTempoChange: (seconds, next) => {
-        if (!session.replay || drifts.recordsTempoInReplay) playlogRecorder?.recordTempoChange(seconds, next);
+        if (!session.replay) playlogRecorder?.recordTempoChange(seconds, next);
       },
       onTempoChange: (change) => {
         if (!uiEnabled) {
@@ -83,12 +91,18 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
     });
   };
 
-  // A replay follows its log's tempo changes as its chart time reaches each.
-  const replayTempoChanges =
-    session.replay || drifts.followsReplayTempoChangesAlways ? (options.replayTempoChanges ?? []) : [];
+  // A replay follows its log's tempo changes as its chart time reaches each; a live play takes its tempo from commands.
+  const replayTempoChanges = session.replay ? (options.replayTempoChanges ?? []) : [];
   let replayTempoChangeIndex = 0;
 
   const handleLaneCommand = judge.handleLaneCommand?.bind(judge);
+  const traceInterrupt = (reason: PlayerInterruptReason, seconds: number): void => {
+    if (uiEnabled || session.clock === undefined) return;
+    writeRuntimeEventLog(writeOutput, 'interrupt', [
+      ['time', formatSeconds(seconds)],
+      ['reason', reason],
+    ]);
+  };
 
   return {
     consume: () => {
@@ -124,16 +138,13 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
             : (command) => {
                 if (command.kind === 'lane-input' || command.kind === 'kitty-state') handleLaneCommand(command);
               },
-        logInterrupt: !uiEnabled
-          ? (reason) => {
-              if (session.clock === undefined) return;
-              writeRuntimeEventLog(writeOutput, 'interrupt', [
-                ['time', formatSeconds(commandSeconds())],
-                ['reason', reason],
-              ]);
-            }
-          : undefined,
+        logInterrupt: (reason) => traceInterrupt(reason, commandSeconds()),
       });
+    },
+    interrupt: (reason, seconds) => {
+      if (interruptedReason !== undefined) return;
+      traceInterrupt(reason, seconds);
+      interruptedReason = reason;
     },
     followReplayTempoChanges: (nowSec) => {
       while (replayTempoChangeIndex < replayTempoChanges.length) {
@@ -143,10 +154,15 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
         changeTempo(change.tempo);
       }
     },
+    chartStarted: () => {
+      if (pauseAtStart) {
+        pauseAtStart = false;
+        togglePause();
+      }
+    },
     recordPendingViewChanges: () => {
       recordPendingViewChanges(inputSignals, playlogRecorder, Math.max(0, commandSeconds()));
     },
-    commandSeconds,
     get interruptedReason() {
       return interruptedReason;
     },
