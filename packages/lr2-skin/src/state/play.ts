@@ -335,6 +335,15 @@ export function resolveLr2PlayState(setup: Lr2PlaySetup, frame: Lr2PlayFrame): L
   };
 }
 
+/**
+ * Whether a lane draws the skin's AUTO note graphics (`#SRC_AUTO_*`, with the skin's own "dummy notes" choice): a lane
+ * the player's options play by themselves, the 1P scratch (lane 0) while 1P auto scratch is on (op 55). Full AUTOPLAY
+ * (op 33) keeps the regular notes, as in LR2. Op 53 is EXTRA MODE, which plays no lane by itself.
+ */
+export function isLr2AutoLane(laneIndex: number, ops: ReadonlySet<number>): boolean {
+  return laneIndex === 0 && ops.has(LR2_OP.AUTO_SCRATCH_1P_ON);
+}
+
 /** A timer bank of the lanes: bombs (50 / 60), long-note holds (70 / 80), key on (100 / 110) and key off (120 / 130). */
 export type Lr2LaneTimerBank = 'bomb' | 'ln-hold' | 'key-on' | 'key-off';
 

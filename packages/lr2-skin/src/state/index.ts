@@ -24,6 +24,7 @@ export {
 export { resolveLr2BarLamp, resolveLr2LampOp } from './records.ts';
 export { resolveLr2DecideState, type Lr2DecideInput } from './decide.ts';
 export {
+  isLr2AutoLane,
   resolveLr2GaugeRangeOp,
   resolveLr2GaugeTypeOps,
   resolveLr2LaneTimer,

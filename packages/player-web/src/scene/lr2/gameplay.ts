@@ -49,6 +49,7 @@ import {
 } from './gameplay-hud.ts';
 import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
 import {
+  isLr2AutoLane,
   resolveLr2JudgeCombo,
   resolveLr2LaneTimer,
   resolveLr2NonstopStage,
@@ -1956,9 +1957,9 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
    * Picks the best note SRC for the given kind + lane index.
    *
    * The LR2 `#SRC_AUTO_*` variants ("dummy notes") are *not* a global "use this when autoplay is on" override — they
-   * only kick in for lanes that the per-lane autoscratch / autolane options (op 53/55) handle automatically, with
-   * `AUTOPLAY LANE = DUMMY NOTES` (op 915) selected. Full-game autoplay (op 33) keeps the regular note sprite, exactly
-   * like the LR2 reference video.
+   * only kick in for lanes the auto scratch option plays by itself (`isLr2AutoLane`), with `AUTOPLAY LANE = DUMMY
+   * NOTES` (op 915) selected. Full-game autoplay (op 33) keeps the regular note sprite, exactly like the LR2 reference
+   * video.
    */
   private resolveNoteSource(
     skin: Lr2Skin | undefined,
@@ -1968,7 +1969,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     if (!skin) {
       return undefined;
     }
-    if (this.isAutoLane(laneIndex) && this.runtimeOps.has(915)) {
+    if (isLr2AutoLane(laneIndex, this.runtimeOps) && this.runtimeOps.has(915)) {
       const autoKind = ('auto' + kind) as keyof Lr2Skin['notes'];
       const auto = skin.notes[autoKind];
       const direct = auto?.[laneIndex];
@@ -1979,22 +1980,6 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       }
     }
     return skin.notes[kind]?.[laneIndex];
-  }
-
-  /**
-   * Returns true when the given lane index is currently auto-handled by the per-lane play options — autoscratch on (op
-   * 55) → scratch lane auto, or autolane on (op 53) → all lanes auto. Global autoplay (op 33) is deliberately not
-   * counted here so notes still render in their normal color during autoplay demonstrations, matching the LR2
-   * reference.
-   */
-  private isAutoLane(laneIndex: number): boolean {
-    if (this.runtimeOps.has(LR2_OP.EXTRA_MODE_ON)) {
-      return true;
-    }
-    if (laneIndex === 0 && this.runtimeOps.has(LR2_OP.AUTO_SCRATCH_1P_ON)) {
-      return true;
-    }
-    return false;
   }
 
   private hasSkinnedJudge(): boolean {
