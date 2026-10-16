@@ -3,6 +3,7 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import {
   checkCoursePlaylogEligibility,
   PLAYLOG_ENGINE_VERSION,
+  resolveCoursePlayedRuleset,
   simulateCoursePlaylog,
   type BeMusicCoursePlaylog,
   type BeMusicPlaylog,
@@ -28,7 +29,7 @@ import { loadCourseBestScores, toCourseBestScoreRow } from './bests.ts';
 import { courseTrophyRank, mergeCourseTrophy, toCourseStageFigures } from './figures.ts';
 import { countCoursePlayers, rankOfCourseExScore } from './ranking.ts';
 import { checkNonstopStageCharts, checkUnreachedStageCharts, type StageChartInput } from './stage-charts.ts';
-import { checkCourseRun, resolveCoursePlayedRuleset } from './verify.ts';
+import { checkCourseRun } from './verify.ts';
 
 /** The fingerprint documents of one played stage, in the order the stages were played. */
 export interface CourseStageDocuments {

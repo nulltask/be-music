@@ -855,6 +855,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.resolveCourseLamp('beatoraja', benchStageResult, 'GROOVE');
     },
   });
+  define('player.playlog.resolveCoursePlayedRuleset', {
+    run: () => {
+      playlogApi.resolveCoursePlayedRuleset(benchCourseLog);
+    },
+  });
   define('player.playlog.resolveRulesetResultLamp', {
     run: () => {
       playlogApi.resolveRulesetResultLamp(benchStageResult, 'lr2');

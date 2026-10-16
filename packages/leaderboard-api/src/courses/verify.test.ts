@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createCoursePlaylog,
+  resolveCoursePlayedRuleset,
   simulateCoursePlaylog,
   simulatePlaylog,
   type BeMusicPlaylog,
   type PlaylogCourseStage,
 } from '@be-music/player/playlog';
 import { makeChart, makePlaylog } from '../../test/support.ts';
-import { checkCourseRun, resolveCoursePlayedRuleset } from './verify.ts';
+import { checkCourseRun } from './verify.ts';
 
 const CHART = makeChart(['#00111:01010101', '#00211:01010101', '#00311:0101']);
 
