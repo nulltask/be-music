@@ -1,5 +1,5 @@
 import type { BeMusicJson } from '@be-music/json';
-import { resolveLibraryChartKeyMode, type KeyMode, type KeysFilter, type LibraryChart } from '@be-music/scene-model';
+import { resolveLibraryChartKeyMode, type KeyMode, type LibraryChart } from '@be-music/scene-model';
 import { LR2_OP, LR2_TEXT } from '../ids/index.ts';
 
 /** What a chart has that LR2's ops 170-179 report. */
@@ -55,43 +55,6 @@ const KEY_MODE_OPS: Readonly<Record<KeyMode, number>> = {
 /** LR2's key-mode op (160-164) for a library chart: its key mode (`resolveLibraryChartKeyMode`), 24-key ones folded. */
 export function resolveLr2KeyModeOp(chart: LibraryChart): number {
   return KEY_MODE_OPS[resolveLibraryChartKeyMode(chart)];
-}
-
-/**
- * The key-mode op each key-mode filter lists, as a select screen filters its bars by LR2's key-mode op. The 24-key
- * filters (beatoraja's) fold onto the same-shape ops, as {@link resolveLr2KeyModeOp} folds the 24-key charts.
- */
-export const LR2_KEYS_FILTER_OPS: Readonly<Record<Exclude<KeysFilter, 'ALL'>, number>> = {
-  KEYS_5: LR2_OP.KEYS_5,
-  KEYS_7: LR2_OP.KEYS_7,
-  KEYS_9: LR2_OP.KEYS_9,
-  KEYS_10: LR2_OP.KEYS_10,
-  KEYS_14: LR2_OP.KEYS_14,
-  KEYS_24: LR2_OP.KEYS_7,
-  KEYS_48: LR2_OP.KEYS_14,
-};
-
-/** The key count each LR2 key-mode op stands for. */
-const KEY_MODE_OP_KEYS: Readonly<Record<number, number>> = {
-  [LR2_OP.KEYS_7]: 7,
-  [LR2_OP.KEYS_5]: 5,
-  [LR2_OP.KEYS_14]: 14,
-  [LR2_OP.KEYS_10]: 10,
-  [LR2_OP.KEYS_9]: 9,
-};
-
-/**
- * Whether a course bar stays listed under a key-mode filter (its LR2 op, {@link LR2_KEYS_FILTER_OPS}): LR2 lists only
- * the courses of the filter's key mode (OpenLR2 L18030-L18053, `WHERE line=…`). A course that names no key mode
- * (`definition.keyMode`, e.g. a beatoraja course) and a NEW COURSE bar stay listed.
- */
-export function lr2CourseMatchesKeysFilter(
-  course: { definition: { keyMode?: number }; newCourse?: true },
-  filterOp: number,
-): boolean {
-  const keyMode = course.definition.keyMode;
-  if (keyMode === undefined || course.newCourse === true) return true;
-  return KEY_MODE_OP_KEYS[filterOp] === keyMode;
 }
 
 /** LR2's `#DIFFICULTY` op (150 undefined, 151 BEGINNER … 155 INSANE); a missing or unknown difficulty is undefined. */

@@ -2,8 +2,6 @@ import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import { LR2_OP, LR2_TEXT } from '../ids/index.ts';
 import {
-  LR2_KEYS_FILTER_OPS,
-  lr2CourseMatchesKeysFilter,
   resolveLr2ChartFeatures,
   resolveLr2ChartText,
   resolveLr2DifficultyOp,
@@ -26,22 +24,6 @@ describe('resolveLr2KeyModeOp', () => {
     expect(resolveLr2KeyModeOp(makeChartWith({ channels: ['11'], modeHint: 'beat-14k' }))).toBe(LR2_OP.KEYS_14);
     expect(resolveLr2KeyModeOp(makeChartWith({ modeHint: 'keyboard-24k' }))).toBe(LR2_OP.KEYS_7);
     expect(resolveLr2KeyModeOp(makeChartWith({ modeHint: 'keyboard-24k-double' }))).toBe(LR2_OP.KEYS_14);
-    expect(LR2_KEYS_FILTER_OPS.KEYS_24).toBe(LR2_OP.KEYS_7);
-    expect(LR2_KEYS_FILTER_OPS.KEYS_48).toBe(LR2_OP.KEYS_14);
-  });
-});
-
-describe('lr2CourseMatchesKeysFilter', () => {
-  it('lists a course under its own key mode only, as LR2 lists courses by line', () => {
-    const seven = { definition: { keyMode: 7 } };
-    expect(lr2CourseMatchesKeysFilter(seven, LR2_OP.KEYS_7)).toBe(true);
-    expect(lr2CourseMatchesKeysFilter(seven, LR2_OP.KEYS_14)).toBe(false);
-    expect(lr2CourseMatchesKeysFilter({ definition: { keyMode: 9 } }, LR2_OP.KEYS_9)).toBe(true);
-  });
-
-  it('keeps a course that names no key mode and a NEW COURSE bar', () => {
-    expect(lr2CourseMatchesKeysFilter({ definition: {} }, LR2_OP.KEYS_5)).toBe(true);
-    expect(lr2CourseMatchesKeysFilter({ definition: { keyMode: 7 }, newCourse: true }, LR2_OP.KEYS_5)).toBe(true);
   });
 });
 

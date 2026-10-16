@@ -90,11 +90,6 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
       lr2StateApi.isLr2AutoLane(0, BENCH_AUTO_SCRATCH_OPS);
     },
   });
-  define('lr2-skin.state.lr2CourseMatchesKeysFilter', {
-    run: () => {
-      lr2StateApi.lr2CourseMatchesKeysFilter({ definition: { keyMode: 7 } }, 160);
-    },
-  });
   define('lr2-skin.state.pickLr2BarBody', {
     run: () => {
       lr2StateApi.pickLr2BarBody(BENCH_BAR_BODIES, BENCH_ENTRY);
