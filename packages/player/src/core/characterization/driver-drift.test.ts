@@ -103,11 +103,11 @@ describe('driver drift', () => {
     }
   });
 
-  test('drift: autoPlay starts its input runtime before the lead-in, manualPlay after it', async () => {
+  test('manual and auto play both start their input runtime before the lead-in', async () => {
     const play = { chart: basicChart(), options: { leadInMs: 500 } };
     const starts = (observation: PlayObservation) =>
       observation.host.filter((entry) => entry.endsWith('input-runtime start'));
-    expect(starts(await observePlay({ ...play, driver: 'manual' }))).toEqual(['500.000 input-runtime start']);
+    expect(starts(await observePlay({ ...play, driver: 'manual' }))).toEqual(['0.000 input-runtime start']);
     expect(starts(await observePlay({ ...play, driver: 'auto' }))).toEqual(['0.000 input-runtime start']);
   });
 

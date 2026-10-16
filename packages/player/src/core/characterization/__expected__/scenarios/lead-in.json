@@ -250,7 +250,7 @@
       "0.000 input-runtime create manual",
       "0.000 load-complete",
       "0.000 ui start",
-      "1000.000 input-runtime start",
+      "0.000 input-runtime start",
       "6701.667 input-runtime stop",
       "6701.667 ui stop",
       "6701.667 ui dispose"
