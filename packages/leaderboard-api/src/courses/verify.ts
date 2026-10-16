@@ -3,7 +3,6 @@ import type {
   BeMusicCoursePlaylog,
   BeMusicPlaylog,
   PlaylogCourseResult,
-  PlaylogRulesetId,
   PlaylogRulesetResult,
 } from '@be-music/player/playlog';
 
@@ -22,16 +21,6 @@ export type CourseRunCheck = { ok: true } | { ok: false; reason: CourseRunReject
 
 /** How far a recorded carry-in gauge may sit from the re-simulated one (float noise; the value is a percentage). */
 const CARRY_GAUGE_TOLERANCE = 1e-3;
-
-/** The ruleset every stage of a course run was judged under, or `undefined` when they differ. */
-export function resolveCoursePlayedRuleset(courseLog: BeMusicCoursePlaylog): PlaylogRulesetId | undefined {
-  // A NONSTOP run was one play.
-  if (courseLog.nonstop !== undefined) return courseLog.nonstop.playlog.play.judgeRuleset ?? 'lr2';
-  const rulesets = new Set(
-    courseLog.stages.flatMap((entry) => (entry.played ? [entry.playlog.play.judgeRuleset ?? 'lr2'] : [])),
-  );
-  return rulesets.size === 1 ? [...rulesets][0] : undefined;
-}
 
 /** The stage settings a course's constraints give (`gauge_*` → gauge set, `no_good` / `no_great` → judge). */
 function expectedStageSettings(constraints: readonly string[]) {
