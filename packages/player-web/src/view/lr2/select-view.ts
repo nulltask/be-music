@@ -1,6 +1,15 @@
-import { Color, Container, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+/**
+ * The LR2 family's select view: an LR2 select skin's `#SRC_*` / `#DST_*` frame, its bar list (`#SRC_BAR_BODY` slots
+ * around `#BAR_CENTER`), buttons, panels, sliders, numbers, texts and mouse cursor, over the select session's frames.
+ * The skin's ops, numbers, texts, button cells and sliders come from `resolveLr2SelectState`, its buttons' actions from
+ * `resolveLr2SelectButton` / `resolveLr2CourseMakerAction`, and its timers from `resolveLr2SelectTimers`, started by
+ * what the frames report (the screen's entry, cursor moves, option panels, the course being made). The LR2 ids stay in
+ * this view: the session sees intents.
+ */
+
+import { resolveBeMusicSelectLayout, type BeMusicSelectLayout } from '@be-music/skin-sdk';
+import { Color, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import type {
-  Lr2BarBodySlot,
   Lr2BarFlashElement,
   Lr2BarLampSource,
   Lr2BarLevelSource,
@@ -17,7 +26,40 @@ import type {
   Lr2SpecialGraphic,
   Lr2TextElement,
 } from '@be-music/lr2-skin';
-import { PLAY_OPTION_CHOICES } from '@be-music/scene-model';
+import { LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
+import {
+  pickLr2BarBody,
+  resolveLr2BarLamp,
+  resolveLr2BarLevel,
+  resolveLr2CourseMakerAction,
+  resolveLr2SelectButton,
+  resolveLr2SelectState,
+  resolveLr2SelectTimers,
+  type Lr2Clock,
+  type Lr2SelectState,
+  type Lr2TimerUpdate,
+} from '@be-music/lr2-skin/state';
+import type { BrowserBrowseEntry, BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
+import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
+import { hasReadtextForSong } from '../../collection/readtext.ts';
+import { resolveChartBpmRange } from '../../chart/bpm-range.ts';
+import type { Lr2Kit } from '../../host/family-kit.ts';
+import { logger } from '../../logger.ts';
+import { LR2_TEXT_FALLBACK_FONT } from '../../scene/lr2/fonts.ts';
+import {
+  designRectToCanvas,
+  resolveDesignTextResolution,
+  resolveScaledViewport,
+  setDesignPixelRatio,
+  setDesignTextResolution,
+  type ScaledViewport,
+} from '../../scene/core/viewport.ts';
+import type { PixiSceneHost } from '../../scene/host.ts';
+import { PerfTracker } from '../../scene/perf.ts';
+import { disposeChildren } from '../../scene/pixi-utils.ts';
+import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
+import { resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import {
   applyDestinationToSprite,
   containerSpriteSink,
@@ -30,72 +72,28 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import { LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
+import { clampFontSize, isDestinationVisible, makeLr2TextSprite } from '../../skin/lr2/scene-render.ts';
 import {
-  pickLr2BarBody,
-  resolveLr2BarLamp,
-  resolveLr2BarLevel,
-  resolveLr2CourseMakerAction,
-  resolveLr2SelectButton,
-  resolveLr2SelectState,
-  resolveLr2SelectTimers,
-  type Lr2Clock,
-  type Lr2SelectState,
-} from '@be-music/lr2-skin/state';
-import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
-import {
+  collectSelectSkinTexturePaths,
   Lr2ChartGraphicTextureStore,
   Lr2SkinTextureStore,
-  collectSelectSkinTexturePaths,
   resolveSolidSpecialGraphicTexture,
 } from '../../skin/lr2/scene-textures.ts';
-import { clampFontSize, isDestinationVisible, makeLr2TextSprite } from '../../skin/lr2/scene-render.ts';
-import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
-import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
-import { resolveChartBpmRange } from '../../chart/bpm-range.ts';
-import type { BrowserBrowseEntry, BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
-import { resolveSongSource } from '../../collection/collection.ts';
-import { dirname } from '@be-music/utils/core';
-import { LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
-import { CoreSongSelectView, type CoreSongSelectViewOptions, type SelectDesignSize } from '../core/select.ts';
-import type { SceneIdentity } from '../../host/family-kit.ts';
+import { phantomSkin } from '../../skins/phantom/index.ts';
+import { renderEmptyStateHint } from '../built-in/select-empty-hint.ts';
+import { SelectReadTextOverlay } from '../built-in/select-readtext.ts';
+import { SelectPointer, type SelectDesignSize, type SelectPointerContext } from '../shared/select-pointer.ts';
+import type { IntentSink, SelectFrame, SelectIntent, SelectView } from '../types.ts';
 
-// The family-neutral half of the select scene (navigation, input, audio, play options, be-music fallback) lives in
-// `scene/core/select.ts`; re-export its public surface so existing `scene/lr2/select` importers keep working.
-export {
-  DEFAULT_PLAY_OPTIONS,
-  matchesSearchQuery,
-  wrappedCursorDelta,
-  type PixiBgaMode,
-  type PixiBgaSize,
-  type PixiDifficultyFilter,
-  type PixiHiddenSudden,
-  type PixiHsFix,
-  type PixiKeysFilter,
-  type PixiPlayOptions,
-  type PixiRandomMode,
-  type PixiSelectSort,
-  type PixiSongSelectSystemSounds,
-} from '../core/select.ts';
+const log = logger('select');
 
+const BG = new Color('#050912');
 const TEXT = new Color('#f6f2e8');
 
-/** Constructor options for {@link PixiSongSelectView}: the shared select options plus the LR2 skin. */
-export interface PixiSongSelectViewOptions extends CoreSongSelectViewOptions {
-  /**
-   * LR2 skin to render the select screen with. When provided, static `#IMAGE` elements decorate the frame and
-   * `#SRC_BAR_BODY` / `#DST_BAR_BODY_OFF` / `_ON` slots host the song list. Without a skin the view falls back to a
-   * built-in pixel-art-style layout.
-   */
-  skin?: Lr2Skin;
-}
-
 /**
- * One entry in the precomputed {@link PixiSongSelectView.sortedChromeEntries} array. Tagged union over the six
- * chrome-element kinds the LR2 select view paints (`#SRC_IMAGE`, `#SRC_NUMBER`, `#SRC_TEXT`, `#SRC_BUTTON`,
- * `#SRC_ONMOUSE`, `#SRC_SLIDER`). The `order` field is the CSV-declaration order used as the inter-kind sort key —
- * matching LR2's "later declaration paints on top" rule. `layerIsForeground` caches the result of `pickChromeLayer` so
- * the per-frame switch can resolve the destination container without re-reading the skin's bar layout each time.
+ * One entry of the skin's chrome, in its declaration order across kinds (`#SRC_IMAGE`, `#SRC_NUMBER`, `#SRC_TEXT`,
+ * `#SRC_BUTTON`, `#SRC_ONMOUSE`, `#SRC_SLIDER`): LR2 paints a later declaration on top. `layerIsForeground` caches
+ * whether it was declared after the bar list.
  */
 type SortedSelectChromeEntry =
   | { kind: 'image'; order: number; layerIsForeground: boolean; element: Lr2ImageElement }
@@ -105,124 +103,341 @@ type SortedSelectChromeEntry =
   | { kind: 'onMouse'; order: number; layerIsForeground: boolean; element: Lr2OnMouseElement }
   | { kind: 'slider'; order: number; layerIsForeground: boolean; element: Lr2SliderElement };
 
-const IDENTITY: SceneIdentity = { kind: 'select', family: 'lr2' };
+const NO_ENTRIES: readonly BrowserBrowseEntry[] = [];
+const EMPTY_LIBRARY: BrowserSongCollection = { sources: [], songs: [], errors: [] };
 
-/**
- * LR2-skinned song-select scene. Extends {@link CoreSongSelectView} with the `#SRC_*` / `#DST_*` frame, the bar list,
- * the skin's buttons / panels / sliders / mouse cursor, and the `#STARTINPUT`-driven timers. Without a select-capable
- * skin (no `#SRC_BAR_BODY` slots) every theme hook falls through and the core's be-music fallback renders instead.
- */
-export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOptions> {
+/** The LR2 select view. See the module comment. */
+export class Lr2SelectView implements SelectView {
+  public readonly family = 'lr2' as const;
+  /** An LR2 skin has no launch outro: a started chart is handed on at once. */
+  public readonly launchOutroMs = 0;
+  /** The viewport background and the letterboxed design canvas. */
+  public readonly root: Container = new Container();
+  private readonly designRoot = new Container();
+  /** Clips the design canvas, so an element sliding in from off-canvas (`#DST_BAR_BODY_OFF`) is cut at its edge. */
+  private readonly designClipMask = new Graphics();
+  private readonly viewportBackground = new Graphics();
+  private readonly background = new Graphics();
+  /** The skin's chrome declared before the bar list. Cleared every frame. */
+  private readonly skinLayer: Container = new Container();
+  /** The bar list. Slides by {@link listScrollOffset} after a cursor move. */
+  private readonly listLayer: Container = new Container();
+  /** The skin's chrome declared after the bar list (e.g. the list's scroll slider), on top of it. */
+  private readonly skinForegroundLayer: Container = new Container();
+  private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay();
+  private readonly pointer: SelectPointer;
+  /** Per-frame timing, logged every second with `?perf` or `globalThis.__BE_MUSIC_PERF__ = true`. */
+  private readonly perf: PerfTracker = new PerfTracker('select');
+  private kit: Lr2Kit;
+  private host: PixiSceneHost | undefined;
+  private emit: IntentSink<SelectIntent> | undefined;
+  private attached = false;
+  private built = false;
+  private disposed = false;
+  /** The last frame drawn: what the hit tests and the pointer read between frames. */
+  private frame: SelectFrame | undefined;
+  /** The frame clock now, while a frame draws. */
+  private nowMs = 0;
+  /** When the screen was entered, on the frame clock: timer 0 counts from it and timer 1 after `#STARTINPUT`. */
+  private enteredAtMs = Number.NaN;
   /**
-   * Precomputed, declaration-order-sorted union of every chrome-element kind the LR2 skin defines for the select view.
-   * Rebuilt only when the bound skin reference changes — the underlying skin structure (declaration order, layer
-   * routing, panel masks) is static for a given skin, so building this list per render frame was pure waste in the
-   * previous `work[]` + `.sort()` implementation. Per-frame visibility (ops gating, panel-open gating, DST keyframe
-   * eval, pointer hit-test) still happens during the per-entry switch dispatch; only the merge/sort step is hoisted
-   * out.
+   * When each LR2 timer the screen drives last started, on the frame clock: 0 at the entry, 10-13 on cursor moves,
+   * 21-29 / 31-39 as the option panels open and close, 17 / 18 as a course starts and stops being made. A missing one
+   * has not started (elapsed 0, inactive); starting one again replays the keyframes anchored to it.
    */
+  private readonly timerStartedAt = new Map<number, number>();
+  /** Whether a course was being made at the last frame, to start timer 17 / 18 as making starts and ends. */
+  private makingCourse = false;
+  /**
+   * The bar list's slide after a cursor move, in design pixels: the bars stay where they were (`+slot` for a step
+   * down) and ease back to their places over a few frames.
+   */
+  private listScrollOffset = 0;
+  private lastScrollUpdate = 0;
+  private cachedScreenWidth = -1;
+  private cachedScreenHeight = -1;
+  private cachedDesignWidth = -1;
+  private cachedDesignHeight = -1;
+  /** The viewport of the last frame, to place the search box on the page. */
+  private lastViewport: ScaledViewport | undefined;
+  /** The pointer in design pixels, `-1` while it is off the canvas (`#SRC_ONMOUSE`, `#SRC_MOUSECURSOR`). */
+  private mouseX = -1;
+  private mouseY = -1;
+  /** The skin's chrome in declaration order, built once per skin ({@link ensureSortedChromeEntries}). */
   private sortedChromeEntries: SortedSelectChromeEntry[] = [];
-  /**
-   * Skin reference used to build {@link sortedChromeEntries}. Comparing identity is enough — the LR2 skin objects are
-   * frozen after parse, so a structural change requires {@link setSkin} to swap in a fresh reference.
-   */
   private sortedChromeSkinRef: Lr2Skin | undefined;
-  /**
-   * Skin asset path → decoded texture cache. Populated by `prepareSkinTextures()` after the view is mounted; rendering
-   * reads straight from this map and silently skips bars whose texture is still loading (next render tick will fill
-   * them in).
-   */
+  /** The skin's images, loaded on the first attach; a frame skips what is still loading. */
   private readonly skinTextures = new Lr2SkinTextureStore();
-  /**
-   * Loaded LR2 bitmap-font payloads keyed by `#LR2FONT` declaration index. Populated asynchronously by
-   * `prepareBitmapFonts`; until that finishes the renderer falls back to the system-font path inside
-   * `makeLr2TextSprite`.
-   */
+  /** The skin's `#LR2FONT` fonts by index, once loaded; text draws with a system font until then. */
   private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
-  /**
-   * Per-song chart-asset texture cache for LR2 runtime-bound graphics (`#SRC_IMAGE,gr=100/101/102` → STAGEFILE /
-   * BACKBMP / BANNER). Keyed by `${song.id}:${kind}` so navigating between songs reuses already-decoded banners. Loaded
-   * lazily on first reference.
-   */
+  /** The focused chart's STAGEFILE / BACKBMP / BANNER (`#SRC_IMAGE` gr 100-102), by chart. */
   private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
 
-  public constructor(options: PixiSongSelectViewOptions = {}) {
-    super(options);
+  public constructor(kit: Lr2Kit) {
+    this.kit = kit;
+    this.pointer = new SelectPointer(Lr2SelectView.createPointerContext(this));
   }
 
-  public override get identity(): SceneIdentity {
-    return IDENTITY;
+  /** Takes another LR2 select skin: its images and fonts load again, and the next frame draws with it. */
+  public updateKit(kit: Lr2Kit): void {
+    if (kit.skin === this.kit.skin) return;
+    this.kit = kit;
+    this.skinTextures.clear();
+    this.bitmapFonts = new Map();
+    this.sortedChromeSkinRef = undefined;
+    this.sortedChromeEntries = [];
+    if (this.built) this.loadSkin(kit.skin);
+  }
+
+  public attach(host: PixiSceneHost, emit: IntentSink<SelectIntent>): void {
+    if (this.disposed) return;
+    this.host = host;
+    this.emit = emit;
+    if (!this.built) {
+      this.build();
+      this.loadSkin(this.kit.skin);
+    }
+    const canvas = host.app.canvas;
+    canvas.addEventListener('pointerdown', this.pointer.handlePointerDown);
+    canvas.addEventListener('pointermove', this.pointer.handlePointerMove);
+    canvas.addEventListener('pointerleave', this.pointer.handlePointerLeave);
+    canvas.addEventListener('pointerup', this.pointer.handlePointerUp);
+    canvas.addEventListener('pointercancel', this.pointer.handlePointerCancel);
+    // `passive: false`, so a wheel over the list does not also scroll the page under it.
+    canvas.addEventListener('wheel', this.pointer.handleWheel, { passive: false });
+    // Left over from before the screen last left: a slide that would decay over minutes, a wheel throttle.
+    this.listScrollOffset = 0;
+    this.lastScrollUpdate = 0;
+    this.pointer.lastWheelMoveAt = Number.NEGATIVE_INFINITY;
+    this.attached = true;
+  }
+
+  public detach(): void {
+    if (!this.attached) return;
+    this.attached = false;
+    this.pointer.fling = undefined;
+    const canvas = this.host?.app.canvas;
+    if (canvas !== undefined) {
+      canvas.removeEventListener('pointerdown', this.pointer.handlePointerDown);
+      canvas.removeEventListener('pointermove', this.pointer.handlePointerMove);
+      canvas.removeEventListener('pointerleave', this.pointer.handlePointerLeave);
+      canvas.removeEventListener('pointerup', this.pointer.handlePointerUp);
+      canvas.removeEventListener('pointercancel', this.pointer.handlePointerCancel);
+      canvas.removeEventListener('wheel', this.pointer.handleWheel);
+    }
+    this.emit = undefined;
+  }
+
+  public dispose(): void {
+    if (this.disposed) return;
+    this.detach();
+    this.disposed = true;
+    this.root.parent?.removeChild(this.root);
+    try {
+      this.skinTextures.dispose();
+      this.chartGraphicTextures.dispose();
+    } catch (error) {
+      log.warn('texture cleanup threw', error);
+    }
+    try {
+      this.root.destroy({ children: true, context: true });
+    } catch (error) {
+      log.warn('root.destroy threw', error);
+    }
+    this.host = undefined;
+  }
+
+  public draw(frame: SelectFrame): void {
+    if (this.disposed || this.host === undefined) return;
+    this.frame = frame;
+    this.nowMs = frame.clock.nowMs;
+    if (frame.clock.enteredAtMs !== this.enteredAtMs) this.startScene(frame.clock.enteredAtMs);
+    for (const event of frame.events) {
+      if (event.kind === 'browse') {
+        const { event: browse } = event;
+        // A cursor move slides the list by its step; a folder opened slides it one bar down, one closed one bar up.
+        const delta =
+          browse.kind === 'cursor'
+            ? browse.delta
+            : browse.kind === 'folder-opened'
+              ? 1
+              : browse.kind === 'folder-closed'
+                ? -1
+                : 0;
+        if (delta !== 0) this.noteCursorChange(delta, event.atMs);
+      } else if (event.kind === 'panel') {
+        this.applyLr2Timers(
+          resolveLr2SelectTimers({ kind: 'panel', panel: event.panel, open: event.open, at: event.atMs }),
+        );
+      } else {
+        this.readText.scrollBy(event.delta);
+      }
+    }
+    this.readText.show(frame.readText);
+    this.perf.beginTick();
+    this.pointer.advanceFling(this.nowMs);
+    this.pointer.settleListPull(this.nowMs);
+    this.perf.time('render', () => this.render(frame));
+    const report = this.perf.endFrame(() => ({
+      skin: this.skinLayer.children.length,
+      list: this.listLayer.children.length,
+      songs: frame.library.songs.length,
+    }));
+    if (report) log.debug('perf', report);
+  }
+
+  /** The skin's search box on the canvas, in CSS pixels, or `undefined` when it has none (or nothing is drawn yet). */
+  public searchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
+    const rect = this.designSearchFieldRect();
+    const viewport = this.lastViewport;
+    if (rect === undefined || viewport === undefined) return undefined;
+    return designRectToCanvas(rect, viewport);
+  }
+
+  /** The skin's design canvas and its size, for screenshots. */
+  public getStageInfo(): { container: Container; width: number; height: number } {
+    return { container: this.designRoot, width: this.kit.skin.width, height: this.kit.skin.height };
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // The frame
+  // ---------------------------------------------------------------------------------------------------------------------
+
+  private get entries(): readonly BrowserBrowseEntry[] {
+    return this.frame?.entries ?? NO_ENTRIES;
+  }
+
+  private get cursor(): number {
+    return this.frame?.cursor ?? 0;
+  }
+
+  private get library(): BrowserSongCollection {
+    return this.frame?.library ?? EMPTY_LIBRARY;
+  }
+
+  private focusedSong(): BrowserSongEntry | undefined {
+    const entry = this.entries[this.cursor];
+    return entry?.kind === 'song' ? entry.song : undefined;
+  }
+
+  private focusedCourse(): Extract<BrowserBrowseEntry, { kind: 'course' }>['course'] | undefined {
+    const entry = this.entries[this.cursor];
+    return entry?.kind === 'course' ? entry.course : undefined;
   }
 
   /**
-   * The LR2 skin's frame + bars are only used when the skin actually carries select-screen definitions
-   * (`#SRC_BAR_BODY` / `#DST_BAR_BODY_*`). A play-only skin like `play_7.lr2skin` would otherwise paint its STAGE
-   * FAILED / gauge / etc. graphics here because they're stored in the same `images` array — drop back to the built-in
-   * list when that's the case.
+   * Whether an element gated on `panel` draws, as LR2 gates them: `0` always, `-1` while no option panel is open, `1`-`9`
+   * while that one is. An arrow, so it can be handed to the free helpers.
    */
-  protected override get themeDesignSize(): SelectDesignSize | undefined {
-    const skin = this.options.skin;
-    if (skin === undefined || skin.barLayout.slots.length === 0) return undefined;
-    return { width: skin.width, height: skin.height };
+  private readonly isPanelOpen = (panel: number): boolean => {
+    if (panel === 0) return true;
+    const open = this.frame?.panel;
+    return panel === -1 ? open === undefined : open === panel;
+  };
+
+  /** Builds the scene graph under {@link root}, on the first attach. */
+  private build(): void {
+    this.built = true;
+    this.root.label = 'select/scene';
+    this.designRoot.label = 'select/root';
+    this.viewportBackground.label = 'select/viewport-bg';
+    this.background.label = 'select/background';
+    this.skinLayer.label = 'select/skin';
+    this.listLayer.label = 'select/list';
+    this.skinForegroundLayer.label = 'select/skin-fg';
+    this.designClipMask.label = 'select/design-clip';
+    this.root.addChild(this.viewportBackground, this.designRoot);
+    // Back to front: the background, the chrome declared before the bars, the bars, the chrome declared after them,
+    // the README overlay. An LR2 option panel is chrome gated by its `panel` field, not a layer of its own.
+    this.designRoot.addChild(
+      this.background,
+      this.skinLayer,
+      this.listLayer,
+      this.skinForegroundLayer,
+      this.readText.layer,
+      this.designClipMask,
+    );
+    this.designRoot.mask = this.designClipMask;
   }
 
-  protected override prepareTheme(): void {
-    // Only preload skin assets if the skin has select-screen definitions — a play-only skin would otherwise pull in the
-    // STAGE FAILED graphic, gauge frame, etc. that don't belong on the select view.
-    if (this.options.skin && this.options.skin.barLayout.slots.length > 0) {
-      void this.prepareSkinTextures(this.options.skin);
-      void this.prepareBitmapFonts(this.options.skin);
+  /** Lays the design canvas into the screen and draws the skin's frame over the session's frame. */
+  private render(frame: SelectFrame): void {
+    const host = this.host!;
+    const app = host.app;
+    const skin = this.kit.skin;
+    const screenWidth = app.screen.width || app.canvas.parentElement?.clientWidth || skin.width;
+    const screenHeight = app.screen.height || app.canvas.parentElement?.clientHeight || skin.height;
+    const viewport = resolveScaledViewport(screenWidth, screenHeight, skin.width, skin.height);
+    setDesignTextResolution(resolveDesignTextResolution(viewport.scale, app.renderer.resolution));
+    setDesignPixelRatio(viewport.scale * app.renderer.resolution);
+    // The rects are drawn again only when their sizes change: a `Graphics` rebuild every frame is not free.
+    if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
+      this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
+      this.cachedScreenWidth = screenWidth;
+      this.cachedScreenHeight = screenHeight;
     }
-  }
-
-  protected override themeListSlotHeight(): number {
-    return this.estimateSlotHeight();
-  }
-
-  protected override renderTheme(designWidth: number, designHeight: number): void {
-    const skin = this.options.skin;
-    if (!skin) return;
-    // Compute the dynamic op set ONCE per render and thread it into both renderers. Putting this here (rather than
-    // inside each `isDestinationVisible` call) lets us: 1. Reflect the focused song's chart features (LN, BPM change,
-    // BACKBMP presence, …) onto static frame elements that LR2 skins gate with op 70..195. 2. Avoid recomputing the
-    // same `Set` per element.
-    this.syncCourseMakerTimers();
-    const state = this.perf.time('computeOps', () => this.computeState(skin));
+    this.designRoot.position.set(viewport.x, viewport.y);
+    this.designRoot.scale.set(viewport.scale);
+    this.lastViewport = viewport;
+    host.setStageOrientation('landscape');
+    if (this.cachedDesignWidth !== skin.width || this.cachedDesignHeight !== skin.height) {
+      this.designClipMask.clear().rect(0, 0, skin.width, skin.height).fill(0xffffff);
+      this.background.clear().rect(0, 0, skin.width, skin.height).fill(BG);
+      this.cachedDesignWidth = skin.width;
+      this.cachedDesignHeight = skin.height;
+    }
+    // The skin's sprites are built anew every frame; `disposeChildren` frees what Pixi keeps for the old ones.
+    disposeChildren(this.skinLayer);
+    disposeChildren(this.listLayer);
+    disposeChildren(this.skinForegroundLayer);
+    // The slide eases back with a time constant of about 80 ms, frame-rate independent; steps in quick succession add
+    // onto what is left of it.
+    if (this.lastScrollUpdate === 0) this.lastScrollUpdate = this.nowMs;
+    const dt = this.nowMs - this.lastScrollUpdate;
+    this.lastScrollUpdate = this.nowMs;
+    if (this.listScrollOffset !== 0) {
+      this.listScrollOffset *= Math.exp(-dt / 80);
+      if (Math.abs(this.listScrollOffset) < 0.5) this.listScrollOffset = 0;
+    }
+    this.listLayer.y = this.listScrollOffset;
+    this.syncCourseMakerTimers(frame);
+    // The state is resolved once per frame for every element: its ops reflect the focused chart's features (long
+    // notes, BPM changes, BACKBMP, …) onto the frame's static elements, which LR2 skins gate with ops 70-195.
+    const state = this.perf.time('computeOps', () => this.computeState(skin, frame));
     this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, state));
     this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, state.ops));
-    // Empty-state hint — shown over the skin when nothing was loaded, so the user understands they need to drop
-    // content.
-    if (this.collection.songs.length === 0) {
-      this.renderEmptyStateHint(designWidth, designHeight);
+    // With nothing loaded, a hint over the skin says what to drop.
+    if (frame.library.songs.length === 0) {
+      renderEmptyStateHint({ skinLayer: this.skinLayer, collection: frame.library }, skin.width, skin.height);
     }
+    this.readText.render(skin.width, skin.height);
   }
 
   /**
    * The LR2 state of the select screen for the bar under the cursor (`resolveLr2SelectState`): its ops, numbers, texts,
    * button cells and sliders. A course bar lights the course-bar op (3), the playable op (5) when every stage is in the
-   * collection, its best lamp (100-105), its stages' difficulties (700-745) and the course ops (290 and its kind's op).
+   * library, its best lamp (100-105), its stages' difficulties (700-745) and the course ops (290 and its kind's op).
    */
-  private computeState(skin: Lr2Skin): Lr2SelectState {
-    const entries = this.currentEntries();
-    const focused = entries[this.selectedIndex];
+  private computeState(skin: Lr2Skin, frame: SelectFrame): Lr2SelectState {
+    const focused = frame.entries[frame.cursor];
     const song = focused?.kind === 'song' ? focused.song : undefined;
-    const maker = this.options.courseMaker;
+    const maker = frame.courseMaker;
     return resolveLr2SelectState({
       ...(focused !== undefined ? { focused } : {}),
-      options: this.playOptions,
+      options: frame.playOptions,
       record:
         focused?.kind === 'song'
-          ? { lamp: this.options.resolveSongRecord?.(focused.song)?.lamp }
+          ? { lamp: frame.records.chart(focused.song)?.lamp }
           : focused?.kind === 'course'
-            ? { lamp: this.options.resolveCourseRecord?.(focused.course)?.lamp }
+            ? { lamp: frame.records.course(focused.course)?.lamp }
             : {},
-      openPanels: this.panelStates,
+      openPanels: frame.panel !== undefined ? [frame.panel] : [],
       customOps: skin.customOptions.map((option) => option.defaultOp),
-      readme: song !== undefined && hasReadtextForSong(this.collection, song),
+      readme: song !== undefined && hasReadtextForSong(frame.library, song),
       ...(song !== undefined ? { bpmRange: resolveChartBpmRange(song.chart) } : {}),
       // The search word is the typed query, left to the host's field while the player types in it.
-      searchText: this.searchEditing ? '' : this.searchText,
-      listPosition: this.resolveListPosition(entries.length),
+      searchText: frame.searchEditing ? '' : frame.browse.searchText,
+      listPosition: this.resolveListPosition(frame.entries.length),
       ...(maker !== undefined
         ? {
             courseMaker: {
@@ -233,105 +448,114 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
           }
         : {}),
       clock: lr2ClockNow(),
-      // The scene samples no frame rate of its own; 60 rather than a blank panel.
+      // The view samples no frame rate of its own; 60 rather than a blank panel.
       fps: 60,
     });
   }
 
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Timers
+  // ---------------------------------------------------------------------------------------------------------------------
+
+  /** Starts and stops the LR2 timers a moment of the screen changes (`resolveLr2SelectTimers`). */
+  private applyLr2Timers(update: Lr2TimerUpdate): void {
+    for (const timer of update.stop) this.timerStartedAt.delete(timer);
+    for (const [timer, at] of update.start) this.timerStartedAt.set(timer, at);
+  }
+
   /**
-   * The search box of an LR2 skin: the visible `#SRC_TEXT st=30`, where its text is drawn. Its DST often hugs the text
-   * and collapses when empty, so a narrow one is widened (to the LR2 default theme's box on that theme). The default
-   * theme's box stands in when no such text is visible.
+   * The screen was entered at `atMs`: every timer starts again from there, so the skin's entrance (keyframes on timer 0)
+   * and the bar slide-in (timer 11) play on every entry, as each LR2 scene change restarts them.
    */
-  protected override designSearchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
-    const skin = this.options.skin;
-    if (skin === undefined || this.themeDesignSize === undefined) return undefined;
-    const ops = this.computeState(skin).ops;
-    const isDefaultTheme = skin.width === 1280 && skin.height === 720;
-    for (const text of skin.texts) {
-      if (text.st !== LR2_TEXT.SEARCH_WORD || !this.isPanelOpen(text.panel)) continue;
-      const dst = this.evaluateElementDst(text);
-      if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const rect = normalizeRect(dst);
-      const width = rect.w >= 40 ? rect.w : isDefaultTheme ? Math.max(40, 920 - rect.x) : 320;
-      return { x: rect.x, y: rect.y, width, height: Math.max(rect.h, 16) };
-    }
-    return isDefaultTheme ? { x: 0, y: 540, width: 920, height: 42 } : undefined;
-  }
-
-  protected override handleThemePointerDown(virtualX: number, virtualY: number): void {
-    const skin = this.options.skin;
-    if (!skin) return;
-    // Hit-test interactive skin elements first — buttons, search input — before bars, since they often overlap the
-    // bar-list area on the LR2 default skin (e.g. AUTOPLAY at y=319 sits adjacent to the song-info column).
-    if (this.handleSkinHitTest(skin, virtualX, virtualY)) {
-      return;
-    }
-    // Skin layout: hit-test each available slot's BAR_BODY rect and jump the selection so the clicked slot becomes
-    // the center. Any slot click both moves the cursor (if needed) AND triggers the selection action — earlier the
-    // click on a non-center slot only moved the cursor and required a second click on the center slot to actually
-    // pick the song. The 1-click flow is what mouse users expect; keyboard navigation still uses the 2-step "land on
-    // cursor → press Enter" model.
-    const center = clampSlot(skin.barLayout.center, skin.barLayout.slots.length);
-    const available = skin.barLayout.available > 0 ? skin.barLayout.available : skin.barLayout.slots.length;
-    const slots = skin.barLayout.slots.slice(0, available);
-    const entries = this.currentEntries();
-    for (const slot of slots) {
-      const dst = slot.off ?? slot.on;
-      if (!dst) continue;
-      if (containsPoint(dst, virtualX, virtualY)) {
-        const offset = slot.index - center;
-        const target = wrapIndex(this.selectedIndex + offset, entries.length);
-        if (target === undefined) {
-          return;
-        }
-        // The cursor moves the slots between, so the list slides by them, and the bar starts.
-        if (target !== this.selectedIndex) this.moveCursor(offset);
-        this.activateFocused();
-        return;
-      }
-    }
-  }
-
-  protected override disposeTheme(): void {
-    this.skinTextures.dispose();
-    this.chartGraphicTextures.dispose();
+  private startScene(atMs: number): void {
+    this.enteredAtMs = atMs;
+    this.timerStartedAt.clear();
+    this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'scene-start', at: atMs }));
+    this.listScrollOffset = 0;
+    this.lastScrollUpdate = 0;
   }
 
   /**
-   * Swap the active LR2 skin without disposing the underlying `Application`. Re-runs the asset preload for the new skin
-   * and re-renders. Pass `undefined` to fall back to the built-in UI.
-   *
-   * Hosts use this instead of disposing+re-creating the view, which historically tripped the PixiJS Devtools extension
-   * on the second `Application.init` (`Cannot read properties of null (reading 'batch')`).
+   * The cursor moved `delta` bars at `atMs`: the list timers (10, 11 and 12 / 13 by direction) start again, so the
+   * keyframes anchored to them replay, and the bars slide from where they were.
    */
-  public setSkin(skin: Lr2Skin | undefined): void {
-    this.options = { ...this.options, skin };
-    // Drop the previous skin's textures — `prepareSkinTextures` will populate fresh ones for the new skin, and the
-    // chart-graphic (BACKBMP / BANNER / STAGEFILE) cache stays valid since it's keyed by song id, not by skin.
-    this.skinTextures.clear();
-    this.bitmapFonts = new Map();
-    // Invalidate the precomputed sorted chrome entry list — `ensureSortedChromeEntries` keys on reference identity, so
-    // dropping the cached ref forces a rebuild against the new skin on the next render.
-    this.sortedChromeSkinRef = undefined;
-    this.sortedChromeEntries = [];
-    if (skin && skin.barLayout.slots.length > 0) {
-      void this.prepareSkinTextures(skin);
-      void this.prepareBitmapFonts(skin);
-    }
-    this.render();
+  private noteCursorChange(delta: number, atMs: number): void {
+    this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'cursor', delta, at: atMs }));
+    this.listScrollOffset += delta * this.estimateSlotHeight();
+  }
+
+  /** Starts LR2's timer 17 when making a course begins (OpenLR2 L12151) and timer 18 when it ends (L11067, L11090). */
+  private syncCourseMakerTimers(frame: SelectFrame): void {
+    const making = frame.courseMaker?.draft !== undefined;
+    if (making === this.makingCourse) return;
+    this.makingCourse = making;
+    this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'course-making', making, at: this.nowMs }));
   }
 
   /**
-   * Estimates the vertical pitch between adjacent bar slots — used to scale `listScrollOffset` so a 1-step cursor move
-   * produces a 1-slot worth of visual slide. Picks the most-occupied y-delta between adjacent off-slot rectangles since
-   * LR2 default skins tend to have one "center" slot at a different y than the uniformly-spaced off-center slots; the
-   * median of pairwise deltas excludes that outlier.
+   * The DST of an element at this moment: its keyframes interpolated by the time since their timer started, or its
+   * one destination.
+   */
+  private evaluateElementDst(element: {
+    destination: Lr2DestinationRect;
+    keyframes: Lr2DestinationRect[];
+  }): Lr2DestinationRect {
+    return evaluateElementDestination(element, (timer) => this.elapsedSinceTimer(timer));
+  }
+
+  /** How long ago `timer` started, in ms, or 0 when it has not; timer 1 starts `#STARTINPUT` after the entry. */
+  private elapsedSinceTimer(timer: number): number {
+    if (timer === LR2_TIMER.START_INPUT) {
+      return Math.max(0, this.nowMs - (this.enteredAtMs + (this.kit.skin.timing.startInput ?? 0)));
+    }
+    const startedAt = this.timerStartedAt.get(timer);
+    return startedAt === undefined ? 0 : Math.max(0, this.nowMs - startedAt);
+  }
+
+  /**
+   * Whether `timer` runs, so the elements anchored to it draw (`isDestinationVisible`): timer 0 always, timer 1 after
+   * `#STARTINPUT`, the list timers (10-13) once started, a panel's open timer (21-29) while it is open, its close timer
+   * (31-39) once started, and the course-maker timers (17 / 18) once started. The play timers never run here. An
+   * arrow, so it can be handed to the free helpers.
+   */
+  private readonly timerActive = (timer: number): boolean => {
+    if (timer === LR2_TIMER.SCENE_START) return true;
+    if (timer === LR2_TIMER.START_INPUT) return this.nowMs - this.enteredAtMs >= (this.kit.skin.timing.startInput ?? 0);
+    if (timer >= LR2_TIMER.SONG_BAR_MOVE && timer <= LR2_TIMER.SONG_BAR_DOWN) return this.timerStartedAt.has(timer);
+    if (timer >= LR2_TIMER.PANEL1_OPEN && timer <= LR2_TIMER.PANEL9_OPEN) {
+      return this.frame?.panel === timer - LR2_TIMER.PANEL1_OPEN + 1;
+    }
+    if (timer >= LR2_TIMER.PANEL1_CLOSE && timer <= LR2_TIMER.PANEL9_CLOSE) return this.timerStartedAt.has(timer);
+    if (timer === LR2_TIMER.COURSE_MAKING_START || timer === LR2_TIMER.COURSE_MAKING_END) {
+      return this.timerStartedAt.has(timer);
+    }
+    return false;
+  };
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Loading
+  // ---------------------------------------------------------------------------------------------------------------------
+
+  /** Loads the skin's images and fonts; frames draw what has loaded. */
+  private loadSkin(skin: Lr2Skin): void {
+    void this.skinTextures
+      .preload(skin, collectSelectSkinTexturePaths(skin), () => !this.disposed && this.kit.skin === skin)
+      .catch((error: unknown) => log.warn('skin textures failed to load', error));
+    if (skin.lr2FontPaths.length === 0) return;
+    void loadSkinBitmapFonts(skin.lr2FontPaths, skin.files)
+      .then((fonts) => {
+        if (!this.disposed && this.kit.skin === skin) this.bitmapFonts = fonts;
+      })
+      .catch((error: unknown) => log.warn('skin fonts failed to load', error));
+  }
+
+  /**
+   * The vertical pitch between bar slots, for a one-bar slide: the median gap between adjacent slots, as the LR2
+   * default skins put the center slot at a different gap from the evenly spaced others.
    */
   private estimateSlotHeight(): number {
-    const slots = this.options.skin?.barLayout.slots ?? [];
     const ys: number[] = [];
-    for (const slot of slots) {
+    for (const slot of this.kit.skin.barLayout.slots) {
       const dst = slot.off ?? slot.on;
       if (dst) ys.push(dst.y);
     }
@@ -347,176 +571,142 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     return deltas[Math.floor(deltas.length / 2)]!;
   }
 
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Pointer
+  // ---------------------------------------------------------------------------------------------------------------------
+
   /**
-   * Pre-loads every image referenced by the skin's `#IMAGE` table and its `#SRC_BAR_BODY` definitions. Loads happen in
-   * parallel; the render pass is non-blocking and just skips bars whose texture isn't ready yet (we re-render after
-   * each load resolves).
+   * The search box of the skin: the visible `#SRC_TEXT st=30`, where its text is drawn. Its DST often hugs the text and
+   * collapses when empty, so a narrow one is widened (to the LR2 default theme's box on that theme). The default theme's
+   * box stands in when no such text is visible.
    */
-  private async prepareSkinTextures(skin: Lr2Skin): Promise<void> {
-    const loaded = await this.skinTextures.preload(
-      skin,
-      collectSelectSkinTexturePaths(skin),
-      () => !this.disposed && this.options.skin === skin,
-    );
-    if (loaded) {
-      this.render();
+  private designSearchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
+    const skin = this.kit.skin;
+    const frame = this.frame;
+    if (frame === undefined) return undefined;
+    const ops = this.computeState(skin, frame).ops;
+    const isDefaultTheme = skin.width === 1280 && skin.height === 720;
+    for (const text of skin.texts) {
+      if (text.st !== LR2_TEXT.SEARCH_WORD || !this.isPanelOpen(text.panel)) continue;
+      const dst = this.evaluateElementDst(text);
+      if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
+      const rect = normalizeRect(dst);
+      const width = rect.w >= 40 ? rect.w : isDefaultTheme ? Math.max(40, 920 - rect.x) : 320;
+      return { x: rect.x, y: rect.y, width, height: Math.max(rect.h, 16) };
+    }
+    return isDefaultTheme ? { x: 0, y: 540, width: 920, height: 42 } : undefined;
+  }
+
+  /**
+   * A click at design point (`x`, `y`): the skin's buttons and search box first (on the LR2 default skin they sit next
+   * to the bars), then the bars. A click on a bar moves the cursor onto it and takes it at once, opening its folder or
+   * starting it; the keyboard keeps LR2's two steps (land on the bar, then decide).
+   */
+  private handlePointerDown(x: number, y: number): void {
+    const skin = this.kit.skin;
+    if (this.frame === undefined || this.handleSkinHitTest(skin, x, y)) return;
+    const layout = skin.barLayout;
+    const center = clampSlot(layout.center, layout.slots.length);
+    const available = layout.available > 0 ? layout.available : layout.slots.length;
+    for (const slot of layout.slots.slice(0, available)) {
+      const dst = slot.off ?? slot.on;
+      if (!dst || !containsPoint(dst, x, y)) continue;
+      const offset = slot.index - center;
+      const target = wrapIndex(this.cursor + offset, this.entries.length);
+      if (target === undefined) return;
+      if (target !== this.cursor) this.emit?.({ type: 'browse', command: { type: 'move', delta: offset } });
+      this.emit?.({ type: 'activate' });
+      return;
     }
   }
 
   /**
-   * Loads `#LR2FONT` payloads for the supplied skin in parallel with `prepareSkinTextures`. Bails out cleanly if the
-   * skin declares no fonts or if the user navigates away mid-load (`this.options.skin !== skin`). Fonts that fail to
-   * decode (encrypted DXA, missing image, etc.) are simply skipped — the system-font fallback renders for those
-   * indices.
+   * Hit-tests the skin's interactive elements at the click: a `#SRC_BUTTON` (`click = 1`) runs its action, the course
+   * name (text 170) asks to name the course, the search word (text 30) or the LR2 default theme's search box asks to
+   * type a search. Elements count only where they draw (their panel open, their DST visible, interpolated so a click
+   * during a slide-in hits what the player sees). Returns whether the click was taken.
    */
-  private async prepareBitmapFonts(skin: Lr2Skin): Promise<void> {
-    if (skin.lr2FontPaths.length === 0) return;
-    const loaded = await loadSkinBitmapFonts(skin.lr2FontPaths, skin.files);
-    if (this.disposed || this.options.skin !== skin) return;
-    this.bitmapFonts = loaded;
-    this.render();
-  }
-
-  /**
-   * Hit-tests interactive skin elements at the click point and dispatches per-element actions. Returns `true` when a
-   * hit was consumed so the bar-list pointerdown branch doesn't also fire.
-   *
-   * Currently handles:
-   *
-   * - `#SRC_BUTTON` (`click = 1`) — AUTOPLAY (`type = 16`) is wired to `onSongAutoPlay` for the focused song. Other
-   *   button types are recognized but currently no-op (panel / filter / sort buttons land here for future wiring).
-   * - `#SRC_TEXT` (`edit = 1`, `st = 30`) — fires `onSearchActivate` so the host can focus a DOM `<input>` overlay.
-   *
-   * Buttons / texts are only considered when their DST passes the standard visibility / panel gate; we re-use
-   * `evaluateElementDst` to honor keyframe interpolation (so a click during a slide-in animation hits the rectangle
-   * the user actually sees, not a static endpoint).
-   */
-  private handleSkinHitTest(skin: Lr2Skin, virtualX: number, virtualY: number): boolean {
-    const ops = this.computeState(skin).ops;
+  private handleSkinHitTest(skin: Lr2Skin, x: number, y: number): boolean {
+    const ops = this.computeState(skin, this.frame!).ops;
     for (const button of skin.buttons) {
-      if (button.click !== 1) continue;
-      if (!this.isPanelOpen(button.panel)) continue;
+      if (button.click !== 1 || !this.isPanelOpen(button.panel)) continue;
       const dst = this.evaluateElementDst(button);
-      if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      if (!containsPoint(dst, virtualX, virtualY)) continue;
+      if (!isDestinationVisible(dst, ops, this.timerActive) || !containsPoint(dst, x, y)) continue;
       // LR2's value buttons step up on their right half and down on their left half (`ButtonByInput`).
       const rect = normalizeRect(dst);
-      this.dispatchButtonClick(button, virtualX >= rect.x + rect.w / 2 ? 1 : -1);
+      this.dispatchButtonClick(button, x >= rect.x + rect.w / 2 ? 1 : -1);
       return true;
     }
-    if (this.options.courseMaker !== undefined && this.hitsCourseName(skin, ops, virtualX, virtualY)) {
-      this.options.onCourseNameActivate?.();
+    if (this.frame?.courseMaker !== undefined && this.hitsCourseName(skin, ops, x, y)) {
+      this.emit?.({ type: 'course-maker', action: { kind: 'name' } });
       return true;
     }
     for (const text of skin.texts) {
-      if (text.st !== LR2_TEXT.SEARCH_WORD) continue;
-      // We deliberately DON'T require `text.edit === 1` here. The LR2 default theme paints the search box with a
-      // `#SRC_TEXT st=30` chrome but routes the actual edit affordance through the skin's surrounding background sprite
-      // (no `edit` flag on the text itself), so the strict `edit === 1` filter previously made the search- word area
-      // look interactive without actually firing `onSearchActivate`. Loosening to "any st=30 text" catches the LR2
-      // default plus every theme that authors a search box more conventionally; the host's `onSearchActivate` is
-      // idempotent (it just focuses the overlay input), so a stray click on a non-editable search readout is harmless.
-      if (!this.isPanelOpen(text.panel)) continue;
+      // Any `st = 30` text, not only an `edit = 1` one: the LR2 default theme draws its search box as an image with a
+      // plain search-word text on it. A stray click on a search readout only opens the host's field.
+      if (text.st !== LR2_TEXT.SEARCH_WORD || !this.isPanelOpen(text.panel)) continue;
       const dst = this.evaluateElementDst(text);
-      if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      if (!containsPoint(dst, virtualX, virtualY)) continue;
-      this.options.onSearchActivate?.();
+      if (!isDestinationVisible(dst, ops, this.timerActive) || !containsPoint(dst, x, y)) continue;
+      this.emit?.({ type: 'search' });
       return true;
     }
-    if (
-      isInsideLr2DefaultSearchBox({
-        width: skin.width,
-        height: skin.height,
-        x: virtualX,
-        y: virtualY,
-      })
-    ) {
-      this.options.onSearchActivate?.();
+    if (isInsideLr2DefaultSearchBox({ width: skin.width, height: skin.height, x, y })) {
+      this.emit?.({ type: 'search' });
       return true;
     }
     return false;
   }
 
   /**
-   * Runs a clicked `#SRC_BUTTON`: a course-maker button against the host's course maker, any other through its LR2
-   * action (`resolveLr2SelectButton`): toggle a panel, step the hi-speed (`plusOnly` picks the direction), cycle or set
-   * a play option (a filter or the sort reshapes the list), or play the focused bar (PLAY /
-   * AUTOPLAY on a course bar start the course, as the built-in scene's PLAY / AUTO do) or show its text file. The key
+   * Runs a clicked `#SRC_BUTTON` as an intent: a course-maker button (`resolveLr2CourseMakerAction`), or its LR2 action
+   * (`resolveLr2SelectButton`): toggle a panel, step the hi-speed (`plusOnly` picks the direction), step or set a play
+   * option, play the focused bar (PLAY / AUTOPLAY on a course bar start the course) or show its text file. The key
    * config, skin select and replay buttons are not implemented: a click does nothing rather than the wrong thing.
    */
-  private dispatchButtonClick(button: Lr2ButtonElement, direction: 1 | -1 = 1): void {
-    if (this.dispatchCourseMakerButton(button.type, direction)) return;
+  private dispatchButtonClick(button: Lr2ButtonElement, direction: 1 | -1): void {
+    const emit = (intent: SelectIntent): void => this.emit?.(intent);
+    const maker = resolveLr2CourseMakerAction(button.type);
+    if (maker !== undefined && this.frame?.courseMaker !== undefined) {
+      if (maker.kind === 'connection') emit({ type: 'course-maker', action: { ...maker, step: direction } });
+      else if (maker.kind === 'default-connection')
+        emit({ type: 'course-maker', action: { ...maker, step: direction } });
+      else emit({ type: 'course-maker', action: maker });
+      return;
+    }
     const action = resolveLr2SelectButton(button.type);
     if (action === undefined) return;
     switch (action.kind) {
       case 'panel':
-        // Clickable without a focused song: the LR2 default skin's OPTION launcher works before any chart is selected.
-        this.togglePanel(action.panel);
+        // Clickable without a focused chart: the LR2 default skin's OPTION launcher works before any is selected.
+        emit({ type: 'panel', panel: action.panel });
         return;
       case 'hi-speed':
         // Both sides step the one hi-speed.
-        this.adjustHiSpeed(button.plusOnly === -1 ? -1 : 1);
+        emit({ type: 'play-option', key: 'hiSpeed', step: button.plusOnly === -1 ? -1 : 1 });
         return;
       case 'cycle-option':
-        this.cyclePlayOption(action.option, PLAY_OPTION_CHOICES[action.option]!);
+        emit({ type: 'play-option', key: action.option, step: 1 });
         return;
       case 'set-difficulty-filter':
-        this.setPlayOption('difficultyFilter', action.value);
+        emit({ type: 'set-play-option', key: 'difficultyFilter', value: action.value });
         return;
       case 'play':
+        emit({ type: 'start', autoPlay: false });
+        return;
       case 'autoplay':
+        emit({ type: 'start', autoPlay: true });
+        return;
       case 'read-text':
-        this.launchFromButton(action.kind);
+        emit({ type: 'readtext' });
         return;
       default:
         return;
     }
   }
 
-  /** PLAY / AUTOPLAY / READ TEXT on the focused bar. */
-  private launchFromButton(kind: 'play' | 'autoplay' | 'read-text'): void {
-    if (kind !== 'read-text' && this.focusedCourse() !== undefined) {
-      this.launchFocusedSong(kind === 'autoplay');
-      return;
-    }
-    const focused = this.focusedSong();
-    if (!focused) return;
-    if (kind === 'play') {
-      this.options.onSongSelected?.(focused);
-    } else if (kind === 'read-text') {
-      this.toggleReadText(focused);
-    } else if (this.options.onSongAutoPlay) {
-      this.options.onSongAutoPlay(focused);
-    } else {
-      // AUTOPLAY falls back to the regular start so the button isn't a dead end on hosts that haven't wired it.
-      this.options.onSongSelected?.(focused);
-    }
-  }
-
-  /**
-   * Runs an LR2 course-maker button (see `resolveLr2CourseMakerAction`) against the host's {@link CourseMaker}: finish /
-   * cancel the course being made, delete the selected course of the player's own, or step a NONSTOP connection.
-   * Returns whether `type` is such a button.
-   */
-  private dispatchCourseMakerButton(type: number, direction: 1 | -1): boolean {
-    const maker = this.options.courseMaker;
-    const action = resolveLr2CourseMakerAction(type);
-    if (maker === undefined || action === undefined) return false;
-    const course = this.focusedCourse();
-    const own = course?.editable === true && maker.owns(course.definition) ? course.definition : undefined;
-    if (action.kind === 'finish') maker.finish();
-    else if (action.kind === 'cancel') maker.cancel();
-    else if (action.kind === 'default-connection') maker.stepDefaultConnection(direction);
-    // LR2 asks before it deletes (`isDeletingCourse`); the host confirms and calls `CourseMaker.deleteCourse`.
-    else if (own !== undefined && action.kind === 'delete') this.options.onCourseDeleteRequest?.(own);
-    else if (own !== undefined && action.kind === 'connection') maker.stepConnection(own, action.slot, direction);
-    this.render();
-    return true;
-  }
-
   /** Whether a click lands on the course name (text 170) while it can be edited: making a course, or on one's own. */
   private hitsCourseName(skin: Lr2Skin, ops: ReadonlySet<number>, x: number, y: number): boolean {
-    if (this.options.courseMaker?.draft === undefined && this.focusedCourse()?.editable !== true) return false;
+    if (this.frame?.courseMaker?.draft === undefined && this.focusedCourse()?.editable !== true) return false;
     return skin.texts.some((text) => {
       if (text.st !== LR2_TEXT.COURSE_TITLE || !this.isPanelOpen(text.panel)) return false;
       const dst = this.evaluateElementDst(text);
@@ -524,88 +714,74 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     });
   }
 
-  /**
-   * Returns the per-frame interpolated DST for an element with a keyframe sequence. For static elements (single
-   * keyframe or none) this is a no-op that returns `element.destination`.
-   *
-   * Only timer 0 (scene main) is currently driven — other timers resolve to elapsed=0, which yields the first keyframe.
-   * As we drive more timers (timer 11 = song change for focus-bar pulse, etc.), this is the single integration point.
-   */
-  private evaluateElementDst(element: {
-    destination: Lr2DestinationRect;
-    keyframes: Lr2DestinationRect[];
-  }): Lr2DestinationRect {
-    return evaluateElementDestination(element, (timer) => this.elapsedSinceTimer(timer));
+  /** What the pointer input reads and drives: the last frame, the skin's canvas, and intents for what is asked. */
+  private static createPointerContext(view: Lr2SelectView): SelectPointerContext {
+    const emit = (intent: SelectIntent): void => view.emit?.(intent);
+    const size = (): SelectDesignSize => ({ width: view.kit.skin.width, height: view.kit.skin.height });
+    return {
+      get visible(): boolean {
+        return view.attached;
+      },
+      get launchAt(): number | undefined {
+        return view.frame?.startedAtMs;
+      },
+      get screen() {
+        return view.host!.app.screen;
+      },
+      get themeDesignSize(): SelectDesignSize {
+        return size();
+      },
+      get beMusicDesignSize(): SelectDesignSize {
+        return size();
+      },
+      // A list pulled part of a row settles by the built-in skin's list window, as the LR2 select always did; the
+      // skin's slots place the bars.
+      get beMusicSelectLayout(): BeMusicSelectLayout {
+        const screen = view.host?.app.screen;
+        const stage = resolveBeMusicSkinStage(
+          phantomSkin,
+          screen !== undefined && screen.width > 0 && screen.height > 0 ? screen : undefined,
+        );
+        return resolveBeMusicSelectLayout(phantomSkin.select, { width: stage.width, height: stage.height });
+      },
+      get selectedIndex(): number {
+        return view.cursor;
+      },
+      get mouseX(): number {
+        return view.mouseX;
+      },
+      set mouseX(value: number) {
+        view.mouseX = value;
+      },
+      get mouseY(): number {
+        return view.mouseY;
+      },
+      set mouseY(value: number) {
+        view.mouseY = value;
+      },
+      get readTextOpen(): boolean {
+        return view.readText.open;
+      },
+      scrollReadText: (delta) => view.readText.scrollBy(delta),
+      closeReadText: () => emit({ type: 'readtext' }),
+      resolveDesignSize: size,
+      currentEntries: () => view.entries,
+      moveCursorBy: (steps) => {
+        const delta = steps > 0 ? 1 : -1;
+        for (let step = 0; step < Math.abs(steps); step += 1)
+          emit({ type: 'browse', command: { type: 'move', delta } });
+      },
+      stepCursor: (direction) => emit({ type: 'browse', command: { type: 'move', delta: direction } }),
+      jumpCursor: (index) => emit({ type: 'browse', command: { type: 'jump', index } }),
+      activateFocused: () => emit({ type: 'activate' }),
+      handleThemePointerDown: (x, y) => view.handlePointerDown(x, y),
+      startSelectBgm: async () => emit({ type: 'gesture' }),
+    };
   }
 
-  /**
-   * Returns the elapsed milliseconds since `timer` started, or 0 when the timer isn't currently driven. Reads
-   * `timerStartedAt` for any timer the host has fired (0 / 11 at mount; 10 / 11 / 12 / 13 on cursor moves). Timer 1 is
-   * computed from `#STARTINPUT` lazily so we don't need a setTimeout.
-   */
-  private elapsedSinceTimer(timer: number): number {
-    if (timer === LR2_TIMER.START_INPUT) {
-      const startInput = this.options.skin?.timing.startInput ?? 0;
-      const fireAt = this.sceneStartedAt + startInput;
-      return Math.max(0, performance.now() - fireAt);
-    }
-    const startedAt = this.timerStartedAt.get(timer);
-    if (startedAt === undefined) {
-      return 0;
-    }
-    return Math.max(0, performance.now() - startedAt);
-  }
-
-  /**
-   * Returns whether `timer` is currently active (i.e. has fired and is producing meaningful elapsed-time output). Used
-   * by `isDestinationVisible` so DST elements anchored to a not-yet-fired timer (e.g. an idle panel-open animation)
-   * stay hidden.
-   *
-   * Defined as an arrow-property so callers can pass it through to the free `isDestinationVisible` helper without
-   * losing `this`.
-   */
-  private readonly timerActive = (timer: number): boolean => {
-    if (timer === LR2_TIMER.SCENE_START) return true;
-    if (timer === LR2_TIMER.START_INPUT) {
-      const startInput = this.options.skin?.timing.startInput ?? 0;
-      return performance.now() - this.sceneStartedAt >= startInput;
-    }
-    // Song-list timers 10..13 — active once we've recorded a start (i.e. the cursor moved at least once or scene-mount
-    // seeded timer 11). The keyframe interpolator clamps past the final frame, so leaving them "active" forever is
-    // fine.
-    if (timer >= LR2_TIMER.SONG_BAR_MOVE && timer <= LR2_TIMER.SONG_BAR_DOWN) {
-      return this.timerStartedAt.has(timer);
-    }
-    // Panel-open timers 21..29 — active iff that panel is currently open. LR2 spec: the timer is OFF once the panel closes, so the timer
-    // implicitly stops when `togglePanel` clears the state, even if the seed timestamp is left in `timerStartedAt`.
-    if (timer >= LR2_TIMER.PANEL1_OPEN && timer <= LR2_TIMER.PANEL9_OPEN) {
-      const which = timer - LR2_TIMER.PANEL1_OPEN + 1;
-      return this.panelStates.has(which);
-    }
-    // Panel-close timers 31..39 — active once seeded by `togglePanel`. The close-anim keyframes clamp at their final
-    // frame, so leaving it "active" past the animation is harmless; reopening the same panel re-deletes this entry to
-    // prevent a stale seed from triggering the close anim again.
-    if (timer >= LR2_TIMER.PANEL1_CLOSE && timer <= LR2_TIMER.PANEL9_CLOSE) {
-      return this.timerStartedAt.has(timer);
-    }
-    // Course-maker timers: 17 runs while a course is being made, 18 from when it was saved or cancelled.
-    if (timer === LR2_TIMER.COURSE_MAKING_START || timer === LR2_TIMER.COURSE_MAKING_END) {
-      return this.timerStartedAt.has(timer);
-    }
-    // Play timers (40+) etc. stay inactive on the select scene.
-    return false;
-  };
-
-  /** Whether a course was being made at the last render, to start timer 17 / 18 as making starts and ends. */
-  private makingCourse = false;
-
-  /** Starts LR2's timer 17 when making a course begins (OpenLR2 L12151) and timer 18 when it ends (L11067, L11090). */
-  private syncCourseMakerTimers(): void {
-    const making = this.options.courseMaker?.draft !== undefined;
-    if (making === this.makingCourse) return;
-    this.makingCourse = making;
-    this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'course-making', making, at: performance.now() }));
-  }
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Drawing
+  // ---------------------------------------------------------------------------------------------------------------------
 
   /**
    * Picks the right scene-graph layer for a chrome element based on its CSV-stream declaration order vs the bar
@@ -617,7 +793,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    * effectively "before bars" because there are no bars.
    */
   private pickChromeLayer(declarationOrder: number): Container {
-    const barOrder = this.options.skin?.barLayout.declarationOrder;
+    const barOrder = this.kit.skin.barLayout.declarationOrder;
     if (barOrder !== undefined && declarationOrder > barOrder) {
       return this.skinForegroundLayer;
     }
@@ -807,7 +983,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
   private resolveListPosition(entryCount: number): number {
     if (entryCount <= 1) return 0;
     const slotHeight = this.estimateSlotHeight();
-    const visualIndex = slotHeight > 0 ? this.selectedIndex - this.listScrollOffset / slotHeight : this.selectedIndex;
+    const visualIndex = slotHeight > 0 ? this.cursor - this.listScrollOffset / slotHeight : this.cursor;
     return Math.max(0, Math.min(1, visualIndex / (entryCount - 1)));
   }
 
@@ -948,12 +1124,12 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     const slotCount = layout.slots.length;
     const center = clampSlot(layout.center, slotCount);
     // Choose the OFF/ON state per slot — only the center slot uses ON.
-    const entries = this.currentEntries();
+    const entries = this.entries;
     for (const slot of layout.slots) {
       const offset = slot.index - center;
       // Wrap so off-edge slots show entries from the opposite end. E.g. with 3 entries and a slot below the cursor's
       // "current+3" position, the slot displays `entries[0]` again — matching LR2's circular rail rendering.
-      const targetIndex = wrapIndex(this.selectedIndex + offset, entries.length);
+      const targetIndex = wrapIndex(this.cursor + offset, entries.length);
       const entry = targetIndex !== undefined ? entries[targetIndex] : undefined;
       const isCenter = slot.index === center;
       // Interpolate the slot's keyframe chain instead of pinning to the final keyframe. The skin typically anchors
@@ -1012,9 +1188,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
   ): void {
     if (entry.kind === 'folder') return;
     const record =
-      entry.kind === 'song'
-        ? this.options.resolveSongRecord?.(entry.song)
-        : this.options.resolveCourseRecord?.(entry.course);
+      entry.kind === 'song' ? this.frame?.records.chart(entry.song) : this.frame?.records.course(entry.course);
     const kind = resolveLr2BarLamp(record?.lamp);
     const lamp = lamps.find((source) => source.kind === kind);
     if (lamp === undefined) return;
@@ -1117,7 +1291,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     if (!song) {
       return undefined;
     }
-    return this.chartGraphicTextures.resolve(this.collection, song, path, () => this.render());
+    return this.chartGraphicTextures.resolve(this.library, song, path, () => undefined);
   }
 
   private makeBarBodySprite(
@@ -1281,19 +1455,3 @@ function lr2ClockNow(): Lr2Clock {
     second: now.getSeconds(),
   };
 }
-
-/** Whether the folder of `song`'s chart holds a text (`.txt`) file: LR2's readme (ops 174 / 175). */
-function hasReadtextForSong(collection: BrowserSongCollection, song: BrowserSongEntry): boolean {
-  const source = resolveSongSource(collection, song);
-  if (!source) return false;
-  const dir = dirname(song.chartPath).toLowerCase();
-  for (const path of source.files.keys()) {
-    if (!path.toLowerCase().endsWith('.txt')) continue;
-    if (dirname(path).toLowerCase() === dir) return true;
-  }
-  return false;
-}
-
-// Re-export the slot type so consumers (tests, future helpers) can reach it without dipping into the parser module
-// directly.
-export type { Lr2BarBodySlot };

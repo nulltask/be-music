@@ -18,7 +18,22 @@ export * from './course-info.ts';
 export * from './default/index.ts';
 
 // LR2 family — Lunatic Rave 2 skin-driven scenes.
-export * from './lr2/select.ts';
+// The LR2 select skin's default search box (the select screen is `createSelectScene`'s, below).
+export { isInsideLr2DefaultSearchBox, type Lr2DefaultSearchBoxHitTestInput } from '../view/lr2/select-view.ts';
+// The select scenes' play options and browse helpers under the names they were exported with, now the models of
+// `@be-music/scene-model`.
+export { DEFAULT_PLAY_OPTIONS, matchesSearchQuery, wrappedCursorDelta } from '@be-music/scene-model';
+export type {
+  BgaMode as PixiBgaMode,
+  BgaSize as PixiBgaSize,
+  BrowseSort as PixiSelectSort,
+  DifficultyFilter as PixiDifficultyFilter,
+  HiddenSuddenMode as PixiHiddenSudden,
+  HsFix as PixiHsFix,
+  KeysFilter as PixiKeysFilter,
+  PlayOptions as PixiPlayOptions,
+  RandomMode as PixiRandomMode,
+} from '@be-music/scene-model';
 
 // What a finished play hands its result screen (the play scene's `progress()` and `on.finish`).
 export type { GaugeHistorySample, PixiGameplayResultData, ScoreHistorySample } from './core/result-data.ts';
@@ -59,4 +74,4 @@ export {
   type PlaySceneSettings,
 } from '../host/play.ts';
 export { createSelectScene, type SelectScene, type SelectSceneKit, type SelectSceneOptions } from '../host/select.ts';
-export type { SelectSessionEvents, SelectStartEntry } from '../session/select/select-session.ts';
+export type { SelectCourseMaker, SelectSessionEvents, SelectStartEntry } from '../session/select/select-session.ts';

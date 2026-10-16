@@ -10,7 +10,6 @@ import { resolveBeMusicSelectLayout, resolveStageOrientation, type BeMusicSelect
 import { Color, Container, Graphics } from 'pixi.js';
 import { resolveSongSource } from '../../collection/collection.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
-import type { SelectDesignSize } from '../../scene/core/select.ts';
 import {
   designRectToCanvas,
   resolveDesignTextResolution,
@@ -21,7 +20,7 @@ import {
 } from '../../scene/core/viewport.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { PerfTracker } from '../../scene/perf.ts';
-import { SelectPointer, type SelectPointerContext } from '../../session/select/select-pointer.ts';
+import { SelectPointer, type SelectDesignSize, type SelectPointerContext } from '../shared/select-pointer.ts';
 import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';

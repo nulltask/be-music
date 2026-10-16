@@ -4,8 +4,8 @@
  */
 
 import { dirname } from '@be-music/utils/core';
-import { loadAssetBytes, resolveSongSource } from '../../collection/collection.ts';
-import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
+import { loadAssetBytes, resolveSongSource } from './collection.ts';
+import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
 
 /** The `.txt` files directly inside the folder of `song`'s chart, in the source's order. */
 function readtextPaths(collection: BrowserSongCollection, song: BrowserSongEntry): string[] {

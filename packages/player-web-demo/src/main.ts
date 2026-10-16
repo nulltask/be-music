@@ -13,7 +13,6 @@ import {
   PixiBeatorajaGameplayView,
   PixiBeatorajaSelectScene,
   PixiSceneHost,
-  PixiSongSelectView,
   HISPEED_MAX,
   HISPEED_MIN,
   HISPEED_STEP,
@@ -29,6 +28,7 @@ import {
   type ResultSceneKit,
   type PixiScene,
   type SelectScene,
+  type SelectSceneKit,
   type SelectStartEntry,
   resolveSceneCourseInfo,
   type SceneCourseInfo,
@@ -228,7 +228,6 @@ import {
   buildNonstopCoursePlaylog,
   resolveCourseStagePlaySettings,
   resolveCourseStageSettings,
-  type CourseDefinition,
 } from '@be-music/player/course';
 import { CourseMakerPanel } from './course-maker-panel.ts';
 import { loadMadeCourses, saveMadeCourses } from './course-maker-store.ts';
@@ -592,9 +591,8 @@ class PlayerWebDemoApp {
    */
   private beatorajaSelectBgmPath: string | undefined;
   /**
-   * Loop-playable BGM bytes for the song-select scene (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
-   * Forwarded to `PixiSongSelectView` via the constructor option on first mount and via `setSelectBgm` on subsequent
-   * theme drops mid-session.
+   * Loop-playable BGM bytes for the song-select scene (`LR2files/Bgm/<theme>/select.wav` from the dropped theme), handed
+   * to the select screen in its sound set (`selectSoundSet`).
    */
   private selectBgmBytes: Uint8Array | undefined;
   /** LR2 result jingles (`clear` / `fail` / `result`); the result scene picks one per outcome (`resolveResultJingle`). */
@@ -605,14 +603,13 @@ class PlayerWebDemoApp {
   private courseClearBgmBytes: Uint8Array | undefined;
   private courseFailBgmBytes: Uint8Array | undefined;
   /**
-   * One-shot song-decided sound bytes (`LR2files/Bgm/<theme>/decide.wav`). Played by
-   * `PixiSongSelectView.playDecideSound` on the select → gameplay transition.
+   * One-shot song-decided sound bytes (`LR2files/Bgm/<theme>/decide.wav`): the select screen's decide jingle, played as a
+   * chart or a course starts a play (`selectSoundSet`).
    */
   private decideBgmBytes: Uint8Array | undefined;
   /**
-   * LR2 system sound-effect bundle (`LR2files/Sound/lr2/<name>.wav`). Each slot maps to a `PixiSongSelectView`
-   * system-sound name (cursorMove / folderOpen / folderClose). Forwarded via the constructor option on first mount and
-   * via `setSystemSounds` on subsequent theme drops.
+   * LR2 system sound-effect bundle (`LR2files/Sound/lr2/<name>.wav`): the select screen's cues, in its sound set
+   * (`selectSoundSet`).
    */
   private systemSoundBundle: {
     cursorMove?: Uint8Array;
@@ -622,11 +619,8 @@ class PlayerWebDemoApp {
     optionClose?: Uint8Array;
     optionChange?: Uint8Array;
   } = {};
-  /**
-   * The select screen: the LR2 family's `PixiSongSelectView`, or the built-in family's `createSelectScene`. Both take the
-   * select scene's host API (`SelectScene`): `snapshot`, `restore`, `setLibrary`, `setSounds`, `setPlayOptions`, …
-   */
-  private selectView: PixiSongSelectView | SelectScene | undefined;
+  /** The select screen (`createSelectScene`), drawn by the LR2 or the built-in family. */
+  private selectView: SelectScene | undefined;
   /** The built-in or LR2 play on the stage (`createPlayScene`). */
   private gameplayView: PlayScene | undefined;
   /**
@@ -3216,8 +3210,8 @@ class PlayerWebDemoApp {
 
   /**
    * Apply a Debug Menu skin-family change. The persistent select scene needs an explicit dispose-and-rebuild
-   * (the underlying class differs across families — `PixiSongSelectView` vs `DefaultPixiSongSelectView` vs the
-   * beatoraja scene), then `showSelect` reconstructs whichever family the new override resolves to. The gameplay
+   * (its view is the family's — the LR2 or the built-in select view, or the beatoraja scene), then `showSelect`
+   * reconstructs whichever family the new override resolves to. The gameplay
    * / decide / result scenes pick up the new override on their next mount — they're transient and there's
    * nothing on screen to swap at the moment the user changes the dropdown (they'd have to be in song-select to
    * even reach the GUI).
@@ -3344,9 +3338,7 @@ class PlayerWebDemoApp {
 
   /** Hands the active be-music skin's settings to the scenes on screen, which draw with them from their next frame. */
   private applyBeMusicSkinSettings(): void {
-    const settings = this.beMusicSkinSettings;
-    if (this.selectView instanceof PixiSongSelectView) this.selectView.setBeMusicSkinSettings(settings);
-    else this.selectView?.updateKit(this.builtInKit);
+    if (this.selectView?.identity.family === 'built-in') this.selectView.updateKit(this.builtInKit);
     if (this.gameplayView?.identity.family === 'built-in') this.gameplayView.updateKit(this.builtInKit);
     if (this.resultView?.identity.family === 'built-in') this.resultView.updateKit(this.builtInKit);
     if (this.decideView?.identity.family === 'built-in') this.decideView.updateKit(this.builtInKit);
@@ -4535,15 +4527,18 @@ class PlayerWebDemoApp {
     }
     this.disposeScene(this.beatorajaSelectScene);
     this.beatorajaSelectScene = undefined;
-    // The active family for this select mount. `'lr2'` flows the loaded LR2 select skin through, `'default'` strips
-    // it so the underlying scene paints built-in chrome regardless of what's loaded. The beatoraja branch returned
-    // earlier, so we only have these two cases here.
-    const lr2SelectSkin = activeFamily === 'lr2' ? this.selectSkin : undefined;
+    // The active family for this select mount: the LR2 family draws the loaded LR2 select skin when it has a bar list;
+    // otherwise the built-in family draws the be-music skin. The beatoraja branch returned earlier.
+    const lr2SelectSkin =
+      activeFamily === 'lr2' && this.selectSkin !== undefined && this.selectSkin.barLayout.slots.length > 0
+        ? this.selectSkin
+        : undefined;
+    const kit: SelectSceneKit = lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtInKit;
     let carriedPlayOptions: PixiPlayOptions | undefined;
     const current = this.selectView;
-    if (current !== undefined && current instanceof PixiSongSelectView !== (lr2SelectSkin !== undefined)) {
+    if (current !== undefined && current.identity.family !== kit.family) {
       // The family changed (an LR2 theme dropped while the built-in screen is up, or the other way round): only that
-      // family's scene draws it, so it is rebuilt below, carrying the cursor and the live play options across.
+      // family's view draws it, so the screen is made again below, carrying the cursor and the live play options across.
       this.lastSelectNavigation ??= current.snapshot();
       carriedPlayOptions = current.getPlayOptions();
       this.disposeScene(current);
@@ -4554,7 +4549,7 @@ class PlayerWebDemoApp {
     if (kept) {
       // The latest theme's skin and sounds go onto the scene BEFORE it shows again: off the stage it only takes them, and
       // its BGM starts as it enters. The other way round, the previous theme's BGM would start for a moment.
-      if (kept instanceof PixiSongSelectView) kept.setSkin(lr2SelectSkin);
+      if (kit.family === 'lr2') kept.updateKit(kit);
       kept.setSounds(sounds);
       kept.setLibrary(this.collection);
       await this.sceneHost.setScene(kept);
@@ -4562,7 +4557,7 @@ class PlayerWebDemoApp {
       return;
     }
     // Seed the screen's play options from the Debug Menu's "Play options" state (two-way sync: the screen's own edits
-    // come back through `onPlayOptions` below; lil-gui edits push through `setPlayOptions`).
+    // come back through `on.playOptions` below; lil-gui edits push through `setPlayOptions`).
     const playOptions: Partial<PixiPlayOptions> = {
       ...carriedPlayOptions,
       autoPlay: this.guiState.autoPlay,
@@ -4577,73 +4572,47 @@ class PlayerWebDemoApp {
       difficultyFilter: this.guiState.difficultyFilter,
       hiSpeed: this.guiState.hiSpeed,
     };
-    const onPlayOptions = (options: PixiPlayOptions): void => {
-      // Mirror the screen's play option edits (an LR2 panel, a skin's buttons) back into the Debug Menu state so both
-      // surfaces always agree, then repaint the lil-gui controllers.
-      this.guiState.autoPlay = options.autoPlay;
-      this.guiState.gauge = options.gauge1P;
-      this.guiState.random1P = options.random1P;
-      this.guiState.random2P = options.random2P;
-      this.guiState.dpFlip = options.dpFlip;
-      this.guiState.autoScratch1P = options.autoScratch1P;
-      this.guiState.autoScratch2P = options.autoScratch2P;
-      this.guiState.sort = options.sort;
-      this.guiState.keysFilter = options.keysFilter;
-      this.guiState.difficultyFilter = options.difficultyFilter;
-      if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
-      this.refreshPlayOptionControllers();
-    };
-    const lookupCourse = (course: BrowserCourseEntry) =>
-      lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement);
-    if (lr2SelectSkin === undefined) {
-      // The built-in family: the select session drawn by the built-in view, playing through the audio service. Its
-      // decide jingle plays out through the decide screen into the play.
-      const scene = createSelectScene(this.builtInKit, {
-        library: this.collection,
-        ...(this.lastSelectNavigation !== undefined ? { browse: this.lastSelectNavigation } : {}),
-        playOptions,
-        records: { chart: (song) => this.lookupSongRecord(song), course: lookupCourse },
-        sounds,
-        audio: this.audio,
-        on: {
-          start: (entry, { autoPlay }) => this.startFromSelect(entry, autoPlay),
-          playOptions: onPlayOptions,
-          search: () => this.search.openFromPointer(),
-        },
-      });
-      this.selectView = scene;
-      await this.sceneHost.setScene(scene);
-      this.scheduleFirstRunResolutionDetect();
-      return;
-    }
-    // The LR2 family's scene plays the decide jingle on its own context, which its exit leaves playing.
-    const start = (entry: SelectStartEntry, autoPlay: boolean): void => {
-      if (this.startFromSelect(entry, autoPlay)) void view.playDecideSound();
-    };
-    const view = new PixiSongSelectView({
-      skin: lr2SelectSkin,
-      selectBgm: this.selectBgmBytes,
-      decideBgm: this.decideBgmBytes,
-      systemSounds: this.systemSoundBundle,
-      ...(this.lastSelectNavigation !== undefined ? { initialNavigation: this.lastSelectNavigation } : {}),
-      initialPlayOptions: playOptions,
-      onPlayOptionsChange: onPlayOptions,
-      resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
-      resolveCourseRecord: lookupCourse,
-      onSongSelected: (song: BrowserSongEntry) => start({ kind: 'song', song }, false),
-      onSongAutoPlay: (song: BrowserSongEntry) => start({ kind: 'song', song }, true),
-      // A course with a missing stage comes here too: it does not start (no decide jingle), and the status line says
-      // why.
-      onCourseSelected: (course: BrowserCourseEntry) => start({ kind: 'course', course }, false),
-      onCourseAutoPlay: (course: BrowserCourseEntry) => start({ kind: 'course', course }, true),
-      onSearchActivate: () => this.search.openFromPointer(),
+    // The select session plays through the audio service; its decide jingle plays out through the decide screen into
+    // the play.
+    const scene = createSelectScene(kit, {
+      library: this.collection,
+      ...(this.lastSelectNavigation !== undefined ? { browse: this.lastSelectNavigation } : {}),
+      playOptions,
+      records: {
+        chart: (song) => this.lookupSongRecord(song),
+        course: (course) => lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement),
+      },
+      sounds,
+      audio: this.audio,
       courseMaker: this.courseMaker,
-      onCourseNameActivate: () => this.courseMakerPanel?.focusName(),
-      onCourseDeleteRequest: (course: CourseDefinition) => this.courseMakerPanel?.confirmDelete(course),
+      on: {
+        start: (entry, { autoPlay }) => this.startFromSelect(entry, autoPlay),
+        playOptions: (options) => {
+          // Mirror the screen's play option edits (an LR2 panel, a skin's buttons) back into the Debug Menu state so
+          // both surfaces always agree, then repaint the lil-gui controllers.
+          this.guiState.autoPlay = options.autoPlay;
+          this.guiState.gauge = options.gauge1P;
+          this.guiState.random1P = options.random1P;
+          this.guiState.random2P = options.random2P;
+          this.guiState.dpFlip = options.dpFlip;
+          this.guiState.autoScratch1P = options.autoScratch1P;
+          this.guiState.autoScratch2P = options.autoScratch2P;
+          this.guiState.sort = options.sort;
+          this.guiState.keysFilter = options.keysFilter;
+          this.guiState.difficultyFilter = options.difficultyFilter;
+          if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
+          this.refreshPlayOptionControllers();
+        },
+        search: () => this.search.openFromPointer(),
+        // An LR2 skin's course name (text 170) and delete button (233): the panel names the course or confirms first.
+        courseMaker: (action, course) => {
+          if (action === 'name') this.courseMakerPanel?.focusName();
+          else if (course !== undefined) this.courseMakerPanel?.confirmDelete(course.definition);
+        },
+      },
     });
-    this.selectView = view;
-    await this.sceneHost.setScene(view);
-    view.setLibrary(this.collection);
+    this.selectView = scene;
+    await this.sceneHost.setScene(scene);
     this.scheduleFirstRunResolutionDetect();
   }
 
@@ -4760,9 +4729,9 @@ class PlayerWebDemoApp {
    * the theme's decide entry, on the LR2 family the theme's decide skin, on the default family the be-music skin's own
    * decide screen, shown only when the skin declares one.
    *
-   * On the LR2 and default families the select view's `playDecideSound` was already fired at song-pick time, and the
-   * splash visually masks the chart-load + gameplay-mount window that comes next. The beatoraja splash plays its
-   * theme's decide sound itself.
+   * The select screen's decide jingle, started as the chart was picked, plays on through the splash, which visually
+   * masks the chart-load + gameplay-mount window that comes next. The beatoraja splash plays its theme's decide sound
+   * itself.
    */
   private async showDecide(
     song: BrowserSongEntry,
@@ -4778,8 +4747,7 @@ class PlayerWebDemoApp {
     const kit = await this.decideKitFor(decideFamily, song, playsOnBeatoraja);
     if (kit === undefined) {
       // No decide splash: a be-music skin without one, an LR2-only setup that didn't ship a decide skin, or a beatoraja
-      // theme without a decide skin (or one that failed to load). The select view's `playDecideSound` already fired so
-      // the audio cue still plays.
+      // theme without a decide skin (or one that failed to load). The select screen's decide jingle still plays.
       await start();
       return;
     }

@@ -190,7 +190,7 @@ TGA image は `tga.ts`、DDS image は `dds.ts` でデコードします（ブ�
 
 `@be-music/player-web` は次の scene module で parsed skin model を使用します。
 
-- `scene/lr2/select.ts`
+- `view/lr2/select-view.ts`
 - `view/lr2/decide-view.ts`
 - `view/lr2/play-view.ts`（`play-elements.ts`、`play-timers.ts`、`play-hud.ts` とともに）
 - `view/lr2/result-view.ts`

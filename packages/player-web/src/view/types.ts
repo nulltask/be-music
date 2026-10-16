@@ -8,6 +8,7 @@
  */
 
 import type { BeMusicJson } from '@be-music/json';
+import type { CourseDraft, NonstopConnection } from '@be-music/player/course';
 import type { BeMusicAudioFrame, BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/skin-sdk';
 import type {
   BrowseCommand,
@@ -117,6 +118,27 @@ export type SelectViewEvent =
   /** The README overlay scrolls by `delta` pixels (a key); the view clamps it to the text. */
   | { readonly kind: 'readtext-scroll'; readonly delta: number };
 
+/** The course maker as a select skin shows it: the course being made and a new NONSTOP course's connection. */
+export interface SelectCourseMakerState {
+  /** The course being made; absent while none is. */
+  readonly draft?: CourseDraft;
+  /** The connection a new NONSTOP course gets. */
+  readonly defaultConnection: NonstopConnection;
+}
+
+/**
+ * What the player asks of the course maker: name the course being made (or their own course under the cursor),
+ * delete their course under the cursor, finish or cancel the course being made, or step a connection of their NONSTOP
+ * course under the cursor (`slot`, after stage `slot + 1`) or the default one.
+ */
+export type SelectCourseMakerAction =
+  | { readonly kind: 'name' }
+  | { readonly kind: 'delete' }
+  | { readonly kind: 'finish' }
+  | { readonly kind: 'cancel' }
+  | { readonly kind: 'connection'; readonly slot: number; readonly step: 1 | -1 }
+  | { readonly kind: 'default-connection'; readonly step: 1 | -1 };
+
 /** What the select screen draws. */
 export interface SelectFrame {
   readonly clock: SceneClock;
@@ -143,6 +165,8 @@ export interface SelectFrame {
   readonly startedAtMs?: number;
   /** The README overlay: the text file shown for a chart. */
   readonly readText?: { readonly chart: LibraryChart; readonly text: string };
+  /** The course maker, when the player makes courses (LR2's course-maker ops, texts and buttons). */
+  readonly courseMaker?: SelectCourseMakerState;
   /** The screen's music (BGM and chart preview), analysed for audio-reactive skins. */
   readonly audio: BeMusicAudioFrame;
 }
@@ -165,8 +189,8 @@ export type SelectIntent =
   | { readonly type: 'search' }
   /** Show the text file of the chart under the cursor, or close the one shown. */
   | { readonly type: 'readtext' }
-  /** The course maker: name the course being made, or delete the player's course under the cursor. */
-  | { readonly type: 'course-maker'; readonly action: 'name' | 'delete' }
+  /** The course maker (LR2's buttons and course name). */
+  | { readonly type: 'course-maker'; readonly action: SelectCourseMakerAction }
   /** Open the skin's options. */
   | { readonly type: 'skin-config' }
   /** Leave the select screen. */

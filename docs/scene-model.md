@@ -299,24 +299,24 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 
 ## Where the helpers moved
 
-| Helper                                                                           | Was in                                    | Now                                                                                |
-| -------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- |
-| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                 | `@be-music/skin-sdk`                      | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (aliased in skin-sdk)          |
-| `BeMusicPlayOptions` and its value types                                         | `@be-music/skin-sdk`                      | `PlayOptions`, … (aliased in skin-sdk)                                             |
-| `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                  | `@be-music/skin-sdk`                      | `PlayResult`, … (aliased in skin-sdk)                                              |
-| `BeMusicJudge`, `BeMusicSide`, `BeMusicJudgeTiming`, `BeMusicLaneCover`          | `@be-music/skin-sdk`                      | `Judge`, `PlaySide`, `JudgeTiming`, `LaneCover` (aliased in skin-sdk)              |
-| `groupSongsByFolder`, `resolveChartPlayVariant`                                  | `player-web` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (re-exported)              |
-| `matchesSearchQuery`, `wrappedCursorDelta`                                       | `player-web` core select                  | Same names (re-exported)                                                           |
-| The core select's sort and difficulty filter                                     | `player-web` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                               |
-| `resolveSelectNavigation`                                                        | `player-web` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse`       |
-| `DEFAULT_PLAY_OPTIONS`, the option cycles                                        | `player-web` core select                  | Same names (re-exported)                                                           |
-| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                         | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue` (re-exported under the old names) |
-| The hi-speed range and steps                                                     | `player-web` `scene/hi-speed.ts`          | Same names (re-exported)                                                           |
-| `SceneCourseInfo`, `resolveSceneCourseInfo`                                      | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (re-exported under the old names)                |
-| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                    | `player-web` `scene/core/course-combo.ts` | Same names, with `reduceCourseCombo`                                               |
-| `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                               | `player-web` `scene/playlog-view.ts`      | Same names (re-exported), over `resolvePlaylogView`                                |
-| `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation` | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)                     |
-| `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                 |
+| Helper                                                                           | Was in                                    | Now                                                                          |
+| -------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                 | `@be-music/skin-sdk`                      | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (aliased in skin-sdk)    |
+| `BeMusicPlayOptions` and its value types                                         | `@be-music/skin-sdk`                      | `PlayOptions`, … (aliased in skin-sdk)                                       |
+| `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                  | `@be-music/skin-sdk`                      | `PlayResult`, … (aliased in skin-sdk)                                        |
+| `BeMusicJudge`, `BeMusicSide`, `BeMusicJudgeTiming`, `BeMusicLaneCover`          | `@be-music/skin-sdk`                      | `Judge`, `PlaySide`, `JudgeTiming`, `LaneCover` (aliased in skin-sdk)        |
+| `groupSongsByFolder`, `resolveChartPlayVariant`                                  | `player-web` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (re-exported)        |
+| `matchesSearchQuery`, `wrappedCursorDelta`                                       | `player-web` core select                  | Same names (re-exported)                                                     |
+| The core select's sort and difficulty filter                                     | `player-web` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                         |
+| `resolveSelectNavigation`                                                        | `player-web` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse` |
+| `DEFAULT_PLAY_OPTIONS`, the option cycles                                        | `player-web` core select                  | Same names (`DEFAULT_PLAY_OPTIONS` re-exported)                              |
+| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                         | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue`                             |
+| The hi-speed range and steps                                                     | `player-web` `scene/hi-speed.ts`          | Same names (re-exported)                                                     |
+| `SceneCourseInfo`, `resolveSceneCourseInfo`                                      | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (re-exported under the old names)          |
+| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                    | `player-web` `scene/core/course-combo.ts` | Same names, with `reduceCourseCombo`                                         |
+| `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                               | `player-web` `scene/playlog-view.ts`      | Same names (re-exported), over `resolvePlaylogView`                          |
+| `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation` | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)               |
+| `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                           |
 
 The built-in and LR2 select screens browse with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
 `restoreBrowse`, `browseSystemSound`). The built-in and LR2 play screens keep one `PlayState` and read their result off

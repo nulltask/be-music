@@ -4,13 +4,13 @@
  * or by the distance a trackpad travels. A list pulled part of a row eases back to one once nothing moves it. While the
  * README overlay is open, the pointer scrolls or closes it instead.
  *
- * The pointer reads and drives the select scene through {@link SelectPointerContext}; the scene passes it.
+ * The pointer reads the last frame and turns what the player does into intents through {@link SelectPointerContext}; the
+ * family view passes it.
  */
 
 import type { BeMusicSelectLayout } from '@be-music/skin-sdk';
 import type { Application } from 'pixi.js';
 import type { BrowserBrowseEntry } from '../../collection/types.ts';
-import type { SelectDesignSize } from '../../scene/core/select.ts';
 import {
   FLING_START_VELOCITY,
   FLING_STOP_VELOCITY,
@@ -24,6 +24,12 @@ import {
 } from '../../scene/core/touch-scroll.ts';
 import { resolveScaledViewport } from '../../scene/core/viewport.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
+
+/** A skin's design canvas, in design pixels. */
+export interface SelectDesignSize {
+  readonly width: number;
+  readonly height: number;
+}
 
 /**
  * Minimum interval between two notch-driven cursor moves in the bar list, so a free-spinning notched wheel can't fire
