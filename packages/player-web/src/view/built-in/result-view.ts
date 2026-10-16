@@ -4,7 +4,7 @@
  * plays the jingle and steps the screen.
  */
 
-import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
+import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/ruleset';
 import { resolveStageOrientation } from '@be-music/skin-sdk';
 import { Color, Container, Graphics } from 'pixi.js';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
