@@ -5,6 +5,7 @@ import {
   PlaylogViewCursor,
   resolveBeatorajaPlaylogView,
   resolveGreenNumber,
+  resolveHiSpeedForWhiteNumber,
   resolvePlaylogView,
   resolveWhiteNumber,
 } from './view.ts';
@@ -91,6 +92,31 @@ describe('resolveWhiteNumber / resolveGreenNumber', () => {
     expect(resolveWhiteNumber({ laneBeats: 4, hiSpeed: 1, sudden: 0, bpm: 120, scrollRate: 0 })).toBe(0);
     expect(resolveWhiteNumber({ laneBeats: 4, hiSpeed: 0, sudden: 0, bpm: 120 })).toBe(0);
     expect(resolveWhiteNumber({ laneBeats: 0, hiSpeed: 1, sudden: 0, bpm: 120 })).toBe(0);
+  });
+});
+
+describe('resolveHiSpeedForWhiteNumber', () => {
+  test('is the hi-speed that shows the white number', () => {
+    // 240000 / 150 / 1000: beatoraja's hi-speed for a white number of 1000 at 150 BPM.
+    expect(resolveHiSpeedForWhiteNumber({ laneBeats: 4, sudden: 0, bpm: 150, whiteNumberMs: 1000 })).toBe(1.6);
+    // A shorter lane needs a slower scroll for the same time; SUDDEN+ covers part of it.
+    expect(resolveHiSpeedForWhiteNumber({ laneBeats: 2, sudden: 0.5, bpm: 120, whiteNumberMs: 250 })).toBe(2);
+  });
+
+  test('inverts resolveWhiteNumber', () => {
+    const lane = { laneBeats: 5.25, sudden: 0.3, bpm: 147, scrollRate: 1.5 };
+    const whiteNumberMs = resolveWhiteNumber({ ...lane, hiSpeed: 2.75 });
+    expect(resolveHiSpeedForWhiteNumber({ ...lane, whiteNumberMs })).toBeCloseTo(2.75, 12);
+  });
+
+  test('has no answer when nothing of the lane is uncovered or an input is not positive', () => {
+    const lane = { laneBeats: 4, sudden: 0, bpm: 150, whiteNumberMs: 1000 };
+    expect(resolveHiSpeedForWhiteNumber({ ...lane, sudden: 1 })).toBeUndefined();
+    expect(resolveHiSpeedForWhiteNumber({ ...lane, laneBeats: 0 })).toBeUndefined();
+    expect(resolveHiSpeedForWhiteNumber({ ...lane, bpm: 0 })).toBeUndefined();
+    expect(resolveHiSpeedForWhiteNumber({ ...lane, whiteNumberMs: 0 })).toBeUndefined();
+    expect(resolveHiSpeedForWhiteNumber({ ...lane, whiteNumberMs: Number.NaN })).toBeUndefined();
+    expect(resolveHiSpeedForWhiteNumber({ ...lane, scrollRate: -1 })).toBeUndefined();
   });
 });
 

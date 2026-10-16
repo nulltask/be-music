@@ -33,6 +33,30 @@ export function resolveWhiteNumber(input: {
   return ((input.laneBeats / input.hiSpeed / scrollRate) * uncovered * 60_000) / input.bpm;
 }
 
+/**
+ * The hi-speed that shows a note for `whiteNumberMs` below the SUDDEN+ cover ({@link resolveWhiteNumber} solved for the
+ * hi-speed), for a lane `laneBeats` beats long at hi-speed 1: a replay on another hi-speed scale works out the speed that
+ * shows the visible time a play log recorded. Like the white number it leaves the LIFT out. `undefined` when nothing of
+ * the lane is uncovered or an input is not positive.
+ */
+export function resolveHiSpeedForWhiteNumber(input: {
+  laneBeats: number;
+  sudden: number;
+  bpm: number;
+  whiteNumberMs: number;
+  scrollRate?: number;
+}): number | undefined {
+  const atHiSpeed1 = resolveWhiteNumber({
+    laneBeats: input.laneBeats,
+    hiSpeed: 1,
+    sudden: input.sudden,
+    bpm: input.bpm,
+    ...(input.scrollRate !== undefined ? { scrollRate: input.scrollRate } : {}),
+  });
+  if (!(atHiSpeed1 > 0) || !(input.whiteNumberMs > 0)) return undefined;
+  return atHiSpeed1 / input.whiteNumberMs;
+}
+
 /** The IIDX-style green number for a white number: three fifths of it, rounded (beatoraja's `duration_green`). */
 export function resolveGreenNumber(whiteNumberMs: number): number {
   return Math.round((whiteNumberMs * 3) / 5);
