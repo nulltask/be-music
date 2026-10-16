@@ -3,29 +3,31 @@
  * kit's family and returns the scene to show with `PixiSceneHost.setScene`.
  */
 
+import type { BeMusicJson } from '@be-music/json';
 import type { PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/scene-model';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { ResultSession, type ResultSessionEvents } from '../session/result/result-session.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
-import { BuiltInResultView } from '../view/built-in/result-view.ts';
-import { Lr2ResultView } from '../view/lr2/result-view.ts';
-import type { ResultFrame, ResultIntent, ResultView } from '../view/types.ts';
-import type { BuiltInKit, Lr2Kit } from './family-kit.ts';
+import { BeatorajaResultView, resolveBeatorajaResultTiming } from '../view/beatoraja/result-view.ts';
+import { BUILT_IN_RESULT_TIMING, BuiltInResultView } from '../view/built-in/result-view.ts';
+import { Lr2ResultView, resolveLr2ResultTiming } from '../view/lr2/result-view.ts';
+import type { ResultFrame, ResultIntent, ResultView, ResultViewTiming } from '../view/types.ts';
+import type { ResultKit } from './family-kit.ts';
 
 const log = logger('result');
 
 /**
- * The kits the result scene takes: a be-music skin, or an LR2 result skin (the course-result skin for a course run).
- * The beatoraja result screen is still `PixiBeatorajaResultScene`.
+ * The kits the result scene takes: a be-music skin, an LR2 result skin (the course-result skin for a course run), or a
+ * beatoraja theme's result entry (its course-result entry for a course run), loaded with `loadBeatorajaSceneKit`.
  */
-export type ResultSceneKit = BuiltInKit | Lr2Kit;
+export type ResultSceneKit = ResultKit;
 
 export interface ResultSceneOptions extends SessionSceneOptions {
   /**
-   * The play (or the course run) the screen shows. An LR2 skin shows the course of `result.course` (its ops, numbers and
-   * texts): the course a stage belongs to, with the stage, or the course run.
+   * The play (or the course run) the screen shows. An LR2 or beatoraja skin shows the course of `result.course` (its
+   * ops, numbers and texts): the course a stage belongs to, with the stage, or the course run.
    */
   readonly result: PlayResult;
   /**
@@ -35,8 +37,17 @@ export interface ResultSceneOptions extends SessionSceneOptions {
   readonly run?: PlayRunKind;
   /** Where the result's chart files are, for the images a skin shows. */
   readonly source?: BrowserSongAssetSource;
+  /**
+   * The chart as the play played it (its `#RANDOM` branches drawn), when the host has it: a beatoraja skin's BPM graph,
+   * note kinds and TOTAL readout read it, and show nothing of the chart without it.
+   */
+  readonly playChart?: BeMusicJson;
   /** The theme's sounds: the screen plays its clear, fail or result jingle and stops it as it leaves. */
   readonly sounds: SystemSoundSet;
+  /**
+   * The host's audio service: the jingle plays through it, and so do a beatoraja skin's Lua sounds (`skinSounds`,
+   * resolved against the theme's files set with `setTheme`), which stop as the screen leaves.
+   */
   readonly audio: AudioService;
   /**
    * Where the screen leads: `continue` when the player is done, `retry` to play the chart again (R). Without `retry`
@@ -60,21 +71,55 @@ interface FamilyResultView {
   updateKit(kit: ResultSceneKit): void;
 }
 
-/** The result view of `kit`'s family, reading the chart's files from `source`. */
-function createResultView(kit: ResultSceneKit, source: BrowserSongAssetSource | undefined): FamilyResultView {
-  const options = source !== undefined ? { source } : {};
-  if (kit.family === 'lr2') {
-    const view = new Lr2ResultView(kit, options);
-    return {
-      view,
-      updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),
-    };
+/** The skin timing of `kit`'s result view, which the session times the screen from. */
+function resultTimingOf(kit: ResultSceneKit): ResultViewTiming {
+  switch (kit.family) {
+    case 'lr2':
+      return resolveLr2ResultTiming(kit.skin);
+    case 'beatoraja':
+      return resolveBeatorajaResultTiming(kit.kit.skin);
+    case 'built-in':
+      return BUILT_IN_RESULT_TIMING;
   }
-  const view = new BuiltInResultView(kit, options);
-  return {
-    view,
-    updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
-  };
+}
+
+/**
+ * The result view of `kit`'s family, reading the chart's files from `options.source`. A beatoraja skin's Lua sounds
+ * play through the audio service as the session's, so they stop as the screen leaves.
+ */
+function createResultView(
+  kit: ResultSceneKit,
+  session: ResultSession,
+  options: Pick<ResultSceneOptions, 'result' | 'source' | 'audio'>,
+): FamilyResultView {
+  const source = options.source !== undefined ? { source: options.source } : {};
+  switch (kit.family) {
+    case 'lr2': {
+      const view = new Lr2ResultView(kit, source);
+      return {
+        view,
+        updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),
+      };
+    }
+    case 'beatoraja': {
+      const view = new BeatorajaResultView(kit, {
+        chart: options.result.song,
+        ...source,
+        skinSounds: options.audio.skinSounds.owned(session),
+      });
+      return {
+        view,
+        updateKit: (next) => (next.family === 'beatoraja' ? view.updateKit(next) : ignoreKit(next, 'beatoraja')),
+      };
+    }
+    case 'built-in': {
+      const view = new BuiltInResultView(kit, source);
+      return {
+        view,
+        updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
+      };
+    }
+  }
 }
 
 function ignoreKit(kit: ResultSceneKit, family: ResultSceneKit['family']): void {
@@ -99,17 +144,16 @@ class FamilyResultScene extends SessionScene<ResultFrame, ResultIntent> implemen
  * where it leads; the kit's family view draws it. Show it with `PixiSceneHost.setScene`, and dispose it once it is gone.
  */
 export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptions): ResultScene {
-  const familyView = createResultView(kit, options.source);
-  const { view } = familyView;
   const session = new ResultSession({
     result: options.result,
     ...(options.run !== undefined ? { run: options.run } : {}),
+    ...(options.playChart !== undefined ? { playChart: options.playChart } : {}),
     sounds: options.sounds,
     audio: options.audio,
-    timing: view.timing,
+    timing: resultTimingOf(kit),
     on: options.on,
   });
-  return new FamilyResultScene(session, familyView, {
+  return new FamilyResultScene(session, createResultView(kit, session, options), {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
