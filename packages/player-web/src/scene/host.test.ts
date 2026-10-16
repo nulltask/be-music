@@ -10,7 +10,6 @@ import { CoreResultView } from './core/result.ts';
 import { CoreSongSelectView } from './core/select.ts';
 import { DefaultPixiGameplayView, DefaultPixiSongSelectView } from './default/index.ts';
 import { PixiSceneHost, resolveRendererPreference, resolveRenderResolution, type PixiScene } from './host.ts';
-import { PixiDecideView } from './lr2/decide.ts';
 import { PixiGameplayView } from './lr2/gameplay.ts';
 import { PixiResultView } from './lr2/result.ts';
 import { PixiSongSelectView } from './lr2/select.ts';
@@ -270,7 +269,6 @@ describe('scene identities', () => {
     ['CoreSongSelectView', CoreSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
     ['DefaultPixiSongSelectView', DefaultPixiSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
     ['PixiSongSelectView', PixiSongSelectView.prototype.identity, { kind: 'select', family: 'lr2' }],
-    ['PixiDecideView', PixiDecideView.prototype.identity, { kind: 'decide', family: 'lr2' }],
     ['CoreGameplayView', CoreGameplayView.prototype.identity, { kind: 'play', family: 'built-in' }],
     ['DefaultPixiGameplayView', DefaultPixiGameplayView.prototype.identity, { kind: 'play', family: 'built-in' }],
     ['PixiGameplayView', PixiGameplayView.prototype.identity, { kind: 'play', family: 'lr2' }],
