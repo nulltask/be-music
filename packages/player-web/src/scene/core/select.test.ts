@@ -72,7 +72,7 @@ describe('CoreSongSelectView course bars', () => {
     }) as unknown as BrowserCourseEntry;
 
   type CourseBarView = {
-    browseStack: BrowserFolderNode[];
+    session: { browseStack: BrowserFolderNode[] };
     selectedIndex: number;
     activateEntry(entry: BrowserBrowseEntry): void;
     launchFocusedSong(autoPlay: boolean): void;
@@ -81,7 +81,7 @@ describe('CoreSongSelectView course bars', () => {
   /** A view (not mounted, so nothing renders) with the cursor on `entry` inside its course folder. */
   function viewOnCourse(entry: BrowserCourseEntry, options: ConstructorParameters<typeof CoreSongSelectView>[0]) {
     const view = new CoreSongSelectView(options) as unknown as CourseBarView;
-    view.browseStack = [{ label: 'Dan', songs: [], courses: [entry] }];
+    view.session.browseStack = [{ label: 'Dan', songs: [], courses: [entry] }];
     view.selectedIndex = 0;
     return view;
   }

@@ -39,11 +39,11 @@ describe('PixiSongSelectView PLAY / AUTOPLAY buttons', () => {
       onCourseSelected: () => started.push('play'),
       onCourseAutoPlay: () => started.push('auto'),
     }) as unknown as {
-      browseStack: BrowserFolderNode[];
+      session: { browseStack: BrowserFolderNode[] };
       selectedIndex: number;
       dispatchButtonClick(button: { type: number }): void;
     };
-    view.browseStack = [{ label: 'Dan', songs: [], courses: [dan] }];
+    view.session.browseStack = [{ label: 'Dan', songs: [], courses: [dan] }];
     view.selectedIndex = 0;
     view.dispatchButtonClick({ type: 15 });
     view.dispatchButtonClick({ type: 16 });

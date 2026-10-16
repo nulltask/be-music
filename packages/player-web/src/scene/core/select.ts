@@ -3,42 +3,28 @@ import { PerfTracker } from '../perf.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { SceneIdentity } from '../../host/family-kit.ts';
 import { disposeChildren } from '../pixi-utils.ts';
-import { groupSongsByFolder, resolveSongSource } from '../../collection/collection.ts';
+import { resolveSongSource } from '../../collection/collection.ts';
 import {
   BGA_CYCLE,
   BGA_SIZE_CYCLE,
   BOOLEAN_CYCLE,
-  browseCursor,
-  browseSnapshotFromSelectNavigation,
-  chartMatchesDifficultyFilter,
   clampHiSpeed,
-  clampShutter,
   cyclePlayOptionValue,
   DEFAULT_PLAY_OPTIONS,
   DIFFICULTY_FILTER_CYCLE,
   HIDDEN_SUDDEN_CYCLE,
   HS_FIX_CYCLE,
-  isListPlayOption,
   KEYS_FILTER_CYCLE,
   matchesSearchQuery,
-  nextChoice,
   PLAY_OPTION_CHOICES,
   RANDOM_CYCLE,
   resolvePlayOptionValue,
-  restoreBrowse,
   SORT_CYCLE,
-  sortLibraryEntries,
   wrappedCursorDelta,
 } from '@be-music/scene-model';
-import {
-  LR2_KEYS_FILTER_OPS,
-  lr2CourseMatchesKeysFilter,
-  resolveLr2KeyModeOp,
-  resolveLr2SelectTimers,
-  type Lr2TimerUpdate,
-} from '@be-music/lr2-skin/state';
+import { resolveLr2SelectTimers, type Lr2TimerUpdate } from '@be-music/lr2-skin/state';
 import { logger } from '../../logger.ts';
-import { HISPEED_MAX, HISPEED_MIN, HISPEED_STEP } from '../hi-speed.ts';
+import { HISPEED_MAX, HISPEED_MIN } from '../hi-speed.ts';
 import type {
   BrowserBrowseEntry,
   BrowserCourseEntry,
@@ -47,7 +33,6 @@ import type {
   BrowserSongEntry,
 } from '../../collection/types.ts';
 import type { CourseDefinition } from '@be-music/player/course';
-import { GAUGE_TYPES } from '@be-music/player/ruleset';
 import type { CourseMaker } from '../../collection/course-maker.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
 import type {
@@ -81,6 +66,7 @@ import { resolveBeMusicSelectLayout, resolveStageOrientation, type BeMusicSelect
 import { SelectReadTextOverlay, type SelectReadTextContext } from '../../view/built-in/select-readtext.ts';
 import { renderEmptyStateHint, type SelectEmptyHintContext } from '../../view/built-in/select-empty-hint.ts';
 import { SelectPointer, type SelectPointerContext } from '../../session/select/select-pointer.ts';
+import { SelectSession, type SelectSessionContext } from '../../session/select/select-session.ts';
 import { SelectAudio, type SelectAudioContext } from '../../session/select/select-audio.ts';
 import { SelectKeys, type SelectKeysContext } from '../../session/select/select-keys.ts';
 
@@ -299,6 +285,7 @@ const IDENTITY: SceneIdentity = { kind: 'select', family: 'built-in' };
 type SelectSceneContext = SelectReadTextContext &
   SelectEmptyHintContext &
   SelectPointerContext &
+  SelectSessionContext &
   SelectKeysContext &
   SelectAudioContext;
 
@@ -363,6 +350,8 @@ export class CoreSongSelectView<
   private readonly context: SelectSceneContext = CoreSongSelectView.createContext(this);
   /** The README overlay the LR2 READTEXT button and a be-music skin open over the song list. */
   private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay(this.context);
+  /** The browsing: the folder stack and the cursor, the play options and the panels, the search, the launch. */
+  private readonly session: SelectSession = new SelectSession(this.context);
   /** The sound: the select BGM, the system cues and the chart preview. */
   private readonly audio: SelectAudio = new SelectAudio(this.context);
   /** The keyboard. */
@@ -400,38 +389,6 @@ export class CoreSongSelectView<
     text: 'Select: Arrow keys / Enter',
     style: new TextStyle({ fill: MUTED, fontSize: 14, fontFamily: CORE_TEXT_FONT }),
   });
-  protected collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
-  /**
-   * Current selection cursor into `currentEntries()`. Reset to 0 when navigating into / out of a folder so the cursor
-   * lands on the first entry of the new view.
-   */
-  protected selectedIndex = 0;
-  /**
-   * Folder navigation stack. Empty = at root (showing folder bars). Length-1 = inside one folder (showing its songs).
-   * LR2 only really uses one nesting level today, but the array makes it trivial to extend later.
-   */
-  private browseStack: BrowserFolderNode[] = [];
-  /**
-   * Live play-option state, mutated by the in-scene panel buttons (LR2 `#SRC_BUTTON,type=40..58` etc.) and read by the
-   * host via {@link getPlayOptions} at gameplay-launch time. Initialized from `initialPlayOptions` (overlaid on {@link
-   * DEFAULT_PLAY_OPTIONS}) at construction.
-   */
-  protected playOptions: PixiPlayOptions = { ...DEFAULT_PLAY_OPTIONS };
-  /**
-   * Set of currently-open LR2 panels (1..9). Feeds the panel ops of `resolveLr2SelectState` and gates panel-scoped `#SRC_*`
-   * elements via {@link isPanelOpen}. Convention: panel 1 is the play- options panel — opened with the START button
-   * (Enter / Space) per LR2's select-skin spec (LR2SkinHelp line 9101).
-   *
-   * Multiple panels can be open simultaneously per spec (the FX panel and the play-options panel coexist on real LR2
-   * setups); `togglePanel` flips one slot at a time so the user explicitly controls which panels are stacked.
-   */
-  protected readonly panelStates: Set<number> = new Set<number>();
-  /**
-   * Parallel stack of the parent's `selectedIndex` at the moment each folder on `browseStack` was entered. Used by
-   * {@link leaveFolder} to land the cursor back on the folder bar the user just exited rather than jumping to the top
-   * of the parent list. Always satisfies `parentCursorStack.length === browseStack.length`.
-   */
-  private parentCursorStack: number[] = [];
   private mountedContainer: HTMLElement | undefined;
   /**
    * `performance.now()` at the moment the select scene was mounted. Drives the elapsed-time clock for LR2 timer 0
@@ -502,26 +459,8 @@ export class CoreSongSelectView<
    * so we'd otherwise compete for arrow keys).
    */
   private visible = true;
-  /**
-   * Lower-cased search query. When non-empty, `currentEntries` is filtered to bars whose title / subtitle / artist /
-   * genre / file label / folder label contains the substring (case- insensitive). Empty string disables the filter —
-   * hosts call {@link setSearchQuery} to seed it; the view never mutates it on its own.
-   */
-  private searchQuery = '';
-  /** The query as typed (case and spaces kept), for skins that show it. */
-  protected searchText = '';
-  /** Whether the host's text field is laid over the search box: the skin then leaves the box's text to it. */
-  protected searchEditing = false;
   /** The viewport of the last render, to place the search box on the page. */
   private lastViewport: { x: number; y: number; scale: number } | undefined;
-  /**
-   * Memoized result of {@link currentEntries}. Recomputed only when one of the captured inputs changes; otherwise the
-   * cached array is returned as-is so per-frame call sites (slider value, bar renderer) hit a Map-like O(1) path
-   * instead of re-walking the chart events of every song under the keymode filter. Initialized lazily on the first
-   * call.
-   */
-  private cachedEntries: BrowserBrowseEntry[] = [];
-  private cachedEntriesInputs: CurrentEntriesInputs | undefined;
   protected options: TOptions;
   /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
   private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
@@ -533,15 +472,15 @@ export class CoreSongSelectView<
     this.audio.setOneShotBytes('decide', options.decideBgm);
     this.setSystemSounds(options.systemSounds);
     if (options.initialPlayOptions) {
-      this.playOptions = { ...this.playOptions, ...options.initialPlayOptions };
-      this.playOptions.hiSpeed = clampHiSpeed(this.playOptions.hiSpeed);
+      this.session.playOptions = { ...this.session.playOptions, ...options.initialPlayOptions };
+      this.session.playOptions.hiSpeed = clampHiSpeed(this.session.playOptions.hiSpeed);
     }
   }
 
   /**
-   * `scene` as the parts it is made of read and drive it (`SelectKeysContext`, `SelectPointerContext`,
-   * `SelectAudioContext`, `SelectReadTextContext`, `SelectEmptyHintContext`): getters and methods over its own state
-   * and its parts, so that state keeps its access modifiers.
+   * `scene` as the parts it is made of read and drive it (`SelectSessionContext`, `SelectKeysContext`,
+   * `SelectPointerContext`, `SelectAudioContext`, `SelectReadTextContext`, `SelectEmptyHintContext`): getters and
+   * methods over its own state and its parts, so that state keeps its access modifiers.
    */
   private static createContext(scene: CoreSongSelectView): SelectSceneContext {
     return {
@@ -563,6 +502,9 @@ export class CoreSongSelectView<
       get screen(): Application['screen'] {
         return scene.app.screen;
       },
+      get options(): CoreSongSelectViewOptions {
+        return scene.options;
+      },
       get themeDesignSize(): SelectDesignSize | undefined {
         return scene.themeDesignSize;
       },
@@ -571,6 +513,18 @@ export class CoreSongSelectView<
       },
       get beMusicSelectLayout(): BeMusicSelectLayout {
         return scene.beMusicSelectLayout;
+      },
+      get beMusicRenderer(): BeMusicSelectBinding | undefined {
+        return scene.beMusicRenderer;
+      },
+      get beMusicNeedsFrame(): boolean {
+        return scene.beMusicNeedsFrame;
+      },
+      set beMusicNeedsFrame(value: boolean) {
+        scene.beMusicNeedsFrame = value;
+      },
+      get songImages(): SongImageCache | undefined {
+        return scene.songImages;
       },
       get selectedIndex(): number {
         return scene.selectedIndex;
@@ -600,18 +554,20 @@ export class CoreSongSelectView<
       closeReadText: () => scene.readText.closeReadText(),
       playOneShotSound: (name) => scene.audio.playOneShotSound(name),
       startSelectBgm: () => scene.audio.startSelectBgm(),
+      refreshChartPreview: () => scene.refreshChartPreview(),
       resolveDesignSize: () => scene.resolveDesignSize(),
       currentEntries: () => scene.currentEntries(),
       focusedSong: () => scene.focusedSong(),
-      moveCursorBy: (steps) => scene.moveCursorBy(steps),
+      moveCursorBy: (steps) => scene.session.moveCursorBy(steps),
       noteCursorChange: (delta) => scene.noteCursorChange(delta),
       activateEntry: (entry) => scene.activateEntry(entry),
-      leaveFolder: () => scene.leaveFolder(),
+      leaveFolder: () => scene.session.leaveFolder(),
       togglePanel: (which) => scene.togglePanel(which),
       adjustHiSpeed: (direction) => scene.adjustHiSpeed(direction),
       cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void {
         scene.cyclePlayOption(key, cycle);
       },
+      applyLr2Timers: (update) => scene.applyLr2Timers(update),
       handleThemePointerDown: (virtualX, virtualY) => scene.handleThemePointerDown(virtualX, virtualY),
       render: () => scene.render(),
     };
@@ -640,43 +596,7 @@ export class CoreSongSelectView<
    * in-scene panel.
    */
   public setPlayOptions(partial: Partial<PixiPlayOptions>): void {
-    const next = { ...this.playOptions, ...partial };
-    next.hiSpeed = clampHiSpeed(next.hiSpeed);
-    if (!BGA_CYCLE.includes(next.bga)) next.bga = DEFAULT_PLAY_OPTIONS.bga;
-    if (!BGA_SIZE_CYCLE.includes(next.bgaSize)) next.bgaSize = DEFAULT_PLAY_OPTIONS.bgaSize;
-    if (typeof next.scoreGraph !== 'boolean') next.scoreGraph = DEFAULT_PLAY_OPTIONS.scoreGraph;
-    if (!DIFFICULTY_FILTER_CYCLE.includes(next.difficultyFilter)) {
-      next.difficultyFilter = DEFAULT_PLAY_OPTIONS.difficultyFilter;
-    }
-    if (!KEYS_FILTER_CYCLE.includes(next.keysFilter)) {
-      next.keysFilter = DEFAULT_PLAY_OPTIONS.keysFilter;
-    }
-    if (!SORT_CYCLE.includes(next.sort)) {
-      next.sort = DEFAULT_PLAY_OPTIONS.sort;
-    }
-    if (!HS_FIX_CYCLE.includes(next.hsFix)) {
-      next.hsFix = DEFAULT_PLAY_OPTIONS.hsFix;
-    }
-    if (!HIDDEN_SUDDEN_CYCLE.includes(next.hiddenSudden1P)) {
-      next.hiddenSudden1P = DEFAULT_PLAY_OPTIONS.hiddenSudden1P;
-    }
-    if (!HIDDEN_SUDDEN_CYCLE.includes(next.hiddenSudden2P)) {
-      next.hiddenSudden2P = DEFAULT_PLAY_OPTIONS.hiddenSudden2P;
-    }
-    next.shutter = clampShutter(next.shutter);
-    if (typeof next.autoScratch1P !== 'boolean') next.autoScratch1P = DEFAULT_PLAY_OPTIONS.autoScratch1P;
-    if (typeof next.autoScratch2P !== 'boolean') next.autoScratch2P = DEFAULT_PLAY_OPTIONS.autoScratch2P;
-    if (typeof next.dpFlip !== 'boolean') next.dpFlip = DEFAULT_PLAY_OPTIONS.dpFlip;
-    if (!RANDOM_CYCLE.includes(next.random1P)) next.random1P = DEFAULT_PLAY_OPTIONS.random1P;
-    if (!RANDOM_CYCLE.includes(next.random2P)) next.random2P = DEFAULT_PLAY_OPTIONS.random2P;
-    if (!GAUGE_TYPES.includes(next.gauge1P)) next.gauge1P = DEFAULT_PLAY_OPTIONS.gauge1P;
-    if (!GAUGE_TYPES.includes(next.gauge2P)) next.gauge2P = DEFAULT_PLAY_OPTIONS.gauge2P;
-    this.playOptions = next;
-    // Re-render only when panel 1 (the play-options panel) is currently open — that's the only surface that visualizes
-    // these values today, so a closed-panel write doesn't need a frame.
-    if (this.panelStates.has(1)) {
-      this.render();
-    }
+    this.session.setPlayOptions(partial);
   }
 
   /**
@@ -910,119 +830,6 @@ export class CoreSongSelectView<
   }
 
   /**
-   * Drills into `folder`: pushes onto the browse stack, resets the cursor to the top of the folder's contents, animates
-   * the bar slide as a single down-step, and fires the LR2 folder-open cue (`Sound\lr2\f-open.wav`).
-   *
-   * Three call sites use this — keyboard Enter, skin-mode click, fallback-row click — so factoring it here keeps their
-   * semantics identical.
-   */
-  /** Opens a folder bar, starts a song bar, or hands a course bar to the host (see `onCourseSelected`). */
-  protected activateEntry(entry: BrowserBrowseEntry): void {
-    if (entry.kind === 'folder') {
-      this.enterFolder(entry.folder);
-    } else if (entry.kind === 'song') {
-      this.launchSong(entry.song);
-    } else if (this.launchAt === undefined) {
-      this.options.onCourseSelected?.(entry.course);
-    }
-  }
-
-  protected enterFolder(folder: BrowserFolderNode): void {
-    // Stash the parent's cursor BEFORE pushing so leaveFolder can land the cursor back on this folder bar.
-    this.parentCursorStack = [...this.parentCursorStack, this.selectedIndex];
-    this.browseStack = [...this.browseStack, folder];
-    this.selectedIndex = 0;
-    // Folder traversal: animate as a single "down" step regardless of how big the index jump was, so the slide stays
-    // bounded.
-    this.noteCursorChange(1);
-    this.render();
-    void this.audio.playOneShotSound('folder-open');
-  }
-
-  /**
-   * Pops one level out of the browse stack. No-op at the root (mirroring the old inline branch that bailed when
-   * `browseStack.length === 0`). Fires the LR2 folder-close cue (`Sound\lr2\f-close.wav`).
-   *
-   * Restores the parent's `selectedIndex` from the parallel cursor stack so the user lands back on the folder bar they
-   * just left. The restored index is clamped to the parent list's current length to handle the rare case where the
-   * collection / search filter changed while inside the folder.
-   */
-  private leaveFolder(): boolean {
-    if (this.browseStack.length === 0) return false;
-    this.browseStack = this.browseStack.slice(0, -1);
-    const remembered = this.parentCursorStack[this.parentCursorStack.length - 1];
-    this.parentCursorStack = this.parentCursorStack.slice(0, -1);
-    if (remembered !== undefined) {
-      const parentEntries = this.currentEntries();
-      const upperBound = Math.max(0, parentEntries.length - 1);
-      this.selectedIndex = Math.max(0, Math.min(remembered, upperBound));
-    } else {
-      this.selectedIndex = 0;
-    }
-    this.noteCursorChange(-1);
-    this.render();
-    void this.audio.playOneShotSound('folder-close');
-    return true;
-  }
-
-  /**
-   * Returns whether an element with the given `panel` gate should currently render. Per LR2 spec:
-   *
-   * - - `panel = 0` → always render (default). - `panel = -1` → only when no option panel is open. - `panel = 1..9` →
-   *   only when that specific panel is open.
-   *
-   * Defined as an arrow-property so callers can pass `this.isPanelOpen` to free helpers that need a `(panel) =>
-   * boolean` predicate without binding `this` themselves.
-   */
-  protected readonly isPanelOpen = (panel: number): boolean => {
-    if (panel === 0) return true;
-    if (panel === -1) return this.panelStates.size === 0;
-    return this.panelStates.has(panel);
-  };
-
-  /**
-   * Toggles LR2 panel `which` (1..9). Opening sets the corresponding `panelStates` flag and starts the matching open
-   * timer (21..29); closing clears the flag and starts the close timer (31..39). Mirrors the LR2 spec — panel buttons
-   * (`#SRC_BUTTON,type=1..9`) and the START key both route through here so keyboard / mouse paths stay in sync.
-   *
-   * Re-renders synchronously so panel-gated elements appear / disappear on the very next frame instead of waiting for
-   * the idle rAF tick (which only fires while keyframe animations are active and would skip a few frames after a
-   * static-state toggle).
-   */
-  protected togglePanel(which: number): void {
-    if (which < 1 || which > 9) return;
-    const now = performance.now();
-    let opening: boolean;
-    if (this.panelStates.has(which)) {
-      // Closing: drop the open timer (so it goes inactive next frame) and seed the close timer for the close-anim
-      // keyframes that #DST elements anchored to timer 31..39 depend on.
-      this.panelStates.delete(which);
-      this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'panel', panel: which, open: false, at: now }));
-      opening = false;
-    } else {
-      // Opening: only one option panel may be open at a time (LR2 mutual-exclusion convention — clicking PLAY OPTION
-      // while SYSTEM OPTION is already open closes the latter first, then opens the former). Snapshot the open set
-      // before we start mutating it so we don't trip on iterator-vs-mutation order. Close every other open panel via
-      // the same close-timer + state-flip sequence so their close-anim keyframes still play.
-      const previouslyOpen = Array.from(this.panelStates);
-      for (const open of previouslyOpen) {
-        if (open === which) continue;
-        this.panelStates.delete(open);
-        this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'panel', panel: open, open: false, at: now }));
-      }
-      // Drop our own (potentially leftover) close timer and seed the open timer.
-      this.panelStates.add(which);
-      this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'panel', panel: which, open: true, at: now }));
-      opening = true;
-    }
-    // LR2 system effects — `Sound\lr2\o-open.wav` / `o-close.wav`. Fire-and-forget; the cached buffer makes rapid
-    // toggles cheap. Use the open cue for "swap to another panel" too (the previous panel's silent close is implicit;
-    // firing both cues at once would just clip).
-    void this.audio.playOneShotSound(opening ? 'option-open' : 'option-close');
-    this.render();
-  }
-
-  /**
    * Attaches the keyframe-driven re-render handler to the host's shared `app.ticker` so DST keyframe sequences (intro
    * slide-in, loop animations, focused-bar pulse, etc.) play out. The handler is bound once at construction
    * ({@link tickerHandle}); this method just registers it. The previous implementation kicked its own
@@ -1101,7 +908,7 @@ export class CoreSongSelectView<
     }
     this.disposed = true;
     this.stopAnimationLoop();
-    if (this.launchTimer !== undefined) window.clearTimeout(this.launchTimer);
+    if (this.session.launchTimer !== undefined) window.clearTimeout(this.session.launchTimer);
     this.beMusicRenderer?.dispose();
     this.beMusicRenderer = undefined;
     this.songImages?.dispose();
@@ -1140,12 +947,7 @@ export class CoreSongSelectView<
    * a live view (e.g. when the host swaps a saved navigation snapshot back in after a play session).
    */
   public setNavigation(navigation: PixiSongSelectNavigation): void {
-    if (this.restoreNavigation(navigation)) {
-      this.render();
-      // Cursor / folder state changed → focused chart likely changed too. Same reasoning as `setCollection` — bring the
-      // preview engine back in sync with whatever bar is now under the cursor.
-      this.refreshChartPreview();
-    }
+    this.session.setNavigation(navigation);
   }
 
   /** Whether the select screen is showing: entered, and not exited for a decide / play / result screen since. */
@@ -1154,37 +956,7 @@ export class CoreSongSelectView<
   }
 
   public setCollection(collection: BrowserSongCollection): void {
-    // When the host re-asserts the same collection reference (e.g. returning to the select view from a play session) we
-    // MUST NOT clobber the live cursor / browse stack — the host has already (or is about to) call `setNavigation` with
-    // the snapshot it captured before play started, and re-resetting here would discard that. Identity comparison is
-    // enough because `collectionStore.loadFromFiles` always returns a fresh collection object on a real reload.
-    if (this.collection === collection) {
-      this.render();
-      return;
-    }
-    this.collection = collection;
-    // Images cached for the previous collection's songs may not match the new one's files.
-    this.songImages?.clear();
-    this.browseStack = [];
-    this.parentCursorStack = [];
-    this.selectedIndex = 0;
-    // Brand-new collection: try the constructor-time `initialNavigation` (typical: dropped a folder mid-session and
-    // there's a saved snapshot in the URL or local storage). Falls back to the auto-enter-single-folder behavior when
-    // no saved state exists or the saved labels no longer match.
-    const restored = this.options.initialNavigation ? this.restoreNavigation(this.options.initialNavigation) : false;
-    if (!restored) {
-      const folders = groupSongsByFolder(collection.songs);
-      if (folders.length === 1) {
-        this.browseStack = [folders[0]!];
-        // Keep parentCursorStack length-aligned with browseStack even on the auto-enter-single-folder fast path — a
-        // mismatch would feed `leaveFolder` a stale entry from a previous session.
-        this.parentCursorStack = [0];
-      }
-    }
-    this.render();
-    // Collection changed → focused song's identity / source map changed. Re-arm the preview engine so it sees the new
-    // target (or no target, if we landed on a folder bar).
-    this.refreshChartPreview();
+    this.session.setCollection(collection);
   }
 
   /**
@@ -1193,95 +965,12 @@ export class CoreSongSelectView<
    * snapshot is decoupled from the live `BrowserFolderNode` references.
    */
   public getNavigation(): PixiSongSelectNavigation {
-    return {
-      folderPath: this.browseStack.map((folder) => folder.label),
-      selectedIndex: this.selectedIndex,
-    };
+    return this.session.getNavigation();
   }
 
   /** The bar under the cursor (a folder, song or course), or `undefined` when the list is empty. */
   public getFocusedEntry(): BrowserBrowseEntry | undefined {
     return this.currentEntries()[this.selectedIndex];
-  }
-
-  /**
-   * Walks `folderPath` deepest-first, looking up each label in the folder list at the matching depth. Stops as soon as
-   * a label doesn't match — the partial path is still a useful restore. The `selectedIndex` is clamped to the recovered
-   * list's length so the cursor never lands past the end.
-   */
-  private restoreNavigation(navigation: PixiSongSelectNavigation): boolean {
-    const resolved = resolveSelectNavigation(this.collection, navigation);
-    // None of the saved labels matched: the caller falls back to the default "single-folder auto-enter" path instead of
-    // leaving the cursor on an unrelated entry.
-    if (resolved === undefined) return false;
-    this.browseStack = resolved.stack;
-    // No saved per-level cursor history yet — fill the parallel stack with zeros so its length matches `browseStack`.
-    // If the user backs out without entering further, they land on the first folder bar of the parent (acceptable
-    // fallback for a restored session that has no prior entry-time snapshot).
-    this.parentCursorStack = resolved.stack.map(() => 0);
-    this.selectedIndex = resolved.selectedIndex;
-    return true;
-  }
-
-  /**
-   * Returns the entries to render in the bar list at the current navigation depth. At the root we surface one bar per
-   * top-level folder, except while searching: search results are flattened to matching charts so typing a title rewrites
-   * the visible list immediately. Inside a folder we surface that folder's songs.
-   *
-   * Honors `searchQuery` (lower-cased substring match) when set — the filter applies at every depth so a user can type
-   * while inside a folder and only see matching songs in that folder.
-   */
-  protected currentEntries(): BrowserBrowseEntry[] {
-    // Cache the filtered + sorted list so the per-frame call sites (slider value resolver, bar renderer, …) don't
-    // re-allocate every entry and re-walk the keymode filter on every frame. Inputs that affect the result are captured
-    // shallowly; reference comparison is enough for the array / folder fields because the mutators always replace those
-    // refs (no in-place edits).
-    const top = this.browseStack[this.browseStack.length - 1];
-    const songs = this.collection.songs;
-    const inputs: CurrentEntriesInputs = {
-      top,
-      stackLength: this.browseStack.length,
-      songs,
-      difficulty: this.playOptions.difficultyFilter,
-      keys: this.playOptions.keysFilter,
-      sort: this.playOptions.sort,
-      search: this.searchQuery,
-    };
-    if (this.cachedEntriesInputs && currentEntriesInputsEqual(this.cachedEntriesInputs, inputs)) {
-      return this.cachedEntries;
-    }
-    const baseEntries: BrowserBrowseEntry[] = top
-      ? top.courses !== undefined
-        ? top.courses.map((course): BrowserBrowseEntry => ({ kind: 'course', course }))
-        : top.songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
-      : this.searchQuery.length > 0
-        ? songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
-        : [...groupSongsByFolder(songs), ...(this.collection.courseFolders ?? [])].map(
-            (folder): BrowserBrowseEntry => ({ kind: 'folder', folder }),
-          );
-    let filtered = baseEntries;
-    if (this.playOptions.difficultyFilter !== 'ALL') {
-      const filter = this.playOptions.difficultyFilter;
-      filtered = filtered.filter((entry) => entry.kind !== 'song' || chartMatchesDifficultyFilter(entry.song, filter));
-    }
-    if (this.playOptions.keysFilter !== 'ALL') {
-      const targetOp = LR2_KEYS_FILTER_OPS[this.playOptions.keysFilter];
-      // A course bar is listed under its key mode, as LR2 lists courses by their `line`.
-      filtered = filtered.filter((entry) =>
-        entry.kind === 'song'
-          ? resolveLr2KeyModeOp(entry.song) === targetOp
-          : entry.kind !== 'course' || lr2CourseMatchesKeysFilter(entry.course, targetOp),
-      );
-    }
-    if (this.searchQuery.length > 0) {
-      filtered = filtered.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
-    }
-    if (this.playOptions.sort !== 'OFF') {
-      filtered = sortLibraryEntries(filtered, this.playOptions.sort);
-    }
-    this.cachedEntries = filtered;
-    this.cachedEntriesInputs = inputs;
-    return filtered;
   }
 
   /**
@@ -1291,23 +980,14 @@ export class CoreSongSelectView<
    * the cursor pointing past the new end and `focusedSong()` would return undefined.
    */
   public setSearchQuery(query: string): void {
-    this.searchText = query;
-    const normalized = query.trim().toLowerCase();
-    if (this.searchQuery === normalized) {
-      return;
-    }
-    this.searchQuery = normalized;
-    this.selectedIndex = 0;
-    this.render();
+    this.session.setSearchQuery(query);
   }
   /**
    * Tells the scene the host's text field sits over the search box (`true`) or has left it (`false`). While it does,
    * skins leave the box's text to the field, so the query is not drawn twice.
    */
   public setSearchEditing(editing: boolean): void {
-    if (this.searchEditing === editing) return;
-    this.searchEditing = editing;
-    this.render();
+    this.session.setSearchEditing(editing);
   }
 
   /**
@@ -1326,100 +1006,14 @@ export class CoreSongSelectView<
     return this.themeDesignSize === undefined ? this.beMusicRenderer?.searchFieldRect : undefined;
   }
 
-  /**
-   * Returns the song under the cursor, or `undefined` when the cursor is on a folder bar (in which case song-info
-   * NUMBER / TEXT panels leave their slots blank).
-   */
-  protected focusedSong(): BrowserSongEntry | undefined {
-    const entry = this.currentEntries()[this.selectedIndex];
-    return entry?.kind === 'song' ? entry.song : undefined;
-  }
-
-  /** Returns the course under the cursor, or `undefined` when the cursor is on a folder or song bar. */
-  protected focusedCourse(): BrowserCourseEntry | undefined {
-    const entry = this.currentEntries()[this.selectedIndex];
-    return entry?.kind === 'course' ? entry.course : undefined;
-  }
-
   /** Draws the empty-library hint into `skinLayer`; themes call it from {@link renderTheme}. */
   protected renderEmptyStateHint(designWidth: number, designHeight: number): void {
     renderEmptyStateHint(this.context, designWidth, designHeight);
   }
 
-  /**
-   * Moves the cursor `steps` entries (forward when positive), one slot at a time so the bar slide animates each step,
-   * wrapping at the ends like the keyboard and wheel.
-   */
-  private moveCursorBy(steps: number): void {
-    const entries = this.currentEntries();
-    if (entries.length === 0) return;
-    const direction = steps > 0 ? 1 : -1;
-    for (let index = 0; index < Math.abs(steps); index += 1) {
-      this.selectedIndex = (this.selectedIndex + direction + entries.length) % entries.length;
-      this.noteCursorChange(direction);
-    }
-    this.render();
-  }
-
   /** Toggles the README overlay for `song` (see {@link SelectReadTextOverlay.toggleReadText}). */
   protected toggleReadText(song: BrowserSongEntry): void {
     this.readText.toggleReadText(song);
-  }
-
-  /**
-   * Mutates `playOptions.hiSpeed` by ±0.1 (clamped to [{@link HISPEED_MIN}, {@link HISPEED_MAX}]) and notifies any
-   * external observer through `onPlayOptionsChange`. Re-renders synchronously so the open panel reflects the new value
-   * (the HS slider knob, the NUMBER readout, and any keyframed UI gated on op 10/11) without waiting for the idle rAF
-   * tick.
-   */
-  protected adjustHiSpeed(direction: 1 | -1): void {
-    const next = clampHiSpeed(this.playOptions.hiSpeed + direction * HISPEED_STEP);
-    if (next === this.playOptions.hiSpeed) return; // already at clamp
-    this.playOptions = { ...this.playOptions, hiSpeed: next };
-    this.options.onPlayOptionsChange?.({ ...this.playOptions });
-    // LR2 system effect — `Sound\lr2\o-change.wav`. Fired on any option-value change inside an open panel (HS up/down,
-    // gauge toggle, random select, etc.).
-    void this.audio.playOneShotSound('option-change');
-    this.render();
-  }
-
-  /**
-   * Generic cycler for enum-style play options. Advances the value at `key` to the next entry in `cycle` (wrapping past
-   * the end), notifies host / fires the option-change cue, and re-renders. Used for `#SRC_BUTTON` types that walk
-   * through a fixed set of states on click (BGA on/off/autoplay-only, gauge type, random, etc.). Generic so adding a
-   * new enum option is a one-liner.
-   */
-  protected cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void {
-    const next = nextChoice(cycle, this.playOptions[key]);
-    if (next === this.playOptions[key]) return;
-    this.playOptions = { ...this.playOptions, [key]: next };
-    this.options.onPlayOptionsChange?.({ ...this.playOptions });
-    void this.audio.playOneShotSound('option-change');
-    this.render();
-  }
-
-  /**
-   * Direct-set helper for play options whose `#SRC_BUTTON` is a "set this exact value" affair (e.g. type 91..96 for the
-   * difficulty filter). Skips the change notification when the value already matches so spam-clicking the same button
-   * doesn't fire phantom `option-change` cues.
-   */
-  protected setPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
-    if (this.playOptions[key] === value) return;
-    this.playOptions = { ...this.playOptions, [key]: value };
-    this.options.onPlayOptionsChange?.({ ...this.playOptions });
-    void this.audio.playOneShotSound('option-change');
-    this.render();
-  }
-
-  /**
-   * Resets `selectedIndex` to 0 after a song-list filter (the difficulty / keymode filter buttons) changed. Whatever
-   * song the user was hovering on a moment ago is unlikely to be at the same numeric index in the new filtered list (or
-   * even still present), so jumping to the top is more predictable than trying to clamp/preserve. Re-arms the chart
-   * preview so the new top song's preview starts after the LR2 focus- settle delay.
-   */
-  protected snapCursorAfterFilterChange(): void {
-    this.selectedIndex = 0;
-    this.refreshChartPreview();
   }
 
   protected render(): void {
@@ -1500,7 +1094,7 @@ export class CoreSongSelectView<
       this.selectedIndex,
       entries.length,
     );
-    const currentFolder = this.browseStack[this.browseStack.length - 1];
+    const currentFolder = this.session.browseStack[this.session.browseStack.length - 1];
     this.beMusicBackHolder.visible = true;
     this.beMusicFrontHolder.visible = true;
     renderer.render({
@@ -1516,7 +1110,7 @@ export class CoreSongSelectView<
       focusedSong: this.focusedSong(),
       focusedCourse: this.focusedCourse(),
       folderLabel: currentFolder?.label,
-      searchQuery: this.searchQuery,
+      searchQuery: this.session.searchQuery,
       searchEditing: this.searchEditing,
       totalCharts: this.collection.songs.length,
       actions: this.beMusicActions,
@@ -1560,82 +1154,16 @@ export class CoreSongSelectView<
     play: (): void => this.launchFocusedSong(false),
     autoPlay: (): void => this.launchFocusedSong(true),
     activateSearch: (): void => this.options.onSearchActivate?.(),
-    setPlayOption: (key, value): void => this.setSkinPlayOption(key, value),
+    setPlayOption: (key, value): void => this.session.setSkinPlayOption(key, value),
     cyclePlayOption: (key, step = 1): void => {
       const next = cyclePlayOptionValue(key, this.playOptions[key], step);
-      if (next !== undefined) this.setSkinPlayOption(key, next);
+      if (next !== undefined) this.session.setSkinPlayOption(key, next);
     },
     toggleReadme: (): void => {
       const song = this.focusedSong();
       if (song) this.toggleReadText(song);
     },
   };
-
-  /**
-   * A be-music skin's play-option change: values outside the option's choices (or range) are dropped (see {@link
-   * resolvePlayOptionValue}), and a list filter / sort change moves the cursor back to the top like the LR2 buttons do.
-   */
-  private setSkinPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
-    const next = resolvePlayOptionValue(key, value);
-    if (next === undefined || this.playOptions[key] === next) return;
-    this.setPlayOption(key, next);
-    if (isListPlayOption(key)) this.snapCursorAfterFilterChange();
-  }
-
-  /**
-   * PLAY / AUTO: starts the focused song, or hands the focused course to the host (which refuses a course with a
-   * missing stage and says why).
-   */
-  protected launchFocusedSong(autoPlay: boolean): void {
-    const course = this.focusedCourse();
-    if (course !== undefined) {
-      if (this.launchAt !== undefined) return;
-      if (autoPlay && this.options.onCourseAutoPlay !== undefined) this.options.onCourseAutoPlay(course);
-      else this.options.onCourseSelected?.(course);
-      return;
-    }
-    const focused = this.focusedSong();
-    if (!focused) return;
-    this.launchSong(focused, autoPlay);
-  }
-
-  /** `performance.now()` of a launch whose be-music outro is still playing, else `undefined`. */
-  protected launchAt: number | undefined;
-  private launchTimer: number | undefined;
-
-  /**
-   * Hands `song` to the host. On the be-music path the skin may first play an outro (`BeMusicSelectRenderer.outroMs`);
-   * input is ignored until it finishes. Themes (LR2) and `effects: 'off'` launch immediately.
-   */
-  protected launchSong(song: BrowserSongEntry, autoPlay = false): void {
-    if (this.launchAt !== undefined) return;
-    const fire = (): void => {
-      if (autoPlay && this.options.onSongAutoPlay) {
-        this.options.onSongAutoPlay(song);
-        return;
-      }
-      this.options.onSongSelected?.(song);
-    };
-    const outroMs =
-      this.themeDesignSize === undefined && (this.options.beMusicEffects ?? 'full') !== 'off'
-        ? (this.beMusicRenderer?.outroMs ?? 0)
-        : 0;
-    if (outroMs <= 0) {
-      fire();
-      return;
-    }
-    this.launchAt = performance.now();
-    this.beMusicNeedsFrame = true;
-    this.render();
-    this.launchTimer = window.setTimeout(() => {
-      this.launchTimer = undefined;
-      this.launchAt = undefined;
-      if (this.disposed) return;
-      fire();
-      // Settle the screen behind the gameplay handoff so a return to select doesn't flash the outro's last frame.
-      this.render();
-    }, outroMs);
-  }
 
   /** Design canvas for the current frame: the active theme's, or the be-music skin's stage. */
   private resolveDesignSize(): SelectDesignSize {
@@ -1662,6 +1190,108 @@ export class CoreSongSelectView<
 
   // The scene's state and operations as theme scenes (the LR2 select) read and call them, kept over the parts that now
   // hold them.
+
+  /** The library (`SelectSession.collection`). */
+  protected get collection(): BrowserSongCollection {
+    return this.session.collection;
+  }
+
+  /** The cursor into {@link currentEntries} (`SelectSession.selectedIndex`). */
+  protected get selectedIndex(): number {
+    return this.session.selectedIndex;
+  }
+
+  protected set selectedIndex(value: number) {
+    this.session.selectedIndex = value;
+  }
+
+  /** The live play options (`SelectSession.playOptions`). */
+  protected get playOptions(): PixiPlayOptions {
+    return this.session.playOptions;
+  }
+
+  /** The LR2 option panels open (`SelectSession.panelStates`). */
+  protected get panelStates(): Set<number> {
+    return this.session.panelStates;
+  }
+
+  /** The search query as typed (`SelectSession.searchText`). */
+  protected get searchText(): string {
+    return this.session.searchText;
+  }
+
+  /** Whether the host's text field is over the search box (`SelectSession.searchEditing`). */
+  protected get searchEditing(): boolean {
+    return this.session.searchEditing;
+  }
+
+  /** When a launch whose be-music outro is still playing started (`SelectSession.launchAt`). */
+  protected get launchAt(): number | undefined {
+    return this.session.launchAt;
+  }
+
+  /** Whether an element gated on `panel` draws (`SelectSession.isPanelOpen`); an arrow, so it can be passed on. */
+  protected readonly isPanelOpen = (panel: number): boolean => this.session.isPanelOpen(panel);
+
+  /** The bars listed (`SelectSession.currentEntries`). */
+  protected currentEntries(): BrowserBrowseEntry[] {
+    return this.session.currentEntries();
+  }
+
+  /** The song under the cursor (`SelectSession.focusedSong`). */
+  protected focusedSong(): BrowserSongEntry | undefined {
+    return this.session.focusedSong();
+  }
+
+  /** The course under the cursor (`SelectSession.focusedCourse`). */
+  protected focusedCourse(): BrowserCourseEntry | undefined {
+    return this.session.focusedCourse();
+  }
+
+  /** Opens a folder bar, starts a song bar or hands a course bar to the host (`SelectSession.activateEntry`). */
+  protected activateEntry(entry: BrowserBrowseEntry): void {
+    this.session.activateEntry(entry);
+  }
+
+  /** Opens `folder` (`SelectSession.enterFolder`). */
+  protected enterFolder(folder: BrowserFolderNode): void {
+    this.session.enterFolder(folder);
+  }
+
+  /** Opens or closes LR2 panel `which` (`SelectSession.togglePanel`). */
+  protected togglePanel(which: number): void {
+    this.session.togglePanel(which);
+  }
+
+  /** Steps the hi-speed (`SelectSession.adjustHiSpeed`). */
+  protected adjustHiSpeed(direction: 1 | -1): void {
+    this.session.adjustHiSpeed(direction);
+  }
+
+  /** Steps an enum play option through `cycle` (`SelectSession.cyclePlayOption`). */
+  protected cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void {
+    this.session.cyclePlayOption(key, cycle);
+  }
+
+  /** Sets a play option (`SelectSession.setPlayOption`). */
+  protected setPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
+    this.session.setPlayOption(key, value);
+  }
+
+  /** Puts the cursor back on the top after a filter change (`SelectSession.snapCursorAfterFilterChange`). */
+  protected snapCursorAfterFilterChange(): void {
+    this.session.snapCursorAfterFilterChange();
+  }
+
+  /** PLAY / AUTO on the bar under the cursor (`SelectSession.launchFocusedSong`). */
+  protected launchFocusedSong(autoPlay: boolean): void {
+    this.session.launchFocusedSong(autoPlay);
+  }
+
+  /** Hands `song` to the host (`SelectSession.launchSong`). */
+  protected launchSong(song: BrowserSongEntry, autoPlay = false): void {
+    this.session.launchSong(song, autoPlay);
+  }
 
   /** Points the chart preview at the bar under the cursor (`SelectAudio.refreshChartPreview`). */
   protected refreshChartPreview(): void {
@@ -1700,47 +1330,9 @@ export class CoreSongSelectView<
   protected disposeTheme(): void {}
 }
 
-/**
- * The browse stack and cursor a saved {@link PixiSongSelectNavigation} restores in `collection`: its folder path matched
- * by label (song folders, then course folders, at the root), the cursor clamped to the deepest list, as the browse model
- * of `@be-music/scene-model` restores it (`restoreBrowse`). `undefined` when none of the saved labels matches.
- */
-export function resolveSelectNavigation(
-  collection: Pick<BrowserSongCollection, 'songs' | 'courseFolders'>,
-  navigation: PixiSongSelectNavigation,
-): { stack: BrowserFolderNode[]; selectedIndex: number } | undefined {
-  const { state, restoredDepth } = restoreBrowse(collection, browseSnapshotFromSelectNavigation(navigation));
-  if (restoredDepth === 0 && navigation.folderPath.length > 0) return undefined;
-  return { stack: [...state.path], selectedIndex: browseCursor(state) };
-}
+// Moved to the select session; re-exported under this module's name.
+export { resolveSelectNavigation } from '../../session/select/select-session.ts';
 
 // The search and cursor rules of the browse model in `@be-music/scene-model`, re-exported under the names this module
 // has always used.
 export { matchesSearchQuery, wrappedCursorDelta };
-
-/**
- * Inputs captured by {@link CoreSongSelectView.currentEntries}' memoization pass. Reference-equal `top` / `songs` is
- * enough because the view never mutates either in place — every library reload / browse-stack change replaces the
- * array, so a stale cache is impossible without one of these fields changing.
- */
-interface CurrentEntriesInputs {
-  top: BrowserFolderNode | undefined;
-  stackLength: number;
-  songs: ReadonlyArray<BrowserSongEntry>;
-  difficulty: PixiDifficultyFilter;
-  keys: PixiKeysFilter;
-  sort: PixiSelectSort;
-  search: string;
-}
-
-function currentEntriesInputsEqual(a: CurrentEntriesInputs, b: CurrentEntriesInputs): boolean {
-  return (
-    a.top === b.top &&
-    a.stackLength === b.stackLength &&
-    a.songs === b.songs &&
-    a.difficulty === b.difficulty &&
-    a.keys === b.keys &&
-    a.sort === b.sort &&
-    a.search === b.search
-  );
-}
