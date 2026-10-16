@@ -6,24 +6,18 @@
  * The session reads and drives the rest of the scene through {@link SelectSessionContext}; the scene passes it.
  */
 
-import {
-  LR2_KEYS_FILTER_OPS,
-  lr2CourseMatchesKeysFilter,
-  resolveLr2KeyModeOp,
-  resolveLr2SelectTimers,
-  type Lr2TimerUpdate,
-} from '@be-music/lr2-skin/state';
+import { resolveLr2SelectTimers, type Lr2TimerUpdate } from '@be-music/lr2-skin/state';
 import { GAUGE_TYPES } from '@be-music/player/ruleset';
 import {
   BGA_CYCLE,
   BGA_SIZE_CYCLE,
   browseCursor,
   browseSnapshotFromSelectNavigation,
-  chartMatchesDifficultyFilter,
   clampHiSpeed,
   clampShutter,
   DEFAULT_PLAY_OPTIONS,
   DIFFICULTY_FILTER_CYCLE,
+  entryMatchesListFilters,
   HIDDEN_SUDDEN_CYCLE,
   HS_FIX_CYCLE,
   isListPlayOption,
@@ -410,18 +404,10 @@ export class SelectSession {
             (folder): BrowserBrowseEntry => ({ kind: 'folder', folder }),
           );
     let filtered = baseEntries;
-    if (this.playOptions.difficultyFilter !== 'ALL') {
-      const filter = this.playOptions.difficultyFilter;
-      filtered = filtered.filter((entry) => entry.kind !== 'song' || chartMatchesDifficultyFilter(entry.song, filter));
-    }
-    if (this.playOptions.keysFilter !== 'ALL') {
-      const targetOp = LR2_KEYS_FILTER_OPS[this.playOptions.keysFilter];
-      // A course bar is listed under its key mode, as LR2 lists courses by their `line`.
-      filtered = filtered.filter((entry) =>
-        entry.kind === 'song'
-          ? resolveLr2KeyModeOp(entry.song) === targetOp
-          : entry.kind !== 'course' || lr2CourseMatchesKeysFilter(entry.course, targetOp),
-      );
+    if (this.playOptions.difficultyFilter !== 'ALL' || this.playOptions.keysFilter !== 'ALL') {
+      // A chart by its difficulty and key mode (a 24-key chart is its own mode), a course by its key mode, as LR2 lists
+      // courses by their `line`; folder bars stay listed.
+      filtered = filtered.filter((entry) => entryMatchesListFilters(entry, this.playOptions));
     }
     if (this.searchQuery.length > 0) {
       filtered = filtered.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
