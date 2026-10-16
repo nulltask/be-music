@@ -148,8 +148,8 @@ export function resolveBeatorajaScoreNumber(id: number, input: BeatorajaScoreNum
   }
 }
 
-/** The 10 % EX-score band ops (230-240), lowest first. */
-const SCORE_BAND_OPS: readonly number[] = [
+/** The 1P gauge range ops (230-240: 0-9 % … 90-99 %, 100 %), lowest first. */
+const GAUGE_RANGE_OPS: readonly number[] = [
   BEATORAJA_OP.P1_BAND_0_9,
   BEATORAJA_OP.P1_BAND_10_19,
   BEATORAJA_OP.P1_BAND_20_29,
@@ -163,15 +163,14 @@ const SCORE_BAND_OPS: readonly number[] = [
   BEATORAJA_OP.P1_BAND_100,
 ];
 
-/** The band op of the EX score's tenth of its maximum (`P1_BAND_0_9` … `P1_BAND_100`). */
-function scoreBandOp(exScore: number, maxExScore: number): number {
-  if (maxExScore <= 0) return BEATORAJA_OP.P1_BAND_0_9;
-  const ratio = exScore / maxExScore;
-  if (ratio >= 1) return BEATORAJA_OP.P1_BAND_100;
-  for (let band = 9; band >= 1; band -= 1) {
-    if (ratio >= band / 10) return SCORE_BAND_OPS[band]!;
-  }
-  return BEATORAJA_OP.P1_BAND_0_9;
+/**
+ * The gauge range op of a gauge: its tenth of the maximum, the full gauge on its own (beatoraja
+ * `BooleanPropertyFactory.GaugeDrawCondition`: `value >= range × 10 % of max && value < (range + 1) × 10 %`; LR2's
+ * "1P gauge 0-9 %" … "100 %").
+ */
+function gaugeRangeOp(gauge: Pick<BeatorajaGaugeInput, 'current' | 'max'>): number {
+  const range = Math.floor(gaugePercent(gauge) / 10);
+  return GAUGE_RANGE_OPS[Math.max(0, Math.min(GAUGE_RANGE_OPS.length - 1, range))]!;
 }
 
 /**
@@ -186,13 +185,14 @@ function nowRankOp(sideRank: number): number {
 }
 
 /**
- * The ops a play's running score lights on a play skin, as of the engine's latest frame: the 1P, generic and "now" rank
- * ops, the EX-score band op (230-240) and `P1_BAND_BORDER_OR_MORE` (1240) from 80 % of the EX score on, the
- * judgment-exists ops (2241-2246), and `GAUGE_NOW_AT_MAX_1P` while the gauge is full.
+ * The ops a play's running score and gauge light on a play skin, as of the engine's latest frame: the 1P, generic and
+ * "now" rank ops of the EX score and its judgment-exists ops (2241-2246); and with a gauge, its range op (230-240),
+ * `P1_BAND_BORDER_OR_MORE` (1240) while the gauge would clear (beatoraja `Gauge.isQualified`: above 0 and at its border
+ * or more), and `GAUGE_NOW_AT_MAX_1P` while it is full.
  */
 export function resolveBeatorajaPlayScoreOps(
   score: BeatorajaScoreInput,
-  gauge: Pick<BeatorajaGaugeInput, 'current' | 'max'> | undefined,
+  gauge: Pick<BeatorajaGaugeInput, 'current' | 'max' | 'clearThreshold'> | undefined,
 ): number[] {
   const maxExScore = score.total * 2;
   const sideRank = computeRankOp(score.exScore, maxExScore, 1);
@@ -200,10 +200,14 @@ export function resolveBeatorajaPlayScoreOps(
     sideRank,
     computeGenericRankOp(score.exScore, maxExScore),
     nowRankOp(sideRank),
-    scoreBandOp(score.exScore, maxExScore),
+    ...computeJudgeExistOps(score),
   ];
-  if (maxExScore > 0 && score.exScore / maxExScore >= 0.8) ops.push(BEATORAJA_OP.P1_BAND_BORDER_OR_MORE);
-  ops.push(...computeJudgeExistOps(score));
-  if (gauge !== undefined && gaugePercent(gauge) >= 100) ops.push(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
+  if (gauge !== undefined && gauge.max > 0) {
+    ops.push(gaugeRangeOp(gauge));
+    if (gauge.current > 0 && gauge.current >= (gauge.clearThreshold ?? 0)) {
+      ops.push(BEATORAJA_OP.P1_BAND_BORDER_OR_MORE);
+    }
+    if (gaugePercent(gauge) >= 100) ops.push(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
+  }
   return ops;
 }

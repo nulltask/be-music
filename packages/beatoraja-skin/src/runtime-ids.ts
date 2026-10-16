@@ -611,10 +611,10 @@ export const BEATORAJA_OP = {
   NOW_E_1P: LR2_OP.UPDATED_RANK_E as typeof LR2_OP.UPDATED_RANK_E,
   NOW_F_1P: LR2_OP.UPDATED_RANK_F as typeof LR2_OP.UPDATED_RANK_F,
 
-  // ─── Score band ops (prop.lua `_1p_0_9 = 230` ... `_1p_100 = 240`, `_1p_border_or_more = 1240`) ──
-  // The active EX-score band. Many score-readout chrome elements gate on these. We set exactly
-  // one based on the EX-score percentage. LR2 defines 230-240 as ten-percent ranges of the 1P gauge
-  // (`LR2_OP.GAUGE_1P_*`, and `_1p_border_or_more` reads as the gauge's clear border).
+  // ─── 1P gauge range ops (prop.lua `_1p_0_9 = 230` ... `_1p_100 = 240`, `_1p_border_or_more = 1240`) ──
+  // The 1P gauge's tenth: exactly one of 230-240 is lit during a play, 240 for a full gauge (beatoraja
+  // `GaugeDrawCondition`, LR2's `LR2_OP.GAUGE_1P_*`). 1240 is lit while the gauge would clear: above 0 and at its
+  // border or more (`Gauge.isQualified`). Skins swap gauge-dependent chrome (a character's mood, a FEVER cue) on them.
   P1_BAND_0_9: LR2_OP.GAUGE_1P_0_9 as typeof LR2_OP.GAUGE_1P_0_9,
   P1_BAND_10_19: LR2_OP.GAUGE_1P_10_19 as typeof LR2_OP.GAUGE_1P_10_19,
   P1_BAND_20_29: LR2_OP.GAUGE_1P_20_29 as typeof LR2_OP.GAUGE_1P_20_29,
