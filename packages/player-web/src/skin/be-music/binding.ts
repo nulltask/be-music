@@ -58,6 +58,11 @@ export type BeMusicStoredSkinSettings = Readonly<Record<string, unknown>>;
 /** How long the decide screen shows when the skin doesn't say (`BeMusicDecideSkin.durationMs`). */
 const DEFAULT_DECIDE_DURATION_MS = 2000;
 
+/** How long `skin`'s decide screen shows before the play starts: its `decide.durationMs`, 2000 ms by default. */
+export function resolveBeMusicDecideDurationMs(skin: BeMusicSkin): number {
+  return Math.max(0, skin.decide?.durationMs ?? DEFAULT_DECIDE_DURATION_MS);
+}
+
 /** Largest canvas edge a surface allocates, whatever the window size. */
 const MAX_CANVAS_EDGE = 4096;
 
@@ -616,7 +621,7 @@ export class BeMusicDecideBinding {
     this.surface = new SkinSurface(skin, options.renderer);
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
-    this.durationMs = Math.max(0, skin.decide?.durationMs ?? DEFAULT_DECIDE_DURATION_MS);
+    this.durationMs = resolveBeMusicDecideDurationMs(skin);
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
   }
 
