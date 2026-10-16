@@ -51,38 +51,38 @@ export interface PlayEndingContext {
  * host callback. Themes with no fade-out / close timing collapse to immediate dispatch (the skinless behaviour).
  */
 export function beginExitSequence(
-  this: PlayEndingContext,
+  ctx: PlayEndingContext,
   callback: () => void,
   options: { fadeAudio?: boolean; minFadeOutMs?: number } = {},
 ): void {
-  if (this.exiting || this.disposed) {
+  if (ctx.exiting || ctx.disposed) {
     callback();
     return;
   }
-  this.exiting = true;
-  const closeMs = this.theme.themeTiming().closeMs;
+  ctx.exiting = true;
+  const closeMs = ctx.theme.themeTiming().closeMs;
   // A failed play fades out even on a theme without a fade-out of its own (`minFadeOutMs`).
-  const fadeOutMs = Math.max(this.theme.themeTiming().fadeOutMs, options.minFadeOutMs ?? 0);
-  this.exitFadeOutMs = fadeOutMs;
+  const fadeOutMs = Math.max(ctx.theme.themeTiming().fadeOutMs, options.minFadeOutMs ?? 0);
+  ctx.exitFadeOutMs = fadeOutMs;
   if (fadeOutMs <= 0 && closeMs <= 0) {
     callback();
     return;
   }
-  const fadeStartedAt = this.playClock();
-  this.exitFadeStartedAt = fadeStartedAt;
-  this.theme.onThemeEvent({ kind: 'exit-fade-out', at: fadeStartedAt });
+  const fadeStartedAt = ctx.playClock();
+  ctx.exitFadeStartedAt = fadeStartedAt;
+  ctx.theme.onThemeEvent({ kind: 'exit-fade-out', at: fadeStartedAt });
   // Drive the audio bus's post-tap fade in lock-step with `applyExitFadeAlpha`'s screen-alpha animation. The fade
   // node sits AFTER the recording tap, so a recording in flight keeps capturing the unattenuated mix; only the
   // speakers go quiet. Skipped when the theme has no fade-out (the screen also stays at full alpha in that path), so
   // a skinless demo gets the historical immediate-cut behavior.
   if (fadeOutMs > 0 && options.fadeAudio !== false) {
-    this.audioBus?.fadeOutAudibleTo(0, fadeOutMs);
+    ctx.audioBus?.fadeOutAudibleTo(0, fadeOutMs);
   }
   const fireClose = (): void => {
-    this.theme.onThemeEvent({ kind: 'exit-close', at: this.playClock() });
-    this.exitCloseHandle = window.setTimeout(() => {
-      this.exitCloseHandle = undefined;
-      if (this.disposed) return;
+    ctx.theme.onThemeEvent({ kind: 'exit-close', at: ctx.playClock() });
+    ctx.exitCloseHandle = window.setTimeout(() => {
+      ctx.exitCloseHandle = undefined;
+      if (ctx.disposed) return;
       callback();
     }, closeMs);
   };
@@ -90,9 +90,9 @@ export function beginExitSequence(
     fireClose();
     return;
   }
-  this.exitFadeOutHandle = window.setTimeout(() => {
-    this.exitFadeOutHandle = undefined;
-    if (this.disposed) return;
+  ctx.exitFadeOutHandle = window.setTimeout(() => {
+    ctx.exitFadeOutHandle = undefined;
+    if (ctx.disposed) return;
     if (closeMs <= 0) {
       callback();
       return;
@@ -102,42 +102,42 @@ export function beginExitSequence(
 }
 
 /** The play as a result snapshot: `CoreGameplayView.getResultData` (see there). */
-export function getResultData(this: PlayEndingContext): PixiGameplayResultData | undefined {
-  if (!this.song) {
+export function getResultData(ctx: PlayEndingContext): PixiGameplayResultData | undefined {
+  if (!ctx.song) {
     return undefined;
   }
   // Append a final "current values @ now" sample so the polyline reaches the right edge of the chart area even when
   // the last judge fired well before the chart's natural end (e.g. AUTO PERFECTs the final note 5 s before the audio
   // tail clears).
-  const totalSeconds = this.resolveSongDurationSeconds();
-  const finalProgress = totalSeconds > 0 ? Math.max(0, Math.min(1, this.currentSeconds() / totalSeconds)) : 1;
-  const gaugeHistory = [...this.gaugeHistory, { progress: finalProgress, value: this.gaugeState.current }];
-  const scoreHistory = [...this.scoreHistory, { progress: finalProgress, exScore: this.score.exScore }];
+  const totalSeconds = ctx.resolveSongDurationSeconds();
+  const finalProgress = totalSeconds > 0 ? Math.max(0, Math.min(1, ctx.currentSeconds() / totalSeconds)) : 1;
+  const gaugeHistory = [...ctx.gaugeHistory, { progress: finalProgress, value: ctx.gaugeState.current }];
+  const scoreHistory = [...ctx.scoreHistory, { progress: finalProgress, exScore: ctx.score.exScore }];
   return {
     // Shallow-clone the score so a downstream consumer mutating their copy doesn't accidentally rewrite our live
     // state.
-    score: { ...this.score },
-    maxCombo: this.maxCombo,
-    gauge: this.gaugeState.current,
+    score: { ...ctx.score },
+    maxCombo: ctx.maxCombo,
+    gauge: ctx.gaugeState.current,
     // The clear rule belongs to the ruleset — a threshold comparison for GROOVE/EASY, "never bottomed out" for
     // the survival gauges — so take the engine's verdict rather than re-deriving it from the percentage.
-    cleared: this.gaugeState.cleared,
-    playSeconds: this.currentSeconds(),
-    song: this.song,
+    cleared: ctx.gaugeState.cleared,
+    playSeconds: ctx.currentSeconds(),
+    song: ctx.song,
     gaugeHistory,
     scoreHistory,
-    ...(this.playlog !== undefined ? { playlog: this.playlog } : {}),
+    ...(ctx.playlog !== undefined ? { playlog: ctx.playlog } : {}),
     lamp: resolveClearLamp({
-      cleared: this.gaugeState.cleared,
-      score: this.score,
-      ...(this.gaugeState.type !== undefined ? { gauge: this.gaugeState.type } : {}),
-      ruleset: this.resolveJudgeRuleset(),
+      cleared: ctx.gaugeState.cleared,
+      score: ctx.score,
+      ...(ctx.gaugeState.type !== undefined ? { gauge: ctx.gaugeState.type } : {}),
+      ruleset: ctx.resolveJudgeRuleset(),
     }),
-    gaugeType: this.gaugeState.type,
-    judgeRuleset: this.resolveJudgeRuleset(),
-    fast: this.fastCount,
-    slow: this.slowCount,
+    gaugeType: ctx.gaugeState.type,
+    judgeRuleset: ctx.resolveJudgeRuleset(),
+    fast: ctx.fastCount,
+    slow: ctx.slowCount,
     // `clear` swaps in a fresh list for the next play, so the result can keep this one.
-    judgeTimings: this.judgeTimings.all,
+    judgeTimings: ctx.judgeTimings.all,
   };
 }

@@ -331,7 +331,7 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   // `resolveChartReferenceBpm` helper prefers `#BASEBPM` over the chart's initial `#BPM` so a chart whose `#BPM` is
   // its peak / average rather than its scroll-feel reference still calibrates at the speed the author intended; falls
   // back to the parsed `metadata.bpm` and finally the song-list BPM hint when neither is present.
-  applyHsFix.call(ctx, resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm), resolveChartMainBpm(resolvedPlay));
+  applyHsFix(ctx, resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm), resolveChartMainBpm(resolvedPlay));
   // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
   // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
   // per PG/GR.

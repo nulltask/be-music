@@ -257,7 +257,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * rect. Pushing nothing hides the BGA for the frame.
    */
   protected collectBgaTargets(out: GameplayBgaTarget[]): void {
-    collectBgaTargets.call(this, out);
+    collectBgaTargets(this, out);
   }
 
   /**
@@ -390,7 +390,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * concurrently and is allowed to land mid-play; the playfield is up by the time `start()` fires regardless.
    */
   public async prepare(host: PixiSceneHost, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
-    build.call(this, host);
+    build(this, host);
     this.song = song;
     this.source = source;
     // Hidden until {@link start} fires, so a scene shown before the play begins draws nothing of it yet.
@@ -428,9 +428,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   public enter(host: PixiSceneHost): void {
     if (this.disposed || this.entered) return;
-    build.call(this, host);
+    build(this, host);
     this.entered = true;
-    attachPlayInput.call(this, host);
+    attachPlayInput(this, host);
     if (this.resumeAnimationOnEnter) this.startAnimationLoop();
   }
 
@@ -443,7 +443,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.entered = false;
     this.resumeAnimationOnEnter = this.tickerAttached;
     this.stopAnimationLoop();
-    detachPlayInput.call(this);
+    detachPlayInput(this);
   }
 
   /**
@@ -503,7 +503,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // Hand chart playback over to `@be-music/player`'s engine. Fires only after the play-start gate (= same instant
       // the legacy self-judge would have started consuming notes), so the engine's chart-time t=0 lines up with the
       // view's `audioContextStartTime` anchor — no double-leadin.
-      launchSharedEngine.call(this);
+      launchSharedEngine(this);
     });
     this.app.canvas.focus();
     this.startAnimationLoop();
@@ -535,7 +535,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   public requestTogglePause(): void {
     if (this.disposed || this.exiting) return;
-    togglePause.call(this);
+    togglePause(this);
   }
 
   /** Whether the play is paused (by Space, {@link requestTogglePause}, or the auto-pause on losing focus). */
@@ -566,8 +566,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
   public requestExit(): void {
-    beginExitSequence.call(this, () => {
-      interruptSharedEngine.call(this, 'escape');
+    beginExitSequence(this, () => {
+      interruptSharedEngine(this, 'escape');
       this.sharedEngineAbortController?.abort();
       this.options.onExit?.();
     });
@@ -743,14 +743,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     this.keyFlashTimeouts.clear();
     log.info('listeners detached');
-    disposeBgaVideos.call(this);
+    disposeBgaVideos(this);
     // Hard-stop any active recording before tearing down the bus. `GameplayRecorder.dispose` calls
     // `MediaRecorder.stop()` synchronously (no chunk-flush wait) and disconnects its audio tap from the bus's output
     // node, so the bus can be disposed cleanly afterwards.
     this.recorder?.dispose();
     this.recorder = undefined;
-    stopSharedEngine.call(this);
-    disposePlayAudio.call(this, options);
+    stopSharedEngine(this);
+    disposePlayAudio(this, options);
     // Detach our subtree from the host's stage. The host owns the `Application` lifetime; we just stop contributing to
     // its scene graph. The root Container itself stays alive in case the host wants to re-enter the same view (we
     // don't, but it's harmless).
@@ -1027,11 +1027,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
   }
 
-  readonly handleVisibilityChange = (): void => handleVisibilityChange.call(this);
+  readonly handleVisibilityChange = (): void => handleVisibilityChange(this);
 
-  readonly handleWindowBlur = (): void => handleWindowBlur.call(this);
+  readonly handleWindowBlur = (): void => handleWindowBlur(this);
 
-  readonly handleWindowFocus = (): void => handleWindowFocus.call(this);
+  readonly handleWindowFocus = (): void => handleWindowFocus(this);
 
   readonly focus = (): void => {
     this.app.canvas.focus();
@@ -1051,7 +1051,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.quitHold.cancel();
   };
 
-  readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => handleSharedEngineExitKey.call(this, event);
+  readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => handleSharedEngineExitKey(this, event);
 
   /**
    * Sets the hi-speed from the host (e.g. a settings menu) while the scene is mounted. `value` is on the scale of
@@ -1079,9 +1079,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     });
   }
 
-  readonly handleTouchPointer = (event: PointerEvent): void => handleTouchPointer.call(this, event);
+  readonly handleTouchPointer = (event: PointerEvent): void => handleTouchPointer(this, event);
 
-  readonly handleTouchPointerUp = (event: PointerEvent): void => handleTouchPointerUp.call(this, event);
+  readonly handleTouchPointerUp = (event: PointerEvent): void => handleTouchPointerUp(this, event);
 
   /**
    * Pause-aware monotonic clock used by every "time since X" animation in the play scene (LR2 timer keyframes,
@@ -1140,8 +1140,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // state-applying callbacks were registered at engine launch; here we simply pull from the buses. The
       // engine itself owns judge / sample / chart-end bookkeeping and runs its own tick loop at
       // TUI_FRAME_INTERVAL_MS independent of this rAF.
-      drainSharedEngineSignals.call(this);
-      updatePlaylogView.call(this, seconds);
+      drainSharedEngineSignals(this);
+      updatePlaylogView(this, seconds);
     }
     this.perf.time('updateFps', () => this.updateFps());
     this.perf.time('updateScores', () => {
@@ -1149,7 +1149,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.updateThemeState();
     });
     this.perf.time('render', () => {
-      render.call(this, seconds);
+      render(this, seconds);
       // A skin drawing through the player's renderer draws the frame just collected now, before Pixi renders.
       this.skinBindingInstance?.flush();
     });
@@ -1232,7 +1232,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * the host can hand it to a result scene that outlives this view.
    */
   public getResultData(): PixiGameplayResultData | undefined {
-    return getResultData.call(this);
+    return getResultData(this);
   }
 
   /**
@@ -1326,7 +1326,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /** The lane covers each play side shows (`resolveLaneCovers` in `play-view-settings.ts`), for the playfield and chrome. */
   resolveLaneCovers(): readonly BeMusicLaneCover[] {
-    return resolveLaneCovers.call(this);
+    return resolveLaneCovers(this);
   }
 
   /** How long a note stays visible below `cover` (`resolveVisibleMs` in `play-view-settings.ts`), for the chrome. */
@@ -1335,7 +1335,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     bpm: number | undefined,
     scrollRate: number,
   ): number | undefined {
-    return resolveVisibleMs.call(this, cover, bpm, scrollRate);
+    return resolveVisibleMs(this, cover, bpm, scrollRate);
   }
   /**
    * Paints the chrome layers (`skinLayer` / `overlayLayer`) for this frame and sets their transforms together with the
@@ -1362,7 +1362,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       if (this.options.skinlessChromeRenderer) {
         this.options.skinlessChromeRenderer(context);
       } else {
-        this.skinBinding?.renderChrome({ ...context, layout: resolveBeMusicLayout.call(this) });
+        this.skinBinding?.renderChrome({ ...context, layout: resolveBeMusicLayout(this) });
       }
     } finally {
       this.skinLayerPool.end();
