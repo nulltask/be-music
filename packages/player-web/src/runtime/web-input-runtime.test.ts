@@ -71,6 +71,14 @@ describe('createWebInputRuntime', () => {
     runtime.stop();
   });
 
+  test('declares that it reports key releases, so the engine judges the play as key-state input from its first key', () => {
+    const runtime = createWebInputRuntime({
+      inputSignals: createPlayerInputSignalBus(),
+      inputTokenToChannels: new Map(),
+    });
+    expect(runtime.reportsKeyReleases).toBe(true);
+  });
+
   test('lane key press pushes a lane-input command followed by a kitty-state press for LN sustain tracking', () => {
     // The runtime emits BOTH commands on a single keydown:
     // - `lane-input` resolves the timing judge for the press itself.

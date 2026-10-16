@@ -38,6 +38,9 @@ export interface WebInputRuntimeOptions {
  * shortcuts (`Escape`, `F5` for restart, `Space` for pause) are routed through `interrupt` / `toggle-pause`
  * commands so the engine sees the same control surface the TUI exposes.
  *
+ * A browser reports every key release (`keyup`), so the runtime declares `reportsKeyReleases`: the engine judges the
+ * play as key-state input from its first key instead of inferring when the first key came up.
+ *
  * Browser-specific concerns kept off the engine side:
  * - `KeyboardEvent.repeat` is filtered (we don't want OS auto-repeat to cause spurious lane judgements).
  * - `Tab` and modifier-only presses are ignored (they would otherwise produce empty token lists that the engine
@@ -129,6 +132,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
   };
 
   return {
+    reportsKeyReleases: true,
     start: (): void => {
       if (attached) return;
       target.addEventListener('keydown', handleKeyDown);

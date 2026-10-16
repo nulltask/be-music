@@ -212,6 +212,39 @@ describe('node input runtime', () => {
     platformSpy.mockRestore();
   });
 
+  test('declares key releases once the terminal negotiated a stateful keyboard protocol in an earlier play', async () => {
+    // A fresh module: whether the protocol was negotiated is remembered for the whole process.
+    vi.resetModules();
+    const fresh = await import('./node-input-runtime.ts');
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    const create = () =>
+      fresh.createNodeInputRuntime({
+        mode: 'manual',
+        inputSignals: createPlayerInputSignalBus(),
+        inputTokenToChannels: new Map([['z', ['11']]]),
+      });
+    const legacyKey = { name: 'z', sequence: 'z', ctrl: false, meta: false, shift: false };
+
+    // Legacy key presses negotiate nothing: the engine keeps detecting.
+    const first = create();
+    expect(first.reportsKeyReleases).toBeUndefined();
+    first.start();
+    process.stdin.emit('keypress', 'z', legacyKey);
+    first.stop();
+    expect(fresh.hasNegotiatedStatefulKeyboardProtocol()).toBe(false);
+
+    // A kitty key event: the play that receives it detects it, and every later play declares it.
+    const second = create();
+    expect(second.reportsKeyReleases).toBeUndefined();
+    second.start();
+    process.stdin.emit('data', Buffer.from('KITTY'));
+    second.stop();
+    expect(second.reportsKeyReleases).toBeUndefined();
+    expect(fresh.hasNegotiatedStatefulKeyboardProtocol()).toBe(true);
+    expect(create().reportsKeyReleases).toBe(true);
+    platformSpy.mockRestore();
+  });
+
   test('manual mode processes win32 protocol data and suppresses immediate legacy keypresses', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000);
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');

@@ -16,18 +16,24 @@ import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 
 /**
  * The manual judge strategy: the deterministic judge core (`judge-core.ts`) fed the play clock's time once per tick and
- * every key the player presses and releases, stamped with the instant it went down (`pressedAt`). Until the input
- * reports a release (`kitty-state`), its presses go through a key-state inference (`play-key-inference.ts`), which
- * infers when each key came up.
+ * every key the player presses and releases, stamped with the instant it went down (`pressedAt`). An input runtime that
+ * declares its releases (`PlayerInputRuntime.reportsKeyReleases`, a browser) is key-state input from its first key.
+ * Otherwise, until the input reports a release (`kitty-state`), its presses go through a key-state inference
+ * (`play-key-inference.ts`), which infers when each key came up.
  */
 
 /**
  * The judge core of a manual play or a replay. `judgeMsPerChartSecond` is the millisecond domain the hold-grace
  * windows run in: live play runs them on the playback clock at the tempo it started at (after a tempo change, on
  * chart time at that tempo, `TempoClock.initialTempoMsAt`, so the domain stays linear in chart time); a replay has no
- * wall clock to honour, so it runs them on chart time and its judgments do not depend on `speed`.
+ * wall clock to honour, so it runs them on chart time and its judgments do not depend on `speed`. `reportsKeyReleases`:
+ * the input declared its key releases, so the core judges key-state input from the start.
  */
-export function createPlayJudgeCore(session: PlaySession, judgeMsPerChartSecond: number): JudgeCoreState {
+export function createPlayJudgeCore(
+  session: PlaySession,
+  judgeMsPerChartSecond: number,
+  reportsKeyReleases = false,
+): JudgeCoreState {
   const { playbackChart, resolvedJson } = session;
   return createJudgeCoreState(
     {
@@ -49,6 +55,7 @@ export function createPlayJudgeCore(session: PlaySession, judgeMsPerChartSecond:
       // already cut there (`collectRealtimeAudioTriggers` / `collectRealtimeAudioVolumeEvents`).
       reversalSeconds: session.resolvedChart.reversal?.seconds,
       endOnFailure: session.endOnFailure,
+      ...(reportsKeyReleases ? { reportsKeyReleases } : {}),
     },
     session.score,
   );
@@ -93,7 +100,10 @@ export function writeManualIntro(session: PlaySession): void {
 function createManualJudge(session: PlaySession): PlayJudge {
   const { tempoClock, uiEnabled, writeOutput, tracer, applyJudgeEffect } = session;
   const { inputTokenToChannels } = session.playbackChart;
-  const judgeCore = createPlayJudgeCore(session, 1000 / tempoClock.initialTempo);
+  // Input that reports its key releases: declared by the input runtime before the play, or else detected from the first
+  // `kitty-state` command. Until then when each key came up is inferred.
+  const declaresReleases = session.inputRuntime?.reportsKeyReleases === true;
+  const judgeCore = createPlayJudgeCore(session, 1000 / tempoClock.initialTempo, declaresReleases);
   const step = (input: JudgeCoreInput): void => {
     runJudgeCoreStep(judgeCore, input, applyJudgeEffect);
   };
@@ -113,8 +123,7 @@ function createManualJudge(session: PlaySession): PlayJudge {
       ['tokens', tokens.join(',')],
     ]);
   };
-  // Input without key releases: when each key came up is inferred, until the input reports a release itself.
-  let inputReportsReleases = false;
+  let inputReportsReleases = declaresReleases;
   const keyState = createKeyStateInference(
     judgeCore,
     step,
