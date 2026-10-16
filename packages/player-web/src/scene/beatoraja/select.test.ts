@@ -310,4 +310,17 @@ describe('PixiBeatorajaSelectScene list', () => {
     expect(shown()).toEqual(['Beta', 'Zeta', 'Dan']);
     scene.dispose();
   });
+
+  it('orders titles case-insensitively, keeping the library order of titles that differ only in case', () => {
+    const { scene, internals, shown } = sceneOf([
+      { ...makeChart('upper', 'Pack'), title: 'Beta' },
+      { ...makeChart('lower', 'Pack'), title: 'beta' },
+      { ...makeChart('first', 'Pack'), title: 'alpha' },
+    ]);
+    internals.activateCurrentEntry();
+    // SORT steps DEFAULT → TITLE.
+    internals.handleButtonAction(12);
+    expect(shown()).toEqual(['alpha', 'Beta', 'beta']);
+    scene.dispose();
+  });
 });

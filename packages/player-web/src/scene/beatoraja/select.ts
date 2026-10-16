@@ -1417,25 +1417,28 @@ function isSameEntry(a: BrowserBrowseEntry, b: BrowserBrowseEntry): boolean {
   return false;
 }
 
+/** Case-insensitive text order in the runtime's locale, as one collator (the browse model's text order). */
+const TEXT_COLLATOR = new Intl.Collator(undefined, { sensitivity: 'base' });
+
 /**
  * Sort a song list by the given mode index. Mode `0` (DEFAULT) is the caller's responsibility
  * — they pass the original collection in unchanged. The other modes are documented next to the
  * `sortMode` field on the scene class.
  *
- * Returns a NEW array; never mutates the input. Sort is `localeCompare`-based for strings (so
- * Japanese alphabetisation works) and numeric for level / BPM / notes.
+ * Returns a NEW array; never mutates the input. Texts sort case-insensitively in the runtime's locale order, as the
+ * browse model sorts them (`TEXT_COLLATOR`); level / BPM / notes sort numerically.
  */
 function sortSongsByMode(songs: ReadonlyArray<BrowserSongEntry>, mode: number): ReadonlyArray<BrowserSongEntry> {
   const out = [...songs];
   switch (mode) {
     case 1: // TITLE
-      out.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '', 'ja'));
+      out.sort((a, b) => TEXT_COLLATOR.compare(a.title ?? '', b.title ?? ''));
       break;
     case 2: // ARTIST
-      out.sort((a, b) => (a.artist ?? '').localeCompare(b.artist ?? '', 'ja'));
+      out.sort((a, b) => TEXT_COLLATOR.compare(a.artist ?? '', b.artist ?? ''));
       break;
     case 3: // GENRE
-      out.sort((a, b) => (a.genre ?? '').localeCompare(b.genre ?? '', 'ja'));
+      out.sort((a, b) => TEXT_COLLATOR.compare(a.genre ?? '', b.genre ?? ''));
       break;
     case 4: // PLAYLEVEL
       out.sort((a, b) => sortableNumber(a.playLevel) - sortableNumber(b.playLevel));
