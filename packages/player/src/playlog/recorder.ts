@@ -131,11 +131,13 @@ export interface PlaylogRecorderFinalizeInput {
 }
 
 export interface PlaylogRecorder {
+  /** Records a press or release; `inferred` marks a release the engine inferred from input without releases. */
   recordInput(
     action: PlaylogInputAction,
     timeSeconds: number,
     tokens: readonly string[],
     channels: Iterable<string>,
+    inferred?: boolean,
   ): void;
   /** Counts an LR2-style empty POOR — cached into the native result for diagnostics. */
   recordEmptyPoor(): void;
@@ -156,7 +158,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
   let currentTempo = options.play.tempo ?? 1;
 
   return {
-    recordInput: (action, timeSeconds, tokens, channels): void => {
+    recordInput: (action, timeSeconds, tokens, channels, inferred): void => {
       const channelList = [...channels];
       if (channelList.length === 0) {
         return;
@@ -169,6 +171,9 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
       };
       if (tokens.length > 0) {
         event.tokens = [...tokens];
+      }
+      if (inferred === true && action === 'up') {
+        event.inferred = true;
       }
       inputs.push(event);
     },

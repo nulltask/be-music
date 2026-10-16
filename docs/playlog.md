@@ -33,7 +33,10 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    sweeps misses past R, and ends a run that leaves scorable notes unjudged with the gauge at 0, exactly as the
    engine did (see [`bms-spec.md`](./bms-spec.md) "Negative BPM").
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
-   `{ seq, timeUs, action: 'down' | 'up', channels }`. Inputs are never converted into judgments, never assigned
+   `{ seq, timeUs, action: 'down' | 'up', channels }`, with the key `tokens` when the host named them and
+   `inferred: true` on an `up` the engine inferred because the input reported no releases (a terminal without the
+   kitty keyboard protocol): the instant it took the key as let go. `inferred` is diagnostic only; replays and
+   simulators read such an `up` like any other. Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the

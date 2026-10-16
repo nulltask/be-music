@@ -85,6 +85,12 @@ export interface PlaylogInputEvent {
   channels: string[];
   /** Raw input tokens (`'z'`, `'shift-left'`, ...) — diagnostic only; simulators use `channels`. */
   tokens?: string[];
+  /**
+   * An `up` the engine inferred: the input reported no key releases (a terminal without the kitty keyboard protocol),
+   * so this is the instant the engine took the key as let go — when its repeats stopped for longer than the hold
+   * grace. Diagnostic only: replays and simulators read it as any release.
+   */
+  inferred?: true;
 }
 
 export interface PlaylogJudgeRank {
@@ -528,6 +534,12 @@ function parseInputs(value: unknown): PlaylogInputEvent[] {
         throw new PlaylogParseError(`inputs[${index}].tokens: expected string[]`);
       }
       event.tokens = record.tokens as string[];
+    }
+    if (record.inferred !== undefined) {
+      if (record.inferred !== true || action !== 'up') {
+        throw new PlaylogParseError(`inputs[${index}].inferred: expected true on an 'up'`);
+      }
+      event.inferred = true;
     }
     return event;
   });
