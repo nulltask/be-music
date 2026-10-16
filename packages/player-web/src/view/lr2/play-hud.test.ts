@@ -1,9 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import {
-  LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT,
-  LR2_GROOVE_GAUGE_UNITS,
-  resolveGrooveGaugeBeads,
-} from './gameplay-hud.ts';
+import { LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT, LR2_GROOVE_GAUGE_UNITS, resolveGrooveGaugeBeads } from './play-hud.ts';
 
 // Cell offsets within the LR2 4-cell frame (order: 表赤/表緑/裏赤/裏緑).
 const LIT_RED = 0;
