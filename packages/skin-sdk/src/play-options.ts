@@ -1,3 +1,5 @@
+import type { GaugeType } from '@be-music/player/ruleset';
+
 /**
  * Per-session gameplay tweaks the player picks on the select screen: hi-speed, autoplay, note arrangement, gauge type,
  * HIDDEN / SUDDEN and the lane cover, BGA display, and the song-list filters. The host owns the live values and hands
@@ -146,8 +148,8 @@ export type BeMusicHiddenSudden = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 /** Allowed values for {@link BeMusicPlayOptions.random1P} / `random2P`. */
 export type BeMusicRandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
 
-/** Allowed values for {@link BeMusicPlayOptions.gauge1P} / `gauge2P`. */
-export type BeMusicGaugeType = 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
+/** Allowed values for {@link BeMusicPlayOptions.gauge1P} / `gauge2P`: the gauge type of `@be-music/player/ruleset`. */
+export type BeMusicGaugeType = GaugeType;
 
 /** Allowed values for {@link BeMusicPlayOptions.bga}. */
 export type BeMusicBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
