@@ -26,6 +26,7 @@ import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
   BEATORAJA_TEXT,
+  beatorajaGaugeModeFromString,
   buildBaseOpSet,
   computeGenericRankOp,
   computeJudgeExistOps,
@@ -293,6 +294,9 @@ export class PixiBeatorajaResultScene implements PixiScene {
       // `BeatorajaRuntimeAdapter.getTimerStart` which already returns `undefined` for unfired
       // timers.
       getTimerStart: (timerId) => this.timerStartedAt.get(timerId),
+      // The gauge the play ended on, so `main_state.gauge_type()` and the gauge slab name it (a course's class gauge
+      // included) instead of defaulting to NORMAL.
+      resolveGaugeState: () => resolveResultGaugeState(this.options.summary.gauge),
       nowMs: elapsed,
       audioPlay:
         this.options.skinAudio === undefined ? undefined : (path, vol) => this.options.skinAudio!.play(path, vol),
@@ -751,5 +755,21 @@ export class PixiBeatorajaResultScene implements PixiScene {
         this.transitionToContinue?.begin();
         break;
     }
+  };
+}
+
+/**
+ * The final gauge of a result as beatoraja's gauge state (`main_state.gauge_type()` reads its `mode`), or `undefined`
+ * without a gauge.
+ */
+export function resolveResultGaugeState(
+  gauge: Pick<NonNullable<PlayerSummary['gauge']>, 'type' | 'current' | 'max' | 'clearThreshold'> | undefined,
+): { value: number; max: number; border: number; mode: number } | undefined {
+  if (gauge === undefined || gauge.max <= 0) return undefined;
+  return {
+    value: gauge.current,
+    max: gauge.max,
+    border: gauge.clearThreshold,
+    mode: beatorajaGaugeModeFromString(gauge.type),
   };
 }
