@@ -1,26 +1,11 @@
 import { gzipSync } from 'node:zlib';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
-import { computeChartFingerprint, resolveChart } from '@be-music/chart';
+import { resolveChart } from '@be-music/chart';
 import { parseBms } from '@be-music/parser';
 import { manualPlay } from '@be-music/player';
-import {
-  applyCourseLongNoteConstraint,
-  normalizeCourseConstraints,
-  stitchNonstopCourse,
-} from '@be-music/player/course';
-import {
-  createCoursePlaylog,
-  resolveChartRulesetFacts,
-  resolveNonstopNoteStages,
-  resolveNonstopPlaylogStages,
-  resolvePlayChart,
-  splitNonstopPlaylog,
-  type BeMusicCoursePlaylog,
-  type BeMusicPlaylog,
-  type PlaylogCourseStageEntry,
-  type PlaylogInputEvent,
-} from '@be-music/player/playlog';
+import { buildNonstopCoursePlaylog, normalizeCourseConstraints, prepareNonstopCourse } from '@be-music/player/course';
+import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogInputEvent } from '@be-music/player/playlog';
 import { ORIGIN, signInAnonymously, startTestBindings } from '../test/support.ts';
 import { createApp } from './app.ts';
 import { openDatabase } from './db/client.ts';
@@ -89,18 +74,18 @@ function presses(chart: Parameters<typeof resolveChart>[0], untilUs = Number.POS
 }
 
 /**
- * A NONSTOP run of {@link SOURCES} as the web client records it: each stage resolved (`#RANDOM` drawn) with the
- * course's long-note constraint applied, stitched, played as one chart, and cut into its stages. `untilUs` gives up
- * (ESC) there.
+ * A NONSTOP run of {@link SOURCES} as the web client records it, on the shared NONSTOP pipeline: each stage resolved
+ * (`#RANDOM` drawn) with the course's long-note constraint applied, stitched, played as one chart, and cut into its
+ * stages. `untilUs` gives up (ESC) there.
  */
 async function nonstopRun(untilUs?: number): Promise<BeMusicCoursePlaylog> {
-  const resolved = SOURCES.map((source) => resolvePlayChart(source, { random: () => 0 }));
   const constraints = normalizeCourseConstraints(COURSE.constraints);
-  const stitched = stitchNonstopCourse(
-    resolved.map(({ chart }) => ({ chart: applyCourseLongNoteConstraint(chart, constraints) })),
-    { connections: ['cut'], placement: 'intended', title: COURSE.name },
+  const prepared = prepareNonstopCourse(
+    SOURCES.map((chart) => ({ chart })),
+    { constraints, connections: ['cut'], placement: 'intended', title: COURSE.name, random: () => 0 },
   );
-  if (!stitched.ok) throw new Error(`stitch failed: ${stitched.reason}`);
+  if (!prepared.ok) throw new Error(`stitch failed: ${prepared.reason}`);
+  const stitched = prepared.course;
   let recorded: BeMusicPlaylog | undefined;
   await manualPlay(stitched.chart, {
     speed: 16,
@@ -119,27 +104,7 @@ async function nonstopRun(untilUs?: number): Promise<BeMusicCoursePlaylog> {
     playlog.play.aborted = true;
     playlog.play.abortedAtUs = untilUs;
   }
-  const chartFingerprints = SOURCES.map((source) => computeChartFingerprint(source, { chartPath: undefined }));
-  const noteStages = resolveNonstopNoteStages(stitched.chart, stitched.map, playlog.chart.notes);
-  const stages = resolveNonstopPlaylogStages(
-    stitched.map,
-    resolved.map(({ randomDraws }) => randomDraws),
-  );
-  const cut = splitNonstopPlaylog(
-    { playlog, stages, noteStages },
-    chartFingerprints.map((chartFingerprint) => ({ chartFingerprint })),
-    { ruleset: 'lr2' },
-  );
-  const entries = SOURCES.map((source, index): PlaylogCourseStageEntry => {
-    const stageLog = cut[index];
-    if (stageLog !== undefined) return { played: true, playlog: stageLog };
-    return { played: false, facts: resolveChartRulesetFacts(source), chartFingerprint: chartFingerprints[index]! };
-  });
-  return createCoursePlaylog({
-    course: COURSE,
-    stages: entries,
-    nonstop: { connections: ['cut'], placement: 'intended', playlog, stages, noteStages },
-  });
+  return buildNonstopCoursePlaylog({ ...COURSE, constraints, release: true }, stitched, playlog);
 }
 
 function submit(cookie: string, log: BeMusicCoursePlaylog, charts: readonly unknown[] = SOURCES): Promise<Response> {

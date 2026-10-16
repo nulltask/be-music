@@ -1,11 +1,13 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
-import type { BeMusicCoursePlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
+import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  activeCourseInfo,
   courseDecideSong,
   courseRecordPlay,
+  courseStageHistories,
   describeNonstopPrepareFailure,
   describeRandomCourseDrawFailure,
   describeUnplayableCourse,
@@ -14,6 +16,8 @@ import {
   resolveGameplayExit,
   resolveGameplayRestart,
   resolveResultRetry,
+  nextCourseStagePlay,
+  startCourseRun,
 } from './course-flow.ts';
 
 function song(id: string): BrowserSongEntry {
@@ -171,5 +175,65 @@ describe('resolveResultRetry', () => {
 
   test('a course stage or course result offers no retry', () => {
     expect(resolveResultRetry({ quickRetry: false, songId: 'a', lastPlay })).toBeUndefined();
+  });
+});
+
+describe('a running course', () => {
+  const three = (): BrowserCourseEntry => {
+    const definition = parseBeatorajaCourseData({
+      name: 'Dan',
+      hash: ['1', '2', '3'].map((digit) => ({ md5: digit.repeat(32) })),
+      constraint: ['HCN'],
+    })!;
+    return {
+      id: 'dan#0',
+      definition,
+      stages: ['a', 'b', 'c'].map((id) => ({ title: id, song: song(id) })),
+      playable: true,
+    };
+  };
+  const stageLog = (): BeMusicPlaylog =>
+    ({
+      results: {
+        native: {
+          ruleset: 'be-music/native',
+          judge: { pgreat: 10, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
+          fast: 0,
+          slow: 0,
+          exScore: 20,
+          noteCount: 10,
+          maxCombo: 10,
+          gauge: { type: 'GRADE', final: 90, cleared: true },
+        },
+      },
+    }) as unknown as BeMusicPlaylog;
+
+  test('plays the course bar’s songs, each stage named for the skins', () => {
+    const active = startCourseRun(three());
+    const first = nextCourseStagePlay(active)!;
+    expect(first.stage.id).toBe('a');
+    expect(first.stage.chart.sourceFormat === 'bms' && first.stage.chart.bms.lnMode).toBe(3);
+    expect(first.courseInfo).toMatchObject({ kind: 'expert', title: 'Dan', stageIndex: 0 });
+    expect(activeCourseInfo(active).stageIndex).toBeUndefined();
+    active.run.recordStage(stageLog());
+    expect(activeCourseInfo(active)).toMatchObject({
+      stageIndex: 0,
+      stages: [{ title: 'a' }, { title: 'b' }, { title: 'c' }],
+    });
+    expect(nextCourseStagePlay(active)!.courseInfo.stageIndex).toBe(1);
+  });
+
+  test('refuses a course with a stage missing from the collection', () => {
+    const missing = three();
+    missing.stages = [missing.stages[0]!, { title: 'gone' }, missing.stages[2]!];
+    expect(() => startCourseRun({ ...missing, playable: false })).toThrow('has no chart for stage 2');
+  });
+
+  test('keeps each played stage’s graphs, a stage given up with none', () => {
+    const active = startCourseRun(three());
+    const history = { gaugeHistory: [{ progress: 1, value: 80 }], scoreHistory: [{ progress: 1, exScore: 20 }] };
+    active.run.recordStage(stageLog(), history);
+    active.run.giveUp(stageLog());
+    expect(courseStageHistories(active)).toEqual([history, { gaugeHistory: [], scoreHistory: [] }]);
   });
 });

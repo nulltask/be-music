@@ -255,6 +255,60 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseApi.applyCourseLongNoteConstraint(benchNonstopChart, ['cn']);
     },
   });
+  define('player.course.resolveCourseStageSettings', {
+    run: () => {
+      courseApi.resolveCourseStageSettings(benchCourse);
+    },
+  });
+  define('player.course.resolveCourseLaneOptions', {
+    run: () => {
+      courseApi.resolveCourseLaneOptions(benchCourse.constraints, {
+        random1P: 'RANDOM',
+        random2P: 'MIRROR',
+        dpFlip: true,
+      });
+      courseApi.resolveCourseLaneOptions(['grade_mirror'], { random1P: 'MIRROR', random2P: 'OFF', dpFlip: false });
+    },
+  });
+  const benchLr2GradeDefinition = courseApi.parseLr2CourseFile(benchLr2Course)[0]!;
+  define('player.course.isLr2GradeCourse', {
+    run: () => {
+      courseApi.isLr2GradeCourse(benchLr2GradeDefinition);
+    },
+  });
+  define('player.course.resolveLr2GradeCoursePlaySettings', {
+    run: () => {
+      courseApi.resolveLr2GradeCoursePlaySettings(benchLr2GradeDefinition, {
+        gauge: 'EASY',
+        hiddenSudden1P: 'SUDDEN',
+        hiddenSudden2P: 'OFF',
+        autoScratch1P: true,
+        autoScratch2P: false,
+        dpFlip: true,
+        tempo: 1.1,
+      });
+    },
+  });
+  define('player.course.resolveCourseStagePlaySettings', {
+    run: () => {
+      courseApi.resolveCourseStagePlaySettings(benchLr2GradeDefinition, {
+        random1P: 'RANDOM',
+        random2P: 'OFF',
+        dpFlip: true,
+        gauge: 'EASY',
+        hiddenSudden1P: 'SUDDEN',
+        hiddenSudden2P: 'OFF',
+        autoScratch1P: true,
+        autoScratch2P: false,
+        tempo: 1.1,
+      });
+    },
+  });
+  define('player.course.isCourseHiSpeedLocked', {
+    run: () => {
+      courseApi.isCourseHiSpeedLocked(['no_speed', 'gauge_lr2']);
+    },
+  });
   const benchStitched = courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
   const benchStitchedMap = benchStitched.ok ? benchStitched.map : { stages: [], tempo: [], stageRanks: [] };
   const benchReadoutPlacements = courseApi.planNonstopCourse(benchNonstopStages.slice(0, 3), ['fade', 'cut-fit']);
@@ -307,6 +361,33 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         { playlog: BENCH_PLAYLOG, stages: benchSplitStages, noteStages: benchSplitNoteStages },
         [{ title: 'A' }, { title: 'B' }],
         { ruleset: 'lr2' },
+      );
+    },
+  });
+  const benchPipelineStages = benchNonstopInputs.map((input, index) => ({
+    chart: input.chart,
+    chartPath: `stage${index}.bms`,
+    facts: { title: `Stage ${index + 1}` },
+  }));
+  const benchPipelineOptions = { constraints: ['cn' as const], connections: ['fade' as const, 'cut-fit' as const] };
+  define('player.course.prepareNonstopCourse', {
+    run: () => {
+      courseApi.prepareNonstopCourse(benchPipelineStages, { ...benchPipelineOptions, random: () => 0 });
+    },
+  });
+  const benchPrepared = courseApi.prepareNonstopCourse(benchPipelineStages, benchPipelineOptions);
+  if (!benchPrepared.ok) throw new Error(`bench NONSTOP course failed to stitch: ${benchPrepared.reason}`);
+  define('player.course.resolveNonstopRun', {
+    run: () => {
+      courseApi.resolveNonstopRun(benchPrepared.course, BENCH_PLAYLOG);
+    },
+  });
+  define('player.course.buildNonstopCoursePlaylog', {
+    run: () => {
+      courseApi.buildNonstopCoursePlaylog(
+        { name: 'Nonstop', kind: 'nonstop', constraints: ['cn'], trophies: [], release: true },
+        benchPrepared.course,
+        BENCH_PLAYLOG,
       );
     },
   });
@@ -530,6 +611,26 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   });
   const benchCourseText = playlogApi.serializeCoursePlaylog(benchCourseLog);
   const benchStageResult = playlogApi.simulatePlaylog(BENCH_PLAYLOG, { ruleset: 'lr2' });
+  const benchRunStageLog: BeMusicPlaylog = { ...BENCH_PLAYLOG, results: { native: benchStageResult } };
+  const benchRunStages = [
+    { chart: benchNonstopChart, chartPath: 'a.bms' },
+    { chart: benchNonstopChart, chartPath: 'b.bms' },
+  ];
+  define('player.course.CourseRun', {
+    run: () => {
+      const run = new courseApi.CourseRun(benchCourse, benchRunStages);
+      run.nextStage();
+      run.recordStage(benchRunStageLog, { playSeconds: 16 });
+      run.nextStage();
+      run.buildPlaylog();
+    },
+  });
+  define('player.course.resolveGivenUpPlaySeconds', {
+    run: () => {
+      courseApi.resolveGivenUpPlaySeconds(BENCH_PLAYLOG);
+      courseApi.resolveGivenUpPlaySeconds({ play: { ...BENCH_PLAYLOG.play, aborted: true, abortedAtUs: 4_000_000 } });
+    },
+  });
   define('player.playlog.aggregateCourseResult', {
     run: () => {
       playlogApi.aggregateCourseResult(
