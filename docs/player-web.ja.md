@@ -434,6 +434,20 @@ stateDiagram-v2
 
 Web のデモは、標準のリザルトをすべてこの画面で表示します。単曲のプレイ、コースのステージ、コース全体、NONSTOP（beatoraja のテーマでは標準の画面にフォールバックし、そのテーマのジングルを鳴らします）です。
 
+### プレイのシーンの部品の置き場所
+
+プレイのセッションが独り立ちするまでは、`CoreGameplayView` が組み込みと LR2 のプレイのシーンのままです。ただし、その部品は新しいツリーに置いてあります。各モジュールはシーンを明示的なコンテキスト（`ctx`）として受け取り、自分のインターフェースを通してその状態を読み書きします。シーンは自分自身を渡します。状態は `CoreGameplayState`（`scene/core/gameplay-state.ts`）にあり、シーンはこれを継承します。LR2 のファミリーが上書きするテーマのフックは `protected` のままで、モジュールはシーンの `theme` オブジェクト（`GameplayThemeHooks`）を通してそれらを呼びます。
+
+- `session/play/`：
+  - `play-chart.ts`：`prepareSong`、レーンオプション（RANDOM、MIRROR、S-RANDOM、SCATTER、DP FLIP）、リプレイの配置
+  - `play-media.ts`：オーディオグラフ、サンプル、BGA のテクスチャと、それらの後片付け
+  - `play-engine.ts`：共通エンジンの起動、その UI シグナル、判定とレーンの演出、エンディングの開始
+  - `play-input.ts`：ESC、F5、Space、矢印キー、長押しでの終了、自動一時停止、タッチのレーン。`PLAY_SCENE_KEY_CODES` は、エンジンの Web 入力ランタイムが読み飛ばすキーの一覧です
+  - `play-view-settings.ts`：ハイスピードと HS-FIX、エンジンが従うテンポ、レーンカバー、プレイログの見え方
+  - `play-ending.ts`：退出のタイムラインと、結果のスナップショット
+- `view/shared/`：`playfield/*`（レーン、ノート、ロングノート、地雷、小節線、ボム、カバー、テキスト）、`bga-renderer.ts`、`play-frame.ts`（レイヤーの木、画面への合わせ込み、フェード）
+- `view/built-in/play-chrome.ts`：組み込みのレーンの配置、BGA の矩形、be-music のレイアウトと、スキンなしのクロームのランタイム
+
 ## ノートの表示範囲
 
 描画は判定 ruleset に含まれないため、ruleset は描画に関わりません。gameplay view は、どのノート・地雷・小節線をどこに描くかを 2 つの規則のどちらかで決めます（[`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)）。
