@@ -8,8 +8,8 @@ import {
   synesthesiaSkin,
   createDecideScene,
   createPlayScene,
-  DefaultPixiSongSelectView,
   createResultScene,
+  createSelectScene,
   PixiBeatorajaGameplayView,
   PixiBeatorajaSelectScene,
   PixiSceneHost,
@@ -28,6 +28,8 @@ import {
   type ResultScene,
   type ResultSceneKit,
   type PixiScene,
+  type SelectScene,
+  type SelectStartEntry,
   resolveSceneCourseInfo,
   type SceneCourseInfo,
 } from '@be-music/player-web/scenes';
@@ -41,6 +43,7 @@ import {
   systemSoundSetFromBeatoraja,
   type BrowseSnapshot,
   type PlayRunKind,
+  type SystemSoundSet,
 } from '@be-music/scene-model';
 import {
   BeatorajaSkinAudioPlayer,
@@ -619,7 +622,11 @@ class PlayerWebDemoApp {
     optionClose?: Uint8Array;
     optionChange?: Uint8Array;
   } = {};
-  private selectView: PixiSongSelectView | DefaultPixiSongSelectView | undefined;
+  /**
+   * The select screen: the LR2 family's `PixiSongSelectView`, or the built-in family's `createSelectScene`. Both take the
+   * select scene's host API (`SelectScene`): `snapshot`, `restore`, `setLibrary`, `setSounds`, `setPlayOptions`, …
+   */
+  private selectView: PixiSongSelectView | SelectScene | undefined;
   /** The built-in or LR2 play on the stage (`createPlayScene`). */
   private gameplayView: PlayScene | undefined;
   /**
@@ -668,10 +675,10 @@ class PlayerWebDemoApp {
     input: document.querySelector<HTMLInputElement>('#search')!,
     shell: document.querySelector<HTMLElement>('.shell')!,
     canvas: () => this.sceneHost?.app.canvas,
-    fieldRect: () => (this.beatorajaSelectScene === undefined ? this.selectView?.getSearchFieldRect() : undefined),
+    fieldRect: () => (this.beatorajaSelectScene === undefined ? this.selectView?.searchFieldRect() : undefined),
     setQuery: (query) => {
       if (this.beatorajaSelectScene !== undefined) this.beatorajaSelectScene.setSearchQuery(query);
-      else this.selectView?.setSearchQuery(query);
+      else this.selectView?.setSearch(query);
     },
     setEditing: (editing) => this.selectView?.setSearchEditing(editing),
     touch: () => document.documentElement.classList.contains('touch-first'),
@@ -1959,9 +1966,9 @@ class PlayerWebDemoApp {
           : current === this.selectView
             ? this.selectView
             : undefined;
-    const entry = select?.getFocusedEntry();
+    const entry = select instanceof PixiBeatorajaSelectScene ? select.getFocusedEntry() : select?.focused();
     // The built-in and LR2 select screens' browse position: their folders, sort, filters and search.
-    const navigation = select instanceof PixiBeatorajaSelectScene ? undefined : select?.getNavigation();
+    const navigation = select instanceof PixiBeatorajaSelectScene ? undefined : select?.snapshot();
     const play = scene.kind === 'play' ? this.lastPlay : undefined;
     // The engine's frame on the beatoraja scene; the play's running result on the LR2 / built-in ones.
     const frame = this.beatorajaGameplayView?.getFrame();
@@ -2440,7 +2447,7 @@ class PlayerWebDemoApp {
     this.courseMakerPanel?.update();
     if (change === 'draft') {
       // Same collection: the select view only redraws (an LR2 skin's course-maker ops and texts).
-      this.selectView?.setCollection(this.collection);
+      this.selectView?.setLibrary(this.collection);
       return;
     }
     try {
@@ -2453,7 +2460,7 @@ class PlayerWebDemoApp {
       dropLog.warn('course save failed', error);
     }
     if (change === 'courses') await this.refreshMadeCourses();
-    else this.selectView?.setCollection(this.collection);
+    else this.selectView?.setLibrary(this.collection);
   }
 
   /** Relists the course folders after the player's own courses changed, keeping the select screen where it was. */
@@ -2465,9 +2472,9 @@ class PlayerWebDemoApp {
     }
     const view = this.selectView;
     if (view === undefined) return;
-    const navigation = view.getNavigation();
-    view.setCollection(this.collection);
-    view.setNavigation(navigation);
+    const navigation = view.snapshot();
+    view.setLibrary(this.collection);
+    view.restore(navigation);
   }
 
   /**
@@ -2516,7 +2523,7 @@ class PlayerWebDemoApp {
       this.setStatus(describeUnplayableCourse(entry));
       return;
     }
-    this.courseReturnNavigation = this.selectView?.getNavigation() ?? this.lastSelectNavigation;
+    this.courseReturnNavigation = this.selectView?.snapshot() ?? this.lastSelectNavigation;
     let course = entry;
     if (plan.action === 'draw') {
       const candidates = await Promise.all(
@@ -2789,7 +2796,7 @@ class PlayerWebDemoApp {
       void this.showSelect();
       return;
     }
-    this.selectView?.setCollection(this.collection);
+    this.selectView?.setLibrary(this.collection);
   }
 
   /** Records the running play's result under its chart, when the play counts ({@link playRecordKey}). */
@@ -2994,7 +3001,7 @@ class PlayerWebDemoApp {
     const theme = this.availableLr2Themes.find((entry) => entry.name === name);
     if (theme === undefined) return;
     if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
-      this.lastSelectNavigation = this.selectView.getNavigation();
+      this.lastSelectNavigation = this.selectView.snapshot();
     }
     this.disposeScene(this.selectView);
     this.selectView = undefined;
@@ -3338,7 +3345,8 @@ class PlayerWebDemoApp {
   /** Hands the active be-music skin's settings to the scenes on screen, which draw with them from their next frame. */
   private applyBeMusicSkinSettings(): void {
     const settings = this.beMusicSkinSettings;
-    this.selectView?.setBeMusicSkinSettings(settings);
+    if (this.selectView instanceof PixiSongSelectView) this.selectView.setBeMusicSkinSettings(settings);
+    else this.selectView?.updateKit(this.builtInKit);
     if (this.gameplayView?.identity.family === 'built-in') this.gameplayView.updateKit(this.builtInKit);
     if (this.resultView?.identity.family === 'built-in') this.resultView.updateKit(this.builtInKit);
     if (this.decideView?.identity.family === 'built-in') this.decideView.updateKit(this.builtInKit);
@@ -3349,7 +3357,7 @@ class PlayerWebDemoApp {
     this.activeSkinSystem = value;
     this.skinFamilyController?.updateDisplay();
     if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
-      this.lastSelectNavigation = this.selectView.getNavigation();
+      this.lastSelectNavigation = this.selectView.snapshot();
     }
     this.disposeScene(this.selectView);
     this.selectView = undefined;
@@ -3426,7 +3434,7 @@ class PlayerWebDemoApp {
 
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
-    this.lastSelectNavigation = this.selectView?.getNavigation();
+    this.lastSelectNavigation = this.selectView?.snapshot();
     await this.leaveScene(this.selectView);
     this.disposeScene(this.decideView);
     this.decideView = undefined;
@@ -4532,118 +4540,147 @@ class PlayerWebDemoApp {
     // earlier, so we only have these two cases here.
     const lr2SelectSkin = activeFamily === 'lr2' ? this.selectSkin : undefined;
     let carriedPlayOptions: PixiPlayOptions | undefined;
-    if (this.selectView && lr2SelectSkin !== undefined && !(this.selectView instanceof PixiSongSelectView)) {
-      // A theme dropped while the default-family scene is up: only the LR2 scene can adopt an LR2 skin, so rebuild it
-      // below as the LR2 scene, carrying the cursor and the live play options across.
-      this.lastSelectNavigation ??= this.selectView.getNavigation();
-      carriedPlayOptions = this.selectView.getPlayOptions();
-      this.disposeScene(this.selectView);
+    const current = this.selectView;
+    if (current !== undefined && current instanceof PixiSongSelectView !== (lr2SelectSkin !== undefined)) {
+      // The family changed (an LR2 theme dropped while the built-in screen is up, or the other way round): only that
+      // family's scene draws it, so it is rebuilt below, carrying the cursor and the live play options across.
+      this.lastSelectNavigation ??= current.snapshot();
+      carriedPlayOptions = current.getPlayOptions();
+      this.disposeScene(current);
       this.selectView = undefined;
     }
+    const sounds = this.selectSoundSet();
     const kept = this.selectView;
     if (kept) {
-      // Push the latest theme assets onto the view BEFORE showing it again. Order matters — `setSelectBgm` no-ops when
-      // the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps the
-      // bytes, and (because the view is still off stage) defers the actual `start()` until it re-enters a moment
-      // later. Doing it the other way round would briefly start the prior theme's BGM as it comes back.
-      if (kept instanceof PixiSongSelectView) {
-        kept.setSkin(lr2SelectSkin);
-      }
-      kept.setSelectBgm(this.selectBgmBytes);
-      kept.setDecideBgm(this.decideBgmBytes);
-      kept.setSystemSounds(this.systemSoundBundle);
-      kept.setCollection(this.collection);
+      // The latest theme's skin and sounds go onto the scene BEFORE it shows again: off the stage it only takes them, and
+      // its BGM starts as it enters. The other way round, the previous theme's BGM would start for a moment.
+      if (kept instanceof PixiSongSelectView) kept.setSkin(lr2SelectSkin);
+      kept.setSounds(sounds);
+      kept.setLibrary(this.collection);
       await this.sceneHost.setScene(kept);
-      if (this.lastSelectNavigation) {
-        kept.setNavigation(this.lastSelectNavigation);
-      }
+      if (this.lastSelectNavigation) kept.restore(this.lastSelectNavigation);
       return;
     }
-    // Pick the right family's select scene: when an LR2 select skin is loaded, use the LR2 scene; otherwise the
-    // default family takes over (visually the built-in 640×480 chrome). The previous code constructed
-    // `PixiSongSelectView` with `skin: this.selectSkin` and relied on the LR2 scene's internal `if (skin)` fallback —
-    // now that "no skin" is its own family at the type level, the dispatch happens here and the LR2 scene type
-    // signals to readers that a real LR2 skin is required to take this path.
-    const selectSceneOptions = {
+    // Seed the screen's play options from the Debug Menu's "Play options" state (two-way sync: the screen's own edits
+    // come back through `onPlayOptions` below; lil-gui edits push through `setPlayOptions`).
+    const playOptions: Partial<PixiPlayOptions> = {
+      ...carriedPlayOptions,
+      autoPlay: this.guiState.autoPlay,
+      gauge1P: this.guiState.gauge,
+      random1P: this.guiState.random1P,
+      random2P: this.guiState.random2P,
+      dpFlip: this.guiState.dpFlip,
+      autoScratch1P: this.guiState.autoScratch1P,
+      autoScratch2P: this.guiState.autoScratch2P,
+      sort: this.guiState.sort,
+      keysFilter: this.guiState.keysFilter,
+      difficultyFilter: this.guiState.difficultyFilter,
+      hiSpeed: this.guiState.hiSpeed,
+    };
+    const onPlayOptions = (options: PixiPlayOptions): void => {
+      // Mirror the screen's play option edits (an LR2 panel, a skin's buttons) back into the Debug Menu state so both
+      // surfaces always agree, then repaint the lil-gui controllers.
+      this.guiState.autoPlay = options.autoPlay;
+      this.guiState.gauge = options.gauge1P;
+      this.guiState.random1P = options.random1P;
+      this.guiState.random2P = options.random2P;
+      this.guiState.dpFlip = options.dpFlip;
+      this.guiState.autoScratch1P = options.autoScratch1P;
+      this.guiState.autoScratch2P = options.autoScratch2P;
+      this.guiState.sort = options.sort;
+      this.guiState.keysFilter = options.keysFilter;
+      this.guiState.difficultyFilter = options.difficultyFilter;
+      if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
+      this.refreshPlayOptionControllers();
+    };
+    const lookupCourse = (course: BrowserCourseEntry) =>
+      lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement);
+    if (lr2SelectSkin === undefined) {
+      // The built-in family: the select session drawn by the built-in view, playing through the audio service. Its
+      // decide jingle plays out through the decide screen into the play.
+      const scene = createSelectScene(this.builtInKit, {
+        library: this.collection,
+        ...(this.lastSelectNavigation !== undefined ? { browse: this.lastSelectNavigation } : {}),
+        playOptions,
+        records: { chart: (song) => this.lookupSongRecord(song), course: lookupCourse },
+        sounds,
+        audio: this.audio,
+        on: {
+          start: (entry, { autoPlay }) => this.startFromSelect(entry, autoPlay),
+          playOptions: onPlayOptions,
+          search: () => this.search.openFromPointer(),
+        },
+      });
+      this.selectView = scene;
+      await this.sceneHost.setScene(scene);
+      this.scheduleFirstRunResolutionDetect();
+      return;
+    }
+    // The LR2 family's scene plays the decide jingle on its own context, which its exit leaves playing.
+    const start = (entry: SelectStartEntry, autoPlay: boolean): void => {
+      if (this.startFromSelect(entry, autoPlay)) void view.playDecideSound();
+    };
+    const view = new PixiSongSelectView({
+      skin: lr2SelectSkin,
       selectBgm: this.selectBgmBytes,
       decideBgm: this.decideBgmBytes,
       systemSounds: this.systemSoundBundle,
-      initialNavigation: this.lastSelectNavigation,
-      // Seed the in-scene panel from the Debug Menu's "Play options" state (two-way sync: the panel's own edits
-      // come back through `onPlayOptionsChange` below; lil-gui edits push through `setPlayOptions`).
-      initialPlayOptions: {
-        ...carriedPlayOptions,
-        autoPlay: this.guiState.autoPlay,
-        gauge1P: this.guiState.gauge,
-        random1P: this.guiState.random1P,
-        random2P: this.guiState.random2P,
-        dpFlip: this.guiState.dpFlip,
-        autoScratch1P: this.guiState.autoScratch1P,
-        autoScratch2P: this.guiState.autoScratch2P,
-        sort: this.guiState.sort,
-        keysFilter: this.guiState.keysFilter,
-        difficultyFilter: this.guiState.difficultyFilter,
-        hiSpeed: this.guiState.hiSpeed,
-      },
-      onPlayOptionsChange: (options: PixiPlayOptions) => {
-        // Mirror the in-skin PLAY OPTION panel's edits back into the Debug Menu state so both surfaces always
-        // agree, then repaint the lil-gui controllers.
-        this.guiState.autoPlay = options.autoPlay;
-        this.guiState.gauge = options.gauge1P;
-        this.guiState.random1P = options.random1P;
-        this.guiState.random2P = options.random2P;
-        this.guiState.dpFlip = options.dpFlip;
-        this.guiState.autoScratch1P = options.autoScratch1P;
-        this.guiState.autoScratch2P = options.autoScratch2P;
-        this.guiState.sort = options.sort;
-        this.guiState.keysFilter = options.keysFilter;
-        this.guiState.difficultyFilter = options.difficultyFilter;
-        if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
-        this.refreshPlayOptionControllers();
-      },
+      ...(this.lastSelectNavigation !== undefined ? { initialNavigation: this.lastSelectNavigation } : {}),
+      initialPlayOptions: playOptions,
+      onPlayOptionsChange: onPlayOptions,
       resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
-      resolveCourseRecord: (course: BrowserCourseEntry) =>
-        lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement),
-      onSongSelected: (song: BrowserSongEntry) => {
-        if (this.addSongToCourseBeingMade(song)) return;
-        // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
-        // the view is hidden, so the cue isn't cut by the gameplay mount.
-        void this.selectView?.playDecideSound();
-        void this.showDecide(song);
-      },
-      onSongAutoPlay: (song: BrowserSongEntry) => {
-        if (this.addSongToCourseBeingMade(song)) return;
-        // The skin's AUTOPLAY button forces the auto flag on for this session regardless of the toolbar checkbox state.
-        // We DON'T mutate the checkbox here — the user might want to keep it off for the next manual play.
-        void this.selectView?.playDecideSound();
-        void this.showDecide(song, { autoPlay: true });
-      },
-      // A course with a missing stage comes here too: it does not start (no decide cue), and the status line says why.
-      onCourseSelected: (course: BrowserCourseEntry) => {
-        if (course.playable) void this.selectView?.playDecideSound();
-        void this.startCourse(course);
-      },
-      onCourseAutoPlay: (course: BrowserCourseEntry) => {
-        if (course.playable) void this.selectView?.playDecideSound();
-        void this.startCourse(course, { autoPlay: true });
-      },
+      resolveCourseRecord: lookupCourse,
+      onSongSelected: (song: BrowserSongEntry) => start({ kind: 'song', song }, false),
+      onSongAutoPlay: (song: BrowserSongEntry) => start({ kind: 'song', song }, true),
+      // A course with a missing stage comes here too: it does not start (no decide jingle), and the status line says
+      // why.
+      onCourseSelected: (course: BrowserCourseEntry) => start({ kind: 'course', course }, false),
+      onCourseAutoPlay: (course: BrowserCourseEntry) => start({ kind: 'course', course }, true),
       onSearchActivate: () => this.search.openFromPointer(),
       courseMaker: this.courseMaker,
       onCourseNameActivate: () => this.courseMakerPanel?.focusName(),
       onCourseDeleteRequest: (course: CourseDefinition) => this.courseMakerPanel?.confirmDelete(course),
-    };
-    const view = lr2SelectSkin
-      ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
-      : new DefaultPixiSongSelectView({
-          ...selectSceneOptions,
-          beMusicSkin: this.beMusicSkin,
-          beMusicEffects: this.guiState.skinEffects,
-          beMusicSkinSettings: this.beMusicSkinSettings,
-        });
+    });
     this.selectView = view;
     await this.sceneHost.setScene(view);
-    view.setCollection(this.collection);
+    view.setLibrary(this.collection);
     this.scheduleFirstRunResolutionDetect();
+  }
+
+  /**
+   * A chart or a course started on the select screen. While a course is being made, a chart joins it instead of playing
+   * (as LR2 does); a course starts its run, or says why it cannot. Returns whether a play starts, so the screen plays
+   * the decide jingle only then.
+   */
+  private startFromSelect(entry: SelectStartEntry, autoPlay: boolean): boolean {
+    if (entry.kind === 'song') {
+      if (this.addSongToCourseBeingMade(entry.song)) return false;
+      // The skin's AUTOPLAY forces auto play for this play only; the Debug Menu's checkbox keeps its state.
+      void this.showDecide(entry.song, autoPlay ? { autoPlay: true } : {});
+      return true;
+    }
+    void this.startCourse(entry.course, autoPlay ? { autoPlay: true } : {});
+    return entry.course.playable;
+  }
+
+  /**
+   * The select screen's sounds as a `SystemSoundSet`: the LR2 theme's select BGM, decide jingle and cues (by bytes); none
+   * without a theme.
+   */
+  private selectSoundSet(): SystemSoundSet {
+    const set: { -readonly [S in keyof SystemSoundSet]: SystemSoundSet[S] } = {};
+    const add = (slot: keyof SystemSoundSet, bytes: Uint8Array | undefined): void => {
+      if (bytes !== undefined) set[slot] = { bytes };
+    };
+    add('selectBgm', this.selectBgmBytes);
+    add('decideBgm', this.decideBgmBytes);
+    add('cursor', this.systemSoundBundle.cursorMove);
+    add('folderOpen', this.systemSoundBundle.folderOpen);
+    add('folderClose', this.systemSoundBundle.folderClose);
+    add('optionOpen', this.systemSoundBundle.optionOpen);
+    add('optionClose', this.systemSoundBundle.optionClose);
+    add('optionChange', this.systemSoundBundle.optionChange);
+    return set;
   }
 
   /**
@@ -4660,7 +4697,11 @@ class PlayerWebDemoApp {
     const selectView = this.selectView;
     window.setTimeout(() => {
       // Gone on to a play already: measuring gameplay that just started would mislead, so wait for the next visit.
-      if (this.selectView !== selectView || !selectView?.isVisible() || readStoredRenderResolution() !== undefined) {
+      if (
+        this.selectView !== selectView ||
+        selectView?.entered !== true ||
+        readStoredRenderResolution() !== undefined
+      ) {
         return;
       }
       void this.detectRenderResolution({ whileShowing: selectView });
@@ -4688,7 +4729,7 @@ class PlayerWebDemoApp {
         cancelled: () =>
           document.visibilityState !== 'visible' ||
           (options.whileShowing !== undefined &&
-            (this.selectView !== options.whileShowing || this.selectView?.isVisible() !== true)),
+            (this.selectView !== options.whileShowing || this.selectView?.entered !== true)),
       });
       this.guiState.renderResolution = result.chosen;
       storeRenderResolution(result.chosen);
@@ -4743,7 +4784,7 @@ class PlayerWebDemoApp {
       return;
     }
     await this.ensureHostMounted();
-    this.lastSelectNavigation = this.selectView?.getNavigation();
+    this.lastSelectNavigation = this.selectView?.snapshot();
     await this.leaveScene(this.selectView);
     if (kit.family === 'beatoraja') {
       // Capture the beatoraja select scene's state before disposing it: back from the result, the player lands in the
@@ -5144,7 +5185,7 @@ class PlayerWebDemoApp {
     const view = this.gameplayView;
     if (!view) return;
     this.elements.shell.classList.add('playing');
-    this.lastSelectNavigation = this.selectView?.getNavigation();
+    this.lastSelectNavigation = this.selectView?.snapshot();
     // The splash hands the stage over: it exits as the prepared play enters, then goes.
     const decide = this.decideView;
     this.decideView = undefined;
@@ -5204,7 +5245,7 @@ class PlayerWebDemoApp {
     }
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
-    this.lastSelectNavigation = this.selectView?.getNavigation();
+    this.lastSelectNavigation = this.selectView?.snapshot();
     await this.leaveScene(this.selectView);
     // Tear down the decide splash before the play shows — a live one would keep taking its keys and clicks. A play
     // being restarted (F5, R on its result) goes too; the field keeps it until the new one replaces it.
