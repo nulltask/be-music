@@ -11,7 +11,6 @@ import {
   DefaultPixiSongSelectView,
   createResultScene,
   PixiBeatorajaGameplayView,
-  PixiBeatorajaResultScene,
   PixiBeatorajaSelectScene,
   PixiSceneHost,
   PixiSongSelectView,
@@ -35,9 +34,13 @@ import {
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
+  playResultFromBeatoraja,
+  resolveResultJingle,
+  resolveResultJingles,
   SORT_CYCLE,
   systemSoundSetFromBeatoraja,
   type BrowseSnapshot,
+  type PlayRunKind,
 } from '@be-music/scene-model';
 import {
   BeatorajaSkinAudioPlayer,
@@ -673,12 +676,6 @@ class PlayerWebDemoApp {
     setEditing: (editing) => this.selectView?.setSearchEditing(editing),
     touch: () => document.documentElement.classList.contains('touch-first'),
   });
-  /**
-   * Beatoraja-skinned result scene. Active after gameplay completes when the loaded theme ships a
-   * result skin (`type = 7`). The chart's final `PlayerSummary` is forwarded so the skin's value
-   * destinations can render frozen score / judge / combo readouts.
-   */
-  private beatorajaResultScene: PixiBeatorajaResultScene | undefined;
   /**
    * Bottom-right lil-gui panel exposing the active beatoraja skin's `property[]` / `filepath[]` /
    * note-offset for live editing. Lazily constructed once `start()` mounts the host (the panel is
@@ -2414,7 +2411,6 @@ class PlayerWebDemoApp {
     const busy =
       this.elements.shell.classList.contains('playing') ||
       this.resultView !== undefined ||
-      this.beatorajaResultScene !== undefined ||
       this.decideView !== undefined;
     if (!busy) await this.showSelect();
   }
@@ -4064,9 +4060,10 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Mount the beatoraja result scene for `song` against the chart's final `summary`. Returns
-   * `true` when the scene actually mounted — `false` falls through to the no-result fast-path
-   * (no result skin in the bundle, or skin load failed).
+   * Mount the beatoraja result screen for `song` with `createResultScene`: the play's final `summary`, max combo and
+   * graphs (or, with `course.result`, a course run's) read as one `PlayResult` (`playResultFromBeatoraja`) on the theme's
+   * result skin (its course-result skin for a course run). Returns `true` when the screen actually mounted — `false`
+   * falls through to the no-result fast-path (no result skin in the bundle, or skin load failed).
    */
   private async showBeatorajaResult(
     song: BrowserSongEntry,
@@ -4113,83 +4110,79 @@ class PlayerWebDemoApp {
       gameplayLog.warn(`beatoraja result: ${load.message}`);
       return false;
     }
-    const { skin, textures, fonts, skinConfig: config } = load.kit;
 
     await this.ensureHostMounted();
-    this.disposeScene(this.beatorajaResultScene);
+    this.disposeScene(this.resultView);
+    this.resultView = undefined;
 
-    // Decode the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps so the result skin's
-    // synthetic-id destinations (-100 / -101 / -102) can paint them. Reuses the same loader
-    // as decide / play so all three scenes share one decoder path.
-    const chartImages = await this.loadBeatorajaChartImages(song);
-
-    let dismissed = false;
+    const run: PlayRunKind = courseResult ? 'course' : course !== undefined ? 'stage' : 'single';
+    const presentation = resolveResultPresentation(run);
+    // The beatoraja play hands its result in its own shape until it produces a `PlayResult` itself (PL8). Its graphs
+    // run from the chart's start to its end, as the built-in and LR2 results' do.
+    const result = playResultFromBeatoraja(
+      { summary, maxCombo, history },
+      {
+        song,
+        run,
+        judgeRuleset: this.guiState.judgeRuleset,
+        ...(course !== undefined ? { course: course.info } : {}),
+      },
+    );
+    // The chart as the play played it, for any `bpmgraph[]` and note-kind graph of the result skin. The prep bundle is
+    // disposed at gameplay teardown, so the chart is kept in `lastBeatorajaChart`; it is only handed on when it is this
+    // song's, so a graph never plots another chart. A course run's result plots none.
+    const playChart =
+      !courseResult && this.lastBeatorajaChart?.chartPath === song.chartPath
+        ? this.lastBeatorajaChart.resolved.chart
+        : undefined;
     // R on the result plays the same chart again — only offered when the recorded play start is this chart's, and
     // never in a course (beatoraja disables quick retry there).
-    const retry = course === undefined && this.lastPlay?.song.id === song.id ? this.lastPlay : undefined;
-    const cleared = summary.gauge?.cleared ?? false;
-    // The course result plays `course_clear` / `course_fail`, falling back to the result ones as beatoraja does.
-    const bgmBytes =
-      (courseResult ? (cleared ? this.beatorajaThemeBgm.courseClear : this.beatorajaThemeBgm.courseFail) : undefined) ??
-      (cleared ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
-      this.beatorajaThemeBgm.result;
-    this.beatorajaResultScene = new PixiBeatorajaResultScene({
-      judgeRuleset: this.guiState.judgeRuleset,
-      skin,
-      textures,
-      fonts,
-      skinConfig: config,
-      song,
-      // Pass the just-played chart so any `bpmgraph[]` element in the result skin can plot the
-      // chart's BPM curve. The prep bundle is disposed at gameplay teardown, so the chart
-      // reference is snapshot into `lastBeatorajaChart` for use here. We only forward when the
-      // cached chart matches the song the result scene is rendering — otherwise the bpmgraph
-      // would plot the wrong chart's BPM curve.
-      chart:
-        !courseResult && this.lastBeatorajaChart?.chartPath === song.chartPath
-          ? this.lastBeatorajaChart.resolved.chart
-          : undefined,
-      summary,
-      maxCombo,
-      scoreHistory: history.scoreHistory,
-      gaugeHistory: history.gaugeHistory,
-      timingHistory: history.timingHistory,
-      chartImages,
-      // Pick the outcome-specific jingle when one was discovered, falling back to the generic
-      // `result` slot. Beatoraja themes that ship a single result BGM authoredit as `result.*`,
-      // while themes that distinguish clear / fail (most reference themes) ship dedicated tracks.
-      bgmBytes,
-      ...(course !== undefined ? { courseInfo: course.info } : {}),
-      skinAudio: this.beatorajaSkinAudio,
-      onContinue: () => {
-        if (dismissed) return;
-        dismissed = true;
-        void this.sceneHost.setScene(undefined).then(() => {
-          this.beatorajaResultScene?.dispose();
-          this.beatorajaResultScene = undefined;
-          if (!courseResult && this.continueCourse()) return;
-          void this.showSelect();
-        });
-      },
-      ...(retry !== undefined
-        ? {
-            onRetry: () => {
-              if (dismissed) return;
-              dismissed = true;
-              void this.sceneHost.setScene(undefined).then(() => {
-                this.beatorajaResultScene?.dispose();
-                this.beatorajaResultScene = undefined;
-                void this.playSong(retry.song, retry.overrides);
-              });
-            },
-          }
-        : {}),
+    const lastPlay = this.lastPlay;
+    const retryTarget = resolveResultRetry({
+      quickRetry: presentation.quickRetry,
+      songId: song.id,
+      ...(lastPlay !== undefined ? { lastPlay: { songId: lastPlay.song.id, play: lastPlay } } : {}),
     });
-    await this.sceneHost.setScene(this.beatorajaResultScene);
+    // beatoraja plays every result from its theme's one set: a course run's `course_clear` / `course_fail`, falling back
+    // to the clear / fail ones, else the generic `result` one.
+    const sounds = systemSoundSetFromBeatoraja({ bgm: this.beatorajaThemeBgm });
+    const jingleBytes = resolveResultJingle(
+      resolveResultJingles([sounds], presentation.courseJingles),
+      result.cleared,
+    )?.bytes;
+    const onContinue = (): void => {
+      // The next stage does not tear the result screen down, and a live one would keep taking its keys during that
+      // stage: drop it first.
+      this.disposeScene(this.resultView);
+      this.resultView = undefined;
+      if (!courseResult && this.continueCourse()) return;
+      void this.showSelect();
+    };
+    const onRetry =
+      retryTarget?.kind === 'replay'
+        ? (): void => {
+            this.disposeScene(this.resultView);
+            this.resultView = undefined;
+            void this.playSong(retryTarget.play.song, retryTarget.play.overrides);
+          }
+        : undefined;
+    this.resultView = createResultScene(
+      { family: 'beatoraja', kit: load.kit },
+      {
+        result,
+        run,
+        source: resolveSongSource(this.collection, song),
+        ...(playChart !== undefined ? { playChart } : {}),
+        sounds,
+        audio: this.audio,
+        on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
+      },
+    );
+    await this.sceneHost.setScene(this.resultView);
     this.setPlayStatus(
       `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · ex=${summary.exScore} maxCombo=${maxCombo}`,
     );
-    const jingle = this.nameResultJingle(bgmBytes);
+    const jingle = this.nameResultJingle(jingleBytes);
     this.testHook?.recordResult(
       course?.result !== undefined
         ? resultFromCourseLog(course.result.log, course.result.native, { family: 'beatoraja', jingle })
@@ -4534,10 +4527,6 @@ class PlayerWebDemoApp {
     }
     this.disposeScene(this.beatorajaSelectScene);
     this.beatorajaSelectScene = undefined;
-    // The result splash doesn't outlive a return to select either — the gameplay-skinned chrome it paints would
-    // otherwise overlay the select scene.
-    this.disposeScene(this.beatorajaResultScene);
-    this.beatorajaResultScene = undefined;
     // The active family for this select mount. `'lr2'` flows the loaded LR2 select skin through, `'default'` strips
     // it so the underlying scene paints built-in chrome regardless of what's loaded. The beatoraja branch returned
     // earlier, so we only have these two cases here.
