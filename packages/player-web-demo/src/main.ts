@@ -8,8 +8,8 @@ import {
   synesthesiaSkin,
   createDecideScene,
   DefaultPixiGameplayView,
-  DefaultPixiResultView,
   DefaultPixiSongSelectView,
+  createResultScene,
   PixiBeatorajaDecideScene,
   PixiBeatorajaGameplayView,
   PixiBeatorajaResultScene,
@@ -27,6 +27,7 @@ import {
   type DecideScene,
   type PixiGameplayResultData,
   type PixiPlayOptions,
+  type ResultScene,
   type PixiScene,
   type PixiSongSelectNavigation,
   resolveSceneCourseInfo,
@@ -169,7 +170,7 @@ import {
 } from './skin-settings.ts';
 import { resolvePlayChart, type PlayerSummary, type ResolvedPlayChart } from '@be-music/player/core/engine';
 import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
-import { resolveResultViewJingles } from './result-jingles.ts';
+import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingles.ts';
 import {
   resolveCoursePlaylogFilename,
   serializeCoursePlaylog,
@@ -728,7 +729,7 @@ class PlayerWebDemoApp {
    * by `onExit` (ESC at root) since that's the user explicitly leaving the select altogether.
    */
   private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
-  private resultView: PixiResultView | DefaultPixiResultView | undefined;
+  private resultView: PixiResultView | ResultScene | undefined;
   /**
    * The chart and play mode of the most recent play start (LR2 / default and beatoraja alike), so the result screen's
    * R key can start the same chart again. `autoPlay` is resolved at play start so a retry keeps the mode the play ran
@@ -739,7 +740,7 @@ class PlayerWebDemoApp {
   private decideView: PixiDecideView | DecideScene | undefined;
   /**
    * The player's audio service (ADR 0007): one system AudioContext for the sounds of the screens built on it, the
-   * built-in decide screen so far. The other screens still play on contexts of their own.
+   * built-in decide and result screens so far. The other screens still play on contexts of their own.
    */
   private readonly audio: AudioService = createAudioService();
   private hostMounted = false;
@@ -3322,7 +3323,8 @@ class PlayerWebDemoApp {
     const settings = this.beMusicSkinSettings;
     this.selectView?.setBeMusicSkinSettings(settings);
     this.gameplayView?.setBeMusicSkinSettings(settings);
-    this.resultView?.setBeMusicSkinSettings(settings);
+    if (this.resultView instanceof PixiResultView) this.resultView.setBeMusicSkinSettings(settings);
+    else this.resultView?.updateKit(this.builtInKit);
     if (this.decideView !== undefined && !(this.decideView instanceof PixiDecideView)) {
       this.decideView.updateKit(this.builtInKit);
     }
@@ -5601,7 +5603,7 @@ class PlayerWebDemoApp {
           ? () => void this.playSong(retryTarget.play.song, retryTarget.play.overrides)
           : undefined;
     // The active theme's jingles: a beatoraja theme's when its result falls back to this view (a NONSTOP course).
-    const jingles = resolveResultViewJingles(resultFamily, presentation.courseJingles, {
+    const themeJingles = {
       lr2: {
         clear: this.clearBgmBytes,
         fail: this.failBgmBytes,
@@ -5610,46 +5612,50 @@ class PlayerWebDemoApp {
         courseFail: this.courseFailBgmBytes,
       },
       beatoraja: this.beatorajaThemeBgm,
-    });
-    const sharedResultOptions = {
-      collection: this.collection,
-      ...jingles,
-      onContinue: () => {
-        if (courseStage && this.activeCourse !== undefined) {
-          // The next stage does not tear the result view down, and a live one would keep taking its clicks and keys
-          // (Enter / Space / Escape) during that stage, starting it over: drop it first.
-          this.disposeScene(this.resultView);
-          this.resultView = undefined;
-          this.continueCourse();
-          return;
-        }
-        void this.showSelect();
-      },
-      ...(retry !== undefined
-        ? {
-            onRetry: () => {
-              // Straight back into the chart, skipping select and decide. `playSong` tears down gameplay / decide but
-              // not the result view, so drop it (and its BGM) first.
-              this.disposeScene(this.resultView);
-              this.resultView = undefined;
-              retry();
-            },
-          }
-        : {}),
     };
-    this.resultView = lr2ResultSkin
-      ? new PixiResultView({
-          skin: lr2ResultSkin,
-          ...sharedResultOptions,
-          ...(courseInfo !== undefined ? { courseInfo } : {}),
-        })
-      : new DefaultPixiResultView({
-          ...sharedResultOptions,
-          beMusicSkin: this.beMusicSkin,
-          beMusicEffects: this.guiState.skinEffects,
-          beMusicSkinSettings: this.beMusicSkinSettings,
-        });
-    this.resultView.setResult(data);
+    const jingles = resolveResultViewJingles(resultFamily, presentation.courseJingles, themeJingles);
+    const onContinue = (): void => {
+      if (courseStage && this.activeCourse !== undefined) {
+        // The next stage does not tear the result view down, and a live one would keep taking its clicks and keys
+        // (Enter / Space / Escape) during that stage, starting it over: drop it first.
+        this.disposeScene(this.resultView);
+        this.resultView = undefined;
+        this.continueCourse();
+        return;
+      }
+      void this.showSelect();
+    };
+    const onRetry =
+      retry === undefined
+        ? undefined
+        : (): void => {
+            // Straight back into the chart, skipping select and decide. `playSong` tears down gameplay / decide but not
+            // the result view, so drop it (and its jingle) first.
+            this.disposeScene(this.resultView);
+            this.resultView = undefined;
+            retry();
+          };
+    if (lr2ResultSkin !== undefined) {
+      const view = new PixiResultView({
+        skin: lr2ResultSkin,
+        collection: this.collection,
+        ...jingles,
+        onContinue,
+        ...(onRetry !== undefined ? { onRetry } : {}),
+        ...(courseInfo !== undefined ? { courseInfo } : {}),
+      });
+      view.setResult(data);
+      this.resultView = view;
+    } else {
+      this.resultView = createResultScene(this.builtInKit, {
+        result: data,
+        run,
+        source: resolveSongSource(this.collection, data.song),
+        sounds: resolveResultSoundSet(resultFamily, themeJingles),
+        audio: this.audio,
+        on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
+      });
+    }
     // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`).
     await this.sceneHost.setScene(this.resultView);
     this.disposeScene(this.gameplayView, (view) => view.dispose({ preserveAudioTail: true }));

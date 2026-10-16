@@ -460,12 +460,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
     interactive: true,
   });
-  define('player-web.DefaultPixiResultView', {
-    run: () => {
-      new playerWebCoreApi.DefaultPixiResultView();
-    },
-    interactive: true,
-  });
   define('player-web.DefaultPixiSongSelectView', {
     run: () => {
       new playerWebCoreApi.DefaultPixiSongSelectView();
