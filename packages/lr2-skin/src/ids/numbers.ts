@@ -140,6 +140,8 @@ export const LR2_NUM = {
   GAUGE: 107,
   /** The EX score less the rival's. */
   EXSCORE_DIFF: 108,
+  /** Number 109: as `NEXT_RANK_DIFF` (OpenLR2 resolves the two alike). */
+  NEXT_RANK_DIFF_ALT: 109,
   /** PERFECTs. */
   PERFECT: 110,
   /** GREATs. */
@@ -162,7 +164,10 @@ export const LR2_NUM = {
   HIGH_SCORE_DIFF: 152,
   /** The EX score less the target's. */
   TARGET_SCORE_DIFF: 153,
-  /** EX score still needed for the next rank. */
+  /**
+   * The EX score less the border of the next DJ Rank over every note: negative until it is reached, and less the
+   * maximum from AAA on; 0 at the maximum (OpenLR2 `SetObjectValue_Num`).
+   */
   NEXT_RANK_DIFF: 154,
   /** The BPM now. */
   BPM: 160,

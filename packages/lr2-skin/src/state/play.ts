@@ -169,13 +169,17 @@ function frameCourse(setup: Lr2PlaySetup, frame: Lr2PlayFrame): CourseView | und
   return { ...course, stageIndex: frame.nonstopStage };
 }
 
-/** EX score still needed for the next rank (number 154); 0 at AAA or before the chart has notes. */
-function nextRankDiff(score: ScoreSummary): number {
-  if (score.total <= 0) return 0;
+/**
+ * LR2's distance to the next DJ Rank (numbers 109 / 154, OpenLR2 `SetObjectValue_Num`): the EX score less the next
+ * rank's border over every note, `floor(notes × 2 × (rank + 1) / 9)` for the rank `exscore × 9 / (notes × 2)` held
+ * between E's border and AAA. So it reads negative until the border is reached, F counts down to E, and AAA to the
+ * maximum. 0 at the maximum or before the chart has notes.
+ */
+function nextRankDiff(score: Pick<ScoreSummary, 'total' | 'exScore'>): number {
   const max = score.total * 2;
-  const thresholds = [8 / 9, 7 / 9, 6 / 9, 5 / 9, 4 / 9, 3 / 9, 2 / 9, 1 / 9];
-  const next = thresholds.find((threshold) => score.exScore < max * threshold) ?? 0;
-  return Math.max(0, Math.ceil(max * next - score.exScore));
+  if (score.total <= 0 || score.exScore === max) return 0;
+  const rank = Math.min(8, Math.max(1, Math.floor((score.exScore * 9) / max)));
+  return score.exScore - Math.floor((max * (rank + 1)) / 9);
 }
 
 function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): number | undefined {
@@ -226,6 +230,7 @@ function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): numb
     case LR2_NUM.TARGET_SCORE_DIFF:
       return score.exScore;
     case LR2_NUM.NEXT_RANK_DIFF:
+    case LR2_NUM.NEXT_RANK_DIFF_ALT:
       return nextRankDiff(score);
     case LR2_NUM.BPM:
       return frame.bpm ?? setup.chart?.bpm;
