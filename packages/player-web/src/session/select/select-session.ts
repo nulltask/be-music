@@ -395,8 +395,8 @@ export class SelectSession {
     );
     // Kept as before: when none of the saved folders is found, nothing is restored.
     if (restoredDepth === 0 && snapshot.folderPath.length > 0) return undefined;
-    // Kept as before: the parent cursors go back to the top, so backing out lands on the first folder bar.
-    return { ...state, cursors: state.cursors.map((cursor, depth) => (depth < state.path.length ? 0 : cursor)) };
+    // Each parent cursor is on the bar of the folder opened from it, so backing out lands there.
+    return state;
   }
 
   /**
