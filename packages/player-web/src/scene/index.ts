@@ -26,7 +26,6 @@ export * from './beatoraja/bga.ts';
 export * from './beatoraja/gameplay.ts';
 export * from './beatoraja/markers.ts';
 export * from './beatoraja/notes.ts';
-export * from './beatoraja/result.ts';
 export * from './beatoraja/select.ts';
 export * from './beatoraja/skin-view.ts';
 

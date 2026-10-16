@@ -1014,14 +1014,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
     interactive: true,
   });
-  define('player-web.PixiBeatorajaResultScene', {
-    run: () => {
-      new playerWebCoreApi.PixiBeatorajaResultScene(
-        {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaResultScene>[0],
-      );
-    },
-    interactive: true,
-  });
   define('player-web.PixiBeatorajaSelectScene', {
     run: () => {
       new playerWebCoreApi.PixiBeatorajaSelectScene(
