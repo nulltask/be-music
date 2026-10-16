@@ -1,10 +1,15 @@
 import { CourseRun, type CourseRunStagePlan, type RandomCourseDrawFailure } from '@be-music/player/course';
-import type { BeMusicCoursePlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
+import {
+  resolveCoursePlayedRuleset,
+  type BeMusicCoursePlaylog,
+  type PlaylogCourseResult,
+} from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import { resolveSceneCourseInfo, type SceneCourseInfo } from '@be-music/player-web/scenes';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPlayFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player/records';
+import { rulesetRecordKey } from './song-records.ts';
 
 /**
  * The decisions the demo's course flow takes, kept apart from the scenes that act on them so they can be tested: what
@@ -103,15 +108,19 @@ export function describeNonstopPrepareFailure(
 }
 
 /**
- * The record a course run leaves under `key`, or `undefined` when the run keeps none: an auto-played run, or one at
- * another tempo, which is practice (and the Leaderboard refuses it as `tempo`).
+ * The record a course run leaves under the course's `key`, kept under the judge ruleset the run was played on
+ * (`resolveCoursePlayedRuleset`), or `undefined` when the run keeps none: an auto-played run, one at another tempo,
+ * which is practice (and the Leaderboard refuses it as `tempo`), and one whose stages were judged under different
+ * rulesets.
  */
 export function resolveCourseRecordUpdate(
   courseLog: Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>,
   result: PlaylogCourseResult,
   key: string,
 ): { key: string; play: RecordPlay } | undefined {
-  return courseRunKeepsRecord(courseLog) ? { key, play: courseRunRecordPlay(result) } : undefined;
+  const ruleset = resolveCoursePlayedRuleset(courseLog);
+  if (ruleset === undefined || !courseRunKeepsRecord(courseLog)) return undefined;
+  return { key: rulesetRecordKey(ruleset, key), play: courseRunRecordPlay(result) };
 }
 
 /** What a play is, for the gameplay exits below. */

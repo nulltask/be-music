@@ -1,6 +1,6 @@
 // The demo's best records, handed to the select skins through `resolveSongRecord` / `resolveCourseRecord`: the keys
-// they are kept under and their persistence across reloads. The rules they are kept by — merging a play, what a play
-// contributes, which plays count — are `@be-music/player/records`.
+// they are kept under — one record per chart (or course) and judge ruleset — and their persistence across reloads. The
+// rules they are kept by — merging a play, what a play contributes, which plays count — are `@be-music/player/records`.
 
 import {
   courseStageKeepsRecord,
@@ -8,52 +8,84 @@ import {
   type BestRecord,
   type RecordPlayKind,
 } from '@be-music/player/records';
-import { isClearLamp, type ClearLamp } from '@be-music/player/ruleset';
+import { isClearLamp, type ClearLamp, type PlaylogRulesetId } from '@be-music/player/ruleset';
 import type { BrowserSongEntry } from '@be-music/player-web/collection';
 
 const STORAGE_KEY = 'be-music-demo.song-records';
 /**
- * Bumped when the stored shape changes; a stored map with an unknown version is ignored. Version 1 records were kept
- * before the LR2 ruleset's lamps followed LR2, and are read through {@link toLr2RecordLamp}.
+ * Bumped when the stored shape changes; a stored map with an unknown version is ignored. Version 3 keys every record by
+ * its judge ruleset ({@link rulesetRecordKey}). Versions 1 and 2 kept one record per chart whatever the ruleset; they
+ * are read as LR2 records, the demo's default ruleset, and version 1 lamps (kept before the LR2 ruleset's lamps followed
+ * LR2) through {@link toLr2RecordLamp}.
  */
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
+
+const JUDGE_RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+
+/** How a play was played and judged, as far as which record it keeps goes. */
+export type RecordedPlayKind = RecordPlayKind & {
+  /** The judge ruleset the play ran under: it keeps that ruleset's record. */
+  judgeRuleset: PlaylogRulesetId;
+};
 
 /**
- * The key a play's result is recorded under, or `undefined` when the play leaves the records alone
- * (`playKeepsRecord`): an auto play, a replay, a course stage (NONSTOP included — the course keeps the record) and a
- * play at another tempo (practice).
+ * The key a record is stored under: the judge ruleset it was played under, then the chart's key ({@link songRecordKey})
+ * or the course's (`courseRecordKey`), e.g. `lr2:sha256:…`. Each ruleset has its own lamps, BP and scoring, so a chart
+ * keeps one record per ruleset.
+ */
+export function rulesetRecordKey(ruleset: PlaylogRulesetId, key: string): string {
+  return `${ruleset}:${key}`;
+}
+
+/** The records of one judge ruleset, looked up by a chart's or a course's own key (as `lookupCourseRecord` reads them). */
+export function rulesetRecords<T>(
+  records: { get(key: string): T | undefined },
+  ruleset: PlaylogRulesetId,
+): { get(key: string): T | undefined } {
+  return { get: (key) => records.get(rulesetRecordKey(ruleset, key)) };
+}
+
+/**
+ * The key a play's result is recorded under — its chart's, under the judge ruleset the play ran under — or `undefined`
+ * when the play leaves the records alone (`playKeepsRecord`): an auto play, a replay, a course stage (NONSTOP included —
+ * the course keeps the record) and a play at another tempo (practice).
  */
 export function playRecordKey(
   song: Pick<BrowserSongEntry, 'chartPath'>,
   chartSha256: string | undefined,
-  play: RecordPlayKind & { course: boolean },
+  play: RecordedPlayKind & { course: boolean },
 ): string | undefined {
-  return playKeepsRecord(play) ? songRecordKey(song, chartSha256) : undefined;
+  return playKeepsRecord(play) ? rulesetRecordKey(play.judgeRuleset, songRecordKey(song, chartSha256)) : undefined;
 }
 
 /**
- * The key an EXPERT / GRADE course stage also updates its chart's record under, or `undefined` when it leaves the
- * chart's record alone (`courseStageKeepsRecord`): an auto play, a replay and a play at another tempo.
+ * The key an EXPERT / GRADE course stage also updates its chart's record under (under the judge ruleset the stage ran
+ * under), or `undefined` when it leaves the chart's record alone (`courseStageKeepsRecord`): an auto play, a replay and a
+ * play at another tempo.
  */
 export function courseStageRecordKey(
   song: Pick<BrowserSongEntry, 'chartPath'>,
   chartSha256: string | undefined,
-  play: RecordPlayKind,
+  play: RecordedPlayKind,
 ): string | undefined {
-  return courseStageKeepsRecord(play) ? songRecordKey(song, chartSha256) : undefined;
+  return courseStageKeepsRecord(play)
+    ? rulesetRecordKey(play.judgeRuleset, songRecordKey(song, chartSha256))
+    : undefined;
 }
 
 /**
- * The key a chart's record is stored under: its chart-file SHA-256 when known (stable across sessions, machines, and
- * file moves — the same hash the play-logs record), else its chart path inside the dropped library.
+ * The key a chart's record is stored under, before its judge ruleset ({@link rulesetRecordKey}): its chart-file SHA-256
+ * when known (stable across sessions, machines, and file moves — the same hash the play-logs record), else its chart
+ * path inside the dropped library.
  */
 export function songRecordKey(song: Pick<BrowserSongEntry, 'chartPath'>, chartSha256: string | undefined): string {
   return chartSha256 !== undefined && chartSha256.length > 0 ? `sha256:${chartSha256}` : `path:${song.chartPath}`;
 }
 
 /**
- * Parses stored records. Entries whose lamp is unknown are dropped and malformed counts are left out, so a hand-edited
- * or stale store can't hand a skin junk; anything unreadable yields no records.
+ * Parses stored records, keyed by {@link rulesetRecordKey}. Entries whose lamp is unknown (or whose key names no judge
+ * ruleset) are dropped and malformed counts are left out, so a hand-edited or stale store can't hand a skin junk;
+ * anything unreadable yields no records. Records of versions 1 and 2 are read as LR2 records.
  */
 export function parseSongRecords(raw: string | null | undefined): Map<string, BestRecord> {
   const records = new Map<string, BestRecord>();
@@ -66,10 +98,20 @@ export function parseSongRecords(raw: string | null | undefined): Map<string, Be
   }
   if (typeof parsed !== 'object' || parsed === null) return records;
   const { version, records: stored } = parsed as { version?: unknown; records?: unknown };
-  if ((version !== STORAGE_VERSION && version !== 1) || typeof stored !== 'object' || stored === null) return records;
-  // Version 1 lamps predate LR2's lamp rules; the demo plays on LR2's ruleset by default, so they are read as LR2 plays.
+  if (
+    (version !== STORAGE_VERSION && version !== 2 && version !== 1) ||
+    typeof stored !== 'object' ||
+    stored === null
+  ) {
+    return records;
+  }
+  // Versions 1 and 2 kept one record per chart whatever the ruleset; the demo plays on LR2's ruleset by default, so they
+  // are read as LR2 records. Version 1 lamps also predate LR2's lamp rules.
+  const readKey = version === STORAGE_VERSION ? (key: string) => key : (key: string) => rulesetRecordKey('lr2', key);
   const readLamp = version === 1 ? toLr2RecordLamp : (lamp: ClearLamp) => lamp;
-  for (const [key, entry] of Object.entries(stored)) {
+  for (const [storedKey, entry] of Object.entries(stored)) {
+    const key = readKey(storedKey);
+    if (!JUDGE_RULESETS.some((ruleset) => key.startsWith(`${ruleset}:`))) continue;
     if (typeof entry !== 'object' || entry === null) continue;
     const { lamp } = entry as { lamp?: unknown };
     if (!isClearLamp(lamp)) continue;
@@ -93,7 +135,7 @@ export function toLr2RecordLamp(lamp: ClearLamp): ClearLamp {
   return lamp;
 }
 
-/** Serializes records as `{ version: 2, records: { [key]: BestRecord } }`. */
+/** Serializes records as `{ version: 3, records: { [rulesetRecordKey]: BestRecord } }`. */
 export function serializeSongRecords(records: ReadonlyMap<string, BestRecord>): string {
   return JSON.stringify({ version: STORAGE_VERSION, records: Object.fromEntries(records) });
 }
