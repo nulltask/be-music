@@ -65,11 +65,6 @@
       "types": "./dist/utils.d.ts",
       "default": "./dist/utils.js"
     },
-    "./core/groove-gauge": {
-      "source": "./src/core/groove-gauge.ts",
-      "types": "./dist/core/groove-gauge.d.ts",
-      "default": "./dist/core/groove-gauge.js"
-    },
     "./core/bga-timeline": {
       "source": "./src/core/bga-timeline.ts",
       "types": "./dist/core/bga-timeline.d.ts",

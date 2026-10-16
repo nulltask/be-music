@@ -16,7 +16,6 @@ export default defineConfig({
       ruleset: 'src/ruleset/vocabulary.ts',
       'core/bga-timeline': 'src/core/bga-timeline.ts',
       'core/engine': 'src/core/engine.ts',
-      'core/groove-gauge': 'src/core/groove-gauge.ts',
       'core/high-speed-control': 'src/core/high-speed-control.ts',
       'core/input-signal-bus': 'src/core/input-signal-bus.ts',
       'core/judge-window': 'src/core/judge-window.ts',
