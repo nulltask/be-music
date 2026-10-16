@@ -115,3 +115,21 @@ export type GameplayThemeEvent =
   | { kind: 'bomb'; channel: string; at: number }
   | { kind: 'bomb-retired'; channel: string }
   | { kind: 'lane-command'; command: PlayerUiCommand };
+
+/**
+ * `CoreGameplayView`'s overridable theme hooks, for the modules the scene's parts live in. The hooks stay `protected`
+ * for the theme families that override them, so the scene hands the modules this object (`CoreGameplayView.theme`),
+ * whose functions call them; `themeOwnsPlayfield` is the hook's getter.
+ */
+export interface GameplayThemeHooks {
+  themeOwnsPlayfield(): boolean;
+  resolveThemeLaneRect(channel: string, width: number, height: number): GameplayLaneRect | undefined;
+  resolveThemeNoteCell(kind: GameplayThemeNoteKind, laneIndex: number): GameplayThemeNoteCell | undefined;
+  renderThemeMeasureLines(frame: GameplayMeasureLineFrame): boolean;
+  renderThemeText(seconds: number): void;
+  renderBombEffects(): void;
+  resolveBombDurationMs(channel: string): number;
+  resolveKeyOnFadeMs(timerId: number): number;
+  collectBgaTargets(out: GameplayBgaTarget[]): void;
+  onThemeEvent(event: GameplayThemeEvent): void;
+}
