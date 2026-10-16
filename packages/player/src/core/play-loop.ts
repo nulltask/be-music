@@ -116,7 +116,7 @@ export async function runPlayLoop(
       const loopWakeUp = wakeUp;
 
       // A held play (`holdAfterChart`) runs past its horizon until the host ends it.
-      const hold = drifts.ignoresHoldAfterChart ? undefined : options.holdAfterChart;
+      const hold = options.holdAfterChart;
       // On the play clock, so a tempo change during the play moves it.
       const widestReachMs = 1000 * widestJudgeReachSeconds(session);
       const horizonMs = (): number =>
@@ -124,7 +124,7 @@ export async function runPlayLoop(
           ? tempoClock.clockMsAt(totalSeconds) + 1000
           : tempoClock.clockMsAt(totalSeconds) + session.leadInMs + widestReachMs + 1000;
       // Without audio to play out a play ends as soon as its chart is over and judged — unless the host holds it open.
-      const endsWithChart = drifts.horizon === 'chart-end' || (audioSession === undefined && hold === undefined);
+      const endsWithChart = (drifts.horizon === 'chart-end' || audioSession === undefined) && hold === undefined;
       let settled = false;
       const pastHorizon = (): boolean => {
         if (clock.nowMs() < horizonMs()) return false;

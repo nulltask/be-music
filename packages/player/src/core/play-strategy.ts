@@ -50,8 +50,6 @@ export interface PlayJudge {
  * they are removed one by one.
  */
 export interface StrategyDrifts {
-  /** Plays as if `holdAfterChart` were not set. */
-  readonly ignoresHoldAfterChart: boolean;
   /** Resolves its ruleset without the chart's `#EXRANK` changes, and traces their windows without `judgeWindowMs`. */
   readonly ignoresJudgeRankChanges: boolean;
   /** Records the play clock's chart time as `abortedAtUs` of an ESC, not where its judge had settled. */
@@ -64,8 +62,8 @@ export interface StrategyDrifts {
   readonly startsInputRuntimeAfterLeadIn: boolean;
   /**
    * Where the play ends: `lead-in-and-reach` runs to the chart's end plus the lead-in, the widest reach and a second
-   * (ending early only without an audio session or a hold); `chart-end` ends as soon as the chart is over and judged,
-   * and caps the play at the chart's end plus a second.
+   * (ending early only without an audio session or a hold); `chart-end` ends as soon as the chart is over and judged
+   * (unless the host holds it) and caps the play at the chart's end plus a second.
    */
   readonly horizon: 'lead-in-and-reach' | 'chart-end';
   /** Publishes a closing frame at the chart's end after `finish`. */
