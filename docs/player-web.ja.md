@@ -238,17 +238,62 @@ beatoraja default skin を primary compatibility target とし、community theme
 ## Scene lifecycle
 
 browser player は session 全体で 1 つの `PixiSceneHost` を使います。
-host は 1 つの PixiJS `Application` を所有し、同時に 1 つの scene root だけを attach し、scene transition を直列化し、host dispose 時だけ renderer を破棄します。
+host は 1 つの PixiJS `Application` を所有し、同時に 1 つの scene だけを表示し、scene transition を直列化し、host dispose 時だけ renderer を破棄します。
 
-LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。default family は decide scene を持たず、同じ select、gameplay、result の形を skinless に提供します。
+LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。default family は、be-music skin が decide 画面を持つときだけ decide 画面を表示します。
 
 - chart browsing、preview playback、skin-side interaction を扱う select scene
 - active family が提供する場合、gameplay 前の短い transition を扱う decide scene
 - note、lane、BGA、HUD、judgment、audio、recording tap を扱う gameplay scene
 - score summary と skin-rendered result presentation を扱う result scene
 
-scene は `enter()`, `exit()`, `dispose()` を実装します。
-`exit()` は transition 向けに一時的な listener と ticker work を外し、`dispose()` は scene 所有 resource を恒久的に解放します。
+標準・LR2・beatoraja のどの scene も `PixiScene` を実装し、host は `setScene` だけで scene を切り替えます。
+
+- `root` は、scene の表示中に host が stage に載せる container です。scene はその下に scene graph を組み、自分で stage に載ることはありません。
+- `identity` は `{ kind, family }` で、画面（`select`、`decide`、`play`、`result`）と、描く skin family（`built-in`、`lr2`、`beatoraja`）を表します。表示中の scene は `getCurrentScene()?.identity` でわかり、demo の test hook もこれを報告します。
+- `enter(host)` は scene が active になるたびに、host が `root` を stage に載せる前に呼ばれます。最初の entry で scene graph を組み、input と ticker の処理をつなぎます。2 回目以降は `exit()` で止めたものを再開し、画面の入場演出をもう一度始めます。
+- `exit()` は別の scene に替わるときや stage を空にするときに、host が `root` を stage から外す前に呼ばれます。ticker の処理、input、画面自身の音（BGM、preview、jingle）が止まります。scene はもう一度 enter できます。
+- `dispose()` はすべてを解放します。呼ぶのは scene の持ち主で、`setScene` は置き換える scene を exit するだけです。
+
+`SessionScene`（[シーンセッションとファミリービュー](#シーンセッションとファミリービュー)）も同じ約束に従い、`identity` は session と view から取ります。
+
+```mermaid
+stateDiagram-v2
+  [*] --> Created
+  Created --> Prepared: prepare（プレイ）
+  Created --> Active: setScene、enter
+  Prepared --> Active: setScene、enter
+  Active --> OffStage: setScene（別の scene）、exit
+  OffStage --> Active: setScene、再び enter
+  Prepared --> Disposed: dispose
+  Active --> Disposed: dispose
+  OffStage --> Disposed: dispose
+  Disposed --> [*]
+```
+
+scene が表示する内容は表示の前に渡します。decide scene は `setTarget`、result scene は `setResult`、gameplay scene は `prepare(host, song, source)` の song、ほかは constructor の option です。
+
+- **select scene は生かしておきます。** 標準と LR2 の select scene は decide、プレイ、result のあいだも残ります。`exit()` で BGM を一時停止し、chart preview（focus 中の譜面は覚えたまま）と描画ループを止めますが、cursor、一覧の状態、decode 済みの BGM は保ちます。input の listener はつないだままで、stage にないあいだは入力を無視します。もう一度 enter すると scene timer を始め直して skin の入場演出を再び流し、BGM と preview を再開します。beatoraja の select scene は snapshot から作り直します。
+- **プレイは stage の外で読み込みます。** `prepare()` は stage にも listener にも触れずに譜面を parse して音声を decode するので、demo は decide 画面の裏でプレイを準備します。decide 画面が終わると `setScene(play)` で decide scene を exit してプレイを enter し、`start()` で始めます。decide 画面のあいだに押した key は decide 画面にだけ届きます。decide 画面がないときは demo が先にプレイを表示し、表示中に走る `prepare()` は読み込み中の playfield を描きます。
+- **プレイの音は画面より長く残ります。** gameplay scene の `exit()` は描画と input を止めますが音は止めないので、最後の音が鳴っているあいだに result を表示できます。demo はそのあとプレイを `preserveAudioTail` で dispose します。
+- **decide と result の scene は使い捨てです。** もう一度 enter すると timeline を最初から始めます。demo は画面が替わると dispose します。
+
+```mermaid
+sequenceDiagram
+  participant Demo
+  participant Host as PixiSceneHost
+  participant Decide
+  participant Play
+  Demo->>Play: prepare（stage の外）
+  Demo->>Host: setScene(Decide)
+  Host->>Decide: enter
+  Decide-->>Demo: onContinue
+  Demo->>Host: setScene(Play)
+  Host->>Decide: exit
+  Host->>Play: enter
+  Demo->>Decide: dispose
+  Demo->>Play: start
+```
 
 ### gameplay family が共有するもの
 

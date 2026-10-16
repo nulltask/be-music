@@ -118,7 +118,8 @@ import { fillLaneCover, resolveGreenNumber, resolveHiSpeedForVisibleMs, resolveN
 import { BE_MUSIC_HI_SPEED_SCALE, PlaylogViewCursor } from '../playlog-view.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
-import { type PixiSceneHost } from '../host.ts';
+import type { PixiScene, PixiSceneHost } from '../host.ts';
+import type { SceneIdentity } from '../../host/family-kit.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
 import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
@@ -223,6 +224,8 @@ import { logger } from '../../logger.ts';
 import { QUIT_HOLD_KEY_CODE, QuitHoldController } from '../quit-hold.ts';
 
 const log = logger('gameplay');
+
+const IDENTITY: SceneIdentity = { kind: 'play', family: 'built-in' };
 
 /** Design px above a lane's top through which notes keep drawing as they scroll in (standard layout). */
 const NOTE_OVERSCAN = 48;
@@ -718,27 +721,26 @@ export interface CoreGameplayDisposeOptions {
  * `renderThemeMeasureLines`, `renderThemeText`, `renderBombEffects`, `themeTiming`, `onThemeEvent`, … — each of which
  * defaults to the skinless behaviour, so the class paints a complete scene on its own.
  */
-export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGameplayViewOptions> {
+export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGameplayViewOptions> implements PixiScene {
   /**
-   * The host that owns the underlying `Application`. Set by {@link mount}; before that, accessing `this.app` throws —
-   * the scene must always be mounted to a host before any rendering or input interaction can happen. See
-   * `PixiSceneHost` for the single-Application architecture rationale.
+   * The host that owns the underlying `Application`. Set by {@link prepare} or {@link enter}, whichever runs first;
+   * before that, accessing `this.app` throws. See `PixiSceneHost` for the single-Application architecture rationale.
    */
   private host: PixiSceneHost | undefined;
   /**
    * Top-level Container the scene host attaches to its `app.stage` while gameplay is active. All visible nodes
-   * (`viewportBackground` + `root`) live as children of this sceneRoot, so the host can mount/unmount the whole
+   * (`viewportBackground` + `designRoot`) live as children of this root, so the host can attach / detach the whole
    * gameplay subtree as one operation.
    */
-  private readonly sceneRoot = new Container();
-  private readonly root = new Container();
+  public readonly root: Container = new Container();
+  private readonly designRoot = new Container();
   /**
-   * Clip mask for the design rect — sits as a child of `root` so the same `position` / `scale` transform applies to it
-   * as the sprites it clips. Pixi uses the mask's world-space bounds to decide what's visible; with the mask drawn at
-   * `(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT)` in design space, the post-transform bounds match the on-screen design
-   * rectangle exactly, and any sprite that animates in from off-canvas (LR2 default's `#DST_IMAGE,...,758,0,...`
-   * slide-ins, etc.) gets clipped at the design edge instead of bleeding into the pillarbox / letterbox of a screen
-   * with a different aspect ratio.
+   * Clip mask for the design rect — sits as a child of `designRoot` so the same `position` / `scale` transform applies
+   * to it as the sprites it clips. Pixi uses the mask's world-space bounds to decide what's visible; with the mask
+   * drawn at `(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT)` in design space, the post-transform bounds match the on-screen
+   * design rectangle exactly, and any sprite that animates in from off-canvas (LR2 default's `#DST_IMAGE,...,758,0,...`
+   * slide-ins, etc.) gets clipped at the design edge instead of bleeding into the pillarbox / letterbox of a screen with
+   * a different aspect ratio.
    */
   private readonly designClipMask = new Graphics();
   /** Layout last handed to the be-music chrome, keyed by the lane set it was built for. */
@@ -925,8 +927,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * (which may be transcoding video) has settled. Skins show it as NOW LOADING on the lanes.
    */
   private assetsLoading = false;
-  /** Set by {@link mount}: show the playfield (in its loading state) during {@link prepare} instead of hiding it. */
-  private revealWhilePreparing = false;
+  /**
+   * Between {@link enter} and {@link exit}: the input listeners are attached, and a {@link prepare} running meanwhile
+   * shows the playfield (in its loading state) instead of loading off stage.
+   */
+  private entered = false;
+  /** Whether {@link exit} stopped a running render loop, for the next {@link enter} to resume. */
+  private resumeAnimationOnEnter = false;
   /**
    * `audioContext.currentTime` value that corresponds to chart-second 0. Used to schedule background samples with
    * sample-accurate Web Audio timing.
@@ -1403,13 +1410,17 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.audioCompressorParams = { ...options.audioCompressorParams };
   }
 
+  public get identity(): SceneIdentity {
+    return IDENTITY;
+  }
+
   /**
-   * Convenience accessor for the host's `Application`. Throws if called before {@link mount}; this is intentional —
-   * every code path that touches `this.app` runs after mount completes.
+   * Convenience accessor for the host's `Application`. Throws if called before {@link prepare} / {@link enter}; this is
+   * intentional — every code path that touches `this.app` runs after one of them.
    */
   private get app(): Application {
     if (!this.host) {
-      throw new Error('CoreGameplayView: app accessed before mount');
+      throw new Error('CoreGameplayView: app accessed before prepare / enter');
     }
     return this.host.app;
   }
@@ -1621,101 +1632,55 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /**
-   * Convenience wrapper that runs {@link prepare} and {@link start} back-to-back — the historical "mount everything and
-   * play" entry point. Hosts that want to overlap heavy load with a Decide splash should call `prepare()` early and
-   * call `start()` only when the splash is dismissed. See the `showDecide` flow in `player-web-demo`.
-   */
-  public async mount(host: PixiSceneHost, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
-    // No splash covers the load window on this path, so the playfield comes up straight away and shows the loading
-    // state (see `revealWhilePreparing`) instead of a blank stage while chart audio decodes.
-    this.revealWhilePreparing = true;
-    await this.prepare(host, song, source);
-    if (this.disposed) return;
-    this.start();
-  }
-
-  /**
-   * Attaches the scene-graph subtree to the host, wires DOM listeners, parses the chart, and decodes every audio sample
-   * the chart references — the slow part of going from "song picked" to "gameplay can begin". The scene is added to the
-   * stage with `sceneRoot.visible = false` so a Decide splash (or any other overlay) can keep painting during the load
-   * window without competing for stage z-order.
+   * Loads the play: parses the chart, and decodes every audio sample the chart references — the slow part of going from
+   * "song picked" to "gameplay can begin". It attaches nothing to the stage and no listeners, so a Decide splash can
+   * show while it runs; the host then shows the scene ({@link enter}) and calls {@link start}. Run while the scene is
+   * already showing (a play with no splash), it draws the playfield in its loading state as assets decode instead.
    *
    * Returns once chart audio is decoded (timer / chart-start scheduling is deferred to {@link start}). BGA preload runs
    * concurrently and is allowed to land mid-play; the playfield is up by the time `start()` fires regardless.
    */
   public async prepare(host: PixiSceneHost, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
-    this.host = host;
+    this.build(host);
     this.song = song;
     this.source = source;
-    // Label every top-level node so the PixiJS Devtools "Scene Graph" panel reads as `gameplay > {bga,skin,lane,…}`
-    // instead of a wall of `Container` rows. Layer ordering matches `addChild` below.
-    this.sceneRoot.label = 'gameplay/scene';
-    this.root.label = 'gameplay/root';
-    this.viewportBackground.label = 'gameplay/viewport-bg';
-    this.background.label = 'gameplay/background';
-    this.bgaLayer.label = 'gameplay/bga';
-    this.skinLayer.label = 'gameplay/skin';
-    this.laneLayer.label = 'gameplay/lanes';
-    this.noteLayer.label = 'gameplay/notes';
-    this.bombLayer.label = 'gameplay/bombs';
-    this.overlayLayer.label = 'gameplay/overlay';
-    this.textLayer.label = 'gameplay/text';
-    this.overlay.label = 'gameplay/pause-overlay';
-    this.designClipMask.label = 'gameplay/design-clip';
-    // The mask and design background only change shape with the stage (a rotation can switch a skin between its
-    // landscape and portrait stages), so they are stamped here and restamped by `render` only when the stage changes,
-    // skipping the per-frame rebuild that was contributing to the rAF handler's runtime.
-    this.stampDesignRect(this.stageSize);
-    // The gameplay scene owns its own pointerdown listener on the canvas itself (`this.focus`) and a window-level
-    // keydown listener — none of the per-layer children need to participate in Pixi's interaction system. Marking
-    // each render-only Container as `eventMode = 'none'` lets the interaction manager skip the entire subtree
-    // during hit-testing every pointermove / pointerdown, which is otherwise an O(N) walk over hundreds of skin
-    // children per event.
-    //
-    // CAUTION: `this.background` and `this.designClipMask` are intentionally NOT marked `'none'`. The mask is
-    // referenced via `this.root.mask = this.designClipMask` and Pixi v8's mask resolution path interacts with the
-    // event-mode setting in subtle ways — clearing it on the mask Graphics has been observed to leave the root
-    // unclipped (residual previous-frame content visible, e.g. the LR2 intro title strip stays painted across
-    // subsequent frames) and has the side effect of dropping the rendered frame rate. The mask + the static
-    // `background` Graphics don't carry interactive children either way, so leaving their `eventMode` at the
-    // default is the safest choice.
-    for (const layer of [
-      this.bgaLayer,
-      this.skinLayer,
-      this.laneLayer,
-      this.noteLayer,
-      this.shutterLayer,
-      this.bombLayer,
-      this.overlayLayer,
-      this.textLayer,
-    ]) {
-      layer.eventMode = 'none';
+    // Hidden until {@link start} fires, so a scene shown before the play begins draws nothing of it yet.
+    this.root.visible = false;
+    this.assetsLoading = true;
+    this.prepareSong(song);
+    if (this.entered) {
+      // No splash covers the load window: hold the chart clock before its start (see `start()`) and draw the loading
+      // playfield while assets decode, instead of a blank stage.
+      this.startTime = Number.POSITIVE_INFINITY;
+      this.root.visible = true;
+      this.startAnimationLoop();
     }
-    // Theme sub-layers (e.g. the LR2 bitmap-text layer) must be parked inside `skinLayer` before the scene graph is
-    // assembled so their z-order matches the theme's own layering.
-    this.attachThemeLayers();
-    this.root.addChild(
-      this.background,
-      this.bgaLayer,
-      this.skinLayer,
-      this.laneLayer,
-      this.noteLayer,
-      this.shutterLayer,
-      this.bombLayer,
-      this.overlayLayer,
-      this.textLayer,
-      this.overlay,
-      this.designClipMask,
-    );
-    // Clip every child of `root` to the design rectangle. The mask graphic itself is a child of `root`, so the same
-    // viewport scale / translate applies to both the mask and the masked content — Pixi clips against the mask's world-
-    // space bounds, which matches the on-screen design rectangle.
-    this.root.mask = this.designClipMask;
-    this.shutterLayer.label = 'gameplay/shutter';
-    this.sceneRoot.addChild(this.viewportBackground, this.root);
-    // Attach to the host's already-initialized stage. The host owns the `Application` (canvas, ticker, WebGL context) —
-    // we just contribute our scene-graph subtree.
-    host.app.stage.addChild(this.sceneRoot);
+    await this.prepareTheme();
+    if (this.disposed) return;
+    await this.prepareAudio();
+    if (this.disposed) return;
+    // BGA preload runs IN THE BACKGROUND — `prepare()` resolves here even if `prepareBga()` is still decoding videos.
+    // The ffmpeg.wasm fallback for unsupported codecs (e.g. legacy `.mpg`) can take ~tens of seconds, and the user
+    // wants the PLAY scene to transition in immediately and play its LR2 LOADING animation during that wait rather than
+    // freezing the Decide splash. {@link start} gates the actual chart start (LR2 timer 40 → 41 / op 80 → 81) on
+    // `bgaReadyPromise`, so notes still don't begin until the BGA is in place.
+    this.bgaReadyPromise = this.prepareBga().catch((error) => {
+      log.warn('BGA preload failed; continuing without it', error);
+    });
+    void this.bgaReadyPromise.then(() => {
+      this.assetsLoading = false;
+    });
+  }
+
+  /**
+   * Shows the play (see {@link PixiScene.enter}): wires its keys (ESC / F5 / Space / arrows, the Backspace hold),
+   * touch lanes, canvas focus and the auto-pause on losing focus, and resumes drawing if {@link exit} stopped it. The
+   * play itself starts with {@link start}.
+   */
+  public enter(host: PixiSceneHost): void {
+    if (this.disposed || this.entered) return;
+    this.build(host);
+    this.entered = true;
     // ESC / F5 / Space / ArrowUp / ArrowDown stay on the view so the LR2 `#FADEOUT` exit animation runs to
     // completion BEFORE the engine's interrupt flow disposes the audio session, and so HiSpeed adjustment
     // affects the visual scroll speed (which the engine doesn't own). The WebInputRuntime's `shouldSkipKey`
@@ -1725,15 +1690,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Holding Backspace quits like Escape (`QuitHoldController`); the keyup / blur listeners end the hold.
     window.addEventListener('keyup', this.handleQuitHoldKeyUp);
     window.addEventListener('blur', this.cancelQuitHold);
-    this.app.canvas.addEventListener('pointerdown', this.focus);
+    host.app.canvas.addEventListener('pointerdown', this.focus);
     // Touch play: fingers on the lanes press them. `touch-action: none` keeps the page from scrolling or zooming under
     // the fingers while the play is up.
-    this.previousCanvasTouchAction = this.app.canvas.style.touchAction;
-    this.app.canvas.style.touchAction = 'none';
-    this.app.canvas.addEventListener('pointerdown', this.handleTouchPointer);
-    this.app.canvas.addEventListener('pointermove', this.handleTouchPointer);
-    this.app.canvas.addEventListener('pointerup', this.handleTouchPointerUp);
-    this.app.canvas.addEventListener('pointercancel', this.handleTouchPointerUp);
+    this.previousCanvasTouchAction = host.app.canvas.style.touchAction;
+    host.app.canvas.style.touchAction = 'none';
+    host.app.canvas.addEventListener('pointerdown', this.handleTouchPointer);
+    host.app.canvas.addEventListener('pointermove', this.handleTouchPointer);
+    host.app.canvas.addEventListener('pointerup', this.handleTouchPointerUp);
+    host.app.canvas.addEventListener('pointercancel', this.handleTouchPointerUp);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     // `visibilitychange` covers tab switching but not always app switching (Cmd-Tab / Alt-Tab) — fall back to window
     // blur/focus so the gameplay also pauses when the user moves to another OS app entirely. Use the capture phase so
@@ -1773,33 +1738,114 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       hidden: document.hidden,
       hasFocus: typeof document.hasFocus === 'function' ? document.hasFocus() : 'n/a',
     });
-    // Hide the scene-graph subtree until {@link start} fires so a Decide splash (or any other overlay) can keep
-    // painting on the shared stage during the load window without z-order contention. `start()` flips this back on the
-    // moment the host hands control over to gameplay.
-    this.sceneRoot.visible = false;
-    this.assetsLoading = true;
-    this.prepareSong(song);
-    if (this.revealWhilePreparing) {
-      // Hold the chart clock before its start (see `start()`) and draw the loading playfield while assets decode.
-      this.startTime = Number.POSITIVE_INFINITY;
-      this.sceneRoot.visible = true;
-      this.startAnimationLoop();
+    if (this.resumeAnimationOnEnter) this.startAnimationLoop();
+  }
+
+  /**
+   * Stops drawing and taking input (see {@link PixiScene.exit}). The play's engine and sound run on — a play that has
+   * ended keeps its audio tail until {@link dispose}.
+   */
+  public exit(): void {
+    if (!this.entered) return;
+    this.entered = false;
+    this.resumeAnimationOnEnter = this.tickerAttached;
+    this.stopAnimationLoop();
+    // Detach window-level event listeners so a stray keypress doesn't hit a view that is off stage.
+    window.removeEventListener('keydown', this.handleSharedEngineExitKey);
+    window.removeEventListener('keyup', this.handleQuitHoldKeyUp);
+    window.removeEventListener('blur', this.cancelQuitHold);
+    this.quitHold.cancel();
+    if (this.host) {
+      this.host.app.canvas.removeEventListener('pointerdown', this.focus);
+      const canvas = this.host.app.canvas;
+      canvas.removeEventListener('pointerdown', this.handleTouchPointer);
+      canvas.removeEventListener('pointermove', this.handleTouchPointer);
+      canvas.removeEventListener('pointerup', this.handleTouchPointerUp);
+      canvas.removeEventListener('pointercancel', this.handleTouchPointerUp);
+      if (this.previousCanvasTouchAction !== undefined) canvas.style.touchAction = this.previousCanvasTouchAction;
+      this.touchLanes.upAll();
     }
-    await this.prepareTheme();
-    if (this.disposed) return;
-    await this.prepareAudio();
-    if (this.disposed) return;
-    // BGA preload runs IN THE BACKGROUND — `prepare()` resolves here even if `prepareBga()` is still decoding videos.
-    // The ffmpeg.wasm fallback for unsupported codecs (e.g. legacy `.mpg`) can take ~tens of seconds, and the user
-    // wants the PLAY scene to transition in immediately and play its LR2 LOADING animation during that wait rather than
-    // freezing the Decide splash. {@link start} gates the actual chart start (LR2 timer 40 → 41 / op 80 → 81) on
-    // `bgaReadyPromise`, so notes still don't begin until the BGA is in place.
-    this.bgaReadyPromise = this.prepareBga().catch((error) => {
-      log.warn('BGA preload failed; continuing without it', error);
-    });
-    void this.bgaReadyPromise.then(() => {
-      this.assetsLoading = false;
-    });
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    window.removeEventListener('blur', this.handleWindowBlur, true);
+    window.removeEventListener('focus', this.handleWindowFocus, true);
+    window.removeEventListener('pagehide', this.handleWindowBlur);
+    window.removeEventListener('pageshow', this.handleWindowFocus);
+    if (this.visibilityPollHandle !== undefined) {
+      window.clearInterval(this.visibilityPollHandle);
+      this.visibilityPollHandle = undefined;
+    }
+  }
+
+  /** Builds the scene graph under {@link root} on the first {@link prepare} or {@link enter}; later calls no-op. */
+  private build(host: PixiSceneHost): void {
+    if (this.host !== undefined) return;
+    this.host = host;
+    // Label every top-level node so the PixiJS Devtools "Scene Graph" panel reads as `gameplay > {bga,skin,lane,…}`
+    // instead of a wall of `Container` rows. Layer ordering matches `addChild` below.
+    this.root.label = 'gameplay/scene';
+    this.designRoot.label = 'gameplay/root';
+    this.viewportBackground.label = 'gameplay/viewport-bg';
+    this.background.label = 'gameplay/background';
+    this.bgaLayer.label = 'gameplay/bga';
+    this.skinLayer.label = 'gameplay/skin';
+    this.laneLayer.label = 'gameplay/lanes';
+    this.noteLayer.label = 'gameplay/notes';
+    this.bombLayer.label = 'gameplay/bombs';
+    this.overlayLayer.label = 'gameplay/overlay';
+    this.textLayer.label = 'gameplay/text';
+    this.overlay.label = 'gameplay/pause-overlay';
+    this.designClipMask.label = 'gameplay/design-clip';
+    // The mask and design background only change shape with the stage (a rotation can switch a skin between its
+    // landscape and portrait stages), so they are stamped here and restamped by `render` only when the stage changes,
+    // skipping the per-frame rebuild that was contributing to the rAF handler's runtime.
+    this.stampDesignRect(this.stageSize);
+    // The gameplay scene owns its own pointerdown listener on the canvas itself (`this.focus`) and a window-level
+    // keydown listener — none of the per-layer children need to participate in Pixi's interaction system. Marking
+    // each render-only Container as `eventMode = 'none'` lets the interaction manager skip the entire subtree
+    // during hit-testing every pointermove / pointerdown, which is otherwise an O(N) walk over hundreds of skin
+    // children per event.
+    //
+    // CAUTION: `this.background` and `this.designClipMask` are intentionally NOT marked `'none'`. The mask is
+    // referenced via `this.designRoot.mask = this.designClipMask` and Pixi v8's mask resolution path interacts with the
+    // event-mode setting in subtle ways — clearing it on the mask Graphics has been observed to leave the root
+    // unclipped (residual previous-frame content visible, e.g. the LR2 intro title strip stays painted across
+    // subsequent frames) and has the side effect of dropping the rendered frame rate. The mask + the static
+    // `background` Graphics don't carry interactive children either way, so leaving their `eventMode` at the
+    // default is the safest choice.
+    for (const layer of [
+      this.bgaLayer,
+      this.skinLayer,
+      this.laneLayer,
+      this.noteLayer,
+      this.shutterLayer,
+      this.bombLayer,
+      this.overlayLayer,
+      this.textLayer,
+    ]) {
+      layer.eventMode = 'none';
+    }
+    // Theme sub-layers (e.g. the LR2 bitmap-text layer) must be parked inside `skinLayer` before the scene graph is
+    // assembled so their z-order matches the theme's own layering.
+    this.attachThemeLayers();
+    this.designRoot.addChild(
+      this.background,
+      this.bgaLayer,
+      this.skinLayer,
+      this.laneLayer,
+      this.noteLayer,
+      this.shutterLayer,
+      this.bombLayer,
+      this.overlayLayer,
+      this.textLayer,
+      this.overlay,
+      this.designClipMask,
+    );
+    // Clip every child of `designRoot` to the design rectangle. The mask graphic itself is a child of `designRoot`, so
+    // the same viewport scale / translate applies to both the mask and the masked content — Pixi clips against the
+    // mask's world-space bounds, which matches the on-screen design rectangle.
+    this.designRoot.mask = this.designClipMask;
+    this.shutterLayer.label = 'gameplay/shutter';
+    this.root.addChild(this.viewportBackground, this.designRoot);
   }
 
   /**
@@ -1812,7 +1858,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   public start(): void {
     if (this.disposed) return;
     if (this.sceneStartTime !== 0) return;
-    this.sceneRoot.visible = true;
+    this.root.visible = true;
     // The intro timeline comes from the theme (see {@link themeTiming}; the LR2 family maps `#LOADSTART` / `#LOADEND`
     // / `#PLAYSTART`). `start()` only runs when `paused` is false and `pauseTotal` is still 0, so `playClock()` and
     // `performance.now()` are equivalent here — but seeding through `playClock()` keeps the animation clocks all in the
@@ -1886,10 +1932,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /**
-   * Hides / shows the scene's subtree on the shared stage. Toggles `sceneRoot.visible` (cheap) instead of touching the
-   * canvas display — the canvas is shared with the select scene now, so we mustn't make it `display: none` from here.
-   */
-  /**
    * Pauses or resumes the play, as Space does. For hosts that offer on-screen controls — a touch device has no keyboard
    * to press Space or Escape on.
    */
@@ -1949,10 +1991,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.sharedEngineAbortController?.abort();
       this.options.onExit?.();
     });
-  }
-
-  public setVisible(visible: boolean): void {
-    this.sceneRoot.visible = visible;
   }
 
   /**
@@ -2100,33 +2138,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       return;
     }
     this.disposed = true;
-    // Detach the gameplay tick from the host ticker. The shared `Application` keeps running for the next active scene
-    // — only the per-scene state below is freed.
+    // Detach the gameplay tick and the input listeners. The shared `Application` keeps running for the next active
+    // scene — only the per-scene state below is freed.
+    this.exit();
     this.stopAnimationLoop();
-    // Detach window-level event listeners so a stray keypress doesn't hit a disposed view.
-    window.removeEventListener('keydown', this.handleSharedEngineExitKey);
-    window.removeEventListener('keyup', this.handleQuitHoldKeyUp);
-    window.removeEventListener('blur', this.cancelQuitHold);
-    this.quitHold.cancel();
-    if (this.host) {
-      this.host.app.canvas.removeEventListener('pointerdown', this.focus);
-      const canvas = this.host.app.canvas;
-      canvas.removeEventListener('pointerdown', this.handleTouchPointer);
-      canvas.removeEventListener('pointermove', this.handleTouchPointer);
-      canvas.removeEventListener('pointerup', this.handleTouchPointerUp);
-      canvas.removeEventListener('pointercancel', this.handleTouchPointerUp);
-      if (this.previousCanvasTouchAction !== undefined) canvas.style.touchAction = this.previousCanvasTouchAction;
-      this.touchLanes.upAll();
-    }
-    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-    window.removeEventListener('blur', this.handleWindowBlur, true);
-    window.removeEventListener('focus', this.handleWindowFocus, true);
-    window.removeEventListener('pagehide', this.handleWindowBlur);
-    window.removeEventListener('pageshow', this.handleWindowFocus);
-    if (this.visibilityPollHandle !== undefined) {
-      window.clearInterval(this.visibilityPollHandle);
-      this.visibilityPollHandle = undefined;
-    }
     if (this.exitFadeOutHandle !== undefined) {
       window.clearTimeout(this.exitFadeOutHandle);
       this.exitFadeOutHandle = undefined;
@@ -2230,14 +2245,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       preserveAudioTail ? audioTailCleanupDelayMs : 0,
     );
     // Detach our subtree from the host's stage. The host owns the `Application` lifetime; we just stop contributing to
-    // its scene graph. The sceneRoot Container itself stays alive in case the host wants to re-enter the same view (we
+    // its scene graph. The root Container itself stays alive in case the host wants to re-enter the same view (we
     // don't, but it's harmless).
-    if (this.sceneRoot.parent) {
-      this.sceneRoot.parent.removeChild(this.sceneRoot);
+    if (this.root.parent) {
+      this.root.parent.removeChild(this.root);
     }
-    // Free per-view textures. Order matters: textures BEFORE we destroy the sceneRoot / sprites, because
+    // Free per-view textures. Order matters: textures BEFORE we destroy the root / sprites, because
     // `Texture.destroy()` emits a `styleChange` event that traverses up to the live `GlTextureSystem` (still alive on
-    // the shared host). With our sprites still parented to sceneRoot, the events route correctly.
+    // the shared host). With our sprites still parented to root, the events route correctly.
     //
     // The destroys are spread across multiple frames via the shared host's ticker: a sync sweep over the gameplay
     // view's full texture set (skin chrome + every #BGA frame slot + per-key bombs, often several hundred entries)
@@ -2317,9 +2332,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Destroy our scene-graph subtree. With the shared host pattern we never call `app.destroy` here — that would nuke
     // the canvas and the select scene would lose its rendering target.
     try {
-      this.sceneRoot.destroy({ children: true, context: true });
+      this.root.destroy({ children: true, context: true });
     } catch (error) {
-      log.warn('sceneRoot.destroy threw', error);
+      log.warn('root.destroy threw', error);
     }
     // Drop large per-song reference holders explicitly. Async gates and cancelled browser decode tasks can retain the
     // view for a little while after `dispose()` returns; clearing these fields keeps that short tail from pinning a
@@ -3437,13 +3452,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /**
    * Drives the global "fade everything to black" tween while {@link beginExitSequence} is in flight. The skin's
    * authored `#FADEOUT` overlay (if any) only covers whatever the skin artist drew — gameplay-side layers (notes, lane
-   * chrome, BGA, shutters, bombs, overlay text) sit *above* `skinLayer` in `root` and would otherwise stay fully
-   * visible until the scene is torn down. Fading `root` itself dims every layer uniformly; `viewportBackground` is a
-   * sibling of `root` (under `sceneRoot`), so the page reveals the same `BG` (near-black) the playfield sat against,
-   * giving a clean fade-to-black appearance regardless of which lanes are still painting.
+   * chrome, BGA, shutters, bombs, overlay text) sit *above* `skinLayer` in `designRoot` and would otherwise stay
+   * fully visible until the scene is torn down. Fading `designRoot` itself dims every layer uniformly;
+   * `viewportBackground` is a sibling of `designRoot` (under `root`), so the page reveals the same `BG` (near-black)
+   * the playfield sat against, giving a clean fade-to-black appearance regardless of which lanes are still painting.
    *
-   * Called every frame from {@link render}; cheap when the exit sequence isn't running (`root.alpha` is set back to 1
-   * only when it diverges from 1, so steady-state has no GPU cost).
+   * Called every frame from {@link render}; cheap when the exit sequence isn't running (`designRoot.alpha` is set
+   * back to 1 only when it diverges from 1, so steady-state has no GPU cost).
    */
   private applyExitFadeAlpha(): void {
     if (!this.exiting) {
@@ -3453,19 +3468,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         this.enteredAt ??= now;
         alpha = Math.min(1, (now - this.enteredAt) / BE_MUSIC_ENTER_FADE_MS);
       }
-      if (this.root.alpha !== alpha) this.root.alpha = alpha;
+      if (this.designRoot.alpha !== alpha) this.designRoot.alpha = alpha;
       return;
     }
     const fadeOutMs = this.exitFadeOutMs;
     const fadeStart = this.exitFadeStartedAt;
     if (fadeStart === undefined || fadeOutMs <= 0) {
-      // Fade hasn't been seeded (or the theme has no fade-out); leave root at full alpha. Close-only themes keep the
-      // scene visible until the host transitions us out.
-      if (this.root.alpha !== 1) this.root.alpha = 1;
+      // Fade hasn't been seeded (or the theme has no fade-out); leave designRoot at full alpha. Close-only themes keep
+      // the scene visible until the host transitions us out.
+      if (this.designRoot.alpha !== 1) this.designRoot.alpha = 1;
       return;
     }
     const elapsed = this.playClock() - fadeStart;
-    this.root.alpha = Math.max(0, Math.min(1, 1 - elapsed / fadeOutMs));
+    this.designRoot.alpha = Math.max(0, Math.min(1, 1 - elapsed / fadeOutMs));
   }
 
   /**
@@ -3745,8 +3760,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.cachedScreenWidth = screenWidth;
       this.cachedScreenHeight = screenHeight;
     }
-    this.root.position.set(viewport.x, viewport.y);
-    this.root.scale.set(viewport.scale);
+    this.designRoot.position.set(viewport.x, viewport.y);
+    this.designRoot.scale.set(viewport.scale);
     this.stampDesignRect(this.stageSize);
     this.host?.setStageOrientation(resolveStageOrientation(this.stageSize));
     this.applyExitFadeAlpha();
@@ -5249,7 +5264,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
           if (target.isContentEditable === true) return true;
         }
-        // ESC and F5 are handled by the view's own listener (set up in `mount`) so the LR2 `#FADEOUT` animation
+        // ESC and F5 are handled by the view's own listener (set up in `enter`) so the LR2 `#FADEOUT` animation
         // runs to completion BEFORE the engine's `PlayerInterruptedError` flow disposes the audio session. If
         // we let the runtime push `interrupt(escape)` directly, the engine's `dispose()` would `node.stop()`
         // every in-flight BufferSource immediately, killing the chart audio mid-fade. Same idea for Space:

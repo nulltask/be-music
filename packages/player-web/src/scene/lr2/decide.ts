@@ -8,7 +8,8 @@ import {
   LR2_SPECIAL_GRAPHIC,
 } from '@be-music/lr2-skin';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
-import { type PixiSceneHost } from '../host.ts';
+import type { PixiScene, PixiSceneHost } from '../host.ts';
+import type { SceneIdentity } from '../../host/family-kit.ts';
 import { disposeChildren } from '../pixi-utils.ts';
 import { resolveLr2DecideState, type Lr2SceneState } from '@be-music/lr2-skin/state';
 import {
@@ -33,7 +34,8 @@ const log = logger('decide');
  *
  * Lifecycle:
  *
- * - `mount(host, target)` builds the scene graph, primes the per-song texture cache, and starts the rAF loop.
+ * - `setTarget(target)` names the chart; the host's `setScene` then enters the scene, which builds the scene graph,
+ *   primes the per-song texture cache, and starts the render loop.
  * - The scene auto-dismisses after the skin's `#STARTINPUT` ms plus a fixed window
  *   (`AUTO_ADVANCE_AFTER_STARTINPUT_MS`). Pressing Enter / Space dismisses immediately as long as `#STARTINPUT` has
  *   elapsed (LR2 spec — input is gated on that directive). Escape dismisses unconditionally.
@@ -70,6 +72,8 @@ const AUTO_ADVANCE_AFTER_STARTINPUT_MS = 1200;
  */
 const DEFAULT_STARTINPUT_MS = 1500;
 
+const IDENTITY: SceneIdentity = { kind: 'decide', family: 'lr2' };
+
 export interface PixiDecideTarget {
   song: BrowserSongEntry;
   collection: BrowserSongCollection;
@@ -91,14 +95,14 @@ export interface PixiDecideViewOptions {
 }
 
 /**
- * Mounts the LR2 Decide skin and dismisses itself when the timer / input ladder elapses. The view owns its scene-graph
+ * Shows the LR2 Decide skin and dismisses itself when the timer / input ladder elapses. The view owns its scene-graph
  * subtree (cleared in `dispose`) and never closes the host's AudioContext — decide BGM is handled by the select view,
  * not here.
  */
-export class PixiDecideView {
+export class PixiDecideView implements PixiScene {
   private host: PixiSceneHost | undefined;
-  private readonly sceneRoot = new Container();
-  private readonly root = new Container();
+  public readonly root: Container = new Container();
+  private readonly designRoot = new Container();
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
   /**
@@ -139,6 +143,8 @@ export class PixiDecideView {
     if (this.disposed) return;
     this.render();
   };
+  /** Between {@link enter} and {@link exit}. */
+  private entered = false;
   private disposed = false;
   private continuedFired = false;
   private autoAdvanceHandle: ReturnType<typeof setTimeout> | undefined;
@@ -151,34 +157,41 @@ export class PixiDecideView {
     this.options = options;
   }
 
+  public get identity(): SceneIdentity {
+    return IDENTITY;
+  }
+
   private get app(): Application {
     if (!this.host) {
-      throw new Error('PixiDecideView: app accessed before mount');
+      throw new Error('PixiDecideView: app accessed before enter');
     }
     return this.host.app;
   }
 
-  public async mount(host: PixiSceneHost, target: PixiDecideTarget): Promise<void> {
-    this.host = host;
+  /** The chart about to be played. Set it before the scene is entered. */
+  public setTarget(target: PixiDecideTarget): void {
     this.target = target;
-    this.sceneRoot.label = 'decide/scene';
-    this.root.label = 'decide/root';
-    this.viewportBackground.label = 'decide/viewport-bg';
-    this.background.label = 'decide/background';
-    this.stageFileLayer.label = 'decide/stagefile';
-    this.skinLayer.label = 'decide/skin';
-    this.fallbackLayer.label = 'decide/fallback';
-    this.designClipMask.label = 'decide/design-clip';
-    this.sceneRoot.addChild(this.viewportBackground, this.root);
-    this.root.addChild(this.background, this.stageFileLayer, this.skinLayer, this.fallbackLayer, this.designClipMask);
-    this.root.mask = this.designClipMask;
-    host.app.stage.addChild(this.sceneRoot);
+  }
+
+  /**
+   * Shows the splash (see {@link PixiScene.enter}): the first entry builds the scene graph and starts loading the
+   * skin's textures and fonts; each one wires the keys and clicks, starts drawing and runs the timer ladder from
+   * timer 0.
+   */
+  public enter(host: PixiSceneHost): void {
+    if (this.disposed || this.entered) return;
+    const firstEntry = this.host === undefined;
+    if (firstEntry) this.build(host);
+    this.entered = true;
     window.addEventListener('keydown', this.handleKeyDown);
     host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
-    if (this.options.skin) {
+    if (firstEntry && this.options.skin) {
       void this.prepareSkinTextures(this.options.skin);
       void this.prepareBitmapFonts(this.options.skin);
     }
+    this.continuedFired = false;
+    this.inputUnlocked = false;
+    this.timerStartedAt.clear();
     const now = performance.now();
     this.sceneStartedAt = now;
     this.timerStartedAt.set(LR2_TIMER.SCENE_START, now);
@@ -200,11 +213,10 @@ export class PixiDecideView {
     this.startAnimationLoop();
   }
 
-  public dispose(): void {
-    if (this.disposed) {
-      return;
-    }
-    this.disposed = true;
+  /** Stops the timer ladder, drawing and input (see {@link PixiScene.exit}). */
+  public exit(): void {
+    if (!this.entered) return;
+    this.entered = false;
     this.stopAnimationLoop();
     if (this.autoAdvanceHandle !== undefined) {
       clearTimeout(this.autoAdvanceHandle);
@@ -218,8 +230,38 @@ export class PixiDecideView {
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
     }
-    if (this.sceneRoot.parent) {
-      this.sceneRoot.parent.removeChild(this.sceneRoot);
+  }
+
+  /** Builds the scene graph under {@link root}, once. */
+  private build(host: PixiSceneHost): void {
+    this.host = host;
+    this.root.label = 'decide/scene';
+    this.designRoot.label = 'decide/root';
+    this.viewportBackground.label = 'decide/viewport-bg';
+    this.background.label = 'decide/background';
+    this.stageFileLayer.label = 'decide/stagefile';
+    this.skinLayer.label = 'decide/skin';
+    this.fallbackLayer.label = 'decide/fallback';
+    this.designClipMask.label = 'decide/design-clip';
+    this.root.addChild(this.viewportBackground, this.designRoot);
+    this.designRoot.addChild(
+      this.background,
+      this.stageFileLayer,
+      this.skinLayer,
+      this.fallbackLayer,
+      this.designClipMask,
+    );
+    this.designRoot.mask = this.designClipMask;
+  }
+
+  public dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.exit();
+    if (this.root.parent) {
+      this.root.parent.removeChild(this.root);
     }
     try {
       this.skinTextures.dispose();
@@ -228,9 +270,9 @@ export class PixiDecideView {
       log.warn('texture cleanup threw', error);
     }
     try {
-      this.sceneRoot.destroy({ children: true, context: true });
+      this.root.destroy({ children: true, context: true });
     } catch (error) {
-      log.warn('sceneRoot.destroy threw', error);
+      log.warn('root.destroy threw', error);
     }
     this.host = undefined;
   }
@@ -280,8 +322,8 @@ export class PixiDecideView {
       this.cachedScreenWidth = screenWidth;
       this.cachedScreenHeight = screenHeight;
     }
-    this.root.position.set(viewport.x, viewport.y);
-    this.root.scale.set(viewport.scale);
+    this.designRoot.position.set(viewport.x, viewport.y);
+    this.designRoot.scale.set(viewport.scale);
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
       this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);

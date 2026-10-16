@@ -73,6 +73,7 @@ import {
   type GameplayThemeNoteKind,
   type GameplayThemeTiming,
 } from '../core/gameplay.ts';
+import type { SceneIdentity } from '../../host/family-kit.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 
@@ -113,6 +114,8 @@ export interface PixiGameplayViewOptions extends CoreGameplayViewOptions {
    */
   invisibleNoteSkin?: Lr2Skin;
 }
+
+const IDENTITY: SceneIdentity = { kind: 'play', family: 'lr2' };
 
 /**
  * LR2-family gameplay scene. Extends the family-neutral {@link CoreGameplayView} with everything an LR2 play skin
@@ -268,6 +271,10 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       '1': PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC,
       '2': PixiGameplayView.TURNTABLE_BASELINE_RAD_PER_SEC,
     };
+  }
+
+  public override get identity(): SceneIdentity {
+    return IDENTITY;
   }
 
   // ---------------------------------------------------------------------------------------------------------------
