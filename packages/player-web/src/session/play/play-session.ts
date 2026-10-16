@@ -49,7 +49,7 @@ import {
 import { resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { LiveTempo } from '../../scene/live-tempo.ts';
-import { staggerDestroyTextures } from '../../scene/pixi-utils.ts';
+import { releaseTexturesOnHost } from '../../scene/pixi-utils.ts';
 import { QuitHoldController } from '../../scene/quit-hold.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
@@ -549,33 +549,8 @@ export class PlaySession extends PlaySessionState {
    * itself is going: a sync sweep over a play's textures stalls the next scene's first frames on lower-end devices.
    */
   protected releaseTextures(textures: readonly (Texture | undefined)[]): void {
-    if (textures.length === 0) return;
     try {
-      const ticker = this.host?.app.ticker;
-      const hostIsDisposing = this.host?.isDisposed() === true;
-      const cleanup = staggerDestroyTextures(
-        textures,
-        ticker !== undefined
-          ? (callback) => {
-              ticker.add(callback);
-              return () => ticker.remove(callback);
-            }
-          : (callback) => {
-              let cancelled = false;
-              let timeout: ReturnType<typeof setTimeout> | undefined;
-              const loop = (): void => {
-                if (cancelled) return;
-                callback();
-                if (!cancelled) timeout = setTimeout(loop, 0);
-              };
-              timeout = setTimeout(loop, 0);
-              return () => {
-                cancelled = true;
-                if (timeout !== undefined) clearTimeout(timeout);
-              };
-            },
-      );
-      if (hostIsDisposing) cleanup.drain();
+      releaseTexturesOnHost(this.host, textures);
     } catch (error) {
       log.warn('texture cleanup threw', error);
     }

@@ -6,25 +6,31 @@
 import type { ResolvedPlayChart } from '@be-music/player/core/engine';
 import type { BeMusicPlaylog, PlaylogCourseStage } from '@be-music/player/playlog';
 import { DEFAULT_PLAY_OPTIONS, type CourseView, type PlayOptions, type PlayResult } from '@be-music/scene-model';
+import type { Texture } from 'pixi.js';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/types.ts';
 import type { GameplayRecorderResult } from '../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../recording/recording-format.ts';
 import type { AudioBusChannel, CompressorParams, CompressorStage, TunableCompressor } from '../runtime/audio-bus.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../scene/core/gameplay-options.ts';
-import { KEY_ON_FADE_OUT_MS } from '../scene/gameplay-constants.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
 import { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import { PlaySession } from '../session/play/play-session.ts';
 import type { PlaySessionTheme } from '../session/play/play-session-theme.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
-import { LEGACY_STAGE_SIZE } from '../view/built-in/play-chrome.ts';
-import { BUILT_IN_PLAY_TIMING, BuiltInPlayView } from '../view/built-in/play-view.ts';
-import type { PlayFrame, PlayIntent } from '../view/types.ts';
-import type { BuiltInKit } from './family-kit.ts';
+import { logger } from '../logger.ts';
+import { BuiltInPlayView } from '../view/built-in/play-view.ts';
+import { Lr2PlayView } from '../view/lr2/play-view.ts';
+import type { PlayFrame, PlayIntent, PlayView, PlayfieldSkin } from '../view/types.ts';
+import type { BuiltInKit, Lr2PlayKit } from './family-kit.ts';
 
-/** The kits the play scene takes. The LR2 and beatoraja play screens are still `PixiGameplayView` and `PixiBeatorajaGameplayView`. */
-export type PlaySceneKit = BuiltInKit;
+const log = logger('gameplay');
+
+/**
+ * The kits the play scene takes: a be-music skin, or an LR2 play skin (with the 9-keys skin for invisible notes). The
+ * beatoraja play screen is still `PixiBeatorajaGameplayView`.
+ */
+export type PlaySceneKit = BuiltInKit | Lr2PlayKit;
 
 /**
  * How a play runs, apart from its chart, its skin and where it leads: the play options it judges and scrolls with
@@ -132,7 +138,10 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   progress(): PlayResult | undefined;
   /** The play log once the engine has recorded it, also after Escape; `undefined` after `timeoutMs` without one. */
   waitForPlaylog(timeoutMs?: number): Promise<BeMusicPlaylog | undefined>;
-  /** Takes the player's new settings for the kit's skin; the next frame draws with them. */
+  /**
+   * Takes the player's new settings for the kit's skin; the next frame draws with them. The scene keeps its family and
+   * its skin: a kit of another family or skin is ignored.
+   */
   updateKit(kit: PlaySceneKit): void;
   setAudioVolume(channel: AudioBusChannel, volume: number): void;
   setAudioCompressor(enabled: boolean): void;
@@ -146,23 +155,102 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   dispose(options?: CoreGameplayDisposeOptions): void;
 }
 
-class BuiltInPlayScene extends SessionScene<PlayFrame, PlayIntent> implements PlayScene {
+/** A family's play view, and what the scene and the play session ask of it. */
+interface FamilyPlayView {
+  readonly view: PlayView;
+  /** How the view's skin answers the shared playfield: its stage (for the touch lanes) and its key-beam fade. */
+  readonly playfieldSkin: PlayfieldSkin;
+  /** Builds the view's layers on `host` ahead of its first frame, so what the play loads can upload to the GPU. */
+  prepareOn(host: PixiSceneHost): void;
+  /** Loads the view's own assets once the chart is prepared (the session theme's `prepareView`). */
+  prepareView?(): Promise<void>;
+  uploadTextures(textures: Iterable<Texture | undefined>, isCancelled: () => boolean): Promise<void>;
+  setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void;
+  setShowInvisibleNotes(enabled: boolean): void;
+  updateKit(kit: PlaySceneKit): void;
+}
+
+/** The play view of `kit`'s family, drawing `play`. */
+function createPlayView(
+  kit: PlaySceneKit,
+  play: PlaySession,
+  options: Pick<PlaySceneOptions, 'settings' | 'course' | 'source'>,
+): FamilyPlayView {
+  const { settings, course, source } = options;
+  const drawing = {
+    ...(settings.bga !== undefined ? { bga: settings.bga } : {}),
+    ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
+    ...(settings.nonstop !== undefined ? { nonstop: settings.nonstop } : {}),
+    ...(settings.showInvisibleNotes !== undefined ? { showInvisibleNotes: settings.showInvisibleNotes } : {}),
+    ...(settings.judgedNoteDisplay !== undefined ? { judgedNoteDisplay: settings.judgedNoteDisplay } : {}),
+    ...(source !== undefined ? { source } : {}),
+  };
+  if (kit.family === 'lr2') {
+    const view = new Lr2PlayView(kit, play, {
+      ...drawing,
+      ...(settings.bgaSize !== undefined ? { bgaSize: settings.bgaSize } : {}),
+      ...(settings.autoScratch1P !== undefined ? { autoScratch1P: settings.autoScratch1P } : {}),
+      ...(settings.autoScratch2P !== undefined ? { autoScratch2P: settings.autoScratch2P } : {}),
+      ...(settings.scoreGraph !== undefined ? { scoreGraph: settings.scoreGraph } : {}),
+      gauge: play.resolveSelectedGauge(),
+      courseGauge: course !== undefined,
+      ...(course?.view !== undefined ? { course: course.view } : {}),
+    });
+    return {
+      view,
+      playfieldSkin: view.playfieldSkin,
+      prepareOn: (host) => view.prepareOn(host),
+      prepareView: () => view.prepare(),
+      uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
+      setJudgedNoteDisplay: (mode) => {
+        view.options.judgedNoteDisplay = mode;
+      },
+      setShowInvisibleNotes: (enabled) => {
+        view.options.showInvisibleNotes = enabled;
+      },
+      updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),
+    };
+  }
+  const view = new BuiltInPlayView(kit, play, {
+    ...drawing,
+    ...(settings.layoutMode !== undefined ? { layoutMode: settings.layoutMode } : {}),
+  });
+  return {
+    view,
+    playfieldSkin: view.playfieldSkin,
+    prepareOn: (host) => view.prepareOn(host),
+    uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
+    setJudgedNoteDisplay: (mode) => {
+      view.options.judgedNoteDisplay = mode;
+    },
+    setShowInvisibleNotes: (enabled) => {
+      view.options.showInvisibleNotes = enabled;
+    },
+    updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
+  };
+}
+
+function ignoreKit(kit: PlaySceneKit, family: PlaySceneKit['family']): void {
+  log.warn(`a ${family} play scene keeps its family; ignoring a ${kit.family} kit`);
+}
+
+class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements PlayScene {
   public readonly recording: PlaySceneRecording;
   private readonly playSession: PlaySceneSession;
-  private readonly playView: BuiltInPlayView;
+  private readonly familyView: FamilyPlayView;
   private readonly chart: BrowserSongEntry;
   private readonly source: BrowserSongAssetSource | undefined;
   private readonly prepareHost: PixiSceneHost | undefined;
 
   public constructor(
     session: PlaySceneSession,
-    view: BuiltInPlayView,
+    familyView: FamilyPlayView,
     facts: { chart: BrowserSongEntry; source?: BrowserSongAssetSource; host?: PixiSceneHost },
     options: SessionSceneOptions,
   ) {
-    super(session, view, options);
+    super(session, familyView.view, options);
     this.playSession = session;
-    this.playView = view;
+    this.familyView = familyView;
     this.chart = facts.chart;
     this.source = facts.source;
     this.prepareHost = facts.host;
@@ -187,7 +275,7 @@ class BuiltInPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pl
   public async prepare(onProgress?: (progress: number) => void): Promise<void> {
     if (this.prepareHost !== undefined) {
       this.play.host ??= this.prepareHost;
-      this.playView.prepareOn(this.prepareHost);
+      this.familyView.prepareOn(this.prepareHost);
     }
     const report = (progress: number): void => {
       this.playSession.loadProgress = progress;
@@ -239,7 +327,7 @@ class BuiltInPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pl
   }
 
   public updateKit(kit: PlaySceneKit): void {
-    this.playView.updateKit(kit);
+    this.familyView.updateKit(kit);
   }
 
   public setAudioVolume(channel: AudioBusChannel, volume: number): void {
@@ -267,11 +355,11 @@ class BuiltInPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pl
   }
 
   public setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void {
-    this.playView.options.judgedNoteDisplay = mode;
+    this.familyView.setJudgedNoteDisplay(mode);
   }
 
   public setShowInvisibleNotes(enabled: boolean): void {
-    this.playView.options.showInvisibleNotes = enabled;
+    this.familyView.setShowInvisibleNotes(enabled);
   }
 
   public override dispose(options: CoreGameplayDisposeOptions = {}): void {
@@ -289,13 +377,15 @@ class BuiltInPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pl
 export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): PlayScene {
   const { settings, course, on } = options;
   let sceneSession: PlaySceneSession | undefined;
-  let view: BuiltInPlayView | undefined;
+  let family: FamilyPlayView | undefined;
+  // The view is made for the play below; the play asks its theme nothing before both exist.
   const theme: PlaySessionTheme = {
-    timing: () => BUILT_IN_PLAY_TIMING,
+    timing: () => family!.view.timing,
     moment: (moment) => sceneSession?.queueEvent(moment),
-    keyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
-    stage: () => view?.playfieldSkin.stage ?? LEGACY_STAGE_SIZE,
-    uploadTextures: (textures) => view?.uploadTextures(textures, () => play.disposed) ?? Promise.resolve(),
+    keyOnFadeMs: (channel) => family!.playfieldSkin.keyOnFadeMs(channel),
+    stage: () => family!.playfieldSkin.stage,
+    prepareView: () => family?.prepareView?.() ?? Promise.resolve(),
+    uploadTextures: (textures) => family?.uploadTextures(textures, () => play.disposed) ?? Promise.resolve(),
   };
   const play = new PlaySession(
     {
@@ -314,23 +404,15 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     },
     theme,
   );
-  view = new BuiltInPlayView(kit, play, {
-    ...(settings.bga !== undefined ? { bga: settings.bga } : {}),
-    ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
-    ...(settings.nonstop !== undefined ? { nonstop: settings.nonstop } : {}),
-    ...(settings.showInvisibleNotes !== undefined ? { showInvisibleNotes: settings.showInvisibleNotes } : {}),
-    ...(settings.judgedNoteDisplay !== undefined ? { judgedNoteDisplay: settings.judgedNoteDisplay } : {}),
-    ...(settings.layoutMode !== undefined ? { layoutMode: settings.layoutMode } : {}),
-    ...(options.source !== undefined ? { source: options.source } : {}),
-  });
+  family = createPlayView(kit, play, options);
   sceneSession = new PlaySceneSession(play, {
     chart: options.chart,
     ...(course?.view !== undefined ? { course: course.view } : {}),
     playOptions: options.playOptions ?? DEFAULT_PLAY_OPTIONS,
   });
-  return new BuiltInPlayScene(
+  return new FamilyPlayScene(
     sceneSession,
-    view,
+    family,
     {
       chart: options.chart,
       ...(options.source !== undefined ? { source: options.source } : {}),

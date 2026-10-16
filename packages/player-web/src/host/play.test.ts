@@ -1,4 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
+import type { Lr2Skin } from '@be-music/lr2-skin';
 import { parseChart } from '@be-music/parser';
 import type { LibraryChart } from '@be-music/scene-model';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
@@ -8,6 +9,8 @@ import type { PixiSceneHost } from '../scene/host.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
 import { createDecideScene } from './decide.ts';
+import { resolveLr2LaneRect } from '../view/lr2/play-elements.ts';
+import { resolveLr2PlayTiming } from '../view/lr2/play-view.ts';
 import { createPlayScene, type PlaySceneOptions } from './play.ts';
 
 const CHART: LibraryChart = {
@@ -200,5 +203,112 @@ describe('createPlayScene', () => {
     expect(on.finish).not.toHaveBeenCalled();
     expect(on.exit).not.toHaveBeenCalled();
     expect(scene.disposed).toBe(true);
+  });
+});
+
+/** An LR2 play skin drawing nothing, with `timing`; LR2's 640x480 unless `size` says otherwise. */
+function lr2PlaySkin(timing: Lr2Skin['timing'] = {}, size = { width: 640, height: 480 }): Lr2Skin {
+  return {
+    ...size,
+    timing,
+    images: [],
+    judgeLines: [],
+    numbers: [],
+    grooveGauges: [],
+    bargraphs: [],
+    sliders: [],
+    texts: [],
+    judges: {},
+    judges2P: {},
+    nowCombos: [],
+    laneRects: [],
+    measureLines: [],
+    bgas: [],
+    notes: {},
+    customOptions: [],
+    customFiles: [],
+    lr2FontPaths: [],
+    files: new Map(),
+  } as unknown as Lr2Skin;
+}
+
+describe('resolveLr2PlayTiming', () => {
+  it('gates the chart on #LOADSTART + #LOADEND, then #PLAYSTART, and ends on #FADEOUT and #CLOSE', () => {
+    expect(
+      resolveLr2PlayTiming({ timing: { loadStart: 100, loadEnd: 1500, playStart: 1500, fadeOut: 500, close: 1000 } }),
+    ).toEqual({ loadEndOffsetMs: 1600, playStartOffsetMs: 3100, fadeOutMs: 500, closeMs: 1000 });
+    expect(resolveLr2PlayTiming({ timing: {} })).toEqual({
+      loadEndOffsetMs: 0,
+      playStartOffsetMs: 0,
+      fadeOutMs: 0,
+      closeMs: 0,
+    });
+    expect(resolveLr2PlayTiming({ timing: { loadEnd: -5, fadeOut: -1 } }).fadeOutMs).toBe(0);
+  });
+});
+
+describe('resolveLr2LaneRect', () => {
+  it("scales the skin's #DST_NOTE rect onto the stage, down to the judgement line's bottom edge", () => {
+    const skin = {
+      ...lr2PlaySkin({}, { width: 1280, height: 720 }),
+      laneRects: [undefined, { x: 100, y: 600, w: 60, h: 8 }],
+    } as unknown as Lr2Skin;
+    expect(resolveLr2LaneRect(skin, 1, { width: 640, height: 480 })).toEqual({ x: 50, w: 30, top: 60, bottom: 364 });
+    expect(resolveLr2LaneRect(skin, 2, { width: 640, height: 480 })).toBeUndefined();
+  });
+});
+
+describe('createPlayScene with an LR2 kit', () => {
+  function createLr2(timing: Lr2Skin['timing'] = {}, overrides: Partial<PlaySceneOptions> = {}) {
+    const on = { finish: vi.fn(), exit: vi.fn(), restart: vi.fn() };
+    const scene = createPlayScene(
+      { family: 'lr2', skin: lr2PlaySkin(timing) },
+      {
+        chart: { ...CHART, chart: RANDOM_CHART } as BrowserSongEntry,
+        settings: { initialHiSpeed: 2 },
+        audio: AUDIO,
+        on,
+        keyTarget: NO_KEYS,
+        ...overrides,
+      },
+    );
+    return { scene, on };
+  }
+
+  it('is the LR2 play screen', async () => {
+    const { scene } = createLr2();
+    expect(scene.identity).toEqual({ kind: 'play', family: 'lr2' });
+    expect(scene.getHiSpeed()).toBe(2);
+    await scene.prepare();
+    expect(scene.progress()?.song.title).toBe('Chart');
+    scene.dispose();
+  });
+
+  it("draws its frames once started and leaves through the skin's #FADEOUT and #CLOSE", async () => {
+    vi.useFakeTimers();
+    const fake = createFakeHost();
+    const { scene, on } = createLr2({ fadeOut: 300, close: 200 }, { host: fake.host });
+    await scene.prepare();
+    await scene.enter(fake.host);
+    expect(scene.root.visible).toBe(false);
+    scene.start();
+    fake.tick();
+    expect(scene.root.visible).toBe(true);
+    scene.requestExit();
+    fake.tick();
+    vi.advanceTimersByTime(300);
+    expect(on.exit).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(200);
+    expect(on.exit).toHaveBeenCalledTimes(1);
+    scene.exit();
+    expect(fake.ticking()).toBe(0);
+    scene.dispose();
+  });
+
+  it('keeps its family and skin when handed another kit', () => {
+    const { scene } = createLr2();
+    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'lr2', skin: lr2PlaySkin() })).not.toThrow();
+    scene.dispose();
   });
 });
