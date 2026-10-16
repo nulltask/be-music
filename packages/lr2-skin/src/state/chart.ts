@@ -126,24 +126,6 @@ export function resolveLr2JudgeRankOp(rank: number | undefined): number {
   }
 }
 
-/** The name LR2 skins show for a `#DIFFICULTY` (BEGINNER … INSANE); empty for none. */
-export function lr2DifficultyName(difficulty: number | undefined): string {
-  switch (difficulty) {
-    case 1:
-      return 'BEGINNER';
-    case 2:
-      return 'NORMAL';
-    case 3:
-      return 'HYPER';
-    case 4:
-      return 'ANOTHER';
-    case 5:
-      return 'INSANE';
-    default:
-      return '';
-  }
-}
-
 /** A chart's `#PLAYLEVEL` as a number, `undefined` when it has none or it is not a number. */
 export function lr2PlayLevel(chart: Pick<LibraryChart, 'playLevel'>): number | undefined {
   const level =
@@ -153,7 +135,7 @@ export function lr2PlayLevel(chart: Pick<LibraryChart, 'playLevel'>): number | u
 
 /**
  * The chart texts LR2 draws for a library chart: the title, subtitle, genre, artist, subartist (bmson `subartists`),
- * tag (empty: be-music keeps no tags), play level and difficulty name (10-18; texts 20-28 repeat them) and the INSANE
+ * tag (empty: be-music keeps no tags), play level and difficulty number (10-18; texts 20-28 repeat them) and the INSANE
  * level (29). `undefined` for any other text.
  */
 export function resolveLr2ChartText(st: number, chart: LibraryChart): string | undefined {
@@ -185,7 +167,8 @@ export function resolveLr2ChartText(st: number, chart: LibraryChart): string | u
       return chart.playLevel?.toString() ?? '';
     case LR2_TEXT.DIFFICULTY:
     case LR2_TEXT.DIFFICULTY_ALT:
-      return lr2DifficultyName(chart.chart.metadata.difficulty);
+      // The `#DIFFICULTY` number, as LR2 draws it; the difficulty ops (150-155) name it.
+      return chart.chart.metadata.difficulty?.toString() ?? '';
     case LR2_TEXT.INSANE_LEVEL:
       // No insane-table level of its own: an INSANE chart's play level.
       return chart.chart.metadata.difficulty === 5 ? (chart.playLevel?.toString() ?? '') : '';

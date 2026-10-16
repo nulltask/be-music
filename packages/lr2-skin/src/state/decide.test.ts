@@ -21,7 +21,7 @@ describe('resolveLr2DecideState', () => {
     });
     expect(state.text(LR2_TEXT.TITLE)).toBe('T');
     expect(state.text(LR2_TEXT.ARTIST_ALT)).toBe('A');
-    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('INSANE');
+    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('5');
     expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBeUndefined();
     expect(state.text(LR2_TEXT.TAG_ALT)).toBe('');
     expect(state.number(LR2_NUM.TOTAL_NOTES)).toBeUndefined();

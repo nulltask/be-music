@@ -173,7 +173,7 @@ describe('resolveLr2PlayState texts, sliders and bar graphs', () => {
     const state = resolveLr2PlayState(SETUP, frame());
     expect(state.text(LR2_TEXT.TITLE)).toBe('T');
     expect(state.text(LR2_TEXT.ARTIST)).toBe('A');
-    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('HYPER');
+    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('3');
     expect(state.text(LR2_TEXT.RIVAL)).toBe('TARGET');
     expect(state.text(LR2_TEXT.TAG)).toBe('');
     expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBeUndefined();

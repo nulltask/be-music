@@ -383,7 +383,7 @@ describe('resolveLr2ResultState values', () => {
     const state = resolveLr2ResultState({ result: makeResult({ difficulty: 5 }) });
     expect(state.text(LR2_TEXT.RIVAL)).toBe('TARGET');
     expect(state.text(LR2_TEXT.TITLE_ALT)).toBe('Test');
-    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('INSANE');
+    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('5');
     expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBeUndefined();
     expect(state.text(LR2_TEXT.TAG)).toBe('');
   });
