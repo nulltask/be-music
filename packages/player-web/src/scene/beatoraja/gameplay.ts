@@ -294,10 +294,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private readonly options: PixiBeatorajaGameplayViewOptions;
   private readonly skinAudioRenderContext: BeatorajaRenderContext;
   private currentFrame: PlayerUiFramePayload | null = null;
-  // Hispeed fallback used until `stateSignals.highSpeed()` reports a host-driven value (which it
-  // does on every update tick — see line ~929). Aligned with `DEFAULT_PLAY_OPTIONS.hiSpeed = 2.0`
-  // in `scene/lr2/select` for consistency, NOT upstream `PlayConfig.java:16`'s `1.0f`. See the
-  // rationale comment on `DEFAULT_PLAY_OPTIONS.hiSpeed`.
+  // Hi-speed until `stateSignals.highSpeed()` reports a host-driven value: 2.0 as `DEFAULT_PLAY_OPTIONS.hiSpeed` in
+  // `scene/lr2/select` (see the rationale there), not upstream `PlayConfig.java:16`'s `1.0f`.
   private hiSpeed = 2.0;
   /** Whether {@link hiSpeed} came from the host (`initialHiSpeed` / `setHiSpeed`) and must seed the engine's signal. */
   private hiSpeedSeeded = false;
@@ -332,10 +330,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private exitRequested = false;
   /** The play tempo in force (`engineOptions.speed`, then every live change) and the changes asked for. */
   private readonly liveTempo: LiveTempo;
-  /**
-   * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`).
-   * Hosts read it back through {@link getPlaylog} after `onComplete` fires.
-   */
+  /** The play log the engine assembles as it settles (`onPlaylogRecorded`); hosts read it with {@link getPlaylog}. */
   private playlog: BeMusicPlaylog | undefined;
   private disposed = false;
   /**
@@ -825,6 +820,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    */
   getPlaylog(): BeMusicPlaylog | undefined {
     return this.playlog;
+  }
+
+  /** The engine's latest frame (chart time, judgments and gauge so far), `undefined` before its first one. */
+  getFrame(): PlayerUiFramePayload | undefined {
+    return this.currentFrame ?? undefined;
   }
 
   /**
