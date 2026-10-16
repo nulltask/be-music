@@ -2,17 +2,17 @@ import { restoreBrowse } from '@be-music/scene-model';
 import { describe, expect, it } from 'vite-plus/test';
 import { CoreSongSelectView } from './select.ts';
 import type { BrowserCourseEntry } from '../../collection/types.ts';
-import type { SelectSession } from '../../session/select/select-session.ts';
+import type { LegacySelectSession } from './select-legacy/session.ts';
 import { makeCollection, makeCourse, makeCourseFolder } from '../../session/select/test-support.ts';
 
 /*
  * The select scene's browsing, search, cursor and play options are tested with its session
- * (`session/select/select-session.test.ts`) and the browse and play options models in `@be-music/scene-model`.
+ * (`select-legacy/session.test.ts`) and the browse and play options models in `@be-music/scene-model`.
  */
 
 describe('CoreSongSelectView course bars', () => {
   type CourseBarView = {
-    session: SelectSession;
+    session: LegacySelectSession;
     activateFocused(): void;
     launchFocusedSong(autoPlay: boolean): void;
   };

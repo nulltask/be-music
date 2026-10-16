@@ -153,8 +153,11 @@ export interface AudioService {
   playBgm(sound: AudioSoundRef | undefined, options?: AudioBgmOptions): Promise<boolean>;
   /** Stops the BGM; with `owner`, only when that owner started it. */
   stopBgm(owner?: AudioOwner): void;
-  /** Plays a cue of the theme's sounds once (a cursor move, a folder, an option panel). Resolves whether it started. */
-  playCue(slot: SystemSoundSlot, options?: AudioPlayOptions): Promise<boolean>;
+  /**
+   * Plays a cue once on the cue bus (a cursor move, a folder, an option panel): a slot of the theme's sounds, or a
+   * resolved `SystemSound` (a scene's own sound set). Resolves whether it started.
+   */
+  playCue(sound: AudioSoundRef | undefined, options?: AudioPlayOptions): Promise<boolean>;
   /** Plays a jingle once (the decide jingle, a result jingle). Resolves whether it started. */
   playJingle(sound: AudioSoundRef | undefined, options?: AudioPlayOptions): Promise<boolean>;
   /** A beatoraja skin's Lua sounds, resolved against the theme's files. */
@@ -592,9 +595,9 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
       if (owner !== undefined && bgm.owner !== owner) return;
       stopVoice(bgm);
     },
-    playCue(slot, playOptions = {}) {
+    playCue(sound, playOptions = {}) {
       if (disposed) return Promise.resolve(false);
-      return play('cue', resolveSound(slot), playOptions)?.started ?? Promise.resolve(false);
+      return play('cue', resolveSound(sound), playOptions)?.started ?? Promise.resolve(false);
     },
     playJingle(sound, playOptions = {}) {
       if (disposed) return Promise.resolve(false);
