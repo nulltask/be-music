@@ -234,11 +234,12 @@ flowchart LR
 
 - スキンは 2 回読み込みます。1 回目はヘッダーの `property[]`、`filepath[]`、`offset[]` を読み、その既定値でエントリのオプションを用意します（`defaultBeatorajaSkinConfig`）。2 回目はそのオプションで Lua スキンの `main()` を実行します。ホストがオプションをすでに持っているとき（スキンのオプションを変えたとき）は 1 回だけ読み込みます。決定画面とリザルト画面のスキンには、譜面の難易度の op を点けた読み込み時の `main_state` を渡します（`createBeatorajaSkinLoadContext`）。ModernChic が `main()` の中で色を決めるためです。
 - `source[]` はテーマのファイルから解決して（`bundleBeatorajaSources`。オプションの `filepath[]` の選択を反映します）テクスチャにデコードし、`font[]` を登録します。
+- スキンの合成スロット -100〜-102 に描く譜面自身の画像（`#STAGEFILE`、`#BACKBMP`、`#BANNER`）は `loadBeatorajaChartImages(chart, source)` で読み込みます。譜面と同じフォルダー、次にソースのルートで探します。beatoraja の決定画面のビューは、これを自分で読み込みます。
 - ホストは `BeatorajaSceneKitCaches` を 1 つ持ち、エントリごとのテクスチャ、フォント、オプションをエントリのパスで保持します。同じエントリの次の scene はそれを使い回します。PixiJS v8 は破棄したあとに同じバイト列をデコードし直すとクラッシュするので、テクスチャは破棄しません。新しいテーマを読み込むと、テクスチャを手放してフォントを破棄します（`releaseBeatorajaSceneKitAssets`）。
 
 実装済みの beatoraja browser feature:
 
-- `BeatorajaPlaySkinView` を使う select、decide、gameplay、result scene
+- `BeatorajaPlaySkinView` を使う select、decide、gameplay、result scene。決定画面は `createDecideScene` で作るファミリービューです（[決定画面](#決定画面)）
 - play variant `5`, `7`, `9`, `10`, `14`。`24` / `24d` skin は discovery しますが、chart gameplay では mount しません
 - skin `property[]`、`filepath[]`、custom offset、category group、mid-session `replaceSkin()` refresh
 - score、combo、judge、gauge、chart metadata、clear lamp、rank、play option 向けの runtime `TIMER_*`、`OPTION_*`、`TEXT`、`NUM` wiring
@@ -285,7 +286,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-scene が表示する内容は表示の前に渡します。標準と LR2 の decide 画面は `createDecideScene` の option、beatoraja の decide scene は `setTarget`、標準と LR2 の result 画面は `createResultScene` の option、beatoraja の result scene は `setResult`、標準のプレイ画面は `createPlayScene` の option、LR2 の gameplay scene は `prepare(host, song, source)` の song、ほかは constructor の option です。
+scene が表示する内容は表示の前に渡します。decide 画面はどれも `createDecideScene` の option、標準と LR2 の result 画面は `createResultScene` の option、beatoraja の result scene は `setResult`、標準のプレイ画面は `createPlayScene` の option、LR2 の gameplay scene は `prepare(host, song, source)` の song、ほかは constructor の option です。
 
 - **select scene は生かしておきます。** 標準と LR2 の select scene は decide、プレイ、result のあいだも残ります。`exit()` で BGM を一時停止し、chart preview（focus 中の譜面は覚えたまま）と描画ループを止めますが、cursor、一覧の状態、decode 済みの BGM は保ちます。input の listener はつないだままで、stage にないあいだは入力を無視します。もう一度 enter すると scene timer を始め直して skin の入場演出を再び流し、BGM と preview を再開します。beatoraja の select scene は snapshot から作り直します。
 - **プレイは stage の外で読み込みます。** `prepare()` は stage にも listener にも触れずに譜面を parse して音声を decode するので、demo は decide 画面の裏でプレイを準備します。decide 画面が終わると `setScene(play)` で decide scene を exit してプレイを enter し、`start()` で始めます。decide 画面のあいだに押した key は decide 画面にだけ届きます。decide 画面がないときは demo が先にプレイを表示し、表示中に走る `prepare()` は読み込み中の playfield を描きます。
@@ -338,7 +339,7 @@ flowchart TD
 
 ## シーンセッションとファミリービュー
 
-scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。標準と LR2 の決定画面とリザルト画面、標準のプレイ画面はすでに移りました（[決定画面](#決定画面)、[リザルト画面](#リザルト画面)、[プレイ画面](#プレイ画面)）。ほかの scene は、まだ [Scene lifecycle](#scene-lifecycle) で説明したクラスのままです。
+scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。どの種類の決定画面も、標準と LR2 のリザルト画面と標準のプレイ画面も、すでに移りました（[決定画面](#決定画面)、[リザルト画面](#リザルト画面)、[プレイ画面](#プレイ画面)）。ほかの scene は、まだ [Scene lifecycle](#scene-lifecycle) で説明したクラスのままです。
 
 ```mermaid
 flowchart LR
@@ -355,7 +356,7 @@ flowchart LR
 - **ファミリーキット**（`host/family-kit.ts`）。ホストが種類ごとに scene に渡すものです。`{ family: 'built-in', skin }`（be-music スキンとプレイヤーの設定値）、`{ family: 'lr2', skin }`、`{ family: 'beatoraja', kit }`（読み込んだテーマの 1 エントリ。スキン、テクスチャ、フォント、オプション、テーマのファイル）のどれかで、`SelectKit`・`DecideKit`・`PlayKit`・`ResultKit` があります。
 - **フレーム**（`view/types.ts`）。セッションはティックごとに、シーンモデルの上に組んだフレームをビューに渡します。
   - `SelectFrame`: ライブラリ、`BrowseState`、一覧とカーソル、プレイオプション、記録
-  - `DecideFrame`: 譜面、コースのステージ、読み込みの進み具合
+  - `DecideFrame`: 譜面、プレイが遊ぶとおりの譜面、コースのステージ、読み込みの進み具合
   - `PlayFrame`: `PlayState`、譜面の時刻、ノート、押されているレーン、前のフレームからのできごと
   - `ResultFrame`: `PlayResult` と、その見せ方
 - **インテント。** ビューは、プレイヤーが求めたことを scene ごとに返します。
@@ -363,7 +364,7 @@ flowchart LR
   - 決定: 進む、戻る
   - プレイ: タッチのレーン、ハイスピード、カバー、一時停止、中断
   - リザルト: 進む、リトライ
-- **`FamilyView`** は `attach(host, emit)`・`draw(frame)`・`detach()`・`dispose()` を持ちます。外したビューは読み込んだものを保ちます。決定・プレイ・リザルトのビューは、スキンのタイミングも渡します。入力までの待ち、自動で進むまでの時間、フェードアウトで、プレイなら LR2 の読み込み終了・譜面開始・フェードアウト・クローズのオフセットです。
+- **`FamilyView`** は `attach(host, emit)`・`draw(frame)`・`detach()`・`dispose()` を持ちます。外したビューは読み込んだものを保ちます。決定・プレイ・リザルトのビューは、スキンのタイミングも渡します。入力までの待ち、自動で進むまでの時間、フェードアウト（beatoraja のように Escape も入力を待つかどうかも）で、プレイなら LR2 の読み込み終了・譜面開始・フェードアウト・クローズのオフセットです。
 - **`SessionScene`** は、セッションとビューから作る `PixiScene` です。
   - `enter(host)` でビューを付け、セッションを始め、最初のフレームを描きます。
   - ティッカーがセッションにフレームを求め、ビューに描かせます。
@@ -408,15 +409,16 @@ Web demo はプレイ、コース（カーソルはコースのバーに戻り�
 
 ### 決定画面
 
-`createDecideScene(kit, options)`（`@be-music/player-web/scenes`）は標準と LR2 の決定画面を作ります。決定画面のセッション（`session/decide/decide-session.ts`）を kit の種類のビューが描くもので、`setScene` で表示する `SessionScene` です。標準の kit（`{ family: 'built-in', skin }`）は標準の決定画面のビュー（`view/built-in/decide-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin }`。テーマの決定画面のスキン）は LR2 の決定画面のビュー（`view/lr2/decide-view.ts`）が描きます。beatoraja の決定画面は、まだ `PixiBeatorajaDecideScene` です。
+`createDecideScene(kit, options)`（`@be-music/player-web/scenes`）は、どの種類の決定画面も作ります。決定画面のセッション（`session/decide/decide-session.ts`）を kit の種類のビューが描くもので、`setScene` で表示する `SessionScene` です。標準の kit（`{ family: 'built-in', skin }`）は標準の決定画面のビュー（`view/built-in/decide-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin }`。テーマの決定画面のスキン）は LR2 の決定画面のビュー（`view/lr2/decide-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。`loadBeatorajaSceneKit` で読み込んだテーマの決定画面のエントリ）は beatoraja の決定画面のビュー（`view/beatoraja/decide-view.ts`）が描きます。
 
-- **オプション。** `chart`（これから遊ぶ譜面）、`course`（コースのステージなら、そのコース）、`playOptions`（スキンに見せるプレイオプション）、`source`（スキンの画像のための譜面のファイル）、`sounds`（テーマの `SystemSoundSet`）、`audio`（ホストのオーディオサービス）、`progress`（裏で準備しているプレイの読み込みの進み具合）、`on: { continue, cancel }` です。
-- **タイミング。** セッションは、ビューのスキンのタイミング（`DecideView.timing`）で画面を進めます。入力は入力までの待ちのあとに受け付けます。自動で進むまでの時間がたつと、画面はひとりでにプレイへ進みます。その時間がなければ、プレイヤーの操作を待ちます。画面を出るときはまずフェードアウトし、そのあと `on.continue`（プレイへ）か `on.cancel`（選曲画面へ戻る）を、enter ごとに 1 回だけ呼びます。be-music スキンの画面はすぐに入力を受け付け、`decide.durationMs`（既定は 2000 ms）のあとに進み、フェードアウトはありません。LR2 スキンの画面は `#STARTINPUT`（なければ 1500 ms）のあとに入力を受け付け、その 1200 ms 後に進み、`#FADEOUT` の間フェードアウトします。
-- **入力。** Enter、Space、キャンバスのクリックは、入力を受け付けてから進みます。Escape はいつでも戻ります。LR2 が `#STARTINPUT` の前でも Escape を受け付けるのと同じです。キーリピートは無視するので、選曲画面から押したままの Enter で画面を飛ばすことはありません。
+- **オプション。** `chart`（これから遊ぶ譜面）、`course`（コースのステージなら、そのコース）、`playOptions`（スキンに見せるプレイオプション）、`source`（スキンの画像のための譜面のファイル）、`sounds`（テーマの `SystemSoundSet`）、`audio`（ホストのオーディオサービス）、`progress`（裏で準備しているプレイの読み込みの進み具合。ないときは、自動で進むまでの時間のうち過ぎた割合をフレームに入れます）、`on: { continue, cancel }` です。
+- **タイミング。** セッションは、ビューのスキンのタイミング（`DecideView.timing`）で画面を進めます。入力は入力までの待ちのあとに受け付けます。自動で進むまでの時間がたつと、画面はひとりでにプレイへ進みます。その時間がなければ、プレイヤーの操作を待ちます。画面を出るときはまずフェードアウトし、そのあと `on.continue`（プレイへ）か `on.cancel`（選曲画面へ戻る）を、enter ごとに 1 回だけ呼びます。be-music スキンの画面はすぐに入力を受け付け、`decide.durationMs`（既定は 2000 ms）のあとに進み、フェードアウトはありません。LR2 スキンの画面は `#STARTINPUT`（なければ 1500 ms）のあとに入力を受け付け、その 1200 ms 後に進み、`#FADEOUT` の間フェードアウトします。beatoraja スキンの画面は `input`（なければ 500 ms）のあとに入力を受け付け、`scene`（なければ 3000 ms。`scene = 0` ならプレイヤーの操作を待ちます）のあとに進み、`fadeout`（なければ 500 ms）の間フェードアウトします。
+- **入力。** Enter、Space、キャンバスのクリックは、入力を受け付けてから進みます。beatoraja の画面は、beatoraja と同じくクリックを受け付けません。Escape はいつでも戻ります。LR2 が `#STARTINPUT` の前でも Escape を受け付けるのと同じです。beatoraja のスキンでは、beatoraja の `input` がすべてのキーを待たせるのと同じく、Escape も入力を受け付けるまで待ちます（`SceneViewTiming.escapeWaitsForInput`）。キーリピートは無視するので、選曲画面から押したままの Enter で画面を飛ばすことはありません。
 - **LR2 の描画。** LR2 のビューは、譜面の `#STAGEFILE` の上に決定画面のスキンを `resolveLr2DecideState`（譜面の難易度、キーモード、テキスト。コースのステージならコースのもの）で描きます。LR2 のタイマーはフレームごとにフレームから読みます。タイマー 0 は画面に入った時刻から、タイマー 1 は入力を受け付けた時刻から、タイマー 2 は画面を出始めた時刻からです。タイマーの ID はビューの中にとどめます。
-- **音。** セッションは、画面に入るときにテーマの決定音（`sounds.decideBgm`）をオーナーとしてオーディオサービスで鳴らし、画面がステージから外れるときに `stopOwned` で止めます。Web のデモは、どの種類でも決定画面に決定音を渡しません（`sounds: {}`）。[決定音](#決定音) を見てください。
-- **`#RANDOM`。** セッションは、scene を作るときに譜面の `#RANDOM` / `#SWITCH` の分岐を 1 回だけ引きます。beatoraja の決定画面と同じです。`scene.resolved` は分岐を解決した譜面と引いた値で、プレイに渡す（`preResolved`）ためのものです。`DecideFrame.playChart` はビューのグラフのための同じ譜面なので、画面はプレイが遊ぶ分岐を表示します。Web のデモの LR2 / 標準のプレイは、まだ解決済みの譜面を受け取らず、自分で分岐を引きます。標準の決定画面のビューも LR2 の決定画面のビューも分岐を描きません。
-- **スキンの設定。** `updateKit(kit)` は、プレイヤーが変えたスキンの設定値を受け取り、次のフレームからそれで描きます。
+- **beatoraja の描画。** beatoraja のビューは、決定画面のスキンを `BeatorajaPlaySkinView` で、キャンバスをウィンドウに合わせて描きます。`@be-music/beatoraja-skin/scene` のシーンの対応づけで、譜面の難易度の op、`#PLAYLEVEL` と BPM、読み込みのバーと割合（`NOW_LOADING` のあと `LOADED`。`resolveBeatorajaDecideOps`、`resolveBeatorajaDecideNumber`、`resolveBeatorajaDecideGraphValue`）と、譜面とスキンのテキストを描きます。`DecideFrame.playChart` の BPM グラフとノート種別のグラフ、譜面の `#STAGEFILE`・`#BACKBMP`・`#BANNER` も描きます。画像は最初のフレームの前に `source` から読み込みます。beatoraja のタイマーは、フレームごとに画面自身の時計（入ってからの ms）で読みます。タイマー 0 は画面に入った時刻から、タイマー 1 と READY / PLAY は入力を受け付けた時刻から、タイマー 2 は画面を出始めた時刻からです。
+- **音。** セッションは、画面に入るときにテーマの決定音（`sounds.decideBgm`）をオーナーとしてオーディオサービスで鳴らし、画面がステージから外れるときに `stopOwned` で止めます。Web のデモは、標準と LR2 の決定画面に決定音を渡しません（`sounds: {}`）。[決定音](#決定音) を見てください。beatoraja の画面にはテーマの決定音を渡します（`systemSoundSetFromBeatoraja`）。beatoraja スキンの Lua の音（`main_state.audio_*`）はオーディオサービスのスキンの音でセッションのものとして鳴らすので（`skinSounds.owned`）、画面を出るときに一緒に止まります。
+- **`#RANDOM`。** セッションは、scene を作るときに譜面の `#RANDOM` / `#SWITCH` の分岐を 1 回だけ引きます。beatoraja の決定画面と同じです。`scene.resolved` は分岐を解決した譜面と引いた値で、プレイに渡す（`preResolved`）ためのものです。`DecideFrame.playChart` はビューのグラフのための同じ譜面なので、画面はプレイが遊ぶ分岐を表示します。Web のデモは引いた値をプレイに渡します。画面の裏で先読みする LR2 / 標準のプレイも、beatoraja のプレイも同じです（コースのステージは自分で引きます）。分岐を描くのは beatoraja の決定画面のビュー（BPM グラフとノート種別のグラフ）だけです。
+- **スキンの設定。** `updateKit(kit)` は、プレイヤーが変えたスキンの設定値を受け取り、次のフレームからそれで描きます。beatoraja のスキンはオプションを反映して読み込むので、別のスキンの beatoraja の kit は無視します。
 
 ```mermaid
 stateDiagram-v2
@@ -431,11 +433,11 @@ stateDiagram-v2
   ToSelect --> [*]: フェードアウト、cancel
 ```
 
-Web のデモは、これまでどおり画面の裏でプレイを準備し、`on.continue` でそれを表示します。
+Web のデモは、これまでどおり標準と LR2 の画面の裏で LR2 / 標準のプレイを準備し、`on.continue` でそれを表示します。beatoraja の画面のあとは、これまでどおり `on.continue` でプレイを始めます。
 
 #### 決定音
 
-LR2 のサウンドセットの決定音（`#DECIDE`）は、今は標準 / LR2 の選曲 scene にあります。Web のデモは、譜面かコースを選んだときに選曲 scene の `playDecideSound` で、選曲 scene 自身の AudioContext で鳴らします。選曲 scene の exit はこれを止めません。決定音は LR2 と同じく決定画面を通ってプレイまで鳴り続け、決定画面が出ないとき（決定画面のスキンのないテーマ）にも鳴ります。beatoraja の決定画面は、今もテーマの決定音を自分で鳴らします。
+LR2 のサウンドセットの決定音（`#DECIDE`）は、今は標準 / LR2 の選曲 scene にあります。Web のデモは、譜面かコースを選んだときに選曲 scene の `playDecideSound` で、選曲 scene 自身の AudioContext で鳴らします。選曲 scene の exit はこれを止めません。決定音は LR2 と同じく決定画面を通ってプレイまで鳴り続け、決定画面が出ないとき（決定画面のスキンのないテーマ）にも鳴ります。beatoraja の決定画面は、テーマの決定音をセッションのジングルとして鳴らし、画面を出るときに止めます。以前の画面自身の AudioContext で止まっていたのと同じです。
 
 ```mermaid
 sequenceDiagram
@@ -450,7 +452,7 @@ sequenceDiagram
   Note over Select,Play: 決定音は終わるまで鳴り続ける
 ```
 
-決定画面のセッションも決定音を鳴らせます（`sounds.decideBgm`）。ただしそれは決定 scene 自身の音で、scene が出るときに `stopOwned` が止めるので、プレイが始まるところで決定音が切れます。そのためデモは、どの決定画面にも `sounds: {}` を渡します。決定音は選曲画面と一緒に移ります（S4、オーディオサービスを使う選曲画面のセッション）。選曲画面のセッションは決定音をオーナーなしでオーディオサービスから鳴らすので、続く scene をまたいで最後まで鳴ります。
+決定画面のセッションも決定音を鳴らせます（`sounds.decideBgm`）。ただしそれは決定 scene 自身の音で、scene が出るときに `stopOwned` が止めるので、プレイが始まるところで決定音が切れます。そのためデモは、標準と LR2 の決定画面に `sounds: {}` を渡します。決定音は選曲画面と一緒に移ります（S4、オーディオサービスを使う選曲画面のセッション）。選曲画面のセッションは決定音をオーナーなしでオーディオサービスから鳴らすので、続く scene をまたいで最後まで鳴ります。
 
 ### リザルト画面
 
@@ -608,7 +610,7 @@ pnpm bench -- --packages player-web
 
 ### オーディオサービス
 
-`createAudioService()`（`@be-music/player-web/runtime`）は、プレイ中の譜面の音以外を鳴らす唯一の入口です（[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）。scene session はできるごとにこれで音を鳴らします。今のところ決定画面、リザルト画面、標準のプレイ画面で（プレイは `openPlayGraph` で専用のグラフを開きます）、ほかの scene はまだそれぞれの AudioContext を使います。Web のデモは起動時にサービスを 1 つ作り、これで作るすべての scene に渡します。
+`createAudioService()`（`@be-music/player-web/runtime`）は、プレイ中の譜面の音以外を鳴らす唯一の入口です（[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）。scene session はできるごとにこれで音を鳴らします。今のところ決定画面、リザルト画面、標準のプレイ画面で（プレイは `openPlayGraph` で専用のグラフを開きます）、ほかの scene はまだそれぞれの AudioContext を使います。Web のデモは起動時にサービスを 1 つ作り、これで作るすべての scene に渡します。beatoraja のテーマを読み込むと、スキンの音のためにそのファイルを設定します（`setTheme({ files })`）。
 
 ```mermaid
 flowchart LR
