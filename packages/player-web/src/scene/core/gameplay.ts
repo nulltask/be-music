@@ -23,7 +23,6 @@ import {
   createEmptyScore,
   resolveClearLamp,
   resolveDisplayedPoor,
-  resolveIidxRankLabel,
   type GaugeType,
   type JudgeKind,
   type PlaylogRulesetId,
@@ -104,7 +103,7 @@ import {
   type TempoPitchMode,
   type TimeStretchAlgorithm,
 } from '../../runtime/play-tempo.ts';
-import { fillLaneCover, resolveGreenNumber, resolveHiSpeedForVisibleMs, resolveNoteVisibleMs } from './lane-cover.ts';
+import { fillLaneCover, resolveHiSpeedForVisibleMs, resolveNoteVisibleMs } from './lane-cover.ts';
 import { BE_MUSIC_HI_SPEED_SCALE, PlaylogViewCursor } from '../playlog-view.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from '../../view/shared/playfield/measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
@@ -145,11 +144,7 @@ import {
   type NonstopStageBgaTimeline,
 } from './gameplay-bga.ts';
 import { resolveLr2LaneIndex, resolveSideRelativeLaneIndex } from '../gameplay-lanes.ts';
-import type {
-  SkinlessGameplayChromeRenderer,
-  SkinlessGameplayChromeRuntime,
-  SkinlessGameplayJudgeState,
-} from '../gameplay-chrome.ts';
+import type { SkinlessGameplayChromeRenderer } from '../gameplay-chrome.ts';
 import { resolveGameplayAudioTailCleanupDelayMs } from './gameplay-result-delay.ts';
 import { resolvePlayEnding } from '../play-ending.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
@@ -208,6 +203,7 @@ import {
   prepareBga,
   samplePlaybackRate,
 } from '../../session/play/play-media.ts';
+import { resolveLaneGeometry, resolveSkinlessGameplayChromeRuntime } from '../../view/built-in/play-chrome.ts';
 import type {
   GameplayBgaTarget,
   GameplayLaneRect,
@@ -1374,7 +1370,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       out.push(DEFAULT_BGA_TARGET);
       return;
     }
-    const geometry = this.resolveLaneGeometry();
+    const geometry = resolveLaneGeometry.call(this);
     // The landscape touch layout gives the BGA's room to the lanes.
     if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
     const rect = stage.resolveBgaRect(geometry.right);
@@ -1411,40 +1407,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   get noteOverscan(): number {
     return this.layoutMode === 'touch' || resolveStageOrientation(this.stageSize) === 'portrait' ? 0 : NOTE_OVERSCAN;
-  }
-
-  /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
-  private resolveLaneGeometry(): ReturnType<typeof resolveGameplayLaneGeometry> {
-    // Asked several times a frame (lanes, BGA, notes); it changes only with its inputs, so it is kept until one does. The
-    // stage is one of the skin's own stage objects, so a rotation that switches stages shows up as a new one.
-    const stage = this.beMusicStage;
-    const cached = this.laneGeometryCache;
-    if (
-      cached !== undefined &&
-      cached.laneChannels === this.laneChannels &&
-      cached.laneCount === this.laneChannels.length &&
-      cached.playVariant === this.chartPlayVariant &&
-      cached.layoutMode === this.layoutMode &&
-      cached.stage === stage
-    ) {
-      return cached.geometry;
-    }
-    const geometry = resolveGameplayLaneGeometry(
-      this.laneChannels,
-      this.laneChannels.length,
-      this.chartPlayVariant,
-      this.layoutMode,
-      stage,
-    );
-    this.laneGeometryCache = {
-      laneChannels: this.laneChannels,
-      laneCount: this.laneChannels.length,
-      playVariant: this.chartPlayVariant,
-      layoutMode: this.layoutMode,
-      stage,
-      geometry,
-    };
-    return geometry;
   }
 
   laneGeometryCache:
@@ -3837,97 +3799,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     );
   }
 
-  private resolveSkinlessGameplayChromeRuntime(): SkinlessGameplayChromeRuntime {
-    const total = this.score.total > 0 ? this.score.total : 0;
-    const seconds = this.currentSeconds();
-    const songLengthSeconds = this.resolveSongDurationSeconds();
-    const usesPlayer2 = this.chartPlayVariant !== '9' && this.laneChannels.some((channel) => channel.startsWith('2'));
-    const judgeSides: SkinlessGameplayJudgeState[] = [];
-    for (const side of ['1P', '2P'] as const) {
-      if (side === '2P' && !usesPlayer2) {
-        continue;
-      }
-      const state = this.judgeSideState[side];
-      if (state.judge && seconds <= state.until) {
-        judgeSides.push({ side, judge: state.judge, combo: state.combo });
-      }
-    }
-    const currentBeat = this.currentBeat(seconds);
-    // The BPM readout freezes at the reversal value (LR2's frozen pump holds |BPM| there) instead of following the
-    // mirrored scroll back through earlier tempo points — see `nowBpm`.
-    const bpm = this.nowBpm(seconds) ?? this.song?.bpm;
-    const laneCovers = this.resolveLaneCovers();
-    const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm, this.scrollMapper?.rateAt?.(currentBeat) ?? 1);
-    return {
-      songTitle: this.song?.title,
-      songArtist: this.song?.artist,
-      songGenre: this.song?.genre,
-      // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBpm`.
-      bpm: this.displayBpm(seconds) ?? bpm,
-      // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
-      hiSpeed: this.playerHiSpeed,
-      score: this.score.score,
-      exScore: this.score.exScore,
-      exScoreMax: total * 2,
-      combo: this.tracker.combo,
-      maxCombo: this.maxCombo,
-      perfect: this.score.perfect,
-      great: this.score.great,
-      good: this.score.good,
-      bad: this.score.bad,
-      poor: this.score.poor,
-      gauge: this.gaugeState.current,
-      clearThreshold: this.gaugeState.clearThreshold,
-      laneCount: this.laneChannels.length,
-      laneChannels: this.laneChannels,
-      playVariant: this.chartPlayVariant,
-      lastJudge: seconds <= this.lastJudgeUntil ? this.lastJudge : undefined,
-      judgeSides,
-      rank: total <= 0 ? undefined : resolveIidxRankLabel(this.score.exScore, total),
-      autoplay: this.options.autoPlay === true,
-      hasBga: this.hasBga,
-      nowMs: this.playClock(),
-      progressRatio: songLengthSeconds > 0 ? Math.max(0, Math.min(1, seconds / songLengthSeconds)) : 0,
-      // The beat this frame already worked out for the same `seconds`.
-      beatPhase: currentBeat - Math.floor(currentBeat),
-      rulesetLabel: this.resolveJudgeRuleset(),
-      gaugeLabel: this.gaugeState.type ?? 'GROOVE',
-      gaugeSurvival: this.gaugeState.survival === true,
-      fast: this.fastCount,
-      slow: this.slowCount,
-      totalNotes: total,
-      // While assets load the count-in waits: the skin shows NOW LOADING instead.
-      chartMs: this.assetsLoading ? undefined : this.resolveChartMs(),
-      loading: this.assetsLoading,
-      judgeAtMs: this.lastJudgeAt,
-      impulseAtMs: this.lastImpulseAt,
-      impulseKind: this.lastImpulseKind,
-      effects: this.options.beMusicEffects ?? 'full',
-      audio: this.audioFrame,
-      song: this.song,
-      lastJudgeDeltaMs: this.judgeTimings.lastDeltaMs,
-      judgeTimings: this.judgeTimings.recent,
-      minBpm: this.chartBpmRange?.minBpm,
-      maxBpm: this.chartBpmRange?.maxBpm,
-      mainBpm: this.chartBpmRange?.mainBpm,
-      songLengthMs: this.song ? songLengthSeconds * 1000 : undefined,
-      // Clamped to the length so the remaining time never runs negative through the audio tail.
-      songElapsedMs: this.song ? Math.min(seconds, songLengthSeconds) * 1000 : undefined,
-      failedAtMs: this.playMoments.failedAtMs,
-      allNotesDoneAtMs: this.playMoments.allNotesDoneAtMs,
-      outroAtMs: this.playMoments.outroAtMs,
-      gaugeRiseAtMs: this.playMoments.gaugeRiseAtMs,
-      gaugeMaxAtMs: this.playMoments.gaugeMaxAtMs,
-      // Shared by reference: the arrays only grow during a play, and skins are told not to mutate them.
-      scoreHistory: this.scoreHistory,
-      gaugeHistory: this.gaugeHistory,
-      judgeWindows: this.judgeWindows,
-      laneCovers,
-      visibleMs,
-      greenNumber: visibleMs === undefined ? undefined : resolveGreenNumber(visibleMs),
-    };
-  }
-
   /**
    * The lane covers of each play side with lanes, as {@link renderShutter} draws them (whether or not it does: a skin
    * that sets `drawsLaneCover` reads them to draw its own). The array and its entries are reused across frames.
@@ -4082,7 +3953,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         overlayLayer: this.overlayLayer,
         layerPool: this.skinLayerPool,
         overlayLayerPool: this.overlayLayerPool,
-        runtime: this.resolveSkinlessGameplayChromeRuntime(),
+        runtime: resolveSkinlessGameplayChromeRuntime.call(this),
       };
       if (this.options.skinlessChromeRenderer) {
         this.options.skinlessChromeRenderer(context);
@@ -4145,7 +4016,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       left: fallbackLeft,
       top: fallbackTop,
       judgementY: fallbackBottom,
-    } = this.resolveLaneGeometry();
+    } = resolveLaneGeometry.call(this);
 
     const skinlessLanes: BeMusicLaneFrame[] = [];
     this.laneChannels.forEach((channel, index) => {
