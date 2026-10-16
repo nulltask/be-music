@@ -112,7 +112,7 @@ play skin は variant ごと (`'7' / '5' / '9' / '10' / '14' / '24' / '24d'`) �
 
 `@be-music/beatoraja-skin/scene` は、`@be-music/scene-model` の skin family に依存しない scene model を beatoraja skin の語彙に写します。
 どの op が点くか、各 number と text が何を読むか、どの timer が始まり止まるか、gauge、graph、live offset です（[ADR 0002](./adr/0002-scene-model-package.ja.md)）。
-以前は `@be-music/player-web` の renderer のそばにあった beatoraja の state 解決で、今は play、select、result scene が読み、P4 では runtime adapter の代わりに beatoraja の family view が読みます。
+以前は `@be-music/player-web` の renderer のそばにあった beatoraja の state 解決で、今は play、select、result scene と decide の family view が読み、P4 では runtime adapter の代わりに beatoraja の play の view が読みます。
 
 ```mermaid
 flowchart LR
@@ -120,24 +120,28 @@ flowchart LR
     play["PlayState · engine frame"]
     result["PlayResult"]
     entry["LibraryEntry · 一覧の設定"]
+    chart["LibraryChart · 読み込みの進み具合"]
     course["CourseView"]
   end
   subgraph mapping["@be-music/beatoraja-skin/scene"]
     playR["play の resolver"]
     resultR["result の resolver"]
     selectR["select の resolver"]
+    decideR["decide の resolver"]
     courseR["course の id"]
   end
   ids["beatoraja の id<br/>op · number · text · timer<br/>gauge · graph · offset"]
-  view["play / select / result の view"]
+  view["play / select / decide / result の view"]
 
   play --> playR
   result --> resultR
   entry --> selectR
+  chart --> decideR
   course --> courseR
   playR --> ids
   resultR --> ids
   selectR --> ids
+  decideR --> ids
   courseR --> ids
   ids --> view
 ```
@@ -152,6 +156,7 @@ clock を読まず、呼び出しの間に state を持ちません。chart time
 | Play   | play state、engine の最新 frame、chart の情報、clock                 | `resolveBeatorajaPlayNumber`（number の表）、`resolveBeatorajaPlayText`、`resolveBeatorajaPlayStartOps` / `ScoreOps` / `CoverOps`、`resolveBeatorajaJudgeEffect`、`resolveBeatorajaLaneTimers`、`resolveBeatorajaFrameTimers`、`resolveBeatorajaGaugeState`、graph・slider・judge graph・judge state の resolver、`writeBeatorajaPlayOffset` |
 | Result | `PlayResult`、最終 gauge、chart の `#TOTAL` と note の種類           | `resolveBeatorajaResultNumber`、`resolveBeatorajaResultOps`、`resolveBeatorajaResultText`、result の gauge と graph の resolver                                                                                                                                                                                                              |
 | Select | フォーカス中の `LibraryEntry` とその chart の情報、一覧の設定、clock | `resolveBeatorajaSelectBarOps`、`resolveBeatorajaSelectNumber`、`resolveBeatorajaSelectText`、`resolveBeatorajaSelectRefValue`、`resolveBeatorajaSelectSliderValue`                                                                                                                                                                          |
+| Decide | これから遊ぶ `LibraryChart`、play の読み込みの進み具合               | `resolveBeatorajaDecideOps`、`resolveBeatorajaDecideNumber`、`resolveBeatorajaDecideGraphValue`                                                                                                                                                                                                                                              |
 | Course | `LibraryCourse`（bar）か `CourseView`（進行中の course）             | `resolveBeatorajaCourseBarOps`、`resolveBeatorajaCourseStageOps`、`resolveBeatorajaCourseText`                                                                                                                                                                                                                                               |
 | Sound  | theme の file map                                                    | `discoverBeatorajaSystemSoundPaths`、`discoverBeatorajaSelectBgmPath`、`pickBeatorajaThemeBgmPaths`                                                                                                                                                                                                                                          |
 
@@ -159,6 +164,7 @@ number の表は 1 つの score の表（`resolveBeatorajaScoreNumber`）を共�
 play は hi-speed、lane cover、白数字と緑数字（`resolveWhiteNumber`）、playhead の BPM、時間、clock を加えます。
 result は timing の平均と標準偏差を加え、扱わない number はすべて 0 とします。
 select はフォーカス中の chart の情報を読み、play の live な number は 0 とします。
+decide は score の表を使いません。chart の `#PLAYLEVEL`、BPM の number には一覧の BPM、読み込みの進み具合（165）を読み、ほかの number はすべて 0 とします。
 
 ### Timer を data で返す
 
@@ -207,6 +213,7 @@ state は LR2 theme state と並列に保持されるため、demo は両方の 
 
 browser renderer は select、decide、gameplay、result skin の共有 view として `BeatorajaPlaySkinView` を使います。
 scene は `TEXT`、`NUM`、`OPTION`、timer、gauge、graph を [scene mapping](#scene-mapping) から読み、chart image、note layer、BGA layer、audio、result history など runtime 固有の部分を自分で提供します。
+decide 画面は player-web の beatoraja の決定画面の family view で、`createDecideScene` で作ります（[player-web.ja.md](./player-web.ja.md#決定画面)）。decide の resolver で決定画面のセッションのフレームを描き、beatoraja の scene の timer をフレームごとに読みます。
 gameplay は `BeatorajaRuntimeAdapter` を橋渡しに使います。engine UI signal の間の play の state を持ち、frame、判定、レーン操作ごとに mapping が解決した op と timer を適用します。
 
 browser gameplay path は parser が discovery する chart variant `5`、`7`、`9`、`10`、`14`、`24`、`24d` をすべて mount します。

@@ -10,7 +10,6 @@ import {
   createPlayScene,
   DefaultPixiSongSelectView,
   createResultScene,
-  PixiBeatorajaDecideScene,
   PixiBeatorajaGameplayView,
   PixiBeatorajaResultScene,
   PixiBeatorajaSelectScene,
@@ -33,7 +32,13 @@ import {
   resolveSceneCourseInfo,
   type SceneCourseInfo,
 } from '@be-music/player-web/scenes';
-import { DIFFICULTY_FILTER_CYCLE, KEYS_FILTER_CYCLE, SORT_CYCLE, type BrowseSnapshot } from '@be-music/scene-model';
+import {
+  DIFFICULTY_FILTER_CYCLE,
+  KEYS_FILTER_CYCLE,
+  SORT_CYCLE,
+  systemSoundSetFromBeatoraja,
+  type BrowseSnapshot,
+} from '@be-music/scene-model';
 import {
   BeatorajaSkinAudioPlayer,
   createBeMusicSkinRegistry,
@@ -43,17 +48,19 @@ import {
   createBeatorajaSceneKitCaches,
   createBeatorajaSkinLoadContext,
   findBeatorajaThemeBgm,
+  loadBeatorajaChartImages,
   loadBeatorajaSceneKit,
   loadBeatorajaThemeFromFiles,
-  loadTextureFromBytes,
   pickBeatorajaPlayableVariant,
   releaseBeatorajaSceneKitAssets,
   resolveBeatorajaSkinConfig,
   skinFamilyRegistry,
   summarizeBeatorajaPlaySkins,
+  type BeatorajaChartImages,
   type BeatorajaPlayableVariant,
   type BeatorajaThemeBgm,
   type BeatorajaThemeBundle,
+  type SkinFamilyId,
 } from '@be-music/player-web/skin';
 import { prepareBeatorajaGameplayChart, type PreparedBeatorajaGameplayChart } from '@be-music/player-web/chart';
 import {
@@ -162,7 +169,7 @@ import {
   setStoredSkinSetting,
   storeSkinSettings,
 } from './skin-settings.ts';
-import { resolvePlayChart, type PlayerSummary, type ResolvedPlayChart } from '@be-music/player/core/engine';
+import type { PlayerSummary, ResolvedPlayChart } from '@be-music/player/core/engine';
 import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingles.ts';
 import {
@@ -319,7 +326,7 @@ import {
   renderResolutionSteps,
   storeRenderResolution,
 } from './render-resolution.ts';
-import type { ChartImageTexture, DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
+import type { DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
 import {
   describeBar,
   isTestHookEnabled,
@@ -666,11 +673,6 @@ class PlayerWebDemoApp {
     setEditing: (editing) => this.selectView?.setSearchEditing(editing),
     touch: () => document.documentElement.classList.contains('touch-first'),
   });
-  /**
-   * Beatoraja-skinned decide splash. Active during the select → gameplay handoff when the loaded
-   * theme ships a decide skin (`type = 6`). Disposed before the gameplay scene mounts.
-   */
-  private beatorajaDecideScene: PixiBeatorajaDecideScene | undefined;
   /**
    * Beatoraja-skinned result scene. Active after gameplay completes when the loaded theme ships a
    * result skin (`type = 7`). The chart's final `PlayerSummary` is forwarded so the skin's value
@@ -3089,6 +3091,9 @@ class PlayerWebDemoApp {
       // scene runs silent in the background then).
       this.beatorajaSelectBgmPath = discoverBeatorajaSelectBgmPath(bundle.files);
       this.beatorajaTheme = bundle;
+      // The skin sounds of the scenes made with `create*Scene` (`main_state.audio_*` of the decide skin) play through
+      // the audio service, which reads them from the theme's files.
+      this.audio.setTheme({ files: bundle.files });
       // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
       // resolve against the new entries. Without this `pickBeatorajaSkinEntryWithOverride`'s
       // self-clearing fallback would still kick in, but the picker dropdowns would briefly show
@@ -3984,52 +3989,12 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Decode the focused chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps to Pixi textures
-   * for the beatoraja decide scene's synthetic-id destinations (`-100` / `-101` / `-102`).
-   * Each entry is best-effort — missing or malformed bitmaps resolve to `undefined` and the
-   * matching destinations stay hidden. Uses the same `loadTextureFromBytes` decoder the LR2
-   * scenes use, so TGA / PNG / BMP / JPG all work transparently.
+   * Decode the chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps to Pixi textures for the beatoraja scenes'
+   * synthetic-id destinations (`-100` / `-101` / `-102`). Each is best-effort: a missing or malformed bitmap is left
+   * out and the matching destinations stay hidden.
    */
-  private async loadBeatorajaChartImages(song: BrowserSongEntry): Promise<{
-    stageFile?: ChartImageTexture;
-    backBmp?: ChartImageTexture;
-    banner?: ChartImageTexture;
-  }> {
-    const source = resolveSongSource(this.collection, song);
-    if (source === undefined) return {};
-    const meta = song.chart.metadata;
-    const out: { stageFile?: ChartImageTexture; backBmp?: ChartImageTexture; banner?: ChartImageTexture } = {};
-    const decode = async (relPath: string | undefined): Promise<ChartImageTexture | undefined> => {
-      if (relPath === undefined || relPath.length === 0) return undefined;
-      // Resolve relative to the chart's directory — `#STAGEFILE foo.png` lives next to the BMS
-      // unless the path starts with `/`. We strip any leading slash and join under the chart's
-      // dirname for the lookup.
-      const chartDir = song.chartPath.includes('/') ? song.chartPath.slice(0, song.chartPath.lastIndexOf('/')) : '';
-      const normalized = relPath.replace(/^\/+/, '');
-      const candidates = [chartDir.length > 0 ? `${chartDir}/${normalized}` : normalized, normalized];
-      for (const candidate of candidates) {
-        const entry = source.files.get(candidate);
-        if (entry === undefined) continue;
-        const bytes = await loadAssetBytes(entry);
-        if (bytes === undefined) continue;
-        try {
-          return await loadTextureFromBytes(candidate, bytes);
-        } catch (error) {
-          gameplayLog.info('beatoraja decide chart-image decode failed', { path: candidate, error });
-          return undefined;
-        }
-      }
-      return undefined;
-    };
-    const [stageFile, backBmp, banner] = await Promise.all([
-      decode(meta.stageFile),
-      decode(meta.backBmp),
-      decode(meta.banner),
-    ]);
-    if (stageFile !== undefined) out.stageFile = stageFile;
-    if (backBmp !== undefined) out.backBmp = backBmp;
-    if (banner !== undefined) out.banner = banner;
-    return out;
+  private loadBeatorajaChartImages(song: BrowserSongEntry): Promise<BeatorajaChartImages> {
+    return loadBeatorajaChartImages(song, resolveSongSource(this.collection, song));
   }
 
   /**
@@ -4068,43 +4033,22 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Mount the beatoraja decide splash for `song`. Returns `true` when the splash actually mounted —
-   * `false` falls through to the no-decide fast-path (the loaded theme didn't ship a decide skin,
-   * the entry's header / payload failed to load, etc.). Both branches eventually call
-   * `playSongBeatoraja`; the difference is whether the user sees an animated chrome between
-   * select and gameplay.
+   * The beatoraja theme's decide skin for `song`, loaded as a scene kit, or `undefined` when there is none to show: no
+   * beatoraja theme, no decide skin in it, or one that failed to load. The player's pick in the Debug Menu wins over the
+   * discovery's (`theme.decideSkin`, not `decideCandidates[0]`, which is only the first in the file walk).
    */
-  private async showBeatorajaDecide(
-    song: BrowserSongEntry,
-    overrides: { autoPlay?: boolean },
-    then?: DecideContinuation,
-  ): Promise<boolean> {
+  private async loadBeatorajaDecideKit(song: BrowserSongEntry): Promise<DecideSceneKit | undefined> {
     const bundle = this.beatorajaTheme;
-    if (bundle === undefined) return false;
-
-    // Decide skin discovery — same shape as select / play. Picks the user's override when set,
-    // otherwise the discovery's "best" pick (`theme.decideSkin`). Falling back to
-    // `decideCandidates[0]` here was the previous behaviour and a bug: that's whatever
-    // happens to come first in the file-walk iteration order, NOT the preferred entry. So
-    // when the user picked the discovery default in the Debug Menu (which CLEARS the
-    // override per `rebuildBeatorajaSkinPickers`), the next decide mount fell back to
-    // `decideCandidates[0]` and silently mounted whichever theme the file map iterated
-    // first (typically GdbG_Skin instead of the requested default). The Debug Menu's
-    // dropdown showed the right name but the wrong skin actually loaded.
+    if (bundle === undefined) return undefined;
     const decideCandidates = bundle.theme.entries.filter((entry) => entry.header.type === BEATORAJA_SKIN_TYPE.DECIDE);
     const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
       BEATORAJA_SKIN_TYPE.DECIDE,
       decideCandidates,
       bundle.theme.decideSkin,
     );
-    if (selectedEntry === undefined) return false;
-
-    // Two-pass evaluation — same `loadBeatorajaSceneKit` contract as select / play. The first pass
-    // gives us the header (used for `property[]` dropdown); the second runs the skin's `main()`
-    // with the resolved option set so dynamic destinations populate. The phase-2 eval also
-    // gets a `runtimeContext` populated with the chart's difficulty ops so themes that
-    // pre-compute per-difficulty values at load time (e.g. ModernChic's
-    // `CUSTOM.NUM.diffRGB()`) see a non-`nil` answer instead of crashing on `RGB[1]`. Textures and fonts reuse the
+    if (selectedEntry === undefined) return undefined;
+    // The skin's `main()` runs with the chart's difficulty ops, so themes that work out per-difficulty values as they
+    // load (ModernChic's `CUSTOM.NUM.diffRGB()`) see one instead of crashing on `nil`. Textures and fonts reuse the
     // entry's cached ones or are decoded and registered fresh.
     const load = await loadBeatorajaSceneKit({
       files: bundle.files,
@@ -4114,90 +4058,15 @@ class PlayerWebDemoApp {
     });
     if (!load.ok) {
       gameplayLog.warn(`beatoraja decide: ${load.message}`);
-      return false;
+      return undefined;
     }
-    const { skin, textures, fonts, skinConfig: config } = load.kit;
-
-    await this.ensureHostMounted();
-    this.lastSelectNavigation = this.selectView?.getNavigation();
-    await this.leaveScene(this.selectView);
-    // Capture the select scene's state before disposing — the user picked a song and is
-    // heading into decide → play. When they come back via the result scene's "back to
-    // select" path we re-mount with this snapshot so they land in the same folder / cursor /
-    // sort / filter / favorites state, not at the root with default sort.
-    if (this.beatorajaSelectScene !== undefined) {
-      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
-    }
-    this.disposeScene(this.beatorajaSelectScene);
-    this.beatorajaSelectScene = undefined;
-    this.disposeScene(this.beatorajaDecideScene);
-
-    // Resolve `#IF` / `#RANDOM` once at decide entry so the decide skin's bpmgraph plots the SAME branches the
-    // gameplay scene will play. The resolution (chart + draws) is cached on the demo and handed to
-    // `prepareBeatorajaGameplayChart` as `preResolved` by `playSongBeatoraja`, so nothing draws a second time.
-    const resolved = resolvePlayChart(song.chart);
-    const resolvedChart = resolved.chart;
-    // A course resolves each stage's chart itself when the stage starts.
-    if (then === undefined) this.lastBeatorajaChart = { resolved, chartPath: song.chartPath };
-
-    // Idempotency gate — `onContinue` and the auto-advance timer can race in theory; whichever
-    // lands first wins. Same pattern as the LR2 decide path.
-    let advanced = false;
-    const advance = (then: () => void): void => {
-      if (advanced) return;
-      advanced = true;
-      then();
-    };
-
-    // Resolve the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps to Pixi textures so the
-    // decide skin's synthetic-id destinations (-100 / -101 / -102) can paint them. Loading is
-    // best-effort — missing bitmaps just leave the matching destinations hidden.
-    const chartImages = await this.loadBeatorajaChartImages(song);
-
-    this.beatorajaDecideScene = new PixiBeatorajaDecideScene({
-      skin,
-      textures,
-      fonts,
-      // Pass the resolved chart so the decide skin's bpmgraph element (when authored) plots the
-      // BPM curve of the about-to-play chart.
-      chart: resolvedChart,
-      skinConfig: config,
-      song,
-      chartImages,
-      bgmBytes: this.beatorajaThemeBgm.decide,
-      skinAudio: this.beatorajaSkinAudio,
-      onContinue: () =>
-        advance(() => {
-          // Drop the decide scene first so the gameplay scene gets a clean stage. `playSongBeatoraja`
-          // handles the rest — host mount, audio prep, skin selection, etc.
-          void this.sceneHost.setScene(undefined).then(() => {
-            this.beatorajaDecideScene?.dispose();
-            this.beatorajaDecideScene = undefined;
-            // Through `playSong`, so the gameplay family is picked as on every other path (the decide skin's family
-            // need not be the play's).
-            void (then !== undefined ? then.start() : this.playSong(song, overrides));
-          });
-        }),
-      onCancel: () =>
-        advance(() => {
-          // ESC from the splash returns to select — same fallback as LR2.
-          void this.sceneHost.setScene(undefined).then(() => {
-            this.beatorajaDecideScene?.dispose();
-            this.beatorajaDecideScene = undefined;
-            then?.cancel?.();
-            void this.showSelect();
-          });
-        }),
-    });
-    await this.sceneHost.setScene(this.beatorajaDecideScene);
-    this.setStatus(`Decide (beatoraja): ${song.title}`);
-    return true;
+    return { family: 'beatoraja', kit: load.kit };
   }
 
   /**
    * Mount the beatoraja result scene for `song` against the chart's final `summary`. Returns
    * `true` when the scene actually mounted — `false` falls through to the no-result fast-path
-   * (no result skin in the bundle, or skin load failed). Same shape as `showBeatorajaDecide`.
+   * (no result skin in the bundle, or skin load failed).
    */
   private async showBeatorajaResult(
     song: BrowserSongEntry,
@@ -4665,10 +4534,8 @@ class PlayerWebDemoApp {
     }
     this.disposeScene(this.beatorajaSelectScene);
     this.beatorajaSelectScene = undefined;
-    // Decide / result splashes don't outlive a return to select either — the gameplay-skinned
-    // chrome they paint would otherwise overlay the select scene.
-    this.disposeScene(this.beatorajaDecideScene);
-    this.beatorajaDecideScene = undefined;
+    // The result splash doesn't outlive a return to select either — the gameplay-skinned chrome it paints would
+    // otherwise overlay the select scene.
     this.disposeScene(this.beatorajaResultScene);
     this.beatorajaResultScene = undefined;
     // The active family for this select mount. `'lr2'` flows the loaded LR2 select skin through, `'default'` strips
@@ -4859,12 +4726,13 @@ class PlayerWebDemoApp {
   /**
    * Mounts the decide-screen splash and routes the user into gameplay when it dismisses (auto-advance OR Enter / Space
    * / Escape input). Without a decide skin, falls straight through to `playSong` so themes that don't ship a Decide
-   * directory still play the chart immediately. The LR2 and built-in splashes are `createDecideScene`'s: on the LR2
-   * family the theme's decide skin, on the default family the be-music skin's own decide screen, shown only when the
-   * skin declares one.
+   * directory still play the chart immediately. Every family's splash is `createDecideScene`'s: on the beatoraja family
+   * the theme's decide entry, on the LR2 family the theme's decide skin, on the default family the be-music skin's own
+   * decide screen, shown only when the skin declares one.
    *
-   * The decide view runs alongside the select view's AudioContext — `playDecideSound` was already fired at song-pick
-   * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
+   * On the LR2 and default families the select view's `playDecideSound` was already fired at song-pick time, and the
+   * splash visually masks the chart-load + gameplay-mount window that comes next. The beatoraja splash plays its
+   * theme's decide sound itself.
    */
   private async showDecide(
     song: BrowserSongEntry,
@@ -4876,30 +4744,27 @@ class PlayerWebDemoApp {
     // playing in LR2 mode and have a beatoraja-only decide skin, or vice versa. The decide splash is a one-shot
     // overlay so each scene transition consults the family helper afresh.
     const decideFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'decide', song);
-    if (decideFamily === 'beatoraja') {
-      const mounted = await this.showBeatorajaDecide(song, overrides, then);
-      if (!mounted) await start();
-      return;
-    }
-    // A be-music skin's decide screen hands over to the LR2 / default gameplay preloaded below, so it is skipped when
-    // the play itself runs on a beatoraja theme.
     const playsOnBeatoraja = this.playsOnBeatoraja(song, {});
-    const beMusicDecide = decideFamily === 'default' && this.beMusicSkin.decide !== undefined && !playsOnBeatoraja;
-    const lr2DecideSkin = decideFamily === 'default' ? undefined : this.decideSkin;
-    const kit: DecideSceneKit | undefined = beMusicDecide
-      ? this.builtInKit
-      : lr2DecideSkin !== undefined
-        ? { family: 'lr2', skin: lr2DecideSkin }
-        : undefined;
+    const kit = await this.decideKitFor(decideFamily, song, playsOnBeatoraja);
     if (kit === undefined) {
-      // No decide splash: a be-music skin without one, or an LR2-only setup that didn't ship a decide skin. The select
-      // view's `playDecideSound` already fired so the audio cue still plays.
+      // No decide splash: a be-music skin without one, an LR2-only setup that didn't ship a decide skin, or a beatoraja
+      // theme without a decide skin (or one that failed to load). The select view's `playDecideSound` already fired so
+      // the audio cue still plays.
       await start();
       return;
     }
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
     await this.leaveScene(this.selectView);
+    if (kit.family === 'beatoraja') {
+      // Capture the beatoraja select scene's state before disposing it: back from the result, the player lands in the
+      // same folder / cursor / sort / filter / favorites state.
+      if (this.beatorajaSelectScene !== undefined) {
+        this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
+      }
+      this.disposeScene(this.beatorajaSelectScene);
+      this.beatorajaSelectScene = undefined;
+    }
     this.disposeScene(this.decideView);
     this.disposeScene(this.gameplayView);
     this.gameplayView = undefined;
@@ -4908,8 +4773,9 @@ class PlayerWebDemoApp {
     // typically runs ~3 s; chart asset decoding is mostly done by the time the splash auto-advances, so the hand-off to
     // gameplay becomes instant instead of dropping a frozen frame.
     // A course starts its own play once the splash is done, so nothing is preloaded for it; nor for a play on the
-    // beatoraja scene, which prepares its own chart once the splash is done (`playSong`). The play is preloaded once the
-    // decide screen is made, so it plays the `#RANDOM` branches the screen drew (`DecideScene.resolved`).
+    // beatoraja scene, which prepares its own chart once the splash is done (`playSong`). The beatoraja splash starts
+    // its play once it is done, whichever family plays it, as before. The play is preloaded once the decide screen is
+    // made, so it plays the `#RANDOM` branches the screen drew (`DecideScene.resolved`).
     let preloaded: Promise<void> | undefined;
     let advanced = false;
     const advance = (then: () => void): void => {
@@ -4940,22 +4806,49 @@ class PlayerWebDemoApp {
         }),
     };
     const playOptions = this.selectView?.getPlayOptions();
-    this.decideView = createDecideScene(kit, {
+    const decide = createDecideScene(kit, {
       chart: song,
       ...(playOptions !== undefined
         ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
         : {}),
       source: resolveSongSource(this.collection, song),
-      // The select screen plays the theme's decide jingle as the chart is picked, and lets it ring on into the play;
-      // this screen plays none of its own.
-      sounds: {},
+      // The LR2 / built-in select screen plays the theme's decide jingle as the chart is picked, and lets it ring on
+      // into the play, so those screens play none of their own. The beatoraja screen plays its theme's decide sound.
+      sounds: kit.family === 'beatoraja' ? systemSoundSetFromBeatoraja({ bgm: this.beatorajaThemeBgm }) : {},
       audio: this.audio,
       on: { continue: callbacks.onContinue, cancel: callbacks.onCancel },
     });
-    if (then === undefined && !playsOnBeatoraja) {
-      preloaded = this.preloadGameplay(song, { ...overrides, preResolved: this.decideView.resolved });
+    this.decideView = decide;
+    if (then === undefined && !playsOnBeatoraja && kit.family !== 'beatoraja') {
+      preloaded = this.preloadGameplay(song, { ...overrides, preResolved: decide.resolved });
     }
-    await this.sceneHost.setScene(this.decideView);
+    // The beatoraja play takes the `#RANDOM` branches the screen drew (`preResolved`), so the screen's BPM graph shows
+    // the branches the play plays. A course resolves each stage's chart itself when the stage starts.
+    if (kit.family === 'beatoraja' && then === undefined) {
+      this.lastBeatorajaChart = { resolved: decide.resolved, chartPath: song.chartPath };
+    }
+    await this.sceneHost.setScene(decide);
+    if (kit.family === 'beatoraja') this.setStatus(`Decide (beatoraja): ${song.title}`);
+  }
+
+  /**
+   * The kit the decide splash of `family` is drawn with, or `undefined` for no splash: the beatoraja theme's decide
+   * entry, the LR2 theme's decide skin, or the be-music skin's decide screen. A be-music skin's decide screen hands over
+   * to the LR2 / default gameplay preloaded behind it, so it is skipped when the play itself runs on a beatoraja theme.
+   */
+  private async decideKitFor(
+    family: SkinFamilyId,
+    song: BrowserSongEntry,
+    playsOnBeatoraja: boolean,
+  ): Promise<DecideSceneKit | undefined> {
+    switch (family) {
+      case 'beatoraja':
+        return this.loadBeatorajaDecideKit(song);
+      case 'lr2':
+        return this.decideSkin !== undefined ? { family: 'lr2', skin: this.decideSkin } : undefined;
+      default:
+        return this.beMusicSkin.decide !== undefined && !playsOnBeatoraja ? this.builtInKit : undefined;
+    }
   }
 
   /**

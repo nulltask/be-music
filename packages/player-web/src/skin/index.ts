@@ -13,6 +13,7 @@ export { loadTextureFromBytes } from './lr2/textures.ts';
 
 // beatoraja family — theme loaders, runtime adapter, audio / fonts / textures.
 export * from './beatoraja/audio.ts';
+export * from './beatoraja/chart-images.ts';
 export * from './beatoraja/family.ts';
 export * from './beatoraja/fonts.ts';
 export * from './beatoraja/render.ts';

@@ -42,15 +42,16 @@ import { isResultRetryKey } from '../../session/result/result-keys.ts';
 import {
   attachBeatorajaSceneLifecycle,
   BeatorajaSceneBgmPlayer,
-  fitBeatorajaViewToStage,
   hasBeatorajaSceneLockedTransition,
   isBeatorajaSceneInputReady,
-  beatorajaSongTextOf,
-  resolveBeatorajaChartImage,
-  resolveBeatorajaSkinTimingMs,
-  type BeatorajaChartImages,
   type BeatorajaSceneLoopAttachment,
 } from './shared-scene.ts';
+import {
+  beatorajaSongTextOf,
+  fitBeatorajaViewToStage,
+  resolveBeatorajaSkinTimingMs,
+} from '../../view/beatoraja/scene-frame.ts';
+import { resolveBeatorajaChartImage, type BeatorajaChartImages } from '../../skin/beatoraja/chart-images.ts';
 
 export interface PixiBeatorajaResultSceneOptions {
   /** Result skin (`header.type === 7`). */

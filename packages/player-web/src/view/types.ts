@@ -85,6 +85,11 @@ export interface SceneViewTiming {
   readonly autoAdvanceMs?: number;
   /** The fade-out as the screen leaves (LR2's `#FADEOUT`, beatoraja's `fadeout`). */
   readonly fadeOutMs: number;
+  /**
+   * Escape waits for input to open too, as beatoraja's `input` holds back every key; without it Escape leaves at any
+   * time, as LR2 lets it before `#STARTINPUT`.
+   */
+  readonly escapeWaitsForInput?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -160,7 +165,10 @@ export interface DecideFrame {
   /** The course and the stage about to be played, for a course stage. */
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
-  /** How far the play behind the screen has loaded, 0..1; absent when nothing is loading. */
+  /**
+   * How far the play behind the screen has loaded, 0..1: the host's progress, else how much of the auto advance has
+   * gone by (the screen stands for the load as it moves on by itself). Absent with neither.
+   */
   readonly progress?: number;
   /** When input opens, on the clock. */
   readonly inputOpenAtMs: number;

@@ -10,18 +10,19 @@ import type { AudioService } from '../runtime/audio-service.ts';
 import { DecideSession, type DecideSessionEvents } from '../session/decide/decide-session.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
-import { BuiltInDecideView } from '../view/built-in/decide-view.ts';
-import { Lr2DecideView } from '../view/lr2/decide-view.ts';
-import type { DecideFrame, DecideIntent, DecideView } from '../view/types.ts';
-import type { BuiltInKit, Lr2Kit } from './family-kit.ts';
+import { BeatorajaDecideView, resolveBeatorajaDecideTiming } from '../view/beatoraja/decide-view.ts';
+import { BuiltInDecideView, resolveBuiltInDecideTiming } from '../view/built-in/decide-view.ts';
+import { Lr2DecideView, resolveLr2DecideTiming } from '../view/lr2/decide-view.ts';
+import type { DecideFrame, DecideIntent, DecideView, SceneViewTiming } from '../view/types.ts';
+import type { DecideKit } from './family-kit.ts';
 
 const log = logger('decide');
 
 /**
- * The kits the decide scene takes: a be-music skin, or an LR2 decide skin. The beatoraja decide screen is still
- * `PixiBeatorajaDecideScene`.
+ * The kits the decide scene takes: a be-music skin, an LR2 decide skin, or a beatoraja theme's decide entry
+ * (`{ family: 'beatoraja', kit }`, loaded with `loadBeatorajaSceneKit`).
  */
-export type DecideSceneKit = BuiltInKit | Lr2Kit;
+export type DecideSceneKit = DecideKit;
 
 export interface DecideSceneOptions extends SessionSceneOptions {
   /** The chart about to be played. */
@@ -34,8 +35,15 @@ export interface DecideSceneOptions extends SessionSceneOptions {
   readonly source?: BrowserSongAssetSource;
   /** The theme's sounds: the screen plays `decideBgm`, its jingle, and stops it as it leaves. */
   readonly sounds: SystemSoundSet;
+  /**
+   * The host's audio service: the jingle plays through it, and so do a beatoraja skin's Lua sounds (`skinSounds`,
+   * resolved against the theme's files set with `setTheme`), which stop as the screen leaves.
+   */
   readonly audio: AudioService;
-  /** How far the play prepared behind the screen has loaded, 0..1, read every frame. */
+  /**
+   * How far the play prepared behind the screen has loaded, 0..1, read every frame. Without it the screen shows how
+   * much of its auto advance has gone by.
+   */
   readonly progress?: () => number | undefined;
   /** The random source the chart's `#RANDOM` / `#SWITCH` branches are drawn with. Defaults to `Math.random`. */
   readonly random?: () => number;
@@ -63,21 +71,55 @@ interface FamilyDecideView {
   updateKit(kit: DecideSceneKit): void;
 }
 
-/** The decide view of `kit`'s family, reading the chart's files from `source`. */
-function createDecideView(kit: DecideSceneKit, source: BrowserSongAssetSource | undefined): FamilyDecideView {
-  const options = source !== undefined ? { source } : {};
-  if (kit.family === 'lr2') {
-    const view = new Lr2DecideView(kit, options);
-    return {
-      view,
-      updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),
-    };
+/** The skin timing of `kit`'s decide view, which the session times the screen from. */
+function decideTimingOf(kit: DecideSceneKit): SceneViewTiming {
+  switch (kit.family) {
+    case 'lr2':
+      return resolveLr2DecideTiming(kit.skin);
+    case 'beatoraja':
+      return resolveBeatorajaDecideTiming(kit.kit.skin);
+    case 'built-in':
+      return resolveBuiltInDecideTiming(kit);
   }
-  const view = new BuiltInDecideView(kit, options);
-  return {
-    view,
-    updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
-  };
+}
+
+/**
+ * The decide view of `kit`'s family, reading the chart's files from `options.source`. A beatoraja skin's Lua sounds
+ * play through the audio service as the session's, so they stop as the screen leaves.
+ */
+function createDecideView(
+  kit: DecideSceneKit,
+  session: DecideSession,
+  options: Pick<DecideSceneOptions, 'chart' | 'source' | 'audio'>,
+): FamilyDecideView {
+  const source = options.source !== undefined ? { source: options.source } : {};
+  switch (kit.family) {
+    case 'lr2': {
+      const view = new Lr2DecideView(kit, source);
+      return {
+        view,
+        updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),
+      };
+    }
+    case 'beatoraja': {
+      const view = new BeatorajaDecideView(kit, {
+        chart: options.chart,
+        ...source,
+        skinSounds: options.audio.skinSounds.owned(session),
+      });
+      return {
+        view,
+        updateKit: (next) => (next.family === 'beatoraja' ? view.updateKit(next) : ignoreKit(next, 'beatoraja')),
+      };
+    }
+    case 'built-in': {
+      const view = new BuiltInDecideView(kit, source);
+      return {
+        view,
+        updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
+      };
+    }
+  }
 }
 
 function ignoreKit(kit: DecideSceneKit, family: DecideSceneKit['family']): void {
@@ -104,20 +146,18 @@ class FamilyDecideScene extends SessionScene<DecideFrame, DecideIntent> implemen
  * view draws it. Show it with `PixiSceneHost.setScene`, and dispose it once it is gone.
  */
 export function createDecideScene(kit: DecideSceneKit, options: DecideSceneOptions): DecideScene {
-  const familyView = createDecideView(kit, options.source);
-  const { view } = familyView;
   const session = new DecideSession({
     chart: options.chart,
     ...(options.course !== undefined ? { course: options.course } : {}),
     ...(options.playOptions !== undefined ? { playOptions: options.playOptions } : {}),
     sounds: options.sounds,
     audio: options.audio,
-    timing: view.timing,
+    timing: decideTimingOf(kit),
     ...(options.progress !== undefined ? { progress: options.progress } : {}),
     ...(options.random !== undefined ? { random: options.random } : {}),
     on: options.on,
   });
-  return new FamilyDecideScene(session, familyView, {
+  return new FamilyDecideScene(session, createDecideView(kit, session, options), {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
