@@ -51,7 +51,8 @@ interface PlayedStage<H> {
 /**
  * One run of an EXPERT or GRADE course: plays the stages in order, carrying each stage's gauge value, course combo and
  * course max combo into the next, and ends when a stage fails, when the player gives up, or after the last stage. The
- * stage play logs it collects make the course play log. A NONSTOP course is played as one stitched chart instead.
+ * stage play logs it collects make the course play log. A NONSTOP course is played as one stitched chart instead
+ * (`prepareNonstopCourse`).
  *
  * Runtime-neutral and chart-agnostic: `S` is the host's stage entry (anything with a chart, {@link CourseRunStage}) and
  * `H` what the host keeps of each played stage ({@link CourseRunStageExtras}).

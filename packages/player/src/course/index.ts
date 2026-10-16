@@ -11,6 +11,7 @@ export * from './nonstop/plan.ts';
 export * from './nonstop/stage.ts';
 export * from './nonstop/compose.ts';
 export * from './nonstop/readouts.ts';
+export * from './nonstop/pipeline.ts';
 export * from './maker.ts';
 export * from './long-note.ts';
 export * from './stage-rules.ts';
