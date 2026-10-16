@@ -64,7 +64,11 @@ export class LeaderboardPanel {
   /** The toggle as it was when the current play started: a play is sent only if it was on at song start. */
   private submitThisPlay = false;
 
-  constructor(private readonly host: LeaderboardPanelHost) {}
+  private readonly host: LeaderboardPanelHost;
+
+  constructor(host: LeaderboardPanelHost) {
+    this.host = host;
+  }
 
   /** Fills the Debug Menu's Leaderboard folder and wires the account chip. */
   buildFolder(folder: GUI): void {

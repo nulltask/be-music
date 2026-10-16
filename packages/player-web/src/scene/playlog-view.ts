@@ -11,11 +11,13 @@ import {
  */
 export class PlaylogViewCursor {
   private applied = -1;
+  private readonly initial: PlaylogViewState | undefined;
+  private readonly changes: readonly PlaylogViewChange[];
 
-  constructor(
-    private readonly initial: PlaylogViewState | undefined,
-    private readonly changes: readonly PlaylogViewChange[] = [],
-  ) {}
+  constructor(initial: PlaylogViewState | undefined, changes: readonly PlaylogViewChange[] = []) {
+    this.initial = initial;
+    this.changes = changes;
+  }
 
   /**
    * The recorded view in force at `timeUs` (chart time, µs) when it differs from the one the last call returned — the

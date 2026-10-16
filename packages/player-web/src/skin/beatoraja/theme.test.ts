@@ -9,10 +9,12 @@ import {
 } from './theme.ts';
 
 class FakeFile {
-  constructor(
-    public readonly webkitRelativePath: string,
-    private readonly bytes: Uint8Array,
-  ) {}
+  public readonly webkitRelativePath: string;
+  private readonly bytes: Uint8Array;
+  constructor(webkitRelativePath: string, bytes: Uint8Array) {
+    this.webkitRelativePath = webkitRelativePath;
+    this.bytes = bytes;
+  }
   get name(): string {
     return this.webkitRelativePath.split('/').at(-1) ?? this.webkitRelativePath;
   }

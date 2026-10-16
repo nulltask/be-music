@@ -56,11 +56,11 @@ class FakeFolder implements FolderNode {
   public _closed: boolean;
   public readonly folders: FakeFolder[] = [];
   private listener: ((changed: FolderNode) => void) | undefined;
-  public constructor(
-    public readonly _title: string,
-    public readonly parent?: FakeFolder,
-    open = true,
-  ) {
+  public readonly _title: string;
+  public readonly parent: FakeFolder | undefined;
+  public constructor(title: string, parent?: FakeFolder, open = true) {
+    this._title = title;
+    this.parent = parent;
     this._closed = !open;
     parent?.folders.push(this);
   }
