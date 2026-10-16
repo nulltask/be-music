@@ -43,14 +43,15 @@ import {
   createBeatorajaSceneKitCaches,
   createBeatorajaSkinLoadContext,
   findBeatorajaThemeBgm,
+  loadBeatorajaChartImages,
   loadBeatorajaSceneKit,
   loadBeatorajaThemeFromFiles,
-  loadTextureFromBytes,
   pickBeatorajaPlayableVariant,
   releaseBeatorajaSceneKitAssets,
   resolveBeatorajaSkinConfig,
   skinFamilyRegistry,
   summarizeBeatorajaPlaySkins,
+  type BeatorajaChartImages,
   type BeatorajaPlayableVariant,
   type BeatorajaThemeBgm,
   type BeatorajaThemeBundle,
@@ -319,7 +320,7 @@ import {
   renderResolutionSteps,
   storeRenderResolution,
 } from './render-resolution.ts';
-import type { ChartImageTexture, DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
+import type { DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
 import {
   describeBar,
   isTestHookEnabled,
@@ -3993,52 +3994,12 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Decode the focused chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps to Pixi textures
-   * for the beatoraja decide scene's synthetic-id destinations (`-100` / `-101` / `-102`).
-   * Each entry is best-effort — missing or malformed bitmaps resolve to `undefined` and the
-   * matching destinations stay hidden. Uses the same `loadTextureFromBytes` decoder the LR2
-   * scenes use, so TGA / PNG / BMP / JPG all work transparently.
+   * Decode the chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps to Pixi textures for the beatoraja scenes'
+   * synthetic-id destinations (`-100` / `-101` / `-102`). Each is best-effort: a missing or malformed bitmap is left
+   * out and the matching destinations stay hidden.
    */
-  private async loadBeatorajaChartImages(song: BrowserSongEntry): Promise<{
-    stageFile?: ChartImageTexture;
-    backBmp?: ChartImageTexture;
-    banner?: ChartImageTexture;
-  }> {
-    const source = resolveSongSource(this.collection, song);
-    if (source === undefined) return {};
-    const meta = song.chart.metadata;
-    const out: { stageFile?: ChartImageTexture; backBmp?: ChartImageTexture; banner?: ChartImageTexture } = {};
-    const decode = async (relPath: string | undefined): Promise<ChartImageTexture | undefined> => {
-      if (relPath === undefined || relPath.length === 0) return undefined;
-      // Resolve relative to the chart's directory — `#STAGEFILE foo.png` lives next to the BMS
-      // unless the path starts with `/`. We strip any leading slash and join under the chart's
-      // dirname for the lookup.
-      const chartDir = song.chartPath.includes('/') ? song.chartPath.slice(0, song.chartPath.lastIndexOf('/')) : '';
-      const normalized = relPath.replace(/^\/+/, '');
-      const candidates = [chartDir.length > 0 ? `${chartDir}/${normalized}` : normalized, normalized];
-      for (const candidate of candidates) {
-        const entry = source.files.get(candidate);
-        if (entry === undefined) continue;
-        const bytes = await loadAssetBytes(entry);
-        if (bytes === undefined) continue;
-        try {
-          return await loadTextureFromBytes(candidate, bytes);
-        } catch (error) {
-          gameplayLog.info('beatoraja decide chart-image decode failed', { path: candidate, error });
-          return undefined;
-        }
-      }
-      return undefined;
-    };
-    const [stageFile, backBmp, banner] = await Promise.all([
-      decode(meta.stageFile),
-      decode(meta.backBmp),
-      decode(meta.banner),
-    ]);
-    if (stageFile !== undefined) out.stageFile = stageFile;
-    if (backBmp !== undefined) out.backBmp = backBmp;
-    if (banner !== undefined) out.banner = banner;
-    return out;
+  private loadBeatorajaChartImages(song: BrowserSongEntry): Promise<BeatorajaChartImages> {
+    return loadBeatorajaChartImages(song, resolveSongSource(this.collection, song));
   }
 
   /**
