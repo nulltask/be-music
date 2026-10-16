@@ -5,6 +5,7 @@ import {
   parseBeatorajaCourseData,
   parseLr2CourseFile,
   resolveCourseLaneOptions,
+  resolveCourseStagePlaySettings,
   resolveCourseStageSettings,
   resolveLr2GradeCoursePlaySettings,
   type CourseLaneOption,
@@ -91,5 +92,49 @@ describe('LR2 GRADE course resets', () => {
     expect(resolveLr2GradeCoursePlaySettings(lr2, { ...picks, gauge: 'HARD' }).gauge).toBe('HARD');
     // Another course keeps every pick.
     expect(resolveLr2GradeCoursePlaySettings({ ...lr2, kind: 'expert' }, picks)).toBe(picks);
+  });
+});
+
+describe('resolveCourseStagePlaySettings', () => {
+  const picks = {
+    random1P: 'RANDOM' as const,
+    random2P: 'MIRROR' as const,
+    dpFlip: true,
+    gauge: 'EASY' as const,
+    hiddenSudden1P: 'SUDDEN' as const,
+    hiddenSudden2P: 'OFF' as const,
+    autoScratch1P: true,
+    autoScratch2P: false,
+    tempo: 0.9,
+  };
+
+  test('resets an LR2 GRADE course’s stage to what LR2 allows, lane options included', () => {
+    const definition = parseLr2CourseFile(
+      `<courselist><course><title>Dan</title><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${MD5_A}</hash></course></courselist>`,
+    )[0]!;
+    expect(resolveCourseStagePlaySettings(definition, picks)).toEqual({
+      random1P: 'OFF',
+      random2P: 'OFF',
+      dpFlip: false,
+      gauge: 'GROOVE',
+      hiddenSudden1P: 'OFF',
+      hiddenSudden2P: 'OFF',
+      autoScratch1P: false,
+      autoScratch2P: false,
+      tempo: 1,
+    });
+  });
+
+  test('applies only the lane-option constraint to another course, passing other fields through', () => {
+    const definition = parseBeatorajaCourseData({ hash: [{ md5: MD5_A }], constraint: ['MIRROR'] })!;
+    expect(resolveCourseStagePlaySettings(definition, { ...picks, bga: true })).toEqual({
+      ...picks,
+      bga: true,
+      random1P: 'OFF',
+      random2P: 'OFF',
+      dpFlip: false,
+    });
+    const free = parseBeatorajaCourseData({ hash: [{ md5: MD5_A }], constraint: [] })!;
+    expect(resolveCourseStagePlaySettings(free, picks)).toEqual(picks);
   });
 });

@@ -117,3 +117,22 @@ export function resolveLr2GradeCoursePlaySettings<T extends Lr2GradeResetSetting
 export function isCourseHiSpeedLocked(constraints: readonly CourseConstraint[]): boolean {
   return constraints.includes('no_speed');
 }
+
+/** The player's picks a course may override for a stage: the lane options and what LR2 resets on a GRADE course. */
+export interface CourseStagePlaySettings extends CourseLaneOptions, Lr2GradeResetSettings {}
+
+/**
+ * The settings a stage plays with in place of the player's picks: the lane options the course allows
+ * ({@link resolveCourseLaneOptions}), then, on an LR2 GRADE course, LR2's resets ({@link resolveLr2GradeCoursePlaySettings}:
+ * EASY gauge to GROOVE; HIDDEN / SUDDEN, auto scratch, FLIP and the tempo off). The other fields a host carries along
+ * pass through. The player's own settings are left as they are, so they come back after the course.
+ */
+export function resolveCourseStagePlaySettings<T extends CourseStagePlaySettings>(
+  definition: Pick<CourseDefinition, 'kind' | 'source' | 'constraints'>,
+  picked: T,
+): T {
+  return resolveLr2GradeCoursePlaySettings(definition, {
+    ...picked,
+    ...resolveCourseLaneOptions(definition.constraints, picked),
+  });
+}
