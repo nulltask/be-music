@@ -126,6 +126,9 @@ describe('resolveLr2PlayState numbers', () => {
     expect(state.number(LR2_NUM.PERFECT)).toBe(50);
     expect(state.number(LR2_NUM.POOR)).toBe(3);
     expect(state.number(LR2_NUM.TOTAL_RATE)).toBe(55);
+    // 102 is the score rate, not the frame rate: 110 of the 126 points of the 63 notes judged, 87.30 %.
+    expect(state.number(LR2_NUM.SCORE_RATE)).toBe(87);
+    expect(state.number(LR2_NUM.SCORE_RATE_AFTERDOT)).toBe(30);
     expect(state.number(LR2_NUM.PLAY_MINUTE)).toBe(1);
     expect(state.number(LR2_NUM.PLAY_SECOND)).toBe(15);
     expect(state.number(LR2_NUM.REMAINING_SECOND)).toBe(45);
