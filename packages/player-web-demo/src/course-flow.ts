@@ -1,6 +1,8 @@
-import type { RandomCourseDrawFailure } from '@be-music/player/course';
+import { CourseRun, type CourseRunStagePlan, type RandomCourseDrawFailure } from '@be-music/player/course';
 import type { BeMusicCoursePlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
+import { resolveSceneCourseInfo, type SceneCourseInfo } from '@be-music/player-web/scenes';
+import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPrepareFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, type SongRecordPlay } from './song-records.ts';
 
@@ -27,6 +29,45 @@ export function planCourseStart(entry: BrowserCourseEntry): CourseStartPlan {
   if (!entry.playable) return { action: 'unplayable' };
   if (entry.random !== undefined) return { action: 'draw' };
   return entry.definition.kind === 'nonstop' ? { action: 'nonstop' } : { action: 'stages' };
+}
+
+/** An EXPERT / GRADE course being played: the course bar it started from and its run. */
+export interface ActiveCourse {
+  course: BrowserCourseEntry;
+  run: CourseRun<BrowserSongEntry, CourseStageHistory>;
+}
+
+/** A stage of a running course as the demo plays it: the run's plan, with the course as the skins show it there. */
+export interface CourseStagePlay extends CourseRunStagePlan<BrowserSongEntry> {
+  courseInfo: SceneCourseInfo;
+}
+
+/** Starts a run of a course whose stages are all in the collection (`CourseRun` refuses one with a stage missing). */
+export function startCourseRun(course: BrowserCourseEntry): ActiveCourse {
+  return {
+    course,
+    run: new CourseRun(
+      course.definition,
+      course.stages.map((stage) => stage.song),
+    ),
+  };
+}
+
+/** The next stage of a running course, with the course as the skins show it there; `undefined` once the run is over. */
+export function nextCourseStagePlay(active: ActiveCourse): CourseStagePlay | undefined {
+  const plan = active.run.nextStage();
+  return plan === undefined ? undefined : { ...plan, courseInfo: resolveSceneCourseInfo(active.course, plan.index) };
+}
+
+/** The course as the skins show it at the stage last played (none before the first one). */
+export function activeCourseInfo(active: ActiveCourse): SceneCourseInfo {
+  const played = active.run.stagesPlayed;
+  return resolveSceneCourseInfo(active.course, played > 0 ? played - 1 : undefined);
+}
+
+/** The graphs of every stage played, in order: a stage given up, or played without graphs, has empty ones. */
+export function courseStageHistories(active: ActiveCourse): CourseStageHistory[] {
+  return active.run.stageExtras.map((history) => history ?? EMPTY_COURSE_STAGE_HISTORY);
 }
 
 /**
