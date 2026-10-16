@@ -125,14 +125,13 @@ export async function runPlayLoop(
 
       // A held play (`holdAfterChart`) runs past its horizon until the host ends it.
       const hold = options.holdAfterChart;
-      // On the play clock, so a tempo change during the play moves it.
+      // The chart's end, the widest BAD reach (its last notes can still be judged until then) and a second of grace
+      // for the audio to play out. On the play clock, which starts after the lead-in, so a tempo change during the
+      // play moves it.
       const widestReachMs = 1000 * widestJudgeReachSeconds(session);
-      const horizonMs = (): number =>
-        drifts.horizon === 'chart-end'
-          ? tempoClock.clockMsAt(totalSeconds) + 1000
-          : tempoClock.clockMsAt(totalSeconds) + session.leadInMs + widestReachMs + 1000;
+      const horizonMs = (): number => tempoClock.clockMsAt(totalSeconds) + widestReachMs + 1000;
       // Without audio to play out a play ends as soon as its chart is over and judged — unless the host holds it open.
-      const endsWithChart = (drifts.horizon === 'chart-end' || audioSession === undefined) && hold === undefined;
+      const endsWithChart = audioSession === undefined && hold === undefined;
       let settled = false;
       const pastHorizon = (): boolean => {
         if (clock.nowMs() < horizonMs()) return false;
@@ -185,7 +184,7 @@ export async function runPlayLoop(
       }
 
       if (controls.interruptedReason === undefined) {
-        await judge.beforeFinish?.(loopWakeUp);
+        judge.beforeFinish?.();
         tracer.flushUntil(totalSeconds);
         judge.finish();
         if (drifts.closingFrame) {

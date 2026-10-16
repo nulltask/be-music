@@ -303,7 +303,7 @@
   },
   "auto": {
     "outcome": "completed",
-    "endedAtMs": 3250,
+    "endedAtMs": 4450,
     "summary": {
       "total": 4,
       "perfect": 4,
@@ -396,8 +396,8 @@
       "2500.000 trigger 13:02@1+1/4",
       "3000.000 trigger 14:02@1+1/2",
       "3000.000 trigger 14:02@1+1/2",
-      "3250.000 finish",
-      "3250.000 dispose"
+      "4450.000 finish",
+      "4450.000 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -408,7 +408,7 @@
     ],
     "ui": ["500.000 flash-lane 11","1500.000 flash-lane 12","2500.000 flash-lane 13","3000.000 flash-lane 14"],
     "frames": {
-      "count": 202,
+      "count": 273,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "1500.000 seconds=1.5 note 12@1.5",
@@ -416,9 +416,9 @@
         "2366.667 seconds=2.366667 invisible 16@2.25",
         "2500.000 seconds=2.5 note 13@2.5",
         "3000.000 seconds=3 note 14@3",
-        "3250.000 seconds=3.25 mine 15@3.25"
+        "3366.667 seconds=3.366667 mine 15@3.25"
       ],
-      "last": "3250.000 seconds=3.25 beat=6.5"
+      "last": "4450.000 seconds=3.25 beat=6.5"
     },
     "host": [
       "0.000 ruleset beatoraja/0 per-note note={\"judges\":[[-15000,15000],[-37500,37500],[-75000,75000],[-112500,112500]],\"ms\":[-150000,500000]}",
@@ -426,9 +426,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "3250.000 input-runtime stop",
-      "3250.000 ui stop",
-      "3250.000 ui dispose"
+      "4450.000 input-runtime stop",
+      "4450.000 ui stop",
+      "4450.000 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.25}",

@@ -1,7 +1,6 @@
 import { resolveAltModifierLabel } from '../utils.ts';
 import { createAutoJudgeState, isAutoJudgeSettled, runAutoJudgeStep, type AutoJudgeInput } from './auto-judge-core.ts';
 import { clampToReversal } from './judge-core.ts';
-import { TUI_FRAME_INTERVAL_MS, waitPreciseOrInput } from './engine-clock.ts';
 import { printLaneMap, writePlayableSampleTriggerEventLog } from './engine-trace.ts';
 import { createRealtimeAudioCursor } from './play-audio-cursor.ts';
 import type { PlaySession } from './play-session.ts';
@@ -14,7 +13,6 @@ import type { JudgeStrategy, PlayJudge, StrategyDrifts } from './play-strategy.t
 
 /** AUTO play's drifts from manual play (see {@link StrategyDrifts}). */
 const AUTO_DRIFTS: StrategyDrifts = {
-  horizon: 'chart-end',
   closingFrame: true,
   queuesLaneKeysoundsAsRealtimeAudio: true,
   omitsEndOnFailure: true,
@@ -38,8 +36,7 @@ function writeAutoIntro(session: PlaySession): void {
 }
 
 function createAutoJudge(session: PlaySession): PlayJudge {
-  const { playbackChart, uiEnabled, writeOutput, wavResources, idBase, audioSession, totalSeconds, tempoClock } =
-    session;
+  const { playbackChart, uiEnabled, writeOutput, wavResources, idBase, audioSession, totalSeconds } = session;
   const { scorableNotes } = playbackChart;
   const autoJudge = createAutoJudgeState(
     {
@@ -87,18 +84,6 @@ function createAutoJudge(session: PlaySession): PlayJudge {
     judgedThroughSeconds: (tick) => tick.nowSec,
     isSettled: () => noteKeysounds.done && isAutoJudgeSettled(autoJudge),
     isClosed: () => false,
-    beforeFinish: async (wakeUp) => {
-      session.volumeChanges.triggerUntil(totalSeconds);
-      session.backgroundAudio.triggerUntil(totalSeconds);
-      noteKeysounds.triggerUntil(totalSeconds);
-      step({ kind: 'reach', nowSec: totalSeconds });
-      const totalWaitMs = Math.max(0, tempoClock.clockMsAt(totalSeconds) - (session.clock?.nowMs() ?? 0));
-      if (totalWaitMs > 0) {
-        // Trailing wait for the chart's end. ESC during it should still abort promptly, so race the sleep against the
-        // wake-up the same way the main tick does.
-        await waitPreciseOrInput(Math.min(totalWaitMs, TUI_FRAME_INTERVAL_MS), wakeUp);
-      }
-    },
     finish: () => step({ kind: 'finish', totalSeconds }),
     settledThroughSeconds: () => judgedThroughSeconds,
   };

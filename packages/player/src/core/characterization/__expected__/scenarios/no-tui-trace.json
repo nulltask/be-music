@@ -227,7 +227,7 @@
   },
   "auto": {
     "outcome": "completed",
-    "endedAtMs": 3500,
+    "endedAtMs": 4716.667,
     "summary": {
       "total": 6,
       "perfect": 6,
@@ -325,8 +325,8 @@
       "2500.000 trigger 54:02@1+1/4",
       "3500.000 trigger 15:04@1+3/4",
       "3500.000 trigger 15:04@1+3/4",
-      "3500.000 finish",
-      "3500.000 dispose"
+      "4716.667 finish",
+      "4716.667 dispose"
     ],
     "judges": [],
     "ui": [],
@@ -336,7 +336,7 @@
       "0.000 input-runtime create auto",
       "0.000 load-complete",
       "0.000 input-runtime start",
-      "3500.000 input-runtime stop"
+      "4716.667 input-runtime stop"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":false,\"audioEnabled\":true,\"totalSeconds\":3.5}",

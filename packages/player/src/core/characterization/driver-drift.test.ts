@@ -24,6 +24,9 @@ const ON_TIME: ScriptStep[] = [
   ...tap(3500, '11'),
 ];
 
+/** One 60 Hz tick, and the rounding of a snapshot time (the loop's tick times are sums of 1000 / 60 ms). */
+const TICK_MS = 1000 / 60 + 0.001;
+
 const audioCalls = (observation: PlayObservation, call: string): string[] =>
   observation.audio.filter((entry) => entry.split(' ')[1] === call);
 
@@ -41,11 +44,11 @@ describe('driver drift', () => {
       expect(observation.endedAtMs).toBeGreaterThanOrEqual(settledAtMs + 500);
       return settledAtMs;
     };
-    // Manual play settles at the first tick past its horizon (3.5 s chart + 0.2 s BAD reach + 1 s).
-    expect(settledAt(manual)).toBeGreaterThanOrEqual(4700);
-    expect(settledAt(manual)).toBeLessThan(4700 + 1000 / 60);
-    // Auto play settles past the chart's end too, instead of ending with it.
-    expect(settledAt(auto)).toBeGreaterThan(3500);
+    // Both settle at the first tick past their horizon (3.5 s chart + 0.2 s BAD reach + 1 s).
+    for (const observation of [manual, auto]) {
+      expect(settledAt(observation)).toBeGreaterThanOrEqual(4700);
+      expect(settledAt(observation)).toBeLessThanOrEqual(4700 + TICK_MS);
+    }
   });
 
   test('auto play resolves the #EXRANK changes like manual play', async () => {
@@ -111,32 +114,27 @@ describe('driver drift', () => {
     expect(starts(await observePlay({ ...play, driver: 'auto' }))).toEqual(['0.000 input-runtime start']);
   });
 
-  test('drift: with an audio session manualPlay runs on past the chart by the lead-in, the widest BAD reach and 1 s; autoPlay stops with the chart', async () => {
+  test('with an audio session manual and auto play both run on past the chart by the widest BAD reach and 1 s', async () => {
     const play = { chart: basicChart(), options: { leadInMs: 1000 } };
-    const manual = await observePlay({
-      ...play,
-      driver: 'manual',
-      script: ON_TIME.map((step) => ({ ...step, atMs: step.atMs + 1000 })),
-    });
+    const script = ON_TIME.map((step) => ({ ...step, atMs: step.atMs + 1000 }));
+    const manual = await observePlay({ ...play, driver: 'manual', script });
     const auto = await observePlay({ ...play, driver: 'auto' });
-    // 1000 lead-in + 3500 chart, then manual's horizon adds the lead-in again, the 200 ms BAD reach and 1000 ms.
-    expect(auto.endedAtMs).toBe(4500);
-    expect(manual.endedAtMs).toBeGreaterThanOrEqual(6700);
-    expect(manual.endedAtMs).toBeLessThan(6700 + 1000 / 60);
-    // Without an audio session manual play ends once its chart is judged.
-    const silent = await observePlay({
-      ...play,
-      driver: 'manual',
-      audio: false,
-      script: ON_TIME.map((step) => ({ ...step, atMs: step.atMs + 1000 })),
-    });
-    expect(silent.endedAtMs).toBeLessThan(4800);
+    // 1000 lead-in + 3500 chart + 200 ms BAD reach + 1000 ms, counted once on the play clock: the first tick past it.
+    for (const observation of [manual, auto]) {
+      expect(observation.endedAtMs).toBeGreaterThanOrEqual(5700);
+      expect(observation.endedAtMs).toBeLessThanOrEqual(5700 + TICK_MS);
+    }
+    // Without an audio session both end once their chart is judged.
+    const silentManual = await observePlay({ ...play, driver: 'manual', audio: false, script });
+    const silentAuto = await observePlay({ ...play, driver: 'auto', audio: false });
+    expect(silentManual.endedAtMs).toBeLessThan(4600);
+    expect(silentAuto.endedAtMs).toBeLessThan(4600);
   });
 
   test('drift: autoPlay publishes a closing frame at the chart’s end, manualPlay’s last frame is its last tick', async () => {
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: ON_TIME });
     const auto = await observePlay({ driver: 'auto', chart: basicChart() });
-    expect(auto.frames.last).toBe('3500.000 seconds=3.5 beat=7');
+    expect(auto.frames.last).toMatch(/^4\d{3}\.\d{3} seconds=3\.5 beat=7$/);
     expect(manual.frames.last).toMatch(/^4\d{3}\.\d{3} seconds=4\./);
   });
 

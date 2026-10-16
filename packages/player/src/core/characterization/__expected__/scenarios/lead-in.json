@@ -1,7 +1,7 @@
 {
   "manual": {
     "outcome": "completed",
-    "endedAtMs": 6701.667,
+    "endedAtMs": 5701.667,
     "summary": {
       "total": 11,
       "perfect": 6,
@@ -151,8 +151,8 @@
       "4000.000 trigger 12:03@1+1/2",
       "4000.000 trigger 13:04@0+2/4",
       "4525.000 trigger 11:02@1+3/4",
-      "6701.667 finish",
-      "6701.667 dispose"
+      "5701.667 finish",
+      "5701.667 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -229,7 +229,7 @@
       "4585.000 release-lane 11"
     ],
     "frames": {
-      "count": 364,
+      "count": 304,
       "judged": [
         "1500.000 seconds=0.5 note 11@0.5",
         "1780.000 seconds=0.78 note 12@0.75",
@@ -243,7 +243,7 @@
         "4000.000 seconds=3 note 12@3",
         "4525.000 seconds=3.525 note 11@3.5"
       ],
-      "last": "6685.000 seconds=5.685 beat=11.37"
+      "last": "5685.000 seconds=4.685 beat=9.37"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -251,9 +251,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "6701.667 input-runtime stop",
-      "6701.667 ui stop",
-      "6701.667 ui dispose"
+      "5701.667 input-runtime stop",
+      "5701.667 ui stop",
+      "5701.667 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"manual\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",
@@ -280,7 +280,7 @@
   },
   "auto": {
     "outcome": "completed",
-    "endedAtMs": 4500,
+    "endedAtMs": 5700,
     "summary": {
       "total": 11,
       "perfect": 11,
@@ -391,8 +391,8 @@
       "4000.000 trigger 12:03@1+1/2",
       "4500.000 trigger 11:02@1+3/4",
       "4500.000 trigger 11:02@1+3/4",
-      "4500.000 finish",
-      "4500.000 dispose"
+      "5700.000 finish",
+      "5700.000 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -422,7 +422,7 @@
       "4500.000 flash-lane 11"
     ],
     "frames": {
-      "count": 224,
+      "count": 295,
       "judged": [
         "1500.000 seconds=0.5 note 11@0.5",
         "1750.000 seconds=0.75 note 12@0.75",
@@ -436,7 +436,7 @@
         "4000.000 seconds=3 note 12@3",
         "4500.000 seconds=3.5 note 11@3.5"
       ],
-      "last": "4500.000 seconds=3.5 beat=7"
+      "last": "5700.000 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -444,9 +444,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "4500.000 input-runtime stop",
-      "4500.000 ui stop",
-      "4500.000 ui dispose"
+      "5700.000 input-runtime stop",
+      "5700.000 ui stop",
+      "5700.000 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",

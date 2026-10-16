@@ -1,7 +1,6 @@
 import type { PlaylogPlay } from '../playlog/format.ts';
 import type { PlayerInputCommand } from './input-signal-bus.ts';
 import type { PlaySession } from './play-session.ts';
-import type { InputWakeUp } from './input-wakeup.ts';
 
 /**
  * Judge strategies: what differs between manual, replay and AUTO play. The play loop (`play-loop.ts`) owns the clock,
@@ -37,7 +36,7 @@ export interface PlayJudge {
   /** Judging stopped for good: a survival gauge emptied under `endOnFailure`. */
   isClosed(): boolean;
   /** Runs once the loop is over and before `finish`, when the play was not interrupted. */
-  beforeFinish?(wakeUp: InputWakeUp): Promise<void> | void;
+  beforeFinish?(): void;
   /** Applies the end-of-play rules. */
   finish(): void;
   /** The chart second the judge had settled through, recorded when the play is aborted. */
@@ -50,12 +49,6 @@ export interface PlayJudge {
  * they are removed one by one.
  */
 export interface StrategyDrifts {
-  /**
-   * Where the play ends: `lead-in-and-reach` runs to the chart's end plus the lead-in, the widest reach and a second
-   * (ending early only without an audio session or a hold); `chart-end` ends as soon as the chart is over and judged
-   * (unless the host holds it) and caps the play at the chart's end plus a second.
-   */
-  readonly horizon: 'lead-in-and-reach' | 'chart-end';
   /** Publishes a closing frame at the chart's end after `finish`. */
   readonly closingFrame: boolean;
   /** Queues the play lanes' keysounds as realtime audio as well as its own note keysounds. */
