@@ -14,6 +14,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
 - `@be-music/player`: Shared playback engine, timing, judgment, scoring, gauge, BGA timeline, and UI/audio adapter contracts
 - `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-playlog` play-log re-simulator
+- `@be-music/scene-model`: Runtime-neutral scene models — library entries, browsing, play options — shared by every skin family
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
 - `@be-music/skin-sdk`: Framework-free SDK for writing be-music skins for the browser player

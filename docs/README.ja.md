@@ -13,6 +13,7 @@
 - [Player 実装仕様](player-spec.ja.md)
 - [Terminal player 実装メモ](player-tui.ja.md)
 - [Browser player 実装メモ](player-web.ja.md)
+- [シーンモデル（`@be-music/scene-model`）](scene-model.ja.md)
 - [プレイログ（プレイ履歴）仕様](playlog.ja.md)
 - [コースと段位認定](course.ja.md)
 - [コースのブラウザ確認](course-checklist.ja.md)
