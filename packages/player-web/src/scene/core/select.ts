@@ -1565,6 +1565,11 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     };
   }
 
+  /** The bar under the cursor (a folder, song or course), or `undefined` when the list is empty. */
+  public getFocusedEntry(): BrowserBrowseEntry | undefined {
+    return this.currentEntries()[this.selectedIndex];
+  }
+
   /**
    * Walks `folderPath` deepest-first, looking up each label in the folder list at the matching depth. Stops as soon as
    * a label doesn't match — the partial path is still a useful restore. The `selectedIndex` is clamped to the recovered
