@@ -7,7 +7,7 @@ import { createApp } from './app.ts';
 import { openDatabase } from './db/client.ts';
 import { course, courseScore, score } from './db/schema.ts';
 import type { Env } from './env.ts';
-import { ClearLamp } from './scoring/lamp.ts';
+import { clearLampRank } from '@be-music/player/ruleset';
 
 const noChartsets = async () => undefined;
 
@@ -57,7 +57,7 @@ describe('POST /api/v0/course-scores', () => {
     expect(body.results.map((result) => result.ruleset)).toEqual(['lr2', 'beatoraja', 'iidx']);
     for (const result of body.results) {
       expect(result).toMatchObject({ exScore: 60, noteCount: 30, missCount: 0, stagesPlayed: 3, rank: 1, players: 1 });
-      expect(result.clearLamp).toBeGreaterThanOrEqual(ClearLamp.FULL_COMBO);
+      expect(result.clearLamp).toBeGreaterThanOrEqual(clearLampRank('FULL_COMBO'));
     }
 
     const db = openDatabase(env.DB);
@@ -90,7 +90,7 @@ describe('POST /api/v0/course-scores', () => {
     expect(response.status).toBe(201);
     const body = (await response.json()) as CourseOutcome;
     const lr2 = body.results.find((result) => result.ruleset === 'lr2')!;
-    expect(lr2).toMatchObject({ clearLamp: ClearLamp.FAILED, stagesPlayed: 2, exScore: 20, noteCount: 30 });
+    expect(lr2).toMatchObject({ clearLamp: clearLampRank('FAILED'), stagesPlayed: 2, exScore: 20, noteCount: 30 });
     // Stage 2's first POOR, its nine notes never judged, and all ten of stage 3.
     expect(lr2.missCount).toBe(20);
     // A failed run is keyed like a cleared one (by the stage charts, reached or not): one ranking for both.
@@ -157,7 +157,7 @@ describe('POST /api/v0/course-scores', () => {
     const response = await submitCourse(cookie, courseBody(givenUp, charts));
     expect(response.status).toBe(201);
     const lr2 = ((await response.json()) as CourseOutcome).results.find((result) => result.ruleset === 'lr2')!;
-    expect(lr2).toMatchObject({ clearLamp: ClearLamp.FAILED, stagesPlayed: 2 });
+    expect(lr2).toMatchObject({ clearLamp: clearLampRank('FAILED'), stagesPlayed: 2 });
     // The ten notes of the stage never reached count as misses.
     expect(lr2.missCount).toBe(10);
   });

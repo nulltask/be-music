@@ -4,7 +4,6 @@ import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import type { Database } from '../db/client.ts';
 import { bestScore, score, scoreResult } from '../db/schema.ts';
 import { mergeBestScores, type BestScores } from '../scoring/best.ts';
-import type { ClearLamp } from '../scoring/lamp.ts';
 
 export type BestScoreRow = typeof bestScore.$inferInsert;
 
@@ -40,7 +39,7 @@ export function toBestScores(row: typeof bestScore.$inferSelect): BestScores {
     bestEx: row.bestEx,
     bestExScoreId: row.bestExScoreId,
     bestExAt: row.bestExAt.getTime(),
-    bestLamp: row.bestLamp as ClearLamp,
+    bestLamp: row.bestLamp,
     bestLampScoreId: row.bestLampScoreId,
     minMiss: row.minMiss,
     minMissScoreId: row.minMissScoreId,
@@ -118,7 +117,7 @@ export async function rebuildBestScores(
       scoreId: row.scoreId,
       playedAt: row.createdAt.getTime(),
       exScore: row.exScore,
-      lamp: row.clearLamp as ClearLamp,
+      lamp: row.clearLamp,
       missCount: row.missCount,
     });
     folded.set(key, {

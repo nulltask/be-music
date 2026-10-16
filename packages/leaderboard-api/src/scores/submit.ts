@@ -3,6 +3,7 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import {
   checkPlaylogEligibility,
   PLAYLOG_ENGINE_VERSION,
+  resolveRulesetResultLamp,
   simulatePlaylog,
   type BeMusicPlaylog,
   type PlaylogRulesetId,
@@ -13,7 +14,7 @@ import type { Database } from '../db/client.ts';
 import { bestScore, score, scoreResult } from '../db/schema.ts';
 import { rankOfExScore, countPlayers } from '../ranking.ts';
 import { mergeBestScores } from '../scoring/best.ts';
-import { resolveClearLamp, resolveMissCount, type ClearLamp } from '../scoring/lamp.ts';
+import { clearLampRank, resolveMissCount } from '@be-music/player/ruleset';
 import { sha256Hex } from '../hash.ts';
 import { playedFileOf } from './played-file.ts';
 import { checkPlayedChart, gzipText, playedChartStatements, putChartDocument } from './played-chart.ts';
@@ -43,7 +44,8 @@ export interface RulesetOutcome {
   rulesetRevision: string;
   exScore: number;
   noteCount: number;
-  clearLamp: ClearLamp;
+  /** The clear lamp, by its rank (`clearLampRank`). */
+  clearLamp: number;
   missCount: number;
   rank: number;
   players: number;
@@ -111,8 +113,8 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   ]);
   const playedRuleset = input.playlog.play.judgeRuleset ?? 'lr2';
   const figures = simulated.map(({ ruleset, result }) => {
-    const lamp = resolveClearLamp(result, ruleset);
-    const missCount = resolveMissCount(result);
+    const lamp = clearLampRank(resolveRulesetResultLamp(result, ruleset));
+    const missCount = resolveMissCount(result.judge);
     const current = currentBests.get(ruleset);
     const update = mergeBestScores(current, { scoreId, playedAt: now, exScore: result.exScore, lamp, missCount });
     const playedHere = (current?.playedHere ?? false) || playedRuleset === ruleset;
@@ -203,7 +205,7 @@ function toScoreResultRow(
   scoreId: string,
   ruleset: PlaylogRulesetId,
   result: PlaylogRulesetResult,
-  lamp: ClearLamp,
+  lamp: number,
   missCount: number,
 ): typeof scoreResult.$inferInsert {
   return {
@@ -244,7 +246,7 @@ async function loadOutcomes(
         rulesetRevision: row.rulesetRevision,
         exScore: row.exScore,
         noteCount: row.noteCount,
-        clearLamp: row.clearLamp as ClearLamp,
+        clearLamp: row.clearLamp,
         missCount: row.missCount,
         rank,
         players,
