@@ -9,6 +9,7 @@
  * - Decide: {@link resolveLr2DecideState} for the chart about to be played (and its course).
  * - Play: {@link resolveLr2PlayState} for a frame of a play (its setup and the running play state), the timers a
  *   moment of the play starts and stops, and the lane timer banks.
+ * - Result: {@link resolveLr2ResultState} for a play's result (and its course).
  * - Charts and records: a chart's key-mode op and features, a record's clear-lamp op and bar lamp.
  * - Courses: the course ops, numbers and texts of a `CourseView`, the course maker's ops, texts and buttons.
  */
@@ -39,6 +40,7 @@ export {
   type Lr2PlayTimerEvent,
   type Lr2PlayView,
 } from './play.ts';
+export { resolveLr2ResultState, type Lr2ResultInput, type Lr2ResultState } from './result.ts';
 export {
   pickLr2BarBody,
   resolveLr2BarLevel,
