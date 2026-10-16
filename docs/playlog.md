@@ -33,7 +33,10 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    sweeps misses past R, and ends a run that leaves scorable notes unjudged with the gauge at 0, exactly as the
    engine did (see [`bms-spec.md`](./bms-spec.md) "Negative BPM").
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
-   `{ seq, timeUs, action: 'down' | 'up', channels }`. Inputs are never converted into judgments, never assigned
+   `{ seq, timeUs, action: 'down' | 'up', channels }`, with the key `tokens` when the host named them and
+   `inferred: true` on an `up` the engine inferred because the input reported no releases (a terminal without the
+   kitty keyboard protocol): the instant it took the key as let go. `inferred` is diagnostic only; replays and
+   simulators read such an `up` like any other. Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
@@ -79,7 +82,7 @@ The recommended file suffix is `.bmplay.json`.
 Recording is engine-owned so every host (browser LR2 / beatoraja scenes, and any future TUI adoption) shares one
 implementation. `PlayerOptions.onPlaylogRecorded` enables it: the engine snapshots its prepared chart, records
 every judged press (`lane-input`) and release (`kitty-state` release) with `pressedAt`-corrected chart-relative
-timestamps, counts empty POORs for the native cache, and hands the assembled `BeMusicPlaylog` to the callback right
+timestamps — for input without releases, the releases it inferred ([Input without key releases](#input-without-key-releases)) — counts empty POORs for the native cache, and hands the assembled `BeMusicPlaylog` to the callback right
 before `autoPlay` / `manualPlay` resolves — including the ESC (aborted) exit. `PlayerOptions.recordPlaylog` carries
 the host-declared settings the engine cannot know (selected gauge, lane-shuffle labels, DP flip, freeform
 `native` extras, and the source chart the fingerprints are computed from). The `#RANDOM` / `#SWITCH` draws come from
@@ -105,6 +108,26 @@ In the browser player:
   (LR2 / beatoraja / IIDX), gauge, Random 1P/2P, DP flip, and auto scratch. Where the LR2 select scene's
   PLAY OPTION panel has a counterpart, the two surfaces two-way sync. Its **Replay / ghost** subfolder picks what a
   replay reproduces of the recorded view ([What the player saw](#what-the-player-saw)).
+
+### Input without key releases
+
+A terminal without the kitty keyboard protocol sends a key as one press and then, while it is held, as repeated
+presses; it never reports a release. Until the input reports one (a `kitty-state` command), the engine infers when
+each key came up and feeds the judge, and the play log, ordinary presses and releases:
+
+- a press on a lane that is up is a key going down (a `down`);
+- the lane stays down for a grace after each press: 380 ms after the press that hits a long note's head (a terminal's
+  repeat delay), 120 ms after any other, in the play's clock at the tempo it started at;
+- a press on a lane that is down is the held key repeating when the lane's long note is held, or when it is the key of
+  a long note it already let go before that note's end with no note in reach: it keeps the lane down and is not
+  recorded; otherwise it is a new press (a key mashed faster than the grace) and is recorded as a `down`;
+- a press on a lane that is up that is the key of a long note it already let go, still repeating, is no press at all;
+- once a lane's grace lapses with no repeat, its key comes up at that instant: an `up` marked `inferred: true`, judged
+  there (the ruleset's release rules, beatoraja's release margin included), whenever the engine notices.
+
+The judge then sees exactly the inputs the log records, so a replay and the re-simulation under the play's ruleset
+reach the live play's result (`driver-drift.test.ts` checks long notes in every mode, key repeat, mashing and mines
+under each ruleset).
 
 ## Compat rulesets
 
@@ -224,14 +247,10 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
   per-mode gauge tables other than SEVENKEYS (the 7K gauge constants are used for every mode).
 - Because the playlog stores the resolved chart, `#RANDOM` and lane-shuffle differences between players never
   affect re-simulation.
-- A play from input without key releases (a terminal without the kitty keyboard protocol) is judged live on
-  hold-grace windows: a repeated press keeps a long note held for a short window, a repeat on the lane of the long
-  note it is playing is no empty POOR, and a mine takes a key as down for the same window after each press. Its log
-  records each of those presses as a `down` and has no `up`, so a replay and the re-simulations read it as key-state
-  input — every key held from its press on, every repeat a new press — and agree with each other, but can judge it
-  differently from the live play (extra empty POORs, long notes held to their tails), at any tempo. Reproducing such
-  a play would need the log to say that its input had no releases and the simulators to model the hold-grace windows
-  (in the live play's clock domain); neither does yet.
+- A play from input without key releases records the releases the engine inferred ([Input without key
+  releases](#input-without-key-releases)), so it replays and re-simulates as it was judged. Logs recorded before
+  that have only `down` inputs for it: a replay and the re-simulations hold every key from its press on and take
+  every repeat as a new press, and can judge such a log differently from how it was played.
 
 ## Course play logs
 

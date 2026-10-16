@@ -216,6 +216,22 @@ function hasEmptyPoorReferenceNote(state: JudgeCoreState, channels: ReadonlySet<
   return false;
 }
 
+/**
+ * Input without key releases (a terminal's key repeat): whether a press on `channel` at `nowSec` is the key of a long
+ * note it already let go, still repeating — before that long note's end, with no long note held on the lane and no
+ * note in reach of the press — so it is no new press. Reads the state only.
+ */
+export function isLongNoteKeyRepeat(state: JudgeCoreState, channel: string, nowSec: number): boolean {
+  if (state.activeLongNotes.has(channel)) {
+    return false;
+  }
+  const channels = new Set([channel]);
+  return (
+    isLongNoteRepeatSuppressedInput(state, channels, nowSec) &&
+    selectPressCandidate(state, toJudgeClock(state.config, nowSec), channels) === undefined
+  );
+}
+
 function isLongNoteRepeatSuppressedInput(
   state: JudgeCoreState,
   candidateChannels: ReadonlySet<string>,
@@ -506,6 +522,7 @@ export function handleLaneRelease(
       seconds: input.recordSec,
       tokens: input.tokens,
       channels: input.channels,
+      ...(input.inferred === true ? { inferred: true } : {}),
     });
   }
   state.keyStateInput = true;
@@ -516,7 +533,9 @@ export function handleLaneRelease(
     recordLaneUp(laneHoldHistory(state, channel), input.tokens, releaseMs);
     setHcnGaining(state, channel, toJudgeUs(input.nowSec), emit);
     state.heldChannels.delete(channel);
-    emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
+    if (input.inferred !== true) {
+      emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
+    }
     if (state.activeLongNotes.has(channel)) {
       state.longHoldReleaseSeconds.set(channel, input.nowSec);
       const marginMs = resolveLongNoteReleaseMarginMs(state, channel, input.nowSec);

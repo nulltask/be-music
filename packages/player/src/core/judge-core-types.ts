@@ -159,9 +159,15 @@ export type JudgeCoreInput =
   | { kind: 'advance'; nowSec: number; nowMs: number }
   /** A lane press on `channels` (already mapped from key tokens; `tokens` are only recorded). */
   | { kind: 'press'; channels: ReadonlySet<string>; tokens: readonly string[]; nowSec: number; nowMs: number }
-  /** Keys went down and stay down (key-state input): the lanes count as held until released. */
-  | { kind: 'hold'; channels: ReadonlySet<string> }
-  /** Keys came up. `recordSec` is the instant the play log records for the release. */
+  /**
+   * Keys went down and stay down (key-state input): the lanes count as held until released. `inferred`: the driver
+   * inferred it from input without releases, so no lane cue shows it.
+   */
+  | { kind: 'hold'; channels: ReadonlySet<string>; inferred?: boolean }
+  /**
+   * Keys came up. `recordSec` is the instant the play log records for the release. `inferred`: the driver inferred it
+   * from input without releases (the play log marks it), so no lane cue shows it.
+   */
   | {
       kind: 'release';
       channels: ReadonlySet<string>;
@@ -169,6 +175,7 @@ export type JudgeCoreInput =
       nowSec: number;
       nowMs: number;
       recordSec: number;
+      inferred?: boolean;
     }
   /**
    * The play ended: anything still unjudged is charged as POOR at `totalSeconds` — except, past an LR2 negative-BPM
@@ -184,13 +191,17 @@ export type JudgeSoundSource = 'auto-scratch' | 'manual-note' | 'lane-fallback' 
 
 /** What a step produced, in order. Drivers map these onto audio, the UI buses, the play log and the no-TUI trace. */
 export type JudgeCoreEffect =
-  /** Record a raw input in the play log (before it is judged). `channels` is only valid during dispatch. */
+  /**
+   * Record a raw input in the play log (before it is judged). `channels` is only valid during dispatch. `inferred`
+   * marks a release the driver inferred from input without releases.
+   */
   | {
       kind: 'record-input';
       action: PlaylogInputEvent['action'];
       seconds: number;
       tokens: readonly string[];
       channels: ReadonlySet<string>;
+      inferred?: boolean;
     }
   /** Count an empty POOR in the play log's native result. */
   | { kind: 'record-empty-poor' }
