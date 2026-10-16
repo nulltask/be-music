@@ -16,6 +16,7 @@ packages/*/dist/
 packages/*/dist-sea/
 *.tsbuildinfo
 coverage/
+packages/player-web-demo/e2e-results/
 
 # Example datasets
 examples/*
