@@ -7,7 +7,8 @@
 
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import type { ScoreSummary } from '@be-music/player/ruleset';
-import { playResultFromPlayState, type PlayState } from '@be-music/scene-model';
+import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
+import { gaugePercent, playResultFromPlayState, type PlayState } from '@be-music/scene-model';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
@@ -25,6 +26,8 @@ export interface PlayEndingContext {
   readonly audioBus: AudioBusHandle | undefined;
   readonly song: BrowserSongEntry | undefined;
   readonly score: ScoreSummary;
+  /** The engine's gauge as of its last frame: its clear border and the TOTAL it runs on. */
+  readonly gaugeState: PlayerGaugeSummary;
   playState: PlayState;
   readonly fastCount: number;
   readonly slowCount: number;
@@ -99,13 +102,15 @@ export function beginExitSequence(
 /**
  * The play as a result (`PlaySession.getResultData`): read off the play state (`playResultFromPlayState`), with the
  * graphs ending at the playhead so they reach the right edge even when the last judgment came well before the chart's
- * end, the clear lamp by the one clear-lamp rule, and the scores as the readouts show them.
+ * end, the clear lamp by the one clear-lamp rule, and the scores as the readouts show them; with the gauge's clear
+ * border (in percent) and TOTAL, which a beatoraja result skin shows.
  */
 export function getResultData(ctx: PlayEndingContext): PixiGameplayResultData | undefined {
   if (!ctx.song) {
     return undefined;
   }
-  return playResultFromPlayState(ctx.playState, {
+  const gauge = ctx.gaugeState;
+  const result = playResultFromPlayState(ctx.playState, {
     song: ctx.song,
     score: ctx.score,
     seconds: ctx.currentSeconds(),
@@ -114,4 +119,10 @@ export function getResultData(ctx: PlayEndingContext): PixiGameplayResultData | 
     slow: ctx.slowCount,
     ...(ctx.playlog !== undefined ? { playlog: ctx.playlog } : {}),
   });
+  return {
+    ...result,
+    ...(gauge.max > 0 ? { gaugeBorder: gaugePercent({ current: gauge.clearThreshold, max: gauge.max }) } : {}),
+    // The TOTAL the engine reports; the placeholder gauge before its first frame has none.
+    ...(gauge.effectiveTotal > 0 ? { gaugeTotal: gauge.effectiveTotal } : {}),
+  };
 }
