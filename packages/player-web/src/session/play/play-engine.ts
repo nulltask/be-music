@@ -675,13 +675,12 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
 }
 
 /**
- * The play's final summary, as the engine hands it over: its scores and gauge, and, for an AUTO play, the final
- * judgment counts (`finish`): a full combo makes the max combo every note, even where the engine published no combo
- * for some of them (an autoplayed chord).
+ * The play's final summary, as the engine hands it over: its scores and gauge, and its final judgment counts
+ * (`finish`): a full combo makes the max combo every note, for any play, even where the engine published no combo for
+ * some of them (an autoplayed chord).
  */
 export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
   applyEngineSummary(ctx, summary);
-  if (ctx.options.autoPlay !== true) return;
   applyPlayEvent(ctx, { type: 'finish', summary });
 }
 
