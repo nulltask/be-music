@@ -1048,8 +1048,11 @@ export const BEATORAJA_NUM = {
   // ─── Live-play block (100-116, 121-128, 135-136, 407, 410-427) ────────────────────────────────
   /** prop.lua `point = 100` — current run's score (NOT the best-ever record). */
   POINT: LR2_NUM.SCORE as typeof LR2_NUM.SCORE,
-  /** prop.lua `score2 = 101` — alias of `point` for skins that prefer the legacy name. */
-  SCORE2: 101,
+  /**
+   * prop.lua `score2 = 101` — the current run's EX score (`IntegerPropertyFactory.createScoreProperty`: the play's
+   * `getNowEXScore`, the result's new EX score), LR2's number 101.
+   */
+  SCORE2: LR2_NUM.EXSCORE as typeof LR2_NUM.EXSCORE,
   /** prop.lua `score_rate = 102` — EX-score percentage integer part. */
   SCORE_RATE: LR2_NUM.SCORE_RATE as typeof LR2_NUM.SCORE_RATE,
   /** prop.lua `score_rate_afterdot = 103` — EX-score percentage post-decimal digits. */

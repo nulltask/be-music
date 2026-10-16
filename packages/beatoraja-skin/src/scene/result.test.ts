@@ -58,6 +58,7 @@ describe('resolveBeatorajaResultNumber', () => {
   it("reads the run's score numbers, its max combo as the combo too", () => {
     const result = input();
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.POINT, result)).toBe(140_000);
+    expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.SCORE2, result)).toBe(14);
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.SCORE_RATE, result)).toBe(70);
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.COMBO, result)).toBe(8);
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.MAXCOMBO_LIVE, result)).toBe(8);
