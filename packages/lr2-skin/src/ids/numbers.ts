@@ -50,13 +50,13 @@ export const LR2_NUM = {
   TOTAL_BAD: 36,
   /** POORs in total. */
   TOTAL_POOR: 37,
-  /** The running combo across plays. */
+  /** The running combo across plays: it grows on every GOOD or better and breaks on a BAD or POOR, play after play. */
   RUNNING_COMBO: 38,
   /** The longest running combo across plays. */
   RUNNING_COMBO_MAX: 39,
-  /** The trial (dan) level. */
+  /** LR2's trial level: the step of its ladder of play missions the player has reached (OpenLR2 `CheckMission`). */
   TRIAL_LEVEL: 40,
-  /** The trial (dan) level below it. */
+  /** The trial level less one: the last step cleared. */
   TRIAL_LEVEL_PREVIOUS: 41,
 
   // ─── Select: the selected chart ─────────────────────────────────────────────────────────────────────────────────
@@ -140,6 +140,8 @@ export const LR2_NUM = {
   GAUGE: 107,
   /** The EX score less the rival's. */
   EXSCORE_DIFF: 108,
+  /** Number 109: as `NEXT_RANK_DIFF` (OpenLR2 resolves the two alike). */
+  NEXT_RANK_DIFF_ALT: 109,
   /** PERFECTs. */
   PERFECT: 110,
   /** GREATs. */
@@ -154,15 +156,18 @@ export const LR2_NUM = {
   TOTAL_RATE: 115,
   /** The digits after the dot of `TOTAL_RATE`. */
   TOTAL_RATE_AFTERDOT: 116,
-  /** The best EX score. */
+  /** The best record's EX score at this point of the play: its pacemaker (OpenLR2 `highScore.rate`). */
   HIGH_SCORE: 150,
-  /** The target's EX score. */
+  /** The target's EX score at this point of the play. */
   TARGET_SCORE: 151,
-  /** The EX score less the best one. */
+  /** The EX score less `HIGH_SCORE`. */
   HIGH_SCORE_DIFF: 152,
-  /** The EX score less the target's. */
+  /** The EX score less `TARGET_SCORE`. */
   TARGET_SCORE_DIFF: 153,
-  /** EX score still needed for the next rank. */
+  /**
+   * The EX score less the border of the next DJ Rank over every note: negative until it is reached, and less the
+   * maximum from AAA on; 0 at the maximum (OpenLR2 `SetObjectValue_Num`).
+   */
   NEXT_RANK_DIFF: 154,
   /** The BPM now. */
   BPM: 160,

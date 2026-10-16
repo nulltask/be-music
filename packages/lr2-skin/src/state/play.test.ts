@@ -81,7 +81,7 @@ describe('resolveLr2PlayState ops', () => {
     const loading = resolveLr2PlayState(SETUP, frame({ loaded: false })).ops;
     expect(loading.has(LR2_OP.LOADING)).toBe(true);
     expect(loading.has(LR2_OP.LOADED)).toBe(false);
-    const { ops } = resolveLr2PlayState(SETUP, frame({ score: score({ exScore: 180 }) }));
+    const { ops } = resolveLr2PlayState(SETUP, frame({ score: score({ perfect: 90, exScore: 180 }) }));
     expect(ops.has(LR2_OP.RANK_1P_AAA)).toBe(true);
     expect(ops.has(LR2_OP.GAUGE_1P_50_59)).toBe(true);
   });
@@ -134,7 +134,26 @@ describe('resolveLr2PlayState numbers', () => {
     expect(state.number(LR2_NUM.REMAINING_SECOND)).toBe(45);
     expect(state.number(LR2_NUM.BPM)).toBe(151);
     expect(resolveLr2PlayState(SETUP, frame()).number(LR2_NUM.BPM)).toBe(150);
-    expect(state.number(LR2_NUM.NEXT_RANK_DIFF)).toBe(68);
+    // 110 of 200 points is rank 4 (C): B's border is floor(200 × 5 / 9) = 111, one point away.
+    expect(state.number(LR2_NUM.NEXT_RANK_DIFF)).toBe(-1);
+    expect(state.number(LR2_NUM.NEXT_RANK_DIFF_ALT)).toBe(-1);
+  });
+
+  it('reads LR2’s distance to the next rank on 109 / 154: negative, toward the maximum from AAA', () => {
+    const diff = (exScore: number, total = 100): number | undefined =>
+      resolveLr2PlayState(SETUP, frame({ score: { ...createEmptyScore(total), exScore } })).number(
+        LR2_NUM.NEXT_RANK_DIFF,
+      );
+    // F counts down to E's border (floor(200 × 2 / 9) = 44), from no score as well.
+    expect(diff(0)).toBe(-44);
+    expect(diff(30)).toBe(-14);
+    // AA counts down to AAA's border (floor(200 × 8 / 9) = 177), and AAA to the maximum.
+    expect(diff(156)).toBe(-21);
+    expect(diff(178)).toBe(-22);
+    expect(diff(199)).toBe(-1);
+    // 0 at the maximum and on a chart without notes.
+    expect(diff(200)).toBe(0);
+    expect(diff(0, 0)).toBe(0);
   });
 
   it('counts the whole course in the combo numbers of an expert or grade course', () => {
@@ -150,14 +169,16 @@ describe('resolveLr2PlayState numbers', () => {
 });
 
 describe('resolveLr2PlayState texts, sliders and bar graphs', () => {
-  it('draws the chart’s texts, an empty tag and no INSANE level', () => {
+  it('draws the chart’s texts, an empty tag and the INSANE level', () => {
     const state = resolveLr2PlayState(SETUP, frame());
     expect(state.text(LR2_TEXT.TITLE)).toBe('T');
     expect(state.text(LR2_TEXT.ARTIST)).toBe('A');
-    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('HYPER');
+    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('3');
     expect(state.text(LR2_TEXT.RIVAL)).toBe('TARGET');
     expect(state.text(LR2_TEXT.TAG)).toBe('');
-    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBeUndefined();
+    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBe('');
+    const insane = { ...SETUP, chart: makeChartWith({ difficulty: 5 }, { playLevel: 12 }) };
+    expect(resolveLr2PlayState(insane, frame()).text(LR2_TEXT.INSANE_LEVEL)).toBe('12');
     expect(resolveLr2PlayState({ ...SETUP, chart: undefined }, frame()).text(LR2_TEXT.TITLE)).toBeUndefined();
   });
 
@@ -199,10 +220,17 @@ describe('play ops', () => {
     expect(resolveLr2GaugeRangeOp(150)).toBe(240);
   });
 
-  it('lights the rank op of the EX score over the chart’s notes', () => {
-    expect(resolveLr2RankOp({ total: 0, exScore: 0 })).toBeUndefined();
-    expect(resolveLr2RankOp({ total: 100, exScore: 200 })).toBe(LR2_OP.RANK_1P_AAA);
-    expect(resolveLr2RankOp({ total: 100, exScore: 0 })).toBe(LR2_OP.RANK_1P_F);
+  it('lights the rank op of the EX score over the notes judged so far, as LR2 does', () => {
+    // Nothing is lit before the first note is judged, whatever the chart's notes.
+    expect(resolveLr2RankOp(score())).toBeUndefined();
+    // 10 notes judged of the chart's 100, all PGREAT: AAA, not the F the EX score over every note would give.
+    expect(resolveLr2RankOp(score({ perfect: 10, exScore: 20 }))).toBe(LR2_OP.RANK_1P_AAA);
+    // 16 of 18 points is exactly 8/9: AAA; 15 of 18 is AA.
+    expect(resolveLr2RankOp(score({ perfect: 7, great: 2, exScore: 16 }))).toBe(LR2_OP.RANK_1P_AAA);
+    expect(resolveLr2RankOp(score({ perfect: 6, great: 3, exScore: 15 }))).toBe(LR2_OP.RANK_1P_AA);
+    // POORs are notes judged; an empty POOR is not.
+    expect(resolveLr2RankOp(score({ perfect: 1, poor: 9, emptyPoor: 50, exScore: 2 }))).toBe(LR2_OP.RANK_1P_F);
+    expect(resolveLr2RankOp(score({ perfect: 1, emptyPoor: 50, exScore: 2 }))).toBe(LR2_OP.RANK_1P_AAA);
   });
 });
 

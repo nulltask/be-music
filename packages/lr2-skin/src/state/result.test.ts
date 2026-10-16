@@ -349,6 +349,18 @@ describe('resolveLr2ResultState values', () => {
     expect(state.number(LR2_NUM.IR_RANK)).toBeUndefined();
   });
 
+  it('truncates the best record’s rates (73, 85-89) as LR2 draws them', () => {
+    // 179 of 200 points is 89.5 %; 2 of 3 notes PGREAT is 66.6… %, 1 of 3 GREAT 33.3… %.
+    const rated = resolveLr2ResultState({ result: makeResult({ total: 100, exScore: 179 }) });
+    expect(rated.number(LR2_NUM.BEST_RATE)).toBe(89);
+    const thirds = makeResult({ total: 3, exScore: 5, perfect: 2 });
+    const state = resolveLr2ResultState({ result: { ...thirds, score: { ...thirds.score, great: 1 } } });
+    expect(state.number(LR2_NUM.BEST_PERFECT_RATE)).toBe(66);
+    expect(state.number(LR2_NUM.BEST_GREAT_RATE)).toBe(33);
+    expect(state.number(LR2_NUM.BEST_POOR_RATE)).toBe(0);
+    expect(resolveLr2ResultState({ result: makeResult({ total: 0, exScore: 0 }) }).number(LR2_NUM.BEST_RATE)).toBe(0);
+  });
+
   it('draws the rate over the notes judged on 102 / 103 and over every note on 115 / 116', () => {
     // A play that failed after 95 of 100 notes: 150 of the 190 points judged (78.94 %), of the 200 of the chart (75 %).
     const result = makeResult({ cleared: false, total: 100, exScore: 150, perfect: 60, bad: 2, poor: 3 });
@@ -367,12 +379,15 @@ describe('resolveLr2ResultState values', () => {
     expect(state.text(LR2_TEXT.TITLE)).toBe('Test');
   });
 
-  it('draws the chart’s texts, without the INSANE level', () => {
+  it('draws the chart’s texts, the INSANE level among them', () => {
     const state = resolveLr2ResultState({ result: makeResult({ difficulty: 5 }) });
     expect(state.text(LR2_TEXT.RIVAL)).toBe('TARGET');
-    expect(state.text(LR2_TEXT.TITLE_ALT)).toBe('Test');
-    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('INSANE');
-    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBeUndefined();
+    expect(state.text(LR2_TEXT.TITLE)).toBe('Test');
+    // Text 20 is the internet ranking's message on the result screen: none without one.
+    expect(state.text(LR2_TEXT.TITLE_ALT)).toBe('');
+    expect(state.text(LR2_TEXT.ARTIST_ALT)).toBe(state.text(LR2_TEXT.ARTIST));
+    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('5');
+    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBe(state.text(LR2_TEXT.PLAY_LEVEL));
     expect(state.text(LR2_TEXT.TAG)).toBe('');
   });
 

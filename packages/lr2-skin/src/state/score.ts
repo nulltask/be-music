@@ -8,8 +8,8 @@ function percent(count: number, of: number): { whole: number; afterDot: number }
   return { whole: Math.floor(hundredths / 100), afterDot: hundredths % 100 };
 }
 
-/** The notes judged so far: every PERFECT … POOR (an empty POOR judges no note). */
-function notesJudged(score: Pick<ScoreSummary, 'perfect' | 'great' | 'good' | 'bad' | 'poor'>): number {
+/** The notes judged so far: every PERFECT … POOR (an empty POOR judges no note). LR2's `note_current`. */
+export function notesJudged(score: Pick<ScoreSummary, 'perfect' | 'great' | 'good' | 'bad' | 'poor'>): number {
   return score.perfect + score.great + score.good + score.bad + score.poor;
 }
 

@@ -69,7 +69,16 @@ The numbers follow the stock skin's documentation and OpenLR2, and `LR2body.exe`
 
 Where the stock documentation is unclear, OpenLR2's `LR2_skinobject.cpp` (`GetOptionFlag_dst`, `SetObjectValue_Num`) and `ProcS_Select` decide: op 20 lights while no option panel is open and 21-29 while panel 1-9 is, op 53 is EXTRA MODE, number 102 is the running score rate over the notes judged so far and 115 the rate over every note, and texts 16 / 26 are the chart's tag in LR2's song database (`LR2_TEXT.TAG`; beatoraja draws the full artist there).
 
-beatoraja keeps LR2's numbers for its LR2-compatible ids, so `@be-music/beatoraja-skin` takes those from these tables under its own names (`BEATORAJA_OP.FOLDERBAR` is `LR2_OP.FOLDER_BAR`, `TIMER_READY` is `LR2_TIMER.READY`) and numbers only beatoraja's own ids. The parser's parse-time ops and `@be-music/player-web`'s LR2 scenes use the tables too.
+The ids [#430](https://github.com/nulltask/be-music/issues/430) named with less confidence were checked against the same sources, with `SaveResult` and `ProcI_Result`:
+
+- Op 1 lights on a folder bar (LR2's folders, level folders and custom folders). Op 34 is GHOST off, and holds while the judge is automatic as well; be-music has no ghost, so it always holds. Ops 400-402 are the key-config screen's page (7 / 14, 9, 5 / 10 KEYS), which stays set on the screens after it. Op 999 is a `#CUSTOMOPTION` op like 900-998.
+- Ops 200-207 rank the EX score over the notes judged so far, `exscore × 9 / (notes judged × 2)`, and none holds before the first note is judged.
+- Numbers 38-41 are the player's running combo across plays, its longest run, LR2's trial level (its ladder of play missions) and the step below it; 92-94 are the internet ranking's place, players and clear rate; 150-153 are the best record's and the target's EX score at this point of the play, LR2's pacemakers, and the EX score less each.
+- Numbers 109 and 154 are the distance to the next DJ Rank: the EX score less the next rank's border over every note, `floor(notes × 2 × (rank + 1) / 9)`. They read negative until the border is reached, F counts down to E, and AAA to the maximum.
+- The best record's rates (73, 85-89) are whole percents, truncated.
+- Texts 20-29 are the fields LR2's tag editor edits: 20-28 repeat 10-18 on every screen but the result, where LR2 reuses text 20 for the internet ranking's message. Texts 18 / 28 are the `#DIFFICULTY` number (0-5), which the ops 150-155 name. Text 29 is LR2's ex level, a level a player sets in its song database; LR2 sets texts 10-29 on the select screen and keeps them through decide, play and result.
+
+beatoraja keeps LR2's numbers for its LR2-compatible ids, so `@be-music/beatoraja-skin` takes those from these tables under its own names (`BEATORAJA_OP.FOLDERBAR` is `LR2_OP.FOLDER_BAR`, `TIMER_READY` is `LR2_TIMER.READY`) and numbers only beatoraja's own ids. A few LR2 ids mean something else to beatoraja, which its own table names: number 92 is the main BPM and op 400 the CONSTANT option, and beatoraja defines no numbers 38-41 or 93-94 and no texts 17-29. The parser's parse-time ops and `@be-music/player-web`'s LR2 scenes use the tables too.
 
 Not named here: ops 900-999 (the skin's own `#CUSTOMOPTION`s), the `#SRC_BARGRAPH` types, and the small enums of the `#DST_*` fields (`blend`, `center`, `acc`), which `skin/lr2/render.ts` maps where it reads them.
 
@@ -190,4 +199,10 @@ Other LR2 skins may load, but small layout differences, missing animation detail
 - `#CUSTOMOPTION` and `#CUSTOMFILE` are parsed and surfaced, but full user-facing option persistence belongs to the host application.
 - System font rendering is a browser-renderer concern; `@be-music/lr2-skin` only preserves the declared font metadata.
 - Renderer-specific behavior such as PixiJS texture upload, video BGA playback, WebAudio system sounds, and DOM text input overlays lives outside this package.
-- Where the scene state still differs from LR2 (OpenLR2): the 1P rank ops (200-207) read the EX score over every note instead of the notes judged so far; number 154 (and 109) reads the EX score still needed for AAA instead of LR2's distance to the next rank; the result screen's bar graphs and sliders read their own numbering instead of LR2's bar-graph types (1 progress, 2 loading, 10-13 the EX score); texts 18 / 28 draw the difficulty's name where LR2 draws its number, and only the select screen draws text 29; a folder bar does not light op 1; ops 400-402 follow the chart's key mode instead of the key-config screen's; the best-record rates (73, 85-89) are rounded where LR2 truncates.
+- Where the scene state still differs from LR2 (OpenLR2), each for want of data or a screen be-music does not have yet:
+  - The player's totals (numbers 30-41) read 0: no play history is kept.
+  - The internet ranking reads nothing: numbers 92-94, and text 20's message on the result screen.
+  - The pacemakers read 0: numbers 150 / 151, and 152 / 153 read the EX score. No best-record ghost or target reaches the play.
+  - Text 29 reads an INSANE chart's play level where LR2 reads the ex level its database keeps.
+  - The result screen's bar graphs and sliders read their own numbering instead of LR2's bar-graph types (1 progress, 2 loading, 10-15 the EX score, the best and the target). LR2's types compare the play with the best record and the target, which the result does not carry yet.
+  - Ops 400-402 follow the chart's key mode: there is no key-config screen whose page they could follow.

@@ -15,14 +15,15 @@ describe('resolveLr2DecideState', () => {
     expect(resolveLr2DecideState({ chart: makeChartWith({}) }).ops.has(LR2_OP.DIFFICULTY_UNDEFINED)).toBe(true);
   });
 
-  it('draws the chart’s texts, without the INSANE level', () => {
+  it('draws the chart’s texts, the INSANE level among them', () => {
     const state = resolveLr2DecideState({
       chart: makeChartWith({ difficulty: 5 }, { title: 'T', artist: 'A', playLevel: 12 }),
     });
     expect(state.text(LR2_TEXT.TITLE)).toBe('T');
     expect(state.text(LR2_TEXT.ARTIST_ALT)).toBe('A');
-    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('INSANE');
-    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBeUndefined();
+    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('5');
+    // LR2 sets texts 10-29 on the select screen and keeps them through decide, play and result.
+    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBe('12');
     expect(state.text(LR2_TEXT.TAG_ALT)).toBe('');
     expect(state.number(LR2_NUM.TOTAL_NOTES)).toBeUndefined();
     expect(state.slider(1)).toBeUndefined();
