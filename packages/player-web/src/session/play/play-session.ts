@@ -557,6 +557,7 @@ export class PlaySession extends PlaySessionState {
     this.mineNotes = [];
     this.invisibleNotes.length = 0;
     this.preparedChart = undefined;
+    this.engineFrame = undefined;
     this.touchTokenByChannel = undefined;
     this.resolvedChart = undefined;
     this.resolvedPlayChart = undefined;

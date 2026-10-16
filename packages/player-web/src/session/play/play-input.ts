@@ -22,13 +22,17 @@ import {
 } from '../../scene/core/touch-lanes.ts';
 import { HISPEED_STEP } from '../../scene/gameplay-constants.ts';
 import { logger } from '../../logger.ts';
+import type { PlaySessionOptions } from './play-options.ts';
+import { resolvePlayCoverKey } from './play-cover-keys.ts';
 import type { PlayEngineContext } from './play-engine.ts';
+import { applyPlayEvent } from './play-state.ts';
 import { adjustHiSpeed } from './play-view-settings.ts';
 
 const log = logger('gameplay');
 
 /** The scene's members the input reads and writes: the play session's members of these names. */
 export interface PlayInputContext extends PlayEngineContext {
+  readonly options: PlayEngineContext['options'] & Readonly<Pick<PlaySessionOptions, 'coverKeys'>>;
   readonly host: PixiSceneHost | undefined;
   readonly app: Application;
   readonly quitHold: QuitHoldController;
@@ -219,6 +223,8 @@ export function handleWindowFocus(ctx: PlayInputContext): void {
 export function handleSharedEngineExitKey(ctx: PlayInputContext, event: KeyboardEvent): void {
   // Backspace first: its auto-repeat must still be `preventDefault`ed, which the repeat filter below would skip.
   if (ctx.quitHold.handleKeyDown(event)) return;
+  // A held cover key keeps moving its cover, so the cover keys come before the repeat filter.
+  if (ctx.options.coverKeys === true && handleCoverKey(ctx, event)) return;
   if (event.repeat) return;
   if (event.code === 'Escape') {
     event.preventDefault();
@@ -239,15 +245,26 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
   // the value it tracks is decoupled from the visual scroll speed (`PIXELS_PER_BEAT * this.hiSpeed`) the
   // renderer applies. The WebInputRuntime's lane-input dispatch ignores arrow tokens, so the engine has no
   // way to push HiSpeed changes back to the renderer; we handle them directly here.
-  if (event.code === 'ArrowUp') {
+  if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
     event.preventDefault();
-    adjustHiSpeed(ctx, HISPEED_STEP);
-    return;
+    if (adjustHiSpeed(ctx, event.code === 'ArrowUp' ? HISPEED_STEP : -HISPEED_STEP)) {
+      ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
+    }
   }
-  if (event.code === 'ArrowDown') {
-    event.preventDefault();
-    adjustHiSpeed(ctx, -HISPEED_STEP);
-  }
+}
+
+/**
+ * A lane cover key (`resolvePlayCoverKey`) of a play that takes them: the play state's covers move (not while a course
+ * locks them), and the view hears which setting the key changed. Returns whether `event` was a cover key.
+ */
+function handleCoverKey(ctx: PlayInputContext, event: KeyboardEvent): boolean {
+  const key = resolvePlayCoverKey(event);
+  if (key === undefined) return false;
+  event.preventDefault();
+  if (ctx.playState.view.hiSpeed.locked) return true;
+  applyPlayEvent(ctx, key.command);
+  ctx.theme.moment({ kind: 'view-setting', setting: key.setting, at: ctx.playClock() });
+  return true;
 }
 
 /**

@@ -127,6 +127,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   sharedEngineInterrupt: 'escape' | 'restart' | undefined;
   sharedEngineChartSettled: boolean;
   sharedEngineClockAnchored: boolean;
+  engineFrame: Readonly<PlayerUiFramePayload> | undefined;
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
   playlog: BeMusicPlaylog | undefined;
@@ -290,8 +291,14 @@ function flashKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
   ctx.keyFlashTimeouts.add(timeout);
 }
 
-function publishJudge(ctx: PlayEngineContext, judge: JudgeKind, seconds: number, channel?: string): void {
+function publishJudge(
+  ctx: PlayEngineContext,
+  judge: JudgeKind,
+  seconds: number,
+  state: Readonly<Pick<PlayerJudgeComboSignalState, 'channel' | 'deltaMs' | 'combo'>>,
+): void {
   const until = seconds + 0.6;
+  const channel = state.channel;
   ctx.lastJudge = judge;
   ctx.lastJudgeUntil = until;
   ctx.lastJudgeAt = ctx.playClock();
@@ -302,7 +309,16 @@ function publishJudge(ctx: PlayEngineContext, judge: JudgeKind, seconds: number,
   // right half of the Pop'n nine-lane bank, not the second player).
   const isPlayer2 = ctx.chartPlayVariant !== '9' && typeof channel === 'string' && channel.startsWith('2');
   const side: '1P' | '2P' = isPlayer2 ? '2P' : '1P';
-  ctx.theme.moment({ kind: 'judge', side, at: ctx.playClock() });
+  // The judgment goes with the moment, so a view keeps each lane's and each plate's own (a beatoraja skin's).
+  ctx.theme.moment({
+    kind: 'judge',
+    side,
+    at: ctx.playClock(),
+    judge,
+    ...(channel !== undefined ? { channel } : {}),
+    ...(typeof state.deltaMs === 'number' && Number.isFinite(state.deltaMs) ? { deltaMs: state.deltaMs } : {}),
+    combo: state.combo,
+  });
   // Snapshot the verdict + combo for this side so DP rendering shows each lane group's *own* combo number — frozen at
   // the moment that side last hit a note — rather than mirroring the global running combo on both sides.
   // A course stage also snapshots the course combo, which an LR2 skin shows there during an expert or grade course.
@@ -392,6 +408,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ctx.sharedEngineSignals = signals;
     },
   };
+  ctx.engineFrame = undefined;
   // A replay shows its recorded view along the playhead; a recorded play logs its own from the start.
   ctx.playlogViewCoalescer = undefined;
   ctx.replayViewCursor =
@@ -605,6 +622,7 @@ export function drainSharedEngineSignals(ctx: PlayEngineContext): void {
  * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
  */
 function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUiFramePayload>): void {
+  ctx.engineFrame = frame;
   // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
   // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
   // event) anchors at the moment the engine creates the clock — which lands a few ms to a few hundred ms
@@ -776,7 +794,7 @@ function applyEngineJudgeCombo(ctx: PlayEngineContext, state: Readonly<PlayerJud
   const seconds = ctx.currentSeconds();
   // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`: the play state keeps no timing for them.
   applyPlayEvent(ctx, { type: 'judge', judge: state, seconds, atMs: ctx.playClock() });
-  publishJudge(ctx, judgeKind, seconds, state.channel);
+  publishJudge(ctx, judgeKind, seconds, state);
   if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
     triggerBomb(ctx, state.channel, judgeKind);
   }
