@@ -57,6 +57,21 @@ describe('LR2 id tables', () => {
 });
 
 describe('LR2_OP anchors', () => {
+  it('numbers the panel ops as LR2 lights them: 20 for none open, 21-29 for panels 1-9', () => {
+    expect(LR2_OP.NO_PANEL).toBe(20);
+    expect([
+      LR2_OP.PANEL1,
+      LR2_OP.PANEL2,
+      LR2_OP.PANEL3,
+      LR2_OP.PANEL4,
+      LR2_OP.PANEL5,
+      LR2_OP.PANEL6,
+      LR2_OP.PANEL7,
+      LR2_OP.PANEL8,
+      LR2_OP.PANEL9,
+    ]).toEqual(range(21, 9));
+  });
+
   it('numbers the course ops as LR2 lights them (OpenLR2 L5403-L5444, the binary for 292 / 293)', () => {
     expect([LR2_OP.COURSE, LR2_OP.COURSE_NONSTOP, LR2_OP.COURSE_EXPERT, LR2_OP.COURSE_GRADE]).toEqual([
       290, 291, 292, 293,

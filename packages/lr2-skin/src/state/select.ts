@@ -59,7 +59,7 @@ export interface Lr2SelectInput {
   readonly options: PlayOptions;
   /** The player's best record on the focused chart or course: its clear lamp (ops 100-105). */
   readonly record?: { readonly lamp?: ClearLamp };
-  /** The option panels open (1-9). */
+  /** The option panels open (1-9): ops 21-29, or op 20 while none is. */
   readonly openPanels?: Iterable<number>;
   /** The skin's `#CUSTOMOPTION` choices: their ops (900-999). */
   readonly customOps?: Iterable<number>;
@@ -139,9 +139,14 @@ function chartOps(chart: LibraryChart, readme: boolean, lamp: ClearLamp | undefi
 
 function selectOps(input: Lr2SelectInput, chart: LibraryChart | undefined, course: CourseView | undefined): number[] {
   const ops = [...SELECT_BASE_OPS];
+  // Op 20 while no option panel is open, 21-29 while panel 1-9 is.
+  let panelOpen = false;
   for (const panel of input.openPanels ?? []) {
-    if (panel >= 1 && panel <= 9) ops.push(panel);
+    if (panel < 1 || panel > 9) continue;
+    ops.push(LR2_OP.PANEL1 + panel - 1);
+    panelOpen = true;
   }
+  if (!panelOpen) ops.push(LR2_OP.NO_PANEL);
   for (const op of input.customOps ?? []) ops.push(op);
   ops.push(...resolveLr2PlayOptionOps(input.options));
   ops.push(...(chart !== undefined ? chartOps(chart, input.readme === true, input.record?.lamp) : NO_CHART_OPS));
