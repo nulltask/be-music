@@ -179,7 +179,7 @@
       "1208.333 trigger-poor-bga seconds=1.208333"
     ],
     "frames": {
-      "count": 84,
+      "count": 85,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "625.000 seconds=0.625 note 12@0.625",
@@ -403,7 +403,7 @@
       "4591.667 trigger-poor-bga seconds=4.591667"
     ],
     "frames": {
-      "count": 345,
+      "count": 346,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "625.000 seconds=0.625 note 12@0.625",
@@ -438,7 +438,7 @@
         "4458.333 seconds=4.458333 note 13@4.25",
         "4591.667 seconds=4.591667 note 14@4.375"
       ],
-      "last": "5558.333 seconds=5.558333 beat=11.116667"
+      "last": "5575.000 seconds=4.375 beat=8.75"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",

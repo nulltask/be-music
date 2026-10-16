@@ -171,7 +171,7 @@
       "2820.000 release-lane 14"
     ],
     "frames": {
-      "count": 255,
+      "count": 256,
       "judged": [
         "1030.000 seconds=1.03 note 11@1",
         "1470.000 seconds=1.47 note 12@1.5",
@@ -179,7 +179,7 @@
         "2030.000 seconds=2.03 note 14@2",
         "2770.000 seconds=2.77 note 14@2.8"
       ],
-      "last": "4070.000 seconds=4.07 beat=10.175"
+      "last": "4086.667 seconds=2.8 beat=7"
     },
     "host": [
       "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",
@@ -307,7 +307,7 @@
       "2833.333 release-lane 14"
     ],
     "frames": {
-      "count": 246,
+      "count": 247,
       "judged": [
         "1033.333 seconds=1.033333 note 11@1",
         "1483.333 seconds=1.483333 note 12@1.5",
@@ -315,7 +315,7 @@
         "2033.333 seconds=2.033333 note 14@2",
         "2783.333 seconds=2.783333 note 14@2.8"
       ],
-      "last": "4066.667 seconds=4.066667 beat=10.166667"
+      "last": "4083.333 seconds=2.8 beat=7"
     },
     "host": [
       "0.000 ruleset iidx/0 charge note={\"judges\":[[-16667,16667],[-33333,33333],[-116667,116667],[-250000,250000]],\"ms\":[-150000,500000]}",

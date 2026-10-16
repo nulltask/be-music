@@ -131,11 +131,12 @@ describe('driver drift', () => {
     expect(silentAuto.endedAtMs).toBeLessThan(4600);
   });
 
-  test('drift: autoPlay publishes a closing frame at the chart’s end, manualPlay’s last frame is its last tick', async () => {
+  test('manual and auto play both publish a closing frame at the chart’s end', async () => {
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: ON_TIME });
     const auto = await observePlay({ driver: 'auto', chart: basicChart() });
+    // Published once the play is over (past the horizon), showing the chart's end.
+    expect(manual.frames.last).toMatch(/^4\d{3}\.\d{3} seconds=3\.5 beat=7$/);
     expect(auto.frames.last).toMatch(/^4\d{3}\.\d{3} seconds=3\.5 beat=7$/);
-    expect(manual.frames.last).toMatch(/^4\d{3}\.\d{3} seconds=4\./);
   });
 
   test('drift: autoPlay sends every note’s keysound to the audio session twice, manualPlay once per press', async () => {

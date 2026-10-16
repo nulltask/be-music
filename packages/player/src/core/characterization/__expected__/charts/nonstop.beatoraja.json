@@ -171,7 +171,7 @@
       "2820.000 release-lane 14"
     ],
     "frames": {
-      "count": 254,
+      "count": 255,
       "judged": [
         "1030.000 seconds=1.03 note 11@1",
         "1470.000 seconds=1.47 note 12@1.5",
@@ -179,7 +179,7 @@
         "2030.000 seconds=2.03 note 14@2",
         "2770.000 seconds=2.77 note 14@2.8"
       ],
-      "last": "4053.333 seconds=4.053333 beat=10.133333"
+      "last": "4070.000 seconds=2.8 beat=7"
     },
     "host": [
       "0.000 ruleset beatoraja/0 per-note note={\"judges\":[[-20000,20000],[-50000,50000],[-100000,100000],[-150000,150000]],\"ms\":[-150000,500000]}",
@@ -307,7 +307,7 @@
       "2833.333 release-lane 14"
     ],
     "frames": {
-      "count": 245,
+      "count": 246,
       "judged": [
         "1033.333 seconds=1.033333 note 11@1",
         "1483.333 seconds=1.483333 note 12@1.5",
@@ -315,7 +315,7 @@
         "2033.333 seconds=2.033333 note 14@2",
         "2783.333 seconds=2.783333 note 14@2.8"
       ],
-      "last": "4050.000 seconds=4.05 beat=10.125"
+      "last": "4066.667 seconds=2.8 beat=7"
     },
     "host": [
       "0.000 ruleset beatoraja/0 per-note note={\"judges\":[[-20000,20000],[-50000,50000],[-100000,100000],[-150000,150000]],\"ms\":[-150000,500000]}",

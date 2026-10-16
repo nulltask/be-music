@@ -104,8 +104,7 @@ export async function runPlayLoop(
   judge: PlayJudge,
   controls: PlayControls,
 ): Promise<PlayOutcome> {
-  const { options, strategy, tempoClock, totalSeconds, audioSession, tracer, publishUiFrame, beatAtSeconds } = session;
-  const { drifts } = strategy;
+  const { options, tempoClock, totalSeconds, audioSession, tracer, publishUiFrame, beatAtSeconds } = session;
   openPlay(session);
 
   // Event-driven wake-up: the loop's sleep is cut short the moment a command arrives, so a keysound, a lane flash, a
@@ -132,6 +131,7 @@ export async function runPlayLoop(
       const horizonMs = (): number => tempoClock.clockMsAt(totalSeconds) + widestReachMs + 1000;
       // Without audio to play out a play ends as soon as its chart is over and judged — unless the host holds it open.
       const endsWithChart = audioSession === undefined && hold === undefined;
+      let endSeconds = totalSeconds;
       let settled = false;
       const pastHorizon = (): boolean => {
         if (clock.nowMs() < horizonMs()) return false;
@@ -173,6 +173,7 @@ export async function runPlayLoop(
         // A play that ends on failure stops the moment its gauge empties.
         if (judge.isClosed()) {
           endedOnFailure = true;
+          endSeconds = tick.nowSec;
           break;
         }
         const safeNowSeconds = Math.max(0, judge.judgedThroughSeconds(tick)) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
@@ -187,9 +188,9 @@ export async function runPlayLoop(
         judge.beforeFinish?.();
         tracer.flushUntil(totalSeconds);
         judge.finish();
-        if (drifts.closingFrame) {
-          publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
-        }
+        // A closing frame shows the state `finish` left at the play's end — the chart's end, whatever tick the loop
+        // stopped on, or where the play failed.
+        publishUiFrame(endSeconds, beatAtSeconds(endSeconds));
       }
     }
   } finally {
