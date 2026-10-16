@@ -246,4 +246,25 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(play.state().combo).toBe(4);
     expect(getResultData(play.ctx)!.maxCombo).toBe(4);
   });
+
+  test('a played full combo counts every note as its max combo too, the course combo included', () => {
+    const play = createPlay({ total: 4, courseCarryIn: { combo: 2, maxCombo: 2 } });
+    // The combo the engine published reached three of the four notes.
+    play.step(1, {}, [{ judge: 'PERFECT', combo: 1, deltaMs: -2 }]);
+    play.step(2, {}, [{ judge: 'GREAT', combo: 3, deltaMs: 9 }]);
+    applyFinalSummary(play.ctx, summary({ perfect: 3, great: 1, exScore: 7 }, 30));
+    expect(play.state().maxCombo).toBe(4);
+    expect(play.state().courseCombo).toMatchObject({ combo: 6, maxCombo: 6 });
+    expect(getResultData(play.ctx)!.maxCombo).toBe(4);
+  });
+
+  test('a play that broke its combo keeps the longest combo it reached', () => {
+    const play = createPlay({ total: 4 });
+    play.step(1, {}, [{ judge: 'PERFECT', combo: 1 }]);
+    play.step(2, {}, [{ judge: 'PERFECT', combo: 2 }]);
+    play.step(3, {}, [{ judge: 'POOR', combo: 0 }]);
+    play.step(4, {}, [{ judge: 'PERFECT', combo: 1 }]);
+    applyFinalSummary(play.ctx, summary({ perfect: 3, poor: 1, exScore: 6 }, 30));
+    expect(play.state().maxCombo).toBe(2);
+  });
 });
