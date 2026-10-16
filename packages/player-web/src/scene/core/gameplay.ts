@@ -5,7 +5,6 @@ import { Application, Container, Graphics, Text, TextStyle, Texture, VideoSource
 // expects `renderer.prepare` to exist.
 import 'pixi.js/prepare';
 import {
-  createBmsonSamplePlaybackMap,
   mirrorBeatAtTempoReversal,
   type TimedSampleTrigger,
   type TimingResolver,
@@ -14,8 +13,6 @@ import { createScoreTracker, type ScoreTracker } from '@be-music/player/core/sco
 import {
   createTempoClock,
   PlayerInterruptedError,
-  preparePlaybackChart,
-  resolvePlayChart,
   type PreparedPlaybackChartData,
   type PlayerSummary,
   type PlayerTempoChange,
@@ -33,7 +30,7 @@ import {
   type ScoreSummary,
 } from '@be-music/player/ruleset';
 import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
-import { type ChartPlayVariant, resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
+import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import type {
@@ -43,8 +40,7 @@ import type {
   PlayerUiSignalBus,
 } from '@be-music/player/core/ui-signal-bus';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-timeline';
-import { createBeatAtSecondsResolverFromTimingResolver } from '@be-music/player/core/timeline';
-import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
+import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import {
   createPlaylogViewCoalescer,
@@ -60,11 +56,8 @@ import {
   type PlaylogViewReplay,
   type PlaylogViewState,
 } from '@be-music/player/playlog';
-import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
 import {
   advanceDrawCursor,
-  changesScrollRate,
-  collectResolvedLaneTimelineBeats,
   GoneDrawObjects,
   isDrawnAtTime,
   isDrawnUntilJudged,
@@ -80,8 +73,6 @@ import {
 } from './note-draw-window.ts';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import { resolveChartPlayVariant } from '../../collection/collection.ts';
-import { loadPlayBga, resolvePoorBgaFallbackKey } from '../../chart/play-bga.ts';
 import {
   type AudioBusChannel,
   type AudioBusHandle,
@@ -93,23 +84,21 @@ import {
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../../recording/recording-format.ts';
-import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
+import type { ChartBpmRange } from './gameplay-bpm-range.ts';
 import { JudgeTimingLog } from './judge-timing-log.ts';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
-import { advanceCourseCombo, createCourseCombo, type CourseComboState } from './course-combo.ts';
+import { advanceCourseCombo, type CourseComboState } from './course-combo.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { nonstopBpmAt, type NonstopStitchMap } from '@be-music/player/course';
-import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
+import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { LiveTempo } from '../live-tempo.ts';
 import {
   chartToElapsedSeconds,
   clampPlayTempo,
   resolveReplayTempo,
-  resolveSamplePlaybackRate,
   setVideoPlaybackTempo,
-  stretchSlicePlayback,
   supportsLiveTempoChange,
   type ReplayTempo,
   type TempoPitchMode,
@@ -124,17 +113,13 @@ import type { SceneIdentity } from '../../host/family-kit.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
 import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
-import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
-import { collectChartVolumeMultipliers, createPlayAudioGraph, loadPlaySamples } from '../../chart/play-audio.ts';
+import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
-import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import {
-  parseBmsSwBga,
   pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
   resolveChart,
-  resolveChartMainBpm,
-  resolveChartReferenceBpm,
   type BmsSwitchingBga,
   type RandomDraws,
   type ResolvedChart,
@@ -156,17 +141,10 @@ import {
   pickActiveBgaKey,
   resolveBgaImageRect,
   resolveNonstopBgaAlpha,
-  splitNonstopBgaTimeline,
-  toBrowserBgaTimeline,
   type BgaCue,
   type NonstopStageBgaTimeline,
 } from './gameplay-bga.ts';
-import {
-  isPlayableInputChannel,
-  resolvePlayVariantLaneChannels,
-  resolveLr2LaneIndex,
-  resolveSideRelativeLaneIndex,
-} from '../gameplay-lanes.ts';
+import { resolveLr2LaneIndex, resolveSideRelativeLaneIndex } from '../gameplay-lanes.ts';
 import type {
   SkinlessGameplayChromeRenderer,
   SkinlessGameplayChromeRuntime,
@@ -223,6 +201,13 @@ import {
 } from './touch-lanes.ts';
 import { logger } from '../../logger.ts';
 import { QUIT_HOLD_KEY_CODE, QuitHoldController } from '../quit-hold.ts';
+import { isChannelOnSide, prepareSong } from '../../session/play/play-chart.ts';
+import {
+  disposeGameplayAudioGraphAfterDelay,
+  prepareAudio,
+  prepareBga,
+  samplePlaybackRate,
+} from '../../session/play/play-media.ts';
 
 const log = logger('gameplay');
 
@@ -721,6 +706,10 @@ export interface CoreGameplayDisposeOptions {
  * `prepareTheme`, `renderThemeLayer`, `collectBgaTargets`, `resolveThemeLaneRect`, `resolveThemeNoteCell`,
  * `renderThemeMeasureLines`, `renderThemeText`, `renderBombEffects`, `themeTiming`, `onThemeEvent`, … — each of which
  * defaults to the skinless behaviour, so the class paints a complete scene on its own.
+ *
+ * The play's parts live in their own modules (`session/play/*`), which take the scene as their context and read and
+ * write its state through their own interfaces (`PlayChartContext`, …). That state has no `private` / `protected`
+ * modifier so the scene satisfies those interfaces; it is not part of the scene's API.
  */
 export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGameplayViewOptions> implements PixiScene {
   /**
@@ -816,8 +805,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       fontFamily: CORE_TEXT_FONT,
     }),
   });
-  protected song: BrowserSongEntry | undefined;
-  protected source: BrowserSongAssetSource | undefined;
+  song: BrowserSongEntry | undefined;
+  source: BrowserSongAssetSource | undefined;
   /**
    * The chart's `#RANDOM` / `#IF` control flow resolved for THIS play session. `song.chart` is the raw parsed JSON
    * (kept for metadata stability), but every gameplay-time consumer — note extraction, timing resolver, sample
@@ -825,21 +814,21 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Without this step BMS charts using `#RANDOM` / `#SETRANDOM` / `#SWITCH` either omit every conditional section or
    * include them all (depending on parser default), neither of which matches LR2 behavior.
    */
-  private resolvedChart: BeMusicJson | undefined;
+  resolvedChart: BeMusicJson | undefined;
   /**
    * The Resolved layer of {@link resolvedChart} (`resolveChart`): its notes, tempo map, triggers, SCROLL / SPEED
    * keyframes, bar lines and BGA cues are what this scene and the engine play.
    */
-  private resolvedPlayChart: ResolvedChart | undefined;
+  resolvedPlayChart: ResolvedChart | undefined;
   /** The `#RANDOM` / `#SWITCH` draws {@link resolvedChart} was resolved with; handed to the engine with it. */
-  private randomDraws: RandomDraws | undefined;
+  randomDraws: RandomDraws | undefined;
   /**
    * `seconds → beat` resolver that properly accounts for `#STOP` windows. During a STOP, this returns the same beat
    * across the window's duration so the playfield freezes in place. Without it the previous hand-rolled `currentBeat`
    * extrapolation would scroll notes through STOP zones at the prevailing BPM, breaking many BMS arrangements that lean
    * on STOP for visual emphasis.
    */
-  private beatAtSeconds: ((seconds: number) => number) | undefined;
+  beatAtSeconds: ((seconds: number) => number) | undefined;
   /**
    * Distance integrator that consumes `#SCROLL` and `#SPEED` events. Note Y positions are computed as `lane.bottom -
    * distanceBetween(currentBeat, note.beat) * pixelsPerBeat` instead of `(note.beat - currentBeat) * pixelsPerBeat`,
@@ -847,9 +836,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * direction (notes scroll backwards through the playfield), and - `#SPEED` lerps the visual speed between control
    * points. Falls back to plain beat-difference math when no scroll/speed events are present.
    */
-  private scrollMapper: ScrollDistanceMapperLike | undefined;
+  scrollMapper: ScrollDistanceMapperLike | undefined;
   /** Beats of the chart's lane timelines, for the last timeline beatoraja's rules draw past the lane top. */
-  private laneTimelineBeats: Float64Array = new Float64Array(0);
+  laneTimelineBeats: Float64Array = new Float64Array(0);
   /**
    * Engine's `preparePlaybackChartData` result, computed once during {@link prepareSong} and forwarded to the
    * shared engine via `engineOptions.preparedChart`. Holds the canonical `notes` / `landmineNotes` /
@@ -857,15 +846,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * are the same instances), so any mutation the engine performs on a note's `judged` flag is automatically
    * visible to the renderer with no separate sync step. `undefined` until the song has been prepared.
    */
-  private preparedChart: PreparedPlaybackChartData | undefined;
-  protected notes: RuntimeNote[] = [];
+  preparedChart: PreparedPlaybackChartData | undefined;
+  notes: RuntimeNote[] = [];
   /**
    * Landmine notes (channels D1-D9 / E1-E9). Sorted by `seconds` for the same binary-search-by-time access pattern the
    * playable-note judge loop uses. Hit-test runs in `judge()` BEFORE the playable-note check so a press that lands
    * inside the BAD window of both a mine and a regular note prefers the mine — matches LR2 behavior where the mine
    * explodes first.
    */
-  private mineNotes: RuntimeMineNote[] = [];
+  mineNotes: RuntimeMineNote[] = [];
   /**
    * Invisible / keysound notes (BMS channels `3x` / `4x`). Held separately from {@link notes} because they don't
    * participate in scoring or judgement — they exist purely so a press on the matching lane fires the per-note `#WAV`
@@ -876,8 +865,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * gameplay state. The renderer paints a thin green bar per entry so the chart author's hidden keysound layout is
    * legible alongside the regular note stream.
    */
-  private invisibleNotes: TimedPlayableNote[] = [];
-  private maxLongNoteBeatSpan = 0;
+  invisibleNotes: TimedPlayableNote[] = [];
+  maxLongNoteBeatSpan = 0;
   /**
    * LR2's `draw_count` for {@link notes} and {@link mineNotes} under LR2's drawing rules: the first of each not gone yet
    * ({@link advanceDrawCursor}), kept between frames. Rebuilt when the arrays change or the playhead's chart time moves
@@ -894,16 +883,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     | undefined;
   /** Notes and mines gone under LR2's rules, so the mirrored scroll past a negative-BPM reversal does not redraw them. */
   private readonly goneDrawObjects = new GoneDrawObjects();
-  private chartLastNoteEndSeconds = 0;
-  private songDurationSeconds = 0;
-  protected laneChannels: string[] = [];
+  chartLastNoteEndSeconds = 0;
+  songDurationSeconds = 0;
+  laneChannels: string[] = [];
   /**
    * Cached `resolveChartPlayVariant` result for the loaded chart. Used to pick the right per-variant theme layout (LR2
    * `play_<variant>` skin, keymode op 160..164), and to switch lane-channel detection to the PMS layout (`17` is a lane
    * note, `22..25` are 1P-side lanes) instead of the default IIDX layout. Defaults to `'7'` before any chart is loaded so the existing
    * 7K-flavored fallbacks keep behaving as before for skinless / pre-prepare code paths.
    */
-  protected chartPlayVariant: ChartPlayVariant = '7';
+  chartPlayVariant: ChartPlayVariant = '7';
   protected laneX: Map<string, GameplayLaneRect> = new Map();
   /**
    * Theme texture cache, keyed by the theme's own asset ids. The core scene never reads it; theme families fill it in
@@ -941,12 +930,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private audioContextStartTime = 0;
   /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
-  private nonstopMixer: NonstopStageMixer | undefined;
+  nonstopMixer: NonstopStageMixer | undefined;
   /**
    * The play tempo in force ({@link CoreGameplayViewOptions.tempo}, or a replay's recorded one, then every live change):
    * chart seconds per clock second.
    */
-  protected tempo: number;
+  tempo: number;
   /** The tempo a replay plays at and the changes it follows (`resolveReplayTempo`). */
   private readonly replayTempo: ReplayTempo | undefined;
   /**
@@ -964,8 +953,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * press, but a quick double-tap (or a chart-end `setTimeout` racing the keypress) used to fire `dispose` twice and
    * crash on the second pass when `app` was already torn down. Now the second call short-circuits immediately.
    */
-  protected disposed = false;
-  private audioContext: AudioContext | undefined;
+  disposed = false;
+  audioContext: AudioContext | undefined;
   /**
    * Audio routing handle. Owns two stable mixers (`keyMixer` for player-input keysounds, `bgmMixer` for auto-triggered
    * BGM) plus the per-bus and master compressor stages. Sample sources connect to the appropriate mixer; the bus's
@@ -973,9 +962,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    *
    * See `audio-bus.ts` for the architecture and per-mode topology.
    */
-  private audioBus: AudioBusHandle | undefined;
+  audioBus: AudioBusHandle | undefined;
   /** Analyser tapped off the bus output; feeds audio-reactive be-music skins. */
-  private audioAnalyzer: AudioAnalyzer | undefined;
+  audioAnalyzer: AudioAnalyzer | undefined;
   /** This frame's audio features (sampled once per render, on the play clock). */
   private audioFrame: AudioFeatures | undefined;
   /**
@@ -983,11 +972,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * when `setAudioCompressor(true)` re-enables compression after a temporary `'off'` (we restore whatever
    * `audioCompressorMode` the constructor / URL flag selected).
    */
-  private audioCompressorMode: CompressorMode = 'split';
+  audioCompressorMode: CompressorMode = 'split';
   /** Compressor tuning overrides, seeded from the options and kept across audio-bus rebuilds. */
-  private audioCompressorParams: Partial<Record<TunableCompressor, Partial<CompressorParams>>> = {};
+  audioCompressorParams: Partial<Record<TunableCompressor, Partial<CompressorParams>>> = {};
   /** User keysound / BGM bus volumes, seeded from the options and kept across audio-bus rebuilds. */
-  private audioVolumes: Record<AudioBusChannel, number> = { key: 1, bgm: 1 };
+  audioVolumes: Record<AudioBusChannel, number> = { key: 1, bgm: 1 };
   /**
    * Active recorder (canvas video + audio bus tap → WebM blob) when the host has started a recording session via {@link
    * startRecording}. `undefined` while idle. We hold the instance across the play session so `stopRecording` /
@@ -1002,7 +991,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * routing (`keyMixer` / `bgmMixer`), gain splicing, and lifecycle (`stopChannel` for engine-driven LN early
    * release in Phase 4b-ii). Stays `undefined` until `prepareAudio` finishes — every call site guards.
    */
-  private webAudioSession: WebAudioSession | undefined;
+  webAudioSession: WebAudioSession | undefined;
   /**
    * Promise returned by {@link runEngineDriver} once the shared-engine play loop is in flight. `undefined` while
    * the driver hasn't started yet (engine launches at the same chart-start moment the LR2 PLAYSTART gate fires)
@@ -1049,7 +1038,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** Which lane each finger on the canvas holds (touch play). */
   private readonly touchLanes = new TouchLaneTracker();
   /** Input token a touch on each lane channel presses, from the chart's lane bindings (built on the first touch). */
-  private touchTokenByChannel: Map<string, string> | undefined;
+  touchTokenByChannel: Map<string, string> | undefined;
   /** The canvas `touch-action` before this scene set it to `none`, restored on dispose. */
   private previousCanvasTouchAction: string | undefined;
   /**
@@ -1060,7 +1049,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * PLAYSTART anchor and notes pass the judgment line ahead of the engine's actual judge event.
    */
   private sharedEngineClockAnchored = false;
-  private decodedSamples = new Map<string, AudioBuffer>();
+  decodedSamples = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
    * chart by {@link prepareSong} via the shared `collectChartVolumeMultipliers` helper, looked up on every
@@ -1071,16 +1060,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * (playbackRate, loopStart / loopEnd) which the current pipeline doesn't surface yet — see the spec audit. Volume is
    * the dominant in-the-wild use of `#WAVCMD`, so this already covers the common case.
    */
-  private wavCmdVolumeMultipliers = new Map<string, number>();
+  wavCmdVolumeMultipliers = new Map<string, number>();
   /**
    * Parsed `#SWBGAxx` directives keyed by slot id. Built once per chart by {@link prepareSong}, looked up on every BGA
    * frame draw — `pickSwitchingBgaFrame(entry, elapsedMs)` resolves the currently-visible source `#BMPxx` key to swap
    * into the layer draw. Slots without a `#SWBGAxx` declaration stay absent so the fast path (single texture lookup)
    * takes over.
    */
-  private switchingBgas = new Map<string, BmsSwitchingBga>();
+  switchingBgas = new Map<string, BmsSwitchingBga>();
   /** `#BGAxx` sub-region slot → its authored `dx dy` on the 256x256 BGA canvas. */
-  private readonly bgaSubRegionOrigins = new Map<string, { x: number; y: number }>();
+  readonly bgaSubRegionOrigins = new Map<string, { x: number; y: number }>();
   /**
    * bmson per-event slice playback map. For bmson charts the audio-renderer's `createBmsonSamplePlaybackMap`
    * precomputes which portion of each `sound_channels[]` WAV a given note is supposed to play — `offsetSeconds` is the
@@ -1090,25 +1079,25 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    *
    * Stays `undefined` for non-bmson charts (they have no slicing semantics — each note plays its entire WAV from t=0).
    */
-  private bmsonSlicePlayback:
+  bmsonSlicePlayback:
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
-  private autoSampleTriggers: TimedSampleTrigger[] = [];
-  protected score: ScoreSummary = createEmptyScore(0);
-  protected tracker: ScoreTracker = createScoreTracker();
+  autoSampleTriggers: TimedSampleTrigger[] = [];
+  score: ScoreSummary = createEmptyScore(0);
+  tracker: ScoreTracker = createScoreTracker();
   /**
    * Highest value of `tracker.combo` reached during the current play. `tracker.combo` resets to 0 on every BAD / POOR,
    * so we mirror it here whenever it exceeds the previous max. Used as the authoritative "MAX COMBO" readout for the
    * result screen — the old fallback (`score.perfect + score.great`) overcounted on broken-combo plays since it tallies
    * hit count rather than the longest unbroken streak.
    */
-  protected maxCombo = 0;
+  maxCombo = 0;
   /**
    * The course-wide combo of a course stage, carried in from the previous stage (`options.course.carryIn`); undefined
    * outside a course. Skins that count the combo over the whole course read it (LR2 numbers 104 / 105 in an expert or
    * grade course).
    */
-  protected courseCombo: CourseComboState | undefined;
+  courseCombo: CourseComboState | undefined;
   /**
    * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`). Snapshotted
    * into {@link getResultData} so the result host can offer it as a download.
@@ -1124,16 +1113,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `progress` is `seconds / totalSongSeconds` clamped to `[0, 1]`. Drives the result scene's gauge-chart polyline
    * (LR2 `Lr2GaugeChartElement` and friends).
    */
-  private gaugeHistory: Array<{ progress: number; value: number }> = [];
+  gaugeHistory: Array<{ progress: number; value: number }> = [];
   /** Same shape as `gaugeHistory`, but tracking running EX score. */
-  private scoreHistory: Array<{ progress: number; exScore: number }> = [];
+  scoreHistory: Array<{ progress: number; exScore: number }> = [];
   /**
    * Timed judgements of the current play, fed from the engine's judge-combo bus. Its recent window reaches skins as
    * `runtime.judgeTimings`, the full list as the result data's `judgeTimings`.
    */
-  private readonly judgeTimings = new JudgeTimingLog();
+  readonly judgeTimings = new JudgeTimingLog();
   /** Long-note holds of the current play, fed from the engine's `long-note-start` / `long-note-end` commands. */
-  private readonly longNotes = new LongNoteTracker();
+  readonly longNotes = new LongNoteTracker();
   /**
    * How the engine's ruleset plays long notes and its judge windows (ms), from `onRulesetResolved` at engine launch.
    * The windows are the ones in force when the chart starts: an LR2 mid-chart `#EXRANKxx` change narrows or widens
@@ -1142,17 +1131,17 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private longNoteStyle: LongNoteStyle | undefined;
   private judgeWindows: BeMusicJudgeWindows | undefined;
   /** The chart's BPM range, worked out once per {@link prepareSong}. */
-  private chartBpmRange: ChartBpmRange | undefined;
+  chartBpmRange: ChartBpmRange | undefined;
   /**
    * Scratch lanes the engine plays itself under auto-scratch (empty when it is off), resolved per {@link prepareSong}.
    * See {@link isAutoplayedChannel}.
    */
-  private autoScratchChannels: ReadonlySet<string> = new Set();
+  autoScratchChannels: ReadonlySet<string> = new Set();
   /**
    * Play-clock ms of once-per-play moments (gauge failed, last note judged, chart end, gauge first risen above its
    * start / reaching its max), latched as they happen and cleared per {@link prepareSong}.
    */
-  private playMoments: {
+  playMoments: {
     failedAtMs?: number;
     allNotesDoneAtMs?: number;
     outroAtMs?: number;
@@ -1178,10 +1167,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** Judgement that set off each lane's live bomb, by channel; absent for bombs without one (an autoplayed LN head). */
   private readonly bombJudge = new Map<string, BeMusicJudge>();
   /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
-  private readonly lanePressedAt = new Map<string, number>();
-  private readonly laneReleasedAt = new Map<string, number>();
-  protected lastJudge = '';
-  protected lastJudgeUntil = 0;
+  readonly lanePressedAt = new Map<string, number>();
+  readonly laneReleasedAt = new Map<string, number>();
+  lastJudge = '';
+  lastJudgeUntil = 0;
   /**
    * Per-side judge / combo snapshots. Each side captures the verdict text, the chart-time at which the plate should
    * disappear, and the running combo *at the moment that side's note was judged*. The DP renderer reads these directly
@@ -1192,10 +1181,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * SP charts only ever populate the `'1P'` slot, so the global `lastJudge` / `lastJudgeUntil` aliases above keep their
    * existing behavior for the fallback `renderText` path.
    */
-  protected judgeSideState: Record<
-    '1P' | '2P',
-    { judge: JudgeKind | ''; until: number; combo: number; courseCombo?: number }
-  > = {
+  judgeSideState: Record<'1P' | '2P', { judge: JudgeKind | ''; until: number; combo: number; courseCombo?: number }> = {
     '1P': { judge: '', until: 0, combo: 0 },
     '2P': { judge: '', until: 0, combo: 0 },
   };
@@ -1245,21 +1231,21 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * only renders what the engine reports, so LR2 / beatoraja / IIDX differences need no change here. The placeholder
    * below is what renders between scene construction and the first frame.
    */
-  protected gaugeState: PlayerGaugeSummary = createPlaceholderGaugeState();
+  gaugeState: PlayerGaugeSummary = createPlaceholderGaugeState();
   /**
    * FAST / SLOW counts. Incremented on every GREAT or GOOD judgement — PERFECT is "on time" so it doesn't count,
    * BAD/POOR break combo and aren't tracked here. Mirrors `applyFastSlowForJudge` in `packages/player`'s engine. Reset
    * per play in `prepareSong`.
    */
-  private fastCount = 0;
-  private slowCount = 0;
+  fastCount = 0;
+  slowCount = 0;
   /**
    * Set to `true` once the player has hit every chart note without a single BAD / POOR break. Latches on first
    * achievement so the `full-combo` theme event (LR2 FC timers 48 / 49) only fires once per play — replaying the chart resets this in
    * `prepareSong`. Note: AUTO mode reaches FC the moment the last note's auto-PERFECT lands, so the FC presentation
    * also plays during autoplay sessions (the player specifically asked for that behavior).
    */
-  private fullComboFired = false;
+  fullComboFired = false;
   /**
    * High-speed multiplier. 1.0 = base PIXELS_PER_BEAT. Adjustable at runtime via Arrow Up / Arrow Down (steps of 0.25,
    * clamped to [0.5, 6.0]). Mirrors LR2's "hi-speed" knob: only affects the visual scroll rate, never timing.
@@ -1298,15 +1284,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * correctly across `#BPM` change events; the previous hand-rolled `beatAtSeconds` only saw the initial BPM, which
    * made notes drift through tempo transitions.
    */
-  protected timingResolver: TimingResolver | undefined;
+  timingResolver: TimingResolver | undefined;
   /**
    * Per-layer BGA cue lists, sorted by chart-time seconds. Each cue's `bmpKey` is the resource key our texture cache is
    * keyed by (BMS id like "01" for BMS charts, header.name like "base.png" for bmson). `bmpKey === undefined` is the
    * "clear / hide" command (BMS `00`).
    */
   /** A stitched NONSTOP chart's base / layer cues split by stage (`options.nonstop`). */
-  private nonstopBgaTimelines: NonstopStageBgaTimeline[] | undefined;
-  private bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } = {
+  nonstopBgaTimelines: NonstopStageBgaTimeline[] | undefined;
+  bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } = {
     base: [],
     layer: [],
     poor: [],
@@ -1316,14 +1302,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * the playfield can start displaying samples while background images keep streaming in. Black pixels are preserved
    * (this is the bottommost BGA layer).
    */
-  private bgaTextures = new Map<string, Texture>();
+  bgaTextures = new Map<string, Texture>();
   /**
    * BMP-resource → decoded `Texture` cache for the **layer** track (`#BMP` channels 07 and 0A). Decoded separately from
    * {@link bgaTextures} with a chroma-key that turns pure-black pixels transparent — mirrors the BMS BGA "layer"
    * convention used by `packages/player/src/bga.ts` so the foreground composites cleanly over the base track. Even when
    * the same BMP id appears on both tracks we keep two textures because `chroma-key` is destructive.
    */
-  private bgaLayerTextures = new Map<string, Texture>();
+  bgaLayerTextures = new Map<string, Texture>();
   /**
    * BMP-key → `<video>` element for video BGA cues (`.mp4` / `.webm` / etc.). `renderBga` seeks + plays these on cue
    * transitions; `dispose` revokes their object URLs.
@@ -1332,7 +1318,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * texture itself is also added to `bgaTextures` / `bgaLayerTextures` so the existing renderer paths pick it up
    * unchanged.
    */
-  private bgaVideos = new Map<string, { video: HTMLVideoElement; objectUrl: string }>();
+  bgaVideos = new Map<string, { video: HTMLVideoElement; objectUrl: string }>();
   /**
    * Tracks which video is currently associated with each BGA layer and the chart-time it was seeded at. We use this to
    * detect cue transitions in `renderBga` (start the new cue's video, pause the previous one) and to compute the
@@ -1348,17 +1334,17 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * paint BMP00 on a miss before any authored POOR event fires; left `undefined` when the chart already authors a
    * proper POOR track or doesn't ship a BMP00 fallback. Mirrors the TUI BGA renderer's `poorFallbackKey` plumbing.
    */
-  private poorBgaFallbackKey: string | undefined;
+  poorBgaFallbackKey: string | undefined;
   /**
    * Chart-time after which the BMP00 POOR fallback yields to the explicit POOR timeline. Equal to the first authored
    * POOR cue's `seconds` (or `Infinity` when no POOR cues exist). The renderer compares the chart playhead against this
    * so a chart that authors POOR mid-song falls back to BMP00 only during the pre-roll.
    */
-  private poorBgaFallbackUntilSeconds = Number.POSITIVE_INFINITY;
+  poorBgaFallbackUntilSeconds = Number.POSITIVE_INFINITY;
   /** Whether the chart actually carries any BGA events (drives LR2 op 170/171). */
-  protected hasBga = false;
+  hasBga = false;
   /** Smoothed score for the count-up animation. Lerps toward `score.score`. */
-  protected displayedScore = 0;
+  displayedScore = 0;
   /**
    * Frame-rate sampling state. We accumulate frames over a one-second window and publish the rate for theme read-outs
    * (the LR2 RATE NUMBER panel).
@@ -1371,7 +1357,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `globalThis.__BE_MUSIC_PERF__ = true`). When disabled the wrapper adds no measurable overhead.
    */
   private readonly perf = new PerfTracker('gameplay');
-  protected readonly options: TOptions;
+  readonly options: TOptions;
   /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
   private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
 
@@ -1648,7 +1634,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Hidden until {@link start} fires, so a scene shown before the play begins draws nothing of it yet.
     this.root.visible = false;
     this.assetsLoading = true;
-    this.prepareSong(song);
+    prepareSong(this, song);
     if (this.entered) {
       // No splash covers the load window: hold the chart clock before its start (see `start()`) and draw the loading
       // playfield while assets decode, instead of a blank stage.
@@ -1658,14 +1644,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     await this.prepareTheme();
     if (this.disposed) return;
-    await this.prepareAudio();
+    await prepareAudio(this);
     if (this.disposed) return;
     // BGA preload runs IN THE BACKGROUND — `prepare()` resolves here even if `prepareBga()` is still decoding videos.
     // The ffmpeg.wasm fallback for unsupported codecs (e.g. legacy `.mpg`) can take ~tens of seconds, and the user
     // wants the PLAY scene to transition in immediately and play its LR2 LOADING animation during that wait rather than
     // freezing the Decide splash. {@link start} gates the actual chart start (LR2 timer 40 → 41 / op 80 → 81) on
     // `bgaReadyPromise`, so notes still don't begin until the BGA is in place.
-    this.bgaReadyPromise = this.prepareBga().catch((error) => {
+    this.bgaReadyPromise = prepareBga(this).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
     void this.bgaReadyPromise.then(() => {
@@ -2384,262 +2370,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.host = undefined;
   }
 
-  private prepareSong(song: BrowserSongEntry): void {
-    // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
-    // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
-    // with the draws its log recorded, so it plays the recorded branches.
-    const { chart: resolved, randomDraws } = resolvePlayChart(
-      song.chart,
-      this.options.replay?.play.randomDraws !== undefined ? { randomDraws: this.options.replay.play.randomDraws } : {},
-    );
-    this.resolvedChart = resolved;
-    this.randomDraws = randomDraws;
-    // BMS spec — `#WAVCMD 01 xx vv` and `#EXWAVxx` per-slot volumes, collected once so every sample trigger is a single
-    // Map lookup; slots without an entry take the unity-gain fast path.
-    this.wavCmdVolumeMultipliers = collectChartVolumeMultipliers(resolved);
-    // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an animated BGA slot. Pre-parse every entry now so
-    // per-frame BGA composition stays a single `Map.get` plus `pickSwitchingBgaFrame` (no per-frame regex / split).
-    this.switchingBgas.clear();
-    const base = resolveBmsBase(resolved);
-    for (const [slot, raw] of Object.entries(resolved.bms.swBga)) {
-      const parsed = parseBmsSwBga(raw, base);
-      if (parsed) {
-        this.switchingBgas.set(slot, parsed);
-      }
-    }
-    // Build the chart's playable / landmine / invisible note arrays via the engine's own `preparePlaybackChartData`
-    // so the renderer holds the exact same `TimedPlayableNote[]` / `TimedLandmineNote[]` instances the engine
-    // will judge against. We keep a reference to the entire prepared bundle and forward it through
-    // `engineOptions.preparedChart` later, telling the engine to skip its own internal extract pass.
-    //
-    // This is the structural fix for the whole class of view ↔ engine drift bugs the Phase-4c shared-engine
-    // migration kept tripping over: an `inferBmsLnTypeWhenMissing` flag missing on one side, a
-    // `bms.controlFlow` array re-resolved on the engine side, a `random1P: 'OFF'` truthy-check evaluating to
-    // `false` because `'OFF'` is a non-empty string, a missing `laneModeExtension` mapping PMS to IIDX 10-key
-    // DP, … each one shifted the index alignment of the renderer's parallel `this.notes` arrays vs the
-    // engine's, and `applyEngineFrame` ended up mirroring `judged` flags onto the wrong note. Sharing the
-    // instance means the parallel arrays are no longer parallel — they're the same array, the engine mutates
-    // `judged` directly, and the renderer just reads it. There is no second extract that could disagree.
-    // Resolve the chart's intended play variant up front so the lane-binding pass sees the host's
-    // classification (instead of falling back to the engine's content heuristic). Mirrors the beatoraja
-    // path's `composeBeatorajaEngineOptions` wiring in the beatoraja gameplay scene. Without this:
-    //   - `.bme` POPN-9 charts (full `11..19` on `#PLAYER 1`) classify as `'7'` via the engine's heuristic
-    //     and lose the POPN-9 `f/v/g/b` lane bindings on channels `16..19`.
-    //   - `.bms` / `.bme` charts that author PMS-STD content (`11..15 + 22..25`, no scratch) classify as
-    //     `'10'` (IIDX 5K DP) and route the right-side POPN columns through the IIDX 2P key bindings.
-    // `resolveChartPlayVariant` already encodes the right rules for both (see `@be-music/chart`); threading
-    // the result here gives the engine + adapter + renderer a single source of truth without each one
-    // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
-    // branch adds are not in `song.chart.events`, and missing them would lay out (and judge) a 7 KEY play as 5 KEY.
-    const hostPlayVariant = resolveChartPlayVariant(song, resolved);
-    const resolvedPlay = resolveChart(resolved, {
-      randomDraws,
-      playVariant: hostPlayVariant,
-      inferBmsLnTypeWhenMissing: true,
-    });
-    this.resolvedPlayChart = resolvedPlay;
-    // The invisible / keysound array is always prepared even when the overlay is off — so the lil-gui toggle can flip
-    // the visualization on mid-song without a chart restart; the per-frame render loop is gated on
-    // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
-    const prepared = preparePlaybackChart(
-      resolvedPlay,
-      { laneModeExtension: extractChartExtension(this.song?.chartPath) },
-      0,
-    );
-    this.preparedChart = prepared;
-    this.touchTokenByChannel = undefined;
-    this.notes = prepared.notes;
-    this.mineNotes = prepared.landmineNotes;
-    this.invisibleNotes = prepared.invisibleNotes;
-    if (this.options.replay !== undefined) {
-      // Replay playback — the recorded play-log carries the FINAL note arrangement (post-flip, post-shuffle), so
-      // instead of re-rolling the lane transforms we re-apply the recorded channels onto the freshly prepared
-      // notes. A mismatch means the loaded chart is not the one the log was recorded against (different `#RANDOM`
-      // roll or a different file) — surface it as a prepare failure rather than replaying garbage.
-      const arranged = applyPlaylogArrangement(this.options.replay.chart.notes, prepared);
-      if (!arranged.ok) {
-        throw new Error(`play-log replay chart mismatch: ${arranged.reason}`);
-      }
-    } else {
-      // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk because we already iterate `notes` for sorting; SP
-      // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
-      // same visual lane after the flip.
-      if (this.options.dpFlip) {
-        for (const note of this.notes) {
-          note.channel = flipDpChannel(note.channel);
-        }
-        for (const mine of this.mineNotes) {
-          mine.channel = flipDpChannel(mine.channel);
-        }
-        for (const invisible of this.invisibleNotes) {
-          invisible.channel = flipDpChannel(invisible.channel);
-        }
-      }
-      // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
-      // 26) and the 24 / 48 KEY wheel never move (`resolveLaneOptionChannels`). Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
-      // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
-      // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
-      // intact.
-      applyRandomMode(
-        this.notes as Array<{ channel: string }>,
-        resolveLaneOptionChannels('1P', hostPlayVariant),
-        this.options.random1P ?? 'OFF',
-        Math.random,
-        this.mineNotes as Array<{ channel: string }>,
-        this.invisibleNotes as Array<{ channel: string }>,
-      );
-      applyRandomMode(
-        this.notes as Array<{ channel: string }>,
-        resolveLaneOptionChannels('2P', hostPlayVariant),
-        this.options.random2P ?? 'OFF',
-        Math.random,
-        this.mineNotes as Array<{ channel: string }>,
-        this.invisibleNotes as Array<{ channel: string }>,
-      );
-    }
-    this.maxLongNoteBeatSpan = this.notes.reduce((max, note) => {
-      if (note.endBeat === undefined) {
-        return max;
-      }
-      return Math.max(max, Math.max(0, note.endBeat - note.beat));
-    }, 0);
-    this.chartLastNoteEndSeconds = this.notes.reduce((acc, note) => Math.max(acc, note.endSeconds ?? note.seconds), 0);
-    this.songDurationSeconds = this.chartLastNoteEndSeconds;
-    this.chartEnded = false;
-    // Drop the previous chart's active-sample tracking. Stale entries would otherwise let a `c=true` note on the new
-    // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
-    // ends naturally.
-
-    // Lay out the whole keyboard of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY), not just the lanes
-    // the chart happens to use, so a sparse chart still plays on full lanes. The variant also decides channel `17`
-    // (a lane in 9 KEY, FREE ZONE in IIDX) and the 9 KEY layout the LR2 default 9-keys play skin expects.
-    this.chartPlayVariant = hostPlayVariant;
-    this.laneChannels = resolvePlayVariantLaneChannels(this.notes, this.chartPlayVariant);
-    // Initialize from `prepared.scorableNotes.length` so the view's initial `score.total` matches the engine's
-    // authoritative `summary.total` (= same `scorableNotes` filter, with Free-Zone channels excluded). Without
-    // this, charts that use a Free-Zone channel had a renderer-side total larger than the engine's by the
-    // Free-Zone count, and `maybeFireFullCombo`'s `tracker.combo === score.total` predicate became
-    // unreachable — combo could only ever climb to the engine's smaller scorable count, and the FC cue never
-    // fired. `applyEngineFrame` still mirrors `summary.total` defensively each frame, but that's now a no-op
-    // on the common path.
-    this.score = createEmptyScore(prepared.scorableNotes.length);
-    this.tracker = createScoreTracker();
-    this.courseCombo = this.options.course !== undefined ? createCourseCombo(this.options.course.carryIn) : undefined;
-    // Reset the result-screen "MAX COMBO" tracker whenever a fresh chart is prepared — restart (R), song-pick from
-    // select, etc. Otherwise the previous play's max would leak into the new one.
-    this.maxCombo = 0;
-    // Wipe per-side judge / combo snapshots so a fresh chart doesn't briefly paint the previous play's verdict on its
-    // first frame (the `until` chart-time is in the previous chart's coordinate system; comparing it to the new chart's
-    // `currentSeconds()` would render stale state until the new play crosses that mark).
-    this.lastJudge = '';
-    this.lastJudgeUntil = 0;
-    this.judgeSideState = {
-      '1P': { judge: '', until: 0, combo: 0 },
-      '2P': { judge: '', until: 0, combo: 0 },
-    };
-    // Result-screen polyline histories. Seeding waits until after `gaugeState` is reinitialized below — at this point
-    // we'd still be reading the **previous** play's gauge value.
-    this.gaugeHistory = [];
-    this.scoreHistory = [];
-    const resolver = resolvedPlay.timing;
-    this.timingResolver = resolver;
-    // Build a STOP-aware seconds→beat resolver for `currentBeat`.
-    this.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
-    // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, or only ones at 1, so
-    // the common case stays on the plain beat-diff path with no extra cost (and on its ruleset's drawing rules).
-    const beatResolver = resolvedPlay.beatResolver;
-    const scrollTimeline = resolvedPlay.scroll;
-    const speedTimeline = resolvedPlay.speed;
-    this.scrollMapper = changesScrollRate(scrollTimeline, speedTimeline)
-      ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
-      : undefined;
-    this.laneTimelineBeats = collectResolvedLaneTimelineBeats(resolvedPlay);
-    this.autoSampleTriggers = resolvedPlay.sampleTriggers
-      .filter((trigger) => !isPlayableInputChannel(trigger.channel))
-      .sort((left, right) => left.seconds - right.seconds);
-    // bmson 1.0.0 slicing — for bmson charts, each `sound_channels[]` entry is a single audio file that gets sliced at
-    // every distinct pulse where any of its notes fire, and each note plays its assigned slice (`audio_offset` ..
-    // `audio_offset + slice_duration`) instead of the whole WAV from t=0. The audio-renderer already computes the
-    // per-event slice playback table; we wire it up here so the playable- note path (`playSample`) can look up the
-    // offset / duration by event identity at trigger time. BMS / json charts skip the build (the map stays undefined)
-    // since they have no slicing semantics — every note plays its WAV from the start.
-    this.bmsonSlicePlayback =
-      resolved.sourceFormat === 'bmson'
-        ? createBmsonSamplePlaybackMap(
-            resolved,
-            resolver,
-            // Include both playable notes and the auto-trigger BGM events so the {@link WebAudioSession} can resolve
-            // slice metadata for both code paths through a single Map lookup. Without the trigger events here, the
-            // session's `scheduleEvent` would fall back to "play whole WAV" for every BGM cue, regressing bmson
-            // sliced-WAV authoring intent (each note's `audio_offset` / `slice_duration` window).
-            [
-              ...this.notes.map((note) => note.event),
-              ...this.mineNotes.map((note) => note.event),
-              ...this.invisibleNotes.map((note) => note.event),
-              ...this.autoSampleTriggers.map((trigger) => trigger.event),
-            ],
-            beatResolver,
-          )
-        : undefined;
-    this.songDurationSeconds = Math.max(this.chartLastNoteEndSeconds, this.autoSampleTriggers.at(-1)?.seconds ?? 0);
-    // BMS spec — `#BASEBPM N` declares the chart's reference BPM for HS-FIX calibration. The shared
-    // `resolveChartReferenceBpm` helper prefers `#BASEBPM` over the chart's initial `#BPM` so a chart whose `#BPM` is
-    // its peak / average rather than its scroll-feel reference still calibrates at the speed the author intended; falls
-    // back to the parsed `metadata.bpm` and finally the song-list BPM hint when neither is present.
-    this.applyHsFix(resolver, resolveChartReferenceBpm(resolved, this.song?.bpm), resolveChartMainBpm(resolvedPlay));
-    // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
-    // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
-    // per PG/GR.
-    this.gaugeState = createPlaceholderGaugeState(this.resolveSelectedGauge(), this.resolveCourseStartGaugeInput());
-    // Now that the gauge has its starting value (LR2 default 20 %, a course stage's carried-in gauge), seed the polyline history so the result-screen
-    // graph starts at the correct origin instead of the first judge's value.
-    this.gaugeHistory.push({ progress: 0, value: this.gaugeState.current });
-    this.scoreHistory.push({ progress: 0, exScore: 0 });
-    this.fastCount = 0;
-    this.slowCount = 0;
-    this.fullComboFired = false;
-    this.displayedScore = 0;
-    this.judgeTimings.clear();
-    this.longNotes.clear();
-    this.playMoments = {};
-    this.lanePressedAt.clear();
-    this.laneReleasedAt.clear();
-    this.chartBpmRange = resolveChartBpmRange(
-      resolver.tempoPoints,
-      this.songDurationSeconds,
-      resolved.metadata.bpm > 0 ? resolved.metadata.bpm : this.song?.bpm,
-    );
-    this.autoScratchChannels = this.resolveAutoScratchEnabled()
-      ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
-      : new Set();
-    this.bgaTimeline = toBrowserBgaTimeline(resolvedPlay.bga);
-    this.nonstopBgaTimelines =
-      this.options.nonstop !== undefined
-        ? splitNonstopBgaTimeline(this.bgaTimeline, this.options.nonstop.stages)
-        : undefined;
-    // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
-    // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
-    // black POOR plate on misses for charts that rely on this convention.
-    this.poorBgaFallbackKey = resolvePoorBgaFallbackKey(resolved);
-    this.poorBgaFallbackUntilSeconds = this.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
-    this.hasBga =
-      this.bgaTimeline.base.length > 0 || this.bgaTimeline.layer.length > 0 || this.bgaTimeline.poor.length > 0;
-  }
-
   /**
    * The gauge this run actually plays on. A replay restores the recorded pick so the played-back run judges, drains,
    * and clears exactly as the original did; otherwise it is the host's selection, defaulting to LR2 GROOVE.
    */
-  protected resolveSelectedGauge(): GaugeType {
+  resolveSelectedGauge(): GaugeType {
     return this.options.replay?.play.gauge ?? this.options.gauge ?? 'GROOVE';
-  }
-
-  /** The course stage the play runs (a replay's recorded one wins), with its ruleset, for the placeholder gauge. */
-  private resolveCourseStartGaugeInput(): Parameters<typeof createPlaceholderGaugeState>[1] {
-    const stage = this.options.replay !== undefined ? this.options.replay.play.course : this.options.course;
-    if (stage === undefined) return undefined;
-    const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
-    return { stage, ruleset };
   }
 
   /**
@@ -2654,15 +2390,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** The compat ruleset judging the play (a replay's recorded one wins). */
   private resolveJudgeRuleset(): string {
     return this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
-  }
-
-  /**
-   * Whether the engine runs with auto-scratch, mirroring the `autoScratch` engine option: a replay's recorded flag, or
-   * either side's toggle (the engine has one flag for both scratch lanes).
-   */
-  private resolveAutoScratchEnabled(): boolean {
-    if (this.options.replay !== undefined) return this.options.replay.play.autoScratch === true;
-    return this.options.autoScratch1P === true || this.options.autoScratch2P === true;
   }
 
   /** Whether the engine plays `channel`'s notes itself: every lane under autoplay, the scratch under auto-scratch. */
@@ -2754,7 +2481,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * stops — there's no point queuing more uploads on a renderer that just rejected one. The chart still loads; the
    * not-yet-uploaded textures will fall through to lazy upload on first paint, which is the original behavior.
    */
-  protected async preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void> {
+  async preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void> {
     const renderer = this.host?.app.renderer;
     if (!renderer) return;
     type PrepareLike = { upload: (resource: Texture) => Promise<unknown> };
@@ -2778,127 +2505,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         return;
       }
     }
-  }
-
-  private async prepareAudio(): Promise<void> {
-    if (!this.source || !this.song) {
-      return;
-    }
-    // Build the audio bus. See `audio-bus.ts` for the full architecture; in short:
-    //
-    // key sources → keyMixer → keyComp ↘ masterComp → makeup → destination ('split') BGM sources → bgmMixer → bgmComp ↗
-    //
-    // 'legacy' collapses both buses onto a single compressor; 'off' bypasses every compressor stage. Sample sources
-    // always feed `keyMixer` / `bgmMixer`, never directly to the destination, so a mode switch never has to reconnect
-    // in-flight `BufferSourceNode`s — important because hundreds of one-shots come and go per second on dense charts.
-    this.audioCompressorMode = this.options.audioCompressorMode ?? 'split';
-    const initialMode: CompressorMode = this.options.audioCompressor === false ? 'off' : this.audioCompressorMode;
-    // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
-    const chart = this.resolvedChart ?? this.song.chart;
-    // The AudioContext, the bus and `#VOLWAV` are built, and the samples decoded, as the beatoraja prep does
-    // (`chart/play-audio.ts`).
-    const graph = createPlayAudioGraph(chart, initialMode, {
-      initialStages: this.options.audioCompressorStages,
-      initialVolumes: this.audioVolumes,
-      initialCompressorParams: this.audioCompressorParams,
-    });
-    this.audioContext = graph.audioContext;
-    this.audioBus = graph.audioBus;
-    // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
-    this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
-    this.audioBus.outputNode.connect(this.audioAnalyzer.input);
-    const pitchMode = this.options.tempoPitchMode ?? 'pitch';
-    // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
-    // play at their own pitch.
-    const stretched = await loadPlaySamples({
-      audioContext: this.audioContext,
-      chart,
-      source: this.source,
-      chartPath: this.song.chartPath,
-      samples: this.decodedSamples,
-      tempo: this.tempo,
-      tempoPitchMode: pitchMode,
-      tempoStretchAlgorithm: this.options.tempoStretchAlgorithm ?? 'signalsmith',
-      ...(this.options.nonstop !== undefined ? { nonstop: this.options.nonstop } : {}),
-      isCancelled: () => this.disposed,
-    });
-    // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
-    if (stretched && this.bmsonSlicePlayback !== undefined) {
-      this.bmsonSlicePlayback = stretchSlicePlayback(this.bmsonSlicePlayback, this.tempo);
-    }
-    // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
-    // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
-    // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
-    // it. See the field doc for why this beats keeping the audio plumbing inline on the view.
-    if (!this.disposed && this.audioContext && this.audioBus) {
-      this.nonstopMixer?.dispose();
-      this.nonstopMixer =
-        this.options.nonstop !== undefined
-          ? createNonstopStageMixer(this.audioContext, this.audioBus.bgmMixer, this.options.nonstop, {
-              keepPitch: pitchMode === 'keep-pitch',
-              tempo: this.tempo,
-            })
-          : undefined;
-      this.webAudioSession = createWebAudioSession({
-        audioContext: this.audioContext,
-        audioBus: this.audioBus,
-        chart: this.resolvedChart ?? this.song!.chart,
-        decodedSamples: this.decodedSamples,
-        wavCmdVolumeMultipliers: this.wavCmdVolumeMultipliers,
-        bmsonSlicePlayback: this.bmsonSlicePlayback,
-        ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
-        playbackRate: this.samplePlaybackRate(),
-      });
-    }
-  }
-
-  /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
-  private samplePlaybackRate(): number {
-    return resolveSamplePlaybackRate(this.options.tempoPitchMode ?? 'pitch', this.tempo);
-  }
-
-  /**
-   * Decodes every BMP resource referenced by the chart's BGA timelines into a Pixi `Texture`, keyed by the same string
-   * the timeline cues reference. Loads run with bounded parallelism so a long preamble doesn't gate the playfield
-   * without fanning browser decoders out without limit.
-   */
-  private async prepareBga(): Promise<void> {
-    const song = this.song;
-    const source = this.source;
-    if (!song || !source || !this.hasBga) {
-      return;
-    }
-    // Use the control-flow-resolved chart so #IF-gated BMP / bga header declarations match the chosen #RANDOM branch.
-    const chart = this.resolvedChart ?? song.chart;
-    // Loaded as the beatoraja prep loads them (`chart/play-bga.ts`): base + POOR textures keep their blacks, the layer
-    // track's are keyed out for BMS, videos get one texture for both tracks, and `#BGAxx` sub-regions become views.
-    await loadPlayBga({
-      chart,
-      source,
-      chartPath: song.chartPath,
-      timeline: this.bgaTimeline,
-      poorFallbackKey: this.poorBgaFallbackKey,
-      into: {
-        textures: this.bgaTextures,
-        layerTextures: this.bgaLayerTextures,
-        videos: this.bgaVideos,
-        subRegionOrigins: this.bgaSubRegionOrigins,
-      },
-      transcode: {
-        maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
-        useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
-      },
-      tempo: this.tempo,
-      isCancelled: () => this.disposed,
-    });
-    if (this.disposed) return;
-    // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
-    // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
-    // forget from the prepareBga callsite — `bgaReadyPromise` already gates chart start, and adding the upload to
-    // its tail just lengthens that promise by the upload work, which is what we want.
-    await this.preparePixiUpload(this.bgaTextures.values());
-    if (this.disposed) return;
-    await this.preparePixiUpload(this.bgaLayerTextures.values());
   }
 
   /**
@@ -3096,11 +2702,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Skipped when there are no tempo points (defensive — the resolver can be constructed empty during edge-case mounts)
    * or the chart has no BPM info.
    */
-  private applyHsFix(
-    resolver: TimingResolver,
-    referenceBpmCandidate: number | undefined,
-    mainBpm: number | undefined,
-  ): void {
+  applyHsFix(resolver: TimingResolver, referenceBpmCandidate: number | undefined, mainBpm: number | undefined): void {
     const mode = this.options.hsFix ?? 'OFF';
     if (mode === 'OFF') return;
     const referenceBpm =
@@ -3448,7 +3050,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Latches at the moment the engine's `manualPlay` / `autoPlay` Promise resolves so the `onChartFinished` /
    * `onExit` callback fires at most once. {@link handleSharedEngineChartFinished} is the only writer.
    */
-  private chartEnded = false;
+  chartEnded = false;
 
   /**
    * Drives the global "fade everything to black" tween while {@link beginExitSequence} is in flight. The skin's
@@ -5241,7 +4843,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         bmsonSlicePlayback: this.bmsonSlicePlayback,
         // The engine plays through its own session: a stitched NONSTOP chart's stage rates (FIT) and fades go with it.
         ...(this.nonstopMixer !== undefined ? { stageMixer: this.nonstopMixer } : {}),
-        playbackRate: this.samplePlaybackRate(),
+        playbackRate: samplePlaybackRate(this),
         playbackRateFollowsTempo: supportsLiveTempoChange(this.options.tempoPitchMode ?? 'pitch'),
       },
       mode: this.options.autoPlay ? 'auto' : 'manual',
@@ -5729,52 +5331,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 }
 
-function disposeGameplayAudioGraphAfterDelay(
-  graph: {
-    session: WebAudioSession | undefined;
-    bus: AudioBusHandle | undefined;
-    context: AudioContext | undefined;
-  },
-  delayMs: number,
-): void {
-  const cleanup = (): void => {
-    void graph.session?.dispose();
-    graph.bus?.dispose();
-    void graph.context?.close();
-  };
-  if (delayMs <= 0) {
-    cleanup();
-    return;
-  }
-  window.setTimeout(cleanup, delayMs);
-}
-
-/**
- * Returns the lowercased filename extension (including the leading dot, e.g. `.pms` / `.bme` / `.bms`) of
- * `chartPath`, or `undefined` if the path doesn't include a recognizable suffix. The engine's
- * `resolveLaneMode` consumes this via `laneModeExtension` so PMS / BME / BMS charts route to the right binding
- * family even when the chart's content alone is ambiguous (e.g. PMS charts that don't use channel `17`, or
- * BME charts on `#PLAYER 1` that omit the 6 / 7 keys). Returning `undefined` falls back to the engine's
- * content-based heuristics, matching the pre-fix behavior on chart paths the host doesn't surface.
- */
-function extractChartExtension(chartPath: string | undefined): string | undefined {
-  if (typeof chartPath !== 'string' || chartPath.length === 0) {
-    return undefined;
-  }
-  const lastDot = chartPath.lastIndexOf('.');
-  if (lastDot < 0) {
-    return undefined;
-  }
-  // Anchor on the last path segment so `.` characters that appear in directory names (e.g. `Bok.fps/01.bms`)
-  // don't get mistaken for the chart's own extension.
-  const lastSlash = Math.max(chartPath.lastIndexOf('/'), chartPath.lastIndexOf('\\'));
-  if (lastDot < lastSlash) {
-    return undefined;
-  }
-  const ext = chartPath.slice(lastDot).toLowerCase();
-  return ext.length > 1 ? ext : undefined;
-}
-
 /**
  * Returns whether `texture` is backed by a Pixi `VideoSource` (i.e. a `<video>` element). Used by the
  * `PrepareSystem` upload path to skip eager GPU uploads on video-backed textures: the underlying `<video>` may
@@ -5784,148 +5340,6 @@ function extractChartExtension(chartPath: string | undefined): string | undefine
  */
 function isVideoTextureSource(texture: Texture): boolean {
   return texture.source instanceof VideoSource;
-}
-
-/**
- * Swaps a BMS channel's side digit (1↔2) so a 1P-side channel becomes its 2P-side counterpart and vice versa. Used to
- * apply DP FLIP at chart-prepare time. Non-side channels (BGM, BGA, any single-character channel) pass through
- * unchanged.
- */
-function flipDpChannel(channel: string): string {
-  if (channel.length !== 2) return channel;
-  const side = channel[0];
-  const lane = channel[1]!;
-  if (side === '1') return '2' + lane;
-  if (side === '2') return '1' + lane;
-  return channel;
-}
-
-/**
- * Returns whether a BMS channel string belongs to the given play-side. Used by per-side gameplay overlays (LANE COVER /
- * HIDDEN / SUDDEN masks) so each side can render an independent shutter without leaking onto the other side's lanes on
- * a DP chart.
- *
- * Channel layout (LR2 convention): - 1P keyboard: `11..15` + `18` + `19`; scratch: `16` - 2P keyboard: `21..25` + `28`
- * + `29`; scratch: `26`
- *
- * Anything else (BGM, BGA, BPM, etc.) returns `false` for BOTH sides — those don't appear in `laneX` anyway.
- */
-function isChannelOnSide(channel: string, side: '1P' | '2P'): boolean {
-  if (channel.length !== 2) return false;
-  const head = channel[0];
-  if (side === '1P') return head === '1';
-  return head === '2';
-}
-
-/**
- * Shuffles `notes` in place per the chosen arrangement mode. Only `allLanes` — one side's keyboard lanes, from
- * `resolveLaneOptionChannels` — are touched; scratches, the keyboard modes' wheel, and the other side pass through
- * untouched, matching LR2 / beatoraja where the lane options shuffle the keys only. The `usedLanes` filter trims the permutation domain to the lanes actually
- * present in the chart so 5K charts (lanes 1..5 only) MIRROR / RANDOM cleanly inside that subset.
- *
- * - `MIRROR` — deterministic reversal of `usedLanes`
- * - `RANDOM` — single chart-wide permutation (Fisher-Yates with the supplied RNG)
- * - `S-RANDOM` — per-chord permutation; chord notes share the beat key, and we re-permute within that group so notes on
- *   the same beat never collide on one lane
- * - `SCATTER` — currently aliased to `RANDOM`; reserved for a future per-measure permutation pass
- */
-function applyRandomMode(
-  notes: Array<{ channel: string }>,
-  allLanes: readonly string[],
-  mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER',
-  rng: () => number,
-  // Extra channel-bearing arrays (e.g. mine notes) that should follow the same lane shuffle as the playable notes. The
-  // `usedLanes` set is computed from `notes` only — secondary entries on a lane that has no playable notes get remapped
-  // through the same chart-wide map / chord permutation, so mines stay anchored to the visual lane they were authored
-  // on relative to the surrounding chord.
-  ...secondary: Array<Array<{ channel: string }>>
-): void {
-  if (mode === 'OFF') return;
-  const usedLanes = allLanes.filter((lane) => notes.some((note) => note.channel === lane));
-  if (usedLanes.length < 2) return;
-
-  const remapAll = (map: Map<string, string>): void => {
-    for (const note of notes) {
-      const target = map.get(note.channel);
-      if (target) note.channel = target;
-    }
-    for (const arr of secondary) {
-      for (const entry of arr) {
-        const target = map.get(entry.channel);
-        if (target) entry.channel = target;
-      }
-    }
-  };
-
-  if (mode === 'MIRROR') {
-    const map = new Map<string, string>();
-    for (let index = 0; index < usedLanes.length; index += 1) {
-      map.set(usedLanes[index]!, usedLanes[usedLanes.length - 1 - index]!);
-    }
-    remapAll(map);
-    return;
-  }
-
-  if (mode === 'RANDOM' || mode === 'SCATTER') {
-    const perm = shuffleArray([...usedLanes], rng);
-    const map = new Map<string, string>();
-    for (let index = 0; index < usedLanes.length; index += 1) {
-      map.set(usedLanes[index]!, perm[index]!);
-    }
-    remapAll(map);
-    return;
-  }
-
-  if (mode === 'S-RANDOM') {
-    // Group keyboard-lane notes by beat — every note in a chord shares the same `beat` key, so a fresh permutation per
-    // group gives each note a distinct lane within that chord. The secondary arrays (mines) get the chord-local map too
-    // so an adjacent mine in the same beat ends up beside the re-arranged chord, not floating to a stale lane.
-    const grouped = new Map<number, Array<{ channel: string }>>();
-    const beatOf = (note: { channel: string }): number | undefined => {
-      const beat = (note as { beat?: number }).beat;
-      return typeof beat === 'number' ? beat : undefined;
-    };
-    const groupBy = (arr: Array<{ channel: string }>): void => {
-      for (const note of arr) {
-        if (!usedLanes.includes(note.channel)) continue;
-        const beat = beatOf(note);
-        if (beat === undefined) continue;
-        const group = grouped.get(beat);
-        if (group) {
-          group.push(note);
-        } else {
-          grouped.set(beat, [note]);
-        }
-      }
-    };
-    groupBy(notes);
-    for (const arr of secondary) groupBy(arr);
-    for (const chord of grouped.values()) {
-      const perm = shuffleArray([...usedLanes], rng);
-      const map = new Map<string, string>();
-      for (let index = 0; index < usedLanes.length; index += 1) {
-        map.set(usedLanes[index]!, perm[index]!);
-      }
-      for (const note of chord) {
-        const target = map.get(note.channel);
-        if (target) note.channel = target;
-      }
-    }
-  }
-}
-
-/**
- * In-place Fisher-Yates shuffle. Returns the same array for call-chaining — callers usually just discard the return
- * value since the array is mutated.
- */
-function shuffleArray<T>(array: T[], rng: () => number): T[] {
-  for (let index = array.length - 1; index > 0; index -= 1) {
-    const target = Math.floor(rng() * (index + 1));
-    const swap = array[target]!;
-    array[target] = array[index]!;
-    array[index] = swap;
-  }
-  return array;
 }
 
 // `clampSampleOffset` / `clampSampleDuration` / `startSampleNode` lived here while the gameplay view managed its
