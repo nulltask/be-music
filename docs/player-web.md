@@ -482,12 +482,16 @@ The web demo shows every built-in and LR2 result this way: a single play, a cour
 
 Until the play session stands on its own, `CoreGameplayView` is still the play scene of the built-in and LR2 families, but its parts live in the new trees. Each module takes the scene as an explicit context (`ctx`) and reads and writes its state through an interface of its own; the scene passes itself. The state is `CoreGameplayState` (`scene/core/gameplay-state.ts`), which the scene extends. The theme hooks that the LR2 family overrides stay `protected`, and the modules call them through the scene's `theme` object (`GameplayThemeHooks`).
 
+The running play is one scene-model `PlayState` (`playState`): the gauge and EX score with their graphs, the combo, max combo and course combo, the timed judgments with their early / late counts, and the view (the hi-speed under HS-FIX and the lane covers). Every change to it goes through `applyPlayEvent` (`session/play/play-state.ts`), which reduces it with `reducePlayState` and glides the note scroll to a new drawn hi-speed: the engine's frames, judgments and empty POORs, its final summary, the player's hi-speed keys, the host's `setHiSpeed` and a replay's recorded view. The skins' runtime, the LR2 state resolver (`resolveLr2PlayState`) and the result (`playResultFromPlayState`) read it. The scene keeps the engine's judgment counts as the readouts show them (`score`, with LR2's empty POORs in the POOR count) and the engine's gauge summary (`gaugeState`) beside it.
+
 - `session/play/`:
   - `play-chart.ts`: `prepareSong`, the lane options (RANDOM, MIRROR, S-RANDOM, SCATTER, DP FLIP) and a replay's arrangement;
   - `play-media.ts`: the audio graph, the samples and the BGA textures, and their teardown;
   - `play-engine.ts`: the shared engine's launch, its UI signals, the judgements and lane effects, and the start of the ending;
-  - `play-input.ts`: ESC, F5, Space and the arrows, the quit hold, the auto-pause and touch lanes; `PLAY_SCENE_KEY_CODES` lists the keys the engine's web input runtime skips;
-  - `play-view-settings.ts`: the hi-speed and HS-FIX, the tempo the engine follows, the lane covers and the play log's view;
+  - `play-input.ts`: ESC, F5, Space and the arrows, the quit hold, the auto-pause and touch lanes;
+  - `play-keys.ts`: `PLAY_SCENE_KEY_CODES`, the keys the play handles itself and the engine's web input runtime skips;
+  - `play-state.ts`: `applyPlayEvent`, the one way the play state changes;
+  - `play-view-settings.ts`: the hi-speed keys, the tempo the engine follows, the lane covers as drawn and the play log's view;
   - `play-ending.ts`: the exit timeline and the result snapshot.
 - `view/shared/`: `playfield/*` (lanes, notes, long notes, mines, measure lines, bombs, covers, text), `bga-renderer.ts`, and `play-frame.ts` (the layer tree, its fit to the screen, the fades).
 - `view/built-in/play-chrome.ts`: the built-in lane geometry, BGA rect and be-music layout, and the skinless chrome's runtime.

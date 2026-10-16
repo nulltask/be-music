@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { PLAY_SCENE_KEY_CODES, shouldSkipPlayKey } from './play-input.ts';
+import { PLAY_SCENE_KEY_CODES, shouldSkipPlayKey } from './play-keys.ts';
 
 function keyEvent(code: string, target?: { tagName?: string; isContentEditable?: boolean }): KeyboardEvent {
   return { code, target: target ?? null } as unknown as KeyboardEvent;

@@ -7,8 +7,8 @@
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
 import type { ResolvedChart } from '@be-music/chart';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import type { ScoreTracker } from '@be-music/player/core/scoring';
 import type { TimedLandmineNote, TimedPlayableNote } from '@be-music/player/playable-notes';
+import type { PlayState } from '@be-music/scene-model';
 import type { BeMusicLongNote } from '@be-music/skin-sdk';
 import type { Graphics, Text } from 'pixi.js';
 import type { BrowserSongEntry } from '../../../collection/types.ts';
@@ -81,7 +81,7 @@ export interface PlayfieldContext extends LaneGeometryContext {
   readonly goneDrawObjects: GoneDrawObjects;
   measureBeatCache: { songId: string | undefined; beats: number[] };
   measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
-  readonly tracker: ScoreTracker;
+  readonly playState: PlayState;
   readonly audioFrame: AudioFeatures | undefined;
   readonly longNotes: LongNoteTracker;
   readonly lanePressedAt: Map<string, number>;

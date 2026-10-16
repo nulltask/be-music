@@ -66,7 +66,7 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
       lanes: skinlessLanes,
       beatPhase: beat - Math.floor(beat),
       nowMs: ctx.playClock(),
-      combo: ctx.tracker.combo,
+      combo: ctx.playState.combo,
       effects: ctx.options.beMusicEffects ?? 'full',
       audio: ctx.audioFrame,
     });

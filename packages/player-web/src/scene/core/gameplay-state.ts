@@ -7,7 +7,6 @@
  */
 import { Container, Graphics, Text, TextStyle, Texture } from 'pixi.js';
 import type { TimedSampleTrigger, TimingResolver } from '@be-music/audio-renderer/triggers';
-import { createScoreTracker, type ScoreTracker } from '@be-music/player/core/scoring';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player/core/engine';
 import { createEmptyScore, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
 import type { LongNoteStyle } from '@be-music/player/core/engine';
@@ -17,7 +16,8 @@ import type { PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerGaugeSummary, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
-import type { BeMusicPlaylog, PlaylogLaneCover, PlaylogViewCoalescer } from '@be-music/player/playlog';
+import type { BeMusicPlaylog, PlaylogViewCoalescer } from '@be-music/player/playlog';
+import { createPlayState, type LaneCover, type LaneCoverState, type PlayState } from '@be-music/scene-model';
 import { GoneDrawObjects } from './note-draw-window.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import type {
@@ -29,9 +29,7 @@ import type {
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder } from '../../recording/gameplay-recorder.ts';
 import type { ChartBpmRange } from './gameplay-bpm-range.ts';
-import { JudgeTimingLog } from './judge-timing-log.ts';
 import { LongNoteTracker } from './long-note-tracker.ts';
-import type { CourseComboState } from './course-combo.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { PlaylogViewCursor } from '../playlog-view.ts';
@@ -43,10 +41,10 @@ import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.
 import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { BmsSwitchingBga, RandomDraws, ResolvedChart } from '@be-music/chart';
-import { HiSpeedTransition } from '../hi-speed.ts';
+import { DEFAULT_HISPEED, HiSpeedTransition } from '../hi-speed.ts';
 import type { BgaCue, NonstopStageBgaTimeline } from './gameplay-bga.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
-import type { BeMusicGameplayLayout, BeMusicJudge, BeMusicLaneCover, BeMusicStage } from '../../skin/be-music/types.ts';
+import type { BeMusicGameplayLayout, BeMusicJudge, BeMusicStage } from '../../skin/be-music/types.ts';
 import { resolveGameplayLaneGeometry, type BeMusicJudgeWindows, type BeMusicLaneKind } from '@be-music/skin-sdk';
 import { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
@@ -412,21 +410,18 @@ export class CoreGameplayState {
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
   autoSampleTriggers: TimedSampleTrigger[] = [];
+  /**
+   * The engine's judgment counts and scores, as the readouts show them: under LR2 the POOR counter folds the empty POORs
+   * in (`resolveDisplayedPoor`).
+   */
   score: ScoreSummary = createEmptyScore(0);
-  tracker: ScoreTracker = createScoreTracker();
   /**
-   * Highest value of `tracker.combo` reached during the current play. `tracker.combo` resets to 0 on every BAD / POOR,
-   * so we mirror it here whenever it exceeds the previous max. Used as the authoritative "MAX COMBO" readout for the
-   * result screen — the old fallback (`score.perfect + score.great`) overcounted on broken-combo plays since it tallies
-   * hit count rather than the longest unbroken streak.
+   * The play as every screen reads it (`@be-music/scene-model`): the gauge and EX score with their graphs, the combo,
+   * max combo and course combo, the timed judgments with their early / late counts, and the view (the hi-speed with
+   * HS-FIX, the lane covers). Fed through `reducePlayState` from the engine's frames, judgments and commands and from
+   * the player's hi-speed changes; the result is read off it (`playResultFromPlayState`).
    */
-  maxCombo = 0;
-  /**
-   * The course-wide combo of a course stage, carried in from the previous stage (`options.course.carryIn`); undefined
-   * outside a course. Skins that count the combo over the whole course read it (LR2 numbers 104 / 105 in an expert or
-   * grade course).
-   */
-  courseCombo: CourseComboState | undefined;
+  playState: PlayState = createPlayState();
   /**
    * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`). Snapshotted
    * into {@link getResultData} so the result host can offer it as a download.
@@ -434,22 +429,6 @@ export class CoreGameplayState {
   playlog: BeMusicPlaylog | undefined;
   /** Callers of {@link waitForPlaylog} waiting for the engine to record the play. */
   readonly playlogWaiters: Array<(playlog: BeMusicPlaylog) => void> = [];
-  /**
-   * Per-play sampled history of `(progress, gauge%)` pairs. Recorded inside `publishJudge` (the single chokepoint for
-   * every judge event) and seeded with a `(0, initialGauge)` entry on `prepareSong` so the polyline starts from the LR2
-   * default starting gauge (20 %) instead of the first judge's value.
-   *
-   * `progress` is `seconds / totalSongSeconds` clamped to `[0, 1]`. Drives the result scene's gauge-chart polyline
-   * (LR2 `Lr2GaugeChartElement` and friends).
-   */
-  gaugeHistory: Array<{ progress: number; value: number }> = [];
-  /** Same shape as `gaugeHistory`, but tracking running EX score. */
-  scoreHistory: Array<{ progress: number; exScore: number }> = [];
-  /**
-   * Timed judgements of the current play, fed from the engine's judge-combo bus. Its recent window reaches skins as
-   * `runtime.judgeTimings`, the full list as the result data's `judgeTimings`.
-   */
-  readonly judgeTimings: JudgeTimingLog = new JudgeTimingLog();
   /** Long-note holds of the current play, fed from the engine's `long-note-start` / `long-note-end` commands. */
   readonly longNotes: LongNoteTracker = new LongNoteTracker();
   /**
@@ -478,16 +457,14 @@ export class CoreGameplayState {
     gaugeMaxAtMs?: number;
   } = {};
   /**
-   * Lane covers handed to skins as `runtime.laneCovers`, one per play side with lanes. Rebuilt when the lane channels
-   * change and refilled in place every frame, so the runtime allocates nothing for them.
+   * The lane covers as drawn ({@link resolveLaneCover} of the play state's covers), handed to skins as
+   * `runtime.laneCovers`; rebuilt only when the play state's covers change.
    */
-  laneCovers: { channels: readonly string[]; covers: BeMusicLaneCover[] } | undefined;
+  drawnLaneCovers: { covers: readonly LaneCoverState[]; drawn: LaneCover[] } | undefined;
   /** Folds the live view into the recorded play log's view changes ({@link updatePlaylogView}); unset in a replay. */
   playlogViewCoalescer: PlaylogViewCoalescer | undefined;
   /** A replay's recorded view along the playhead ({@link updatePlaylogView}). */
   replayViewCursor: PlaylogViewCursor | undefined;
-  /** The SUDDEN+ / HIDDEN+ per side a replay shows over the viewer's own ({@link resolveLaneCovers}). */
-  replayCovers: readonly PlaylogLaneCover[] | undefined;
   /**
    * Lane runs measure lines cross for a skin that draws them (`drawsMeasureLines`), with the lane geometry they were
    * worked out from; rebuilt only when the lanes move.
@@ -576,31 +553,11 @@ export class CoreGameplayState {
    */
   fullComboFired = false;
   /**
-   * High-speed multiplier. 1.0 = base PIXELS_PER_BEAT. Adjustable at runtime via Arrow Up / Arrow Down (steps of 0.25,
-   * clamped to [0.5, 6.0]). Mirrors LR2's "hi-speed" knob: only affects the visual scroll rate, never timing.
-   *
-   * Seeded to 2.0 to match the LR2 select scene's `DEFAULT_PLAY_OPTIONS.hiSpeed` — the select view always passes
-   * `initialHiSpeed` along when transitioning to gameplay, so this is just the fallback when gameplay is mounted
-   * directly without a preceding select scene (tests / direct-launch tooling). Note this diverges from upstream
-   * beatoraja's `PlayConfig.java:16` (`hispeed = 1.0f`); see the rationale next to that default.
+   * The scroll factor notes, bar lines and long notes are positioned with: it glides to each new drawn hi-speed (the
+   * play state's `view.hiSpeed.drawn`) over `HISPEED_TRANSITION_MS` (wall clock) instead of jumping, while the HUD /
+   * readouts show the new target at once. Visual only — judging never reads it.
    */
-  hiSpeed = 2.0;
-  /**
-   * The HS-FIX multiplier {@link applyHsFix} folded into {@link hiSpeed} (1 without HS-FIX), so a hi-speed reported to
-   * or set by the host stays on the player's own scale.
-   */
-  hsFixMultiplier = 1;
-  /**
-   * The hi-speed on the player's own scale: {@link hiSpeed} without the HS-FIX multiplier. It is what the player picked
-   * (the select panel and the host show it), so the HUD's hi-speed readout shows it too, and the hotkey steps it.
-   */
-  playerHiSpeed: number = this.hiSpeed;
-  /**
-   * The scroll factor notes, bar lines and long notes are positioned with: it glides to each new {@link hiSpeed} over
-   * `HISPEED_TRANSITION_MS` (wall clock) instead of jumping, while the HUD / readouts show the new target at once.
-   * Visual only — judging never reads it.
-   */
-  readonly scrollHiSpeed: HiSpeedTransition = new HiSpeedTransition(this.hiSpeed);
+  readonly scrollHiSpeed: HiSpeedTransition = new HiSpeedTransition(DEFAULT_HISPEED);
   /**
    * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering from
    * `gameplay-constants.ts`. The core scene drives the key-on bank (100–119) for the lane beams; theme families stamp

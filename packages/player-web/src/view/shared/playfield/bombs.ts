@@ -75,7 +75,7 @@ export function renderBombEffects(ctx: PlayfieldContext): void {
     pool: ctx.bombLayerPool,
     bombs,
     nowMs: now,
-    combo: ctx.tracker.combo,
+    combo: ctx.playState.combo,
     effects: ctx.options.beMusicEffects ?? 'full',
     audio: ctx.audioFrame,
   });
