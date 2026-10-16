@@ -39,14 +39,14 @@
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, type Ticker } from 'pixi.js';
 import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
 import { parseBeatorajaSongList, TIMER_SCENE_START, TIMER_SONGBAR_CHANGE } from '@be-music/beatoraja-skin';
+import { chartMatchesKeysFilter, courseMatchesKeysFilter } from '@be-music/scene-model';
 import {
-  beatorajaKeyModeIndex,
+  BEATORAJA_KEYS_FILTERS,
   beatorajaLnModeIndex,
   resolveBeatorajaSelectSliderValue,
   type BeatorajaSystemSoundPaths,
 } from '@be-music/beatoraja-skin/scene';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
-import { safeResolveChartVariant } from './select/chart-facts.ts';
 import { BeatorajaSelectChartImages, type BeatorajaSelectChartImagesContext } from './select/chart-images.ts';
 import type { PixiBeatorajaSelectSceneOptions, PixiBeatorajaSelectSceneSnapshot } from './select/options.ts';
 import { BeatorajaSelectRows, type BeatorajaSelectRowsContext } from './select/rows.ts';
@@ -320,16 +320,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       for (const id of snapshot.favoriteSongs) this.favoriteSongs.add(id);
       for (const id of snapshot.favoriteCharts) this.favoriteCharts.add(id);
       this.cursorStack = snapshot.cursorStack.slice();
-      // Walk `folderPath` resolving each label to a folder node from the live collection.
-      // Re-runs `groupSongsByFolder` on the keymode-filtered set so the folders match what
-      // refreshEntries() will produce below.
-      const filtered =
-        this.keymodeFilter === 0
-          ? options.songs
-          : options.songs.filter((song) => beatorajaKeyModeIndex(safeResolveChartVariant(song)) === this.keymodeFilter);
+      // Walk `folderPath` resolving each label to a folder node from the live collection. Every folder is listed
+      // whatever the key filter, as refreshEntries() lists them below.
       // The root lists the course folders after the song folders, as `refreshEntries` does, so a cursor left in a
       // course folder (the select scene is mounted again after every course) comes back to its course bar.
-      const rootFolders = [...groupSongsByFolder(filtered), ...(options.courseFolders ?? [])];
+      const rootFolders = [...groupSongsByFolder(options.songs), ...(options.courseFolders ?? [])];
       let currentFolders: ReadonlyArray<BrowserFolderNode> = rootFolders;
       for (const label of snapshot.folderPath) {
         const match = currentFolders.find((f) => f.label === label);
@@ -680,14 +675,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * external `setSelectionIndex`.
    */
   private refreshEntries(initialIndex: number): void {
-    // Apply the current keymode filter (act=11 MODE button cycles it). `0` = ALL → no filter.
-    // Higher values restrict to charts whose `resolveChartPlayVariant` returns the matching
-    // variant; charts without a variant resolution are dropped from the filtered set.
+    // Apply the current keymode filter (act=11 MODE button cycles it). `0` = ALL → no filter. Higher values restrict
+    // the charts to that key mode and a course folder's courses to those of that key mode, as the browse model of
+    // `@be-music/scene-model` lists them; every folder bar stays listed, so an emptied folder can still be opened.
     const filter = this.keymodeFilter;
+    const keysFilter = BEATORAJA_KEYS_FILTERS[filter] ?? 'ALL';
     const keymodeFiltered =
-      filter === 0
-        ? this.options.songs
-        : this.options.songs.filter((song) => beatorajaKeyModeIndex(safeResolveChartVariant(song)) === filter);
+      filter === 0 ? this.options.songs : this.options.songs.filter((song) => chartMatchesKeysFilter(song, keysFilter));
     // Search query — case-insensitive substring match on title / artist / genre / subtitle.
     // Empty string short-circuits (no filter). Applied AFTER the keymode filter so a search
     // narrows whatever the user already filtered to via the MODE button.
@@ -703,11 +697,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         const sorted = this.sortMode !== 0 ? sortSongsByMode(searchFiltered, this.sortMode) : searchFiltered;
         this.entries = sorted.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
       } else {
-        const folders = [...groupSongsByFolder(searchFiltered), ...(this.options.courseFolders ?? [])];
+        const folders = [...groupSongsByFolder(this.options.songs), ...(this.options.courseFolders ?? [])];
         this.entries = folders.map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
       }
     } else if (this.folderStack[this.folderStack.length - 1]!.courses !== undefined) {
-      const courses = this.folderStack[this.folderStack.length - 1]!.courses!;
+      const courses = this.folderStack[this.folderStack.length - 1]!.courses!.filter((course) =>
+        courseMatchesKeysFilter(course, keysFilter),
+      );
       this.entries = courses.map((course): BrowserBrowseEntry => ({ kind: 'course', course }));
     } else {
       const top = this.folderStack[this.folderStack.length - 1]!;
