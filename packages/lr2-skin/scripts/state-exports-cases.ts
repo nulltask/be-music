@@ -1,5 +1,6 @@
 import { createEmptyJson } from '@be-music/json';
 import * as lr2StateApi from '@be-music/lr2-skin/state';
+import { createEmptyScore } from '@be-music/player/core/scoring';
 import type { Lr2BarBodySource } from '@be-music/lr2-skin';
 import { DEFAULT_PLAY_OPTIONS, type CourseView, type LibraryChart, type LibraryEntry } from '@be-music/scene-model';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -41,6 +42,28 @@ const BENCH_BAR_BODIES = [
   { kind: 'folder', source: { imagePath: 'folder.png' } },
 ] as unknown as Lr2BarBodySource[];
 const BENCH_CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
+const BENCH_PLAY_SETUP: lr2StateApi.Lr2PlaySetup = {
+  chart: BENCH_CHART,
+  lanes: { playVariant: '7', channels: ['11', '12', '16', '18'] },
+  features: { longNote: true, bpmChange: false, bga: true },
+  options: {
+    autoPlay: false,
+    autoScratch1P: false,
+    autoScratch2P: false,
+    scoreGraph: true,
+    bga: 'ON',
+    bgaSize: 'EXTEND',
+  },
+  gauge: 'GROOVE',
+  course: BENCH_COURSE,
+};
+const BENCH_PLAY_FRAME: lr2StateApi.Lr2PlayFrame = {
+  play: { gauge: 54, combo: 12, maxCombo: 30, totalSeconds: 120, view: { hiSpeed: { player: 2.5 } } },
+  score: { ...createEmptyScore(500), perfect: 100, great: 20, exScore: 220, score: 50000 },
+  seconds: 75,
+  fps: 60,
+};
+const BENCH_LANE = { channel: '13', laneIndex: 3, playVariant: '7' as const };
 
 /** Cases for `@be-music/lr2-skin/state`, keyed `lr2-skin.state.<export>`. */
 export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): void {
@@ -75,6 +98,48 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
       const state = lr2StateApi.resolveLr2DecideState({ chart: BENCH_CHART, course: BENCH_COURSE });
       state.text(10);
       state.text(150);
+    },
+  });
+  define('lr2-skin.state.resolveLr2GaugeRangeOp', {
+    run: () => {
+      lr2StateApi.resolveLr2GaugeRangeOp(54);
+    },
+  });
+  define('lr2-skin.state.resolveLr2GaugeTypeOps', {
+    run: () => {
+      lr2StateApi.resolveLr2GaugeTypeOps('HARD');
+    },
+  });
+  define('lr2-skin.state.resolveLr2LaneTimer', {
+    run: () => {
+      lr2StateApi.resolveLr2LaneTimer('bomb', BENCH_LANE);
+      lr2StateApi.resolveLr2LaneTimer('key-on', BENCH_LANE);
+    },
+  });
+  define('lr2-skin.state.resolveLr2PlayKeyModeOp', {
+    run: () => {
+      lr2StateApi.resolveLr2PlayKeyModeOp(BENCH_PLAY_SETUP.lanes);
+    },
+  });
+  define('lr2-skin.state.resolveLr2PlayState', {
+    run: () => {
+      const state = lr2StateApi.resolveLr2PlayState(BENCH_PLAY_SETUP, BENCH_PLAY_FRAME);
+      state.number(101);
+      state.number(104);
+      state.text(10);
+      state.slider(6);
+      state.bargraph(10);
+    },
+  });
+  define('lr2-skin.state.resolveLr2PlayTimers', {
+    run: () => {
+      lr2StateApi.resolveLr2PlayTimers({ kind: 'gauge', previous: 98, next: 100, at: 0 });
+      lr2StateApi.resolveLr2PlayTimers({ kind: 'lane', bank: 'bomb', lane: BENCH_LANE, at: 0 });
+    },
+  });
+  define('lr2-skin.state.resolveLr2RankOp', {
+    run: () => {
+      lr2StateApi.resolveLr2RankOp(BENCH_PLAY_FRAME.score);
     },
   });
   define('lr2-skin.state.resolveLr2KeyModeOp', {

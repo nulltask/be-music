@@ -7,6 +7,8 @@
  * - Select: {@link resolveLr2SelectState} for the bar under the cursor, the buttons' actions, the bars' bodies, levels
  *   and lamps, and the select timers.
  * - Decide: {@link resolveLr2DecideState} for the chart about to be played (and its course).
+ * - Play: {@link resolveLr2PlayState} for a frame of a play (its setup and the running play state), the timers a
+ *   moment of the play starts and stops, and the lane timer banks.
  * - Charts and records: a chart's key-mode op and features, a record's clear-lamp op and bar lamp.
  * - Courses: the course ops, numbers and texts of a `CourseView`, the course maker's ops, texts and buttons.
  */
@@ -20,6 +22,23 @@ export {
 } from './chart.ts';
 export { resolveLr2BarLamp, resolveLr2LampOp } from './records.ts';
 export { resolveLr2DecideState, type Lr2DecideInput } from './decide.ts';
+export {
+  resolveLr2GaugeRangeOp,
+  resolveLr2GaugeTypeOps,
+  resolveLr2LaneTimer,
+  resolveLr2PlayKeyModeOp,
+  resolveLr2PlayState,
+  resolveLr2PlayTimers,
+  resolveLr2RankOp,
+  type Lr2Lane,
+  type Lr2LaneTimerBank,
+  type Lr2PlayFrame,
+  type Lr2PlayLanes,
+  type Lr2PlaySetup,
+  type Lr2PlayState,
+  type Lr2PlayTimerEvent,
+  type Lr2PlayView,
+} from './play.ts';
 export {
   pickLr2BarBody,
   resolveLr2BarLevel,
