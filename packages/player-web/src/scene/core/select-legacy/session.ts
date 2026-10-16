@@ -5,7 +5,7 @@
  * chart or a course. What the browse model leaves to the screen (a back-out at the root, a library of one folder, where
  * the sort and the filters live) comes from the family's select policy (`select-policy.ts`).
  *
- * The session reads and drives the rest of the scene through {@link SelectSessionContext}; the scene passes it.
+ * The session reads and drives the rest of the scene through {@link LegacySelectSessionContext}; the scene passes it.
  */
 
 import { resolveLr2SelectTimers, type Lr2TimerUpdate } from '@be-music/lr2-skin/state';
@@ -49,15 +49,20 @@ import type {
   BrowserFolderNode,
   BrowserSongCollection,
   BrowserSongEntry,
-} from '../../collection/types.ts';
-import type { CoreSongSelectViewOptions, PixiPlayOptions, SelectDesignSize } from '../../scene/core/select.ts';
-import { HISPEED_STEP } from '../../scene/hi-speed.ts';
-import type { BeMusicSelectBinding } from '../../skin/be-music/binding.ts';
-import type { SongImageCache } from '../../skin/be-music/song-images.ts';
-import { openLibrary, restoreSelectBrowse, SELECT_POLICIES, type SelectPolicy } from './select-policy.ts';
+} from '../../../collection/types.ts';
+import type { CoreSongSelectViewOptions, PixiPlayOptions, SelectDesignSize } from '../select.ts';
+import { HISPEED_STEP } from '../../hi-speed.ts';
+import type { BeMusicSelectBinding } from '../../../skin/be-music/binding.ts';
+import type { SongImageCache } from '../../../skin/be-music/song-images.ts';
+import {
+  openLibrary,
+  restoreSelectBrowse,
+  SELECT_POLICIES,
+  type SelectPolicy,
+} from '../../../session/select/select-policy.ts';
 
 /** What the session reads and drives on the select scene: its fields and methods of these names. */
-export interface SelectSessionContext {
+export interface LegacySelectSessionContext {
   readonly options: Readonly<
     Pick<
       CoreSongSelectViewOptions,
@@ -104,8 +109,8 @@ function listOptionsOf(options: PixiPlayOptions): BrowseListOptions {
 }
 
 /** The select screen's browsing. See the module comment. */
-export class SelectSession {
-  private readonly ctx: SelectSessionContext;
+export class LegacySelectSession {
+  private readonly ctx: LegacySelectSessionContext;
   /** What the browse model leaves to the screen: the built-in and LR2 screens share LR2's. */
   private readonly policy: SelectPolicy = SELECT_POLICIES.lr2;
 
@@ -133,7 +138,7 @@ export class SelectSession {
   /** Whether the host's text field is laid over the search box: the skin then leaves the box's text to it. */
   searchEditing = false;
 
-  public constructor(ctx: SelectSessionContext) {
+  public constructor(ctx: LegacySelectSessionContext) {
     this.ctx = ctx;
   }
 
