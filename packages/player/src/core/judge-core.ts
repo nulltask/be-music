@@ -65,7 +65,7 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     longHoldReleaseSeconds: new Map(),
     longNoteSuppressUntilSeconds: new Map(),
     laneHolds: new Map(),
-    keyStateInput: false,
+    keyStateInput: config.reportsKeyReleases === true,
     advancedThroughSeconds: 0,
     pendingAutoScratchLongNotes: [],
     autoScratchNotes: config.autoScratch
