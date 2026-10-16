@@ -444,6 +444,23 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       }
     },
   });
+  define('player-web.createPlayScene', {
+    run: () => {
+      const scene = playerWebCoreApi.createPlayScene(
+        { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
+        {
+          chart: BENCH_SONG,
+          settings: { autoPlay: true },
+          audio: playerWebCoreApi.createAudioService({ createContext: () => undefined }),
+          on: { finish: () => undefined, exit: () => undefined, restart: () => undefined },
+          keyTarget: BENCH_KEY_TARGET,
+          now: () => 0,
+        },
+      );
+      scene.getHiSpeed();
+      scene.dispose();
+    },
+  });
   define('player-web.createSkinFamilyRegistry', {
     run: () => {
       const registry = playerWebCoreApi.createSkinFamilyRegistry([

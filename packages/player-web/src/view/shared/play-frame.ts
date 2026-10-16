@@ -169,7 +169,15 @@ function applyExitFadeAlpha(ctx: PlayFrameContext): void {
   ctx.designRoot.alpha = Math.max(0, Math.min(1, 1 - elapsed / fadeOutMs));
 }
 
-export function render(ctx: PlayFrameContext, seconds: number): void {
+/**
+ * Draws one frame of the play at chart time `seconds`. `audioFrame` is the mix analysed for this frame (a session that
+ * already sampled it hands it over, so the analyser is not stepped twice); without one the play's analyser is sampled.
+ */
+export function render(
+  ctx: PlayFrameContext,
+  seconds: number,
+  audioFrame: AudioFeatures | undefined = ctx.play.audioAnalyzer?.sample(ctx.play.playClock()),
+): void {
   const screenWidth = ctx.app.screen.width;
   const screenHeight = ctx.app.screen.height;
   const { width: designWidth, height: designHeight } = ctx.theme.stageSize();
@@ -189,7 +197,7 @@ export function render(ctx: PlayFrameContext, seconds: number): void {
   stampDesignRect(ctx, ctx.theme.stageSize());
   ctx.host?.setStageOrientation(resolveStageOrientation(ctx.theme.stageSize()));
   applyExitFadeAlpha(ctx);
-  ctx.audioFrame = ctx.play.audioAnalyzer?.sample(ctx.play.playClock());
+  ctx.audioFrame = audioFrame;
   ctx.perf.time('renderSkin', () => ctx.theme.renderThemeLayer(designWidth, designHeight));
   // LR2 negative-BPM reversal: the event pump stops firing BGA cues there, so the cue clock is clamped (freeze, not
   // rewind) while an already-playing movie keeps running on the true clock. All other `seconds` readers here

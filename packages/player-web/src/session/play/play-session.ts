@@ -369,6 +369,15 @@ export class PlaySession extends PlaySessionState {
     });
   }
 
+  /** Plays the chart again the way F5 does: the theme's fade-out runs, then the host's `onRestart` fires. */
+  public requestRestart(): void {
+    beginExitSequence(this, () => {
+      interruptSharedEngine(this, 'restart');
+      this.sharedEngineAbortController?.abort();
+      this.options.onRestart?.();
+    });
+  }
+
   /**
    * Toggles the dynamics compressor stack on the audio bus at runtime. Mid-play safe: the bus's `setMode` only re-wires
    * downstream stages, so in-flight `BufferSourceNode`s keep playing through the unchanged `keyMixer` / `bgmMixer`
