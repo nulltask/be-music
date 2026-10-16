@@ -379,12 +379,12 @@ describe('resolveLr2ResultState values', () => {
     expect(state.text(LR2_TEXT.TITLE)).toBe('Test');
   });
 
-  it('draws the chart’s texts, without the INSANE level', () => {
+  it('draws the chart’s texts, the INSANE level among them', () => {
     const state = resolveLr2ResultState({ result: makeResult({ difficulty: 5 }) });
     expect(state.text(LR2_TEXT.RIVAL)).toBe('TARGET');
     expect(state.text(LR2_TEXT.TITLE_ALT)).toBe('Test');
     expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('5');
-    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBeUndefined();
+    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBe(state.text(LR2_TEXT.PLAY_LEVEL));
     expect(state.text(LR2_TEXT.TAG)).toBe('');
   });
 

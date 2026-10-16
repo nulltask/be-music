@@ -169,14 +169,16 @@ describe('resolveLr2PlayState numbers', () => {
 });
 
 describe('resolveLr2PlayState texts, sliders and bar graphs', () => {
-  it('draws the chart’s texts, an empty tag and no INSANE level', () => {
+  it('draws the chart’s texts, an empty tag and the INSANE level', () => {
     const state = resolveLr2PlayState(SETUP, frame());
     expect(state.text(LR2_TEXT.TITLE)).toBe('T');
     expect(state.text(LR2_TEXT.ARTIST)).toBe('A');
     expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('3');
     expect(state.text(LR2_TEXT.RIVAL)).toBe('TARGET');
     expect(state.text(LR2_TEXT.TAG)).toBe('');
-    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBeUndefined();
+    expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBe('');
+    const insane = { ...SETUP, chart: makeChartWith({ difficulty: 5 }, { playLevel: 12 }) };
+    expect(resolveLr2PlayState(insane, frame()).text(LR2_TEXT.INSANE_LEVEL)).toBe('12');
     expect(resolveLr2PlayState({ ...SETUP, chart: undefined }, frame()).text(LR2_TEXT.TITLE)).toBeUndefined();
   });
 

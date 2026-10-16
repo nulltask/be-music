@@ -200,9 +200,6 @@ function resultText(st: number, input: Lr2ResultInput): string | undefined {
       return 'TARGET';
     case LR2_TEXT.PLAYER:
       return 'PLAYER';
-    case LR2_TEXT.INSANE_LEVEL:
-      // The result screen draws no INSANE level.
-      return undefined;
     default:
       return resolveLr2ChartText(st, input.result.song);
   }
