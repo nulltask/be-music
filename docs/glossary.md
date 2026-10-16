@@ -122,6 +122,9 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **scene model**: The state and rules of one screen, independent of the skin family: what it shows and how it responds. See [ADR 0002](./adr/0002-scene-model-package.md) and [Scene models](./scene-model.md).
 - **library / library entry**: What a select screen browses: the charts, grouped into folders at the root, and the course folders (`Library`); one bar of its list is a chart, a folder or a course (`LibraryEntry`).
 - **browse state**: Where the player is in the library and how the list is shaped: the open folders, the cursor at each depth, the search, the sort and filters (the list options) and the favourites (`BrowseState`). Its snapshot (`BrowseSnapshot`) keeps it across the scenes a play goes through.
+- **play state**: What every gameplay screen reads of a play, fed by the engine's frames and judgments: the running gauge and EX score with their graphs, the combo, the timed judgments, and the view settings (`PlayState`).
+- **play result**: The one result payload of a single play, a course stage, a course run or a NONSTOP run (`PlayResult`); its run kind says which.
+- **system sound set**: A theme's cues and jingles by slot (cursor, decide, folders, option panels, select BGM, clear / fail jingles, …), each resolved to bytes or to a path in the theme (`SystemSoundSet`).
 - **scene session**: The one implementation of a screen's behaviour, shared by every skin family. See [ADR 0001](./adr/0001-skin-families-only-draw.md).
 - **family view**: How one skin family draws a scene model; it returns the player's actions as intents.
 - **intent**: What a player's action on a view means for the scene: open a folder, start a course, cycle the gauge.

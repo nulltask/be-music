@@ -1,5 +1,5 @@
 import type { ChartPlayVariant } from '@be-music/chart';
-import type { PlayOptionChoices } from '@be-music/scene-model';
+import type { Judge, JudgeTiming, LaneCover, PlayOptionChoices, PlaySide } from '@be-music/scene-model';
 import type { BeMusicAudioFrame } from './audio.ts';
 import type { BeMusicPlayOptions } from './play-options.ts';
 import type { BeMusicResultData, GaugeHistorySample, ScoreHistorySample } from './result-data.ts';
@@ -152,11 +152,11 @@ export interface BeMusicStage {
  */
 export type BeMusicEffectLevel = 'full' | 'reduced' | 'off';
 
-/** A judgement grade, best first. */
-export type BeMusicJudge = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
+/** A judgement grade, best first (`Judge` of `@be-music/scene-model`). */
+export type BeMusicJudge = Judge;
 
-/** A play side. `'2P'` only exists in double play. */
-export type BeMusicSide = '1P' | '2P';
+/** A play side. `'2P'` only exists in double play (`PlaySide` of `@be-music/scene-model`). */
+export type BeMusicSide = PlaySide;
 
 /** An image the host hands a skin (song images, BGA layers): anything `drawImage` / `texImage2D` accepts. */
 export type BeMusicImage = CanvasImageSource;
@@ -360,28 +360,12 @@ export interface BeMusicGameplayRuntime {
 
 /**
  * One timed judgement: when it happened and how far off the press was. `deltaMs` is positive when late (SLOW) and
- * negative when early (FAST). See {@link binJudgeTimings} for a histogram.
+ * negative when early (FAST). See {@link binJudgeTimings} for a histogram. `JudgeTiming` of `@be-music/scene-model`.
  */
-export interface BeMusicJudgeTiming {
-  /** Play-clock ms of the judgement. */
-  atMs: number;
-  /** Signed offset (ms): > 0 late, < 0 early. */
-  deltaMs: number;
-  judge: BeMusicJudge;
-  /** Lane channel of the judged note. */
-  channel?: string;
-}
+export type BeMusicJudgeTiming = JudgeTiming;
 
-/** One play side's lane covers, as fractions (0..1) of the lane height. */
-export interface BeMusicLaneCover {
-  side: BeMusicSide;
-  /** SUDDEN+: the cover over the top of the lanes. */
-  sudden: number;
-  /** HIDDEN+: the cover just above the judgement line. */
-  hidden: number;
-  /** LIFT: how far the judgement line is raised. */
-  lift: number;
-}
+/** One play side's lane covers, as fractions (0..1) of the lane height (`LaneCover` of `@be-music/scene-model`). */
+export type BeMusicLaneCover = LaneCover;
 
 /** One judge window: how early and how late (both positive ms) a press still earns the grade. */
 export interface BeMusicJudgeWindow {

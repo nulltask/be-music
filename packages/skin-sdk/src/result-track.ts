@@ -25,10 +25,10 @@ export type ResultVerdict = 'STAGE CLEAR' | 'FAILED' | 'COURSE CLEAR' | 'COURSE 
 
 /**
  * The result's headline: `STAGE CLEAR` / `FAILED` for one play, `COURSE CLEAR` / `COURSE FAILED` for the result of a
- * whole course (`courseResult`).
+ * whole EXPERT / GRADE course run (`run: 'course'`). A course stage and a NONSTOP run read as one play.
  */
-export function resolveResultVerdict(result: Pick<BeMusicResultData, 'cleared' | 'courseResult'>): ResultVerdict {
-  if (result.courseResult === true) return result.cleared ? 'COURSE CLEAR' : 'COURSE FAILED';
+export function resolveResultVerdict(result: Pick<BeMusicResultData, 'cleared' | 'run'>): ResultVerdict {
+  if (result.run === 'course') return result.cleared ? 'COURSE CLEAR' : 'COURSE FAILED';
   return result.cleared ? 'STAGE CLEAR' : 'FAILED';
 }
 
