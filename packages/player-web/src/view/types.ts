@@ -199,8 +199,8 @@ export interface PlayfieldNote {
 }
 
 /**
- * Something that happened in a play since the last frame, for the skin's timers and effects (the moments
- * `CoreGameplayView.onThemeEvent` received, and the engine's lane commands in the view's own words). `atMs` is on the
+ * Something that happened in a play since the last frame, for the skin's timers and effects (the play session's
+ * moments, and the engine's lane commands in the view's own words). `atMs` is on the
  * play clock.
  */
 export type PlayViewEvent =
@@ -407,7 +407,7 @@ export interface PlayfieldBgaTarget {
  * line and bomb images, and the effect lengths. The playfield walks the notes and lays them out; the skin only answers
  * where and with what. A method that returns `undefined` leaves that part to the playfield's built-in drawing.
  *
- * It replaces the theme hooks `CoreGameplayView` subclasses override. Each one maps as follows:
+ * It replaced the theme hooks the subclasses of the removed `CoreGameplayView` overrode, as follows:
  *
  * | `CoreGameplayView` hook | Replaced by |
  * | --- | --- |

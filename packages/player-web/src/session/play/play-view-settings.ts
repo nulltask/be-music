@@ -1,9 +1,9 @@
 /**
- * What the player sees of a play on the built-in and LR2 gameplay scenes (`CoreGameplayView`), and how it changes: the
+ * What the player sees of a play on the built-in and LR2 play screens (`PlaySession`), and how it changes: the
  * hi-speed (the hotkeys, HS-FIX), the play tempo the engine follows, the lane covers, the visible time, and the play
  * log's view, recorded as it changes or shown back from a replay.
  *
- * The functions read and write the scene's state through {@link PlayViewSettingsContext}; the scene passes itself.
+ * The functions read and write the scene's state through {@link PlayViewSettingsContext}; the play session passes itself.
  */
 
 import type { PlayerTempoChange, TempoClock } from '@be-music/player/core/engine';
@@ -34,7 +34,7 @@ import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import { applyPlayEvent, type PlayStateContext } from './play-state.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
-/** The scene's members the view settings read and write: `CoreGameplayView`'s members of these names. */
+/** The scene's members the view settings read and write: the play session's members of these names. */
 export interface PlayViewSettingsContext extends PlayStateContext {
   readonly options: Readonly<Pick<CoreGameplayViewOptions, 'onHiSpeedChange' | 'onTempoChange' | 'replayView'>>;
   readonly disposed: boolean;

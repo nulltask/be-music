@@ -1,10 +1,10 @@
 /**
- * The engine side of a play on the built-in and LR2 gameplay scenes (`CoreGameplayView`): launches the shared engine
+ * The engine side of a play on the built-in and LR2 play screens (`PlaySession`): launches the shared engine
  * (`runEngineDriver`) on the prepared chart, drains its UI signals each frame into the score, gauge, judgement, combo
  * and lane-effect state the scene draws (key-on timers, bombs, POOR BGA, long-note holds), and starts the ending once
  * the chart settles. ESC / F5 / a teardown interrupt the engine here.
  *
- * The functions read and write the scene's state through {@link PlayEngineContext}; the scene passes itself.
+ * The functions read and write the scene's state through {@link PlayEngineContext}; the play session passes itself.
  */
 
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
@@ -61,7 +61,7 @@ import {
 
 const log = logger('gameplay');
 
-/** The scene's members the engine side reads and writes: `CoreGameplayView`'s members of these names. */
+/** The scene's members the engine side reads and writes: the play session's members of these names. */
 export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingContext {
   readonly options: Readonly<
     Pick<
@@ -164,7 +164,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
 }
 
 /**
- * "Fully on" hold time before {@link CoreGameplayView.flashKeyOnTimer} hands the lane laser to the release-fade path.
+ * "Fully on" hold time before {@link flashKeyOnTimer} hands the lane laser to the release-fade path.
  * Without this hold the sprite would only stay at peak alpha for the first frame (≈16 ms at 60 fps) before the fade
  * tween kicked in, which made auto-judged short-note flashes look like a single-frame blink. ~60 ms is enough to
  * register visually as a deliberate "tap" without lingering through the next note.
@@ -202,7 +202,7 @@ function startKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
 
 /**
  * Smoothly extinguishes the lane laser when a key (or auto LN head) releases: the LR2 key-on timer (100..117) stays
- * in its currently-active state for {@link resolveKeyOnFadeMs} ms while a render-time alpha taper drives the visible
+ * in its currently-active state for the view's key-beam fade (`PlaySessionTheme.keyOnFadeMs`) while a render-time alpha taper drives the visible
  * amplitude down to 0, then the timer entry itself is deleted. Anchored on `playClock` so the fade pauses cleanly
  * with the rest of the scene.
  *
@@ -841,7 +841,7 @@ function handleSharedEngineChartFinished(
   }, ending.leadOutMs);
 }
 
-/** Stops the shared engine as the scene is disposed (`CoreGameplayView.dispose`) and lets go of its buses. */
+/** Stops the shared engine as the play is disposed (`PlaySession.dispose`) and lets go of its buses. */
 export function stopSharedEngine(ctx: PlayEngineContext): void {
   // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
   // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via

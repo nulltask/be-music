@@ -1,8 +1,8 @@
 /**
- * The ending of a play on the built-in and LR2 gameplay scenes (`CoreGameplayView`): the theme's exit timeline (fade-out,
+ * The ending of a play on the built-in and LR2 play screens (`PlaySession`): the theme's exit timeline (fade-out,
  * then close) before the host takes over, and the result the play hands the host.
  *
- * The functions read and write the scene's state through {@link PlayEndingContext}; the scene passes itself.
+ * The functions read and write the scene's state through {@link PlayEndingContext}; the play session passes itself.
  */
 
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
@@ -13,7 +13,7 @@ import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { PlaySessionTheme } from './play-session-theme.ts';
 
-/** The scene's members the ending reads and writes: `CoreGameplayView`'s members of these names. */
+/** The scene's members the ending reads and writes: the play session's members of these names. */
 export interface PlayEndingContext {
   readonly theme: PlaySessionTheme;
   readonly disposed: boolean;
@@ -97,7 +97,7 @@ export function beginExitSequence(
 }
 
 /**
- * The play as a result (`CoreGameplayView.getResultData`): read off the play state (`playResultFromPlayState`), with the
+ * The play as a result (`PlaySession.getResultData`): read off the play state (`playResultFromPlayState`), with the
  * graphs ending at the playhead so they reach the right edge even when the last judgment came well before the chart's
  * end, the clear lamp by the one clear-lamp rule, and the scores as the readouts show them.
  */
