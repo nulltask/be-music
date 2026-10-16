@@ -233,10 +233,6 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   /** Searches for `text` (`reduceBrowse`'s `search`): a changed query puts the cursor on the top of the new list. */
   public setSearch(text: string): void {
     this.applyBrowse({ type: 'search', text }, this.now());
-    // Kept as the select scene did: a search leaves the preview where it was until the cursor moves.
-    const chart = focusedChart(this.library, this.browse);
-    const source = chart === undefined ? undefined : resolveSongSource(this.library, chart);
-    this.previewKey = chart === undefined || source === undefined ? undefined : `${source.id}\n${chart.id}`;
   }
 
   /** The host's text field is over the search box (`true`) or has left it: skins leave the box's text to it. */
