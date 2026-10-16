@@ -1,7 +1,7 @@
 import { createEmptyJson } from '@be-music/json';
 import type { LibraryChart, PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
-import type { SceneViewTiming } from '../../view/types.ts';
+import type { ResultViewTiming } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
 import { RESULT_GRAPH_DRAW_MS, ResultSession, type ResultAudio } from './result-session.ts';
 
@@ -74,7 +74,8 @@ function createSession(
     run?: PlayRunKind;
     sounds?: SystemSoundSet;
     retry?: boolean;
-    timing?: Partial<SceneViewTiming>;
+    timing?: Partial<ResultViewTiming>;
+    playChart?: ReturnType<typeof createEmptyJson>;
   } = {},
 ) {
   const audio = createAudio();
@@ -82,6 +83,7 @@ function createSession(
   const session = new ResultSession({
     result: options.result ?? playResult(),
     ...(options.run !== undefined ? { run: options.run } : {}),
+    ...(options.playChart !== undefined ? { playChart: options.playChart } : {}),
     sounds: options.sounds ?? ALL_JINGLES,
     audio,
     timing: { inputDelayMs: 1500, fadeOutMs: 0, ...options.timing },
@@ -139,6 +141,38 @@ describe('ResultSession', () => {
     expect(session.handleKey(key('Escape', 10))).toBe(true);
     expect(on.continue).toHaveBeenCalledTimes(1);
     expect(on.retry).not.toHaveBeenCalled();
+  });
+
+  it('holds Escape back until input opens when the skin holds every key back', () => {
+    const { session, on } = createSession({ timing: { escapeWaitsForInput: true } });
+    session.enter(0);
+    expect(session.handleKey(key('Escape', 1499))).toBe(true);
+    session.frame(1499);
+    expect(on.continue).not.toHaveBeenCalled();
+    session.handleKey(key('Escape', 1500));
+    expect(on.continue).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues on the first press once input is open when the skin has no result steps', () => {
+    const { session, on } = createSession({ timing: { skipsResultSteps: true, fadeOutMs: 200 } });
+    session.enter(0);
+    session.handleKey(key('Enter', 1000));
+    session.frame(1000);
+    expect(session.frame(1000)).not.toHaveProperty('leaving');
+    session.handleKey(key(' ', 1600));
+    expect(session.frame(1700)).toMatchObject({ leaving: { to: 'continue', atMs: 1600 } });
+    expect(session.frame(1700)).not.toHaveProperty('graphShownAtMs');
+    expect(on.continue).not.toHaveBeenCalled();
+    session.frame(1800);
+    expect(on.continue).toHaveBeenCalledTimes(1);
+  });
+
+  it('carries the chart as the play played it, for the chart graphs', () => {
+    const playChart = createEmptyJson('bms');
+    const { session } = createSession({ playChart });
+    session.enter(0);
+    expect(session.frame(0).playChart).toBe(playChart);
+    expect(createSession().session.frame(0)).not.toHaveProperty('playChart');
   });
 
   it('retries on a bare R once input is open, on a run that offers it', () => {

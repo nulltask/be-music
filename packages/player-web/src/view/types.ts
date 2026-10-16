@@ -328,6 +328,11 @@ export interface PlayView extends FamilyView<PlayFrame, PlayIntent> {
 export interface ResultFrame {
   readonly clock: SceneClock;
   readonly result: PlayResult;
+  /**
+   * The chart as the play played it (its `#RANDOM` branches drawn), when the host has it: a skin's chart graphs read it
+   * (beatoraja's BPM graph and note kinds, and its TOTAL readout).
+   */
+  readonly playChart?: BeMusicJson;
   /** How the run is presented: the course-result skin, the course jingles, quick retry. */
   readonly presentation: ResultPresentation;
   /** The player's best record on the chart (or the course) before this play, for the best and difference figures. */
@@ -350,8 +355,17 @@ export interface ResultFrame {
  */
 export type ResultIntent = { readonly type: 'continue' } | { readonly type: 'retry' };
 
+/** When the result screen takes input and how it leaves, as its skin authors it. */
+export interface ResultViewTiming extends SceneViewTiming {
+  /**
+   * A press on (Enter, Space, a click) leaves at once, as the beatoraja result screen does; without it the first press
+   * skips the graphs, the next shows the record update and the one after leaves, as LR2's result does.
+   */
+  readonly skipsResultSteps?: boolean;
+}
+
 export interface ResultView extends FamilyView<ResultFrame, ResultIntent> {
-  readonly timing: SceneViewTiming;
+  readonly timing: ResultViewTiming;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

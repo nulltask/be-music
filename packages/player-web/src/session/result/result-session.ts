@@ -4,8 +4,9 @@
  *
  * - Input opens after the view's input delay (LR2's `#STARTINPUT`), and the result's graphs start drawing then.
  * - The graphs finish drawing by themselves {@link RESULT_GRAPH_DRAW_MS} later. Enter, Space or a click before that
- *   skips them; the next press shows the record update, and the one after that continues.
- * - Escape continues at any time.
+ *   skips them; the next press shows the record update, and the one after that continues. A skin without those steps
+ *   (`ResultViewTiming.skipsResultSteps`, beatoraja's) continues on the first press.
+ * - Escape continues at any time, or once input is open when the skin holds every key back until then (beatoraja's).
  * - R plays the chart again once input is open, when the run offers a quick retry (`ResultPresentation.quickRetry`) and
  *   the host can retry it.
  *
@@ -13,6 +14,7 @@
  * run. It plays through the audio service as the screen enters and stops as it leaves the stage.
  */
 
+import type { BeMusicJson } from '@be-music/json';
 import {
   playResultRun,
   resolveResultJingle,
@@ -25,7 +27,7 @@ import {
   type SystemSoundSet,
 } from '@be-music/scene-model';
 import type { AudioService } from '../../runtime/audio-service.ts';
-import type { ResultFrame, ResultIntent, SceneLeaving, SceneViewTiming } from '../../view/types.ts';
+import type { ResultFrame, ResultIntent, ResultViewTiming, SceneLeaving } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { isResultRetryKey } from './result-keys.ts';
 
@@ -45,13 +47,15 @@ export interface ResultSessionEvents {
 
 export interface ResultSessionOptions {
   readonly result: PlayResult;
+  /** The chart as the play played it, for the skin's chart graphs; the frame carries it. */
+  readonly playChart?: BeMusicJson;
   /** Which play the result is of; the result's own `run` without one. Decides the jingles and the quick retry. */
   readonly run?: PlayRunKind;
   /** The theme's sounds: the result jingles are read from them. */
   readonly sounds: SystemSoundSet;
   readonly audio: ResultAudio;
   /** When the screen takes input and how it leaves, as the view's skin authors it. */
-  readonly timing: SceneViewTiming;
+  readonly timing: ResultViewTiming;
   readonly on: ResultSessionEvents;
 }
 
@@ -132,7 +136,7 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
       return true;
     }
     if (event.key === 'Escape') {
-      if (this.leaving === undefined) this.leave('continue', event.timeStamp);
+      this.escape(event.timeStamp);
       return true;
     }
     if (event.key === 'Enter' || event.key === ' ') {
@@ -159,6 +163,7 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       result: this.options.result,
+      ...(this.options.playChart !== undefined ? { playChart: this.options.playChart } : {}),
       presentation: this.presentation,
       inputOpenAtMs: this.inputOpenAtMs,
       ...(this.graphShownAtMs !== undefined ? { graphShownAtMs: this.graphShownAtMs } : {}),
@@ -174,11 +179,18 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     if (this.graphShownAtMs === undefined && this.nowMs >= drawnAtMs) this.graphShownAtMs = drawnAtMs;
   }
 
-  /** One press on, at `atMs`: skip the graphs, then show the record update, then continue. Waits for input to open. */
+  /**
+   * One press on, at `atMs`: skip the graphs, then show the record update, then continue (at once without those steps).
+   * Waits for input to open.
+   */
   private step(atMs: number): void {
     if (this.leaving !== undefined) return;
     this.advanceTo(atMs);
     if (this.nowMs < this.inputOpenAtMs) return;
+    if (this.options.timing.skipsResultSteps === true) {
+      this.leave('continue', this.nowMs);
+      return;
+    }
     if (this.graphShownAtMs === undefined) {
       this.graphShownAtMs = this.nowMs;
       return;
@@ -187,6 +199,14 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
       this.updateShownAtMs = this.nowMs;
       return;
     }
+    this.leave('continue', this.nowMs);
+  }
+
+  /** Continues on Escape, at once, or once input is open when the skin holds every key back until then. */
+  private escape(atMs: number): void {
+    if (this.leaving !== undefined) return;
+    this.advanceTo(atMs);
+    if (this.options.timing.escapeWaitsForInput === true && this.nowMs < this.inputOpenAtMs) return;
     this.leave('continue', this.nowMs);
   }
 
