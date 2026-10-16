@@ -38,7 +38,7 @@ import {
   type ReplayTempo,
 } from '../../runtime/play-tempo.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
-import { resolveBeMusicLongNoteMode } from '../../scene/core/long-note-tracker.ts';
+import { resolveBeMusicLongNoteMode } from '../../view/shared/playfield/long-note-tracker.ts';
 import {
   DESIGN_HEIGHT,
   DESIGN_WIDTH,

@@ -8,8 +8,7 @@
 import type { Texture } from 'pixi.js';
 import type { TimedSampleTrigger, TimingResolver } from '@be-music/audio-renderer/triggers';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player/core/engine';
-import { createEmptyScore, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
-import type { LongNoteStyle } from '@be-music/player/core/engine';
+import { createEmptyScore, type JudgeKind, type LongNoteStyle, type ScoreSummary } from '@be-music/player/ruleset';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerStateSignals } from '@be-music/player/state-signals';
@@ -28,7 +27,7 @@ import type {
 } from '../../runtime/audio-bus.ts';
 import type { GameplayRecorder } from '../../recording/gameplay-recorder.ts';
 import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
+import { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import type { PlaylogViewCursor } from '../../scene/playlog-view.ts';

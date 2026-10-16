@@ -12,7 +12,6 @@ import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import {
   PlayerInterruptedError,
-  type LongNoteStyle,
   type PlayerRulesetInfo,
   type PlayerSummary,
   type PreparedPlaybackChartData,
@@ -27,7 +26,13 @@ import type {
 } from '@be-music/player/core/ui-signal-bus';
 import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
-import { resolveDisplayedPoor, type GaugeType, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
+import {
+  resolveDisplayedPoor,
+  type GaugeType,
+  type JudgeKind,
+  type LongNoteStyle,
+  type ScoreSummary,
+} from '@be-music/player/ruleset';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import { playEventFromUiCommand } from '@be-music/scene-model';
 import { resolveLr2LaneIndex } from '../../scene/gameplay-lanes.ts';
@@ -40,7 +45,7 @@ import { supportsLiveTempoChange, type ReplayTempo } from '../../runtime/play-te
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { toBeMusicJudgeWindows } from '../../scene/core/judge-windows.ts';
-import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
+import type { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { LiveTempo } from '../../scene/live-tempo.ts';
 import { resolvePlayEnding } from '../../scene/play-ending.ts';
