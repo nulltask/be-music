@@ -463,8 +463,50 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelApi.advanceCourseCombo({ combo: 12, maxCombo: 30, stageCombo: 4 }, 5);
     },
   });
+
+  // System sounds
+  define('scene-model.systemSoundSetFromLr2Theme', {
+    run: () => {
+      sceneModelApi.systemSoundSetFromLr2Theme(BENCH_LR2_THEME_SOUNDS);
+    },
+  });
+  define('scene-model.systemSoundSetFromBeatoraja', {
+    run: () => {
+      sceneModelApi.systemSoundSetFromBeatoraja({
+        paths: { cursor: 'sound/cursor.wav', decide: 'sound/decide.wav' },
+        selectBgmPath: 'Bgm/select.wav',
+        bgm: { clear: BENCH_BYTES },
+      });
+    },
+  });
+  define('scene-model.hasResultJingle', {
+    run: () => {
+      sceneModelApi.hasResultJingle(BENCH_SOUND_SET);
+    },
+  });
+  define('scene-model.resolveResultJingles', {
+    run: () => {
+      sceneModelApi.resolveResultJingles([undefined, BENCH_SOUND_SET], true);
+    },
+  });
+  define('scene-model.resolveResultJingle', {
+    run: () => {
+      sceneModelApi.resolveResultJingle({ clear: { bytes: BENCH_BYTES } }, true);
+    },
+  });
+  define('scene-model.browseSystemSound', {
+    run: () => {
+      sceneModelApi.browseSystemSound({ type: 'move', delta: 1 }, { kind: 'cursor', from: 0, to: 1, delta: 1 });
+    },
+  });
+  define('scene-model.startSystemSound', {
+    run: () => {
+      sceneModelApi.startSystemSound(BENCH_CHART_ENTRY);
+    },
+  });
 }
 
+const BENCH_BYTES = new Uint8Array([1, 2, 3]);
 const BENCH_HS_FIX_TEMPO = { referenceBpm: 150, bpms: [150, 300, 75], mainBpm: 150 };
 const BENCH_HI_SPEED = sceneModelApi.createHiSpeedState({ hiSpeed: 2.5, multiplier: 0.8 });
 const BENCH_COVER_OPTIONS = {
@@ -546,3 +588,9 @@ const BENCH_COURSE_RESULT: Parameters<typeof sceneModelApi.playResultFromCourseR
 const BENCH_COURSE_LOG = {
   stages: [{ played: true, playlog: { play: { judgeRuleset: 'lr2' } } }],
 } as unknown as Parameters<typeof sceneModelApi.playResultFromCourseRun>[2];
+const BENCH_LR2_THEME_SOUNDS: sceneModelApi.Lr2ThemeSounds = {
+  selectBgm: { path: 'LR2files/Bgm/x/select.wav', bytes: BENCH_BYTES },
+  clearBgm: { path: 'LR2files/Sound/lr2/clear.wav', bytes: BENCH_BYTES },
+  systemSounds: { cursorMove: { path: 'LR2files/Sound/lr2/scratch.wav', bytes: BENCH_BYTES } },
+};
+const BENCH_SOUND_SET = sceneModelApi.systemSoundSetFromLr2Theme(BENCH_LR2_THEME_SOUNDS);

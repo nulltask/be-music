@@ -13,6 +13,7 @@
  *   the engine's frames and judgments (`PlayState`, `reducePlayState`), and its view in the play log's units.
  * - Play result: the one result payload for single plays, course stages, course runs and NONSTOP runs (`PlayResult`).
  * - Course view: the course a screen shows (`CourseView`) and the course-wide combo of a stage.
+ * - System sounds: a theme's cues and jingles by slot (`SystemSoundSet`), from an LR2 or a beatoraja theme.
  */
 export * from './library/entries.ts';
 export * from './library/folders.ts';
@@ -40,3 +41,5 @@ export * from './play-result/course.ts';
 
 export * from './course-view/course-view.ts';
 export * from './course-view/course-combo.ts';
+
+export * from './system-sounds/system-sounds.ts';
