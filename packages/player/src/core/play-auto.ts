@@ -14,7 +14,6 @@ import type { JudgeStrategy, PlayJudge, StrategyDrifts } from './play-strategy.t
 
 /** AUTO play's drifts from manual play (see {@link StrategyDrifts}). */
 const AUTO_DRIFTS: StrategyDrifts = {
-  startsInputRuntimeAfterLeadIn: false,
   horizon: 'chart-end',
   closingFrame: true,
   queuesLaneKeysoundsAsRealtimeAudio: true,

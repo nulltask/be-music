@@ -50,8 +50,6 @@ export interface PlayJudge {
  * they are removed one by one.
  */
 export interface StrategyDrifts {
-  /** Starts the input runtime once the lead-in is over. */
-  readonly startsInputRuntimeAfterLeadIn: boolean;
   /**
    * Where the play ends: `lead-in-and-reach` runs to the chart's end plus the lead-in, the widest reach and a second
    * (ending early only without an audio session or a hold); `chart-end` ends as soon as the chart is over and judged

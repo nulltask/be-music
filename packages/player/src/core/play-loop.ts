@@ -114,13 +114,9 @@ export async function runPlayLoop(
   const wakeUp = createInputWakeUp(session.inputSignals);
   let endedOnFailure = false;
   try {
-    if (!drifts.startsInputRuntimeAfterLeadIn) {
-      session.inputRuntime?.start();
-    }
+    // The input runtime runs from the start of the lead-in, so ESC, pause and the other commands work during it.
+    session.inputRuntime?.start();
     await waitOutLeadIn(session, controls, wakeUp);
-    if (drifts.startsInputRuntimeAfterLeadIn) {
-      session.inputRuntime?.start();
-    }
     // An ESC (or a restart) during the lead-in ends the play before its chart starts.
     if (controls.interruptedReason === undefined) {
       const clock = startChart(session);
