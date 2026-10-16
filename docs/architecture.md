@@ -2,7 +2,7 @@
 
 # Architecture
 
-This document covers how a chart becomes something to play (the Source and Resolved layers), how the engine judges a play (a deterministic judge core and the drivers around it), and the rules that keep these parts runtime-neutral and small.
+This document covers how a chart becomes something to play (the Source and Resolved layers), how the engine judges a play (a deterministic judge core and the one play loop around it), and the rules that keep these parts runtime-neutral and small.
 
 be-music reads a chart in two layers. The **Source layer** says what the file says. The **Resolved layer** says what the player plays. Exactly one function, `resolveChart`, turns the first into the second, and every format default and de facto reading is applied there or in a helper it calls. Consumers read the Resolved layer and do not interpret the format again.
 
@@ -94,27 +94,36 @@ The reasons behind each reading, and every place where be-music departs from a s
 
 `tests/regression/resolved-chart.test.ts` resolves every chart in `examples/test`, for each `#RANDOM` draw the regression corpus pins. It checks the result against the consumer helpers (`extractTimedNotes`, `collectSampleTriggers`, `createTimingResolver`) and against the pinned engine note list, triggers, tempo map and chart facts in `tests/regression/__expected__` (see the [regression corpus](../tests/regression/README.md)).
 
-## The engine: judge core and drivers
+## The engine: judge core and one play loop
 
-`@be-music/player`'s engine ([`core/`](../packages/player/src/core)) is a deterministic judge core with drivers around it.
+`@be-music/player`'s engine ([`core/`](../packages/player/src/core)) is a deterministic judge core driven by one play loop. Manual play, a replay and AUTO play differ only in the judge strategy plugged into the loop ([ADR 0003](./adr/0003-one-play-loop.md)).
 
 ```mermaid
 flowchart TD
   inputs(["clock / key input / recorded play log"])
-  subgraph drivers["drivers"]
-    manual["manual-play.ts"]
-    auto["auto-play.ts"]
+  subgraph loop["one play loop"]
+    session["play-session.ts"]
+    run["play-loop.ts"]
+    finish["play-finish.ts"]
+  end
+  subgraph strategies["judge strategies"]
+    manual["play-manual.ts"]
+    replay["play-replay.ts"]
+    auto["play-auto.ts"]
   end
   subgraph core["judge core"]
-    judge["judge-core.ts<br/>(+ judge-core-{types,score,advance,press}.ts)<br/><i>manual play</i>"]
-    autoJudge["auto-judge-core.ts<br/><i>AUTO play</i>"]
+    judge["judge-core.ts<br/>(+ judge-core-{types,score,advance,press}.ts)"]
+    autoJudge["auto-judge-core.ts"]
   end
   effects["engine-effects.ts"]
   host(["audio session, UI buses, play log, no-TUI trace"])
 
-  inputs --> manual
-  inputs --> auto
+  inputs --> session --> run --> finish
+  run --> manual
+  run --> replay
+  run --> auto
   manual -->|"step(state, input)"| judge
+  replay -->|"advanceJudgeCoreReplay"| judge
   auto -->|"step(state, input)"| autoJudge
   judge -->|effects| effects
   autoJudge -->|effects| effects
@@ -122,14 +131,15 @@ flowchart TD
 ```
 
 - **The judge core** holds everything that decides a judgment in an explicit state object: note selection, the ruleset windows, long-note holds and tails, HCN gauge ticks, mines, auto-scratch, misses, combo, score and gauge. `runJudgeCoreStep(state, input, emit)` (or `stepJudgeCore(state, input)`, which returns the effects as an array) applies one input — `advance`, `press`, `hold`, `release` or `finish`, stamped with chart seconds — and reports what happened as effects: sounds and sound stops, gauge / combo / long-note changes, UI cues, play-log records and trace lines. The core reads no clock, sets no timer and does no I/O, so the same state and inputs always give the same effects. `auto-judge-core.ts` does the same for AUTO play. The LR2 negative-BPM reversal reaches the cores as chart data (`reversalSeconds`, from `ResolvedChart.reversal`): past it they stop sweeping misses and mines and judge presses and releases on the mirrored clock `2R − now`, computed from the input's own chart time.
-- **The drivers** (`manualPlay`, `autoPlay`) own the clock, the input runtimes, audio scheduling, pause and HIGH-SPEED, and map the core's effects onto the host through `engine-effects.ts`. Live play steps the core from the playback clock once per frame and on every key event. A replay (`PlayerOptions.replayInputs`) steps it with `advanceJudgeCoreReplay` from one instant to the next: to each recorded input's microsecond and to the microsecond after each timed judgment (a long-note tail, a miss deadline, an AUTO SCRATCH note, a mine check, from `nextTimedJudgmentUs`), so a replay's judgments do not depend on tick timing or `speed`.
+- **The play loop** runs every play: `manualPlay` and `autoPlay` (`play.ts`) are thin wrappers over an internal `play(chart, options, strategy)`. `play-session.ts` sets the play up: the chart resolved for play, the tempo clock, `preparePlaybackChart`, the ruleset and score, the play-log recorder, the UI and input buses and runtimes, the audio session and the no-TUI trace. `play-loop.ts` (`runPlayLoop`) owns the rest: the lead-in, the play clock, the 60 Hz tick and the input wake-up that cuts it short, the horizon, the hold after the chart (`holdAfterChart`) and closing the runtimes. Each tick drains the input commands (`play-controls.ts`: pause, HIGH-SPEED, tempo changes and a replay's recorded ones, view changes for the play log, interrupts), queues the realtime audio due by the audio write head (`play-audio-cursor.ts`, one cursor for the volume changes, the background sounds and AUTO play's note keysounds), lets the strategy judge, and publishes a UI frame. `play-finish.ts` (`finishPlay`) ends every play the same way: an ESC returns the summary of an aborted play, a restart or Ctrl+C throws `PlayerInterruptedError`, anything else completes or fails; the play log and the no-TUI trace are closed there.
+- **Judge strategies** (`play-strategy.ts`) say how a play is judged. `play-manual.ts` feeds the judge core the play clock once per tick and every key event, stamped with the instant the key went down. `play-replay.ts` re-drives a recorded input stream (`PlayerOptions.replayInputs`) with `advanceJudgeCoreReplay`, from one instant to the next: to each recorded input's microsecond and to the microsecond after each timed judgment (a long-note tail, a miss deadline, an AUTO SCRATCH note, a mine check, from `nextTimedJudgmentUs`), so a replay's judgments do not depend on tick timing or `speed`. `play-auto.ts` steps the auto judge core and queues each note's keysound against the write head, ahead of its judgment. `manualPlay` picks the manual or the replay strategy, `autoPlay` the auto one. Where the two drivers the loop replaced behaved differently, the strategies still say so, one `StrategyDrifts` flag per known drift (`driver-drift.test.ts`), so the loop changed no behaviour; the flags go one by one.
 - **Timed judgments** fall due once time has moved past their whole microsecond (the play log's clock). One instant settles long-note tails and held-back releases first, then Hell Charge gauge ticks, then AUTO SCRATCH notes, then misses, then mines, each in channel order; misses are taken at each note's own deadline. `finish` steps through every judgment still pending the same way before it applies the end-of-play rules, and an ESC abort stops where the judge stood (the play log records it as `play.abortedAtUs`). The play-log simulator schedules the same judgments in the same order, so the two reach the gauge in the same sequence even where it clamps.
 - **Shared rules.** The rules both the judge core and the play-log simulator (`playlog/simulate.ts`) apply live in the ruleset: windows and classification (`ruleset/judge.ts`), candidate selection (`ruleset/selection.ts`), the gauge (`ruleset/gauge.ts`), and the long-note rules — the mode a ruleset plays, the missed-charge-tail POOR, LR2's late LN-head BAD and the multi-BAD pruning (`ruleset/long-note.ts`). The simulator keeps its own microsecond event queue, so `playlog/equivalence.test.ts` checks that the two reach the same judgments on the same input stream.
-- **Driver services** sit beside the drivers: `engine-preparation.ts` (chart resolution for play, load progress, runtime start-up), `engine-audio.ts` (the built-in Node audio session and mixing), `engine-clock.ts` (the playback clock, and the scheduler the drivers read the time and wait through), `engine-trace.ts` (no-TUI output) and `engine-types.ts` (the public types). `engine.ts` is the public facade; its exports did not change with the split.
+- **Services around the loop**: `engine-preparation.ts` (chart resolution for play, load progress, runtime start-up), `engine-audio.ts` (the built-in Node audio session and mixing), `engine-clock.ts` (the playback clock, and the scheduler the loop reads the time and waits through), `engine-effects.ts` (the judge's effects onto the host), `engine-trace.ts` (no-TUI output) and `engine-types.ts` (the public types). `engine.ts` is the public facade; its exports did not change with the split or the one loop.
 
 ### Engine characterization tests
 
-[`core/characterization/`](../packages/player/src/core/characterization) pins what the two drivers do today, so the one play loop (P1) can show that it changes nothing it does not mean to. Each case plays a small synthetic chart (normal notes, long notes under each `#LNMODE`, mines, BPM / STOP / SCROLL / SPEED changes, `#EXRANK` changes, a chart that empties a survival gauge, a stitched two-stage NONSTOP chart) live with scripted input, as a replay of its own log and in AUTO, under each judge ruleset. Scenarios add the tempo set at the start and changed mid-play, view, HIGH-SPEED and pause commands, ESC, restart and Ctrl+C, a play that ends on failure, `holdAfterChart`, a course stage's carry-in, no UI, no audio session, an audio clock whose write head runs ahead, the lead-in and terminal input. A snapshot in `__expected__/` holds what a host can observe of each play: the summary, the play log and its re-simulation under every ruleset, the audio session's calls, the judge cues with the gauge, the UI commands and frames, the host callbacks and the text output. `driver-drift.test.ts` pins the known differences between the drivers, and between a live play and its replay, as tests named `drift: …`.
+[`core/characterization/`](../packages/player/src/core/characterization) pins what the engine does, so a refactor can show that it changes nothing it does not mean to: the one play loop (P1) replaced the two drivers they were written against and left every snapshot as it was. Each case plays a small synthetic chart (normal notes, long notes under each `#LNMODE`, mines, BPM / STOP / SCROLL / SPEED changes, `#EXRANK` changes, a chart that empties a survival gauge, a stitched two-stage NONSTOP chart) live with scripted input, as a replay of its own log and in AUTO, under each judge ruleset. Scenarios add the tempo set at the start and changed mid-play, view, HIGH-SPEED and pause commands, ESC, restart and Ctrl+C, a play that ends on failure, `holdAfterChart`, a course stage's carry-in, no UI, no audio session, an audio clock whose write head runs ahead, the lead-in and terminal input. A snapshot in `__expected__/` holds what a host can observe of each play: the summary, the play log and its re-simulation under every ruleset, the audio session's calls, the judge cues with the gauge, the UI commands and frames, the host callbacks and the text output. `driver-drift.test.ts` pins the known differences between manual and AUTO play, and between a live play and its replay, as tests named `drift: …`.
 
 The plays run on a virtual clock. `engine-clock.ts` reads the time and waits through an `EngineScheduler`, and a test swaps its own in with `setEngineScheduler` (test-only; no entry point exports it). Time then moves only while the play waits, so the suite is deterministic and runs in seconds, and `virtual-clock.test.ts` checks that a replay and an AUTO play reach the same results on the real clock. Run it with `pnpm exec vp test run packages/player/src/core/characterization`. A changed snapshot means the engine's behaviour changed: update the snapshots (`-u`) only in a pull request that means to change that behaviour, and say why there. A refactor leaves them alone.
 
@@ -147,7 +157,7 @@ The plays run on a virtual clock. `engine-clock.ts` reads the time and waits thr
 
 Borderline fields:
 
-- `auto`, `tui`, `audioTailSeconds` and `showInvisibleNotes` are not read by the engine. Hosts pick `autoPlay` or `manualPlay` themselves, and the play log takes `play.mode` from the driver.
+- `auto`, `tui`, `audioTailSeconds` and `showInvisibleNotes` are not read by the engine. Hosts pick `autoPlay` or `manualPlay` themselves, and the play log takes `play.mode` from the judge strategy.
 - `preparedChart` carries the chart after lane options. It is the chart, not a setting, and belongs to the `chart` argument of the future API. Until then it sits in the runtime group.
 - `audioBaseDir` is a plain string, but it locates the host's files, so it counts as runtime.
 - `audioOffsetMs` shifts the judge clock against live key presses, so it can move live judgments. Recorded inputs are already on chart time, so a replay does not need it.
@@ -160,7 +170,7 @@ What the play log (`PlaylogPlay` in [`playlog/format.ts`](../packages/player/src
 - `inferBmsLnTypeWhenMissing` is not recorded. `chart.notes` keeps the long notes it produced, but replaying against the source chart needs the same flag.
 - `laneModeExtension` and `playVariant` are recorded only as their result, `chart.laneMode`, and as the fingerprint's lane-mode input. Replaying against the source chart needs them to get the same lane mode and, under beatoraja, the same per-mode windows.
 
-Play-log fields with no matching option: `play.mode` (the driver), `play.randomLane` and `play.dpFlip` (host lane options, applied through `preparedChart` and declared through `recordPlaylog`), `play.native`, and `play.aborted` / `play.abortedAtUs` (an outcome).
+Play-log fields with no matching option: `play.mode` (the judge strategy), `play.randomLane` and `play.dpFlip` (host lane options, applied through `preparedChart` and declared through `recordPlaylog`), `play.native`, and `play.aborted` / `play.abortedAtUs` (an outcome).
 
 ## Target architecture
 
@@ -214,7 +224,7 @@ Rules that keep it cheap to change:
 | Phase | Work                                                                                                                                                                                                                  | Status                                                                                                       |
 | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | P0    | Safety net: engine characterization snapshots (charts × manual / auto / replay × tempo, ESC, failure, hold, NONSTOP); the course browser checklist automated end to end with fixture charts and minimal fixture skins | done (P0a, the engine characterization snapshots; P0b, the course checklist end to end, `pnpm run test:e2e`) |
-| P1    | One play loop with judge strategies                                                                                                                                                                                   | planned                                                                                                      |
+| P1    | One play loop with judge strategies                                                                                                                                                                                   | in progress (P1a, the one play loop, done)                                                                   |
 | P2    | Domain rules into `@be-music/player`: vocabulary, course runs, the shared NONSTOP pipeline (the Leaderboard included), course stage rules, best records per judge ruleset                                             | done (P2a, the vocabulary and best records; P2b, course runs, NONSTOP, stage rules)                          |
 | P3    | `@be-music/scene-model`; LR2 id tables and state mapping in `lr2-skin`; beatoraja state resolution into `beatoraja-skin`                                                                                              | planned                                                                                                      |
 | P4    | Web runtime: one scene lifecycle, scene sessions, family views (built-in, then LR2, then beatoraja), one audio service, one host API; the old scene classes removed                                                   | planned                                                                                                      |
