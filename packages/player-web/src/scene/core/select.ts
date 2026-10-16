@@ -18,6 +18,7 @@ import {
   resolvePlayOptionValue,
   SORT_CYCLE,
   wrappedCursorDelta,
+  type BrowseSnapshot,
 } from '@be-music/scene-model';
 import { resolveLr2SelectTimers, type Lr2TimerUpdate } from '@be-music/lr2-skin/state';
 import { logger } from '../../logger.ts';
@@ -59,21 +60,6 @@ import { SelectAudio, type SelectAudioContext } from '../../session/select/selec
 import { SelectKeys, type SelectKeysContext } from '../../session/select/select-keys.ts';
 
 const log = logger('select');
-
-/**
- * Serializable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
- * play → return → select), so the user lands back on the same song they launched.
- *
- * Folder identity travels by **label** rather than node reference because each `setCollection()` call rebuilds the
- * folder list — the actual `BrowserFolderNode` objects from the previous instance no longer exist by the time we
- * restore.
- */
-export interface PixiSongSelectNavigation {
-  /** Sequence of folder labels from root to the deepest open folder. */
-  folderPath: string[];
-  /** Cursor position in the deepest entry list. */
-  selectedIndex: number;
-}
 
 /**
  * Per-session gameplay tweaks the user picks on the select screen. The shape lives in `@be-music/skin-sdk` as
@@ -211,11 +197,11 @@ export interface CoreSongSelectViewOptions {
    */
   systemSounds?: PixiSongSelectSystemSounds;
   /**
-   * Initial cursor / folder state. When provided, the view restores the previous `selectedIndex` and walks back into
-   * `folderPath` (skipping any segment whose label no longer exists). Used by the demo to remember the focused song
-   * across play sessions.
+   * The browse position to open the library on (`@be-music/scene-model`'s `BrowseSnapshot`, as `getNavigation`
+   * returns it): when the library is set, the view walks back into its folders and puts the cursor back. Used by the
+   * demo to keep the player's place across a skin change. Without one, a library of one chart folder opens it.
    */
-  initialNavigation?: PixiSongSelectNavigation;
+  initialNavigation?: BrowseSnapshot;
   /**
    * Initial play-option values. Merged onto {@link DEFAULT_PLAY_OPTIONS} — fields the host omits keep their defaults.
    * The view owns the live state from then on; hosts read it back via {@link CoreSongSelectView.getPlayOptions} when
@@ -442,10 +428,7 @@ export class CoreSongSelectView<
       get selectedIndex(): number {
         return scene.selectedIndex;
       },
-      set selectedIndex(value: number) {
-        scene.selectedIndex = value;
-      },
-      get browseStack(): BrowserFolderNode[] {
+      get browseStack(): readonly BrowserFolderNode[] {
         return scene.session.browseStack;
       },
       get playOptions(): PixiPlayOptions {
@@ -485,8 +468,10 @@ export class CoreSongSelectView<
       focusedSong: () => scene.focusedSong(),
       focusedCourse: () => scene.focusedCourse(),
       moveCursorBy: (steps) => scene.session.moveCursorBy(steps),
+      stepCursor: (direction) => scene.session.stepCursor(direction),
+      jumpCursor: (index) => scene.session.jumpCursor(index),
       noteCursorChange: (delta) => scene.noteCursorChange(delta),
-      activateEntry: (entry) => scene.activateEntry(entry),
+      activateFocused: () => scene.activateFocused(),
       leaveFolder: () => scene.session.leaveFolder(),
       togglePanel: (which) => scene.togglePanel(which),
       adjustHiSpeed: (direction) => scene.adjustHiSpeed(direction),
@@ -847,11 +832,11 @@ export class CoreSongSelectView<
   }
 
   /**
-   * Restores cursor / browse state externally. Same shape as the `initialNavigation` constructor option, but applied to
-   * a live view (e.g. when the host swaps a saved navigation snapshot back in after a play session).
+   * Restores a browse position (`BrowseSnapshot`, as {@link getNavigation} returns it) on the live view, over the
+   * library it has now: e.g. when the host puts back the position it saved before a play.
    */
-  public setNavigation(navigation: PixiSongSelectNavigation): void {
-    this.session.setNavigation(navigation);
+  public setNavigation(snapshot: BrowseSnapshot): void {
+    this.session.setNavigation(snapshot);
   }
 
   /** Whether the select screen is showing: entered, and not exited for a decide / play / result screen since. */
@@ -864,24 +849,24 @@ export class CoreSongSelectView<
   }
 
   /**
-   * Returns a snapshot of the current cursor / browse state suitable for round-tripping through `dispose()` (when
-   * transitioning to gameplay) and `initialNavigation` (when coming back). Folder identity is captured by label so the
-   * snapshot is decoupled from the live `BrowserFolderNode` references.
+   * The browse position as plain data (`captureBrowse` of `@be-music/scene-model`), to hand back to {@link
+   * setNavigation} or `initialNavigation` later: the open folders by label, the cursor at every depth, the bar under the
+   * cursor by its key, the search and the list options. The library's folders are rebuilt on every `setCollection`, so
+   * nothing in it refers to them.
    */
-  public getNavigation(): PixiSongSelectNavigation {
+  public getNavigation(): BrowseSnapshot {
     return this.session.getNavigation();
   }
 
   /** The bar under the cursor (a folder, song or course), or `undefined` when the list is empty. */
   public getFocusedEntry(): BrowserBrowseEntry | undefined {
-    return this.currentEntries()[this.selectedIndex];
+    return this.session.focusedEntry();
   }
 
   /**
-   * Sets the lower-cased search query and re-renders. The bar list filters entries by title / subtitle / artist / genre
-   * / file label / folder label (case-insensitive substring). Pass `''` (empty) to clear the filter. Resets the cursor
-   * to 0 so the focused entry is always one that satisfies the filter — without this, narrowing the list could leave
-   * the cursor pointing past the new end and `focusedSong()` would return undefined.
+   * Sets the search and re-renders. The bar list filters entries by title / subtitle / artist / genre / file label /
+   * folder label / course name, by the query trimmed and lower-cased. Pass `''` (empty) to clear the filter. A changed
+   * query puts the cursor on the top of the new list (`reduceBrowse`'s `search`).
    */
   public setSearchQuery(query: string): void {
     this.session.setSearchQuery(query);
@@ -953,10 +938,6 @@ export class CoreSongSelectView<
     return this.session.selectedIndex;
   }
 
-  protected set selectedIndex(value: number) {
-    this.session.selectedIndex = value;
-  }
-
   /** The live play options (`SelectSession.playOptions`). */
   protected get playOptions(): PixiPlayOptions {
     return this.session.playOptions;
@@ -986,7 +967,7 @@ export class CoreSongSelectView<
   protected readonly isPanelOpen = (panel: number): boolean => this.session.isPanelOpen(panel);
 
   /** The bars listed (`SelectSession.currentEntries`). */
-  protected currentEntries(): BrowserBrowseEntry[] {
+  protected currentEntries(): readonly BrowserBrowseEntry[] {
     return this.session.currentEntries();
   }
 
@@ -1000,14 +981,14 @@ export class CoreSongSelectView<
     return this.session.focusedCourse();
   }
 
-  /** Opens a folder bar, starts a song bar or hands a course bar to the host (`SelectSession.activateEntry`). */
-  protected activateEntry(entry: BrowserBrowseEntry): void {
-    this.session.activateEntry(entry);
+  /** Opens the folder bar, starts the song bar or hands the course bar under the cursor to the host. */
+  protected activateFocused(): void {
+    this.session.activateFocused();
   }
 
-  /** Opens `folder` (`SelectSession.enterFolder`). */
-  protected enterFolder(folder: BrowserFolderNode): void {
-    this.session.enterFolder(folder);
+  /** Moves the cursor `delta` bars in one move, wrapping past either end (`SelectSession.moveCursor`). */
+  protected moveCursor(delta: number): void {
+    this.session.moveCursor(delta);
   }
 
   /** Opens or closes LR2 panel `which` (`SelectSession.togglePanel`). */
@@ -1028,11 +1009,6 @@ export class CoreSongSelectView<
   /** Sets a play option (`SelectSession.setPlayOption`). */
   protected setPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
     this.session.setPlayOption(key, value);
-  }
-
-  /** Puts the cursor back on the top after a filter change (`SelectSession.snapCursorAfterFilterChange`). */
-  protected snapCursorAfterFilterChange(): void {
-    this.session.snapCursorAfterFilterChange();
   }
 
   /** PLAY / AUTO on the bar under the cursor (`SelectSession.launchFocusedSong`). */
@@ -1086,9 +1062,6 @@ export class CoreSongSelectView<
   /** Theme hook: releases theme-owned GPU resources on {@link dispose}. Exceptions are caught and logged. */
   protected disposeTheme(): void {}
 }
-
-// Moved to the select session; re-exported under this module's name.
-export { resolveSelectNavigation } from '../../session/select/select-session.ts';
 
 // The search and cursor rules of the browse model in `@be-music/scene-model`, re-exported under the names this module
 // has always used.

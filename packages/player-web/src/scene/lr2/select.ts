@@ -17,7 +17,7 @@ import type {
   Lr2SpecialGraphic,
   Lr2TextElement,
 } from '@be-music/lr2-skin';
-import { PLAY_OPTION_CHOICES, isListPlayOption } from '@be-music/scene-model';
+import { PLAY_OPTION_CHOICES } from '@be-music/scene-model';
 import {
   applyDestinationToSprite,
   containerSpriteSink,
@@ -65,7 +65,6 @@ import type { SceneIdentity } from '../../host/family-kit.ts';
 export {
   DEFAULT_PLAY_OPTIONS,
   matchesSearchQuery,
-  resolveSelectNavigation,
   wrappedCursorDelta,
   type PixiBgaMode,
   type PixiBgaSize,
@@ -76,7 +75,6 @@ export {
   type PixiPlayOptions,
   type PixiRandomMode,
   type PixiSelectSort,
-  type PixiSongSelectNavigation,
   type PixiSongSelectSystemSounds,
 } from '../core/select.ts';
 
@@ -287,14 +285,9 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
         if (target === undefined) {
           return;
         }
-        if (target !== this.selectedIndex) {
-          this.noteCursorChange(offset);
-          this.selectedIndex = target;
-          this.render();
-        }
-        const entry = entries[target];
-        if (!entry) return;
-        this.activateEntry(entry);
+        // The cursor moves the slots between, so the list slides by them, and the bar starts.
+        if (target !== this.selectedIndex) this.moveCursor(offset);
+        this.activateFocused();
         return;
       }
     }
@@ -447,7 +440,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
   /**
    * Runs a clicked `#SRC_BUTTON`: a course-maker button against the host's course maker, any other through its LR2
    * action (`resolveLr2SelectButton`): toggle a panel, step the hi-speed (`plusOnly` picks the direction), cycle or set
-   * a play option (a filter or the sort moves the cursor to the top of the new list), or play the focused bar (PLAY /
+   * a play option (a filter or the sort reshapes the list), or play the focused bar (PLAY /
    * AUTOPLAY on a course bar start the course, as the built-in scene's PLAY / AUTO do) or show its text file. The key
    * config, skin select and replay buttons are not implemented: a click does nothing rather than the wrong thing.
    */
@@ -466,11 +459,9 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
         return;
       case 'cycle-option':
         this.cyclePlayOption(action.option, PLAY_OPTION_CHOICES[action.option]!);
-        if (isListPlayOption(action.option)) this.snapCursorAfterFilterChange();
         return;
       case 'set-difficulty-filter':
         this.setPlayOption('difficultyFilter', action.value);
-        this.snapCursorAfterFilterChange();
         return;
       case 'play':
       case 'autoplay':

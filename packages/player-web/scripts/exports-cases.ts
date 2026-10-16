@@ -1179,14 +1179,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.summarizeBeatorajaPlaySkins(BENCH_BEATORAJA_PLAY_SKINS);
     },
   });
-  define('player-web.resolveSelectNavigation', {
-    run: () => {
-      playerWebCoreApi.resolveSelectNavigation(
-        { songs: [BENCH_SONG], courseFolders: [{ label: 'courses', songs: [], courses: [] }] },
-        { folderPath: ['courses'], selectedIndex: 0 },
-      );
-    },
-  });
   define('player-web.wrappedCursorDelta', {
     run: () => {
       playerWebCoreApi.wrappedCursorDelta(-9, 10);
