@@ -24,7 +24,7 @@ import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/n
 import { resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay.ts';
+import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 
 /** The play state the media preparation reads and fills: `CoreGameplayView`'s fields of these names. */
 export interface PlayMediaContext {
