@@ -294,9 +294,9 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-What a scene shows is handed to it before it is shown: the options of `createDecideScene` for every decide screen, the options of `createResultScene` for every result screen, the options of `createPlayScene` for the built-in and LR2 play screens, and the constructor options for the rest.
+What a scene shows is handed to it before it is shown: the options of `createDecideScene` for every decide screen, the options of `createResultScene` for every result screen, the options of `createPlayScene` for the built-in and LR2 play screens, the options of `createSelectScene` for the built-in select screen, and the constructor options for the rest.
 
-- **The select scene is kept alive.** The built-in and LR2 select scene stays across a decide, play and result: its `exit()` pauses the BGM, stops the chart preview (which keeps its focused chart) and the render loop, and it keeps its cursor, browse state and decoded BGM. Its input listeners stay attached and ignore input while it is off stage. Entering it again re-seeds its scene timers, so the skin's entrance plays again, and resumes the BGM and the preview. The beatoraja select scene is rebuilt from its snapshot instead.
+- **The select scene is kept alive.** The built-in and LR2 select screens stay across a decide, play and result: their `exit()` stops the BGM and the chart preview and the drawing, and they keep their cursor, browse state and decoded BGM. Entering again restarts the scene timers, so the skin's entrance plays again, and the BGM; the preview starts again once the cursor is on another chart than the one it left on. The built-in screen (`createSelectScene`) stops its sounds with `stopOwned` and detaches its input on exit; the LR2 scene keeps its input listeners attached and ignores input while it is off stage. The beatoraja select scene is rebuilt from its snapshot instead.
 - **A play loads off stage.** `prepare()` parses the chart and decodes its audio without touching the stage or adding listeners, so the demo prepares the play behind a decide splash. When the splash is done, `setScene(play)` exits the decide scene and enters the play, then `start()` begins it; keys pressed during the splash reach only the splash. Without a splash the demo shows the play first, and a `prepare()` that runs while the play is showing draws the playfield in its loading state.
 - **A play's sound outlives its screen.** The gameplay scene's `exit()` stops its drawing and input but not its sound, so the result shows while the last notes ring out; the demo then disposes the play with `preserveAudioTail`.
 - **Decide and result scenes are one-shot.** Entered again, they restart their timeline; the demo disposes them once they are gone.
@@ -347,7 +347,7 @@ flowchart TD
 
 ## Scene sessions and family views
 
-The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). Every family's decide and result screens and the built-in and LR2 play screens are on them ([The decide screen](#the-decide-screen), [The result screen](#the-result-screen), [The play screen](#the-play-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
+The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). Every family's decide and result screens, the built-in select screen and the built-in and LR2 play screens are on them ([The select screen](#the-select-screen), [The decide screen](#the-decide-screen), [The result screen](#the-result-screen), [The play screen](#the-play-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
 
 ```mermaid
 flowchart LR
@@ -405,12 +405,21 @@ flowchart LR
   - `view/**` imports neither `@be-music/player/core/engine` nor `runtime/engine-driver` and the `runtime/web-*-runtime` modules;
   - `view/**` does not use `AudioContext` or `OfflineAudioContext`.
 
-### Browsing on the select screen
+### The select screen
 
-The built-in and LR2 select screens browse the library with the browse model of `@be-music/scene-model` ([Browse](./scene-model.md#browse)). Their session (`session/select/select-session.ts`) keeps a `BrowseState`: the keys, the wheel, a swipe and a click on a bar go through `reduceBrowse`, the list drawn is `browseEntries`, and the folder and option cues come from `browseSystemSound`. The sort, the key filter and the difficulty filter stay in the play options (LR2's option panel, an LR2 skin's buttons, a be-music skin's play options, the host's `setPlayOptions`), and the list follows them.
+`createSelectScene(kit, options)` (`@be-music/player-web/scenes`) makes the built-in select screen: a select session (`session/select/select-session.ts`) drawn by the built-in select view (`view/built-in/select-view.ts`), as a `SessionScene` to show with `setScene`. The LR2 select screen is still `PixiSongSelectView` (on `CoreSongSelectView`, whose parts sit in `scene/core/select-legacy/`) and the beatoraja one `PixiBeatorajaSelectScene`. `CoreSongSelectView` answers to `SelectScene`'s names, so a host drives both alike.
 
-- **The list.** A sort or a filter change keeps the cursor on the bar it was on, or on its row, clamped, when the filter takes that bar out. A search change puts the cursor on the top. The key filter lists a chart under its own key mode, so a 24-key chart is listed only under ALL: LR2's key filter has no 24-key choice.
-- **The browse position.** `getNavigation()` is a `BrowseSnapshot` (`captureBrowse`), and `setNavigation` and the `initialNavigation` option take one back (`restoreBrowse`): the search it was saved with, the folders walked by label as far as they are still found, each parent cursor on the bar of the folder opened from it (so backing out lands on it), and the cursor on the saved bar, found by its key, while it is still listed. The sort and the filters in force are kept.
+- **Options.** `library` (the collection, with its charts' files), `browse` (a `BrowseSnapshot` to open on), `playOptions`, `records` (the best records for the bars and panels), `sounds` (the theme's `SystemSoundSet`), `audio` (the host's audio service) and `on`: `start(entry, { autoPlay })`, `playOptions`, `search`, and the optional `readtext`, `courseMaker`, `skinConfig` and `exit`.
+- **The scene.** `snapshot()`, `focused()`, `getPlayOptions()` / `setPlayOptions()` (the host's change, not reported back), `setLibrary()` (the same library redraws; a new one keeps the player's place over it), `restore()`, `refreshRecords()`, `setSearch()` / `setSearchEditing()`, `searchFieldRect()`, `setSounds()` and `updateKit()`.
+- **Keys** (`session/select/select-keys.ts`). ↑ / ↓ move the cursor, Enter opens the folder or starts the bar, Escape, Backspace or ← back out of a folder. Space opens and closes the play-options panel; while it is open the 1P lane keys step its options (Z DP flip, S random, X 2P random, D gauge, C / V hi-speed, F auto scratch), and Escape closes it. While the README overlay is open, the keys scroll or close it.
+- **Pointer.** The view turns a click or a tap on a bar, a swipe and its glide, the wheel, and the be-music skin's PLAY, AUTO, search, play option and readme hit areas into intents.
+- **Starting.** Enter, a click or PLAY / AUTO on a chart hands it to `on.start` after the be-music skin's launch outro (input waits meanwhile); a course is handed at once. The decide cue and jingle play when `on.start` does not return `false` ([The decide jingle](#the-decide-jingle)); a course with a stage missing plays the cancel cue.
+- **Sound.** The session plays through the audio service. The select BGM (at half level, ducked under the preview) and the preview of the chart under the cursor are its own: the screen's exit stops them with `stopOwned`, and its next entry starts the BGM again. The cues and the decide jingle have no owner and play out. The preview follows the chart under the cursor, a search included; coming back with the cursor on the chart it left on does not start that chart's preview again until the cursor moves.
+
+The list, the browse position and the select policy work the same on the built-in and LR2 screens:
+
+- **The list.** The session keeps a `BrowseState` of the browse model of `@be-music/scene-model` ([Browse](./scene-model.md#browse)): commands go through `reduceBrowse`, the list drawn is `browseEntries`, and the folder and option cues come from `browseSystemSound`. The sort, the key filter and the difficulty filter stay in the play options (LR2's option panel, an LR2 skin's buttons, a be-music skin's play options, the host's `setPlayOptions`), and the list follows them. A sort or a filter change keeps the cursor on the bar it was on, or on its row, clamped, when the filter takes that bar out. A search change puts the cursor on the top. The key filter lists a chart under its own key mode, so a 24-key chart is listed only under ALL: LR2's key filter has no 24-key choice.
+- **The browse position.** A `BrowseSnapshot` (`captureBrowse`) is restored with `restoreBrowse`: the search it was saved with, the folders walked by label as far as they are still found, each parent cursor on the bar of the folder opened from it (so backing out lands on it), and the cursor on the saved bar, found by its key, while it is still listed. The sort and the filters in force are kept.
 - **The select policy.** What the model leaves to the screen is the family's select policy (`session/select/select-policy.ts`): on the built-in and LR2 screens a back-out at the root does nothing, and a library of one chart folder opens it when there is no position to restore.
 
 The web demo keeps the snapshot across a play, a course (the cursor comes back to the course bar) and a skin change, and opens a drop's folder with one. Its Debug Menu's Play options set the sort and the filters too.
@@ -442,22 +451,24 @@ The web demo prepares the LR2 / built-in play behind the built-in and LR2 screen
 
 #### The decide jingle
 
-The decide jingle of an LR2 sound set (`#DECIDE`) lives in the built-in / LR2 select scene for now: the web demo plays it with the select scene's `playDecideSound` as the chart or the course is picked, on the select scene's own context, and the select scene's exit does not stop it. It rings on through the decide screen and into the play, as LR2's does, and it also plays where no decide screen shows (a theme without a decide skin). The beatoraja decide screen plays its theme's decide sound as the session's jingle, which stops as the screen leaves, as it stopped with the screen's own context before.
+The select screen plays the decide jingle of an LR2 sound set (`#DECIDE`, `sounds.decideBgm`) as a chart or a course starts a play. The built-in select screen's session plays it through the audio service without an owner: the select screen's exit (`stopOwned`) stops its BGM and preview but not the jingle, which rings on through the decide screen and into the play, as LR2's does. It also plays where no decide screen shows (a theme without a decide skin). The LR2 select scene still plays it with `playDecideSound` on its own context, which its exit leaves playing, until it moves onto the select session too. The beatoraja decide screen plays its theme's decide sound as the session's jingle, which stops as the screen leaves, as it stopped with the screen's own context before.
 
 ```mermaid
 sequenceDiagram
+  participant Select as Select session
+  participant Audio as Audio service
   participant Demo
-  participant Select as Select scene
   participant Decide as Decide scene
   participant Play as Play scene
-  Demo->>Select: playDecideSound
-  Note right of Select: the jingle starts
-  Demo->>Decide: setScene, no jingle
+  Select->>Demo: on.start
+  Select->>Audio: playJingle, no owner
+  Demo->>Decide: setScene
+  Note over Select,Audio: exit: stopOwned stops the BGM and the preview
   Demo->>Play: setScene
-  Note over Select,Play: the jingle rings on until it ends
+  Note over Audio,Play: the jingle rings on until it ends
 ```
 
-The decide session could play it (`sounds.decideBgm`), but as the decide scene's own sound, which `stopOwned` stops when the scene leaves: the jingle would be cut as the play starts. So the demo hands the built-in and LR2 decide screens `sounds: {}`. The jingle moves with the select screen (S4, the select session on the audio service): the select session will play it through the audio service without an owner, so it plays out across the scenes that follow.
+The decide session could play it (`sounds.decideBgm`), but as the decide scene's own sound, which `stopOwned` stops when the scene leaves: the jingle would be cut as the play starts. So the demo hands the built-in and LR2 decide screens `sounds: {}`, and the jingle stays the select screen's. The host tells the select screen whether a start begins a play: `on.start` returns `false` when the course being made takes the chart or a course cannot start, and then no jingle plays.
 
 ### The result screen
 
@@ -621,7 +632,7 @@ pnpm bench -- --packages player-web
 
 ### Audio service
 
-`createAudioService()` (`@be-music/player-web/runtime`) is the one way the player plays sounds outside a play's chart ([ADR 0007](./adr/0007-one-system-audio-context.md)). The scene sessions play through it as they land, the decide, result and built-in play screens so far (a play opens its own graph through `openPlayGraph`); the other scenes still use contexts of their own. The web demo creates one service at start-up and hands it to every scene made on it, and sets a beatoraja theme's files on it (`setTheme({ files })`) for the skin sounds of the beatoraja decide and result screens.
+`createAudioService()` (`@be-music/player-web/runtime`) is the one way the player plays sounds outside a play's chart ([ADR 0007](./adr/0007-one-system-audio-context.md)). The scene sessions play through it as they land, the built-in select, decide, result and built-in play screens so far (a play opens its own graph through `openPlayGraph`); the other scenes still use contexts of their own. The web demo creates one service at start-up and hands it to every scene made on it, and sets a beatoraja theme's files on it (`setTheme({ files })`) for the skin sounds of the beatoraja decide and result screens.
 
 ```mermaid
 flowchart LR
