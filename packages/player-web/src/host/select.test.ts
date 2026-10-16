@@ -1,3 +1,4 @@
+import type { Lr2Skin } from '@be-music/lr2-skin';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import { SILENT_AUDIO } from '../runtime/audio-analysis.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
@@ -81,6 +82,27 @@ describe('createSelectScene', () => {
     expect(scene.focused()).toMatchObject({ song: { id: 'a' } });
     expect(scene.searchFieldRect()).toBeUndefined();
     scene.updateKit({ family: 'lr2' } as unknown as BuiltInKit);
+    scene.dispose();
+  });
+});
+
+describe('createSelectScene with an LR2 kit', () => {
+  it('is the LR2 family’s select screen, with no launch outro, and keeps its family', () => {
+    const { service } = createFakeAudio();
+    const start = vi.fn();
+    const scene = createSelectScene(
+      { family: 'lr2', skin: {} as Lr2Skin },
+      {
+        library: makeCollection([makeChart('a', 'pack')]),
+        sounds: {},
+        audio: service,
+        on: { start },
+        now: () => 0,
+      },
+    );
+    expect(scene.identity).toEqual({ kind: 'select', family: 'lr2' });
+    expect(() => scene.updateKit(KIT)).not.toThrow();
+    expect(scene.identity).toEqual({ kind: 'select', family: 'lr2' });
     scene.dispose();
   });
 });

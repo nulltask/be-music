@@ -59,4 +59,4 @@ export {
   type PlaySceneSettings,
 } from '../host/play.ts';
 export { createSelectScene, type SelectScene, type SelectSceneKit, type SelectSceneOptions } from '../host/select.ts';
-export type { SelectSessionEvents, SelectStartEntry } from '../session/select/select-session.ts';
+export type { SelectCourseMaker, SelectSessionEvents, SelectStartEntry } from '../session/select/select-session.ts';
