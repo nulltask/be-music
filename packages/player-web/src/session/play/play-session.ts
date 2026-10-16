@@ -37,7 +37,7 @@ import {
   supportsLiveTempoChange,
   type ReplayTempo,
 } from '../../runtime/play-tempo.ts';
-import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveBeMusicLongNoteMode } from '../../scene/core/long-note-tracker.ts';
 import {
   DESIGN_HEIGHT,
@@ -86,13 +86,10 @@ const NO_THEME: PlaySessionTheme = {
   stage: () => ({ width: DESIGN_WIDTH, height: DESIGN_HEIGHT }),
 };
 
-/** The options a play session runs with: the play settings, the host's callbacks and the chart it may start from. */
-export type PlaySessionOptions = CoreGameplayViewOptions;
-
 /** The play session. See the module comment. */
 export class PlaySession extends PlaySessionState {
   /**
-   * The play tempo in force ({@link CoreGameplayViewOptions.tempo}, or a replay's recorded one, then every live change):
+   * The play tempo in force ({@link PlaySessionOptions.tempo}, or a replay's recorded one, then every live change):
    * chart seconds per clock second.
    */
   tempo: number;
@@ -473,7 +470,7 @@ export class PlaySession extends PlaySessionState {
    * Ends the play: its input, timers, BGA videos, recording, engine and audio (kept until the tail has rung out after a
    * natural end with `preserveAudioTail`), then the BGA textures, released over the next frames, and the per-song state.
    */
-  public dispose(options: CoreGameplayDisposeOptions = {}): void {
+  public dispose(options: PlayDisposeOptions = {}): void {
     if (this.disposed) return;
     this.disposed = true;
     this.detachInput();
@@ -489,7 +486,7 @@ export class PlaySession extends PlaySessionState {
    * Stops what runs on as the play is disposed: the exit and stage timers, the key flashes, the BGA videos, a
    * recording, the engine, and the audio graph (after its tail with `preserveAudioTail`). The textures stay.
    */
-  private stopPlay(options: CoreGameplayDisposeOptions): void {
+  private stopPlay(options: PlayDisposeOptions): void {
     if (this.exitFadeOutHandle !== undefined) {
       window.clearTimeout(this.exitFadeOutHandle);
       this.exitFadeOutHandle = undefined;
@@ -706,7 +703,7 @@ export class PlaySession extends PlaySessionState {
 
   /**
    * Sets the hi-speed from the host (e.g. a settings menu) during the play. `value` is on the scale of
-   * {@link CoreGameplayViewOptions.initialHiSpeed}: the chart's HS-FIX multiplier is applied on top, as at the start.
+   * {@link PlaySessionOptions.initialHiSpeed}: the chart's HS-FIX multiplier is applied on top, as at the start.
    * Snapped and clamped like the in-game hotkey; non-finite values are ignored.
    */
   public setHiSpeed(value: number): void {

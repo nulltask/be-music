@@ -9,7 +9,7 @@
 import { resolveStageOrientation } from '@be-music/skin-sdk';
 import type { Application, Container, Graphics, Text } from 'pixi.js';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import {
   resolveDesignTextResolution,
   resolveScaledViewport,
@@ -35,7 +35,7 @@ const BE_MUSIC_ENTER_FADE_MS = 400;
 export interface PlayFrameContext extends PlayfieldContext, BgaRendererContext {
   readonly options: Readonly<
     Pick<
-      CoreGameplayViewOptions,
+      PlaySessionOptions,
       'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'bga' | 'autoPlay' | 'nonstop'
     >
   >;

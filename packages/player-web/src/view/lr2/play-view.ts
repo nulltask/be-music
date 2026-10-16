@@ -28,7 +28,7 @@ import { loadAssetBytes, resolveChartImageAsset } from '../../collection/collect
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { Lr2PlayKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../scene/gameplay-constants.ts';
 import { resolveLr2LaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
@@ -89,7 +89,7 @@ export function resolveLr2PlayTiming(skin: Pick<Lr2Skin, 'timing'>): PlayViewTim
 
 /** What the LR2 play view draws with besides its kit: the options of the play that change what is drawn. */
 export type Lr2PlayViewOptions = Pick<
-  CoreGameplayViewOptions,
+  PlaySessionOptions,
   | 'bga'
   | 'bgaSize'
   | 'autoPlay'

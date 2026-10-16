@@ -108,7 +108,7 @@ export class PlaySessionState {
    * sample. The extractor already remaps `3x → 1x` / `4x → 2x` so each entry's `channel` lines up with the playable
    * lane it shares.
    *
-   * Populated only when {@link CoreGameplayViewOptions.showInvisibleNotes} is on — this is a debug visualization, not
+   * Populated only when {@link PlaySessionOptions.showInvisibleNotes} is on — this is a debug visualization, not
    * gameplay state. The renderer paints a thin green bar per entry so the chart author's hidden keysound layout is
    * legible alongside the regular note stream.
    */

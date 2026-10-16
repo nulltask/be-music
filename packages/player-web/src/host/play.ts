@@ -12,7 +12,7 @@ import type { GameplayRecorderResult } from '../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../recording/recording-format.ts';
 import type { AudioBusChannel, CompressorParams, CompressorStage, TunableCompressor } from '../runtime/audio-bus.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
-import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../scene/core/gameplay-options.ts';
+import type { PlayDisposeOptions, PlaySessionOptions } from '../session/play/play-options.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
 import { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import { PlaySession } from '../session/play/play-session.ts';
@@ -38,11 +38,8 @@ export type PlaySceneKit = BuiltInKit | Lr2PlayKit;
  * the debug drawing options.
  */
 export type PlaySceneSettings = Omit<
-  CoreGameplayViewOptions,
-  | 'skinlessChromeRenderer'
-  | 'beMusicSkin'
+  PlaySessionOptions,
   | 'beMusicEffects'
-  | 'beMusicSkinSettings'
   | 'onExit'
   | 'onRestart'
   | 'onChartFinished'
@@ -152,7 +149,7 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void;
   setShowInvisibleNotes(enabled: boolean): void;
   /** Ends the scene; `preserveAudioTail` lets a play that ended ring out before its audio closes. */
-  dispose(options?: CoreGameplayDisposeOptions): void;
+  dispose(options?: PlayDisposeOptions): void;
 }
 
 /** A family's play view, and what the scene and the play session ask of it. */
@@ -362,7 +359,7 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     this.familyView.setShowInvisibleNotes(enabled);
   }
 
-  public override dispose(options: CoreGameplayDisposeOptions = {}): void {
+  public override dispose(options: PlayDisposeOptions = {}): void {
     this.playSession.disposeOptions = options;
     super.dispose();
   }

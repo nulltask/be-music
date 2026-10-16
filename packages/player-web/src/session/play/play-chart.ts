@@ -41,7 +41,7 @@ import {
   type NonstopStageBgaTimeline,
 } from '../../scene/core/gameplay-bga.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from './play-options.ts';
 import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../scene/core/note-draw-window.ts';
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
@@ -63,7 +63,7 @@ import type { HiSpeedTransition } from '../../scene/hi-speed.ts';
 export interface PlayChartContext {
   readonly options: Readonly<
     Pick<
-      CoreGameplayViewOptions,
+      PlaySessionOptions,
       | 'hsFix'
       | 'preResolved'
       | 'hiSpeedLocked'
