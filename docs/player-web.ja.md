@@ -488,7 +488,8 @@ Web のデモは、標準と LR2 のリザルトをすべてこの画面で表�
   - `play-chart.ts`：`prepareSong`、レーンオプション（RANDOM、MIRROR、S-RANDOM、SCATTER、DP FLIP）、リプレイの配置
   - `play-media.ts`：オーディオグラフ、サンプル、BGA のテクスチャと、それらの後片付け
   - `play-engine.ts`：共通エンジンの起動、その UI シグナル、判定とレーンの演出、エンディングの開始
-  - `play-input.ts`：ESC、F5、Space、矢印キー、長押しでの終了、自動一時停止、タッチのレーン。`PLAY_SCENE_KEY_CODES` は、エンジンの Web 入力ランタイムが読み飛ばすキーの一覧です
+  - `play-input.ts`：ESC、F5、Space、矢印キー、長押しでの終了、自動一時停止、タッチのレーン
+  - `play-keys.ts`：`PLAY_SCENE_KEY_CODES`。プレイが自分で扱い、エンジンの Web 入力ランタイムが読み飛ばすキーの一覧です
   - `play-state.ts`：`applyPlayEvent`。プレイの状態を変える唯一の道です
   - `play-view-settings.ts`：ハイスピードのキー、エンジンが従うテンポ、描くとおりのレーンカバー、プレイログの見え方
   - `play-ending.ts`：退出のタイムラインと、結果のスナップショット

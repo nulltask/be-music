@@ -50,7 +50,7 @@ import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import { beginExitSequence, type PlayEndingContext } from './play-ending.ts';
 import { applyPlayEvent } from './play-state.ts';
-import { shouldSkipPlayKey } from './play-input.ts';
+import { shouldSkipPlayKey } from './play-keys.ts';
 import { samplePlaybackRate } from './play-media.ts';
 import {
   flushPlaylogView,

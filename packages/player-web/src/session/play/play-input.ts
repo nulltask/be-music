@@ -11,7 +11,7 @@ import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bu
 import type { Application } from 'pixi.js';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { resolveScaledViewport } from '../../scene/core/viewport.ts';
-import { QUIT_HOLD_KEY_CODE, type QuitHoldController } from '../../scene/quit-hold.ts';
+import type { QuitHoldController } from '../../scene/quit-hold.ts';
 import {
   canvasPointToDesign,
   hitTestTouchLane,
@@ -64,7 +64,7 @@ export function attachPlayInput(ctx: PlayInputContext, host: PixiSceneHost): voi
   // ESC / F5 / Space / ArrowUp / ArrowDown stay on the view so the LR2 `#FADEOUT` exit animation runs to
   // completion BEFORE the engine's interrupt flow disposes the audio session, and so HiSpeed adjustment
   // affects the visual scroll speed (which the engine doesn't own). The WebInputRuntime's `shouldSkipKey`
-  // filter skips this list (`PLAY_SCENE_KEY_CODES`) so it doesn't also push duplicate `interrupt` /
+  // filter skips this list (`PLAY_SCENE_KEY_CODES` in `play-keys.ts`) so it doesn't also push duplicate `interrupt` /
   // `toggle-pause` commands. Lane input goes through the WebInputRuntime's own `keydown` listener to the engine's
   // input bus.
   window.addEventListener('keydown', ctx.handleSharedEngineExitKey);
@@ -349,40 +349,4 @@ export function togglePause(ctx: PlayInputContext): void {
   // `audioContext.suspend()` / `resume()` — those are idempotent when the context is already in the matching
   // state, so the redundant call from the engine side after our own `audioContext.suspend()` above is a no-op.
   ctx.sharedEngineInputSignals?.pushCommand({ kind: 'toggle-pause' });
-}
-
-/**
- * The keys the play scene handles itself ({@link handleSharedEngineExitKey} and the quit hold): ESC, F5, Space,
- * Backspace and the hi-speed arrows. The engine's web input runtime skips them ({@link shouldSkipPlayKey}), so it
- * pushes no `interrupt` / `toggle-pause` of its own.
- */
-export const PLAY_SCENE_KEY_CODES: ReadonlySet<string> = new Set([
-  'Escape',
-  'F5',
-  'Space',
-  QUIT_HOLD_KEY_CODE,
-  'ArrowUp',
-  'ArrowDown',
-]);
-
-/**
- * The `shouldSkipKey` filter of the engine's web input runtime for a play: a key typed into a text field, or one of
- * {@link PLAY_SCENE_KEY_CODES}, is not a lane.
- */
-export function shouldSkipPlayKey(event: KeyboardEvent): boolean {
-  // Suppress lane-input dispatch when the user is typing into a focused text input (search box, etc.).
-  const target = event.target as HTMLElement | null;
-  if (target) {
-    const tag = target.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
-    if (target.isContentEditable === true) return true;
-  }
-  // ESC and F5 are handled by the view's own listener (set up in `enter`) so the LR2 `#FADEOUT` animation
-  // runs to completion BEFORE the engine's `PlayerInterruptedError` flow disposes the audio session. If
-  // we let the runtime push `interrupt(escape)` directly, the engine's `dispose()` would `node.stop()`
-  // every in-flight BufferSource immediately, killing the chart audio mid-fade. Same idea for Space:
-  // routing the toggle through the view's `togglePause` keeps the view's `paused` flag, the audio bus's
-  // suspend, the BGA video pause, and the engine's playback clock all on the same single entry-point.
-  // Backspace is the view's hold-to-quit key (`QuitHoldController`), never a lane.
-  return PLAY_SCENE_KEY_CODES.has(event.code);
 }
