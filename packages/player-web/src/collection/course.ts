@@ -250,6 +250,3 @@ export function drawBrowserRandomCourse(
     },
   };
 }
-
-/** Moved to `@be-music/player/course`; re-exported here for the hosts that import it from the collection. */
-export { applyCourseLongNoteConstraint } from '@be-music/player/course';
