@@ -288,4 +288,26 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       transition.valueAt(1_100);
     },
   });
+
+  // Course view
+  define('scene-model.resolveCourseView', {
+    run: () => {
+      sceneModelApi.resolveCourseView(BENCH_COURSE, 0);
+    },
+  });
+  define('scene-model.createCourseCombo', {
+    run: () => {
+      sceneModelApi.createCourseCombo({ combo: 12, maxCombo: 30 });
+    },
+  });
+  define('scene-model.reduceCourseCombo', {
+    run: () => {
+      sceneModelApi.reduceCourseCombo({ combo: 12, maxCombo: 30, stageCombo: 4 }, 5);
+    },
+  });
+  define('scene-model.advanceCourseCombo', {
+    run: () => {
+      sceneModelApi.advanceCourseCombo({ combo: 12, maxCombo: 30, stageCombo: 4 }, 5);
+    },
+  });
 }

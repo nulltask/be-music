@@ -9,6 +9,7 @@
  *   `restoreBrowse`).
  * - Play options: what the player picks before a play (`PlayOptions`), its defaults, choices and validation, and the
  *   hi-speed range.
+ * - Course view: the course a screen shows (`CourseView`) and the course-wide combo of a stage.
  */
 export * from './library/entries.ts';
 export * from './library/folders.ts';
@@ -24,3 +25,6 @@ export * from './browse/snapshot.ts';
 export * from './play-options/options.ts';
 export * from './play-options/choices.ts';
 export * from './play-options/hi-speed.ts';
+
+export * from './course-view/course-view.ts';
+export * from './course-view/course-combo.ts';
