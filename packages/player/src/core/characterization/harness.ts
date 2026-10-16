@@ -1,6 +1,5 @@
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
-import { autoPlay } from '../auto-play.ts';
-import { manualPlay } from '../manual-play.ts';
+import { autoPlay, manualPlay } from '../play.ts';
 import {
   PlayerInterruptedError,
   type AudioSession,
