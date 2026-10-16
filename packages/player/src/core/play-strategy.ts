@@ -50,8 +50,6 @@ export interface PlayJudge {
  * they are removed one by one.
  */
 export interface StrategyDrifts {
-  /** Starts the chart after the lead-in whatever was sent during it, stopping only at its first tick. */
-  readonly startsChartAfterLeadInEscape: boolean;
   /** Starts the input runtime once the lead-in is over. */
   readonly startsInputRuntimeAfterLeadIn: boolean;
   /**

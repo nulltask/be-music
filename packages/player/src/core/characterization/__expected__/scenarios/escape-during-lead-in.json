@@ -1,7 +1,7 @@
 {
   "manual": {
     "outcome": "completed",
-    "endedAtMs": 500,
+    "endedAtMs": 200,
     "summary": {
       "total": 11,
       "perfect": 0,
@@ -108,7 +108,7 @@
         "gauge": {"type":"NORMAL","final":22,"cleared":false}
       }
     },
-    "audio": ["500.000 start","500.000 dispose"],
+    "audio": ["200.000 dispose"],
     "judges": ["0.000 READY combo=0 gauge=20"],
     "ui": [],
     "frames": {"count":1,"judged":[],"last":"0.000 seconds=0 beat=0"},
@@ -117,16 +117,15 @@
       "0.000 input-runtime create manual",
       "0.000 load-complete",
       "0.000 ui start",
-      "500.000 input-runtime start",
-      "500.000 input-runtime stop",
-      "500.000 ui stop",
-      "500.000 ui dispose"
+      "200.000 input-runtime start",
+      "200.000 input-runtime stop",
+      "200.000 ui stop",
+      "200.000 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"manual\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",
       "0.000 info ui.start {\"mode\":\"manual\"}",
-      "0.000 debug ui.initial-frame.published {\"mode\":\"manual\",\"seconds\":0,\"beat\":0}",
-      "500.000 info audio.start {\"mode\":\"manual\"}"
+      "0.000 debug ui.initial-frame.published {\"mode\":\"manual\",\"seconds\":0,\"beat\":0}"
     ],
     "output": [
       "Audio backend: characterization",
@@ -147,7 +146,7 @@
   },
   "auto": {
     "outcome": "completed",
-    "endedAtMs": 500,
+    "endedAtMs": 200,
     "summary": {
       "total": 11,
       "perfect": 0,
@@ -182,7 +181,7 @@
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
-    "audio": ["500.000 dispose"],
+    "audio": ["200.000 dispose"],
     "judges": ["0.000 READY combo=0 gauge=20"],
     "ui": [],
     "frames": {"count":1,"judged":[],"last":"0.000 seconds=0 beat=0"},
@@ -192,9 +191,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "500.000 input-runtime stop",
-      "500.000 ui stop",
-      "500.000 ui dispose"
+      "200.000 input-runtime stop",
+      "200.000 ui stop",
+      "200.000 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.5}",

@@ -4,7 +4,7 @@ import { createInputWakeUp, type InputWakeUp } from './input-wakeup.ts';
 import {
   createAudioPlaybackClockSource,
   createPlaybackClock,
-  delay,
+  getEngineScheduler,
   PAUSE_POLL_INTERVAL_MS,
   type PlaybackClock,
   REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS,
@@ -61,6 +61,23 @@ function openPlay(session: PlaySession): void {
   emitPlayerLog(options, 'debug', 'ui.initial-frame.published', { mode: strategy.mode, seconds: 0, beat: 0 });
 }
 
+/**
+ * Waits out the lead-in, taking the commands sent during it: an interrupt ends it at once, a tempo or HIGH-SPEED
+ * change sets what the chart starts with, a view change is recorded at the chart's start, a pause holds the chart at
+ * its start, and lane input is dropped (there is nothing to judge yet).
+ */
+async function waitOutLeadIn(session: PlaySession, controls: PlayControls, wakeUp: InputWakeUp): Promise<void> {
+  const scheduler = getEngineScheduler();
+  const endMs = scheduler.now() + session.leadInMs;
+  for (;;) {
+    controls.consume();
+    if (controls.interruptedReason !== undefined) return;
+    const remainingMs = endMs - scheduler.now();
+    if (remainingMs <= 0) return;
+    await waitPreciseOrInput(remainingMs, wakeUp);
+  }
+}
+
 /** Starts the chart's audio and the play clock (chart second 0). */
 function startChart(session: PlaySession): PlaybackClock {
   const { options, strategy, audioSession, uiEnabled } = session;
@@ -91,28 +108,23 @@ export async function runPlayLoop(
   const { drifts } = strategy;
   openPlay(session);
 
-  let wakeUp: InputWakeUp | undefined;
-  const startInput = (): InputWakeUp => {
-    session.inputRuntime?.start();
-    // Event-driven wake-up: the loop's sleep is cut short the moment a command arrives, so a keysound, a lane flash
-    // or a pause lands within ~1 ms instead of at the next 60 Hz tick (the judge timestamp itself comes from
-    // `pressedAt`).
-    return createInputWakeUp(session.inputSignals);
-  };
+  // Event-driven wake-up: the loop's sleep is cut short the moment a command arrives, so a keysound, a lane flash, a
+  // pause or an ESC lands within ~1 ms instead of at the next 60 Hz tick (the judge timestamp itself comes from
+  // `pressedAt`).
+  const wakeUp = createInputWakeUp(session.inputSignals);
   let endedOnFailure = false;
   try {
+    if (!drifts.startsInputRuntimeAfterLeadIn) {
+      session.inputRuntime?.start();
+    }
+    await waitOutLeadIn(session, controls, wakeUp);
     if (drifts.startsInputRuntimeAfterLeadIn) {
-      await delay(session.leadInMs);
-      wakeUp = startInput();
-    } else {
-      wakeUp = startInput();
-      await delay(session.leadInMs);
+      session.inputRuntime?.start();
     }
-    if (!drifts.startsChartAfterLeadInEscape) {
-      controls.consume();
-    }
+    // An ESC (or a restart) during the lead-in ends the play before its chart starts.
     if (controls.interruptedReason === undefined) {
       const clock = startChart(session);
+      controls.chartStarted();
       const loopWakeUp = wakeUp;
 
       // A held play (`holdAfterChart`) runs past its horizon until the host ends it.
@@ -192,7 +204,7 @@ export async function runPlayLoop(
       await finalizeAudioSessionSafely(audioSession);
     }
     session.inputRuntime?.stop();
-    wakeUp?.dispose();
+    wakeUp.dispose();
     await settleMaybeAsyncWithTimeout(session.uiRuntime?.stop(), 300);
     await settleMaybeAsyncWithTimeout(session.uiRuntime?.dispose(), 300);
   }

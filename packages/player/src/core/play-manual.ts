@@ -20,7 +20,6 @@ import type { JudgeStrategy, PlayJudge, StrategyDrifts } from './play-strategy.t
 
 /** Manual play's drifts from the auto driver (see {@link StrategyDrifts}); the replay strategy shares them. */
 export const MANUAL_DRIFTS: StrategyDrifts = {
-  startsChartAfterLeadInEscape: true,
   startsInputRuntimeAfterLeadIn: true,
   horizon: 'lead-in-and-reach',
   closingFrame: false,

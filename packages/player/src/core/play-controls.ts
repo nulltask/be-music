@@ -20,6 +20,8 @@ export interface PlayControls {
   consume(): void;
   /** Applies the replay's recorded tempo changes due by `nowSec`. */
   followReplayTempoChanges(nowSec: number): void;
+  /** The chart has started: applies a pause sent during the lead-in. */
+  chartStarted(): void;
   /** Records the view changes still on the input bus once the loop is over (sent as the play ended). */
   recordPendingViewChanges(): void;
   /** The interrupt the play received, if any. */
@@ -43,7 +45,13 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
   // The chart second a command takes effect at: the play clock's, or the chart's start before it runs.
   const commandSeconds = (): number => (session.clock ? tempoClock.chartSecondsAt(session.clock.nowMs()) : 0);
 
+  // A pause sent during the lead-in holds the chart at its start.
+  let pauseAtStart = false;
   const togglePause = (): void => {
+    if (session.clock === undefined) {
+      pauseAtStart = !pauseAtStart;
+      return;
+    }
     togglePlaybackPause({
       playbackClock: session.clock,
       audioSession,
@@ -140,6 +148,12 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
         if (change.timeUs / 1_000_000 > nowSec) return;
         replayTempoChangeIndex += 1;
         changeTempo(change.tempo);
+      }
+    },
+    chartStarted: () => {
+      if (pauseAtStart) {
+        pauseAtStart = false;
+        togglePause();
       }
     },
     recordPendingViewChanges: () => {

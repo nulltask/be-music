@@ -91,12 +91,16 @@ describe('driver drift', () => {
     ]);
   });
 
-  test('drift: ESC during the lead-in — manualPlay starts the chart and stops at its first tick, autoPlay never starts it', async () => {
+  test('ESC during the lead-in — neither manual nor auto play starts the chart', async () => {
     const play = { chart: basicChart(), script: [escape(200)], options: { leadInMs: 500 } };
     const manual = await observePlay({ ...play, driver: 'manual' });
     const auto = await observePlay({ ...play, driver: 'auto' });
-    expect(manual.audio).toEqual(['500.000 start', '500.000 dispose']);
-    expect(auto.audio).toEqual(['500.000 dispose']);
+    for (const observation of [manual, auto]) {
+      // The play stops at the ESC, before the chart's audio starts, and records an abort at the chart's start.
+      expect(observation.audio).toEqual(['200.000 dispose']);
+      expect(observation.endedAtMs).toBe(200);
+      expect(observation.playlog?.play).toMatchObject({ aborted: true, abortedAtUs: 0 });
+    }
   });
 
   test('drift: autoPlay starts its input runtime before the lead-in, manualPlay after it', async () => {
