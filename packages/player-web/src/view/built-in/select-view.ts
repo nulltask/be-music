@@ -73,7 +73,7 @@ export interface BuiltInSelectViewContext extends SelectReadTextContext {
   readonly launchAt: number | undefined;
   readonly playOptions: PixiPlayOptions;
   renderTheme(designWidth: number, designHeight: number): void;
-  currentEntries(): BrowserBrowseEntry[];
+  currentEntries(): readonly BrowserBrowseEntry[];
   focusedSong(): BrowserSongEntry | undefined;
   focusedCourse(): BrowserCourseEntry | undefined;
   launchFocusedSong(autoPlay: boolean): void;

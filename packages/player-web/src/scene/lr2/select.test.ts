@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { isInsideLr2DefaultSearchBox, PixiSongSelectView } from './select.ts';
-import type { BrowserCourseEntry, BrowserFolderNode } from '../../collection/types.ts';
+import { restoreBrowse } from '@be-music/scene-model';
+import type { SelectSession } from '../../session/select/select-session.ts';
+import { makeCollection, makeCourse, makeCourseFolder } from '../../session/select/test-support.ts';
 
 describe('isInsideLr2DefaultSearchBox', () => {
   it('accepts the LR2 default search-box chrome on the canonical 1280x720 design canvas', () => {
@@ -27,24 +29,17 @@ describe('isInsideLr2DefaultSearchBox', () => {
 
 describe('PixiSongSelectView PLAY / AUTOPLAY buttons', () => {
   it('start the focused course bar (button types 15 / 16)', () => {
-    const dan = {
-      id: 'dan#0',
-      definition: { name: 'Dan', kind: 'grade', stages: [], constraints: [], trophies: [] },
-      stages: [{ title: 'a' }],
-      playable: true,
-    } as unknown as BrowserCourseEntry;
     const started: string[] = [];
     // Not mounted, so nothing renders; the cursor sits on the course bar inside its course folder.
     const view = new PixiSongSelectView({
       onCourseSelected: () => started.push('play'),
       onCourseAutoPlay: () => started.push('auto'),
     }) as unknown as {
-      session: { browseStack: BrowserFolderNode[] };
-      selectedIndex: number;
+      session: SelectSession;
       dispatchButtonClick(button: { type: number }): void;
     };
-    view.session.browseStack = [{ label: 'Dan', songs: [], courses: [dan] }];
-    view.selectedIndex = 0;
+    view.session.collection = makeCollection([], [makeCourseFolder('Dan', [makeCourse('dan#0')])]);
+    view.session.browse = restoreBrowse(view.session.collection, { folderPath: ['Dan'], cursors: [0, 0] }).state;
     view.dispatchButtonClick({ type: 15 });
     view.dispatchButtonClick({ type: 16 });
     expect(started).toEqual(['play', 'auto']);

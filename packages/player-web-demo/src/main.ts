@@ -29,10 +29,10 @@ import {
   type ResultScene,
   type ResultSceneKit,
   type PixiScene,
-  type PixiSongSelectNavigation,
   resolveSceneCourseInfo,
   type SceneCourseInfo,
 } from '@be-music/player-web/scenes';
+import type { BrowseSnapshot } from '@be-music/scene-model';
 import {
   BeatorajaSkinAudioPlayer,
   createBeMusicSkinRegistry,
@@ -746,12 +746,12 @@ class PlayerWebDemoApp {
    * Last-known cursor / folder state of the select view, captured before gameplay so returning to song select restores
    * the user's position.
    */
-  private lastSelectNavigation: PixiSongSelectNavigation | undefined;
+  private lastSelectNavigation: BrowseSnapshot | undefined;
   /**
    * Where the select screen was when a course started. A later stage starts with no select screen up, so the course
    * keeps this to put the cursor back on the course bar once it is over.
    */
-  private courseReturnNavigation: PixiSongSelectNavigation | undefined;
+  private courseReturnNavigation: BrowseSnapshot | undefined;
   /** Whether the status line describes a play or result, which a return to the select screen replaces. */
   private playStatusShown = false;
   /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
