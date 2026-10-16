@@ -17,6 +17,7 @@ export * from './beatoraja/family.ts';
 export * from './beatoraja/fonts.ts';
 export * from './beatoraja/render.ts';
 export * from './beatoraja/runtime-adapter.ts';
+export * from './beatoraja/scene-kit.ts';
 export * from './beatoraja/textures.ts';
 export * from './beatoraja/theme.ts';
 
