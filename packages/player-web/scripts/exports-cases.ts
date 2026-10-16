@@ -20,6 +20,10 @@ const BENCH_AUDIO_CONTEXT = {
   addEventListener: () => undefined,
 } as unknown as BaseAudioContext;
 
+/** One stand-in system context shared by every run, so `masterOutput` keeps one gain for it. */
+const BENCH_SYSTEM_AUDIO_CONTEXT = createFakeSystemAudioContext();
+const BENCH_AUDIO_OWNER = {};
+
 /** Stand-in for `navigator` with an audio session (Node has none), so the session helpers take their applying path. */
 const BENCH_AUDIO_SESSION_HOST: playerWebCoreApi.SystemAudioSessionHost = { audioSession: { type: 'auto' } };
 
@@ -290,6 +294,15 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.computeSha256Hex', {
     run: async () => {
       await playerWebCoreApi.computeSha256Hex(BENCH_BYTES);
+    },
+  });
+  define('player-web.createAudioService', {
+    run: async () => {
+      const service = playerWebCoreApi.createAudioService({ createContext: () => BENCH_SYSTEM_AUDIO_CONTEXT });
+      service.setTheme({ sounds: { cursor: { bytes: BENCH_BYTES } } });
+      await service.playCue('cursor', { owner: BENCH_AUDIO_OWNER });
+      service.stopOwned(BENCH_AUDIO_OWNER);
+      service.dispose();
     },
   });
   define('player-web.createSkinFamilyRegistry', {
@@ -1180,4 +1193,37 @@ function createFakeAudioContext(): AudioContext {
     createGain: () => createFakeAudioNode('gain'),
     createDynamicsCompressor: () => createFakeAudioNode('compressor') as DynamicsCompressorNode,
   } as AudioContext;
+}
+
+/** A stand-in for the audio service's system context: gains, an analyser, buffer sources and a decode. */
+function createFakeSystemAudioContext(): AudioContext {
+  const buffer = makeAudioBufferLike();
+  return {
+    state: 'running',
+    sampleRate: 48_000,
+    currentTime: 0,
+    destination: createFakeAudioNode('destination'),
+    addEventListener: () => undefined,
+    createGain: () => createFakeAudioNode('gain'),
+    createAnalyser: () => ({
+      connect: () => undefined,
+      disconnect: () => undefined,
+      fftSize: 2048,
+      frequencyBinCount: 1024,
+      getByteFrequencyData: () => undefined,
+      getFloatTimeDomainData: () => undefined,
+    }),
+    createBufferSource: () => ({
+      connect: () => undefined,
+      disconnect: () => undefined,
+      buffer: null,
+      loop: false,
+      onended: null,
+      start: () => undefined,
+      stop: () => undefined,
+    }),
+    decodeAudioData: async () => buffer,
+    resume: async () => undefined,
+    close: async () => undefined,
+  } as unknown as AudioContext;
 }
