@@ -41,6 +41,13 @@ describe('laneCoversFromPlayOptions', () => {
   test('clamps the height to the lane', () => {
     const [full] = laneCoversFromPlayOptions({ ...options, shutter: 1.5, hiddenSudden1P: 'SUDDEN' }, ['1P']);
     expect(full!.sudden).toBe(1);
+    const [none] = laneCoversFromPlayOptions({ ...options, shutter: -0.2, hiddenSudden1P: 'HIDDEN' }, ['1P']);
+    expect(resolveLaneCover(none!).hidden).toBe(0);
+  });
+
+  test('covers nothing on a side whose mode is OFF', () => {
+    const [off] = laneCoversFromPlayOptions({ ...options, hiddenSudden1P: 'OFF' }, ['1P']);
+    expect(resolveLaneCover(off!)).toEqual({ side: '1P', sudden: 0, hidden: 0, lift: 0 });
   });
 });
 
