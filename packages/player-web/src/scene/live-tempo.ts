@@ -10,13 +10,16 @@ type TempoCommandSink = { pushCommand: (command: PlayerInputCommand) => void };
  * none.
  */
 export class LiveTempo {
+  public tempo: number;
+  private readonly enabled: boolean;
   private pending: number | undefined;
   private signals: TempoCommandSink | undefined;
 
-  public constructor(
-    public tempo: number,
-    private readonly enabled = true,
-  ) {}
+  // Plain fields, not parameter properties: Node's type stripping (which `pnpm bench` runs on) rejects those.
+  public constructor(tempo: number, enabled = true) {
+    this.tempo = tempo;
+    this.enabled = enabled;
+  }
 
   /** Asks the engine for `tempo` (clamped by `clampPlayTempo`). Returns whether the change was taken. */
   public request(tempo: number): boolean {
