@@ -1,6 +1,7 @@
 import { BEATORAJA_OP } from '@be-music/beatoraja-skin';
 import { describe, expect, test } from 'vite-plus/test';
-import { beatorajaClearLampOp, resolveClearLamp } from './clear-lamp.ts';
+import { resolveClearLamp } from '@be-music/player/ruleset';
+import { beatorajaClearLampOp } from './clear-lamp.ts';
 
 describe('beatorajaClearLampOp', () => {
   test('maps every lamp onto its beatoraja op', () => {
