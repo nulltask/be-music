@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import type { SceneIdentity } from '../host/family-kit.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
-import { PixiBeatorajaDecideScene } from './beatoraja/decide.ts';
 import { PixiBeatorajaSelectScene } from './beatoraja/select.ts';
 import { CoreGameplayView } from './core/gameplay.ts';
 import { CoreSongSelectView } from './core/select.ts';
@@ -275,7 +274,7 @@ describe('scene identities', () => {
     expect(identity).toEqual(expected);
   });
 
-  it('names the beatoraja select and decide scenes', () => {
+  it('names the beatoraja select scene', () => {
     const skin: BeatorajaSkin = { type: 5, w: 1280, h: 720, image: [], destination: [] };
     const empty = new Map<number | string, Texture>();
     const textures: BeatorajaTextureCache = {
@@ -284,13 +283,10 @@ describe('scene identities', () => {
       pathOf: () => undefined,
     };
     const select = new PixiBeatorajaSelectScene({ skin, textures, songs: [], onSongPicked: () => undefined });
-    const decide = new PixiBeatorajaDecideScene({ skin, textures });
     try {
       expect(select.identity).toEqual({ kind: 'select', family: 'beatoraja' });
-      expect(decide.identity).toEqual({ kind: 'decide', family: 'beatoraja' });
     } finally {
       select.dispose();
-      decide.dispose();
     }
   });
 });

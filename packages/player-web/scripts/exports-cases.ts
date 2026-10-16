@@ -1002,14 +1002,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.pickBeatorajaPlayableVariant({ keys: 9, isDouble: false, isPms: true });
     },
   });
-  define('player-web.PixiBeatorajaDecideScene', {
-    run: () => {
-      new playerWebCoreApi.PixiBeatorajaDecideScene(
-        {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaDecideScene>[0],
-      );
-    },
-    interactive: true,
-  });
   define('player-web.PixiBeatorajaGameplayView', {
     run: () => {
       new playerWebCoreApi.PixiBeatorajaGameplayView(
