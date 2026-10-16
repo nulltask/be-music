@@ -1,12 +1,11 @@
-import type { ClearLamp } from './lamp.ts';
-
 /** One player's personal bests on one chart, ruleset and assist class (a `best_scores` row). */
 export interface BestScores {
   bestEx: number;
   bestExScoreId: string;
   /** When the best EX score was first reached — orders tied players (earlier first). */
   bestExAt: number;
-  bestLamp: ClearLamp;
+  /** The best clear lamp, by its rank (`clearLampRank` of `@be-music/player/ruleset`). */
+  bestLamp: number;
   bestLampScoreId: string;
   minMiss: number;
   minMissScoreId: string;
@@ -19,7 +18,8 @@ export interface PlayFigures {
   /** When the play was accepted, in epoch milliseconds. */
   playedAt: number;
   exScore: number;
-  lamp: ClearLamp;
+  /** The play's clear lamp, by its rank (`clearLampRank`). */
+  lamp: number;
   missCount: number;
 }
 

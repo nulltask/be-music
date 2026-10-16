@@ -22,6 +22,8 @@ interface SongOverrides {
 
 interface ResultOverrides extends SongOverrides {
   cleared?: boolean;
+  lamp?: PixiGameplayResultData['lamp'];
+  perfect?: number;
   exScore?: number;
   total?: number;
   bad?: number;
@@ -56,7 +58,7 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
     cleared: overrides.cleared ?? true,
     score: {
       total,
-      perfect: 0,
+      perfect: overrides.perfect ?? 0,
       great: 0,
       good: 0,
       bad: overrides.bad ?? 0,
@@ -82,6 +84,7 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
     },
     gaugeHistory: [],
     scoreHistory: [],
+    ...(overrides.lamp !== undefined ? { lamp: overrides.lamp } : {}),
   };
 }
 
@@ -134,9 +137,23 @@ describe('computeResultOps', () => {
   });
 
   // -- Clear lamp (op 101..105) ------------------------------------- The lamp determines which "STAGE CLEARED" /
-  // "FAILED" / "FULL COMBO" graphic shows. The branching priority is: 1. failed (gauge < 80) 2. full combo (cleared AND
-  // zero BAD/POOR) 3. normal (otherwise)
+  // "FAILED" / "FULL COMBO" graphic shows: the play's lamp on LR2's lamps, else the clear-lamp rule over the result.
   describe('clear lamp', () => {
+    it('lights the play’s lamp on LR2’s lamps', () => {
+      const lampOp = (lamp: NonNullable<PixiGameplayResultData['lamp']>) =>
+        [...computeResultOps(makeResult({ cleared: lamp !== 'FAILED', bad: 1, lamp }), makeSkin())].filter(
+          (op) => op >= RESULT_DYNAMIC_OPS.LAMP_FAILED && op <= RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO,
+        );
+      expect(lampOp('FAILED')).toEqual([RESULT_DYNAMIC_OPS.LAMP_FAILED]);
+      expect(lampOp('ASSIST_EASY')).toEqual([RESULT_DYNAMIC_OPS.LAMP_EASY]);
+      expect(lampOp('EASY')).toEqual([RESULT_DYNAMIC_OPS.LAMP_EASY]);
+      expect(lampOp('NORMAL')).toEqual([RESULT_DYNAMIC_OPS.LAMP_NORMAL]);
+      expect(lampOp('HARD')).toEqual([RESULT_DYNAMIC_OPS.LAMP_HARD]);
+      expect(lampOp('EX_HARD')).toEqual([RESULT_DYNAMIC_OPS.LAMP_HARD]);
+      expect(lampOp('FULL_COMBO')).toEqual([RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO]);
+      expect(lampOp('MAX')).toEqual([RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO]);
+    });
+
     it('selects FAILED lamp when not cleared', () => {
       const ops = computeResultOps(makeResult({ cleared: false }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_FAILED)).toBe(true);
@@ -144,7 +161,7 @@ describe('computeResultOps', () => {
     });
 
     it('selects FULL COMBO lamp when cleared with zero BAD/POOR', () => {
-      const ops = computeResultOps(makeResult({ cleared: true, bad: 0, poor: 0, total: 50 }), makeSkin());
+      const ops = computeResultOps(makeResult({ cleared: true, bad: 0, poor: 0, perfect: 50, total: 50 }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO)).toBe(true);
       expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_NORMAL)).toBe(false);
     });

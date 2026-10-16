@@ -1,4 +1,4 @@
-import type { GrooveGaugeType } from '../core/groove-gauge.ts';
+import type { GaugeType } from '../ruleset/gauge-type.ts';
 import type { PlaylogCourseStage } from '../playlog/format.ts';
 import type { CourseConstraint, CourseDefinition } from './definition.ts';
 
@@ -76,7 +76,7 @@ export function isLr2GradeCourse(definition: Pick<CourseDefinition, 'kind' | 'so
 
 /** The play settings LR2 resets when a GRADE course starts. */
 export interface Lr2GradeResetSettings {
-  gauge: GrooveGaugeType;
+  gauge: GaugeType;
   /** Each side's lane cover, as the select screen names it. */
   hiddenSudden1P: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
   hiddenSudden2P: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';

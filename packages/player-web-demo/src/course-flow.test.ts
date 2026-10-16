@@ -6,7 +6,6 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   activeCourseInfo,
   courseDecideSong,
-  courseRecordPlay,
   courseStageHistories,
   describeNonstopPrepareFailure,
   describeRandomCourseDrawFailure,
@@ -58,12 +57,17 @@ const RESULT: PlaylogCourseResult = {
   stagesPlayed: 1,
 } as PlaylogCourseResult;
 
-function courseLog(play: {
-  mode?: 'auto' | 'manual';
-  tempo?: number;
-}): Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'> {
+function courseLog(
+  play: {
+    mode?: 'auto' | 'manual';
+    tempo?: number;
+    judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  },
+  second?: { judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx' },
+): Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'> {
+  const stage = (stagePlay: object) => ({ played: true, playlog: { play: { mode: 'manual', ...stagePlay } } });
   return {
-    stages: [{ played: true, playlog: { play: { mode: play.mode ?? 'manual', ...play } } }],
+    stages: second === undefined ? [stage(play)] : [stage(play), stage(second)],
   } as unknown as Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>;
 }
 
@@ -128,12 +132,19 @@ describe('failure messages', () => {
 });
 
 describe('resolveCourseRecordUpdate', () => {
-  test('keeps the run’s lamp, EX score, max combo and BP under the course key', () => {
+  test('keeps the run’s lamp, EX score, max combo and BP under the course key of its judge ruleset', () => {
     expect(resolveCourseRecordUpdate(courseLog({}), RESULT, 'course:k')).toEqual({
-      key: 'course:k',
-      play: courseRecordPlay(RESULT),
+      key: 'lr2:course:k',
+      play: { lamp: 'NORMAL', exScore: 22, maxCombo: 9, missCount: 3 },
     });
-    expect(courseRecordPlay(RESULT)).toEqual({ lamp: 'NORMAL', exScore: 22, maxCombo: 9, missCount: 3 });
+    expect(resolveCourseRecordUpdate(courseLog({ judgeRuleset: 'beatoraja' }), RESULT, 'course:k')?.key).toBe(
+      'beatoraja:course:k',
+    );
+  });
+
+  test('keeps nothing for a run whose stages were judged under different rulesets', () => {
+    const mixed = courseLog({ judgeRuleset: 'lr2' }, { judgeRuleset: 'iidx' });
+    expect(resolveCourseRecordUpdate(mixed, RESULT, 'course:k')).toBeUndefined();
   });
 
   test('keeps nothing for an auto-played run or one at another tempo', () => {

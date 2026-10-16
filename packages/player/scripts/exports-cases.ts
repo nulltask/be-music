@@ -4,6 +4,8 @@ import * as playerApi from '@be-music/player';
 import * as courseApi from '@be-music/player/course';
 import * as judgingApi from '@be-music/player/judging';
 import * as playlogApi from '@be-music/player/playlog';
+import * as recordsApi from '@be-music/player/records';
+import * as rulesetApi from '@be-music/player/ruleset';
 import type { PlayerOptions } from '@be-music/player';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -716,9 +718,151 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.parseCoursePlaylog(benchCourseText);
     },
   });
+  const benchLampScore = { total: 100, perfect: 90, great: 8, good: 2 };
+  const benchRecordPlay = { lamp: 'HARD' as const, exScore: 1500, maxCombo: 400, missCount: 12 };
+  const benchRecord = { lamp: 'EASY' as const, exScore: 1400, maxCombo: 500, missCount: 20, playCount: 3 };
+  const benchRecordResult = {
+    lamp: 'HARD' as const,
+    cleared: true,
+    maxCombo: 400,
+    score: { total: 1000, perfect: 600, great: 300, good: 60, bad: 20, poor: 10, emptyPoor: 5, exScore: 1500 },
+  };
+  const benchRecordSummary = {
+    ...benchRecordResult.score,
+    gauge: { type: 'HARD', current: 40, max: 100, clearThreshold: 0, initial: 100, effectiveTotal: 300, cleared: true },
+  };
+  const benchRecordKind = { autoPlay: false, replay: false, course: false, tempo: 1 };
+  define('player.records.mergeBestRecord', {
+    run: () => {
+      recordsApi.mergeBestRecord(benchRecord, benchRecordPlay);
+    },
+  });
+  define('player.records.mergeCourseStageRecord', {
+    run: () => {
+      recordsApi.mergeCourseStageRecord(benchRecord, benchRecordPlay);
+    },
+  });
+  define('player.records.recordPlayFromResult', {
+    run: () => {
+      recordsApi.recordPlayFromResult(benchRecordResult);
+    },
+  });
+  define('player.records.recordPlayFromSummary', {
+    run: () => {
+      recordsApi.recordPlayFromSummary(benchRecordSummary, 400, 'lr2');
+    },
+  });
+  define('player.records.courseStageRecordPlayFromResult', {
+    run: () => {
+      recordsApi.courseStageRecordPlayFromResult(benchRecordResult);
+    },
+  });
+  define('player.records.courseStageRecordPlayFromSummary', {
+    run: () => {
+      recordsApi.courseStageRecordPlayFromSummary(benchRecordSummary, 400, 'lr2');
+    },
+  });
+  define('player.records.courseRunRecordPlay', {
+    run: () => {
+      recordsApi.courseRunRecordPlay(benchRecordPlay);
+    },
+  });
+  define('player.records.playKeepsRecord', {
+    run: () => {
+      recordsApi.playKeepsRecord(benchRecordKind);
+    },
+  });
+  define('player.records.courseStageKeepsRecord', {
+    run: () => {
+      recordsApi.courseStageKeepsRecord(benchRecordKind);
+    },
+  });
+  define('player.records.isCourseRunAtAnotherTempo', {
+    run: () => {
+      recordsApi.isCourseRunAtAnotherTempo(benchCourseLog);
+    },
+  });
+  define('player.records.isCourseRunAutoPlayed', {
+    run: () => {
+      recordsApi.isCourseRunAutoPlayed(benchCourseLog);
+    },
+  });
+  define('player.records.courseRunKeepsRecord', {
+    run: () => {
+      recordsApi.courseRunKeepsRecord(benchCourseLog);
+    },
+  });
+  define('player.ruleset.isClearLamp', {
+    run: () => {
+      rulesetApi.isClearLamp('EX_HARD');
+    },
+  });
+  define('player.ruleset.clearLampRank', {
+    run: () => {
+      rulesetApi.clearLampRank('FULL_COMBO');
+    },
+  });
+  define('player.ruleset.clearLampAtRank', {
+    run: () => {
+      rulesetApi.clearLampAtRank(7);
+    },
+  });
+  define('player.ruleset.betterClearLamp', {
+    run: () => {
+      rulesetApi.betterClearLamp('HARD', 'FULL_COMBO');
+    },
+  });
+  define('player.ruleset.topClearLamp', {
+    run: () => {
+      rulesetApi.topClearLamp('lr2');
+    },
+  });
+  define('player.ruleset.isFullCombo', {
+    run: () => {
+      rulesetApi.isFullCombo(benchLampScore);
+    },
+  });
+  define('player.ruleset.resolveClearLamp', {
+    run: () => {
+      rulesetApi.resolveClearLamp({ ruleset: 'beatoraja', cleared: true, gauge: 'HARD', score: benchLampScore });
+    },
+  });
+  define('player.ruleset.resolveCourseClearLamp', {
+    run: () => {
+      rulesetApi.resolveCourseClearLamp({
+        ruleset: 'lr2',
+        cleared: true,
+        gauge: 'GRADE-HARD',
+        gaugeType: 'HARD',
+        noteCount: 1000,
+        maxCombo: 400,
+        judge: { great: 120, good: 12 },
+      });
+    },
+  });
+  define('player.ruleset.resolveMissCount', {
+    run: () => {
+      rulesetApi.resolveMissCount({ bad: 3, poor: 5, emptyPoor: 2 }, 10);
+    },
+  });
+  define('player.ruleset.isGaugeType', {
+    run: () => {
+      rulesetApi.isGaugeType('DEATH');
+    },
+  });
   define('player.playlog.resolveCourseLamp', {
     run: () => {
       playlogApi.resolveCourseLamp('beatoraja', benchStageResult, 'GROOVE');
+    },
+  });
+  define('player.playlog.resolveCoursePlayedRuleset', {
+    run: () => {
+      playlogApi.resolveCoursePlayedRuleset(benchCourseLog);
+    },
+  });
+  define('player.playlog.resolveRulesetResultLamp', {
+    run: () => {
+      playlogApi.resolveRulesetResultLamp(benchStageResult, 'lr2');
     },
   });
   define('player.playlog.resolveCoursePlaylogFilename', {

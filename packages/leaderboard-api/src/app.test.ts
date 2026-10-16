@@ -16,7 +16,7 @@ import { bestScore, score } from './db/schema.ts';
 import { loadChartFiles, loadPlayRanking } from './ranking-plays.ts';
 import { backfillPlayedFiles } from './scores/backfill.ts';
 import type { Env } from './env.ts';
-import { ClearLamp } from './scoring/lamp.ts';
+import { clearLampRank } from '@be-music/player/ruleset';
 
 // Tests never reach BMS Search: a submission's background chartset lookup finds nothing.
 const noChartsets = async () => undefined;
@@ -127,8 +127,8 @@ describe('POST /api/v0/scores', () => {
       expect(result.rank).toBe(1);
       expect(result.rulesetRevision).toMatch(/\/0$/);
     }
-    expect(body.results.find((result) => result.ruleset === 'beatoraja')?.clearLamp).toBe(ClearLamp.MAX);
-    expect(body.results.find((result) => result.ruleset === 'lr2')?.clearLamp).toBe(ClearLamp.FULL_COMBO);
+    expect(body.results.find((result) => result.ruleset === 'beatoraja')?.clearLamp).toBe(clearLampRank('MAX'));
+    expect(body.results.find((result) => result.ruleset === 'lr2')?.clearLamp).toBe(clearLampRank('FULL_COMBO'));
 
     // The play log and the chart document are stored in R2.
     const stored = await env.BLOBS.get(`playlogs/${body.scoreId}.bmplay.json.gz`);

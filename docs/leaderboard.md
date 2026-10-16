@@ -234,6 +234,7 @@ turning a play document's positions and timeline into note times that match the 
   emptied) are stored and count as plays.
 - **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear (LR2body.exe `CheckClear`);
   beatoraja and IIDX give DEATH (`HAZARD`) an EX HARD lamp. Every ruleset counts empty POORs in BP, LR2 included. Migration `0012` rewrote the `lr2` results stored before this rule.
+  The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` in `@be-music/player/playlog`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
   play that was not aborted, cleared or not.

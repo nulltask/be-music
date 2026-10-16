@@ -11,7 +11,7 @@ import { createApp } from './app.ts';
 import { openDatabase } from './db/client.ts';
 import { course, courseScore } from './db/schema.ts';
 import type { Env } from './env.ts';
-import { ClearLamp } from './scoring/lamp.ts';
+import { clearLampRank } from '@be-music/player/ruleset';
 
 let env: Env;
 let dispose: () => Promise<void>;
@@ -147,7 +147,7 @@ describe('POST /api/v0/course-scores with a NONSTOP run', () => {
     const lr2 = body.results.find((result) => result.ruleset === 'lr2')!;
     // Three notes, then two notes and a long note.
     expect(lr2).toMatchObject({ noteCount: 6, exScore: 12, stagesPlayed: 2 });
-    expect(lr2.clearLamp).toBeGreaterThanOrEqual(ClearLamp.FULL_COMBO);
+    expect(lr2.clearLamp).toBeGreaterThanOrEqual(clearLampRank('FULL_COMBO'));
 
     const db = openDatabase(env.DB);
     const stored = await db.query.course.findFirst({ where: eq(course.courseFingerprint, body.courseFingerprint) });
@@ -165,7 +165,7 @@ describe('POST /api/v0/course-scores with a NONSTOP run', () => {
     expect(response.status).toBe(201);
     const lr2 = ((await response.json()) as Outcome).results.find((result) => result.ruleset === 'lr2')!;
     // Given up after the first note: the five notes it never played count, and the second stage was never reached.
-    expect(lr2).toMatchObject({ clearLamp: ClearLamp.FAILED, noteCount: 6, missCount: 5, stagesPlayed: 1 });
+    expect(lr2).toMatchObject({ clearLamp: clearLampRank('FAILED'), noteCount: 6, missCount: 5, stagesPlayed: 1 });
   });
 
   test('refuses stage charts or a stage map that do not rebuild the stitched play', async () => {

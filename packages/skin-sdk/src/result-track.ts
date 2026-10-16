@@ -1,3 +1,4 @@
+import { resolveClearLamp } from '@be-music/player/ruleset';
 import type { BeMusicResultData } from './result-data.ts';
 import { formatPlayVariantLabel } from './song-stats.ts';
 
@@ -7,12 +8,16 @@ import { formatPlayVariantLabel } from './song-stats.ts';
  */
 export type ResultLamp = 'PERFECT' | 'FULL COMBO' | 'CLEAR' | 'FAILED';
 
+/**
+ * The result track's label for the play's clear lamp, by the one clear-lamp rule (`resolveClearLamp` of
+ * `@be-music/player/ruleset`) on beatoraja's full set of lamps: MAX reads `PERFECT`, a PERFECT or FULL COMBO lamp
+ * `FULL COMBO`, and any other clear `CLEAR`.
+ */
 export function resolveResultLamp(result: Pick<BeMusicResultData, 'score' | 'cleared'>): ResultLamp {
-  const { score } = result;
-  if (!result.cleared) return 'FAILED';
-  if (score.total <= 0) return 'CLEAR';
-  if (score.bad + score.poor > 0) return 'CLEAR';
-  return score.perfect >= score.total ? 'PERFECT' : 'FULL COMBO';
+  const lamp = resolveClearLamp({ cleared: result.cleared, score: result.score });
+  if (lamp === 'FAILED') return 'FAILED';
+  if (lamp === 'MAX') return 'PERFECT';
+  return lamp === 'PERFECT' || lamp === 'FULL_COMBO' ? 'FULL COMBO' : 'CLEAR';
 }
 
 /** The headline a result screen leads with. */

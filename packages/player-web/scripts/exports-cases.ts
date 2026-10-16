@@ -893,15 +893,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.recordingFileExtension('video/mp4;codecs=avc1,mp4a.40.2');
     },
   });
-  define('player-web.resolveClearLamp', {
-    run: () => {
-      playerWebCoreApi.resolveClearLamp({
-        cleared: true,
-        score: { total: 100, perfect: 90, great: 10, good: 0 },
-        gaugeType: 'HARD',
-      });
-    },
-  });
   define('player-web.beatorajaClearLampOp', {
     run: () => {
       playerWebCoreApi.beatorajaClearLampOp('FULL_COMBO');

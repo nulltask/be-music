@@ -18,6 +18,7 @@ import type {
   Lr2SpecialGraphic,
   Lr2TextElement,
 } from '@be-music/lr2-skin';
+import { GAUGE_TYPES } from '@be-music/player/ruleset';
 import {
   applyDestinationToSprite,
   containerSpriteSink,
@@ -77,7 +78,6 @@ import {
   DEFAULT_PLAY_OPTIONS,
   DIFFICULTY_FILTER_BY_DIRECT_BUTTON,
   DIFFICULTY_FILTER_CYCLE,
-  GAUGE_CYCLE,
   HIDDEN_SUDDEN_CYCLE,
   HISPEED_MAX,
   HISPEED_MIN,
@@ -100,7 +100,6 @@ export {
   type PixiBgaMode,
   type PixiBgaSize,
   type PixiDifficultyFilter,
-  type PixiGaugeType,
   type PixiHiddenSudden,
   type PixiHsFix,
   type PixiKeysFilter,
@@ -584,11 +583,11 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     }
     // Gauge type cycle (button_type 40 = 1P, 41 = 2P).
     if (type === 40) {
-      this.cyclePlayOption('gauge1P', GAUGE_CYCLE);
+      this.cyclePlayOption('gauge1P', GAUGE_TYPES);
       return;
     }
     if (type === 41) {
-      this.cyclePlayOption('gauge2P', GAUGE_CYCLE);
+      this.cyclePlayOption('gauge2P', GAUGE_TYPES);
       return;
     }
     // PLAY / AUTOPLAY on a course bar start the course, as the built-in scene's PLAY / AUTO do.
@@ -1825,11 +1824,11 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
     // RANDOM 2P.
     stateIndex = RANDOM_CYCLE.indexOf(playOptions.random2P);
   } else if (type === 40) {
-    // Gauge 1P: cells follow {@link GAUGE_CYCLE} order.
-    stateIndex = GAUGE_CYCLE.indexOf(playOptions.gauge1P);
+    // Gauge 1P: cells follow {@link GAUGE_TYPES} order.
+    stateIndex = GAUGE_TYPES.indexOf(playOptions.gauge1P);
   } else if (type === 41) {
     // Gauge 2P.
-    stateIndex = GAUGE_CYCLE.indexOf(playOptions.gauge2P);
+    stateIndex = GAUGE_TYPES.indexOf(playOptions.gauge2P);
   } else if (type >= 91 && type <= 96) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive / active depending on whether this button's specific
     // difficulty matches the live filter. Skins typically use these as separate "lit when selected" plates.

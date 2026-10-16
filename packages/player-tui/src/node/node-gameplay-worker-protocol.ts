@@ -10,7 +10,7 @@ import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals
 import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
 import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
 import type { JudgeWindowRuleset } from '@be-music/player/core/judge-window';
-import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
+import type { GaugeType } from '@be-music/player/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
   inferBmsLnTypeWhenMissing?: boolean;
@@ -32,7 +32,7 @@ export interface NodeGameplayWorkerPlayOptions {
   highSpeed?: number;
   judgeWindowMs?: number;
   judgeRuleset?: JudgeWindowRuleset;
-  gauge?: GrooveGaugeType;
+  gauge?: GaugeType;
   debugActiveAudio?: boolean;
   leadInMs?: number;
   audio?: boolean;

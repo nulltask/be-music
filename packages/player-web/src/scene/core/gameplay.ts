@@ -29,7 +29,7 @@ import {
   type PlayerTempoChange,
   type TempoClock,
 } from '@be-music/player/core/engine';
-import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
+import { resolveClearLamp, type GaugeType } from '@be-music/player/ruleset';
 import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
 import { type ChartPlayVariant, resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
@@ -91,7 +91,6 @@ import {
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../../recording/recording-format.ts';
-import { resolveClearLamp } from './clear-lamp.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
 import { JudgeTimingLog } from './judge-timing-log.ts';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
@@ -585,7 +584,7 @@ export interface CoreGameplayViewOptions {
    * the gauge-on-red-branch op flags (43 / 45). 2P-side gauge isn't yet separately wired — the engine
    * consumes the 1P value and applies it to the single shared gauge.
    */
-  gauge?: 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
+  gauge?: GaugeType;
   /**
    * The play is one stage of a course (`PlayerOptions.course`): it runs on the ruleset's course gauge, from the state the
    * previous stage left. Recorded into the play log, which then replays on its own.
@@ -2616,7 +2615,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * The gauge this run actually plays on. A replay restores the recorded pick so the played-back run judges, drains,
    * and clears exactly as the original did; otherwise it is the host's selection, defaulting to LR2 GROOVE.
    */
-  protected resolveSelectedGauge(): GrooveGaugeType {
+  protected resolveSelectedGauge(): GaugeType {
     return this.options.replay?.play.gauge ?? this.options.gauge ?? 'GROOVE';
   }
 
@@ -3564,7 +3563,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       lamp: resolveClearLamp({
         cleared: this.gaugeState.cleared,
         score: this.score,
-        gaugeType: this.gaugeState.type,
+        ...(this.gaugeState.type !== undefined ? { gauge: this.gaugeState.type } : {}),
         ruleset: this.resolveJudgeRuleset(),
       }),
       gaugeType: this.gaugeState.type,

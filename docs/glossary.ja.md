@@ -110,8 +110,10 @@
 - **投げ（give up）**: コースの実行を ESC で抜けること。投げた実行は落ちた実行です。
 - **結合したプレイ（stitched play）**: NONSTOP のコースを遊ぶ 1 本の譜面。ステージをつなぎ方と配置に従って結合して作ります。
 - **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`iidx`。
-- **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX）。判定ルールセットごとに付く範囲が違います。
-- **自己ベスト（best record）**: 1 つの判定ルールセットで、譜面またはコースについてプレイヤーが持つ最良のクリアランプ・EX-SCORE・最大コンボ・BP。
+- **ゲージの種類（gauge type）**: プレイヤーが選ぶゲージ。LR2 の名前で `GROOVE`・`HARD`・`DEATH`・`EASY`（`GaugeType`）。判定ルールセットはそれぞれ自分のゲージで遊ばせ、そのゲージはゲージ ID（`NORMAL`・`HAZARD`・`CLASS` など）で呼びます。
+- **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
+- **BP**: ミスの数。BAD・POOR・空 POOR に、コースでは判定されなかったノートを加えたもの（`resolveMissCount`）。
+- **自己ベスト（best record）**: 1 つの判定ルールセットで、譜面またはコースについてプレイヤーが持つ最良のクリアランプ・EX-SCORE・最大コンボ・BP（`BestRecord`。`@be-music/player/records` の規則で保ちます）。
 - **表示設定（view settings）**: 判定とは別に、プレイヤーが見ていたもの。ハイスピード、ハイスピード固定、表示時間、各サイドの SUDDEN+・HIDDEN+・LIFT です。_避ける語_: display options。
 - **プレイテンポ（play tempo）**: 譜面に対してプレイがどれだけ速く進むか（`speed`）。テンポを変えたプレイは練習扱いです。
 

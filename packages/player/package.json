@@ -30,6 +30,16 @@
       "types": "./dist/playlog.d.ts",
       "default": "./dist/playlog.js"
     },
+    "./records": {
+      "source": "./src/records/index.ts",
+      "types": "./dist/records.d.ts",
+      "default": "./dist/records.js"
+    },
+    "./ruleset": {
+      "source": "./src/ruleset/vocabulary.ts",
+      "types": "./dist/ruleset.d.ts",
+      "default": "./dist/ruleset.js"
+    },
     "./audio-sink": {
       "source": "./src/audio-sink.ts",
       "types": "./dist/audio-sink.d.ts",
@@ -54,11 +64,6 @@
       "source": "./src/utils.ts",
       "types": "./dist/utils.d.ts",
       "default": "./dist/utils.js"
-    },
-    "./core/groove-gauge": {
-      "source": "./src/core/groove-gauge.ts",
-      "types": "./dist/core/groove-gauge.d.ts",
-      "default": "./dist/core/groove-gauge.js"
     },
     "./core/bga-timeline": {
       "source": "./src/core/bga-timeline.ts",
