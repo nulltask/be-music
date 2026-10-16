@@ -214,6 +214,7 @@ import type {
   GameplayMeasureLineFrame,
   GameplayStageSize,
   GameplayThemeEvent,
+  GameplayThemeHooks,
   GameplayThemeNoteCell,
   GameplayThemeNoteKind,
   GameplayThemeTiming,
@@ -619,9 +620,10 @@ export interface CoreGameplayDisposeOptions {
  * `renderThemeMeasureLines`, `renderThemeText`, `renderBombEffects`, `themeTiming`, `onThemeEvent`, … — each of which
  * defaults to the skinless behaviour, so the class paints a complete scene on its own.
  *
- * The play's parts live in their own modules (`session/play/*`), which take the scene as their context and read and
- * write its state through their own interfaces (`PlayChartContext`, …). That state has no `private` / `protected`
- * modifier so the scene satisfies those interfaces; it is not part of the scene's API.
+ * The play's parts live in their own modules (`session/play/*`, `view/shared/*`, `view/built-in/*`), which take the
+ * scene as their context and read and write its state through their own interfaces (`PlayChartContext`,
+ * `PlayfieldContext`, …). That state has no `private` / `protected` modifier so the scene satisfies those interfaces;
+ * it is not part of the scene's API. The theme hooks stay `protected`; the modules call them through {@link theme}.
  */
 export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGameplayViewOptions> implements PixiScene {
   /**
@@ -676,14 +678,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   protected readonly bgaLayer: Container = new Container();
   protected readonly skinLayer: Container = new Container();
-  private readonly laneLayer = new Graphics();
+  readonly laneLayer = new Graphics();
   private readonly noteLayer = new Container();
   /**
    * Shutter mask layer. Sits above `noteLayer` so the dark rectangles drawn here cover the scrolling notes underneath
    * but stay below the judgement-line / HUD overlays. Cleared and redrawn every frame from `playOptions.hiddenSudden` +
    * `playOptions.shutter`.
    */
-  private readonly shutterLayer = new Graphics();
+  readonly shutterLayer = new Graphics();
   private readonly bombLayer = new Container();
   /**
    * Sits above `noteLayer` / `bombLayer` and below `textLayer`. Holds the chrome that should visually punch through the
@@ -701,13 +703,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `pool.end()` to hide whatever the pass didn't use. `dispose()` calls `pool.destroy()` to free the underlying
    * children when the view tears down.
    */
-  protected readonly noteLayerPool: ChildPool = new ChildPool(this.noteLayer);
+  readonly noteLayerPool: ChildPool = new ChildPool(this.noteLayer);
   protected skinLayerPool: ChildPool = new ChildPool(this.skinLayer);
   protected overlayLayerPool: ChildPool = new ChildPool(this.overlayLayer);
-  protected readonly textLayerPool: ChildPool = new ChildPool(this.textLayer);
-  protected readonly bombLayerPool: ChildPool = new ChildPool(this.bombLayer);
-  private readonly bgaLayerPool = new ChildPool(this.bgaLayer);
-  private readonly overlay = new Text({
+  readonly textLayerPool: ChildPool = new ChildPool(this.textLayer);
+  readonly bombLayerPool: ChildPool = new ChildPool(this.bombLayer);
+  readonly bgaLayerPool = new ChildPool(this.bgaLayer);
+  readonly overlay = new Text({
     text: '',
     style: new TextStyle({
       fill: 0xf8fafc,
@@ -784,7 +786,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * ({@link advanceDrawCursor}), kept between frames. Rebuilt when the arrays change or the playhead's chart time moves
    * back (not when an LR2 negative-BPM reversal mirrors the scroll: LR2's `draw_count` never moves back).
    */
-  private drawCursor:
+  drawCursor:
     | {
         notes: readonly RuntimeNote[];
         mines: readonly TimedLandmineNote[];
@@ -794,7 +796,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       }
     | undefined;
   /** Notes and mines gone under LR2's rules, so the mirrored scroll past a negative-BPM reversal does not redraw them. */
-  private readonly goneDrawObjects = new GoneDrawObjects();
+  readonly goneDrawObjects = new GoneDrawObjects();
   chartLastNoteEndSeconds = 0;
   songDurationSeconds = 0;
   laneChannels: string[] = [];
@@ -805,7 +807,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * 7K-flavored fallbacks keep behaving as before for skinless / pre-prepare code paths.
    */
   chartPlayVariant: ChartPlayVariant = '7';
-  protected laneX: Map<string, GameplayLaneRect> = new Map();
+  laneX: Map<string, GameplayLaneRect> = new Map();
   /**
    * Theme texture cache, keyed by the theme's own asset ids. The core scene never reads it; theme families fill it in
    * {@link prepareTheme} and the core destroys every entry on {@link dispose}.
@@ -820,15 +822,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** Intro length scheduled by `start()` (theme `#PLAYSTART` or the fallback), for chrome count-ins. */
   private scheduledIntroMs = 0;
   /** Play-clock time of the last judgement / key impulse, for the be-music skin's reactive visuals. */
-  private lastJudgeAt: number | undefined;
-  private lastImpulseAt: number | undefined;
-  private lastImpulseKind: BeMusicLaneKind | undefined;
+  lastJudgeAt: number | undefined;
+  lastImpulseAt: number | undefined;
+  lastImpulseKind: BeMusicLaneKind | undefined;
   private startTime = 0;
   /**
    * True while the chart's assets are still loading: from {@link prepare} until audio is decoded and the BGA preload
    * (which may be transcoding video) has settled. Skins show it as NOW LOADING on the lanes.
    */
-  private assetsLoading = false;
+  assetsLoading = false;
   /**
    * Between {@link enter} and {@link exit}: the input listeners are attached, and a {@link prepare} running meanwhile
    * shows the playfield (in its loading state) instead of loading off stage.
@@ -840,7 +842,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `audioContext.currentTime` value that corresponds to chart-second 0. Used to schedule background samples with
    * sample-accurate Web Audio timing.
    */
-  private audioContextStartTime = 0;
+  audioContextStartTime = 0;
   /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
   nonstopMixer: NonstopStageMixer | undefined;
   /**
@@ -857,7 +859,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private tempoClock: TempoClock;
   /** The live tempo changes asked for ({@link setTempo}), pushed to the engine (held until its input bus is up). */
   private readonly liveTempo: LiveTempo;
-  protected paused = false;
+  paused = false;
   private pauseTime = 0;
   private pauseTotal = 0;
   /**
@@ -878,7 +880,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** Analyser tapped off the bus output; feeds audio-reactive be-music skins. */
   audioAnalyzer: AudioAnalyzer | undefined;
   /** This frame's audio features (sampled once per render, on the play clock). */
-  private audioFrame: AudioFeatures | undefined;
+  audioFrame: AudioFeatures | undefined;
   /**
    * Most-recently-applied compressor mode. Distinct from the bus's `mode` getter so we can decide what to flip back to
    * when `setAudioCompressor(true)` re-enables compression after a temporary `'off'` (we restore whatever
@@ -1041,7 +1043,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * the engine's windows from then on, but is not reflected here.
    */
   private longNoteStyle: LongNoteStyle | undefined;
-  private judgeWindows: BeMusicJudgeWindows | undefined;
+  judgeWindows: BeMusicJudgeWindows | undefined;
   /** The chart's BPM range, worked out once per {@link prepareSong}. */
   chartBpmRange: ChartBpmRange | undefined;
   /**
@@ -1075,9 +1077,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Lane runs measure lines cross for a skin that draws them (`drawsMeasureLines`), with the lane geometry they were
    * worked out from; rebuilt only when the lanes move.
    */
-  private measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
+  measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
   /** Judgement that set off each lane's live bomb, by channel; absent for bombs without one (an autoplayed LN head). */
-  private readonly bombJudge = new Map<string, BeMusicJudge>();
+  readonly bombJudge = new Map<string, BeMusicJudge>();
   /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
   readonly lanePressedAt = new Map<string, number>();
   readonly laneReleasedAt = new Map<string, number>();
@@ -1127,16 +1129,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private exiting = false;
   protected readonly keyFlashTimeouts: Set<number> = new Set();
-  protected readonly pressedChannels: Set<string> = new Set();
+  readonly pressedChannels: Set<string> = new Set();
   /**
    * Per-key-on-timer (`100..117`) play-clock timestamp of an in-flight release fade. When set, the lane beam (and a
    * theme's key-on sprites) taper from 1 → 0 over {@link resolveKeyOnFadeMs} starting at the recorded value, so an LN
    * release decays instead of popping off. {@link releaseKeyOnTimer} populates this; {@link
    * startKeyOnTimer} clears it on a fresh press.
    */
-  protected readonly keyOnFadeOutStart: Map<number, number> = new Map();
-  protected readonly bombStartedAt: Map<string, number> = new Map();
-  private readonly bgaTargetsScratch: GameplayBgaTarget[] = [];
+  readonly keyOnFadeOutStart: Map<number, number> = new Map();
+  readonly bombStartedAt: Map<string, number> = new Map();
+  readonly bgaTargetsScratch: GameplayBgaTarget[] = [];
   /**
    * Mirror of the engine's gauge state, refreshed from every `summary.gauge` frame. The gauge model itself
    * (per-judge deltas, TOTAL scaling, guts softening, clear rule) lives entirely in the active ruleset — this view
@@ -1177,20 +1179,20 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * The hi-speed on the player's own scale: {@link hiSpeed} without the HS-FIX multiplier. It is what the player picked
    * (the select panel and the host show it), so the HUD's hi-speed readout shows it too, and the hotkey steps it.
    */
-  protected playerHiSpeed = this.hiSpeed;
+  playerHiSpeed = this.hiSpeed;
   /**
    * The scroll factor notes, bar lines and long notes are positioned with: it glides to each new {@link hiSpeed} over
    * `HISPEED_TRANSITION_MS` (wall clock) instead of jumping, while the HUD / readouts show the new target at once.
    * Visual only — judging never reads it.
    */
-  private readonly scrollHiSpeed = new HiSpeedTransition(this.hiSpeed);
+  readonly scrollHiSpeed = new HiSpeedTransition(this.hiSpeed);
   /**
    * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering from
    * `gameplay-constants.ts`. The core scene drives the key-on bank (100–119) for the lane beams; theme families stamp
    * their own timers (bombs, FC, judge, scene stages, …) into the same map. Removed when the timer "stops" (e.g. key
    * release for key-on).
    */
-  protected readonly timerStartedAt: Map<number, number> = new Map();
+  readonly timerStartedAt: Map<number, number> = new Map();
   /**
    * BPM-aware seconds → beat resolver, prepared once per song. Used by `renderNotes` to position scrolling notes
    * correctly across `#BPM` change events; the previous hand-rolled `beatAtSeconds` only saw the initial BPM, which
@@ -1236,10 +1238,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * detect cue transitions in `renderBga` (start the new cue's video, pause the previous one) and to compute the
    * `currentTime` offset relative to the cue's start seconds.
    */
-  private bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } } =
-    {};
+  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } } = {};
   /** `performance.now()` of the most recent POOR judgement, drives the POOR-BGA window. */
-  private lastPoorAt = 0;
+  lastPoorAt = 0;
   /**
    * BMS spec — when the chart omits `#POORBGA` and provides `#BMP00`, the BMP00 image acts as the implicit POOR
    * placeholder until an explicit `#xxx06` POOR cue takes over. Set during {@link prepareSong} so the renderer can
@@ -1399,7 +1400,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * renderer or theme brings its own geometry). The play mode may still fall back to standard — see
    * {@link resolveLaneGeometry}.
    */
-  private get layoutMode(): GameplayLayoutMode {
+  get layoutMode(): GameplayLayoutMode {
     return this.options.layoutMode === 'touch' && this.beMusicStage !== undefined ? 'touch' : 'standard';
   }
 
@@ -1408,7 +1409,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * so notes enter from off-stage; the touch and portrait lanes start below the skin's header band (or the BGA and HUD
    * above them), so notes there appear at the lane top instead of drawing over the chrome.
    */
-  private get noteOverscan(): number {
+  get noteOverscan(): number {
     return this.layoutMode === 'touch' || resolveStageOrientation(this.stageSize) === 'portrait' ? 0 : NOTE_OVERSCAN;
   }
 
@@ -1446,7 +1447,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return geometry;
   }
 
-  private laneGeometryCache:
+  laneGeometryCache:
     | {
         laneChannels: readonly string[];
         laneCount: number;
@@ -1462,7 +1463,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * screen is upright and the chart fits a portrait playfield, its landscape stage otherwise. Read every frame, so a
    * rotation mid-play re-lays the screen out on the next frame.
    */
-  private get beMusicStage(): BeMusicStage | undefined {
+  get beMusicStage(): BeMusicStage | undefined {
     if (this.options.skinlessChromeRenderer) return undefined;
     const skin = this.options.beMusicSkin;
     if (!skin) return undefined;
@@ -1529,6 +1530,23 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   protected disposeTheme(): Iterable<Texture | undefined> {
     return [];
   }
+
+  /**
+   * The theme hooks above, for the modules the scene's parts live in (`view/shared/playfield/*`, …): the hooks stay
+   * `protected` for the theme families that override them, so the modules call them through this object.
+   */
+  readonly theme: GameplayThemeHooks = {
+    themeOwnsPlayfield: () => this.themeOwnsPlayfield,
+    resolveThemeLaneRect: (channel, width, height) => this.resolveThemeLaneRect(channel, width, height),
+    resolveThemeNoteCell: (kind, laneIndex) => this.resolveThemeNoteCell(kind, laneIndex),
+    renderThemeMeasureLines: (frame) => this.renderThemeMeasureLines(frame),
+    renderThemeText: (seconds) => this.renderThemeText(seconds),
+    renderBombEffects: () => this.renderBombEffects(),
+    resolveBombDurationMs: (channel) => this.resolveBombDurationMs(channel),
+    resolveKeyOnFadeMs: (timerId) => this.resolveKeyOnFadeMs(timerId),
+    collectBgaTargets: (out) => this.collectBgaTargets(out),
+    onThemeEvent: (event) => this.onThemeEvent(event),
+  };
 
   /**
    * Loads the play: parses the chart, and decodes every audio sample the chart references — the slow part of going from
@@ -2300,12 +2318,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /** The compat ruleset judging the play (a replay's recorded one wins). */
-  private resolveJudgeRuleset(): string {
+  resolveJudgeRuleset(): string {
     return this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
   }
 
   /** Whether the engine plays `channel`'s notes itself: every lane under autoplay, the scratch under auto-scratch. */
-  private isAutoplayedChannel(channel: string): boolean {
+  isAutoplayedChannel(channel: string): boolean {
     return this.options.autoPlay === true || this.autoScratchChannels.has(channel);
   }
 
@@ -2315,7 +2333,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * visibly out of sync with the audio.
    */
   /** True while the wall-clock playhead is still inside the intro buffer. */
-  protected isIntroPlaying(): boolean {
+  isIntroPlaying(): boolean {
     if (this.startTime === 0) {
       return true;
     }
@@ -2327,7 +2345,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * the reversal — LR2's frozen event pump never applies a later BPM event — even though the reverse scroll itself
    * keeps following the forward tempo map.
    */
-  protected nowBpm(seconds: number): number | undefined {
+  nowBpm(seconds: number): number | undefined {
     const resolver = this.timingResolver;
     if (!resolver) return undefined;
     // `displayBpmAtBeat`: a negative `#BPMxx` reads as |trunc(BPM)|, LR2's int NOWBPM.
@@ -2341,12 +2359,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * constant 150 BPM, the BPM of the stage being played, scaled by its FIT rate (`NonstopStitchMap.tempo`), as LR2
    * shows it; otherwise {@link nowBpm}.
    */
-  protected displayBpm(seconds: number): number | undefined {
+  displayBpm(seconds: number): number | undefined {
     const tempo = this.options.nonstop?.tempo;
     return tempo !== undefined && tempo.length > 0 ? nonstopBpmAt(tempo, seconds) : this.nowBpm(seconds);
   }
 
-  protected currentBeat(seconds: number): number {
+  currentBeat(seconds: number): number {
     // LR2 negative-BPM reversal (issue #134): past the first negative `#BPMxx` the chart *visually* scrolls backwards.
     // LR2 mirrors the chart POSITION around the reversal (`2 * pos(R) - pos(now)`), so the reverse scroll runs at the
     // post-reversal |BPM| and pauses through post-reversal STOPs. Every display consumer — renderNotes, measure
@@ -2650,7 +2668,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * The LR2 key-on timer of `channel`'s lane (`resolveLr2LaneTimer`): 100 + lane on 1P, 110 + lane on 2P, keys 1-7 (1-9
    * for 9 KEY, whose lanes all run through the 1P bank).
    */
-  private resolveKeyOnTimerId(channel: string): number | undefined {
+  resolveKeyOnTimerId(channel: string): number | undefined {
     return resolveLr2LaneTimer('key-on', {
       channel,
       laneIndex: resolveSideRelativeLaneIndex(channel, this.chartPlayVariant),
@@ -2810,7 +2828,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * drive these animations store `playClock()` values, and the read sites compute `playClock() - seed` — so animations
    * resume exactly where they left off rather than jumping forward by the pause duration.
    */
-  protected playClock(): number {
+  playClock(): number {
     if (this.paused) {
       return this.pauseTime - this.pauseTotal;
     }
@@ -3146,7 +3164,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Anchoring everything on `audioContext.currentTime` removes that accumulating drift entirely. For environments where
    * the audio context isn't ready yet we fall back to the wall-clock model.
    */
-  protected currentSeconds(): number {
+  currentSeconds(): number {
     if (this.audioContext && this.audioContextStartTime > 0) {
       return this.tempoClock.chartSecondsAt((this.audioContext.currentTime - this.audioContextStartTime) * 1000);
     }
@@ -3447,7 +3465,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * to it as data and the skin draws them on its own canvas. `undefined` for themes, whose missing pieces (lanes, notes
    * without a cell, bombs) are drawn here in the built-in Phantom style instead.
    */
-  private get skinBinding(): BeMusicGameplayBinding | undefined {
+  get skinBinding(): BeMusicGameplayBinding | undefined {
     const skin = this.options.beMusicSkin;
     if (!skin || this.options.skinlessChromeRenderer) return undefined;
     if (!this.skinBindingInstance) {
@@ -3708,7 +3726,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Cropped copies of the `#BGAxx` sub-region textures, for a skin that composites the BGA itself (a canvas image can't
    * carry the crop the way a Pixi sub-texture does). `null` while the crop is being made.
    */
-  private readonly skinBgaCrops = new Map<Texture, ImageBitmap | null>();
+  readonly skinBgaCrops = new Map<Texture, ImageBitmap | null>();
 
   /**
    * The image behind a loaded BGA texture, for `frame.bga`: the decoded bitmap or the `<video>` element itself, or a
@@ -3802,7 +3820,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Milliseconds since the chart's first beat for chrome count-ins. Before the play-start gate opens (`startTime` is
    * still +Infinity) it counts toward the scheduled intro end and holds just below zero if the BGA preload runs long.
    */
-  private resolveChartMs(): number | undefined {
+  resolveChartMs(): number | undefined {
     if (this.startTime === 0) return undefined;
     if (Number.isFinite(this.startTime))
       return this.tempoClock.chartSecondsAt(performance.now() - this.startTime) * 1000;
@@ -3914,7 +3932,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * The lane covers of each play side with lanes, as {@link renderShutter} draws them (whether or not it does: a skin
    * that sets `drawsLaneCover` reads them to draw its own). The array and its entries are reused across frames.
    */
-  private resolveLaneCovers(): readonly BeMusicLaneCover[] {
+  resolveLaneCovers(): readonly BeMusicLaneCover[] {
     let cache = this.laneCovers;
     if (!cache || cache.channels !== this.laneChannels) {
       const covers: BeMusicLaneCover[] = [];
@@ -4019,7 +4037,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * laid out last frame, divided by the `#SCROLL` × `#SPEED` rate at the playhead (0 while the chart scrolls backwards or
    * stands still, as beatoraja shows it). `undefined` until the lanes are laid out or while the BPM is unknown.
    */
-  private resolveVisibleMs(
+  resolveVisibleMs(
     cover: BeMusicLaneCover | undefined,
     bpm: number | undefined,
     scrollRate: number,
@@ -4111,7 +4129,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /** Approximate total duration of the loaded chart in seconds. */
-  protected resolveSongDurationSeconds(): number {
+  resolveSongDurationSeconds(): number {
     if (!this.song) {
       return 0;
     }
@@ -4439,7 +4457,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * the measure list every frame. Each entry is the beat count at the *start* of the measure with that index (measure 0
    * starts at beat 0).
    */
-  private measureBeatCache: { songId: string | undefined; beats: number[] } = { songId: undefined, beats: [] };
+  measureBeatCache: { songId: string | undefined; beats: number[] } = { songId: undefined, beats: [] };
 
   private resolveMeasureBeats(): number[] {
     const song = this.song;
@@ -5130,7 +5148,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * The mode a long note plays in: the one the engine announced while it is held, otherwise worked out from the
    * ruleset's long-note style (unknown until the engine reports its ruleset).
    */
-  private resolveLongNoteMode(note: RuntimeNote): BeMusicLongNote['mode'] {
+  resolveLongNoteMode(note: RuntimeNote): BeMusicLongNote['mode'] {
     const held = this.longNotes.heldMode(note.channel, note.beat);
     if (held !== undefined) return held;
     return this.longNoteStyle === undefined
