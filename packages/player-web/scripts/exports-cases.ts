@@ -427,12 +427,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.createCroppedBeatorajaTexture(undefined, { x: 0, y: 0, w: 16, h: 16 });
     },
   });
-  define('player-web.DefaultPixiDecideView', {
-    run: () => {
-      new playerWebCoreApi.DefaultPixiDecideView({ beMusicSkin: playerWebCoreApi.phantomSkin });
-    },
-    interactive: true,
-  });
   define('player-web.DefaultPixiGameplayView', {
     run: () => {
       new playerWebCoreApi.DefaultPixiGameplayView();

@@ -6,7 +6,7 @@ import {
   latticeSkin,
   plainSkin,
   synesthesiaSkin,
-  DefaultPixiDecideView,
+  createDecideScene,
   DefaultPixiGameplayView,
   DefaultPixiResultView,
   DefaultPixiSongSelectView,
@@ -23,6 +23,8 @@ import {
   HISPEED_MIN,
   HISPEED_STEP,
   snapHiSpeed,
+  type BuiltInKit,
+  type DecideScene,
   type PixiGameplayResultData,
   type PixiPlayOptions,
   type PixiScene,
@@ -83,6 +85,7 @@ import {
   type CourseDefinitionGroup,
 } from '@be-music/player-web/collection';
 import {
+  createAudioService,
   downloadBlob,
   parseCompressorMode,
   parsePlaylog,
@@ -93,6 +96,7 @@ import {
   setMasterVolume,
   supportsSystemAudioSession,
   applySilentModePlayback,
+  type AudioService,
   type BeMusicPlaylog,
   type PlaylogRecorderInfo,
   type CompressorMode,
@@ -732,7 +736,12 @@ class PlayerWebDemoApp {
    * on any play start.
    */
   private lastPlay: { song: BrowserSongEntry; overrides: { autoPlay: boolean; replay?: BeMusicPlaylog } } | undefined;
-  private decideView: PixiDecideView | DefaultPixiDecideView | undefined;
+  private decideView: PixiDecideView | DecideScene | undefined;
+  /**
+   * The player's audio service (ADR 0007): one system AudioContext for the sounds of the screens built on it, the
+   * built-in decide screen so far. The other screens still play on contexts of their own.
+   */
+  private readonly audio: AudioService = createAudioService();
   private hostMounted = false;
   /**
    * Last-known cursor / folder state of the select view, captured before gameplay so returning to song select restores
@@ -3255,6 +3264,16 @@ class PlayerWebDemoApp {
     return this.skinSettings.get(this.beMusicSkin.id);
   }
 
+  /** The kit the built-in scenes draw with: the active be-music skin, its stored settings and the effect level. */
+  private get builtInKit(): BuiltInKit {
+    return {
+      family: 'built-in',
+      skin: this.beMusicSkin,
+      settings: this.beMusicSkinSettings,
+      effects: this.guiState.skinEffects,
+    };
+  }
+
   /**
    * Refills the "Skin settings" folder from the active be-music skin's `settings` schema — a dropdown per choice, a
    * slider per number, a checkbox per toggle — seeded with the stored values, and hides it when the skin declares none.
@@ -3304,7 +3323,9 @@ class PlayerWebDemoApp {
     this.selectView?.setBeMusicSkinSettings(settings);
     this.gameplayView?.setBeMusicSkinSettings(settings);
     this.resultView?.setBeMusicSkinSettings(settings);
-    if (this.decideView instanceof DefaultPixiDecideView) this.decideView.setBeMusicSkinSettings(settings);
+    if (this.decideView !== undefined && !(this.decideView instanceof PixiDecideView)) {
+      this.decideView.updateKit(this.builtInKit);
+    }
   }
 
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
@@ -5093,19 +5114,25 @@ class PlayerWebDemoApp {
           void this.showSelect();
         }),
     };
-    const playOptions = this.selectView?.getPlayOptions();
-    this.decideView = beMusicDecide
-      ? new DefaultPixiDecideView({
-          ...callbacks,
-          beMusicSkin: this.beMusicSkin,
-          beMusicEffects: this.guiState.skinEffects,
-          beMusicSkinSettings: this.beMusicSkinSettings,
-          ...(playOptions !== undefined
-            ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
-            : {}),
-        })
-      : new PixiDecideView({ ...callbacks, skin: this.decideSkin });
-    this.decideView.setTarget({ song, collection: this.collection });
+    if (beMusicDecide) {
+      const playOptions = this.selectView?.getPlayOptions();
+      this.decideView = createDecideScene(this.builtInKit, {
+        chart: song,
+        ...(playOptions !== undefined
+          ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
+          : {}),
+        source: resolveSongSource(this.collection, song),
+        // The select screen plays the theme's decide jingle as the chart is picked, and lets it ring on into the play;
+        // this screen plays none of its own.
+        sounds: {},
+        audio: this.audio,
+        on: { continue: callbacks.onContinue, cancel: callbacks.onCancel },
+      });
+    } else {
+      const view = new PixiDecideView({ ...callbacks, skin: this.decideSkin });
+      view.setTarget({ song, collection: this.collection });
+      this.decideView = view;
+    }
     await this.sceneHost.setScene(this.decideView);
   }
 
