@@ -245,18 +245,62 @@ The default beatoraja skin is the primary compatibility target. Community themes
 ## Scene lifecycle
 
 The browser player uses one `PixiSceneHost` for the whole session.
-The host owns a single PixiJS `Application`, attaches one scene root at a time, serializes scene transitions, and destroys the renderer only when the host is disposed.
+The host owns a single PixiJS `Application`, shows one scene at a time, serializes scene transitions, and destroys the renderer only when the host is disposed.
 
-The LR2 and beatoraja paths each provide the same high-level scene set, while the default family provides the same
-select, gameplay, and result shape without a decide scene:
+The LR2 and beatoraja paths each provide the same high-level scene set; the default family shows a decide screen only when its be-music skin declares one:
 
 - Select scene for chart browsing, preview playback, and skin-side interactions
 - Decide scene for the short transition before gameplay when the active family supplies one
 - Gameplay scene for notes, lanes, BGA, HUD, judgment, audio, and recording taps
 - Result scene for score summary and skin-rendered result presentation
 
-Scenes implement `enter()`, `exit()`, and `dispose()`.
-`exit()` detaches transient listeners and ticker work for transitions, while `dispose()` permanently releases scene-owned resources.
+Every scene, built-in, LR2 and beatoraja alike, implements `PixiScene`, and a host changes scenes only with `setScene`:
+
+- `root` is the container the host puts on the stage while the scene shows. A scene builds its scene graph under it and never adds itself to the stage.
+- `identity` is `{ kind, family }`: the screen (`select`, `decide`, `play` or `result`) and the skin family drawing it (`built-in`, `lr2` or `beatoraja`). `getCurrentScene()?.identity` says what is showing; the demo's test hook reports it.
+- `enter(host)` runs each time the scene becomes the active one, before the host puts `root` on the stage. The first entry builds the scene graph and wires input and ticker work; a later one resumes what `exit()` paused and starts the screen's entrance again.
+- `exit()` runs when another scene takes over or the stage is cleared, before the host takes `root` off it. The scene's ticker work, input and its own screen sound (BGM, preview, jingle) stop; it can be entered again.
+- `dispose()` releases everything. The scene's owner calls it: `setScene` only exits the scene it replaces.
+
+`SessionScene` ([Scene sessions and family views](#scene-sessions-and-family-views)) keeps the same contract, with its `identity` taken from its session and view.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Created
+  Created --> Prepared: prepare (a play)
+  Created --> Active: setScene, enter
+  Prepared --> Active: setScene, enter
+  Active --> OffStage: setScene(another), exit
+  OffStage --> Active: setScene, enter again
+  Prepared --> Disposed: dispose
+  Active --> Disposed: dispose
+  OffStage --> Disposed: dispose
+  Disposed --> [*]
+```
+
+What a scene shows is handed to it before it is shown: `setTarget` on the decide scenes, `setResult` on the result scenes, the song in `prepare(host, song, source)` on the gameplay scenes, and the constructor options for the rest.
+
+- **The select scene is kept alive.** The built-in and LR2 select scene stays across a decide, play and result: its `exit()` pauses the BGM, stops the chart preview (which keeps its focused chart) and the render loop, and it keeps its cursor, browse state and decoded BGM. Its input listeners stay attached and ignore input while it is off stage. Entering it again re-seeds its scene timers, so the skin's entrance plays again, and resumes the BGM and the preview. The beatoraja select scene is rebuilt from its snapshot instead.
+- **A play loads off stage.** `prepare()` parses the chart and decodes its audio without touching the stage or adding listeners, so the demo prepares the play behind a decide splash. When the splash is done, `setScene(play)` exits the decide scene and enters the play, then `start()` begins it; keys pressed during the splash reach only the splash. Without a splash the demo shows the play first, and a `prepare()` that runs while the play is showing draws the playfield in its loading state.
+- **A play's sound outlives its screen.** The gameplay scene's `exit()` stops its drawing and input but not its sound, so the result shows while the last notes ring out; the demo then disposes the play with `preserveAudioTail`.
+- **Decide and result scenes are one-shot.** Entered again, they restart their timeline; the demo disposes them once they are gone.
+
+```mermaid
+sequenceDiagram
+  participant Demo
+  participant Host as PixiSceneHost
+  participant Decide
+  participant Play
+  Demo->>Play: prepare (off stage)
+  Demo->>Host: setScene(Decide)
+  Host->>Decide: enter
+  Decide-->>Demo: onContinue
+  Demo->>Host: setScene(Play)
+  Host->>Decide: exit
+  Host->>Play: enter
+  Demo->>Decide: dispose
+  Demo->>Play: start
+```
 
 ### What the gameplay families share
 
