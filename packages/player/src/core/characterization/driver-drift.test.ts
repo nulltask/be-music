@@ -3,9 +3,10 @@ import { basicChart, exRankChart, longNoteChart } from './charts.ts';
 import { command, observePlay, tap, type PlayObservation, type ScriptStep } from './harness.ts';
 
 /**
- * Known drifts between the manual and the auto driver, and between a live play and its replay, as they stand today.
- * Each test pins one, named `drift: …`, so the one play loop (ADR 0003, migration phase P1) can keep it or flip it on
- * purpose: a pull request that removes a drift changes its test (and the snapshots it touches) and says so.
+ * Where the manual and the auto driver, and a live play and its replay, used to drift apart. The one play loop (ADR
+ * 0003, migration phase P1) fixed them one at a time; each test now asserts that both sides agree. A test still named
+ * `drift: …` pins a difference that remains on purpose: a pull request that removes it changes its test (and the
+ * snapshots it touches) and says so.
  */
 
 const escape = (atMs: number): ScriptStep => command(atMs, { kind: 'interrupt', reason: 'escape' });
