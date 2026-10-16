@@ -220,8 +220,9 @@ flowchart LR
   `resolveLaneCover` gives the covers as drawn, as fractions of the lane, HIDDEN+ scaled to the lane above the LIFT.
 - **View settings.** `resolvePlaylogView` is the view in the play log's units: the drawn hi-speed on the scene's
   hi-speed scale, the HS-FIX, each side's covers and the visible time at the main BPM (`resolveWhiteNumber`, the white
-  number for a lane of a given length in beats: four for beatoraja's). `PlaylogViewCursor` walks a replayed log's view
-  along the playhead.
+  number for a lane of a given length in beats: four for beatoraja's; LIFT left out, as beatoraja leaves it out).
+  `resolveHiSpeedForWhiteNumber` is its inverse: the hi-speed that shows a recorded visible time, for a replay on
+  another hi-speed scale. `PlaylogViewCursor` walks a replayed log's view along the playhead.
 
 ### Behaviour choices
 
@@ -311,8 +312,8 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                 |
 
 The built-in and LR2 play screens keep one `PlayState` and read their result off it (`playResultFromPlayState`), so
-they follow the model's play-state choices above: a full combo's max combo is every note for any play, and the result
-carries each judgment's early / late count. The other scenes still keep their own browse and play state (the beatoraja
+they follow the model's play-state choices above: a full combo's max combo is every note for any play, the result
+carries each judgment's early / late count, and the play log's visible time is the white number (`resolvePlaylogView`). The other scenes still keep their own browse and play state (the beatoraja
 runtime adapter its histories and covers); the scene sessions of the web runtime move onto these models. The skin
 packages map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
 [beatoraja-skin.md](./beatoraja-skin.md#scene-mapping)).

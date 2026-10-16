@@ -205,7 +205,9 @@ ESC で中断したログのリプレイは、再シミュレーションと同�
 | `visibleMs`    | ノートが SUDDEN+ の下に見えている時間（整数 ms。白数字で、× 0.6 が緑数字）。譜面のメイン BPM で、`#SCROLL` / `#SPEED` を除いた値です。                                                               |
 | `covers`       | レーンのあるプレイサイドごとに、レーンの高さに対する割合（0〜1）。`sudden` は上から、`hidden` は判定ラインのすぐ上、`lift` は判定ラインを持ち上げる量。組み込みと LR2 のシーンは LIFT を描きません。 |
 
-beatoraja のシーンの HIDDEN カバーはリフトより上のレーンに対する比率なので、`比率 × (1 − lift)` を記録します。その `visibleMs` は beatoraja 自身の表示時間と同じくリフトを差し引きません。
+beatoraja のシーンの HIDDEN カバーはリフトより上のレーンに対する比率なので、`比率 × (1 − lift)` を記録します。
+
+**`visibleMs` と LIFT。** どのシーンも `visibleMs` を beatoraja の白数字として記録し、LIFT は差し引きません。LR2 には LIFT がないため、beatoraja に従います。beatoraja の [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L321-L330) は、持ち上げた判定ラインより上のレーンを、そのレーンに合わせた速さでノートが流れるように描きます（`rxhs = (hu - hl) * hispeed * speed`。`hl` はリフトの分だけ上がります）。そのため LIFT はレーンを短くしますが、ノートがレーンを流れきる時間は変えません。表示する白数字は `region * (1 - lanecover)` で、`region = 240000 / nbpm / hispeed / speed / nscroll` です。リフトの項はありません（`currentduration`、321〜330 行）。ハイスピード固定のモードも同じ式をハイスピードについて解きます（`resetHispeed`、[206〜210 行](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L206-L210)）。シーンモデルはこれを一か所で計算します。`resolveWhiteNumber` はハイスピード 1 で指定した拍数の長さのレーンについて求め（beatoraja のシーンでは 4 拍、組み込みと LR2 のシーンでは配置したレーンを `PIXELS_PER_BEAT` で割った拍数）、`resolveHiSpeedForWhiteNumber` はその逆です。組み込みと LR2 のシーンは LIFT を描かないので、その白数字はノートが見えている時間そのものです。
 
 シーンは見え方を決まった精度で記録します（`roundPlaylogView`）。`hiSpeed` は 1/1000 刻み、`visibleMs` は整数 ms、カバーの各値は小数 4 桁です。浮動小数点の誤差（0.1 のカバーが `0.09999999999999999` になるなど）はログに残らず、変更にも数えません。
 
@@ -223,7 +225,7 @@ flowchart TD
   visible -->|いいえ| recorded
 ```
 
-同じスケール（または `hiSpeedScale` のないログ）なら、記録されたハイスピードを HS-FIX 込みで描かれたとおりに使い、見る人の HS-FIX は重ねません。スケールが違うと同じ数値でも速さが違うため、記録された表示時間になるハイスピードを、自分のレーンの高さと表示している SUDDEN+ から求めます（組み込みと LR2 のシーンでは `resolveHiSpeedForVisibleMs`）。リプレイは組み込みと LR2 のシーンで再生され、これらは LIFT を描かないため、`lift` の切り替えはまだそこでは何も変えません。`tempo` の切り替えは記録されたテンポ（`play.tempo`、`play.tempoChanges`）を扱います。ブラウザプレイヤーにはまだゴースト表示がありません。ゴーストも同じように見え方を読みます。
+同じスケール（または `hiSpeedScale` のないログ）なら、記録されたハイスピードを HS-FIX 込みで描かれたとおりに使い、見る人の HS-FIX は重ねません。スケールが違うと同じ数値でも速さが違うため、記録された表示時間になるハイスピードを、自分のレーンと表示している SUDDEN+ から求めます（組み込みと LR2 のシーンでは `resolveHiSpeedForWhiteNumber`）。リプレイは組み込みと LR2 のシーンで再生され、これらは LIFT を描かないため、`lift` の切り替えはまだそこでは何も変えません。`tempo` の切り替えは記録されたテンポ（`play.tempo`、`play.tempoChanges`）を扱います。ブラウザプレイヤーにはまだゴースト表示がありません。ゴーストも同じように見え方を読みます。
 
 ## LR2 / beatoraja / IIDX リザルトの再現
 

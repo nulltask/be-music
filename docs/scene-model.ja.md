@@ -222,8 +222,9 @@ flowchart LR
   `resolveLaneCover` は描かれるカバーをレーンに対する割合で返し、HIDDEN+ は LIFT より上の部分に対する割合にします。
 - **見え方の設定**。`resolvePlaylogView` はプレイログの単位での見え方です。シーンのハイスピードの尺度での描画用の
   ハイスピード、HS-FIX、サイドごとのカバー、メイン BPM での表示時間（`resolveWhiteNumber`。指定した拍数の長さの
-  レーンに対する白数字で、beatoraja は 4 拍）です。`PlaylogViewCursor` はリプレイするログの見え方を再生位置に沿って
-  たどります。
+  レーンに対する白数字で、beatoraja は 4 拍。beatoraja と同じく LIFT は差し引きません）です。
+  `resolveHiSpeedForWhiteNumber` はその逆で、記録された表示時間になるハイスピードを返します。ハイスピードの尺度が
+  違うリプレイに使います。`PlaylogViewCursor` はリプレイするログの見え方を再生位置に沿ってたどります。
 
 ### 振る舞いの選択
 
@@ -313,6 +314,6 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 
 標準と LR2 のプレイ画面は `PlayState` を一つ持ち、リザルトをそこから読みます（`playResultFromPlayState`）。そのため上の
 プレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、リザルトは判定ごとの早い / 遅いの数を
-持ちます。ほかのシーンはまだ自分の一覧とプレイの状態を持っています（beatoraja のランタイムアダプターは記録とカバー）。
+持ち、プレイログの表示時間は白数字（`resolvePlaylogView`）です。ほかのシーンはまだ自分の一覧とプレイの状態を持っています（beatoraja のランタイムアダプターは記録とカバー）。
 Web 実行層のシーンセッションがこれらのモデルへ移ります。スキンのパッケージはモデルを各スキンの
 語彙に写します。beatoraja の番号へは `@be-music/beatoraja-skin/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。
