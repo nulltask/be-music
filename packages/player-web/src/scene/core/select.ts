@@ -82,6 +82,7 @@ import { SelectReadTextOverlay, type SelectReadTextContext } from '../../view/bu
 import { renderEmptyStateHint, type SelectEmptyHintContext } from '../../view/built-in/select-empty-hint.ts';
 import { SelectPointer, type SelectPointerContext } from '../../session/select/select-pointer.ts';
 import { SelectAudio, type SelectAudioContext } from '../../session/select/select-audio.ts';
+import { SelectKeys, type SelectKeysContext } from '../../session/select/select-keys.ts';
 
 const log = logger('select');
 const BG = new Color('#050912');
@@ -99,17 +100,6 @@ const MUTED = new Color('#a9a39a');
  */
 const FALLBACK_DESIGN_WIDTH = 640;
 const FALLBACK_DESIGN_HEIGHT = 480;
-
-/**
- * Pixel scroll step for the readtext modal's arrow-key nudge — roughly two lines at the body's 14px / 18px line-height.
- * Wheel input uses the browser's native `deltaY` (already in pixels) so it doesn't need this constant.
- */
-const READTEXT_LINE_SCROLL = 36;
-/**
- * PageUp / PageDown / Space scroll step — most of a viewport, leaving a couple of lines of overlap so the user can
- * re-find their place after the jump.
- */
-const READTEXT_PAGE_SCROLL = 360;
 
 /**
  * Serializable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
@@ -306,7 +296,11 @@ export interface SelectDesignSize {
 const IDENTITY: SceneIdentity = { kind: 'select', family: 'built-in' };
 
 /** What the parts of the select scene read and drive on it. */
-type SelectSceneContext = SelectReadTextContext & SelectEmptyHintContext & SelectPointerContext & SelectAudioContext;
+type SelectSceneContext = SelectReadTextContext &
+  SelectEmptyHintContext &
+  SelectPointerContext &
+  SelectKeysContext &
+  SelectAudioContext;
 
 /**
  * Family-neutral song-select scene. Owns everything that doesn't depend on a particular skin format: the scene shown
@@ -371,6 +365,8 @@ export class CoreSongSelectView<
   private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay(this.context);
   /** The sound: the select BGM, the system cues and the chart preview. */
   private readonly audio: SelectAudio = new SelectAudio(this.context);
+  /** The keyboard. */
+  private readonly keys: SelectKeys = new SelectKeys(this.context);
   /**
    * Per-frame section timing tracker. Logs every second when enabled via `?perf` URL flag or
    * `globalThis.__BE_MUSIC_PERF__ = true`.
@@ -543,9 +539,9 @@ export class CoreSongSelectView<
   }
 
   /**
-   * `scene` as the parts it is made of read and drive it (`SelectPointerContext`, `SelectAudioContext`,
-   * `SelectReadTextContext`, `SelectEmptyHintContext`): getters and methods over its own state and its parts, so that
-   * state keeps its access modifiers.
+   * `scene` as the parts it is made of read and drive it (`SelectKeysContext`, `SelectPointerContext`,
+   * `SelectAudioContext`, `SelectReadTextContext`, `SelectEmptyHintContext`): getters and methods over its own state
+   * and its parts, so that state keeps its access modifiers.
    */
   private static createContext(scene: CoreSongSelectView): SelectSceneContext {
     return {
@@ -582,6 +578,9 @@ export class CoreSongSelectView<
       set selectedIndex(value: number) {
         scene.selectedIndex = value;
       },
+      get panelStates(): Set<number> {
+        return scene.panelStates;
+      },
       get mouseX(): number {
         return scene.mouseX;
       },
@@ -607,6 +606,12 @@ export class CoreSongSelectView<
       moveCursorBy: (steps) => scene.moveCursorBy(steps),
       noteCursorChange: (delta) => scene.noteCursorChange(delta),
       activateEntry: (entry) => scene.activateEntry(entry),
+      leaveFolder: () => scene.leaveFolder(),
+      togglePanel: (which) => scene.togglePanel(which),
+      adjustHiSpeed: (direction) => scene.adjustHiSpeed(direction),
+      cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void {
+        scene.cyclePlayOption(key, cycle);
+      },
       handleThemePointerDown: (virtualX, virtualY) => scene.handleThemePointerDown(virtualX, virtualY),
       render: () => scene.render(),
     };
@@ -812,7 +817,7 @@ export class CoreSongSelectView<
     // itself is a child of the document body and naturally won't have focus until interacted with — which would
     // otherwise eat ↑/↓/Enter/Esc. Pointer events still bind on the canvas because their offset coordinates are
     // canvas-relative.
-    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keydown', this.keys.handleKeyDown);
     host.app.canvas.addEventListener('pointerdown', this.pointer.handlePointerDown);
     host.app.canvas.addEventListener('pointermove', this.pointer.handlePointerMove);
     host.app.canvas.addEventListener('pointerleave', this.pointer.handlePointerLeave);
@@ -1101,7 +1106,7 @@ export class CoreSongSelectView<
     this.beMusicRenderer = undefined;
     this.songImages?.dispose();
     this.songImages = undefined;
-    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keydown', this.keys.handleKeyDown);
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.pointer.handlePointerDown);
       this.host.app.canvas.removeEventListener('pointermove', this.pointer.handlePointerMove);
@@ -1417,171 +1422,6 @@ export class CoreSongSelectView<
     this.refreshChartPreview();
   }
 
-  private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    // A launch outro is playing — the chart is already chosen.
-    if (this.launchAt !== undefined) {
-      return;
-    }
-    // Same gesture-retry as `handlePointerDown` — most users will arrive at the select view via the keyboard rather
-    // than a mouse on macOS / touchpad-only devices, so we hook here too.
-    void this.audio.startSelectBgm();
-    // Don't navigate while the view is hidden — e.g. when gameplay is on top. Both views attach `keydown` to the window
-    // so they can capture input without canvas focus, but only the visible one should react.
-    if (!this.visible) {
-      return;
-    }
-    // Skip when the user is typing into a form / contenteditable element so arrow keys / Enter aren't hijacked from
-    // text input.
-    if (isEditableTarget(event.target)) {
-      return;
-    }
-    // Space toggles LR2 panel 1 (the play-options panel by convention — LR2SkinHelp line 9101: only the song-select skin
-    // supports invoking panel 1 via the start button). We bind it to Space rather than Enter because Enter is already the song-pick /
-    // folder-enter accelerator on this view.
-    if (event.code === 'Space') {
-      event.preventDefault();
-      this.togglePanel(1);
-      return;
-    }
-    // While the README modal is open it owns the keyboard. LR2's canonical close key is Enter (the decide / confirm
-    // key); from the keyboard: - Enter / Backspace close it. Enter is the LR2-faithful shortcut hinted in the modal
-    // footer; Backspace is a secondary "go back" alias. Esc is intentionally NOT bound — LR2 doesn't use it for panel
-    // close, and reusing it here would diverge from the host's skin-faithful interaction model. - ↑ / ↓ / PageUp /
-    // PageDown / Home / End / Space scroll the body. Falling through to the cursor-move handlers would defeat the modal
-    // — the bar cursor would race past songs while the user is just trying to read the note.
-    if (this.readText.readTextOpen) {
-      if (event.key === 'Backspace' || event.key === 'Enter') {
-        event.preventDefault();
-        this.readText.closeReadText();
-        return;
-      }
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        this.readText.scrollReadText(READTEXT_LINE_SCROLL);
-        return;
-      }
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        this.readText.scrollReadText(-READTEXT_LINE_SCROLL);
-        return;
-      }
-      if (event.key === 'PageDown' || event.key === ' ') {
-        event.preventDefault();
-        this.readText.scrollReadText(READTEXT_PAGE_SCROLL);
-        return;
-      }
-      if (event.key === 'PageUp') {
-        event.preventDefault();
-        this.readText.scrollReadText(-READTEXT_PAGE_SCROLL);
-        return;
-      }
-      if (event.key === 'Home') {
-        event.preventDefault();
-        this.readText.scrollReadText(-Number.MAX_SAFE_INTEGER);
-        return;
-      }
-      if (event.key === 'End') {
-        event.preventDefault();
-        this.readText.scrollReadText(Number.MAX_SAFE_INTEGER);
-        return;
-      }
-      // Any other key — swallow so it doesn't leak through to the panel / cursor handlers below.
-      return;
-    }
-    // While any panel is open, Escape closes it instead of popping a folder. Mirrors LR2: right-click on a panel (or
-    // re-clicking its launcher button) closes it; here we accept Escape too so keyboard-only users have a back-out
-    // shortcut.
-    if (event.key === 'Escape' && this.panelStates.size > 0) {
-      event.preventDefault();
-      // Close panels in numeric order — picking the lowest-numbered open panel matches "Esc closes the topmost /
-      // most-recent" expectation on the common case where only panel 1 is open.
-      const sorted = [...this.panelStates].sort((a, b) => a - b);
-      const target = sorted[0];
-      if (target !== undefined) this.togglePanel(target);
-      return;
-    }
-    // HS adjustment via the 1P 5 / 7 lane keys (LR2 convention: pressing the 5-key inside the play-options panel
-    // decreases HiSpeed, the 7-key increases it). Bindings follow the common gameplay lane convention — PLAY
-    // OPTIONS panel (panel 1) keyboard shortcuts. While the panel is open, each 7K lane key cycles a corresponding play
-    // option — same "adjacent-key shortcuts" family LR2 hardcodes for option panels. The mapping mirrors the panel's
-    // visible button layout:
-    //
-    // LANE 1 (KeyZ) → PLAY STYLE (`dpFlip` toggle) LANE 2 (KeyS) → RANDOM (`random1P` cycle) LANE 3 (KeyX) → BATTLE
-    // (`random2P` cycle — DP-side independent random is the canonical "battle" effect) LANE 4 (KeyD) → GAUGE (`gauge1P`
-    // cycle) LANE 5 (KeyC) → HI-SPD ↓ (`adjustHiSpeed(-1)`) LANE 6 (KeyF) → ASSIST (`autoScratch1P` toggle) LANE 7
-    // (KeyV) → HI-SPD ↑ (`adjustHiSpeed(+1)`)
-    //
-    // Only fires while panel 1 is open so the keys remain free outside the play-options context.
-    if (this.panelStates.has(1)) {
-      if (event.code === 'KeyZ') {
-        event.preventDefault();
-        this.cyclePlayOption('dpFlip', BOOLEAN_CYCLE);
-        return;
-      }
-      if (event.code === 'KeyS') {
-        event.preventDefault();
-        this.cyclePlayOption('random1P', RANDOM_CYCLE);
-        return;
-      }
-      if (event.code === 'KeyX') {
-        event.preventDefault();
-        this.cyclePlayOption('random2P', RANDOM_CYCLE);
-        return;
-      }
-      if (event.code === 'KeyD') {
-        event.preventDefault();
-        this.cyclePlayOption('gauge1P', GAUGE_TYPES);
-        return;
-      }
-      if (event.code === 'KeyC') {
-        event.preventDefault();
-        this.adjustHiSpeed(-1);
-        return;
-      }
-      if (event.code === 'KeyF') {
-        event.preventDefault();
-        this.cyclePlayOption('autoScratch1P', BOOLEAN_CYCLE);
-        return;
-      }
-      if (event.code === 'KeyV') {
-        event.preventDefault();
-        this.adjustHiSpeed(1);
-        return;
-      }
-    }
-    const entries = this.currentEntries();
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      if (entries.length === 0) return;
-      // Wrap past the end → first entry. Matches LR2's circular bar list (the rail keeps scrolling forever in either
-      // direction). Pass `+1` directly to `noteCursorChange` rather than the `(new - old)` wrapped delta: with very
-      // short lists (2 / 3 entries) the wrap brings the cursor back to a lower index, which would otherwise drive the
-      // slide animation in the OPPOSITE direction of the keypress. The user pressed down, so the bars should always
-      // slide as if going down — every press, regardless of whether the cursor wraps.
-      this.selectedIndex = (this.selectedIndex + 1) % entries.length;
-      this.noteCursorChange(1);
-      this.render();
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      if (entries.length === 0) return;
-      // Symmetric to ArrowDown — pass `-1` directly so the slide animation always matches the keypress direction even
-      // when the cursor wraps from `0` to `entries.length - 1`.
-      this.selectedIndex = (this.selectedIndex - 1 + entries.length) % entries.length;
-      this.noteCursorChange(-1);
-      this.render();
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      const entry = entries[this.selectedIndex];
-      if (!entry) return;
-      this.activateEntry(entry);
-    } else if (event.key === 'Escape' || event.key === 'Backspace' || event.key === 'ArrowLeft') {
-      // Pop one level up — Esc / Backspace / ← all back out of the current folder. No-op at the root so the user
-      // doesn't get stuck on an "empty list" view by accident.
-      if (!this.leaveFolder()) return;
-      event.preventDefault();
-    }
-  };
-
   protected render(): void {
     const screenWidth = this.app.screen.width || this.mountedContainer?.clientWidth || FALLBACK_DESIGN_WIDTH;
     const screenHeight = this.app.screen.height || this.mountedContainer?.clientHeight || FALLBACK_DESIGN_HEIGHT;
@@ -1877,36 +1717,6 @@ export function resolveSelectNavigation(
 // The search and cursor rules of the browse model in `@be-music/scene-model`, re-exported under the names this module
 // has always used.
 export { matchesSearchQuery, wrappedCursorDelta };
-
-/**
- * Returns `true` when the keydown target is a text-editable element (`<input>` / `<textarea>` / `<select>` /
- * `contenteditable`). The select view's keyboard handlers use this to bail so the user can type into form fields
- * without arrow keys hijacking the bar list.
- *
- * `<input type="checkbox">` / `<input type="file">` pass through — those don't capture text input and the user expects
- * arrow keys to still drive the song list while a checkbox happens to be focused.
- */
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
-  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
-  if (tag === 'INPUT') {
-    const type = (target as HTMLInputElement).type.toLowerCase();
-    // text-like input types we want to leave alone.
-    return (
-      type === 'text' ||
-      type === 'search' ||
-      type === 'url' ||
-      type === 'email' ||
-      type === 'password' ||
-      type === 'number' ||
-      type === 'tel' ||
-      type === ''
-    );
-  }
-  return false;
-}
 
 /**
  * Inputs captured by {@link CoreSongSelectView.currentEntries}' memoization pass. Reference-equal `top` / `songs` is
