@@ -37,3 +37,10 @@ export * from './beatoraja/skin-view.ts';
 // session and its view, and the scene that pairs them.
 export type * from '../host/family-kit.ts';
 export type * from '../view/types.ts';
+export {
+  SessionScene,
+  type SceneSession,
+  type SessionKeyEvent,
+  type SessionKeyTarget,
+  type SessionSceneOptions,
+} from '../session/session-scene.ts';

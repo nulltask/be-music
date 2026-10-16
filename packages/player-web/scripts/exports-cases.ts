@@ -23,6 +23,28 @@ const BENCH_AUDIO_CONTEXT = {
 /** Stand-in for `navigator` with an audio session (Node has none), so the session helpers take their applying path. */
 const BENCH_AUDIO_SESSION_HOST: playerWebCoreApi.SystemAudioSessionHost = { audioSession: { type: 'auto' } };
 
+/** A host whose ticker only records callbacks, and a session and view that do nothing, for `SessionScene`. */
+const BENCH_SCENE_HOST = {
+  app: { ticker: { add: () => undefined, remove: () => undefined } },
+} as unknown as playerWebCoreApi.PixiSceneHost;
+const BENCH_SCENE_SESSION: playerWebCoreApi.SceneSession<number, never> = {
+  kind: 'select',
+  enter: () => undefined,
+  exit: () => undefined,
+  dispose: () => undefined,
+  handleKey: () => false,
+  dispatch: () => undefined,
+  frame: (nowMs) => nowMs,
+};
+const BENCH_FAMILY_VIEW: playerWebCoreApi.FamilyView<number, never> = {
+  family: 'built-in',
+  root: new Container(),
+  attach: () => undefined,
+  draw: () => undefined,
+  detach: () => undefined,
+  dispose: () => undefined,
+};
+
 const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99, 104, 10]);
 const BENCH_BMS_FILE = makeBenchFile('Songs/Bench/main.bms', '#TITLE Bench\n#BPM 130\n#00111:0100\n');
 const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE Bench Extra\n#BPM 130\n#00111:0100\n');
@@ -834,6 +856,14 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       new playerWebCoreApi.PixiSceneHost();
     },
     interactive: true,
+  });
+  define('player-web.SessionScene', {
+    run: async () => {
+      const scene = new playerWebCoreApi.SessionScene(BENCH_SCENE_SESSION, BENCH_FAMILY_VIEW, { now: () => 0 });
+      await scene.enter(BENCH_SCENE_HOST);
+      scene.exit();
+      scene.dispose();
+    },
   });
   define('player-web.PixiSongSelectView', {
     run: () => {
