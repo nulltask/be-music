@@ -17,6 +17,12 @@
 // timer; our `LOAD_END: 2` was `fadeout`). Skins that gated chrome on those slots would either show the
 // wrong thing or stay invisible during gameplay. Every entry below quotes its `prop.lua` name in the
 // JSDoc so future additions stay verifiable.
+//
+// beatoraja keeps LR2's numbers for its LR2-compatible ids, so those entries take their value from
+// `@be-music/lr2-skin/ids` (`LR2_OP` / `LR2_TIMER` / `LR2_NUM` / `LR2_TEXT` / `LR2_BUTTON`) under the beatoraja name;
+// only beatoraja's own ids are numbered here. (`X as typeof X` keeps the literal type under `isolatedDeclarations`.)
+
+import { LR2_BUTTON, LR2_LANE_INDEX_MAX, LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
 
 /**
  * Discriminator for a beatoraja "side" — single-play / 1P-side of double / first-half of 9key uses `1`;
@@ -46,17 +52,17 @@ export type BeatorajaSide = 1 | 2 | 3;
 // import readability.
 
 /** Anchored at the moment the play scene mounts. Always-on for elements with `timer = 0`. */
-export const TIMER_SCENE_START = 0;
+export const TIMER_SCENE_START: typeof LR2_TIMER.SCENE_START = LR2_TIMER.SCENE_START;
 /** prop.lua `startinput` — fires when input becomes responsive (during loading lead-in). */
-export const TIMER_STARTINPUT = 1;
+export const TIMER_STARTINPUT: typeof LR2_TIMER.START_INPUT = LR2_TIMER.START_INPUT;
 /** prop.lua `fadeout` — fires when the result fade-out starts. NOT a load-end signal! */
-export const TIMER_FADEOUT = 2;
+export const TIMER_FADEOUT: typeof LR2_TIMER.FADE_OUT = LR2_TIMER.FADE_OUT;
 /** prop.lua `failed` — fires on the failed verdict (gauge below clear threshold at chart end). */
-export const TIMER_FAILED = 3;
+export const TIMER_FAILED: typeof LR2_TIMER.FAILED = LR2_TIMER.FAILED;
 /** prop.lua `ready` — fires when the READY display flashes (≈ LR2 PLAY START − N ms). */
-export const TIMER_READY = 40;
+export const TIMER_READY: typeof LR2_TIMER.READY = LR2_TIMER.READY;
 /** prop.lua `play` — fires when the chart begins audible playback. */
-export const TIMER_PLAY = 41;
+export const TIMER_PLAY: typeof LR2_TIMER.PLAY = LR2_TIMER.PLAY;
 
 /**
  * prop.lua `songbar_change = 11` — restarts every time the focused song bar changes (cursor
@@ -69,12 +75,12 @@ export const TIMER_PLAY = 41;
  * `getTimerStart` and stay hidden — visible to the user as "the left-side song info panel
  * (title / artist / genre) never appears".
  */
-export const TIMER_SONGBAR_CHANGE = 11;
+export const TIMER_SONGBAR_CHANGE: typeof LR2_TIMER.SONG_BAR_CHANGE = LR2_TIMER.SONG_BAR_CHANGE;
 
 /** prop.lua `judge_1p` — restarts on every judgement on side 1. */
-export const TIMER_JUDGE_1P = 46;
+export const TIMER_JUDGE_1P: typeof LR2_TIMER.JUDGE_1P = LR2_TIMER.JUDGE_1P;
 /** prop.lua `judge_2p` — restarts on every judgement on side 2. */
-export const TIMER_JUDGE_2P = 47;
+export const TIMER_JUDGE_2P: typeof LR2_TIMER.JUDGE_2P = LR2_TIMER.JUDGE_2P;
 /**
  * prop.lua `judge_3p = 247` — restarts on every judgement on side 3. Only POPN-9 (and any
  * other layout with `judgenow.length >= 3` in the skin's `judge[]` declarations) addresses
@@ -94,7 +100,7 @@ export const TIMER_ENDOFNOTE_1P = 143;
 export const TIMER_ENDOFNOTE_2P = 144;
 
 /** prop.lua `rhythm` — beat-pulse timer the skin uses for "every beat" glow effects. */
-export const TIMER_RHYTHM = 140;
+export const TIMER_RHYTHM: typeof LR2_TIMER.RHYTHM = LR2_TIMER.RHYTHM;
 
 /**
  * prop.lua `preview = 141` — fires when the chart's "preview" state begins (post-decode,
@@ -105,25 +111,25 @@ export const TIMER_RHYTHM = 140;
 export const TIMER_PREVIEW = 141;
 
 /** prop.lua `fullcombo_1p = 48` — fires once at end-of-chart when 1P side has a full combo. */
-export const TIMER_FULLCOMBO_1P = 48;
+export const TIMER_FULLCOMBO_1P: typeof LR2_TIMER.FULL_COMBO_1P = LR2_TIMER.FULL_COMBO_1P;
 /** prop.lua `fullcombo_2p = 49`. */
-export const TIMER_FULLCOMBO_2P = 49;
+export const TIMER_FULLCOMBO_2P: typeof LR2_TIMER.FULL_COMBO_2P = LR2_TIMER.FULL_COMBO_2P;
 
 /**
  * prop.lua `gauge_inclease_1p = 42` (note: beatoraja's actual spelling is "INCLEASE", a typo
  * of "INCREASE" preserved for skin-author compatibility). Re-stamped on every judge that
  * gains gauge — skins author a brief sparkle / flash animation gated on it.
  */
-export const TIMER_GAUGE_INCREASE_1P = 42;
+export const TIMER_GAUGE_INCREASE_1P: typeof LR2_TIMER.GAUGE_UP_1P = LR2_TIMER.GAUGE_UP_1P;
 /** prop.lua `gauge_inclease_2p = 43`. */
-export const TIMER_GAUGE_INCREASE_2P = 43;
+export const TIMER_GAUGE_INCREASE_2P: typeof LR2_TIMER.GAUGE_UP_2P = LR2_TIMER.GAUGE_UP_2P;
 /**
  * prop.lua `gauge_max_1p = 44` — fires once when 1P gauge first reaches 100%. Skins author
  * a "max gauge" celebration lamp gated on it.
  */
-export const TIMER_GAUGE_MAX_1P = 44;
+export const TIMER_GAUGE_MAX_1P: typeof LR2_TIMER.GAUGE_MAX_1P = LR2_TIMER.GAUGE_MAX_1P;
 /** prop.lua `gauge_max_2p = 45`. */
-export const TIMER_GAUGE_MAX_2P = 45;
+export const TIMER_GAUGE_MAX_2P: typeof LR2_TIMER.GAUGE_MAX_2P = LR2_TIMER.GAUGE_MAX_2P;
 
 // ─── Per-lane timer bases (1P side) ──────────────────────────────────────────────────────────────
 //
@@ -131,24 +137,24 @@ export const TIMER_GAUGE_MAX_2P = 45;
 // `bomb_1p_scratch`, `bombTimerId(1, 1) = 51` is `bomb_1p_key1`, … (matches prop.lua exactly).
 
 /** prop.lua `bomb_1p_scratch = 50` … `bomb_1p_key9 = 59`. */
-export const TIMER_BOMB_1P_BASE = 50;
+export const TIMER_BOMB_1P_BASE: typeof LR2_TIMER.BOMB_1P = LR2_TIMER.BOMB_1P;
 /** prop.lua `bomb_2p_scratch = 60` … `bomb_2p_key9 = 69`. */
-export const TIMER_BOMB_2P_BASE = 60;
+export const TIMER_BOMB_2P_BASE: typeof LR2_TIMER.BOMB_2P = LR2_TIMER.BOMB_2P;
 
 /** prop.lua `hold_1p_scratch = 70` … `hold_1p_key9 = 79` (LN hold-effect timer). */
-export const TIMER_LN_HOLD_1P_BASE = 70;
+export const TIMER_LN_HOLD_1P_BASE: typeof LR2_TIMER.LN_HOLD_1P = LR2_TIMER.LN_HOLD_1P;
 /** prop.lua `hold_2p_scratch = 80` … `hold_2p_key9 = 89`. */
-export const TIMER_LN_HOLD_2P_BASE = 80;
+export const TIMER_LN_HOLD_2P_BASE: typeof LR2_TIMER.LN_HOLD_2P = LR2_TIMER.LN_HOLD_2P;
 
 /** prop.lua `keyon_1p_scratch = 100` … `keyon_1p_key9 = 109`. */
-export const TIMER_KEY_ON_1P_BASE = 100;
+export const TIMER_KEY_ON_1P_BASE: typeof LR2_TIMER.KEY_ON_1P = LR2_TIMER.KEY_ON_1P;
 /** prop.lua `keyon_2p_scratch = 110` … `keyon_2p_key9 = 119`. */
-export const TIMER_KEY_ON_2P_BASE = 110;
+export const TIMER_KEY_ON_2P_BASE: typeof LR2_TIMER.KEY_ON_2P = LR2_TIMER.KEY_ON_2P;
 
 /** prop.lua `keyoff_1p_scratch = 120` … `keyoff_1p_key9 = 129`. */
-export const TIMER_KEY_OFF_1P_BASE = 120;
+export const TIMER_KEY_OFF_1P_BASE: typeof LR2_TIMER.KEY_OFF_1P = LR2_TIMER.KEY_OFF_1P;
 /** prop.lua `keyoff_2p_scratch = 130` … `keyoff_2p_key9 = 139`. */
-export const TIMER_KEY_OFF_2P_BASE = 130;
+export const TIMER_KEY_OFF_2P_BASE: typeof LR2_TIMER.KEY_OFF_2P = LR2_TIMER.KEY_OFF_2P;
 
 // ─── 24-key extensions ─────────────────────────────────────────────────────────────────────────
 //
@@ -167,7 +173,7 @@ export const TIMER_KEY_OFF_EXT_BASE = 1600;
 const TIMER_EXT_2P_OFFSET = 100;
 
 /** Maximum lane index addressable by the 1P / 2P bases (inclusive). Above this falls into 1000+ space. */
-export const LR2_LANE_INDEX_MAX = 9;
+export { LR2_LANE_INDEX_MAX };
 
 /**
  * Per-side base for a given timer category, returning the value to which a 0..N lane index is added.
@@ -267,53 +273,53 @@ export function endOfNoteTimerId(side: BeatorajaSide): number {
 
 export const BEATORAJA_OP = {
   /** prop.lua `now_loading = 80`. */
-  NOW_LOADING: 80,
+  NOW_LOADING: LR2_OP.LOADING as typeof LR2_OP.LOADING,
   /** prop.lua `loaded = 81`. */
-  LOADED: 81,
+  LOADED: LR2_OP.LOADED as typeof LR2_OP.LOADED,
 
   // ─── IR / save-state / replay ops (50, 51, 60-66, 82-84) ──────────────────────────────────
   // SkinProperty: OFFLINE / ONLINE — IR (online ranking) connection state. We have no IR
   // integration today so the select scene fires OFFLINE; chrome that gates on ONLINE stays
   // hidden, OFFLINE-gated chrome shows.
-  OFFLINE: 50,
-  ONLINE: 51,
+  OFFLINE: LR2_OP.OFFLINE as typeof LR2_OP.OFFLINE,
+  ONLINE: LR2_OP.ONLINE as typeof LR2_OP.ONLINE,
   // Save-state ops — declare whether the DB will save this run's score / clear lamp. Without a
   // score DB we permanently fire DISABLE_SAVE_SCORE / NO_SAVE_CLEAR; chrome that gates on the
   // ENABLE_* / *_SAVE_CLEAR variants stays hidden.
-  DISABLE_SAVE_SCORE: 60,
-  ENABLE_SAVE_SCORE: 61,
-  NO_SAVE_CLEAR: 62,
-  EASY_SAVE_CLEAR: 63,
-  NORMAL_SAVE_CLEAR: 64,
-  HARD_SAVE_CLEAR: 65,
-  FULLCOMBO_SAVE_CLEAR: 66,
+  DISABLE_SAVE_SCORE: LR2_OP.SCORE_SAVE_OFF as typeof LR2_OP.SCORE_SAVE_OFF,
+  ENABLE_SAVE_SCORE: LR2_OP.SCORE_SAVE_ON as typeof LR2_OP.SCORE_SAVE_ON,
+  NO_SAVE_CLEAR: LR2_OP.CLEAR_SAVE_OFF as typeof LR2_OP.CLEAR_SAVE_OFF,
+  EASY_SAVE_CLEAR: LR2_OP.CLEAR_SAVE_EASY as typeof LR2_OP.CLEAR_SAVE_EASY,
+  NORMAL_SAVE_CLEAR: LR2_OP.CLEAR_SAVE_NORMAL as typeof LR2_OP.CLEAR_SAVE_NORMAL,
+  HARD_SAVE_CLEAR: LR2_OP.CLEAR_SAVE_HARD as typeof LR2_OP.CLEAR_SAVE_HARD,
+  FULLCOMBO_SAVE_CLEAR: LR2_OP.CLEAR_SAVE_FULL_COMBO as typeof LR2_OP.CLEAR_SAVE_FULL_COMBO,
   // Replay system state — we have no replay capture / playback today, so REPLAY_OFF fires
   // permanently. Chrome that gates on REPLAY_RECORDING / REPLAY_PLAYING stays hidden.
-  REPLAY_OFF: 82,
-  REPLAY_RECORDING: 83,
-  REPLAY_PLAYING: 84,
+  REPLAY_OFF: LR2_OP.REPLAY_OFF as typeof LR2_OP.REPLAY_OFF,
+  REPLAY_RECORDING: LR2_OP.REPLAY_RECORDING as typeof LR2_OP.REPLAY_RECORDING,
+  REPLAY_PLAYING: LR2_OP.REPLAY_PLAYING as typeof LR2_OP.REPLAY_PLAYING,
 
   /** prop.lua `autoplayoff = 32` / `autoplayon = 33`. */
-  AUTOPLAY_OFF: 32,
-  AUTOPLAY_ON: 33,
+  AUTOPLAY_OFF: LR2_OP.AUTOPLAY_OFF as typeof LR2_OP.AUTOPLAY_OFF,
+  AUTOPLAY_ON: LR2_OP.AUTOPLAY_ON as typeof LR2_OP.AUTOPLAY_ON,
 
   /** prop.lua `bgaoff = 40` / `bgaon = 41`. */
-  BGA_OFF: 40,
-  BGA_ON: 41,
+  BGA_OFF: LR2_OP.BGA_OFF as typeof LR2_OP.BGA_OFF,
+  BGA_ON: LR2_OP.BGA_ON as typeof LR2_OP.BGA_ON,
 
   // ─── 1P last-judge op (prop.lua `_1p_*`) ─────────────────────────────────────────────────────
   /** prop.lua `_1p_perfect = 241`. */
-  P1_JUDGE_PERFECT: 241,
+  P1_JUDGE_PERFECT: LR2_OP.JUDGE_1P_PERFECT as typeof LR2_OP.JUDGE_1P_PERFECT,
   /** prop.lua `_1p_great = 242`. */
-  P1_JUDGE_GREAT: 242,
+  P1_JUDGE_GREAT: LR2_OP.JUDGE_1P_GREAT as typeof LR2_OP.JUDGE_1P_GREAT,
   /** prop.lua `_1p_good = 243`. */
-  P1_JUDGE_GOOD: 243,
+  P1_JUDGE_GOOD: LR2_OP.JUDGE_1P_GOOD as typeof LR2_OP.JUDGE_1P_GOOD,
   /** prop.lua `_1p_bad = 244`. */
-  P1_JUDGE_BAD: 244,
+  P1_JUDGE_BAD: LR2_OP.JUDGE_1P_BAD as typeof LR2_OP.JUDGE_1P_BAD,
   /** prop.lua `_1p_poor = 245`. */
-  P1_JUDGE_POOR: 245,
+  P1_JUDGE_POOR: LR2_OP.JUDGE_1P_POOR as typeof LR2_OP.JUDGE_1P_POOR,
   /** prop.lua `_1p_miss = 246`. */
-  P1_JUDGE_MISS: 246,
+  P1_JUDGE_MISS: LR2_OP.JUDGE_1P_MISS as typeof LR2_OP.JUDGE_1P_MISS,
 
   /** prop.lua `_1p_early = 1242` (current judge was on the early side of its window). */
   P1_JUDGE_EARLY: 1242,
@@ -321,12 +327,12 @@ export const BEATORAJA_OP = {
   P1_JUDGE_LATE: 1243,
 
   // ─── 2P last-judge op (prop.lua `_2p_*`) ─────────────────────────────────────────────────────
-  P2_JUDGE_PERFECT: 261,
-  P2_JUDGE_GREAT: 262,
-  P2_JUDGE_GOOD: 263,
-  P2_JUDGE_BAD: 264,
-  P2_JUDGE_POOR: 265,
-  P2_JUDGE_MISS: 266,
+  P2_JUDGE_PERFECT: LR2_OP.JUDGE_2P_PERFECT as typeof LR2_OP.JUDGE_2P_PERFECT,
+  P2_JUDGE_GREAT: LR2_OP.JUDGE_2P_GREAT as typeof LR2_OP.JUDGE_2P_GREAT,
+  P2_JUDGE_GOOD: LR2_OP.JUDGE_2P_GOOD as typeof LR2_OP.JUDGE_2P_GOOD,
+  P2_JUDGE_BAD: LR2_OP.JUDGE_2P_BAD as typeof LR2_OP.JUDGE_2P_BAD,
+  P2_JUDGE_POOR: LR2_OP.JUDGE_2P_POOR as typeof LR2_OP.JUDGE_2P_POOR,
+  P2_JUDGE_MISS: LR2_OP.JUDGE_2P_MISS as typeof LR2_OP.JUDGE_2P_MISS,
 
   /** prop.lua `_2p_early = 1262`. */
   P2_JUDGE_EARLY: 1262,
@@ -364,23 +370,23 @@ export const BEATORAJA_OP = {
   //
   // Exactly one of these is active at any given moment; the renderer toggles them mutually
   // exclusively via `computeRankOp`.
-  P1_RANK_AAA: 200,
-  P1_RANK_AA: 201,
-  P1_RANK_A: 202,
-  P1_RANK_B: 203,
-  P1_RANK_C: 204,
-  P1_RANK_D: 205,
-  P1_RANK_E: 206,
-  P1_RANK_F: 207,
+  P1_RANK_AAA: LR2_OP.RANK_1P_AAA as typeof LR2_OP.RANK_1P_AAA,
+  P1_RANK_AA: LR2_OP.RANK_1P_AA as typeof LR2_OP.RANK_1P_AA,
+  P1_RANK_A: LR2_OP.RANK_1P_A as typeof LR2_OP.RANK_1P_A,
+  P1_RANK_B: LR2_OP.RANK_1P_B as typeof LR2_OP.RANK_1P_B,
+  P1_RANK_C: LR2_OP.RANK_1P_C as typeof LR2_OP.RANK_1P_C,
+  P1_RANK_D: LR2_OP.RANK_1P_D as typeof LR2_OP.RANK_1P_D,
+  P1_RANK_E: LR2_OP.RANK_1P_E as typeof LR2_OP.RANK_1P_E,
+  P1_RANK_F: LR2_OP.RANK_1P_F as typeof LR2_OP.RANK_1P_F,
 
-  P2_RANK_AAA: 210,
-  P2_RANK_AA: 211,
-  P2_RANK_A: 212,
-  P2_RANK_B: 213,
-  P2_RANK_C: 214,
-  P2_RANK_D: 215,
-  P2_RANK_E: 216,
-  P2_RANK_F: 217,
+  P2_RANK_AAA: LR2_OP.RANK_2P_AAA as typeof LR2_OP.RANK_2P_AAA,
+  P2_RANK_AA: LR2_OP.RANK_2P_AA as typeof LR2_OP.RANK_2P_AA,
+  P2_RANK_A: LR2_OP.RANK_2P_A as typeof LR2_OP.RANK_2P_A,
+  P2_RANK_B: LR2_OP.RANK_2P_B as typeof LR2_OP.RANK_2P_B,
+  P2_RANK_C: LR2_OP.RANK_2P_C as typeof LR2_OP.RANK_2P_C,
+  P2_RANK_D: LR2_OP.RANK_2P_D as typeof LR2_OP.RANK_2P_D,
+  P2_RANK_E: LR2_OP.RANK_2P_E as typeof LR2_OP.RANK_2P_E,
+  P2_RANK_F: LR2_OP.RANK_2P_F as typeof LR2_OP.RANK_2P_F,
 
   /** Generic active-player rank — most skins use these instead of the side-specific ones. */
   RANK_AAA: 220,
@@ -395,16 +401,16 @@ export const BEATORAJA_OP = {
   // ─── Result-scene rank ops (prop.lua `result_*_1p = 300` ... `result_0_1p = 308`) ─────────
   // Same letter-rank logic as the live ops above, but only set on the result scene. Authors
   // typically gate result-screen visuals on these to swap rank graphics by outcome.
-  RESULT_RANK_AAA_1P: 300,
-  RESULT_RANK_AA_1P: 301,
-  RESULT_RANK_A_1P: 302,
-  RESULT_RANK_B_1P: 303,
-  RESULT_RANK_C_1P: 304,
-  RESULT_RANK_D_1P: 305,
-  RESULT_RANK_E_1P: 306,
-  RESULT_RANK_F_1P: 307,
+  RESULT_RANK_AAA_1P: LR2_OP.RESULT_RANK_AAA as typeof LR2_OP.RESULT_RANK_AAA,
+  RESULT_RANK_AA_1P: LR2_OP.RESULT_RANK_AA as typeof LR2_OP.RESULT_RANK_AA,
+  RESULT_RANK_A_1P: LR2_OP.RESULT_RANK_A as typeof LR2_OP.RESULT_RANK_A,
+  RESULT_RANK_B_1P: LR2_OP.RESULT_RANK_B as typeof LR2_OP.RESULT_RANK_B,
+  RESULT_RANK_C_1P: LR2_OP.RESULT_RANK_C as typeof LR2_OP.RESULT_RANK_C,
+  RESULT_RANK_D_1P: LR2_OP.RESULT_RANK_D as typeof LR2_OP.RESULT_RANK_D,
+  RESULT_RANK_E_1P: LR2_OP.RESULT_RANK_E as typeof LR2_OP.RESULT_RANK_E,
+  RESULT_RANK_F_1P: LR2_OP.RESULT_RANK_F as typeof LR2_OP.RESULT_RANK_F,
   /** prop.lua `result_0_1p = 308` — no score (POOR everything). */
-  RESULT_RANK_ZERO_1P: 308,
+  RESULT_RANK_ZERO_1P: LR2_OP.RESULT_RANK_0 as typeof LR2_OP.RESULT_RANK_0,
 
   // ─── Per-judge "exists" gates (prop.lua `perfect_exist = 2241` …) ─────────────────────────
   // Active when at least one judgement of that kind has been observed this run. Skins use these
@@ -418,33 +424,33 @@ export const BEATORAJA_OP = {
 
   // ─── Result outcome (prop.lua `result_clear = 90`, `result_fail = 91`) ────────────────────
   /** Run cleared. Set when `summary.gauge.cleared === true`. */
-  RESULT_CLEAR: 90,
+  RESULT_CLEAR: LR2_OP.RESULT_CLEAR as typeof LR2_OP.RESULT_CLEAR,
   /** Run failed. The complement of {@link RESULT_CLEAR}; one or the other is active. */
-  RESULT_FAIL: 91,
+  RESULT_FAIL: LR2_OP.RESULT_FAIL as typeof LR2_OP.RESULT_FAIL,
 
   // ─── Clear-lamp ops (prop.lua `clear_easy = 121` etc.) ────────────────────────────────────
   // We only set the most-fitting one for the live run's outcome. NO_PLAY / FAILED / EASY /
   // NORMAL / HARD / FULLCOMBO are mutually exclusive — picking the highest classification
   // matches beatoraja's "best-of-this-run" semantics.
-  CLEAR_LAMP_NOPLAY: 100,
-  CLEAR_LAMP_FAILED: 101,
+  CLEAR_LAMP_NOPLAY: LR2_OP.LAMP_NO_PLAY as typeof LR2_OP.LAMP_NO_PLAY,
+  CLEAR_LAMP_FAILED: LR2_OP.LAMP_FAILED as typeof LR2_OP.LAMP_FAILED,
   CLEAR_LAMP_ASSIST_EASY: 1100,
   CLEAR_LAMP_LIGHT_ASSIST_EASY: 1101,
-  CLEAR_LAMP_EASY: 102,
-  CLEAR_LAMP_NORMAL: 103,
-  CLEAR_LAMP_HARD: 104,
+  CLEAR_LAMP_EASY: LR2_OP.LAMP_EASY as typeof LR2_OP.LAMP_EASY,
+  CLEAR_LAMP_NORMAL: LR2_OP.LAMP_NORMAL as typeof LR2_OP.LAMP_NORMAL,
+  CLEAR_LAMP_HARD: LR2_OP.LAMP_HARD as typeof LR2_OP.LAMP_HARD,
   CLEAR_LAMP_EXHARD: 1102,
-  CLEAR_LAMP_FULLCOMBO: 105,
+  CLEAR_LAMP_FULLCOMBO: LR2_OP.LAMP_FULL_COMBO as typeof LR2_OP.LAMP_FULL_COMBO,
   CLEAR_LAMP_PERFECT: 1103,
   CLEAR_LAMP_MAX: 1104,
 
   // ─── Gauge type ops (prop.lua `gauge_groove = 42` etc.) ───────────────────────────────────
   // The active gauge variant. Beatoraja sets exactly one of these (1P side); skins gate the
   // gauge graphic / clear-threshold marker on the matching op.
-  GAUGE_GROOVE: 42,
-  GAUGE_HARD: 43,
-  GAUGE_GROOVE_2P: 44,
-  GAUGE_HARD_2P: 45,
+  GAUGE_GROOVE: LR2_OP.GAUGE_1P_NORMAL as typeof LR2_OP.GAUGE_1P_NORMAL,
+  GAUGE_HARD: LR2_OP.GAUGE_1P_RED as typeof LR2_OP.GAUGE_1P_RED,
+  GAUGE_GROOVE_2P: LR2_OP.GAUGE_2P_NORMAL as typeof LR2_OP.GAUGE_2P_NORMAL,
+  GAUGE_HARD_2P: LR2_OP.GAUGE_2P_RED as typeof LR2_OP.GAUGE_2P_RED,
   GAUGE_EX: 1046,
   GAUGE_EX_2P: 1047,
 
@@ -470,17 +476,17 @@ export const BEATORAJA_OP = {
   // (GdbG_Skin, ModernChic's decide pane via `MAIN.OP.DIFFICULTY1..5/0`) gate per-difficulty
   // chrome on these. We fire BOTH op blocks simultaneously so either flavour of skin renders.
   /** LR2 `OP_DIFFICULTY_UNDEFINED` — `#DIFFICULTY` header missing or 0. */
-  DIFFICULTY_UNDEFINED: 150,
+  DIFFICULTY_UNDEFINED: LR2_OP.DIFFICULTY_UNDEFINED as typeof LR2_OP.DIFFICULTY_UNDEFINED,
   /** LR2 `OP_DIFFICULTY_BEGINNER` (= EASY in some skins) — `#DIFFICULTY 1`. */
-  DIFFICULTY_BEGINNER: 151,
+  DIFFICULTY_BEGINNER: LR2_OP.DIFFICULTY_BEGINNER as typeof LR2_OP.DIFFICULTY_BEGINNER,
   /** LR2 `OP_DIFFICULTY_NORMAL` — `#DIFFICULTY 2`. */
-  DIFFICULTY_NORMAL: 152,
+  DIFFICULTY_NORMAL: LR2_OP.DIFFICULTY_NORMAL as typeof LR2_OP.DIFFICULTY_NORMAL,
   /** LR2 `OP_DIFFICULTY_HYPER` — `#DIFFICULTY 3`. */
-  DIFFICULTY_HYPER: 153,
+  DIFFICULTY_HYPER: LR2_OP.DIFFICULTY_HYPER as typeof LR2_OP.DIFFICULTY_HYPER,
   /** LR2 `OP_DIFFICULTY_ANOTHER` — `#DIFFICULTY 4`. */
-  DIFFICULTY_ANOTHER: 154,
+  DIFFICULTY_ANOTHER: LR2_OP.DIFFICULTY_ANOTHER as typeof LR2_OP.DIFFICULTY_ANOTHER,
   /** LR2 `OP_DIFFICULTY_INSANE` — `#DIFFICULTY 5`. */
-  DIFFICULTY_INSANE: 155,
+  DIFFICULTY_INSANE: LR2_OP.DIFFICULTY_INSANE as typeof LR2_OP.DIFFICULTY_INSANE,
 
   // ─── Music-select bar ops (SkinProperty: FOLDERBAR=1, SONGBAR=2, GRADEBAR=3, PLAYABLEBAR=5) ─
   // Set per-frame on the select scene based on what the cursor's focused bar is. Skins gate
@@ -488,13 +494,13 @@ export const BEATORAJA_OP = {
   // shown on a folder bar), bpm / playlevel / score readouts behind SONGBAR, course-mod chrome
   // behind GRADEBAR. Without these the entire song-info panel stays hidden.
   /** Cursor is on a folder bar — show "X songs in this folder" chrome. */
-  FOLDERBAR: 1,
+  FOLDERBAR: LR2_OP.FOLDER_BAR as typeof LR2_OP.FOLDER_BAR,
   /** Cursor is on a song bar — show per-song info (BPM / level / title / score). */
-  SONGBAR: 2,
+  SONGBAR: LR2_OP.SONG_BAR as typeof LR2_OP.SONG_BAR,
   /** Cursor is on a grade / course bar — show course mods + score chrome. */
-  GRADEBAR: 3,
+  GRADEBAR: LR2_OP.COURSE_BAR as typeof LR2_OP.COURSE_BAR,
   /** Cursor is on a playable bar (song OR grade). Used by chrome that's the same across both. */
-  PLAYABLEBAR: 5,
+  PLAYABLEBAR: LR2_OP.PLAYABLE_BAR as typeof LR2_OP.PLAYABLE_BAR,
 
   // ─── Course ops (SkinProperty `OPTION_GRADEBAR_*` / `OPTION_COURSE_*` / `OPTION_MODE_COURSE`) ──
   // The `GRADEBAR_*` ops light on the select screen for the focused course's constraints
@@ -532,26 +538,26 @@ export const BEATORAJA_OP = {
   /** SkinProperty `OPTION_RANDOMCOURSEBAR` — the cursor is on a random-course bar. */
   RANDOMCOURSEBAR: 1031,
   /** SkinProperty `OPTION_COURSE_STAGE1` — stage 1 of a course is played and is not the last one. */
-  COURSE_STAGE1: 280,
+  COURSE_STAGE1: LR2_OP.COURSE_STAGE1 as typeof LR2_OP.COURSE_STAGE1,
   /** SkinProperty `OPTION_COURSE_STAGE2`. */
-  COURSE_STAGE2: 281,
+  COURSE_STAGE2: LR2_OP.COURSE_STAGE2 as typeof LR2_OP.COURSE_STAGE2,
   /** SkinProperty `OPTION_COURSE_STAGE3`. */
-  COURSE_STAGE3: 282,
+  COURSE_STAGE3: LR2_OP.COURSE_STAGE3 as typeof LR2_OP.COURSE_STAGE3,
   /** SkinProperty `OPTION_COURSE_STAGE4`. */
-  COURSE_STAGE4: 283,
+  COURSE_STAGE4: LR2_OP.COURSE_STAGE4 as typeof LR2_OP.COURSE_STAGE4,
   /** SkinProperty `OPTION_COURSE_STAGE_FINAL` — the last stage of a course. */
-  COURSE_STAGE_FINAL: 289,
+  COURSE_STAGE_FINAL: LR2_OP.COURSE_STAGE_FINAL as typeof LR2_OP.COURSE_STAGE_FINAL,
   /** SkinProperty `OPTION_MODE_COURSE` — a course is running. */
-  MODE_COURSE: 290,
+  MODE_COURSE: LR2_OP.COURSE as typeof LR2_OP.COURSE,
 
   // ─── Chart keys ops (prop.lua `_*keysong = 160-164` etc.) ─────────────────────────────────
   // Set to indicate which chart variant is being played. Skins use these to gate per-keys
   // chrome elements (e.g. show 7K-specific lane backgrounds only on _7keysong).
-  KEYSONG_7K: 160,
-  KEYSONG_5K: 161,
-  KEYSONG_14K: 162,
-  KEYSONG_10K: 163,
-  KEYSONG_9K: 164,
+  KEYSONG_7K: LR2_OP.KEYS_7 as typeof LR2_OP.KEYS_7,
+  KEYSONG_5K: LR2_OP.KEYS_5 as typeof LR2_OP.KEYS_5,
+  KEYSONG_14K: LR2_OP.KEYS_14 as typeof LR2_OP.KEYS_14,
+  KEYSONG_10K: LR2_OP.KEYS_10 as typeof LR2_OP.KEYS_10,
+  KEYSONG_9K: LR2_OP.KEYS_9 as typeof LR2_OP.KEYS_9,
   KEYSONG_24K: 1160,
   KEYSONG_24K_DP: 1161,
 
@@ -559,32 +565,32 @@ export const BEATORAJA_OP = {
   // Set per-frame on the select scene based on the focused chart's `#RANK` header value
   // (0=VERYHARD, 1=HARD, 2=NORMAL, 3=EASY, 4=VERYEASY). Default skin's "judge" image swap
   // chrome (GdbG_Skin / ModernChic both gate per-rank judgment-window labels) gates on these.
-  JUDGE_VERYHARD: 180,
-  JUDGE_HARD: 181,
-  JUDGE_NORMAL: 182,
-  JUDGE_EASY: 183,
+  JUDGE_VERYHARD: LR2_OP.JUDGE_VERY_HARD as typeof LR2_OP.JUDGE_VERY_HARD,
+  JUDGE_HARD: LR2_OP.JUDGE_HARD as typeof LR2_OP.JUDGE_HARD,
+  JUDGE_NORMAL: LR2_OP.JUDGE_NORMAL as typeof LR2_OP.JUDGE_NORMAL,
+  JUDGE_EASY: LR2_OP.JUDGE_EASY as typeof LR2_OP.JUDGE_EASY,
   JUDGE_VERYEASY: 184,
 
   // ─── Chart trait ops (prop.lua `bgaoff = 40` ... `randomsequence = 179`) ──────────────────
   // Set based on chart content + user options. Skins use these to gate optional chrome
   // (e.g. show LN-specific tracks only on `OPTION_LN`).
-  NO_BGA: 170,
-  HAS_BGA: 171,
-  NO_LN: 172,
-  HAS_LN: 173,
-  NO_TEXT: 174,
-  HAS_TEXT: 175,
-  NO_BPMCHANGE: 176,
-  HAS_BPMCHANGE: 177,
+  NO_BGA: LR2_OP.NO_BGA as typeof LR2_OP.NO_BGA,
+  HAS_BGA: LR2_OP.HAS_BGA as typeof LR2_OP.HAS_BGA,
+  NO_LN: LR2_OP.NO_LN as typeof LR2_OP.NO_LN,
+  HAS_LN: LR2_OP.HAS_LN as typeof LR2_OP.HAS_LN,
+  NO_TEXT: LR2_OP.NO_TEXT as typeof LR2_OP.NO_TEXT,
+  HAS_TEXT: LR2_OP.HAS_TEXT as typeof LR2_OP.HAS_TEXT,
+  NO_BPMCHANGE: LR2_OP.NO_BPM_CHANGE as typeof LR2_OP.NO_BPM_CHANGE,
+  HAS_BPMCHANGE: LR2_OP.HAS_BPM_CHANGE as typeof LR2_OP.HAS_BPM_CHANGE,
   HAS_BPMSTOP: 1177,
-  NO_RANDOMSEQUENCE: 178,
-  HAS_RANDOMSEQUENCE: 179,
-  NO_STAGEFILE: 190,
-  HAS_STAGEFILE: 191,
-  NO_BANNER: 192,
-  HAS_BANNER: 193,
-  NO_BACKBMP: 194,
-  HAS_BACKBMP: 195,
+  NO_RANDOMSEQUENCE: LR2_OP.NO_RANDOM as typeof LR2_OP.NO_RANDOM,
+  HAS_RANDOMSEQUENCE: LR2_OP.HAS_RANDOM as typeof LR2_OP.HAS_RANDOM,
+  NO_STAGEFILE: LR2_OP.NO_STAGEFILE as typeof LR2_OP.NO_STAGEFILE,
+  HAS_STAGEFILE: LR2_OP.HAS_STAGEFILE as typeof LR2_OP.HAS_STAGEFILE,
+  NO_BANNER: LR2_OP.NO_BANNER as typeof LR2_OP.NO_BANNER,
+  HAS_BANNER: LR2_OP.HAS_BANNER as typeof LR2_OP.HAS_BANNER,
+  NO_BACKBMP: LR2_OP.NO_BACKBMP as typeof LR2_OP.NO_BACKBMP,
+  HAS_BACKBMP: LR2_OP.HAS_BACKBMP as typeof LR2_OP.HAS_BACKBMP,
 
   // ─── Lanecover / lift / hidden state (prop.lua `lanecover1_changing = 270` etc.) ──────────
   LANECOVER1_CHANGING: 270,
@@ -596,29 +602,30 @@ export const BEATORAJA_OP = {
   // Set based on the active run's EX-score band (DIFFERENT from the live `_1p_*` rank ops at
   // 200-207, which are the same data but a separate op block beatoraja maintains for the result
   // scene's "during play" indicator).
-  NOW_AAA_1P: 340,
-  NOW_AA_1P: 341,
-  NOW_A_1P: 342,
-  NOW_B_1P: 343,
-  NOW_C_1P: 344,
-  NOW_D_1P: 345,
-  NOW_E_1P: 346,
-  NOW_F_1P: 347,
+  NOW_AAA_1P: LR2_OP.UPDATED_RANK_AAA as typeof LR2_OP.UPDATED_RANK_AAA,
+  NOW_AA_1P: LR2_OP.UPDATED_RANK_AA as typeof LR2_OP.UPDATED_RANK_AA,
+  NOW_A_1P: LR2_OP.UPDATED_RANK_A as typeof LR2_OP.UPDATED_RANK_A,
+  NOW_B_1P: LR2_OP.UPDATED_RANK_B as typeof LR2_OP.UPDATED_RANK_B,
+  NOW_C_1P: LR2_OP.UPDATED_RANK_C as typeof LR2_OP.UPDATED_RANK_C,
+  NOW_D_1P: LR2_OP.UPDATED_RANK_D as typeof LR2_OP.UPDATED_RANK_D,
+  NOW_E_1P: LR2_OP.UPDATED_RANK_E as typeof LR2_OP.UPDATED_RANK_E,
+  NOW_F_1P: LR2_OP.UPDATED_RANK_F as typeof LR2_OP.UPDATED_RANK_F,
 
   // ─── Score band ops (prop.lua `_1p_0_9 = 230` ... `_1p_100 = 240`, `_1p_border_or_more = 1240`) ──
   // The active EX-score band. Many score-readout chrome elements gate on these. We set exactly
-  // one based on the EX-score percentage.
-  P1_BAND_0_9: 230,
-  P1_BAND_10_19: 231,
-  P1_BAND_20_29: 232,
-  P1_BAND_30_39: 233,
-  P1_BAND_40_49: 234,
-  P1_BAND_50_59: 235,
-  P1_BAND_60_69: 236,
-  P1_BAND_70_79: 237,
-  P1_BAND_80_89: 238,
-  P1_BAND_90_99: 239,
-  P1_BAND_100: 240,
+  // one based on the EX-score percentage. LR2 defines 230-240 as ten-percent ranges of the 1P gauge
+  // (`LR2_OP.GAUGE_1P_*`, and `_1p_border_or_more` reads as the gauge's clear border).
+  P1_BAND_0_9: LR2_OP.GAUGE_1P_0_9 as typeof LR2_OP.GAUGE_1P_0_9,
+  P1_BAND_10_19: LR2_OP.GAUGE_1P_10_19 as typeof LR2_OP.GAUGE_1P_10_19,
+  P1_BAND_20_29: LR2_OP.GAUGE_1P_20_29 as typeof LR2_OP.GAUGE_1P_20_29,
+  P1_BAND_30_39: LR2_OP.GAUGE_1P_30_39 as typeof LR2_OP.GAUGE_1P_30_39,
+  P1_BAND_40_49: LR2_OP.GAUGE_1P_40_49 as typeof LR2_OP.GAUGE_1P_40_49,
+  P1_BAND_50_59: LR2_OP.GAUGE_1P_50_59 as typeof LR2_OP.GAUGE_1P_50_59,
+  P1_BAND_60_69: LR2_OP.GAUGE_1P_60_69 as typeof LR2_OP.GAUGE_1P_60_69,
+  P1_BAND_70_79: LR2_OP.GAUGE_1P_70_79 as typeof LR2_OP.GAUGE_1P_70_79,
+  P1_BAND_80_89: LR2_OP.GAUGE_1P_80_89 as typeof LR2_OP.GAUGE_1P_80_89,
+  P1_BAND_90_99: LR2_OP.GAUGE_1P_90_99 as typeof LR2_OP.GAUGE_1P_90_99,
+  P1_BAND_100: LR2_OP.GAUGE_1P_100 as typeof LR2_OP.GAUGE_1P_100,
   P1_BAND_BORDER_OR_MORE: 1240,
 
   // ─── Synthetic op codes (player-web only, not in beatoraja's prop.lua) ────────────────────────
@@ -656,21 +663,21 @@ export const BEATORAJA_OP = {
  */
 export const BEATORAJA_BUTTON = {
   /** Cycle keymode filter (5K / 7K / 9K / 10K / 14K / 24K / 24K-DP / ALL). */
-  MODE: 11,
+  MODE: LR2_BUTTON.KEY_MODE_FILTER as typeof LR2_BUTTON.KEY_MODE_FILTER,
   /** Cycle sort order (default / title / artist / level / bpm / etc.). */
-  SORT: 12,
+  SORT: LR2_BUTTON.SORT as typeof LR2_BUTTON.SORT,
   /** Open key-config dialog. */
-  KEYCONFIG: 13,
+  KEYCONFIG: LR2_BUTTON.KEY_CONFIG as typeof LR2_BUTTON.KEY_CONFIG,
   /** Open skin-select picker. */
-  SKINSELECT: 14,
+  SKINSELECT: LR2_BUTTON.SKIN_SELECT as typeof LR2_BUTTON.SKIN_SELECT,
   /** Start play with the user's default mode. */
-  PLAY: 15,
+  PLAY: LR2_BUTTON.PLAY as typeof LR2_BUTTON.PLAY,
   /** Start play in autoplay mode. */
-  AUTOPLAY: 16,
+  AUTOPLAY: LR2_BUTTON.AUTOPLAY as typeof LR2_BUTTON.AUTOPLAY,
   /** Show chart's accompanying readme/text content. */
-  READTEXT: 17,
+  READTEXT: LR2_BUTTON.READ_TEXT as typeof LR2_BUTTON.READ_TEXT,
   /** Start replay slot 1. */
-  REPLAY: 19,
+  REPLAY: LR2_BUTTON.REPLAY as typeof LR2_BUTTON.REPLAY,
   /** Open IR ranking website for the focused chart. */
   OPEN_IR_WEBSITE: 210,
   /** Start practice mode (currently routes as plain play in player-web). */
@@ -680,13 +687,13 @@ export const BEATORAJA_BUTTON = {
   REPLAY3: 317,
   REPLAY4: 318,
   /** Toggle BGA (background animation) overlay. */
-  BGA: 72,
+  BGA: LR2_BUTTON.BGA as typeof LR2_BUTTON.BGA,
   /** Adjust note offset by ±1 ms (Shift = decrement). */
   JUDGE_TIMING: 74,
   /** Open target-score picker. */
   TARGET: 77,
   /** Cycle hispeed-fix mode. */
-  HSFIX: 55,
+  HSFIX: LR2_BUTTON.HS_FIX as typeof LR2_BUTTON.HS_FIX,
   /** Adjust lanecover percentage. */
   LANECOVER: 330,
   /** Adjust lift percentage. */
@@ -935,11 +942,11 @@ export function isPerfectJudge(kind: string): boolean {
 export const BEATORAJA_NUM = {
   // ─── Hispeed / lanecover (10, 12-14, 310-315, 1312-1327) ──────────────────────────────────────
   /** prop.lua `hispeed_lr2 = 10` — hispeed × 100, LR2-compatible slot. */
-  HISPEED_LR2: 10,
+  HISPEED_LR2: LR2_NUM.HISPEED_1P as typeof LR2_NUM.HISPEED_1P,
   /** prop.lua `judgetiming = 12` — manual judge offset (skin config). */
-  JUDGETIMING: 12,
+  JUDGETIMING: LR2_NUM.JUDGE_TIMING as typeof LR2_NUM.JUDGE_TIMING,
   /** prop.lua `lanecover1 = 14` — 1P lanecover percentage (skin config). */
-  LANECOVER1: 14,
+  LANECOVER1: LR2_NUM.LANE_COVER_1P as typeof LR2_NUM.LANE_COVER_1P,
   /** prop.lua `hispeed = 310` — current hispeed × 100 (e.g. 1.5× → 150). */
   HISPEED: 310,
   /** prop.lua `hispeed_afterdot = 311` — fractional digits of hispeed (e.g. 1.5× → 50). */
@@ -961,19 +968,19 @@ export const BEATORAJA_NUM = {
   /** prop.lua `totalplaytime_second = 19`. */
   TOTALPLAYTIME_SECOND: 19,
   /** prop.lua `current_fps = 20` — moving-average FPS. */
-  CURRENT_FPS: 20,
+  CURRENT_FPS: LR2_NUM.FPS as typeof LR2_NUM.FPS,
   /** prop.lua `time_year = 21`. */
-  TIME_YEAR: 21,
+  TIME_YEAR: LR2_NUM.YEAR as typeof LR2_NUM.YEAR,
   /** prop.lua `time_month = 22`. */
-  TIME_MONTH: 22,
+  TIME_MONTH: LR2_NUM.MONTH as typeof LR2_NUM.MONTH,
   /** prop.lua `time_day = 23`. */
-  TIME_DAY: 23,
+  TIME_DAY: LR2_NUM.DAY as typeof LR2_NUM.DAY,
   /** prop.lua `time_hour = 24`. */
-  TIME_HOUR: 24,
+  TIME_HOUR: LR2_NUM.HOUR as typeof LR2_NUM.HOUR,
   /** prop.lua `time_minute = 25`. */
-  TIME_MINUTE: 25,
+  TIME_MINUTE: LR2_NUM.MINUTE as typeof LR2_NUM.MINUTE,
   /** prop.lua `time_second = 26`. */
-  TIME_SECOND: 26,
+  TIME_SECOND: LR2_NUM.SECOND as typeof LR2_NUM.SECOND,
   /** prop.lua `operating_time_hour = 27` — beatoraja runtime hour part. */
   OPERATING_TIME_HOUR: 27,
   /** prop.lua `operating_time_minute = 28`. */
@@ -983,11 +990,11 @@ export const BEATORAJA_NUM = {
 
   // ─── Best-record block (71-89) ────────────────────────────────────────────────────────────────
   /** prop.lua `score = 71` — best-ever score for this chart. */
-  BEST_SCORE: 71,
+  BEST_SCORE: LR2_NUM.BEST_EXSCORE as typeof LR2_NUM.BEST_EXSCORE,
   /** prop.lua `maxscore = 72`. */
-  BEST_MAXSCORE: 72,
+  BEST_MAXSCORE: LR2_NUM.EXSCORE_MAX as typeof LR2_NUM.EXSCORE_MAX,
   /** prop.lua `totalnotes = 74` — total scorable notes (also exposed as live `totalnotes2 = 106`). */
-  TOTALNOTES: 74,
+  TOTALNOTES: LR2_NUM.TOTAL_NOTES as typeof LR2_NUM.TOTAL_NOTES,
   /**
    * prop.lua `maxcombo = 75` (upstream `NUMBER_MAXCOMBO`). Context-dependent:
    *
@@ -1008,31 +1015,31 @@ export const BEATORAJA_NUM = {
    *
    * The `BEST_*` prefix in this enum is a naming holdover from the music-select interpretation.
    */
-  BEST_MAXCOMBO: 75,
+  BEST_MAXCOMBO: LR2_NUM.BEST_MAX_COMBO as typeof LR2_NUM.BEST_MAX_COMBO,
   /** prop.lua `misscount = 76`. */
-  BEST_MISSCOUNT: 76,
+  BEST_MISSCOUNT: LR2_NUM.BEST_MIN_BP as typeof LR2_NUM.BEST_MIN_BP,
   /** prop.lua `playcount = 77`. */
-  PLAYCOUNT: 77,
+  PLAYCOUNT: LR2_NUM.PLAY_COUNT as typeof LR2_NUM.PLAY_COUNT,
   /** prop.lua `clearcount = 78`. */
-  CLEARCOUNT: 78,
+  CLEARCOUNT: LR2_NUM.CLEAR_COUNT as typeof LR2_NUM.CLEAR_COUNT,
   /** prop.lua `failcount = 79`. */
-  FAILCOUNT: 79,
+  FAILCOUNT: LR2_NUM.FAIL_COUNT as typeof LR2_NUM.FAIL_COUNT,
   /** prop.lua `perfect2 = 80` — best run's perfect count. */
-  BEST_PERFECT: 80,
+  BEST_PERFECT: LR2_NUM.BEST_PERFECT as typeof LR2_NUM.BEST_PERFECT,
   /** prop.lua `great2 = 81`. */
-  BEST_GREAT: 81,
+  BEST_GREAT: LR2_NUM.BEST_GREAT as typeof LR2_NUM.BEST_GREAT,
   /** prop.lua `good2 = 82`. */
-  BEST_GOOD: 82,
+  BEST_GOOD: LR2_NUM.BEST_GOOD as typeof LR2_NUM.BEST_GOOD,
   /** prop.lua `bad2 = 83`. */
-  BEST_BAD: 83,
+  BEST_BAD: LR2_NUM.BEST_BAD as typeof LR2_NUM.BEST_BAD,
   /** prop.lua `poor2 = 84`. */
-  BEST_POOR: 84,
+  BEST_POOR: LR2_NUM.BEST_POOR as typeof LR2_NUM.BEST_POOR,
 
   // ─── Chart metadata (90-92, 96) ───────────────────────────────────────────────────────────────
   /** prop.lua `maxbpm = 90`. */
-  MAXBPM: 90,
+  MAXBPM: LR2_NUM.MAX_BPM as typeof LR2_NUM.MAX_BPM,
   /** prop.lua `minbpm = 91`. */
-  MINBPM: 91,
+  MINBPM: LR2_NUM.MIN_BPM as typeof LR2_NUM.MIN_BPM,
   /** prop.lua `mainbpm = 92`. */
   MAINBPM: 92,
   /** prop.lua `playlevel = 96` — chart difficulty rating from `#PLAYLEVEL`. */
@@ -1040,37 +1047,37 @@ export const BEATORAJA_NUM = {
 
   // ─── Live-play block (100-116, 121-128, 135-136, 407, 410-427) ────────────────────────────────
   /** prop.lua `point = 100` — current run's score (NOT the best-ever record). */
-  POINT: 100,
+  POINT: LR2_NUM.SCORE as typeof LR2_NUM.SCORE,
   /** prop.lua `score2 = 101` — alias of `point` for skins that prefer the legacy name. */
   SCORE2: 101,
   /** prop.lua `score_rate = 102` — EX-score percentage integer part. */
-  SCORE_RATE: 102,
+  SCORE_RATE: LR2_NUM.SCORE_RATE as typeof LR2_NUM.SCORE_RATE,
   /** prop.lua `score_rate_afterdot = 103` — EX-score percentage post-decimal digits. */
-  SCORE_RATE_AFTERDOT: 103,
+  SCORE_RATE_AFTERDOT: LR2_NUM.SCORE_RATE_AFTERDOT as typeof LR2_NUM.SCORE_RATE_AFTERDOT,
   /** prop.lua `combo = 104` — running combo. */
-  COMBO: 104,
+  COMBO: LR2_NUM.COMBO as typeof LR2_NUM.COMBO,
   /** prop.lua `maxcombo2 = 105` — max combo this run. */
-  MAXCOMBO_LIVE: 105,
+  MAXCOMBO_LIVE: LR2_NUM.MAX_COMBO as typeof LR2_NUM.MAX_COMBO,
   /** prop.lua `totalnotes2 = 106`. */
-  TOTALNOTES_LIVE: 106,
+  TOTALNOTES_LIVE: LR2_NUM.NOTES as typeof LR2_NUM.NOTES,
   /** prop.lua `groovegauge = 107` — gauge % (integer). */
-  GROOVEGAUGE: 107,
+  GROOVEGAUGE: LR2_NUM.GAUGE as typeof LR2_NUM.GAUGE,
   /** prop.lua `diff_exscore = 108`. */
-  DIFF_EXSCORE: 108,
+  DIFF_EXSCORE: LR2_NUM.EXSCORE_DIFF as typeof LR2_NUM.EXSCORE_DIFF,
   /** prop.lua `perfect = 110`. */
-  PERFECT: 110,
+  PERFECT: LR2_NUM.PERFECT as typeof LR2_NUM.PERFECT,
   /** prop.lua `great = 111`. */
-  GREAT: 111,
+  GREAT: LR2_NUM.GREAT as typeof LR2_NUM.GREAT,
   /** prop.lua `good = 112`. */
-  GOOD: 112,
+  GOOD: LR2_NUM.GOOD as typeof LR2_NUM.GOOD,
   /** prop.lua `bad = 113`. */
-  BAD: 113,
+  BAD: LR2_NUM.BAD as typeof LR2_NUM.BAD,
   /** prop.lua `poor = 114`. */
-  POOR: 114,
+  POOR: LR2_NUM.POOR as typeof LR2_NUM.POOR,
   /** prop.lua `total_rate = 115`. */
-  TOTAL_RATE: 115,
+  TOTAL_RATE: LR2_NUM.TOTAL_RATE as typeof LR2_NUM.TOTAL_RATE,
   /** prop.lua `total_rate_afterdot = 116`. */
-  TOTAL_RATE_AFTERDOT: 116,
+  TOTAL_RATE_AFTERDOT: LR2_NUM.TOTAL_RATE_AFTERDOT as typeof LR2_NUM.TOTAL_RATE_AFTERDOT,
   /** prop.lua `target_score = 121`. */
   TARGET_SCORE: 121,
   /** prop.lua `target_score_rate = 122`. */
@@ -1180,17 +1187,17 @@ export const BEATORAJA_NUM = {
 
   // ─── Time-based readouts (160-165, 1163-1164) ─────────────────────────────────────────────────
   /** prop.lua `nowbpm = 160` — current BPM (best effort: chart's canonical BPM). */
-  NOWBPM: 160,
+  NOWBPM: LR2_NUM.BPM as typeof LR2_NUM.BPM,
   /** prop.lua `playtime_minute = 161`. */
-  PLAYTIME_MINUTE: 161,
+  PLAYTIME_MINUTE: LR2_NUM.PLAY_MINUTE as typeof LR2_NUM.PLAY_MINUTE,
   /** prop.lua `playtime_second = 162`. */
-  PLAYTIME_SECOND: 162,
+  PLAYTIME_SECOND: LR2_NUM.PLAY_SECOND as typeof LR2_NUM.PLAY_SECOND,
   /** prop.lua `timeleft_minute = 163`. */
-  TIMELEFT_MINUTE: 163,
+  TIMELEFT_MINUTE: LR2_NUM.REMAINING_MINUTE as typeof LR2_NUM.REMAINING_MINUTE,
   /** prop.lua `timeleft_second = 164`. */
-  TIMELEFT_SECOND: 164,
+  TIMELEFT_SECOND: LR2_NUM.REMAINING_SECOND as typeof LR2_NUM.REMAINING_SECOND,
   /** prop.lua `loading_progress = 165` — 0..100. */
-  LOADING_PROGRESS: 165,
+  LOADING_PROGRESS: LR2_NUM.LOADING_PROGRESS as typeof LR2_NUM.LOADING_PROGRESS,
   /** prop.lua `songlength_minute = 1163`. */
   SONGLENGTH_MINUTE: 1163,
   /** prop.lua `songlength_second = 1164`. */
@@ -1199,36 +1206,36 @@ export const BEATORAJA_NUM = {
 
 export const BEATORAJA_TEXT = {
   /** prop.lua `rival = 1`. DB-backed; not wired. */
-  RIVAL: 1,
+  RIVAL: LR2_TEXT.RIVAL as typeof LR2_TEXT.RIVAL,
   /** prop.lua `player = 2`. DB-backed; not wired. */
-  PLAYER: 2,
+  PLAYER: LR2_TEXT.PLAYER as typeof LR2_TEXT.PLAYER,
   /** prop.lua `title = 10`. */
-  TITLE: 10,
+  TITLE: LR2_TEXT.TITLE as typeof LR2_TEXT.TITLE,
   /** prop.lua `subtitle = 11`. */
-  SUBTITLE: 11,
+  SUBTITLE: LR2_TEXT.SUBTITLE as typeof LR2_TEXT.SUBTITLE,
   /** prop.lua `fulltitle = 12` (`title` + `" "` + `subtitle`). */
-  FULLTITLE: 12,
+  FULLTITLE: LR2_TEXT.FULL_TITLE as typeof LR2_TEXT.FULL_TITLE,
   /** prop.lua `genre = 13`. */
-  GENRE: 13,
+  GENRE: LR2_TEXT.GENRE as typeof LR2_TEXT.GENRE,
   /** prop.lua `artist = 14`. */
-  ARTIST: 14,
+  ARTIST: LR2_TEXT.ARTIST as typeof LR2_TEXT.ARTIST,
   /** prop.lua `subartist = 15`. */
-  SUBARTIST: 15,
+  SUBARTIST: LR2_TEXT.SUBARTIST as typeof LR2_TEXT.SUBARTIST,
   /** prop.lua `fullartist = 16` (`artist` + `" "` + `subartist`). */
-  FULLARTIST: 16,
+  FULLARTIST: LR2_TEXT.FULL_ARTIST as typeof LR2_TEXT.FULL_ARTIST,
   /**
    * SkinProperty `STRING_COURSE1_TITLE = 150`: the title of course stage 1. Stages 2-10 follow at 151-159
    * (`STRING_COURSE10_TITLE = 159`), on the select screen for the focused course and elsewhere for the running one.
    */
-  COURSE1_TITLE: 150,
+  COURSE1_TITLE: LR2_TEXT.COURSE_STAGE1_TITLE as typeof LR2_TEXT.COURSE_STAGE1_TITLE,
   /** SkinProperty `STRING_COURSE10_TITLE = 159`: the last course stage title slot. */
   COURSE10_TITLE: 159,
   /** prop.lua `searchword = 30`. The select scene's current search query. */
-  SEARCHWORD: 30,
+  SEARCHWORD: LR2_TEXT.SEARCH_WORD as typeof LR2_TEXT.SEARCH_WORD,
   /** prop.lua `skin_name = 50`. The mounted skin's `header.name`. */
-  SKIN_NAME: 50,
+  SKIN_NAME: LR2_TEXT.SKIN_NAME as typeof LR2_TEXT.SKIN_NAME,
   /** prop.lua `skin_author = 51`. The mounted skin's `header.author`. */
-  SKIN_AUTHOR: 51,
+  SKIN_AUTHOR: LR2_TEXT.SKIN_AUTHOR as typeof LR2_TEXT.SKIN_AUTHOR,
   /** prop.lua `directory = 1000`. The current song's parent directory label. */
   DIRECTORY: 1000,
   /** prop.lua `tablename = 1001`. Difficulty-table name (e.g. `"★1"`) for table / dan-grade play. */

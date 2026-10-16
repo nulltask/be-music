@@ -7,6 +7,7 @@ import {
   type Lr2SpecialGraphic,
   LR2_SPECIAL_GRAPHIC,
 } from '@be-music/lr2-skin';
+import { LR2_OP, LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { type PixiSceneHost } from '../host.ts';
 import { disposeChildren } from '../pixi-utils.ts';
 import { resolveKeyModeOp } from '../select-ops.ts';
@@ -69,30 +70,11 @@ const AUTO_ADVANCE_AFTER_STARTINPUT_MS = 1200;
  */
 const DEFAULT_STARTINPUT_MS = 1500;
 
-/**
- * Element op set flipped per-song on the decide screen. Mirrors `RESULT_DYNAMIC_OPS` in `scene/lr2/result.ts` but keeps only
- * the flags relevant to a "we're about to play this chart" splash: difficulty (skins gate per-difficulty plates against
- * these) and key mode. Score-related ops (90 / 91 / 100..105) are deliberately omitted — those are decided after the
- * chart runs, not at decision time.
- */
-const DECIDE_DYNAMIC_OPS = {
-  DIFFICULTY_UNDEFINED: 150,
-  DIFFICULTY_EASY: 151,
-  DIFFICULTY_NORMAL: 152,
-  DIFFICULTY_HYPER: 153,
-  DIFFICULTY_ANOTHER: 154,
-  DIFFICULTY_INSANE: 155,
-  KEYS_7: 160,
-  KEYS_5: 161,
-  KEYS_14: 162,
-  KEYS_10: 163,
-  KEYS_9: 164,
-} as const;
-
 const DECIDE_BASE_OPS: ReadonlySet<number> = new Set<number>([
-  // Per-frame "always true" flags shared with select / result. 81 = "load complete" (data is ready by the time we mount
-  // the decide scene), 50 = "offline" (no IR connection yet).
-  50, 81,
+  // Per-frame "always true" flags shared with select / result: no IR connection yet, and the data is ready by the time
+  // we mount the decide scene.
+  LR2_OP.OFFLINE,
+  LR2_OP.LOADED,
 ]);
 
 export interface PixiDecideTarget {
@@ -206,7 +188,7 @@ export class PixiDecideView {
     }
     const now = performance.now();
     this.sceneStartedAt = now;
-    this.timerStartedAt.set(0, now);
+    this.timerStartedAt.set(LR2_TIMER.SCENE_START, now);
     // Schedule timer 1 (#STARTINPUT) and the auto-advance so the user sees the splash for a consistent window before
     // gameplay. Pressing Enter / Space before the start-input window elapses does nothing, matching LR2's input-gating.
     const startInputMs = Math.max(0, this.options.skin?.timing.startInput ?? DEFAULT_STARTINPUT_MS);
@@ -214,7 +196,7 @@ export class PixiDecideView {
       this.inputUnlockHandle = undefined;
       if (this.disposed) return;
       this.inputUnlocked = true;
-      this.timerStartedAt.set(1, performance.now());
+      this.timerStartedAt.set(LR2_TIMER.START_INPUT, performance.now());
     }, startInputMs);
     this.autoAdvanceHandle = setTimeout(() => {
       this.autoAdvanceHandle = undefined;
@@ -503,7 +485,7 @@ export class PixiDecideView {
   }
 
   private readonly timerActive = (timer: number): boolean => {
-    if (timer === 0) return true;
+    if (timer === LR2_TIMER.SCENE_START) return true;
     return this.timerStartedAt.has(timer);
   };
 
@@ -572,22 +554,22 @@ function computeDecideOps(target: PixiDecideTarget, skin: Lr2Skin): ReadonlySet<
   // maps to op 150 ("???") so the skin draws a generic plate when the chart didn't author a `#DIFFICULTY` field.
   switch (meta.difficulty) {
     case 1:
-      ops.add(DECIDE_DYNAMIC_OPS.DIFFICULTY_EASY);
+      ops.add(LR2_OP.DIFFICULTY_BEGINNER);
       break;
     case 2:
-      ops.add(DECIDE_DYNAMIC_OPS.DIFFICULTY_NORMAL);
+      ops.add(LR2_OP.DIFFICULTY_NORMAL);
       break;
     case 3:
-      ops.add(DECIDE_DYNAMIC_OPS.DIFFICULTY_HYPER);
+      ops.add(LR2_OP.DIFFICULTY_HYPER);
       break;
     case 4:
-      ops.add(DECIDE_DYNAMIC_OPS.DIFFICULTY_ANOTHER);
+      ops.add(LR2_OP.DIFFICULTY_ANOTHER);
       break;
     case 5:
-      ops.add(DECIDE_DYNAMIC_OPS.DIFFICULTY_INSANE);
+      ops.add(LR2_OP.DIFFICULTY_INSANE);
       break;
     default:
-      ops.add(DECIDE_DYNAMIC_OPS.DIFFICULTY_UNDEFINED);
+      ops.add(LR2_OP.DIFFICULTY_UNDEFINED);
       break;
   }
   // Key mode — the select scene's op (160..164), from the chart's play variant.
@@ -601,32 +583,32 @@ function computeDecideOps(target: PixiDecideTarget, skin: Lr2Skin): ReadonlySet<
 function resolveDecideText(st: number, song: BrowserSongEntry): string | undefined {
   const subartists = song.chart.bmson.info?.subartists?.join(' / ');
   switch (st) {
-    case 10:
-    case 20:
+    case LR2_TEXT.TITLE:
+    case LR2_TEXT.TITLE_ALT:
       return song.title;
-    case 11:
-    case 21:
+    case LR2_TEXT.SUBTITLE:
+    case LR2_TEXT.SUBTITLE_ALT:
       return song.subtitle ?? '';
-    case 12:
-    case 22:
+    case LR2_TEXT.FULL_TITLE:
+    case LR2_TEXT.FULL_TITLE_ALT:
       return [song.title, song.subtitle].filter((value): value is string => Boolean(value)).join(' ');
-    case 13:
-    case 23:
+    case LR2_TEXT.GENRE:
+    case LR2_TEXT.GENRE_ALT:
       return song.genre ?? '';
-    case 14:
-    case 24:
+    case LR2_TEXT.ARTIST:
+    case LR2_TEXT.ARTIST_ALT:
       return song.artist ?? '';
-    case 15:
-    case 25:
+    case LR2_TEXT.SUBARTIST:
+    case LR2_TEXT.SUBARTIST_ALT:
       return subartists ?? '';
-    case 16:
-    case 26:
+    case LR2_TEXT.FULL_ARTIST:
+    case LR2_TEXT.FULL_ARTIST_ALT:
       return song.fileLabel;
-    case 17:
-    case 27:
+    case LR2_TEXT.PLAY_LEVEL:
+    case LR2_TEXT.PLAY_LEVEL_ALT:
       return song.playLevel?.toString() ?? '';
-    case 18:
-    case 28:
+    case LR2_TEXT.DIFFICULTY:
+    case LR2_TEXT.DIFFICULTY_ALT:
       switch (song.chart.metadata.difficulty) {
         case 1:
           return 'BEGINNER';

@@ -14,6 +14,11 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./ids": {
+      "source": "./src/ids/index.ts",
+      "types": "./dist/ids.d.ts",
+      "default": "./dist/ids.js"
     }
   },
   "scripts": {

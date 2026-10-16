@@ -15,11 +15,16 @@ import {
   type Lr2NowComboKind,
   type Lr2Skin,
 } from '@be-music/lr2-skin';
+import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { applyDestinationToSprite, createCroppedTexture, type SpriteSink } from '../../skin/lr2/render.ts';
 
 export function isLr2OverlayImage(image: Lr2ImageElement): boolean {
   const t = image.destination.timer;
-  return (t >= 50 && t <= 89) || (t >= 100 && t <= 139);
+  // Bombs and long-note holds (50-89), key on / off (100-139).
+  return (
+    (t >= LR2_TIMER.BOMB_1P && t < LR2_TIMER.LN_HOLD_2P + LR2_LANE_TIMER_BANK_SIZE) ||
+    (t >= LR2_TIMER.KEY_ON_1P && t < LR2_TIMER.KEY_OFF_2P + LR2_LANE_TIMER_BANK_SIZE)
+  );
 }
 
 export function resolveNumberValue(
@@ -41,49 +46,49 @@ export function resolveNumberValue(
   const rateDecimals = Math.round(rate * 10000) % 100;
   const remaining = Math.max(0, totalSeconds - seconds);
   switch (num) {
-    case 10:
+    case LR2_NUM.HISPEED_1P:
       return Math.round(hiSpeed * 100);
-    case 20:
+    case LR2_NUM.FPS:
       return Math.round(fps);
-    case 100:
+    case LR2_NUM.SCORE:
       return Math.round(displayedScore);
-    case 101:
+    case LR2_NUM.EXSCORE:
       return score.exScore;
-    case 102:
+    case LR2_NUM.SCORE_RATE:
       return Math.round(fps);
-    case 103:
+    case LR2_NUM.SCORE_RATE_AFTERDOT:
       return Math.round(rate * 10000);
-    case 104:
+    case LR2_NUM.COMBO:
       return combo;
-    case 105:
+    case LR2_NUM.MAX_COMBO:
       return maxCombo;
-    case 106:
+    case LR2_NUM.NOTES:
       return score.total;
-    case 107:
+    case LR2_NUM.GAUGE:
       return Math.round(gauge);
-    case 108:
+    case LR2_NUM.EXSCORE_DIFF:
       return 0;
-    case 110:
+    case LR2_NUM.PERFECT:
       return score.perfect;
-    case 111:
+    case LR2_NUM.GREAT:
       return score.great;
-    case 112:
+    case LR2_NUM.GOOD:
       return score.good;
-    case 113:
+    case LR2_NUM.BAD:
       return score.bad;
-    case 114:
+    case LR2_NUM.POOR:
       return score.poor;
-    case 115:
+    case LR2_NUM.TOTAL_RATE:
       return ratePct;
-    case 116:
+    case LR2_NUM.TOTAL_RATE_AFTERDOT:
       return rateDecimals;
-    case 150:
-    case 151:
+    case LR2_NUM.HIGH_SCORE:
+    case LR2_NUM.TARGET_SCORE:
       return 0;
-    case 152:
-    case 153:
+    case LR2_NUM.HIGH_SCORE_DIFF:
+    case LR2_NUM.TARGET_SCORE_DIFF:
       return score.exScore;
-    case 154: {
+    case LR2_NUM.NEXT_RANK_DIFF: {
       if (score.total <= 0) {
         return 0;
       }
@@ -92,17 +97,17 @@ export function resolveNumberValue(
       const next = thresholds.find((threshold) => score.exScore < max * threshold) ?? 0;
       return Math.max(0, Math.ceil(max * next - score.exScore));
     }
-    case 160:
+    case LR2_NUM.BPM:
       return liveBpm ?? song?.bpm;
-    case 161:
+    case LR2_NUM.PLAY_MINUTE:
       return Math.floor(seconds / 60);
-    case 162:
+    case LR2_NUM.PLAY_SECOND:
       return Math.floor(seconds % 60);
-    case 163:
+    case LR2_NUM.REMAINING_MINUTE:
       return Math.floor(remaining / 60);
-    case 164:
+    case LR2_NUM.REMAINING_SECOND:
       return Math.floor(remaining % 60);
-    case 165:
+    case LR2_NUM.LOADING_PROGRESS:
       return 100;
     default:
       return undefined;
@@ -118,12 +123,14 @@ export function computeRankOp(score: ScoreSummary): number | undefined {
  * EASY share the normal ones (42 / 44). Skins gate their gauge frame plate on these (`#IF op43` for the red plate).
  */
 export function computeGaugeTypeOps(gauge: GaugeType): readonly [number, number] {
-  return gauge === 'HARD' || gauge === 'DEATH' ? [43, 45] : [42, 44];
+  return gauge === 'HARD' || gauge === 'DEATH'
+    ? [LR2_OP.GAUGE_1P_RED, LR2_OP.GAUGE_2P_RED]
+    : [LR2_OP.GAUGE_1P_NORMAL, LR2_OP.GAUGE_2P_NORMAL];
 }
 
 /** LR2 1P gauge-percentage bucket op: 230 = 0–9 %, 231 = 10–19 %, …, 240 = 100 %. */
 export function computeGaugeBucketOp(gaugePercent: number): number {
-  return 230 + Math.min(10, Math.max(0, Math.floor(gaugePercent / 10)));
+  return LR2_OP.GAUGE_1P_0_9 + Math.min(10, Math.max(0, Math.floor(gaugePercent / 10)));
 }
 
 export function lastJudgeToNowComboKind(lastJudge: string): Lr2NowComboKind | undefined {
@@ -329,7 +336,7 @@ export function computeFullComboDurationMs(skin: Lr2Skin): number {
   const visit = (entry: { destination?: Lr2DestinationRect; keyframes?: Lr2DestinationRect[] }): void => {
     const dst = entry.destination;
     if (!dst) return;
-    if (dst.timer !== 48 && dst.timer !== 49) return;
+    if (dst.timer !== LR2_TIMER.FULL_COMBO_1P && dst.timer !== LR2_TIMER.FULL_COMBO_2P) return;
     const frames = entry.keyframes && entry.keyframes.length > 0 ? entry.keyframes : [dst];
     for (const frame of frames) {
       if (Number.isFinite(frame.time) && frame.time > max) {
@@ -356,7 +363,8 @@ export function computeFullComboDurationMs(skin: Lr2Skin): number {
  * report a span.
  */
 export function computeKeyOnFadeDurationsMs(skin: Lr2Skin): Map<number, number> {
-  return collectMaxKeyframeTimePerTimer(skin, 100, 117);
+  // Through 2P key 7.
+  return collectMaxKeyframeTimePerTimer(skin, LR2_TIMER.KEY_ON_1P, LR2_TIMER.KEY_ON_2P + 7);
 }
 
 /**
@@ -366,7 +374,7 @@ export function computeKeyOnFadeDurationsMs(skin: Lr2Skin): Map<number, number> 
  * instead of pinning every chart to a hard-coded "LR2 default 150 ms" cycle.
  */
 export function computeBombDurationsMs(skin: Lr2Skin): Map<number, number> {
-  return collectMaxKeyframeTimePerTimer(skin, 50, 69);
+  return collectMaxKeyframeTimePerTimer(skin, LR2_TIMER.BOMB_1P, LR2_TIMER.BOMB_2P + LR2_LANE_TIMER_BANK_SIZE - 1);
 }
 
 /**
@@ -375,7 +383,11 @@ export function computeBombDurationsMs(skin: Lr2Skin): Map<number, number> {
  * on the timer.
  */
 export function computeLnHoldDurationsMs(skin: Lr2Skin): Map<number, number> {
-  return collectMaxKeyframeTimePerTimer(skin, 70, 89);
+  return collectMaxKeyframeTimePerTimer(
+    skin,
+    LR2_TIMER.LN_HOLD_1P,
+    LR2_TIMER.LN_HOLD_2P + LR2_LANE_TIMER_BANK_SIZE - 1,
+  );
 }
 
 /**
@@ -386,7 +398,7 @@ export function computeLnHoldDurationsMs(skin: Lr2Skin): Map<number, number> {
  * key-on / LN-hold helpers.
  */
 export function computeGaugeTimerDurationsMs(skin: Lr2Skin): Map<number, number> {
-  return collectMaxKeyframeTimePerTimer(skin, 42, 45);
+  return collectMaxKeyframeTimePerTimer(skin, LR2_TIMER.GAUGE_UP_1P, LR2_TIMER.GAUGE_MAX_2P);
 }
 
 /**

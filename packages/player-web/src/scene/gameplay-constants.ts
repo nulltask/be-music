@@ -31,23 +31,6 @@ export { HISPEED_MAX, HISPEED_MIN, HISPEED_STEP } from './hi-speed.ts';
  */
 export const FALLBACK_INTRO_DELAY_MS = 3000;
 
-/**
- * Lanes each LR2 per-side timer bank covers: scratch (index 0) plus keys 1..9. Lanes past that — the 24-key keyboard
- * modes' columns 10..24 — have no LR2 timer slot, and stamping `base + laneIndex` for them would spill into the next
- * bank (e.g. bomb 50 + 24 = 74, which is the 1P LN-hold bank).
- */
-export const LR2_LANE_TIMER_BANK_SIZE = 10;
-
-export const LR2_1P_KEYON_TIMER_BASE = 100;
-export const LR2_2P_KEYON_TIMER_BASE = 110;
-export const LR2_1P_BOMB_TIMER_BASE = 50;
-export const LR2_2P_BOMB_TIMER_BASE = 60;
-/**
- * LR2 long-note hold-effect timers: 70-79 for the 1P side, 80-89 for the 2P side.
- */
-export const LR2_1P_LN_HOLD_TIMER_BASE = 70;
-export const LR2_2P_LN_HOLD_TIMER_BASE = 80;
-
 export { PLAYFIELD } from './gameplay-geometry.ts';
 /**
  * BGA rectangle used by the built-in/default chrome path.

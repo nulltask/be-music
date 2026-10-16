@@ -1,6 +1,7 @@
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
-import { computeResultOps, RESULT_DYNAMIC_OPS } from './result.ts';
+import { LR2_OP } from '@be-music/lr2-skin/ids';
+import { computeResultOps } from './result.ts';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import type { PixiGameplayResultData } from './gameplay.ts';
 
@@ -125,14 +126,14 @@ describe('computeResultOps', () => {
   describe('cleared / failed', () => {
     it('sets op 90 (cleared) when data.cleared is true', () => {
       const ops = computeResultOps(makeResult({ cleared: true }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.RESULT_CLEARED)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.RESULT_FAILED)).toBe(false);
+      expect(ops.has(LR2_OP.RESULT_CLEAR)).toBe(true);
+      expect(ops.has(LR2_OP.RESULT_FAIL)).toBe(false);
     });
 
     it('sets op 91 (failed) when data.cleared is false', () => {
       const ops = computeResultOps(makeResult({ cleared: false }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.RESULT_FAILED)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.RESULT_CLEARED)).toBe(false);
+      expect(ops.has(LR2_OP.RESULT_FAIL)).toBe(true);
+      expect(ops.has(LR2_OP.RESULT_CLEAR)).toBe(false);
     });
   });
 
@@ -142,40 +143,40 @@ describe('computeResultOps', () => {
     it('lights the play’s lamp on LR2’s lamps', () => {
       const lampOp = (lamp: NonNullable<PixiGameplayResultData['lamp']>) =>
         [...computeResultOps(makeResult({ cleared: lamp !== 'FAILED', bad: 1, lamp }), makeSkin())].filter(
-          (op) => op >= RESULT_DYNAMIC_OPS.LAMP_FAILED && op <= RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO,
+          (op) => op >= LR2_OP.LAMP_FAILED && op <= LR2_OP.LAMP_FULL_COMBO,
         );
-      expect(lampOp('FAILED')).toEqual([RESULT_DYNAMIC_OPS.LAMP_FAILED]);
-      expect(lampOp('ASSIST_EASY')).toEqual([RESULT_DYNAMIC_OPS.LAMP_EASY]);
-      expect(lampOp('EASY')).toEqual([RESULT_DYNAMIC_OPS.LAMP_EASY]);
-      expect(lampOp('NORMAL')).toEqual([RESULT_DYNAMIC_OPS.LAMP_NORMAL]);
-      expect(lampOp('HARD')).toEqual([RESULT_DYNAMIC_OPS.LAMP_HARD]);
-      expect(lampOp('EX_HARD')).toEqual([RESULT_DYNAMIC_OPS.LAMP_HARD]);
-      expect(lampOp('FULL_COMBO')).toEqual([RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO]);
-      expect(lampOp('MAX')).toEqual([RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO]);
+      expect(lampOp('FAILED')).toEqual([LR2_OP.LAMP_FAILED]);
+      expect(lampOp('ASSIST_EASY')).toEqual([LR2_OP.LAMP_EASY]);
+      expect(lampOp('EASY')).toEqual([LR2_OP.LAMP_EASY]);
+      expect(lampOp('NORMAL')).toEqual([LR2_OP.LAMP_NORMAL]);
+      expect(lampOp('HARD')).toEqual([LR2_OP.LAMP_HARD]);
+      expect(lampOp('EX_HARD')).toEqual([LR2_OP.LAMP_HARD]);
+      expect(lampOp('FULL_COMBO')).toEqual([LR2_OP.LAMP_FULL_COMBO]);
+      expect(lampOp('MAX')).toEqual([LR2_OP.LAMP_FULL_COMBO]);
     });
 
     it('selects FAILED lamp when not cleared', () => {
       const ops = computeResultOps(makeResult({ cleared: false }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_FAILED)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO)).toBe(false);
+      expect(ops.has(LR2_OP.LAMP_FAILED)).toBe(true);
+      expect(ops.has(LR2_OP.LAMP_FULL_COMBO)).toBe(false);
     });
 
     it('selects FULL COMBO lamp when cleared with zero BAD/POOR', () => {
       const ops = computeResultOps(makeResult({ cleared: true, bad: 0, poor: 0, perfect: 50, total: 50 }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_NORMAL)).toBe(false);
+      expect(ops.has(LR2_OP.LAMP_FULL_COMBO)).toBe(true);
+      expect(ops.has(LR2_OP.LAMP_NORMAL)).toBe(false);
     });
 
     it('selects NORMAL CLEARED lamp when cleared but combo broke', () => {
       const ops = computeResultOps(makeResult({ cleared: true, bad: 1 }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_NORMAL)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO)).toBe(false);
+      expect(ops.has(LR2_OP.LAMP_NORMAL)).toBe(true);
+      expect(ops.has(LR2_OP.LAMP_FULL_COMBO)).toBe(false);
     });
 
     it('treats POOR-only plays as combo-broken (not full combo)', () => {
       const ops = computeResultOps(makeResult({ cleared: true, bad: 0, poor: 1 }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_NORMAL)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO)).toBe(false);
+      expect(ops.has(LR2_OP.LAMP_NORMAL)).toBe(true);
+      expect(ops.has(LR2_OP.LAMP_FULL_COMBO)).toBe(false);
     });
   });
 
@@ -186,28 +187,28 @@ describe('computeResultOps', () => {
     it('maps EX rate >= 8/9 to AAA on both NOW (300) and NEXT (340)', () => {
       // total=100 → ex max 200; exScore 178 = 89% > 8/9 ≈ 88.9%.
       const ops = computeResultOps(makeResult({ total: 100, exScore: 178 }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.RANK_NOW_AAA)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.RANK_NEXT_AAA)).toBe(true);
+      expect(ops.has(LR2_OP.RESULT_RANK_AAA)).toBe(true);
+      expect(ops.has(LR2_OP.UPDATED_RANK_AAA)).toBe(true);
     });
 
     it('maps EX rate < 1/9 (and > 0) to F (NOW=307, NEXT=347)', () => {
       // exScore 10 / 200 = 5% — below all thresholds.
       const ops = computeResultOps(makeResult({ total: 100, exScore: 10 }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.RANK_NOW_F)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.RANK_NEXT_AAA + 7)).toBe(true);
+      expect(ops.has(LR2_OP.RESULT_RANK_F)).toBe(true);
+      expect(ops.has(LR2_OP.UPDATED_RANK_AAA + 7)).toBe(true);
     });
 
     it('always sets PREV rank slot to 0 (no history yet)', () => {
       // Until score persistence lands, every play is "first time" so the previous rank reads as rank-0 / "0 tier".
       const ops = computeResultOps(makeResult({ total: 100, exScore: 200 }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.RANK_PREV_0)).toBe(true);
+      expect(ops.has(LR2_OP.PREVIOUS_RANK_0)).toBe(true);
     });
 
     it('falls back to AAA when total <= 0 (empty chart)', () => {
       // With total=0 the rate divisor is undefined; the implementation returns AAA so the rank panel still renders with
       // something.
       const ops = computeResultOps(makeResult({ total: 0, exScore: 0 }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.RANK_NOW_AAA)).toBe(true);
+      expect(ops.has(LR2_OP.RESULT_RANK_AAA)).toBe(true);
     });
   });
 
@@ -217,8 +218,8 @@ describe('computeResultOps', () => {
   describe('updated flags', () => {
     it('sets SCORE_UPDATED and RANK_UPDATED on every result', () => {
       const ops = computeResultOps(makeResult(), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.SCORE_UPDATED)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.RANK_UPDATED)).toBe(true);
+      expect(ops.has(LR2_OP.SCORE_UPDATED)).toBe(true);
+      expect(ops.has(LR2_OP.RANK_UPDATED)).toBe(true);
     });
   });
 
@@ -228,14 +229,14 @@ describe('computeResultOps', () => {
   describe('result flip', () => {
     it('sets RESULT_FLIP_DISABLED when the skin does not declare #FLIPRESULT', () => {
       const ops = computeResultOps(makeResult(), makeSkin(false));
-      expect(ops.has(RESULT_DYNAMIC_OPS.RESULT_FLIP_DISABLED)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.RESULT_FLIP_ENABLED)).toBe(false);
+      expect(ops.has(LR2_OP.RESULT_FLIP_OFF)).toBe(true);
+      expect(ops.has(LR2_OP.RESULT_FLIP_ON)).toBe(false);
     });
 
     it('flips to RESULT_FLIP_ENABLED when the skin declares #FLIPRESULT', () => {
       const ops = computeResultOps(makeResult(), makeSkin(true));
-      expect(ops.has(RESULT_DYNAMIC_OPS.RESULT_FLIP_ENABLED)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.RESULT_FLIP_DISABLED)).toBe(false);
+      expect(ops.has(LR2_OP.RESULT_FLIP_ON)).toBe(true);
+      expect(ops.has(LR2_OP.RESULT_FLIP_OFF)).toBe(false);
     });
   });
 
@@ -246,27 +247,27 @@ describe('computeResultOps', () => {
     it('sets 160 (7K) and 400 (7+14K) for an SP-7K chart', () => {
       // 7K means the chart uses key 6/7 (channels 18 / 19).
       const ops = computeResultOps(makeResult({ channels: ['11', '12', '13', '14', '15', '18', '19'] }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_7)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_7_14)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_5)).toBe(false);
+      expect(ops.has(LR2_OP.KEYS_7)).toBe(true);
+      expect(ops.has(LR2_OP.KEY_CONFIG_7_14)).toBe(true);
+      expect(ops.has(LR2_OP.KEYS_5)).toBe(false);
     });
 
     it('sets 161 (5K) and 402 (5+10K) for an SP-5K chart (no channel 18/19)', () => {
       const ops = computeResultOps(makeResult({ channels: ['11', '12', '13', '14', '15'] }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_5)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_5_10)).toBe(true);
+      expect(ops.has(LR2_OP.KEYS_5)).toBe(true);
+      expect(ops.has(LR2_OP.KEY_CONFIG_5_10)).toBe(true);
     });
 
     it('sets 162 (14K) and 400 for a DP-14K chart (#PLAYER 3 + 6/7 keys)', () => {
       const ops = computeResultOps(makeResult({ player: 3, channels: ['11', '18', '21', '28'] }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_14)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_7_14)).toBe(true);
+      expect(ops.has(LR2_OP.KEYS_14)).toBe(true);
+      expect(ops.has(LR2_OP.KEY_CONFIG_7_14)).toBe(true);
     });
 
     it('sets 163 (10K) and 402 for a DP-10K chart (#PLAYER 3, no 6/7)', () => {
       const ops = computeResultOps(makeResult({ player: 3, channels: ['11', '21'] }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_10)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_5_10)).toBe(true);
+      expect(ops.has(LR2_OP.KEYS_10)).toBe(true);
+      expect(ops.has(LR2_OP.KEY_CONFIG_5_10)).toBe(true);
     });
 
     it('sets 164 (9K) and 401 for a .pms chart, whose 2x lanes are 9 KEY buttons', () => {
@@ -274,9 +275,9 @@ describe('computeResultOps', () => {
         makeResult({ chartPath: 'test/song.pms', channels: ['11', '12', '13', '14', '15', '22', '23', '24', '25'] }),
         makeSkin(),
       );
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_9)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_9)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_10)).toBe(false);
+      expect(ops.has(LR2_OP.KEYS_9)).toBe(true);
+      expect(ops.has(LR2_OP.KEY_CONFIG_9)).toBe(true);
+      expect(ops.has(LR2_OP.KEYS_10)).toBe(false);
     });
 
     it('reads the key mode from the lanes, not from mines or invisible notes', () => {
@@ -284,19 +285,19 @@ describe('computeResultOps', () => {
         makeResult({ channels: ['11', '12', '13', '14', '15', '16', 'D8', '39'] }),
         makeSkin(),
       );
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_5)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_7)).toBe(false);
+      expect(ops.has(LR2_OP.KEYS_5)).toBe(true);
+      expect(ops.has(LR2_OP.KEYS_7)).toBe(false);
     });
 
     it('counts #LNTYPE long-note lanes toward the key mode', () => {
       const ops = computeResultOps(makeResult({ channels: ['11', '12', '13', '14', '15', '58'] }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_7)).toBe(true);
+      expect(ops.has(LR2_OP.KEYS_7)).toBe(true);
     });
 
     it('honors bmson modeHint over channel detection', () => {
       const ops = computeResultOps(makeResult({ modeHint: 'beat-9k' }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_9)).toBe(true);
-      expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_9)).toBe(true);
+      expect(ops.has(LR2_OP.KEYS_9)).toBe(true);
+      expect(ops.has(LR2_OP.KEY_CONFIG_9)).toBe(true);
     });
   });
 
@@ -306,12 +307,12 @@ describe('computeResultOps', () => {
   describe('difficulty echo', () => {
     it('sets DIFFICULTY_HYPER (153) for difficulty=3', () => {
       const ops = computeResultOps(makeResult({ difficulty: 3 }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.DIFFICULTY_HYPER)).toBe(true);
+      expect(ops.has(LR2_OP.DIFFICULTY_HYPER)).toBe(true);
     });
 
     it('falls back to DIFFICULTY_NORMAL when difficulty is undefined', () => {
       const ops = computeResultOps(makeResult({ difficulty: undefined }), makeSkin());
-      expect(ops.has(RESULT_DYNAMIC_OPS.DIFFICULTY_NORMAL)).toBe(true);
+      expect(ops.has(LR2_OP.DIFFICULTY_NORMAL)).toBe(true);
     });
   });
 

@@ -1,7 +1,8 @@
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import { DEFAULT_PLAY_OPTIONS, isInsideLr2DefaultSearchBox, PixiSongSelectView } from './select.ts';
-import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from '../select-ops.ts';
+import { LR2_OP } from '@be-music/lr2-skin/ids';
+import { computeSelectOps, resolveKeyModeOp } from '../select-ops.ts';
 import type {
   BrowserBrowseEntry,
   BrowserCourseEntry,
@@ -33,10 +34,10 @@ function makeSongEntry(overrides: Partial<BrowserSongEntry>): BrowserBrowseEntry
 describe('select ops', () => {
   it('seeds empty-list defaults without a focused song', () => {
     const ops = computeSelectOps(undefined, new Set(), DEFAULT_PLAY_OPTIONS);
-    expect(ops.has(SELECT_DYNAMIC_OPS.BGA_ABSENT)).toBe(true);
-    expect(ops.has(SELECT_DYNAMIC_OPS.LN_ABSENT)).toBe(true);
-    expect(ops.has(SELECT_DYNAMIC_OPS.TEXT_ABSENT)).toBe(true);
-    expect(ops.has(SELECT_DYNAMIC_OPS.KEYS_7)).toBe(true);
+    expect(ops.has(LR2_OP.NO_BGA)).toBe(true);
+    expect(ops.has(LR2_OP.NO_LN)).toBe(true);
+    expect(ops.has(LR2_OP.NO_TEXT)).toBe(true);
+    expect(ops.has(LR2_OP.KEYS_7)).toBe(true);
     expect(ops.has(41)).toBe(true);
     expect(ops.has(31)).toBe(true);
   });
@@ -50,7 +51,7 @@ describe('select ops', () => {
       },
     });
     if (entry.kind !== 'song') throw new Error('expected song entry');
-    expect(resolveKeyModeOp(entry.song)).toBe(SELECT_DYNAMIC_OPS.KEYS_9);
+    expect(resolveKeyModeOp(entry.song)).toBe(LR2_OP.KEYS_9);
   });
 });
 

@@ -23,6 +23,7 @@
     "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
+    "@be-music/lr2-skin": "workspace:*",
     "@be-music/utils": "workspace:*",
     "fengari": "^0.1.4",
     "fengari-web": "^0.1.4"

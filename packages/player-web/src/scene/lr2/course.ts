@@ -1,24 +1,11 @@
+import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_TEXT } from '@be-music/lr2-skin/ids';
 import type { CourseDraft, CourseKind, NonstopConnection } from '@be-music/player/course';
 import type { SceneCourseInfo } from '../course-info.ts';
 
-/**
- * LR2's course ops (OpenLR2 `LR2f.cpp` L5403-L5444): 280-288 light while stage 1-9 is played and is not the last one,
- * 289 on the last stage, 290 for a course (the selected bar on the select screen, the running course in play), and
- * 291 / 292 / 293 name its kind.
- */
-export const LR2_COURSE_OPS = {
-  FIRST_STAGE: 280,
-  FINAL_STAGE: 289,
-  COURSE: 290,
-  NONSTOP: 291,
-  EXPERT: 292,
-  GRADE: 293,
-} as const;
-
 const KIND_OPS: Record<CourseKind, number> = {
-  nonstop: LR2_COURSE_OPS.NONSTOP,
-  expert: LR2_COURSE_OPS.EXPERT,
-  grade: LR2_COURSE_OPS.GRADE,
+  nonstop: LR2_OP.COURSE_NONSTOP,
+  expert: LR2_OP.COURSE_EXPERT,
+  grade: LR2_OP.COURSE_GRADE,
 };
 
 /**
@@ -27,11 +14,11 @@ const KIND_OPS: Record<CourseKind, number> = {
  * parse-time ops for a course stage's skin (`Lr2ThemeSkins.loadSkin`).
  */
 export function resolveLr2CourseOps(course: SceneCourseInfo): number[] {
-  const ops: number[] = [LR2_COURSE_OPS.COURSE, KIND_OPS[course.kind]];
+  const ops: number[] = [LR2_OP.COURSE, KIND_OPS[course.kind]];
   const index = course.stageIndex;
   if (index === undefined) return ops;
-  if (index >= course.stages.length - 1) ops.push(LR2_COURSE_OPS.FINAL_STAGE);
-  else if (index <= 8) ops.push(LR2_COURSE_OPS.FIRST_STAGE + index);
+  if (index >= course.stages.length - 1) ops.push(LR2_OP.COURSE_STAGE_FINAL);
+  else if (index <= 8) ops.push(LR2_OP.COURSE_STAGE1 + index);
   return ops;
 }
 
@@ -43,14 +30,14 @@ export function resolveLr2CourseOps(course: SceneCourseInfo): number[] {
 export function resolveLr2CourseStageDifficultyOps(course: SceneCourseInfo | undefined): number[] {
   return [0, 1, 2, 3, 4].map((index) => {
     const difficulty = Math.trunc(course?.stages[index]?.difficulty ?? 0);
-    return 700 + index * 10 + (difficulty >= 0 && difficulty <= 5 ? difficulty : 0);
+    return LR2_OP.COURSE_STAGE_DIFFICULTY + index * 10 + (difficulty >= 0 && difficulty <= 5 ? difficulty : 0);
   });
 }
 
 /** LR2 numbers 250-259: the play level of course stage 1-10 (OpenLR2 L923-L942). */
 export function resolveLr2CourseNumber(num: number, course: SceneCourseInfo): number | undefined {
-  if (num < 250 || num > 259) return undefined;
-  return course.stages[num - 250]?.level;
+  if (num < LR2_NUM.COURSE_STAGE1_LEVEL || num > LR2_NUM.COURSE_STAGE10_LEVEL) return undefined;
+  return course.stages[num - LR2_NUM.COURSE_STAGE1_LEVEL]?.level;
 }
 
 /**
@@ -58,9 +45,13 @@ export function resolveLr2CourseNumber(num: number, course: SceneCourseInfo): nu
  * title. A stage the course does not have reads empty.
  */
 export function resolveLr2CourseText(st: number, course: SceneCourseInfo): string | undefined {
-  if (st >= 150 && st <= 154) return course.stages[st - 150]?.title ?? '';
-  if (st >= 160 && st <= 164) return course.stages[st - 160]?.subtitle ?? '';
-  if (st === 170) return course.title;
+  if (st >= LR2_TEXT.COURSE_STAGE1_TITLE && st <= LR2_TEXT.COURSE_STAGE5_TITLE) {
+    return course.stages[st - LR2_TEXT.COURSE_STAGE1_TITLE]?.title ?? '';
+  }
+  if (st >= LR2_TEXT.COURSE_STAGE1_SUBTITLE && st <= LR2_TEXT.COURSE_STAGE5_SUBTITLE) {
+    return course.stages[st - LR2_TEXT.COURSE_STAGE1_SUBTITLE]?.subtitle ?? '';
+  }
+  if (st === LR2_TEXT.COURSE_TITLE) return course.title;
   return undefined;
 }
 
@@ -99,9 +90,9 @@ const LR2_CONNECTION_LABELS: Readonly<Record<NonstopConnection, string>> = {
  * `DISABLE` for any other course. Returns `undefined` for other text ids.
  */
 export function resolveLr2CourseConnectionText(st: number, course: SceneCourseInfo): string | undefined {
-  if (st < 171 || st > 179) return undefined;
+  if (st < LR2_TEXT.COURSE_CONNECTION1 || st > LR2_TEXT.COURSE_CONNECTION9) return undefined;
   if (course.kind !== 'nonstop' || course.connections === undefined) return 'DISABLE';
-  return LR2_CONNECTION_LABELS[course.connections[st - 171] ?? 'fade'];
+  return LR2_CONNECTION_LABELS[course.connections[st - LR2_TEXT.COURSE_CONNECTION1] ?? 'fade'];
 }
 
 /**
@@ -126,15 +117,12 @@ export function resolveLr2NonstopStage(
  * more than N stages. (OpenLR2 marks 571 / 572 as falling through to the next case, a decompilation artefact; this
  * follows the evident intent.)
  */
-export const LR2_COURSE_MAKER_OPS = { STAGES_OVER: 580, MAKING: 571, NOT_MAKING: 572, SONGS_ADDED: 590 } as const;
-
 export function resolveLr2CourseMakerOps(draft: CourseDraft | undefined, selectedStageCount = 0): number[] {
   if (draft !== undefined) {
-    return [LR2_COURSE_MAKER_OPS.MAKING, LR2_COURSE_MAKER_OPS.SONGS_ADDED + Math.min(draft.stages.length, 9)];
+    return [LR2_OP.COURSE_MAKING, LR2_OP.COURSE_SONGS_ADDED + Math.min(draft.stages.length, 9)];
   }
-  const ops: number[] = [LR2_COURSE_MAKER_OPS.NOT_MAKING];
-  for (let count = 0; count < Math.min(selectedStageCount, 10); count += 1)
-    ops.push(LR2_COURSE_MAKER_OPS.STAGES_OVER + count);
+  const ops: number[] = [LR2_OP.COURSE_NOT_MAKING];
+  for (let count = 0; count < Math.min(selectedStageCount, 10); count += 1) ops.push(LR2_OP.COURSE_STAGES_OVER + count);
   return ops;
 }
 
@@ -156,7 +144,7 @@ export function resolveLr2CourseDraftInfo(draft: CourseDraft, namePrompt = ''): 
 
 /** LR2 text 198: the connection a new NONSTOP course gets (its `config.course.defaultconnection`). */
 export function resolveLr2CourseMakerText(st: number, defaultConnection: NonstopConnection): string | undefined {
-  return st === 198 ? LR2_CONNECTION_LABELS[defaultConnection] : undefined;
+  return st === LR2_TEXT.COURSE_DEFAULT_CONNECTION ? LR2_CONNECTION_LABELS[defaultConnection] : undefined;
 }
 
 /** What an LR2 select button does to the player's courses (OpenLR2 L11063-L11137). */
@@ -173,11 +161,13 @@ export type Lr2CourseMakerAction =
  * connection. `undefined` for any other button.
  */
 export function resolveLr2CourseMakerAction(type: number): Lr2CourseMakerAction | undefined {
-  if (type === 230) return { kind: 'finish' };
-  if (type === 231) return { kind: 'cancel' };
-  if (type === 233) return { kind: 'delete' };
-  if (type >= 240 && type <= 248) return { kind: 'connection', slot: type - 240 };
-  if (type === 268) return { kind: 'default-connection' };
+  if (type === LR2_BUTTON.COURSE_FINISH) return { kind: 'finish' };
+  if (type === LR2_BUTTON.COURSE_CANCEL) return { kind: 'cancel' };
+  if (type === LR2_BUTTON.COURSE_DELETE) return { kind: 'delete' };
+  if (type >= LR2_BUTTON.COURSE_CONNECTION1 && type <= LR2_BUTTON.COURSE_CONNECTION9) {
+    return { kind: 'connection', slot: type - LR2_BUTTON.COURSE_CONNECTION1 };
+  }
+  if (type === LR2_BUTTON.COURSE_DEFAULT_CONNECTION) return { kind: 'default-connection' };
   return undefined;
 }
 
