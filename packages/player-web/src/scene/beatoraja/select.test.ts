@@ -5,7 +5,13 @@ import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import { EventBoundary, Matrix, type Container, type Sprite, type Text, type Texture } from 'pixi.js';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
-import type { BrowserCourseEntry, BrowserSongEntry } from '../../collection/types.ts';
+import type {
+  BrowserBrowseEntry,
+  BrowserCourseEntry,
+  BrowserFolderNode,
+  BrowserSongEntry,
+} from '../../collection/types.ts';
+import { makeChart, makeCourse, makeCourseFolder } from '../../session/select/test-support.ts';
 import { createEmptyJson } from '@be-music/json';
 import { PixiBeatorajaSelectScene } from './select.ts';
 
@@ -207,6 +213,64 @@ describe('PixiBeatorajaSelectScene course bars', () => {
       ['dan', { autoPlay: true }],
     ]);
     expect(cues).toEqual(['decide', 'decide']);
+    scene.dispose();
+  });
+});
+
+describe('PixiBeatorajaSelectScene list', () => {
+  type ListInternals = {
+    entries: ReadonlyArray<BrowserBrowseEntry>;
+    moveCursor(delta: number): void;
+    activateCurrentEntry(): void;
+    handleButtonAction(act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }): void;
+  };
+
+  /** The scene over `songs` and `courseFolders`, and what its tests reach of it. */
+  function sceneOf(songs: BrowserSongEntry[], courseFolders: BrowserFolderNode[] = []) {
+    const scene = new PixiBeatorajaSelectScene({
+      skin: makeSkin(),
+      textures: fakeTextureCache(),
+      songs,
+      courseFolders,
+      onSongPicked: () => undefined,
+    });
+    const internals = scene as unknown as ListInternals;
+    const shown = (): string[] =>
+      internals.entries.map((entry) =>
+        entry.kind === 'folder' ? entry.folder.label : entry.kind === 'song' ? entry.song.title : entry.course.id,
+      );
+    return { scene, internals, shown };
+  }
+
+  /** A grade course named `id`, of `keyMode` keys when given. */
+  function courseOf(id: string, keyMode?: number): BrowserCourseEntry {
+    const course = makeCourse(id);
+    return keyMode === undefined ? course : { ...course, definition: { ...course.definition, keyMode } };
+  }
+
+  it('keeps every folder bar listed under the MODE filter', () => {
+    const { scene, internals, shown } = sceneOf([
+      makeChart('five', 'Five', { channels: ['11', '16'] }),
+      makeChart('seven', 'Seven'),
+    ]);
+    // MODE steps ALL → 5 KEYS: the 7-key folder stays, empty.
+    internals.handleButtonAction(11);
+    expect(shown()).toEqual(['Five', 'Seven']);
+    internals.moveCursor(1);
+    internals.activateCurrentEntry();
+    expect(shown()).toEqual([]);
+    scene.dispose();
+  });
+
+  it("lists a course folder's courses of the MODE filter's key mode, and those that name none", () => {
+    const { scene, internals, shown } = sceneOf(
+      [makeChart('seven', 'Seven')],
+      [makeCourseFolder('Dan', [courseOf('seven-dan', 7), courseOf('five-dan', 5), courseOf('any')])],
+    );
+    internals.handleButtonAction(11);
+    internals.moveCursor(1);
+    internals.activateCurrentEntry();
+    expect(shown()).toEqual(['five-dan', 'any']);
     scene.dispose();
   });
 });
