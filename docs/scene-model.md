@@ -96,16 +96,16 @@ can read it every frame.
 
 ### Commands
 
-| Command    | What it does                                                                                          | Event                            |
-| ---------- | ----------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `move`     | Moves the cursor by a number of bars, wrapping past either end                                        | `cursor` with the step asked for |
-| `jump`     | Puts the cursor on a bar, clamped (Home / End, a click)                                               | `cursor` with the shortest step  |
-| `random`   | Puts the cursor on a random bar other than the focused one; the random draw is an input               | `cursor`                         |
-| `open`     | Opens the focused folder bar at its first bar                                                         | `folder-opened`                  |
-| `close`    | Backs out onto the folder bar the folder was opened from; at the root there is nothing to back out of | `folder-closed`, or `at-root`    |
-| `search`   | Sets the search text; the cursor goes to the top when the query changes                               | `list-changed`                   |
-| `list`     | Changes the sort or a filter; the cursor stays on the focused bar while it is still listed            | `list-changed`                   |
-| `favorite` | Marks or unmarks the focused chart in beatoraja's song or chart favourites                            | `favorite`                       |
+| Command    | What it does                                                                                                            | Event                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `move`     | Moves the cursor by a number of bars, wrapping past either end                                                          | `cursor` with the step asked for |
+| `jump`     | Puts the cursor on a bar, clamped (Home / End, a click)                                                                 | `cursor` with the shortest step  |
+| `random`   | Puts the cursor on a random bar other than the focused one; the random draw is an input                                 | `cursor`                         |
+| `open`     | Opens the focused folder bar at its first bar                                                                           | `folder-opened`                  |
+| `close`    | Backs out onto the bar of the folder it leaves, wherever the list moved it; at the root there is nothing to back out of | `folder-closed`, or `at-root`    |
+| `search`   | Sets the search text; the cursor goes to the top when the query changes                                                 | `list-changed`                   |
+| `list`     | Changes the sort or a filter; the cursor stays on the focused bar while it is still listed                              | `list-changed`                   |
+| `favorite` | Marks or unmarks the focused chart in beatoraja's song or chart favourites                                              | `favorite`                       |
 
 A command that changes nothing returns the same state and the `none` event. `wrappedCursorDelta` maps a jump to the
 shortest step around the list, keeping the key's direction on lists of two or three bars.

@@ -298,9 +298,12 @@ function closeFolder(library: Library, state: BrowseState): BrowseTransition {
   if (folder === undefined) return { state, event: { kind: 'at-root' } };
   const path = state.path.length === 1 ? ROOT_PATH : state.path.slice(0, -1);
   const parent: BrowseState = { ...state, path, cursors: state.cursors.slice(0, -1) };
-  // The parent list may have changed while the folder was open (a search typed inside it): keep the cursor on it.
-  const count = browseEntries(library, parent).length;
-  const cursor = clampIndex(browseCursor(parent), count);
+  // The parent list may have changed while the folder was open (a sort moved the folder bar, a search typed inside it
+  // left only charts): land on the folder's bar wherever it is now, else keep the cursor on the list.
+  const entries = browseEntries(library, parent);
+  const key = libraryEntryKey({ kind: 'folder', folder });
+  const opened = entries.findIndex((entry) => libraryEntryKey(entry) === key);
+  const cursor = opened >= 0 ? opened : clampIndex(browseCursor(parent), entries.length);
   return {
     state: cursor === browseCursor(parent) ? parent : withCursor(parent, cursor),
     event: { kind: 'folder-closed', folder },
