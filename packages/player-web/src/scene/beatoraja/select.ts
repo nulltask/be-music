@@ -207,7 +207,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    *   1 TITLE           — alphabetical by title
    *   2 ARTIST          — alphabetical by artist
    *   3 GENRE           — alphabetical by genre
-   *   4 PLAYLEVEL       — by `#PLAYLEVEL` ascending
+   *   4 PLAYLEVEL       — by `#PLAYLEVEL` ascending, equal levels by title
    *   5 BPM             — by main BPM ascending
    *   6 TOTALNOTES      — by playable-note count ascending
    *   7 LASTPLAY        — by most-recent play (DB-required; falls back to DEFAULT today)
@@ -1013,8 +1013,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
   // ─── Layout / visuals ─────────────────────────────────────────────────────────────────────────
 
-  /** Map a chart's `playLevel` to a tint colour band — visual hint at glance. */
-
   private fitToStage(): void {
     const host = this.host;
     if (!host) return;
@@ -1440,8 +1438,10 @@ function sortSongsByMode(songs: ReadonlyArray<BrowserSongEntry>, mode: number): 
     case 3: // GENRE
       out.sort((a, b) => TEXT_COLLATOR.compare(a.genre ?? '', b.genre ?? ''));
       break;
-    case 4: // PLAYLEVEL
-      out.sort((a, b) => sortableNumber(a.playLevel) - sortableNumber(b.playLevel));
+    case 4: // PLAYLEVEL — equal levels by title
+      out.sort(
+        (a, b) => sortableNumber(a.playLevel) - sortableNumber(b.playLevel) || TEXT_COLLATOR.compare(a.title, b.title),
+      );
       break;
     case 5: // BPM (main)
       out.sort((a, b) => (a.bpm ?? 0) - (b.bpm ?? 0));
@@ -1459,12 +1459,13 @@ function sortSongsByMode(songs: ReadonlyArray<BrowserSongEntry>, mode: number): 
 
 /**
  * Coerce a `playLevel` (number | string | undefined) to a comparable number. Strings parse via
- * `parseInt`; undefined / non-finite values get `+Infinity` so they sort to the end of the list.
+ * `parseFloat` (a `12.5`-style level keeps its fraction); undefined / non-finite values get `+Infinity` so they sort
+ * to the end of the list.
  */
 function sortableNumber(value: number | string | undefined): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
   if (typeof value === 'string') {
-    const parsed = Number.parseInt(value, 10);
+    const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
   }
   return Number.POSITIVE_INFINITY;

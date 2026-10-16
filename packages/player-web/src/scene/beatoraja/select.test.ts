@@ -323,4 +323,18 @@ describe('PixiBeatorajaSelectScene list', () => {
     expect(shown()).toEqual(['alpha', 'Beta', 'beta']);
     scene.dispose();
   });
+
+  it('orders levels by their value, fractions included, and equal levels by title', () => {
+    const { scene, internals, shown } = sceneOf([
+      { ...makeChart('c', 'Pack'), title: 'Charlie', playLevel: '12.5' },
+      { ...makeChart('b', 'Pack'), title: 'Bravo', playLevel: '12' },
+      { ...makeChart('a', 'Pack'), title: 'Alpha', playLevel: 12 },
+      { ...makeChart('none', 'Pack'), title: 'Delta' },
+    ]);
+    internals.activateCurrentEntry();
+    // SORT steps DEFAULT → TITLE → ARTIST → GENRE → LEVEL.
+    for (let step = 0; step < 4; step += 1) internals.handleButtonAction(12);
+    expect(shown()).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta']);
+    scene.dispose();
+  });
 });
