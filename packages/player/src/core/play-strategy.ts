@@ -49,8 +49,6 @@ export interface PlayJudge {
  * they are removed one by one.
  */
 export interface StrategyDrifts {
-  /** Queues the play lanes' keysounds as realtime audio as well as its own note keysounds. */
-  readonly queuesLaneKeysoundsAsRealtimeAudio: boolean;
   /** Leaves `endOnFailure` out of its play log. */
   readonly omitsEndOnFailure: boolean;
   /** Records `tempo` and `tempoChanges` in a replay too. */
