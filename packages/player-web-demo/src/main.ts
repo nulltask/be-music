@@ -5203,7 +5203,12 @@ class PlayerWebDemoApp {
     this.selectView?.setVisible(false);
     this.decideView?.dispose();
     this.decideView = undefined;
-    this.setPlayStatus(describePlayingStatus(song.title, { tempoPercent: this.guiState.tempoPercent }));
+    this.setPlayStatus(
+      describePlayingStatus(song.title, {
+        tempoPercent: this.guiState.tempoPercent,
+        replay: this.lastPlay?.overrides.replay !== undefined,
+      }),
+    );
     this.lockPlaylogOptionsForPlay(
       allowsLiveTempo(this.guiState, {
         replay: this.lastPlay?.overrides.replay !== undefined,
@@ -5286,7 +5291,7 @@ class PlayerWebDemoApp {
     // A replay plays at its recorded tempo, unless the Replay / ghost options keep the viewer's own.
     const tempoPercent =
       overrides.replay !== undefined ? tempoPercentFromTempo(this.gameplayView.getTempo()) : this.guiState.tempoPercent;
-    this.setPlayStatus(describePlayingStatus(song.title, { tempoPercent }));
+    this.setPlayStatus(describePlayingStatus(song.title, { tempoPercent, replay: overrides.replay !== undefined }));
     this.lockPlaylogOptionsForPlay(
       allowsLiveTempo(this.guiState, { replay: overrides.replay !== undefined, tempo: this.gameplayView.getTempo() }),
     );
@@ -5452,7 +5457,13 @@ class PlayerWebDemoApp {
     const title = this.lastPlay?.song.title;
     if (title !== undefined) {
       const family = this.beatorajaGameplayView !== undefined ? 'beatoraja' : undefined;
-      this.setPlayStatus(describePlayingStatus(title, { family, tempoPercent: tempoPercentFromTempo(tempo) }));
+      this.setPlayStatus(
+        describePlayingStatus(title, {
+          family,
+          tempoPercent: tempoPercentFromTempo(tempo),
+          replay: this.lastPlay?.overrides.replay !== undefined,
+        }),
+      );
     }
     if (tempo !== 1) {
       this.activePlayRecordKey = undefined;
