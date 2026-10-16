@@ -80,14 +80,14 @@ describe('driver drift', () => {
     expect(auto.playlog?.play.abortedAtUs).toBe(1_783_333);
   });
 
-  test('drift: ESC — autoPlay’s no-TUI trace reports the play as complete', async () => {
+  test('ESC — manual and auto play both trace the end of the play as an escape', async () => {
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: [escape(1800)], ui: false });
     const auto = await observePlay({ driver: 'auto', chart: basicChart(), script: [escape(1800)], ui: false });
     expect(manual.output.filter((line) => line.includes('kind:playback-end'))).toEqual([
       'EVENT time:0:03.50 kind:playback-end reason:escape',
     ]);
     expect(auto.output.filter((line) => line.includes('kind:playback-end'))).toEqual([
-      'EVENT time:0:03.50 kind:playback-end reason:complete',
+      'EVENT time:0:03.50 kind:playback-end reason:escape',
     ]);
   });
 
