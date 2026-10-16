@@ -910,12 +910,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
     interactive: true,
   });
-  define('player-web.PixiDecideView', {
-    run: () => {
-      new playerWebCoreApi.PixiDecideView();
-    },
-    interactive: true,
-  });
   define('player-web.PixiGameplayView', {
     run: () => {
       new playerWebCoreApi.PixiGameplayView();
