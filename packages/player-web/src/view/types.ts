@@ -30,6 +30,7 @@ import type {
 import type { Container, Sprite, Texture } from 'pixi.js';
 import type { SceneFamily } from '../host/family-kit.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
+import type { PlayfieldRuntime } from './shared/playfield/context.ts';
 
 /** Where an intent goes: the session the view belongs to. */
 export type IntentSink<Intent> = (intent: Intent) => void;
@@ -265,6 +266,17 @@ export interface PlayFrame {
   readonly events: readonly PlayViewEvent[];
   /** The play's mix, analysed for audio-reactive skins. */
   readonly audio: BeMusicAudioFrame;
+  /**
+   * Whether the play shows yet: from the session's `start`, or from the chart's preparation when the play is on the
+   * stage while it loads. A view draws nothing of the play before.
+   */
+  readonly shown: boolean;
+  /**
+   * The running play as the shared playfield reads it (`view/shared/playfield`): the lanes laid out, the notes and
+   * their scroll, the lane effects, the BGA's timelines and textures and the clocks. The session passes itself; the
+   * view only reads it, and writes the lanes it lays out and the BGA videos it plays.
+   */
+  readonly playfield: PlayfieldRuntime;
 }
 
 /** What the player asks of the play screen through the view (keys go to the session directly). */
