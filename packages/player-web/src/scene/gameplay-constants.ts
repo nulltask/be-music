@@ -1,13 +1,13 @@
 import { Color } from 'pixi.js';
 
 // Gameplay fallback palette. Family-specific chrome can override these in its own renderer.
-export const BG = new Color('#05070b');
-export const PANEL = new Color('#10141d');
-export const WHITE = new Color('#edf2f7');
-export const BLUE = new Color('#56b6f7');
-export const RED = new Color('#ff6b6b');
-export const YELLOW = new Color('#ffd166');
-export const MUTED = new Color('#98a5b3');
+export const BG: Color = new Color('#05070b');
+export const PANEL: Color = new Color('#10141d');
+export const WHITE: Color = new Color('#edf2f7');
+export const BLUE: Color = new Color('#56b6f7');
+export const RED: Color = new Color('#ff6b6b');
+export const YELLOW: Color = new Color('#ffd166');
+export const MUTED: Color = new Color('#98a5b3');
 
 export const PIXELS_PER_BEAT = 72;
 /**

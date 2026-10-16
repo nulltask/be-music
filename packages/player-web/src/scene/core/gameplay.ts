@@ -1038,7 +1038,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   };
 
   /** Holding Backspace for `QUIT_HOLD_THRESHOLD_MS` leaves the play the way Escape does. */
-  readonly quitHold = new QuitHoldController({
+  readonly quitHold: QuitHoldController = new QuitHoldController({
     onComplete: () => this.requestExit(),
     now: () => performance.now(),
   });

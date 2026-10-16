@@ -403,9 +403,9 @@ export type BeMusicSelectSceneFrame = Omit<
 export class BeMusicSelectBinding {
   readonly outroMs: number;
   /** Shows the skin's canvas, behind the scene's list layer. */
-  readonly backLayer = new Container();
+  readonly backLayer: Container = new Container();
   /** Holds the hit areas, in front of everything. */
-  readonly frontLayer = new Container();
+  readonly frontLayer: Container = new Container();
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private readonly hitPool: ChildPool;
@@ -554,7 +554,7 @@ export type BeMusicResultSceneFrame = Omit<BeMusicResultFrame, 'songImage' | 'se
 /** Result for one scene: draws the skin every frame onto a canvas shown by {@link view}. */
 export class BeMusicResultBinding {
   /** Persistent container showing the skin's canvas; the scene mounts it once. */
-  readonly view = new Container();
+  readonly view: Container = new Container();
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private settings: BeMusicSkinSettingValues;
@@ -600,7 +600,7 @@ export type BeMusicDecideSceneFrame = Omit<BeMusicDecideFrame, 'songImage' | 'se
 /** Decide for one scene: draws the skin's `decide` every frame onto a canvas shown by {@link view}. */
 export class BeMusicDecideBinding {
   /** Persistent container showing the skin's canvas; the scene mounts it once. */
-  readonly view = new Container();
+  readonly view: Container = new Container();
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private settings: BeMusicSkinSettingValues;
