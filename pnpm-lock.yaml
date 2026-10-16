@@ -253,6 +253,12 @@ importers:
       '@be-music/json':
         specifier: workspace:*
         version: link:../json
+      '@be-music/player':
+        specifier: workspace:*
+        version: link:../player
+      '@be-music/scene-model':
+        specifier: workspace:*
+        version: link:../scene-model
       '@be-music/utils':
         specifier: workspace:*
         version: link:../utils

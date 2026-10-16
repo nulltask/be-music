@@ -18,7 +18,6 @@ export * from './course-info.ts';
 export * from './default/index.ts';
 
 // LR2 family — Lunatic Rave 2 skin-driven scenes.
-export * from './lr2/course.ts';
 export * from './lr2/decide.ts';
 export * from './lr2/gameplay.ts';
 export * from './lr2/result.ts';

@@ -53,7 +53,6 @@ const BENCH_HASHED_SONGS = [{ song: BENCH_SONG, md5: BENCH_SONG_MD5 }];
 const BENCH_COURSE_LOOKUP = playerWebCoreApi.createSongHashLookup(BENCH_HASHED_SONGS);
 const BENCH_COURSE_ENTRY = playerWebCoreApi.resolveCourseFolders(BENCH_COURSE_GROUPS, BENCH_COURSE_LOOKUP)[0]!
   .courses![0]!;
-const BENCH_COURSE_INFO = playerWebCoreApi.resolveSceneCourseInfo(BENCH_COURSE_ENTRY, 0);
 const BENCH_RANDOM_COURSE = parseBeatorajaRandomCourseData({
   name: 'Bench Random',
   stage: [{ sql: 'level >= 0' }],
@@ -514,88 +513,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveSceneCourseInfo(BENCH_COURSE_ENTRY, 0);
     },
   });
-  define('player-web.resolveLr2CourseOps', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseOps(BENCH_COURSE_INFO);
-    },
-  });
-  define('player-web.resolveLr2CourseNumber', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseNumber(250, BENCH_COURSE_INFO);
-    },
-  });
-  define('player-web.resolveLr2CourseStageDifficultyOps', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseStageDifficultyOps(BENCH_COURSE_INFO);
-      playerWebCoreApi.resolveLr2CourseStageDifficultyOps(undefined);
-    },
-  });
-  define('player-web.resolveLr2JudgeCombo', {
-    run: () => {
-      playerWebCoreApi.resolveLr2JudgeCombo(12, 340, 'grade');
-      playerWebCoreApi.resolveLr2JudgeCombo(12, 340, 'nonstop');
-    },
-  });
-  define('player-web.resolveLr2CourseText', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseText(150, BENCH_COURSE_INFO);
-      playerWebCoreApi.resolveLr2CourseText(170, BENCH_COURSE_INFO);
-    },
-  });
-  define('player-web.resolveLr2CourseConnectionText', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseConnectionText(171, {
-        ...BENCH_COURSE_INFO,
-        kind: 'nonstop',
-        connections: ['cut'],
-      });
-      playerWebCoreApi.resolveLr2CourseConnectionText(172, BENCH_COURSE_INFO);
-    },
-  });
-  define('player-web.resolveLr2NonstopStage', {
-    run: () => {
-      playerWebCoreApi.resolveLr2NonstopStage(
-        [
-          { windowStart: 0, lr2StageMarker: false },
-          { windowStart: 20, lr2StageMarker: true },
-        ],
-        25,
-      );
-    },
-  });
-  const benchDraft = {
-    kind: 'nonstop' as const,
-    name: 'Bench',
-    stages: [{ md5: BENCH_SONG_MD5, keyMode: 7, title: 'Bench' }],
-  };
-  define('player-web.resolveLr2CourseDraftInfo', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseDraftInfo(benchDraft, 'Type the course title');
-    },
-  });
-  define('player-web.resolveLr2CourseMakerOps', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseMakerOps(benchDraft);
-      playerWebCoreApi.resolveLr2CourseMakerOps(undefined, 3);
-    },
-  });
-  define('player-web.resolveLr2CourseMakerText', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseMakerText(198, 'cut');
-    },
-  });
-  define('player-web.resolveLr2CourseMakerAction', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseMakerAction(230);
-      playerWebCoreApi.resolveLr2CourseMakerAction(244);
-    },
-  });
-  define('player-web.resolveLr2CourseMakerButtonState', {
-    run: () => {
-      playerWebCoreApi.resolveLr2CourseMakerButtonState(240, BENCH_COURSE_INFO, 'fade');
-      playerWebCoreApi.resolveLr2CourseMakerButtonState(268, undefined, 'blank1');
-    },
-  });
   define('player-web.resolveCourseEntry', {
     run: () => {
       playerWebCoreApi.resolveCourseEntry('Bench#0', BENCH_COURSE_DEFINITION, BENCH_COURSE_LOOKUP);
@@ -616,11 +533,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.resolveCourseMakerFolders', {
     run: () => {
       playerWebCoreApi.resolveCourseMakerFolders([BENCH_COURSE_DEFINITION], BENCH_COURSE_LOOKUP);
-    },
-  });
-  define('player-web.lr2ShowsCourseCombo', {
-    run: () => {
-      playerWebCoreApi.lr2ShowsCourseCombo('grade');
     },
   });
   define('player-web.findBeatorajaThemeBgm', {

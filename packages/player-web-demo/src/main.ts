@@ -28,7 +28,6 @@ import {
   type PixiGameplayResultData,
   type PixiPlayOptions,
   type PixiSongSelectNavigation,
-  resolveLr2CourseOps,
   resolveSceneCourseInfo,
   type SceneCourseInfo,
 } from '@be-music/player-web/scenes';
@@ -119,6 +118,7 @@ import {
   type Lr2Skin,
   type Lr2ThemeSkins,
 } from '@be-music/lr2-skin';
+import { resolveLr2CourseOps } from '@be-music/lr2-skin/state';
 import {
   BEATORAJA_OP,
   BEATORAJA_SKIN_TYPE,
