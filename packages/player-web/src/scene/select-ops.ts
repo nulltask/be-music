@@ -24,7 +24,8 @@ export const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
 ]);
 
 /**
- * Mapping from select key filter → LR2 keymode op.
+ * Mapping from select key filter → LR2 keymode op. LR2's op space stops at 14 keys, so the 24-key filters (beatoraja's)
+ * fold onto the same-shape ops, as {@link resolveKeyModeOp} folds the 24-key charts.
  */
 export const SELECT_KEYS_FILTER_TO_OP = {
   KEYS_5: LR2_OP.KEYS_5,
@@ -32,6 +33,8 @@ export const SELECT_KEYS_FILTER_TO_OP = {
   KEYS_9: LR2_OP.KEYS_9,
   KEYS_10: LR2_OP.KEYS_10,
   KEYS_14: LR2_OP.KEYS_14,
+  KEYS_24: LR2_OP.KEYS_7,
+  KEYS_48: LR2_OP.KEYS_14,
 } as const;
 
 /**
