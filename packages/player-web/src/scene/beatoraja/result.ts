@@ -46,11 +46,10 @@ import {
   hasBeatorajaSceneLockedTransition,
   isBeatorajaSceneInputReady,
   beatorajaSongTextOf,
-  resolveBeatorajaChartImage,
   resolveBeatorajaSkinTimingMs,
-  type BeatorajaChartImages,
   type BeatorajaSceneLoopAttachment,
 } from './shared-scene.ts';
+import { resolveBeatorajaChartImage, type BeatorajaChartImages } from '../../skin/beatoraja/chart-images.ts';
 
 export interface PixiBeatorajaResultSceneOptions {
   /** Result skin (`header.type === 7`). */

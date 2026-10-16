@@ -11,18 +11,12 @@ import {
   resolveBeatorajaSongText as resolveBeatorajaSongTextOf,
   type BeatorajaSongTextInput,
 } from '@be-music/beatoraja-skin/scene';
-import { Container, Graphics, type Texture, type Ticker } from 'pixi.js';
+import { Container, Graphics, type Ticker } from 'pixi.js';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
 import type { PixiSceneHost } from '../host.ts';
 import { masterOutput } from '../../runtime/master-volume.ts';
-
-export interface BeatorajaChartImages {
-  stageFile?: Texture;
-  backBmp?: Texture;
-  banner?: Texture;
-}
 
 export interface BeatorajaStageFitState {
   width: number;
@@ -74,23 +68,6 @@ interface BeatorajaStageView {
   readonly width: number;
   readonly height: number;
   readonly container: Container;
-}
-
-export function resolveBeatorajaChartImage(
-  images: BeatorajaChartImages | undefined,
-  syntheticId: number,
-): Texture | undefined {
-  if (images === undefined) return undefined;
-  switch (syntheticId) {
-    case -100:
-      return images.stageFile;
-    case -101:
-      return images.backBmp;
-    case -102:
-      return images.banner;
-    default:
-      return undefined;
-  }
 }
 
 const SONG_TEXTS = new WeakMap<BrowserSongEntry, BeatorajaSongTextInput>();

@@ -705,6 +705,18 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreApi.loadAssetBytes(BENCH_BYTES);
     },
   });
+  define('player-web.loadBeatorajaChartImages', {
+    run: async () => {
+      // The bench chart has no images, so the source is walked without decoding anything.
+      await playerWebCoreApi.loadBeatorajaChartImages(BENCH_SONG, BENCH_SOURCE);
+    },
+  });
+  define('player-web.resolveBeatorajaChartImage', {
+    run: () => {
+      playerWebCoreApi.resolveBeatorajaChartImage({}, -100);
+      playerWebCoreApi.resolveBeatorajaChartImage(undefined, -102);
+    },
+  });
   define('player-web.loadBeatorajaFonts', {
     run: async () => {
       const cache = await playerWebCoreApi.loadBeatorajaFonts({

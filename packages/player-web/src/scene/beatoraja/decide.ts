@@ -40,12 +40,11 @@ import {
   fitBeatorajaViewToStage,
   hasBeatorajaSceneFadingTransition,
   isBeatorajaSceneInputReady,
-  resolveBeatorajaChartImage,
   resolveBeatorajaSkinTimingMs,
   resolveBeatorajaSongText,
-  type BeatorajaChartImages,
   type BeatorajaSceneLoopAttachment,
 } from './shared-scene.ts';
+import { resolveBeatorajaChartImage, type BeatorajaChartImages } from '../../skin/beatoraja/chart-images.ts';
 
 export interface PixiBeatorajaDecideSceneOptions {
   /** Decide skin (`header.type === 6`). */
