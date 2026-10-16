@@ -1,4 +1,4 @@
-import type { GaugeType } from '@be-music/player/ruleset';
+import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
 import { resolveCourseStageStartGauge, type PlaylogCourseStage } from '@be-music/player/playlog';
 
@@ -12,7 +12,7 @@ import { resolveCourseStageStartGauge, type PlaylogCourseStage } from '@be-music
  */
 export function createPlaceholderGaugeState(
   type: GaugeType = 'GROOVE',
-  course?: { stage: PlaylogCourseStage; ruleset: 'lr2' | 'beatoraja' | 'iidx' },
+  course?: { stage: PlaylogCourseStage; ruleset: PlaylogRulesetId },
 ): PlayerGaugeSummary {
   if (course !== undefined) {
     const start = resolveCourseStageStartGauge(course.ruleset, course.stage, type);

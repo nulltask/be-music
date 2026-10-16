@@ -9,7 +9,6 @@ import { type AudioSinkClockState } from '../audio-sink.ts';
 import { type PlayerGaugeSummary, type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
 import type { GaugeType } from '../ruleset/gauge-type.ts';
-import { type JudgeWindowRuleset } from './judge-window.ts';
 import { type LongNoteStyle, type PlaylogRulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type PlaylogRecordingOptions } from '../playlog/recorder.ts';
 import type { BeMusicPlaylog, PlaylogCourseStage, PlaylogInputEvent } from '../playlog/format.ts';
@@ -85,7 +84,7 @@ export interface PlayerPlaySettings {
    * `#EXRANKxx` changes are an LR2 concept and only apply under `'lr2'`. Recorded into the playlog
    * (`play.judgeRuleset`) so replays re-apply the same windows.
    */
-  judgeRuleset?: JudgeWindowRuleset;
+  judgeRuleset?: PlaylogRulesetId;
   /**
    * The `#RANDOM` / `#SWITCH` outcomes of this play (`resolvePlayChart`, or `drawRandomOutcomes` from
    * `@be-music/chart`). With a chart the host already resolved, these are the draws it was resolved with and only feed

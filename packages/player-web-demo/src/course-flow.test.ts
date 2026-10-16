@@ -2,6 +2,7 @@ import { createEmptyJson } from '@be-music/json';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
+import type { PlaylogRulesetId } from '@be-music/player/ruleset';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   activeCourseInfo,
@@ -61,9 +62,9 @@ function courseLog(
   play: {
     mode?: 'auto' | 'manual';
     tempo?: number;
-    judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+    judgeRuleset?: PlaylogRulesetId;
   },
-  second?: { judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx' },
+  second?: { judgeRuleset?: PlaylogRulesetId },
 ): Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'> {
   const stage = (stagePlay: object) => ({ played: true, playlog: { play: { mode: 'manual', ...stagePlay } } });
   return {

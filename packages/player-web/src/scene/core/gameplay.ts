@@ -30,7 +30,7 @@ import {
   type TempoClock,
 } from '@be-music/player/core/engine';
 import { resolveLr2LaneTimer } from '@be-music/lr2-skin/state';
-import { resolveClearLamp, type GaugeType } from '@be-music/player/ruleset';
+import { resolveClearLamp, type GaugeType, type PlaylogRulesetId } from '@be-music/player/ruleset';
 import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
 import { type ChartPlayVariant, resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
@@ -571,7 +571,7 @@ export interface CoreGameplayViewOptions {
    * Judge-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): `'lr2'` (default) / `'beatoraja'`
    * / `'iidx'`. Recorded into the play-log; replays re-apply the log's own value instead.
    */
-  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset?: PlaylogRulesetId;
   /**
    * SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. Stamped into the recorded
    * play-log (`chart.sha256`) so a dropped log can be matched back to its chart by content.
