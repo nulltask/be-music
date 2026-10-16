@@ -1,6 +1,6 @@
 /** The lane covers of the shared playfield: each side's SUDDEN / HIDDEN masks over its lanes. */
 
-import { isChannelOnSide } from '../../../session/play/play-chart.ts';
+import { isChannelOnSide } from '../../../chart/lane-sides.ts';
 import type { PlayfieldContext } from './context.ts';
 
 /**

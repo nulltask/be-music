@@ -29,7 +29,7 @@ import { PIXELS_PER_BEAT } from '../../scene/gameplay-constants.ts';
 import { snapHiSpeed, stepPlayerHiSpeed, type HiSpeedTransition } from '../../scene/hi-speed.ts';
 import { BE_MUSIC_HI_SPEED_SCALE, type PlaylogViewCursor } from '../../scene/playlog-view.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
-import { isChannelOnSide } from './play-chart.ts';
+import { isChannelOnSide } from '../../chart/lane-sides.ts';
 
 /** What {@link applyHsFix} folds the HS-FIX multiplier into: `CoreGameplayView`'s members of these names. */
 export interface HsFixContext {

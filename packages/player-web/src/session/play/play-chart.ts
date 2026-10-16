@@ -428,23 +428,6 @@ export function flipDpChannel(channel: string): string {
 }
 
 /**
- * Returns whether a BMS channel string belongs to the given play-side. Used by per-side gameplay overlays (LANE COVER /
- * HIDDEN / SUDDEN masks) so each side can render an independent shutter without leaking onto the other side's lanes on
- * a DP chart.
- *
- * Channel layout (LR2 convention): - 1P keyboard: `11..15` + `18` + `19`; scratch: `16` - 2P keyboard: `21..25` + `28`
- * + `29`; scratch: `26`
- *
- * Anything else (BGM, BGA, BPM, etc.) returns `false` for BOTH sides — those don't appear in `laneX` anyway.
- */
-export function isChannelOnSide(channel: string, side: '1P' | '2P'): boolean {
-  if (channel.length !== 2) return false;
-  const head = channel[0];
-  if (side === '1P') return head === '1';
-  return head === '2';
-}
-
-/**
  * Shuffles `notes` in place per the chosen arrangement mode. Only `allLanes` — one side's keyboard lanes, from
  * `resolveLaneOptionChannels` — are touched; scratches, the keyboard modes' wheel, and the other side pass through
  * untouched, matching LR2 / beatoraja where the lane options shuffle the keys only. The `usedLanes` filter trims the permutation domain to the lanes actually
