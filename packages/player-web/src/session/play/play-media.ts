@@ -7,12 +7,14 @@
  * The functions read and write the play's state through {@link PlayMediaContext}; the scene passes itself.
  */
 
+import type { TimedSampleTrigger } from '@be-music/audio-renderer/triggers';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { Texture } from 'pixi.js';
 import { createPlayAudioGraph, loadPlaySamples } from '../../chart/play-audio.ts';
 import { loadPlayBga } from '../../chart/play-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
+import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type {
   AudioBusChannel,
   AudioBusHandle,
@@ -21,10 +23,11 @@ import type {
   TunableCompressor,
 } from '../../runtime/audio-bus.ts';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
-import { resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
+import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import { resolveGameplayAudioTailCleanupDelayMs } from '../../scene/core/gameplay-result-delay.ts';
 
 /** The play state the media preparation reads and fills: `CoreGameplayView`'s fields of these names. */
 export interface PlayMediaContext {
@@ -209,4 +212,61 @@ export function disposeGameplayAudioGraphAfterDelay(
     return;
   }
   window.setTimeout(cleanup, delayMs);
+}
+
+/** What {@link disposePlayAudio} tears down: the media state, and what the audio tail is measured against. */
+export interface PlayMediaTeardownContext extends PlayMediaContext {
+  readonly chartEnded: boolean;
+  readonly notes: readonly TimedPlayableNote[];
+  readonly autoSampleTriggers: readonly TimedSampleTrigger[];
+  audioFrame: AudioFeatures | undefined;
+  currentSeconds(): number;
+}
+
+/**
+ * Releases the play's audio graph as the scene is disposed (`CoreGameplayView.dispose`); after a natural end with
+ * `preserveAudioTail`, the graph is kept until the last samples have rung out.
+ */
+export function disposePlayAudio(this: PlayMediaTeardownContext, options: CoreGameplayDisposeOptions): void {
+  // WebAudioSession owns the in-flight BufferSource tracking that the bus's connected sources hang off of, so
+  // dispose it BEFORE we tear the bus down — that gives the session a chance to call `node.stop()` on every
+  // still-playing source so they don't survive into the next chart's bus and bleed audio through. Fire-and-
+  // forget the returned promise; the session's dispose path is best-effort.
+  const preserveAudioTail = options.preserveAudioTail === true && this.chartEnded;
+  const audioTailChart = this.resolvedChart ?? this.song?.chart;
+  const audioTailCleanupDelayMs =
+    preserveAudioTail && audioTailChart !== undefined
+      ? chartToElapsedSeconds(
+          resolveGameplayAudioTailCleanupDelayMs({
+            chart: audioTailChart,
+            notes: this.notes,
+            autoSampleTriggers: this.autoSampleTriggers,
+            decodedSamples: this.decodedSamples,
+            bmsonSlicePlayback: this.bmsonSlicePlayback,
+            currentSeconds: this.currentSeconds(),
+          }),
+          this.tempo,
+        )
+      : 0;
+  const webAudioSession = this.webAudioSession;
+  this.webAudioSession = undefined;
+  this.nonstopMixer?.dispose();
+  this.nonstopMixer = undefined;
+  // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
+  // The bus doesn't own the AudioContext itself; closing that is the next step.
+  this.audioAnalyzer?.dispose();
+  this.audioAnalyzer = undefined;
+  this.audioFrame = undefined;
+  const audioBus = this.audioBus;
+  this.audioBus = undefined;
+  const audioContext = this.audioContext;
+  this.audioContext = undefined;
+  disposeGameplayAudioGraphAfterDelay(
+    {
+      session: webAudioSession,
+      bus: audioBus,
+      context: audioContext,
+    },
+    preserveAudioTail ? audioTailCleanupDelayMs : 0,
+  );
 }

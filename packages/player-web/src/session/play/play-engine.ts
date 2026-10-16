@@ -899,3 +899,26 @@ function handleSharedEngineChartFinished(
     );
   }, ending.leadOutMs);
 }
+
+/** Stops the shared engine as the scene is disposed (`CoreGameplayView.dispose`) and lets go of its buses. */
+export function stopSharedEngine(this: PlayEngineContext): void {
+  // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
+  // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via
+  // `throwIfAborted` and unwinds; our launchSharedEngine catch swallows the resulting `AbortError` because
+  // the host already initiated dispose.
+  // A play torn down mid-chart is interrupted too, so the engine stops instead of running on to the chart's end.
+  interruptSharedEngine.call(this, 'escape');
+  if (this.sharedEngineAbortController) {
+    try {
+      this.sharedEngineAbortController.abort();
+    } catch {
+      // Already aborted or unsupported environment — swallow.
+    }
+    this.sharedEngineAbortController = undefined;
+  }
+  this.sharedEngineSignals = undefined;
+  this.sharedEngineInputSignals = undefined;
+  this.liveTempo.attach(undefined);
+  this.sharedEngineClockAnchored = false;
+  this.sharedEnginePromise = undefined;
+}

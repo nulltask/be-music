@@ -23,7 +23,6 @@ import { resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { nonstopBpmAt } from '@be-music/player/course';
 import { LiveTempo } from '../live-tempo.ts';
 import {
-  chartToElapsedSeconds,
   clampPlayTempo,
   resolveReplayTempo,
   supportsLiveTempoChange,
@@ -35,7 +34,6 @@ import { staggerDestroyTextures } from '../pixi-utils.ts';
 import { BG, BGA, DESIGN_HEIGHT, DESIGN_WIDTH, FALLBACK_INTRO_DELAY_MS } from '../gameplay-constants.ts';
 import { snapHiSpeed, stepPlayerHiSpeed } from '../hi-speed.ts';
 import { resolveSideRelativeLaneIndex } from '../gameplay-lanes.ts';
-import { resolveGameplayAudioTailCleanupDelayMs } from './gameplay-result-delay.ts';
 import type { BeMusicGameplayLayout, BeMusicLaneCover, BeMusicStage } from '../../skin/be-music/types.ts';
 import {
   resolveGameplayLayout,
@@ -58,7 +56,12 @@ import { QuitHoldController } from '../quit-hold.ts';
 import { prepareSong } from '../../session/play/play-chart.ts';
 import { resolveLaneCovers, resolveVisibleMs, updatePlaylogView } from '../../session/play/play-view-settings.ts';
 import { beginExitSequence, getResultData } from '../../session/play/play-ending.ts';
-import { drainSharedEngineSignals, interruptSharedEngine, launchSharedEngine } from '../../session/play/play-engine.ts';
+import {
+  drainSharedEngineSignals,
+  interruptSharedEngine,
+  launchSharedEngine,
+  stopSharedEngine,
+} from '../../session/play/play-engine.ts';
 import {
   attachPlayInput,
   detachPlayInput,
@@ -70,9 +73,9 @@ import {
   handleWindowFocus,
   togglePause,
 } from '../../session/play/play-input.ts';
-import { disposeGameplayAudioGraphAfterDelay, prepareAudio, prepareBga } from '../../session/play/play-media.ts';
+import { disposePlayAudio, prepareAudio, prepareBga } from '../../session/play/play-media.ts';
 import { resolveLaneGeometry, resolveSkinlessGameplayChromeRuntime } from '../../view/built-in/play-chrome.ts';
-import { renderBga } from '../../view/shared/bga-renderer.ts';
+import { disposeBgaVideos, renderBga } from '../../view/shared/bga-renderer.ts';
 import { renderBombEffects, renderBombs } from '../../view/shared/playfield/bombs.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
 import { renderLanes } from '../../view/shared/playfield/lanes.ts';
@@ -862,87 +865,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     this.keyFlashTimeouts.clear();
     log.info('listeners detached');
-    // Pause every BGA video BEFORE we touch textures. The Pixi `VideoSource` wrapping each video registers a
-    // `requestVideoFrameCallback` that re-uploads frames into the GL texture as they decode — leaving those callbacks
-    // in flight while we destroy the textures throws inside the GL texture system. Pausing also revokes the Blob URL so
-    // the underlying buffer can be released.
-    for (const { video, objectUrl } of this.bgaVideos.values()) {
-      try {
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-      } catch {
-        // Defensive — `load()` can throw on detached videos.
-      }
-      URL.revokeObjectURL(objectUrl);
-    }
-    this.bgaVideos.clear();
-    this.bgaActiveVideos = {};
+    disposeBgaVideos.call(this);
     // Hard-stop any active recording before tearing down the bus. `GameplayRecorder.dispose` calls
     // `MediaRecorder.stop()` synchronously (no chunk-flush wait) and disconnects its audio tap from the bus's output
     // node, so the bus can be disposed cleanly afterwards.
     this.recorder?.dispose();
     this.recorder = undefined;
-    // WebAudioSession owns the in-flight BufferSource tracking that the bus's connected sources hang off of, so
-    // dispose it BEFORE we tear the bus down — that gives the session a chance to call `node.stop()` on every
-    // still-playing source so they don't survive into the next chart's bus and bleed audio through. Fire-and-
-    // forget the returned promise; the session's dispose path is best-effort.
-    // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
-    // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via
-    // `throwIfAborted` and unwinds; our launchSharedEngine catch swallows the resulting `AbortError` because
-    // the host already initiated dispose.
-    // A play torn down mid-chart is interrupted too, so the engine stops instead of running on to the chart's end.
-    interruptSharedEngine.call(this, 'escape');
-    if (this.sharedEngineAbortController) {
-      try {
-        this.sharedEngineAbortController.abort();
-      } catch {
-        // Already aborted or unsupported environment — swallow.
-      }
-      this.sharedEngineAbortController = undefined;
-    }
-    this.sharedEngineSignals = undefined;
-    this.sharedEngineInputSignals = undefined;
-    this.liveTempo.attach(undefined);
-    this.sharedEngineClockAnchored = false;
-    this.sharedEnginePromise = undefined;
-    const preserveAudioTail = options.preserveAudioTail === true && this.chartEnded;
-    const audioTailChart = this.resolvedChart ?? this.song?.chart;
-    const audioTailCleanupDelayMs =
-      preserveAudioTail && audioTailChart !== undefined
-        ? chartToElapsedSeconds(
-            resolveGameplayAudioTailCleanupDelayMs({
-              chart: audioTailChart,
-              notes: this.notes,
-              autoSampleTriggers: this.autoSampleTriggers,
-              decodedSamples: this.decodedSamples,
-              bmsonSlicePlayback: this.bmsonSlicePlayback,
-              currentSeconds: this.currentSeconds(),
-            }),
-            this.tempo,
-          )
-        : 0;
-    const webAudioSession = this.webAudioSession;
-    this.webAudioSession = undefined;
-    this.nonstopMixer?.dispose();
-    this.nonstopMixer = undefined;
-    // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
-    // The bus doesn't own the AudioContext itself; closing that is the next step.
-    this.audioAnalyzer?.dispose();
-    this.audioAnalyzer = undefined;
-    this.audioFrame = undefined;
-    const audioBus = this.audioBus;
-    this.audioBus = undefined;
-    const audioContext = this.audioContext;
-    this.audioContext = undefined;
-    disposeGameplayAudioGraphAfterDelay(
-      {
-        session: webAudioSession,
-        bus: audioBus,
-        context: audioContext,
-      },
-      preserveAudioTail ? audioTailCleanupDelayMs : 0,
-    );
+    stopSharedEngine.call(this);
+    disposePlayAudio.call(this, options);
     // Detach our subtree from the host's stage. The host owns the `Application` lifetime; we just stop contributing to
     // its scene graph. The root Container itself stays alive in case the host wants to re-enter the same view (we
     // don't, but it's harmless).
