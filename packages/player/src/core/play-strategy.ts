@@ -50,8 +50,6 @@ export interface PlayJudge {
  * they are removed one by one.
  */
 export interface StrategyDrifts {
-  /** Resolves its ruleset without the chart's `#EXRANK` changes, and traces their windows without `judgeWindowMs`. */
-  readonly ignoresJudgeRankChanges: boolean;
   /** Records the play clock's chart time as `abortedAtUs` of an ESC, not where its judge had settled. */
   readonly abortsAtClockTime: boolean;
   /** Its no-TUI trace reports an ESC as `complete`. */

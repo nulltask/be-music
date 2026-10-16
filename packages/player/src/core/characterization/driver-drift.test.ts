@@ -48,18 +48,18 @@ describe('driver drift', () => {
     expect(settledAt(auto)).toBeGreaterThan(3500);
   });
 
-  test('drift: autoPlay plays as if the chart had no #EXRANK changes (its ruleset is resolved without them)', async () => {
+  test('auto play resolves the #EXRANK changes like manual play', async () => {
+    // AUTO play judges every note PGREAT and reads only LR2's BAD reach, which no rank changes, so the changes show where
+    // the windows are reported: under a judge-window override both modes trace them with the same windows.
+    const options = { judgeWindowMs: 150 };
+    const manual = await observePlay({ driver: 'manual', chart: exRankChart(true), ui: false, options });
+    const auto = await observePlay({ driver: 'auto', chart: exRankChart(true), ui: false, options });
+    const rankChanges = (observation: PlayObservation) =>
+      observation.output.filter((line) => line.includes('kind:judge-rank-change'));
+    expect(rankChanges(auto)).toEqual(rankChanges(manual));
+    expect(rankChanges(auto).every((line) => line.endsWith(' bad:150ms'))).toBe(true);
     const withChanges = await observePlay({ driver: 'auto', chart: exRankChart(true) });
-    const withoutChanges = await observePlay({ driver: 'auto', chart: exRankChart(false) });
-    const visible = ({ summary, judges, audio, ui, frames }: PlayObservation) => ({
-      summary,
-      judges,
-      audio,
-      ui,
-      frames,
-    });
-    expect(visible(withChanges)).toEqual(visible(withoutChanges));
-    // Its play log still records the changes, and manual play judges by them.
+    // Its play log records the changes, and manual play judges by them.
     expect(withChanges.playlog?.chart.judgeRank.timeline).toEqual([
       { timeUs: 1_000_000, exRankValue: 25 },
       { timeUs: 2_000_000, exRankValue: 200 },

@@ -174,12 +174,7 @@ export async function createPlaySession(
   // only declared it for the log (`recordPlaylog.gauge`) gets it played too.
   const selectedGauge = options.gauge ?? options.recordPlaylog?.gauge;
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(
-      resolvedJson,
-      playbackChart,
-      drifts.ignoresJudgeRankChanges ? [] : judgeRankChanges,
-      options.stageRanks,
-    ),
+    rulesetChartFactsFromChart(resolvedJson, playbackChart, judgeRankChanges, options.stageRanks),
     options.judgeRuleset ?? 'lr2',
     {
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
@@ -275,7 +270,7 @@ export async function createPlaySession(
     : createNoTuiPlaybackEventTracer({
         resolved: resolvedChart,
         writeOutput,
-        ...(drifts.ignoresJudgeRankChanges ? {} : { judgeWindowMs: options.judgeWindowMs }),
+        judgeWindowMs: options.judgeWindowMs,
       });
   const stateLogger = uiEnabled
     ? createNoopPlaybackStateLogger()
