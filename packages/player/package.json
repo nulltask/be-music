@@ -30,6 +30,11 @@
       "types": "./dist/playlog.d.ts",
       "default": "./dist/playlog.js"
     },
+    "./records": {
+      "source": "./src/records/index.ts",
+      "types": "./dist/records.d.ts",
+      "default": "./dist/records.js"
+    },
     "./ruleset": {
       "source": "./src/ruleset/vocabulary.ts",
       "types": "./dist/ruleset.d.ts",
