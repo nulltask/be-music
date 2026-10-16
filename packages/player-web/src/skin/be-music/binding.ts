@@ -601,8 +601,6 @@ export type BeMusicDecideSceneFrame = Omit<BeMusicDecideFrame, 'songImage' | 'se
 export class BeMusicDecideBinding {
   /** Persistent container showing the skin's canvas; the scene mounts it once. */
   readonly view = new Container();
-  /** How long (ms) the screen shows before the play starts (the skin's `decide.durationMs`, default 2000). */
-  readonly durationMs: number;
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private settings: BeMusicSkinSettingValues;
@@ -621,7 +619,6 @@ export class BeMusicDecideBinding {
     this.surface = new SkinSurface(skin, options.renderer);
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
-    this.durationMs = resolveBeMusicDecideDurationMs(skin);
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
   }
 

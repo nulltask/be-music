@@ -5,16 +5,10 @@ import type { SceneIdentity } from '../host/family-kit.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { PixiBeatorajaDecideScene } from './beatoraja/decide.ts';
 import { PixiBeatorajaSelectScene } from './beatoraja/select.ts';
-import { CoreDecideView } from './core/decide.ts';
 import { CoreGameplayView } from './core/gameplay.ts';
 import { CoreResultView } from './core/result.ts';
 import { CoreSongSelectView } from './core/select.ts';
-import {
-  DefaultPixiDecideView,
-  DefaultPixiGameplayView,
-  DefaultPixiResultView,
-  DefaultPixiSongSelectView,
-} from './default/index.ts';
+import { DefaultPixiGameplayView, DefaultPixiResultView, DefaultPixiSongSelectView } from './default/index.ts';
 import { PixiSceneHost, resolveRendererPreference, resolveRenderResolution, type PixiScene } from './host.ts';
 import { PixiDecideView } from './lr2/decide.ts';
 import { PixiGameplayView } from './lr2/gameplay.ts';
@@ -276,8 +270,6 @@ describe('scene identities', () => {
     ['CoreSongSelectView', CoreSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
     ['DefaultPixiSongSelectView', DefaultPixiSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
     ['PixiSongSelectView', PixiSongSelectView.prototype.identity, { kind: 'select', family: 'lr2' }],
-    ['CoreDecideView', CoreDecideView.prototype.identity, { kind: 'decide', family: 'built-in' }],
-    ['DefaultPixiDecideView', DefaultPixiDecideView.prototype.identity, { kind: 'decide', family: 'built-in' }],
     ['PixiDecideView', PixiDecideView.prototype.identity, { kind: 'decide', family: 'lr2' }],
     ['CoreGameplayView', CoreGameplayView.prototype.identity, { kind: 'play', family: 'built-in' }],
     ['DefaultPixiGameplayView', DefaultPixiGameplayView.prototype.identity, { kind: 'play', family: 'built-in' }],
