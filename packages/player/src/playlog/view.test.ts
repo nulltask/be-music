@@ -196,6 +196,14 @@ describe('createPlaylogViewCoalescer', () => {
     expect(coalescer.observe({ hiSpeed: 2.3, covers: [cover('1P', 0.15)] }, 300)).toBeUndefined();
   });
 
+  test('flushes a change still held back as the play ends, whatever the interval', () => {
+    const coalescer = createPlaylogViewCoalescer({ hiSpeed: 2 }, { minIntervalMs: 100 });
+    expect(coalescer.observe({ hiSpeed: 2.1 }, 0)).toEqual({ hiSpeed: 2.1 });
+    expect(coalescer.observe({ hiSpeed: 2.2 }, 20)).toBeUndefined();
+    expect(coalescer.flush({ hiSpeed: 2.2 })).toEqual({ hiSpeed: 2.2 });
+    expect(coalescer.flush({ hiSpeed: 2.2 })).toBeUndefined();
+  });
+
   test('a change back to the recorded view within the interval records nothing', () => {
     const coalescer = createPlaylogViewCoalescer({ hiSpeed: 2 });
     expect(coalescer.observe({ hiSpeed: 2.5 }, 0)).toEqual({ hiSpeed: 2.5 });

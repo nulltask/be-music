@@ -243,3 +243,17 @@ export function consumePlaybackInputCommands(params: {
     onUnhandledCommand?.(command);
   }
 }
+
+/**
+ * Records the view changes left on the input bus once a play's loop has ended (`{ kind: 'view' }`, sent by the host as
+ * the play ends, after the loop's last drain), at `chartSeconds`; other commands left there no longer matter.
+ */
+export function recordPendingViewChanges(
+  inputSignals: PlayerInputSignalBus,
+  recorder: { recordViewChange(timeSeconds: number, change: PlaylogViewState): void } | undefined,
+  chartSeconds: number,
+): void {
+  for (const command of inputSignals.drainCommands()) {
+    if (command.kind === 'view') recorder?.recordViewChange(chartSeconds, command.change);
+  }
+}
