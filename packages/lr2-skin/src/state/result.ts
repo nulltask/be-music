@@ -109,9 +109,9 @@ function resultNumber(num: number, result: PlayResult): number | undefined {
   if (rateNumber !== undefined) return rateNumber;
   const totalNotes = score.total;
   const exMax = totalNotes * 2;
-  const rate = exMax > 0 ? score.exScore / exMax : 0;
   const minBp = score.bad + score.poor;
-  const percentOfNotes = (count: number): number => (totalNotes > 0 ? Math.round((count / totalNotes) * 100) : 0);
+  // The best record's rates as LR2 draws them: whole percents, truncated (OpenLR2 `SetObjectValue_Num` 73, 85-89).
+  const percentOfNotes = (count: number): number => (totalNotes > 0 ? Math.floor((count * 100) / totalNotes) : 0);
   switch (num) {
     case LR2_NUM.BEST_SCORE:
     case LR2_NUM.SCORE:
@@ -124,7 +124,7 @@ function resultNumber(num: number, result: PlayResult): number | undefined {
     case LR2_NUM.EXSCORE_MAX:
       return exMax;
     case LR2_NUM.BEST_RATE:
-      return Math.round(rate * 100);
+      return exMax > 0 ? Math.floor((score.exScore * 100) / exMax) : 0;
     case LR2_NUM.TOTAL_NOTES:
     case LR2_NUM.NOTES:
       return totalNotes;
