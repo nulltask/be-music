@@ -229,6 +229,22 @@ general text and Azeret Mono for judgment and combo readouts.
 The package discovers JSON and Lua skin entries, then the browser layer loads sources, textures, fonts, theme BGM,
 and system sounds from the same dropped bundle.
 
+Each beatoraja scene loads its skin entry as a scene kit with `loadBeatorajaSceneKit()` (`@be-music/player-web/skin`):
+
+```mermaid
+flowchart LR
+  header[Header pass] --> options[Options]
+  options --> skin[Skin pass]
+  skin --> textures[Textures]
+  skin --> fonts[Fonts]
+  textures --> kit[Scene kit]
+  fonts --> kit
+```
+
+- The skin is loaded twice. The header pass reads `property[]`, `filepath[]` and `offset[]`, whose defaults seed the player's options for the entry (`defaultBeatorajaSkinConfig`); the skin pass runs a Lua skin's `main()` with those options. Options the host already holds (a skin-options change) load it once. Decide and result skins get a load-time `main_state` with the chart's difficulty ops (`createBeatorajaSkinLoadContext`), as ModernChic works out its colours in `main()`.
+- `source[]` is resolved against the theme's files (`bundleBeatorajaSources`, with the options' `filepath[]` picks) and decoded to textures, and `font[]` is registered.
+- The host keeps one `BeatorajaSceneKitCaches`: the textures, fonts and options of each entry, by entry path, so the next scene on the same entry reuses them. Textures are never destroyed, as PixiJS v8 crashes when the same bytes are decoded again after a destroy; a new theme forgets them and disposes the fonts (`releaseBeatorajaSceneKitAssets`).
+
 Implemented beatoraja browser features include:
 
 - Select, decide, gameplay, and result scenes backed by `BeatorajaPlaySkinView`
