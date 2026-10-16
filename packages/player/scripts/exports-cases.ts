@@ -4,6 +4,7 @@ import * as playerApi from '@be-music/player';
 import * as courseApi from '@be-music/player/course';
 import * as judgingApi from '@be-music/player/judging';
 import * as playlogApi from '@be-music/player/playlog';
+import * as rulesetApi from '@be-music/player/ruleset';
 import type { PlayerOptions } from '@be-music/player';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -714,6 +715,65 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.playlog.parseCoursePlaylog', {
     run: () => {
       playlogApi.parseCoursePlaylog(benchCourseText);
+    },
+  });
+  const benchLampScore = { total: 100, perfect: 90, great: 8, good: 2 };
+  define('player.ruleset.isClearLamp', {
+    run: () => {
+      rulesetApi.isClearLamp('EX_HARD');
+    },
+  });
+  define('player.ruleset.clearLampRank', {
+    run: () => {
+      rulesetApi.clearLampRank('FULL_COMBO');
+    },
+  });
+  define('player.ruleset.clearLampAtRank', {
+    run: () => {
+      rulesetApi.clearLampAtRank(7);
+    },
+  });
+  define('player.ruleset.betterClearLamp', {
+    run: () => {
+      rulesetApi.betterClearLamp('HARD', 'FULL_COMBO');
+    },
+  });
+  define('player.ruleset.topClearLamp', {
+    run: () => {
+      rulesetApi.topClearLamp('lr2');
+    },
+  });
+  define('player.ruleset.isFullCombo', {
+    run: () => {
+      rulesetApi.isFullCombo(benchLampScore);
+    },
+  });
+  define('player.ruleset.resolveClearLamp', {
+    run: () => {
+      rulesetApi.resolveClearLamp({ ruleset: 'beatoraja', cleared: true, gauge: 'HARD', score: benchLampScore });
+    },
+  });
+  define('player.ruleset.resolveCourseClearLamp', {
+    run: () => {
+      rulesetApi.resolveCourseClearLamp({
+        ruleset: 'lr2',
+        cleared: true,
+        gauge: 'GRADE-HARD',
+        gaugeType: 'HARD',
+        noteCount: 1000,
+        maxCombo: 400,
+        judge: { great: 120, good: 12 },
+      });
+    },
+  });
+  define('player.ruleset.resolveMissCount', {
+    run: () => {
+      rulesetApi.resolveMissCount({ bad: 3, poor: 5, emptyPoor: 2 }, 10);
+    },
+  });
+  define('player.ruleset.isGaugeType', {
+    run: () => {
+      rulesetApi.isGaugeType('DEATH');
     },
   });
   define('player.playlog.resolveCourseLamp', {

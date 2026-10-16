@@ -30,6 +30,11 @@
       "types": "./dist/playlog.d.ts",
       "default": "./dist/playlog.js"
     },
+    "./ruleset": {
+      "source": "./src/ruleset/vocabulary.ts",
+      "types": "./dist/ruleset.d.ts",
+      "default": "./dist/ruleset.js"
+    },
     "./audio-sink": {
       "source": "./src/audio-sink.ts",
       "types": "./dist/audio-sink.d.ts",

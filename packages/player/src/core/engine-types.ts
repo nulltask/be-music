@@ -8,7 +8,7 @@ import { type TuiNoteHeight } from './ui-options.ts';
 import { type AudioSinkClockState } from '../audio-sink.ts';
 import { type PlayerGaugeSummary, type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
-import { type GrooveGaugeType } from './groove-gauge.ts';
+import type { GaugeType } from '../ruleset/gauge-type.ts';
 import { type JudgeWindowRuleset } from './judge-window.ts';
 import { type LongNoteStyle, type PlaylogRulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type PlaylogRecordingOptions } from '../playlog/recorder.ts';
@@ -76,7 +76,7 @@ export interface PlayerPlaySettings {
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
    * Defaults to `recordPlaylog.gauge`, then `'GROOVE'`. The play log records the gauge the play ran on.
    */
-  gauge?: GrooveGaugeType;
+  gauge?: GaugeType;
   /**
    * Judge-window ruleset for manual play: `'lr2'` (default — the engine's LR2-aligned windows), `'beatoraja'`
    * (SEVENKEYS windows scaled by beatoraja's judgerank), or `'iidx'` (fixed ±16.67/±33.33/±116.67/±250 ms).
