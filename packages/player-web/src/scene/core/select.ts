@@ -55,7 +55,7 @@ import type { BeMusicSelectLayout } from '@be-music/skin-sdk';
 import type { SelectReadTextContext } from './select-legacy/readtext.ts';
 import { renderEmptyStateHint, type SelectEmptyHintContext } from '../../view/built-in/select-empty-hint.ts';
 import { LegacySelectView, type LegacySelectViewContext } from './select-legacy/view.ts';
-import { SelectPointer, type SelectPointerContext } from '../../session/select/select-pointer.ts';
+import { SelectPointer, type SelectPointerContext } from '../../view/shared/select-pointer.ts';
 import { LegacySelectSession, type LegacySelectSessionContext } from './select-legacy/session.ts';
 import { SelectAudio, type SelectAudioContext } from './select-legacy/audio.ts';
 import { SelectKeys, type SelectKeysContext } from './select-legacy/keys.ts';

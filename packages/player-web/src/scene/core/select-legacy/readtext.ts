@@ -7,7 +7,7 @@
  */
 
 import { Color, Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { findReadtextForSong } from '../../../session/select/select-readtext.ts';
+import { findReadtextForSong } from '../../../collection/readtext.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../../../collection/types.ts';
 import { CORE_TEXT_FONT } from '../fonts.ts';
 

@@ -8,19 +8,20 @@ import type { BrowserSongCollection } from '../collection/types.ts';
 import { logger } from '../logger.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { SELECT_POLICIES } from '../session/select/select-policy.ts';
-import { SelectSession, type SelectSessionEvents } from '../session/select/select-session.ts';
+import { SelectSession, type SelectCourseMaker, type SelectSessionEvents } from '../session/select/select-session.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { BuiltInSelectView } from '../view/built-in/select-view.ts';
-import type { SelectFrame, SelectIntent, SelectRecords } from '../view/types.ts';
-import type { BuiltInKit } from './family-kit.ts';
+import { Lr2SelectView } from '../view/lr2/select-view.ts';
+import type { SelectFrame, SelectIntent, SelectRecords, SelectView } from '../view/types.ts';
+import type { BuiltInKit, Lr2Kit } from './family-kit.ts';
 
 const log = logger('select');
 
 /**
- * The kits the select scene takes: a be-music skin. The LR2 select screen is still `PixiSongSelectView`, the beatoraja
- * one `PixiBeatorajaSelectScene`.
+ * The kits the select scene takes: a be-music skin, or an LR2 select skin (the theme's, with its bar list). The
+ * beatoraja select screen is still `PixiBeatorajaSelectScene`.
  */
-export type SelectSceneKit = BuiltInKit;
+export type SelectSceneKit = BuiltInKit | Lr2Kit;
 
 export interface SelectSceneOptions extends SessionSceneOptions {
   /** The library to browse, with its charts' files (the preview's samples, the images, the text files). */
@@ -37,6 +38,11 @@ export interface SelectSceneOptions extends SessionSceneOptions {
    */
   readonly sounds: SystemSoundSet;
   readonly audio: AudioService;
+  /**
+   * The player's own courses and the course being made (LR2's course maker): an LR2 skin shows it and its finish,
+   * cancel and connection buttons run on it.
+   */
+  readonly courseMaker?: SelectCourseMaker;
   /** What the screen tells the host: a chart or a course started, the play options changed, and the rest. */
   readonly on: SelectSessionEvents;
 }
@@ -69,20 +75,43 @@ export interface SelectScene extends SessionScene<SelectFrame, SelectIntent> {
   /** Takes the theme's new sounds; a BGM playing changes to the new one. */
   setSounds(sounds: SystemSoundSet): void;
   /**
-   * Takes the player's new settings for the kit's skin; the next frame draws with them. The scene keeps its family and
-   * its skin: a kit of another family is ignored.
+   * Takes a new kit of the scene's family: the player's new settings for a be-music skin (the scene keeps its skin), or
+   * another LR2 select skin (a theme dropped). The next frame draws with it. A kit of another family is ignored.
    */
   updateKit(kit: SelectSceneKit): void;
 }
 
+/** A family's select view, and how it takes a new kit. */
+interface FamilySelectView {
+  readonly view: SelectView;
+  updateKit(kit: SelectSceneKit): void;
+}
+
+/** The select view of `kit`'s family. */
+function createSelectView(kit: SelectSceneKit): FamilySelectView {
+  if (kit.family === 'lr2') {
+    const view = new Lr2SelectView(kit);
+    return { view, updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')) };
+  }
+  const view = new BuiltInSelectView(kit);
+  return {
+    view,
+    updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
+  };
+}
+
+function ignoreKit(kit: SelectSceneKit, family: SelectSceneKit['family']): void {
+  log.warn(`a ${family} select scene keeps its family; ignoring a ${kit.family} kit`);
+}
+
 class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implements SelectScene {
   private readonly selectSession: SelectSession;
-  private readonly selectView: BuiltInSelectView;
+  private readonly familyView: FamilySelectView;
 
-  public constructor(session: SelectSession, view: BuiltInSelectView, options: SessionSceneOptions) {
-    super(session, view, options);
+  public constructor(session: SelectSession, familyView: FamilySelectView, options: SessionSceneOptions) {
+    super(session, familyView.view, options);
     this.selectSession = session;
-    this.selectView = view;
+    this.familyView = familyView;
   }
 
   public snapshot(): BrowseSnapshot {
@@ -122,7 +151,7 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
   }
 
   public searchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
-    return this.selectView.searchFieldRect();
+    return this.familyView.view.searchFieldRect();
   }
 
   public setSounds(sounds: SystemSoundSet): void {
@@ -130,11 +159,7 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
   }
 
   public updateKit(kit: SelectSceneKit): void {
-    if (kit.family !== 'built-in') {
-      log.warn(`a built-in select scene keeps its family; ignoring a ${String(kit.family)} kit`);
-      return;
-    }
-    this.selectView.updateKit(kit);
+    this.familyView.updateKit(kit);
     // The view builds its skin again from the next frame.
     this.selectSession.refreshRecords();
   }
@@ -147,7 +172,8 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
  * are kept). Dispose it once it is gone.
  */
 export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptions): SelectScene {
-  const view = new BuiltInSelectView(kit);
+  const familyView = createSelectView(kit);
+  const { view } = familyView;
   const session = new SelectSession({
     library: options.library,
     ...(options.browse !== undefined ? { browse: options.browse } : {}),
@@ -155,12 +181,13 @@ export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptio
     ...(options.records !== undefined ? { records: options.records } : {}),
     sounds: options.sounds,
     audio: options.audio,
+    ...(options.courseMaker !== undefined ? { courseMaker: options.courseMaker } : {}),
     policy: SELECT_POLICIES[kit.family],
     launchOutroMs: () => view.launchOutroMs,
     ...(options.now !== undefined ? { now: options.now } : {}),
     on: options.on,
   });
-  return new FamilySelectScene(session, view, {
+  return new FamilySelectScene(session, familyView, {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });

@@ -426,3 +426,63 @@ describe('SelectSession README overlay', () => {
     expect(readtext).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
   });
 });
+
+describe('SelectSession course maker', () => {
+  /** A course maker that owns the courses marked editable, recording what it is asked. */
+  function createMaker(draft: boolean) {
+    return {
+      draft: draft ? ({ kind: 'nonstop', stages: [] } as never) : undefined,
+      defaultConnection: 'FADE' as never,
+      owns: vi.fn(() => true),
+      finish: vi.fn(),
+      cancel: vi.fn(),
+      stepDefaultConnection: vi.fn(),
+      stepConnection: vi.fn(),
+    };
+  }
+
+  /** The player's own course and another one, in a course folder. */
+  function makeCourseLibrary() {
+    return makeCollection(
+      [makeChart('a', 'pack')],
+      [makeCourseFolder('mine', [makeCourse('own', { editable: true }), makeCourse('other')])],
+    );
+  }
+
+  it('shows the course being made in the frame, and runs its finish, cancel and default connection', () => {
+    const courseMaker = createMaker(true);
+    const { intent, advance } = createSession({ courseMaker });
+    expect(advance(10).courseMaker).toEqual({ draft: courseMaker.draft, defaultConnection: 'FADE' });
+    intent({ type: 'course-maker', action: { kind: 'finish' } });
+    intent({ type: 'course-maker', action: { kind: 'cancel' } });
+    intent({ type: 'course-maker', action: { kind: 'default-connection', step: -1 } });
+    expect(courseMaker.finish).toHaveBeenCalledTimes(1);
+    expect(courseMaker.cancel).toHaveBeenCalledTimes(1);
+    expect(courseMaker.stepDefaultConnection).toHaveBeenCalledWith(-1);
+  });
+
+  it('steps a connection of, or asks to delete, only the player’s own course under the cursor', () => {
+    const courseMaker = createMaker(false);
+    const courseMakerEvent = vi.fn();
+    const { intent, key } = createSession({
+      library: makeCourseLibrary(),
+      browse: { folderPath: ['mine'], cursors: [1, 0] },
+      courseMaker,
+      on: { courseMaker: courseMakerEvent },
+    });
+    intent({ type: 'course-maker', action: { kind: 'connection', slot: 2, step: 1 } });
+    intent({ type: 'course-maker', action: { kind: 'delete' } });
+    intent({ type: 'course-maker', action: { kind: 'name' } });
+    expect(courseMaker.stepConnection).toHaveBeenCalledWith(expect.objectContaining({ name: 'own' }), 2, 1);
+    expect(courseMakerEvent.mock.calls.map(([action, course]) => [action, course?.id])).toEqual([
+      ['delete', 'own'],
+      ['name', 'own'],
+    ]);
+    key('ArrowDown');
+    intent({ type: 'course-maker', action: { kind: 'connection', slot: 0, step: 1 } });
+    intent({ type: 'course-maker', action: { kind: 'delete' } });
+    intent({ type: 'course-maker', action: { kind: 'name' } });
+    expect(courseMaker.stepConnection).toHaveBeenCalledTimes(1);
+    expect(courseMakerEvent).toHaveBeenCalledTimes(2);
+  });
+});
