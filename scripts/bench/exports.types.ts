@@ -11,6 +11,7 @@ export const PACKAGE_NAMES = [
   'editor',
   'audio-renderer',
   'player',
+  'scene-model',
   'player-tui',
   'lr2-skin',
   'skin-sdk',
