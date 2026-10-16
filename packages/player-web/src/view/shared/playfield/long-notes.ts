@@ -23,7 +23,7 @@ export function renderLongNote(
   drawBottom: number,
 ): void {
   const channel = note.channel;
-  const state = ctx.longNotes.stateOf(channel, note.beat, note.judged);
+  const state = ctx.play.longNotes.stateOf(channel, note.beat, note.judged);
   const alpha = resolveLongNoteAlpha(state);
   // `yStart` / `yEnd` are the chart-time intersections with the judgement line. With the bottom-edge anchor
   // convention (matching LR2 / BMS): - LN_START's *bottom edge* sits at `yStart` (just-timing of the head) - LN_END's
@@ -49,7 +49,7 @@ export function renderLongNote(
       sprite.alpha = alpha;
     }
   } else {
-    const kind = resolveBeMusicLaneKind(channel, laneIndex, ctx.chartPlayVariant);
+    const kind = resolveBeMusicLaneKind(channel, laneIndex, ctx.play.chartPlayVariant);
     const binding = ctx.skinBinding;
     if (binding) {
       binding.addLongNote({
@@ -58,14 +58,22 @@ export function renderLongNote(
         w: lane.w,
         top,
         bottom,
-        mode: ctx.resolveLongNoteMode(note),
+        mode: ctx.play.resolveLongNoteMode(note),
         state,
-        autoplay: ctx.isAutoplayedChannel(channel),
+        autoplay: ctx.play.isAutoplayedChannel(channel),
       });
     } else {
       const graphic = ctx.noteLayerPool.acquireGraphics();
       graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
-      renderPhantomLongNote({ graphics: graphic, kind, x: lane.x, w: lane.w, top, bottom, nowMs: ctx.playClock() });
+      renderPhantomLongNote({
+        graphics: graphic,
+        kind,
+        x: lane.x,
+        w: lane.w,
+        top,
+        bottom,
+        nowMs: ctx.play.playClock(),
+      });
       graphic.alpha = alpha;
     }
   }

@@ -137,3 +137,12 @@ export interface GameplayThemeHooks {
   collectBgaTargets(out: GameplayBgaTarget[]): void;
   onThemeEvent(event: GameplayThemeEvent): void;
 }
+
+/**
+ * The theme hooks the play session itself calls (`session/play/*`): the timing of the intro and the fade-out, the scene
+ * moments, the key-beam fade and the stage the touch lanes map onto. The rest only the view's own drawing calls.
+ */
+export type GameplaySessionHooks = Pick<
+  GameplayThemeHooks,
+  'onThemeEvent' | 'themeTiming' | 'resolveKeyOnFadeMs' | 'stageSize'
+>;

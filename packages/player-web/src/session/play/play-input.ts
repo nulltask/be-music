@@ -22,8 +22,7 @@ import {
 } from '../../scene/core/touch-lanes.ts';
 import { HISPEED_STEP } from '../../scene/gameplay-constants.ts';
 import { logger } from '../../logger.ts';
-import { beginExitSequence } from './play-ending.ts';
-import { interruptSharedEngine, type PlayEngineContext } from './play-engine.ts';
+import type { PlayEngineContext } from './play-engine.ts';
 import { adjustHiSpeed } from './play-view-settings.ts';
 
 const log = logger('gameplay');
@@ -55,6 +54,7 @@ export interface PlayInputContext extends PlayEngineContext {
   readonly handleWindowBlur: () => void;
   readonly handleWindowFocus: () => void;
   requestExit(): void;
+  requestRestart(): void;
   pauseAllBgaVideos(): void;
   resumeActiveBgaVideos(): void;
 }
@@ -227,11 +227,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
   }
   if (event.code === 'F5') {
     event.preventDefault();
-    beginExitSequence(ctx, () => {
-      interruptSharedEngine(ctx, 'restart');
-      ctx.sharedEngineAbortController?.abort();
-      ctx.options.onRestart?.();
-    });
+    ctx.requestRestart();
     return;
   }
   if (event.code === 'Space') {

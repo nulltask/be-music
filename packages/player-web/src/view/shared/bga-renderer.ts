@@ -6,8 +6,7 @@
  * The functions read and write the scene's state through {@link BgaRendererContext}; the scene passes itself.
  */
 
-import { pickSwitchingBgaFrame, resolveBmsBmpArgb, type BmsSwitchingBga } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import { pickSwitchingBgaFrame, resolveBmsBmpArgb } from '@be-music/chart';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-timeline';
 import { Texture } from 'pixi.js';
 import {
@@ -17,39 +16,23 @@ import {
   resolveBgaImageRect,
   resolveNonstopBgaAlpha,
   type BgaCue,
-  type NonstopStageBgaTimeline,
 } from '../../scene/core/gameplay-bga.ts';
 import type { GameplayBgaTarget, GameplayThemeHooks } from '../../scene/core/gameplay-theme.ts';
 import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 import type { ChildPool } from '../../scene/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { BeMusicImage } from '../../skin/be-music/types.ts';
+import type { PlayfieldRuntime } from './playfield/context.ts';
 
 /** The scene's members the BGA passes use: `CoreGameplayView`'s members of these names. */
 export interface BgaRendererContext {
+  readonly play: PlayfieldRuntime;
   readonly options: Readonly<Pick<CoreGameplayViewOptions, 'bga' | 'autoPlay' | 'nonstop'>>;
   readonly theme: GameplayThemeHooks;
-  readonly disposed: boolean;
-  readonly tempo: number;
-  readonly audioContextStartTime: number;
   readonly bgaLayerPool: ChildPool;
   readonly bgaTargetsScratch: GameplayBgaTarget[];
   readonly skinBinding: BeMusicGameplayBinding | undefined;
-  readonly resolvedChart: BeMusicJson | undefined;
-  readonly hasBga: boolean;
-  readonly bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] };
-  readonly nonstopBgaTimelines: NonstopStageBgaTimeline[] | undefined;
-  readonly poorBgaFallbackKey: string | undefined;
-  readonly poorBgaFallbackUntilSeconds: number;
-  readonly lastPoorAt: number;
-  readonly switchingBgas: Map<string, BmsSwitchingBga>;
-  readonly bgaTextures: Map<string, Texture>;
-  readonly bgaLayerTextures: Map<string, Texture>;
-  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }>;
-  readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
   readonly skinBgaCrops: Map<Texture, ImageBitmap | null>;
-  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
-  playClock(): number;
 }
 
 /**
@@ -80,7 +63,7 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
     ctx.bgaLayerPool.end();
     return;
   }
-  if (!ctx.hasBga) {
+  if (!ctx.play.hasBga) {
     ctx.bgaLayerPool.end();
     return;
   }
@@ -97,7 +80,8 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
   // per-rect would still get a consistent global playback state from this single sync point.
   const controllingBga = visibleBgas[0]!;
   const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
-  const inPoorWindow = !controllingBga.noPoor && ctx.lastPoorAt > 0 && ctx.playClock() - ctx.lastPoorAt < poorWindowMs;
+  const inPoorWindow =
+    !controllingBga.noPoor && ctx.play.lastPoorAt > 0 && ctx.play.playClock() - ctx.play.lastPoorAt < poorWindowMs;
   // A stitched NONSTOP chart shows one BGA stack per stage, crossfading at the seams; any other chart one stack.
   const stacks = resolveBgaStacks(
     ctx,
@@ -114,9 +98,9 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
   const layerCue = leading?.layerCue;
   const baseKey = baseCue?.bmpKey;
   const layerKey = layerCue?.bmpKey;
-  let poorKey = ctx.nonstopBgaTimelines !== undefined ? leading?.poorKey : undefined;
-  if (inPoorWindow && ctx.nonstopBgaTimelines === undefined) {
-    poorKey = pickActiveBgaKey(ctx.bgaTimeline.poor, cueSeconds);
+  let poorKey = ctx.play.nonstopBgaTimelines !== undefined ? leading?.poorKey : undefined;
+  if (inPoorWindow && ctx.play.nonstopBgaTimelines === undefined) {
+    poorKey = pickActiveBgaKey(ctx.play.bgaTimeline.poor, cueSeconds);
   }
   // BMP00 fallback: when no explicit POOR cue is active but the chart left `#POORBGA` blank with a `#BMP00` defined,
   // paint BMP00 during the miss window. Capped at the first authored POOR cue's chart-time so a chart that does
@@ -124,12 +108,12 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
   if (
     inPoorWindow &&
     poorKey === undefined &&
-    ctx.poorBgaFallbackKey !== undefined &&
-    cueSeconds < ctx.poorBgaFallbackUntilSeconds
+    ctx.play.poorBgaFallbackKey !== undefined &&
+    cueSeconds < ctx.play.poorBgaFallbackUntilSeconds
   ) {
-    poorKey = ctx.poorBgaFallbackKey;
+    poorKey = ctx.play.poorBgaFallbackKey;
   }
-  if (ctx.nonstopBgaTimelines === undefined && stacks[0] !== undefined) stacks[0].poorKey = poorKey;
+  if (ctx.play.nonstopBgaTimelines === undefined && stacks[0] !== undefined) stacks[0].poorKey = poorKey;
   syncBgaVideo(ctx, 'base', baseCue, seconds);
   syncBgaVideo(ctx, 'layer', layerCue, seconds);
 
@@ -143,7 +127,8 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
           layer: layerKey !== undefined ? resolveBgaFrameKey(ctx, layerKey, layerCue?.seconds, seconds) : undefined,
           poor: poorKey,
         },
-        (key, track) => resolveSkinBgaImage(ctx, (track === 'layer' ? ctx.bgaLayerTextures : ctx.bgaTextures).get(key)),
+        (key, track) =>
+          resolveSkinBgaImage(ctx, (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key)),
       ),
     );
     ctx.bgaLayerPool.end();
@@ -166,9 +151,14 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
       // The rect stands for the 256x256 BMS canvas: an image that fits it keeps its pixel size there, centered
       // horizontally and top-aligned (a 256x161 frame leaves a band at the bottom), while a larger image or a
       // video fills the rect, as LR2 and beatoraja do.
-      const placed = ctx.bgaVideos.has(resolvedKey)
+      const placed = ctx.play.bgaVideos.has(resolvedKey)
         ? bga
-        : resolveBgaImageRect(texture.frame.width, texture.frame.height, bga, ctx.bgaSubRegionOrigins.get(resolvedKey));
+        : resolveBgaImageRect(
+            texture.frame.width,
+            texture.frame.height,
+            bga,
+            ctx.play.bgaSubRegionOrigins.get(resolvedKey),
+          );
       if (layerName !== 'layer' && (placed.w < bga.w || placed.h < bga.h)) {
         // The base canvas around a small image is black (a 1x1 black BMP blanks the BGA in LR2 and beatoraja), so
         // fill the rect before drawing the image; the layer track's canvas stays transparent.
@@ -198,7 +188,7 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
       // beatoraja precedence. BGA-cue keys come from `buildBgaTimelines`, which routes through `normalizeObjectKey` —
       // exactly the same key normalization the parser applies to the `chart.bms.argb` / `chart.bms.exBmp` maps, so
       // the direct lookup matches.
-      const resolvedChart = ctx.resolvedChart;
+      const resolvedChart = ctx.play.resolvedChart;
       if (resolvedChart) {
         // Tint resolution honors the original cue key first (so `#ARGBxx 01` applies even when `#SWBGA01` is ALSO
         // active and the per-frame source slot lacks its own tint). Falling back to the resolved frame key catches
@@ -217,15 +207,15 @@ export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: 
         // POOR uses base-mode decoding (no chroma key) since it replaces the stack's base+layer composite during its
         // window. POOR has no per-cue origin time we can hand to `drawLayer` for `#SWBGAxx` frame timing; chart
         // authors don't typically pair POOR with switching BGA, and a static frame is the safer fallback.
-        drawLayer(stack.poorKey, ctx.bgaTextures, 'poor', undefined, stack.alpha);
+        drawLayer(stack.poorKey, ctx.play.bgaTextures, 'poor', undefined, stack.alpha);
         continue;
       }
       // `cue.seconds` anchors switching-BGA frame timing — `pickSwitchingBgaFrame` advances frames relative to when
       // the cue fired, not relative to the chart origin.
-      drawLayer(stack.baseCue?.bmpKey, ctx.bgaTextures, 'base', stack.baseCue?.seconds, stack.alpha);
+      drawLayer(stack.baseCue?.bmpKey, ctx.play.bgaTextures, 'base', stack.baseCue?.seconds, stack.alpha);
       // Layer track is composited on top with black→transparent so the base track shows through where the
       // foreground BMP is empty.
-      drawLayer(stack.layerCue?.bmpKey, ctx.bgaLayerTextures, 'layer', stack.layerCue?.seconds, stack.alpha);
+      drawLayer(stack.layerCue?.bmpKey, ctx.play.bgaLayerTextures, 'layer', stack.layerCue?.seconds, stack.alpha);
     }
   }
   ctx.bgaLayerPool.end();
@@ -253,10 +243,10 @@ function resolveBgaStacks(
     ...(inPoorWindow && timeline.poor !== undefined ? { poorKey: pickActiveBgaKey(timeline.poor, cueSeconds) } : {}),
   });
   const stages = ctx.options.nonstop?.stages;
-  const timelines = ctx.nonstopBgaTimelines;
+  const timelines = ctx.play.nonstopBgaTimelines;
   if (stages === undefined || timelines === undefined) {
     // The chart's own POOR cue (with its `#BMP00` fallback) is resolved by the caller.
-    return [pick({ base: ctx.bgaTimeline.base, layer: ctx.bgaTimeline.layer }, 1)];
+    return [pick({ base: ctx.play.bgaTimeline.base, layer: ctx.play.bgaTimeline.layer }, 1)];
   }
   return stages.flatMap((stage, index) => {
     const alpha = resolveNonstopBgaAlpha(stage, cueSeconds);
@@ -277,7 +267,7 @@ function resolveBgaFrameKey(
   seconds: number,
 ): string {
   if (cueSeconds === undefined) return key;
-  const swBga = ctx.switchingBgas.get(key);
+  const swBga = ctx.play.switchingBgas.get(key);
   if (!swBga) return key;
   const elapsedMs = Math.max(0, (seconds - cueSeconds) * 1000);
   return pickSwitchingBgaFrame(swBga, elapsedMs) || key;
@@ -301,7 +291,7 @@ function resolveSkinBgaImage(ctx: BgaRendererContext, texture: Texture | undefin
   ctx.skinBgaCrops.set(texture, null);
   createImageBitmap(resource, frame.x, frame.y, frame.width, frame.height).then(
     (bitmap) => {
-      if (ctx.disposed || !ctx.skinBgaCrops.has(texture)) bitmap.close();
+      if (ctx.play.disposed || !ctx.skinBgaCrops.has(texture)) bitmap.close();
       else ctx.skinBgaCrops.set(texture, bitmap);
     },
     () => {
@@ -332,20 +322,20 @@ function syncBgaVideo(
   // the user sees the BGA running behind the LOADING / DONE chrome. By short-circuiting we also avoid populating
   // `bgaActiveVideos[track]`, so when PLAY START fires the next sync call still sees `previous = undefined` and
   // re-enters the "first cue" branch with the correct seek offset.
-  if (ctx.audioContextStartTime === 0) {
+  if (ctx.play.audioContextStartTime === 0) {
     return;
   }
-  const previous = ctx.bgaActiveVideos[track];
+  const previous = ctx.play.bgaActiveVideos[track];
   const key = cue?.bmpKey;
-  const handle = key ? ctx.bgaVideos.get(key) : undefined;
+  const handle = key ? ctx.play.bgaVideos.get(key) : undefined;
   if (!handle) {
     // Cue points at a still image (or nothing). If we were playing a video, pause it.
     if (previous) {
-      const prevHandle = ctx.bgaVideos.get(previous.key);
+      const prevHandle = ctx.play.bgaVideos.get(previous.key);
       if (prevHandle && !prevHandle.video.paused) {
         prevHandle.video.pause();
       }
-      ctx.bgaActiveVideos[track] = undefined;
+      ctx.play.bgaActiveVideos[track] = undefined;
     }
     return;
   }
@@ -355,16 +345,16 @@ function syncBgaVideo(
     return;
   }
   if (previous) {
-    const prevHandle = ctx.bgaVideos.get(previous.key);
+    const prevHandle = ctx.play.bgaVideos.get(previous.key);
     if (prevHandle && !prevHandle.video.paused) {
       prevHandle.video.pause();
     }
   }
   const cueSeconds = cue?.seconds ?? 0;
-  ctx.bgaActiveVideos[track] = { key: key!, cueSeconds };
+  ctx.play.bgaActiveVideos[track] = { key: key!, cueSeconds };
   const offset = Math.max(0, seconds - cueSeconds);
   // The video runs at the play tempo, so its time stays the chart time since its cue.
-  handle.video.playbackRate = ctx.tempo;
+  handle.video.playbackRate = ctx.play.tempo;
   try {
     handle.video.currentTime = Math.min(offset, Math.max(0, handle.video.duration - 0.05) || offset);
   } catch {
@@ -374,24 +364,4 @@ function syncBgaVideo(
   void handle.video.play().catch(() => {
     // Autoplay policy / codec rejections — silently swallow so the still-image fallback keeps working.
   });
-}
-
-/** Stops the BGA videos and lets go of them as the scene is disposed (`CoreGameplayView.dispose`). */
-export function disposeBgaVideos(ctx: BgaRendererContext): void {
-  // Pause every BGA video BEFORE we touch textures. The Pixi `VideoSource` wrapping each video registers a
-  // `requestVideoFrameCallback` that re-uploads frames into the GL texture as they decode — leaving those callbacks
-  // in flight while we destroy the textures throws inside the GL texture system. Pausing also revokes the Blob URL so
-  // the underlying buffer can be released.
-  for (const { video, objectUrl } of ctx.bgaVideos.values()) {
-    try {
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-    } catch {
-      // Defensive — `load()` can throw on detached videos.
-    }
-    URL.revokeObjectURL(objectUrl);
-  }
-  ctx.bgaVideos.clear();
-  ctx.bgaActiveVideos = {};
 }
