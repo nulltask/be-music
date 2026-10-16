@@ -60,6 +60,11 @@ export interface NodeGameplayWorkerInitData {
   mode: 'auto' | 'manual';
   autoScratch?: boolean;
   playOptions: NodeGameplayWorkerPlayOptions;
+  /**
+   * The terminal had negotiated a stateful keyboard protocol before the play (`hasNegotiatedStatefulKeyboardProtocol`):
+   * the worker's input runtime declares that its keys report their releases (`PlayerInputRuntime.reportsKeyReleases`).
+   */
+  inputReportsKeyReleases?: boolean;
 }
 
 export interface NodeGameplayUiRuntimeInit {
