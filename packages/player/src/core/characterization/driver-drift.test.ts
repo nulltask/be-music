@@ -148,11 +148,13 @@ describe('driver drift', () => {
     expect(lane11(auto)).toHaveLength(3);
   });
 
-  test('drift: autoPlay does not record endOnFailure', async () => {
+  test('manual and auto play both record endOnFailure', async () => {
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: ON_TIME });
     const auto = await observePlay({ driver: 'auto', chart: basicChart() });
     expect(manual.playlog?.play.endOnFailure).toBe(true);
-    expect(auto.playlog?.play).not.toHaveProperty('endOnFailure');
+    expect(auto.playlog?.play.endOnFailure).toBe(true);
+    const keepingOn = await observePlay({ driver: 'auto', chart: basicChart(), options: { endOnFailure: false } });
+    expect(keepingOn.playlog?.play).not.toHaveProperty('endOnFailure');
   });
 
   test('drift: autoPlay records the tempo and the tempo changes of a play it re-drives, a manual replay records neither', async () => {

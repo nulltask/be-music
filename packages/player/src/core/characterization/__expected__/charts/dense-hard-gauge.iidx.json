@@ -438,7 +438,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"HARD","judgeRuleset":"iidx"},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"HARD","judgeRuleset":"iidx","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",

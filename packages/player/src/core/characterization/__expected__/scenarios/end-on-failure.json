@@ -501,7 +501,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manualEnding)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"DEATH"},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"DEATH","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",

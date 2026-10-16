@@ -473,7 +473,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE"},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","endOnFailure":true},
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -592,7 +592,13 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as auto)",
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","tempoChanges":[{"timeUs":1016667,"tempo":0.5}]},
+      "play": {
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "endOnFailure": true,
+        "tempoChanges": [{"timeUs":1016667,"tempo":0.5}]
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -708,7 +714,13 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as auto)",
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","tempoChanges":[{"timeUs":1000000,"tempo":0.5}]},
+      "play": {
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "endOnFailure": true,
+        "tempoChanges": [{"timeUs":1000000,"tempo":0.5}]
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",

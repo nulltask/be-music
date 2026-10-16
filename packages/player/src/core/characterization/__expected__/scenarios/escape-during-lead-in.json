@@ -177,7 +177,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","aborted":true,"abortedAtUs":0},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","aborted":true,"abortedAtUs":0,"endOnFailure":true},
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",

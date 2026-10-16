@@ -311,7 +311,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE"},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -655,7 +655,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as auto)",
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE"},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","endOnFailure":true},
       "results": "(same as auto)"
     },
     "simulated": "(same as auto)",

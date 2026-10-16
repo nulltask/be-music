@@ -366,7 +366,14 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"lr2","course":{"kind":"nonstop"}},
+      "play": {
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "lr2",
+        "endOnFailure": true,
+        "course": {"kind":"nonstop"}
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",

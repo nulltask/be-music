@@ -463,7 +463,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","tempo":1.5},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","endOnFailure":true,"tempo":1.5},
       "results": {
         "native": {
           "ruleset": "be-music/native",
