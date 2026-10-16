@@ -93,6 +93,7 @@ import {
   type TouchSample,
 } from './touch-scroll.ts';
 import { SelectReadTextOverlay, type SelectReadTextContext } from '../../view/built-in/select-readtext.ts';
+import { renderEmptyStateHint, type SelectEmptyHintContext } from '../../view/built-in/select-empty-hint.ts';
 
 const log = logger('select');
 const BG = new Color('#050912');
@@ -333,6 +334,9 @@ export interface SelectDesignSize {
 
 const IDENTITY: SceneIdentity = { kind: 'select', family: 'built-in' };
 
+/** What the parts of the select scene read and drive on it. */
+type SelectSceneContext = SelectReadTextContext & SelectEmptyHintContext;
+
 /**
  * Family-neutral song-select scene. Owns everything that doesn't depend on a particular skin format: the scene shown
  * on the shared {@link PixiSceneHost}, collection / folder browsing / search, keyboard + pointer input, cursor movement
@@ -390,8 +394,10 @@ export class CoreSongSelectView<
    * the bars. Cleared every render.
    */
   protected readonly skinForegroundLayer: Container = new Container();
+  /** This scene as the parts it is made of read and drive it (see {@link createContext}). */
+  private readonly context: SelectSceneContext = CoreSongSelectView.createContext(this);
   /** The README overlay the LR2 READTEXT button and a be-music skin open over the song list. */
-  private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay(CoreSongSelectView.createContext(this));
+  private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay(this.context);
   /**
    * Per-frame section timing tracker. Logs every second when enabled via `?perf` URL flag or
    * `globalThis.__BE_MUSIC_PERF__ = true`.
@@ -674,13 +680,16 @@ export class CoreSongSelectView<
   }
 
   /**
-   * `scene` as the parts it is made of read and drive it (`SelectReadTextContext`): getters and methods over its own
-   * state, so that state keeps its access modifiers.
+   * `scene` as the parts it is made of read and drive it (`SelectReadTextContext`, `SelectEmptyHintContext`): getters
+   * and methods over its own state, so that state keeps its access modifiers.
    */
-  private static createContext(scene: CoreSongSelectView): SelectReadTextContext {
+  private static createContext(scene: CoreSongSelectView): SelectSceneContext {
     return {
       get collection(): BrowserSongCollection {
         return scene.collection;
+      },
+      get skinLayer(): Container {
+        return scene.skinLayer;
       },
       get disposed(): boolean {
         return scene.disposed;
@@ -1669,40 +1678,9 @@ export class CoreSongSelectView<
     return entry?.kind === 'course' ? entry.course : undefined;
   }
 
-  /**
-   * Renders a centered hint over the skin layer when no songs are loaded so the user understands the empty bar list
-   * isn't a bug. Drawn straight onto `skinLayer` — same coordinate space as the static frame — so it scales with the
-   * rest of the skin. Themes call this from {@link renderTheme}; the be-music path leaves the empty-library callout to
-   * the host's drop overlay.
-   */
+  /** Draws the empty-library hint into `skinLayer`; themes call it from {@link renderTheme}. */
   protected renderEmptyStateHint(designWidth: number, designHeight: number): void {
-    const text = new Text({
-      text: 'Drop a BMS folder or ZIP onto this window',
-      style: new TextStyle({
-        fill: TEXT,
-        fontSize: 16,
-        fontWeight: '700',
-        fontFamily: CORE_TEXT_FONT,
-      }),
-    });
-    text.label = 'empty-state/hint';
-    text.anchor.set(0.5, 0.5);
-    text.position.set(designWidth / 2, designHeight / 2);
-    this.skinLayer.addChild(text);
-    if (this.collection.errors.length > 0) {
-      const errorText = new Text({
-        text: `${this.collection.errors.length} parse error${this.collection.errors.length === 1 ? '' : 's'} — see console`,
-        style: new TextStyle({
-          fill: MUTED,
-          fontSize: 11,
-          fontFamily: CORE_TEXT_FONT,
-        }),
-      });
-      errorText.label = 'empty-state/errors';
-      errorText.anchor.set(0.5, 0);
-      errorText.position.set(designWidth / 2, designHeight / 2 + 18);
-      this.skinLayer.addChild(errorText);
-    }
+    renderEmptyStateHint(this.context, designWidth, designHeight);
   }
 
   /**
