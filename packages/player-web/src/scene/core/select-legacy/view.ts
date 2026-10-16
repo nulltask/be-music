@@ -3,36 +3,36 @@
  * window, the layers a theme (the LR2 select) draws its frame into, the be-music skin that draws the frame without a
  * theme (the built-in Phantom skin unless the host picks one), and the README overlay on top.
  *
- * The view reads the scene's state and calls back into it through {@link BuiltInSelectViewContext}; the select scene
+ * The view reads the scene's state and calls back into it through {@link LegacySelectViewContext}; the select scene
  * passes it.
  */
 
 import { cyclePlayOptionValue, PLAY_OPTION_CHOICES } from '@be-music/scene-model';
 import { resolveBeMusicSelectLayout, resolveStageOrientation, type BeMusicSelectLayout } from '@be-music/skin-sdk';
 import { type Application, Color, Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { resolveSongSource } from '../../collection/collection.ts';
+import { resolveSongSource } from '../../../collection/collection.ts';
 import type {
   BrowserBrowseEntry,
   BrowserCourseEntry,
   BrowserFolderNode,
   BrowserSongEntry,
-} from '../../collection/types.ts';
-import { CORE_TEXT_FONT } from '../../scene/core/fonts.ts';
-import type { CoreSongSelectViewOptions, PixiPlayOptions, SelectDesignSize } from '../../scene/core/select.ts';
+} from '../../../collection/types.ts';
+import { CORE_TEXT_FONT } from '../fonts.ts';
+import type { CoreSongSelectViewOptions, PixiPlayOptions, SelectDesignSize } from '../select.ts';
 import {
   resolveDesignTextResolution,
   resolveScaledViewport,
   setDesignPixelRatio,
   setDesignTextResolution,
-} from '../../scene/core/viewport.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
-import { disposeChildren } from '../../scene/pixi-utils.ts';
-import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
-import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
-import { SongImageCache } from '../../skin/be-music/song-images.ts';
-import type { BeMusicSelectActions, BeMusicSkin } from '../../skin/be-music/types.ts';
-import { phantomSkin } from '../../skins/phantom/index.ts';
-import { SelectReadTextOverlay, type SelectReadTextContext } from './select-readtext.ts';
+} from '../viewport.ts';
+import type { PixiSceneHost } from '../../host.ts';
+import { disposeChildren } from '../../pixi-utils.ts';
+import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../../skin/be-music/binding.ts';
+import { resolveSelectListWindow } from '../../../skin/be-music/registry.ts';
+import { SongImageCache } from '../../../skin/be-music/song-images.ts';
+import type { BeMusicSelectActions, BeMusicSkin } from '../../../skin/be-music/types.ts';
+import { phantomSkin } from '../../../skins/phantom/index.ts';
+import { SelectReadTextOverlay, type SelectReadTextContext } from './readtext.ts';
 
 const BG = new Color('#050912');
 const TEXT = new Color('#f6f2e8');
@@ -51,7 +51,7 @@ const FALLBACK_DESIGN_WIDTH = 640;
 const FALLBACK_DESIGN_HEIGHT = 480;
 
 /** What the view reads and calls on the select scene: its fields and methods of these names. */
-export interface BuiltInSelectViewContext extends SelectReadTextContext {
+export interface LegacySelectViewContext extends SelectReadTextContext {
   /** The host's `Application`; reading it before the scene's first entry throws. */
   readonly app: Application;
   readonly host: PixiSceneHost | undefined;
@@ -82,8 +82,8 @@ export interface BuiltInSelectViewContext extends SelectReadTextContext {
 }
 
 /** The select scene's drawing. See the module comment. */
-export class BuiltInSelectView {
-  private readonly ctx: BuiltInSelectViewContext;
+export class LegacySelectView {
+  private readonly ctx: LegacySelectViewContext;
 
   /**
    * Top-level Container the host attaches to its `app.stage` while the select scene is active. Holds
@@ -171,7 +171,7 @@ export class BuiltInSelectView {
   /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
   beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
 
-  public constructor(ctx: BuiltInSelectViewContext) {
+  public constructor(ctx: LegacySelectViewContext) {
     this.ctx = ctx;
     this.readText = new SelectReadTextOverlay(ctx);
   }

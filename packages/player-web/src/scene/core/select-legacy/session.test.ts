@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { CoreSongSelectViewOptions } from '../../scene/core/select.ts';
-import { SelectSession, type SelectSessionContext } from './select-session.ts';
-import { makeChart, makeCollection, makeCourse, makeCourseFolder } from './test-support.ts';
+import type { CoreSongSelectViewOptions } from '../select.ts';
+import { LegacySelectSession, type LegacySelectSessionContext } from './session.ts';
+import { makeChart, makeCollection, makeCourse, makeCourseFolder } from '../../../session/select/test-support.ts';
 
 /** A session on a scene that draws nothing, recording the cues it plays. */
-function createSession(options: CoreSongSelectViewOptions = {}): { session: SelectSession; cues: string[] } {
+function createSession(options: CoreSongSelectViewOptions = {}): { session: LegacySelectSession; cues: string[] } {
   const cues: string[] = [];
-  const ctx: SelectSessionContext = {
+  const ctx: LegacySelectSessionContext = {
     options,
     disposed: false,
     themeDesignSize: undefined,
@@ -21,15 +21,15 @@ function createSession(options: CoreSongSelectViewOptions = {}): { session: Sele
     },
     applyLr2Timers: () => {},
   };
-  return { session: new SelectSession(ctx), cues };
+  return { session: new LegacySelectSession(ctx), cues };
 }
 
-function titles(session: SelectSession): string[] {
+function titles(session: LegacySelectSession): string[] {
   return session.currentEntries().map((entry) => (entry.kind === 'song' ? entry.song.title : entry.kind));
 }
 
 /** The bar under the cursor: a chart's title, a folder's label or a course's name. */
-function focusedTitle(session: SelectSession): string | undefined {
+function focusedTitle(session: LegacySelectSession): string | undefined {
   const entry = session.focusedEntry();
   if (entry === undefined) return undefined;
   if (entry.kind === 'song') return entry.song.title;
@@ -49,7 +49,7 @@ function makeLibrary() {
   );
 }
 
-describe('SelectSession key filter', () => {
+describe('LegacySelectSession key filter', () => {
   it('lists a 24-key chart under no key filter of LR2’s, rather than folding it onto 7 or 14 keys', () => {
     const { session } = createSession();
     session.setCollection(
@@ -69,7 +69,7 @@ describe('SelectSession key filter', () => {
   });
 });
 
-describe('SelectSession browse position', () => {
+describe('LegacySelectSession browse position', () => {
   it('restores a cursor inside a chart folder', () => {
     const { session } = createSession();
     session.setCollection(makeLibrary());
@@ -123,7 +123,7 @@ describe('SelectSession browse position', () => {
   });
 });
 
-describe('SelectSession list options', () => {
+describe('LegacySelectSession list options', () => {
   it('keeps the cursor on the focused bar when the player changes the sort', () => {
     const { session, cues } = createSession();
     session.setCollection(makeLibrary());
@@ -168,7 +168,7 @@ describe('SelectSession list options', () => {
   });
 });
 
-describe('SelectSession restore', () => {
+describe('LegacySelectSession restore', () => {
   it('puts the parent cursor on the bar of the folder opened, so backing out lands on it', () => {
     const { session } = createSession();
     session.setCollection(makeLibrary());

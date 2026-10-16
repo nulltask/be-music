@@ -8,7 +8,7 @@
 
 import { GAUGE_TYPES } from '@be-music/player/ruleset';
 import { BOOLEAN_CYCLE, RANDOM_CYCLE } from '@be-music/scene-model';
-import type { PixiPlayOptions } from '../../scene/core/select.ts';
+import type { PixiPlayOptions } from '../select.ts';
 
 /**
  * Pixel scroll step for the readtext modal's arrow-key nudge — roughly two lines at the body's 14px / 18px line-height.
@@ -37,11 +37,11 @@ export interface SelectKeysContext {
   scrollReadText(delta: number): void;
   cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void;
   adjustHiSpeed(direction: 1 | -1): void;
-  /** Moves the cursor one bar, wrapping past either end (`SelectSession.stepCursor`). */
+  /** Moves the cursor one bar, wrapping past either end (`LegacySelectSession.stepCursor`). */
   stepCursor(direction: 1 | -1): void;
-  /** Opens the folder or starts the bar under the cursor (`SelectSession.activateFocused`). */
+  /** Opens the folder or starts the bar under the cursor (`LegacySelectSession.activateFocused`). */
   activateFocused(): void;
-  /** Backs out of the folder shown; `false` at the root (`SelectSession.leaveFolder`). */
+  /** Backs out of the folder shown; `false` at the root (`LegacySelectSession.leaveFolder`). */
   leaveFolder(): boolean;
 }
 

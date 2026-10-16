@@ -7,13 +7,13 @@
  * The audio reads the select scene through {@link SelectAudioContext}; the scene passes it.
  */
 
-import { ChartPreviewEngine } from '../../chart/preview.ts';
-import { resolveSongSource } from '../../collection/collection.ts';
-import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
-import { logger } from '../../logger.ts';
-import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
-import { masterOutput } from '../../runtime/master-volume.ts';
-import type { PixiSongSelectSystemSounds } from '../../scene/core/select.ts';
+import { ChartPreviewEngine } from '../../../chart/preview.ts';
+import { resolveSongSource } from '../../../collection/collection.ts';
+import type { BrowserSongCollection, BrowserSongEntry } from '../../../collection/types.ts';
+import { logger } from '../../../logger.ts';
+import { AudioAnalyzer } from '../../../runtime/audio-analysis.ts';
+import { masterOutput } from '../../../runtime/master-volume.ts';
+import type { PixiSongSelectSystemSounds } from '../select.ts';
 
 const log = logger('select');
 

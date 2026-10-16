@@ -8,9 +8,9 @@
 
 import { dirname } from '@be-music/utils/core';
 import { Color, Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { loadAssetBytes, resolveSongSource } from '../../collection/collection.ts';
-import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
-import { CORE_TEXT_FONT } from '../../scene/core/fonts.ts';
+import { loadAssetBytes, resolveSongSource } from '../../../collection/collection.ts';
+import type { BrowserSongCollection, BrowserSongEntry } from '../../../collection/types.ts';
+import { CORE_TEXT_FONT } from '../fonts.ts';
 
 const TEXT = new Color('#f6f2e8');
 const MUTED = new Color('#a9a39a');
