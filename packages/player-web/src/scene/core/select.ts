@@ -81,19 +81,9 @@ import {
 } from './viewport.ts';
 import { masterOutput } from '../../runtime/master-volume.ts';
 import { resolveBeMusicSelectLayout, resolveStageOrientation, type BeMusicSelectLayout } from '@be-music/skin-sdk';
-import {
-  FLING_START_VELOCITY,
-  FLING_STOP_VELOCITY,
-  isTouchDrag,
-  isWheelNotch,
-  releaseVelocity,
-  stepFling,
-  stepTouchScroll,
-  stepWheelScroll,
-  type TouchSample,
-} from './touch-scroll.ts';
 import { SelectReadTextOverlay, type SelectReadTextContext } from '../../view/built-in/select-readtext.ts';
 import { renderEmptyStateHint, type SelectEmptyHintContext } from '../../view/built-in/select-empty-hint.ts';
+import { SelectPointer, type SelectPointerContext } from '../../session/select/select-pointer.ts';
 
 const log = logger('select');
 const BG = new Color('#050912');
@@ -122,23 +112,6 @@ const READTEXT_LINE_SCROLL = 36;
  * re-find their place after the jump.
  */
 const READTEXT_PAGE_SCROLL = 360;
-
-/**
- * Minimum interval between two notch-driven cursor moves in the bar list, so a free-spinning notched wheel can't fire
- * the `cursor-move` SFX and re-seed the slide faster than it can play. Smooth (trackpad) scrolling isn't throttled: it
- * steps by the distance travelled instead (see `stepWheelScroll`).
- */
-const WHEEL_THROTTLE_INTERVAL_MS = 15;
-
-/** Finger positions kept per touch for the release velocity (a few frames' worth). */
-const TOUCH_SAMPLE_LIMIT = 8;
-
-/** How long (ms) after the last wheel or drag movement a partly pulled list starts settling back to a row. */
-const PULL_SETTLE_DELAY_MS = 120;
-/** Time constant (ms) of the settle back to a row. */
-const PULL_SETTLE_TIME_CONSTANT_MS = 70;
-/** Below this pull (design pixels) the list counts as at rest. */
-const PULL_SETTLE_EPSILON = 0.3;
 
 /**
  * Serializable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
@@ -335,7 +308,7 @@ export interface SelectDesignSize {
 const IDENTITY: SceneIdentity = { kind: 'select', family: 'built-in' };
 
 /** What the parts of the select scene read and drive on it. */
-type SelectSceneContext = SelectReadTextContext & SelectEmptyHintContext;
+type SelectSceneContext = SelectReadTextContext & SelectEmptyHintContext & SelectPointerContext;
 
 /**
  * Family-neutral song-select scene. Owns everything that doesn't depend on a particular skin format: the scene shown
@@ -519,43 +492,8 @@ export class CoreSongSelectView<
    * speed is wall-clock consistent across refresh rates.
    */
   private lastScrollUpdate = 0;
-  /**
-   * `performance.now()` of the most recent wheel-driven cursor move. Used by {@link handleWheel} to throttle high-rate
-   * trackpad / hi-res-mouse input to one cursor step per {@link WHEEL_THROTTLE_INTERVAL_MS} so a fast flick doesn't
-   * fly past the user's target. `-Infinity` lets the very first wheel tick after mount fire immediately.
-   */
-  private lastWheelMoveAt = Number.NEGATIVE_INFINITY;
-  /**
-   * The finger currently on the list (touch / pen only): where it touched down and last was, in canvas CSS pixels,
-   * whether it has moved far enough to be a swipe, and the swipe travel not yet turned into a cursor step. A touch acts
-   * on lift — as a tap when it never became a swipe — so swiping the list does not also pick the row it started on.
-   */
-  private touchGesture:
-    | {
-        pointerId: number;
-        startX: number;
-        startY: number;
-        lastY: number;
-        dragging: boolean;
-        /** Recent positions (design pixels), for the velocity the list keeps once the finger lifts. */
-        samples: TouchSample[];
-      }
-    | undefined;
-  /**
-   * The list still gliding after a swipe was let go: its velocity (design pixels per ms, positive = toward earlier
-   * entries, as the finger moved down) and when it last advanced.
-   */
-  private fling: { velocity: number; lastAt: number } | undefined;
-  /**
-   * How far the list is pulled past the focused row toward later entries, in design pixels, less than a row: the
-   * travel of a drag, a fling or a trackpad not yet turned into a cursor step. Shown to the skin as
-   * `frame.listScroll`, and eased back to a row (see {@link settleListPull}) once nothing is moving the list.
-   */
-  private listPull = 0;
-  /** `performance.now()` of the last wheel or drag movement, so the pull settles only once input stops. */
-  private lastPullInputAt = Number.NEGATIVE_INFINITY;
-  /** `performance.now()` of the last {@link settleListPull}, for its frame-rate independent easing. */
-  private lastSettleAt: number | undefined;
+  /** The pointer input: taps, swipes and their glide, and the wheel. */
+  private readonly pointer: SelectPointer = new SelectPointer(this.context);
   /**
    * Last known pointer position in **design-space** coordinates, used by `#SRC_ONMOUSE` hit-tests and
    * `#SRC_MOUSECURSOR` follow. `-1` means "no pointer over canvas yet"; both renderers skip drawing in that case.
@@ -680,8 +618,8 @@ export class CoreSongSelectView<
   }
 
   /**
-   * `scene` as the parts it is made of read and drive it (`SelectReadTextContext`, `SelectEmptyHintContext`): getters
-   * and methods over its own state, so that state keeps its access modifiers.
+   * `scene` as the parts it is made of read and drive it (`SelectReadTextContext`, `SelectEmptyHintContext`,
+   * `SelectPointerContext`): getters and methods over its own state, so that state keeps its access modifiers.
    */
   private static createContext(scene: CoreSongSelectView): SelectSceneContext {
     return {
@@ -694,7 +632,55 @@ export class CoreSongSelectView<
       get disposed(): boolean {
         return scene.disposed;
       },
+      get visible(): boolean {
+        return scene.visible;
+      },
+      get launchAt(): number | undefined {
+        return scene.launchAt;
+      },
+      get screen(): Application['screen'] {
+        return scene.app.screen;
+      },
+      get themeDesignSize(): SelectDesignSize | undefined {
+        return scene.themeDesignSize;
+      },
+      get beMusicDesignSize(): SelectDesignSize {
+        return scene.beMusicDesignSize;
+      },
+      get beMusicSelectLayout(): BeMusicSelectLayout {
+        return scene.beMusicSelectLayout;
+      },
+      get selectedIndex(): number {
+        return scene.selectedIndex;
+      },
+      set selectedIndex(value: number) {
+        scene.selectedIndex = value;
+      },
+      get mouseX(): number {
+        return scene.mouseX;
+      },
+      set mouseX(value: number) {
+        scene.mouseX = value;
+      },
+      get mouseY(): number {
+        return scene.mouseY;
+      },
+      set mouseY(value: number) {
+        scene.mouseY = value;
+      },
+      get readTextOpen(): boolean {
+        return scene.readText.readTextOpen;
+      },
+      scrollReadText: (delta) => scene.readText.scrollReadText(delta),
+      closeReadText: () => scene.readText.closeReadText(),
       playOneShotSound: (name) => scene.playOneShotSound(name),
+      startSelectBgm: () => scene.startSelectBgm(),
+      resolveDesignSize: () => scene.resolveDesignSize(),
+      currentEntries: () => scene.currentEntries(),
+      moveCursorBy: (steps) => scene.moveCursorBy(steps),
+      noteCursorChange: (delta) => scene.noteCursorChange(delta),
+      activateEntry: (entry) => scene.activateEntry(entry),
+      handleThemePointerDown: (virtualX, virtualY) => scene.handleThemePointerDown(virtualX, virtualY),
       render: () => scene.render(),
     };
   }
@@ -981,14 +967,14 @@ export class CoreSongSelectView<
     // otherwise eat ↑/↓/Enter/Esc. Pointer events still bind on the canvas because their offset coordinates are
     // canvas-relative.
     window.addEventListener('keydown', this.handleKeyDown);
-    host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
-    host.app.canvas.addEventListener('pointermove', this.handlePointerMove);
-    host.app.canvas.addEventListener('pointerleave', this.handlePointerLeave);
-    host.app.canvas.addEventListener('pointerup', this.handlePointerUp);
-    host.app.canvas.addEventListener('pointercancel', this.handlePointerCancel);
+    host.app.canvas.addEventListener('pointerdown', this.pointer.handlePointerDown);
+    host.app.canvas.addEventListener('pointermove', this.pointer.handlePointerMove);
+    host.app.canvas.addEventListener('pointerleave', this.pointer.handlePointerLeave);
+    host.app.canvas.addEventListener('pointerup', this.pointer.handlePointerUp);
+    host.app.canvas.addEventListener('pointercancel', this.pointer.handlePointerCancel);
     // Wheel scroll → cursor move. `passive: false` so we can call preventDefault and stop the page from scrolling under
     // the floating debug toolbar (which would otherwise compete for wheel events when the canvas is full-screen).
-    host.app.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
+    host.app.canvas.addEventListener('wheel', this.pointer.handleWheel, { passive: false });
     this.prepareTheme();
     this.resetSceneTimers();
     this.render();
@@ -1028,7 +1014,7 @@ export class CoreSongSelectView<
     this.lastScrollUpdate = 0;
     // Reset the wheel throttle so the first wheel tick after a re-mount fires immediately rather than being eaten by
     // a stale `lastWheelMoveAt` from before the play round-trip.
-    this.lastWheelMoveAt = Number.NEGATIVE_INFINITY;
+    this.pointer.lastWheelMoveAt = Number.NEGATIVE_INFINITY;
   }
 
   /**
@@ -1216,13 +1202,13 @@ export class CoreSongSelectView<
    */
   private tickFrame(): void {
     if (!this.visible) {
-      this.fling = undefined;
+      this.pointer.fling = undefined;
       return;
     }
     this.perf.beginTick();
     const tickNow = performance.now();
-    this.advanceFling(tickNow);
-    this.settleListPull(tickNow);
+    this.pointer.advanceFling(tickNow);
+    this.pointer.settleListPull(tickNow);
     if (this.themeDesignSize) {
       this.perf.time('render', () => this.render());
     } else {
@@ -1242,7 +1228,7 @@ export class CoreSongSelectView<
         const { width, height } = this.beMusicDesignSize;
         const onStage = this.mouseX >= 0 && this.mouseY >= 0 && this.mouseX < width && this.mouseY < height;
         this.beMusicRenderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
-        this.beMusicRenderer.setListScroll(this.shownListPull());
+        this.beMusicRenderer.setListScroll(this.pointer.shownListPull());
         this.beMusicRenderer.tick(now, this.focusedSong(), this.launchAt, this.selectAudioAnalyzer?.sample(now));
       }
     }
@@ -1271,12 +1257,12 @@ export class CoreSongSelectView<
     this.songImages = undefined;
     window.removeEventListener('keydown', this.handleKeyDown);
     if (this.host) {
-      this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
-      this.host.app.canvas.removeEventListener('pointermove', this.handlePointerMove);
-      this.host.app.canvas.removeEventListener('wheel', this.handleWheel);
-      this.host.app.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
-      this.host.app.canvas.removeEventListener('pointerup', this.handlePointerUp);
-      this.host.app.canvas.removeEventListener('pointercancel', this.handlePointerCancel);
+      this.host.app.canvas.removeEventListener('pointerdown', this.pointer.handlePointerDown);
+      this.host.app.canvas.removeEventListener('pointermove', this.pointer.handlePointerMove);
+      this.host.app.canvas.removeEventListener('wheel', this.pointer.handleWheel);
+      this.host.app.canvas.removeEventListener('pointerleave', this.pointer.handlePointerLeave);
+      this.host.app.canvas.removeEventListener('pointerup', this.pointer.handlePointerUp);
+      this.host.app.canvas.removeEventListener('pointercancel', this.pointer.handlePointerCancel);
     }
     // Tear down BGM + preview playback before scene-graph teardown so no `BufferSourceNode` outlives the view. The
     // preview engine MUST go first — it shares this AudioContext, and disposing it after the context is closed throws
@@ -1684,118 +1670,6 @@ export class CoreSongSelectView<
   }
 
   /**
-   * Tracks the pointer in design-space coordinates so `#SRC_ONMOUSE` hit-tests and the `#SRC_MOUSECURSOR` follow can
-   * read from a single source of truth. The math mirrors `handlePointerDown` — undo the viewport scale & offset to land
-   * in skin design pixels.
-   */
-  private readonly handlePointerMove = (event: PointerEvent): void => {
-    if (!this.visible) return;
-    const { width: designWidth, height: designHeight } = this.resolveDesignSize();
-    const viewport = resolveScaledViewport(this.app.screen.width, this.app.screen.height, designWidth, designHeight);
-    this.mouseX = (event.offsetX - viewport.x) / viewport.scale;
-    this.mouseY = (event.offsetY - viewport.y) / viewport.scale;
-    const gesture = this.touchGesture;
-    if (gesture === undefined || gesture.pointerId !== event.pointerId) return;
-    if (!gesture.dragging) {
-      if (!isTouchDrag(event.offsetX - gesture.startX, event.offsetY - gesture.startY)) return;
-      gesture.dragging = true;
-    }
-    const delta = (event.offsetY - gesture.lastY) / viewport.scale;
-    gesture.lastY = event.offsetY;
-    gesture.samples.push({ at: performance.now(), y: event.offsetY / viewport.scale });
-    if (gesture.samples.length > TOUCH_SAMPLE_LIMIT) gesture.samples.shift();
-    // A swipe over the open README pans its body, as the wheel does.
-    if (this.readText.readTextOpen) {
-      this.readText.scrollReadText(-delta);
-      return;
-    }
-    const step = stepTouchScroll(this.listPull, delta, this.resolveTouchScrollPitch());
-    this.listPull = step.carry;
-    this.lastPullInputAt = performance.now();
-    if (step.steps !== 0) this.moveCursorBy(step.steps);
-  };
-
-  /**
-   * A finger lifting: a touch that never became a swipe is a tap at the point it touched down; a swipe let go while
-   * still moving keeps the list gliding and slowing down (see {@link advanceFling}).
-   */
-  private readonly handlePointerUp = (event: PointerEvent): void => {
-    const gesture = this.touchGesture;
-    if (gesture === undefined || gesture.pointerId !== event.pointerId) return;
-    this.touchGesture = undefined;
-    if (!gesture.dragging) {
-      this.handlePointerTap(gesture.startX, gesture.startY);
-      return;
-    }
-    if (this.readText.readTextOpen) return;
-    const now = performance.now();
-    const velocity = releaseVelocity(gesture.samples, now);
-    if (Math.abs(velocity) >= FLING_START_VELOCITY) {
-      this.fling = { velocity, lastAt: now };
-    }
-  };
-
-  /** Moves a gliding list on by the time since its last frame, stepping the cursor per row travelled. */
-  private advanceFling(now: number): void {
-    const fling = this.fling;
-    if (fling === undefined) return;
-    const { distance, velocity } = stepFling(fling.velocity, now - fling.lastAt);
-    fling.lastAt = now;
-    fling.velocity = velocity;
-    const step = stepTouchScroll(this.listPull, distance, this.resolveTouchScrollPitch());
-    this.listPull = step.carry;
-    if (step.steps !== 0) this.moveCursorBy(step.steps);
-    if (Math.abs(velocity) < FLING_STOP_VELOCITY) this.fling = undefined;
-  }
-
-  /**
-   * Once nothing moves the list (no finger down, no fling, no wheel for {@link PULL_SETTLE_DELAY_MS}), eases its pull
-   * back to a row: on to the next one when it was pulled past half a row and the window can move that way, back to the
-   * focused one otherwise.
-   */
-  private settleListPull(now: number): void {
-    const dt = this.lastSettleAt === undefined ? 0 : now - this.lastSettleAt;
-    this.lastSettleAt = now;
-    if (this.listPull === 0 || this.touchGesture?.dragging || this.fling !== undefined) return;
-    if (now - this.lastPullInputAt < PULL_SETTLE_DELAY_MS) return;
-    const pitch = this.resolveTouchScrollPitch();
-    const direction = Math.sign(this.listPull);
-    if (Math.abs(this.listPull) >= pitch / 2 && this.listWindowMoves(direction)) {
-      this.moveCursorBy(direction);
-      this.listPull -= direction * pitch;
-    }
-    this.listPull *= Math.exp(-dt / PULL_SETTLE_TIME_CONSTANT_MS);
-    if (Math.abs(this.listPull) < PULL_SETTLE_EPSILON) this.listPull = 0;
-  }
-
-  /** The pull the skin draws: none where the list window can't move that way (at the list's ends). */
-  private shownListPull(): number {
-    return this.listPull !== 0 && this.listWindowMoves(Math.sign(this.listPull)) ? this.listPull : 0;
-  }
-
-  /** Whether one cursor step in `direction` (±1) scrolls the list window rather than only moving the highlight. */
-  private listWindowMoves(direction: number): boolean {
-    const entries = this.currentEntries();
-    const next = this.selectedIndex + direction;
-    if (next < 0 || next >= entries.length) return false;
-    const layout = this.beMusicSelectLayout;
-    const { height } = this.resolveDesignSize();
-    return (
-      resolveSelectListWindow(layout, height, next, entries.length).firstVisibleIndex !==
-      resolveSelectListWindow(layout, height, this.selectedIndex, entries.length).firstVisibleIndex
-    );
-  }
-
-  private readonly handlePointerCancel = (event: PointerEvent): void => {
-    if (this.touchGesture?.pointerId === event.pointerId) this.touchGesture = undefined;
-  };
-
-  /** Design pixels a swipe travels per cursor step: the list's row pitch. */
-  private resolveTouchScrollPitch(): number {
-    return this.themeDesignSize ? 30 : this.beMusicSelectLayout.rowHeight;
-  }
-
-  /**
    * Moves the cursor `steps` entries (forward when positive), one slot at a time so the bar slide animates each step,
    * wrapping at the ends like the keyboard and wheel.
    */
@@ -1809,11 +1683,6 @@ export class CoreSongSelectView<
     }
     this.render();
   }
-
-  private readonly handlePointerLeave = (): void => {
-    this.mouseX = -1;
-    this.mouseY = -1;
-  };
 
   /** Toggles the README overlay for `song` (see {@link SelectReadTextOverlay.toggleReadText}). */
   protected toggleReadText(song: BrowserSongEntry): void {
@@ -1874,142 +1743,6 @@ export class CoreSongSelectView<
   protected snapCursorAfterFilterChange(): void {
     this.selectedIndex = 0;
     this.refreshChartPreview();
-  }
-
-  /**
-   * Wheel-scroll → cursor move. `deltaY > 0` (wheel down) advances to the next entry; `deltaY < 0` (wheel up) rewinds.
-   * A notched mouse wheel moves one entry per notch (several notches in one event still count once, throttled by
-   * {@link WHEEL_THROTTLE_INTERVAL_MS}). A trackpad or free-spinning wheel sends a stream of small pixel deltas; those
-   * move the list by the distance travelled, one entry per row pitch on screen, so a light touch no longer races through
-   * the list.
-   *
-   * Wraps at the list ends, matching the keyboard navigation. Skipped while hidden (gameplay on top) so a wheel event
-   * over the canvas doesn't navigate the select view in the background.
-   */
-  private readonly handleWheel = (event: WheelEvent): void => {
-    if (!this.visible) return;
-    if (event.deltaY === 0) return;
-    event.preventDefault();
-    // While the readtext modal is open, the wheel scrolls the README body instead of moving the bar cursor. Otherwise
-    // the user couldn't pan a long author note without first closing the overlay.
-    if (this.readText.readTextOpen) {
-      this.readText.scrollReadText(event.deltaY);
-      return;
-    }
-    const entries = this.currentEntries();
-    if (entries.length === 0) return;
-    this.fling = undefined;
-    if (!isWheelNotch(event)) {
-      const { width: designWidth, height: designHeight } = this.resolveDesignSize();
-      const viewport = resolveScaledViewport(this.app.screen.width, this.app.screen.height, designWidth, designHeight);
-      const step = stepWheelScroll(this.listPull, event.deltaY / viewport.scale, this.resolveTouchScrollPitch());
-      this.listPull = step.carry;
-      this.lastPullInputAt = performance.now();
-      if (step.steps !== 0) this.moveCursorBy(step.steps);
-      return;
-    }
-    this.listPull = 0;
-    const now = performance.now();
-    if (now - this.lastWheelMoveAt < WHEEL_THROTTLE_INTERVAL_MS) return;
-    this.lastWheelMoveAt = now;
-    const direction = event.deltaY > 0 ? 1 : -1;
-    this.selectedIndex = (this.selectedIndex + direction + entries.length) % entries.length;
-    // Use the wheel direction directly rather than the wrapped (new - old) delta. With a tiny list (e.g. 2 entries),
-    // wrapping from `last` back to `first` produces a `rawDelta` of `-(N-1)` whose shortest-path interpretation is
-    // "back by one", which would slide the bars in the wrong direction even though the user wheeled DOWN. Treating
-    // wheel input as an "infinite rail" — every notch always slides one slot in the wheel's direction — preserves the
-    // LR2 selection feel.
-    this.noteCursorChange(direction);
-    this.render();
-  };
-
-  private readonly handlePointerDown = (event: PointerEvent): void => {
-    if (!this.visible || this.launchAt !== undefined) return;
-    // Retry BGM start on the first user gesture — browsers gate `AudioContext.resume()` behind a user-input event, so
-    // the start on entering the scene may have left the context suspended. Cheap to call repeatedly
-    // (early-returns when a source is already playing).
-    void this.startSelectBgm();
-    // A finger may be starting a swipe over the list, so its tap waits for the lift (`handlePointerUp`).
-    if (event.pointerType === 'touch' || event.pointerType === 'pen') {
-      if (this.touchGesture !== undefined) return;
-      // A touch stops a gliding list where it is, like catching it.
-      this.fling = undefined;
-      this.touchGesture = {
-        pointerId: event.pointerId,
-        startX: event.offsetX,
-        startY: event.offsetY,
-        lastY: event.offsetY,
-        dragging: false,
-        samples: [],
-      };
-      return;
-    }
-    if (this.readText.readTextOpen) event.preventDefault();
-    this.handlePointerTap(event.offsetX, event.offsetY);
-  };
-
-  /** A click (or a touch that did not swipe) at canvas point (`offsetX`, `offsetY`), in CSS pixels. */
-  private handlePointerTap(offsetX: number, offsetY: number): void {
-    if (!this.visible || this.launchAt !== undefined) return;
-    // README modal owns the pointer while open. LR2 uses Enter (the decide key) for panel close, mirrored on the
-    // keyboard path; on the mouse side we accept any click anywhere as a dismiss to cover users who'd reach for "click
-    // outside the card" before reading the footer hint. The README content itself isn't interactive so consuming the
-    // click loses no affordance.
-    if (this.readText.readTextOpen) {
-      this.readText.closeReadText();
-      return;
-    }
-    // No `canvas.focus()` — we listen for `keydown` on `window`, so capturing focus here would needlessly pull it away
-    // from any form input the user might already be typing into.
-    const themeSize = this.themeDesignSize;
-    const { width: designWidth, height: designHeight } = themeSize ?? this.beMusicDesignSize;
-    const viewport = resolveScaledViewport(this.app.screen.width, this.app.screen.height, designWidth, designHeight);
-    const virtualX = (offsetX - viewport.x) / viewport.scale;
-    const virtualY = (offsetY - viewport.y) / viewport.scale;
-
-    if (themeSize) {
-      this.handleThemePointerDown(virtualX, virtualY);
-      return;
-    }
-
-    // Skin-less fallback: hit-test the right-column bar list. The chrome paints other interactive-looking regions
-    // (search box, top tabs, score panel), but those are decorative-only in this no-skin path — clicks on them
-    // shouldn't pick a song or change navigation. Bound the song-list reaction to the right-column rectangle the rows
-    // actually live in.
-    //
-    // Geometry must mirror the `render()` layout above: rows begin at `listTop` with `rowHeight` pitch, and the visible
-    // window centers on `selectedIndex` with the same `start` calculation. Anything outside the list rectangle is a
-    // no-op.
-    const layout = this.beMusicSelectLayout;
-    const { listX, listTop, rowHeight } = layout;
-    const listBottom = designHeight - layout.listBottomInset;
-    if (virtualX < listX || virtualY < listTop || virtualY > listBottom) {
-      return;
-    }
-    const fallbackEntries = this.currentEntries();
-    if (fallbackEntries.length === 0) {
-      return;
-    }
-    const start = resolveSelectListWindow(
-      layout,
-      designHeight,
-      this.selectedIndex,
-      fallbackEntries.length,
-    ).firstVisibleIndex;
-    const visibleRow = Math.floor((virtualY - listTop) / rowHeight);
-    const entryIndex = start + visibleRow;
-    if (entryIndex < 0 || entryIndex >= fallbackEntries.length) {
-      return;
-    }
-    const entry = fallbackEntries[entryIndex];
-    if (!entry) return;
-    const previous = this.selectedIndex;
-    if (entryIndex !== previous) {
-      this.noteCursorChange(wrappedCursorDelta(entryIndex - previous, fallbackEntries.length));
-    }
-    this.selectedIndex = entryIndex;
-    this.render();
-    this.activateEntry(entry);
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
