@@ -32,13 +32,8 @@ import {
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
 import { pickLr2BarBody } from './bar-body.ts';
-import {
-  computeSelectOps,
-  resolveKeyModeOp,
-  resolveLr2BarLampKind,
-  resolveLr2LampOp,
-  SELECT_DYNAMIC_OPS,
-} from '../select-ops.ts';
+import { LR2_OP } from '@be-music/lr2-skin/ids';
+import { computeSelectOps, resolveKeyModeOp, resolveLr2BarLampKind, resolveLr2LampOp } from '../select-ops.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
 import { resolveSceneCourseInfo, type SceneCourseInfo } from '../course-info.ts';
 import {
@@ -253,10 +248,10 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       resolveLr2CourseMakerOps(maker.draft, course?.stages.length).forEach((op) => withCourse.add(op));
     }
     if (course === undefined || courseInfo === undefined) return withCourse;
-    withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_COURSE);
-    if (course.playable) withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_PLAYABLE);
+    withCourse.add(LR2_OP.COURSE_BAR);
+    if (course.playable) withCourse.add(LR2_OP.PLAYABLE_BAR);
     // The course's best lamp (ops 100-105), from the player's record on it as LR2 keeps one per course.
-    withCourse.delete(SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED);
+    withCourse.delete(LR2_OP.LAMP_NO_PLAY);
     withCourse.add(resolveLr2LampOp(this.options.resolveCourseRecord?.(course)?.lamp));
     resolveLr2CourseOps(courseInfo).forEach((op) => withCourse.add(op));
     return withCourse;
