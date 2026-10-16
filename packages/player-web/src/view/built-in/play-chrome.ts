@@ -100,124 +100,124 @@ export interface PlayChromeContext {
 }
 
 /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
-export function resolveLaneGeometry(this: LaneGeometryContext): ReturnType<typeof resolveGameplayLaneGeometry> {
+export function resolveLaneGeometry(ctx: LaneGeometryContext): ReturnType<typeof resolveGameplayLaneGeometry> {
   // Asked several times a frame (lanes, BGA, notes); it changes only with its inputs, so it is kept until one does. The
   // stage is one of the skin's own stage objects, so a rotation that switches stages shows up as a new one.
-  const stage = this.beMusicStage;
-  const cached = this.laneGeometryCache;
+  const stage = ctx.beMusicStage;
+  const cached = ctx.laneGeometryCache;
   if (
     cached !== undefined &&
-    cached.laneChannels === this.laneChannels &&
-    cached.laneCount === this.laneChannels.length &&
-    cached.playVariant === this.chartPlayVariant &&
-    cached.layoutMode === this.layoutMode &&
+    cached.laneChannels === ctx.laneChannels &&
+    cached.laneCount === ctx.laneChannels.length &&
+    cached.playVariant === ctx.chartPlayVariant &&
+    cached.layoutMode === ctx.layoutMode &&
     cached.stage === stage
   ) {
     return cached.geometry;
   }
   const geometry = resolveGameplayLaneGeometry(
-    this.laneChannels,
-    this.laneChannels.length,
-    this.chartPlayVariant,
-    this.layoutMode,
+    ctx.laneChannels,
+    ctx.laneChannels.length,
+    ctx.chartPlayVariant,
+    ctx.layoutMode,
     stage,
   );
-  this.laneGeometryCache = {
-    laneChannels: this.laneChannels,
-    laneCount: this.laneChannels.length,
-    playVariant: this.chartPlayVariant,
-    layoutMode: this.layoutMode,
+  ctx.laneGeometryCache = {
+    laneChannels: ctx.laneChannels,
+    laneCount: ctx.laneChannels.length,
+    playVariant: ctx.chartPlayVariant,
+    layoutMode: ctx.layoutMode,
     stage,
     geometry,
   };
   return geometry;
 }
 
-export function resolveSkinlessGameplayChromeRuntime(this: PlayChromeContext): SkinlessGameplayChromeRuntime {
-  const total = this.score.total > 0 ? this.score.total : 0;
-  const seconds = this.currentSeconds();
-  const songLengthSeconds = this.resolveSongDurationSeconds();
-  const usesPlayer2 = this.chartPlayVariant !== '9' && this.laneChannels.some((channel) => channel.startsWith('2'));
+export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): SkinlessGameplayChromeRuntime {
+  const total = ctx.score.total > 0 ? ctx.score.total : 0;
+  const seconds = ctx.currentSeconds();
+  const songLengthSeconds = ctx.resolveSongDurationSeconds();
+  const usesPlayer2 = ctx.chartPlayVariant !== '9' && ctx.laneChannels.some((channel) => channel.startsWith('2'));
   const judgeSides: SkinlessGameplayJudgeState[] = [];
   for (const side of ['1P', '2P'] as const) {
     if (side === '2P' && !usesPlayer2) {
       continue;
     }
-    const state = this.judgeSideState[side];
+    const state = ctx.judgeSideState[side];
     if (state.judge && seconds <= state.until) {
       judgeSides.push({ side, judge: state.judge, combo: state.combo });
     }
   }
-  const currentBeat = this.currentBeat(seconds);
+  const currentBeat = ctx.currentBeat(seconds);
   // The BPM readout freezes at the reversal value (LR2's frozen pump holds |BPM| there) instead of following the
   // mirrored scroll back through earlier tempo points — see `nowBpm`.
-  const bpm = this.nowBpm(seconds) ?? this.song?.bpm;
-  const laneCovers = this.resolveLaneCovers();
-  const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm, this.scrollMapper?.rateAt?.(currentBeat) ?? 1);
+  const bpm = ctx.nowBpm(seconds) ?? ctx.song?.bpm;
+  const laneCovers = ctx.resolveLaneCovers();
+  const visibleMs = ctx.resolveVisibleMs(laneCovers[0], bpm, ctx.scrollMapper?.rateAt?.(currentBeat) ?? 1);
   return {
-    songTitle: this.song?.title,
-    songArtist: this.song?.artist,
-    songGenre: this.song?.genre,
+    songTitle: ctx.song?.title,
+    songArtist: ctx.song?.artist,
+    songGenre: ctx.song?.genre,
     // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBpm`.
-    bpm: this.displayBpm(seconds) ?? bpm,
+    bpm: ctx.displayBpm(seconds) ?? bpm,
     // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
-    hiSpeed: this.playerHiSpeed,
-    score: this.score.score,
-    exScore: this.score.exScore,
+    hiSpeed: ctx.playerHiSpeed,
+    score: ctx.score.score,
+    exScore: ctx.score.exScore,
     exScoreMax: total * 2,
-    combo: this.tracker.combo,
-    maxCombo: this.maxCombo,
-    perfect: this.score.perfect,
-    great: this.score.great,
-    good: this.score.good,
-    bad: this.score.bad,
-    poor: this.score.poor,
-    gauge: this.gaugeState.current,
-    clearThreshold: this.gaugeState.clearThreshold,
-    laneCount: this.laneChannels.length,
-    laneChannels: this.laneChannels,
-    playVariant: this.chartPlayVariant,
-    lastJudge: seconds <= this.lastJudgeUntil ? this.lastJudge : undefined,
+    combo: ctx.tracker.combo,
+    maxCombo: ctx.maxCombo,
+    perfect: ctx.score.perfect,
+    great: ctx.score.great,
+    good: ctx.score.good,
+    bad: ctx.score.bad,
+    poor: ctx.score.poor,
+    gauge: ctx.gaugeState.current,
+    clearThreshold: ctx.gaugeState.clearThreshold,
+    laneCount: ctx.laneChannels.length,
+    laneChannels: ctx.laneChannels,
+    playVariant: ctx.chartPlayVariant,
+    lastJudge: seconds <= ctx.lastJudgeUntil ? ctx.lastJudge : undefined,
     judgeSides,
-    rank: total <= 0 ? undefined : resolveIidxRankLabel(this.score.exScore, total),
-    autoplay: this.options.autoPlay === true,
-    hasBga: this.hasBga,
-    nowMs: this.playClock(),
+    rank: total <= 0 ? undefined : resolveIidxRankLabel(ctx.score.exScore, total),
+    autoplay: ctx.options.autoPlay === true,
+    hasBga: ctx.hasBga,
+    nowMs: ctx.playClock(),
     progressRatio: songLengthSeconds > 0 ? Math.max(0, Math.min(1, seconds / songLengthSeconds)) : 0,
     // The beat this frame already worked out for the same `seconds`.
     beatPhase: currentBeat - Math.floor(currentBeat),
-    rulesetLabel: this.resolveJudgeRuleset(),
-    gaugeLabel: this.gaugeState.type ?? 'GROOVE',
-    gaugeSurvival: this.gaugeState.survival === true,
-    fast: this.fastCount,
-    slow: this.slowCount,
+    rulesetLabel: ctx.resolveJudgeRuleset(),
+    gaugeLabel: ctx.gaugeState.type ?? 'GROOVE',
+    gaugeSurvival: ctx.gaugeState.survival === true,
+    fast: ctx.fastCount,
+    slow: ctx.slowCount,
     totalNotes: total,
     // While assets load the count-in waits: the skin shows NOW LOADING instead.
-    chartMs: this.assetsLoading ? undefined : this.resolveChartMs(),
-    loading: this.assetsLoading,
-    judgeAtMs: this.lastJudgeAt,
-    impulseAtMs: this.lastImpulseAt,
-    impulseKind: this.lastImpulseKind,
-    effects: this.options.beMusicEffects ?? 'full',
-    audio: this.audioFrame,
-    song: this.song,
-    lastJudgeDeltaMs: this.judgeTimings.lastDeltaMs,
-    judgeTimings: this.judgeTimings.recent,
-    minBpm: this.chartBpmRange?.minBpm,
-    maxBpm: this.chartBpmRange?.maxBpm,
-    mainBpm: this.chartBpmRange?.mainBpm,
-    songLengthMs: this.song ? songLengthSeconds * 1000 : undefined,
+    chartMs: ctx.assetsLoading ? undefined : ctx.resolveChartMs(),
+    loading: ctx.assetsLoading,
+    judgeAtMs: ctx.lastJudgeAt,
+    impulseAtMs: ctx.lastImpulseAt,
+    impulseKind: ctx.lastImpulseKind,
+    effects: ctx.options.beMusicEffects ?? 'full',
+    audio: ctx.audioFrame,
+    song: ctx.song,
+    lastJudgeDeltaMs: ctx.judgeTimings.lastDeltaMs,
+    judgeTimings: ctx.judgeTimings.recent,
+    minBpm: ctx.chartBpmRange?.minBpm,
+    maxBpm: ctx.chartBpmRange?.maxBpm,
+    mainBpm: ctx.chartBpmRange?.mainBpm,
+    songLengthMs: ctx.song ? songLengthSeconds * 1000 : undefined,
     // Clamped to the length so the remaining time never runs negative through the audio tail.
-    songElapsedMs: this.song ? Math.min(seconds, songLengthSeconds) * 1000 : undefined,
-    failedAtMs: this.playMoments.failedAtMs,
-    allNotesDoneAtMs: this.playMoments.allNotesDoneAtMs,
-    outroAtMs: this.playMoments.outroAtMs,
-    gaugeRiseAtMs: this.playMoments.gaugeRiseAtMs,
-    gaugeMaxAtMs: this.playMoments.gaugeMaxAtMs,
+    songElapsedMs: ctx.song ? Math.min(seconds, songLengthSeconds) * 1000 : undefined,
+    failedAtMs: ctx.playMoments.failedAtMs,
+    allNotesDoneAtMs: ctx.playMoments.allNotesDoneAtMs,
+    outroAtMs: ctx.playMoments.outroAtMs,
+    gaugeRiseAtMs: ctx.playMoments.gaugeRiseAtMs,
+    gaugeMaxAtMs: ctx.playMoments.gaugeMaxAtMs,
     // Shared by reference: the arrays only grow during a play, and skins are told not to mutate them.
-    scoreHistory: this.scoreHistory,
-    gaugeHistory: this.gaugeHistory,
-    judgeWindows: this.judgeWindows,
+    scoreHistory: ctx.scoreHistory,
+    gaugeHistory: ctx.gaugeHistory,
+    judgeWindows: ctx.judgeWindows,
     laneCovers,
     visibleMs,
     greenNumber: visibleMs === undefined ? undefined : resolveGreenNumber(visibleMs),

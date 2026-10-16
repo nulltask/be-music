@@ -15,68 +15,68 @@ import type { PlayfieldContext } from './context.ts';
  * `bomb-retired` so a theme can stop its own per-lane bomb timer; without this retirement a theme's "play once and
  * clamp" explosion would keep displaying its last frame forever.
  */
-function cleanupBombTimers(this: PlayfieldContext): void {
-  if (this.bombStartedAt.size === 0) {
+function cleanupBombTimers(ctx: PlayfieldContext): void {
+  if (ctx.bombStartedAt.size === 0) {
     return;
   }
-  const now = this.playClock();
-  for (const [channel, startedAt] of this.bombStartedAt) {
-    const cleanupAtMs = this.theme.resolveBombDurationMs(channel);
+  const now = ctx.playClock();
+  for (const [channel, startedAt] of ctx.bombStartedAt) {
+    const cleanupAtMs = ctx.theme.resolveBombDurationMs(channel);
     if (now - startedAt < cleanupAtMs) {
       continue;
     }
-    this.bombStartedAt.delete(channel);
-    this.bombJudge.delete(channel);
-    this.theme.onThemeEvent({ kind: 'bomb-retired', channel });
+    ctx.bombStartedAt.delete(channel);
+    ctx.bombJudge.delete(channel);
+    ctx.theme.onThemeEvent({ kind: 'bomb-retired', channel });
   }
 }
 
-export function renderBombs(this: PlayfieldContext): void {
+export function renderBombs(ctx: PlayfieldContext): void {
   // Pooled per-frame children — see `ChildPool` in `pixi-utils.ts`. The previous `disposeChildren` rebuild ran a
   // destroy + Sprite-allocation cycle for every active explosion; the pool reuses parented sprites across frames.
-  this.bombLayerPool.begin();
-  cleanupBombTimers.call(this);
+  ctx.bombLayerPool.begin();
+  cleanupBombTimers(ctx);
   // When a theme owns the playfield its bombs are part of the theme's own chrome (the LR2 skin's `#DST_IMAGE` set,
   // gated on bomb timer 50–57 / 60–67). Drawing our own copy on top would double-render the explosion, so this path
   // only fires for the skinless experience.
-  if (this.theme.themeOwnsPlayfield() || this.bombStartedAt.size === 0) {
-    this.bombLayerPool.end();
+  if (ctx.theme.themeOwnsPlayfield() || ctx.bombStartedAt.size === 0) {
+    ctx.bombLayerPool.end();
     return;
   }
-  this.theme.renderBombEffects();
-  this.bombLayerPool.end();
+  ctx.theme.renderBombEffects();
+  ctx.bombLayerPool.end();
 }
 
 /** The built-in bombs: `CoreGameplayView.renderBombEffects`, unless a theme draws its own. */
-export function renderBombEffects(this: PlayfieldContext): void {
-  const now = this.playClock();
+export function renderBombEffects(ctx: PlayfieldContext): void {
+  const now = ctx.playClock();
   const bombs: BeMusicBomb[] = [];
-  for (const [channel, startedAt] of this.bombStartedAt) {
-    const lane = this.laneX.get(channel);
+  for (const [channel, startedAt] of ctx.bombStartedAt) {
+    const lane = ctx.laneX.get(channel);
     if (!lane) continue;
     bombs.push({
       channel,
-      kind: resolveBeMusicLaneKind(channel, resolveLr2LaneIndex(channel, this.chartPlayVariant), this.chartPlayVariant),
+      kind: resolveBeMusicLaneKind(channel, resolveLr2LaneIndex(channel, ctx.chartPlayVariant), ctx.chartPlayVariant),
       x: lane.x,
       w: lane.w,
       y: lane.bottom,
       elapsedMs: Math.max(0, now - startedAt),
       // Stable per hit: the start time changes on every re-trigger, so a new hit gets a new scatter.
       seed: Math.floor(startedAt * 7.31) % 100_003,
-      judge: this.bombJudge.get(channel),
+      judge: ctx.bombJudge.get(channel),
     });
   }
-  const binding = this.skinBinding;
+  const binding = ctx.skinBinding;
   if (binding) {
     binding.addBombs(bombs);
     return;
   }
   renderPhantomBombs({
-    pool: this.bombLayerPool,
+    pool: ctx.bombLayerPool,
     bombs,
     nowMs: now,
-    combo: this.tracker.combo,
-    effects: this.options.beMusicEffects ?? 'full',
-    audio: this.audioFrame,
+    combo: ctx.tracker.combo,
+    effects: ctx.options.beMusicEffects ?? 'full',
+    audio: ctx.audioFrame,
   });
 }

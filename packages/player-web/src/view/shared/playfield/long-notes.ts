@@ -14,7 +14,7 @@ import type { PlayfieldContext, RuntimeNote } from './context.ts';
  * itself.
  */
 export function renderLongNote(
-  this: PlayfieldContext,
+  ctx: PlayfieldContext,
   laneIndex: number,
   note: RuntimeNote,
   lane: GameplayLaneRect,
@@ -23,7 +23,7 @@ export function renderLongNote(
   drawBottom: number,
 ): void {
   const channel = note.channel;
-  const state = this.longNotes.stateOf(channel, note.beat, note.judged);
+  const state = ctx.longNotes.stateOf(channel, note.beat, note.judged);
   const alpha = resolveLongNoteAlpha(state);
   // `yStart` / `yEnd` are the chart-time intersections with the judgement line. With the bottom-edge anchor
   // convention (matching LR2 / BMS): - LN_START's *bottom edge* sits at `yStart` (just-timing of the head) - LN_END's
@@ -31,12 +31,12 @@ export function renderLongNote(
   // to `drawBottom` — the judgement-line bottom (= `lane.bottom`) unless beatoraja's rules let a long note a negative
   // `#SCROLL` puts below the line draw there — so the body never paints over the keys area below the line, even mid-LN
   // where the head has already passed but the tail is still above.
-  const top = Math.max(lane.top - this.noteOverscan, Math.min(yStart, yEnd));
+  const top = Math.max(lane.top - ctx.noteOverscan, Math.min(yStart, yEnd));
   const bottom = Math.min(drawBottom, Math.max(yStart, yEnd));
-  const bodyCell = this.theme.resolveThemeNoteCell('lnbody', laneIndex);
+  const bodyCell = ctx.theme.resolveThemeNoteCell('lnbody', laneIndex);
   if (bodyCell) {
     if (bodyCell.texture) {
-      const sprite = this.noteLayerPool.acquireSprite();
+      const sprite = ctx.noteLayerPool.acquireSprite();
       sprite.texture = bodyCell.texture;
       sprite.label = `ln-body[lane=${laneIndex},ch=${channel}]`;
       sprite.x = lane.x + (lane.w - bodyCell.width) / 2;
@@ -49,8 +49,8 @@ export function renderLongNote(
       sprite.alpha = alpha;
     }
   } else {
-    const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
-    const binding = this.skinBinding;
+    const kind = resolveBeMusicLaneKind(channel, laneIndex, ctx.chartPlayVariant);
+    const binding = ctx.skinBinding;
     if (binding) {
       binding.addLongNote({
         kind,
@@ -58,21 +58,21 @@ export function renderLongNote(
         w: lane.w,
         top,
         bottom,
-        mode: this.resolveLongNoteMode(note),
+        mode: ctx.resolveLongNoteMode(note),
         state,
-        autoplay: this.isAutoplayedChannel(channel),
+        autoplay: ctx.isAutoplayedChannel(channel),
       });
     } else {
-      const graphic = this.noteLayerPool.acquireGraphics();
+      const graphic = ctx.noteLayerPool.acquireGraphics();
       graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
-      renderPhantomLongNote({ graphics: graphic, kind, x: lane.x, w: lane.w, top, bottom, nowMs: this.playClock() });
+      renderPhantomLongNote({ graphics: graphic, kind, x: lane.x, w: lane.w, top, bottom, nowMs: ctx.playClock() });
       graphic.alpha = alpha;
     }
   }
   // LN_END at the top (yEnd), LN_START at the bottom (yStart).
-  const endCell = this.theme.resolveThemeNoteCell('lnend', laneIndex);
+  const endCell = ctx.theme.resolveThemeNoteCell('lnend', laneIndex);
   if (endCell?.texture) {
-    const sprite = this.noteLayerPool.acquireSprite();
+    const sprite = ctx.noteLayerPool.acquireSprite();
     sprite.texture = endCell.texture;
     sprite.label = `ln-end[lane=${laneIndex},ch=${channel}]`;
     sprite.x = lane.x + (lane.w - endCell.width) / 2;
@@ -84,9 +84,9 @@ export function renderLongNote(
   // The head draws wherever it is above the draw bottom: on the judgement line once passed (both rule sets hold it
   // there), and under beatoraja's rules skipped while a negative `#SCROLL` has it below the stage.
   if (yStart <= drawBottom) {
-    const startCell = this.theme.resolveThemeNoteCell('lnstart', laneIndex);
+    const startCell = ctx.theme.resolveThemeNoteCell('lnstart', laneIndex);
     if (startCell?.texture) {
-      const sprite = this.noteLayerPool.acquireSprite();
+      const sprite = ctx.noteLayerPool.acquireSprite();
       sprite.texture = startCell.texture;
       sprite.label = `ln-start[lane=${laneIndex},ch=${channel}]`;
       sprite.x = lane.x + (lane.w - startCell.width) / 2;
