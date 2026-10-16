@@ -239,7 +239,7 @@
       "5300.000 press-lane 16"
     ],
     "frames": {
-      "count": 345,
+      "count": 346,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "780.000 seconds=0.78 note 12@0.75",
@@ -253,7 +253,7 @@
         "3000.000 seconds=3 note 12@3",
         "3525.000 seconds=3.525 note 11@3.5"
       ],
-      "last": "5300.000 seconds=5.3 beat=10.6"
+      "last": "5316.667 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -408,7 +408,7 @@
       "5300.000 press-lane 16"
     ],
     "frames": {
-      "count": 345,
+      "count": 346,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "780.000 seconds=0.78 note 12@0.75",
@@ -422,7 +422,7 @@
         "3000.000 seconds=3 note 12@3",
         "3525.000 seconds=3.525 note 11@3.5"
       ],
-      "last": "5300.000 seconds=5.3 beat=10.6"
+      "last": "5316.667 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",

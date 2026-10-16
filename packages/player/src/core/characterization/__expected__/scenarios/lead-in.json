@@ -229,7 +229,7 @@
       "4585.000 release-lane 11"
     ],
     "frames": {
-      "count": 304,
+      "count": 305,
       "judged": [
         "1500.000 seconds=0.5 note 11@0.5",
         "1780.000 seconds=0.78 note 12@0.75",
@@ -243,7 +243,7 @@
         "4000.000 seconds=3 note 12@3",
         "4525.000 seconds=3.525 note 11@3.5"
       ],
-      "last": "5685.000 seconds=4.685 beat=9.37"
+      "last": "5701.667 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",

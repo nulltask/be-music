@@ -188,7 +188,7 @@
       "1960.000 trigger-poor-bga seconds=1.96"
     ],
     "frames": {
-      "count": 131,
+      "count": 132,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "780.000 seconds=0.78 note 12@0.75",
@@ -333,7 +333,7 @@
       "1966.667 trigger-poor-bga seconds=1.950001"
     ],
     "frames": {
-      "count": 120,
+      "count": 121,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "783.333 seconds=0.783333 note 12@0.75",

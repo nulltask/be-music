@@ -49,8 +49,6 @@ export interface PlayJudge {
  * they are removed one by one.
  */
 export interface StrategyDrifts {
-  /** Publishes a closing frame at the chart's end after `finish`. */
-  readonly closingFrame: boolean;
   /** Queues the play lanes' keysounds as realtime audio as well as its own note keysounds. */
   readonly queuesLaneKeysoundsAsRealtimeAudio: boolean;
   /** Leaves `endOnFailure` out of its play log. */

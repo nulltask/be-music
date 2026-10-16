@@ -207,7 +207,7 @@
       "3525.000 press-lane 11"
     ],
     "frames": {
-      "count": 234,
+      "count": 235,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "780.000 seconds=0.78 note 12@0.75",
@@ -221,7 +221,7 @@
         "3000.000 seconds=3 note 12@3",
         "3525.000 seconds=3.525 note 11@3.5"
       ],
-      "last": "3525.000 seconds=3.525 beat=7.05"
+      "last": "3525.000 seconds=3.5 beat=7"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
