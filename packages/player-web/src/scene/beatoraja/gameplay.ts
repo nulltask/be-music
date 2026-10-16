@@ -7,24 +7,21 @@
 //     ├── BeatorajaRuntimeAdapter                ← engine signals → activeOps / timer-start map / text-ref
 //     └── runEngineDriver                        ← audio + input + chart playback (manual / auto)
 //
-// The view drives the skin from the engine's UI signals every Pixi tick. Three signal kinds flow through:
-//
-//   - `frame` (currentSeconds, summary, notes[]) — latched into the adapter so text / value resolvers can
-//     read combo / score / per-lane judge counts.
-//   - `commands` (press-lane / release-lane / flash-lane / hold-lane-until-beat / poor-bga) — folded into
-//     the adapter's per-lane timer slots.
-//   - `judge-combo` publishes — fold into the per-side judge timer + last-judge op gate.
-//
-// `drainWebUiSignals` does the polling so the engine doesn't have to call back into the renderer on its
-// own clock. The adapter keeps a single mutable `activeOps` Set + timer Map; `view.update(ctx)` re-samples
-// every destination keyframe against the current state.
+// The view drives the skin from the engine's UI signals every Pixi tick: `drainWebUiSignals` folds each `frame`
+// (currentSeconds, summary, notes[]), lane command (press / release / flash / hold / POOR BGA) and judge-combo publish
+// into the adapter, whose one `activeOps` Set + timer Map `view.update(ctx)` re-samples every destination keyframe
+// against.
 //
 // The gameplay scene layers authored skin chrome, scrolling notes, markers, BGA still/video textures, judge popups,
 // key-beam glows, LN hold effects, and HUD text on top of the same engine-driven state.
 
 import type { SceneCourseInfo } from '../course-info.ts';
-import { computeAuthoredLaneBottomYPixi, readJudgeComboMetrics, resolveFadeoutMs } from './play-skin-metrics.ts';
-import { Container, Graphics, Text, type Ticker } from 'pixi.js';
+import {
+  computeAuthoredLaneBottomYPixi,
+  readJudgeComboMetrics,
+  resolveFadeoutMs,
+} from '../../view/beatoraja/play/skin-metrics.ts';
+import { Container, Graphics, Text, type Texture, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';
 import {
   buildBaseOpSet,
@@ -40,16 +37,20 @@ import {
 import { withBeatorajaCourseStageOps } from '@be-music/beatoraja-skin/scene';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { chartPlayVariantForBeatorajaVariant, type BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
-import { BeatorajaNoteLayer, beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat } from './notes.ts';
+import {
+  BeatorajaNoteLayer,
+  beatorajaDisplayScrollBeat,
+  beatorajaPixelsPerBeat,
+} from '../../view/beatoraja/play/notes.ts';
 import { resolveChart, type TempoReversalPoint } from '@be-music/chart';
 import { playEndingFadeAlpha, resolvePlayEnding, type PlayEnding, type PlayEndingNote } from '../play-ending.ts';
-import { BeatorajaMarkerLayer } from './markers.ts';
+import { BeatorajaMarkerLayer } from '../../view/beatoraja/play/markers.ts';
 import {
   createBeatorajaLaneTimelines,
   createBeatorajaScrollMapper,
   resolveBeatorajaScrollPlacement,
   type BeatorajaLaneTimelines,
-} from './scroll-placement.ts';
+} from '../../view/beatoraja/play/scroll-placement.ts';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import { computeBeatorajaChartMarkers } from '../../chart/beatoraja/markers.ts';
@@ -59,9 +60,8 @@ import {
   type BeatorajaChartNoteDistribution,
 } from '../../chart/beatoraja/note-distribution.ts';
 import { flipDpChart } from '../../chart/beatoraja/dp-flip.ts';
-import { BeatorajaBgaLayer } from './bga.ts';
+import { BeatorajaBgaLayer } from '../../view/beatoraja/play/bga.ts';
 import type { BgaCue } from '../core/gameplay-bga.ts';
-import type { Texture } from 'pixi.js';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { PlayerOptions, PlayerSummary } from '@be-music/player/core/engine';
 import { setVideoPlaybackTempo } from '../../runtime/play-tempo.ts';

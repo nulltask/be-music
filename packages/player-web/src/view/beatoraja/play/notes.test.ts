@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { BEATORAJA_OP, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
-import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
+import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
 import {
   BeatorajaNoteLayer,
   beatorajaDisplayScrollBeat,
