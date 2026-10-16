@@ -36,16 +36,40 @@ LR2 finds its BGM and system sounds through the sound set, `LR2files/Sound/*.lr2
 
 LR2 reads a skin each time its scene starts, so an `#IF` block can test state that holds for the whole scene. In a course that means the course ops (OpenLR2 `LR2f.cpp` L5403-L5444):
 
-| Op              | Meaning                                           |
-| --------------- | ------------------------------------------------- |
-| 280-288         | Stage 1-9 is played and is not the last one       |
-| 289             | The last stage                                    |
-| 290             | A course: the selected bar, or the running course |
-| 291 / 292 / 293 | Its kind: NONSTOP / EXPERT / GRADE                |
+| Op              | `LR2_OP`                                            | Meaning                                           |
+| --------------- | --------------------------------------------------- | ------------------------------------------------- |
+| 280-288         | `COURSE_STAGE1`-`COURSE_STAGE9`                     | Stage 1-9 is played and is not the last one       |
+| 289             | `COURSE_STAGE_FINAL`                                | The last stage                                    |
+| 290             | `COURSE`                                            | A course: the selected bar, or the running course |
+| 291 / 292 / 293 | `COURSE_NONSTOP` / `COURSE_EXPERT` / `COURSE_GRADE` | Its kind: NONSTOP / EXPERT / GRADE                |
 
 The theme is parsed once, with these ops off. `Lr2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` parses one of its skins again from the files already read, with extra ops held true while `#IF` / `#ELSEIF` are evaluated (`LoadLr2SkinOptions.parseOps`). `pickLr2PlaySkinVariant` names the play-skin variant a chart plays on, so a host can parse that skin again for a course stage.
 
 The values a course skin reads (numbers 250-259, texts 150-170, the course combo on 104 / 105) are scene state; `@be-music/player-web` supplies them. See [Courses and dan certification](./player-web.md#courses-and-dan-certification).
+
+## Id tables
+
+A skin refers to the engine's state by number: the ops of a `#DST_*` row or an `#IF`, the `timer` it runs on, the `num` of a `#SRC_NUMBER`, the `st` of a `#SRC_TEXT`, the `type` of a `#SRC_BUTTON` or `#SRC_SLIDER`, the index of a `#SRC_BAR_BODY` or `#SRC_BAR_LAMP`, and the `gr` of a runtime-bound image. `@be-music/lr2-skin/ids` names them in one table per kind, each entry documented with what it means and, by its section, the screen that sets or reads it:
+
+| Table                                 | Names                 | Sections                                                                                                                                                     |
+| ------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `LR2_OP`                              | ops (`dst_option`)    | selected bar, play options, loading and replay, result outcome, best record, chart, running rank / gauge / judgement, courses, result ranks, making a course |
+| `LR2_TIMER`                           | `timer`               | every scene, select (bar list, panels, course maker), play (ready, gauge, judge, full combo, lane banks, rhythm), result                                     |
+| `LR2_NUM`                             | `#SRC_NUMBER` `num`   | options and clock, player totals, selected chart, running score, result before / after, course stage levels                                                  |
+| `LR2_TEXT`                            | `#SRC_TEXT` `st`      | song info, search word, skin, option panel labels, courses                                                                                                   |
+| `LR2_BUTTON`                          | `#SRC_BUTTON` `type`  | panels, bar list and play, play options, making courses                                                                                                      |
+| `LR2_SLIDER`                          | `#SRC_SLIDER` `type`  | bar-list position, hi-speed, lane cover, play progress                                                                                                       |
+| `LR2_BAR_BODY` / `LR2_BAR_BODY_KINDS` | `#SRC_BAR_BODY` index | each bar kind and the parsed `Lr2BarBodyKind`                                                                                                                |
+| `LR2_BAR_LAMP` / `LR2_BAR_LAMP_KINDS` | `#SRC_BAR_LAMP` index | each clear lamp and the parsed `Lr2BarLampKind`; the lamp ops 100-105 follow the same order                                                                  |
+| `LR2_GR`                              | `gr`                  | the images LR2 binds at run time (STAGEFILE, BACKBMP, BANNER, skin thumbnail, black, white)                                                                  |
+
+A short range is named id by id (course stages 280-289, panels 1-9, NONSTOP connections). A long one keeps its first id: a lane bank (`LR2_TIMER.BOMB_1P`, `LN_HOLD_1P`, `KEY_ON_1P`, `KEY_OFF_1P` and their 2P banks) is the scratch timer, with key N at `+ N` for the `LR2_LANE_TIMER_BANK_SIZE` lanes; `LR2_OP.COURSE_STAGES_OVER + N`, `COURSE_SONGS_ADDED + N` and `COURSE_STAGE_DIFFICULTY + 10 × i + difficulty` are the course-maker and stage-difficulty ops.
+
+The numbers follow the stock skin's documentation and OpenLR2, and `LR2body.exe` where they disagree: 292 is EXPERT and 293 GRADE (the stock documentation swaps them). Op 571 lights only while a course is being made, as intended; in the binary it falls through to 572 and lights either way.
+
+beatoraja keeps LR2's numbers for its LR2-compatible ids, so `@be-music/beatoraja-skin` takes those from these tables under its own names (`BEATORAJA_OP.FOLDERBAR` is `LR2_OP.FOLDER_BAR`, `TIMER_READY` is `LR2_TIMER.READY`) and numbers only beatoraja's own ids. The parser's parse-time ops and `@be-music/player-web`'s LR2 scenes use the tables too.
+
+Not named here: ops 900-999 (the skin's own `#CUSTOMOPTION`s), the `#SRC_BARGRAPH` types, and the small enums of the `#DST_*` fields (`blend`, `center`, `acc`), which `skin/lr2/render.ts` maps where it reads them.
 
 ## Parsed directives
 
@@ -99,6 +123,7 @@ TGA images are decoded by `tga.ts` and DDS images by `dds.ts` (the browser playe
 - `scene/lr2/result.ts`
 
 Shared rendering helpers in `skin/lr2/render.ts` and `skin/lr2/scene-render.ts` evaluate destination keyframes, op-gated visibility, source cells, sprite transforms, text, numbers, sliders, and bargraphs.
+The scenes light ops, start timers and resolve numbers, texts, buttons and sliders through the [id tables](#id-tables).
 The browser player binds runtime values such as song metadata, current judge, combo, gauge, score, BGA textures, play options, and result history onto the parsed skin elements.
 
 ## Compatibility boundary
