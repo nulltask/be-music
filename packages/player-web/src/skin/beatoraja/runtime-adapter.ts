@@ -425,14 +425,11 @@ export class BeatorajaRuntimeAdapter {
     this.lastFrameGauge = frame.summary.gauge?.current;
   }
 
-  /**
-   * Swap the score ops of the last frame for this frame's. `P1_BAND_BORDER_OR_MORE` stays lit for the rest of the
-   * play once lit.
-   */
+  /** Swap the score and gauge ops of the last frame for this frame's. */
   private syncScoreOps(score: BeatorajaScoreInput, gauge: BeatorajaGaugeInput | undefined): void {
     const next = resolveBeatorajaPlayScoreOps(score, gauge);
     for (const op of this.scoreOps) {
-      if (op !== BEATORAJA_OP.P1_BAND_BORDER_OR_MORE && !next.includes(op)) this.activeOps.delete(op);
+      if (!next.includes(op)) this.activeOps.delete(op);
     }
     for (const op of next) this.activeOps.add(op);
     this.scoreOps = next;

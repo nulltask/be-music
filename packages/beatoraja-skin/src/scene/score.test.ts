@@ -140,14 +140,27 @@ describe('beatorajaExScoreRate / beatorajaChartTotalReadout', () => {
 });
 
 describe('resolveBeatorajaPlayScoreOps', () => {
-  it('lights the rank, now-rank and band ops of the EX score with the judgment-exists ops', () => {
-    const ops = resolveBeatorajaPlayScoreOps(SCORE, { current: 50, max: 100 });
+  const RANGE_OPS: readonly number[] = [
+    BEATORAJA_OP.P1_BAND_0_9,
+    BEATORAJA_OP.P1_BAND_10_19,
+    BEATORAJA_OP.P1_BAND_20_29,
+    BEATORAJA_OP.P1_BAND_30_39,
+    BEATORAJA_OP.P1_BAND_40_49,
+    BEATORAJA_OP.P1_BAND_50_59,
+    BEATORAJA_OP.P1_BAND_60_69,
+    BEATORAJA_OP.P1_BAND_70_79,
+    BEATORAJA_OP.P1_BAND_80_89,
+    BEATORAJA_OP.P1_BAND_90_99,
+    BEATORAJA_OP.P1_BAND_100,
+  ];
+  const rangesLit = (ops: readonly number[]): number[] => ops.filter((op) => RANGE_OPS.includes(op));
+
+  it('lights the rank and now-rank ops of the EX score with the judgment-exists ops', () => {
+    const ops = resolveBeatorajaPlayScoreOps(SCORE, { current: 50, max: 100, clearThreshold: 80 });
     // 70 % is rank A (6/9 ≈ 66.7 %).
     expect(ops).toContain(BEATORAJA_OP.P1_RANK_A);
     expect(ops).toContain(BEATORAJA_OP.RANK_A);
     expect(ops).toContain(BEATORAJA_OP.NOW_A_1P);
-    expect(ops).toContain(BEATORAJA_OP.P1_BAND_70_79);
-    expect(ops).not.toContain(BEATORAJA_OP.P1_BAND_BORDER_OR_MORE);
     expect(ops).toEqual(
       expect.arrayContaining([
         BEATORAJA_OP.PERFECT_EXIST,
@@ -161,18 +174,50 @@ describe('resolveBeatorajaPlayScoreOps', () => {
     expect(ops).not.toContain(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
   });
 
-  it('lights the border op from 80 % of the EX score and the full-gauge op at the maximum', () => {
-    const ops = resolveBeatorajaPlayScoreOps({ ...SCORE, exScore: 170 }, { current: 100, max: 100 });
-    expect(ops).toContain(BEATORAJA_OP.P1_BAND_80_89);
-    expect(ops).toContain(BEATORAJA_OP.P1_BAND_BORDER_OR_MORE);
-    expect(ops).toContain(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
+  it("lights the gauge's range (230-240), not the EX score's, as beatoraja and LR2 do", () => {
+    // EX score 70 %, gauge 50 %: the 50-59 % op, not 70-79 %.
+    expect(rangesLit(resolveBeatorajaPlayScoreOps(SCORE, { current: 50, max: 100 }))).toEqual([
+      BEATORAJA_OP.P1_BAND_50_59,
+    ]);
+    const at = (current: number, max = 100): number[] =>
+      rangesLit(resolveBeatorajaPlayScoreOps(SCORE, { current, max }));
+    expect(at(0)).toEqual([BEATORAJA_OP.P1_BAND_0_9]);
+    expect(at(9.9)).toEqual([BEATORAJA_OP.P1_BAND_0_9]);
+    expect(at(10)).toEqual([BEATORAJA_OP.P1_BAND_10_19]);
+    expect(at(30)).toEqual([BEATORAJA_OP.P1_BAND_30_39]);
+    expect(at(99.9)).toEqual([BEATORAJA_OP.P1_BAND_90_99]);
+    expect(at(100)).toEqual([BEATORAJA_OP.P1_BAND_100]);
+    // A gauge of another maximum ranges over its own maximum.
+    expect(at(48, 120)).toEqual([BEATORAJA_OP.P1_BAND_40_49]);
   });
 
-  it('lights the lowest rank and band without notes', () => {
-    const ops = resolveBeatorajaPlayScoreOps(
-      { total: 0, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 },
-      undefined,
-    );
-    expect(ops).toEqual([BEATORAJA_OP.P1_RANK_F, BEATORAJA_OP.RANK_F, BEATORAJA_OP.NOW_F_1P, BEATORAJA_OP.P1_BAND_0_9]);
+  it('lights the border op while the gauge would clear, whatever the EX score', () => {
+    const border = (current: number, clearThreshold: number): boolean =>
+      resolveBeatorajaPlayScoreOps(SCORE, { current, max: 100, clearThreshold }).includes(
+        BEATORAJA_OP.P1_BAND_BORDER_OR_MORE,
+      );
+    expect(border(80, 80)).toBe(true);
+    expect(border(79.9, 80)).toBe(false);
+    // A survival gauge (border 0) qualifies while above 0.
+    expect(border(2, 0)).toBe(true);
+    expect(border(0, 0)).toBe(false);
+    // An EX score of 85 % on a gauge below its border does not.
+    expect(
+      resolveBeatorajaPlayScoreOps({ ...SCORE, exScore: 170 }, { current: 60, max: 100, clearThreshold: 80 }),
+    ).not.toContain(BEATORAJA_OP.P1_BAND_BORDER_OR_MORE);
+  });
+
+  it('lights the full-gauge op at the maximum', () => {
+    expect(resolveBeatorajaPlayScoreOps(SCORE, { current: 100, max: 100 })).toContain(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
+  });
+
+  it('lights no gauge op without a gauge, and the lowest rank without notes', () => {
+    expect(
+      resolveBeatorajaPlayScoreOps(
+        { total: 0, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 },
+        undefined,
+      ),
+    ).toEqual([BEATORAJA_OP.P1_RANK_F, BEATORAJA_OP.RANK_F, BEATORAJA_OP.NOW_F_1P]);
+    expect(rangesLit(resolveBeatorajaPlayScoreOps(SCORE, { current: 0, max: 0 }))).toEqual([]);
   });
 });
