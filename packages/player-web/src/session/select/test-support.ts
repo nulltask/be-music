@@ -12,14 +12,14 @@ import type {
   BrowserSongEntry,
 } from '../../collection/types.ts';
 
-/** A chart titled `id` in the folder `directory`, with one object on each of `channels` and the options given. */
+/** A chart titled `id` in the folder `directory`, with one object on each of `channels` (a 7-key chart by default). */
 export function makeChart(
   id: string,
   directory: string,
   options: { channels?: readonly string[]; difficulty?: number; modeHint?: string; playLevel?: number } = {},
 ): BrowserSongEntry {
   const chart: BeMusicJson = createEmptyJson();
-  chart.events = (options.channels ?? ['11']).map((channel, index): BeMusicEvent => ({
+  chart.events = (options.channels ?? ['11', '18']).map((channel, index): BeMusicEvent => ({
     measure: 1,
     channel,
     position: [index, Math.max(1, options.channels?.length ?? 1)],

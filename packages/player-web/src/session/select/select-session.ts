@@ -18,7 +18,6 @@ import {
   browseSystemSound,
   captureBrowse,
   clampHiSpeed,
-  clampIndex,
   clampShutter,
   createBrowseState,
   DEFAULT_PLAY_OPTIONS,
@@ -86,9 +85,6 @@ export interface SelectSessionContext {
   playOneShotSound(name: string): Promise<void>;
   applyLr2Timers(update: Lr2TimerUpdate): void;
 }
-
-/** Who changed a play option: the player (the option panel, a skin's button) or the host (`setPlayOptions`). */
-type PlayOptionOrigin = 'player' | 'host';
 
 /**
  * The scene's one-shot sound for each system sound slot a browse command plays (`browseSystemSound`). The cursor cue
@@ -195,7 +191,7 @@ export class SelectSession {
     if (!GAUGE_TYPES.includes(next.gauge1P)) next.gauge1P = DEFAULT_PLAY_OPTIONS.gauge1P;
     if (!GAUGE_TYPES.includes(next.gauge2P)) next.gauge2P = DEFAULT_PLAY_OPTIONS.gauge2P;
     this.playOptions = next;
-    const listChanged = this.syncListOptions('host');
+    const listChanged = this.syncListOptions();
     // Re-render when the list changed, or when panel 1 (the play-options panel) is open — the only surface that shows
     // the other values today, so a closed-panel write doesn't need a frame.
     if (listChanged || this.panelStates.has(1)) {
@@ -482,7 +478,7 @@ export class SelectSession {
     this.playOptions = { ...this.playOptions, [key]: value };
     this.ctx.options.onPlayOptionsChange?.({ ...this.playOptions });
     void this.ctx.playOneShotSound('option-change');
-    if (isListPlayOption(key)) this.syncListOptions('player');
+    if (isListPlayOption(key)) this.syncListOptions();
     this.ctx.render();
   }
 
@@ -496,21 +492,18 @@ export class SelectSession {
     this.setPlayOption(key, next);
   }
 
-  /** Shapes the list by the play options' sort and filters (`list`), when they changed. Returns whether they did. */
-  private syncListOptions(origin: PlayOptionOrigin): boolean {
+  /**
+   * Shapes the list by the play options' sort and filters (`list`), when they changed, whoever changed them: the
+   * cursor stays on the bar it was on while that bar is still listed, else on the same row, clamped. Returns whether
+   * they changed.
+   */
+  private syncListOptions(): boolean {
     const list = listOptionsOf(this.playOptions);
     if (sameBrowseListOptions(list, this.browse.list)) return false;
-    const previous = this.selectedIndex;
     // The play option's own cue has played; the list change plays none of its own.
-    const { state } = reduceBrowse(this.collection, this.browse, { type: 'list', options: list });
-    this.browse = state;
-    // Kept as before the browse model: the player's change puts the cursor on the top of the new list (a skin's
-    // button, the option panel), the host's keeps the cursor's index.
-    const cursor = origin === 'player' ? 0 : clampIndex(previous, this.currentEntries().length);
-    const cursors = [...this.browse.cursors];
-    cursors[cursors.length - 1] = cursor;
-    this.browse = { ...this.browse, cursors };
-    if (origin === 'player') this.ctx.refreshChartPreview();
+    this.browse = reduceBrowse(this.collection, this.browse, { type: 'list', options: list }).state;
+    // A bar the filter took out leaves the cursor on another one.
+    this.ctx.refreshChartPreview();
     return true;
   }
 
