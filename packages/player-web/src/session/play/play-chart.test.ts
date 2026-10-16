@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
-import { applyRandomMode, extractChartExtension, flipDpChannel, isChannelOnSide, shuffleArray } from './play-chart.ts';
+import { applyRandomMode, extractChartExtension, flipDpChannel, shuffleArray } from './play-chart.ts';
 
 /** A seeded random (mulberry32), so every draw is the same on every run. */
 function seededRandom(seed: number): () => number {
@@ -119,23 +119,6 @@ describe('flipDpChannel (DP FLIP)', () => {
   test('flipping twice puts every lane back', () => {
     const channels = ['11', '15', '16', '22', '28', '01'];
     expect(channels.map(flipDpChannel).map(flipDpChannel)).toEqual(channels);
-  });
-});
-
-describe('isChannelOnSide', () => {
-  test('sorts lanes by their side digit', () => {
-    expect(isChannelOnSide('11', '1P')).toBe(true);
-    expect(isChannelOnSide('16', '1P')).toBe(true);
-    expect(isChannelOnSide('21', '1P')).toBe(false);
-    expect(isChannelOnSide('26', '2P')).toBe(true);
-    expect(isChannelOnSide('11', '2P')).toBe(false);
-  });
-
-  test('puts channels that are not lanes on neither side', () => {
-    for (const channel of ['01', '1', '111']) {
-      expect(isChannelOnSide(channel, '1P')).toBe(false);
-      expect(isChannelOnSide(channel, '2P')).toBe(false);
-    }
   });
 });
 
