@@ -14,7 +14,7 @@
 // position multiplied by the measure's length.
 
 import type { BeMusicJson } from '@be-music/json';
-import type { BeatorajaMarkerBeats } from '../../scene/beatoraja/markers.ts';
+import type { BeatorajaMarkerBeats } from '../../view/beatoraja/play/markers.ts';
 import {
   beatorajaEventBeat,
   computeBeatorajaMeasureBaseBeats,

@@ -19,7 +19,7 @@ import {
   resolveNoteDrawWindow,
   resolveReversedDrawClock,
   type NoteDrawWindow,
-} from '../core/note-draw-window.ts';
+} from '../../../scene/core/note-draw-window.ts';
 
 /** The chart's `#SCROLL` / `#SPEED` distance integrator, or `undefined` when it has neither (or only points at 1). */
 export function createBeatorajaScrollMapper(chart: BeMusicJson): ScrollDistanceMapperLike | undefined {

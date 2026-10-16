@@ -20,13 +20,13 @@
 // shows it matters.
 
 import { Container, Sprite, Texture } from 'pixi.js';
-import { destinationToSpriteProps, type BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
+import { destinationToSpriteProps, type BeatorajaRenderContext } from '../../../skin/beatoraja/render.ts';
 import {
   normalizeBeatorajaDestinations,
   type BeatorajaDestinationGroup,
   type BeatorajaSkin,
 } from '@be-music/beatoraja-skin';
-import { pickActiveBgaKey, resolveBgaImageRect, type BgaCue } from '../core/gameplay-bga.ts';
+import { pickActiveBgaKey, resolveBgaImageRect, type BgaCue } from '../../../scene/core/gameplay-bga.ts';
 
 export interface BeatorajaBgaLayerOptions {
   skin: BeatorajaSkin;
