@@ -194,10 +194,15 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     this.session.dispose();
   }
 
-  /** One frame: the session advances, the view draws. */
+  /**
+   * One frame: the session advances, the view draws. Advancing can end the screen (a decide screen's time runs out and
+   * its host moves on), and a scene its host left or disposed meanwhile draws nothing more.
+   */
   private readonly tick = (): void => {
     if (this.state !== 'entered') return;
-    this.view.draw(this.session.frame(this.now()));
+    const frame = this.session.frame(this.now());
+    if ((this.state as SceneState) !== 'entered') return;
+    this.view.draw(frame);
   };
 
   /** The view's intents reach the session only while the scene is on the stage. */

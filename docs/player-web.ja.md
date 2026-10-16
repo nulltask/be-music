@@ -271,7 +271,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-scene が表示する内容は表示の前に渡します。decide scene は `setTarget`、result scene は `setResult`、gameplay scene は `prepare(host, song, source)` の song、ほかは constructor の option です。
+scene が表示する内容は表示の前に渡します。標準の decide 画面は `createDecideScene` の option、LR2 と beatoraja の decide scene は `setTarget`、result scene は `setResult`、gameplay scene は `prepare(host, song, source)` の song、ほかは constructor の option です。
 
 - **select scene は生かしておきます。** 標準と LR2 の select scene は decide、プレイ、result のあいだも残ります。`exit()` で BGM を一時停止し、chart preview（focus 中の譜面は覚えたまま）と描画ループを止めますが、cursor、一覧の状態、decode 済みの BGM は保ちます。input の listener はつないだままで、stage にないあいだは入力を無視します。もう一度 enter すると scene timer を始め直して skin の入場演出を再び流し、BGM と preview を再開します。beatoraja の select scene は snapshot から作り直します。
 - **プレイは stage の外で読み込みます。** `prepare()` は stage にも listener にも触れずに譜面を parse して音声を decode するので、demo は decide 画面の裏でプレイを準備します。decide 画面が終わると `setScene(play)` で decide scene を exit してプレイを enter し、`start()` で始めます。decide 画面のあいだに押した key は decide 画面にだけ届きます。decide 画面がないときは demo が先にプレイを表示し、表示中に走る `prepare()` は読み込み中の playfield を描きます。
@@ -324,7 +324,7 @@ flowchart TD
 
 ## シーンセッションとファミリービュー
 
-scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。それまではどの scene も使いません。
+scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。最初に移ったのは標準の決定画面です（[決定画面](#決定画面)）。ほかの scene は、まだ [Scene lifecycle](#scene-lifecycle) で説明したクラスのままです。
 
 ```mermaid
 flowchart LR
@@ -381,6 +381,32 @@ flowchart LR
   - `session/**` は Pixi を型にしか使いません。そのためセッションは、偽のビューを相手に Node のテストで動きます。
   - `view/**` は `@be-music/player/core/engine`、`runtime/engine-driver`、`runtime/web-*-runtime` のどれも import しません。
   - `view/**` は `AudioContext` も `OfflineAudioContext` も使いません。
+
+### 決定画面
+
+`createDecideScene(kit, options)`（`@be-music/player-web/scenes`）は標準の決定画面を作ります。決定画面のセッション（`session/decide/decide-session.ts`）を標準の決定画面のビュー（`view/built-in/decide-view.ts`）が描くもので、`setScene` で表示する `SessionScene` です。LR2 と beatoraja の決定画面は、まだ `PixiDecideView` と `PixiBeatorajaDecideScene` です。
+
+- **オプション。** `chart`（これから遊ぶ譜面）、`course`（コースのステージなら、そのコース）、`playOptions`（スキンに見せるプレイオプション）、`source`（スキンの画像のための譜面のファイル）、`sounds`（テーマの `SystemSoundSet`）、`audio`（ホストのオーディオサービス）、`progress`（裏で準備しているプレイの読み込みの進み具合）、`on: { continue, cancel }` です。
+- **タイミング。** セッションは、ビューのスキンのタイミング（`DecideView.timing`）で画面を進めます。入力は入力までの待ちのあとに受け付けます。自動で進むまでの時間がたつと、画面はひとりでにプレイへ進みます。その時間がなければ、プレイヤーの操作を待ちます。画面を出るときはまずフェードアウトし、そのあと `on.continue`（プレイへ）か `on.cancel`（選曲画面へ戻る）を、enter ごとに 1 回だけ呼びます。be-music スキンの画面はすぐに入力を受け付け、`decide.durationMs`（既定は 2000 ms）のあとに進み、フェードアウトはありません。
+- **入力。** Enter、Space、キャンバスのクリックは、入力を受け付けてから進みます。Escape はいつでも戻ります。LR2 が `#STARTINPUT` の前でも Escape を受け付けるのと同じです。キーリピートは無視するので、選曲画面から押したままの Enter で画面を飛ばすことはありません。
+- **音。** セッションは、画面に入るときにテーマの決定音（`sounds.decideBgm`）をオーナーとしてオーディオサービスで鳴らし、画面がステージから外れるときに `stopOwned` で止めます。Web のデモは、決定音がプレイまで鳴り続けるように、今も譜面を選んだときに選曲画面から鳴らしており、決定画面には決定音を渡しません。
+- **`#RANDOM`。** セッションは、scene を作るときに譜面の `#RANDOM` / `#SWITCH` の分岐を 1 回だけ引きます。beatoraja の決定画面と同じです。`scene.resolved` は分岐を解決した譜面と引いた値で、プレイに渡す（`preResolved`）ためのものです。`DecideFrame.playChart` はビューのグラフのための同じ譜面なので、画面はプレイが遊ぶ分岐を表示します。Web のデモの LR2 / 標準のプレイは、まだ解決済みの譜面を受け取らず、自分で分岐を引きます。標準の決定画面のビューは分岐を描きません。
+- **スキンの設定。** `updateKit(kit)` は、プレイヤーが変えたスキンの設定値を受け取り、次のフレームからそれで描きます。
+
+```mermaid
+stateDiagram-v2
+  state "表示中" as Showing
+  state "プレイへ" as ToPlay
+  state "選曲へ" as ToSelect
+  [*] --> Showing: enter
+  Showing --> ToPlay: 自動で進む
+  Showing --> ToPlay: Enter、Space、クリック
+  Showing --> ToSelect: Escape
+  ToPlay --> [*]: フェードアウト、continue
+  ToSelect --> [*]: フェードアウト、cancel
+```
+
+Web のデモは、これまでどおり画面の裏でプレイを準備し、`on.continue` でそれを表示します。
 
 ## ノートの表示範囲
 
@@ -457,7 +483,7 @@ pnpm bench -- --packages player-web
 
 ### オーディオサービス
 
-`createAudioService()`（`@be-music/player-web/runtime`）は、プレイ中の譜面の音以外を鳴らす唯一の入口です（[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）。まだどの scene も使っておらず、scene session ができるごとに移ります。
+`createAudioService()`（`@be-music/player-web/runtime`）は、プレイ中の譜面の音以外を鳴らす唯一の入口です（[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）。scene session はできるごとにこれで音を鳴らします。最初は決定画面で、ほかの scene はまだそれぞれの AudioContext を使います。Web のデモは起動時にサービスを 1 つ作り、これで作るすべての scene に渡します。
 
 ```mermaid
 flowchart LR
