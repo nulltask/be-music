@@ -11,27 +11,27 @@ import { renderPhantomLanes } from '../../../skins/phantom/playfield.ts';
 import { resolveLaneGeometry } from '../../built-in/play-chrome.ts';
 import type { PlayfieldContext } from './context.ts';
 
-export function renderLanes(this: PlayfieldContext, width: number, height: number): void {
-  this.laneLayer.clear();
-  this.laneX.clear();
-  const themeOwnsPlayfield = this.theme.themeOwnsPlayfield();
+export function renderLanes(ctx: PlayfieldContext, width: number, height: number): void {
+  ctx.laneLayer.clear();
+  ctx.laneX.clear();
+  const themeOwnsPlayfield = ctx.theme.themeOwnsPlayfield();
   const {
     lanes: fallbackLanes,
     left: fallbackLeft,
     top: fallbackTop,
     judgementY: fallbackBottom,
-  } = resolveLaneGeometry.call(this);
+  } = resolveLaneGeometry(ctx);
 
   const skinlessLanes: BeMusicLaneFrame[] = [];
-  this.laneChannels.forEach((channel, index) => {
+  ctx.laneChannels.forEach((channel, index) => {
     // A theme-authored lane rect wins; channels the theme doesn't place use the default-family layout.
-    const themeLane = this.theme.resolveThemeLaneRect(channel, width, height);
+    const themeLane = ctx.theme.resolveThemeLaneRect(channel, width, height);
     const fallbackLane = fallbackLanes[index];
     const x = themeLane ? themeLane.x : (fallbackLane?.x ?? fallbackLeft);
     const w = themeLane ? themeLane.w : Math.max(4, fallbackLane?.w ?? PLAYFIELD.w);
     const top = themeLane ? themeLane.top : fallbackTop;
     const bottom = themeLane ? themeLane.bottom : fallbackBottom;
-    this.laneX.set(channel, { x, w, top, bottom });
+    ctx.laneX.set(channel, { x, w, top, bottom });
 
     if (themeOwnsPlayfield) {
       // With a theme owning the playfield, the lane background, judgement line and key lasers are all rendered by the
@@ -41,58 +41,58 @@ export function renderLanes(this: PlayfieldContext, width: number, height: numbe
     }
     skinlessLanes.push({
       channel,
-      kind: resolveBeMusicLaneKind(channel, resolveLr2LaneIndex(channel, this.chartPlayVariant), this.chartPlayVariant),
+      kind: resolveBeMusicLaneKind(channel, resolveLr2LaneIndex(channel, ctx.chartPlayVariant), ctx.chartPlayVariant),
       x,
       w,
       top,
       bottom,
-      beam: resolveFallbackLaneLaserAlpha.call(this, channel),
-      pressedAtMs: this.lanePressedAt.get(channel),
-      releasedAtMs: this.laneReleasedAt.get(channel),
-      holding: this.longNotes.isHolding(channel),
-      holdStartedAtMs: this.longNotes.holdStartedAtMs(channel),
+      beam: resolveFallbackLaneLaserAlpha(ctx, channel),
+      pressedAtMs: ctx.lanePressedAt.get(channel),
+      releasedAtMs: ctx.laneReleasedAt.get(channel),
+      holding: ctx.longNotes.isHolding(channel),
+      holdStartedAtMs: ctx.longNotes.holdStartedAtMs(channel),
     });
   });
 
   if (!themeOwnsPlayfield && skinlessLanes.length > 0) {
-    const beat = this.currentBeat(this.currentSeconds());
-    const binding = this.skinBinding;
+    const beat = ctx.currentBeat(ctx.currentSeconds());
+    const binding = ctx.skinBinding;
     if (binding) {
       binding.addLanes(skinlessLanes);
       return;
     }
     renderPhantomLanes({
-      graphics: this.laneLayer,
+      graphics: ctx.laneLayer,
       lanes: skinlessLanes,
       beatPhase: beat - Math.floor(beat),
-      nowMs: this.playClock(),
-      combo: this.tracker.combo,
-      effects: this.options.beMusicEffects ?? 'full',
-      audio: this.audioFrame,
+      nowMs: ctx.playClock(),
+      combo: ctx.tracker.combo,
+      effects: ctx.options.beMusicEffects ?? 'full',
+      audio: ctx.audioFrame,
     });
   }
 }
 
-function resolveFallbackLaneLaserAlpha(this: PlayfieldContext, channel: string): number {
-  const timerId = this.resolveKeyOnTimerId(channel);
+function resolveFallbackLaneLaserAlpha(ctx: PlayfieldContext, channel: string): number {
+  const timerId = ctx.resolveKeyOnTimerId(channel);
   if (timerId === undefined) {
     return 0;
   }
-  if (this.pressedChannels.has(channel)) {
+  if (ctx.pressedChannels.has(channel)) {
     return 1;
   }
-  if (!this.timerStartedAt.has(timerId)) {
+  if (!ctx.timerStartedAt.has(timerId)) {
     return 0;
   }
-  const fadeStart = this.keyOnFadeOutStart.get(timerId);
+  const fadeStart = ctx.keyOnFadeOutStart.get(timerId);
   if (fadeStart === undefined) {
     return 1;
   }
-  const fadeMs = this.theme.resolveKeyOnFadeMs(timerId);
-  const elapsed = Math.max(0, this.playClock() - fadeStart);
+  const fadeMs = ctx.theme.resolveKeyOnFadeMs(timerId);
+  const elapsed = Math.max(0, ctx.playClock() - fadeStart);
   if (elapsed >= fadeMs) {
-    this.keyOnFadeOutStart.delete(timerId);
-    this.timerStartedAt.delete(timerId);
+    ctx.keyOnFadeOutStart.delete(timerId);
+    ctx.timerStartedAt.delete(timerId);
     return 0;
   }
   return Math.max(0, 1 - elapsed / fadeMs);

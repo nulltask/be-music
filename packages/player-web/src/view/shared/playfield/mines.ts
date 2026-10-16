@@ -11,15 +11,15 @@ import type { PlayfieldContext } from './context.ts';
  * to the caution-striped bar ({@link drawCautionMine}) so the hazard still reads distinctly from playable notes.
  */
 export function renderMineNote(
-  this: PlayfieldContext,
+  ctx: PlayfieldContext,
   laneIndex: number,
   channel: string,
   lane: GameplayLaneRect,
   y: number,
 ): void {
-  const cell = this.theme.resolveThemeNoteCell('mine', laneIndex);
+  const cell = ctx.theme.resolveThemeNoteCell('mine', laneIndex);
   if (cell?.texture) {
-    const sprite = this.noteLayerPool.acquireSprite();
+    const sprite = ctx.noteLayerPool.acquireSprite();
     sprite.texture = cell.texture;
     sprite.label = `mine[lane=${laneIndex},ch=${channel}]`;
     sprite.x = lane.x + (lane.w - cell.width) / 2;
@@ -28,17 +28,17 @@ export function renderMineNote(
     sprite.height = cell.height;
     return;
   }
-  const binding = this.skinBinding;
+  const binding = ctx.skinBinding;
   if (binding?.drawsMines) {
     binding.addMine({
-      kind: resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant),
+      kind: resolveBeMusicLaneKind(channel, laneIndex, ctx.chartPlayVariant),
       x: lane.x,
       w: lane.w,
       y,
     });
     return;
   }
-  const graphic = this.noteLayerPool.acquireGraphics();
+  const graphic = ctx.noteLayerPool.acquireGraphics();
   graphic.label = `mine-fallback[lane=${laneIndex},ch=${channel}]`;
   drawCautionMine(graphic, lane.x, lane.w, y);
 }

@@ -1315,7 +1315,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       out.push(DEFAULT_BGA_TARGET);
       return;
     }
-    const geometry = resolveLaneGeometry.call(this);
+    const geometry = resolveLaneGeometry(this);
     // The landscape touch layout gives the BGA's room to the lanes.
     if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
     const rect = stage.resolveBgaRect(geometry.right);
@@ -3212,12 +3212,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // (progress ratio, time readouts, judge-until comparisons) stay on the true clock.
     const reversalSeconds = this.timingResolver?.reversal?.seconds;
     const bgaCueSeconds = reversalSeconds === undefined ? seconds : Math.min(seconds, reversalSeconds);
-    this.perf.time('renderBga', () => renderBga.call(this, seconds, bgaCueSeconds));
-    this.perf.time('renderLanes', () => renderLanes.call(this, designWidth, designHeight));
-    this.perf.time('renderNotes', () => renderNotes.call(this, seconds, designHeight));
-    this.perf.time('renderShutter', () => renderShutter.call(this));
-    this.perf.time('renderBombs', () => renderBombs.call(this));
-    this.perf.time('renderText', () => renderText.call(this, designWidth, designHeight, seconds));
+    this.perf.time('renderBga', () => renderBga(this, seconds, bgaCueSeconds));
+    this.perf.time('renderLanes', () => renderLanes(this, designWidth, designHeight));
+    this.perf.time('renderNotes', () => renderNotes(this, seconds, designHeight));
+    this.perf.time('renderShutter', () => renderShutter(this));
+    this.perf.time('renderBombs', () => renderBombs(this));
+    this.perf.time('renderText', () => renderText(this, designWidth, designHeight, seconds));
   }
 
   /**
@@ -3225,7 +3225,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * bomb effect; themes that ship their own bomb sheet override it.
    */
   protected renderBombEffects(): void {
-    renderBombEffects.call(this);
+    renderBombEffects(this);
   }
 
   private skinBindingInstance: BeMusicGameplayBinding | undefined;
@@ -3444,7 +3444,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         overlayLayer: this.overlayLayer,
         layerPool: this.skinLayerPool,
         overlayLayerPool: this.overlayLayerPool,
-        runtime: resolveSkinlessGameplayChromeRuntime.call(this),
+        runtime: resolveSkinlessGameplayChromeRuntime(this),
       };
       if (this.options.skinlessChromeRenderer) {
         this.options.skinlessChromeRenderer(context);

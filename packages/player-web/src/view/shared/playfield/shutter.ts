@@ -9,18 +9,18 @@ import type { PlayfieldContext } from './context.ts';
  * over the union of that side's lanes' top/bottom from `laneX`, so the mask exactly covers the lane area however the
  * theme laid the lanes out (single-side, DP, etc.).
  */
-export function renderShutter(this: PlayfieldContext): void {
-  this.shutterLayer.clear();
+export function renderShutter(ctx: PlayfieldContext): void {
+  ctx.shutterLayer.clear();
   // A be-music skin that draws its own covers reads them from `runtime.laneCovers` instead.
-  if (this.skinBinding?.drawsLaneCover) return;
-  if (this.laneX.size === 0) return;
-  for (const cover of this.resolveLaneCovers()) {
-    paintSideShutter.call(this, collectSideBounds.call(this, cover.side), cover.sudden, cover.hidden);
+  if (ctx.skinBinding?.drawsLaneCover) return;
+  if (ctx.laneX.size === 0) return;
+  for (const cover of ctx.resolveLaneCovers()) {
+    paintSideShutter(ctx, collectSideBounds(ctx, cover.side), cover.sudden, cover.hidden);
   }
 }
 
 function collectSideBounds(
-  this: PlayfieldContext,
+  ctx: PlayfieldContext,
   side: '1P' | '2P',
 ):
   | {
@@ -35,7 +35,7 @@ function collectSideBounds(
   let top = Number.POSITIVE_INFINITY;
   let bottom = Number.NEGATIVE_INFINITY;
   let any = false;
-  for (const [channel, lane] of this.laneX) {
+  for (const [channel, lane] of ctx.laneX) {
     const onSide = isChannelOnSide(channel, side);
     if (!onSide) continue;
     any = true;
@@ -50,7 +50,7 @@ function collectSideBounds(
 }
 
 function paintSideShutter(
-  this: PlayfieldContext,
+  ctx: PlayfieldContext,
   bounds: { left: number; right: number; top: number; bottom: number } | undefined,
   sudden: number,
   hidden: number,
@@ -60,12 +60,12 @@ function paintSideShutter(
   const height = bounds.bottom - bounds.top;
   if (sudden > 0) {
     // SUDDEN — opaque rect at the TOP of the playfield. Notes emerge below it.
-    this.shutterLayer.rect(bounds.left, bounds.top, width, height * sudden).fill({ color: 0x000000, alpha: 0.92 });
+    ctx.shutterLayer.rect(bounds.left, bounds.top, width, height * sudden).fill({ color: 0x000000, alpha: 0.92 });
   }
   if (hidden > 0) {
     // HIDDEN — opaque rect at the BOTTOM of the playfield, just above the judge line (lanes' `bottom` is the judge
     // line bottom edge — the mask itself ends there).
-    this.shutterLayer
+    ctx.shutterLayer
       .rect(bounds.left, bounds.bottom - height * hidden, width, height * hidden)
       .fill({ color: 0x000000, alpha: 0.92 });
   }

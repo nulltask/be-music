@@ -2,12 +2,12 @@
 
 import type { PlayfieldContext } from './context.ts';
 
-export function renderText(this: PlayfieldContext, width: number, height: number, seconds: number): void {
-  this.textLayerPool.begin();
-  this.theme.renderThemeText(seconds);
-  this.textLayerPool.end();
-  this.overlay.visible = this.paused;
-  this.overlay.text = 'Paused';
-  this.overlay.anchor.set(0.5);
-  this.overlay.position.set(width / 2, height / 2);
+export function renderText(ctx: PlayfieldContext, width: number, height: number, seconds: number): void {
+  ctx.textLayerPool.begin();
+  ctx.theme.renderThemeText(seconds);
+  ctx.textLayerPool.end();
+  ctx.overlay.visible = ctx.paused;
+  ctx.overlay.text = 'Paused';
+  ctx.overlay.anchor.set(0.5);
+  ctx.overlay.position.set(width / 2, height / 2);
 }

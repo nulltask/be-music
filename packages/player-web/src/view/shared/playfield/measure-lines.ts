@@ -14,18 +14,18 @@ import {
 import type { PlayfieldContext } from './context.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 
-function resolveMeasureBeats(this: PlayfieldContext): number[] {
-  const song = this.song;
+function resolveMeasureBeats(ctx: PlayfieldContext): number[] {
+  const song = ctx.song;
   if (!song) {
     return [];
   }
-  if (this.measureBeatCache.songId === song.id) {
-    return this.measureBeatCache.beats;
+  if (ctx.measureBeatCache.songId === song.id) {
+    return ctx.measureBeatCache.beats;
   }
   // The resolved chart's bar lines: one per measure start up to the last measure, using the chosen `#RANDOM` branch's
   // `#xxx02` lengths, and none when a bmson chart opts out with `lines: []`.
-  const beats = [...(this.resolvedPlayChart ?? resolveChart(song.chart)).barLines];
-  this.measureBeatCache = { songId: song.id, beats };
+  const beats = [...(ctx.resolvedPlayChart ?? resolveChart(song.chart)).barLines];
+  ctx.measureBeatCache = { songId: song.id, beats };
   return beats;
 }
 
@@ -34,16 +34,16 @@ function resolveMeasureBeats(this: PlayfieldContext): number[] {
  * ({@link renderThemeMeasureLines}; the LR2 family uses `#SRC_LINE` / `#DST_LINE`); otherwise we fall back to a thin
  * bar across each run of adjacent lanes, so double play's banks get one each and the gap between them stays clear.
  */
-export function renderMeasureLines(this: PlayfieldContext, drawWindow: NoteDrawWindow, pixelsPerBeat: number): void {
+export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWindow, pixelsPerBeat: number): void {
   const { currentBeat } = drawWindow;
-  const beats = resolveMeasureBeats.call(this);
-  if (beats.length === 0 || this.laneChannels.length === 0) {
+  const beats = resolveMeasureBeats(ctx);
+  if (beats.length === 0 || ctx.laneChannels.length === 0) {
     return;
   }
-  const firstChannel = this.laneChannels[0]!;
-  const lastChannel = this.laneChannels[this.laneChannels.length - 1]!;
-  const left = this.laneX.get(firstChannel);
-  const right = this.laneX.get(lastChannel);
+  const firstChannel = ctx.laneChannels[0]!;
+  const lastChannel = ctx.laneChannels[ctx.laneChannels.length - 1]!;
+  const left = ctx.laneX.get(firstChannel);
+  const right = ctx.laneX.get(lastChannel);
   if (!left || !right) {
     return;
   }
@@ -53,7 +53,7 @@ export function renderMeasureLines(this: PlayfieldContext, drawWindow: NoteDrawW
   if (drawWindow.rules === 'beatoraja') {
     // A bar line is a timeline like any other: gone once its time has come (a STOP on it included).
     firstBeatIndex = findFirstIndexNumberAtOrAfter(beats, currentBeat);
-    const timing = this.timingResolver;
+    const timing = ctx.timingResolver;
     while (
       timing &&
       firstBeatIndex < beats.length &&
@@ -73,13 +73,13 @@ export function renderMeasureLines(this: PlayfieldContext, drawWindow: NoteDrawW
     drawWindow.rules === 'beatoraja'
       ? drawWindow.lastBeat
       : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
-  const beatDistance = this.scrollMapper
-    ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
+  const beatDistance = ctx.scrollMapper
+    ? (toBeat: number): number => ctx.scrollMapper!.distanceBetween(currentBeat, toBeat)
     : (toBeat: number): number => toBeat - currentBeat;
   const drawBottom = resolveDrawBottom(drawWindow, bottom);
   const lineY = (beat: number): number => resolveDrawY(drawWindow, bottom - beatDistance(beat) * pixelsPerBeat, bottom);
   if (
-    this.theme.renderThemeMeasureLines({
+    ctx.theme.renderThemeMeasureLines({
       beats,
       firstBeatIndex,
       maxBeat,
@@ -93,10 +93,10 @@ export function renderMeasureLines(this: PlayfieldContext, drawWindow: NoteDrawW
   ) {
     return;
   }
-  const binding = this.skinBinding;
+  const binding = ctx.skinBinding;
   if (binding?.drawsMeasureLines) {
     // The skin draws them: hand it one line per lane run, so double play's gap stays clear.
-    const runs = resolveMeasureLineRuns.call(this);
+    const runs = resolveMeasureLineRuns(ctx);
     for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
       const beat = beats[beatIndex]!;
       if (beat > maxBeat) {
@@ -115,8 +115,8 @@ export function renderMeasureLines(this: PlayfieldContext, drawWindow: NoteDrawW
   // Fallback: simple white strip when the theme draws none, one per run of adjacent lanes so double play's gap stays
   // clear. One pooled `Graphics` carries every line — the accumulated rect-fill commands form one batched draw, no
   // per-line allocation.
-  const runs = resolveMeasureLineRuns.call(this);
-  const graphic = this.noteLayerPool.acquireGraphics();
+  const runs = resolveMeasureLineRuns(ctx);
+  const graphic = ctx.noteLayerPool.acquireGraphics();
   for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
     const beat = beats[beatIndex]!;
     if (beat > maxBeat) {
@@ -133,14 +133,14 @@ export function renderMeasureLines(this: PlayfieldContext, drawWindow: NoteDrawW
 }
 
 /** The lane runs of this frame's lanes, recomputed only when their geometry changes. */
-function resolveMeasureLineRuns(this: PlayfieldContext): readonly SideLaneRun[] {
-  let signature = this.laneX.size;
-  for (const lane of this.laneX.values()) {
+function resolveMeasureLineRuns(ctx: PlayfieldContext): readonly SideLaneRun[] {
+  let signature = ctx.laneX.size;
+  for (const lane of ctx.laneX.values()) {
     signature = (signature * 31 + lane.x * 7 + lane.w) % 1_000_000_007;
   }
-  const cached = this.measureLineRuns;
+  const cached = ctx.measureLineRuns;
   if (cached && cached.signature === signature) return cached.runs;
-  const runs = resolveSideLaneRuns(this.laneX);
-  this.measureLineRuns = { signature, runs };
+  const runs = resolveSideLaneRuns(ctx.laneX);
+  ctx.measureLineRuns = { signature, runs };
   return runs;
 }
