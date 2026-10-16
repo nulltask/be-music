@@ -28,22 +28,24 @@ const audioCalls = (observation: PlayObservation, call: string): string[] =>
   observation.audio.filter((entry) => entry.split(' ')[1] === call);
 
 describe('driver drift', () => {
-  test('drift: autoPlay ignores holdAfterChart', async () => {
+  test('manual and auto play both honour holdAfterChart', async () => {
     const play = { chart: basicChart(), holdAfterChart: { releaseAfterMs: 500 } };
     const manual = await observePlay({ ...play, driver: 'manual', script: ON_TIME });
     const auto = await observePlay({ ...play, driver: 'auto' });
-    // Manual play settles at the first tick past its horizon (3.5 s chart + 0.2 s BAD reach + 1 s), stays open, and
-    // ends on the release.
-    const hold = manual.host.filter((entry) => entry.includes(' hold ')).map((entry) => entry.split(' '));
-    expect(hold.map(([, , what]) => what)).toEqual(['settled', 'release']);
-    const settledAtMs = Number(hold[0]![0]);
-    expect(settledAtMs).toBeGreaterThanOrEqual(4700);
-    expect(settledAtMs).toBeLessThan(4700 + 1000 / 60);
-    expect(Number(hold[1]![0])).toBe(settledAtMs + 500);
-    expect(manual.endedAtMs).toBeGreaterThanOrEqual(settledAtMs + 500);
-    // Auto play never settles a hold and ends with its chart.
-    expect(auto.host.some((entry) => entry.includes(' hold '))).toBe(false);
-    expect(auto.endedAtMs).toBe(3500);
+    const settledAt = (observation: PlayObservation): number => {
+      // The play settles once, stays open, and ends on the release.
+      const hold = observation.host.filter((entry) => entry.includes(' hold ')).map((entry) => entry.split(' '));
+      expect(hold.map(([, , what]) => what)).toEqual(['settled', 'release']);
+      const settledAtMs = Number(hold[0]![0]);
+      expect(Number(hold[1]![0])).toBe(settledAtMs + 500);
+      expect(observation.endedAtMs).toBeGreaterThanOrEqual(settledAtMs + 500);
+      return settledAtMs;
+    };
+    // Manual play settles at the first tick past its horizon (3.5 s chart + 0.2 s BAD reach + 1 s).
+    expect(settledAt(manual)).toBeGreaterThanOrEqual(4700);
+    expect(settledAt(manual)).toBeLessThan(4700 + 1000 / 60);
+    // Auto play settles past the chart's end too, instead of ending with it.
+    expect(settledAt(auto)).toBeGreaterThan(3500);
   });
 
   test('drift: autoPlay plays as if the chart had no #EXRANK changes (its ruleset is resolved without them)', async () => {
