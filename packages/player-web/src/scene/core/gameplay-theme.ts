@@ -122,6 +122,8 @@ export type GameplayThemeEvent =
  * whose functions call them; `themeTiming`, `stageSize` and `themeOwnsPlayfield` are the hooks' getters.
  */
 export interface GameplayThemeHooks {
+  attachThemeLayers(): void;
+  renderThemeLayer(width: number, height: number): void;
   themeTiming(): GameplayThemeTiming;
   stageSize(): GameplayStageSize;
   themeOwnsPlayfield(): boolean;

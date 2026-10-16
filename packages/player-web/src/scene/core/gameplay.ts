@@ -271,7 +271,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /** Whether the scene paints through a be-music skin (rather than a theme or a host chrome renderer). */
-  private get paintsThroughBeMusicSkin(): boolean {
+  get paintsThroughBeMusicSkin(): boolean {
     return this.options.beMusicSkin !== undefined && this.options.skinlessChromeRenderer === undefined;
   }
 
@@ -411,6 +411,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `protected` for the theme families that override them, so the modules call them through this object.
    */
   readonly theme: GameplayThemeHooks = {
+    attachThemeLayers: () => this.attachThemeLayers(),
+    renderThemeLayer: (width, height) => this.renderThemeLayer(width, height),
     themeTiming: () => this.themeTiming,
     stageSize: () => this.stageSize,
     themeOwnsPlayfield: () => this.themeOwnsPlayfield,
