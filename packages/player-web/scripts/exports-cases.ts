@@ -74,6 +74,16 @@ const BENCH_DROPPED_ENTRY = {
 };
 const BENCH_SOURCE = makeBenchSource();
 const BENCH_SONG = makeBenchSong();
+const BENCH_PLAY_RESULT: playerWebCoreApi.PixiGameplayResultData = {
+  score: { total: 1, perfect: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 2, score: 2 },
+  maxCombo: 1,
+  gauge: 100,
+  cleared: true,
+  playSeconds: 1,
+  song: BENCH_SONG,
+  gaugeHistory: [],
+  scoreHistory: [],
+};
 const BENCH_PLAYLOG = makeBenchPlaylog();
 const BENCH_PLAYLOG_JSON = JSON.stringify(BENCH_PLAYLOG);
 const BENCH_PMS_SONG = makeBenchPmsSong();
@@ -360,6 +370,23 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       scene.dispose();
     },
   });
+  define('player-web.createResultScene', {
+    run: () => {
+      const scene = playerWebCoreApi.createResultScene(
+        { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
+        {
+          result: BENCH_PLAY_RESULT,
+          sounds: { clear: { bytes: BENCH_BYTES } },
+          audio: playerWebCoreApi.createAudioService({ createContext: () => undefined }),
+          on: { continue: () => undefined, retry: () => undefined },
+          keyTarget: BENCH_KEY_TARGET,
+          now: () => 0,
+        },
+      );
+      scene.exit();
+      scene.dispose();
+    },
+  });
   define('player-web.createSkinFamilyRegistry', {
     run: () => {
       const registry = playerWebCoreApi.createSkinFamilyRegistry([
@@ -430,12 +457,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.DefaultPixiGameplayView', {
     run: () => {
       new playerWebCoreApi.DefaultPixiGameplayView();
-    },
-    interactive: true,
-  });
-  define('player-web.DefaultPixiResultView', {
-    run: () => {
-      new playerWebCoreApi.DefaultPixiResultView();
     },
     interactive: true,
   });
