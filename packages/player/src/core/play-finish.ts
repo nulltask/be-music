@@ -17,7 +17,7 @@ export function finishPlay(
   controls: PlayControls,
   outcome: PlayOutcome,
 ): PlayerSummary {
-  const { options, strategy, summary, totalSeconds, playlogRecorder, writeOutput } = session;
+  const { options, summary, totalSeconds, playlogRecorder, writeOutput } = session;
   const { interruptedReason, endedOnFailure } = outcome;
   // View changes the host sent as the play ended, after the loop's last drain, still belong to it.
   controls.recordPendingViewChanges();
@@ -25,13 +25,7 @@ export function finishPlay(
     throw new PlayerInterruptedError(interruptedReason);
   }
   const aborted = interruptedReason === 'escape';
-  const reason = aborted
-    ? strategy.drifts.tracesEscapeAsComplete
-      ? 'complete'
-      : 'escape'
-    : endedOnFailure
-      ? 'failed'
-      : 'complete';
+  const reason = aborted ? 'escape' : endedOnFailure ? 'failed' : 'complete';
   if (!session.uiEnabled) {
     writeRuntimeEventLog(writeOutput, 'playback-end', [
       ['time', formatSeconds(totalSeconds)],
