@@ -30,7 +30,10 @@ export const LR2_TEXT = {
   TAG: 16,
   /** The chart's play level. */
   PLAY_LEVEL: 17,
-  /** The chart's difficulty name (BEGINNER … INSANE). */
+  /**
+   * The chart's `#DIFFICULTY` as a number, 0-5 (OpenLR2 `ProcS_Select` sets text 18 with `SetObjectStringInt`); the
+   * difficulty ops (150-155) name it.
+   */
   DIFFICULTY: 18,
   /** Text 20: as `TITLE`. */
   TITLE_ALT: 20,
