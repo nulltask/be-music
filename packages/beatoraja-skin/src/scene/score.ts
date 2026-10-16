@@ -64,8 +64,9 @@ function late(earlyLate: BeatorajaEarlyLate | undefined, judge: keyof NonNullabl
  * combo, the judgment counts and their early / late split, the gauge and the chart TOTAL. `undefined` for an id that is
  * not one of them.
  *
- * - `POINT` (100) and `SCORE2` (101) show the displayed score; `SCORE_RATE` (102 / 103) the EX score in percent of its
- *   maximum, `TOTAL_RATE` (115 / 116) the displayed score in percent of 1000 per judgment.
+ * - `POINT` (100) shows the displayed score and `SCORE2` (101) the EX score (beatoraja's `createScoreProperty`, LR2's
+ *   number 101); `SCORE_RATE` (102 / 103) the EX score in percent of its maximum, `TOTAL_RATE` (115 / 116) the
+ *   displayed score in percent of 1000 per judgment.
  * - The engine has no MISS judgment (beatoraja's empty POOR): `MISS` (420) reads the POOR count, and its early / late
  *   rows (421 / 422) the `MISS` entry of the early / late counts, else POOR's.
  * - `COMBOBREAK` (425) and `BAD_PLUS_POOR_PLUS_MISS` (427) count BAD + POOR, `POOR_PLUS_MISS` (426) POOR.
@@ -74,8 +75,9 @@ export function resolveBeatorajaScoreNumber(id: number, input: BeatorajaScoreNum
   const { score, earlyLate } = input;
   switch (id) {
     case BEATORAJA_NUM.POINT:
-    case BEATORAJA_NUM.SCORE2:
       return score?.score ?? 0;
+    case BEATORAJA_NUM.SCORE2:
+      return score?.exScore ?? 0;
     case BEATORAJA_NUM.SCORE_RATE:
       return Math.floor(beatorajaExScoreRate(score));
     case BEATORAJA_NUM.SCORE_RATE_AFTERDOT:

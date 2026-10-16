@@ -44,6 +44,8 @@ describe('resolveBeatorajaScoreNumber', () => {
   it('reads the score, its rates and the combo', () => {
     const numbers = input();
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.POINT, numbers)).toBe(81_234);
+    // 101 is the EX score (beatoraja `createScoreProperty`, LR2 number 101), not a second POINT.
+    expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.SCORE2, numbers)).toBe(140);
     // EX 140 / 200 = 70 %; displayed score 81234 / 100000 = 81.234 %.
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.SCORE_RATE, numbers)).toBe(70);
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.SCORE_RATE_AFTERDOT, numbers)).toBe(0);
