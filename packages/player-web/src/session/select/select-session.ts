@@ -338,9 +338,7 @@ export class SelectSession {
 
   /** See `CoreSongSelectView.setNavigation`. */
   setNavigation(snapshot: BrowseSnapshot): void {
-    const restored = this.restore(snapshot);
-    if (restored === undefined) return;
-    this.browse = restored;
+    this.browse = this.restore(snapshot);
     this.ctx.render();
     // Cursor / folder state changed → focused chart likely changed too. Same reasoning as `setCollection` — bring the
     // preview engine back in sync with whatever bar is now under the cursor.
@@ -366,8 +364,7 @@ export class SelectSession {
     const kept = { searchText: this.browse.searchText, list: this.browse.list };
     this.browse = createBrowseState(kept);
     const snapshot = this.ctx.options.initialNavigation;
-    const restored = snapshot === undefined ? undefined : this.restore(snapshot);
-    this.browse = restored ?? openLibrary(collection, this.policy, kept);
+    this.browse = snapshot === undefined ? openLibrary(collection, this.policy, kept) : this.restore(snapshot);
     this.ctx.render();
     // Collection changed → focused song's identity / source map changed. Re-arm the preview engine so it sees the new
     // target (or no target, if we landed on a folder bar).
@@ -380,23 +377,20 @@ export class SelectSession {
   }
 
   /**
-   * The browse state `snapshot` restores over the library (`restoreSelectBrowse`), or `undefined` when it restores
-   * nothing.
+   * The browse state `snapshot` restores over the library (`restoreSelectBrowse`): its folders walked by label as far
+   * as they are still found, each parent cursor on the bar of the folder opened from it (so backing out lands there),
+   * and the cursor saved for the depth the walk reached, clamped.
    */
-  private restore(snapshot: BrowseSnapshot): BrowseState | undefined {
+  private restore(snapshot: BrowseSnapshot): BrowseState {
     // Kept as the select scene restored before it kept its browse position as a scene-model snapshot: by the cursor's
     // index rather than the focused bar's key, with the search in force.
     const { focusKey: _focusKey, ...byIndex } = snapshot;
-    const { state, restoredDepth } = restoreSelectBrowse(
+    return restoreSelectBrowse(
       this.collection,
       { ...byIndex, searchText: this.browse.searchText },
       this.browse,
       this.policy,
-    );
-    // Kept as before: when none of the saved folders is found, nothing is restored.
-    if (restoredDepth === 0 && snapshot.folderPath.length > 0) return undefined;
-    // Each parent cursor is on the bar of the folder opened from it, so backing out lands there.
-    return state;
+    ).state;
   }
 
   /**
