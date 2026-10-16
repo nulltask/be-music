@@ -177,12 +177,17 @@ function lr2DecideSkin(timing: Lr2Skin['timing'] = {}): Lr2Skin {
 }
 
 describe('resolveLr2DecideTiming', () => {
-  it("opens input after the skin's #STARTINPUT and moves on 1200 ms later, with no fade-out", () => {
+  it("opens input after the skin's #STARTINPUT and moves on 1200 ms later, with no fade-out without #FADEOUT", () => {
     expect(resolveLr2DecideTiming({ timing: { startInput: 300 } })).toEqual({
       inputDelayMs: 300,
       autoAdvanceMs: 1500,
       fadeOutMs: 0,
     });
+  });
+
+  it("fades out over the skin's #FADEOUT", () => {
+    expect(resolveLr2DecideTiming({ timing: { startInput: 300, fadeOut: 200 } }).fadeOutMs).toBe(200);
+    expect(resolveLr2DecideTiming({ timing: { fadeOut: -1 } }).fadeOutMs).toBe(0);
   });
 
   it('opens input after 1500 ms without #STARTINPUT, as the stock decide skin does', () => {
@@ -202,6 +207,15 @@ describe('resolveLr2DecideTimers', () => {
       [LR2_TIMER.SCENE_START, 1000],
       [LR2_TIMER.START_INPUT, 1300],
     ]);
+  });
+
+  it('runs timer 2 from when the screen started leaving', () => {
+    const leaving = { to: 'play' as const, atMs: 1400 };
+    expect(
+      resolveLr2DecideTimers({ clock: { nowMs: 1450, enteredAtMs: 1000 }, inputOpenAtMs: 1300, leaving }).get(
+        LR2_TIMER.FADE_OUT,
+      ),
+    ).toBe(1400);
   });
 });
 
@@ -284,6 +298,21 @@ describe('createDecideScene with an LR2 kit', () => {
     expect(on.continue).not.toHaveBeenCalled();
     expect(press('Escape', 1400)).toHaveBeenCalled();
     expect(on.cancel).toHaveBeenCalledTimes(1);
+    scene.dispose();
+  });
+
+  it("moves on once the skin's #FADEOUT has run", async () => {
+    const { scene, on, clock } = create({ startInput: 300, fadeOut: 200 });
+    const fake = createFakeHost();
+    await scene.enter(fake.host);
+    clock.now = 2500;
+    fake.tick();
+    clock.now = 2699;
+    fake.tick();
+    expect(on.continue).not.toHaveBeenCalled();
+    clock.now = 2700;
+    fake.tick();
+    expect(on.continue).toHaveBeenCalledTimes(1);
     scene.dispose();
   });
 

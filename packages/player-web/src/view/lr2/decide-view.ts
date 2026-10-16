@@ -50,25 +50,29 @@ export const LR2_DECIDE_DEFAULT_INPUT_DELAY_MS = 1500;
 export const LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS = 1200;
 
 /**
- * The decide skin's timing: input opens after its `#STARTINPUT` (1500 ms without one), and the screen moves on by itself
- * {@link LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS} later. It leaves without a fade-out.
+ * The decide skin's timing: input opens after its `#STARTINPUT` (1500 ms without one), the screen moves on by itself
+ * {@link LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS} later, and it fades out over its `#FADEOUT` as it leaves (at once
+ * without one).
  */
 export function resolveLr2DecideTiming(skin: Pick<Lr2Skin, 'timing'>): SceneViewTiming {
   const inputDelayMs = Math.max(0, skin.timing.startInput ?? LR2_DECIDE_DEFAULT_INPUT_DELAY_MS);
   return {
     inputDelayMs,
     autoAdvanceMs: inputDelayMs + LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS,
-    fadeOutMs: 0,
+    fadeOutMs: Math.max(0, skin.timing.fadeOut ?? 0),
   };
 }
 
 /**
  * The LR2 timers running on a decide frame, each with when it started on the frame's clock: timer 0 (the scene) from
- * the screen's entry, and timer 1 (input) once input has opened.
+ * the screen's entry, timer 1 (input) once input has opened, and timer 2 (the fade-out) once the screen is leaving.
  */
-export function resolveLr2DecideTimers(frame: Pick<DecideFrame, 'clock' | 'inputOpenAtMs'>): Map<number, number> {
+export function resolveLr2DecideTimers(
+  frame: Pick<DecideFrame, 'clock' | 'inputOpenAtMs' | 'leaving'>,
+): Map<number, number> {
   const timers = new Map<number, number>([[LR2_TIMER.SCENE_START, frame.clock.enteredAtMs]]);
   if (frame.clock.nowMs >= frame.inputOpenAtMs) timers.set(LR2_TIMER.START_INPUT, frame.inputOpenAtMs);
+  if (frame.leaving !== undefined) timers.set(LR2_TIMER.FADE_OUT, frame.leaving.atMs);
   return timers;
 }
 
