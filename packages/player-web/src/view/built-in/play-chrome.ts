@@ -8,7 +8,6 @@
  */
 
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import type { ScoreTracker } from '@be-music/player/core/scoring';
 import { resolveIidxRankLabel, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
@@ -19,12 +18,11 @@ import {
   type BeMusicLaneKind,
   type GameplayLayoutMode,
 } from '@be-music/skin-sdk';
+import { recentJudgeTimings, resolveGreenNumber, type PlayState } from '@be-music/scene-model';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
 import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
-import type { JudgeTimingLog } from '../../scene/core/judge-timing-log.ts';
-import { resolveGreenNumber } from '../../scene/core/lane-cover.ts';
 import type { SkinlessGameplayChromeRuntime, SkinlessGameplayJudgeState } from '../../scene/gameplay-chrome.ts';
 import type { BeMusicGameplayLayout, BeMusicLaneCover, BeMusicStage } from '../../skin/be-music/types.ts';
 import type { GameplayBgaTarget, GameplayStageSize } from '../../scene/core/gameplay-theme.ts';
@@ -81,8 +79,7 @@ export interface PlayChromeContext {
   readonly chartPlayVariant: ChartPlayVariant;
   readonly scrollMapper: ScrollDistanceMapperLike | undefined;
   readonly score: ScoreSummary;
-  readonly tracker: ScoreTracker;
-  readonly maxCombo: number;
+  readonly playState: PlayState;
   readonly gaugeState: PlayerGaugeSummary;
   readonly lastJudge: string;
   readonly lastJudgeUntil: number;
@@ -91,7 +88,6 @@ export interface PlayChromeContext {
     { judge: JudgeKind | ''; until: number; combo: number; courseCombo?: number }
   >;
   readonly hasBga: boolean;
-  readonly playerHiSpeed: number;
   readonly fastCount: number;
   readonly slowCount: number;
   readonly assetsLoading: boolean;
@@ -99,7 +95,6 @@ export interface PlayChromeContext {
   readonly lastImpulseAt: number | undefined;
   readonly lastImpulseKind: BeMusicLaneKind | undefined;
   readonly audioFrame: AudioFeatures | undefined;
-  readonly judgeTimings: JudgeTimingLog;
   readonly chartBpmRange: ChartBpmRange | undefined;
   readonly playMoments: {
     failedAtMs?: number;
@@ -108,8 +103,6 @@ export interface PlayChromeContext {
     gaugeRiseAtMs?: number;
     gaugeMaxAtMs?: number;
   };
-  readonly scoreHistory: Array<{ progress: number; exScore: number }>;
-  readonly gaugeHistory: Array<{ progress: number; value: number }>;
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   currentSeconds(): number;
   currentBeat(seconds: number): number;
@@ -163,6 +156,7 @@ export function resolveLaneGeometry(ctx: LaneGeometryContext): ReturnType<typeof
 
 export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): SkinlessGameplayChromeRuntime {
   const total = ctx.score.total > 0 ? ctx.score.total : 0;
+  const play = ctx.playState;
   const seconds = ctx.currentSeconds();
   const songLengthSeconds = ctx.resolveSongDurationSeconds();
   const usesPlayer2 = ctx.chartPlayVariant !== '9' && ctx.laneChannels.some((channel) => channel.startsWith('2'));
@@ -189,12 +183,12 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBpm`.
     bpm: ctx.displayBpm(seconds) ?? bpm,
     // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
-    hiSpeed: ctx.playerHiSpeed,
+    hiSpeed: play.view.hiSpeed.player,
     score: ctx.score.score,
     exScore: ctx.score.exScore,
     exScoreMax: total * 2,
-    combo: ctx.tracker.combo,
-    maxCombo: ctx.maxCombo,
+    combo: play.combo,
+    maxCombo: play.maxCombo,
     perfect: ctx.score.perfect,
     great: ctx.score.great,
     good: ctx.score.good,
@@ -229,8 +223,8 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     effects: ctx.options.beMusicEffects ?? 'full',
     audio: ctx.audioFrame,
     song: ctx.song,
-    lastJudgeDeltaMs: ctx.judgeTimings.lastDeltaMs,
-    judgeTimings: ctx.judgeTimings.recent,
+    lastJudgeDeltaMs: play.lastJudgeDeltaMs,
+    judgeTimings: recentJudgeTimings(play),
     minBpm: ctx.chartBpmRange?.minBpm,
     maxBpm: ctx.chartBpmRange?.maxBpm,
     mainBpm: ctx.chartBpmRange?.mainBpm,
@@ -242,9 +236,9 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     outroAtMs: ctx.playMoments.outroAtMs,
     gaugeRiseAtMs: ctx.playMoments.gaugeRiseAtMs,
     gaugeMaxAtMs: ctx.playMoments.gaugeMaxAtMs,
-    // Shared by reference: the arrays only grow during a play, and skins are told not to mutate them.
-    scoreHistory: ctx.scoreHistory,
-    gaugeHistory: ctx.gaugeHistory,
+    // The play state's own arrays, shared by reference: skins are told not to mutate them.
+    scoreHistory: play.scoreHistory,
+    gaugeHistory: play.gaugeHistory,
     judgeWindows: ctx.judgeWindows,
     laneCovers,
     visibleMs,

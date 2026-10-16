@@ -19,7 +19,6 @@ import {
 } from '@be-music/player/core/engine';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
-import type { ScoreTracker } from '@be-music/player/core/scoring';
 import type {
   PlayerGaugeSummary,
   PlayerUiCommand,
@@ -30,6 +29,7 @@ import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import { resolveDisplayedPoor, type GaugeType, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
+import { playEventFromUiCommand } from '@be-music/scene-model';
 import { resolveLr2LaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import type { BrowserSongEntry } from '../../collection/types.ts';
@@ -38,10 +38,8 @@ import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { supportsLiveTempoChange, type ReplayTempo } from '../../runtime/play-tempo.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
-import { advanceCourseCombo, type CourseComboState } from '../../scene/core/course-combo.ts';
 import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 import { toBeMusicJudgeWindows } from '../../scene/core/judge-windows.ts';
-import type { JudgeTimingLog } from '../../scene/core/judge-timing-log.ts';
 import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { LiveTempo } from '../../scene/live-tempo.ts';
@@ -51,6 +49,7 @@ import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import { beginExitSequence, type PlayEndingContext } from './play-ending.ts';
+import { applyPlayEvent } from './play-state.ts';
 import { shouldSkipPlayKey } from './play-input.ts';
 import { samplePlaybackRate } from './play-media.ts';
 import {
@@ -129,9 +128,6 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   readonly playlogWaiters: Array<(playlog: BeMusicPlaylog) => void>;
   replayViewCursor: PlaylogViewCursor | undefined;
   score: ScoreSummary;
-  readonly tracker: ScoreTracker;
-  maxCombo: number;
-  readonly courseCombo: CourseComboState | undefined;
   gaugeState: PlayerGaugeSummary;
   fastCount: number;
   slowCount: number;
@@ -140,7 +136,6 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   lastJudgeUntil: number;
   lastJudgeAt: number | undefined;
   judgeSideState: Record<'1P' | '2P', { judge: JudgeKind | ''; until: number; combo: number; courseCombo?: number }>;
-  readonly judgeTimings: JudgeTimingLog;
   judgeWindows: BeMusicJudgeWindows | undefined;
   longNoteStyle: LongNoteStyle | undefined;
   readonly longNotes: LongNoteTracker;
@@ -306,30 +301,18 @@ function publishJudge(ctx: PlayEngineContext, judge: JudgeKind, seconds: number,
   // Snapshot the verdict + combo for this side so DP rendering shows each lane group's *own* combo number — frozen at
   // the moment that side last hit a note — rather than mirroring the global running combo on both sides.
   // A course stage also snapshots the course combo, which an LR2 skin shows there during an expert or grade course.
+  const { combo, courseCombo } = ctx.playState;
   ctx.judgeSideState[side] = {
     judge,
     until,
-    combo: ctx.tracker.combo,
-    ...(ctx.courseCombo !== undefined ? { courseCombo: ctx.courseCombo.combo } : {}),
+    combo,
+    ...(courseCombo !== undefined ? { courseCombo: courseCombo.combo } : {}),
   };
   // POOR / BAD judgements briefly swap the base BGA for the chart's POOR BGA. We trigger the same window for `BAD`
   // because the LR2 spec doesn't distinguish the two for the BGA channel.
   if (judge === 'POOR' || judge === 'BAD') {
     ctx.lastPoorAt = ctx.playClock();
   }
-  // Mirror the running combo into our high-water mark. `tracker.combo` resets on every BAD/POOR, so this captures the
-  // longest unbroken GREAT-or-better streak the player has reached so far. Used as the "MAX COMBO" readout for the
-  // result screen — see `getResultData`.
-  if (ctx.tracker.combo > ctx.maxCombo) {
-    ctx.maxCombo = ctx.tracker.combo;
-  }
-  // Append a sample to the result-screen polyline histories. We do this in `publishJudge` (rather than at each judge
-  // call site) because every gauge / EX-score change funnels through the same judgement path — adding the sample once
-  // here keeps the three judge sites (manual hit, auto-PERFECT, auto-miss) symmetric.
-  const totalSeconds = ctx.resolveSongDurationSeconds();
-  const progress = totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
-  ctx.gaugeHistory.push({ progress, value: ctx.gaugeState.current });
-  ctx.scoreHistory.push({ progress, exScore: ctx.score.exScore });
   maybeFireFullCombo(ctx);
 }
 
@@ -341,7 +324,7 @@ function publishJudge(ctx: PlayEngineContext, judge: JudgeKind, seconds: number,
  *
  * AUTO mode also reaches this state on the very last note (every judge is auto-PERFECT, so combo === total at the
  * end) — the player specifically asked for the FC presentation to fire in AUTO too, which falls out for free since
- * the path is the same `applyJudgeToSummary` → `publishJudge` chain manual play uses.
+ * the path is the same `publishJudge` chain manual play uses.
  *
  * One event covers both sides because we don't yet model per-side combos. For DP this is correct (one player, one
  * combo). Battle mode would split.
@@ -350,7 +333,7 @@ function maybeFireFullCombo(ctx: PlayEngineContext): void {
   if (ctx.fullComboFired) return;
   if (ctx.score.bad > 0 || ctx.score.poor > 0) return;
   if (ctx.score.total <= 0) return;
-  if (ctx.tracker.combo < ctx.score.total) return;
+  if (ctx.playState.combo < ctx.score.total) return;
   ctx.fullComboFired = true;
   ctx.theme.onThemeEvent({ kind: 'full-combo', at: ctx.playClock() });
   log.info('FULL COMBO');
@@ -406,7 +389,6 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
   };
   // A replay shows its recorded view along the playhead; a recorded play logs its own from the start.
   ctx.playlogViewCoalescer = undefined;
-  ctx.replayCovers = undefined;
   ctx.replayViewCursor =
     ctx.options.replay !== undefined
       ? new PlaylogViewCursor(ctx.options.replay.play.view, ctx.options.replay.play.viewChanges)
@@ -557,8 +539,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     .then((summary) => {
       log.info('shared engine driver finished');
       drainSharedEngineSignals(ctx);
-      applyEngineSummary(ctx, summary);
-      applyFinalComboSummary(ctx, summary);
+      applyFinalSummary(ctx, summary);
       // A play the view interrupted (ESC / F5 / teardown) has already handed the host over; it does not finish.
       if (ctx.sharedEngineInterrupt !== undefined) return;
       // A held play ends when its outro lets go; one that ended on its own (a failed gauge, a replay stopping where its
@@ -643,7 +624,7 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
   // Free-Zone channels). The view's own initial `score.total` is computed independently in `prepareSong` from
   // `notes.filter(isPlayableInputChannel).length`, which DOES include Free-Zone — so on charts that use
   // channel `17` / `27` as Free-Zone the two diverge by the Free-Zone count. That mismatch makes
-  // `maybeFireFullCombo`'s `tracker.combo === score.total` predicate unreachable (combo can only ever climb to
+  // `maybeFireFullCombo`'s `combo === score.total` predicate unreachable (combo can only ever climb to
   // the engine's smaller scorable count) and the FC presentation never fires. Sync `score.total` to the
   // engine's value here so the view always agrees with the authority on the scorable population.
   ctx.score.total = summary.total;
@@ -661,6 +642,8 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
   ctx.score.score = summary.score;
   ctx.fastCount = summary.fast;
   ctx.slowCount = summary.slow;
+  // The play state's gauge and EX score, the graphs' next samples. The graphs run over the scene's own chart length.
+  applyPlayEvent(ctx, { type: 'frame', frame: { totalSeconds: ctx.resolveSongDurationSeconds(), summary } });
   if (summary.gauge) {
     const previous = ctx.gaugeState.current;
     ctx.gaugeState = { ...summary.gauge };
@@ -691,14 +674,15 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
   // there is no second extract.
 }
 
-function applyFinalComboSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
+/**
+ * The play's final summary, as the engine hands it over: its scores and gauge, and, for an AUTO play, the final
+ * judgment counts (`finish`): a full combo makes the max combo every note, even where the engine published no combo
+ * for some of them (an autoplayed chord).
+ */
+export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSummary>): void {
+  applyEngineSummary(ctx, summary);
   if (ctx.options.autoPlay !== true) return;
-  if (summary.total <= 0) return;
-  if (summary.perfect + summary.great + summary.good < summary.total) return;
-  if (summary.bad > 0 || summary.poor > 0) return;
-  ctx.tracker.combo = Math.max(ctx.tracker.combo, summary.total);
-  ctx.maxCombo = Math.max(ctx.maxCombo, summary.total);
-  if (ctx.courseCombo !== undefined) advanceCourseCombo(ctx.courseCombo, ctx.tracker.combo);
+  applyPlayEvent(ctx, { type: 'finish', summary });
 }
 
 /**
@@ -740,17 +724,15 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUiCommand): v
       // start in autoplay.
       triggerBomb(ctx, command.channel);
       break;
-    case 'trigger-poor-bga':
+    case 'trigger-poor-bga': {
       ctx.lastPoorAt = command.seconds;
-      // Empty POOR (the engine fires `trigger-poor-bga` for both real POOR judges AND for empty presses /
-      // unjudged-misses-past-window) doesn't go through `publishJudgeCombo` for empty-press cases, so the
-      // result-screen gauge / score polylines would skip those samples in shared-engine mode and the graph
-      // wouldn't match the legacy view's. Append history points here so the graph stays smooth across both
-      // paths. Real POOR judges that ALSO publish a judge-combo will get a second sample from
-      // `applyEngineJudgeCombo`'s `publishJudge` call — that's a no-op visually (both samples land at almost
-      // the same `progress`) and keeps the contract "every gauge / EX-score change records a sample."
-      recordSharedEngineHistorySample(ctx, command.seconds);
+      // An empty POOR (the engine fires `trigger-poor-bga` for real POOR judgments too, and for empty presses and
+      // misses past the window) moves the gauge without a judgment: the play state samples its graphs here. A real
+      // POOR that also publishes a judgment gets a second sample at almost the same progress.
+      const event = playEventFromUiCommand(command);
+      if (event !== undefined) applyPlayEvent(ctx, event);
       break;
+    }
     case 'clear-poor-bga':
       ctx.lastPoorAt = -Number.POSITIVE_INFINITY;
       break;
@@ -771,42 +753,26 @@ function applyResolvedRuleset(ctx: PlayEngineContext, info: PlayerRulesetInfo): 
 }
 
 /**
- * Pushes one sample to {@link gaugeHistory} / {@link scoreHistory} using the current engine-derived
- * \`gaugeState.current\` and \`score.exScore\` snapshots. Called from the shared-engine command handler when
- * the engine reports a gauge / score change that doesn't flow through \`publishJudgeCombo\` (= empty POOR).
- * In legacy mode the same arrays are pushed exclusively from \`publishJudge\`.
- */
-function recordSharedEngineHistorySample(ctx: PlayEngineContext, seconds: number): void {
-  const totalSeconds = ctx.resolveSongDurationSeconds();
-  const progress = totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
-  ctx.gaugeHistory.push({ progress, value: ctx.gaugeState.current });
-  ctx.scoreHistory.push({ progress, exScore: ctx.score.exScore });
-}
-
-/**
  * Drives every per-judge visual the LR2 skin animates against from the engine's stateSignals judge-combo bus:
  *
- * - `tracker.combo` mirrors the engine's running combo so `#SRC_NUMBER,st=70` (NOWCOMBO) renders the right
- *   number, and the `maxCombo` high-water mark feeds the result screen's MAX COMBO readout.
+ * - The play state takes the judgment (`reducePlayState`): the running combo `#SRC_NUMBER,st=70` (NOWCOMBO) renders,
+ *   the max combo and course combo, the timed judgment with its early / late count, and a sample of the graphs.
  * - `publishJudge` does the rest of the legacy per-judge work — it stamps timer 46 (1P) or 47 (2P) so the
  *   `#DST_NOWJUDGE` / `#DST_NOWCOMBO` keyframe chains animate from time=0 on every hit (without this, the
  *   plate stays invisible because the timer's playhead is parked at scene start), latches `lastJudge` /
  *   `lastJudgeUntil` so the fallback `#SRC_TEXT` paints the verdict, snapshots `judgeSideState[side]` for DP
- *   per-side rendering, swaps to the POOR BGA on POOR/BAD, appends a sample to gauge / score histories for
- *   the result graph, and fires `maybeFireFullCombo` for timers 48/49.
+ *   per-side rendering, swaps to the POOR BGA on POOR/BAD, and fires `maybeFireFullCombo` for timers 48/49.
  * - On PERFECT / GREAT we additionally fire the lane bomb (the engine's `flash-lane` command is severity-
  *   independent so we can't piggy-back on it; the bomb is a positive-feedback cue specifically for clean
  *   hits). The legacy `commitFinalJudge` ran the same gate.
  */
 function applyEngineJudgeCombo(ctx: PlayEngineContext, state: Readonly<PlayerJudgeComboSignalState>): void {
   if (state.judge === 'READY') return;
-  ctx.tracker.combo = state.combo;
-  if (state.combo > ctx.maxCombo) ctx.maxCombo = state.combo;
-  if (ctx.courseCombo !== undefined) advanceCourseCombo(ctx.courseCombo, state.combo);
   const judgeKind = state.judge as JudgeKind;
-  // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`; the log skips them.
-  ctx.judgeTimings.push(ctx.playClock(), state.judge, state.deltaMs, state.channel);
-  publishJudge(ctx, judgeKind, ctx.currentSeconds(), state.channel);
+  const seconds = ctx.currentSeconds();
+  // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`: the play state keeps no timing for them.
+  applyPlayEvent(ctx, { type: 'judge', judge: state, seconds, atMs: ctx.playClock() });
+  publishJudge(ctx, judgeKind, seconds, state.channel);
   if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
     triggerBomb(ctx, state.channel, judgeKind);
   }
@@ -848,10 +814,7 @@ function handleSharedEngineChartFinished(
     ctx.chartEndTimeout = undefined;
     if (ctx.disposed) return;
     drainSharedEngineSignals(ctx);
-    if (finalSummary !== undefined) {
-      applyEngineSummary(ctx, finalSummary);
-      applyFinalComboSummary(ctx, finalSummary);
-    }
+    if (finalSummary !== undefined) applyFinalSummary(ctx, finalSummary);
     const finish = (): void => {
       const result = ctx.getResultData();
       if (ctx.options.onChartFinished && result) {
