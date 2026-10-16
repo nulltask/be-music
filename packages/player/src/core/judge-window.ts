@@ -1,4 +1,5 @@
 import type { BeMusicJson } from '@be-music/json';
+import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
 
 /**
  * LR2 judge windows.
@@ -162,10 +163,12 @@ export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: numb
  * and per note context), note selection, empty POOR, long-note mechanics, gauges, and scoring. The tables live in
  * `src/ruleset/definitions.ts`; this module only still resolves LR2's own `#RANK` / `#DEFEXRANK` / `#EXRANKxx`
  * axis, which the LR2 ruleset reads.
+ *
+ * @deprecated Use `PlaylogRulesetId` from `@be-music/player/ruleset`, the one judge ruleset id; this is an alias of it.
  */
-export type JudgeWindowRuleset = 'lr2' | 'beatoraja' | 'iidx';
+export type JudgeWindowRuleset = PlaylogRulesetId;
 
-export const JUDGE_WINDOW_RULESETS: readonly JudgeWindowRuleset[] = ['lr2', 'beatoraja', 'iidx'];
+export const JUDGE_WINDOW_RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number): JudgeWindowsMs {
   const bad =

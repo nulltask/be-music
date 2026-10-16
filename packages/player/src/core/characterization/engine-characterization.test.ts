@@ -2,7 +2,7 @@ import { resolveChart } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerOptions } from '../engine-types.ts';
-import type { JudgeWindowRuleset } from '../judge-window.ts';
+import type { PlaylogRulesetId } from '../../ruleset/definitions.ts';
 import type { PlaylogViewState } from '../../playlog/view.ts';
 import { basicChart, denseChart, exRankChart, longNoteChart, mineChart, nonstopCourse, tempoChart } from './charts.ts';
 import {
@@ -27,7 +27,7 @@ import {
  * that behaviour: update it there with `vp test run -u` and say why in the pull request.
  */
 
-const RULESETS: readonly JudgeWindowRuleset[] = ['lr2', 'beatoraja', 'iidx'];
+const RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 /** Every note pressed `offsetsMs[i]` off its time (cycled), every `skipEvery`th left alone, long notes held to their end. */
 function scriptForNotes(

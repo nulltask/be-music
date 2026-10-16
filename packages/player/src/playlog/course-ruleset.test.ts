@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'vite-plus/test';
+import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
 import type { BeMusicCoursePlaylog } from './course.ts';
 import { resolveCoursePlayedRuleset } from './course-ruleset.ts';
 
 type Log = Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>;
 
-const played = (judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx') =>
+const played = (judgeRuleset?: PlaylogRulesetId) =>
   ({
     played: true,
     playlog: { play: judgeRuleset === undefined ? {} : { judgeRuleset } },

@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from '../../parser/src/index.ts';
-import { resolveRuleset, rulesetChartFactsFromChart, type JudgeWindowSetUs } from '../../player/src/ruleset/index.ts';
+import {
+  resolveRuleset,
+  rulesetChartFactsFromChart,
+  type JudgeWindowSetUs,
+  type PlaylogRulesetId,
+} from '../../player/src/ruleset/index.ts';
 import { stringifyBms, stringifyBmson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -1064,10 +1069,8 @@ describe('stringifier', () => {
 
     describe("be-music's judge windows for the BMS and its bmson conversion", () => {
       const chart = { scorableNotes: [], laneDisplayMode: '7 KEY SP' };
-      const windowsOf = (
-        json: ReturnType<typeof parseChart>,
-        ruleset: 'lr2' | 'beatoraja' | 'iidx',
-      ): JudgeWindowSetUs => resolveRuleset(rulesetChartFactsFromChart(json, chart), ruleset).windows.note;
+      const windowsOf = (json: ReturnType<typeof parseChart>, ruleset: PlaylogRulesetId): JudgeWindowSetUs =>
+        resolveRuleset(rulesetChartFactsFromChart(json, chart), ruleset).windows.note;
       const convert = (source: string) => {
         const bms = parseChart(source);
         return { bms, bmson: parseBmson(stringifyBmson(bms)) };

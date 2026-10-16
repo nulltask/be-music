@@ -12,6 +12,7 @@ import {
   checkCoursePlaylogEligibility,
   resolveCourseStageChartFingerprints,
   type BeMusicCoursePlaylog,
+  type PlaylogRulesetId,
 } from '@be-music/player/playlog';
 import { checkPlaylogEligibility, type BeMusicPlaylog } from '@be-music/player-web/runtime';
 
@@ -74,7 +75,7 @@ function rebuildDocuments(
 
 /** The API's answer for one ruleset (`RulesetOutcome` in `@be-music/leaderboard-api`). */
 export interface LeaderboardRulesetResult {
-  ruleset: 'lr2' | 'beatoraja' | 'iidx';
+  ruleset: PlaylogRulesetId;
   exScore: number;
   clearLamp: number;
   missCount: number;
