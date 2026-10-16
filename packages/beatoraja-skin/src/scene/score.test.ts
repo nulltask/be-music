@@ -126,7 +126,14 @@ describe('beatorajaExScoreRate / beatorajaChartTotalReadout', () => {
   });
 
   it('prefers the TOTAL the gauge runs on, floored', () => {
+    // A bmson `total: 100` is a percentage; the readout shows the resolved TOTAL, as beatoraja does after
+    // `BMSPlayerRule.validate`.
+    expect(beatorajaChartTotalReadout({ effectiveTotal: 176.8 }, 100)).toBe(176);
     expect(beatorajaChartTotalReadout({ effectiveTotal: 160.9 }, 200)).toBe(160);
+  });
+
+  it('falls back to the chart header without a resolved gauge, and is undefined with neither', () => {
+    expect(beatorajaChartTotalReadout(undefined, 320)).toBe(320);
     expect(beatorajaChartTotalReadout({ effectiveTotal: 0 }, 200.7)).toBe(200);
     expect(beatorajaChartTotalReadout(undefined, undefined)).toBeUndefined();
   });

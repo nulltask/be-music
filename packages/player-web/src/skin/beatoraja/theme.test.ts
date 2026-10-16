@@ -4,7 +4,6 @@ import {
   loadBeatorajaThemeFromFiles,
   pickBeatorajaPlayableSkinVariant,
   pickBeatorajaPlayableVariant,
-  pickBeatorajaThemeBgmPaths,
   summarizeBeatorajaPlaySkins,
 } from './theme.ts';
 
@@ -104,54 +103,5 @@ describe('24-key keyboard play variants', () => {
     expect(pickBeatorajaPlayableSkinVariant({}, '24')).toBeUndefined();
     // A theme that only ships play24 can still render an IIDX chart.
     expect(pickBeatorajaPlayableSkinVariant({ '24': {} as never }, '7')).toBe('24');
-  });
-});
-
-describe('pickBeatorajaThemeBgmPaths', () => {
-  it('lets exact stems win over loose matches listed earlier', () => {
-    expect(
-      pickBeatorajaThemeBgmPaths([
-        'sound/course_clear.wav',
-        'sound/course_fail.ogg',
-        'sound/resultclose.wav',
-        'sound/clear.wav',
-        'sound/fail.wav',
-        'sound/result.wav',
-        'readme.txt',
-      ]),
-    ).toEqual({
-      clear: 'sound/clear.wav',
-      fail: 'sound/fail.wav',
-      result: 'sound/result.wav',
-      courseClear: 'sound/course_clear.wav',
-      courseFail: 'sound/course_fail.ogg',
-    });
-  });
-
-  it('falls back to a stem containing the name, but never a course stem for the plain slots', () => {
-    expect(pickBeatorajaThemeBgmPaths(['bgm/course_clear.wav', 'bgm/clear_loop.wav', 'bgm/decide_v2.mp3'])).toEqual({
-      decide: 'bgm/decide_v2.mp3',
-      clear: 'bgm/clear_loop.wav',
-      courseClear: 'bgm/course_clear.wav',
-    });
-    expect(pickBeatorajaThemeBgmPaths(['bgm/course_clear.wav'])).toEqual({ courseClear: 'bgm/course_clear.wav' });
-  });
-
-  it('takes a stem from the sound set folder over the same stem elsewhere', () => {
-    // ModernChic: a voice clip named clear.ogg sorts before the sound set's own clear.ogg.
-    expect(
-      pickBeatorajaThemeBgmPaths([
-        'ModernChic/Root/sounds/vo/tsumugi/clear/clear.ogg',
-        'ModernChic/Root/sounds/vo/tsumugi/clear/failed.ogg',
-        'ModernChic/Sound/clear.ogg',
-        'ModernChic/Sound/fail.ogg',
-      ]),
-    ).toEqual({ clear: 'ModernChic/Sound/clear.ogg', fail: 'ModernChic/Sound/fail.ogg' });
-    // With no folder holding more of the slots, the shallowest file wins.
-    expect(pickBeatorajaThemeBgmPaths(['a/b/c/clear.wav', 'a/clear.wav'])).toEqual({ clear: 'a/clear.wav' });
-  });
-
-  it('does not reuse one file for two slots', () => {
-    expect(pickBeatorajaThemeBgmPaths(['sound/resultclose.wav'])).toEqual({ result: 'sound/resultclose.wav' });
   });
 });

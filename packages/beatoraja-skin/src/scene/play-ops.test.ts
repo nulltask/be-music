@@ -96,9 +96,11 @@ describe('resolveBeatorajaCoverOps', () => {
     // A cover switched off keeps its height but is not drawn.
     expect(resolveBeatorajaCoverOps(cover({ sudden: 0.3 }), false)).toEqual([]);
     expect(resolveBeatorajaCoverOps(undefined, true)).toEqual([BEATORAJA_OP.LANECOVER1_CHANGING]);
-    expect([...BEATORAJA_COVER_OPS].sort()).toEqual(
-      [BEATORAJA_OP.LANECOVER1_CHANGING, BEATORAJA_OP.LANECOVER1_ON, BEATORAJA_OP.LIFT1_ON].sort(),
-    );
+    expect(BEATORAJA_COVER_OPS).toEqual([
+      BEATORAJA_OP.LANECOVER1_CHANGING,
+      BEATORAJA_OP.LANECOVER1_ON,
+      BEATORAJA_OP.LIFT1_ON,
+    ]);
   });
 });
 

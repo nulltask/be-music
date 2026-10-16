@@ -5,6 +5,7 @@
 // only wires the dropped-File array up to that pipeline and doesn't open any PixiJS resources.
 
 import { asLoadedBytes, discoverBeatorajaTheme, loadAssetBytes, readFilesIntoBytesMap } from '@be-music/beatoraja-skin';
+import { pickBeatorajaThemeBgmPaths } from '@be-music/beatoraja-skin/scene';
 import type {
   BeatorajaPlaySkinMap,
   BeatorajaPlayVariant,
@@ -191,86 +192,10 @@ export interface BeatorajaThemeBgm {
   courseFail?: Uint8Array;
 }
 
-const BGM_AUDIO_EXTENSIONS = ['.wav', '.ogg', '.mp3', '.flac'] as const;
-
-/** Each BGM slot's canonical file stem; the course ones are beatoraja's `course_clear` / `course_fail`. */
-const BGM_SLOT_STEMS: Record<keyof BeatorajaThemeBgm, string> = {
-  decide: 'decide',
-  clear: 'clear',
-  fail: 'fail',
-  result: 'result',
-  courseClear: 'course_clear',
-  courseFail: 'course_fail',
-};
-
-/**
- * Picks the file for each BGM slot from a theme's audio file stems: a stem equal to the slot's name wins, else the
- * first stem containing it (`decide_v2`, `clear_loop`). A course stem (`course_*`) never stands in for the plain
- * result slots, and a stem taken by one slot is not reused for another, so `course_clear.wav` or `resultclose.wav`
- * listed before `clear.wav` / `result.wav` cannot take their place.
- */
-export function pickBeatorajaThemeBgmPaths(paths: Iterable<string>): Partial<Record<keyof BeatorajaThemeBgm, string>> {
-  const audio: Array<{ path: string; stem: string; dir: string; depth: number }> = [];
-  for (const path of paths) {
-    const lower = path.toLowerCase();
-    if (!BGM_AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext))) continue;
-    // Match on the file's basename — `sound/decide.wav` and `<theme-root>/decide.wav` and
-    // `LR2files/Sound/<theme>/decide.wav` all count.
-    const slash = lower.lastIndexOf('/');
-    const base = lower.slice(slash + 1);
-    const dir = slash >= 0 ? lower.slice(0, slash) : '';
-    audio.push({ path, stem: base.slice(0, base.lastIndexOf('.')), dir, depth: lower.split('/').length });
-  }
-  const slots = Object.keys(BGM_SLOT_STEMS) as Array<keyof BeatorajaThemeBgm>;
-  const slotStems = new Set(Object.values(BGM_SLOT_STEMS));
-  // beatoraja plays these from one sound set, a folder holding `clear.wav` and the rest (`SystemSoundManager`), so a
-  // stem that also turns up elsewhere (ModernChic's voice clip `Root/sounds/vo/<voice>/clear/clear.ogg`) loses to the
-  // one in the folder holding the most of the slots' files, then to the shallowest.
-  const slotFilesByDir = new Map<string, Set<string>>();
-  for (const file of audio) {
-    if (!slotStems.has(file.stem)) continue;
-    const stems = slotFilesByDir.get(file.dir) ?? new Set<string>();
-    stems.add(file.stem);
-    slotFilesByDir.set(file.dir, stems);
-  }
-  const setSize = (file: { dir: string }): number => slotFilesByDir.get(file.dir)?.size ?? 0;
-  const picked: Partial<Record<keyof BeatorajaThemeBgm, string>> = {};
-  const taken = new Set<string>();
-  // Exact stems first, across every slot, so a loose match can never claim a file another slot names exactly.
-  for (const slot of slots) {
-    let match: (typeof audio)[number] | undefined;
-    for (const file of audio) {
-      if (file.stem !== BGM_SLOT_STEMS[slot] || taken.has(file.path)) continue;
-      if (
-        match === undefined ||
-        setSize(file) > setSize(match) ||
-        (setSize(file) === setSize(match) && file.depth < match.depth)
-      ) {
-        match = file;
-      }
-    }
-    if (match === undefined) continue;
-    picked[slot] = match.path;
-    taken.add(match.path);
-  }
-  for (const slot of slots) {
-    if (picked[slot] !== undefined) continue;
-    const name = BGM_SLOT_STEMS[slot];
-    const course = name.startsWith('course_');
-    const match = audio.find(
-      (file) => !taken.has(file.path) && file.stem.includes(name) && (course || !file.stem.startsWith('course')),
-    );
-    if (match === undefined) continue;
-    picked[slot] = match.path;
-    taken.add(match.path);
-  }
-  return picked;
-}
-
 /**
  * Scan a beatoraja theme bundle for BGM files. The lookup is heuristic — beatoraja's spec doesn't
  * pin BGM to a fixed path, so the file stems are matched against the conventional names (see
- * {@link pickBeatorajaThemeBgmPaths}).
+ * `pickBeatorajaThemeBgmPaths` in `@be-music/beatoraja-skin/scene`).
  *
  * Returns synchronously when every matched entry was eagerly loaded. When some entries are
  * deferred (lazy file readers), the helper awaits each `loadAssetBytes` call serially — each BGM

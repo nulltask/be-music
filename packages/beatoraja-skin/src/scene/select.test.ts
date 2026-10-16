@@ -91,7 +91,8 @@ describe('button orders', () => {
     expect(['5', '7', '10', '14', '9', '24', '48', 'x', undefined].map(beatorajaKeyModeIndex)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 0, 0,
     ]);
-    expect([1, 2, 3, 4, undefined].map(beatorajaLnModeIndex)).toEqual([0, 1, 2, 0, 0]);
+    // `#LNMODE` counts from 1; a missing or out-of-range one reads as LN.
+    expect([1, 2, 3, 0, 4, undefined].map(beatorajaLnModeIndex)).toEqual([0, 1, 2, 0, 0, 0]);
   });
 });
 

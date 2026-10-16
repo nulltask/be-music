@@ -25,7 +25,6 @@ export * from './lr2/select.ts';
 
 // beatoraja family — beatoraja Lua skin-driven scenes.
 export * from './beatoraja/bga.ts';
-export * from './beatoraja/clear-lamp.ts';
 export * from './beatoraja/decide.ts';
 export * from './beatoraja/gameplay.ts';
 export * from './beatoraja/markers.ts';
