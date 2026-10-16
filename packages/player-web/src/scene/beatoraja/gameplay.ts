@@ -248,6 +248,7 @@ const COVER_KEYS: ReadonlySet<string> = new Set(['PageUp', 'PageDown', 'Home', '
 
 export class PixiBeatorajaGameplayView implements PixiScene {
   readonly root: Container = new Container();
+  readonly identity = { kind: 'play', family: 'beatoraja' } as const;
   /**
    * Backdrop that fills the full canvas behind the (letterboxed) skin container. The Pixi `Application`
    * runs with `backgroundAlpha: 0` so all scenes share a transparent canvas and decide for themselves

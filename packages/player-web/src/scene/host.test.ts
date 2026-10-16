@@ -1,15 +1,62 @@
-import { Container, RendererType } from 'pixi.js';
+import { Container, RendererType, type Texture } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
+import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
+import type { SceneIdentity } from '../host/family-kit.ts';
+import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
+import { PixiBeatorajaDecideScene } from './beatoraja/decide.ts';
+import { PixiBeatorajaSelectScene } from './beatoraja/select.ts';
+import { CoreDecideView } from './core/decide.ts';
+import { CoreGameplayView } from './core/gameplay.ts';
+import { CoreResultView } from './core/result.ts';
+import { CoreSongSelectView } from './core/select.ts';
+import {
+  DefaultPixiDecideView,
+  DefaultPixiGameplayView,
+  DefaultPixiResultView,
+  DefaultPixiSongSelectView,
+} from './default/index.ts';
 import { PixiSceneHost, resolveRendererPreference, resolveRenderResolution, type PixiScene } from './host.ts';
+import { PixiDecideView } from './lr2/decide.ts';
+import { PixiGameplayView } from './lr2/gameplay.ts';
+import { PixiResultView } from './lr2/result.ts';
+import { PixiSongSelectView } from './lr2/select.ts';
 
 function makeScene(overrides: Partial<PixiScene> = {}): PixiScene {
   return {
     root: new Container(),
+    identity: { kind: 'select', family: 'built-in' },
     enter: vi.fn(),
     exit: vi.fn(),
     dispose: vi.fn(),
     ...overrides,
   };
+}
+
+/**
+ * A scene that writes each lifecycle call to `log` as `<name>.<call>`, with whether its root was on the host's stage at
+ * that moment (`on` / `off`).
+ */
+function makeLoggedScene(
+  name: string,
+  host: PixiSceneHost,
+  log: string[],
+  overrides: Partial<PixiScene> = {},
+): PixiScene {
+  const root = new Container();
+  const stage = (): string => (root.parent === host.app.stage ? 'on' : 'off');
+  return makeScene({
+    root,
+    enter: vi.fn(() => {
+      log.push(`${name}.enter ${stage()}`);
+    }),
+    exit: vi.fn(() => {
+      log.push(`${name}.exit ${stage()}`);
+    }),
+    dispose: vi.fn(() => {
+      log.push(`${name}.dispose`);
+    }),
+    ...overrides,
+  });
 }
 
 describe('resolveRendererPreference', () => {
@@ -91,6 +138,175 @@ describe('PixiSceneHost', () => {
       expect(scene.root.parent).toBeNull();
     } finally {
       warn.mockRestore();
+    }
+  });
+});
+
+describe('PixiSceneHost scene lifecycle', () => {
+  it('exits the previous scene and takes its root off the stage before the next one enters and goes on', async () => {
+    const host = new PixiSceneHost();
+    const log: string[] = [];
+    const select = makeLoggedScene('select', host, log);
+    const decide = makeLoggedScene('decide', host, log);
+
+    await host.setScene(select);
+    expect(host.app.stage.children).toEqual([select.root]);
+    await host.setScene(decide);
+
+    // Each scene enters off the stage (the host puts its root on once `enter` returns) and exits still on it.
+    expect(log).toEqual(['select.enter off', 'select.exit on', 'decide.enter off']);
+    expect(host.app.stage.children).toEqual([decide.root]);
+    // A transition only exits: disposing is the owner's call.
+    expect(select.dispose).not.toHaveBeenCalled();
+  });
+
+  it('keeps a scene alive across others and enters it again (the select screen across a play)', async () => {
+    const host = new PixiSceneHost();
+    const log: string[] = [];
+    const select = makeLoggedScene('select', host, log);
+    const decide = makeLoggedScene('decide', host, log);
+    const play = makeLoggedScene('play', host, log);
+
+    await host.setScene(select);
+    await host.setScene(decide);
+    await host.setScene(play);
+    await host.setScene(select);
+
+    expect(log).toEqual([
+      'select.enter off',
+      'select.exit on',
+      'decide.enter off',
+      'decide.exit on',
+      'play.enter off',
+      'play.exit on',
+      'select.enter off',
+    ]);
+    expect(select.enter).toHaveBeenCalledTimes(2);
+    expect(select.enter).toHaveBeenLastCalledWith(host);
+    expect(select.exit).toHaveBeenCalledTimes(1);
+    expect(select.dispose).not.toHaveBeenCalled();
+    expect(host.app.stage.children).toEqual([select.root]);
+    expect(host.getCurrentScene()).toBe(select);
+  });
+
+  it('clears the stage with undefined: the active scene exits and none is left', async () => {
+    const host = new PixiSceneHost();
+    const log: string[] = [];
+    const select = makeLoggedScene('select', host, log);
+
+    await host.setScene(select);
+    await host.setScene(undefined);
+
+    expect(log).toEqual(['select.enter off', 'select.exit on']);
+    expect(host.app.stage.children).toEqual([]);
+    expect(host.getCurrentScene()).toBeUndefined();
+  });
+
+  it('does nothing when the active scene is set again', async () => {
+    const host = new PixiSceneHost();
+    const log: string[] = [];
+    const select = makeLoggedScene('select', host, log);
+
+    await host.setScene(select);
+    await host.setScene(select);
+
+    expect(log).toEqual(['select.enter off']);
+    expect(host.app.stage.children).toEqual([select.root]);
+  });
+
+  it('runs transitions one at a time in call order, waiting for an exit that resolves later', async () => {
+    const host = new PixiSceneHost();
+    const log: string[] = [];
+    let finishExit: () => void = () => undefined;
+    const slow = makeLoggedScene('slow', host, log, {
+      exit: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            log.push('slow.exit started');
+            finishExit = () => {
+              log.push('slow.exit done');
+              resolve();
+            };
+          }),
+      ),
+    });
+    const decide = makeLoggedScene('decide', host, log);
+    const play = makeLoggedScene('play', host, log);
+    await host.setScene(slow);
+
+    const toDecide = host.setScene(decide);
+    const toPlay = host.setScene(play);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(log).toEqual(['slow.enter off', 'slow.exit started']);
+    finishExit();
+    await Promise.all([toDecide, toPlay]);
+
+    expect(log).toEqual([
+      'slow.enter off',
+      'slow.exit started',
+      'slow.exit done',
+      'decide.enter off',
+      'decide.exit on',
+      'play.enter off',
+    ]);
+    expect(host.app.stage.children).toEqual([play.root]);
+  });
+
+  it("reports the active scene's identity from the moment its transition starts", async () => {
+    const host = new PixiSceneHost();
+    const select = makeScene({ identity: { kind: 'select', family: 'lr2' } });
+    const play = makeScene({ identity: { kind: 'play', family: 'beatoraja' } });
+    expect(host.getCurrentScene()?.identity).toBeUndefined();
+
+    await host.setScene(select);
+    expect(host.getCurrentScene()?.identity).toEqual({ kind: 'select', family: 'lr2' });
+    const toPlay = host.setScene(play);
+    await Promise.resolve();
+    expect(host.getCurrentScene()?.identity).toEqual({ kind: 'play', family: 'beatoraja' });
+    await toPlay;
+    await host.setScene(undefined);
+    expect(host.getCurrentScene()).toBeUndefined();
+  });
+});
+
+describe('scene identities', () => {
+  // The getters live on each class's prototype, so they read without building a scene.
+  const cases: [string, SceneIdentity, SceneIdentity][] = [
+    ['CoreSongSelectView', CoreSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
+    ['DefaultPixiSongSelectView', DefaultPixiSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
+    ['PixiSongSelectView', PixiSongSelectView.prototype.identity, { kind: 'select', family: 'lr2' }],
+    ['CoreDecideView', CoreDecideView.prototype.identity, { kind: 'decide', family: 'built-in' }],
+    ['DefaultPixiDecideView', DefaultPixiDecideView.prototype.identity, { kind: 'decide', family: 'built-in' }],
+    ['PixiDecideView', PixiDecideView.prototype.identity, { kind: 'decide', family: 'lr2' }],
+    ['CoreGameplayView', CoreGameplayView.prototype.identity, { kind: 'play', family: 'built-in' }],
+    ['DefaultPixiGameplayView', DefaultPixiGameplayView.prototype.identity, { kind: 'play', family: 'built-in' }],
+    ['PixiGameplayView', PixiGameplayView.prototype.identity, { kind: 'play', family: 'lr2' }],
+    ['CoreResultView', CoreResultView.prototype.identity, { kind: 'result', family: 'built-in' }],
+    ['DefaultPixiResultView', DefaultPixiResultView.prototype.identity, { kind: 'result', family: 'built-in' }],
+    ['PixiResultView', PixiResultView.prototype.identity, { kind: 'result', family: 'lr2' }],
+  ];
+
+  it.each(cases)('%s names its screen and family', (_name, identity, expected) => {
+    expect(identity).toEqual(expected);
+  });
+
+  it('names the beatoraja select and decide scenes', () => {
+    const skin: BeatorajaSkin = { type: 5, w: 1280, h: 720, image: [], destination: [] };
+    const empty = new Map<number | string, Texture>();
+    const textures: BeatorajaTextureCache = {
+      get: (id) => empty.get(id),
+      values: () => empty.values(),
+      pathOf: () => undefined,
+    };
+    const select = new PixiBeatorajaSelectScene({ skin, textures, songs: [], onSongPicked: () => undefined });
+    const decide = new PixiBeatorajaDecideScene({ skin, textures });
+    try {
+      expect(select.identity).toEqual({ kind: 'select', family: 'beatoraja' });
+      expect(decide.identity).toEqual({ kind: 'decide', family: 'beatoraja' });
+    } finally {
+      select.dispose();
+      decide.dispose();
     }
   });
 });

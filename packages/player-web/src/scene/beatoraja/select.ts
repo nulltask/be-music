@@ -299,6 +299,7 @@ const SCROLL_SNAP_THRESHOLD = 0.005;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root: Container = new Container();
+  readonly identity = { kind: 'select', family: 'beatoraja' } as const;
   /** Full-canvas backdrop behind the skin container — see `PixiBeatorajaGameplayView` for rationale. */
   private readonly backdrop = new Graphics();
   private view: BeatorajaPlaySkinView;

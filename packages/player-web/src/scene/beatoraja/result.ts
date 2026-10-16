@@ -138,6 +138,7 @@ const DEFAULT_RESULT_INPUT_MS = 500;
 
 export class PixiBeatorajaResultScene implements PixiScene {
   readonly root: Container = new Container();
+  readonly identity = { kind: 'result', family: 'beatoraja' } as const;
   private readonly backdrop = new Graphics();
   private view: BeatorajaPlaySkinView;
   private readonly options: PixiBeatorajaResultSceneOptions;
