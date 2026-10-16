@@ -39,17 +39,18 @@ import {
   resolveBeMusicSkinSettings,
   type BeMusicSkin,
   type BeMusicSongRecord,
+  createBeatorajaSceneKitCaches,
+  createBeatorajaSkinLoadContext,
   findBeatorajaThemeBgm,
-  loadBeatorajaFonts,
-  loadBeatorajaTexturesFromBundle,
+  loadBeatorajaSceneKit,
   loadBeatorajaThemeFromFiles,
   loadTextureFromBytes,
   pickBeatorajaPlayableVariant,
+  releaseBeatorajaSceneKitAssets,
+  resolveBeatorajaSkinConfig,
   skinFamilyRegistry,
   summarizeBeatorajaPlaySkins,
-  type BeatorajaFontCache,
   type BeatorajaPlayableVariant,
-  type BeatorajaTextureCache,
   type BeatorajaThemeBgm,
   type BeatorajaThemeBundle,
 } from '@be-music/player-web/skin';
@@ -128,16 +129,8 @@ import {
 } from '@be-music/lr2-skin';
 import { resolveLr2CourseOps } from '@be-music/lr2-skin/state';
 import {
-  BEATORAJA_OP,
   BEATORAJA_SKIN_TYPE,
-  buildBaseOpSet,
-  buildDefaultSkinConfigFiles,
-  buildDefaultSkinConfigOptions,
-  bundleBeatorajaSources,
   expandBeatorajaWildcard,
-  loadBeatorajaSkin,
-  normalizeBeatorajaFonts,
-  type BeatorajaLuaRuntimeContext,
   type BeatorajaSkinConfig,
   type BeatorajaSkinEntry,
   type BeatorajaSkinHeader,
@@ -690,11 +683,16 @@ class PlayerWebDemoApp {
    */
   private beatorajaSkinOptionsGui: BeatorajaSkinOptionsGui | undefined;
   /**
-   * Per-skin-entry config picks. The skin-options panel mutates these and the active scene re-mounts
-   * with the updated values. Survives scene transitions so navigating away and back preserves the
-   * user's choices for each skin (a select skin and a play skin can carry independent configs).
+   * What each beatoraja skin entry is loaded with (`loadBeatorajaSceneKit`), keyed by its entry path:
+   * - `textures`: never destroyed in this session — disposing beatoraja textures and re-decoding the same bytes
+   *   crashes PixiJS v8's bind-group cache (see `textures.ts`). A new theme only forgets them.
+   * - `fonts`: reused while the same theme is active, then disposed when a new theme is dropped so `document.fonts`
+   *   and Pixi's bitmap-font cache don't accumulate old entries.
+   * - `skinConfigs`: the config picks. The skin-options panel mutates these and the active scene re-mounts with the
+   *   updated values. Survives scene transitions so navigating away and back preserves the user's choices for each
+   *   skin (a select skin and a play skin can carry independent configs).
    */
-  private readonly beatorajaSkinConfigByEntry = new Map<string, BeatorajaSkinConfig>();
+  private readonly beatorajaKitCaches = createBeatorajaSceneKitCaches();
   /**
    * Per-`SkinType` user-picked entry override. Lets the user choose between multiple discovered
    * skins for a given scene type from the Debug Menu. Keyed by the numeric `header.type` so
@@ -3031,12 +3029,11 @@ class PlayerWebDemoApp {
         onProgress: (progress) => applyLoadProgress(this.elements, progress),
       });
       // Drop the per-entry texture caches from the previous theme (we don't destroy individual
-      // beatoraja textures in this session — see `beatorajaTextureCachesByEntry`'s field comment).
+      // beatoraja textures in this session — see `beatorajaKitCaches`'s field comment) and dispose its fonts.
       // Clearing the map releases the only reference to the old theme's decoded bytes; the
       // underlying Pixi textures stay allocated until page reload, but they're unreachable from
       // the renderer once the new theme replaces `beatorajaTheme`.
-      this.beatorajaTextureCachesByEntry.clear();
-      this.disposeBeatorajaFontCaches();
+      releaseBeatorajaSceneKitAssets(this.beatorajaKitCaches);
       // Tear down the previous theme's audio player — its file-map cache references bytes from
       // the old bundle that we're about to replace. A fresh player gets created below tied to
       // the new bundle.
@@ -3090,25 +3087,6 @@ class PlayerWebDemoApp {
       const message = error instanceof Error ? error.message : String(error);
       dropLog.warn(`beatoraja theme load failed: ${message}`);
     }
-  }
-
-  /**
-   * Per-entry-path memoized texture caches. Never destroyed in this session — see `beatoraja-textures.ts` for
-   * why disposing beatoraja textures and re-decoding the same bytes crashes PixiJS v8's bind-group cache.
-   * The same hazard is technically present in the LR2 path but LR2's flow doesn't re-mount the same skin.
-   */
-  private readonly beatorajaTextureCachesByEntry = new Map<string, BeatorajaTextureCache>();
-  /**
-   * Per-entry skin font cache. Reused while the same theme is active, then disposed when a new
-   * theme is dropped so `document.fonts` and Pixi's bitmap-font cache don't accumulate old entries.
-   */
-  private readonly beatorajaFontCachesByEntry = new Map<string, BeatorajaFontCache>();
-
-  private disposeBeatorajaFontCaches(): void {
-    for (const cache of this.beatorajaFontCachesByEntry.values()) {
-      (cache as BeatorajaFontCache & { dispose?: () => void }).dispose?.();
-    }
-    this.beatorajaFontCachesByEntry.clear();
   }
 
   /**
@@ -3431,15 +3409,8 @@ class PlayerWebDemoApp {
       return;
     }
 
-    // Two-pass evaluation — same contract as the select scene.
-    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
-    if (!headerLoad.ok) {
-      gameplayLog.warn(`beatoraja gameplay header: ${headerLoad.error.message}`);
-      this.setStatus(`Beatoraja gameplay unavailable: ${headerLoad.error.message}`);
-      void this.showSelect();
-      return;
-    }
-    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
+    // Two-pass evaluation — same contract as the select scene. Textures and fonts are reused when the entry's were
+    // decoded before.
     // Gameplay skins don't crash without runtimeContext (the load-time `main_state.option`
     // pattern is unique to ModernChic decide; play scenes use op gates on destinations,
     // evaluated at render time with a fresh per-frame context). Skip the load-time
@@ -3447,58 +3418,31 @@ class PlayerWebDemoApp {
     // skins reacted unexpectedly to mid-load `main_state.option` returning chart-aware
     // values where they previously got `false`. Decide / result still inject because
     // ModernChic specifically pre-computes per-difficulty values during `main()`.
-    const result = loadBeatorajaSkin({
-      entryPath: selectedEntry.entryPath,
+    const load = await loadBeatorajaSceneKit({
       files: bundle.files,
-      skinConfig: config,
+      entryPath: selectedEntry.entryPath,
+      caches: this.beatorajaKitCaches,
+      onSources: (sourceBundle) => {
+        gameplayLog.info(
+          `beatoraja gameplay source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${selectedEntry.entryPath})`,
+        );
+        for (const u of sourceBundle.unresolved) {
+          gameplayLog.warn(`beatoraja gameplay unresolved source[${u.id}] '${u.path}': ${u.reason}`);
+        }
+      },
+      onFonts: (loaded, declared) => {
+        gameplayLog.info(
+          `beatoraja gameplay fonts: declared=${declared} loaded=${loaded.values().length} (entry=${selectedEntry.entryPath})`,
+        );
+      },
     });
-    if (!result.ok || !result.skin) {
-      const reason = result.ok ? 'skin payload missing' : result.error.message;
-      gameplayLog.warn(`beatoraja gameplay: ${reason}`);
-      this.setStatus(`Beatoraja gameplay unavailable: ${reason}`);
+    if (!load.ok) {
+      gameplayLog.warn(`beatoraja gameplay${load.stage === 'header' ? ' header' : ''}: ${load.message}`);
+      this.setStatus(`Beatoraja gameplay unavailable: ${load.message}`);
       void this.showSelect();
       return;
     }
-    // Narrow the union by extracting the (now-known-defined) `skin` reference; subsequent uses
-    // type-check without `!` operators.
-    const skin = result.skin;
-    const skinLoad = { entry: selectedEntry, skin };
-
-    // 2. Texture cache for the skin variant — reuse if previously decoded.
-    let textures = this.beatorajaTextureCachesByEntry.get(skinLoad.entry.entryPath);
-    if (textures === undefined) {
-      const sourceBundle = bundleBeatorajaSources({
-        files: bundle.files,
-        entryPath: skinLoad.entry.entryPath,
-        sources: (skinLoad.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-        filepathSchema: skinLoad.skin.filepath,
-        filepathOverrides: config.file,
-      });
-      gameplayLog.info(
-        `beatoraja gameplay source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${skinLoad.entry.entryPath})`,
-      );
-      for (const u of sourceBundle.unresolved) {
-        gameplayLog.warn(`beatoraja gameplay unresolved source[${u.id}] '${u.path}': ${u.reason}`);
-      }
-      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
-      this.beatorajaTextureCachesByEntry.set(skinLoad.entry.entryPath, textures);
-    }
-
-    // 2b. Skin font cache. Same per-entry memoization as textures — TTFs are tiny (≤ a few hundred KB)
-    // and the registered FontFace outlives every scene anyway.
-    let fonts = this.beatorajaFontCachesByEntry.get(skinLoad.entry.entryPath);
-    if (fonts === undefined) {
-      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.skin.font);
-      fonts = await loadBeatorajaFonts({
-        files: bundle.files,
-        entryPath: skinLoad.entry.entryPath,
-        fonts: fontDeclarations,
-      });
-      gameplayLog.info(
-        `beatoraja gameplay fonts: declared=${fontDeclarations.length} loaded=${fonts.values().length} (entry=${skinLoad.entry.entryPath})`,
-      );
-      this.beatorajaFontCachesByEntry.set(skinLoad.entry.entryPath, fonts);
-    }
+    const { skin, textures, fonts, skinConfig: config } = load.kit;
 
     // 3. Audio + BGA prep — owns the AudioContext for this play. The play tempo is read once, here, for the prep and the
     // engine alike. A course stage plays with what its course allows (its lane-option constraint's FLIP, and an LR2
@@ -3593,7 +3537,7 @@ class PlayerWebDemoApp {
     // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
     let givingUp = false;
     this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
-      skin: skinLoad.skin,
+      skin,
       textures,
       fonts,
       skinConfig: config,
@@ -3742,7 +3686,7 @@ class PlayerWebDemoApp {
     this.refreshBeatorajaSkinOptionsGui({
       title: `Skin Config (Play ${variant}K)`,
       entryPath: selectedEntry.entryPath,
-      header: headerLoad.header,
+      header: load.header,
       onApply: (nextConfig) => {
         void this.applyBeatorajaPlaySkinConfig(selectedEntry.entryPath, variant, nextConfig);
       },
@@ -3763,34 +3707,23 @@ class PlayerWebDemoApp {
     const bundle = this.beatorajaTheme;
     if (!bundle || !this.beatorajaGameplayView) return;
     // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an
-    // alternate skin from the Debug Menu's skin-picker dropdown.
-    const result = loadBeatorajaSkin({ entryPath, files: bundle.files, skinConfig: config });
-    if (!result.ok || !result.skin) return;
-    this.beatorajaTextureCachesByEntry.delete(entryPath);
-    const sourceBundle = bundleBeatorajaSources({
+    // alternate skin from the Debug Menu's skin-picker dropdown. The textures are decoded again: option changes can
+    // alter `source[]`.
+    const load = await loadBeatorajaSceneKit({
       files: bundle.files,
       entryPath,
-      sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-      filepathSchema: result.skin.filepath,
-      filepathOverrides: config.file,
+      caches: this.beatorajaKitCaches,
+      skinConfig: config,
+      reloadTextures: true,
     });
-    const textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
-    this.beatorajaTextureCachesByEntry.set(entryPath, textures);
-    let fonts = this.beatorajaFontCachesByEntry.get(entryPath);
-    if (fonts === undefined) {
-      fonts = await loadBeatorajaFonts({
-        files: bundle.files,
-        entryPath,
-        fonts: normalizeBeatorajaFonts(result.skin.font),
-      });
-      this.beatorajaFontCachesByEntry.set(entryPath, fonts);
-    }
-    this.beatorajaGameplayView.replaceSkin({ skin: result.skin, skinConfig: config, textures, fonts });
+    if (!load.ok) return;
+    const { skin, textures, fonts } = load.kit;
+    this.beatorajaGameplayView.replaceSkin({ skin, skinConfig: config, textures, fonts });
 
     this.refreshBeatorajaSkinOptionsGui({
       title: `Skin Config (Play ${variant}K)`,
       entryPath,
-      header: result.header,
+      header: load.header,
       onApply: (nextConfig) => {
         void this.applyBeatorajaPlaySkinConfig(entryPath, variant, nextConfig);
       },
@@ -3824,57 +3757,31 @@ class PlayerWebDemoApp {
     }
 
     // Two-pass evaluation — header pass picks up the skin's `property[]` schema, the second pass
-    // re-runs `main()` with default option picks so dynamic `source[]` / `destination[]` populate.
-    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
-    if (!headerLoad.ok) {
-      gameplayLog.warn(`beatoraja select: ${headerLoad.error.message}`);
-      this.setStatus(`Beatoraja select unavailable: ${headerLoad.error.message}`);
-      return;
-    }
-    // Resolve cached skin config (or seed defaults from the header's property[] schema). The
-    // skin-options panel mutates this object as the user picks options.
-    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
-    const result = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files, skinConfig: config });
-    if (!result.ok || !result.skin) {
-      const reason = result.ok ? 'skin payload missing' : result.error.message;
-      gameplayLog.warn(`beatoraja select: ${reason}`);
-      this.setStatus(`Beatoraja select unavailable: ${reason}`);
-      return;
-    }
-    // Narrow the union by extracting the (now-known-defined) `skin` reference; subsequent uses
-    // type-check without `!` operators.
-    const skin = result.skin;
-    const skinLoad = { entry: selectedEntry, skin };
-
+    // re-runs `main()` with the cached option picks (or defaults seeded from the header) so dynamic `source[]` /
+    // `destination[]` populate. The skin-options panel mutates the config as the user picks options.
     // Texture + font cache — same per-entry memoization as the gameplay path. The select skin lives
-    // at a different `entryPath` than `play_*.luaskin` so the caches are naturally segregated.
-    let textures = this.beatorajaTextureCachesByEntry.get(skinLoad.entry.entryPath);
-    if (textures === undefined) {
-      const sourceBundle = bundleBeatorajaSources({
-        files: bundle.files,
-        entryPath: skinLoad.entry.entryPath,
-        sources: (skinLoad.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-        filepathSchema: skinLoad.skin.filepath,
-      });
-      gameplayLog.info(
-        `beatoraja select source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${skinLoad.entry.entryPath})`,
-      );
-      for (const u of sourceBundle.unresolved) {
-        gameplayLog.warn(`beatoraja select unresolved source[${u.id}] '${u.path}': ${u.reason}`);
-      }
-      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
-      this.beatorajaTextureCachesByEntry.set(skinLoad.entry.entryPath, textures);
+    // at a different `entryPath` than `play_*.luaskin` so the caches are naturally segregated. Its first decode
+    // resolves `source[]` without the config's `filepath[]` picks, as it always has; a skin-config change applies them.
+    const load = await loadBeatorajaSceneKit({
+      files: bundle.files,
+      entryPath: selectedEntry.entryPath,
+      caches: this.beatorajaKitCaches,
+      applyFilepathPicks: false,
+      onSources: (sourceBundle) => {
+        gameplayLog.info(
+          `beatoraja select source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${selectedEntry.entryPath})`,
+        );
+        for (const u of sourceBundle.unresolved) {
+          gameplayLog.warn(`beatoraja select unresolved source[${u.id}] '${u.path}': ${u.reason}`);
+        }
+      },
+    });
+    if (!load.ok) {
+      gameplayLog.warn(`beatoraja select: ${load.message}`);
+      this.setStatus(`Beatoraja select unavailable: ${load.message}`);
+      return;
     }
-    let fonts = this.beatorajaFontCachesByEntry.get(skinLoad.entry.entryPath);
-    if (fonts === undefined) {
-      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.skin.font);
-      fonts = await loadBeatorajaFonts({
-        files: bundle.files,
-        entryPath: skinLoad.entry.entryPath,
-        fonts: fontDeclarations,
-      });
-      this.beatorajaFontCachesByEntry.set(skinLoad.entry.entryPath, fonts);
-    }
+    const { skin, textures, fonts, skinConfig: config } = load.kit;
 
     // Capture the OUTGOING scene's state before disposing so the snapshot is fresh — covers
     // the rare hot-swap case where `showBeatorajaSelect` runs while a scene is already up
@@ -3885,7 +3792,7 @@ class PlayerWebDemoApp {
     }
     this.disposeScene(this.beatorajaSelectScene);
     this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
-      skin: skinLoad.skin,
+      skin,
       // The page's search field (IME and all) does the typing; the scene only filters.
       externalSearch: true,
       textures,
@@ -3965,8 +3872,8 @@ class PlayerWebDemoApp {
         // ±1 ms per click). Persist back into the per-entry cache so the next mount /
         // `replaceSkin` keeps the adjustment, and re-apply through `applyBeatorajaSelectSkinConfig`
         // so the bottom-centre options panel re-renders with the new value.
-        this.beatorajaSkinConfigByEntry.set(skinLoad.entry.entryPath, next);
-        void this.applyBeatorajaSelectSkinConfig(skinLoad.entry.entryPath, next);
+        this.beatorajaKitCaches.skinConfigs.set(selectedEntry.entryPath, next);
+        void this.applyBeatorajaSelectSkinConfig(selectedEntry.entryPath, next);
       },
     });
     await this.sceneHost.setScene(this.beatorajaSelectScene);
@@ -3978,7 +3885,7 @@ class PlayerWebDemoApp {
     this.refreshBeatorajaSkinOptionsGui({
       title: 'Skin Config (Select)',
       entryPath: selectedEntry.entryPath,
-      header: headerLoad.header,
+      header: load.header,
       onApply: (nextConfig) => {
         void this.applyBeatorajaSelectSkinConfig(selectedEntry.entryPath, nextConfig);
       },
@@ -4097,38 +4004,25 @@ class PlayerWebDemoApp {
     const bundle = this.beatorajaTheme;
     if (!bundle || !this.beatorajaSelectScene) return;
     // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an
-    // alternate skin from the Debug Menu's skin-picker dropdown.
-    const result = loadBeatorajaSkin({ entryPath, files: bundle.files, skinConfig: config });
-    if (!result.ok || !result.skin) return;
-    // Drop and re-decode the texture cache for this entry — option changes can alter `source[]`.
-    this.beatorajaTextureCachesByEntry.delete(entryPath);
-    const sourceBundle = bundleBeatorajaSources({
+    // alternate skin from the Debug Menu's skin-picker dropdown. Drop and re-decode the texture cache for this entry —
+    // option changes can alter `source[]`; a font cache miss (fonts may differ between skins) loads them fresh.
+    const load = await loadBeatorajaSceneKit({
       files: bundle.files,
       entryPath,
-      sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-      filepathSchema: result.skin.filepath,
-      filepathOverrides: config.file,
+      caches: this.beatorajaKitCaches,
+      skinConfig: config,
+      reloadTextures: true,
     });
-    const textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
-    this.beatorajaTextureCachesByEntry.set(entryPath, textures);
-    let fonts = this.beatorajaFontCachesByEntry.get(entryPath);
-    if (fonts === undefined) {
-      // Per-entry font cache miss — fonts may differ between skins, so load fresh for this entry.
-      fonts = await loadBeatorajaFonts({
-        files: bundle.files,
-        entryPath,
-        fonts: normalizeBeatorajaFonts(result.skin.font),
-      });
-      this.beatorajaFontCachesByEntry.set(entryPath, fonts);
-    }
-    this.beatorajaSelectScene.replaceSkin({ skin: result.skin, skinConfig: config, textures, fonts });
+    if (!load.ok) return;
+    const { skin, textures, fonts } = load.kit;
+    this.beatorajaSelectScene.replaceSkin({ skin, skinConfig: config, textures, fonts });
 
     // Refresh the skin-options panel against the new entry's header so the property dropdowns
     // reflect the new skin's `property[]` schema.
     this.refreshBeatorajaSkinOptionsGui({
       title: 'Skin Config (Select)',
       entryPath,
-      header: result.header,
+      header: load.header,
       onApply: (nextConfig) => {
         void this.applyBeatorajaSelectSkinConfig(entryPath, nextConfig);
       },
@@ -4167,52 +4061,24 @@ class PlayerWebDemoApp {
     );
     if (selectedEntry === undefined) return false;
 
-    // Two-pass evaluation — same `loadBeatorajaSkin` contract as select / play. The first pass
+    // Two-pass evaluation — same `loadBeatorajaSceneKit` contract as select / play. The first pass
     // gives us the header (used for `property[]` dropdown); the second runs the skin's `main()`
     // with the resolved option set so dynamic destinations populate. The phase-2 eval also
     // gets a `runtimeContext` populated with the chart's difficulty ops so themes that
     // pre-compute per-difficulty values at load time (e.g. ModernChic's
-    // `CUSTOM.NUM.diffRGB()`) see a non-`nil` answer instead of crashing on `RGB[1]`.
-    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
-    if (!headerLoad.ok) {
-      gameplayLog.warn(`beatoraja decide: ${headerLoad.error.message}`);
-      return false;
-    }
-    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
-    const result = loadBeatorajaSkin({
-      entryPath: selectedEntry.entryPath,
+    // `CUSTOM.NUM.diffRGB()`) see a non-`nil` answer instead of crashing on `RGB[1]`. Textures and fonts reuse the
+    // entry's cached ones or are decoded and registered fresh.
+    const load = await loadBeatorajaSceneKit({
       files: bundle.files,
-      skinConfig: config,
-      runtimeContext: this.buildBeatorajaSkinLoadContext(song, config),
+      entryPath: selectedEntry.entryPath,
+      caches: this.beatorajaKitCaches,
+      runtimeContext: (skinConfig) => this.buildBeatorajaSkinLoadContext(song, skinConfig),
     });
-    if (!result.ok || !result.skin) {
-      const reason = result.ok ? 'skin payload missing' : result.error.message;
-      gameplayLog.warn(`beatoraja decide: ${reason}`);
+    if (!load.ok) {
+      gameplayLog.warn(`beatoraja decide: ${load.message}`);
       return false;
     }
-
-    // Texture + font cache lookup — reuse existing entries, decode + register fresh ones.
-    let textures = this.beatorajaTextureCachesByEntry.get(selectedEntry.entryPath);
-    if (textures === undefined) {
-      const sourceBundle = bundleBeatorajaSources({
-        files: bundle.files,
-        entryPath: selectedEntry.entryPath,
-        sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-        filepathSchema: result.skin.filepath,
-        filepathOverrides: config.file,
-      });
-      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
-      this.beatorajaTextureCachesByEntry.set(selectedEntry.entryPath, textures);
-    }
-    let fonts = this.beatorajaFontCachesByEntry.get(selectedEntry.entryPath);
-    if (fonts === undefined) {
-      fonts = await loadBeatorajaFonts({
-        files: bundle.files,
-        entryPath: selectedEntry.entryPath,
-        fonts: normalizeBeatorajaFonts(result.skin.font),
-      });
-      this.beatorajaFontCachesByEntry.set(selectedEntry.entryPath, fonts);
-    }
+    const { skin, textures, fonts, skinConfig: config } = load.kit;
 
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
@@ -4251,7 +4117,7 @@ class PlayerWebDemoApp {
     const chartImages = await this.loadBeatorajaChartImages(song);
 
     this.beatorajaDecideScene = new PixiBeatorajaDecideScene({
-      skin: result.skin,
+      skin,
       textures,
       fonts,
       // Pass the resolved chart so the decide skin's bpmgraph element (when authored) plots the
@@ -4327,48 +4193,20 @@ class PlayerWebDemoApp {
     );
     if (selectedEntry === undefined) return false;
 
-    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
-    if (!headerLoad.ok) {
-      gameplayLog.warn(`beatoraja result: ${headerLoad.error.message}`);
-      return false;
-    }
-    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
     // Phase-2 eval gets the chart's difficulty ops via `runtimeContext` so result themes that
     // pre-compute per-difficulty values at load time (mirroring the decide path's
     // ModernChic-style `diffRGB()` pattern) don't crash on `nil` indexing.
-    const result = loadBeatorajaSkin({
-      entryPath: selectedEntry.entryPath,
+    const load = await loadBeatorajaSceneKit({
       files: bundle.files,
-      skinConfig: config,
-      runtimeContext: this.buildBeatorajaSkinLoadContext(song, config),
+      entryPath: selectedEntry.entryPath,
+      caches: this.beatorajaKitCaches,
+      runtimeContext: (skinConfig) => this.buildBeatorajaSkinLoadContext(song, skinConfig),
     });
-    if (!result.ok || !result.skin) {
-      const reason = result.ok ? 'skin payload missing' : result.error.message;
-      gameplayLog.warn(`beatoraja result: ${reason}`);
+    if (!load.ok) {
+      gameplayLog.warn(`beatoraja result: ${load.message}`);
       return false;
     }
-
-    let textures = this.beatorajaTextureCachesByEntry.get(selectedEntry.entryPath);
-    if (textures === undefined) {
-      const sourceBundle = bundleBeatorajaSources({
-        files: bundle.files,
-        entryPath: selectedEntry.entryPath,
-        sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
-        filepathSchema: result.skin.filepath,
-        filepathOverrides: config.file,
-      });
-      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
-      this.beatorajaTextureCachesByEntry.set(selectedEntry.entryPath, textures);
-    }
-    let fonts = this.beatorajaFontCachesByEntry.get(selectedEntry.entryPath);
-    if (fonts === undefined) {
-      fonts = await loadBeatorajaFonts({
-        files: bundle.files,
-        entryPath: selectedEntry.entryPath,
-        fonts: normalizeBeatorajaFonts(result.skin.font),
-      });
-      this.beatorajaFontCachesByEntry.set(selectedEntry.entryPath, fonts);
-    }
+    const { skin, textures, fonts, skinConfig: config } = load.kit;
 
     await this.ensureHostMounted();
     this.disposeScene(this.beatorajaResultScene);
@@ -4390,7 +4228,7 @@ class PlayerWebDemoApp {
       this.beatorajaThemeBgm.result;
     this.beatorajaResultScene = new PixiBeatorajaResultScene({
       judgeRuleset: this.guiState.judgeRuleset,
-      skin: result.skin,
+      skin,
       textures,
       fonts,
       skinConfig: config,
@@ -4604,7 +4442,7 @@ class PlayerWebDemoApp {
   ): void {
     const matched = candidates.find((entry) => entry.entryPath === entryPath);
     if (matched === undefined) return;
-    const config = this.resolveBeatorajaSkinConfig(entryPath, matched.header);
+    const config = this.beatorajaSkinConfig(entryPath, matched.header);
     if (typeCode === BEATORAJA_SKIN_TYPE.MUSIC_SELECT && this.beatorajaSelectScene !== undefined) {
       void this.applyBeatorajaSelectSkinConfig(entryPath, config);
       return;
@@ -4620,95 +4458,31 @@ class PlayerWebDemoApp {
 
   /**
    * Pick the cached skin config for an entry — falling back to a fresh defaults-fill from the
-   * header's `property[]` schema. Mutating the returned object directly mutates the cache, but the
-   * skin-options panel emits fresh copies on change so the cached state never becomes accidentally
-   * shared with downstream consumers.
+   * header's `property[]` / `filepath[]` schema (`resolveBeatorajaSkinConfig`). Mutating the returned object directly
+   * mutates the cache, but the skin-options panel emits fresh copies on change so the cached state never becomes
+   * accidentally shared with downstream consumers.
    */
-  /**
-   * Build a `BeatorajaLuaRuntimeContext` for skin-load time so themes that compute values via
-   * `main_state.option(...)` inside `main()` see chart-aware ops. Without this:
-   *
-   *   ModernChic decide.lua's `lockonAnimation` calls `CUSTOM.NUM.diffRGB()` which does
-   *   `main_state.option(MAIN.OP.DIFFICULTY1..)` → returns false → falls through to `nil` →
-   *   `RGB[1]` index crashes the entire `main()` evaluation → the load fails silently and
-   *   `showBeatorajaDecide` returns false (= the user's reported "no decide animation,
-   *   the scene jumps straight to PLAY" symptom).
-   *
-   * The context's `option` reflects the same op set the scene would compute on mount, so any
-   * pre-computed RGB / position / asset choice the skin makes at load time matches what would
-   * render anyway. Surfacing the chart's difficulty + skin_config option picks is enough to
-   * unblock the surveyed cases (ModernChic decide / result); other accessors stay
-   * \`undefined\` and fall through to the stub defaults.
-   */
-  private buildBeatorajaSkinLoadContext(
-    song: BrowserSongEntry | undefined,
-    skinConfig: BeatorajaSkinConfig,
-  ): BeatorajaLuaRuntimeContext {
-    const ops = new Set(buildBaseOpSet(skinConfig.option));
-    const difficulty = song?.chart.metadata.difficulty;
-    switch (difficulty) {
-      case 1:
-        ops.add(BEATORAJA_OP.LEVEL_BEGINNER);
-        ops.add(BEATORAJA_OP.DIFFICULTY_BEGINNER);
-        break;
-      case 2:
-        ops.add(BEATORAJA_OP.LEVEL_NORMAL);
-        ops.add(BEATORAJA_OP.DIFFICULTY_NORMAL);
-        break;
-      case 3:
-        ops.add(BEATORAJA_OP.LEVEL_HYPER);
-        ops.add(BEATORAJA_OP.DIFFICULTY_HYPER);
-        break;
-      case 4:
-        ops.add(BEATORAJA_OP.LEVEL_ANOTHER);
-        ops.add(BEATORAJA_OP.DIFFICULTY_ANOTHER);
-        break;
-      case 5:
-        ops.add(BEATORAJA_OP.LEVEL_INSANE);
-        ops.add(BEATORAJA_OP.DIFFICULTY_INSANE);
-        break;
-      default:
-        ops.add(BEATORAJA_OP.DIFFICULTY_UNDEFINED);
-        break;
-    }
-    const audio = this.beatorajaSkinAudio;
-    return {
-      option: (id) => ops.has(id),
-      // Wire `main_state.audio_play / audio_loop / audio_stop` to the theme-bundle audio
-      // player. ModernChic's `Root/customsound.lua` calls these from every panel-toggle /
-      // song-change / confirm — without them the menu UI feels dead even though the eval
-      // doesn't crash. Each callback returns false when the player isn't constructed (no
-      // theme bundle yet) so the Lua side gracefully no-ops.
-      audioPlay: audio === undefined ? undefined : (path, vol) => audio.play(path, vol),
-      audioLoop: audio === undefined ? undefined : (path, vol) => audio.loop(path, vol),
-      audioStop: audio === undefined ? undefined : (path) => audio.stop(path),
-    };
+  private beatorajaSkinConfig(entryPath: string, header: BeatorajaSkinHeader): BeatorajaSkinConfig {
+    return resolveBeatorajaSkinConfig(
+      this.beatorajaKitCaches,
+      entryPath,
+      header,
+      this.beatorajaTheme?.files ?? new Map(),
+    );
   }
 
-  private resolveBeatorajaSkinConfig(entryPath: string, header: BeatorajaSkinHeader): BeatorajaSkinConfig {
-    let cached = this.beatorajaSkinConfigByEntry.get(entryPath);
-    if (cached === undefined) {
-      // Seed both `option` (from `property[].def`) AND `file` (from `filepath[].def`). Earlier
-      // `file` started empty, which made the wildcard fallback inside `resolveSourcePath` pick
-      // whichever filename happened to sort first instead of the author's authored default —
-      // ModernChic's `key` filepath got `#default.png` instead of the intended `harf.png`,
-      // its `bomb` filepath got `Kakabomb.png` instead of `diamond SCUROed..png`, etc.
-      // `buildDefaultSkinConfigFiles` resolves each `filepath[].def` against the wildcard's
-      // match set so first-time mounts pick the author-intended file rather than a sort-order
-      // accident. The bundle's `files` map is the same one `loadBeatorajaSkin` consumed, so
-      // the wildcard expansion sees identical candidates either way.
-      const file =
-        this.beatorajaTheme !== undefined
-          ? buildDefaultSkinConfigFiles(header, this.beatorajaTheme.files, entryPath)
-          : {};
-      // `customOffset` starts empty — the GUI's per-slot zero-fill happens at panel build
-      // time. Storing the empty object explicitly here means the config shape stays
-      // consistent across the cache vs. the GUI emit path (both have a `customOffset` key,
-      // even if empty), which keeps spread / deep-clone snapshots free of surprises.
-      cached = { offset: 0, option: buildDefaultSkinConfigOptions(header), file, customOffset: {} };
-      this.beatorajaSkinConfigByEntry.set(entryPath, cached);
-    }
-    return cached;
+  /**
+   * The `main_state` a decide / result skin sees while its `main()` runs: the chart's difficulty ops and the skin
+   * config's ops, with `main_state.audio_*` wired to the theme-bundle audio player (`createBeatorajaSkinLoadContext`).
+   * ModernChic's decide.lua crashes its whole `main()` without the difficulty ops, and its `Root/customsound.lua` calls
+   * the audio accessors from every panel toggle.
+   */
+  private buildBeatorajaSkinLoadContext(song: BrowserSongEntry, skinConfig: BeatorajaSkinConfig) {
+    return createBeatorajaSkinLoadContext({
+      difficulty: song.chart.metadata.difficulty,
+      skinConfig,
+      skinAudio: this.beatorajaSkinAudio,
+    });
   }
 
   /**
@@ -4755,7 +4529,7 @@ class PlayerWebDemoApp {
     header: BeatorajaSkinHeader;
     onApply: (updatedConfig: BeatorajaSkinConfig) => void;
   }): void {
-    const config = this.resolveBeatorajaSkinConfig(args.entryPath, args.header);
+    const config = this.beatorajaSkinConfig(args.entryPath, args.header);
     const candidates = this.collectBeatorajaFileCandidates(args.entryPath, args.header);
     const gui = this.ensureBeatorajaSkinOptionsGui();
     gui.setSkin({
@@ -4770,7 +4544,7 @@ class PlayerWebDemoApp {
       fileCandidates: candidates,
       onChange: (next) => {
         // Persist and notify the caller so it can re-mount the active scene with the new config.
-        this.beatorajaSkinConfigByEntry.set(args.entryPath, next);
+        this.beatorajaKitCaches.skinConfigs.set(args.entryPath, next);
         args.onApply(next);
       },
     });
