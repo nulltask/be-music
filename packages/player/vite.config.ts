@@ -12,6 +12,7 @@ export default defineConfig({
       judging: 'src/judging.ts',
       'playable-notes': 'src/playable-notes.ts',
       playlog: 'src/playlog/index.ts',
+      records: 'src/records/index.ts',
       ruleset: 'src/ruleset/vocabulary.ts',
       'core/bga-timeline': 'src/core/bga-timeline.ts',
       'core/engine': 'src/core/engine.ts',

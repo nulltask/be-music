@@ -30,6 +30,7 @@ const runtimeNeutralSources = [
   'packages/player/src/core/**/*.ts',
   'packages/player/src/course/**/*.ts',
   'packages/player/src/playlog/**/*.ts',
+  'packages/player/src/records/**/*.ts',
   'packages/player/src/ruleset/**/*.ts',
 ];
 /** Node / CLI entry points inside those trees: the runtime adapters the rule above points to. */
