@@ -31,16 +31,11 @@ import {
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { SceneIdentity } from '../../host/family-kit.ts';
 import { staggerDestroyTextures } from '../pixi-utils.ts';
-import { BG, BGA, DESIGN_HEIGHT, DESIGN_WIDTH, FALLBACK_INTRO_DELAY_MS } from '../gameplay-constants.ts';
+import { BG, FALLBACK_INTRO_DELAY_MS } from '../gameplay-constants.ts';
 import { snapHiSpeed, stepPlayerHiSpeed } from '../hi-speed.ts';
 import { resolveSideRelativeLaneIndex } from '../gameplay-lanes.ts';
-import type { BeMusicGameplayLayout, BeMusicLaneCover, BeMusicStage } from '../../skin/be-music/types.ts';
-import {
-  resolveGameplayLayout,
-  resolveStageOrientation,
-  type BeMusicLongNote,
-  type GameplayLayoutMode,
-} from '@be-music/skin-sdk';
+import type { BeMusicLaneCover, BeMusicStage } from '../../skin/be-music/types.ts';
+import { resolveStageOrientation, type BeMusicLongNote, type GameplayLayoutMode } from '@be-music/skin-sdk';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import { PHANTOM_BOMB_DURATION_MS } from '../../skins/phantom/playfield.ts';
@@ -74,7 +69,12 @@ import {
   togglePause,
 } from '../../session/play/play-input.ts';
 import { disposePlayAudio, prepareAudio, prepareBga } from '../../session/play/play-media.ts';
-import { resolveLaneGeometry, resolveSkinlessGameplayChromeRuntime } from '../../view/built-in/play-chrome.ts';
+import {
+  collectBgaTargets,
+  LEGACY_STAGE_SIZE,
+  resolveBeMusicLayout,
+  resolveSkinlessGameplayChromeRuntime,
+} from '../../view/built-in/play-chrome.ts';
 import { disposeBgaVideos, renderBga } from '../../view/shared/bga-renderer.ts';
 import { renderBombEffects, renderBombs } from '../../view/shared/playfield/bombs.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
@@ -123,31 +123,6 @@ const NOTE_OVERSCAN = 48;
  * feedback.
  */
 export const KEY_ON_FADE_OUT_MS = 120;
-
-/** Default-family BGA rect: the fixed {@link BGA} square, drawn opaque and untinted. */
-const DEFAULT_BGA_TARGET: GameplayBgaTarget = createDefaultBgaTarget(BGA);
-
-function createDefaultBgaTarget(rect: { x: number; y: number; w: number; h: number }): GameplayBgaTarget {
-  return {
-    x: rect.x,
-    y: rect.y,
-    w: rect.w,
-    h: rect.h,
-    noBase: false,
-    noLayer: false,
-    noPoor: false,
-    applyToSprite: (sprite) => {
-      sprite.alpha = 1;
-      sprite.tint = 0xffffff;
-      sprite.blendMode = 'normal';
-    },
-  };
-}
-
-/** The LR2-compatible 640x480 canvas. */
-const LEGACY_STAGE_SIZE: GameplayStageSize = { width: DESIGN_WIDTH, height: DESIGN_HEIGHT };
-/** The 640x480 stage with the fixed default-family BGA square, for skins that declare no stage of their own. */
-const LEGACY_STAGE: BeMusicStage = { ...LEGACY_STAGE_SIZE, resolveBgaRect: () => ({ ...BGA }) };
 
 const DEFAULT_THEME_TIMING: GameplayThemeTiming = {
   loadEndOffsetMs: 0,
@@ -292,22 +267,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * rect. Pushing nothing hides the BGA for the frame.
    */
   protected collectBgaTargets(out: GameplayBgaTarget[]): void {
-    const stage = this.beMusicStage;
-    if (!stage) {
-      out.push(DEFAULT_BGA_TARGET);
-      return;
-    }
-    const geometry = resolveLaneGeometry(this);
-    // The landscape touch layout gives the BGA's room to the lanes.
-    if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
-    const rect = stage.resolveBgaRect(geometry.right);
-    const cached = this.stageBgaTarget;
-    if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
-      out.push(cached);
-      return;
-    }
-    this.stageBgaTarget = createDefaultBgaTarget(rect);
-    out.push(this.stageBgaTarget);
+    collectBgaTargets.call(this, out);
   }
 
   /**
@@ -1553,36 +1513,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       if (this.options.skinlessChromeRenderer) {
         this.options.skinlessChromeRenderer(context);
       } else {
-        this.skinBinding?.renderChrome({ ...context, layout: this.resolveBeMusicLayout() });
+        this.skinBinding?.renderChrome({ ...context, layout: resolveBeMusicLayout.call(this) });
       }
     } finally {
       this.skinLayerPool.end();
       this.overlayLayerPool.end();
     }
-  }
-
-  /**
-   * The gameplay layout handed to the be-music skin's chrome: stage, lanes, playfield bounds, judgement line, and BGA
-   * rect. Lane geometry only changes with the chart and the stage, so it is rebuilt when the lane channels, the play
-   * variant, or the stage (a rotation) change.
-   */
-  private resolveBeMusicLayout(): BeMusicGameplayLayout {
-    const stage = this.beMusicStage ?? LEGACY_STAGE;
-    const cached = this.beMusicLayout;
-    if (
-      cached &&
-      cached.channels === this.laneChannels &&
-      cached.variant === this.chartPlayVariant &&
-      cached.stage === stage
-    ) {
-      return cached.layout;
-    }
-    const layout = resolveGameplayLayout(
-      { laneChannels: this.laneChannels, playVariant: this.chartPlayVariant, layoutMode: this.layoutMode },
-      stage,
-    );
-    this.beMusicLayout = { channels: this.laneChannels, variant: this.chartPlayVariant, stage, layout };
-    return layout;
   }
 
   /** Redraws the design clip mask and background for a stage of `size`, when it differs from the last one drawn. */
