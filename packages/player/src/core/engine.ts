@@ -17,17 +17,18 @@ import { type PlayerSummary } from './engine-types.ts';
 /**
  * The playback engine's public surface (`@be-music/player` and `@be-music/player/core/engine`).
  *
- * The engine is split into a deterministic judge core and the drivers around it:
+ * The engine is a deterministic judge core and one play loop around it:
  *
  * - `judge-core.ts` / `auto-judge-core.ts` — pure judge state machines (`step(state, input) → effects`);
- * - `manual-play.ts` / `auto-play.ts` — the drivers: clock, input, audio, UI and logging around the cores;
+ * - `play.ts` — `manualPlay` / `autoPlay`: a play session (`play-session.ts`) run through the play loop
+ *   (`play-loop.ts`, `play-controls.ts`, `play-finish.ts`) with a judge strategy (`play-manual.ts`, `play-replay.ts`,
+ *   `play-auto.ts`) plugged in;
  * - `engine-effects.ts` — maps core effects onto the host's audio session, UI buses, play log and trace;
  * - `engine-preparation.ts`, `engine-audio.ts`, `engine-clock.ts`, `engine-trace.ts`, `engine-types.ts` — the
- *   driver-side services and the public types.
+ *   services around the loop and the public types.
  */
 export * from './engine-types.ts';
-export { autoPlay } from './auto-play.ts';
-export { manualPlay } from './manual-play.ts';
+export { autoPlay, manualPlay } from './play.ts';
 export {
   formatRandomPatternSummary,
   resolveBmsControlFlowForPlayback,
