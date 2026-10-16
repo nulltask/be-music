@@ -48,3 +48,13 @@ export { createDecideScene, type DecideScene, type DecideSceneKit, type DecideSc
 export type { DecideSessionEvents } from '../session/decide/decide-session.ts';
 export { createResultScene, type ResultScene, type ResultSceneKit, type ResultSceneOptions } from '../host/result.ts';
 export type { ResultSessionEvents } from '../session/result/result-session.ts';
+export {
+  createPlayScene,
+  type PlayScene,
+  type PlaySceneCourse,
+  type PlaySceneEvents,
+  type PlaySceneKit,
+  type PlaySceneOptions,
+  type PlaySceneRecording,
+  type PlaySceneSettings,
+} from '../host/play.ts';

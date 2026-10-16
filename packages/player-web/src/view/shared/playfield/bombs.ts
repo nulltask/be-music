@@ -16,17 +16,17 @@ import type { PlayfieldContext } from './context.ts';
  * clamp" explosion would keep displaying its last frame forever.
  */
 function cleanupBombTimers(ctx: PlayfieldContext): void {
-  if (ctx.bombStartedAt.size === 0) {
+  if (ctx.play.bombStartedAt.size === 0) {
     return;
   }
-  const now = ctx.playClock();
-  for (const [channel, startedAt] of ctx.bombStartedAt) {
+  const now = ctx.play.playClock();
+  for (const [channel, startedAt] of ctx.play.bombStartedAt) {
     const cleanupAtMs = ctx.theme.resolveBombDurationMs(channel);
     if (now - startedAt < cleanupAtMs) {
       continue;
     }
-    ctx.bombStartedAt.delete(channel);
-    ctx.bombJudge.delete(channel);
+    ctx.play.bombStartedAt.delete(channel);
+    ctx.play.bombJudge.delete(channel);
     ctx.theme.onThemeEvent({ kind: 'bomb-retired', channel });
   }
 }
@@ -39,7 +39,7 @@ export function renderBombs(ctx: PlayfieldContext): void {
   // When a theme owns the playfield its bombs are part of the theme's own chrome (the LR2 skin's `#DST_IMAGE` set,
   // gated on bomb timer 50–57 / 60–67). Drawing our own copy on top would double-render the explosion, so this path
   // only fires for the skinless experience.
-  if (ctx.theme.themeOwnsPlayfield() || ctx.bombStartedAt.size === 0) {
+  if (ctx.theme.themeOwnsPlayfield() || ctx.play.bombStartedAt.size === 0) {
     ctx.bombLayerPool.end();
     return;
   }
@@ -49,21 +49,25 @@ export function renderBombs(ctx: PlayfieldContext): void {
 
 /** The built-in bombs: `CoreGameplayView.renderBombEffects`, unless a theme draws its own. */
 export function renderBombEffects(ctx: PlayfieldContext): void {
-  const now = ctx.playClock();
+  const now = ctx.play.playClock();
   const bombs: BeMusicBomb[] = [];
-  for (const [channel, startedAt] of ctx.bombStartedAt) {
-    const lane = ctx.laneX.get(channel);
+  for (const [channel, startedAt] of ctx.play.bombStartedAt) {
+    const lane = ctx.play.laneX.get(channel);
     if (!lane) continue;
     bombs.push({
       channel,
-      kind: resolveBeMusicLaneKind(channel, resolveLr2LaneIndex(channel, ctx.chartPlayVariant), ctx.chartPlayVariant),
+      kind: resolveBeMusicLaneKind(
+        channel,
+        resolveLr2LaneIndex(channel, ctx.play.chartPlayVariant),
+        ctx.play.chartPlayVariant,
+      ),
       x: lane.x,
       w: lane.w,
       y: lane.bottom,
       elapsedMs: Math.max(0, now - startedAt),
       // Stable per hit: the start time changes on every re-trigger, so a new hit gets a new scatter.
       seed: Math.floor(startedAt * 7.31) % 100_003,
-      judge: ctx.bombJudge.get(channel),
+      judge: ctx.play.bombJudge.get(channel),
     });
   }
   const binding = ctx.skinBinding;
@@ -75,7 +79,7 @@ export function renderBombEffects(ctx: PlayfieldContext): void {
     pool: ctx.bombLayerPool,
     bombs,
     nowMs: now,
-    combo: ctx.playState.combo,
+    combo: ctx.play.playState.combo,
     effects: ctx.options.beMusicEffects ?? 'full',
     audio: ctx.audioFrame,
   });

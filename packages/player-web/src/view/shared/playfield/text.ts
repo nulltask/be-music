@@ -6,7 +6,7 @@ export function renderText(ctx: PlayfieldContext, width: number, height: number,
   ctx.textLayerPool.begin();
   ctx.theme.renderThemeText(seconds);
   ctx.textLayerPool.end();
-  ctx.overlay.visible = ctx.paused;
+  ctx.overlay.visible = ctx.play.paused;
   ctx.overlay.text = 'Paused';
   ctx.overlay.anchor.set(0.5);
   ctx.overlay.position.set(width / 2, height / 2);

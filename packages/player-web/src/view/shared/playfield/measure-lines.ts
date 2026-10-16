@@ -15,7 +15,7 @@ import type { PlayfieldContext } from './context.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 
 function resolveMeasureBeats(ctx: PlayfieldContext): number[] {
-  const song = ctx.song;
+  const song = ctx.play.song;
   if (!song) {
     return [];
   }
@@ -24,7 +24,7 @@ function resolveMeasureBeats(ctx: PlayfieldContext): number[] {
   }
   // The resolved chart's bar lines: one per measure start up to the last measure, using the chosen `#RANDOM` branch's
   // `#xxx02` lengths, and none when a bmson chart opts out with `lines: []`.
-  const beats = [...(ctx.resolvedPlayChart ?? resolveChart(song.chart)).barLines];
+  const beats = [...(ctx.play.resolvedPlayChart ?? resolveChart(song.chart)).barLines];
   ctx.measureBeatCache = { songId: song.id, beats };
   return beats;
 }
@@ -37,13 +37,13 @@ function resolveMeasureBeats(ctx: PlayfieldContext): number[] {
 export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWindow, pixelsPerBeat: number): void {
   const { currentBeat } = drawWindow;
   const beats = resolveMeasureBeats(ctx);
-  if (beats.length === 0 || ctx.laneChannels.length === 0) {
+  if (beats.length === 0 || ctx.play.laneChannels.length === 0) {
     return;
   }
-  const firstChannel = ctx.laneChannels[0]!;
-  const lastChannel = ctx.laneChannels[ctx.laneChannels.length - 1]!;
-  const left = ctx.laneX.get(firstChannel);
-  const right = ctx.laneX.get(lastChannel);
+  const firstChannel = ctx.play.laneChannels[0]!;
+  const lastChannel = ctx.play.laneChannels[ctx.play.laneChannels.length - 1]!;
+  const left = ctx.play.laneX.get(firstChannel);
+  const right = ctx.play.laneX.get(lastChannel);
   if (!left || !right) {
     return;
   }
@@ -53,7 +53,7 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
   if (drawWindow.rules === 'beatoraja') {
     // A bar line is a timeline like any other: gone once its time has come (a STOP on it included).
     firstBeatIndex = findFirstIndexNumberAtOrAfter(beats, currentBeat);
-    const timing = ctx.timingResolver;
+    const timing = ctx.play.timingResolver;
     while (
       timing &&
       firstBeatIndex < beats.length &&
@@ -73,8 +73,8 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
     drawWindow.rules === 'beatoraja'
       ? drawWindow.lastBeat
       : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
-  const beatDistance = ctx.scrollMapper
-    ? (toBeat: number): number => ctx.scrollMapper!.distanceBetween(currentBeat, toBeat)
+  const beatDistance = ctx.play.scrollMapper
+    ? (toBeat: number): number => ctx.play.scrollMapper!.distanceBetween(currentBeat, toBeat)
     : (toBeat: number): number => toBeat - currentBeat;
   const drawBottom = resolveDrawBottom(drawWindow, bottom);
   const lineY = (beat: number): number => resolveDrawY(drawWindow, bottom - beatDistance(beat) * pixelsPerBeat, bottom);
@@ -134,13 +134,13 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
 
 /** The lane runs of this frame's lanes, recomputed only when their geometry changes. */
 function resolveMeasureLineRuns(ctx: PlayfieldContext): readonly SideLaneRun[] {
-  let signature = ctx.laneX.size;
-  for (const lane of ctx.laneX.values()) {
+  let signature = ctx.play.laneX.size;
+  for (const lane of ctx.play.laneX.values()) {
     signature = (signature * 31 + lane.x * 7 + lane.w) % 1_000_000_007;
   }
   const cached = ctx.measureLineRuns;
   if (cached && cached.signature === signature) return cached.runs;
-  const runs = resolveSideLaneRuns(ctx.laneX);
+  const runs = resolveSideLaneRuns(ctx.play.laneX);
   ctx.measureLineRuns = { signature, runs };
   return runs;
 }

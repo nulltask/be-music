@@ -491,14 +491,14 @@ SDK は、フレームやヘルパーが使う型も export しています。�
 - **ホスト側:** ホストはスキンをレジストリに登録します。
 
   ```ts
-  import { BUILT_IN_BE_MUSIC_SKINS, DefaultPixiGameplayView } from '@be-music/player-web/scenes';
+  import { BUILT_IN_BE_MUSIC_SKINS, createPlayScene } from '@be-music/player-web/scenes';
   import { createBeMusicSkinRegistry } from '@be-music/player-web/skin';
   import mySkin from 'my-be-music-skin';
 
   const skins = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
   const problems = skins.add(mySkin); // 追加できれば []、拒否されたらその理由
   const skin = skins.resolve('my-skin'); // 未知の id なら最初のスキンにフォールバック
-  // デフォルトファミリーのビューに渡す: new DefaultPixiGameplayView({ …, beMusicSkin: skin })
+  // 組み込みのシーンにキットとして渡す: createPlayScene({ family: 'built-in', skin }, { … })
   ```
 
   - `add` はスキンを検査します。同じ id が登録済みなら置き換えるので、開発中の再読み込みに便利です。

@@ -6,10 +6,9 @@
  * The functions read and write the scene's state through {@link PlayFrameContext}; the scene passes itself.
  */
 
-import type { TimingResolver } from '@be-music/audio-renderer/triggers';
 import { resolveStageOrientation } from '@be-music/skin-sdk';
 import type { Application, Container, Graphics, Text } from 'pixi.js';
-import type { AudioAnalyzer, AudioFeatures } from '../../runtime/audio-analysis.ts';
+import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { GameplayStageSize } from '../../scene/core/gameplay-theme.ts';
 import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 import {
@@ -58,15 +57,10 @@ export interface PlayFrameContext extends PlayfieldContext, BgaRendererContext {
   stampedDesignHeight: number;
   cachedScreenWidth: number;
   cachedScreenHeight: number;
-  readonly exiting: boolean;
-  readonly exitFadeOutMs: number;
-  readonly exitFadeStartedAt: number | undefined;
   enteredAt: number | undefined;
   readonly paintsThroughBeMusicSkin: boolean;
   audioFrame: AudioFeatures | undefined;
-  readonly audioAnalyzer: AudioAnalyzer | undefined;
   readonly perf: PerfTracker;
-  readonly timingResolver: TimingResolver | undefined;
 }
 
 /** Builds the scene graph under {@link root} on the first {@link prepare} or {@link enter}; later calls no-op. */
@@ -153,7 +147,7 @@ export function build(ctx: PlayFrameContext, host: PixiSceneHost): void {
  * back to 1 only when it diverges from 1, so steady-state has no GPU cost).
  */
 function applyExitFadeAlpha(ctx: PlayFrameContext): void {
-  if (!ctx.exiting) {
+  if (!ctx.play.exiting) {
     let alpha = 1;
     if (ctx.paintsThroughBeMusicSkin) {
       const now = performance.now();
@@ -163,19 +157,27 @@ function applyExitFadeAlpha(ctx: PlayFrameContext): void {
     if (ctx.designRoot.alpha !== alpha) ctx.designRoot.alpha = alpha;
     return;
   }
-  const fadeOutMs = ctx.exitFadeOutMs;
-  const fadeStart = ctx.exitFadeStartedAt;
+  const fadeOutMs = ctx.play.exitFadeOutMs;
+  const fadeStart = ctx.play.exitFadeStartedAt;
   if (fadeStart === undefined || fadeOutMs <= 0) {
     // Fade hasn't been seeded (or the theme has no fade-out); leave designRoot at full alpha. Close-only themes keep
     // the scene visible until the host transitions us out.
     if (ctx.designRoot.alpha !== 1) ctx.designRoot.alpha = 1;
     return;
   }
-  const elapsed = ctx.playClock() - fadeStart;
+  const elapsed = ctx.play.playClock() - fadeStart;
   ctx.designRoot.alpha = Math.max(0, Math.min(1, 1 - elapsed / fadeOutMs));
 }
 
-export function render(ctx: PlayFrameContext, seconds: number): void {
+/**
+ * Draws one frame of the play at chart time `seconds`. `audioFrame` is the mix analysed for this frame (a session that
+ * already sampled it hands it over, so the analyser is not stepped twice); without one the play's analyser is sampled.
+ */
+export function render(
+  ctx: PlayFrameContext,
+  seconds: number,
+  audioFrame: AudioFeatures | undefined = ctx.play.audioAnalyzer?.sample(ctx.play.playClock()),
+): void {
   const screenWidth = ctx.app.screen.width;
   const screenHeight = ctx.app.screen.height;
   const { width: designWidth, height: designHeight } = ctx.theme.stageSize();
@@ -195,12 +197,12 @@ export function render(ctx: PlayFrameContext, seconds: number): void {
   stampDesignRect(ctx, ctx.theme.stageSize());
   ctx.host?.setStageOrientation(resolveStageOrientation(ctx.theme.stageSize()));
   applyExitFadeAlpha(ctx);
-  ctx.audioFrame = ctx.audioAnalyzer?.sample(ctx.playClock());
+  ctx.audioFrame = audioFrame;
   ctx.perf.time('renderSkin', () => ctx.theme.renderThemeLayer(designWidth, designHeight));
   // LR2 negative-BPM reversal: the event pump stops firing BGA cues there, so the cue clock is clamped (freeze, not
   // rewind) while an already-playing movie keeps running on the true clock. All other `seconds` readers here
   // (progress ratio, time readouts, judge-until comparisons) stay on the true clock.
-  const reversalSeconds = ctx.timingResolver?.reversal?.seconds;
+  const reversalSeconds = ctx.play.timingResolver?.reversal?.seconds;
   const bgaCueSeconds = reversalSeconds === undefined ? seconds : Math.min(seconds, reversalSeconds);
   ctx.perf.time('renderBga', () => renderBga(ctx, seconds, bgaCueSeconds));
   ctx.perf.time('renderLanes', () => renderLanes(ctx, designWidth, designHeight));
