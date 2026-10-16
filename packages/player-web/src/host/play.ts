@@ -15,7 +15,8 @@ import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../sce
 import { KEY_ON_FADE_OUT_MS } from '../scene/gameplay-constants.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
 import { PlaySceneSession } from '../session/play/play-scene-session.ts';
-import { PlaySession, type PlaySessionTheme } from '../session/play/play-session.ts';
+import { PlaySession } from '../session/play/play-session.ts';
+import type { PlaySessionTheme } from '../session/play/play-session-theme.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { LEGACY_STAGE_SIZE } from '../view/built-in/play-chrome.ts';
 import { BUILT_IN_PLAY_TIMING, BuiltInPlayView } from '../view/built-in/play-view.ts';
@@ -290,10 +291,10 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
   let sceneSession: PlaySceneSession | undefined;
   let view: BuiltInPlayView | undefined;
   const theme: PlaySessionTheme = {
-    onThemeEvent: (event) => sceneSession?.queueEvent(event),
-    themeTiming: () => BUILT_IN_PLAY_TIMING,
-    resolveKeyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
-    stageSize: () => view?.playfieldSkin.stage ?? LEGACY_STAGE_SIZE,
+    timing: () => BUILT_IN_PLAY_TIMING,
+    moment: (moment) => sceneSession?.queueEvent(moment),
+    keyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
+    stage: () => view?.playfieldSkin.stage ?? LEGACY_STAGE_SIZE,
     uploadTextures: (textures) => view?.uploadTextures(textures, () => play.disposed) ?? Promise.resolve(),
   };
   const play = new PlaySession(

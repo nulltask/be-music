@@ -44,7 +44,7 @@ import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import { TouchLaneTracker } from '../../scene/core/touch-lanes.ts';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
-import type { GameplayLaneRect } from '../../scene/core/gameplay-theme.ts';
+import type { PlayfieldLaneRect } from '../../view/types.ts';
 
 export class PlaySessionState {
   /**
@@ -124,7 +124,7 @@ export class PlaySessionState {
    * 7K-flavored fallbacks keep behaving as before for skinless / pre-prepare code paths.
    */
   chartPlayVariant: ChartPlayVariant = '7';
-  laneX: Map<string, GameplayLaneRect> = new Map();
+  laneX: Map<string, PlayfieldLaneRect> = new Map();
   /**
    * `playClock()` value captured at `start()`. Theme animations (LR2 timer 0/40/41 — scene-start / READY / play-start)
    * anchor here so the intro slide-ins, scratch turntable rotation, and similar visuals play from the

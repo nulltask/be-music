@@ -9,7 +9,6 @@ import type { TimedLandmineNote } from '@be-music/player/playable-notes';
 import { resolveGameplayLaneGeometry } from '@be-music/skin-sdk';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { CORE_TEXT_FONT } from '../../scene/core/fonts.ts';
-import type { GameplayBgaTarget } from '../../scene/core/gameplay-theme.ts';
 import { GoneDrawObjects } from '../../scene/core/note-draw-window.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { PerfTracker } from '../../scene/perf.ts';
@@ -18,6 +17,7 @@ import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { SongImageCache } from '../../skin/be-music/song-images.ts';
 import type { BeMusicGameplayLayout, BeMusicStage } from '../../skin/be-music/types.ts';
 import type { SideLaneRun } from './playfield/measure-line-runs.ts';
+import type { PlayfieldBgaTarget } from '../types.ts';
 import type { PlayfieldRuntime, RuntimeNote } from './playfield/context.ts';
 
 export class PlayLayers {
@@ -54,7 +54,7 @@ export class PlayLayers {
   stampedDesignWidth = -1;
   stampedDesignHeight = -1;
   /** BGA target for the be-music stage, rebuilt only when the rect moves (see {@link collectBgaTargets}). */
-  stageBgaTarget: GameplayBgaTarget | undefined;
+  stageBgaTarget: PlayfieldBgaTarget | undefined;
   /**
    * Cached screen / design dimensions baked into the static graphics (`viewportBackground`, `background`,
    * `designClipMask`). Compared against the per-frame values so we only call `.clear().rect().fill()` when the size
@@ -136,7 +136,7 @@ export class PlayLayers {
    * worked out from; rebuilt only when the lanes move.
    */
   measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
-  readonly bgaTargetsScratch: GameplayBgaTarget[] = [];
+  readonly bgaTargetsScratch: PlayfieldBgaTarget[] = [];
   /**
    * Per-frame section timing tracker. Logs a console summary every second when enabled (via `?perf` URL flag or
    * `globalThis.__BE_MUSIC_PERF__ = true`). When disabled the wrapper adds no measurable overhead.

@@ -27,12 +27,12 @@ import {
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { setVideoPlaybackTempo } from '../../runtime/play-tempo.ts';
 import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
-import type { GameplayLaneRect } from '../../scene/core/gameplay-theme.ts';
 import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
 import { PIXELS_PER_BEAT } from '../../scene/gameplay-constants.ts';
 import { BE_MUSIC_HI_SPEED_SCALE, type PlaylogViewCursor } from '../../scene/playlog-view.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import { applyPlayEvent, type PlayStateContext } from './play-state.ts';
+import type { PlayfieldLaneRect } from '../../view/types.ts';
 
 /** The scene's members the view settings read and write: `CoreGameplayView`'s members of these names. */
 export interface PlayViewSettingsContext extends PlayStateContext {
@@ -44,7 +44,7 @@ export interface PlayViewSettingsContext extends PlayStateContext {
   readonly audioContextStartTime: number;
   readonly nonstopMixer: NonstopStageMixer | undefined;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }>;
-  readonly laneX: Map<string, GameplayLaneRect>;
+  readonly laneX: Map<string, PlayfieldLaneRect>;
   readonly chartBpmRange: ChartBpmRange | undefined;
   drawnLaneCovers: { covers: readonly LaneCoverState[]; drawn: LaneCover[] } | undefined;
   playlogViewCoalescer: PlaylogViewCoalescer | undefined;

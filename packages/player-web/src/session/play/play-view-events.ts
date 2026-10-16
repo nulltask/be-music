@@ -1,19 +1,18 @@
 /**
  * The moments of a play a view animates against, in the view contract's words (`PlayViewEvent`, `view/types.ts`): what
- * the play session raises through its theme (`GameplayThemeEvent`: the scene stages, the exit phases, judgments, the
- * full combo, gauge moves, bombs and the engine's lane commands), handed to the view in each `PlayFrame`.
+ * the play session raises for its view (`PlayMoment`: the scene stages, the exit phases, judgments, the full combo,
+ * gauge moves, bombs and the engine's lane commands), handed to the view in each `PlayFrame`.
  */
 
-import type { GameplayThemeEvent } from '../../scene/core/gameplay-theme.ts';
 import type { PlayViewEvent } from '../../view/types.ts';
+import type { PlayMoment } from './play-session-theme.ts';
 
 /**
- * `event` as a view reads it, or `undefined` for one the contract leaves out (a bomb the view itself retired). A judge
- * moment carries the judgment the session reports with it; a lane command maps to a lane, hold, long-note or POOR-image
- * event.
+ * `event` as a view reads it, or `undefined` for a judgment without the judge it reports. A judge moment carries the
+ * judgment the session reports with it; a lane command maps to a lane, hold, long-note or POOR-image event.
  */
-export function playViewEventFromTheme(
-  event: GameplayThemeEvent,
+export function playViewEventFromMoment(
+  event: PlayMoment,
   judgment?: { judge: Extract<PlayViewEvent, { kind: 'judge' }>['judge']; channel?: string; deltaMs?: number },
 ): PlayViewEvent | undefined {
   switch (event.kind) {
@@ -36,11 +35,9 @@ export function playViewEventFromTheme(
     case 'full-combo':
       return { kind: 'full-combo', atMs: event.at };
     case 'gauge':
-      return { kind: 'gauge', previous: event.previous, next: event.next };
+      return { kind: 'gauge', previous: event.previous, next: event.next, atMs: event.at };
     case 'bomb':
       return { kind: 'bomb', channel: event.channel, atMs: event.at };
-    case 'bomb-retired':
-      return undefined;
     case 'lane-command': {
       const command = event.command;
       switch (command.kind) {
