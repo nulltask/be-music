@@ -81,7 +81,7 @@ describe('resolveLr2PlayState ops', () => {
     const loading = resolveLr2PlayState(SETUP, frame({ loaded: false })).ops;
     expect(loading.has(LR2_OP.LOADING)).toBe(true);
     expect(loading.has(LR2_OP.LOADED)).toBe(false);
-    const { ops } = resolveLr2PlayState(SETUP, frame({ score: score({ exScore: 180 }) }));
+    const { ops } = resolveLr2PlayState(SETUP, frame({ score: score({ perfect: 90, exScore: 180 }) }));
     expect(ops.has(LR2_OP.RANK_1P_AAA)).toBe(true);
     expect(ops.has(LR2_OP.GAUGE_1P_50_59)).toBe(true);
   });
@@ -199,10 +199,17 @@ describe('play ops', () => {
     expect(resolveLr2GaugeRangeOp(150)).toBe(240);
   });
 
-  it('lights the rank op of the EX score over the chart’s notes', () => {
-    expect(resolveLr2RankOp({ total: 0, exScore: 0 })).toBeUndefined();
-    expect(resolveLr2RankOp({ total: 100, exScore: 200 })).toBe(LR2_OP.RANK_1P_AAA);
-    expect(resolveLr2RankOp({ total: 100, exScore: 0 })).toBe(LR2_OP.RANK_1P_F);
+  it('lights the rank op of the EX score over the notes judged so far, as LR2 does', () => {
+    // Nothing is lit before the first note is judged, whatever the chart's notes.
+    expect(resolveLr2RankOp(score())).toBeUndefined();
+    // 10 notes judged of the chart's 100, all PGREAT: AAA, not the F the EX score over every note would give.
+    expect(resolveLr2RankOp(score({ perfect: 10, exScore: 20 }))).toBe(LR2_OP.RANK_1P_AAA);
+    // 16 of 18 points is exactly 8/9: AAA; 15 of 18 is AA.
+    expect(resolveLr2RankOp(score({ perfect: 7, great: 2, exScore: 16 }))).toBe(LR2_OP.RANK_1P_AAA);
+    expect(resolveLr2RankOp(score({ perfect: 6, great: 3, exScore: 15 }))).toBe(LR2_OP.RANK_1P_AA);
+    // POORs are notes judged; an empty POOR is not.
+    expect(resolveLr2RankOp(score({ perfect: 1, poor: 9, emptyPoor: 50, exScore: 2 }))).toBe(LR2_OP.RANK_1P_F);
+    expect(resolveLr2RankOp(score({ perfect: 1, emptyPoor: 50, exScore: 2 }))).toBe(LR2_OP.RANK_1P_AAA);
   });
 });
 
