@@ -1,7 +1,7 @@
 const BASE62_DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
 /** Base-62 object keys a stitched chart can name (`01`-`zz`), the most a two-character key reaches. */
-export const NONSTOP_KEY_SPACE = 62 * 62 - 1;
+export const NONSTOP_KEY_SPACE: number = 62 * 62 - 1;
 
 /**
  * Hands out two-character base-62 object keys (`01`, `02`, … `zz`) for one resource table of a stitched chart, one per
