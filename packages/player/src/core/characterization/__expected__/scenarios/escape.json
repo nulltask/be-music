@@ -220,7 +220,7 @@
   },
   "replayOfTheAbortedLog": {
     "outcome": "completed",
-    "endedAtMs": 4716.667,
+    "endedAtMs": 1800,
     "summary": {
       "total": 11,
       "perfect": 3,
@@ -229,17 +229,17 @@
       "great": 1,
       "good": 1,
       "bad": 1,
-      "poor": 5,
+      "poor": 0,
       "emptyPoor": 0,
       "exScore": 7,
       "score": 68181,
       "gauge": {
-        "current": 51.454545,
+        "current": 81.454545,
         "max": 100,
         "clearThreshold": 80,
         "initial": 20,
         "effectiveTotal": 160,
-        "cleared": false,
+        "cleared": true,
         "type": "GROOVE",
         "survival": false,
         "failedMidPlay": false
@@ -251,58 +251,10 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","endOnFailure":true},
-      "results": {
-        "native": {
-          "ruleset": "be-music/native",
-          "judge": {"pgreat":3,"great":1,"good":1,"bad":1,"poor":5,"emptyPoor":0},
-          "fast": 1,
-          "slow": 1,
-          "exScore": 7,
-          "noteCount": 11,
-          "maxCombo": 3,
-          "djLevel": "E",
-          "gauge": {"type":"GROOVE","final":51.454545,"cleared":false},
-          "score": 68181
-        }
-      }
+      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","aborted":true,"abortedAtUs":1793333,"endOnFailure":true},
+      "results": "(same as manual)"
     },
-    "simulated": {
-      "lr2": {
-        "ruleset": "lr2/0",
-        "judge": {"pgreat":3,"great":1,"good":1,"bad":1,"poor":5,"emptyPoor":0},
-        "fast": 1,
-        "slow": 1,
-        "exScore": 7,
-        "noteCount": 11,
-        "maxCombo": 3,
-        "djLevel": "E",
-        "gauge": {"type":"GROOVE","final":51.454545,"cleared":false},
-        "score": 68181
-      },
-      "beatoraja": {
-        "ruleset": "beatoraja/0",
-        "judge": {"pgreat":3,"great":1,"good":2,"bad":0,"poor":5,"emptyPoor":0},
-        "fast": 1,
-        "slow": 2,
-        "exScore": 7,
-        "noteCount": 11,
-        "maxCombo": 6,
-        "djLevel": "E",
-        "gauge": {"type":"NORMAL","final":62.727273,"cleared":false}
-      },
-      "iidx": {
-        "ruleset": "iidx/0",
-        "judge": {"pgreat":3,"great":1,"good":1,"bad":1,"poor":5,"emptyPoor":0},
-        "fast": 1,
-        "slow": 1,
-        "exScore": 7,
-        "noteCount": 11,
-        "maxCombo": 3,
-        "djLevel": "E",
-        "gauge": {"type":"NORMAL","final":70,"cleared":false}
-      }
-    },
+    "simulated": "(same as manual)",
     "audio": [
       "0.000 start",
       "0.000 trigger 01:01@0+0/1",
@@ -313,10 +265,7 @@
       "1383.333 trigger 16:05@0+5/8",
       "1500.000 trigger 14:02@0+3/4",
       "1500.000 trigger 15:03@0+3/4",
-      "2000.000 trigger 98:C0@1+0/1",
-      "2000.000 trigger 01:01@1+0/1",
-      "4716.667 finish",
-      "4716.667 dispose"
+      "1800.000 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -325,12 +274,7 @@
       "950.000 GOOD combo=3 ch=13 delta=-60 gauge=56.363636",
       "1383.333 BAD combo=0 ch=16 delta=120 gauge=52.363636",
       "1500.000 PERFECT combo=1 ch=14 delta=0 gauge=66.909091",
-      "1500.000 PERFECT combo=2 ch=15 delta=0 gauge=81.454545",
-      "1966.667 POOR combo=0 ch=18 delta=200.001 gauge=75.454545",
-      "2216.667 POOR combo=0 ch=19 delta=200.001 gauge=69.454545",
-      "2716.667 POOR combo=0 ch=11 delta=200.001 gauge=63.454545",
-      "3216.667 POOR combo=0 ch=12 delta=200.001 gauge=57.454545",
-      "3716.667 POOR combo=0 ch=11 delta=200.001 gauge=51.454545"
+      "1500.000 PERFECT combo=2 ch=15 delta=0 gauge=81.454545"
     ],
     "ui": [
       "500.000 press-lane 11",
@@ -361,29 +305,19 @@
       "1500.000 flash-lane 15",
       "1500.000 clear-poor-bga",
       "1566.667 release-lane 14",
-      "1566.667 release-lane 15",
-      "1966.667 trigger-poor-bga seconds=1.950001",
-      "2216.667 trigger-poor-bga seconds=2.200001",
-      "2716.667 trigger-poor-bga seconds=2.700001",
-      "3216.667 trigger-poor-bga seconds=3.200001",
-      "3716.667 trigger-poor-bga seconds=3.700001"
+      "1566.667 release-lane 15"
     ],
     "frames": {
-      "count": 285,
+      "count": 110,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "783.333 seconds=0.783333 note 12@0.75",
         "950.000 seconds=0.95 note 13@1",
         "1383.333 seconds=1.383333 note 16@1.25",
         "1500.000 seconds=1.5 note 14@1.5",
-        "1500.000 seconds=1.5 note 15@1.5",
-        "1966.667 seconds=1.966667 note 18@1.75",
-        "2216.667 seconds=2.216667 note 19@2",
-        "2716.667 seconds=2.716667 note 11@2.5",
-        "3216.667 seconds=3.216667 note 12@3",
-        "3716.667 seconds=3.716667 note 11@3.5"
+        "1500.000 seconds=1.5 note 15@1.5"
       ],
-      "last": "4716.667 seconds=3.5 beat=7"
+      "last": "1800.000 seconds=1.793333 beat=3.586666"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -391,27 +325,12 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "4716.667 input-runtime stop",
-      "4716.667 ui stop",
-      "4716.667 ui dispose"
+      "1800.000 input-runtime stop",
+      "1800.000 ui stop",
+      "1800.000 ui dispose"
     ],
     "log": "(same as manual)",
-    "output": [
-      "Audio backend: characterization",
-      "--- Result ---",
-      "TOTAL  : 11",
-      "GAUGE  : 51.45 / 100.00 FAILED (TOTAL 160)",
-      "PGREAT : 3",
-      "GREAT  : 1",
-      "GOOD   : 1",
-      "BAD    : 1",
-      "POOR   : 5",
-      "EMPTY  : 0",
-      "FAST   : 1",
-      "SLOW   : 1",
-      "EX-SCORE: 7 / 22 (31.82%)",
-      "SCORE   : 68181 / 200000 (34.09%)"
-    ]
+    "output": "(same as manual)"
   },
   "auto": {
     "outcome": "completed",

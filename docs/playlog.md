@@ -39,7 +39,7 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
    lane-arrangement options that produced the resolved chart, the live judge-window ruleset (`judgeRuleset`,
    absent = `'lr2'`), the debug judge-window override, an ESC flag (`aborted`, with `abortedAtUs`: the chart time the judge had settled
-   through when the play was aborted, where re-simulations stop instead of missing the rest of the chart),
+   through when the play was aborted, where re-simulations and replays stop instead of missing the rest of the chart),
    `endOnFailure` (the play ended the moment its survival gauge emptied; absent on logs from before that, which kept
    judging), `tempo` (the play tempo, `PlayerOptions.speed`, when it was not 1: the chart, its audio and the clock ran
    `tempo` times as fast; judgments and input times stay in chart time, so a re-simulation ignores it and a replay plays
@@ -151,6 +151,12 @@ recorded branches: the browser's core gameplay scene resolves with them itself (
 them whose new draw rolls differently from the recorded run, cannot be re-aligned: the replay fails with a status
 message instead of playing a mismatched chart. Replay always runs on the LR2 / default gameplay path regardless of
 which skin family recorded the log.
+
+A replay of an ESC-aborted log stops where the play was aborted, as the re-simulations do: the host passes
+`play.abortedAtUs` as `PlayerOptions.replayAbortedAtUs`, and the engine judges up to that chart time and ends the replay
+there as an ESC, with the live play's result. A replay of an AUTO-played log passes its (empty) inputs as
+`replayInputs` too, so it is a replay as well: it follows `replayTempoChanges`, and neither kind of replay records the
+tempo it is re-driven at.
 
 ## What the player saw
 

@@ -232,11 +232,11 @@ describe('engine characterization: play scenarios', () => {
       command(1800, { kind: 'interrupt', reason: 'escape' }),
     ];
     const manual = await observePlay({ driver: 'manual', chart, script });
-    // A replay of the aborted log plays its inputs and then the rest of the chart.
+    // A replay of the aborted log plays its inputs and stops where the play was aborted.
     const replayOfTheAbortedLog = await observePlay({
       driver: 'manual',
       chart,
-      options: { replayInputs: manual.playlog!.inputs },
+      options: { replayInputs: manual.playlog!.inputs, replayAbortedAtUs: manual.playlog!.play.abortedAtUs },
     });
     const auto = await observePlay({
       driver: 'auto',
