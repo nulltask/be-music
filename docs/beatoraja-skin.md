@@ -231,10 +231,11 @@ sequenceDiagram
 ## Browser player wiring
 
 `@be-music/player-web` ships `loadBeatorajaThemeFromFiles()` to wrap dropped browser `File[]` objects into a
-`BeatorajaThemeBundle`. Hosts then call `loadBeatorajaSkin()` or `loadBeatorajaPlaySkin()` from this package,
-`bundleBeatorajaSources()` for `source[]`, `loadBeatorajaTexturesFromBundle()` for Pixi textures, and
-`loadBeatorajaFonts()` for CSS or bitmap fonts. The state lives in parallel with LR2 theme state, so the demo can
-hold both theme formats at once.
+`BeatorajaThemeBundle`. Hosts then load each scene's skin entry with player-web's `loadBeatorajaSceneKit()`
+([player-web.md](./player-web.md#beatoraja-skin-and-theme-support)), which calls `loadBeatorajaSkin()` from this
+package twice (a header pass, then the skin with the player's options), `bundleBeatorajaSources()` for `source[]`,
+`loadBeatorajaTexturesFromBundle()` for Pixi textures and `loadBeatorajaFonts()` for CSS or bitmap fonts, and keeps
+them per entry. The state lives in parallel with LR2 theme state, so the demo can hold both theme formats at once.
 
 The browser renderer uses `BeatorajaPlaySkinView` as the shared view for select, decide, gameplay, and result
 skins. The scenes read `TEXT`, `NUM`, `OPTION`, timers, gauges and graphs from the [scene mapping](#scene-mapping) and
