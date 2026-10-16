@@ -32,7 +32,7 @@ import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { SceneIdentity } from '../../host/family-kit.ts';
 import { staggerDestroyTextures } from '../pixi-utils.ts';
 import { FALLBACK_INTRO_DELAY_MS } from '../gameplay-constants.ts';
-import { snapHiSpeed, stepPlayerHiSpeed } from '../hi-speed.ts';
+import { createHiSpeedState, createPlayState } from '@be-music/scene-model';
 import { resolveSideRelativeLaneIndex } from '../gameplay-lanes.ts';
 import type { BeMusicLaneCover, BeMusicStage } from '../../skin/be-music/types.ts';
 import { resolveStageOrientation, type BeMusicLongNote, type GameplayLayoutMode } from '@be-music/skin-sdk';
@@ -44,6 +44,7 @@ import { logger } from '../../logger.ts';
 import { QuitHoldController } from '../quit-hold.ts';
 import { prepareSong } from '../../session/play/play-chart.ts';
 import { resolveLaneCovers, resolveVisibleMs, updatePlaylogView } from '../../session/play/play-view-settings.ts';
+import { applyPlayEvent } from '../../session/play/play-state.ts';
 import { beginExitSequence, getResultData } from '../../session/play/play-ending.ts';
 import {
   drainSharedEngineSignals,
@@ -185,14 +186,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.tempo,
       options.replay === undefined && supportsLiveTempoChange(options.tempoPitchMode ?? 'pitch'),
     );
-    if (options.initialHiSpeed !== undefined && Number.isFinite(options.initialHiSpeed)) {
-      // Snap to the same 1/1000 grid `adjustHiSpeed` uses so a host-supplied `1.5000000000000002` (the obvious
-      // float-drift failure mode of repeated +0.1 steps) lands on the canonical grid value the in-game adjust hotkey
-      // would produce.
-      this.hiSpeed = snapHiSpeed(options.initialHiSpeed) ?? this.hiSpeed;
-      this.playerHiSpeed = this.hiSpeed;
-      this.scrollHiSpeed.jump(this.hiSpeed);
-    }
+    // The player's hi-speed, snapped to the 1/1000 grid the hotkey steps on, so a host-supplied `1.5000000000000002`
+    // (the float drift of repeated +0.1 steps) lands on the canonical grid value; the default without a valid one.
+    // HS-FIX applies once the chart is prepared.
+    this.playState = createPlayState({
+      view: {
+        hiSpeed: createHiSpeedState({
+          ...(options.initialHiSpeed !== undefined ? { hiSpeed: options.initialHiSpeed } : {}),
+          locked: options.hiSpeedLocked === true,
+        }),
+      },
+    });
+    this.scrollHiSpeed.jump(this.playState.view.hiSpeed.drawn);
     this.autoPauseOnBlur = options.autoPauseOnBlur ?? false;
     this.audioVolumes = {
       key: sanitizeBusVolume(options.audioVolumes?.key ?? 1),
@@ -853,7 +858,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.pressedChannels.clear();
     this.lanePressedAt.clear();
     this.laneReleasedAt.clear();
-    this.judgeTimings.clear();
     this.longNotes.clear();
     this.longNoteStyle = undefined;
     this.judgeWindows = undefined;
@@ -864,8 +868,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.wavCmdVolumeMultipliers.clear();
     this.switchingBgas.clear();
     this.bgaSubRegionOrigins.clear();
-    this.gaugeHistory.length = 0;
-    this.scoreHistory.length = 0;
+    this.playState = createPlayState();
     this.notes = [];
     this.mineNotes = [];
     this.invisibleNotes.length = 0;
@@ -1059,12 +1062,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Snapped and clamped like the in-game hotkey; non-finite values are ignored.
    */
   public setHiSpeed(value: number): void {
-    const next = stepPlayerHiSpeed(value, 0, this.hsFixMultiplier);
-    if (next === undefined) return;
-    this.playerHiSpeed = next.player;
-    if (next.drawn === this.hiSpeed) return;
-    this.hiSpeed = next.drawn;
-    this.scrollHiSpeed.retarget(next.drawn, performance.now());
+    applyPlayEvent(this, { type: 'hi-speed-set', value });
   }
 
   /**
@@ -1260,7 +1258,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /** The player's hi-speed in force (on the scale of `initialHiSpeed`), a replay's recorded one included. */
   public getHiSpeed(): number {
-    return this.playerHiSpeed;
+    return this.playState.view.hiSpeed.player;
   }
 
   /**

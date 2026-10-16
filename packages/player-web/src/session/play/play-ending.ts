@@ -6,12 +6,11 @@
  */
 
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
-import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
-import { resolveClearLamp, type ScoreSummary } from '@be-music/player/ruleset';
+import type { ScoreSummary } from '@be-music/player/ruleset';
+import { playResultFromPlayState, type PlayState } from '@be-music/scene-model';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import type { GameplayThemeHooks } from '../../scene/core/gameplay-theme.ts';
-import type { JudgeTimingLog } from '../../scene/core/judge-timing-log.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 
 /** The scene's members the ending reads and writes: `CoreGameplayView`'s members of these names. */
@@ -26,13 +25,9 @@ export interface PlayEndingContext {
   readonly audioBus: AudioBusHandle | undefined;
   readonly song: BrowserSongEntry | undefined;
   readonly score: ScoreSummary;
-  readonly maxCombo: number;
-  readonly gaugeState: PlayerGaugeSummary;
-  readonly gaugeHistory: Array<{ progress: number; value: number }>;
-  readonly scoreHistory: Array<{ progress: number; exScore: number }>;
+  playState: PlayState;
   readonly fastCount: number;
   readonly slowCount: number;
-  readonly judgeTimings: JudgeTimingLog;
   readonly playlog: BeMusicPlaylog | undefined;
   playClock(): number;
   currentSeconds(): number;
@@ -101,43 +96,22 @@ export function beginExitSequence(
   }, fadeOutMs);
 }
 
-/** The play as a result snapshot: `CoreGameplayView.getResultData` (see there). */
+/**
+ * The play as a result (`CoreGameplayView.getResultData`): read off the play state (`playResultFromPlayState`), with the
+ * graphs ending at the playhead so they reach the right edge even when the last judgment came well before the chart's
+ * end, the clear lamp by the one clear-lamp rule, and the scores as the readouts show them.
+ */
 export function getResultData(ctx: PlayEndingContext): PixiGameplayResultData | undefined {
   if (!ctx.song) {
     return undefined;
   }
-  // Append a final "current values @ now" sample so the polyline reaches the right edge of the chart area even when
-  // the last judge fired well before the chart's natural end (e.g. AUTO PERFECTs the final note 5 s before the audio
-  // tail clears).
-  const totalSeconds = ctx.resolveSongDurationSeconds();
-  const finalProgress = totalSeconds > 0 ? Math.max(0, Math.min(1, ctx.currentSeconds() / totalSeconds)) : 1;
-  const gaugeHistory = [...ctx.gaugeHistory, { progress: finalProgress, value: ctx.gaugeState.current }];
-  const scoreHistory = [...ctx.scoreHistory, { progress: finalProgress, exScore: ctx.score.exScore }];
-  return {
-    // Shallow-clone the score so a downstream consumer mutating their copy doesn't accidentally rewrite our live
-    // state.
-    score: { ...ctx.score },
-    maxCombo: ctx.maxCombo,
-    gauge: ctx.gaugeState.current,
-    // The clear rule belongs to the ruleset — a threshold comparison for GROOVE/EASY, "never bottomed out" for
-    // the survival gauges — so take the engine's verdict rather than re-deriving it from the percentage.
-    cleared: ctx.gaugeState.cleared,
-    playSeconds: ctx.currentSeconds(),
+  return playResultFromPlayState(ctx.playState, {
     song: ctx.song,
-    gaugeHistory,
-    scoreHistory,
-    ...(ctx.playlog !== undefined ? { playlog: ctx.playlog } : {}),
-    lamp: resolveClearLamp({
-      cleared: ctx.gaugeState.cleared,
-      score: ctx.score,
-      ...(ctx.gaugeState.type !== undefined ? { gauge: ctx.gaugeState.type } : {}),
-      ruleset: ctx.resolveJudgeRuleset(),
-    }),
-    gaugeType: ctx.gaugeState.type,
+    score: ctx.score,
+    seconds: ctx.currentSeconds(),
     judgeRuleset: ctx.resolveJudgeRuleset(),
     fast: ctx.fastCount,
     slow: ctx.slowCount,
-    // `clear` swaps in a fresh list for the next play, so the result can keep this one.
-    judgeTimings: ctx.judgeTimings.all,
-  };
+    ...(ctx.playlog !== undefined ? { playlog: ctx.playlog } : {}),
+  });
 }

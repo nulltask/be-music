@@ -25,7 +25,6 @@ import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/j
 import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player/core/engine';
 import { type ChartPlayVariant, resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import { createScoreTracker, type ScoreTracker } from '@be-music/player/core/scoring';
 import { createBeatAtSecondsResolverFromTimingResolver } from '@be-music/player/core/timeline';
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
 import type { TimedLandmineNote, TimedPlayableNote } from '@be-music/player/playable-notes';
@@ -35,7 +34,6 @@ import { resolvePoorBgaFallbackKey } from '../../chart/play-bga.ts';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
 import { resolveChartPlayVariant } from '../../collection/collection.ts';
 import type { BrowserSongEntry } from '../../collection/types.ts';
-import { createCourseCombo, type CourseComboState } from '../../scene/core/course-combo.ts';
 import {
   splitNonstopBgaTimeline,
   toBrowserBgaTimeline,
@@ -44,19 +42,34 @@ import {
 } from '../../scene/core/gameplay-bga.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
 import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
-import type { JudgeTimingLog } from '../../scene/core/judge-timing-log.ts';
 import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../scene/core/note-draw-window.ts';
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
 import { isPlayableInputChannel, resolvePlayVariantLaneChannels } from '../../scene/gameplay-lanes.ts';
-import { applyHsFix, type HsFixContext } from './play-view-settings.ts';
+import {
+  createHiSpeedState,
+  createPlayState,
+  gaugePercent,
+  laneCoversFromPlayOptions,
+  reducePlayState,
+  resolveHsFixMultiplier,
+  SHUTTER_DEFAULT,
+  type PlayState,
+} from '@be-music/scene-model';
+import { resolveLaneSides } from '../../chart/lane-sides.ts';
+import type { HiSpeedTransition } from '../../scene/hi-speed.ts';
 
 /** The play state {@link prepareSong} resets and fills for a new chart: `CoreGameplayView`'s fields of these names. */
-export interface PlayChartContext extends HsFixContext {
+export interface PlayChartContext {
   readonly options: Readonly<
     Pick<
       CoreGameplayViewOptions,
       | 'hsFix'
+      | 'hiSpeedLocked'
+      | 'hiddenSudden1P'
+      | 'hiddenSudden2P'
+      | 'shutter'
+      | 'laneCover'
       | 'replay'
       | 'dpFlip'
       | 'random1P'
@@ -92,12 +105,8 @@ export interface PlayChartContext extends HsFixContext {
     | undefined;
   autoSampleTriggers: TimedSampleTrigger[];
   score: ScoreSummary;
-  tracker: ScoreTracker;
-  maxCombo: number;
-  courseCombo: CourseComboState | undefined;
-  gaugeHistory: Array<{ progress: number; value: number }>;
-  scoreHistory: Array<{ progress: number; exScore: number }>;
-  readonly judgeTimings: JudgeTimingLog;
+  playState: PlayState;
+  readonly scrollHiSpeed: HiSpeedTransition;
   readonly longNotes: LongNoteTracker;
   chartBpmRange: ChartBpmRange | undefined;
   autoScratchChannels: ReadonlySet<string>;
@@ -263,16 +272,11 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   // Initialize from `prepared.scorableNotes.length` so the view's initial `score.total` matches the engine's
   // authoritative `summary.total` (= same `scorableNotes` filter, with Free-Zone channels excluded). Without
   // this, charts that use a Free-Zone channel had a renderer-side total larger than the engine's by the
-  // Free-Zone count, and `maybeFireFullCombo`'s `tracker.combo === score.total` predicate became
+  // Free-Zone count, and `maybeFireFullCombo`'s `combo === score.total` predicate became
   // unreachable — combo could only ever climb to the engine's smaller scorable count, and the FC cue never
   // fired. `applyEngineFrame` still mirrors `summary.total` defensively each frame, but that's now a no-op
   // on the common path.
   ctx.score = createEmptyScore(prepared.scorableNotes.length);
-  ctx.tracker = createScoreTracker();
-  ctx.courseCombo = ctx.options.course !== undefined ? createCourseCombo(ctx.options.course.carryIn) : undefined;
-  // Reset the result-screen "MAX COMBO" tracker whenever a fresh chart is prepared — restart (R), song-pick from
-  // select, etc. Otherwise the previous play's max would leak into the new one.
-  ctx.maxCombo = 0;
   // Wipe per-side judge / combo snapshots so a fresh chart doesn't briefly paint the previous play's verdict on its
   // first frame (the `until` chart-time is in the previous chart's coordinate system; comparing it to the new chart's
   // `currentSeconds()` would render stale state until the new play crosses that mark).
@@ -282,10 +286,6 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
     '1P': { judge: '', until: 0, combo: 0 },
     '2P': { judge: '', until: 0, combo: 0 },
   };
-  // Result-screen polyline histories. Seeding waits until after `gaugeState` is reinitialized below — at this point
-  // we'd still be reading the **previous** play's gauge value.
-  ctx.gaugeHistory = [];
-  ctx.scoreHistory = [];
   const resolver = resolvedPlay.timing;
   ctx.timingResolver = resolver;
   // Build a STOP-aware seconds→beat resolver for `currentBeat`.
@@ -327,24 +327,17 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
         )
       : undefined;
   ctx.songDurationSeconds = Math.max(ctx.chartLastNoteEndSeconds, ctx.autoSampleTriggers.at(-1)?.seconds ?? 0);
-  // BMS spec — `#BASEBPM N` declares the chart's reference BPM for HS-FIX calibration. The shared
-  // `resolveChartReferenceBpm` helper prefers `#BASEBPM` over the chart's initial `#BPM` so a chart whose `#BPM` is
-  // its peak / average rather than its scroll-feel reference still calibrates at the speed the author intended; falls
-  // back to the parsed `metadata.bpm` and finally the song-list BPM hint when neither is present.
-  applyHsFix(ctx, resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm), resolveChartMainBpm(resolvedPlay));
   // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
   // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
   // per PG/GR.
   ctx.gaugeState = createPlaceholderGaugeState(ctx.resolveSelectedGauge(), resolveCourseStartGaugeInput(ctx));
-  // Now that the gauge has its starting value (LR2 default 20 %, a course stage's carried-in gauge), seed the polyline history so the result-screen
-  // graph starts at the correct origin instead of the first judge's value.
-  ctx.gaugeHistory.push({ progress: 0, value: ctx.gaugeState.current });
-  ctx.scoreHistory.push({ progress: 0, exScore: 0 });
+  ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm), resolvedPlay);
+  // Chart setup, before the notes are on screen — no glide.
+  ctx.scrollHiSpeed.jump(ctx.playState.view.hiSpeed.drawn);
   ctx.fastCount = 0;
   ctx.slowCount = 0;
   ctx.fullComboFired = false;
   ctx.displayedScore = 0;
-  ctx.judgeTimings.clear();
   ctx.longNotes.clear();
   ctx.playMoments = {};
   ctx.lanePressedAt.clear();
@@ -368,6 +361,62 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   ctx.poorBgaFallbackKey = resolvePoorBgaFallbackKey(resolved);
   ctx.poorBgaFallbackUntilSeconds = ctx.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
   ctx.hasBga = ctx.bgaTimeline.base.length > 0 || ctx.bgaTimeline.layer.length > 0 || ctx.bgaTimeline.poor.length > 0;
+}
+
+/**
+ * The play state a new chart starts from: the starting gauge (LR2's 20 %, a course stage's carried-in gauge) seeding
+ * the graphs at the chart's start, the chart's length the graphs are taken over, a course stage's carried-in combo,
+ * and the view — the player's hi-speed (the one in force, so a host's setting before the chart is kept) under the
+ * chart's HS-FIX, and each side's lane covers from the play options.
+ *
+ * HS-FIX keeps the player's hi-speed at the chart's reference BPM (`#BASEBPM`, else the start BPM:
+ * `resolveChartReferenceBpm` prefers `#BASEBPM` so a chart whose `#BPM` is its peak or average still calibrates at the
+ * speed the author intended) and rescales it at the chart's MAXBPM, MINBPM or main BPM (`resolveHsFixMultiplier`).
+ */
+function createChartPlayState(
+  ctx: PlayChartContext,
+  resolver: TimingResolver,
+  referenceBpm: number | undefined,
+  resolvedPlay: ResolvedChart,
+): PlayState {
+  const hsFix = ctx.options.hsFix ?? 'OFF';
+  const hiSpeed = createHiSpeedState({
+    hiSpeed: ctx.playState.view.hiSpeed.player,
+    multiplier: resolveHsFixMultiplier(hsFix, {
+      ...(referenceBpm !== undefined ? { referenceBpm } : {}),
+      bpms: resolver.tempoPoints.map((point) => point.bpm),
+      ...withMainBpm(resolveChartMainBpm(resolvedPlay)),
+    }),
+    locked: ctx.options.hiSpeedLocked === true,
+  });
+  const course = ctx.options.course;
+  const started = createPlayState({
+    gauge: gaugePercent(ctx.gaugeState),
+    totalSeconds: ctx.songDurationSeconds,
+    ...(course !== undefined ? { courseCarryIn: course.carryIn ?? { combo: 0, maxCombo: 0 } } : {}),
+    view: {
+      hiSpeed,
+      covers: laneCoversFromPlayOptions(
+        {
+          hiddenSudden1P: ctx.options.hiddenSudden1P ?? 'OFF',
+          hiddenSudden2P: ctx.options.hiddenSudden2P ?? 'OFF',
+          shutter: ctx.options.shutter ?? SHUTTER_DEFAULT,
+          laneCover: ctx.options.laneCover !== false,
+        },
+        resolveLaneSides(ctx.laneChannels),
+      ),
+      hsFix,
+    },
+  });
+  // The starting gauge's type and verdict, so a play given up before the engine's first frame still names its gauge.
+  return reducePlayState(started, {
+    type: 'frame',
+    frame: { totalSeconds: ctx.songDurationSeconds, summary: { exScore: 0, gauge: ctx.gaugeState } },
+  });
+}
+
+function withMainBpm(mainBpm: number | undefined): { mainBpm?: number } {
+  return mainBpm !== undefined ? { mainBpm } : {};
 }
 
 /** The course stage the play runs (a replay's recorded one wins), with its ruleset, for the placeholder gauge. */
@@ -425,23 +474,6 @@ export function flipDpChannel(channel: string): string {
   if (side === '1') return '2' + lane;
   if (side === '2') return '1' + lane;
   return channel;
-}
-
-/**
- * Returns whether a BMS channel string belongs to the given play-side. Used by per-side gameplay overlays (LANE COVER /
- * HIDDEN / SUDDEN masks) so each side can render an independent shutter without leaking onto the other side's lanes on
- * a DP chart.
- *
- * Channel layout (LR2 convention): - 1P keyboard: `11..15` + `18` + `19`; scratch: `16` - 2P keyboard: `21..25` + `28`
- * + `29`; scratch: `26`
- *
- * Anything else (BGM, BGA, BPM, etc.) returns `false` for BOTH sides — those don't appear in `laneX` anyway.
- */
-export function isChannelOnSide(channel: string, side: '1P' | '2P'): boolean {
-  if (channel.length !== 2) return false;
-  const head = channel[0];
-  if (side === '1P') return head === '1';
-  return head === '2';
 }
 
 /**

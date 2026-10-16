@@ -669,23 +669,13 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
   private refreshLr2State(): void {
     const setup = this.lr2Setup;
     if (setup === undefined) return;
-    const courseCombo =
-      this.courseCombo !== undefined
-        ? { combo: this.courseCombo.combo, maxCombo: this.courseCombo.maxCombo }
-        : undefined;
     const seconds = this.currentSeconds();
     // NOWBPM freezes at the reversal value (LR2's frozen pump holds |BPM| there) and shows the stage's own BPM during a
     // stitched NONSTOP play — see `displayBpm`.
     const bpm = this.displayBpm(seconds);
     this.lr2State = resolveLr2PlayState(setup, {
-      play: {
-        gauge: this.gaugeState.current,
-        combo: this.tracker.combo,
-        maxCombo: this.maxCombo,
-        totalSeconds: this.resolveSongDurationSeconds(),
-        ...(courseCombo !== undefined ? { courseCombo } : {}),
-        view: { hiSpeed: { player: this.playerHiSpeed } },
-      },
+      // The gauge (percent), the combo, max combo and course combo, the chart's length and the player's hi-speed.
+      play: this.playState,
       score: this.score,
       seconds,
       loaded: this.loaded,
