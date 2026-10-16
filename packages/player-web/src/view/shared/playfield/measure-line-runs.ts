@@ -1,4 +1,4 @@
-import type { BeMusicSide } from '../../skin/be-music/types.ts';
+import type { BeMusicSide } from '../../../skin/be-music/types.ts';
 
 /** One run of edge-to-edge lanes a measure line crosses, labelled with its play side. */
 export interface SideLaneRun {
