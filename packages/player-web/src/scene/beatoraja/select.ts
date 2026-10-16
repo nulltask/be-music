@@ -32,49 +32,30 @@
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
 //
 // The scene is made of parts that read and drive it through one context it builds (`createContext`): the song list's
-// rows (`select/rows.ts`).
+// rows (`select/rows.ts`), the search input (`select/search.ts`), the focused chart's images and graphs
+// (`select/chart-images.ts`) and what the skin reads of the screen (`select/skin-state.ts`). What the skin reads of a
+// chart bar is in `select/chart-facts.ts`, and the scene's options and snapshot types in `select/options.ts`.
 
-import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
-import type { ChartPlayVariant } from '@be-music/chart';
+import { Container, FederatedPointerEvent, Graphics, Sprite, Text, type Ticker } from 'pixi.js';
 import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
+import { parseBeatorajaSongList, TIMER_SCENE_START, TIMER_SONGBAR_CHANGE } from '@be-music/beatoraja-skin';
 import {
-  buildBaseOpSet,
-  parseBeatorajaSongList,
-  TIMER_SCENE_START,
-  TIMER_SONGBAR_CHANGE,
-} from '@be-music/beatoraja-skin';
-import {
-  BEATORAJA_KEYS_FILTERS,
-  BEATORAJA_SORTS,
   beatorajaKeyModeIndex,
   beatorajaLnModeIndex,
-  beatorajaWallClockOf,
-  resolveBeatorajaSelectBarOps,
-  resolveBeatorajaSelectNumber,
-  resolveBeatorajaSelectRefValue,
   resolveBeatorajaSelectSliderValue,
-  resolveBeatorajaSelectText,
-  type BeatorajaChartTraits,
-  type BeatorajaSelectChartFacts,
-  type BeatorajaSelectInput,
   type BeatorajaSystemSoundPaths,
 } from '@be-music/beatoraja-skin/scene';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
+import { safeResolveChartVariant } from './select/chart-facts.ts';
+import { BeatorajaSelectChartImages, type BeatorajaSelectChartImagesContext } from './select/chart-images.ts';
+import type { PixiBeatorajaSelectSceneOptions, PixiBeatorajaSelectSceneSnapshot } from './select/options.ts';
 import { BeatorajaSelectRows, type BeatorajaSelectRowsContext } from './select/rows.ts';
+import { BeatorajaSelectSearch, songMatchesQuery, type BeatorajaSelectSearchContext } from './select/search.ts';
+import { BeatorajaSelectSkinState, type BeatorajaSelectSkinStateContext } from './select/skin-state.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
-import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
-import { computeBeatorajaChartDensity, type ChartDensity } from '../../chart/beatoraja/density.ts';
-import { computeBeatorajaChartTotalSeconds } from '../../chart/beatoraja/duration.ts';
-import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
-import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import {
-  computeBeatorajaChartNoteDistribution,
-  type BeatorajaChartNoteDistribution,
-} from '../../chart/beatoraja/note-distribution.ts';
-import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from '../../collection/collection.ts';
-import { resolveLr2ChartFeatures } from '@be-music/lr2-skin/state';
+import { groupSongsByFolder, resolveSongSource } from '../../collection/collection.ts';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import type {
   BrowserBrowseEntry,
@@ -84,194 +65,7 @@ import type {
 } from '../../collection/types.ts';
 import { masterOutput } from '../../runtime/master-volume.ts';
 
-export interface PixiBeatorajaSelectSceneOptions {
-  skin: BeatorajaSkin;
-  /**
-   * The host edits the search query in its own text field (with IME) and passes it in through
-   * {@link PixiBeatorajaSelectScene.setSearchQuery}: the scene then leaves `/` and typed keys to that field instead of
-   * running its own key-by-key search mode.
-   */
-  externalSearch?: boolean;
-  textures: BeatorajaTextureCache;
-  /** Optional skin TTF cache (`loadBeatorajaFonts`). Absent → platform sans-serif fallback. */
-  fonts?: BeatorajaFontCache;
-  /** Confirmed user picks for the skin's `property[]`. */
-  skinConfig?: BeatorajaSkinConfig;
-  /** Songs to choose from. Empty array → "no songs" placeholder. */
-  songs: ReadonlyArray<BrowserSongEntry>;
-  /** Course folders, listed after the song folders at the root (see `resolveCourseFolders`). */
-  courseFolders?: ReadonlyArray<BrowserFolderNode>;
-  /**
-   * The player started a course bar. A course with a stage missing from the collection (`playable: false`) is handed
-   * over too, so the host can say why it does not start. `autoPlay` is set when AUTO PLAY (act 16) started it: every
-   * stage plays itself.
-   */
-  onCoursePicked?: (course: BrowserCourseEntry, options?: { autoPlay?: boolean }) => void;
-  /** Initial highlighted index (within the song list at root). Defaults to 0. */
-  initialIndex?: number;
-  /**
-   * Called when the user confirms a song (`Enter` on a song row, or click an already-selected
-   * song). The optional `options.autoPlay` is `true` when the source was the skin's authored
-   * `button_autoplay` (act=16) — the host should route to gameplay in auto mode rather than
-   * the user's default. When omitted / false, the host follows whatever the user has selected
-   * in their global play settings.
-   */
-  onSongPicked: (song: BrowserSongEntry, options?: { autoPlay?: boolean }) => void;
-  /** Called when the user backs out of the root list (`Escape` at root). */
-  onExit?: () => void;
-  /**
-   * Called when the user clicks the skin's READTEXT button (act=17) — typically `readme` /
-   * `player-info` / `help` / `btn-text` etc. depending on the skin. The host is expected to
-   * find and display the chart's accompanying text file (`.txt` next to the chart, or
-   * `#TEXT`-resolved content). Omit to have the action fall through to a console log.
-   */
-  onReadtextRequest?: (song: BrowserSongEntry) => void;
-  /**
-   * Called when the scene mutates `skinConfig` in place — currently fires for `JUDGE_TIMING`
-   * (act=74) note-offset adjustments. The host should persist the new config (e.g. write it
-   * into its per-entry config cache) and refresh any external readouts (e.g. the bottom-right
-   * lil-gui's "Note offset" slider). Receives a fresh shallow clone so the callback never
-   * aliases the scene's mutator state.
-   */
-  onSkinConfigChange?: (config: BeatorajaSkinConfig) => void;
-  /** Optional audio backend for `main_state.audio_play / loop / stop` Lua calls. */
-  skinAudio?: BeatorajaSkinAudio;
-  /**
-   * Optional lookup that returns the focused song's clear-lamp op (one of
-   * `BEATORAJA_OP.CLEAR_LAMP_*`). When omitted, every song reports as `CLEAR_LAMP_NOPLAY`
-   * (= 100), which makes the song-list lamp icon always render the "no record" frame —
-   * audit 2.18.
-   *
-   * Hosts that track in-session play history (the demo does, keyed by `BrowserSongEntry.id`)
-   * supply the callback to light the lamp icon based on actual completed runs. The lookup is
-   * called on every frame for the focused entry only — caching at the host's discretion.
-   * Folder rows pass through unchanged (the lamp op is a song-bar concept).
-   */
-  resolveSongLampOp?: (song: BrowserSongEntry) => number | undefined;
-  /**
-   * The focused course bar's clear-lamp op (`BEATORAJA_OP.CLEAR_LAMP_*`), from the player's best record on the course, as
-   * beatoraja lights a `GradeBar`'s lamp from its course score. Omitted (or `undefined`) reads as `CLEAR_LAMP_NOPLAY`;
-   * a random course bar has no record.
-   */
-  resolveCourseLampOp?: (course: BrowserCourseEntry) => number | undefined;
-  /**
-   * Optional song collection — the same `BrowserSongCollection` the demo built `songs` from.
-   * Required only for the chart-preview engine: `ChartPreviewEngine.focus()` needs to resolve
-   * each song's `BrowserSongAssetSource` to load the `#PREVIEW` file (or fall back to in-place
-   * chart playback). When omitted, the preview engine stays inactive — the select scene runs
-   * silent on cursor moves, same as before this option existed.
-   */
-  collection?: import('../../collection/types.ts').BrowserSongCollection;
-  /**
-   * Optional system-sound paths for navigation cues. Each value is a bundle-relative path
-   * (e.g. `'sound/cursor.wav'`) that {@link skinAudio} resolves through its file map and
-   * decodes lazily. The scene fires the matching path on these events:
-   *
-   *   - `cursor` — every cursor advance (ArrowUp / ArrowDown / PageUp / PageDown / Home / End
-   *     / wheel / mouse-click on a non-focused row).
-   *   - `folderOpen` — drilling into a folder bar via Enter / click.
-   *   - `folderClose` — backing out via Escape / Backspace.
-   *   - `decide` — confirming a song bar (Enter / click on focused / autoplay button).
-   *   - `optionChange` — sort cycle (act=12) / keymode filter cycle (act=11).
-   *   - `cancel` — back-navigation when not in a folder (root-level ESC).
-   *
-   * Missing entries are silently skipped — themes that don't ship a particular cue just don't
-   * play it. Requires {@link skinAudio} to also be supplied; without an audio backend the
-   * paths are unreferenced and the scene runs silent on navigation.
-   *
-   * Hosts should discover the paths from the theme bundle (e.g. probe `sound/cursor.wav`,
-   * `sound/decide.wav` etc. against the bundle's file map) and pass whatever they found.
-   * Beatoraja itself reads these paths from its `config.json` keys (`sound_cursor`,
-   * `sound_select`, `sound_cancel`, `sound_folder`) — the same convention the demo follows.
-   */
-  systemSoundPaths?: BeatorajaSystemSoundPaths;
-  /**
-   * Optional bundle-relative path to a looping select-scene BGM (typically `Bgm/select.wav`).
-   * When supplied, the scene starts the loop in {@link enter} and stops it in {@link exit} via
-   * the {@link skinAudio} backend. Routed through the same `BeatorajaSkinAudioPlayer` the Lua
-   * audio_loop / audio_play calls use so a single AudioContext serves both.
-   *
-   * Discovered by hosts via {@link discoverBeatorajaSelectBgmPath}; pass the result verbatim
-   * (or `undefined` for a silent select). Beatoraja's reference engine stores the path in
-   * `config.json` `bgm_select`; the web port uses convention-based probing instead.
-   *
-   * Volume is fixed at `0.7` — quieter than authored to leave headroom for chart preview
-   * playback (the preview engine doesn't currently duck the BGM, so a too-loud loop drowns
-   * out short preview clips). Future ducking would multiply this by an in-flight factor.
-   */
-  selectBgmPath?: string;
-  /**
-   * Optional snapshot from a previous mount — restores the user's prior cursor / folder /
-   * filter / sort / favorite state when re-entering the select scene (e.g. after returning
-   * from a play). Captured via {@link PixiBeatorajaSelectScene.captureSnapshot} on the
-   * outgoing scene before disposal; passed verbatim into the next mount's options. Takes
-   * precedence over {@link initialIndex} when both are set — snapshot already encodes the
-   * cursor's full position (including which folder the user was in), and `initialIndex`
-   * alone can't disambiguate between "song N of root" vs "song N of folder X".
-   *
-   * Folder identity is preserved by `label` (folder names are stable across mounts as long
-   * as the underlying `BrowserSongCollection` hasn't been reshuffled). When the new
-   * collection no longer contains a folder by that label (the user dropped a different
-   * library), the restore falls back to the root list with cursor 0 — a safe default that
-   * doesn't crash when stale state outlives its source.
-   */
-  restoreSnapshot?: PixiBeatorajaSelectSceneSnapshot;
-  /**
-   * Optional decoder for the focused song's chart-bitmap synthetic ids. The scene calls
-   * this on every focus change; the host returns a Promise resolving to whichever bitmaps
-   * the chart shipped (`#STAGEFILE` / `#BACKBMP` / `#BANNER`). Decoded textures cache
-   * inside the scene by `song.id` so subsequent re-focuses skip the IO.
-   *
-   * Without this, destinations referencing the synthetic ids `-100` / `-101` / `-102`
-   * stay hidden — default beatoraja's select.json paints `-102 BANNER` as the focused
-   * song's banner inside the chart-info panel, ModernChic uses `-100 STAGEFILE` as a
-   * frosted backdrop, etc.
-   */
-  decodeChartImages?: (song: BrowserSongEntry) => Promise<{ stageFile?: Texture; backBmp?: Texture; banner?: Texture }>;
-}
-
-/**
- * Serializable scene state captured at scene-exit for restoration on the next mount. The host
- * persists this opaquely (no field-by-field interpretation needed); the scene re-applies it on
- * the next constructor call. All references are by VALUE — ids and labels rather than object
- * pointers — so the snapshot survives `BrowserSongCollection` rebuilds (drop a new library and
- * the snapshot still applies as long as the same folder labels / song ids exist).
- */
-export interface PixiBeatorajaSelectSceneSnapshot {
-  /** Folder labels in nesting order. Empty = at root. */
-  folderPath: ReadonlyArray<string>;
-  /** Cursor index per stack depth. `[rootIdx]` at root, `[rootIdx, songIdxInFolder]` one deep. */
-  cursorStack: ReadonlyArray<number>;
-  /** Active keymode filter (act=11 MODE button cycle). 0 = ALL. */
-  keymodeFilter: number;
-  /** Active sort mode (act=12 SORT button cycle). 0 = DEFAULT. */
-  sortMode: number;
-  /**
-   * Global LN-mode override (act=308 LNMODE button cycle). `undefined` = use the chart's
-   * authored `#LNMODE`; `0..2` = user override (LN / CN / HCN).
-   */
-  lnModeOverride: 0 | 1 | 2 | undefined;
-  /** `BrowserSongEntry.id`s the user marked as song-level favorites. */
-  favoriteSongs: ReadonlyArray<string>;
-  /** `BrowserSongEntry.id`s the user marked as chart-level favorites. */
-  favoriteCharts: ReadonlyArray<string>;
-  /**
-   * Live search query. Survives PLAY → SELECT round-trips so the user lands back on the
-   * same filtered list. Empty string = no filter (the typical case when the user hasn't
-   * touched search). The active-input flag isn't persisted — coming back from gameplay
-   * always starts in non-input mode so the user can navigate immediately.
-   */
-  searchQuery: string;
-}
-
-/**
- * How long a `BUTTON_*` op stays active after a click fires (audit 2.1). 200ms is long
- * enough for the player to perceive the press-state highlight in skins that author short
- * "press feedback" tweens, short enough that subsequent clicks don't pile up if the user
- * mashes a button. Beatoraja itself gates press feedback on Java's input-frame state which
- * lasts a single frame; our 200ms window gives smooth animation under a 60fps tick.
- */
-const BUTTON_PRESS_WINDOW_MS = 200;
+export type { PixiBeatorajaSelectSceneOptions, PixiBeatorajaSelectSceneSnapshot } from './select/options.ts';
 
 /**
  * Per-frame tween rate for `scrollPosition` chasing `currentIndex`. Fraction of the remaining
@@ -283,7 +77,10 @@ const SCROLL_TWEEN_RATE = 0.25;
 const SCROLL_SNAP_THRESHOLD = 0.005;
 
 /** What the scene's parts read and drive on it. */
-type BeatorajaSelectSceneContext = BeatorajaSelectRowsContext;
+type BeatorajaSelectSceneContext = BeatorajaSelectRowsContext &
+  BeatorajaSelectSearchContext &
+  BeatorajaSelectChartImagesContext &
+  BeatorajaSelectSkinStateContext;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root: Container = new Container();
@@ -317,19 +114,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private get rowHitAreas(): (Sprite | undefined)[] {
     return this.rows.rowHitAreas;
   }
-  /**
-   * Per-song chart-image cache. Keyed by `BrowserSongEntry.id`; populated lazily by
-   * {@link refreshChartImagesForFocus} as the user moves the cursor. Re-focusing a
-   * previously-loaded song hits the cache and skips the IO. Sentinel `null` records a
-   * decode that resolved with no usable images so we don't retry every cursor move
-   * (e.g. chart with no `#STAGEFILE` / `#BACKBMP` / `#BANNER`).
-   */
-  private readonly chartImageCache = new Map<
-    string,
-    { stageFile?: Texture; backBmp?: Texture; banner?: Texture } | null
-  >();
-  /** Generation counter — bumps on every focus change so stale async resolves don't overwrite newer ones. */
-  private chartImageFocusGeneration = 0;
+  /** The search input mode and its prompt. */
+  private readonly search: BeatorajaSelectSearch = new BeatorajaSelectSearch(this.context);
+  /** The search prompt, as the scene's tests reach it. */
+  private get searchPromptText(): Text | undefined {
+    return this.search.searchPromptText;
+  }
+  /** The focused chart's images and graphs. */
+  private readonly chartImages: BeatorajaSelectChartImages = new BeatorajaSelectChartImages(this.context);
+  /** What the skin reads of the screen: the frame's select input, its texts and values, and the active ops. */
+  private readonly skinState: BeatorajaSelectSkinState = new BeatorajaSelectSkinState(this.context);
 
   private readonly options: PixiBeatorajaSelectSceneOptions;
   private host?: PixiSceneHost;
@@ -418,20 +212,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   /**
    * Live search query (case-insensitive substring match on title + artist + genre + sub
    * title). Empty string = no filter. Updated by the search input flow (see
-   * {@link searchActive} / handleKeyDown's `/` branch). Surfaced to the skin via
+   * {@link BeatorajaSelectSearch.searchActive} / handleKeyDown's `/` branch). Surfaced to the skin via
    * `BEATORAJA_TEXT.SEARCHWORD` so themes that author the search-display text node show
    * the live query while the user types.
    */
   private searchQuery = '';
-  /**
-   * `true` while the user is in search-input mode (after pressing `/`). In this mode
-   * keystrokes go to the search query instead of cursor navigation; Enter / Escape exit
-   * the mode (Enter keeps the filter, Escape clears + exits). Visual indicator: a small
-   * prompt at the top of the canvas (rendered as a transient Text node).
-   */
-  private searchActive = false;
-  /** Sprite holding the live search prompt — only mounted while `searchActive`. */
-  private searchPromptText: Text | undefined;
   private disposed = false;
   /**
    * Lazily-constructed chart-preview engine. Mirrors the LR2 `scene/lr2/select.ts` integration —
@@ -455,19 +240,19 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // the catch-all fallback regardless of the user's chosen layout. Routed through
       // `baseOps()` so a `replaceSkin` mid-session reuses the same cached set the per-frame
       // op-resolution path uses.
-      skinConfigOps: this.baseOps(),
+      skinConfigOps: this.skinState.baseOps(),
       // Text content tracks the highlighted song. The skin's title / artist / genre text destinations
       // therefore reflect the live cursor, matching beatoraja's own select-screen behavior.
-      resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
+      resolveTextContent: (refOp) => this.skinState.resolveSelectionText(refOp),
       // Numeric values from the focused song — total notes, BPM, level. Skins render
       // these via `value[]` elements with `ref = 74 (TOTALNOTES)`, `92 (MAINBPM)`,
       // `96 (PLAYLEVEL)`, etc. Without this, the chart-info panel sits on its idle
       // zeros even after the cursor moves to a different song.
-      resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
+      resolveNumberValue: (refOp) => this.skinState.resolveSelectionNumber(refOp),
       // Imageset / generic ref values. Drives `imageset[]` sub-image picks (e.g. `modeset`
       // ref 11 picks "5keys" / "7keys" / etc. from the skin's array based on the focused
       // chart's keymode) plus any other `ref`-driven selectors the skin authored.
-      resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
+      resolveRefValue: (refOp) => this.skinState.resolveSelectionRefValue(refOp),
       // Slider values — volume / lanecover / lift translate sliders. Without a value the
       // renderer hides the slider entirely; we report `1.0` (max position) for volume types
       // so ModernChic's volume sliders sit at full instead of vanishing.
@@ -483,16 +268,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // the FOCUSED song's bitmap when the chart shipped one. Default beatoraja's
       // select.json paints `-102` as the per-song banner; ModernChic uses `-100` as a
       // frosted backdrop on the chart-info panel.
-      chartImageProvider: (id) => this.resolveChartImageForFocus(id),
+      chartImageProvider: (id) => this.chartImages.resolveChartImageForFocus(id),
       // BPM segments + mainbpm reference for the focused chart's `bpmgraph` element.
       // The spec-faithful renderer path uses these to apply log-scaled, mainbpm-relative
       // y projection AND color-code segments by BPM identity (mainbpm = green, minbpm =
       // blue, maxbpm = red, others = yellow, stop = magenta).
-      resolveBpmGraphData: () => this.resolveBpmGraphDataForFocus(),
+      resolveBpmGraphData: () => this.chartImages.resolveBpmGraphDataForFocus(),
       // Per-second × per-category note distribution histogram for `judgegraph` type=0
       // (= the `notes-graph` element on the default skin). Mirrors upstream
       // `SkinNoteDistributionGraph.updateData()` with TYPE_NORMAL.
-      resolveNoteDistribution: () => this.resolveNoteDistributionForFocus(),
+      resolveNoteDistribution: () => this.chartImages.resolveNoteDistributionForFocus(),
     });
 
     this.root.addChild(this.backdrop);
@@ -609,6 +394,28 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return scene.scrollPosition;
       },
       handleRowPointerTap: (rowOffset, event) => scene.handleRowPointerTap(rowOffset, event),
+      get searchQuery(): string {
+        return scene.searchQuery;
+      },
+      setSearchQuery: (query) => scene.setSearchQuery(query),
+      moveCursor: (delta) => scene.moveCursor(delta),
+      setCursor: (index) => scene.setCursor(index),
+      get disposed(): boolean {
+        return scene.disposed;
+      },
+      get currentIndex(): number {
+        return scene.currentIndex;
+      },
+      get keymodeFilter(): number {
+        return scene.keymodeFilter;
+      },
+      get sortMode(): number {
+        return scene.sortMode;
+      },
+      get lnModeOverride(): 0 | 1 | 2 | undefined {
+        return scene.lnModeOverride;
+      },
+      currentFolderLabel: () => scene.currentFolderLabel(),
     };
   }
 
@@ -695,7 +502,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       void this.previewAudioContext.close().catch(() => {});
       this.previewAudioContext = undefined;
     }
-    this.destroySearchPrompt();
+    this.search.destroySearchPrompt();
     this.rows.destroyRowVisuals();
     if (this.listLayer.parent) {
       this.listLayer.parent.removeChild(this.listLayer);
@@ -733,9 +540,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     fonts?: BeatorajaFontCache;
   }): void {
     if (this.disposed) return;
-    this.destroySearchPrompt();
+    this.search.destroySearchPrompt();
     this.view.dispose();
-    this.cachedBaseOps = undefined;
+    this.skinState.cachedBaseOps = undefined;
 
     // Mirror upstream `MainState.setSkin` (`MainState.java:113-132`): swap in the new skin AND
     // its companion resource set so subsequent calls to `buildRowVisuals` /
@@ -766,17 +573,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // `cachedBaseOps` was nulled above — `getCachedBaseOps` rebuilds against the NEW
       // `skinConfig.option` map so layout-variant dst alts re-resolve to the user's
       // (possibly changed) option picks for the swapped skin.
-      skinConfigOps: this.baseOps(),
-      resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
-      resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
-      resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
+      skinConfigOps: this.skinState.baseOps(),
+      resolveTextContent: (refOp) => this.skinState.resolveSelectionText(refOp),
+      resolveNumberValue: (refOp) => this.skinState.resolveSelectionNumber(refOp),
+      resolveRefValue: (refOp) => this.skinState.resolveSelectionRefValue(refOp),
       resolveSliderValue: (type) => resolveBeatorajaSelectSliderValue(type),
       onButtonAction: (act, mods) => this.handleButtonAction(act, mods),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
-      chartImageProvider: (id) => this.resolveChartImageForFocus(id),
-      resolveBpmGraphData: () => this.resolveBpmGraphDataForFocus(),
-      resolveNoteDistribution: () => this.resolveNoteDistributionForFocus(),
+      chartImageProvider: (id) => this.chartImages.resolveChartImageForFocus(id),
+      resolveBpmGraphData: () => this.chartImages.resolveBpmGraphDataForFocus(),
+      resolveNoteDistribution: () => this.chartImages.resolveNoteDistributionForFocus(),
     });
     // The old view's `container.destroy({children: false})` (inside `view.dispose()`) detaches
     // its children — listLayer was one of them, so it's now orphaned. Re-parent into the new
@@ -802,7 +609,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.rows.valueElementsById = undefined;
     this.rows.buildRowVisuals(opts.fonts);
     this.rows.refreshRowVisuals();
-    this.refreshSearchPrompt();
+    this.search.refreshSearchPrompt();
 
     this.lastFitWidth = 0;
     this.lastFitHeight = 0;
@@ -848,10 +655,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // `timer=0` (scene-start) path to use 0 elapsed already, so passing `undefined` for
     // anything else is the correct behaviour.
     const skinAudio = this.options.skinAudio;
-    this.frameInput = undefined;
-    this.frameInput = this.selectInput();
+    this.skinState.frameInput = undefined;
+    this.skinState.frameInput = this.skinState.selectInput();
     this.view.update({
-      activeOps: this.computeActiveOps(),
+      activeOps: this.skinState.computeActiveOps(),
       // Consult the per-scene timer ladder. Returning `undefined` for unstamped timers keeps
       // those destinations hidden (matches the play-scene runtime adapter's behaviour and
       // upstream `getTimerStart` semantics — only fired timers produce a non-null start
@@ -864,61 +671,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       audioLoop: skinAudio === undefined ? undefined : (path, vol) => skinAudio.loop(path, vol),
       audioStop: skinAudio === undefined ? undefined : (path) => skinAudio.stop(path),
     });
-    this.frameInput = undefined;
-  }
-
-  /**
-   * Stable per-skin op set — `skin_config.option` picks plus any always-on flags. Cached because
-   * `buildBaseOpSet` walks the option map; recompute only when `replaceSkin` invalidates the
-   * cache. Live per-frame ops (focused-bar kind, chart keymode) are added on top in
-   * {@link computeActiveOps}.
-   */
-  private baseOps(): ReadonlySet<number> {
-    if (this.cachedBaseOps !== undefined) return this.cachedBaseOps;
-    this.cachedBaseOps = buildBaseOpSet(this.options.skinConfig?.option);
-    return this.cachedBaseOps;
-  }
-  private cachedBaseOps: ReadonlySet<number> | undefined;
-  /**
-   * Transient BUTTON-press tracker (audit 2.1). Maps each clicked `act` code to the
-   * `performance.now()` timestamp at which the press happened. `computeActiveOps` adds the
-   * code to the active op set while it's still within {@link BUTTON_PRESS_WINDOW_MS}, so
-   * skins gating press-state chrome on the matching op see the highlight in flight. Older
-   * entries get garbage-collected lazily during op resolution; the map stays bounded since
-   * the user can only click so many buttons per second.
-   */
-  private readonly buttonPressedAt = new Map<number, number>();
-
-  /**
-   * Per-frame active op set: the stable base ops, the focused bar's ops and the buttons pressed a moment ago. Without
-   * the bar's ops the info pane stays hidden: its destinations are gated on `op:[2]` (`SONGBAR`).
-   */
-  private computeActiveOps(): ReadonlySet<number> {
-    const base = this.baseOps();
-    // Fast path: no active entry → just the base set (includes `skin_config.option` picks).
-    const entry = this.entries[this.currentIndex];
-    if (entry === undefined) return base;
-
-    const ops = new Set(base);
-    // The bar's ops: the screen's fixed state, and the folder, course or chart bar with its key mode, traits,
-    // difficulty, judge rank and clear lamp (`resolveBeatorajaSelectBarOps`).
-    for (const op of resolveBeatorajaSelectBarOps(this.selectInput())) ops.add(op);
-
-    // Transient BUTTON-press feedback (audit 2.1). Each `act` code clicked within the last
-    // `BUTTON_PRESS_WINDOW_MS` lights its matching op so destinations gating press-state
-    // chrome on `op = {act}` show their pressed visual. GC stale entries lazily — the map's
-    // size is bounded by user-click rate, which can never exceed ~10/sec.
-    if (this.buttonPressedAt.size > 0) {
-      const now = performance.now();
-      for (const [act, pressedAtMs] of this.buttonPressedAt) {
-        if (now - pressedAtMs >= BUTTON_PRESS_WINDOW_MS) {
-          this.buttonPressedAt.delete(act);
-          continue;
-        }
-        ops.add(act);
-      }
-    }
-    return ops;
+    this.skinState.frameInput = undefined;
   }
 
   /**
@@ -975,54 +728,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Search-prompt suffix carries a live "N matches" count — refresh whenever the entry
     // list changes so the user sees the new result count after folder enter / sort cycle /
     // keymode filter change while a search query is active.
-    this.refreshSearchPrompt();
-  }
-
-  /**
-   * What the skin reads of the screen (`@be-music/beatoraja-skin/scene`): the focused bar and its chart's facts, the
-   * folder, the search, the MODE / SORT / LNMODE choices, the skin, the judge timing, the bar's best lamp and the clock.
-   * Built once per frame in {@link tick}; read through it for every value, text and image of the frame.
-   */
-  private selectInput(): BeatorajaSelectInput {
-    if (this.frameInput !== undefined) return this.frameInput;
-    const entry = this.entries[this.currentIndex];
-    const offset = this.options.skinConfig?.offset;
-    const lampOp =
-      entry?.kind === 'song'
-        ? this.options.resolveSongLampOp?.(entry.song)
-        : entry?.kind === 'course' && entry.course.random === undefined
-          ? this.options.resolveCourseLampOp?.(entry.course)
-          : undefined;
-    return {
-      focused: entry,
-      ...(entry?.kind === 'song' ? { chart: selectChartFacts(entry.song) } : {}),
-      folderLabel: this.currentFolderLabel(),
-      searchText: this.searchQuery,
-      list: {
-        keysFilter: BEATORAJA_KEYS_FILTERS[this.keymodeFilter] ?? 'ALL',
-        sort: BEATORAJA_SORTS[this.sortMode] ?? 'OFF',
-      },
-      ...(this.lnModeOverride !== undefined ? { lnMode: this.lnModeOverride } : {}),
-      skin: { name: this.options.skin.name, author: this.options.skin.author },
-      judgeTiming: typeof offset === 'number' && Number.isFinite(offset) ? offset : 0,
-      ...(lampOp !== undefined ? { lampOp } : {}),
-      wallClock: beatorajaWallClockOf(new Date()),
-    };
-  }
-
-  /** The frame's {@link selectInput}, while `tick` draws it. */
-  private frameInput: BeatorajaSelectInput | undefined;
-
-  private resolveSelectionText(refOp: number): string | undefined {
-    return resolveBeatorajaSelectText(refOp, this.selectInput());
-  }
-
-  private resolveSelectionNumber(refOp: number): number | undefined {
-    return resolveBeatorajaSelectNumber(refOp, this.selectInput());
-  }
-
-  private resolveSelectionRefValue(refOp: number): number {
-    return resolveBeatorajaSelectRefValue(refOp, this.selectInput());
+    this.search.refreshSearchPrompt();
   }
 
   /**
@@ -1163,7 +869,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // gates each entry on `BUTTON_PRESS_WINDOW_MS` so press-feedback chrome lights up for
     // the duration regardless of which action arm we end up taking (or whether we early-out
     // because the song / folder isn't pickable).
-    this.buttonPressedAt.set(act, performance.now());
+    this.skinState.buttonPressedAt.set(act, performance.now());
     const entry = this.entries[this.currentIndex];
     const song = entry?.kind === 'song' ? entry.song : entry?.kind === 'folder' ? entry.folder.songs[0] : undefined;
     // PLAY / AUTO PLAY on a course bar start the course (`MusicSelector` reads the course bar the same way).
@@ -1297,14 +1003,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   }
 
   // ─── Layout / visuals ─────────────────────────────────────────────────────────────────────────
-
-  private destroySearchPrompt(): void {
-    if (this.searchPromptText === undefined) return;
-    if (!this.searchPromptText.destroyed) {
-      this.searchPromptText.destroy();
-    }
-    this.searchPromptText = undefined;
-  }
 
   /** Map a chart's `playLevel` to a tint colour band — visual hint at glance. */
 
@@ -1560,7 +1258,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Always trigger the chart-image fetch (banner / backbmp / stagefile) on focus change,
     // independent of preview-engine availability — destinations gated on the synthetic
     // image ids paint regardless of whether audio is wired.
-    this.refreshChartImagesForFocus(song);
+    this.chartImages.refreshChartImagesForFocus(song);
     if (engine === undefined) return;
     if (song === undefined || this.options.collection === undefined) {
       engine.focus(undefined);
@@ -1574,112 +1272,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     engine.focus({ song, source });
   }
 
-  /**
-   * Lazily decode the focused song's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps via
-   * the host's `decodeChartImages` callback. Caches by `song.id` so re-focusing a
-   * previously-loaded song hits the cache. Generation counter guards against stale async
-   * resolves overwriting newer ones (rapid cursor moves through a folder).
-   */
-  private refreshChartImagesForFocus(song: BrowserSongEntry | undefined): void {
-    if (song === undefined) return;
-    if (this.options.decodeChartImages === undefined) return;
-    if (this.chartImageCache.has(song.id)) return;
-    // Mark as in-flight so concurrent focus changes don't fire duplicate decodes.
-    this.chartImageCache.set(song.id, null);
-    const generation = ++this.chartImageFocusGeneration;
-    const decoder = this.options.decodeChartImages;
-    void decoder(song)
-      .then((images) => {
-        if (this.disposed) return;
-        // Stale resolve: the user has moved on to another song since this fetch fired.
-        // Still cache the result so a later refocus on this song uses it without re-IO,
-        // but skip the visible-state side effects.
-        this.chartImageCache.set(song.id, images);
-        // The next tick's render pass picks up the new texture via `chartImageProvider`.
-        // No explicit refresh call needed — `update()` reads from the cache every frame.
-        void generation;
-      })
-      .catch((error) => {
-        // Decode failed; leave the cache entry as `null` so we don't retry on every
-        // cursor settle. User-visible: the banner / stagefile / backbmp slot stays hidden.
-        // eslint-disable-next-line no-console
-        console.warn('[beatoraja-select] chart-image decode failed', { songId: song.id, error });
-        this.chartImageCache.set(song.id, null);
-      });
-  }
-
-  /**
-   * Per-frame resolver for the synthetic chart-bitmap ids. Returns the FOCUSED song's
-   * matching texture from the cache, or `undefined` (= destination hides) when the chart
-   * didn't ship that bitmap or the decode is still in flight / failed.
-   */
-  private resolveChartImageForFocus(syntheticId: number): Texture | undefined {
-    const entry = this.entries[this.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const cached = this.chartImageCache.get(entry.song.id);
-    if (cached === null || cached === undefined) return undefined;
-    if (syntheticId === -100) return cached.stageFile;
-    if (syntheticId === -101) return cached.backBmp;
-    if (syntheticId === -102) return cached.banner;
-    return undefined;
-  }
-
-  /**
-   * Lazy analysis cache for the focused chart. `computeBeatorajaChartNoteDistribution`
-   * walks the chart's events once and produces both the per-bucket histogram AND the BPM
-   * segment list — sharing the walk between the bpmgraph and notes-graph renderers. Cached
-   * per song-id so cursor moves through a folder don't redundantly re-analyse.
-   */
-  private analysisFor(song: BrowserSongEntry): BeatorajaChartNoteDistribution {
-    const cached = this.chartAnalysisCache.get(song.id);
-    if (cached !== undefined) return cached;
-    const result = computeBeatorajaChartNoteDistribution(song.chart);
-    this.chartAnalysisCache.set(song.id, result);
-    return result;
-  }
-  private readonly chartAnalysisCache = new Map<string, BeatorajaChartNoteDistribution>();
-
-  /**
-   * Per-frame resolver for the focused chart's BPM segment data (consumed by `bpmgraph`
-   * destinations under the spec-faithful renderer path).
-   */
-  private resolveBpmGraphDataForFocus():
-    | {
-        segments: ReadonlyArray<{ timeMs: number; bpm: number }>;
-        mainBpm: number;
-        minBpm: number;
-        maxBpm: number;
-        totalMs: number;
-      }
-    | undefined {
-    const entry = this.entries[this.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const analysis = this.analysisFor(entry.song);
-    if (analysis.bpmSegments.length === 0 || analysis.totalMs <= 0) return undefined;
-    return {
-      segments: analysis.bpmSegments,
-      mainBpm: analysis.mainBpm,
-      minBpm: analysis.minBpm,
-      maxBpm: analysis.maxBpm,
-      totalMs: analysis.totalMs,
-    };
-  }
-
-  /**
-   * Per-frame resolver for the focused chart's note-distribution histogram (judgegraph
-   * type=0 under the spec-faithful renderer path). Returns the per-second × per-category
-   * bucket data the renderer needs for the upstream `SkinNoteDistributionGraph` look.
-   */
-  private resolveNoteDistributionForFocus():
-    | { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number }
-    | undefined {
-    const entry = this.entries[this.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const analysis = this.analysisFor(entry.song);
-    if (analysis.buckets.length === 0) return undefined;
-    return { buckets: analysis.buckets, maxCount: analysis.maxCount, totalMs: analysis.totalMs };
-  }
-
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed) return;
     // Typing in the host's search field (or any text field) is not navigation.
@@ -1687,8 +1279,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Search-input mode swallows most keys — ArrowUp/Down still navigate within the
     // filtered list (so the user can type, then arrow-pick), but printable characters /
     // Backspace mutate the query and Enter / Escape exit the mode.
-    if (this.searchActive) {
-      this.handleSearchKey(event);
+    if (this.search.searchActive) {
+      this.search.handleSearchKey(event);
       return;
     }
     switch (event.key) {
@@ -1767,127 +1359,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (this.searchQuery === query) return;
     this.searchQuery = query;
     this.refreshEntries(0);
-    this.refreshSearchPrompt();
+    this.search.refreshSearchPrompt();
   }
 
   private setSearchActive(active: boolean): void {
-    if (this.searchActive === active) return;
-    this.searchActive = active;
-    this.refreshSearchPrompt();
-  }
-
-  /**
-   * Field-keystroke handler for search-input mode. ArrowUp/Down still navigate (so the user
-   * can type → arrow-pick); Enter commits the filter and exits search mode; Escape clears
-   * + exits; Backspace deletes the last char; printable single-character keys append.
-   */
-  private handleSearchKey(event: KeyboardEvent): void {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      this.setSearchActive(false);
-      return;
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.setSearchActive(false);
-      this.setSearchQuery('');
-      return;
-    }
-    if (event.key === 'Backspace') {
-      event.preventDefault();
-      this.setSearchQuery(this.searchQuery.slice(0, -1));
-      return;
-    }
-    // Navigation keys still work inside search mode — the user can type a query, then
-    // page through the filtered results without exiting input mode. Mirrors the same set
-    // the navigation-mode handler exposes so muscle memory carries.
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      this.moveCursor(-1);
-      return;
-    }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      this.moveCursor(1);
-      return;
-    }
-    if (event.key === 'PageUp') {
-      event.preventDefault();
-      this.moveCursor(-10);
-      return;
-    }
-    if (event.key === 'PageDown') {
-      event.preventDefault();
-      this.moveCursor(10);
-      return;
-    }
-    if (event.key === 'Home') {
-      event.preventDefault();
-      this.setCursor(0);
-      return;
-    }
-    if (event.key === 'End') {
-      event.preventDefault();
-      this.setCursor(this.entries.length - 1);
-      return;
-    }
-    // Printable single-character keys append to the query. Filter out chord modifiers
-    // (Ctrl/Alt/Meta + letter) — those are typically OS shortcuts the user doesn't want
-    // landing in the search query.
-    if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
-      event.preventDefault();
-      this.setSearchQuery(this.searchQuery + event.key);
-    }
-  }
-
-  /**
-   * Show / hide / update the transient search prompt overlay. Mounted on the listLayer (=
-   * inside the scaled skin container) so its position scales with the rest of the chrome.
-   * Visible only while {@link searchActive}; the searchword display the skin authors via
-   * `BEATORAJA_TEXT.SEARCHWORD` is the canonical surface, but the transient prompt gives
-   * the user clear feedback that they're in input mode even on skins that don't author the
-   * text node.
-   */
-  private refreshSearchPrompt(): void {
-    if (!this.searchActive && this.searchQuery.length === 0) {
-      if (this.searchPromptText !== undefined) {
-        this.searchPromptText.visible = false;
-      }
-      return;
-    }
-    if (this.searchPromptText === undefined) {
-      const text = new Text({
-        text: '',
-        style: {
-          fontFamily: 'sans-serif',
-          fontSize: 24,
-          fill: 0xffe066,
-          fontWeight: '700',
-          stroke: { color: 0x000000, width: 4 },
-        },
-      });
-      text.anchor.set(0.5, 0);
-      text.x = this.view.width / 2;
-      text.y = 8;
-      this.view.container.addChild(text);
-      this.searchPromptText = text;
-    }
-    const prompt = this.searchActive ? '/ ' : '🔍 ';
-    const display = this.searchQuery.length > 0 ? this.searchQuery : '(type to search)';
-    // Append "no matches" suffix when the query yields zero entries — gives the user clear
-    // feedback that they typed too narrowly. Otherwise show the result count for queries
-    // with hits ("3 matches"), which doubles as a hint that filtering is working.
-    let suffix = '';
-    if (this.searchQuery.length > 0) {
-      if (this.entries.length === 0) {
-        suffix = ' — no matches';
-      } else {
-        suffix = ` — ${this.entries.length} match${this.entries.length === 1 ? '' : 'es'}`;
-      }
-    }
-    this.searchPromptText.text = `${prompt}${display}${suffix}`;
-    this.searchPromptText.tint = this.searchQuery.length > 0 && this.entries.length === 0 ? 0xff8888 : 0xffe066;
-    this.searchPromptText.visible = true;
+    this.search.setSearchActive(active);
   }
 
   /**
@@ -1916,35 +1392,6 @@ function clampIndex(value: number, length: number): number {
   if (truncated < 0) return 0;
   if (truncated >= length) return length - 1;
   return truncated;
-}
-
-/**
- * Case-insensitive substring match against a song's text-searchable fields. The query is
- * pre-lowercased by the caller so this hot-path doesn't re-allocate per song. Returns true
- * when ANY field contains the query — title / artist / genre / subtitle. Mirrors
- * beatoraja's reference search which treats fields uniformly.
- */
-function songMatchesQuery(song: BrowserSongEntry, lowerQuery: string): boolean {
-  const meta = song.chart.metadata;
-  const fields = [meta.title, meta.artist, meta.genre, meta.subtitle];
-  for (const field of fields) {
-    if (typeof field !== 'string' || field.length === 0) continue;
-    if (field.toLowerCase().includes(lowerQuery)) return true;
-  }
-  return false;
-}
-
-/**
- * `resolveChartPlayVariant` walks the chart's events / metadata to classify keys mode. On a
- * malformed entry it can throw; a per-frame op-set computation must never throw, so we wrap
- * with a try/catch and fall back to `undefined` (= no `KEYSONG_*` op set, "modeless" bar).
- */
-function safeResolveChartVariant(song: BrowserSongEntry): ChartPlayVariant | undefined {
-  try {
-    return resolveChartPlayVariant(song);
-  } catch {
-    return undefined;
-  }
 }
 
 /**
@@ -2029,153 +1476,6 @@ function openIrWebsite(_song: BrowserSongEntry | undefined): void {
   console.log('[beatoraja-select] opening IR website', JSON.stringify({ url }));
   window.open(url, '_blank', 'noopener,noreferrer');
 }
-
-/**
- * Cached chart duration in seconds for the focused song. The underlying computation walks the
- * full event list + bpm/stop tables; caching keyed by the `BrowserSongEntry` reference (= the
- * chart never changes once loaded) keeps per-frame resolves O(1).
- */
-function resolveSongLengthSeconds(song: BrowserSongEntry): number {
-  const cached = SONG_LENGTH_CACHE.get(song);
-  if (cached !== undefined) return cached;
-  const seconds = computeBeatorajaChartTotalSeconds(song.chart);
-  SONG_LENGTH_CACHE.set(song, seconds);
-  return seconds;
-}
-const SONG_LENGTH_CACHE = new WeakMap<BrowserSongEntry, number>();
-
-/**
- * Cached note breakdown for the focused song. Same caching pattern as the duration helper —
- * the events scan happens once per song, then per-frame resolves are O(1) lookups.
- */
-function resolveNoteBreakdown(song: BrowserSongEntry): NoteBreakdown {
-  const cached = NOTE_BREAKDOWN_CACHE.get(song);
-  if (cached !== undefined) return cached;
-  const breakdown = computeBeatorajaNoteBreakdown(song.chart);
-  NOTE_BREAKDOWN_CACHE.set(song, breakdown);
-  return breakdown;
-}
-const NOTE_BREAKDOWN_CACHE = new WeakMap<BrowserSongEntry, NoteBreakdown>();
-
-/** Cached note density (peak / end / avg NPS) for the focused song. */
-function resolveDensity(song: BrowserSongEntry): ChartDensity {
-  const cached = NOTE_DENSITY_CACHE.get(song);
-  if (cached !== undefined) return cached;
-  const density = computeBeatorajaChartDensity(song.chart);
-  NOTE_DENSITY_CACHE.set(song, density);
-  return density;
-}
-const NOTE_DENSITY_CACHE = new WeakMap<BrowserSongEntry, ChartDensity>();
-
-/**
- * Walk the chart's BPM-change events (channels `03` / `08`) and return the integer min / max
- * BPM. Includes the chart's `metadata.bpm` so a chart that doesn't change BPM still gets a
- * sensible (min === max === main) result. Returns `undefined` when neither metadata BPM nor
- * any change event yields a finite positive number (corrupt / empty chart).
- *
- * Cached per song via WeakMap — the events array is iterated once and reused across frames.
- */
-function resolveBpmRange(song: BrowserSongEntry): { min: number; max: number } | undefined {
-  const cached = BPM_RANGE_CACHE.get(song);
-  if (cached !== undefined) return cached === null ? undefined : cached;
-  let min = Number.POSITIVE_INFINITY;
-  let max = 0;
-  const considerBpm = (bpm: number): void => {
-    if (!Number.isFinite(bpm) || bpm <= 0) return;
-    if (bpm < min) min = bpm;
-    if (bpm > max) max = bpm;
-  };
-  considerBpm(song.chart.metadata.bpm);
-  const bpmTable = song.chart.resources?.bpm ?? {};
-  for (const event of song.chart.events ?? []) {
-    if (event.value === '00' || event.value === '') continue;
-    if (event.channel === '03') {
-      considerBpm(parseInt(event.value, 16));
-    } else if (event.channel === '08') {
-      const looked =
-        bpmTable[event.value] ?? bpmTable[event.value.toLowerCase()] ?? bpmTable[event.value.toUpperCase()];
-      if (typeof looked === 'number') considerBpm(looked);
-      else if (typeof looked === 'string') considerBpm(Number.parseFloat(looked));
-    }
-  }
-  if (!Number.isFinite(min) || max <= 0) {
-    BPM_RANGE_CACHE.set(song, null);
-    return undefined;
-  }
-  const result = { min: Math.round(min), max: Math.round(max) };
-  BPM_RANGE_CACHE.set(song, result);
-  return result;
-}
-const BPM_RANGE_CACHE = new WeakMap<BrowserSongEntry, { min: number; max: number } | null>();
-
-/**
- * What the skin reads of a chart bar beyond its library entry (`BeatorajaSelectChartFacts`), kept per chart. The facts
- * that walk the chart (traits, note kinds, densities, length, BPM range) are read the first time a skin asks for them.
- */
-function selectChartFacts(song: BrowserSongEntry): BeatorajaSelectChartFacts {
-  let facts = SELECT_CHART_FACTS.get(song);
-  if (facts === undefined) {
-    const meta = song.chart.metadata;
-    let traits: BeatorajaChartTraits | undefined;
-    const playVariant = safeResolveChartVariant(song);
-    facts = {
-      ...(playVariant !== undefined ? { playVariant } : {}),
-      get traits(): BeatorajaChartTraits {
-        if (traits === undefined) {
-          const features = resolveLr2ChartFeatures(song.chart);
-          traits = {
-            longNote: features.longNote,
-            bga: features.bga,
-            bpmChange: features.bpmChange,
-            random: features.random,
-            stop: chartHasStop(song),
-            stageFile: Boolean(meta.stageFile),
-            banner: Boolean(meta.banner),
-            backBmp: Boolean(meta.backBmp),
-          };
-        }
-        return traits;
-      },
-      ...(meta.difficulty !== undefined ? { difficulty: meta.difficulty } : {}),
-      ...(meta.rank !== undefined ? { judgeRank: meta.rank } : {}),
-      ...(typeof meta.total === 'number' ? { total: meta.total } : {}),
-      ...(song.chart.bms?.lnMode !== undefined ? { lnMode: song.chart.bms.lnMode } : {}),
-      get subartist(): string {
-        return extractChartSubartist(song.chart);
-      },
-      get noteBreakdown(): NoteBreakdown {
-        return resolveNoteBreakdown(song);
-      },
-      get density(): ChartDensity {
-        return resolveDensity(song);
-      },
-      get lengthSeconds(): number {
-        return resolveSongLengthSeconds(song);
-      },
-      get bpmRange(): { min: number; max: number } | undefined {
-        return resolveBpmRange(song);
-      },
-    };
-    SELECT_CHART_FACTS.set(song, facts);
-  }
-  return facts;
-}
-const SELECT_CHART_FACTS = new WeakMap<BrowserSongEntry, BeatorajaSelectChartFacts>();
-
-/**
- * `true` when the chart authored at least one stop event (channel `09` in BMS, scaled stop in
- * bmson). Used to fire `HAS_BPMSTOP` (1177). Iterates events linearly — at typical chart sizes
- * (a few thousand events) this is microseconds; the WeakMap-cached `resolveLr2ChartFeatures` next to
- * it amortises any worst-case cost across the same select-scene tick.
- */
-function chartHasStop(song: BrowserSongEntry): boolean {
-  const cached = STOP_PRESENCE_CACHE.get(song);
-  if (cached !== undefined) return cached;
-  const has = (song.chart.events ?? []).some((event) => event.channel === '09');
-  STOP_PRESENCE_CACHE.set(song, has);
-  return has;
-}
-const STOP_PRESENCE_CACHE = new WeakMap<BrowserSongEntry, boolean>();
 
 /** Whether a key event comes from a text field, where keys type rather than steer the list. */
 function isEditableKeyTarget(target: EventTarget | null): boolean {
