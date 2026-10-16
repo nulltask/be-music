@@ -1,5 +1,7 @@
 import type { BeMusicJson } from '@be-music/json';
 import type { CourseDefinition, RandomCourseDefinition } from '@be-music/player/course';
+import type { BestRecord } from '@be-music/player/records';
+import type { ClearLamp } from '@be-music/player/ruleset';
 
 /** Where a song came from: a dropped directory, a zip, or loose files. */
 export type BrowserSongSourceKind = 'directory' | 'zip' | 'files';
@@ -83,31 +85,17 @@ export type BeMusicSongImageKind = 'stageFile' | 'banner' | 'backBmp';
 
 /**
  * Clear lamp of a play or a best record, worst first: not played, failed, then the gauge the chart was cleared on
- * (ASSIST EASY … EX HARD), FULL COMBO (no BAD / POOR), PERFECT (no GOOD or worse), and MAX (every note a PGREAT).
+ * (ASSIST EASY … EX HARD), FULL COMBO (no BAD / POOR), PERFECT (no GOOD or worse), and MAX (every note a PGREAT). The
+ * clear lamp of `@be-music/player/ruleset` (`ClearLamp`), which ranks them and lamps a play.
  */
-export type BeMusicClearLamp =
-  | 'NO_PLAY'
-  | 'FAILED'
-  | 'ASSIST_EASY'
-  | 'EASY'
-  | 'NORMAL'
-  | 'HARD'
-  | 'EX_HARD'
-  | 'FULL_COMBO'
-  | 'PERFECT'
-  | 'MAX';
+export type BeMusicClearLamp = ClearLamp;
 
-/** The player's best record on one chart, as a host keeps it. */
-export interface BeMusicSongRecord {
-  /** Best clear lamp so far. */
-  lamp: BeMusicClearLamp;
-  exScore?: number;
-  maxCombo?: number;
-  /** Fewest BAD + POOR. */
-  missCount?: number;
-  /** How many times the chart was played. */
-  playCount?: number;
-}
+/**
+ * The player's best record on one chart, as a host keeps it: the best lamp, EX score, max combo and fewest BAD + POOR +
+ * empty POOR, and the play count. The best record of `@be-music/player/records` (`BestRecord`), whose rules a host
+ * keeps it by.
+ */
+export type BeMusicSongRecord = BestRecord;
 
 /**
  * The player's best record on a course, as a host keeps it: the course's best lamp, EX score, max combo and BP over its
