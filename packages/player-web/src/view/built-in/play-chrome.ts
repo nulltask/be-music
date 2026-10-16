@@ -270,23 +270,23 @@ export interface BeMusicLayoutContext extends LaneGeometryContext {
 }
 
 /** The built-in BGA rect: `CoreGameplayView.collectBgaTargets`, unless a theme supplies its own. */
-export function collectBgaTargets(this: BgaTargetsContext, out: GameplayBgaTarget[]): void {
-  const stage = this.beMusicStage;
+export function collectBgaTargets(ctx: BgaTargetsContext, out: GameplayBgaTarget[]): void {
+  const stage = ctx.beMusicStage;
   if (!stage) {
     out.push(DEFAULT_BGA_TARGET);
     return;
   }
-  const geometry = resolveLaneGeometry(this);
+  const geometry = resolveLaneGeometry(ctx);
   // The landscape touch layout gives the BGA's room to the lanes.
   if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
   const rect = stage.resolveBgaRect(geometry.right);
-  const cached = this.stageBgaTarget;
+  const cached = ctx.stageBgaTarget;
   if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
     out.push(cached);
     return;
   }
-  this.stageBgaTarget = createDefaultBgaTarget(rect);
-  out.push(this.stageBgaTarget);
+  ctx.stageBgaTarget = createDefaultBgaTarget(rect);
+  out.push(ctx.stageBgaTarget);
 }
 
 /**
@@ -294,21 +294,21 @@ export function collectBgaTargets(this: BgaTargetsContext, out: GameplayBgaTarge
  * rect. Lane geometry only changes with the chart and the stage, so it is rebuilt when the lane channels, the play
  * variant, or the stage (a rotation) change.
  */
-export function resolveBeMusicLayout(this: BeMusicLayoutContext): BeMusicGameplayLayout {
-  const stage = this.beMusicStage ?? LEGACY_STAGE;
-  const cached = this.beMusicLayout;
+export function resolveBeMusicLayout(ctx: BeMusicLayoutContext): BeMusicGameplayLayout {
+  const stage = ctx.beMusicStage ?? LEGACY_STAGE;
+  const cached = ctx.beMusicLayout;
   if (
     cached &&
-    cached.channels === this.laneChannels &&
-    cached.variant === this.chartPlayVariant &&
+    cached.channels === ctx.laneChannels &&
+    cached.variant === ctx.chartPlayVariant &&
     cached.stage === stage
   ) {
     return cached.layout;
   }
   const layout = resolveGameplayLayout(
-    { laneChannels: this.laneChannels, playVariant: this.chartPlayVariant, layoutMode: this.layoutMode },
+    { laneChannels: ctx.laneChannels, playVariant: ctx.chartPlayVariant, layoutMode: ctx.layoutMode },
     stage,
   );
-  this.beMusicLayout = { channels: this.laneChannels, variant: this.chartPlayVariant, stage, layout };
+  ctx.beMusicLayout = { channels: ctx.laneChannels, variant: ctx.chartPlayVariant, stage, layout };
   return layout;
 }

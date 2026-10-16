@@ -227,40 +227,40 @@ export interface PlayMediaTeardownContext extends PlayMediaContext {
  * Releases the play's audio graph as the scene is disposed (`CoreGameplayView.dispose`); after a natural end with
  * `preserveAudioTail`, the graph is kept until the last samples have rung out.
  */
-export function disposePlayAudio(this: PlayMediaTeardownContext, options: CoreGameplayDisposeOptions): void {
+export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: CoreGameplayDisposeOptions): void {
   // WebAudioSession owns the in-flight BufferSource tracking that the bus's connected sources hang off of, so
   // dispose it BEFORE we tear the bus down — that gives the session a chance to call `node.stop()` on every
   // still-playing source so they don't survive into the next chart's bus and bleed audio through. Fire-and-
   // forget the returned promise; the session's dispose path is best-effort.
-  const preserveAudioTail = options.preserveAudioTail === true && this.chartEnded;
-  const audioTailChart = this.resolvedChart ?? this.song?.chart;
+  const preserveAudioTail = options.preserveAudioTail === true && ctx.chartEnded;
+  const audioTailChart = ctx.resolvedChart ?? ctx.song?.chart;
   const audioTailCleanupDelayMs =
     preserveAudioTail && audioTailChart !== undefined
       ? chartToElapsedSeconds(
           resolveGameplayAudioTailCleanupDelayMs({
             chart: audioTailChart,
-            notes: this.notes,
-            autoSampleTriggers: this.autoSampleTriggers,
-            decodedSamples: this.decodedSamples,
-            bmsonSlicePlayback: this.bmsonSlicePlayback,
-            currentSeconds: this.currentSeconds(),
+            notes: ctx.notes,
+            autoSampleTriggers: ctx.autoSampleTriggers,
+            decodedSamples: ctx.decodedSamples,
+            bmsonSlicePlayback: ctx.bmsonSlicePlayback,
+            currentSeconds: ctx.currentSeconds(),
           }),
-          this.tempo,
+          ctx.tempo,
         )
       : 0;
-  const webAudioSession = this.webAudioSession;
-  this.webAudioSession = undefined;
-  this.nonstopMixer?.dispose();
-  this.nonstopMixer = undefined;
+  const webAudioSession = ctx.webAudioSession;
+  ctx.webAudioSession = undefined;
+  ctx.nonstopMixer?.dispose();
+  ctx.nonstopMixer = undefined;
   // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
   // The bus doesn't own the AudioContext itself; closing that is the next step.
-  this.audioAnalyzer?.dispose();
-  this.audioAnalyzer = undefined;
-  this.audioFrame = undefined;
-  const audioBus = this.audioBus;
-  this.audioBus = undefined;
-  const audioContext = this.audioContext;
-  this.audioContext = undefined;
+  ctx.audioAnalyzer?.dispose();
+  ctx.audioAnalyzer = undefined;
+  ctx.audioFrame = undefined;
+  const audioBus = ctx.audioBus;
+  ctx.audioBus = undefined;
+  const audioContext = ctx.audioContext;
+  ctx.audioContext = undefined;
   disposeGameplayAudioGraphAfterDelay(
     {
       session: webAudioSession,

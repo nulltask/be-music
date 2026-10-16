@@ -22,7 +22,7 @@ describe('CoreGameplayView hi-speed under HS-FIX', () => {
   it("steps the player's hi-speed and reports it, drawing it scaled by HS-FIX", () => {
     const reported: number[] = [];
     const { view, internals } = hsFixView((hiSpeed) => reported.push(hiSpeed));
-    adjustHiSpeed.call(view, 0.1);
+    adjustHiSpeed(view, 0.1);
     expect(internals.playerHiSpeed).toBe(3.1);
     expect(internals.hiSpeed).toBe(2.067);
     expect(reported).toEqual([3.1]);

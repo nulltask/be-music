@@ -377,12 +377,12 @@ function syncBgaVideo(
 }
 
 /** Stops the BGA videos and lets go of them as the scene is disposed (`CoreGameplayView.dispose`). */
-export function disposeBgaVideos(this: BgaRendererContext): void {
+export function disposeBgaVideos(ctx: BgaRendererContext): void {
   // Pause every BGA video BEFORE we touch textures. The Pixi `VideoSource` wrapping each video registers a
   // `requestVideoFrameCallback` that re-uploads frames into the GL texture as they decode — leaving those callbacks
   // in flight while we destroy the textures throws inside the GL texture system. Pausing also revokes the Blob URL so
   // the underlying buffer can be released.
-  for (const { video, objectUrl } of this.bgaVideos.values()) {
+  for (const { video, objectUrl } of ctx.bgaVideos.values()) {
     try {
       video.pause();
       video.removeAttribute('src');
@@ -392,6 +392,6 @@ export function disposeBgaVideos(this: BgaRendererContext): void {
     }
     URL.revokeObjectURL(objectUrl);
   }
-  this.bgaVideos.clear();
-  this.bgaActiveVideos = {};
+  ctx.bgaVideos.clear();
+  ctx.bgaActiveVideos = {};
 }
