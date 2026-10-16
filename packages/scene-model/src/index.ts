@@ -11,6 +11,7 @@
  *   hi-speed range.
  * - Play state: the running gauge, score, graphs, combo, timed judgments, hi-speed and lane covers of a play, fed by
  *   the engine's frames and judgments (`PlayState`, `reducePlayState`), and its view in the play log's units.
+ * - Play result: the one result payload for single plays, course stages, course runs and NONSTOP runs (`PlayResult`).
  * - Course view: the course a screen shows (`CourseView`) and the course-wide combo of a stage.
  */
 export * from './library/entries.ts';
@@ -33,6 +34,9 @@ export * from './play-state/hi-speed.ts';
 export * from './play-state/lane-cover.ts';
 export * from './play-state/state.ts';
 export * from './play-state/view.ts';
+
+export * from './play-result/result.ts';
+export * from './play-result/course.ts';
 
 export * from './course-view/course-view.ts';
 export * from './course-view/course-combo.ts';
