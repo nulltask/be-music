@@ -21,7 +21,7 @@ import type { AudioAnalyzer, AudioFeatures } from '../../../runtime/audio-analys
 import type { BgaCue, NonstopStageBgaTimeline } from '../../../scene/core/gameplay-bga.ts';
 import type { ChartBpmRange } from '../../../scene/core/gameplay-bpm-range.ts';
 import type { PlaySessionOptions } from '../../../session/play/play-options.ts';
-import type { LongNoteTracker } from '../../../scene/core/long-note-tracker.ts';
+import type { LongNoteTracker } from './long-note-tracker.ts';
 import type { GoneDrawObjects } from '../../../scene/core/note-draw-window.ts';
 import type { HiSpeedTransition } from '../../../scene/hi-speed.ts';
 import type { ChildPool } from '../../../scene/pixi-utils.ts';

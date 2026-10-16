@@ -42,7 +42,7 @@ import {
 } from '../../scene/core/gameplay-bga.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
 import type { PlaySessionOptions } from './play-options.ts';
-import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
+import type { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../scene/core/note-draw-window.ts';
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
 import { isPlayableInputChannel, resolvePlayVariantLaneChannels } from '../../scene/gameplay-lanes.ts';
