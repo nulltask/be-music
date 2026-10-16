@@ -1018,12 +1018,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
     interactive: true,
   });
-  define('player-web.PixiGameplayView', {
-    run: () => {
-      new playerWebCoreApi.PixiGameplayView();
-    },
-    interactive: true,
-  });
   define('player-web.PixiSceneHost', {
     run: () => {
       new playerWebCoreApi.PixiSceneHost();

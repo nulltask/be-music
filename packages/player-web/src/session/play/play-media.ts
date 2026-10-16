@@ -1,10 +1,10 @@
 /**
- * Media preparation for a play on the built-in and LR2 gameplay scenes (`CoreGameplayView`): the play's AudioContext,
+ * Media preparation for a play on the built-in and LR2 play screens (`PlaySession`): the play's AudioContext,
  * audio bus and analyser, the decoded (and, for keep pitch, stretched) samples, the NONSTOP stage mixer and the
  * `WebAudioSession` the engine plays through; the BGA textures and videos; and the audio graph's teardown, which a
  * play that ended naturally delays so its last samples ring out.
  *
- * The functions read and write the play's state through {@link PlayMediaContext}; the scene passes itself.
+ * The functions read and write the play's state through {@link PlayMediaContext}; the play session passes itself.
  */
 
 import type { TimedSampleTrigger } from '@be-music/audio-renderer/triggers';
@@ -30,7 +30,7 @@ import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
 import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 import { resolveGameplayAudioTailCleanupDelayMs } from '../../scene/core/gameplay-result-delay.ts';
 
-/** The play state the media preparation reads and fills: `CoreGameplayView`'s fields of these names. */
+/** The play state the media preparation reads and fills: the play session's fields of these names. */
 export interface PlayMediaContext {
   readonly options: Readonly<
     Pick<
@@ -238,7 +238,7 @@ export interface PlayMediaTeardownContext extends PlayMediaContext {
 }
 
 /**
- * Releases the play's audio graph as the scene is disposed (`CoreGameplayView.dispose`); after a natural end with
+ * Releases the play's audio graph as the play is disposed (`PlaySession.dispose`); after a natural end with
  * `preserveAudioTail`, the graph is kept until the last samples have rung out.
  */
 export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: CoreGameplayDisposeOptions): void {

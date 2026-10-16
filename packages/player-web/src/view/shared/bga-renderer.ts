@@ -1,9 +1,9 @@
 /**
- * The chart's BGA on the built-in and LR2 gameplay scenes (`CoreGameplayView`): composites the base, layer and POOR
+ * The chart's BGA on the built-in and LR2 play screens: composites the base, layer and POOR
  * images (or a stitched NONSTOP chart's per-stage stacks) into the skin's BGA rects, or hands them to a be-music skin
  * that composites the BGA itself, and keeps the BGA videos playing in step with their cues.
  *
- * The functions read and write the scene's state through {@link BgaRendererContext}; the scene passes itself.
+ * The functions read and write the scene's state through {@link BgaRendererContext}; the play view passes itself.
  */
 
 import { pickSwitchingBgaFrame, resolveBmsBmpArgb } from '@be-music/chart';
@@ -24,7 +24,7 @@ import type { BeMusicImage } from '../../skin/be-music/types.ts';
 import type { PlayfieldBgaTarget, PlayfieldSkin } from '../types.ts';
 import type { PlayfieldRuntime } from './playfield/context.ts';
 
-/** The scene's members the BGA passes use: `CoreGameplayView`'s members of these names. */
+/** The view's members the BGA passes use: a play view's members of these names. */
 export interface BgaRendererContext {
   readonly play: PlayfieldRuntime;
   readonly options: Readonly<Pick<CoreGameplayViewOptions, 'bga' | 'autoPlay' | 'nonstop'>>;

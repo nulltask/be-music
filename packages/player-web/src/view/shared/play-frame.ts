@@ -1,9 +1,9 @@
 /**
- * The frame of the built-in and LR2 gameplay scenes (`CoreGameplayView`): the layer tree under the scene's root, its
- * fit to the screen with the design-rect clip and background, the fade in and out, and the per-frame pass that draws
- * the chrome, the BGA and the playfield into it.
+ * The frame of the built-in and LR2 play views: the layer tree under the view's root, its fit to the screen with the
+ * design-rect clip and background, the fade in and out, and the per-frame pass that draws the view's chrome
+ * (`PlayChrome`), the BGA and the playfield into it.
  *
- * The functions read and write the scene's state through {@link PlayFrameContext}; the scene passes itself.
+ * The functions read and write the view's state through {@link PlayFrameContext}; the play view passes itself.
  */
 
 import { resolveStageOrientation } from '@be-music/skin-sdk';
@@ -31,7 +31,7 @@ import type { PlayfieldStage } from '../types.ts';
 /** How long the play screen takes to fade up from black as it appears on a be-music skin. */
 const BE_MUSIC_ENTER_FADE_MS = 400;
 
-/** The scene's members the frame passes use: `CoreGameplayView`'s members of these names. */
+/** The view's members the frame passes use: a play view's members of these names. */
 export interface PlayFrameContext extends PlayfieldContext, BgaRendererContext {
   readonly options: Readonly<
     Pick<

@@ -85,7 +85,7 @@ export class ChildPool {
     this.textHost = new Container();
     // Z-order matches LR2 visual layering: Graphics (measure lines, LN body, fallback rects) → Sprite (notes,
     // skin chrome) → Text (in-skin labels, fallback HUD). The hosts inherit the parent layer's `eventMode` so
-    // setting `layer.eventMode = 'none'` (as `scene/lr2/gameplay.ts` does for render-only layers) propagates here too.
+    // setting `layer.eventMode = 'none'` (as the play frame (`view/shared/play-frame.ts`) does for render-only layers) propagates here too.
     this.layer.addChild(this.graphicsHost, this.spriteHost, this.textHost);
   }
 
