@@ -48,6 +48,13 @@ export interface PlayResult {
   lamp?: ClearLamp;
   /** The gauge the play ran on, as the ruleset names it (`GROOVE`, `HARD`, `EX-HARD`, …). */
   gaugeType?: string;
+  /** The gauge's clear border in percent (0..100), when the play reported it: a beatoraja skin's gauge shows it. */
+  gaugeBorder?: number;
+  /**
+   * The TOTAL the gauge ran on (a bmson `total` or a missing `#TOTAL` resolved), when the play reported it: a beatoraja
+   * skin's TOTAL readout shows it.
+   */
+  gaugeTotal?: number;
   /** Which play this is of; absent reads as a single play. */
   run?: PlayRunKind;
   /** The course a stage or a course run belongs to (with the stage being played for a stage). */
@@ -156,11 +163,19 @@ export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts
   };
 }
 
+/** The final gauge the beatoraja gameplay scene hands its result (`PlayerGaugeSummary`). */
+export interface BeatorajaPlayGauge extends PlayGaugeInput {
+  /** The clear border, in the units of `current`. */
+  readonly clearThreshold?: number;
+  /** The TOTAL the gauge ran on. */
+  readonly effectiveTotal?: number;
+}
+
 /** The final summary the beatoraja gameplay scene hands its result (`PlayerSummary`). */
 export interface BeatorajaPlaySummary extends ScoreSummary {
   fast?: number;
   slow?: number;
-  gauge?: PlayGaugeInput;
+  gauge?: BeatorajaPlayGauge;
 }
 
 /** What the beatoraja gameplay scene hands its result scene: `onComplete(summary, maxCombo, history)`. */
@@ -179,6 +194,7 @@ export interface BeatorajaPlayCompletion {
  * A beatoraja play's result in the one payload. Its graphs get the start and end samples the built-in / LR2 scenes take
  * (the starting gauge at the chart's start, the final values at its end) when they lack them; its timed judgments carry
  * no time, so each reads `atMs` 0, and only the five judgments are kept; the lamp comes from the one clear-lamp rule.
+ * The gauge's clear border (in percent) and TOTAL are kept when the summary reports them.
  */
 export function playResultFromBeatoraja(
   completion: BeatorajaPlayCompletion,
@@ -235,6 +251,10 @@ export function playResultFromBeatoraja(
       ...(facts.judgeRuleset !== undefined ? { ruleset: facts.judgeRuleset } : {}),
     }),
     ...(summary.gauge?.type !== undefined ? { gaugeType: summary.gauge.type } : {}),
+    ...(summary.gauge?.clearThreshold !== undefined
+      ? { gaugeBorder: gaugePercent({ current: summary.gauge.clearThreshold, max: summary.gauge.max }) }
+      : {}),
+    ...(summary.gauge?.effectiveTotal !== undefined ? { gaugeTotal: summary.gauge.effectiveTotal } : {}),
     ...(facts.run !== undefined ? { run: facts.run } : {}),
     ...(facts.course !== undefined ? { course: facts.course } : {}),
     ...(facts.judgeRuleset !== undefined ? { judgeRuleset: facts.judgeRuleset } : {}),
@@ -255,7 +275,7 @@ function withEnds<T extends { progress: number }>(samples: readonly T[], start: 
 /**
  * A result in the shape the beatoraja result scene reads (`summary`, `maxCombo` and the graphs), so a beatoraja skin
  * can show any run — a course run included, its course-wide score as one play (beatoraja's `CourseResult` sums the
- * stages the same way). The gauge reads in percent of 100.
+ * stages the same way). The gauge reads in percent of 100, its clear border too.
  */
 export function beatorajaCompletionFromPlayResult(result: PlayResult): BeatorajaPlayCompletion {
   const { score } = result;
@@ -269,6 +289,8 @@ export function beatorajaCompletionFromPlayResult(result: PlayResult): Beatoraja
         max: 100,
         cleared: result.cleared,
         ...(result.gaugeType !== undefined ? { type: result.gaugeType } : {}),
+        ...(result.gaugeBorder !== undefined ? { clearThreshold: result.gaugeBorder } : {}),
+        ...(result.gaugeTotal !== undefined ? { effectiveTotal: result.gaugeTotal } : {}),
       },
     },
     maxCombo: result.maxCombo,

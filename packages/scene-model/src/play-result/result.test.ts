@@ -126,6 +126,28 @@ describe('playResultFromBeatoraja', () => {
     ]);
   });
 
+  test("keeps the gauge's clear border, in percent, and the TOTAL it ran on", () => {
+    const result = playResultFromBeatoraja(
+      {
+        ...completion,
+        summary: {
+          ...completion.summary,
+          gauge: { current: 40, max: 50, cleared: false, clearThreshold: 30, effectiveTotal: 260 },
+        },
+      },
+      { song },
+    );
+    expect(result).toMatchObject({ gauge: 80, gaugeBorder: 60, gaugeTotal: 260 });
+    expect(beatorajaCompletionFromPlayResult(result).summary.gauge).toMatchObject({
+      current: 80,
+      max: 100,
+      clearThreshold: 60,
+      effectiveTotal: 260,
+    });
+    expect(playResultFromBeatoraja(completion, { song })).not.toHaveProperty('gaugeBorder');
+    expect(playResultFromBeatoraja(completion, { song })).not.toHaveProperty('gaugeTotal');
+  });
+
   test('keeps the five judgments of the timing samples, without a time of their own', () => {
     expect(playResultFromBeatoraja(completion, { song }).judgeTimings).toEqual([
       { atMs: 0, deltaMs: -4, judge: 'PERFECT' },

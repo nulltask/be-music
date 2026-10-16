@@ -37,6 +37,10 @@ export interface BeatorajaResultFacts {
   /** The final gauge in percent, read when the engine's final gauge is not given. */
   readonly gauge?: number;
   readonly gaugeType?: string;
+  /** The gauge's clear border in percent, read with {@link gauge}. */
+  readonly gaugeBorder?: number;
+  /** The TOTAL the gauge ran on, read with {@link gauge}. */
+  readonly gaugeTotal?: number;
   readonly cleared: boolean;
   readonly lamp?: ClearLamp;
   readonly gaugeHistory?: readonly GaugeHistorySample[];
@@ -65,14 +69,23 @@ export interface BeatorajaResultInput {
 
 const RESULT_GAUGES = new WeakMap<BeatorajaResultFacts, BeatorajaGaugeInput | undefined>();
 
-/** The final gauge: the engine's, else the result's percentage out of 100 under its gauge type. */
+/**
+ * The final gauge: the engine's, else the result's percentage out of 100 under its gauge type, with its clear border and
+ * TOTAL when the result has them.
+ */
 function resultGauge(input: BeatorajaResultInput): BeatorajaGaugeInput | undefined {
   if (input.gauge !== undefined) return input.gauge;
   const { result } = input;
   if (RESULT_GAUGES.has(result)) return RESULT_GAUGES.get(result);
   const gauge =
     result.gauge !== undefined
-      ? { current: result.gauge, max: 100, ...(result.gaugeType !== undefined ? { type: result.gaugeType } : {}) }
+      ? {
+          current: result.gauge,
+          max: 100,
+          ...(result.gaugeType !== undefined ? { type: result.gaugeType } : {}),
+          ...(result.gaugeBorder !== undefined ? { clearThreshold: result.gaugeBorder } : {}),
+          ...(result.gaugeTotal !== undefined ? { effectiveTotal: result.gaugeTotal } : {}),
+        }
       : undefined;
   RESULT_GAUGES.set(result, gauge);
   return gauge;

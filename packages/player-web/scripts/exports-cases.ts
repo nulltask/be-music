@@ -433,6 +433,10 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       const kits: playerWebCoreApi.ResultSceneKit[] = [
         { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
         { family: 'lr2', skin: BENCH_LR2_RESULT_SKIN },
+        {
+          family: 'beatoraja',
+          kit: { skin: makeBenchBeatorajaSkin(), textures: makeEmptyBeatorajaTextureCache(), files: new Map() },
+        },
       ];
       for (const kit of kits) {
         const scene = playerWebCoreApi.createResultScene(kit, {
@@ -1006,14 +1010,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     run: () => {
       new playerWebCoreApi.PixiBeatorajaGameplayView(
         {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaGameplayView>[0],
-      );
-    },
-    interactive: true,
-  });
-  define('player-web.PixiBeatorajaResultScene', {
-    run: () => {
-      new playerWebCoreApi.PixiBeatorajaResultScene(
-        {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaResultScene>[0],
       );
     },
     interactive: true,
