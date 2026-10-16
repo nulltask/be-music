@@ -10,7 +10,7 @@
 
 import { Text } from 'pixi.js';
 import type { BrowserBrowseEntry } from '../../../collection/types.ts';
-import type { BeatorajaPlaySkinView } from '../skin-view.ts';
+import type { BeatorajaPlaySkinView } from '../../../scene/beatoraja/skin-view.ts';
 
 /** What the search reads and calls on the select scene: its fields and methods of these names. */
 export interface BeatorajaSelectSearchContext {
