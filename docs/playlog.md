@@ -39,7 +39,7 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
    lane-arrangement options that produced the resolved chart, the live judge-window ruleset (`judgeRuleset`,
    absent = `'lr2'`), the debug judge-window override, an ESC flag (`aborted`, with `abortedAtUs`: the chart time the judge had settled
-   through when the play was aborted, where re-simulations stop instead of missing the rest of the chart),
+   through when the play was aborted, where re-simulations and replays stop instead of missing the rest of the chart),
    `endOnFailure` (the play ended the moment its survival gauge emptied; absent on logs from before that, which kept
    judging), `tempo` (the play tempo, `PlayerOptions.speed`, when it was not 1: the chart, its audio and the clock ran
    `tempo` times as fast; judgments and input times stay in chart time, so a re-simulation ignores it and a replay plays
@@ -152,6 +152,12 @@ them whose new draw rolls differently from the recorded run, cannot be re-aligne
 message instead of playing a mismatched chart. Replay always runs on the LR2 / default gameplay path regardless of
 which skin family recorded the log.
 
+A replay of an ESC-aborted log stops where the play was aborted, as the re-simulations do: the host passes
+`play.abortedAtUs` as `PlayerOptions.replayAbortedAtUs`, and the engine judges up to that chart time and ends the replay
+there as an ESC, with the live play's result. A replay of an AUTO-played log passes its (empty) inputs as
+`replayInputs` too, so it is a replay as well: it follows `replayTempoChanges`, and neither kind of replay records the
+tempo it is re-driven at.
+
 ## What the player saw
 
 `play.view` and `play.viewChanges` record the view, apart from what was judged, in units every scene shares:
@@ -218,6 +224,14 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
   per-mode gauge tables other than SEVENKEYS (the 7K gauge constants are used for every mode).
 - Because the playlog stores the resolved chart, `#RANDOM` and lane-shuffle differences between players never
   affect re-simulation.
+- A play from input without key releases (a terminal without the kitty keyboard protocol) is judged live on
+  hold-grace windows: a repeated press keeps a long note held for a short window, a repeat on the lane of the long
+  note it is playing is no empty POOR, and a mine takes a key as down for the same window after each press. Its log
+  records each of those presses as a `down` and has no `up`, so a replay and the re-simulations read it as key-state
+  input — every key held from its press on, every repeat a new press — and agree with each other, but can judge it
+  differently from the live play (extra empty POORs, long notes held to their tails), at any tempo. Reproducing such
+  a play would need the log to say that its input had no releases and the simulators to model the hold-grace windows
+  (in the live play's clock domain); neither does yet.
 
 ## Course play logs
 

@@ -191,10 +191,11 @@ describe('engine characterization: play scenarios', () => {
       ...resolveChart(chart).notes.flatMap((note) => tap(Math.round(at(note.seconds)), note.channel)),
     ];
     const plays = await playThreeWays({ chart, script });
+    // A replay of an auto-played log with these tempo changes (its inputs are empty).
     const autoFollowingTheLog = await observePlay({
       driver: 'auto',
       chart,
-      options: { replayTempoChanges: plays.manual.playlog!.play.tempoChanges! },
+      options: { replayInputs: [], replayTempoChanges: plays.manual.playlog!.play.tempoChanges! },
     });
     const autoWithCommand = await observePlay({ driver: 'auto', chart, script: [script[0]!] });
     expect(plays.replay.summary).toEqual(plays.manual.summary);
@@ -231,11 +232,11 @@ describe('engine characterization: play scenarios', () => {
       command(1800, { kind: 'interrupt', reason: 'escape' }),
     ];
     const manual = await observePlay({ driver: 'manual', chart, script });
-    // A replay of the aborted log plays its inputs and then the rest of the chart.
+    // A replay of the aborted log plays its inputs and stops where the play was aborted.
     const replayOfTheAbortedLog = await observePlay({
       driver: 'manual',
       chart,
-      options: { replayInputs: manual.playlog!.inputs },
+      options: { replayInputs: manual.playlog!.inputs, replayAbortedAtUs: manual.playlog!.play.abortedAtUs },
     });
     const auto = await observePlay({
       driver: 'auto',

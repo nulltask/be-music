@@ -1,4 +1,4 @@
-import { isInvisibleNoteChannel, isPlayLaneSoundChannel, type ResolvedChart } from '@be-music/chart';
+import { isPlayLaneSoundChannel, type ResolvedChart } from '@be-music/chart';
 import { throwIfAborted } from '@be-music/utils/core';
 import { type BeMusicJson, resolveBmsBase } from '@be-music/json';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
@@ -127,7 +127,7 @@ export async function createPlaySession(
   options: PlayerOptions,
   strategy: JudgeStrategy,
 ): Promise<PlaySession> {
-  const { mode, drifts } = strategy;
+  const { mode } = strategy;
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
@@ -148,10 +148,9 @@ export async function createPlaySession(
   // be re-simulated under LR2 with the windows LR2 would have used.
   const judgeRankChanges = resolvedChart.judgeRank.changes;
   const volumeEvents = collectRealtimeAudioVolumeEvents(resolvedChart);
-  // Background audio: every sound that is not a play lane's — a play lane's keysound is the judge's to play.
-  const backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) =>
-    drifts.queuesLaneKeysoundsAsRealtimeAudio ? !isInvisibleNoteChannel(channel) : !isPlayLaneSoundChannel(channel),
-  );
+  // Background audio: every sound that is not a play lane's — a play lane's keysound is the judge strategy's to play
+  // (on the player's press, or AUTO play's own note keysounds).
+  const backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
   const realtimeAudioEndSeconds =
     options.audio === false ? 0 : Math.max(backgroundTriggers.at(-1)?.seconds ?? 0, volumeEvents.at(-1)?.seconds ?? 0);
   // Prefer the host-provided `preparedChart` over running our own extract pass. See `PlayerOptions.preparedChart`
@@ -161,11 +160,9 @@ export async function createPlaySession(
   const playbackChart =
     options.preparedChart ??
     preparePlaybackChart(resolvedChart, { laneModeExtension: options.laneModeExtension }, realtimeAudioEndSeconds);
-  if (!drifts.queuesLaneKeysoundsAsRealtimeAudio) {
-    // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds,
-    // as background audio at its own time.
-    appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
-  }
+  // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
+  // background audio at its own time.
+  appendShadowedNoteTriggers(backgroundTriggers, resolvedChart, playbackChart.shadowedNotes);
   // Constant for the whole play and read on every tick and judgment: hoisted out of the hot paths.
   const idBase = resolveBmsBase(resolvedJson);
   const wavResources = resolvedJson.resources.wav;
@@ -174,12 +171,7 @@ export async function createPlaySession(
   // only declared it for the log (`recordPlaylog.gauge`) gets it played too.
   const selectedGauge = options.gauge ?? options.recordPlaylog?.gauge;
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(
-      resolvedJson,
-      playbackChart,
-      drifts.ignoresJudgeRankChanges ? [] : judgeRankChanges,
-      options.stageRanks,
-    ),
+    rulesetChartFactsFromChart(resolvedJson, playbackChart, judgeRankChanges, options.stageRanks),
     options.judgeRuleset ?? 'lr2',
     {
       ...(selectedGauge !== undefined ? { selectedGauge } : {}),
@@ -224,13 +216,13 @@ export async function createPlaySession(
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
-            ...(endOnFailure && !drifts.omitsEndOnFailure ? { endOnFailure } : {}),
+            ...(endOnFailure ? { endOnFailure } : {}),
             ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
             gauge: selectedGauge,
             // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
             // fast it is re-driven, so it records none.
-            ...(speed !== 1 && (!replay || drifts.recordsTempoInReplay) ? { tempo: speed } : {}),
+            ...(speed !== 1 && !replay ? { tempo: speed } : {}),
           },
         });
       })()
@@ -275,7 +267,7 @@ export async function createPlaySession(
     : createNoTuiPlaybackEventTracer({
         resolved: resolvedChart,
         writeOutput,
-        ...(drifts.ignoresJudgeRankChanges ? {} : { judgeWindowMs: options.judgeWindowMs }),
+        judgeWindowMs: options.judgeWindowMs,
       });
   const stateLogger = uiEnabled
     ? createNoopPlaybackStateLogger()

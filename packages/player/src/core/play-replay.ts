@@ -1,7 +1,7 @@
 import { advanceJudgeCoreReplay, createJudgeCoreReplay } from './judge-core.ts';
 import type { PlaySession } from './play-session.ts';
 import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
-import { createPlayJudgeCore, judgeCoreJudge, MANUAL_DRIFTS, writeManualIntro } from './play-manual.ts';
+import { createPlayJudgeCore, judgeCoreJudge, writeManualIntro } from './play-manual.ts';
 
 /**
  * The replay judge strategy: the manual judge core re-driven by a recorded play-log input stream
@@ -21,6 +21,8 @@ function createReplayJudge(session: PlaySession): PlayJudge {
     judge: () => undefined,
     // A replay has only judged up to its last chart-time step, which can trail the tick by up to one step.
     judgedThroughSeconds: () => replay.judgedThroughSeconds,
+    // Everything due by the last step's chart time has been judged, whether or not a judgment fell on it.
+    settledThroughSeconds: () => Math.max(0, replay.judgedThroughSeconds),
     beforeFinish: () => {
       if (replay.events.length > 0) {
         // The loop can end once every note is judged while inputs are still queued — typically the release that
@@ -35,7 +37,6 @@ function createReplayJudge(session: PlaySession): PlayJudge {
 /** A replay: a recorded play's inputs, re-driven at their recorded chart times. */
 export const replayStrategy: JudgeStrategy = {
   mode: 'manual',
-  drifts: MANUAL_DRIFTS,
   estimatesActiveAudio: false,
   writeIntro: writeManualIntro,
   createJudge: createReplayJudge,

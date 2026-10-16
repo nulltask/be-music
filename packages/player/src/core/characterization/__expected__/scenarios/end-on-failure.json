@@ -179,7 +179,7 @@
       "1208.333 trigger-poor-bga seconds=1.208333"
     ],
     "frames": {
-      "count": 84,
+      "count": 85,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "625.000 seconds=0.625 note 12@0.625",
@@ -403,7 +403,7 @@
       "4591.667 trigger-poor-bga seconds=4.591667"
     ],
     "frames": {
-      "count": 345,
+      "count": 346,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "625.000 seconds=0.625 note 12@0.625",
@@ -438,7 +438,7 @@
         "4458.333 seconds=4.458333 note 13@4.25",
         "4591.667 seconds=4.591667 note 14@4.375"
       ],
-      "last": "5558.333 seconds=5.558333 beat=11.116667"
+      "last": "5575.000 seconds=4.375 beat=8.75"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -470,7 +470,7 @@
   },
   "autoEnding": {
     "outcome": "completed",
-    "endedAtMs": 4383.333,
+    "endedAtMs": 5583.333,
     "summary": {
       "total": 32,
       "perfect": 32,
@@ -501,7 +501,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manualEnding)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"DEATH"},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"DEATH","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -557,71 +557,39 @@
       "0.000 start",
       "0.000 trigger 01:01@0+0/1",
       "500.000 trigger 11:02@0+4/16",
-      "500.000 trigger 11:02@0+4/16",
-      "633.333 trigger 12:02@0+5/16",
       "633.333 trigger 12:02@0+5/16",
       "750.000 trigger 13:02@0+6/16",
-      "750.000 trigger 13:02@0+6/16",
-      "883.333 trigger 14:02@0+7/16",
       "883.333 trigger 14:02@0+7/16",
       "1000.000 trigger 11:02@0+8/16",
-      "1000.000 trigger 11:02@0+8/16",
-      "1133.333 trigger 12:02@0+9/16",
       "1133.333 trigger 12:02@0+9/16",
       "1250.000 trigger 13:02@0+10/16",
-      "1250.000 trigger 13:02@0+10/16",
-      "1383.333 trigger 14:02@0+11/16",
       "1383.333 trigger 14:02@0+11/16",
       "1500.000 trigger 11:02@0+12/16",
-      "1500.000 trigger 11:02@0+12/16",
-      "1633.333 trigger 12:02@0+13/16",
       "1633.333 trigger 12:02@0+13/16",
       "1750.000 trigger 13:02@0+14/16",
-      "1750.000 trigger 13:02@0+14/16",
-      "1883.333 trigger 14:02@0+15/16",
       "1883.333 trigger 14:02@0+15/16",
       "2000.000 trigger 11:03@1+0/16",
-      "2000.000 trigger 11:03@1+0/16",
-      "2133.333 trigger 12:03@1+1/16",
       "2133.333 trigger 12:03@1+1/16",
       "2250.000 trigger 13:03@1+2/16",
-      "2250.000 trigger 13:03@1+2/16",
-      "2383.333 trigger 14:03@1+3/16",
       "2383.333 trigger 14:03@1+3/16",
       "2500.000 trigger 11:03@1+4/16",
-      "2500.000 trigger 11:03@1+4/16",
-      "2633.333 trigger 12:03@1+5/16",
       "2633.333 trigger 12:03@1+5/16",
       "2750.000 trigger 13:03@1+6/16",
-      "2750.000 trigger 13:03@1+6/16",
-      "2883.333 trigger 14:03@1+7/16",
       "2883.333 trigger 14:03@1+7/16",
       "3000.000 trigger 11:03@1+8/16",
-      "3000.000 trigger 11:03@1+8/16",
-      "3133.333 trigger 12:03@1+9/16",
       "3133.333 trigger 12:03@1+9/16",
       "3250.000 trigger 13:03@1+10/16",
-      "3250.000 trigger 13:03@1+10/16",
-      "3383.333 trigger 14:03@1+11/16",
       "3383.333 trigger 14:03@1+11/16",
       "3500.000 trigger 11:03@1+12/16",
-      "3500.000 trigger 11:03@1+12/16",
-      "3633.333 trigger 12:03@1+13/16",
       "3633.333 trigger 12:03@1+13/16",
       "3750.000 trigger 13:03@1+14/16",
-      "3750.000 trigger 13:03@1+14/16",
-      "3883.333 trigger 14:03@1+15/16",
       "3883.333 trigger 14:03@1+15/16",
       "4000.000 trigger 11:04@2+0/16",
-      "4000.000 trigger 11:04@2+0/16",
-      "4133.333 trigger 12:04@2+1/16",
       "4133.333 trigger 12:04@2+1/16",
       "4250.000 trigger 13:04@2+2/16",
-      "4250.000 trigger 13:04@2+2/16",
       "4383.333 trigger 14:04@2+3/16",
-      "4383.333 trigger 14:04@2+3/16",
-      "4383.333 finish",
-      "4383.333 dispose"
+      "5583.333 finish",
+      "5583.333 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=100",
@@ -693,7 +661,7 @@
       "4383.333 flash-lane 14"
     ],
     "frames": {
-      "count": 298,
+      "count": 369,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "633.333 seconds=0.625 note 12@0.625",
@@ -728,7 +696,7 @@
         "4250.000 seconds=4.25 note 13@4.25",
         "4383.333 seconds=4.375 note 14@4.375"
       ],
-      "last": "4383.333 seconds=4.375 beat=8.75"
+      "last": "5583.333 seconds=4.375 beat=8.75"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -736,9 +704,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "4383.333 input-runtime stop",
-      "4383.333 ui stop",
-      "4383.333 ui dispose"
+      "5583.333 input-runtime stop",
+      "5583.333 ui stop",
+      "5583.333 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":4.375}",
