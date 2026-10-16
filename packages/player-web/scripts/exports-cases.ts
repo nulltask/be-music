@@ -1175,6 +1175,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.summarizeBeatorajaPlaySkins(BENCH_BEATORAJA_PLAY_SKINS);
     },
   });
+  define('player-web.resolveResultGaugeState', {
+    run: () => {
+      playerWebCoreApi.resolveResultGaugeState({ type: 'CLASS', current: 64, max: 100, clearThreshold: 0 });
+    },
+  });
   define('player-web.resolveSelectNavigation', {
     run: () => {
       playerWebCoreApi.resolveSelectNavigation(
