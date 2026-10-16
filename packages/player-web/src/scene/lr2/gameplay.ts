@@ -25,15 +25,7 @@ import {
   pickAnimatedCell,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import {
-  BLUE,
-  BOMB_CYCLE_MS,
-  BOMB_DIVX,
-  BOMB_DIVY,
-  DESIGN_HEIGHT,
-  DESIGN_WIDTH,
-  PLAYFIELD,
-} from '../gameplay-constants.ts';
+import { BLUE, DESIGN_HEIGHT, DESIGN_WIDTH, PLAYFIELD } from '../gameplay-constants.ts';
 import { resolveLr2LaneIndex, resolveSideRelativeLaneIndex } from '../gameplay-lanes.ts';
 import {
   computeBombDurationsMs,
@@ -67,7 +59,6 @@ import {
   type GameplayBgaTarget,
   type GameplayStageSize,
   type GameplayLaneRect,
-  type GameplayMeasureLineFrame,
   type GameplayThemeEvent,
   type GameplayThemeNoteCell,
   type GameplayThemeNoteKind,
@@ -76,6 +67,7 @@ import {
 import type { SceneIdentity } from '../../host/family-kit.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
+import type { PlayfieldMeasureLine } from '../../view/types.ts';
 
 /**
  * Fallback bomb-explosion cleanup duration in ms. The actual value used at runtime is the longest `time` keyframe
@@ -508,17 +500,17 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
 
   /**
    * Prefers the LR2 skin's `#DST_LINE` (e.g. the LR2 default 7-keys skin's 1-px white strip at y=320) when present.
-   * The DST encodes per-side x/w and texture; we replicate it at every measure boundary, scrolled. Iterate every
-   * `#DST_LINE,index,...` the skin authored. SP charts only have `index === 0` so this is a one-line loop; DP charts
-   * add `index === 1` for the 2P-side strip and we draw both at the same beat boundaries.
+   * The DST encodes per-side x/w and texture; the playfield replicates it at every measure boundary, scrolled. Every
+   * `#DST_LINE,index,...` the skin authored: SP charts only have `index === 0`, DP charts add `index === 1` for the
+   * 2P-side strip, drawn at the same beat boundaries.
    */
-  protected override renderThemeMeasureLines(frame: GameplayMeasureLineFrame): boolean {
+  protected override resolveThemeMeasureLines(): readonly PlayfieldMeasureLine[] | undefined {
     const skin = this.options.skin;
     const skinLines = (skin?.measureLines ?? []).filter((entry) => this.textures.has(entry.source.imagePath));
     if (skinLines.length === 0) {
-      return false;
+      return undefined;
     }
-    const { beats, firstBeatIndex, maxBeat, lineY, top, drawBottom } = frame;
+    const lines: PlayfieldMeasureLine[] = [];
     for (const skinLine of skinLines) {
       const baseTexture = this.textures.get(skinLine.source.imagePath);
       if (!baseTexture) continue;
@@ -526,25 +518,15 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       const cell = pickAnimatedCell(skinLine.source, this.elapsedSinceTimer(skinLine.source.timer));
       const cropped = createCroppedTexture(baseTexture, cell);
       if (!cropped) continue;
-      for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
-        const beat = beats[beatIndex]!;
-        if (beat > maxBeat) {
-          break;
-        }
-        const y = lineY(beat);
-        if (y < top - 1 || y > drawBottom + 1) {
-          continue;
-        }
-        const sprite = this.noteLayerPool.acquireSprite();
-        sprite.texture = cropped;
-        sprite.label = `measure-line[idx=${skinLine.index},beat=${beat}]`;
-        sprite.position.set(lineDst.x, Math.round(y));
-        sprite.width = lineDst.w;
-        sprite.height = Math.max(1, Math.abs(lineDst.h));
-        applyDestinationToSprite(sprite, lineDst);
-      }
+      lines.push({
+        cell: { texture: cropped, width: cell.w, height: cell.h },
+        x: lineDst.x,
+        width: lineDst.w,
+        height: Math.max(1, Math.abs(lineDst.h)),
+        applyToSprite: (sprite) => applyDestinationToSprite(sprite, lineDst),
+      });
     }
-    return true;
+    return lines;
   }
 
   protected override renderThemeText(seconds: number): void {
@@ -574,14 +556,6 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       // above the judgement line. Hard-coded to the LR2 number rather than `judgementY - 91` so the relationship is
       // greppable when comparing to LR2 source.
       judge.position.set(PLAYFIELD.x + PLAYFIELD.w / 2, 230);
-    }
-  }
-
-  protected override renderBombEffects(): void {
-    if (this.bombTexture) {
-      this.renderTexturedBombs();
-    } else {
-      super.renderBombEffects();
     }
   }
 
@@ -1411,49 +1385,6 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     }
     this.bitmapTextExtras = [];
     this.previousBitmapTextExtras = [];
-  }
-
-  private renderTexturedBombs(): void {
-    const bombTexture = this.bombTexture;
-    if (!bombTexture) return;
-    const naturalRatio = bombTexture.frame.width / Math.max(1, bombTexture.frame.height);
-    const lr2Layout = naturalRatio >= 6;
-    const divx = lr2Layout ? 9 : BOMB_DIVX;
-    const divy = lr2Layout ? 1 : BOMB_DIVY;
-    const totalFrames = divx * divy;
-    const cellWidth = bombTexture.frame.width / divx;
-    const cellHeight = bombTexture.frame.height / divy;
-    const cycle = lr2Layout ? 150 / totalFrames : BOMB_CYCLE_MS;
-    const now = this.playClock();
-    for (const [channel, startedAt] of this.bombStartedAt) {
-      const elapsed = now - startedAt;
-      const lane = this.laneX.get(channel);
-      if (!lane) {
-        continue;
-      }
-      // Frame is clamped — never wraps — so the explosion plays exactly once.
-      const frameIndex = Math.min(totalFrames - 1, Math.max(0, Math.floor(elapsed / cycle)));
-      const cellX = frameIndex % divx;
-      const cellY = Math.floor(frameIndex / divx);
-      const cropped = createCroppedTexture(bombTexture, {
-        x: cellWidth * cellX,
-        y: cellHeight * cellY,
-        w: cellWidth,
-        h: cellHeight,
-      });
-      if (!cropped) {
-        continue;
-      }
-      const sprite = this.bombLayerPool.acquireSprite();
-      sprite.texture = cropped;
-      sprite.label = `bomb[ch=${channel},frame=${frameIndex}]`;
-      const displayWidth = Math.max(cellWidth * 0.6, lane.w * (lr2Layout ? 4.5 : 3));
-      const displayHeight = displayWidth * (cellHeight / cellWidth);
-      sprite.position.set(lane.x + lane.w / 2 - displayWidth / 2, lane.bottom - displayHeight * 0.45);
-      sprite.width = displayWidth;
-      sprite.height = displayHeight;
-      sprite.blendMode = 'add';
-    }
   }
 
   /**

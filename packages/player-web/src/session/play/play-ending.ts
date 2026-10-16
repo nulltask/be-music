@@ -10,12 +10,12 @@ import type { ScoreSummary } from '@be-music/player/ruleset';
 import { playResultFromPlayState, type PlayState } from '@be-music/scene-model';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
-import type { GameplaySessionHooks } from '../../scene/core/gameplay-theme.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
+import type { PlaySessionTheme } from './play-session-theme.ts';
 
 /** The scene's members the ending reads and writes: `CoreGameplayView`'s members of these names. */
 export interface PlayEndingContext {
-  readonly theme: GameplaySessionHooks;
+  readonly theme: PlaySessionTheme;
   readonly disposed: boolean;
   exiting: boolean;
   exitFadeOutMs: number;
@@ -55,9 +55,9 @@ export function beginExitSequence(
     return;
   }
   ctx.exiting = true;
-  const closeMs = ctx.theme.themeTiming().closeMs;
+  const closeMs = ctx.theme.timing().closeMs;
   // A failed play fades out even on a theme without a fade-out of its own (`minFadeOutMs`).
-  const fadeOutMs = Math.max(ctx.theme.themeTiming().fadeOutMs, options.minFadeOutMs ?? 0);
+  const fadeOutMs = Math.max(ctx.theme.timing().fadeOutMs, options.minFadeOutMs ?? 0);
   ctx.exitFadeOutMs = fadeOutMs;
   if (fadeOutMs <= 0 && closeMs <= 0) {
     callback();
@@ -65,7 +65,7 @@ export function beginExitSequence(
   }
   const fadeStartedAt = ctx.playClock();
   ctx.exitFadeStartedAt = fadeStartedAt;
-  ctx.theme.onThemeEvent({ kind: 'exit-fade-out', at: fadeStartedAt });
+  ctx.theme.moment({ kind: 'exit-fade-out', at: fadeStartedAt });
   // Drive the audio bus's post-tap fade in lock-step with `applyExitFadeAlpha`'s screen-alpha animation. The fade
   // node sits AFTER the recording tap, so a recording in flight keeps capturing the unattenuated mix; only the
   // speakers go quiet. Skipped when the theme has no fade-out (the screen also stays at full alpha in that path), so
@@ -74,7 +74,7 @@ export function beginExitSequence(
     ctx.audioBus?.fadeOutAudibleTo(0, fadeOutMs);
   }
   const fireClose = (): void => {
-    ctx.theme.onThemeEvent({ kind: 'exit-close', at: ctx.playClock() });
+    ctx.theme.moment({ kind: 'exit-close', at: ctx.playClock() });
     ctx.exitCloseHandle = window.setTimeout(() => {
       ctx.exitCloseHandle = undefined;
       if (ctx.disposed) return;

@@ -214,7 +214,7 @@ export type PlayViewEvent =
       readonly atMs: number;
     }
   | { readonly kind: 'full-combo'; readonly atMs: number }
-  | { readonly kind: 'gauge'; readonly previous: number; readonly next: number }
+  | { readonly kind: 'gauge'; readonly previous: number; readonly next: number; readonly atMs: number }
   | { readonly kind: 'bomb'; readonly channel: string; readonly atMs: number }
   | { readonly kind: 'bomb-retired'; readonly channel: string }
   /** A lane's key went down or up, or flashed (an auto lane). */
@@ -444,7 +444,10 @@ export interface PlayfieldSkin {
   measureLines(): readonly PlayfieldMeasureLine[] | undefined;
   /** Pushes this frame's BGA rects; pushing none hides the BGA. */
   bgaTargets(out: PlayfieldBgaTarget[]): void;
-  /** The cell of `channel`'s bomb `elapsedMs` after it went off, or `undefined` for the playfield's own bomb. */
+  /**
+   * The cell of `channel`'s bomb `elapsedMs` after it went off, drawn centred on the lane's judgement line, or
+   * `undefined` for the playfield's own bomb. Not asked when the skin {@link ownsLanes}.
+   */
   bombCell(channel: string, elapsedMs: number): PlayfieldCell | undefined;
   /** How long `channel`'s bomb lasts, in ms. */
   bombDurationMs(channel: string): number;

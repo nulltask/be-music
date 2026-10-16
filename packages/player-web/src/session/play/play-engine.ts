@@ -223,7 +223,7 @@ function releaseKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
   // any still-visible laser through to alpha=0.
   ctx.keyOnFadeOutStart.set(timerId, ctx.playClock());
   if (!ctx.timerStartedAt.has(timerId)) return;
-  const fadeMs = ctx.theme.resolveKeyOnFadeMs(timerId);
+  const fadeMs = ctx.theme.keyOnFadeMs(channel);
   const timeout = window.setTimeout(() => {
     ctx.keyFlashTimeouts.delete(timeout);
     if (ctx.disposed) return;
@@ -246,7 +246,7 @@ function triggerBomb(ctx: PlayEngineContext, channel: string, judge?: BeMusicJud
   ctx.bombStartedAt.set(channel, now);
   if (judge) ctx.bombJudge.set(channel, judge);
   else ctx.bombJudge.delete(channel);
-  ctx.theme.onThemeEvent({ kind: 'bomb', channel, at: now });
+  ctx.theme.moment({ kind: 'bomb', channel, at: now });
 }
 
 /**
@@ -297,7 +297,7 @@ function publishJudge(ctx: PlayEngineContext, judge: JudgeKind, seconds: number,
   // right half of the Pop'n nine-lane bank, not the second player).
   const isPlayer2 = ctx.chartPlayVariant !== '9' && typeof channel === 'string' && channel.startsWith('2');
   const side: '1P' | '2P' = isPlayer2 ? '2P' : '1P';
-  ctx.theme.onThemeEvent({ kind: 'judge', side, at: ctx.playClock() });
+  ctx.theme.moment({ kind: 'judge', side, at: ctx.playClock() });
   // Snapshot the verdict + combo for this side so DP rendering shows each lane group's *own* combo number — frozen at
   // the moment that side last hit a note — rather than mirroring the global running combo on both sides.
   // A course stage also snapshots the course combo, which an LR2 skin shows there during an expert or grade course.
@@ -335,7 +335,7 @@ function maybeFireFullCombo(ctx: PlayEngineContext): void {
   if (ctx.score.total <= 0) return;
   if (ctx.playState.combo < ctx.score.total) return;
   ctx.fullComboFired = true;
-  ctx.theme.onThemeEvent({ kind: 'full-combo', at: ctx.playClock() });
+  ctx.theme.moment({ kind: 'full-combo', at: ctx.playClock() });
   log.info('FULL COMBO');
 }
 
@@ -653,7 +653,7 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
     // not through judge deltas.
     const next = summary.gauge.current;
     if (next !== previous) {
-      ctx.theme.onThemeEvent({ kind: 'gauge', previous, next });
+      ctx.theme.moment({ kind: 'gauge', previous, next, at: ctx.playClock() });
       // Latch the first rise above the starting value and the first time the gauge tops out.
       const moments = ctx.playMoments;
       if (next > summary.gauge.initial) moments.gaugeRiseAtMs ??= ctx.playClock();
@@ -742,7 +742,7 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUiCommand): v
       ctx.longNotes.end(command.channel, command.outcome);
       break;
   }
-  ctx.theme.onThemeEvent({ kind: 'lane-command', command });
+  ctx.theme.moment({ kind: 'lane-command', command });
 }
 
 /** Keeps the engine's long-note style and its judge windows (converted to ms) for the skin runtime. */
@@ -804,7 +804,7 @@ function handleSharedEngineChartFinished(
     timing: ctx.timingResolver,
     currentSeconds: ctx.currentSeconds(),
     tempo: ctx.tempo,
-    themeFadeOutMs: ctx.theme.themeTiming().fadeOutMs,
+    themeFadeOutMs: ctx.theme.timing().fadeOutMs,
   });
   // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
   // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or

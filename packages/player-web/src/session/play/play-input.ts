@@ -257,7 +257,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
 export function handleTouchPointer(ctx: PlayInputContext, event: PointerEvent): void {
   if (!isTouchPlayPointer(event.pointerType)) return;
   if (event.type === 'pointermove' && !ctx.touchLanes.isTracking(event.pointerId)) return;
-  const { width: designWidth, height: designHeight } = ctx.theme.stageSize();
+  const { width: designWidth, height: designHeight } = ctx.theme.stage();
   const viewport = resolveScaledViewport(ctx.app.screen.width, ctx.app.screen.height, designWidth, designHeight);
   const point = canvasPointToDesign(event.offsetX, event.offsetY, viewport);
   const zones = resolveTouchLaneZones(

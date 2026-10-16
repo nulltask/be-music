@@ -67,8 +67,8 @@ function createPlay(options: {
     bombStartedAt: new Map<string, number>(),
     bombJudge: new Map<string, string>(),
     theme: {
-      onThemeEvent: (event: { kind: string }) => events.push(event.kind),
-      resolveKeyOnFadeMs: () => 120,
+      moment: (event: { kind: string }) => events.push(event.kind),
+      keyOnFadeMs: () => 120,
     },
     playClock: () => clock.ms,
     currentSeconds: () => clock.seconds,

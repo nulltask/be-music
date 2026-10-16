@@ -11,17 +11,18 @@ import { logger } from '../../logger.ts';
 import { drainSharedEngineSignals } from '../../session/play/play-engine.ts';
 import { updatePlaylogView } from '../../session/play/play-view-settings.ts';
 import { collectBgaTargets, LEGACY_STAGE_SIZE, renderBuiltInChrome } from '../../view/built-in/play-chrome.ts';
+import type { PlaySessionTheme } from '../../session/play/play-session-theme.ts';
 import { build, render } from '../../view/shared/play-frame.ts';
-import { renderBombEffects } from '../../view/shared/playfield/bombs.ts';
+import type { PlayChrome } from '../../view/shared/playfield/context.ts';
 import { uploadTextures } from '../../view/shared/texture-upload.ts';
+import type { PlayfieldMeasureLine, PlayfieldSkin } from '../../view/types.ts';
 import { KEY_ON_FADE_OUT_MS } from '../gameplay-constants.ts';
+import { resolveLr2LaneIndex } from '../gameplay-lanes.ts';
 import type {
   GameplayBgaTarget,
   GameplayLaneRect,
-  GameplayMeasureLineFrame,
   GameplayStageSize,
   GameplayThemeEvent,
-  GameplayThemeHooks,
   GameplayThemeNoteCell,
   GameplayThemeNoteKind,
   GameplayThemeTiming,
@@ -33,7 +34,6 @@ export type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from './game
 export type {
   GameplayBgaTarget,
   GameplayLaneRect,
-  GameplayMeasureLineFrame,
   GameplayStageSize,
   GameplayThemeEvent,
   GameplayThemeNoteCell,
@@ -67,9 +67,9 @@ const BE_MUSIC_THEME_TIMING: GameplayThemeTiming = { ...DEFAULT_THEME_TIMING, fa
  * The LR2 family's gameplay scene base: a play session (`PlaySession`, which it extends through `CoreGameplayState`)
  * that is its own view. It adds the layers, the per-frame tick and the protected theme hooks the LR2 family's
  * `PixiGameplayView` overrides — `prepareTheme`, `renderThemeLayer`, `collectBgaTargets`, `resolveThemeLaneRect`,
- * `resolveThemeNoteCell`, `renderThemeMeasureLines`, `renderThemeText`, `renderBombEffects`, `themeTiming`,
- * `onThemeEvent`, … — each of which defaults to the skinless behaviour, so the class paints a complete scene on its
- * own (with a host's `skinlessChromeRenderer`, or a be-music skin).
+ * `resolveThemeNoteCell`, `resolveThemeMeasureLines`, `renderThemeText`, `themeTiming`, `onThemeEvent`, … — each of
+ * which defaults to the skinless behaviour, so the class paints a complete scene on its own (with a host's
+ * `skinlessChromeRenderer`, or a be-music skin).
  *
  * The built-in play screen no longer runs on it: `createPlayScene` pairs a play session with the built-in play view
  * (`view/built-in/play-view.ts`). The class stays only while the LR2 view needs it.
@@ -78,7 +78,8 @@ const BE_MUSIC_THEME_TIMING: GameplayThemeTiming = { ...DEFAULT_THEME_TIMING, fa
  * scene as their context and read and write its state through their own interfaces (`PlayChartContext`,
  * `PlayfieldContext`, …). The state lives in {@link CoreGameplayState}, which the scene extends; it has no `private` /
  * `protected` modifier so the scene satisfies those interfaces, and it is not part of the scene's API. The theme hooks
- * stay `protected`; the modules call them through {@link theme}.
+ * stay `protected`; the shared playfield and the session call them through {@link playfieldSkin}, {@link chrome} and
+ * {@link theme}.
  */
 export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGameplayViewOptions>
   extends CoreGameplayState
@@ -86,9 +87,43 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 {
   declare readonly options: TOptions;
 
+  /** How the scene's theme hooks answer the shared playfield. */
+  readonly playfieldSkin: PlayfieldSkin;
+  /** The theme's drawing around the shared playfield, from the hooks. */
+  readonly chrome: PlayChrome;
+
   public constructor(options: TOptions = {} as TOptions) {
     super(options);
     this.beMusicSkinSettings = options.beMusicSkinSettings;
+    // The hooks stay `protected` for the theme families that override them; these objects call them.
+    const stage = (): GameplayStageSize => this.stageSize;
+    const ownsLanes = (): boolean => this.themeOwnsPlayfield;
+    this.playfieldSkin = {
+      get stage() {
+        return stage();
+      },
+      get ownsLanes() {
+        return ownsLanes();
+      },
+      laneRect: (channel, stage) => this.resolveThemeLaneRect(channel, stage.width, stage.height),
+      noteCell: (kind, channel) => this.resolveThemeNoteCell(kind, resolveLr2LaneIndex(channel, this.chartPlayVariant)),
+      measureLines: () => this.resolveThemeMeasureLines(),
+      bgaTargets: (out) => this.collectBgaTargets(out),
+      bombCell: () => undefined,
+      bombDurationMs: (channel) => this.resolveBombDurationMs(channel),
+      keyOnFadeMs: (channel) => this.keyOnFadeMsOf(channel),
+    };
+    this.chrome = {
+      attachLayers: () => this.attachThemeLayers(),
+      draw: (width, height) => this.renderThemeLayer(width, height),
+      drawText: (seconds) => this.renderThemeText(seconds),
+      bombRetired: (channel) => this.onThemeEvent({ kind: 'bomb-retired', channel }),
+    };
+  }
+
+  private keyOnFadeMsOf(channel: string): number {
+    const timerId = this.resolveKeyOnTimerId(channel);
+    return timerId === undefined ? KEY_ON_FADE_OUT_MS : this.resolveKeyOnFadeMs(timerId);
   }
 
   public get identity(): SceneIdentity {
@@ -206,11 +241,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /**
-   * Draws the measure lines for this frame into `noteLayerPool` and returns true, or returns false to let the scene
-   * draw its fallback bar. Default: false.
+   * The theme's measure lines for this frame, each repeated at every measure, or `undefined` to let the scene draw its
+   * fallback bar. Default: `undefined`.
    */
-  protected renderThemeMeasureLines(_frame: GameplayMeasureLineFrame): boolean {
-    return false;
+  protected resolveThemeMeasureLines(): readonly PlayfieldMeasureLine[] | undefined {
+    return undefined;
   }
 
   /**
@@ -238,25 +273,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /**
-   * The theme hooks above, for the modules the scene's parts live in (`view/shared/playfield/*`, …) and for the play
-   * session it extends: the hooks stay `protected` for the theme families that override them, so the modules call
-   * them through this object.
+   * What the play session it extends asks of its view, from the theme hooks above: the hooks stay `protected` for the
+   * theme families that override them, so the session calls them through this object.
    */
-  override readonly theme: GameplayThemeHooks = {
-    attachThemeLayers: () => this.attachThemeLayers(),
-    renderThemeLayer: (width, height) => this.renderThemeLayer(width, height),
-    themeTiming: () => this.themeTiming,
-    stageSize: () => this.stageSize,
-    themeOwnsPlayfield: () => this.themeOwnsPlayfield,
-    resolveThemeLaneRect: (channel, width, height) => this.resolveThemeLaneRect(channel, width, height),
-    resolveThemeNoteCell: (kind, laneIndex) => this.resolveThemeNoteCell(kind, laneIndex),
-    renderThemeMeasureLines: (frame) => this.renderThemeMeasureLines(frame),
-    renderThemeText: (seconds) => this.renderThemeText(seconds),
-    renderBombEffects: () => this.renderBombEffects(),
-    resolveBombDurationMs: (channel) => this.resolveBombDurationMs(channel),
-    resolveKeyOnFadeMs: (timerId) => this.resolveKeyOnFadeMs(timerId),
-    collectBgaTargets: (out) => this.collectBgaTargets(out),
-    onThemeEvent: (event) => this.onThemeEvent(event),
+  override readonly theme: PlaySessionTheme = {
+    timing: () => this.themeTiming,
+    moment: (moment) => this.onThemeEvent(moment),
+    keyOnFadeMs: (channel) => this.keyOnFadeMsOf(channel),
+    stage: () => this.stageSize,
   };
 
   /**
@@ -471,14 +495,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.fpsWindowStart = now;
       this.fpsFrameCount = 0;
     }
-  }
-
-  /**
-   * Draws every active bomb into `bombLayerPool` (between the pool's `begin` / `end`). Defaults to the be-music skin's
-   * bomb effect; themes that ship their own bomb sheet override it.
-   */
-  protected renderBombEffects(): void {
-    renderBombEffects(this);
   }
 
   /**

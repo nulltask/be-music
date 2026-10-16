@@ -1,7 +1,8 @@
 /**
  * What the shared playfield's passes (`view/shared/playfield/*`) read and write: the layers and pools they draw into,
- * the theme hooks and the view's caches, and the running play as `play` ({@link PlayfieldRuntime}: the lanes, the notes
- * and their scroll, the lane effects and bombs). `CoreGameplayView` passes itself, its own play.
+ * the skin's answers ({@link PlayfieldSkin}), the view's own drawing around them ({@link PlayChrome}) and its caches,
+ * and the running play as `play` ({@link PlayfieldRuntime}: the lanes, the notes and their scroll, the lane effects and
+ * bombs). A play view passes itself.
  */
 
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
@@ -19,7 +20,6 @@ import type { BrowserSongEntry } from '../../../collection/types.ts';
 import type { AudioAnalyzer, AudioFeatures } from '../../../runtime/audio-analysis.ts';
 import type { BgaCue, NonstopStageBgaTimeline } from '../../../scene/core/gameplay-bga.ts';
 import type { ChartBpmRange } from '../../../scene/core/gameplay-bpm-range.ts';
-import type { GameplayLaneRect, GameplayThemeHooks } from '../../../scene/core/gameplay-theme.ts';
 import type { CoreGameplayViewOptions } from '../../../scene/core/gameplay-options.ts';
 import type { LongNoteTracker } from '../../../scene/core/long-note-tracker.ts';
 import type { GoneDrawObjects } from '../../../scene/core/note-draw-window.ts';
@@ -28,6 +28,7 @@ import type { ChildPool } from '../../../scene/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../../skin/be-music/binding.ts';
 import type { BeMusicJudge, BeMusicLaneCover } from '../../../skin/be-music/types.ts';
 import type { LaneGeometryContext } from '../../built-in/play-chrome.ts';
+import type { PlayfieldLaneRect, PlayfieldSkin } from '../../types.ts';
 import type { SideLaneRun } from './measure-line-runs.ts';
 
 /**
@@ -62,7 +63,7 @@ export interface PlayfieldRuntime {
   readonly resolvedPlayChart: ResolvedChart | undefined;
   readonly laneChannels: string[];
   readonly chartPlayVariant: ChartPlayVariant;
-  readonly laneX: Map<string, GameplayLaneRect>;
+  readonly laneX: Map<string, PlayfieldLaneRect>;
   readonly notes: RuntimeNote[];
   readonly mineNotes: RuntimeMineNote[];
   readonly invisibleNotes: TimedPlayableNote[];
@@ -144,14 +145,28 @@ export interface PlayfieldRuntime {
 }
 
 /**
- * The view's members the playfield passes use (`CoreGameplayView`'s members of these names, or the built-in play
- * view's), with the running play as `play`.
+ * A play view's own drawing around the shared playfield, which the frame pass (`view/shared/play-frame.ts`) and the
+ * playfield's passes call at their places in each frame. Each family view composes its own; nothing is overridden.
  */
+export interface PlayChrome {
+  /** Adds the view's own layers inside the skin layer, once, before the layer tree is put together. */
+  attachLayers?(): void;
+  /** Draws the view's chrome (the skin and overlay layers) for the frame, on a stage of `width` x `height`. */
+  draw(width: number, height: number): void;
+  /** Draws the view's late text into the text layer, after the bombs. */
+  drawText?(seconds: number): void;
+  /** `channel`'s bomb went out (its effect has played out): the view stops what it started for it. */
+  bombRetired?(channel: string): void;
+}
+
+/** The view's members the playfield passes use (a play view's members of these names), with the running play as `play`. */
 export interface PlayfieldContext extends LaneGeometryContext {
   readonly options: Readonly<
     Pick<CoreGameplayViewOptions, 'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay'>
   >;
-  readonly theme: GameplayThemeHooks;
+  /** How the family's skin answers the playfield: the stage, the lanes, the note and bomb cells, the effect lengths. */
+  readonly playfieldSkin: PlayfieldSkin;
+  readonly chrome: PlayChrome;
   readonly laneLayer: Graphics;
   readonly shutterLayer: Graphics;
   readonly overlay: Text;
