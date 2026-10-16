@@ -66,6 +66,12 @@ export interface CharacterizationPlay {
   /** Engine options over the harness's own (no lead-in, the test runtimes and callbacks, play-log recording). */
   options?: PlayerOptions;
   script?: readonly ScriptStep[];
+  /**
+   * Whether the scripted input runtime declares its key releases (`PlayerInputRuntime.reportsKeyReleases`). By default
+   * it does, as the web input runtime does, unless the script sends terminal presses (`press` steps): the engine then
+   * detects them.
+   */
+  reportsKeyReleases?: boolean;
   /** The test audio session (default), or none at all (`audio: false`). */
   audio?: false | TestAudioSessionOptions;
   /** With a UI runtime (default), or without one: the engine then writes its no-TUI trace to the output. */
@@ -285,9 +291,11 @@ export async function observePlay(
           }),
         );
       }
+      const reportsKeyReleases = play.reportsKeyReleases ?? !(play.script ?? []).some((step) => 'press' in step);
       return {
         start: () => hostEntry('input-runtime start'),
         stop: () => hostEntry('input-runtime stop'),
+        ...(reportsKeyReleases ? { reportsKeyReleases } : {}),
       };
     },
     ...(play.ui === false

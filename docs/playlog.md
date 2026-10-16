@@ -112,8 +112,17 @@ In the browser player:
 ### Input without key releases
 
 A terminal without the kitty keyboard protocol sends a key as one press and then, while it is held, as repeated
-presses; it never reports a release. Until the input reports one (a `kitty-state` command), the engine infers when
-each key came up and feeds the judge, and the play log, ordinary presses and releases:
+presses; it never reports a release. The input runtime says before the play whether its input reports releases
+(`PlayerInputRuntime.reportsKeyReleases`):
+
+- the browser's input runtime always declares it;
+- the TUI declares it once the terminal has answered the kitty keyboard protocol (or Windows' win32-input-mode) in an
+  earlier play of the same process;
+- otherwise the engine detects it, from the first `kitty-state` command.
+
+A play whose input declares its releases is judged as key-state input from its first key. Otherwise, until the input
+reports a release (a `kitty-state` command), the engine infers when each key came up and feeds the judge, and the
+play log, ordinary presses and releases:
 
 - a press on a lane that is up is a key going down (a `down`);
 - the lane stays down for a grace after each press: 380 ms after the press that hits a long note's head (a terminal's

@@ -32,6 +32,14 @@ export interface PlayerUiRuntime {
 export interface PlayerInputRuntime {
   start: () => void;
   stop: () => void;
+  /**
+   * Whether the input reports its key releases (`kitty-state` releases), declared before the play starts. `true`: a
+   * manual play judges it as key-state input from its first key, so even its first press is judged as it comes, with
+   * no inferred hold. Absent (or `false`): the engine detects it, inferring when each key came up
+   * (`play-key-inference.ts`) until the first `kitty-state` command arrives. A browser always reports releases; a
+   * terminal does only under the kitty keyboard protocol (or Windows' win32-input-mode).
+   */
+  reportsKeyReleases?: boolean;
 }
 
 export interface CreatePlayerUiRuntimeContext {
