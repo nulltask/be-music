@@ -1,6 +1,6 @@
 import { Application, Color, Container, Graphics } from 'pixi.js';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
-import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
+import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/ruleset';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { SceneIdentity } from '../../host/family-kit.ts';
 import { disposeChildren } from '../pixi-utils.ts';

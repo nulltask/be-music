@@ -1,4 +1,4 @@
-import { resolveLr2MoneyScore } from '@be-music/player/core/scoring';
+import { resolveLr2MoneyScore } from '@be-music/player/ruleset';
 import type { BeMusicCoursePlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import { resolveCourseView } from '../course-view/course-view.ts';
 import type { LibraryCourse } from '../library/entries.ts';

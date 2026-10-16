@@ -1,6 +1,6 @@
 import { createEmptyJson } from '@be-music/json';
 import * as lr2StateApi from '@be-music/lr2-skin/state';
-import { createEmptyScore } from '@be-music/player/core/scoring';
+import { createEmptyScore } from '@be-music/player/ruleset';
 import type { Lr2BarBodySource } from '@be-music/lr2-skin';
 import {
   DEFAULT_PLAY_OPTIONS,

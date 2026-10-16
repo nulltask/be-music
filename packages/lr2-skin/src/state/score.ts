@@ -1,4 +1,4 @@
-import type { ScoreSummary } from '@be-music/player/core/scoring';
+import type { ScoreSummary } from '@be-music/player/ruleset';
 import { LR2_NUM } from '../ids/index.ts';
 
 /** `count` over `of` as LR2 draws a percentage: truncated, with its two digits after the dot apart. */

@@ -4,7 +4,7 @@ import {
   IIDX_RANK_LABELS,
   type IidxRankLabel,
   type PlaylogRulesetId,
-} from '@be-music/player/playlog';
+} from '@be-music/player/ruleset';
 import type { Database } from '../db/client.ts';
 import { courseFilterConditions, type CourseRankingFilter } from '../courses/ranking.ts';
 import { bestScore, chart, courseBestScore, courseScore, score, scoreResult, user } from '../db/schema.ts';

@@ -1,6 +1,10 @@
 import type { ChartPlayVariant } from '@be-music/chart';
-import { computeScoreRate, resolveIidxRankIndexFromScore, type ScoreSummary } from '@be-music/player/core/scoring';
-import type { GaugeType } from '@be-music/player/ruleset';
+import {
+  computeScoreRate,
+  resolveIidxRankIndexFromScore,
+  type GaugeType,
+  type ScoreSummary,
+} from '@be-music/player/ruleset';
 import type { CourseView, LibraryChart, PlayOptions, PlaySide, PlayState } from '@be-music/scene-model';
 import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
 import { resolveLr2ChartText } from './chart.ts';
