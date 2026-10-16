@@ -1,4 +1,4 @@
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import type { ChartPlayVariant } from '@be-music/chart';
 import {
   IIDX_LANE_WIDTHS,
   isScratchLaneForVariant,
