@@ -289,6 +289,114 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
     },
   });
 
+  // Play state
+  define('scene-model.isJudge', {
+    run: () => {
+      sceneModelApi.isJudge('GREAT');
+    },
+  });
+  define('scene-model.gaugePercent', {
+    run: () => {
+      sceneModelApi.gaugePercent({ current: 80, max: 100 });
+    },
+  });
+  define('scene-model.resolveHsFixMultiplier', {
+    run: () => {
+      sceneModelApi.resolveHsFixMultiplier('MAXBPM', BENCH_HS_FIX_TEMPO);
+    },
+  });
+  define('scene-model.createHiSpeedState', {
+    run: () => {
+      sceneModelApi.createHiSpeedState({ hiSpeed: 2.5, multiplier: 0.8 });
+    },
+  });
+  define('scene-model.reduceHiSpeed', {
+    run: () => {
+      sceneModelApi.reduceHiSpeed(BENCH_HI_SPEED, { type: 'hi-speed-step', delta: 0.1 });
+    },
+  });
+  define('scene-model.laneCoversFromPlayOptions', {
+    run: () => {
+      sceneModelApi.laneCoversFromPlayOptions(BENCH_COVER_OPTIONS, ['1P', '2P']);
+    },
+  });
+  define('scene-model.resolveLaneCover', {
+    run: () => {
+      sceneModelApi.resolveLaneCover(BENCH_COVERS[0]!);
+    },
+  });
+  define('scene-model.reduceLaneCovers', {
+    run: () => {
+      sceneModelApi.reduceLaneCovers(BENCH_COVERS, { type: 'cover-adjust', part: 'sudden', delta: 0.05 });
+    },
+  });
+  define('scene-model.createPlayState', {
+    run: () => {
+      sceneModelApi.createPlayState({ gauge: 20, totalSeconds: 120, courseCarryIn: { combo: 10, maxCombo: 20 } });
+    },
+  });
+  define('scene-model.playEventFromUiCommand', {
+    run: () => {
+      sceneModelApi.playEventFromUiCommand({ kind: 'trigger-poor-bga', seconds: 12 });
+    },
+  });
+  define('scene-model.playProgress', {
+    run: () => {
+      sceneModelApi.playProgress(BENCH_PLAY_STATE, 30);
+    },
+  });
+  define('scene-model.reducePlayState', {
+    run: () => {
+      let state = sceneModelApi.reducePlayState(BENCH_PLAY_STATE, BENCH_FRAME);
+      state = sceneModelApi.reducePlayState(state, BENCH_JUDGE);
+      sceneModelApi.reducePlayState(state, { type: 'hi-speed-step', delta: 0.1 });
+    },
+  });
+  define('scene-model.recentJudgeTimings', {
+    run: () => {
+      sceneModelApi.recentJudgeTimings(BENCH_PLAYED, 16);
+    },
+  });
+  define('scene-model.resolveWhiteNumber', {
+    run: () => {
+      sceneModelApi.resolveWhiteNumber({ laneBeats: 4, hiSpeed: 2.5, sudden: 0.3, bpm: 150 });
+    },
+  });
+  define('scene-model.resolveGreenNumber', {
+    run: () => {
+      sceneModelApi.resolveGreenNumber(640);
+    },
+  });
+  define('scene-model.resolvePlaylogView', {
+    run: () => {
+      sceneModelApi.resolvePlaylogView(BENCH_PLAYED.view, {
+        scale: sceneModelApi.BE_MUSIC_HI_SPEED_SCALE,
+        laneBeats: 4,
+        mainBpm: 150,
+      });
+    },
+  });
+  define('scene-model.resolveBeatorajaPlaylogView', {
+    run: () => {
+      sceneModelApi.resolveBeatorajaPlaylogView({
+        hiSpeed: 2,
+        lanecover: 0.25,
+        lift: 0.1,
+        hiddenRatio: 0.5,
+        hiddenEnabled: true,
+        mainBpm: 150,
+        sides: ['1P'],
+      });
+    },
+  });
+  define('scene-model.PlaylogViewCursor', {
+    run: () => {
+      const cursor = new sceneModelApi.PlaylogViewCursor({ hiSpeed: 2 }, [{ timeUs: 1_000_000, hiSpeed: 2.5 }]);
+      cursor.next(0);
+      cursor.next(2_000_000);
+    },
+  });
+
   // Course view
   define('scene-model.resolveCourseView', {
     run: () => {
@@ -311,3 +419,36 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
     },
   });
 }
+
+const BENCH_HS_FIX_TEMPO = { referenceBpm: 150, bpms: [150, 300, 75], mainBpm: 150 };
+const BENCH_HI_SPEED = sceneModelApi.createHiSpeedState({ hiSpeed: 2.5, multiplier: 0.8 });
+const BENCH_COVER_OPTIONS = {
+  ...sceneModelApi.DEFAULT_PLAY_OPTIONS,
+  hiddenSudden1P: 'HID+SUD',
+  laneCover: true,
+} as const satisfies sceneModelApi.PlayOptions;
+const BENCH_COVERS = sceneModelApi.laneCoversFromPlayOptions(BENCH_COVER_OPTIONS, ['1P', '2P']);
+const BENCH_PLAY_STATE = sceneModelApi.createPlayState({
+  gauge: 20,
+  totalSeconds: 120,
+  view: { hiSpeed: BENCH_HI_SPEED, covers: BENCH_COVERS },
+});
+const BENCH_FRAME: sceneModelApi.PlayEvent = {
+  type: 'frame',
+  frame: {
+    totalSeconds: 120,
+    summary: { exScore: 40, gauge: { current: 46, max: 100, cleared: false, type: 'GROOVE' } },
+  },
+};
+const BENCH_JUDGE: sceneModelApi.PlayEvent = {
+  type: 'judge',
+  judge: { judge: 'GREAT', combo: 21, channel: '11', deltaMs: -12 },
+  seconds: 30,
+  atMs: 30_000,
+};
+const BENCH_PLAYED = Array.from({ length: 200 }, (_, index): sceneModelApi.PlayEvent => ({
+  type: 'judge',
+  judge: { judge: index % 3 === 0 ? 'GREAT' : 'PERFECT', combo: index + 1, deltaMs: (index % 21) - 10 },
+  seconds: index / 2,
+  atMs: index * 500,
+})).reduce(sceneModelApi.reducePlayState, sceneModelApi.reducePlayState(BENCH_PLAY_STATE, BENCH_FRAME));
