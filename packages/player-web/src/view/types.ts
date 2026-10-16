@@ -312,12 +312,22 @@ export interface ResultFrame {
   readonly presentation: ResultPresentation;
   /** The player's best record on the chart (or the course) before this play, for the best and difference figures. */
   readonly previousBest?: BeMusicSongRecord;
-  /** When input opens, on the clock. */
+  /** When input opens, on the clock; the result's graphs start drawing then (LR2's timers 1 and 150). */
   readonly inputOpenAtMs: number;
+  /**
+   * When the graphs finished drawing, by themselves or because the player skipped them, on the clock (LR2's timer
+   * 151): the rank and the score show from then. Absent while they draw.
+   */
+  readonly graphShownAtMs?: number;
+  /** When the player pressed on to the record update, on the clock (LR2's timer 152). Absent until then. */
+  readonly updateShownAtMs?: number;
   readonly leaving?: SceneLeaving<'continue' | 'retry'>;
 }
 
-/** What the player asks of the result screen. */
+/**
+ * What the player asks of the result screen: `continue` presses on, as Enter does (skip the graphs, show the record
+ * update, then leave), and `retry` plays the chart again, as R does.
+ */
 export type ResultIntent = { readonly type: 'continue' } | { readonly type: 'retry' };
 
 export interface ResultView extends FamilyView<ResultFrame, ResultIntent> {
