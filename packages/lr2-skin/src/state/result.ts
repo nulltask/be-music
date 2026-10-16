@@ -1,5 +1,4 @@
-import { resolveIidxRankIndexFromScore } from '@be-music/player/core/scoring';
-import { resolveClearLamp } from '@be-music/player/ruleset';
+import { resolveClearLamp, resolveIidxRankIndexFromScore } from '@be-music/player/ruleset';
 import type { CourseView, PlayResult } from '@be-music/scene-model';
 import { LR2_NUM, LR2_OP, LR2_TEXT } from '../ids/index.ts';
 import { resolveLr2ChartText, resolveLr2DifficultyOp, resolveLr2KeyModeOp } from './chart.ts';

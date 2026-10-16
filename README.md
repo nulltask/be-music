@@ -116,7 +116,8 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - UI and input signal buses for lane flashes, POOR BGA commands, frame snapshots, pause, restart, and high-speed changes
 - Shared note extraction for playable notes, legacy long notes, `#LNOBJ`, FREE ZONE, mines, and invisible notes
 - Shared judgment windows, dynamic `#EXRANKxx` changes, score, groove gauge, scroll-distance, BGA timelines, and result summaries
-- Browser-safe subpath exports for reusable helpers such as `core/engine`, `core/bga-timeline`, `core/scroll-distance`, `core/groove-gauge`, `playable-notes`, and `playlog`
+- Browser-safe subpath exports for reusable helpers such as `core/engine`, `core/bga-timeline`, `core/scroll-distance`, `playable-notes`, `playlog`, `records`, and `ruleset`
+- `ruleset`: the vocabulary hosts, skins and the Leaderboard share: gauges, clear lamps, BP and the score (`ScoreSummary`, `computeScoreRate`, the DJ Ranks, LR2's money score). `core/scoring` is a deprecated alias of the score part
 
 ### terminal player (`@be-music/player-tui`)
 

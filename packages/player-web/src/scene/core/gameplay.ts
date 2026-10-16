@@ -10,15 +10,7 @@ import {
   type TimedSampleTrigger,
   type TimingResolver,
 } from '@be-music/audio-renderer/triggers';
-import {
-  createEmptyScore,
-  createScoreTracker,
-  resolveDisplayedPoor,
-  resolveIidxRankLabel,
-  type JudgeKind,
-  type ScoreSummary,
-  type ScoreTracker,
-} from '@be-music/player/core/scoring';
+import { createScoreTracker, type ScoreTracker } from '@be-music/player/core/scoring';
 import {
   createTempoClock,
   PlayerInterruptedError,
@@ -30,7 +22,16 @@ import {
   type TempoClock,
 } from '@be-music/player/core/engine';
 import { resolveLr2LaneTimer } from '@be-music/lr2-skin/state';
-import { resolveClearLamp, type GaugeType, type PlaylogRulesetId } from '@be-music/player/ruleset';
+import {
+  createEmptyScore,
+  resolveClearLamp,
+  resolveDisplayedPoor,
+  resolveIidxRankLabel,
+  type GaugeType,
+  type JudgeKind,
+  type PlaylogRulesetId,
+  type ScoreSummary,
+} from '@be-music/player/ruleset';
 import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
 import { type ChartPlayVariant, resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';

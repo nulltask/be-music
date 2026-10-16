@@ -1,4 +1,4 @@
-import { createEmptyScore } from '@be-music/player/core/scoring';
+import { createEmptyScore } from '@be-music/player/ruleset';
 import { describe, expect, it } from 'vite-plus/test';
 import { LR2_NUM } from '../ids/index.ts';
 import { resolveLr2RateNumber } from './score.ts';

@@ -1,5 +1,5 @@
 import type { PlayerSummary } from '../core/engine-types.ts';
-import type { ScoreSummary } from '../core/scoring.ts';
+import type { ScoreSummary } from '../ruleset/score.ts';
 import type { BeMusicCoursePlaylog } from '../playlog/course.ts';
 import { playedAtAnotherTempo } from '../playlog/view.ts';
 import {
