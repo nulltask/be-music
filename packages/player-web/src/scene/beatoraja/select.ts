@@ -31,10 +31,10 @@
 //   - Search / sort / random song picks
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
 //
-// The scene is made of parts that read and drive it through one context it builds (`createContext`): the song list's
-// rows (`select/rows.ts`), the search input (`select/search.ts`), the focused chart's images and graphs
-// (`select/chart-images.ts`) and what the skin reads of the screen (`select/skin-state.ts`). What the skin reads of a
-// chart bar is in `select/chart-facts.ts`, and the scene's options and snapshot types in `select/options.ts`.
+// The scene is made of parts that read and drive it through one context it builds (`createContext`), kept in
+// `view/beatoraja/select/`: the song list's rows (`rows.ts`), the search input (`search.ts`), the focused chart's images
+// and graphs (`chart-images.ts`) and what the skin reads of the screen (`skin-state.ts`). What the skin reads of a chart
+// bar is in `chart-facts.ts`, and the scene's options and snapshot types in `select/options.ts` next to this file.
 
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, type Ticker } from 'pixi.js';
 import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
@@ -54,11 +54,17 @@ import {
   type BeatorajaSystemSoundPaths,
 } from '@be-music/beatoraja-skin/scene';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
-import { BeatorajaSelectChartImages, type BeatorajaSelectChartImagesContext } from './select/chart-images.ts';
+import {
+  BeatorajaSelectChartImages,
+  type BeatorajaSelectChartImagesContext,
+} from '../../view/beatoraja/select/chart-images.ts';
 import type { PixiBeatorajaSelectSceneOptions, PixiBeatorajaSelectSceneSnapshot } from './select/options.ts';
-import { BeatorajaSelectRows, type BeatorajaSelectRowsContext } from './select/rows.ts';
-import { BeatorajaSelectSearch, type BeatorajaSelectSearchContext } from './select/search.ts';
-import { BeatorajaSelectSkinState, type BeatorajaSelectSkinStateContext } from './select/skin-state.ts';
+import { BeatorajaSelectRows, type BeatorajaSelectRowsContext } from '../../view/beatoraja/select/rows.ts';
+import { BeatorajaSelectSearch, type BeatorajaSelectSearchContext } from '../../view/beatoraja/select/search.ts';
+import {
+  BeatorajaSelectSkinState,
+  type BeatorajaSelectSkinStateContext,
+} from '../../view/beatoraja/select/skin-state.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
@@ -95,12 +101,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   /** Full-canvas backdrop behind the skin container — see `PixiBeatorajaGameplayView` for rationale. */
   private readonly backdrop = new Graphics();
   private view: BeatorajaPlaySkinView;
-  /**
-   * Song-bar overlay. Painted on top of the skin in screen-space (NOT inside the skin's scaled
-   * container) so the row layout doesn't compress with the letterbox. The reference skin renders
-   * song bars via its own `bar[]` declarations, which we don't parse yet — this overlay lets the
-   * scene be usable in the meantime.
-   */
   /**
    * Song-bar overlay. Mounted INSIDE `view.container` so it inherits the skin's scale +
    * positional transform — the labels live in skin-space and follow whatever bar-list layout
