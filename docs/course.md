@@ -232,6 +232,24 @@ A stage given up with ESC also ends the course as a failed run. This departs fro
 
 A course stage cannot be ranked as a single-chart play: `checkPlaylogEligibility` rejects it as `course-stage`.
 
+### The course run
+
+`CourseRun` (`@be-music/player/course`) is one run of an EXPERT or GRADE course; a NONSTOP course is played as one stitched chart instead ([NONSTOP courses](#nonstop-courses)). A host gives it the course definition and each stage's chart: its own entries (a song entry, a chart file), anything with a `chart` and a `chartPath`, which it hands back with the chart as the course plays it. The run is runtime-neutral, so every host plays courses by the same rules.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stage: nextStage
+    Stage --> Stage: recordStage (goes on)
+    Stage --> Over: recordStage (gauge empty or last stage)
+    Stage --> Over: giveUp (ESC)
+    Over --> [*]: buildPlaylog
+```
+
+- `nextStage` plans the next stage: its chart with the course's long-note constraint applied, `PlayerOptions.course` with the carry-in, and whether the hi-speed is locked. `playSettings` gives the settings it plays with in place of the player's picks (`resolveCourseStagePlaySettings`: the lane options the course allows, then an LR2 GRADE course's resets).
+- `recordStage` records a stage's play log and says whether the run goes on (`goesOnAfter` asks first); `giveUp` records a stage given up with ESC and ends the run as a failed one.
+- `playSeconds` adds up the stages' play time, a stage given up up to where it was left (`resolveGivenUpPlaySeconds`). `stageExtras` keeps what the host kept of each stage, such as its result graphs.
+- `buildPlaylog` writes the course play log: the stages played, then every stage never reached with its chart facts, its file hashes and its chart fingerprint.
+
 ### The course result
 
 The course result sums the stages (see [Play log — Course play logs](./playlog.md#course-play-logs)), then:
