@@ -1,13 +1,14 @@
-// Translates engine-side UI signals into a `BeatorajaRenderContext` for `BeatorajaPlaySkinView.update()`.
+// Bridges the engine's UI signals to a `BeatorajaRenderContext` for `BeatorajaPlaySkinView.update()`.
 //
-// The adapter keeps three pieces of state:
+// What each beatoraja id reads — the ops a play lights, the numbers and texts, the timers a judgment or a lane action
+// starts and stops, the gauge, the graphs and the live offsets — is resolved by `@be-music/beatoraja-skin/scene` from
+// plain state. The adapter only keeps that state between engine signals and applies what the resolvers return:
 //
-//   - `activeOps: Set<number>` — option ops (from `skin_config`) merged with runtime ops the engine has
-//     toggled this frame. Skin elements gated on `if[]` / `op[]` consult this set.
-//   - `timerStartedAt: Map<number, number>` — `(timerId → scene-relative ms)`. The skin's keyframe sampler
-//     reads this to advance per-element animations relative to when the matching event fired.
-//   - `frame: PlayerUiFramePayload | null` — latched current chart frame; used by `resolveTextContent` /
-//     `resolveRefValue` to surface combo / score / judge counts as text and image-ref state.
+//   - `activeOps: Set<number>` — the skin config's option ops and the runtime ops lit now; skin elements gated on
+//     `if[]` / `op[]` consult it.
+//   - `timerStartedAt: Map<number, number>` — `(timerId → scene-relative ms)`; the keyframe sampler reads it.
+//   - the play state the number resolver reads (`play`): the latest engine frame, the combo, the early / late counts,
+//     the hi-speed and the lane covers, the chart's facts and the clock.
 //
 // The lifecycle is owned by `PixiBeatorajaGameplayView`:
 //
@@ -19,9 +20,11 @@
 //        - drain commands → `adapter.applyCommand(cmd)`
 //        - drain judge-combo states → `adapter.applyJudgeCombo(state)`
 //        - `view.update(adapter.getRenderContext())`
+//
+// The scene sessions of P4 keep this state as a scene-model `PlayState` and call the same resolvers; this class then
+// goes away.
 
 import type { SceneCourseInfo } from '../../scene/course-info.ts';
-import { resolveBeatorajaCourseText } from '../../scene/beatoraja/course.ts';
 import type { BeMusicJson } from '@be-music/json';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
@@ -30,53 +33,65 @@ import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
 import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { BeatorajaRenderContext } from './render.ts';
-import { extractChartSubartist, resolveChartTotalReadout } from '../../chart/beatoraja/meta.ts';
+import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import { resolveChartBpmRange } from '../../chart/bpm-range.ts';
+import { computeBeatorajaChartNoteDistribution } from '../../chart/beatoraja/note-distribution.ts';
 import {
-  computeBeatorajaChartNoteDistribution,
-  type BeatorajaBpmSegment,
-} from '../../chart/beatoraja/note-distribution.ts';
+  beatorajaPlayChartFacts,
+  beatorajaPlayChartTraits,
+  computeBeatorajaLastNoteBeats,
+} from '../../chart/beatoraja/play-facts.ts';
 import {
-  beatorajaGaugeModeFromString,
-  BEATORAJA_NUM,
   BEATORAJA_OP,
-  BEATORAJA_TEXT,
-  bombTimerId,
-  comboTimerId,
-  computeGenericRankOp,
-  computeJudgeExistOps,
-  computeRankOp,
-  endOfNoteTimerId,
-  JUDGE_LANE_REF_1P_BASE,
-  JUDGE_LANE_REF_2P_BASE,
+  beatorajaGaugeModeFromString,
   JUDGE_LANE_REF_RANGE,
-  judgeOpForKind,
-  judgeTimerId,
-  keyOffTimerId,
-  keyOnTimerId,
-  lnHoldTimerId,
-  SYNTHETIC_NUM_JUDGE_COMBO_1P,
-  SYNTHETIC_NUM_JUDGE_COMBO_2P,
-  SYNTHETIC_NUM_JUDGE_COMBO_3P,
   TIMER_FADEOUT,
   TIMER_FAILED,
-  TIMER_FULLCOMBO_1P,
-  TIMER_FULLCOMBO_2P,
-  TIMER_GAUGE_INCREASE_1P,
-  TIMER_GAUGE_INCREASE_2P,
-  TIMER_GAUGE_MAX_1P,
   TIMER_PLAY,
   TIMER_PREVIEW,
   TIMER_READY,
-  TIMER_RHYTHM,
   TIMER_SCENE_START,
   TIMER_STARTINPUT,
   type BeatorajaSide,
   type BeatorajaSkinOffsetValue,
 } from '@be-music/beatoraja-skin';
-
-const BEATORAJA_ADAPTER_DIAGNOSTICS = false;
+import {
+  BEATORAJA_COVER_OPS,
+  BEATORAJA_PLAY_STARTED_OPS,
+  beatorajaGaugePercent,
+  beatorajaLaneJudgeImage,
+  beatorajaLaneJudgeRef,
+  beatorajaWallClockOf,
+  createBeatorajaJudgeStateGraph,
+  resolveBeatorajaCoverOps,
+  resolveBeatorajaFrameTimers,
+  resolveBeatorajaGaugeState,
+  resolveBeatorajaJudgeEffect,
+  resolveBeatorajaJudgeStateMove,
+  resolveBeatorajaLanePlacement,
+  resolveBeatorajaLaneTimers,
+  resolveBeatorajaPlayGraphValue,
+  resolveBeatorajaPlayJudgeGraph,
+  resolveBeatorajaPlayNumber,
+  resolveBeatorajaPlayScoreOps,
+  resolveBeatorajaPlaySliderValue,
+  resolveBeatorajaPlayStartOps,
+  resolveBeatorajaPlayText,
+  resolveBeatorajaScorePolyline,
+  writeBeatorajaPlayOffset,
+  type BeatorajaChartTraits,
+  type BeatorajaComboDigitMetric,
+  type BeatorajaGaugeInput,
+  type BeatorajaLaneAction,
+  type BeatorajaLanePlacement,
+  type BeatorajaPlayChartFacts,
+  type BeatorajaPlayNumberInput,
+  type BeatorajaPlayOffsetInput,
+  type BeatorajaPlayTextInput,
+  type BeatorajaScoreInput,
+  type BeatorajaTimerChanges,
+} from '@be-music/beatoraja-skin/scene';
+import type { LaneCoverState } from '@be-music/scene-model';
 
 export interface BeatorajaRuntimeAdapterOptions {
   /** Chart variant (matches `ChartPlayVariant` from `@be-music/player`). Used to resolve channel → lane index. */
@@ -95,17 +110,11 @@ export interface BeatorajaRuntimeAdapterOptions {
    * text-resolver leaves chart-info nodes empty (matches the preview path).
    */
   chart?: BeMusicJson;
-  /**
-   * Optional mounted skin's display name. Surfaced through `BEATORAJA_TEXT.SKIN_NAME = 50` so
-   * skins that print their own name on the play scene get a real string instead of empty.
-   */
+  /** Optional mounted skin's display name (`BEATORAJA_TEXT.SKIN_NAME = 50`). */
   skinHeaderName?: string;
-  /** Optional skin author name — surfaces `BEATORAJA_TEXT.SKIN_AUTHOR = 51`. */
+  /** Optional skin author name (`BEATORAJA_TEXT.SKIN_AUTHOR = 51`). */
   skinHeaderAuthor?: string;
-  /**
-   * Optional song directory label — surfaces `BEATORAJA_TEXT.DIRECTORY = 1000`. Beatoraja's
-   * reference theme uses this to show the parent folder name on the play scene's status bar.
-   */
+  /** Optional song directory label (`BEATORAJA_TEXT.DIRECTORY = 1000`). */
   directoryLabel?: string;
   /**
    * The running course, when the play is one of its stages: its stage titles surface on `STRING_COURSE1_TITLE` …
@@ -113,497 +122,152 @@ export interface BeatorajaRuntimeAdapterOptions {
    */
   courseInfo?: SceneCourseInfo;
   /**
-   * Per-skin lane height in skin-pixel units. Used to scale `OFFSET_LIFT.y` so the lift slider's
-   * full range moves the hidden-cover edge across exactly one lane height (= the visual extent
-   * the cover should travel between `liftRatio = 0` and `1`).
-   *
-   * Hosts extract this from the skin's `slider[]` block — the `lanecover` / `lift` slider's
-   * authored `range` is the canonical value. Defaults to {@link DEFAULT_LANE_HEIGHT} when the
-   * caller doesn't supply it (matches the reference theme's 580; close enough for any skin
-   * that doesn't author this metadata explicitly).
+   * Per-skin lane height in skin-pixel units: the LIFT and HIDDEN+ offsets move across it. Hosts read it from the
+   * skin's `lanecover` / `lift` slider `range`; {@link DEFAULT_LANE_HEIGHT} (the reference theme's 580) without one.
    */
   laneHeight?: number;
   /**
-   * Per-side combo-digit metrics extracted from the skin's `judge[].numbers[0]` declaration.
-   * Used by the synthetic `SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_*P` offset to compute the
-   * dynamic word-shift amount.
-   *
-   * Mirrors upstream `SkinJudge.java:108-109`:
-   *
-   *     nowCount.prepare(time, state, combo, nowJudge.region.x, nowJudge.region.y);
-   *     nowJudge.region.x += shift ? -nowCount.getLength() / 2 : 0;
-   *
-   * Where `nowCount.getLength() = (region.width + space) * (currentImages.length - shiftbase)`
-   * — i.e., per-digit cell width PLUS inter-digit space, multiplied by the visible digit count.
-   * Both `width` and `space` come from the matching `value[]` declaration referenced by
-   * `judge[].numbers[0].id`.
-   *
-   * Default `width = 40, space = 0` matches default skin's `play5.json` / `play7main.lua`.
-   * Community skins with custom metrics pass their authored values.
+   * Per-side combo-digit metrics from the skin's `judge[].numbers[0]` value: the judge word of a `judge[]` with
+   * `shift` moves left by half the combo's width (`SkinJudge.java:108-109`). Defaults to the default skin's
+   * `width = 40, space = 0`.
    */
   judgeComboMetrics?: { 1?: { width?: number; space?: number }; 2?: { width?: number; space?: number } };
 }
 
-interface SideJudgeState {
+/** A judge plate's latest judgment and FAST / SLOW ops, which the next judgment on the plate replaces. */
+interface PlateOps {
   lastJudgeOp: number | undefined;
   lastFastSlowOp: number | undefined;
-  /**
-   * Live combo at the time of the latest judge for this side. Mirrors upstream's
-   * `judgecombo[judgeindex]` which `JudgeManager.notifyJudge` stamps to
-   * `getJudgeManager().getCourseCombo()` on every judge event. Read by `resolveNumberValue`
-   * for {@link SYNTHETIC_NUM_JUDGE_COMBO_1P} / `_2P` so the judge popup's combo digits paint
-   * the LIVE combo (not the running max) — `expandBeatorajaJudgeDestinations` swaps these
-   * synthetic refs into every `judge[].numbers[i]` value declaration.
-   *
-   * Stays at the most-recent value until the next judge for this side; combo-break verdicts
-   * (BAD / POOR) stamp `0` so the popup correctly displays "combo broke at 0" instead of the
-   * peak. Reset to `0` on `dispose()` / scene re-mount.
-   */
-  lastJudgeCombo: number;
 }
 
-type GraphPolylinePoint = { x: number; y: number };
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
-interface CachedScorePolyline {
-  readonly historyLength: number;
-  readonly maxExScore: number;
-  readonly points: ReadonlyArray<GraphPolylinePoint>;
-}
+/** The play state the resolvers read, kept in one object the adapter updates in place. */
+type PlayInput = Mutable<
+  Omit<BeatorajaPlayNumberInput & BeatorajaPlayOffsetInput, 'cover' | 'plateCombos' | 'earlyLate'>
+> & {
+  cover: Mutable<LaneCoverState>;
+  plateCombos: [number, number, number];
+  earlyLate: Record<'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR' | 'MISS', { early: number; late: number }>;
+};
 
-/**
- * Default lane height (in skin-pixel units) when the host doesn't supply a per-skin value via
- * `BeatorajaRuntimeAdapterOptions.laneHeight`. Matches `play7main.lua`'s `lanecover` slider
- * `range = 580` — the reference theme value. Used to scale `OFFSET_LIFT.y` to a full-coverage
- * shift at `liftRatio = 1`.
- */
+/** Default lane height in skin pixels: `play7main.lua`'s `lanecover` slider `range`. */
 const DEFAULT_LANE_HEIGHT = 580;
 
-/**
- * How long `BEATORAJA_OP.LANECOVER1_CHANGING` (= 270) stays active after the player's last
- * lanecover / lift input. Reference theme uses this op to gate the percentage popup that fades
- * after each adjustment — 500ms feels right (long enough to read, short enough not to linger).
- */
+/** How long `LANECOVER1_CHANGING` (270) stays lit after the player moves a cover; skins fade a percentage popup on it. */
 const COVER_CHANGING_WINDOW_MS = 500;
 
-/**
- * Maximum samples retained in the recent-timings ring for the timingvisualizer. 50 mirrors
- * beatoraja's reference `SkinTimingVisualizer` decay tail — long enough to read the recent
- * pattern at a glance, short enough that re-stroking the polyline every judge stays cheap.
- */
+/** Timed judgments kept for the timing visualizer's tail and the judge graph's histogram (`SkinTimingVisualizer`). */
 const RECENT_TIMINGS_CAPACITY = 50;
 
 /**
- * How long after a verdict the per-lane keybeam / bomb imageset stays on its judge-flavored
- * frame. Beatoraja's reference theme uses a brief flash — 250ms feels right (the player keeps
- * holding the key after the hit; the highlight needs to read as a "yes you scored" pulse, not
- * a persistent state). Outside the window the imageset reverts to its neutral frame even if
- * the key is still held; subsequent verdicts re-stamp so a held key during a stream stays
- * highlighted continuously.
- *
- * Naming kept as `_PERFECT_` for legacy reasons — the gate now covers any judge tier (PG / GR
- * / GD / BD / PR / MS), not just PERFECT. See {@link BeatorajaRuntimeAdapter.lastJudgeOnLane}.
- */
-const KEYBEAM_PERFECT_WINDOW_MS = 250;
-
-/**
- * How long after a `flash-lane` autoplay press the lane laser stays lit before the
- * auto-release fires KEY_OFF. Matches LR2 path's `KEY_ON_FLASH_HOLD_MS = 60` so visual
- * feedback for autoplay reads as a deliberate flash rather than staying stuck on for the
- * rest of the chart. Skipped when the lane is actively held (real keypress / LN sustain
- * arrived during the window).
+ * How long an autoplay `flash-lane` keeps the key beam on before its release, as the LR2 path's
+ * `KEY_ON_FLASH_HOLD_MS`; skipped when the lane is pressed or held meanwhile.
  */
 const FLASH_LANE_HOLD_MS = 60;
 
 /**
- * How long after the LN-tail `hold_*p_keyN` re-stamp (see `lnTailVerdictLatch` consumption
- * in {@link applyJudgeCombo}) before the timer is auto-deactivated. Mirrors upstream
- * `JudgeManager.java:546-547`'s `switchTimer(holdTimerId, processing != null)`: once the
- * LN's `state.processing` clears at the tail, upstream's next per-frame tick flips the
- * timer OFF — which lets `loop` skins (the default beatoraja `Destination.loop = 0`,
- * matching ModernChic's lnbomb declaration that omits the `loop` field) stop rendering
- * because the timer's `prepareRegion` returns "off".
- *
- * Our adapter doesn't run a per-frame `switchTimer` sweep, so without an explicit
- * auto-release the re-stamp would leave the timer permanently `on` — and a `loop = 0`
- * bomb destination would animate forever. User-reported symptom: in AUTO PLAY the LN
- * bomb sprite stayed visible after the LN finished judging. Pinning the window at
- * 320 ms covers all surveyed lnbomb cycles
- * (ModernChic `lnbombCycle = 160`, GdbG variants up to ~200) with a comfortable
- * safety margin, while still being short enough that a subsequent LN on the same
- * lane stamps a fresh start time before the auto-release fires.
+ * How long the long-note hold timer, restarted on the tail's judgment for the hold bomb (ModernChic's `lnbomb` keys on
+ * `HOLD_*P_KEY*`), stays on. beatoraja switches it off the frame after the tail (`JudgeManager.java:546-547`); skins
+ * that omit `loop` would otherwise animate the bomb forever. 320 ms covers the surveyed bomb cycles (ModernChic 160,
+ * GdbG up to ~200).
  */
 const LN_TAIL_BOMB_HOLD_MS = 320;
 
-/**
- * For each BPM segment, the last positive BPM at or before it (`NaN` before the first one), so the current BPM is one
- * binary search away. `undefined` when the segments are not in time order, where only the walk is right.
- */
-function bpmLookupFor(segments: ReadonlyArray<BeatorajaBpmSegment>): Float64Array | undefined {
-  if (BPM_LOOKUPS.has(segments)) return BPM_LOOKUPS.get(segments);
-  let lookup: Float64Array | undefined = new Float64Array(segments.length);
-  let lastPositive = Number.NaN;
-  for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index]!;
-    if (index > 0 && segment.timeMs < segments[index - 1]!.timeMs) {
-      lookup = undefined;
-      break;
-    }
-    if (segment.bpm > 0) lastPositive = segment.bpm;
-    lookup[index] = lastPositive;
-  }
-  BPM_LOOKUPS.set(segments, lookup);
-  return lookup;
+const NO_EARLY_LATE = (): PlayInput['earlyLate'] => ({
+  PERFECT: { early: 0, late: 0 },
+  GREAT: { early: 0, late: 0 },
+  GOOD: { early: 0, late: 0 },
+  BAD: { early: 0, late: 0 },
+  POOR: { early: 0, late: 0 },
+  MISS: { early: 0, late: 0 },
+});
+
+function createEmptyLaneJudgeRing(): Array<{ kind: number; at: number }> {
+  return Array.from({ length: JUDGE_LANE_REF_RANGE }, () => ({ kind: -1, at: 0 }));
 }
 
-const BPM_LOOKUPS = new WeakMap<ReadonlyArray<BeatorajaBpmSegment>, Float64Array | undefined>();
+function resolveJudgeComboMetric(preferred: { width?: number; space?: number } | undefined): BeatorajaComboDigitMetric {
+  const width =
+    typeof preferred?.width === 'number' && Number.isFinite(preferred.width) && preferred.width > 0
+      ? preferred.width
+      : 40;
+  const space = typeof preferred?.space === 'number' && Number.isFinite(preferred.space) ? preferred.space : 0;
+  return { width, space };
+}
 
 export class BeatorajaRuntimeAdapter {
   /**
-   * Live op set — option ops (from `baseOps`) plus runtime ops the engine has toggled. Exposed via
-   * {@link getRenderContext} so the skin view can gate visibility per frame. The same `Set` instance is
-   * reused every frame to avoid allocations on the hot path.
+   * Live op set — option ops (from `baseOps`) plus runtime ops. The same `Set` instance is handed to the skin view
+   * every frame.
    */
   private readonly activeOps: Set<number>;
   private baseOps: ReadonlySet<number>;
   private readonly timerStartedAt = new Map<number, number>();
+  /** Timers that start once per play (failure, end of notes, full combo, full gauge) and already did. */
+  private readonly firedOnce = new Set<number>();
   private readonly renderContext: BeatorajaRenderContext;
-  private readonly getTimerStartForRenderContext = (id: number) => this.timerStartedAt.get(id);
-  private readonly resolveOffsetForRenderContext = (id: number) => this.resolveOffset(id);
-  private readonly resolveGaugeStateForRenderContext = () => this.resolveGaugeState();
   private readonly chartPlayVariant: ChartPlayVariant;
   private readonly getNowMs: () => number;
   private readonly chart: BeMusicJson | undefined;
-  private readonly skinHeaderName: string | undefined;
-  private readonly skinHeaderAuthor: string | undefined;
-  private readonly directoryLabel: string | undefined;
-  private readonly courseInfo: SceneCourseInfo | undefined;
-  /**
-   * Skin-pixel lane height — used to scale `OFFSET_LIFT.y` so the lift slider's full extent
-   * matches one lane height. See {@link BeatorajaRuntimeAdapterOptions.laneHeight}.
-   */
-  private readonly laneHeight: number;
-  /**
-   * Per-side combo-digit metrics — `(width, space)` pair from the matching `value[]`
-   * declaration referenced by `judge[].numbers[0].id`. Used by the judge-word-shift
-   * synthetic offset to compute `(width + space) * digitCount / 2` per upstream
-   * `SkinJudge.java:108-109`'s `nowJudge.region.x += -nowCount.getLength() / 2` formula.
-   * Defaults `(40, 0)` cover default skin's `play5.json` / `play7main.lua`.
-   */
-  private readonly judgeComboMetrics: { 1: { width: number; space: number }; 2: { width: number; space: number } };
+  private readonly startTraits: BeatorajaChartTraits | undefined;
+  private readonly texts: BeatorajaPlayTextInput;
+  private readonly play: PlayInput;
   private frame: PlayerUiFramePayload | null = null;
-  // Per-judge-plate state. Side `3` is the POPN-9 third plate (upstream `play9.json` `id: 2012`,
-  // `index: 2`, timers `247` / `448`); it stays unused for SP / DP variants. See {@link resolveJudgePlate}.
-  private readonly judgeState: Record<BeatorajaSide, SideJudgeState> = {
-    1: { lastJudgeOp: undefined, lastFastSlowOp: undefined, lastJudgeCombo: 0 },
-    2: { lastJudgeOp: undefined, lastFastSlowOp: undefined, lastJudgeCombo: 0 },
-    3: { lastJudgeOp: undefined, lastFastSlowOp: undefined, lastJudgeCombo: 0 },
+  /** The ops the running score lit on the last frame ({@link resolveBeatorajaPlayScoreOps}). */
+  private scoreOps: readonly number[] = [];
+  /** Per judge plate (1P, 2P, POPN 9 KEY's third). */
+  private readonly plates: Record<BeatorajaSide, PlateOps> = {
+    1: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
+    2: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
+    3: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
   };
-  /**
-   * Per-(side, lane) most-recent-judge ring. Sized to `JUDGE_LANE_REF_RANGE` (10 lanes per side
-   * ⇒ keys 0..9 with 0 = scratch). Each slot holds the latest verdict's `(judgeIndex, atMs)`,
-   * driving the keybeam / bomb imagesets via the `JUDGE_LANE_REF_*P_BASE + lane` ref:
-   *
-   *   resolveRefValue(refOp) returns judgeIndex+1 within KEYBEAM_PERFECT_WINDOW_MS, else 0.
-   *
-   * Beatoraja's renderer clamps the resolved value to `images.length - 1`, so the ref encoding
-   * lets a single resolver feed imagesets of varying granularity:
-   *
-   *   - Default 7K's 2-frame `{ keybeam-w, keybeam-w-pg }`: any judge collapses to frame 1
-   *     (= "you scored a hit, here's a flash" — the bright variant fires on every clean
-   *     judgement, not just PERFECT).
-   *   - Default 9K's 4-frame `{ keybeam-w, keybeam-w-pg, keybeam-w-gr, keybeam-w-gr }`: PG and
-   *     GR get distinct color variants (frames 1 / 2), GD/BD/PR/MS clamp to frame 3 (= last GR
-   *     entry, which is intentionally the same image as frame 2).
-   *   - Default 7K's 4-entry bomb `{ bomb1, bomb2, bomb1, bomb3 }`: PG → bomb2, GR → bomb1
-   *     (same as no-judge — GR doesn't get its own bomb), GD → bomb3 (unreachable in practice
-   *     since bomb timer only fires on clean hits).
-   *
-   * `kind` uses `-1` to mean "no judge yet OR the latest judge has aged out"; the resolver maps
-   * `-1` to ref `0`. `at` is `getNowMs()`-relative.
-   */
+  /** Per side and lane, the latest judgment's place in beatoraja's order and when it came (refs 500-519). */
   private readonly lastJudgeOnLane: Record<BeatorajaSide, Array<{ kind: number; at: number }>> = {
     1: createEmptyLaneJudgeRing(),
     2: createEmptyLaneJudgeRing(),
-    // POPN-9's per-plate `judge[].numbers` doesn't address per-lane judge ref ops (those are 1P /
-    // 2P only — `JUDGE_LANE_REF_*P_BASE`), but we allocate side `3`'s ring defensively so a stray
-    // resolver call doesn't have to branch on side. Stays empty in practice under SP / DP.
     3: createEmptyLaneJudgeRing(),
   };
+  private readonly placements = new Map<string, BeatorajaLanePlacement>();
   private poorBgaActive = false;
-  /**
-   * Per-lane "is the player currently holding this LN?" set, keyed by engine `channel` string
-   * (e.g. `'11'`, `'26'`). Populated on `hold-lane-until-beat`, cleared on `release-lane`. The
-   * note layer reads this via {@link isLaneLnHeld} every frame to swap between the held / unheld
-   * LN body sprite slots that beatoraja's modern-mode `lnbody` + `lnbodyActive` pair
-   * declares. Distinct from the `lnHoldTimerId` per-lane timer which is "this LN started" —
-   * the timer keeps its stamp through release for taper-fade chrome, but this set tracks the
-   * live press state.
-   */
+  /** Lanes whose long note the player holds now: the note layer draws the held body sprite. */
   private readonly lnHoldHeldByChannel = new Set<string>();
   /**
-   * "This channel was in an LN hold; the next `applyJudgeCombo` on it is the LN tail verdict"
-   * latch.  Populated on `hold-lane-until-beat`; cleared on the next `applyJudgeCombo`
-   * call for the same channel.  Used to drive ModernChic's LN-bomb sprite (which is gated
-   * on `HOLD_*P_KEY*` timers 71..79 / 81..89, NOT on the regular bomb timers 51..59 /
-   * 61..69 the engine's clean-hit branch already stamps).
-   *
-   * Why this exists separately from {@link lnHoldHeldByChannel}: `release-lane` arrives
-   * BEFORE the LN tail's `applyJudgeCombo` (engine emits release-lane first, then the
-   * judge publish), so `lnHoldHeldByChannel` is already cleared by the time we get the
-   * verdict.  This latch survives the release-lane and is consumed by the verdict path
-   * instead.
-   *
-   * Upstream `JudgeManager` automatically stamps the HOLD timer (`hold_*p_keyN`) on every
-   * LN tail verdict — that's what makes the lnbomb sprite animate at LN end on ModernChic.
-   * Our engine doesn't directly model that timer; we synthesize the stamp here by routing
-   * "this `applyJudgeCombo` belongs to an LN tail" through the latch.
+   * Lanes in a long note whose tail's judgment is still to come. `release-lane` arrives before the tail's judgment, so
+   * the hold flag above is already gone; this one restarts the hold timer for the tail's bomb.
    */
   private readonly lnTailVerdictLatch = new Set<string>();
-  /**
-   * Live "is the player currently holding this lane via a real keypress?" set. Populated on
-   * `press-lane`, cleared on `release-lane`. The auto-release path scheduled by
-   * `flash-lane` reads this so a real keypress during the brief flash window doesn't get
-   * stomped by the timed auto-release. Mirrors the LR2 path's `pressedChannels`.
-   */
+  /** Lanes the player presses now, which a `flash-lane` release leaves alone. */
   private readonly pressedChannels = new Set<string>();
-  /**
-   * Active `setTimeout` handles for `flash-lane` auto-release. Cleared on dispose so a
-   * scene tear-down mid-flash doesn't fire the callback against a disposed adapter.
-   */
   private readonly flashReleaseHandles = new Set<ReturnType<typeof setTimeout>>();
-  /**
-   * `setTimeout` handles for the LN-tail bomb auto-release (see {@link LN_TAIL_BOMB_HOLD_MS}).
-   * Tracked separately from `flashReleaseHandles` so a `release-lane` (which clears the hold
-   * timer immediately via {@link deactivateLaneLnHoldTimer}) doesn't get a stale auto-release
-   * scheduled on top — the auto-release skips its work when the timer is already inactive.
-   * Cleared on dispose to keep callbacks from firing against a torn-down adapter.
-   */
   private readonly lnTailBombReleaseHandles = new Set<ReturnType<typeof setTimeout>>();
-  // Initial hispeed value before the host calls `setHiSpeed` (which it does once per frame from
-  // `stateSignals.highSpeed()`). Aligned with `DEFAULT_PLAY_OPTIONS.hiSpeed = 2.0` in
-  // `scene/lr2/select` for consistency. Diverges from upstream `PlayConfig.java:16`'s `1.0f` — see
-  // the rationale comment on `DEFAULT_PLAY_OPTIONS.hiSpeed`.
-  private lastHiSpeed = 2.0;
-  /**
-   * Player's lanecover position in `[0, 1]`. `0` = cover off (slider at home, no obscuring),
-   * `1` = cover fully extended (covers the upper portion of the lane). Drives the `slider[]`
-   * `type = 4` (1P) / `type = 5` (2P) value AND the `BEATORAJA_NUM.LANECOVER_1P` (= 14) percent
-   * readout. The host adjusts this through {@link adjustLanecover} / {@link setLanecover} as the
-   * player drags the slider, scrolls the wheel, or presses the lanecover hotkeys.
-   */
-  private lanecoverRatio = 0;
-  /**
-   * Wallclock ms (`getNowMs`-relative) of the last lanecover or lift adjustment. Used to drive
-   * `BEATORAJA_OP.LANECOVER1_CHANGING = 270` — the op stays active for {@link COVER_CHANGING_WINDOW_MS}
-   * after the player's last input, so reference-theme destinations gated on the op (e.g. the
-   * `lanecover-value` percentage readout that pops up while the player is tweaking the cover)
-   * appear briefly and then fade out.
-   */
+  /** When the player last moved a cover (`getNowMs` ms): `LANECOVER1_CHANGING` stays lit for a moment after. */
   private coverLastChangedAtMs: number | undefined;
-  /**
-   * Player's lift slider position in `[0, 1]`. `0` = lift at home (hidden-cover collapsed at the
-   * bottom edge), `1` = lift fully extended (cover at maximum lift, exposing the upper part of
-   * the lane). Drives `OFFSET_LIFT.y` (mapped onto a skin-pixel Y-UP shift via
-   * {@link LIFT_MAX_Y_OFFSET}) AND the `BEATORAJA_NUM.LIFT1 = 314` percent readout.
-   */
-  private liftRatio = 0;
-  /**
-   * Hidden-cover state. Beatoraja's `LaneRenderer` maintains this on `OFFSET_HIDDEN_COVER`
-   * (id `5`). When the user has hidden enabled, the cover paints visibly and `y` shifts
-   * proportionally to `hiddenRatio × laneHeight` (with the lift-active variant applying
-   * `(1 - lift) × ratio × laneHeight`). When disabled, `a = -255` (additive delta) clamps
-   * the cover's keyframe alpha down to 0 — invisible. Default: disabled / 0 ratio so the
-   * hidden cover stays out of view until the player opts in.
-   *
-   * Mirrors `LaneRenderer.java:282-296`. Together with {@link liftRatio} this drives the
-   * three lane-cover offset slots (LIFT, LANECOVER, HIDDEN_COVER) that the reference theme
-   * and most community skins author.
-   */
-  private hiddenRatio = 0;
-  private hiddenEnabled = false;
-  /**
-   * User-adjustable destination offsets keyed by `OFFSET_*` id (from `SkinProperty.OFFSET_LIFT`
-   * et al.). Values default to `ZERO_BEATORAJA_OFFSET` (no shift, full alpha) and stay there
-   * until a host plugs in slider input via {@link setOffset}. The skin view consumes this through
-   * `context.resolveOffset` — both the per-destination `offsets[]` adjustment and the hidden-
-   * cover `disapearLine` lift linkage read from this map.
-   */
-  private readonly offsets: Map<number, BeatorajaSkinOffsetValue> = new Map();
-  /** Running combo, latched from the engine's `judge-combo` publishes. Reset on combo-break verdicts. */
-  private runningCombo = 0;
-  /** Maximum combo seen this run. */
-  private maxCombo = 0;
-  /**
-   * Last rank op classification — one each for the side-prefixed and generic rank-op blocks.
-   * `applyFrame` reads these to know which op to clear when the rank classification crosses a
-   * threshold. Without this we'd leave stale rank ops in `activeOps` (every threshold the run
-   * crossed would still gate chrome on).
-   */
-  private readonly lastRankOps: { side?: number; generic?: number; now?: number; band?: number } = {};
-  /**
-   * Per-judge `(progress, exScore)` samples accumulated during the run. Result skins consume
-   * this through `getResultHistory()` to draw score-over-time polyline graphs (`graph[].type =
-   * 110` / `113` / `115` in beatoraja's reference). Pushed inside `applyJudgeCombo` because every
-   * EX-score change funnels through the same judge path — sampling once per judge keeps the
-   * polyline density proportional to "how much actually happened" rather than wallclock time.
-   */
-  private readonly scoreHistory: Array<{ progress: number; exScore: number }> = [];
-  private scorePolylineCache: CachedScorePolyline | undefined;
-  /** Per-judge `(progress, gauge%)` samples — gauge polyline source. Same lifecycle as scoreHistory. */
-  private readonly gaugeHistory: Array<{ progress: number; value: number }> = [];
-  /**
-   * Recent judgement timing samples — circular buffer keyed by insertion order. Each entry holds
-   * the signed delta (positive = late, negative = early) and the judge kind so the
-   * timingvisualizer can render judgement-tier-colored marks. Capped at
-   * {@link RECENT_TIMINGS_CAPACITY} — the oldest sample is dropped when capacity is reached so
-   * the visualizer paints a fixed-cost decay tail without unbounded memory growth.
-   */
+  /** Offsets the host set by id (sliders); a live offset the play sets wins over them. */
+  private readonly offsets = new Map<number, BeatorajaSkinOffsetValue>();
+  /** One object per live offset id, refilled on every read: the renderer reads it at once and does not keep it. */
+  private readonly liveOffsets = new Map<number, BeatorajaSkinOffsetValue>();
+  private scoreHistory: Array<{ progress: number; exScore: number }> = [];
+  private gaugeHistory: Array<{ progress: number; value: number }> = [];
+  /** The latest timed judgments, oldest first ({@link RECENT_TIMINGS_CAPACITY}). */
   private readonly recentTimings: Array<{ deltaMs: number; kind: string }> = [];
-  /**
-   * Full timing-delta history for the entire run, kept unbounded across the chart so the result
-   * scene's `timingdistributiongraph[]` can render a per-ms histogram of every judgement. Memory
-   * cost is ~16 bytes per entry × note count (a 2k-note chart costs ~32KB), well within budget.
-   */
+  /** Every timed judgment of the play, for the result's timing distribution. */
   private readonly allTimings: Array<{ deltaMs: number; kind: string }> = [];
-  /**
-   * Per-verdict early / late counters. Updated incrementally on every timed
-   * `applyJudgeCombo` so the resolver can return the per-judge breakdown
-   * (`prop.lua early_perfect = 410` etc.) in O(1). Engine's `summary` only carries the
-   * aggregate `fast` / `slow` totals — these per-kind splits are derived locally.
-   */
-  private readonly earlyLateCounts: Record<
-    'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR' | 'MISS',
-    { early: number; late: number }
-  > = {
-    PERFECT: { early: 0, late: 0 },
-    GREAT: { early: 0, late: 0 },
-    GOOD: { early: 0, late: 0 },
-    BAD: { early: 0, late: 0 },
-    POOR: { early: 0, late: 0 },
-    MISS: { early: 0, late: 0 },
-  };
-  /**
-   * Per-second judge-state buckets for `judgegraph[]` `type=1` (TYPE_JUDGE) — mirrors
-   * upstream `SkinNoteDistributionGraph.data[][]` with `DATA_LENGTH[1] = 6`. Each row is
-   * `[unjudged, PG, GR, GD, BD, PR]`, indexed by chart-second. Initialized at chart load
-   * with every judgeable note (NORMAL + LN-end on key/scratch lanes; LN bodies and mines
-   * excluded per upstream's `case TYPE_JUDGE` filter at `SkinNoteDistributionGraph.java:304`).
-   * Each `applyJudgeCombo` decrements the bucket's unjudged slot and increments the verdict's
-   * slot — by the end of the chart, slot 0 should be 0 and slots 1..5 sum to the chart's
-   * total judgeable note count.
-   *
-   * Approximation note: upstream walks all notes every 750 ms and reads each note's live
-   * `getState()` directly (the BMSModel mutates note state on judge). We don't have per-note
-   * state plumbed through, so we approximate the note's chart-time-second from
-   * `currentChartTimeMs - deltaMs` and update the matching bucket. For the typical case
-   * (deltaMs ≤ 100 ms, 1-second buckets) the approximation lands in the right bucket; only
-   * edge cases (notes within 100 ms of a second-boundary, judged early) might float to a
-   * neighbour. Visual difference is imperceptible.
-   */
-  private judgeStateBuckets: number[][] = [];
-  /**
-   * Per-verdict-kind cumulative count, used as the running histogram in the
-   * `[beatoraja-adapter] apply judge` log line. Keyed on the upper-cased kind string so
-   * `applyJudgeCombo` can build the snapshot in one lookup. Reset to `{}` on `reset()` so a
-   * chart restart starts the histogram fresh.
-   */
-  private judgeKindCounts: Record<string, number> = {};
-  /**
-   * Y-axis max for `judgeStateBuckets` — `max(20, ceil(densest_total / 10) * 10)` capped at
-   * 100 per upstream `SkinNoteDistributionGraph.updateData()` line 272-274. Stable for the
-   * chart's lifetime since the bucket totals don't change (only their distribution across
-   * the 6 states does).
-   */
-  private judgeStateMaxNotesPerBucket = 0;
-  /**
-   * Total chart length in ms (from `BeatorajaChartNoteDistribution.totalMs`). Surfaces the
-   * x-axis span the renderer needs to position the playhead cursor.
-   */
-  private judgeStateTotalMs = 0;
-  /**
-   * Sorted `(timeMs → bpm)` transitions across the chart. Sampled by `currentBpmAtMs()`
-   * to derive the live BPM for `BEATORAJA_NUM.NOWBPM` (160) and the duration formula —
-   * mirrors upstream `LaneRenderer.nbpm` per-frame value, which is a snapshot of the
-   * `BMSModel`'s `TimeLine.getBPM()` at the playhead.
-   *
-   * Stop events emit `(stopStart, 0)` then `(stopEnd, prevBpm)`. The sampler skips zero
-   * entries so a stop holds the previous song-BPM rather than collapsing the readout to
-   * 0 — matches what beatoraja's `MusicPlayer` exposes via `lanerender.getNowBPM()`
-   * during stops (the song BPM holds, only the scroll halts).
-   */
-  private bpmSegments: ReadonlyArray<BeatorajaBpmSegment> = [];
-  /**
-   * "Main" BPM — most-frequent BPM across the chart (weighted by note count per BPM
-   * segment). Mirrors upstream `SongInformation.getMainbpm()` / `BEATORAJA_NUM.MAINBPM`
-   * (92). Cached at chart load via {@link computeBeatorajaChartNoteDistribution}'s
-   * `mainBpm` field.
-   */
-  private cachedMainBpm = 0;
-  /**
-   * Adapter-instance boot wallclock — surfaces prop.lua `operating_time_*` (run uptime). Beatoraja's
-   * native semantics is "since beatoraja launched"; in our world the closest equivalent is "since
-   * this gameplay scene mounted". Stored in `Date.now()` ms so subtraction yields wallclock seconds.
-   */
+  /** The judge-state graph (`judgegraph[]` type 1), updated in place as notes are judged. */
+  private judgeState: { buckets: number[][]; maxCount: number; totalMs: number } | undefined;
   private readonly bootMs = Date.now();
-  /**
-   * Ring buffer of recent `getNowMs()` timestamps, captured by `applyFrame`. Used to derive the
-   * smoothed `current_fps` readout (prop.lua `current_fps = 20`). Sized for ~1 s of frames at 120
-   * Hz, which is more than enough to dampen single-frame jitter.
-   */
+  /** Recent frame times (`getNowMs`), averaged into the frame rate readout. */
   private readonly fpsRingMs = new Float64Array(120);
   private fpsRingHead = 0;
   private fpsRingFilled = 0;
-  /**
-   * Last seen `frame.currentBeat` (latched on every `applyFrame`). Drives the `TIMER_RHYTHM`
-   * (= 140) re-stamp logic — when `Math.floor(currentBeat)` advances we restart the rhythm timer
-   * so any keyframe gated on it replays from t=0 on every beat boundary. `undefined` until the
-   * first frame arrives so the very first beat doesn't accidentally count as a crossing.
-   */
+  /** The beat and gauge of the frame before, for the beat and failure timers. */
   private lastFrameBeat: number | undefined;
-  /**
-   * Last seen `summary.gauge.current` (latched on every `applyFrame`). Drives the `TIMER_FAILED`
-   * (= 3) instant-fail detection — when the gauge transitions from a positive value to 0 we
-   * stamp the timer so HARD / DEATH gauge skins replay their fail-flash animation. `undefined`
-   * before the first frame so the very first 0 reading doesn't count as a transition.
-   */
   private lastFrameGauge: number | undefined;
-  /**
-   * Whether `markFailed` (or the in-frame gauge-zero detection) already stamped the
-   * `TIMER_FAILED` timer this run. Idempotent — multiple host-level calls (instant fail then
-   * end-of-chart fail re-declaration) leave the original stamp in place so authored fail
-   * animations don't restart and replay.
-   */
-  private failedTimerStamped = false;
-  /**
-   * Last note beat per side, computed once at construction from the chart events.
-   * `undefined` for a side with no notes (e.g. SP chart has no `2x` channels). Drives the
-   * `TIMER_ENDOFNOTE_1P/2P` (143 / 144) re-stamp logic — when `frame.currentBeat` crosses the
-   * latched value we mark the side's endofnote timer so any "song complete" reveal animation
-   * gated on it can play out.
-   */
-  private readonly lastNoteBeatBySide: Record<BeatorajaSide, number | undefined> = {
-    1: undefined,
-    2: undefined,
-    // POPN-9 collapses every channel onto 1P (`resolveSide`), so side 3 stays unused here. The
-    // entry exists purely so `[laneSide]` indexing remains a typechecked `BeatorajaSide` lookup.
-    3: undefined,
-  };
-  /** Latched once the side's endofnote timer has fired so subsequent frames don't re-stamp. */
-  private readonly endOfNoteStamped: Record<BeatorajaSide, boolean> = { 1: false, 2: false, 3: false };
-  /**
-   * Per-side latch — `true` once `TIMER_FULLCOMBO_*P` has been stamped this run. Mirrors
-   * `endOfNoteStamped` but for the FC celebration. A re-judge (engine seeks backwards then
-   * forwards) doesn't re-stamp; the FC animation runs once from the moment FC was first
-   * achieved, matching beatoraja's reference behaviour. Side 3 stays unused for the same
-   * reason as `endOfNoteStamped`.
-   */
-  private readonly fullComboStamped: Record<BeatorajaSide, boolean> = { 1: false, 2: false, 3: false };
-  /**
-   * Per-ref "we already logged that this isn't wired" set. Keeps `resolveNumberValue` quiet on the hot
-   * path while still surfacing each missing prop.lua num exactly once per session.
-   */
+  private readonly lastNoteBeats: { 1?: number; 2?: number };
+  private cachedNoteBreakdown: ReturnType<typeof computeBeatorajaNoteBreakdown> | undefined;
+  private cachedJudgeWindowsMs: JudgeWindowsMs | undefined;
+  /** Refs the resolvers do not cover, logged once per session each. */
   private readonly unresolvedNumberRefs = new Set<number>();
-  /** Mirror of {@link unresolvedNumberRefs} for `text[].ref`. */
   private readonly unresolvedTextRefs = new Set<number>();
 
   constructor(options: BeatorajaRuntimeAdapterOptions) {
@@ -612,150 +276,86 @@ export class BeatorajaRuntimeAdapter {
     this.activeOps = new Set(options.baseOps);
     this.renderContext = {
       activeOps: this.activeOps,
-      getTimerStart: this.getTimerStartForRenderContext,
+      getTimerStart: (id) => this.timerStartedAt.get(id),
       nowMs: 0,
-      resolveOffset: this.resolveOffsetForRenderContext,
-      resolveGaugeState: this.resolveGaugeStateForRenderContext,
+      resolveOffset: (id) => this.resolveOffset(id),
+      resolveGaugeState: () => this.resolveGaugeState(),
     };
     this.getNowMs = options.getNowMs;
-    this.chart = options.chart;
-    this.skinHeaderName = options.skinHeaderName;
-    this.skinHeaderAuthor = options.skinHeaderAuthor;
-    this.directoryLabel = options.directoryLabel;
-    this.courseInfo = options.courseInfo;
-    this.laneHeight =
+    const chart = options.chart;
+    this.chart = chart;
+    this.startTraits = chart !== undefined ? beatorajaPlayChartTraits(chart) : undefined;
+    this.lastNoteBeats = chart !== undefined ? computeBeatorajaLastNoteBeats(chart) : {};
+    this.texts = {
+      ...(chart !== undefined
+        ? {
+            song: {
+              title: chart.metadata.title,
+              subtitle: chart.metadata.subtitle,
+              genre: chart.metadata.genre,
+              artist: chart.metadata.artist,
+              subartist: extractChartSubartist(chart),
+              directory: options.directoryLabel,
+            },
+          }
+        : {}),
+      skin: { name: options.skinHeaderName, author: options.skinHeaderAuthor },
+      ...(options.courseInfo !== undefined ? { course: options.courseInfo } : {}),
+    };
+    const laneHeight =
       typeof options.laneHeight === 'number' && Number.isFinite(options.laneHeight) && options.laneHeight > 0
         ? options.laneHeight
         : DEFAULT_LANE_HEIGHT;
-    this.judgeComboMetrics = {
-      1: resolveJudgeComboMetric(options.judgeComboMetrics?.[1]),
-      2: resolveJudgeComboMetric(options.judgeComboMetrics?.[2]),
+    this.play = {
+      combo: 0,
+      maxCombo: 0,
+      earlyLate: NO_EARLY_LATE(),
+      ...(chart?.metadata.total !== undefined ? { chartTotal: chart.metadata.total } : {}),
+      // The host sets the hi-speed every frame; `DEFAULT_PLAY_OPTIONS.hiSpeed` until it does.
+      hiSpeed: 2.0,
+      cover: { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 },
+      chart: this.initJudgeState(),
+      plateCombos: [0, 0, 0],
+      laneHeight,
+      comboDigits: {
+        1: resolveJudgeComboMetric(options.judgeComboMetrics?.[1]),
+        2: resolveJudgeComboMetric(options.judgeComboMetrics?.[2]),
+      },
     };
-    // Autoplay flag — prop.lua `autoplayon = 33` / `autoplayoff = 32`. We surface BOTH so a skin gated on
-    // either side picks up the correct state. (Some skins author the panel as `if[33]`, others as
-    // `if[-32]`; both are valid in beatoraja's spec.)
-    if (options.autoPlay) {
-      this.activeOps.add(BEATORAJA_OP.AUTOPLAY_ON);
-    } else {
-      this.activeOps.add(BEATORAJA_OP.AUTOPLAY_OFF);
-    }
-    // Until the engine signals 'loaded', the loading op is active. We don't actually have a separate
-    // 'loaded' transition wire from the engine yet — `markPlay` flips this when audible playback starts,
-    // so by the time the user sees notes the loaded gate is open.
-    this.activeOps.add(BEATORAJA_OP.NOW_LOADING);
-    // ─── Static chart-trait + variant op gates ──────────────────────────────────────────────
-    // These are computed once at construction from chart metadata and never change. Skins gate
-    // optional chrome on them (e.g. show LN-specific lane backgrounds only when HAS_LN is set,
-    // or hide BPM-change indicators when NO_BPMCHANGE).
-    this.applyChartVariantOps(options.chartPlayVariant);
-    this.applyChartTraitOps(options.chart);
-    // Pre-compute the last note beat per side so `applyFrame` can detect the chart's
-    // end-of-notes moment and stamp `TIMER_ENDOFNOTE_*P` (143 / 144). This is a one-shot
-    // chart-data scan — `frame.notes` is the rendering window subset, not the full chart, so
-    // it can't be used as the signal source.
-    if (options.chart !== undefined) {
-      const last = computeLastNoteBeatBySide(options.chart);
-      this.lastNoteBeatBySide[1] = last[1];
-      this.lastNoteBeatBySide[2] = last[2];
-      this.initJudgeStateBuckets(options.chart);
-    }
-    // Default gauge type — beatoraja sets exactly one of `gauge_groove / hard / ex` (1P side).
-    // Without a runtime gauge-mode setting we default to GROOVE; the result-scene path can
-    // refine via `summary.gauge.type` once we surface it.
-    this.activeOps.add(BEATORAJA_OP.GAUGE_GROOVE);
-    // Scene-start timer is always running — many skin elements default `timer = 0` and read it as the
-    // global clock. Other built-in timers fire later via `markTimer`.
+    this.refreshClock();
+    this.addStartOps(options.autoPlay === true);
+    // The scene-start timer runs from the start: many elements default to `timer = 0`. The preview timer
+    // (ModernChic's lane reveal) has no separate "loaded, not playing" phase here, so it starts with the scene.
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
-    // Preview timer — beatoraja's runtime stamps it during the brief "chart loaded but not yet
-    // playing" window; we don't have that phase exposed separately, so we pin it to scene-start
-    // (= 0). ModernChic's `Play/lua/sp/lane.lua` gates the lane chrome reveal on `timer:preview`,
-    // so without this the playfield never fades in.
     this.timerStartedAt.set(TIMER_PREVIEW, 0);
   }
 
-  /** Activate the matching `OPTION_*KEYSONG` op for the chart's variant. */
-  private applyChartVariantOps(variant: ChartPlayVariant): void {
-    switch (variant) {
-      case '7':
-        this.activeOps.add(BEATORAJA_OP.KEYSONG_7K);
-        break;
-      case '5':
-        this.activeOps.add(BEATORAJA_OP.KEYSONG_5K);
-        break;
-      case '14':
-        this.activeOps.add(BEATORAJA_OP.KEYSONG_14K);
-        break;
-      case '10':
-        this.activeOps.add(BEATORAJA_OP.KEYSONG_10K);
-        break;
-      case '9':
-        this.activeOps.add(BEATORAJA_OP.KEYSONG_9K);
-        break;
-      case '24':
-        this.activeOps.add(BEATORAJA_OP.KEYSONG_24K);
-        break;
-      case '48':
-        this.activeOps.add(BEATORAJA_OP.KEYSONG_24K_DP);
-        break;
-    }
+  /** The ops a play starts with: autoplay, loading, the groove gauge, the key mode and the chart's traits. */
+  private addStartOps(autoPlay: boolean): void {
+    const startOps = resolveBeatorajaPlayStartOps({
+      playVariant: this.chartPlayVariant,
+      autoPlay,
+      ...(this.startTraits !== undefined ? { traits: this.startTraits } : {}),
+    });
+    for (const op of startOps) this.activeOps.add(op);
   }
 
-  /**
-   * Activate static chart-trait gates derived from the chart payload:
-   *
-   *   - `HAS_LN` / `NO_LN` — does the chart contain long notes?
-   *   - `HAS_BPMCHANGE` / `NO_BPMCHANGE` — does the chart change BPM mid-song?
-   *   - `HAS_BPMSTOP` — does it use STOP events?
-   *   - `HAS_TEXT` / `NO_TEXT` — does it carry text channels?
-   *   - `HAS_STAGEFILE` / `HAS_BANNER` / `HAS_BACKBMP` — chart graphics presence
-   *   - `HAS_BGA` / `NO_BGA` — does the chart use BGA channels?
-   *
-   * Mirrors beatoraja's static analysis at chart load. Many skins gate optional chrome (e.g. an
-   * LN-specific lane indicator) on these, so the chrome doesn't appear on non-LN charts.
-   */
-  private applyChartTraitOps(chart: BeMusicJson | undefined): void {
-    if (chart === undefined) return;
-    const meta = chart.metadata;
-    // `HAS_LN`: the chart uses LN channels (channels in 50-69 range for LN, 53/54 for CN, etc.).
-    // The simplest signal is the presence of any event whose channel starts with '5'. This is a
-    // best-effort heuristic — beatoraja inspects the parsed note data; we approximate via channel
-    // prefixes since BeMusicJson doesn't expose a precomputed flag.
-    let hasLn = false;
-    let hasBpmChange = false;
-    let hasBpmStop = false;
-    let hasText = false;
-    for (const event of chart.events ?? []) {
-      const ch = event.channel;
-      if (ch.length === 2) {
-        const first = ch[0];
-        if (first === '5' || first === '6') hasLn = true;
-        else if (ch === '03' || ch === '08') hasBpmChange = true;
-        else if (ch === '09') hasBpmStop = true;
-        else if (ch === '99') hasText = true;
-      }
-      if (hasLn && hasBpmChange && hasBpmStop && hasText) break;
+  /** Builds the judge-state graph and returns the chart facts, from one walk of the chart's notes. */
+  private initJudgeState(): BeatorajaPlayChartFacts {
+    const chart = this.chart;
+    if (chart === undefined) {
+      this.judgeState = undefined;
+      return beatorajaPlayChartFacts(undefined, undefined);
     }
-    this.activeOps.add(hasLn ? BEATORAJA_OP.HAS_LN : BEATORAJA_OP.NO_LN);
-    this.activeOps.add(hasBpmChange ? BEATORAJA_OP.HAS_BPMCHANGE : BEATORAJA_OP.NO_BPMCHANGE);
-    if (hasBpmStop) this.activeOps.add(BEATORAJA_OP.HAS_BPMSTOP);
-    this.activeOps.add(hasText ? BEATORAJA_OP.HAS_TEXT : BEATORAJA_OP.NO_TEXT);
-    // BGA presence — the chart's `resources.bmp` map being non-empty is the simplest signal.
-    const hasBga = Object.keys(chart.resources?.bmp ?? {}).length > 0;
-    this.activeOps.add(hasBga ? BEATORAJA_OP.HAS_BGA : BEATORAJA_OP.NO_BGA);
-    // Chart graphic presence flags. These are static metadata fields on `BeMusicMetadata`.
-    this.activeOps.add(meta.stageFile ? BEATORAJA_OP.HAS_STAGEFILE : BEATORAJA_OP.NO_STAGEFILE);
-    this.activeOps.add(meta.banner ? BEATORAJA_OP.HAS_BANNER : BEATORAJA_OP.NO_BANNER);
-    this.activeOps.add(meta.backBmp ? BEATORAJA_OP.HAS_BACKBMP : BEATORAJA_OP.NO_BACKBMP);
+    const distribution = computeBeatorajaChartNoteDistribution(chart);
+    const graph = createBeatorajaJudgeStateGraph(distribution);
+    this.judgeState = graph && { ...graph, buckets: graph.buckets.map((bucket) => [...bucket]) };
+    return beatorajaPlayChartFacts(chart, distribution);
   }
 
-  /** Stamp a built-in / per-event timer at the current `getNowMs()`. Idempotent — re-marks override. */
+  /** Stamp a built-in / per-event timer at the current `getNowMs()`. Re-marks override. */
   markTimer(timerId: number): void {
-    const now = this.getNowMs();
-    this.timerStartedAt.set(timerId, now);
-    if (BEATORAJA_ADAPTER_DIAGNOSTICS) {
-      // eslint-disable-next-line no-console
-      console.log('[beatoraja-adapter] mark timer', JSON.stringify({ timer: timerId, atMs: now }));
-    }
+    this.timerStartedAt.set(timerId, this.getNowMs());
   }
 
   /** Stamp the `startinput` timer (prop.lua `startinput = 1`). Fires when the engine input bus is ready. */
@@ -768,14 +368,11 @@ export class BeatorajaRuntimeAdapter {
     this.markTimer(TIMER_READY);
   }
 
-  /**
-   * Stamp the `play` timer (prop.lua `play = 41`) and flip the loading gates so chrome gated on
-   * `loaded` (op 81) becomes visible. Called when the engine emits `onStart`.
-   */
+  /** Stamp the `play` timer (prop.lua `play = 41`) and swap `NOW_LOADING` for `LOADED`, when the engine starts. */
   markPlay(): void {
     this.markTimer(TIMER_PLAY);
-    this.activeOps.delete(BEATORAJA_OP.NOW_LOADING);
-    this.activeOps.add(BEATORAJA_OP.LOADED);
+    this.activeOps.delete(BEATORAJA_PLAY_STARTED_OPS.off);
+    this.activeOps.add(BEATORAJA_PLAY_STARTED_OPS.on);
   }
 
   /** Stamp the `fadeout` timer (prop.lua `fadeout = 2`). Fires at chart end / interrupt. */
@@ -783,263 +380,107 @@ export class BeatorajaRuntimeAdapter {
     this.markTimer(TIMER_FADEOUT);
   }
 
-  /** Latch the current engine frame snapshot — drives text / ref content resolution. */
+  /**
+   * Stamp `TIMER_FAILED` (prop.lua `failed = 3`) for an end-of-chart fail, from the engine's `onComplete`. Once per
+   * play: a survival gauge that already failed mid-play keeps that stamp, so the fail animation is not restarted.
+   */
+  markFailed(): void {
+    this.startOnce(TIMER_FAILED);
+  }
+
+  private startOnce(timerId: number): void {
+    if (this.firedOnce.has(timerId)) return;
+    this.firedOnce.add(timerId);
+    this.markTimer(timerId);
+  }
+
+  /** Start and stop the timers a change of the play asks for. */
+  private applyTimers(changes: BeatorajaTimerChanges): void {
+    for (const id of changes.start) this.markTimer(id);
+    for (const id of changes.startOnce) this.startOnce(id);
+    for (const id of changes.stop) this.timerStartedAt.delete(id);
+  }
+
+  /** Latch the current engine frame: the score, gauge and clock the resolvers read, the score ops and frame timers. */
   applyFrame(frame: PlayerUiFramePayload): void {
     this.frame = frame;
-    // Record the frame's clock arrival in the FPS ring so `current_fps` (`BEATORAJA_NUM.CURRENT_FPS`)
-    // can derive a smoothed rate. Using `getNowMs()` (the same scene clock the timer/keyframe sampler
-    // uses) keeps the FPS readout consistent with on-screen timing — if the host throttles the
-    // ticker, `current_fps` reflects the throttle, not the wallclock.
+    this.play.score = frame.summary;
+    this.play.gauge = frame.summary.gauge;
+    this.play.clock = frame;
+    // The frame-rate readout averages the scene clock over recent frames, so a throttled ticker reads as throttled.
     this.fpsRingMs[this.fpsRingHead] = this.getNowMs();
     this.fpsRingHead = (this.fpsRingHead + 1) % this.fpsRingMs.length;
     if (this.fpsRingFilled < this.fpsRingMs.length) this.fpsRingFilled += 1;
-    this.refreshDerivedOps(frame.summary);
-    this.refreshRhythmTimer(frame.currentBeat);
-    this.refreshFailedTimer(frame.summary.gauge);
-    this.refreshEndOfNoteTimer(frame.currentBeat);
-    this.refreshGaugeMaxTimer(frame.summary.gauge);
+    this.syncScoreOps(frame.summary, frame.summary.gauge);
+    this.applyTimers(
+      resolveBeatorajaFrameTimers({
+        beat: frame.currentBeat,
+        ...(this.lastFrameBeat !== undefined ? { previousBeat: this.lastFrameBeat } : {}),
+        ...(frame.summary.gauge !== undefined ? { gauge: frame.summary.gauge } : {}),
+        ...(this.lastFrameGauge !== undefined ? { previousGauge: this.lastFrameGauge } : {}),
+        lastNoteBeats: this.lastNoteBeats,
+      }),
+    );
+    if (Number.isFinite(frame.currentBeat)) this.lastFrameBeat = frame.currentBeat;
+    this.lastFrameGauge = frame.summary.gauge?.current;
   }
 
   /**
-   * Stamp `TIMER_GAUGE_MAX_1P` (= 44) once when the 1P gauge first crosses 100%. ModernChic's
-   * `Play/lua/sp/info.lua` authors a "lamp_maxgauge" celebration animation gated on this timer
-   * — without the stamp the lamp stays at its idle keyframe even after the gauge maxes out.
-   *
-   * Idempotent — once stamped, subsequent frames don't re-fire even if the gauge dips and
-   * climbs again. Beatoraja's reference behaviour is "first reach wins"; the celebration runs
-   * once per chart.
+   * Swap the score ops of the last frame for this frame's. `P1_BAND_BORDER_OR_MORE` stays lit for the rest of the
+   * play once lit.
    */
-  private refreshGaugeMaxTimer(gauge: PlayerUiFramePayload['summary']['gauge']): void {
-    if (gauge === undefined) return;
-    if (this.gaugeMaxStamped) return;
-    if (gauge.max <= 0) return;
-    if (gauge.current >= gauge.max) {
-      this.markTimer(TIMER_GAUGE_MAX_1P);
-      this.gaugeMaxStamped = true;
+  private syncScoreOps(score: BeatorajaScoreInput, gauge: BeatorajaGaugeInput | undefined): void {
+    const next = resolveBeatorajaPlayScoreOps(score, gauge);
+    for (const op of this.scoreOps) {
+      if (op !== BEATORAJA_OP.P1_BAND_BORDER_OR_MORE && !next.includes(op)) this.activeOps.delete(op);
     }
-  }
-  private gaugeMaxStamped = false;
-
-  /**
-   * Re-stamp `TIMER_ENDOFNOTE_1P/2P` (143 / 144) when the playhead crosses the side's last
-   * note. Skins use this to trigger end-of-song reveal animations (e.g. "FULL COMBO" badges
-   * fading in once the chart's last note has been judged). Per-side and idempotent — once
-   * stamped, subsequent frames don't re-stamp even if the engine seeks backwards then forwards
-   * again.
-   *
-   * Skips sides with no notes (SP chart has `lastNoteBeatBySide[2] === undefined`); the side's
-   * endofnote timer simply never fires for those, which matches beatoraja's behavior — the
-   * authored chrome on the empty side stays in its idle state.
-   */
-  private refreshEndOfNoteTimer(currentBeat: number): void {
-    if (!Number.isFinite(currentBeat)) return;
-    for (const side of [1, 2] as const) {
-      if (this.endOfNoteStamped[side]) continue;
-      const lastBeat = this.lastNoteBeatBySide[side];
-      if (lastBeat === undefined) continue;
-      if (currentBeat >= lastBeat) {
-        this.markTimer(endOfNoteTimerId(side));
-        this.endOfNoteStamped[side] = true;
-        // FC stamping moved to `applyJudgeCombo` (combo === total). The previous trigger here
-        // fired up to a late-judge window early — a beat-passes-without-final-judge frame would
-        // see `bad === 0 && poor === 0` even though a still-pending late-press could break the
-        // combo a few frames later. The combo-equals-total path is unambiguous.
-      }
-    }
+    for (const op of next) this.activeOps.add(op);
+    this.scoreOps = next;
   }
 
-  /**
-   * Detect a mid-play instant-fail moment and stamp `TIMER_FAILED` (= 3) accordingly. HARD and
-   * DEATH gauge variants drain to 0 mid-play; the moment the gauge crosses zero is the natural
-   * trigger for the skin's authored fail-flash animation. GROOVE / EASY gauges don't reach 0
-   * during play (they bottom out at 2 with the standard `min` floor) so this detection is a
-   * no-op for them — the explicit {@link markFailed} call from the host's chart-end handler is
-   * the right path for those.
-   *
-   * Stamps once per run (`failedTimerStamped` latch). A re-clear (gauge climbs back above 0)
-   * doesn't unset the latch — once you've failed on HARD, the skin's fail visual is supposed to
-   * persist, mirroring beatoraja's authored chrome.
-   */
-  private refreshFailedTimer(gauge: PlayerUiFramePayload['summary']['gauge']): void {
-    if (gauge === undefined || this.failedTimerStamped) {
-      this.lastFrameGauge = gauge?.current;
-      return;
+  private placementOf(channel: string): BeatorajaLanePlacement {
+    let placement = this.placements.get(channel);
+    if (placement === undefined) {
+      const slot = resolveSideKeySlot(channel, this.chartPlayVariant);
+      placement = resolveBeatorajaLanePlacement(channel, this.chartPlayVariant, slot);
+      this.placements.set(channel, placement);
     }
-    const prev = this.lastFrameGauge;
-    this.lastFrameGauge = gauge.current;
-    // Only stamp on a transition into 0 — a frame that arrives at 0 right after construction
-    // (without a preceding positive reading) is treated as the load-state baseline rather than
-    // a fail event. Without this guard a chart that mounts the gameplay scene before the
-    // engine's first frame has populated the gauge would mis-fire the failed timer.
-    if (prev !== undefined && prev > 0 && gauge.current <= 0) {
-      this.markTimer(TIMER_FAILED);
-      this.failedTimerStamped = true;
-    }
+    return placement;
   }
 
-  /**
-   * Stamp `TIMER_FAILED` (prop.lua `failed = 3`) for an end-of-chart fail outcome. Hosts call
-   * this from the engine's `onComplete` handler when `summary.gauge.cleared` is `false` so the
-   * result-bound fadeout plays the failed variant of authored animations.
-   *
-   * Idempotent — repeat calls (or a host call after a mid-play HARD-gauge instant fail already
-   * stamped via {@link refreshFailedTimer}) leave the original stamp in place. The skin's fail
-   * animation runs from the FIRST stamp, which matches beatoraja's behavior.
-   */
-  markFailed(): void {
-    if (this.failedTimerStamped) return;
-    this.markTimer(TIMER_FAILED);
-    this.failedTimerStamped = true;
+  private applyLaneAction(action: BeatorajaLaneAction, channel: string): void {
+    this.applyTimers(resolveBeatorajaLaneTimers(action, this.placementOf(channel)));
   }
 
-  /**
-   * Re-stamp the rhythm timer (prop.lua `rhythm = 140`) on every beat boundary. Skins gate
-   * pulse / strobe animations on this so visual elements throb in time with the music — a
-   * `dst[]` with `loop = 0` and `cycle`-equivalent timing reads `now - timerStart[140]` and
-   * replays from t=0 every time we re-stamp.
-   *
-   * Detection is based on the integer beat advancing (`Math.floor(beat)` change) rather than
-   * sub-beat interpolation: at typical BPMs (60..240) beats happen at 1..4 Hz while
-   * `applyFrame` runs at ~60 Hz, so the integer-crossing heuristic catches every boundary
-   * within one frame's worth of jitter (≤ 16 ms — imperceptible for a pulse animation).
-   *
-   * The very first frame doesn't count as a crossing (`lastFrameBeat === undefined`); it just
-   * latches the baseline so subsequent crossings are detectable. Reverse beat motion (engine
-   * seek backwards) re-stamps too — the timer should always reflect the most recent beat
-   * boundary regardless of direction.
-   */
-  private refreshRhythmTimer(currentBeat: number): void {
-    if (!Number.isFinite(currentBeat)) return;
-    const flooredNow = Math.floor(currentBeat);
-    const flooredPrev = this.lastFrameBeat !== undefined ? Math.floor(this.lastFrameBeat) : flooredNow;
-    if (this.lastFrameBeat === undefined || flooredNow !== flooredPrev) {
-      this.markTimer(TIMER_RHYTHM);
-    }
-    this.lastFrameBeat = currentBeat;
-  }
-
-  /**
-   * Recompute summary-derived op gates and toggle them in `activeOps`. Called once per frame from
-   * `applyFrame` because the rank classification can shift mid-chart (a single PERFECT can push
-   * the EX-score across an AAA threshold). Tracking which ops we last set lets us cleanly remove
-   * the previous ones — naively `add`-ing without a corresponding `delete` would leave AA, AAA,
-   * etc. all active simultaneously after a rank-up.
-   */
-  private refreshDerivedOps(summary: PlayerUiFramePayload['summary']): void {
-    // ─── Rank ops (P1_RANK_* + generic RANK_* + NOW_*_1P) ───────────────────────────────────
-    const maxExScore = summary.total * 2;
-    const sideRank = computeRankOp(summary.exScore, maxExScore, 1);
-    const genericRank = computeGenericRankOp(summary.exScore, maxExScore);
-    if (this.lastRankOps.side !== sideRank) {
-      if (this.lastRankOps.side !== undefined) this.activeOps.delete(this.lastRankOps.side);
-      this.activeOps.add(sideRank);
-      this.lastRankOps.side = sideRank;
-    }
-    if (this.lastRankOps.generic !== genericRank) {
-      if (this.lastRankOps.generic !== undefined) this.activeOps.delete(this.lastRankOps.generic);
-      this.activeOps.add(genericRank);
-      this.lastRankOps.generic = genericRank;
-    }
-    // `NOW_*_1P` ops mirror the side rank but in the 340-347 range (separate from the 200-207
-    // `_1P_*` block). Skins that author "now playing" rank chrome gate on these.
-    const nowRank = mapSideRankToNowRank(sideRank);
-    if (this.lastRankOps.now !== nowRank) {
-      if (this.lastRankOps.now !== undefined) this.activeOps.delete(this.lastRankOps.now);
-      this.activeOps.add(nowRank);
-      this.lastRankOps.now = nowRank;
-    }
-
-    // ─── EX-score band ops (P1_BAND_0_9 .. P1_BAND_100, P1_BAND_BORDER_OR_MORE) ─────────────
-    // The active band based on EX-score / max ratio in 10% steps. Skins typically use this for
-    // an animated "you're in this band" indicator.
-    const band = computeScoreBandOp(summary.exScore, maxExScore);
-    if (this.lastRankOps.band !== band) {
-      if (this.lastRankOps.band !== undefined) this.activeOps.delete(this.lastRankOps.band);
-      this.activeOps.add(band);
-      this.lastRankOps.band = band;
-    }
-    // `P1_BAND_BORDER_OR_MORE` — sticky bit that activates once the EX-score crosses 80%
-    // (typical IIDX "border" / clear threshold). Stays on even if subsequent breaks drop below.
-    if (maxExScore > 0 && summary.exScore / maxExScore >= 0.8) {
-      this.activeOps.add(BEATORAJA_OP.P1_BAND_BORDER_OR_MORE);
-    }
-
-    // ─── *_EXIST ops ────────────────────────────────────────────────────────────────────────
-    // These are sticky once set — a single observation latches the op for the rest of the run.
-    // No need to delete; only add as new judge counters cross 0.
-    for (const op of computeJudgeExistOps(summary)) this.activeOps.add(op);
-  }
-
-  /**
-   * Fold a single engine UI command into the timer / op state. The command set is documented on
-   * {@link PlayerUiCommand}. Unknown command kinds (forward-compat) are ignored.
-   */
+  /** Fold one engine UI command into the lane timers and state. Unknown kinds are ignored. */
   applyCommand(command: PlayerUiCommand): void {
-    if (BEATORAJA_ADAPTER_DIAGNOSTICS) {
-      // eslint-disable-next-line no-console
-      console.log('[beatoraja-adapter] apply command', JSON.stringify(command));
-    }
     switch (command.kind) {
       case 'press-lane':
-        // Press: stamp KEY_ON, deactivate KEY_OFF. Beatoraja's `KeyInputProccessor` does
-        // `setTimerOn(keyOn); setTimerOff(keyOff)` symmetrically — the OFF state for the
-        // opposite timer is what hides any element gated on it (`SkinObject.prepareRegion`
-        // skips drawing when its timer is OFF). Without the deactivate, the lane laser /
-        // keybeam keyed on KEY_ON would stay visible after the player released the key
-        // because the timer's start time would still be set.
         this.pressedChannels.add(command.channel);
-        this.startLaneKeyOnTimer(command.channel);
-        this.deactivateLaneKeyOffTimer(command.channel);
+        this.applyLaneAction('press', command.channel);
         break;
       case 'release-lane':
-        // Release: stamp KEY_OFF, deactivate KEY_ON. Symmetric to press-lane.
+        // Ends a long note held on the lane too: its hold timer goes off and its body sprite back to the unheld one.
         this.pressedChannels.delete(command.channel);
-        this.startLaneKeyOffTimer(command.channel);
-        this.deactivateLaneKeyOnTimer(command.channel);
-        // Deactivate the LN-hold timer to mirror upstream `JudgeManager.java:546-547`'s
-        // `switchTimer(holdTimerId, processing != null || ...)` — when the LN sustain ends
-        // (player releases the key, or the LN reaches its tail), `state.processing` becomes
-        // `null` and the timer flips OFF. Skins gate "LN bomb" body-pulse / hold-ribbon
-        // animations on this timer (ModernChic's `bomb.lua` keys ln-bombs to
-        // `MAIN.TIMER.HOLD_1P_KEY*`); without the OFF here those animations stay glued
-        // visible after the first LN ends. The lnHoldHeldByChannel flag clears too so the
-        // body sprite flips back to the unheld variant.
-        this.deactivateLaneLnHoldTimer(command.channel);
+        this.applyLaneAction('release', command.channel);
         this.lnHoldHeldByChannel.delete(command.channel);
         break;
       case 'flash-lane': {
-        // `flash-lane` is the engine's "key was pressed" signal. It fires for every input
-        // (manual press AND autoplay note consumption), regardless of judge severity. We
-        // mirror it onto KEY_ON so autoplay's keybeams light up the same way manual play's
-        // do — the bomb sprite is fired SEPARATELY in `applyJudgeCombo` for PERFECT / GREAT
-        // verdicts only.
-        //
-        // Schedule an auto-release after `FLASH_LANE_HOLD_MS` so the laser fades like a
-        // real keystroke. Without this, autoplay would leave the laser stuck on after the
-        // first note since the engine never emits a matching `release-lane` for autoplay.
-        // Skips the auto-release if the lane gets a real `press-lane` (manual takeover) or
-        // `hold-lane-until-beat` (LN sustain) within the window — those have their own
-        // release lifecycles and clobbering them mid-hold would break visuals.
+        // Every press the engine saw, AUTO PLAY's included: the key beam flashes, then comes off on its own, unless a
+        // real press or a long note took the lane meanwhile (AUTO PLAY sends no release).
         const channel = command.channel;
-        this.startLaneKeyOnTimer(channel);
-        this.deactivateLaneKeyOffTimer(channel);
+        this.applyLaneAction('flash', channel);
         const handle = setTimeout(() => {
           this.flashReleaseHandles.delete(handle);
           if (this.pressedChannels.has(channel) || this.lnHoldHeldByChannel.has(channel)) return;
-          this.startLaneKeyOffTimer(channel);
-          this.deactivateLaneKeyOnTimer(channel);
+          this.applyLaneAction('flash-end', channel);
         }, FLASH_LANE_HOLD_MS);
         this.flashReleaseHandles.add(handle);
         break;
       }
       case 'hold-lane-until-beat':
-        this.startLaneLnHoldTimer(command.channel);
-        // Mark the lane as actively held so the LN body sprite swaps to the held variant
-        // (`note.lnBodyHeld` / `note.hcnBodyHeld`) for the duration. Cleared on
-        // `release-lane`.
+        this.applyLaneAction('hold', command.channel);
         this.lnHoldHeldByChannel.add(command.channel);
-        // Latch the channel for the upcoming LN tail verdict — see the field doc on
-        // `lnTailVerdictLatch`. Cleared in `applyJudgeCombo` when the tail's verdict fires.
         this.lnTailVerdictLatch.add(command.channel);
         break;
       case 'trigger-poor-bga':
@@ -1052,255 +493,87 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
-   * Fold one engine judge-combo publish into the side-relative judge timer + last-judge op gate.
-   * Per-side: only one of `_*p_perfect` / `_*p_great` / etc. is active at a time, so a new judge clears
-   * the previous one. FAST / SLOW are surfaced separately via the `_*p_early` / `_*p_late` ops.
+   * Fold one engine judgment into the plate's judgment and FAST / SLOW ops, the timers it starts
+   * ({@link resolveBeatorajaJudgeEffect}), the lane's latest judgment, the combo, the timings and early / late counts,
+   * the judge-state graph and the graphs' samples.
    */
   applyJudgeCombo(state: PlayerJudgeComboSignalState): void {
-    // Two distinct side semantics flow through this method:
-    //
-    //   - `judgeSide` (= `resolveJudgePlate`): which judge / combo PLATE in the skin authoring
-    //     does this verdict belong to. SP / DP have 2 plates (1P / 2P). POPN-9 authors THREE
-    //     plates (`play9.json` `id: 2010/2011/2012`, `index: 0/1/2`) over a single playfield,
-    //     dispatched by lane group per upstream `JudgeManager.notifyJudge:700`
-    //     (`judgeindex = lane / (lanelength / judgenow.length)`). Drives the per-plate timers
-    //     (`judge_*p` = 46/47/247, `combo_*p` = 446/447/448) and the per-plate verdict ops
-    //     (PERFECT / GREAT / GOOD / EARLY / LATE — see `judgeOpForKind`).
-    //
-    //   - `laneSide` (= `resolveSide`): which PLAYER does this verdict belong to. SP / DP keep
-    //     the 1P / 2P distinction; POPN-9 collapses onto 1P (single-side play). Drives the
-    //     globally-per-player chrome — full combo (`fullcombo_*p`), end-of-note, gauge-increase
-    //     sparkle, and the per-(side, lane) judge ref ring (`JUDGE_LANE_REF_*P_BASE`, which only
-    //     has 1P / 2P banks upstream).
-    const judgeSide: BeatorajaSide = state.channel ? this.resolveJudgePlate(state.channel) : 1;
-    const laneSide: BeatorajaSide = state.channel ? this.resolveSide(state.channel) : 1;
-    const op = judgeOpForKind(judgeSide, state.judge);
-    const sideState = this.judgeState[judgeSide];
-    if (sideState.lastJudgeOp !== undefined && sideState.lastJudgeOp !== op) {
-      this.activeOps.delete(sideState.lastJudgeOp);
+    const channel = state.channel;
+    const placement = channel !== undefined ? this.placementOf(channel) : undefined;
+    const effect = resolveBeatorajaJudgeEffect(state, placement, this.frame?.summary.total ?? 0);
+    const plate = placement?.plate ?? 1;
+    const plateOps = this.plates[plate];
+    if (plateOps.lastJudgeOp !== undefined && plateOps.lastJudgeOp !== effect.judgeOp) {
+      this.activeOps.delete(plateOps.lastJudgeOp);
     }
-    if (op !== undefined) {
-      this.activeOps.add(op);
-      sideState.lastJudgeOp = op;
+    if (effect.judgeOp !== undefined) {
+      this.activeOps.add(effect.judgeOp);
+      plateOps.lastJudgeOp = effect.judgeOp;
     }
-    // Latch the per-side live combo at the moment of judge — read by `resolveNumberValue`
-    // for `SYNTHETIC_NUM_JUDGE_COMBO_*P`. Mirrors upstream `JudgeManager.notifyJudge`'s
-    // `judgecombo[judgeindex] = getCourseCombo()` (`JudgeManager.java:710`). Combo-break
-    // verdicts (BAD / POOR) intentionally stamp `0` so the popup reads "broke at 0".
-    sideState.lastJudgeCombo = state.combo;
-    // FAST / SLOW gate (`_*p_early = 1242 / 1262 / 1362`, `_*p_late = 1243 / 1263 / 1363`) —
-    // beatoraja's default play skin gates a "FAST" / "SLOW" badge on these ops so the player
-    // sees which side of the judge window their hit landed on. Mirrors the `lastJudgeOp` pattern:
-    // only one of EARLY / LATE per plate stays active at a time; the next judge with a delta
-    // swaps them. Hits without a `deltaMs` (READY publish, AUTO PLAY confirmation, mine BAD)
-    // leave the previous gate untouched — beatoraja keeps the badge until the NEXT judged hit.
-    //
-    // Sign convention matches our engine: `deltaMs > 0` = late (player pressed AFTER the
-    // note's exact time → SLOW); `deltaMs < 0` = early (BEFORE → FAST). A `deltaMs === 0`
-    // perfect-on-time hit clears any prior gate without setting a new one.
-    if (typeof state.deltaMs === 'number' && Number.isFinite(state.deltaMs)) {
-      const fastSlowOp = pickFastSlowOp(judgeSide, state.deltaMs);
-      if (sideState.lastFastSlowOp !== undefined && sideState.lastFastSlowOp !== fastSlowOp) {
-        this.activeOps.delete(sideState.lastFastSlowOp);
+    // The judge popup's combo: the live combo at the plate's latest judgment (0 after a break), not the max.
+    this.play.plateCombos[plate - 1] = state.combo;
+    if (effect.timing !== undefined) {
+      const fastSlowOp = effect.timing.fastSlowOp;
+      if (plateOps.lastFastSlowOp !== undefined && plateOps.lastFastSlowOp !== fastSlowOp) {
+        this.activeOps.delete(plateOps.lastFastSlowOp);
       }
-      if (fastSlowOp !== undefined) {
-        this.activeOps.add(fastSlowOp);
-      }
-      sideState.lastFastSlowOp = fastSlowOp;
+      if (fastSlowOp !== undefined) this.activeOps.add(fastSlowOp);
+      plateOps.lastFastSlowOp = fastSlowOp;
     }
-    this.markTimer(judgeTimerId(judgeSide));
-
-    // Restart the plate's combo timer (prop.lua `combo_1p = 446` / `combo_2p = 447` /
-    // `combo_3p = 448`) on every combo-keeping verdict. Skins use this to drive the combo
-    // number's pop-in / flicker animation — the keyframe sampler reads
-    // `now - timerStart[combo_*p]` so re-stamping makes the animation replay from t=0 on every
-    // successful hit. PERFECT / GREAT / GOOD all advance the combo; BAD / POOR / MISS break it
-    // (and intentionally DON'T restart the timer — beatoraja keeps the combo number's idle
-    // pose during a break, then resumes the animation from the next successful hit).
-    if (isComboAdvanceJudge(state.judge)) {
-      this.markTimer(comboTimerId(judgeSide));
-    }
-
-    // Fire the lane bomb timer ONLY for clean hits (PERFECT / GREAT). The bomb is a positive-
-    // feedback explosion sprite — beatoraja's reference themes intentionally don't fire it on
-    // GOOD / BAD / POOR / MISS / empty-press, so the player gets a clear visual contrast
-    // between "clean hit" and "off-timing hit". The engine's `flash-lane` command alone can't
-    // gate this (it fires on every press regardless of judgement), so we drive bomb from the
-    // judge-publish path here. `state.channel` carries the lane the engine matched, so the
-    // bomb stamps the right per-lane timer (`bomb_*p_keyN` = 50+lane / 60+lane / 1000+lane).
-    if (isCleanHitJudge(state.judge) && state.channel !== undefined) {
-      this.startLaneBombTimer(state.channel);
-    }
-
-    // LN tail verdict: re-stamp the LN-hold timer (`hold_*p_keyN` = 70..79 / 80..89) so
-    // skins that gate their LN bomb on that timer get a fresh animation on the tail. Upstream
-    // `JudgeManager` stamps the HOLD timer on every LN tail verdict; we synthesize the
-    // equivalent here via `lnTailVerdictLatch`, which was set on `hold-lane-until-beat` at
-    // LN head time and survives the tail's preceding `release-lane`.
-    //
-    // ModernChic's `Play/lua/sp/bomb.lua:82-84` declares its lnbomb sprite with
-    // `timer = MAIN.TIMER.HOLD_1P_KEY*` (= 71..77) and `cycle = 160`. Without this re-stamp
-    // the timer's last `t=0` mark was at LN HEAD time — the 160 ms cycle elapsed long before
-    // the tail, so the lnbomb sprite was past frame 8 (= invisible) by the time the tail
-    // landed. User-reported symptom: LN tail bomb didn't show on ModernChic (GdbG was fine).
-    // GdbG's lnbomb declaration uses the same timer IDs but a longer cycle, so its head-time
-    // stamp was still within the visible window when the tail arrived — hence GdbG's tail
-    // bombs appeared even without this synthesis.
-    //
-    // The companion combo-timer re-stamp at line 1005 (`comboTimerId(side)`) already runs
-    // for LN tail verdicts (they're combo-advancing judges), so ModernChic's combo digit
-    // animation also resyncs at the tail — addresses the user's matching "ModernChic combo
-    // doesn't tick up at the LN tail" report in tandem with this change.
-    if (state.channel !== undefined && this.lnTailVerdictLatch.has(state.channel)) {
-      this.startLaneLnHoldTimer(state.channel);
-      this.lnTailVerdictLatch.delete(state.channel);
-      // Auto-release the re-stamped hold timer so its `loop = 0` consumers (ModernChic
-      // lnbomb, GdbG lnbomb — both omit `loop` and thus default to 0 = repeating) stop
-      // animating once their bomb cycle finishes. Mirrors upstream's per-frame
-      // `switchTimer(holdTimerId, processing != null)` (`JudgeManager.java:546-547`) which
-      // flips the timer OFF on the tick after the tail's `processing` clears. Without this,
-      // a re-stamped tail-time HOLD timer stays "on" forever and the lnbomb animation
-      // loops indefinitely. User-reported symptom: in AUTO PLAY the LN bomb sprite stayed
-      // visible after the LN finished judging.
-      const channel = state.channel;
+    this.applyTimers(effect.timers);
+    if (channel !== undefined && this.lnTailVerdictLatch.has(channel)) {
+      // A long note's tail: the hold bomb plays again, then its timer goes off as beatoraja's does.
+      this.lnTailVerdictLatch.delete(channel);
+      this.applyLaneAction('hold', channel);
       const handle = setTimeout(() => {
         this.lnTailBombReleaseHandles.delete(handle);
-        this.deactivateLaneLnHoldTimer(channel);
+        this.applyLaneAction('hold-end', channel);
       }, LN_TAIL_BOMB_HOLD_MS);
       this.lnTailBombReleaseHandles.add(handle);
     }
-
-    // Update the per-(side, lane) most-recent-judge ring. Drives the keybeam imageset (`ref =
-    // JUDGE_LANE_REF_*P_BASE + lane`) and the default skin's 4-entry bomb imageset (`{ bomb1,
-    // bomb2, bomb1, bomb3 }`) — both pick a frame based on the verdict's judgeIndex+1, with the
-    // renderer's clamp degrading high-index verdicts to whatever the imageset's last frame is.
-    //
-    // A new verdict ALWAYS overwrites the previous one on the same lane (no PERFECT-only
-    // filter). The 2-frame keybeam clamps any judge to frame 1 ("you scored, here's a flash"),
-    // the 4-frame keybeam distinguishes PG vs GR explicitly, and the bomb imageset relies on
-    // its timer (clean-hit-only) to gate visibility regardless of the ref value.
-    //
-    // Only judgements with a known channel update the ring; READY / AUTO / global ticks all
-    // leave channel undefined and skip the update.
-    if (state.channel !== undefined) {
-      const lane = this.resolveLane(state.channel);
-      if (lane !== undefined && lane >= 0 && lane < JUDGE_LANE_REF_RANGE) {
-        const judgeIndex = judgeKindToIndex(state.judge);
-        if (judgeIndex >= 0) {
-          // Use `laneSide` (1P / 2P player), NOT `judgeSide` (per-plate 1/2/3). Upstream's
-          // per-lane judge ref ops only have 1P / 2P banks (`JUDGE_LANE_REF_*P_BASE`), so the
-          // POPN-9 third plate's verdicts land in the 1P bank along with the other plates.
-          this.lastJudgeOnLane[laneSide][lane] = { kind: judgeIndex, at: this.getNowMs() };
-        }
-      }
+    const lane = placement?.lane;
+    if (
+      placement !== undefined &&
+      lane !== undefined &&
+      lane < JUDGE_LANE_REF_RANGE &&
+      effect.laneJudge !== undefined
+    ) {
+      this.lastJudgeOnLane[placement.side][lane] = { kind: effect.laneJudge, at: this.getNowMs() };
     }
-
-    // Re-stamp the gauge-increase timer on each clean hit. ModernChic's
-    // `lamp_gaugeinclease` cycles a 2-frame sparkle at `cycle = 50ms` keyed off this stamp;
-    // dirty hits (GOOD / BAD / POOR / MISS) typically don't gain gauge so we skip them.
-    // Side-aware (1P / 2P) so DP charts get the right per-side feedback; POPN-9 has only the
-    // 1P-side gauge timer authored upstream so `laneSide` correctly collapses there.
-    if (isCleanHitJudge(state.judge)) {
-      this.markTimer(laneSide === 2 ? TIMER_GAUGE_INCREASE_2P : TIMER_GAUGE_INCREASE_1P);
-    }
-
-    // Latch the running combo for `prop.lua num.combo = 104` resolution. The engine emits the
-    // post-judge combo value on every publish — for combo-break verdicts (BAD / POOR) it's `0`,
-    // otherwise it's the new running combo. `maxCombo` tracks the highest value seen this run for
-    // `num.maxcombo2 = 105`.
-    this.runningCombo = state.combo;
-    if (state.combo > this.maxCombo) this.maxCombo = state.combo;
-
-    // Stamp `TIMER_FULLCOMBO_*P` (= 48 / 49) the moment the running combo reaches the chart's
-    // total note count. The previous trigger (`refreshEndOfNoteTimer`'s `currentBeat >= lastBeat`
-    // check) fired at the LAST NOTE'S BEAT, which is up to one late-judge-window early — a player
-    // who was still going to land a late-press POOR within the next ~250 ms would have the FC
-    // animation stamped despite the run ending in a combo break. Tying the stamp directly to
-    // `state.combo === total` is unambiguous: combo can only reach total when every note has
-    // been judged AND the last judgement was a combo-keeper, so FC is genuinely achieved.
-    //
-    // `summary.total` is the chart's full note count (sourced from the engine's per-frame
-    // payload); we wait for at least one frame so this is populated before the first judgement
-    // can fire FC. Charts with `total === 0` (empty / parser edge case) skip the stamp.
-    const total = this.frame?.summary.total ?? 0;
-    // FC fires per PLAYER (laneSide), not per judge plate — upstream only authors
-    // `TIMER_FULLCOMBO_1P/2P` (no `_3P`). POPN-9 collapses onto 1P.
-    if (total > 0 && state.combo >= total && !this.fullComboStamped[laneSide]) {
-      this.markTimer(laneSide === 2 ? TIMER_FULLCOMBO_2P : TIMER_FULLCOMBO_1P);
-      this.fullComboStamped[laneSide] = true;
-    }
-
-    // Capture the signed timing delta when the engine supplied one. Two sinks:
-    //   1. `recentTimings` — bounded ring drives the live `timingvisualizer[]` decay tail.
-    //   2. `allTimings` — unbounded full-run history feeds the result scene's
-    //      `timingdistributiongraph[]` histogram. Both sample only the same valid-delta events
-    //      (READY / AUTO PLAY / mine BAD all leave deltaMs undefined and skip both sinks).
+    this.play.combo = state.combo;
+    if (state.combo > this.play.maxCombo) this.play.maxCombo = state.combo;
     if (typeof state.deltaMs === 'number' && Number.isFinite(state.deltaMs)) {
       const sample = { deltaMs: state.deltaMs, kind: state.judge };
       this.recentTimings.push(sample);
       if (this.recentTimings.length > RECENT_TIMINGS_CAPACITY) this.recentTimings.shift();
       this.allTimings.push(sample);
-      // Per-verdict early / late counter increment. Sign convention: `deltaMs > 0` =
-      // late (player pressed AFTER the note's exact time), `< 0` = early. `=== 0` (perfect-
-      // on-time) is rare but doesn't increment either bucket. Default `play5.json`'s
-      // judge-count panel reads these via `EARLY_*` / `LATE_*` refs (410-422).
-      const bucket = this.earlyLateCounts[state.judge as keyof typeof this.earlyLateCounts];
-      if (bucket !== undefined) {
-        if (state.deltaMs < 0) bucket.early += 1;
-        else if (state.deltaMs > 0) bucket.late += 1;
+      this.play.lastJudgeDeltaMs = state.deltaMs;
+      const count = this.play.earlyLate[state.judge as keyof PlayInput['earlyLate']];
+      if (count !== undefined) {
+        if (state.deltaMs < 0) count.early += 1;
+        else if (state.deltaMs > 0) count.late += 1;
       }
     }
-    // Per-second judge-state bucket update for `judgegraph[]` `type=1` (TYPE_JUDGE).
-    // Mirrors upstream `SkinNoteDistributionGraph.updateData()`'s incremental "note moves
-    // from state 0 (unjudged) to state N (PG/GR/GD/BD/PR)" behaviour. Runs on every
-    // judge publish (READY / AUTO / unknown kinds skip via `judgeStateIndex < 1`).
-    this.updateJudgeStateBucket(state);
-
-    // Append a polyline sample. Mirrors what `PixiGameplayView.publishJudge` does on the LR2
-    // path — a `(progress, exScore)` / `(progress, gauge%)` pair captured at every judge so the
-    // result polyline reflects the chart's structure (dense in busy stretches, sparse in calm
-    // ones) rather than wallclock-uniform sampling.
+    if (this.judgeState !== undefined) {
+      // The note's chart time: the frame's time less the judgment's offset (beatoraja reads each note's state).
+      const noteMs = (this.frame?.currentSeconds ?? 0) * 1000 - (state.deltaMs ?? 0);
+      const move = resolveBeatorajaJudgeStateMove(this.judgeState, state.judge, noteMs);
+      if (move !== undefined) {
+        const bucket = this.judgeState.buckets[move.bucket]!;
+        bucket[0] = bucket[0]! - 1;
+        bucket[move.slot] = bucket[move.slot]! + 1;
+      }
+    }
+    // One graph sample per judgment, so the graphs are dense where the chart is.
     const frame = this.frame;
     if (frame !== null) {
       const progress = frame.totalSeconds > 0 ? Math.max(0, Math.min(1, frame.currentSeconds / frame.totalSeconds)) : 0;
       this.scoreHistory.push({ progress, exScore: frame.summary.exScore });
-      const gauge = frame.summary.gauge;
-      const gaugePct = gauge !== undefined && gauge.max > 0 ? (gauge.current / gauge.max) * 100 : 0;
-      this.gaugeHistory.push({ progress, value: gaugePct });
-    }
-
-    // Cumulative per-kind count for the diagnostic log — useful when investigating reports
-    // like "GREAT and POOR are flickering" or "GOOD / BAD never appear" because the histogram
-    // exposes WHAT verdicts the engine actually emitted vs the user's perception. Bucketed
-    // case-insensitive on the kind string.
-    const kindKey = state.judge.toUpperCase();
-    this.judgeKindCounts[kindKey] = (this.judgeKindCounts[kindKey] ?? 0) + 1;
-    if (BEATORAJA_ADAPTER_DIAGNOSTICS) {
-      // eslint-disable-next-line no-console
-      console.log(
-        '[beatoraja-adapter] apply judge',
-        JSON.stringify({
-          judgeSide,
-          laneSide,
-          kind: state.judge,
-          op,
-          combo: state.combo,
-          maxCombo: this.maxCombo,
-          channel: state.channel,
-          deltaMs: state.deltaMs,
-          // Snapshot the running per-kind histogram so a single log line carries enough context
-          // to diagnose flicker / missing-kind reports without needing to scan the whole stream.
-          counts: { ...this.judgeKindCounts },
-        }),
-      );
+      this.gaugeHistory.push({ progress, value: beatorajaGaugePercent(frame.summary.gauge) });
     }
   }
 
-  /**
-   * Snapshot the polyline histories accumulated this run. Returns frozen copies so consumers
-   * can't mutate adapter state. Used by gameplay's `onComplete` hand-off to seed the result
-   * scene's polyline-graph renderer.
-   */
+  /** Copies of the graphs and timings of the play, for the result scene. */
   getResultHistory(): {
     scoreHistory: ReadonlyArray<{ progress: number; exScore: number }>;
     gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
@@ -1314,181 +587,76 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
-   * Mutable handle the skin view consumes per frame. The same context object and `activeOps` Set
-   * persist across calls (no per-frame closure/object allocation); `nowMs` and set membership are
-   * refreshed before returning.
+   * The context the skin view reads every frame: the same object and op set each time, with the cover ops, the clock
+   * and `nowMs` brought up to date.
    */
   getRenderContext(): BeatorajaRenderContext {
-    this.refreshCoverOps();
-    this.refreshGaugeMaxOp();
+    const changing =
+      this.coverLastChangedAtMs !== undefined && this.getNowMs() - this.coverLastChangedAtMs < COVER_CHANGING_WINDOW_MS;
+    const coverOps = resolveBeatorajaCoverOps(this.play.cover, changing);
+    for (const op of BEATORAJA_COVER_OPS) {
+      if (coverOps.includes(op)) this.activeOps.add(op);
+      else this.activeOps.delete(op);
+    }
+    this.refreshClock();
     this.renderContext.nowMs = this.getNowMs();
     return this.renderContext;
   }
 
-  /**
-   * Toggle `BEATORAJA_OP.GAUGE_NOW_AT_MAX_*P` based on the live groove-gauge percentage.
-   * Beatoraja's `SkinJudge.prepare()` consults `gauge.isMax()` directly to decide whether the
-   * `judge[6]` fullgauge-PG substitute should replace the standard `judgef-pg` slot (audit
-   * 1.2). Beatoraja itself doesn't expose this state through an OPTION code — we synthesize
-   * one so the judge expander can use the standard `op[]` gating machinery instead of a
-   * parallel substitute path.
-   *
-   * The op is transient: ON while the gauge is currently at max, OFF when it dips below.
-   * Distinct from `TIMER_GAUGE_MAX_1P` (which fires once on FIRST max-cross and stays
-   * stamped for the rest of the chart, even if the gauge later falls).
-   */
-  private refreshGaugeMaxOp(): void {
-    const pct = this.resolveGaugePercent();
-    if (pct >= 100) this.activeOps.add(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
-    else this.activeOps.delete(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
-    // 2P-side gauge state isn't currently tracked — battle / DP variants can plumb a separate
-    // gauge handle through if and when 2P play lands. Until then, leave the 2P op unset.
+  /** The wall clock, the time running and the frame rate the clock readouts show. */
+  private refreshClock(): void {
+    const now = new Date();
+    this.play.wallClock = beatorajaWallClockOf(now);
+    this.play.operatingMs = now.getTime() - this.bootMs;
+    this.play.fps = this.currentFps();
+  }
+
+  /** Frames per second over the frames in the ring (N stamps bracket N - 1 intervals); 0 with fewer than two. */
+  private currentFps(): number {
+    if (this.fpsRingFilled < 2) return 0;
+    const length = this.fpsRingMs.length;
+    const newest = this.fpsRingMs[(this.fpsRingHead - 1 + length) % length]!;
+    const oldest = this.fpsRingMs[(this.fpsRingHead - this.fpsRingFilled + length) % length]!;
+    const spanSec = (newest - oldest) / 1000;
+    return spanSec > 0 ? Math.round((this.fpsRingFilled - 1) / spanSec) : 0;
   }
 
   /**
-   * Toggle `BEATORAJA_OP.LANECOVER1_ON` / `LIFT1_ON` based on whichever ratio is non-zero, and
-   * keep `LANECOVER1_CHANGING` lit for {@link COVER_CHANGING_WINDOW_MS} after the player's last
-   * adjustment. Authors gate per-cover percentage popups on `op = {270}` (the changing op) so the
-   * popup briefly appears whenever the player nudges the cover and fades out otherwise.
-   */
-  private refreshCoverOps(): void {
-    if (this.lanecoverRatio > 0) this.activeOps.add(BEATORAJA_OP.LANECOVER1_ON);
-    else this.activeOps.delete(BEATORAJA_OP.LANECOVER1_ON);
-    if (this.liftRatio > 0) this.activeOps.add(BEATORAJA_OP.LIFT1_ON);
-    else this.activeOps.delete(BEATORAJA_OP.LIFT1_ON);
-    const changing =
-      this.coverLastChangedAtMs !== undefined && this.getNowMs() - this.coverLastChangedAtMs < COVER_CHANGING_WINDOW_MS;
-    if (changing) this.activeOps.add(BEATORAJA_OP.LANECOVER1_CHANGING);
-    else this.activeOps.delete(BEATORAJA_OP.LANECOVER1_CHANGING);
-  }
-
-  /**
-   * Resolve a `SkinProperty.OFFSET_*` id into the player's current shift for that slot.
-   *
-   * `OFFSET_LIFT` (id `3`) is computed from the live {@link liftRatio} so that dragging the lift
-   * slider immediately propagates to the hidden-cover `disapearLine` linkage and any
-   * `destination[].offsets = {3}` author-shift. Other slots fall back to whatever was pushed via
-   * {@link setOffset}; if nothing was, returns `undefined` (the destination renderer treats this
-   * as `ZERO_BEATORAJA_OFFSET`).
+   * The shift of a `SkinProperty.OFFSET_*` id: the play's live value for the LIFT, HIDDEN+ and the judge word shift
+   * ({@link writeBeatorajaPlayOffset}), else what the host set with {@link setOffset} (`undefined` reads as no shift).
    */
   resolveOffset(offsetId: number): Readonly<BeatorajaSkinOffsetValue> | undefined {
-    // Synthetic judge-word-shift offset (= `judge[].shift` honor path). Mirrors upstream
-    // `SkinJudge.java:108-109`:
-    //
-    //     nowCount.prepare(time, state, combo, nowJudge.region.x, nowJudge.region.y);
-    //     nowJudge.region.x += shift ? -nowCount.getLength() / 2 : 0;
-    //
-    // Where `nowCount.getLength() = (region.width + space) * (currentImages.length - shiftbase)`
-    // = the visible combo digits' total pixel width (per-cell width + space, times visible
-    // digit count). Shift is applied to `nowJudge.region.x` ONLY — the combo digits
-    // themselves stay where they were prepared (= un-shifted parent.x + child.x).
-    //
-    // Implementation: the synthetic offset id (20001 / 20002) is appended to judgef-*
-    // destinations during `expandBeatorajaJudgeDestinations` ONLY when `judge.shift = true`,
-    // and the standard offset-summing path in `combineBeatorajaOffsets` adds our resolved
-    // value to the keyframe's x. Same observable effect as upstream's inline shift.
-    if (offsetId === 20001 || offsetId === 20002) {
-      // Synthetic per-side judge-word-shift offset; only 1P (20001) / 2P (20002) are addressable
-      // upstream — the POPN-9 third plate doesn't author `judge.shift = true` (its digit width
-      // already fits the per-plate 140-px rect), so this stays narrowed to `1 | 2`.
-      const side: 1 | 2 = offsetId === 20001 ? 1 : 2;
-      // `maxCombo` matches what ref:75 (BEATORAJA_NUM.MAXCOMBO_NOW / BEST_MAXCOMBO_LIVE)
-      // displays in the digit row — same value the combo number element renders.
-      const combo = this.maxCombo;
-      const digitCount = combo <= 0 ? 1 : Math.floor(Math.log10(combo)) + 1;
-      const { width, space } = this.judgeComboMetrics[side];
-      const shiftPx = ((width + space) * digitCount) / 2;
-      // Negative x shifts the judge word LEFT in skin coords.
-      return this.liveOffset(offsetId, -shiftPx, 0, 0);
+    let live = this.liveOffsets.get(offsetId);
+    if (live === undefined) {
+      live = { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 };
+      this.liveOffsets.set(offsetId, live);
     }
-    if (offsetId === 3) {
-      // OFFSET_LIFT — derived live from `liftRatio`, scaled by the skin's lane height so
-      // `liftRatio = 1` shifts the cover edge by exactly one lane. We let the manual
-      // `setOffset(3, ...)` path override only when no live ratio is set (= 0); once the player
-      // nudges the lift slider, this branch always wins. Other axes default to 0 / 255.
-      if (this.liftRatio !== 0) {
-        // alpha=0 = no change (additive default). Previously 255 was the multiplicative
-        // no-op default; matched the old offset semantics but became a +1.0 brightness
-        // delta after the alpha-additive switch.
-        return this.liveOffset(offsetId, 0, this.liftRatio * -this.laneHeight, 0);
-      }
-    }
-    if (offsetId === 5) {
-      // OFFSET_HIDDEN_COVER — mirrors `LaneRenderer.java:282-296`:
-      //
-      //   if (enabled) {
-      //     hidden.a = 0;
-      //     hidden.y = (1 - lift) * ratio * laneHeight       // when lift active
-      //              | ratio * laneHeight                    // when lift inactive
-      //   } else {
-      //     hidden.a = -255;
-      //   }
-      //
-      // The `a = -255` additive delta drops the cover's keyframe alpha (typically 1.0) to
-      // 0 — invisible. Default disabled state hides the cover until the player toggles it
-      // on via {@link setHiddenCover}.
-      if (!this.hiddenEnabled) {
-        return this.liveOffset(offsetId, 0, 0, -255);
-      }
-      // Negative y in libGDX-Y-UP shifts the cover edge UPWARD (toward the top of the lane).
-      // The `(1 - lift)` factor pulls the cover toward the lift edge as the lift rises.
-      const liftFactor = this.liftRatio !== 0 ? 1 - this.liftRatio : 1;
-      return this.liveOffset(offsetId, 0, this.hiddenRatio * liftFactor * -this.laneHeight, 0);
-    }
-    return this.offsets.get(offsetId);
+    return writeBeatorajaPlayOffset(offsetId, this.play, live) ? live : this.offsets.get(offsetId);
   }
 
   /**
-   * The value of a live offset (judge shift, lift, hidden cover), filled into one object per id: `resolveOffset` runs
-   * for every element carrying the id every frame, and its callers read the value at once (`combineBeatorajaOffsets`)
-   * rather than keep it.
-   */
-  private liveOffset(offsetId: number, x: number, y: number, a: number): Readonly<BeatorajaSkinOffsetValue> {
-    let value = this.liveOffsets.get(offsetId);
-    if (value === undefined) {
-      value = { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 };
-      this.liveOffsets.set(offsetId, value);
-    }
-    value.x = x;
-    value.y = y;
-    value.a = a;
-    return value;
-  }
-
-  private readonly liveOffsets = new Map<number, BeatorajaSkinOffsetValue>();
-
-  /**
-   * Push a value for a `SkinProperty.OFFSET_*` id. Called by the host whenever the player drags
-   * the matching slider (lift / lanecover / hidden-cover). Passing a partial object merges with
-   * the previous value — fields the caller doesn't touch stay at their last known value, which
-   * matches beatoraja's behavior of letting authors enable specific axes via the offset's
-   * authored `(x, y, w, h, r, a)` mask.
+   * Set an offset by id (a host slider). A partial value keeps the fields it leaves out at their last value; alpha
+   * defaults to 0, no change.
    */
   setOffset(offsetId: number, value: Readonly<Partial<BeatorajaSkinOffsetValue>>): void {
     const previous = this.offsets.get(offsetId);
-    const merged: BeatorajaSkinOffsetValue = {
+    this.offsets.set(offsetId, {
       x: value.x ?? previous?.x ?? 0,
       y: value.y ?? previous?.y ?? 0,
       w: value.w ?? previous?.w ?? 0,
       h: value.h ?? previous?.h ?? 0,
       r: value.r ?? previous?.r ?? 0,
-      // Default alpha delta = 0 (additive no-op), matching the new
-      // `ZERO_BEATORAJA_OFFSET.a = 0` convention. The previous `?? 255` default was a
-      // multiplicative no-op under the old math but is now a maximum-brightness +1.0 delta.
       a: value.a ?? previous?.a ?? 0,
-    };
-    this.offsets.set(offsetId, merged);
+    });
   }
 
   /**
-   * Resolve a `text[].ref` op-code into the string the skin should render. Maps prop.lua's `text` block
-   * onto the parsed chart (when supplied) — title / artist / genre / subtitle / fulltitle / etc. Codes
-   * the adapter doesn't surface return `undefined` and the corresponding text node renders empty.
+   * A `text[].ref` string: the course stage titles, the chart's song texts and the skin's own
+   * ({@link resolveBeatorajaPlayText}). Without a chart every text renders empty.
    */
   resolveTextContent(refOp: number): string | undefined {
-    const chart = this.chart;
-    if (chart === undefined) return undefined;
-    const value = this.resolveTextContentInner(refOp, chart);
+    if (this.chart === undefined) return undefined;
+    const value = resolveBeatorajaPlayText(refOp, this.texts);
     if (value === undefined && !this.unresolvedTextRefs.has(refOp)) {
       this.unresolvedTextRefs.add(refOp);
       // eslint-disable-next-line no-console
@@ -1500,96 +668,24 @@ export class BeatorajaRuntimeAdapter {
     return value;
   }
 
-  private resolveTextContentInner(refOp: number, chart: BeMusicJson): string | undefined {
-    const meta = chart.metadata;
-    // Sub-artist source covers both formats: bmson `info.subartists[]` (joined with spaces) AND
-    // BMS `#SUBARTIST` (which the parser drops into `metadata.extras.SUBARTIST` since it isn't
-    // promoted to a typed metadata field). Hosts that need structured access can post-process
-    // bmson entries via `parseBmsonSubartist`.
-    const subartist = extractChartSubartist(chart);
-    const courseText = this.courseInfo !== undefined ? resolveBeatorajaCourseText(refOp, this.courseInfo) : undefined;
-    if (courseText !== undefined) return courseText;
-    switch (refOp) {
-      case BEATORAJA_TEXT.TITLE:
-        return meta.title ?? '';
-      case BEATORAJA_TEXT.SUBTITLE:
-        return meta.subtitle ?? '';
-      case BEATORAJA_TEXT.FULLTITLE:
-        return joinNonEmpty(meta.title, meta.subtitle);
-      case BEATORAJA_TEXT.GENRE:
-        return meta.genre ?? '';
-      case BEATORAJA_TEXT.ARTIST:
-        return meta.artist ?? '';
-      case BEATORAJA_TEXT.SUBARTIST:
-        return subartist;
-      case BEATORAJA_TEXT.FULLARTIST:
-        return joinNonEmpty(meta.artist, subartist);
-      // Skin metadata + directory don't live on the chart — the host provides them via the
-      // `skinHeader` / `directoryLabel` adapter options. Returning empty when those weren't
-      // wired keeps the chrome neutral instead of leaking `undefined` through the resolver.
-      case BEATORAJA_TEXT.SKIN_NAME:
-        return this.skinHeaderName ?? '';
-      case BEATORAJA_TEXT.SKIN_AUTHOR:
-        return this.skinHeaderAuthor ?? '';
-      case BEATORAJA_TEXT.DIRECTORY:
-        return this.directoryLabel ?? '';
-      default:
-        return undefined;
-    }
-  }
-
   /**
-   * Resolve an `image[].ref` / `imageset[].ref` op-code into the frame index the skin should pick
-   * from the cell strip / sub-image array. The default `0` keeps lamp / clear-state icons on their
-   * initial frame; once gauge / lamp / FC state is wired through state signals, this fans out to
-   * the matching cell.
-   *
-   * Wired ranges:
-   *   - `500..509` (1P) / `510..519` (2P) — per-lane most-recent-judge gate. Drives the keybeam
-   *     and bomb imagesets (`ref = value_judge(i) = base + lane`). Returns `judgeIndex + 1`
-   *     when the lane saw a verdict within {@link KEYBEAM_PERFECT_WINDOW_MS} of `getNowMs()`,
-   *     `0` otherwise (= no recent judge). The renderer clamps to `images.length - 1`, so:
-   *
-   *       - 2-frame imagesets (default 7K's `{ keybeam-w, keybeam-w-pg }`) collapse any
-   *         judge to frame 1 (= "you scored a hit").
-   *       - 4-frame imagesets (default 9K's `{ keybeam-w, keybeam-w-pg, keybeam-w-gr,
-   *         keybeam-w-gr }`) distinguish PG (frame 1) and GR (frame 2); GD/BD/PR/MS clamp
-   *         to frame 3 (which the author intentionally aliases to GR's image).
-   *
-   *     judgeIndex follows beatoraja's enum: 0=PG, 1=GR, 2=GD, 3=BD, 4=PR, 5=MS. Lane 0 is
-   *     scratch; 1..7 are keys 1..7; 8/9 are 9-key extensions.
+   * An `image[].ref` / `imageset[].ref` frame: the key beam and bomb images of each lane's latest judgment (refs
+   * 500-519, {@link beatorajaLaneJudgeImage}); 0 for any other ref.
    */
   resolveRefValue(refOp: number): number {
-    if (refOp >= JUDGE_LANE_REF_1P_BASE && refOp < JUDGE_LANE_REF_1P_BASE + JUDGE_LANE_REF_RANGE) {
-      return this.resolveLaneJudgeRef(1, refOp - JUDGE_LANE_REF_1P_BASE);
-    }
-    if (refOp >= JUDGE_LANE_REF_2P_BASE && refOp < JUDGE_LANE_REF_2P_BASE + JUDGE_LANE_REF_RANGE) {
-      return this.resolveLaneJudgeRef(2, refOp - JUDGE_LANE_REF_2P_BASE);
-    }
-    return 0;
-  }
-
-  private resolveLaneJudgeRef(side: BeatorajaSide, lane: number): number {
-    const slot = this.lastJudgeOnLane[side][lane];
-    if (slot === undefined || slot.kind < 0) return 0;
-    const elapsed = this.getNowMs() - slot.at;
-    if (!(elapsed >= 0 && elapsed <= KEYBEAM_PERFECT_WINDOW_MS)) return 0;
-    return slot.kind + 1;
+    const ref = beatorajaLaneJudgeRef(refOp);
+    if (ref === undefined) return 0;
+    const slot = this.lastJudgeOnLane[ref.side][ref.lane];
+    return slot !== undefined ? beatorajaLaneJudgeImage(slot.kind, this.getNowMs() - slot.at) : 0;
   }
 
   /**
-   * Resolve a `value[].ref` (prop.lua `num` table key) into the current numeric value to display.
-   * Score / combo / judge counts come from the latest engine `frame`; other surfaces (chart BPM,
-   * options, system info) come from the chart metadata. Codes the adapter doesn't surface yet return
-   * `undefined` and the corresponding digit cells render as `0` (matches reference behavior — the
-   * skin author can't tell whether the engine is waiting on data vs the value is genuinely zero).
+   * A `value[].ref` number ({@link resolveBeatorajaPlayNumber}); `undefined` (drawn as 0) for a ref it does not cover,
+   * logged once.
    */
   resolveNumberValue(refOp: number): number | undefined {
-    const summary = this.frame?.summary;
-    const value = this.resolveNumberValueInner(refOp, summary);
+    const value = resolveBeatorajaPlayNumber(refOp, this.play);
     if (value === undefined && !this.unresolvedNumberRefs.has(refOp)) {
-      // Log each unresolved ref ONCE per session (Set-gated). Helps identify which prop.lua num codes
-      // the loaded skin uses but the adapter doesn't yet wire.
       this.unresolvedNumberRefs.add(refOp);
       // eslint-disable-next-line no-console
       console.log('[beatoraja-adapter] resolveNumberValue: ref not wired (returns 0)', JSON.stringify({ ref: refOp }));
@@ -1597,951 +693,142 @@ export class BeatorajaRuntimeAdapter {
     return value;
   }
 
-  /**
-   * Resolve the live gauge percent in `[0, 100]` for the `gauge` element renderer. The result
-   * scene typically exposes a frozen value, the gameplay path an updating one — both go through
-   * this single resolver. Returns 0 when the engine hasn't published a frame yet (gauge starts
-   * at the GROOVE init value once the first frame lands).
-   */
+  /** The gauge in percent of its maximum; 0 before the first frame. */
   resolveGaugePercent(): number {
-    const gauge = this.frame?.summary.gauge;
-    if (gauge === undefined || gauge.max <= 0) return 0;
-    return (gauge.current / gauge.max) * 100;
+    return beatorajaGaugePercent(this.frame?.summary.gauge);
   }
 
-  /**
-   * Resolve the full gauge state for the spec-correct `pickBeatorajaGaugeNode` signature
-   * (audit 1.4). Beatoraja's `SkinGauge.draw()` indexes nodes as
-   * `images[exgauge + frameOffset + (cellBorder < gauge.border ? 1 : 0)]` and needs all four
-   * fields to compute the right cell.
-   *
-   * Returns `undefined` when no frame has landed yet — the gauge renderer hides cells in
-   * that case (matching beatoraja's "gauge not yet active" behavior).
-   */
+  /** The gauge as the gauge element draws it ({@link resolveBeatorajaGaugeState}); `undefined` before the first frame. */
   resolveGaugeState(): { value: number; max: number; border: number; mode: number } | undefined {
-    const gauge = this.frame?.summary.gauge;
-    if (gauge === undefined || gauge.max <= 0) return undefined;
-    return {
-      value: gauge.current,
-      max: gauge.max,
-      border: gauge.clearThreshold,
-      mode: beatorajaGaugeModeFromString(gauge.type),
-    };
+    return resolveBeatorajaGaugeState(this.frame?.summary.gauge);
   }
 
-  /**
-   * Resolve the gauge type as beatoraja's int constant (`BEATORAJA_GAUGE_MODE.*`). Exposed
-   * to Lua via `main_state.gauge_type()`. Defaults to `NORMAL` (= 2) when no frame yet.
-   */
+  /** The gauge's mode (`BEATORAJA_GAUGE_MODE`); NORMAL before the first frame. */
   resolveGaugeType(): number {
-    const gauge = this.frame?.summary.gauge;
-    return beatorajaGaugeModeFromString(gauge?.type);
+    return beatorajaGaugeModeFromString(this.frame?.summary.gauge?.type);
   }
 
-  /**
-   * Live "is the player currently holding the LN on this lane?" lookup. The note layer reads
-   * this every frame to flip the LN body sprite between `note.lnBodyHeld` (held) and
-   * `note.lnBodyUnheld` (unheld) variants — modern-mode skins (community 9K skins, future
-   * default play skins) author distinct sprites per state, and beatoraja's renderer paints
-   * the matching one. Legacy-mode skins resolve `lnBodyHeld === lnBodyUnheld` so this lookup
-   * has no visual effect for them.
-   *
-   * Returns `false` when the channel isn't held OR isn't currently in flight as an LN.
-   */
+  /** Whether the player holds a long note on the lane now: the note layer draws the held body sprite. */
   isLaneLnHeld(channel: string): boolean {
     return this.lnHoldHeldByChannel.has(channel);
   }
 
-  /**
-   * Resolve a `slider[].type` code into a translation ratio in `[0, 1]`. The skin view translates
-   * the slider sprite by `value * range` skin-pixels along its angle axis. The enum is sparse;
-   * values mirror upstream `SkinProperty.SLIDER_*` constants. Skins authoring un-surfaced types
-   * get `undefined` so their slider sprite stays at home (the renderer hides the indicator).
-   *
-   * Wired types:
-   *   - `4` (`SLIDER_LANECOVER`) / `5` (`SLIDER_LANECOVER2`) → {@link lanecoverRatio}. `0` =
-   *     home (no cover), `1` = fully extended. We're single-player so 4 and 5 alias.
-   *   - `6` (`SLIDER_MUSIC_PROGRESS`) → `currentSeconds / totalSeconds` clamped to `[0, 1]`.
-   *     Drives the small progress-meter bars beatoraja's reference play skins author at the
-   *     screen edge (default `play5.json`'s `id=1050/1051`). Returns `0` before the first frame
-   *     lands.
-   *
-   * Unhandled (returns `undefined`):
-   *   - `1` (`SLIDER_MUSICSELECT_POSITION`) / `7` (`SLIDER_SKINSELECT_POSITION`) — select-scene
-   *     concerns; not driven from the play / decide / result adapter.
-   *   - `17`-`19` (`SLIDER_*_VOLUME`) — host-level volume sliders, not surfaced.
-   *
-   * Note: HISPEED / LIFT / HIDDEN do NOT have slider types in upstream `SkinProperty`. Skins
-   * surface those values through `value[]` digit displays (e.g. `BEATORAJA_NUM.HISPEED = 310`),
-   * not through `slider[]` indicators.
-   */
+  /** A `slider[].type` position ({@link resolveBeatorajaPlaySliderValue}): the lane cover and the song's progress. */
   resolveSliderValue(type: number): number | undefined {
-    switch (type) {
-      case 4:
-      case 5:
-        return this.lanecoverRatio;
-      case 6: {
-        // Song-playback progress. Falls back to 0 before the first frame lands or for a
-        // chart whose totalSeconds didn't resolve (degenerate / empty chart).
-        const frame = this.frame;
-        if (frame === undefined || frame === null) return 0;
-        if (!Number.isFinite(frame.totalSeconds) || frame.totalSeconds <= 0) return 0;
-        if (!Number.isFinite(frame.currentSeconds)) return 0;
-        return Math.max(0, Math.min(1, frame.currentSeconds / frame.totalSeconds));
-      }
-      default:
-        return undefined;
-    }
+    return resolveBeatorajaPlaySliderValue(type, this.play);
   }
 
-  /**
-   * Resolve a `judgegraph[].type` code into the per-bar values for histogram rendering. Beatoraja's
-   * convention:
-   *
-   *   - `0` (note distribution) → `[normal, ln, scratch, bss]` from the chart's static breakdown.
-   *     Computed once per chart (lazy on first call) and cached for subsequent frames. ModernChic
-   *     authors a `type=0` judgegraph for the chart-summary panel — without this resolver the
-   *     graph stays hidden during play.
-   *   - `1` (judgement spread) → `[perfect, great, good, bad, poor]` from the live summary
-   *   - `2` (early/late spread) → 21 ms-binned counts from the recent timing buffer covering
-   *     the range `[-100 ms, +100 ms]` (10 ms per bin). Mirrors upstream `SkinJudgeGraph`'s
-   *     `TYPE_HIT_FAIL_DISTRIBUTION` shape — beatoraja paints one bar per offset bin so the
-   *     player sees how their hits cluster around the perfect window. The previous
-   *     `[summary.fast, summary.slow]` 2-bar return shape was visibly wrong (only two slabs
-   *     instead of a histogram).
-   *
-   * Returns `undefined` when no data is available yet (chart missing for type=0, or no live
-   * summary / no judgements for types 1/2). The renderer hides the graph in that case.
-   */
+  /** A `judgegraph[].type` bar list ({@link resolveBeatorajaPlayJudgeGraph}). */
   resolveJudgeGraphBars(type: number): ReadonlyArray<number> | undefined {
-    if (type === 0) {
-      if (this.chart === undefined) return undefined;
-      if (this.cachedNoteBreakdownBars === undefined) {
-        const breakdown = computeBeatorajaNoteBreakdown(this.chart);
-        this.cachedNoteBreakdownBars = [breakdown.normal, breakdown.ln, breakdown.scratch, breakdown.bss];
-      }
-      return this.cachedNoteBreakdownBars;
-    }
-    const summary = this.frame?.summary;
-    if (summary === undefined) return undefined;
-    switch (type) {
-      case 1:
-        return [summary.perfect, summary.great, summary.good, summary.bad, summary.poor];
-      case 2:
-        return this.computeTimingHistogram();
-      default:
-        return undefined;
-    }
-  }
-  private cachedNoteBreakdownBars: ReadonlyArray<number> | undefined;
-
-  /**
-   * Bin the live `recentTimings` ring buffer into a histogram for `judgegraph type=2`. Each
-   * bin covers a 10 ms slice; bin index 0 spans `[-100, -90)` ms (= max early), bin 20 spans
-   * `[+100, +inf)` ms (= max late). Out-of-range samples saturate at the edge bins so a
-   * single huge mistime doesn't drop off the chart.
-   *
-   * Returns `undefined` when no judgements have fired yet — the renderer hides the graph
-   * until the first hit lands.
-   */
-  private computeTimingHistogram(): ReadonlyArray<number> | undefined {
-    if (this.recentTimings.length === 0) return undefined;
-    const BIN_COUNT = 21;
-    const BIN_WIDTH_MS = 10;
-    const RANGE_HALF_MS = ((BIN_COUNT - 1) / 2) * BIN_WIDTH_MS; // 100 ms
-    const bins = Array.from({ length: BIN_COUNT }, () => 0);
-    for (const sample of this.recentTimings) {
-      const offset = sample.deltaMs;
-      // Map `[-100, +100]` ms to `[0, 20]` (10 ms per bin), saturating outside.
-      let idx = Math.floor((offset + RANGE_HALF_MS) / BIN_WIDTH_MS);
-      if (idx < 0) idx = 0;
-      else if (idx >= BIN_COUNT) idx = BIN_COUNT - 1;
-      bins[idx] = (bins[idx] ?? 0) + 1;
-    }
-    return bins;
+    return resolveBeatorajaPlayJudgeGraph(type, {
+      ...(type === 0 && this.chart !== undefined ? { breakdown: this.noteBreakdown(this.chart) } : {}),
+      ...(this.play.score !== undefined ? { score: this.play.score } : {}),
+      recentTimings: this.recentTimings,
+    });
   }
 
-  /**
-   * Lanecover ratio for the duration formula. Mirrors upstream
-   * `LaneRenderer.java:333` (`region * (1 - lanecover)` — only `playconfig.getLanecover()`,
-   * NOT `lift`). `withCover = true` reads the live cover state for `DURATION_LANECOVER_ON`
-   * resolvers; `false` returns 0 so `DURATION_LANECOVER_OFF` reports the no-cover baseline.
-   *
-   * Lift is a separate visual offset (`OFFSET_LIFT`) that shifts the lane bottom up but
-   * does NOT change the scroll-time the lane represents — upstream's duration formula
-   * doesn't subtract it. The previous implementation included lift in this ratio, which
-   * shrunk the white-number readout when the player engaged lift; that was a deviation
-   * from upstream. (Audit: `LaneRenderer.java:330-335`.)
-   */
-  private lanecoverRatioForDuration(withCover: boolean): number {
-    if (!withCover) return 0;
-    return Math.max(0, Math.min(1, this.lanecoverRatio));
+  private noteBreakdown(chart: BeMusicJson): ReturnType<typeof computeBeatorajaNoteBreakdown> {
+    this.cachedNoteBreakdown ??= computeBeatorajaNoteBreakdown(chart);
+    return this.cachedNoteBreakdown;
   }
 
-  /**
-   * Current BPM at the engine's playhead. Mirrors upstream `LaneRenderer.nbpm` which is
-   * sampled from `BMSModel`'s active TimeLine each frame. Reads the latched
-   * `frame.currentSeconds` and walks the cached {@link bpmSegments} to return the BPM
-   * in effect at that moment.
-   *
-   * Falls back to the chart's metadata BPM before the first frame lands.
-   */
-  private currentBpmForDuration(): number {
-    if (this.frame === null) return this.chart?.metadata.bpm ?? 0;
-    return this.currentBpmAtMs(this.frame.currentSeconds * 1000);
-  }
-
-  /** Min / max BPM of the chart's tempo map (`resolveChartBpmRange`); both are the main BPM for a constant tempo. */
-  private cachedBpmRange(): { min: number; max: number } {
-    return this.chart === undefined ? { min: 0, max: 0 } : resolveChartBpmRange(this.chart);
-  }
-
-  /**
-   * Resolve recent judgement timings for `timingvisualizer[]` rendering. Returns oldest-first
-   * samples (`samples[0]` = oldest in buffer; `samples[length - 1]` = most recent), each with
-   * the signed delta and the judge kind. Empty array when no timed judgement has fired yet — the
-   * renderer hides the visualizer until the player makes their first judged input.
-   *
-   * Sign convention matches the engine: positive `deltaMs` = late, negative = early.
-   */
+  /** The latest timed judgments, oldest first (signed offsets, > 0 late), for the timing visualizer. */
   resolveTimingSamples(): ReadonlyArray<{ deltaMs: number; kind: string }> {
     return this.recentTimings;
   }
 
-  /**
-   * Per-second judge-state histogram for `judgegraph[]` `type=1` (TYPE_JUDGE). Mirrors
-   * upstream `SkinNoteDistributionGraph.draw()`'s data shape — each bucket carries the
-   * `[unjudged, PG, GR, GD, BD, PR]` counts for one chart-second. Renderer stacks them
-   * vertically in column order; as the player progresses, the unjudged (gray) cell at the
-   * bottom shrinks and the verdict-coloured cells stack up on top.
-   *
-   * Returns `undefined` when no chart is loaded (decide / select scenes don't drive this).
-   */
-  resolveJudgeStateBuckets(type: number):
-    | {
-        buckets: ReadonlyArray<ReadonlyArray<number>>;
-        maxCount: number;
-        totalMs: number;
-      }
-    | undefined {
-    if (type !== 1) return undefined;
-    if (this.judgeStateBuckets.length === 0) return undefined;
-    return {
-      buckets: this.judgeStateBuckets,
-      maxCount: this.judgeStateMaxNotesPerBucket,
-      totalMs: this.judgeStateTotalMs,
-    };
+  /** The judge-state graph (`judgegraph[]` type 1); `undefined` for another type or without a chart. */
+  resolveJudgeStateBuckets(
+    type: number,
+  ): { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number } | undefined {
+    return type === 1 ? this.judgeState : undefined;
   }
 
-  /**
-   * Initialize {@link judgeStateBuckets} from the chart's per-second note distribution.
-   * Each judgeable note (NORMAL or LN-end on key/scratch lanes) lands in its second's
-   * `unjudged` slot. LN bodies (categories 1 and 4 of the distribution) and mines
-   * (category 6) are excluded — upstream's `case TYPE_JUDGE` filter at
-   * `SkinNoteDistributionGraph.java:304-309` skips both.
-   */
-  private initJudgeStateBuckets(chart: BeMusicJson): void {
-    const distribution = computeBeatorajaChartNoteDistribution(chart);
-    const buckets: number[][] = [];
-    let maxPerBucket = 0;
-    for (const bucket of distribution.buckets) {
-      // Sum the judgeable categories: SCRATCH_LN_END (0), SCRATCH_NORMAL (2),
-      // KEY_LN_END (3), KEY_NORMAL (5). LN bodies (1, 4) don't get judged; mines (6)
-      // produce damage hits but no PG/GR/GD/BD/PR verdict that lands in TYPE_JUDGE
-      // buckets. (Mines DO get judged as a separate "POOR-equivalent" but upstream's
-      // TYPE_JUDGE explicitly excludes them via `n instanceof MineNote` early-return.)
-      const judgeable = (bucket[0] ?? 0) + (bucket[2] ?? 0) + (bucket[3] ?? 0) + (bucket[5] ?? 0);
-      buckets.push([judgeable, 0, 0, 0, 0, 0]);
-      if (judgeable > maxPerBucket) maxPerBucket = judgeable;
-    }
-    this.judgeStateBuckets = buckets;
-    this.judgeStateTotalMs = distribution.totalMs;
-    // Upstream `updateData()` line 272-274: `max = Math.min((count / 10) * 10 + 10, 100)`
-    // bumped from a starting `max = 20`. Same logic — round densest bucket up to nearest
-    // 10, capped at 100, floor at 20 (so sparse charts don't stretch a 1-note bucket
-    // across the whole graph height).
-    this.judgeStateMaxNotesPerBucket = Math.max(20, Math.min(100, Math.ceil(maxPerBucket / 10) * 10));
-    // Reuse the same chart walk for the BPM-timeline + main-BPM caches that drive
-    // `BEATORAJA_NUM.NOWBPM` (160) and `BEATORAJA_NUM.MAINBPM` (92).
-    this.bpmSegments = distribution.bpmSegments;
-    this.cachedMainBpm = distribution.mainBpm;
-  }
-
-  /**
-   * Sample the BPM in effect at a given chart-time position. Mirrors upstream
-   * `LaneRenderer.nbpm` per-frame value, which is `BMSModel`'s `TimeLine.getBPM()` at the
-   * playhead. Walks {@link bpmSegments} (in time order) and returns the most recent
-   * positive BPM transition that's `<= timeMs`.
-   *
-   * STOP segments emit `bpm = 0`; we skip them so the readout holds the song's "real"
-   * BPM through the stop instead of collapsing to 0. Matches `lanerender.getNowBPM()`
-   * which exposes the song-BPM throughout (only the scroll velocity reaches 0 during a
-   * stop, the BPM number itself doesn't).
-   *
-   * Returns the chart's metadata BPM as a fallback when the timeline is empty (no chart
-   * loaded / chart with no BPM events yet).
-   */
-  private currentBpmAtMs(timeMs: number): number {
-    const segments = this.bpmSegments;
-    if (segments.length === 0) return this.chart?.metadata.bpm ?? 0;
-    const initial = segments[0]!.bpm > 0 ? segments[0]!.bpm : (this.chart?.metadata.bpm ?? 0);
-    const lookup = bpmLookupFor(segments);
-    if (lookup === undefined) {
-      let lastPositive = initial;
-      for (const seg of segments) {
-        if (seg.timeMs > timeMs) break;
-        if (seg.bpm > 0) lastPositive = seg.bpm;
-      }
-      return lastPositive;
-    }
-    // The last segment at or before `timeMs` (a binary search), and the last positive BPM up to it: what walking the
-    // segments in order until one starts after `timeMs` finds, for a readout asked several times a frame.
-    let low = 0;
-    let high = segments.length;
-    while (low < high) {
-      const middle = (low + high) >>> 1;
-      if (segments[middle]!.timeMs > timeMs) {
-        high = middle;
-      } else {
-        low = middle + 1;
-      }
-    }
-    const lastPositive = low === 0 ? Number.NaN : lookup[low - 1]!;
-    return Number.isNaN(lastPositive) ? initial : lastPositive;
-  }
-
-  /**
-   * Resolve the chart's "main BPM" — most-frequent BPM weighted by note count, mirroring
-   * upstream `SongInformation.getMainbpm()`. Pre-cached at chart load through
-   * {@link computeBeatorajaChartNoteDistribution}; falls back to the chart's metadata BPM
-   * for non-loaded charts (decide / select scenes that didn't run the full chart walk).
-   */
-  private cachedMainBpmValue(): number {
-    if (this.cachedMainBpm > 0) return this.cachedMainBpm;
-    return this.chart?.metadata.bpm ?? 0;
-  }
-
-  /**
-   * Update {@link judgeStateBuckets} for one judge event. Decrements the matching
-   * bucket's `unjudged` slot and increments the verdict's slot, mirroring upstream's
-   * incremental "note moves from state 0 to state N" semantics.
-   *
-   * The bucket index is approximated as `floor((currentChartTimeMs - deltaMs) / 1000)`.
-   * Upstream walks all notes every 750 ms and reads each note's live `getState()` — we
-   * don't have per-note state plumbed through, so we use the timing offset to recover the
-   * note's chart-second. For the typical `deltaMs ∈ [-150, +150]` range and 1-second
-   * buckets, the approximation lands in the correct bucket; only notes within ±deltaMs
-   * of a second-boundary might float to a neighbour, an imperceptible visual difference.
-   *
-   * READY publishes (no `judge` value) and unjudged kinds (`MISS`) skip the update — they
-   * don't move a note out of the unjudged state in upstream's semantics.
-   */
-  private updateJudgeStateBucket(state: PlayerJudgeComboSignalState): void {
-    if (this.judgeStateBuckets.length === 0) return;
-    const stateIdx = judgeStateIndex(state.judge);
-    if (stateIdx < 1) return;
-    // Use the engine's latest frame clock as the "current chart time" reference — this is
-    // what `frame.currentSeconds * 1000` gives us. Falling back to 0 covers the rare case
-    // where a judge fires before the first frame has landed.
-    const currentChartTimeMs = (this.frame?.currentSeconds ?? 0) * 1000;
-    const noteChartTimeMs = currentChartTimeMs - (state.deltaMs ?? 0);
-    const bucketIdx = Math.floor(noteChartTimeMs / 1000);
-    if (bucketIdx < 0 || bucketIdx >= this.judgeStateBuckets.length) return;
-    const bucket = this.judgeStateBuckets[bucketIdx]!;
-    if (bucket[0]! > 0) {
-      bucket[0]! -= 1;
-      bucket[stateIdx]! += 1;
-    }
-  }
-
-  /**
-   * Resolve the chart's effective judge windows in ms — `{pgreat, great, good, bad}`.
-   * Used by the `timingvisualizer[]` renderer to paint upstream's per-band coloured
-   * background stripes (mirrors `SkinTimingVisualizer.prepare`'s `getJudgeArea(resource)`
-   * call at `SkinTimingVisualizer.java:88`). The skin's bands are stacked outward from
-   * the centre — PG window first, then GR / GD / BD / PR — so stretching the dst rect
-   * is enough for the player to read where their hits land relative to the windows.
-   *
-   * Cached per-chart since the windows are derived from the parsed JSON's judge rank
-   * and don't change mid-play (dynamic EXRANK changes happen but the timingvisualizer
-   * background is regenerated per BMSModel-change in upstream too).
-   *
-   * Returns `undefined` when no chart is loaded — the renderer falls through to its
-   * default IIDX-NORMAL windows so headless tests / unwired hosts still draw a usable
-   * background.
-   */
+  /** The chart's judge windows in ms, for the timing visualizer's bands; `undefined` without a chart. */
   resolveJudgeWindowsMs(): JudgeWindowsMs | undefined {
     if (this.chart === undefined) return undefined;
-    if (this.cachedJudgeWindowsMs === undefined) {
-      this.cachedJudgeWindowsMs = resolveJudgeWindowsMs(this.chart);
-    }
+    this.cachedJudgeWindowsMs ??= resolveJudgeWindowsMs(this.chart);
     return this.cachedJudgeWindowsMs;
   }
-  private cachedJudgeWindowsMs: JudgeWindowsMs | undefined;
 
-  /**
-   * Resolve a `graph[].type` code into a fill ratio in `[0, 1]`. The skin view scales the graph's
-   * source-rect along its `angle` axis by the returned value. Returns `undefined` for codes the
-   * adapter doesn't surface (the renderer hides the bar).
-   *
-   * The supported codes mirror beatoraja's reference theme conventions:
-   *
-   *   - `1` (gauge 1P) / `6` (gauge 2P): groove gauge percent
-   *   - `2`: chart-time progress
-   *   - `102`: load progress (always 1 in our pipeline — assets pre-decode before mount)
-   *
-   * Polyline-style codes (`110` / `113` / `115` — score history) are NOT surfaced through
-   * this resolver because they don't fit the bar-scaling model. {@link resolveGraphPolyline}
-   * handles the polyline path with `(progress, ratio)` samples instead.
-   */
+  /** A `graph[].type` fill ratio ({@link resolveBeatorajaPlayGraphValue}): the gauge, the song's progress, loading. */
   resolveGraphValue(type: number): number | undefined {
-    const frame = this.frame;
-    if (frame === undefined || frame === null) return undefined;
-    switch (type) {
-      // Gauge bars — 1P (`1`) and 2P (`6`). Same data source for both since we're single-player.
-      case 1:
-      case 6: {
-        const gauge = frame.summary.gauge;
-        if (gauge === undefined || gauge.max <= 0) return 0;
-        return gauge.current / gauge.max;
-      }
-      // Chart-time progress — fills as the chart plays out. Saturates at 1 when the engine
-      // overruns `totalSeconds` slightly (last-note hold past the end-of-chart marker).
-      case 2: {
-        if (frame.totalSeconds <= 0) return 0;
-        return frame.currentSeconds / frame.totalSeconds;
-      }
-      // Load progress — beatoraja themes show this during the asset-decode window. Our pipeline
-      // pre-decodes everything before mounting the gameplay scene, so by the time this resolver
-      // is reachable, loading IS complete. Surface 1 to match the "fully loaded" visual.
-      case 102:
-        return 1;
-      default:
-        return undefined;
-    }
+    return resolveBeatorajaPlayGraphValue(type, this.play);
   }
 
-  /**
-   * Resolve a `graph[].type` code into a polyline of `(x, y)` samples in `[0, 1]²`. Skins
-   * use this for score / gauge history graphs that paint as a curve over time, not as a
-   * single bar. Beatoraja's reference theme convention:
-   *
-   *   - `110` (NUMBER_SCORE_GRAPH) → live exScore polyline. `x` = chart progress (0..1),
-   *     `y` = exScore / maxExScore (0..1). Pulled from {@link scoreHistory}, populated
-   *     in `applyJudgeCombo` so the curve refreshes on every judgement.
-   *   - `113` (NUMBER_TARGET_GRAPH) / `115` (NUMBER_BEST_GRAPH) — DB-backed best /
-   *     target curves. We don't have a per-chart score DB yet, so these return
-   *     `undefined` (= the renderer hides the curve).
-   *
-   * Returning `undefined` for unknown / unsurfaced types keeps unsupported skins clean:
-   * the renderer hides the polyline rather than painting a flat line.
-   */
+  /** A line graph's points: the EX score over the chart so far (110); `undefined` for another type. */
   resolveGraphPolyline(type: number): ReadonlyArray<{ x: number; y: number }> | undefined {
-    switch (type) {
-      case 110: {
-        // Score history. Each sample has `progress ∈ [0, 1]` and `exScore` (raw integer).
-        // Normalize to `y = exScore / maxExScore`. When the history is empty (chart hasn't
-        // fired any judges yet) return undefined so the curve stays hidden until the first
-        // hit lands.
-        const history = this.scoreHistory;
-        if (history.length === 0) return undefined;
-        const summary = this.frame?.summary;
-        const maxExScore = (summary?.total ?? 0) * 2;
-        if (maxExScore <= 0) return undefined;
-        const cached = this.scorePolylineCache;
-        if (cached !== undefined && cached.historyLength === history.length && cached.maxExScore === maxExScore) {
-          return cached.points;
-        }
-        const points = history.map((s) => ({
-          x: Math.max(0, Math.min(1, s.progress)),
-          y: Math.max(0, Math.min(1, s.exScore / maxExScore)),
-        }));
-        this.scorePolylineCache = { historyLength: history.length, maxExScore, points };
-        return points;
-      }
-      default:
-        return undefined;
-    }
+    return type === 110 ? resolveBeatorajaScorePolyline(this.scoreHistory, this.frame?.summary.total ?? 0) : undefined;
   }
 
-  private resolveNumberValueInner(
-    refOp: number,
-    summary: PlayerUiFramePayload['summary'] | undefined,
-  ): number | undefined {
-    // Helpers — defined inside the resolver so the switch arms stay readable. All return finite
-    // ints; the `Math.floor` calls in particular are deliberate (beatoraja's value displays are
-    // integer-only — fractional parts get their own `_afterdot` slot).
-    const exScoreMax = (summary?.total ?? 0) * 2;
-    const exScoreRatePct = exScoreMax > 0 ? ((summary?.exScore ?? 0) / exScoreMax) * 100 : 0;
-    const scoreRatePct = (summary?.total ?? 0) > 0 ? ((summary?.score ?? 0) / ((summary?.total ?? 0) * 1000)) * 100 : 0;
-    const gaugePct = summary?.gauge && summary.gauge.max > 0 ? (summary.gauge.current / summary.gauge.max) * 100 : 0;
-
-    switch (refOp) {
-      // ─── Hispeed slots (10, 310, 311) ──────────────────────────────────────────────────
-      // Three upstream variants in `IntegerPropertyFactory`:
-      //   - NUMBER_HISPEED       (310) = (int) hispeed                — integer part only
-      //   - NUMBER_HISPEED_AFTERDOT (311) = (int)(hispeed * 100) % 100 — 2-digit decimal
-      //   - NUMBER_HISPEED_LR2   (10)  = (int)(hispeed * 100)         — × 100 single int
-      //
-      // The default play skin authors `id="hispeed", ref=310` + `id="hispeed-d", ref=311`
-      // as separate value elements rendered side-by-side ("3" + "." + "42" → "3.42").
-      // Conflating 310 with 10 (the previous behavior) collapsed both pairs to the same
-      // value (342 / 42), making the integer half disappear in skins that author the two
-      // refs separately.
-      case BEATORAJA_NUM.HISPEED:
-        return Math.trunc(this.lastHiSpeed);
-      case BEATORAJA_NUM.HISPEED_LR2:
-        return Math.trunc(this.lastHiSpeed * 100);
-      case BEATORAJA_NUM.HISPEED_AFTERDOT: {
-        // Two-digit fractional part of hispeed × 100 — i.e. `(int)(hispeed * 100) % 100`.
-        // For 1.50 → 50; for 2.00 → 0. Audit 3.16: previously we used `Math.round` here,
-        // which mismatched beatoraja's `(int)` cast at hispeed values like 1.555:
-        // round → 56, beatoraja → 55. Math.trunc matches the (int) cast exactly.
-        return Math.trunc(this.lastHiSpeed * 100) % 100;
-      }
-      // 1P lanecover / lift percentage — the player's slider position rendered as `0..100`.
-      // Both fields update through {@link adjustLanecover} / {@link setLanecover} (resp.
-      // {@link adjustLift} / {@link setLift}) and read back the shared state.
-      case BEATORAJA_NUM.LANECOVER1:
-        return Math.round(this.lanecoverRatio * 100);
-      case BEATORAJA_NUM.LIFT1:
-        return Math.round(this.liftRatio * 100);
-      // Other skin-config knobs the host doesn't surface yet. Returning 0 (not undefined) keeps
-      // the readout zero AND silences the "ref not wired" log so authors aren't spammed about
-      // features that simply aren't connected.
-      case BEATORAJA_NUM.JUDGETIMING:
-      case BEATORAJA_NUM.HIDDEN1:
-        return 0;
-
-      // ─── Duration / green-number readouts (312, 313, 1312-1327) ────────────────────────
-      // White-number duration = `(240000 / bpm / hispeed) / nscroll * (1 - lanecover)` ms,
-      // mirroring upstream `LaneRenderer.java:330-335`. Green-number = white * 3 / 5
-      // (mirrors `IntegerPropertyFactory.duration_green`).
-      //
-      // `currentBpmForDuration()` samples the live BPM at the engine's playhead so SOFLAN
-      // charts see the readout track each BPM change — matches `LaneRenderer.nbpm`.
-      // `_LANECOVER_ON` variants honour the player's lanecover slider; `_LANECOVER_OFF`
-      // pass 0 so the readout shows the no-cover baseline.
-      //
-      // 8 white + 8 green variants (1312-1327) cover {current bpm / main / min / max} ×
-      // {cover on / off}. ModernChic's hispeed panel reads several of these in parallel.
-      case BEATORAJA_NUM.DURATION:
-      case BEATORAJA_NUM.DURATION_LANECOVER_ON:
-        return whiteDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.currentBpmForDuration());
-      case BEATORAJA_NUM.DURATION_GREEN:
-      case BEATORAJA_NUM.DURATION_GREEN_LANECOVER_ON:
-        return greenDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.currentBpmForDuration());
-      case BEATORAJA_NUM.DURATION_LANECOVER_OFF:
-        return whiteDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.currentBpmForDuration());
-      case BEATORAJA_NUM.DURATION_GREEN_LANECOVER_OFF:
-        return greenDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.currentBpmForDuration());
-      case BEATORAJA_NUM.MAINBPM_DURATION_LANECOVER_ON:
-        return whiteDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedMainBpmValue());
-      case BEATORAJA_NUM.MAINBPM_DURATION_GREEN_LANECOVER_ON:
-        return greenDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedMainBpmValue());
-      case BEATORAJA_NUM.MAINBPM_DURATION_LANECOVER_OFF:
-        return whiteDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedMainBpmValue());
-      case BEATORAJA_NUM.MAINBPM_DURATION_GREEN_LANECOVER_OFF:
-        return greenDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedMainBpmValue());
-      case BEATORAJA_NUM.MINBPM_DURATION_LANECOVER_ON:
-        return whiteDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedBpmRange().min);
-      case BEATORAJA_NUM.MINBPM_DURATION_GREEN_LANECOVER_ON:
-        return greenDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedBpmRange().min);
-      case BEATORAJA_NUM.MINBPM_DURATION_LANECOVER_OFF:
-        return whiteDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedBpmRange().min);
-      case BEATORAJA_NUM.MINBPM_DURATION_GREEN_LANECOVER_OFF:
-        return greenDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedBpmRange().min);
-      case BEATORAJA_NUM.MAXBPM_DURATION_LANECOVER_ON:
-        return whiteDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedBpmRange().max);
-      case BEATORAJA_NUM.MAXBPM_DURATION_GREEN_LANECOVER_ON:
-        return greenDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedBpmRange().max);
-      case BEATORAJA_NUM.MAXBPM_DURATION_LANECOVER_OFF:
-        return whiteDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedBpmRange().max);
-      case BEATORAJA_NUM.MAXBPM_DURATION_GREEN_LANECOVER_OFF:
-        return greenDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedBpmRange().max);
-
-      // ─── Wallclock + run uptime + FPS (17-29) ──────────────────────────────────────────
-      // `time_*` reads the local wallclock — what beatoraja prints in the corner of every scene.
-      // `JS Date` returns the user's local TZ which matches beatoraja's "your computer's clock"
-      // semantics on Windows. `getMonth()` is 0-indexed; +1 for the human convention.
-      case BEATORAJA_NUM.TIME_YEAR:
-        return new Date().getFullYear();
-      case BEATORAJA_NUM.TIME_MONTH:
-        return new Date().getMonth() + 1;
-      case BEATORAJA_NUM.TIME_DAY:
-        return new Date().getDate();
-      case BEATORAJA_NUM.TIME_HOUR:
-        return new Date().getHours();
-      case BEATORAJA_NUM.TIME_MINUTE:
-        return new Date().getMinutes();
-      case BEATORAJA_NUM.TIME_SECOND:
-        return new Date().getSeconds();
-      // `operating_time_*` is "how long has beatoraja been running" — we approximate with "how long
-      // has this adapter instance lived", split into hour / minute / second. Authors typically
-      // display this as a single `HH:MM:SS` row from the three slots, so all three need to agree.
-      case BEATORAJA_NUM.OPERATING_TIME_HOUR:
-        return Math.floor((Date.now() - this.bootMs) / 3_600_000);
-      case BEATORAJA_NUM.OPERATING_TIME_MINUTE:
-        return Math.floor(((Date.now() - this.bootMs) / 60_000) % 60);
-      case BEATORAJA_NUM.OPERATING_TIME_SECOND:
-        return Math.floor(((Date.now() - this.bootMs) / 1_000) % 60);
-      // `totalplaytime_*` — accumulated play time across ALL sessions. No persistence layer yet,
-      // so all three slots return 0. Mirror the adapter's existing best-record-block contract.
-      case BEATORAJA_NUM.TOTALPLAYTIME_HOUR:
-      case BEATORAJA_NUM.TOTALPLAYTIME_MINUTE:
-      case BEATORAJA_NUM.TOTALPLAYTIME_SECOND:
-        return 0;
-      // `current_fps` — smoothed FPS derived from the ring of recent `applyFrame` clock stamps. A
-      // single-frame measurement is too noisy (microtick jitter shows ±20 fps); the ring averages
-      // over up to ~1 s of frames so the readout is stable. Empty / single-sample → 0 (we'd
-      // divide by zero or by an arbitrarily-small interval otherwise).
-      case BEATORAJA_NUM.CURRENT_FPS: {
-        if (this.fpsRingFilled < 2) return 0;
-        const newestIdx = (this.fpsRingHead - 1 + this.fpsRingMs.length) % this.fpsRingMs.length;
-        const oldestIdx = (this.fpsRingHead - this.fpsRingFilled + this.fpsRingMs.length) % this.fpsRingMs.length;
-        const newest = this.fpsRingMs[newestIdx]!;
-        const oldest = this.fpsRingMs[oldestIdx]!;
-        const spanSec = (newest - oldest) / 1000;
-        if (spanSec <= 0) return 0;
-        // `fpsRingFilled - 1` because N samples bracket N-1 inter-frame intervals.
-        return Math.round((this.fpsRingFilled - 1) / spanSec);
-      }
-
-      // ─── Best-record block (71-84) ─────────────────────────────────────────────────────
-      // These read from the per-chart score DB. We don't have a DB layer yet, so they all return
-      // 0 — same contract as `totalplaytime_*` above. The exception is `totalnotes = 74`, which
-      // duplicates the live engine `summary.total` (the chart is already parsed; we don't need
-      // a DB lookup for it).
-      case BEATORAJA_NUM.TOTALNOTES:
-        return summary?.total ?? 0;
-      case BEATORAJA_NUM.BEST_SCORE:
-      case BEATORAJA_NUM.BEST_MAXSCORE:
-      case BEATORAJA_NUM.BEST_MISSCOUNT:
-      case BEATORAJA_NUM.PLAYCOUNT:
-      case BEATORAJA_NUM.CLEARCOUNT:
-      case BEATORAJA_NUM.FAILCOUNT:
-      case BEATORAJA_NUM.BEST_PERFECT:
-      case BEATORAJA_NUM.BEST_GREAT:
-      case BEATORAJA_NUM.BEST_GOOD:
-      case BEATORAJA_NUM.BEST_BAD:
-      case BEATORAJA_NUM.BEST_POOR:
-        return 0;
-
-      // ─── Chart metadata (90-92, 96) ────────────────────────────────────────────────────
-      // Mirrors `IntegerPropertyFactory` entries:
-      //   - num.maxbpm  = 90 → SongData.getMaxbpm()       (chart-wide max of BPM events)
-      //   - num.minbpm  = 91 → SongData.getMinbpm()       (chart-wide min, excluding stops)
-      //   - num.mainbpm = 92 → SongInformation.getMainbpm() (most-frequent BPM, note-count weighted)
-      //
-      // All three resolve from chart-static analysis: max/min via {@link cachedBpmRange}
-      // (a scan over channel-03 / channel-08 BPM events), main via the
-      // {@link computeBeatorajaChartNoteDistribution} pass that's already cached for the
-      // judgegraph type=0 path. Constant-tempo charts have all three equal to the
-      // canonical metadata BPM — same end-result as the previous fallback.
-      case BEATORAJA_NUM.MAXBPM:
-        return Math.round(this.cachedBpmRange().max);
-      case BEATORAJA_NUM.MINBPM:
-        return Math.round(this.cachedBpmRange().min);
-      case BEATORAJA_NUM.MAINBPM:
-        return Math.round(this.cachedMainBpmValue());
-      // `num.playlevel = 96` — chart difficulty rating from `#PLAYLEVEL`. The header is sometimes a
-      // string (e.g. `"☆12"`); coerce best-effort to an int with `parseInt`.
-      case BEATORAJA_NUM.PLAYLEVEL: {
-        const level = this.chart?.metadata?.playLevel;
-        if (typeof level === 'number') return Math.trunc(level);
-        if (typeof level === 'string') {
-          const parsed = Number.parseInt(level, 10);
-          return Number.isFinite(parsed) ? parsed : 0;
-        }
-        return 0;
-      }
-
-      // ─── Live-play block (100-116, 121-128, 407, 410-427) ──────────────────────────────
-      // `point = 100` is current run's score (NOT the best record); `score2 = 101` is the same
-      // value under beatoraja's legacy name (some skins author against either).
-      case BEATORAJA_NUM.POINT:
-      case BEATORAJA_NUM.SCORE2:
-        return summary?.score ?? 0;
-      // `score_rate` / `_afterdot` is the EX-score percentage. EX-score's max is `total * 2`
-      // (PERFECT = 2, GREAT = 1). Authors expect this to count up smoothly even when raw `score`
-      // (a band-step gauge value) doesn't.
-      case BEATORAJA_NUM.SCORE_RATE:
-        return Math.floor(exScoreRatePct);
-      case BEATORAJA_NUM.SCORE_RATE_AFTERDOT:
-        return Math.floor((exScoreRatePct - Math.floor(exScoreRatePct)) * 100);
-      // `total_rate = 115` / `_afterdot = 116` — score (NOT EX-score) percentage. Score in our
-      // engine is already a 0..1000 per-note value, so the max is `total * 1000`. (The exact cap
-      // depends on the skin author's expectation; this matches what the engine emits as
-      // `summary.score`.)
-      case BEATORAJA_NUM.TOTAL_RATE:
-        return Math.floor(scoreRatePct);
-      case BEATORAJA_NUM.TOTAL_RATE_AFTERDOT:
-        return Math.floor((scoreRatePct - Math.floor(scoreRatePct)) * 100);
-      case BEATORAJA_NUM.COMBO:
-        return this.runningCombo;
-      // Synthetic per-side judge-combo refs — `expandBeatorajaJudgeDestinations` swaps these
-      // into every `judge[].numbers[i]` value declaration so the judge popup paints the live
-      // combo at the time of the latest judge. Mirrors upstream `SkinJudge.prepare()`'s
-      // explicit-value override (`SkinJudge.java:108`) which calls
-      // `nowCount.prepare(time, state, JudgeManager.getNowCombo(player), ox, oy)` — bypassing
-      // whatever the JSON authored for `value.ref`. Without this, ModernChic / default's
-      // `ref = MAIN.NUM.MAXCOMBO` falls through to the running-max-combo branch below and
-      // the popup keeps the peak number after the player breaks combo.
-      case SYNTHETIC_NUM_JUDGE_COMBO_1P:
-        return this.judgeState[1].lastJudgeCombo;
-      case SYNTHETIC_NUM_JUDGE_COMBO_2P:
-        return this.judgeState[2].lastJudgeCombo;
-      case SYNTHETIC_NUM_JUDGE_COMBO_3P:
-        return this.judgeState[3].lastJudgeCombo;
-      // Ref 75 (`NUMBER_MAXCOMBO`) — running max combo of the CURRENT run; upstream's
-      // `IntegerPropertyFactory` returns `JudgeManager.getScoreData().getCombo()` refreshed
-      // via `score.setCombo(Math.max(score.getCombo(), combo))` on every judge. Score boards
-      // and result-screen readouts source their combo display through here.
-      case BEATORAJA_NUM.BEST_MAXCOMBO:
-      case BEATORAJA_NUM.MAXCOMBO_LIVE:
-        return this.maxCombo;
-      case BEATORAJA_NUM.TOTALNOTES_LIVE:
-        return summary?.total ?? 0;
-      case BEATORAJA_NUM.GROOVEGAUGE:
-        return Math.floor(gaugePct);
-      case BEATORAJA_NUM.GROOVEGAUGE_AFTERDOT:
-        return Math.floor((gaugePct - Math.floor(gaugePct)) * 100);
-      // Signed millisecond offset of the most recent 1P hit (positive = early/fast,
-      // negative = late/slow). Mirrors upstream `JudgeManager.getRecentJudgeTiming(0)`.
-      // Skins use the `divy:2` digit-strip layout to render the sign — row 0 = positive,
-      // row 1 = negative — so we just hand back the signed integer here.
-      //
-      // Returns 0 before the first hit lands (empty timing buffer). The fade-out of the
-      // judge popup is driven by the JUDGE_1P timer's stamp (read elsewhere via
-      // `getTimerStart`), not by this ref.
-      case BEATORAJA_NUM.JUDGE_1P_OFFSET_MS: {
-        const last = this.recentTimings[this.recentTimings.length - 1];
-        if (last === undefined) return 0;
-        return Math.trunc(last.deltaMs);
-      }
-      // Chart TOTAL (368). Same code as the select scene's chart-summary readout — ModernChic /
-      // GdbG_Skin author it on play too. Shows the gauge's effective TOTAL once the engine
-      // reports one, else the chart header; 0 when neither exists.
-      case BEATORAJA_NUM.BMS_TOTAL:
-        return resolveChartTotalReadout(this.chart, summary?.gauge) ?? 0;
-      // Target / rival diff slots — no IR / DB layer, return 0 so the readout shows zero rather
-      // than garbage. (Authors gate these behind `if[ir_loaded]` / similar so the zero is benign.)
-      case BEATORAJA_NUM.DIFF_EXSCORE:
-      case BEATORAJA_NUM.TARGET_SCORE:
-      case BEATORAJA_NUM.TARGET_SCORE_RATE:
-      case BEATORAJA_NUM.TARGET_SCORE_RATE_AFTERDOT:
-        return 0;
-
-      // Per-judge LIVE counts.
-      case BEATORAJA_NUM.PERFECT:
-        return summary?.perfect ?? 0;
-      case BEATORAJA_NUM.GREAT:
-        return summary?.great ?? 0;
-      case BEATORAJA_NUM.GOOD:
-        return summary?.good ?? 0;
-      case BEATORAJA_NUM.BAD:
-        return summary?.bad ?? 0;
-      case BEATORAJA_NUM.POOR:
-        return summary?.poor ?? 0;
-      case BEATORAJA_NUM.MISS:
-        // Engine treats empty-press miss as POOR. Most skins want this readout; surface POOR.
-        return summary?.poor ?? 0;
-      // Per-judge fast / slow split — derived locally from `applyJudgeCombo`'s sample
-      // stream (engine `summary` doesn't carry this granularity; only aggregate `fast` /
-      // `slow` totals). Default `play5.json`'s judge-count panel renders these as the per-
-      // verdict early / late breakdown ("PERFECT 12 EARLY 4 LATE 8" style), so without the
-      // breakdown the panel reads as zero.
-      case BEATORAJA_NUM.EARLY_PERFECT:
-        return this.earlyLateCounts.PERFECT.early;
-      case BEATORAJA_NUM.LATE_PERFECT:
-        return this.earlyLateCounts.PERFECT.late;
-      case BEATORAJA_NUM.EARLY_GREAT:
-        return this.earlyLateCounts.GREAT.early;
-      case BEATORAJA_NUM.LATE_GREAT:
-        return this.earlyLateCounts.GREAT.late;
-      case BEATORAJA_NUM.EARLY_GOOD:
-        return this.earlyLateCounts.GOOD.early;
-      case BEATORAJA_NUM.LATE_GOOD:
-        return this.earlyLateCounts.GOOD.late;
-      case BEATORAJA_NUM.EARLY_BAD:
-        return this.earlyLateCounts.BAD.early;
-      case BEATORAJA_NUM.LATE_BAD:
-        return this.earlyLateCounts.BAD.late;
-      case BEATORAJA_NUM.EARLY_POOR:
-        return this.earlyLateCounts.POOR.early;
-      case BEATORAJA_NUM.LATE_POOR:
-        return this.earlyLateCounts.POOR.late;
-      case BEATORAJA_NUM.EARLY_MISS:
-        return this.earlyLateCounts.MISS.early;
-      case BEATORAJA_NUM.LATE_MISS:
-        return this.earlyLateCounts.MISS.late;
-      case BEATORAJA_NUM.TOTALEARLY:
-        return summary?.fast ?? 0;
-      case BEATORAJA_NUM.TOTALLATE:
-        return summary?.slow ?? 0;
-      // `combobreak` and its aliases. The engine treats POOR / MISS as the same kind so all three
-      // slots converge to `bad + poor` — beatoraja-side `poor_plus_miss` and the longer
-      // `bad_plus_poor_plus_miss` exist for skin authors who want different visual emphasis.
-      case BEATORAJA_NUM.COMBOBREAK:
-      case BEATORAJA_NUM.BAD_PLUS_POOR_PLUS_MISS:
-        return (summary?.bad ?? 0) + (summary?.poor ?? 0);
-      case BEATORAJA_NUM.POOR_PLUS_MISS:
-        return summary?.poor ?? 0;
-
-      // ─── Time-based readouts (160-165, 1163-1164) ──────────────────────────────────────
-      // `nowbpm = 160` → upstream `lanerender.getNowBPM()` — the BPM in effect at the
-      // engine's playhead, which tracks SOFLAN charts in real time. Sampled from the
-      // cached {@link bpmSegments} timeline (built at chart load) keyed by
-      // `frame.currentSeconds * 1000`. Falls back to the chart's metadata BPM before the
-      // first frame lands.
-      // Past an LR2 negative-BPM reversal the readout holds the value at the reversal: LR2's event pump is frozen
-      // there and never applies a later BPM event (the reverse scroll itself keeps following the tempo map).
-      case BEATORAJA_NUM.NOWBPM:
-        return Math.round(
-          this.frame !== null && this.frame.reversalSeconds !== undefined
-            ? this.currentBpmAtMs(Math.min(this.frame.currentSeconds, this.frame.reversalSeconds) * 1000)
-            : this.currentBpmForDuration(),
-        );
-      // `playtime_*` — minute / second elapsed since playback started. Pulled from the engine
-      // frame's `currentSeconds` so it stays in lockstep with what the user hears (independent of
-      // wallclock drift, which would cause clock readouts to slip from chart progress).
-      case BEATORAJA_NUM.PLAYTIME_MINUTE:
-        return this.frame !== null ? Math.floor(this.frame.currentSeconds / 60) : 0;
-      case BEATORAJA_NUM.PLAYTIME_SECOND:
-        return this.frame !== null ? Math.floor(this.frame.currentSeconds % 60) : 0;
-      // `timeleft_*` — minute / second until chart end. Clamped to non-negative because the engine
-      // can over-run `totalSeconds` slightly when the last note is held past the end-of-chart marker.
-      case BEATORAJA_NUM.TIMELEFT_MINUTE: {
-        if (this.frame === null) return 0;
-        const left = Math.max(0, this.frame.totalSeconds - this.frame.currentSeconds);
-        return Math.floor(left / 60);
-      }
-      case BEATORAJA_NUM.TIMELEFT_SECOND: {
-        if (this.frame === null) return 0;
-        const left = Math.max(0, this.frame.totalSeconds - this.frame.currentSeconds);
-        return Math.floor(left % 60);
-      }
-      // `songlength_*` — total chart length, fixed for the run. `totalSeconds` includes any
-      // trailing fadeout the engine appends after the last note.
-      case BEATORAJA_NUM.SONGLENGTH_MINUTE:
-        return this.frame !== null ? Math.floor(this.frame.totalSeconds / 60) : 0;
-      case BEATORAJA_NUM.SONGLENGTH_SECOND:
-        return this.frame !== null ? Math.floor(this.frame.totalSeconds % 60) : 0;
-      // `loading_progress = 165` — 0..100. We don't track granular load progress, but the gameplay
-      // path only mounts after assets finished decoding, so by the time this resolver is reachable
-      // loading IS complete. Surface 100 to keep readouts that gate UI on "not yet 100" happy.
-      case BEATORAJA_NUM.LOADING_PROGRESS:
-        return 100;
-
-      default:
-        return undefined;
-    }
-  }
-
-  /**
-   * Latch the current high-speed multiplier. The host calls this once per frame from
-   * `stateSignals.highSpeed()` so {@link resolveNumberValue} can surface it without owning a
-   * subscription on the signal bus.
-   */
+  /** Latch the hi-speed the notes scroll at; the host sets it every frame. Ignores a value that is not positive. */
   setHiSpeed(value: number): void {
-    if (Number.isFinite(value) && value > 0) this.lastHiSpeed = value;
+    if (Number.isFinite(value) && value > 0) this.play.hiSpeed = value;
   }
 
-  /**
-   * Set the player's lanecover ratio directly. Clamped to `[0, 1]`. Drives the `slider[].type =
-   * 4|5` value (the visible lanecover sprite) and the `BEATORAJA_NUM.LANECOVER1 = 14` percent
-   * readout via the same shared field. Hosts call this when wiring a UI slider to an absolute
-   * value; for incremental key / scroll input use {@link adjustLanecover}.
-   */
+  /** Set the lane cover (SUDDEN+) to a fraction of the lane, clamped to [0, 1]; it is drawn while above 0. */
   setLanecover(value: number): void {
     if (!Number.isFinite(value)) return;
-    this.lanecoverRatio = Math.max(0, Math.min(1, value));
+    const cover = this.play.cover;
+    cover.sudden = Math.max(0, Math.min(1, value));
+    cover.suddenOn = cover.sudden > 0;
     this.coverLastChangedAtMs = this.getNowMs();
   }
 
-  /**
-   * Nudge the lanecover ratio by `delta` (positive grows the cover, negative shrinks). Clamped
-   * to `[0, 1]`. Typical key / scroll bindings step `±0.01` per event for fine control,
-   * `±0.05` for a coarser feel.
-   */
+  /** Move the lane cover by `delta` of the lane (keys step ±0.01, the wheel ±0.05). */
   adjustLanecover(delta: number): void {
     if (!Number.isFinite(delta)) return;
-    this.setLanecover(this.lanecoverRatio + delta);
+    this.setLanecover(this.play.cover.sudden + delta);
   }
 
-  /** Read-only handle on the lanecover ratio. Mostly for tests / host-side state mirroring. */
   getLanecover(): number {
-    return this.lanecoverRatio;
+    return this.play.cover.sudden;
   }
 
-  /**
-   * Set the player's lift ratio directly. Clamped to `[0, 1]`. Drives `OFFSET_LIFT.y` (mapped
-   * onto a Y-UP shift via {@link LIFT_MAX_Y_OFFSET}) AND the `BEATORAJA_NUM.LIFT1 = 314` percent
-   * readout. Hidden-cover sprites with `isDisapearLineLinkLift = true` re-clip on the next frame.
-   */
+  /** Set the LIFT to a fraction of the lane, clamped to [0, 1]. */
   setLift(value: number): void {
     if (!Number.isFinite(value)) return;
-    this.liftRatio = Math.max(0, Math.min(1, value));
+    this.play.cover.lift = Math.max(0, Math.min(1, value));
     this.coverLastChangedAtMs = this.getNowMs();
   }
 
-  /**
-   * Nudge the lift ratio by `delta` (positive raises the cover edge, negative lowers it).
-   * Clamped to `[0, 1]`. Same step conventions as {@link adjustLanecover} — `±0.01` per fine
-   * tap, `±0.05` for coarse.
-   */
+  /** Move the LIFT by `delta` of the lane. */
   adjustLift(delta: number): void {
     if (!Number.isFinite(delta)) return;
-    this.setLift(this.liftRatio + delta);
+    this.setLift(this.play.cover.lift + delta);
   }
 
-  /** Read-only handle on the lift ratio. Mostly for tests / host-side state mirroring. */
   getLift(): number {
-    return this.liftRatio;
+    return this.play.cover.lift;
   }
 
   /**
-   * Set the hidden-cover state. `enabled = false` (default) drives `OFFSET_HIDDEN_COVER.a =
-   * -255` to clamp the cover sprite invisible. `enabled = true` paints the cover and
-   * shifts its y by `ratio × laneHeight` (with the `(1 - lift)` lift-active modifier
-   * applied automatically via the shared `liftRatio`). `ratio` is clamped to `[0, 1]`.
-   *
-   * Mirrors `LaneRenderer.setHiddenCover` + the `OFFSET_HIDDEN_COVER` mutation block. Call
-   * with `(0, false)` to mirror beatoraja's "hidden disabled" baseline; call with
-   * `(0.5, true)` to expose 50% of the lane through the cover.
+   * Set HIDDEN+: its height as a fraction of the lane above the LIFT (clamped to [0, 1]; a non-finite one keeps the
+   * height) and whether it is drawn.
    */
   setHiddenCover(ratio: number, enabled: boolean = true): void {
-    if (Number.isFinite(ratio)) {
-      this.hiddenRatio = Math.max(0, Math.min(1, ratio));
-    }
-    this.hiddenEnabled = enabled === true;
+    const cover = this.play.cover;
+    if (Number.isFinite(ratio)) cover.hidden = Math.max(0, Math.min(1, ratio));
+    cover.hiddenOn = enabled === true;
     this.coverLastChangedAtMs = this.getNowMs();
   }
 
-  /** Read-only handle on the hidden-cover ratio. */
   getHiddenCover(): number {
-    return this.hiddenRatio;
+    return this.play.cover.hidden;
   }
 
-  /** Read-only handle on the hidden-cover enabled flag. */
   isHiddenCoverEnabled(): boolean {
-    return this.hiddenEnabled;
+    return this.play.cover.hiddenOn;
   }
 
-  /**
-   * Snapshot the running combo's all-time-high for this run. The result scene needs it because
-   * `PlayerSummary` doesn't carry max combo (only judge counts) — combo is derived from the
-   * judge-state stream, which the adapter aggregates here.
-   */
+  /** The longest combo of the play (the engine's summary has none). */
   getMaxCombo(): number {
-    return this.maxCombo;
+    return this.play.maxCombo;
   }
 
   /**
-   * Replace the option-driven base op set with `next` while preserving runtime ops (last-judge gate,
-   * autoplay flag, loaded / now-loading state, etc.). Used when the user re-picks a skin's
-   * `property[]` mid-chart — the visual chrome should reflect the new option immediately without
-   * tearing down the engine driver. Old ops absent from `next` are removed; new ops are added.
+   * Replace the skin config's option ops (a `property[]` re-pick mid-chart), keeping the runtime ops: ops absent from
+   * `next` go, new ones are added.
    */
   setBaseOps(next: ReadonlySet<number>): void {
     for (const op of this.baseOps) {
@@ -2551,15 +838,10 @@ export class BeatorajaRuntimeAdapter {
     this.baseOps = next;
   }
 
-  /** Update the autoplay op (mostly for symmetry with the engine driver — mode rarely changes mid-chart). */
+  /** Update the autoplay op. */
   setAutoPlay(active: boolean): void {
-    if (active) {
-      this.activeOps.delete(BEATORAJA_OP.AUTOPLAY_OFF);
-      this.activeOps.add(BEATORAJA_OP.AUTOPLAY_ON);
-    } else {
-      this.activeOps.delete(BEATORAJA_OP.AUTOPLAY_ON);
-      this.activeOps.add(BEATORAJA_OP.AUTOPLAY_OFF);
-    }
+    this.activeOps.delete(active ? BEATORAJA_OP.AUTOPLAY_OFF : BEATORAJA_OP.AUTOPLAY_ON);
+    this.activeOps.add(active ? BEATORAJA_OP.AUTOPLAY_ON : BEATORAJA_OP.AUTOPLAY_OFF);
   }
 
   /** Test-only / diagnostic accessor — returns whether `op` is currently in the active set. */
@@ -2577,524 +859,59 @@ export class BeatorajaRuntimeAdapter {
     return this.poorBgaActive;
   }
 
-  /**
-   * Diagnostic snapshot of every stamped timer. Returned as an array of `[id, atMs]` pairs sorted by
-   * id so the output is stable across calls. Used by the gameplay view's periodic debug log to surface
-   * which timers fired during the run.
-   */
+  /** Every started timer as `[id, atMs]`, by id (diagnostics). */
   timerSnapshot(): ReadonlyArray<readonly [number, number]> {
     return Array.from(this.timerStartedAt.entries()).sort((a, b) => a[0] - b[0]);
   }
 
-  /** Diagnostic — current op set as a sorted array. Useful for "what's gating chrome right now" debugging. */
+  /** The lit ops, sorted (diagnostics). */
   activeOpSnapshot(): ReadonlyArray<number> {
     return Array.from(this.activeOps).sort((a, b) => a - b);
   }
 
   /**
-   * Reset adapter state to the construction defaults. Used on chart restart so per-chart timers don't
-   * bleed into the next run. The autoplay op latched at construction is preserved (the host re-creates
-   * the adapter on a mode change rather than mutating one in flight).
+   * Back to the start of a play (a restart): the runtime ops, timers, judgments, graphs and timings go; the option ops,
+   * the autoplay op, the hi-speed, the covers and the host's offsets stay.
    */
   reset(): void {
     const wasAutoplay = this.activeOps.has(BEATORAJA_OP.AUTOPLAY_ON);
     this.activeOps.clear();
     for (const op of this.baseOps) this.activeOps.add(op);
-    this.activeOps.add(wasAutoplay ? BEATORAJA_OP.AUTOPLAY_ON : BEATORAJA_OP.AUTOPLAY_OFF);
-    this.activeOps.add(BEATORAJA_OP.NOW_LOADING);
-    this.activeOps.add(BEATORAJA_OP.GAUGE_GROOVE);
-    this.applyChartVariantOps(this.chartPlayVariant);
-    this.applyChartTraitOps(this.chart);
+    this.addStartOps(wasAutoplay);
     this.timerStartedAt.clear();
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
     this.timerStartedAt.set(TIMER_PREVIEW, 0);
-    this.judgeState[1].lastJudgeOp = undefined;
-    this.judgeState[1].lastFastSlowOp = undefined;
-    this.judgeState[1].lastJudgeCombo = 0;
-    this.judgeState[2].lastJudgeOp = undefined;
-    this.judgeState[2].lastFastSlowOp = undefined;
-    this.judgeState[2].lastJudgeCombo = 0;
-    this.judgeState[3].lastJudgeOp = undefined;
-    this.judgeState[3].lastFastSlowOp = undefined;
-    this.judgeState[3].lastJudgeCombo = 0;
-    this.judgeKindCounts = {};
+    this.firedOnce.clear();
+    for (const side of [1, 2, 3] as const) {
+      this.plates[side].lastJudgeOp = undefined;
+      this.plates[side].lastFastSlowOp = undefined;
+      this.lastJudgeOnLane[side] = createEmptyLaneJudgeRing();
+    }
+    const play = this.play;
+    play.plateCombos = [0, 0, 0];
+    play.combo = 0;
+    play.maxCombo = 0;
+    play.earlyLate = NO_EARLY_LATE();
+    delete play.score;
+    delete play.gauge;
+    delete play.clock;
+    delete play.lastJudgeDeltaMs;
+    play.chart = this.initJudgeState();
     this.poorBgaActive = false;
-    this.runningCombo = 0;
-    this.maxCombo = 0;
     this.frame = null;
     this.lastFrameBeat = undefined;
     this.lastFrameGauge = undefined;
-    this.failedTimerStamped = false;
-    this.gaugeMaxStamped = false;
-    this.lastRankOps.side = undefined;
-    this.lastRankOps.generic = undefined;
-    this.lastRankOps.now = undefined;
-    this.lastRankOps.band = undefined;
-    this.scoreHistory.length = 0;
-    this.gaugeHistory.length = 0;
+    this.scoreOps = [];
+    this.scoreHistory = [];
+    this.gaugeHistory = [];
     this.recentTimings.length = 0;
     this.allTimings.length = 0;
-    this.scorePolylineCache = undefined;
-    this.judgeStateBuckets = [];
-    this.judgeStateMaxNotesPerBucket = 0;
-    this.judgeStateTotalMs = 0;
-    this.bpmSegments = [];
-    this.cachedMainBpm = 0;
-    if (this.chart !== undefined) this.initJudgeStateBuckets(this.chart);
-    this.endOfNoteStamped[1] = false;
-    this.endOfNoteStamped[2] = false;
-    this.endOfNoteStamped[3] = false;
-    this.fullComboStamped[1] = false;
-    this.fullComboStamped[2] = false;
-    this.fullComboStamped[3] = false;
     this.pressedChannels.clear();
     this.lnHoldHeldByChannel.clear();
-    for (const kind of Object.keys(this.earlyLateCounts) as Array<keyof typeof this.earlyLateCounts>) {
-      this.earlyLateCounts[kind].early = 0;
-      this.earlyLateCounts[kind].late = 0;
-    }
-    // Cancel any in-flight `flash-lane` auto-release timeouts so the next run's first
-    // frames don't get a stale KEY_OFF stamp from the previous chart's tail flashes.
+    // Cancel pending flash and hold-bomb releases so they do not switch off the next run's timers.
     for (const handle of this.flashReleaseHandles) clearTimeout(handle);
     this.flashReleaseHandles.clear();
-    // Same idea for the LN-tail bomb auto-release handles. Pending timeouts here would
-    // deactivate the LN-hold timer of whatever chart loads next mid-frame, which would
-    // dim a freshly-started sustain glow.
     for (const handle of this.lnTailBombReleaseHandles) clearTimeout(handle);
     this.lnTailBombReleaseHandles.clear();
-    // Per-lane judge ring — clear both sides so the keybeam / bomb imageset revert to their
-    // neutral frame after a re-mount. Without this, a re-mounted scene carries the prior
-    // run's last-judge stamps until they age out, so the very first frame of the new run
-    // could show a phantom highlight from the previous chart.
-    for (let i = 0; i < JUDGE_LANE_REF_RANGE; i += 1) {
-      this.lastJudgeOnLane[1][i] = { kind: -1, at: 0 };
-      this.lastJudgeOnLane[2][i] = { kind: -1, at: 0 };
-      this.lastJudgeOnLane[3][i] = { kind: -1, at: 0 };
-    }
   }
-
-  // ─── Internals ────────────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Per-channel "which side does this lane TIMER belong to" — the answer the bomb / key-on /
-   * key-off / LN-hold timer banks need. POPN-9 has only ONE lane-timer bank (the upstream 1P
-   * `bomb_1p_keyN` / `keyon_1p_keyN` / `lnHold_1p_keyN` block, extended to lanes 6..9), so every
-   * channel collapses onto side `1` under variant `'9'`. SP / DP variants follow the literal
-   * `2X` ⇒ `2P` mapping.
-   */
-  private resolveSide(channel: string): BeatorajaSide {
-    if (this.chartPlayVariant === '9') return 1;
-    return channel.startsWith('2') ? 2 : 1;
-  }
-
-  /**
-   * Per-channel "which JUDGE PLATE does this judgement belong to" — distinct from
-   * {@link resolveSide} because beatoraja's `play9.json` authors THREE judge / combo plates
-   * over POPN-9's single playfield (one per 3-lane group). Mirrors upstream
-   * `JudgeManager.notifyJudge`'s dispatch (`JudgeManager.java:700`):
-   *
-   *   final int judgeindex = state.lane / (lanelength / judgenow.length);
-   *
-   * For POPN-9 (lanelength = 9, judgenow.length = 3) the formula collapses to `floor(lane / 3)`,
-   * so lanes 0..2 → plate 0 (side `1`), 3..5 → plate 1 (side `2`), 6..8 → plate 2 (side `3`).
-   * (`state.lane` in upstream is 0-based; `resolveSideKeySlot` here returns 1-based slots, so we
-   * subtract 1 before dividing.) The plate indices line up with `judge[].index` in the skin and
-   * pick the matching `TIMER_JUDGE_*P` / `TIMER_COMBO_*P` / `judgeOpForKind` family.
-   *
-   * SP / DP variants only address plates `1` (1P) and `2` (2P), matching the existing `resolveSide`
-   * behaviour. The third plate is POPN-9-specific.
-   */
-  private resolveJudgePlate(channel: string): BeatorajaSide {
-    if (this.chartPlayVariant === '9') {
-      const slot = resolveSideKeySlot(channel, this.chartPlayVariant);
-      if (slot >= 1 && slot <= 3) return 1;
-      if (slot >= 4 && slot <= 6) return 2;
-      if (slot >= 7 && slot <= 9) return 3;
-      // Out-of-range / scratch (slot 0 — POPN-9 has none, but defensively map to plate 1).
-      return 1;
-    }
-    return channel.startsWith('2') ? 2 : 1;
-  }
-
-  /**
-   * Map an engine channel to a beatoraja per-side lane index. Per prop.lua the convention is:
-   *   - lane 0 = scratch (`bomb_*p_scratch = 50/60`, `keyon_*p_scratch = 100/110`, …)
-   *   - lane 1..9 = keys 1..9 (`bomb_*p_key1 = 51`, etc.)
-   * `resolveSideKeySlot` already returns 0 for scratch and 1..N for keys, so we pass the slot through
-   * verbatim. (Earlier the adapter mapped scratch onto lane 8, which generated a `keyon_1p_key8` timer
-   * for every scratch press — the corresponding skin chrome never lit up.)
-   */
-  private resolveLane(channel: string): number | undefined {
-    const slot = resolveSideKeySlot(channel, this.chartPlayVariant);
-    if (slot < 0) return undefined;
-    return slot;
-  }
-
-  private startLaneTimer(channel: string, resolver: (side: BeatorajaSide, lane: number) => number | undefined): void {
-    const side = this.resolveSide(channel);
-    const lane = this.resolveLane(channel);
-    if (lane === undefined) return;
-    const id = resolver(side, lane);
-    if (id === undefined) return;
-    this.markTimer(id);
-  }
-
-  private startLaneKeyOnTimer(channel: string): void {
-    this.startLaneTimer(channel, keyOnTimerId);
-  }
-
-  private startLaneKeyOffTimer(channel: string): void {
-    this.startLaneTimer(channel, keyOffTimerId);
-  }
-
-  private startLaneBombTimer(channel: string): void {
-    this.startLaneTimer(channel, bombTimerId);
-  }
-
-  private startLaneLnHoldTimer(channel: string): void {
-    this.startLaneTimer(channel, lnHoldTimerId);
-  }
-
-  /**
-   * Deactivate the LN-hold timer for `channel`. Mirrors upstream `JudgeManager.java:546-547`:
-   *
-   *     timer.switchTimer(SkinPropertyMapper.holdTimerId(state.player, state.offset),
-   *         state.processing != null || (state.passing != null && state.inclease));
-   *
-   * upstream re-evaluates the hold timer's on/off state every frame against the live LN
-   * processing state. When the LN sustain ends (player releases or LN reaches its end note),
-   * `state.processing` becomes `null` → `switchTimer` flips the timer OFF, hiding any sprite
-   * gated on it (notably ModernChic's "LN bomb" body-pulse animation in `bomb.lua` keyed to
-   * `MAIN.TIMER.HOLD_1P_KEY*`). Without this OFF, the LN bomb stays glued visible forever
-   * after the first LN ends — exactly the user-reported symptom (the AUTO-mode LN bomb
-   * animation kept playing after the first long note finished resolving).
-   */
-  private deactivateLaneLnHoldTimer(channel: string): void {
-    this.deactivateLaneTimer(channel, lnHoldTimerId);
-  }
-
-  /**
-   * Deactivate (= "turn off" in beatoraja's `TimerManager`) a per-lane timer so any
-   * destination gated on it stops drawing. We deactivate by deleting the entry from
-   * `timerStartedAt` — the destination renderer reads `getTimerStart(id)` and treats
-   * `undefined` as "timer not active", which mirrors beatoraja's `isOff` check inside
-   * `SkinObject.prepareRegion`.
-   *
-   * Used for the press → release symmetry (KEY_ON deactivates on release, KEY_OFF
-   * deactivates on press) so the lane laser doesn't get stuck visible after a key release.
-   */
-  private deactivateLaneTimer(
-    channel: string,
-    resolver: (side: BeatorajaSide, lane: number) => number | undefined,
-  ): void {
-    const side = this.resolveSide(channel);
-    const lane = this.resolveLane(channel);
-    if (lane === undefined) return;
-    const id = resolver(side, lane);
-    if (id === undefined) return;
-    this.timerStartedAt.delete(id);
-  }
-
-  private deactivateLaneKeyOnTimer(channel: string): void {
-    this.deactivateLaneTimer(channel, keyOnTimerId);
-  }
-
-  private deactivateLaneKeyOffTimer(channel: string): void {
-    this.deactivateLaneTimer(channel, keyOffTimerId);
-  }
-}
-
-function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
-  return parts.filter((p): p is string => typeof p === 'string' && p.length > 0).join(' ');
-}
-
-/**
- * Whether a judge verdict represents a combo-advance (PERFECT / GREAT / GOOD) versus a combo-
- * break (BAD / POOR / MISS). Drives the per-side `combo_*p` timer restart in
- * {@link BeatorajaRuntimeAdapter.applyJudgeCombo}. Case-insensitive — the engine emits upper-
- * case strings but the comparison stays defensive.
- */
-function isComboAdvanceJudge(kind: string): boolean {
-  const upper = kind.toUpperCase();
-  return upper === 'PERFECT' || upper === 'GREAT' || upper === 'GOOD';
-}
-
-/**
- * Whether a judge verdict is a "clean hit" that warrants firing the lane bomb explosion.
- * Beatoraja's reference themes only show the bomb sprite for PERFECT and GREAT — GOOD is
- * close-but-imprecise (it advances combo but is visibly distinct from a clean hit), and
- * BAD / POOR / MISS / empty-press obviously shouldn't trigger a positive-feedback effect.
- */
-function isCleanHitJudge(kind: string): boolean {
-  const upper = kind.toUpperCase();
-  return upper === 'PERFECT' || upper === 'GREAT';
-}
-
-/**
- * Map a judge-string verdict to beatoraja's per-lane judge index. Returns `-1` for verdicts
- * that don't fit the standard 6-tier ladder (READY ticks, AUTO PLAY without input, etc.).
- *
- * Beatoraja's enum order is canon: PG=0, GR=1, GD=2, BD=3, PR=4, MS=5. The keybeam / bomb
- * imageset ref encoding in `resolveLaneJudgeRef` adds 1 so frame 0 stays reserved for the
- * "no judge" case — see {@link BeatorajaRuntimeAdapter.lastJudgeOnLane} for the full table.
- */
-/**
- * Pick the FAST / SLOW gating op for a (judge plate, signed delta) pair. Returns `undefined`
- * for `deltaMs === 0` (perfect-on-time — neither gate active).
- *
- * Per-plate ops (`SkinProperty.java`):
- *   - plate 0 (1P): `_1p_early = 1242`, `_1p_late = 1243`
- *   - plate 1 (2P): `_2p_early = 1262`, `_2p_late = 1263`
- *   - plate 2 (POPN-9 third plate): `_3p_early = 1362`, `_3p_late = 1363`
- */
-function pickFastSlowOp(judgeSide: BeatorajaSide, deltaMs: number): number | undefined {
-  if (deltaMs === 0) return undefined;
-  const isEarly = deltaMs < 0;
-  if (judgeSide === 1) return isEarly ? BEATORAJA_OP.P1_JUDGE_EARLY : BEATORAJA_OP.P1_JUDGE_LATE;
-  if (judgeSide === 2) return isEarly ? BEATORAJA_OP.P2_JUDGE_EARLY : BEATORAJA_OP.P2_JUDGE_LATE;
-  return isEarly ? BEATORAJA_OP.P3_JUDGE_EARLY : BEATORAJA_OP.P3_JUDGE_LATE;
-}
-
-function judgeKindToIndex(kind: string): number {
-  switch (kind.toUpperCase()) {
-    case 'PERFECT':
-      return 0;
-    case 'GREAT':
-      return 1;
-    case 'GOOD':
-      return 2;
-    case 'BAD':
-      return 3;
-    case 'POOR':
-      return 4;
-    case 'MISS':
-      return 5;
-    default:
-      return -1;
-  }
-}
-
-/**
- * Map a judge-kind string onto the upstream `Note.getState()` index used by
- * `SkinNoteDistributionGraph` TYPE_JUDGE — `data[index][st]++` where `st ∈ [0, 5]`. Mirrors
- * `bms.model.Note.STATE_*` field values:
- *
- *   0 = NONE (unjudged)
- *   1 = PERFECT (PG)
- *   2 = GREAT (GR)
- *   3 = GOOD (GD)
- *   4 = BAD (BD)
- *   5 = POOR / MISS (PR)
- *
- * Returns 0 for unknown / unjudged kinds (READY publishes, etc.) so callers can use
- * `< 1` as the "no state change" gate.
- */
-function judgeStateIndex(kind: string): number {
-  switch (kind.toUpperCase()) {
-    case 'PERFECT':
-      return 1;
-    case 'GREAT':
-      return 2;
-    case 'GOOD':
-      return 3;
-    case 'BAD':
-      return 4;
-    case 'POOR':
-    case 'MISS':
-      return 5;
-    default:
-      return 0;
-  }
-}
-
-/**
- * Build a fresh per-lane judge-ring buffer. Each slot is initialised to `{ kind: -1, at: 0 }`
- * so the resolver's `kind < 0` short-circuit treats the lane as "no recent judgement" until a
- * real verdict lands. Allocated as a plain array (not a typed array) because each entry is a
- * 2-field record; `JUDGE_LANE_REF_RANGE = 10` slots × 2 sides = 20 records, negligible cost.
- */
-function createEmptyLaneJudgeRing(): Array<{ kind: number; at: number }> {
-  return Array.from({ length: JUDGE_LANE_REF_RANGE }, () => ({ kind: -1, at: 0 }));
-}
-
-/**
- * Beats per measure used for the chart-time → beat conversion. BMS measures default to one full
- * 4/4 bar, with `chart.measures[].length` scaling that 4-beat baseline. The same approximation
- * used by `computeBeatorajaBpmCurve` and `computeBeatorajaChartMarkers`; refinable when we
- * surface a richer beat-per-measure model.
- */
-const BEATS_PER_STANDARD_MEASURE = 4;
-
-/**
- * Compute the per-side beat position of the last "real" note in the chart. Used by the
- * adapter to know when to stamp `TIMER_ENDOFNOTE_*P` so authored end-of-song animations fire
- * at the right moment.
- *
- * Side classification (matches the engine's channel convention):
- *   - 1P: channels starting with `1` (e.g. `11`-`19` visible), `5` (LN 1P), or `D` (mine 1P).
- *   - 2P: channels starting with `2`, `6` (LN 2P), or `E` (mine 2P).
- *   - Skipped: BGM (`01`), BPM (`03`/`08`), STOP (`09`), other non-note channels.
- *
- * Mines + invisible channels (`3*` / `4*`) intentionally NOT counted — endofnote should reflect
- * the last *playable* note, not chrome / hazards. Likewise mines (`D*`/`E*`) are excluded
- * because beatoraja's authored "you've finished the song" reveals shouldn't gate on a mine
- * being the last hazard.
- *
- * Returns `{ 1: undefined, 2: undefined }` for charts with no detectable notes (e.g. empty
- * chart fixtures); `undefined` per side means "this side never fires endofnote".
- */
-function computeLastNoteBeatBySide(chart: BeMusicJson): { 1: number | undefined; 2: number | undefined } {
-  const measureBaseBeat = computeMeasureBaseBeat(chart);
-  let last1: number | undefined;
-  let last2: number | undefined;
-  for (const event of chart.events ?? []) {
-    if (event.value === '00' || event.value === '') continue;
-    const ch = event.channel;
-    if (ch.length < 2) continue;
-    // Side from the leading character. Visible (1*/2*), LN (5*/6*) — mines intentionally not
-    // included (see function-level comment).
-    const head = ch[0]!;
-    let side: 1 | 2 | undefined;
-    if (head === '1' || head === '5') side = 1;
-    else if (head === '2' || head === '6') side = 2;
-    else continue;
-    // BGM is `01`; visible-note channels start with `1` but the second char distinguishes
-    // them from BGM. Skip the explicit `01` literal.
-    if (ch === '01') continue;
-    const beat = computeEventBeat(event, measureBaseBeat);
-    if (beat === undefined) continue;
-    if (side === 1) {
-      if (last1 === undefined || beat > last1) last1 = beat;
-    } else {
-      if (last2 === undefined || beat > last2) last2 = beat;
-    }
-  }
-  return { 1: last1, 2: last2 };
-}
-
-function computeMeasureBaseBeat(chart: BeMusicJson): number[] {
-  const lengths = new Map<number, number>();
-  let maxMeasure = 0;
-  for (const event of chart.events ?? []) {
-    if (event.measure > maxMeasure) maxMeasure = event.measure;
-  }
-  for (const measure of chart.measures ?? []) {
-    const idx = Math.max(0, Math.floor(measure.index));
-    if (idx > maxMeasure) maxMeasure = idx;
-    if (Number.isFinite(measure.length) && measure.length > 0) {
-      lengths.set(idx, measure.length);
-    }
-  }
-  const out: number[] = [];
-  let beat = 0;
-  for (let m = 0; m <= maxMeasure; m += 1) {
-    out.push(beat);
-    const length = lengths.get(m) ?? 1;
-    beat += length * BEATS_PER_STANDARD_MEASURE;
-  }
-  return out;
-}
-
-function computeEventBeat(
-  event: { measure: number; position: readonly [number, number] },
-  measureBaseBeat: ReadonlyArray<number>,
-): number | undefined {
-  const base = measureBaseBeat[event.measure];
-  if (base === undefined) return undefined;
-  const [num, denom] = event.position;
-  if (!Number.isFinite(num) || !Number.isFinite(denom) || denom <= 0) return base;
-  return base + (num / denom) * BEATS_PER_STANDARD_MEASURE;
-}
-
-/**
- * Map a side-rank op (200-207, `_1P_*`) to its `NOW_*_1P` counterpart (340-347). Beatoraja
- * maintains both blocks for live play — `_1P_*` is the "during play" rank gate, `NOW_*_1P` is
- * the "now playing" indicator some skins author separately. We mirror them in lockstep.
- */
-function mapSideRankToNowRank(sideRank: number): number {
-  // 200..207 (1P_AAA..1P_F) → 340..347 (NOW_AAA_1P..NOW_F_1P)
-  if (sideRank >= 200 && sideRank <= 207) return sideRank + 140;
-  // For 2P or unknown, leave at NOW_F_1P. The op block doesn't have a 2P variant in this range.
-  return BEATORAJA_OP.NOW_F_1P;
-}
-
-/**
- * "White" duration — milliseconds for a note to traverse the visible playfield at the given
- * "White-number" duration in ms. Mirrors upstream `LaneRenderer.java:330-335` exactly:
- *
- *     final double region = nscroll > 0 ? (240000 / nbpm / hispeed) / nscroll : 0;
- *     final float lanecover = playconfig.isEnablelanecover() ? playconfig.getLanecover() : 0;
- *     currentduration = (int) Math.round(region * (1 - lanecover));
- *
- * `240000 = 60 sec/min × 4 beats/measure × 1000 ms/sec` — the time (ms) for 4 beats at
- * the given bpm with hispeed = 1 and scroll = 1. Higher BPM / hispeed / scroll all
- * shorten the duration (notes traverse the lane faster); lanecover proportionally
- * shortens it more by hiding the top of the lane.
- *
- * Note that `lift` does NOT enter this formula — it shifts the lane bottom upward but
- * doesn't compress the scroll time. Upstream uses only `playconfig.getLanecover()` here.
- *
- * `nscroll` is the BMS `#SCROLL` channel-09-driven multiplier — currently held at 1.0
- * since we don't yet plumb the per-beat scroll value through the engine UI bus. The
- * default-skin's hispeed panel (which is the dominant consumer of this readout) reads
- * close to upstream for non-SCROLL charts and stays internally consistent.
- *
- * Returns 0 for degenerate inputs (zero / negative bpm, hispeed, or nscroll) so the
- * value display stays at zero rather than garbage.
- */
-function whiteDurationMs(lanecoverRatio: number, hispeed: number, bpm: number, nscroll = 1): number {
-  if (hispeed <= 0 || bpm <= 0 || nscroll <= 0) return 0;
-  const region = 240000 / bpm / hispeed / nscroll;
-  return Math.round(region * (1 - lanecoverRatio));
-}
-
-/**
- * "Green-number" duration in ms. Mirrors upstream `IntegerPropertyFactory` `duration_green`
- * (313): `getCurrentDuration() * 3 / 5` — exactly 60 % of the white-number value.
- *
- * Upstream's older "BPM-invariant" interpretation (white normalised to a constant
- * reference BPM) does NOT match this entry's actual implementation; the upstream code
- * is plain `* 3 / 5`. The previous helper used the BPM-invariant formula, which produced
- * different values from upstream on every non-130-BPM chart. This rewrite restores parity.
- */
-function greenDurationMs(lanecoverRatio: number, hispeed: number, bpm: number, nscroll = 1): number {
-  const white = whiteDurationMs(lanecoverRatio, hispeed, bpm, nscroll);
-  return Math.round((white * 3) / 5);
-}
-
-/**
- * Resolve a per-side judge-combo metric `{width, space}` from the host-supplied options.
- * Defaults match the default skin's `play5.json` / `play7main.lua` (`numbers[i].dst.w = 40`,
- * value space = 0).
- */
-function resolveJudgeComboMetric(preferred: { width?: number; space?: number } | undefined): {
-  width: number;
-  space: number;
-} {
-  const width =
-    typeof preferred?.width === 'number' && Number.isFinite(preferred.width) && preferred.width > 0
-      ? preferred.width
-      : 40;
-  const space = typeof preferred?.space === 'number' && Number.isFinite(preferred.space) ? preferred.space : 0;
-  return { width, space };
-}
-
-/**
- * Pick the active EX-score band op (`P1_BAND_0_9` .. `P1_BAND_100`). The band partition is in
- * 10-percent steps of the EX-score / max ratio, snapping to 100 at exactly the max.
- */
-function computeScoreBandOp(exScore: number, maxExScore: number): number {
-  if (maxExScore <= 0) return BEATORAJA_OP.P1_BAND_0_9;
-  const ratio = exScore / maxExScore;
-  if (ratio >= 1) return BEATORAJA_OP.P1_BAND_100;
-  if (ratio >= 0.9) return BEATORAJA_OP.P1_BAND_90_99;
-  if (ratio >= 0.8) return BEATORAJA_OP.P1_BAND_80_89;
-  if (ratio >= 0.7) return BEATORAJA_OP.P1_BAND_70_79;
-  if (ratio >= 0.6) return BEATORAJA_OP.P1_BAND_60_69;
-  if (ratio >= 0.5) return BEATORAJA_OP.P1_BAND_50_59;
-  if (ratio >= 0.4) return BEATORAJA_OP.P1_BAND_40_49;
-  if (ratio >= 0.3) return BEATORAJA_OP.P1_BAND_30_39;
-  if (ratio >= 0.2) return BEATORAJA_OP.P1_BAND_20_29;
-  if (ratio >= 0.1) return BEATORAJA_OP.P1_BAND_10_19;
-  return BEATORAJA_OP.P1_BAND_0_9;
 }
