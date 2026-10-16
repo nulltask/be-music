@@ -54,6 +54,22 @@ const BENCH_LR2_DECIDE_SKIN = {
   systemFontSizes: [],
   files: new Map(),
 } as unknown as Lr2Skin;
+/** An LR2 result skin with nothing to draw, for the LR2 result scene. */
+const BENCH_LR2_RESULT_SKIN = {
+  width: 640,
+  height: 480,
+  timing: { startInput: 300 },
+  images: [],
+  numbers: [],
+  texts: [],
+  bargraphs: [],
+  sliders: [],
+  gaugeCharts: [],
+  scoreCharts: [],
+  lr2FontPaths: [],
+  systemFontSizes: [],
+  files: new Map(),
+} as unknown as Lr2Skin;
 /** No keys reach a benchmarked scene. */
 const BENCH_KEY_TARGET: playerWebCoreApi.SessionKeyTarget = {
   addEventListener: () => undefined,
@@ -388,19 +404,22 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   });
   define('player-web.createResultScene', {
     run: () => {
-      const scene = playerWebCoreApi.createResultScene(
+      const kits: playerWebCoreApi.ResultSceneKit[] = [
         { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
-        {
+        { family: 'lr2', skin: BENCH_LR2_RESULT_SKIN },
+      ];
+      for (const kit of kits) {
+        const scene = playerWebCoreApi.createResultScene(kit, {
           result: BENCH_PLAY_RESULT,
           sounds: { clear: { bytes: BENCH_BYTES } },
           audio: playerWebCoreApi.createAudioService({ createContext: () => undefined }),
           on: { continue: () => undefined, retry: () => undefined },
           keyTarget: BENCH_KEY_TARGET,
           now: () => 0,
-        },
-      );
-      scene.exit();
-      scene.dispose();
+        });
+        scene.exit();
+        scene.dispose();
+      }
     },
   });
   define('player-web.createSkinFamilyRegistry', {
