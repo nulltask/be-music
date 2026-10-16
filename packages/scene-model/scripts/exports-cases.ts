@@ -228,4 +228,64 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       });
     },
   });
+
+  // Play options
+  define('scene-model.clampHiSpeed', {
+    run: () => {
+      sceneModelApi.clampHiSpeed(1.3000000000000003);
+    },
+  });
+  define('scene-model.clampShutter', {
+    run: () => {
+      sceneModelApi.clampShutter(0.30000000000000004);
+    },
+  });
+  define('scene-model.resolvePlayOptionValue', {
+    run: () => {
+      sceneModelApi.resolvePlayOptionValue('random1P', 'MIRROR');
+      sceneModelApi.resolvePlayOptionValue('hiSpeed', 99);
+    },
+  });
+  define('scene-model.cyclePlayOptionValue', {
+    run: () => {
+      sceneModelApi.cyclePlayOptionValue('gauge1P', 'GROOVE', -1);
+    },
+  });
+  define('scene-model.nextChoice', {
+    run: () => {
+      sceneModelApi.nextChoice(sceneModelApi.RANDOM_CYCLE, 'SCATTER');
+    },
+  });
+  define('scene-model.isListPlayOption', {
+    run: () => {
+      sceneModelApi.isListPlayOption('sort');
+    },
+  });
+  define('scene-model.resolvePlayOptions', {
+    run: () => {
+      sceneModelApi.resolvePlayOptions({ hiSpeed: 3.25, random1P: 'MIRROR', gauge1P: 'BOGUS' });
+    },
+  });
+  define('scene-model.snapHiSpeed', {
+    run: () => {
+      sceneModelApi.snapHiSpeed(1.3000000000000003);
+    },
+  });
+  define('scene-model.stepPlayerHiSpeed', {
+    run: () => {
+      sceneModelApi.stepPlayerHiSpeed(2.5, 0.1, 0.8);
+    },
+  });
+  define('scene-model.easeHiSpeed', {
+    run: () => {
+      sceneModelApi.easeHiSpeed(2, 3, 1_000, 1_100, sceneModelApi.HISPEED_TRANSITION_MS);
+    },
+  });
+  define('scene-model.HiSpeedTransition', {
+    run: () => {
+      const transition = new sceneModelApi.HiSpeedTransition(2);
+      transition.retarget(3, 1_000);
+      transition.valueAt(1_100);
+    },
+  });
 }
