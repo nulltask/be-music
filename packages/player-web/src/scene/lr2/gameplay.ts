@@ -46,7 +46,7 @@ import {
   renderGrooveGaugeElement,
   renderNowComboElement,
   resolveJudgeSkinKind,
-} from './gameplay-hud.ts';
+} from '../../view/lr2/play-hud.ts';
 import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
 import {
   isLr2AutoLane,
