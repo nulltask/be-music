@@ -37,7 +37,8 @@ import {
 } from '@be-music/beatoraja-skin';
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
-import { beatorajaClearLampOp, resolveClearLamp } from './clear-lamp.ts';
+import { resolveClearLamp } from '@be-music/player/ruleset';
+import { beatorajaClearLampOp } from './clear-lamp.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
 import { resolveChartTotalReadout } from '../../chart/beatoraja/meta.ts';
@@ -339,7 +340,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
         resolveClearLamp({
           cleared,
           score: summary,
-          gaugeType: summary.gauge?.type,
+          ...(summary.gauge?.type !== undefined ? { gauge: summary.gauge.type } : {}),
           ...(this.options.judgeRuleset !== undefined ? { ruleset: this.options.judgeRuleset } : {}),
         }),
       ),
