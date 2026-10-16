@@ -47,6 +47,7 @@ const BENCH_BAR_BODIES = [
   { kind: 'song', source: { imagePath: 'song.png' } },
   { kind: 'folder', source: { imagePath: 'folder.png' } },
 ] as unknown as Lr2BarBodySource[];
+const BENCH_AUTO_SCRATCH_OPS: ReadonlySet<number> = new Set([55]);
 const BENCH_CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
 const BENCH_PLAY_SETUP: lr2StateApi.Lr2PlaySetup = {
   chart: BENCH_CHART,
@@ -84,6 +85,11 @@ const BENCH_RESULT: PlayResult = {
 
 /** Cases for `@be-music/lr2-skin/state`, keyed `lr2-skin.state.<export>`. */
 export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): void {
+  define('lr2-skin.state.isLr2AutoLane', {
+    run: () => {
+      lr2StateApi.isLr2AutoLane(0, BENCH_AUTO_SCRATCH_OPS);
+    },
+  });
   define('lr2-skin.state.lr2CourseMatchesKeysFilter', {
     run: () => {
       lr2StateApi.lr2CourseMatchesKeysFilter({ definition: { keyMode: 7 } }, 160);

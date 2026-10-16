@@ -2,6 +2,7 @@ import { createEmptyScore, type ScoreSummary } from '@be-music/player/core/scori
 import { describe, expect, it } from 'vite-plus/test';
 import { LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
 import {
+  isLr2AutoLane,
   resolveLr2GaugeRangeOp,
   resolveLr2GaugeTypeOps,
   resolveLr2LaneTimer,
@@ -198,6 +199,20 @@ describe('play ops', () => {
     expect(resolveLr2RankOp({ total: 0, exScore: 0 })).toBeUndefined();
     expect(resolveLr2RankOp({ total: 100, exScore: 200 })).toBe(LR2_OP.RANK_1P_AAA);
     expect(resolveLr2RankOp({ total: 100, exScore: 0 })).toBe(LR2_OP.RANK_1P_F);
+  });
+});
+
+describe('isLr2AutoLane', () => {
+  it('draws the 1P scratch as an auto lane while 1P auto scratch is on', () => {
+    const autoScratch = new Set([LR2_OP.AUTO_SCRATCH_1P_ON]);
+    expect(isLr2AutoLane(0, autoScratch)).toBe(true);
+    expect(isLr2AutoLane(1, autoScratch)).toBe(false);
+    expect(isLr2AutoLane(0, new Set([LR2_OP.AUTO_SCRATCH_1P_OFF]))).toBe(false);
+  });
+
+  it('takes no lane for an auto lane under EXTRA MODE (op 53) or full AUTOPLAY (op 33)', () => {
+    const ops = new Set([LR2_OP.EXTRA_MODE_ON, LR2_OP.AUTOPLAY_ON, LR2_OP.AUTO_SCRATCH_1P_OFF]);
+    for (const lane of [0, 1, 7]) expect(isLr2AutoLane(lane, ops)).toBe(false);
   });
 });
 
