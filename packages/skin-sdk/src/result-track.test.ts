@@ -67,8 +67,13 @@ describe('resolveResultVerdict', () => {
     expect(resolveResultVerdict({ cleared: false })).toBe('FAILED');
   });
 
-  it('reads COURSE CLEAR / COURSE FAILED for a course result', () => {
-    expect(resolveResultVerdict({ cleared: true, courseResult: true })).toBe('COURSE CLEAR');
-    expect(resolveResultVerdict({ cleared: false, courseResult: true })).toBe('COURSE FAILED');
+  it('reads COURSE CLEAR / COURSE FAILED for a course run', () => {
+    expect(resolveResultVerdict({ cleared: true, run: 'course' })).toBe('COURSE CLEAR');
+    expect(resolveResultVerdict({ cleared: false, run: 'course' })).toBe('COURSE FAILED');
+  });
+
+  it('reads a course stage and a NONSTOP run as one play', () => {
+    expect(resolveResultVerdict({ cleared: true, run: 'stage' })).toBe('STAGE CLEAR');
+    expect(resolveResultVerdict({ cleared: false, run: 'nonstop' })).toBe('FAILED');
   });
 });
