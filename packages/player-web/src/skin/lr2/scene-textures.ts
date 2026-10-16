@@ -2,7 +2,7 @@ import { Texture } from 'pixi.js';
 import { type Lr2Skin, type Lr2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import { destroyTextureAndRevokeBlobUrl, loadSkinAssetTexture, loadTextureFromBytes } from './textures.ts';
 import { loadAssetBytes, resolveChartImageAsset, resolveSongSource } from '../../collection/collection.ts';
-import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
+import type { BrowserSongAssetSource, BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
 
 type TextureLoadValidity = () => boolean;
 type SkinTexturePathCollector = (paths: Set<string>, skin: Lr2Skin) => void;
@@ -68,6 +68,28 @@ export class Lr2ChartGraphicTextureStore {
     path: Lr2SpecialGraphic,
     onLoaded: () => void,
   ): Texture | undefined {
+    return this.resolveWith(() => resolveSongSource(collection, song), song, path, onLoaded);
+  }
+
+  /**
+   * As {@link resolve}, for a chart whose files are `source`: the texture of `path` for `song` once loaded, the solid
+   * one for `*BLACK` / `*WHITE`. Without a source nothing loads.
+   */
+  public resolveFromSource(
+    source: BrowserSongAssetSource | undefined,
+    song: BrowserSongEntry,
+    path: Lr2SpecialGraphic,
+    onLoaded: () => void,
+  ): Texture | undefined {
+    return this.resolveWith(() => source, song, path, onLoaded);
+  }
+
+  private resolveWith(
+    resolveSource: () => BrowserSongAssetSource | undefined,
+    song: BrowserSongEntry,
+    path: Lr2SpecialGraphic,
+    onLoaded: () => void,
+  ): Texture | undefined {
     const solidTexture = resolveSolidSpecialGraphicTexture(path);
     if (solidTexture) {
       return solidTexture;
@@ -79,7 +101,7 @@ export class Lr2ChartGraphicTextureStore {
     }
     if (!this.pending.has(cacheKey)) {
       this.pending.add(cacheKey);
-      void this.load(collection, song, path, cacheKey, onLoaded);
+      void this.load(resolveSource, song, path, cacheKey, onLoaded);
     }
     return undefined;
   }
@@ -94,7 +116,7 @@ export class Lr2ChartGraphicTextureStore {
   }
 
   private async load(
-    collection: BrowserSongCollection,
+    resolveSource: () => BrowserSongAssetSource | undefined,
     song: BrowserSongEntry,
     path: Lr2SpecialGraphic,
     cacheKey: string,
@@ -105,7 +127,7 @@ export class Lr2ChartGraphicTextureStore {
       if (!assetPath) {
         return;
       }
-      const source = resolveSongSource(collection, song);
+      const source = resolveSource();
       if (!source) {
         return;
       }

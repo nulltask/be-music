@@ -1,4 +1,6 @@
 import { createEmptyJson } from '@be-music/json';
+import type { Lr2Skin } from '@be-music/lr2-skin';
+import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { parseChart } from '@be-music/parser';
 import type { LibraryChart } from '@be-music/scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
@@ -7,8 +9,9 @@ import type { PixiSceneHost } from '../scene/host.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
 import { BuiltInDecideView, resolveBuiltInDecideTiming } from '../view/built-in/decide-view.ts';
+import { resolveLr2DecideTimers, resolveLr2DecideTiming } from '../view/lr2/decide-view.ts';
 import { createDecideScene } from './decide.ts';
-import type { BuiltInKit } from './family-kit.ts';
+import type { BuiltInKit, Lr2Kit } from './family-kit.ts';
 
 const CHART: LibraryChart = {
   id: 'chart',
@@ -155,5 +158,147 @@ describe('createDecideScene', () => {
     fake.click();
     expect(emit).toHaveBeenCalledTimes(1);
     view.dispose();
+  });
+});
+
+/** An LR2 decide skin with nothing to draw, and its scene timing. */
+function lr2DecideSkin(timing: Lr2Skin['timing'] = {}): Lr2Skin {
+  return {
+    width: 640,
+    height: 480,
+    timing,
+    images: [],
+    numbers: [],
+    texts: [],
+    lr2FontPaths: [],
+    systemFontSizes: [],
+    files: new Map(),
+  } as unknown as Lr2Skin;
+}
+
+describe('resolveLr2DecideTiming', () => {
+  it("opens input after the skin's #STARTINPUT and moves on 1200 ms later, with no fade-out", () => {
+    expect(resolveLr2DecideTiming({ timing: { startInput: 300 } })).toEqual({
+      inputDelayMs: 300,
+      autoAdvanceMs: 1500,
+      fadeOutMs: 0,
+    });
+  });
+
+  it('opens input after 1500 ms without #STARTINPUT, as the stock decide skin does', () => {
+    expect(resolveLr2DecideTiming({ timing: {} })).toEqual({ inputDelayMs: 1500, autoAdvanceMs: 2700, fadeOutMs: 0 });
+  });
+
+  it('reads a negative #STARTINPUT as no delay', () => {
+    expect(resolveLr2DecideTiming({ timing: { startInput: -50 } }).inputDelayMs).toBe(0);
+  });
+});
+
+describe('resolveLr2DecideTimers', () => {
+  it('runs timer 0 from the entry, and timer 1 once input has opened', () => {
+    const frame = (nowMs: number) => ({ clock: { nowMs, enteredAtMs: 1000 }, inputOpenAtMs: 1300 });
+    expect([...resolveLr2DecideTimers(frame(1200))]).toEqual([[LR2_TIMER.SCENE_START, 1000]]);
+    expect([...resolveLr2DecideTimers(frame(1300))]).toEqual([
+      [LR2_TIMER.SCENE_START, 1000],
+      [LR2_TIMER.START_INPUT, 1300],
+    ]);
+  });
+});
+
+describe('createDecideScene with an LR2 kit', () => {
+  function create(timing: Lr2Skin['timing'] = { startInput: 300 }) {
+    const { audio, service } = createFakeAudio();
+    const on = { continue: vi.fn(), cancel: vi.fn() };
+    const clock = { now: 1000 };
+    const kit: Lr2Kit = { family: 'lr2', skin: lr2DecideSkin(timing) };
+    const scene = createDecideScene(kit, {
+      chart: CHART,
+      sounds: {},
+      audio: service,
+      on,
+      keyTarget: NO_KEYS,
+      now: () => clock.now,
+    });
+    return { scene, audio, on, clock, kit };
+  }
+
+  it('is the LR2 decide screen', () => {
+    const { scene } = create();
+    expect(scene.identity).toEqual({ kind: 'decide', family: 'lr2' });
+    scene.dispose();
+  });
+
+  it("moves on by itself 1200 ms after the skin's #STARTINPUT", async () => {
+    const { scene, on, clock } = create();
+    const fake = createFakeHost();
+    await scene.enter(fake.host);
+    clock.now = 2499;
+    fake.tick();
+    expect(on.continue).not.toHaveBeenCalled();
+    clock.now = 2500;
+    fake.tick();
+    expect(on.continue).toHaveBeenCalledTimes(1);
+    scene.dispose();
+  });
+
+  it('continues on a click once #STARTINPUT has passed, and not before', async () => {
+    const { scene, on, clock } = create();
+    const fake = createFakeHost();
+    await scene.enter(fake.host);
+    clock.now = 1299;
+    fake.tick();
+    fake.click();
+    expect(on.continue).not.toHaveBeenCalled();
+    clock.now = 1300;
+    fake.tick();
+    fake.click();
+    expect(on.continue).toHaveBeenCalledTimes(1);
+    scene.dispose();
+    expect(fake.pointer.size).toBe(0);
+  });
+
+  it('takes no auto-repeat of a key held from the select screen, and backs out on Escape', async () => {
+    const listeners = new Set<(event: KeyboardEvent) => void>();
+    const keyTarget: SessionKeyTarget = {
+      addEventListener: (type, listener) => {
+        if (type === 'keydown') listeners.add(listener);
+      },
+      removeEventListener: (_type, listener) => listeners.delete(listener),
+    };
+    const press = (key: string, timeStamp: number, repeat = false) => {
+      const event = { key, code: key, repeat, timeStamp, target: null, preventDefault: vi.fn() };
+      for (const listener of Array.from(listeners)) listener(event as unknown as KeyboardEvent);
+      return event.preventDefault;
+    };
+    const on = { continue: vi.fn(), cancel: vi.fn() };
+    const clock = { now: 1000 };
+    const scene = createDecideScene(
+      { family: 'lr2', skin: lr2DecideSkin({ startInput: 300 }) },
+      { chart: CHART, sounds: {}, audio: createFakeAudio().service, on, keyTarget, now: () => clock.now },
+    );
+    const fake = createFakeHost();
+    await scene.enter(fake.host);
+    clock.now = 1400;
+    fake.tick();
+    press('Enter', 1400, true);
+    expect(on.continue).not.toHaveBeenCalled();
+    expect(press('Escape', 1400)).toHaveBeenCalled();
+    expect(on.cancel).toHaveBeenCalledTimes(1);
+    scene.dispose();
+  });
+
+  it('plays no jingle of its own when given none', async () => {
+    const { scene, audio } = create();
+    await scene.enter(createFakeHost().host);
+    expect(audio.playJingle).not.toHaveBeenCalled();
+    scene.dispose();
+  });
+
+  it('keeps its family and its skin', () => {
+    const { scene, kit } = create();
+    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit({ family: 'lr2', skin: lr2DecideSkin() })).not.toThrow();
+    expect(() => scene.updateKit(kit)).not.toThrow();
+    scene.dispose();
   });
 });

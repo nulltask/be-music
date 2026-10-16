@@ -9,15 +9,19 @@ import type { BrowserSongAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { DecideSession, type DecideSessionEvents } from '../session/decide/decide-session.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
+import { logger } from '../logger.ts';
 import { BuiltInDecideView } from '../view/built-in/decide-view.ts';
-import type { DecideFrame, DecideIntent } from '../view/types.ts';
-import type { BuiltInKit } from './family-kit.ts';
+import { Lr2DecideView } from '../view/lr2/decide-view.ts';
+import type { DecideFrame, DecideIntent, DecideView } from '../view/types.ts';
+import type { BuiltInKit, Lr2Kit } from './family-kit.ts';
+
+const log = logger('decide');
 
 /**
- * The kits the decide scene takes. The LR2 and beatoraja decide screens are still `PixiDecideView` and
+ * The kits the decide scene takes: a be-music skin, or an LR2 decide skin. The beatoraja decide screen is still
  * `PixiBeatorajaDecideScene`.
  */
-export type DecideSceneKit = BuiltInKit;
+export type DecideSceneKit = BuiltInKit | Lr2Kit;
 
 export interface DecideSceneOptions extends SessionSceneOptions {
   /** The chart about to be played. */
@@ -46,22 +50,52 @@ export interface DecideScene extends SessionScene<DecideFrame, DecideIntent> {
    * draws. The screen shows these branches; hand it to the play (`preResolved`) so the play plays them too.
    */
   readonly resolved: ResolvedPlayChart;
-  /** Takes the player's new settings for the kit's skin; the next frame draws with them. */
+  /**
+   * Takes the player's new settings for the kit's skin; the next frame draws with them. The scene keeps its family and
+   * its skin: a kit of another family or skin is ignored.
+   */
   updateKit(kit: DecideSceneKit): void;
 }
 
-class BuiltInDecideScene extends SessionScene<DecideFrame, DecideIntent> implements DecideScene {
-  public readonly resolved: ResolvedPlayChart;
-  private readonly decideView: BuiltInDecideView;
+/** A family's decide view, and how it takes a new kit. */
+interface FamilyDecideView {
+  readonly view: DecideView;
+  updateKit(kit: DecideSceneKit): void;
+}
 
-  public constructor(session: DecideSession, view: BuiltInDecideView, options: SessionSceneOptions) {
-    super(session, view, options);
+/** The decide view of `kit`'s family, reading the chart's files from `source`. */
+function createDecideView(kit: DecideSceneKit, source: BrowserSongAssetSource | undefined): FamilyDecideView {
+  const options = source !== undefined ? { source } : {};
+  if (kit.family === 'lr2') {
+    const view = new Lr2DecideView(kit, options);
+    return {
+      view,
+      updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),
+    };
+  }
+  const view = new BuiltInDecideView(kit, options);
+  return {
+    view,
+    updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
+  };
+}
+
+function ignoreKit(kit: DecideSceneKit, family: DecideSceneKit['family']): void {
+  log.warn(`a ${family} decide scene keeps its family; ignoring a ${kit.family} kit`);
+}
+
+class FamilyDecideScene extends SessionScene<DecideFrame, DecideIntent> implements DecideScene {
+  public readonly resolved: ResolvedPlayChart;
+  private readonly familyView: FamilyDecideView;
+
+  public constructor(session: DecideSession, familyView: FamilyDecideView, options: SessionSceneOptions) {
+    super(session, familyView.view, options);
     this.resolved = session.resolved;
-    this.decideView = view;
+    this.familyView = familyView;
   }
 
   public updateKit(kit: DecideSceneKit): void {
-    this.decideView.updateKit(kit);
+    this.familyView.updateKit(kit);
   }
 }
 
@@ -70,7 +104,8 @@ class BuiltInDecideScene extends SessionScene<DecideFrame, DecideIntent> impleme
  * view draws it. Show it with `PixiSceneHost.setScene`, and dispose it once it is gone.
  */
 export function createDecideScene(kit: DecideSceneKit, options: DecideSceneOptions): DecideScene {
-  const view = new BuiltInDecideView(kit, options.source !== undefined ? { source: options.source } : {});
+  const familyView = createDecideView(kit, options.source);
+  const { view } = familyView;
   const session = new DecideSession({
     chart: options.chart,
     ...(options.course !== undefined ? { course: options.course } : {}),
@@ -82,7 +117,7 @@ export function createDecideScene(kit: DecideSceneKit, options: DecideSceneOptio
     ...(options.random !== undefined ? { random: options.random } : {}),
     on: options.on,
   });
-  return new BuiltInDecideScene(session, view, {
+  return new FamilyDecideScene(session, familyView, {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
