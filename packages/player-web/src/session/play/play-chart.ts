@@ -43,18 +43,20 @@ import {
   type NonstopStageBgaTimeline,
 } from '../../scene/core/gameplay-bga.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay.ts';
+import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 import type { JudgeTimingLog } from '../../scene/core/judge-timing-log.ts';
 import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../scene/core/note-draw-window.ts';
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
 import { isPlayableInputChannel, resolvePlayVariantLaneChannels } from '../../scene/gameplay-lanes.ts';
+import { applyHsFix, type HsFixContext } from './play-view-settings.ts';
 
 /** The play state {@link prepareSong} resets and fills for a new chart: `CoreGameplayView`'s fields of these names. */
-export interface PlayChartContext {
+export interface PlayChartContext extends HsFixContext {
   readonly options: Readonly<
     Pick<
       CoreGameplayViewOptions,
+      | 'hsFix'
       | 'replay'
       | 'dpFlip'
       | 'random1P'
@@ -125,8 +127,6 @@ export interface PlayChartContext {
   chartEnded: boolean;
   /** The gauge the run plays on (a replay's recorded pick wins). */
   resolveSelectedGauge(): GaugeType;
-  /** Folds the HS-FIX multiplier into the hi-speed once the chart's tempo is known. */
-  applyHsFix(resolver: TimingResolver, referenceBpmCandidate: number | undefined, mainBpm: number | undefined): void;
 }
 
 export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void {
@@ -331,7 +331,7 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   // `resolveChartReferenceBpm` helper prefers `#BASEBPM` over the chart's initial `#BPM` so a chart whose `#BPM` is
   // its peak / average rather than its scroll-feel reference still calibrates at the speed the author intended; falls
   // back to the parsed `metadata.bpm` and finally the song-list BPM hint when neither is present.
-  ctx.applyHsFix(resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm), resolveChartMainBpm(resolvedPlay));
+  applyHsFix(ctx, resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm), resolveChartMainBpm(resolvedPlay));
   // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
   // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
   // per PG/GR.

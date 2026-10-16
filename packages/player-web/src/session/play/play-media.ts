@@ -7,12 +7,14 @@
  * The functions read and write the play's state through {@link PlayMediaContext}; the scene passes itself.
  */
 
+import type { TimedSampleTrigger } from '@be-music/audio-renderer/triggers';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { Texture } from 'pixi.js';
 import { createPlayAudioGraph, loadPlaySamples } from '../../chart/play-audio.ts';
 import { loadPlayBga } from '../../chart/play-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
+import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type {
   AudioBusChannel,
   AudioBusHandle,
@@ -21,10 +23,11 @@ import type {
   TunableCompressor,
 } from '../../runtime/audio-bus.ts';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
-import { resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
+import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay.ts';
+import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import { resolveGameplayAudioTailCleanupDelayMs } from '../../scene/core/gameplay-result-delay.ts';
 
 /** The play state the media preparation reads and fills: `CoreGameplayView`'s fields of these names. */
 export interface PlayMediaContext {
@@ -143,7 +146,7 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
 }
 
 /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
-export function samplePlaybackRate(ctx: PlayMediaContext): number {
+export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'tempo'>): number {
   return resolveSamplePlaybackRate(ctx.options.tempoPitchMode ?? 'pitch', ctx.tempo);
 }
 
@@ -209,4 +212,61 @@ export function disposeGameplayAudioGraphAfterDelay(
     return;
   }
   window.setTimeout(cleanup, delayMs);
+}
+
+/** What {@link disposePlayAudio} tears down: the media state, and what the audio tail is measured against. */
+export interface PlayMediaTeardownContext extends PlayMediaContext {
+  readonly chartEnded: boolean;
+  readonly notes: readonly TimedPlayableNote[];
+  readonly autoSampleTriggers: readonly TimedSampleTrigger[];
+  audioFrame: AudioFeatures | undefined;
+  currentSeconds(): number;
+}
+
+/**
+ * Releases the play's audio graph as the scene is disposed (`CoreGameplayView.dispose`); after a natural end with
+ * `preserveAudioTail`, the graph is kept until the last samples have rung out.
+ */
+export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: CoreGameplayDisposeOptions): void {
+  // WebAudioSession owns the in-flight BufferSource tracking that the bus's connected sources hang off of, so
+  // dispose it BEFORE we tear the bus down — that gives the session a chance to call `node.stop()` on every
+  // still-playing source so they don't survive into the next chart's bus and bleed audio through. Fire-and-
+  // forget the returned promise; the session's dispose path is best-effort.
+  const preserveAudioTail = options.preserveAudioTail === true && ctx.chartEnded;
+  const audioTailChart = ctx.resolvedChart ?? ctx.song?.chart;
+  const audioTailCleanupDelayMs =
+    preserveAudioTail && audioTailChart !== undefined
+      ? chartToElapsedSeconds(
+          resolveGameplayAudioTailCleanupDelayMs({
+            chart: audioTailChart,
+            notes: ctx.notes,
+            autoSampleTriggers: ctx.autoSampleTriggers,
+            decodedSamples: ctx.decodedSamples,
+            bmsonSlicePlayback: ctx.bmsonSlicePlayback,
+            currentSeconds: ctx.currentSeconds(),
+          }),
+          ctx.tempo,
+        )
+      : 0;
+  const webAudioSession = ctx.webAudioSession;
+  ctx.webAudioSession = undefined;
+  ctx.nonstopMixer?.dispose();
+  ctx.nonstopMixer = undefined;
+  // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
+  // The bus doesn't own the AudioContext itself; closing that is the next step.
+  ctx.audioAnalyzer?.dispose();
+  ctx.audioAnalyzer = undefined;
+  ctx.audioFrame = undefined;
+  const audioBus = ctx.audioBus;
+  ctx.audioBus = undefined;
+  const audioContext = ctx.audioContext;
+  ctx.audioContext = undefined;
+  disposeGameplayAudioGraphAfterDelay(
+    {
+      session: webAudioSession,
+      bus: audioBus,
+      context: audioContext,
+    },
+    preserveAudioTail ? audioTailCleanupDelayMs : 0,
+  );
 }

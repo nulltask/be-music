@@ -14,7 +14,7 @@ import type { Graphics, Text } from 'pixi.js';
 import type { BrowserSongEntry } from '../../../collection/types.ts';
 import type { AudioFeatures } from '../../../runtime/audio-analysis.ts';
 import type { GameplayLaneRect, GameplayThemeHooks } from '../../../scene/core/gameplay-theme.ts';
-import type { CoreGameplayViewOptions } from '../../../scene/core/gameplay.ts';
+import type { CoreGameplayViewOptions } from '../../../scene/core/gameplay-options.ts';
 import type { LongNoteTracker } from '../../../scene/core/long-note-tracker.ts';
 import type { GoneDrawObjects } from '../../../scene/core/note-draw-window.ts';
 import type { HiSpeedTransition } from '../../../scene/hi-speed.ts';
