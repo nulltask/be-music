@@ -29,6 +29,7 @@ import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import type { PixiGameplayResultData } from '../core/result-data.ts';
 import { CoreResultView, type CoreResultViewOptions } from '../core/result.ts';
+import { LR2_NUM, LR2_OP, LR2_TEXT } from '@be-music/lr2-skin/ids';
 import { resolveKeyModeOp, resolveLr2LampOp } from '../select-ops.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
@@ -51,113 +52,27 @@ import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } fro
  * `dst_option` in `docs/LR2SkinHelp.md`.
  */
 const RESULT_BASE_OPS: ReadonlySet<number> = new Set<number>([
-  32, // autoplay off
-  34, // ghost off
-  38, // scoregraph off
-  40, // BGA off (no live BGA on the result screen)
-  42, // 1P normal gauge
-  44, // 2P normal gauge
-  47, // difficulty filter disabled
-  50, // offline (no IR connection yet)
-  54, // autoscratch 1P off
-  56, // autoscratch 2P off
-  60, // save impossible (no persistence yet)
-  62, // clear save impossible
-  81, // load complete
-  82, // replay off
-  // op 350 = "result flip disabled" (no #FLIPRESULT in the skin) — most LR2 default skins gate the score panel against
-  // op 350, so set it. Skins that DO declare #FLIPRESULT will need op 351 instead, which we toggle below from the
-  // gameplay's skin.
-  350,
+  LR2_OP.AUTOPLAY_OFF,
+  LR2_OP.GHOST_OFF,
+  LR2_OP.SCORE_GRAPH_OFF,
+  // No live BGA on the result screen.
+  LR2_OP.BGA_OFF,
+  LR2_OP.GAUGE_1P_NORMAL,
+  LR2_OP.GAUGE_2P_NORMAL,
+  LR2_OP.DIFFICULTY_FILTER_OFF,
+  // No IR connection yet.
+  LR2_OP.OFFLINE,
+  LR2_OP.AUTO_SCRATCH_1P_OFF,
+  LR2_OP.AUTO_SCRATCH_2P_OFF,
+  // No persistence yet.
+  LR2_OP.SCORE_SAVE_OFF,
+  LR2_OP.CLEAR_SAVE_OFF,
+  LR2_OP.LOADED,
+  LR2_OP.REPLAY_OFF,
+  // No #FLIPRESULT in the skin — most LR2 default skins gate the score panel against op 350, so set it. Skins that DO
+  // declare #FLIPRESULT need op 351 instead, which we toggle below from the gameplay's skin.
+  LR2_OP.RESULT_FLIP_OFF,
 ]);
-
-/**
- * Op slots flipped per-result. The numeric values are authoritative — they match `dst_option` in `docs/LR2SkinHelp.md`.
- *
- * Notable difference from `scene/lr2/select.ts`: the result screen has its **own** rank op range (300..307 for the 1P
- * current rank, 320..327 for "before update", 340..347 for "after update"). The 200..207 range is a SELECT-screen
- * scratch slot; the LR2 default `Result/result_normal.csv` gates rank graphics on the 300/340 ranges, so binding to
- * 200..207 (as an earlier revision of this file did) leaves every rank panel hidden.
- */
-export const RESULT_DYNAMIC_OPS = {
-  // Cleared / failed at the play-result level. These gate the background atlas (`parts.tga` vs `parts_fail.tga`) plus
-  // the big "CLEARED" / "FAILED" graphic. Runtime-only — pre-set in `defaultParseOps` so both atlases parse.
-  RESULT_CLEARED: 90,
-  RESULT_FAILED: 91,
-  // Bar / cursor type duplicated here in case the skin re-uses a bar-list panel (rare, but the LR2 default
-  // course-result skin does for the per-stage chart graph).
-  BAR_IS_SONG: 2,
-  BAR_IS_PLAYABLE: 5,
-  // Difficulty echoed onto the result screen — gates per-difficulty panels in the default skin
-  // (`#DST_IMAGE,...,400,152,...` = "show only on 7/14K NORMAL chart").
-  DIFFICULTY_UNDEFINED: 150,
-  DIFFICULTY_EASY: 151,
-  DIFFICULTY_NORMAL: 152,
-  DIFFICULTY_HYPER: 153,
-  DIFFICULTY_ANOTHER: 154,
-  DIFFICULTY_INSANE: 155,
-  // Key mode of the played chart for the SELECT-screen op range. The result skin generally uses the KEYCONFIG range
-  // (400..402) instead, but a few skins reuse the select range too — so we set both so each gating style works.
-  KEYS_7: 160,
-  KEYS_5: 161,
-  KEYS_14: 162,
-  KEYS_10: 163,
-  KEYS_9: 164,
-  // Clear lamp for THIS play. 100 = not played (won't fire on the result screen — we always ran the chart), 101 =
-  // failed, 102 = easy clear, 103 = normal clear, 104 = hard clear, 105 = full combo. The play's lamp on LR2's lamps.
-  LAMP_FAILED: 101,
-  LAMP_EASY: 102,
-  LAMP_NORMAL: 103,
-  LAMP_HARD: 104,
-  LAMP_FULL_COMBO: 105,
-  // 1P **result-screen** rank (300..307). Distinct from the select- screen rank op range (200..207) and from the 2P
-  // range (310..317). The default skin's "RANK" panel gates on these.
-  RANK_NOW_AAA: 300,
-  RANK_NOW_AA: 301,
-  RANK_NOW_A: 302,
-  RANK_NOW_B: 303,
-  RANK_NOW_C: 304,
-  RANK_NOW_D: 305,
-  RANK_NOW_E: 306,
-  RANK_NOW_F: 307,
-  RANK_NOW_0: 308,
-  // Pre-update rank — 320..327 + 328 ("rank 0"). Without score history every play is "first time" so the previous rank
-  // is 0 / F. We set 327 (F) to match what real LR2 reports for an un-played chart.
-  RANK_PREV_AAA: 320,
-  RANK_PREV_AA: 321,
-  RANK_PREV_A: 322,
-  RANK_PREV_B: 323,
-  RANK_PREV_C: 324,
-  RANK_PREV_D: 325,
-  RANK_PREV_E: 326,
-  RANK_PREV_F: 327,
-  RANK_PREV_0: 328,
-  // Post-update rank — 340..347. Same value as `RANK_NOW_*` since we don't persist between plays today.
-  RANK_NEXT_AAA: 340,
-  RANK_NEXT_AA: 341,
-  RANK_NEXT_A: 342,
-  RANK_NEXT_B: 343,
-  RANK_NEXT_C: 344,
-  RANK_NEXT_D: 345,
-  RANK_NEXT_E: 346,
-  RANK_NEXT_F: 347,
-  // "Score / max-combo / score-rank updated" flags. Without score persistence we always claim "updated" so the LR2
-  // default skin's congratulatory artwork shows; once history persists, this becomes a comparison against the stored
-  // best.
-  SCORE_UPDATED: 330,
-  MAXCOMBO_UPDATED: 331,
-  MIN_BP_UPDATED: 332,
-  RANK_UPDATED: 335,
-  // Result-flip status. 350 = flip disabled (default), 351 = flip enabled (skin declared `#FLIPRESULT`). We set exactly
-  // one based on the gameplay skin's `scratchFlip.flipResult`.
-  RESULT_FLIP_DISABLED: 350,
-  RESULT_FLIP_ENABLED: 351,
-  // KEYCONFIG-derived key mode used by the result skin's per-keymode panels. 400 = 7/14keys, 401 = 9keys, 402 =
-  // 5/10keys.
-  KEYCONFIG_7_14: 400,
-  KEYCONFIG_9: 401,
-  KEYCONFIG_5_10: 402,
-} as const;
 
 export interface PixiResultViewOptions extends CoreResultViewOptions {
   /**
@@ -638,9 +553,9 @@ export function computeResultOps(
   for (const option of skin.customOptions ?? []) {
     ops.add(option.defaultOp);
   }
-  ops.add(data.cleared ? RESULT_DYNAMIC_OPS.RESULT_CLEARED : RESULT_DYNAMIC_OPS.RESULT_FAILED);
-  ops.add(RESULT_DYNAMIC_OPS.BAR_IS_SONG);
-  ops.add(RESULT_DYNAMIC_OPS.BAR_IS_PLAYABLE);
+  ops.add(data.cleared ? LR2_OP.RESULT_CLEAR : LR2_OP.RESULT_FAIL);
+  ops.add(LR2_OP.SONG_BAR);
+  ops.add(LR2_OP.PLAYABLE_BAR);
 
   // Key mode set in both ranges so a skin can gate either way.
   for (const op of resolveKeyModeOps(data)) {
@@ -652,23 +567,23 @@ export function computeResultOps(
   // rank op and the LR2 default skin doesn't gate on it). Both "now" and "next" carry the same value because we don't
   // yet persist a best-score baseline to compare against.
   const rankIndex = resolveResultRankIndex(data);
-  ops.add(RESULT_DYNAMIC_OPS.RANK_NOW_AAA + rankIndex);
-  ops.add(RESULT_DYNAMIC_OPS.RANK_NEXT_AAA + rankIndex);
+  ops.add(LR2_OP.RESULT_RANK_AAA + rankIndex);
+  ops.add(LR2_OP.UPDATED_RANK_AAA + rankIndex);
   // Pre-update rank is rank-0 (no prior history) — the default skin uses 328 ("0" tier) for that, with 320..327
   // reserved for each historical rank.
-  ops.add(RESULT_DYNAMIC_OPS.RANK_PREV_0);
+  ops.add(LR2_OP.PREVIOUS_RANK_0);
 
   // No score history yet — claim "updated" on every result.
-  ops.add(RESULT_DYNAMIC_OPS.SCORE_UPDATED);
-  ops.add(RESULT_DYNAMIC_OPS.MAXCOMBO_UPDATED);
-  ops.add(RESULT_DYNAMIC_OPS.MIN_BP_UPDATED);
-  ops.add(RESULT_DYNAMIC_OPS.RANK_UPDATED);
+  ops.add(LR2_OP.SCORE_UPDATED);
+  ops.add(LR2_OP.MAX_COMBO_UPDATED);
+  ops.add(LR2_OP.MIN_BP_UPDATED);
+  ops.add(LR2_OP.RANK_UPDATED);
 
   // Result-flip status toggled from the gameplay skin (#FLIPRESULT). Default-disabled is already in `RESULT_BASE_OPS`;
   // if the skin declares flipResult we swap to the enabled slot.
   if (skin.scratchFlip.flipResult) {
-    ops.delete(RESULT_DYNAMIC_OPS.RESULT_FLIP_DISABLED);
-    ops.add(RESULT_DYNAMIC_OPS.RESULT_FLIP_ENABLED);
+    ops.delete(LR2_OP.RESULT_FLIP_OFF);
+    ops.add(LR2_OP.RESULT_FLIP_ON);
   }
 
   if (course !== undefined) resolveLr2CourseOps(course).forEach((op) => ops.add(op));
@@ -687,12 +602,12 @@ function resolveKeyModeOps(data: PixiGameplayResultData): number[] {
   // Map the select-range op onto the KEYCONFIG range. 7K + 14K share op 400 because the LR2 default skin doesn't draw a
   // separate 14K layout. Likewise 5K + 10K share 402.
   let keyConfigOp: number;
-  if (selectOp === RESULT_DYNAMIC_OPS.KEYS_9) {
-    keyConfigOp = RESULT_DYNAMIC_OPS.KEYCONFIG_9;
-  } else if (selectOp === RESULT_DYNAMIC_OPS.KEYS_5 || selectOp === RESULT_DYNAMIC_OPS.KEYS_10) {
-    keyConfigOp = RESULT_DYNAMIC_OPS.KEYCONFIG_5_10;
+  if (selectOp === LR2_OP.KEYS_9) {
+    keyConfigOp = LR2_OP.KEY_CONFIG_9;
+  } else if (selectOp === LR2_OP.KEYS_5 || selectOp === LR2_OP.KEYS_10) {
+    keyConfigOp = LR2_OP.KEY_CONFIG_5_10;
   } else {
-    keyConfigOp = RESULT_DYNAMIC_OPS.KEYCONFIG_7_14;
+    keyConfigOp = LR2_OP.KEY_CONFIG_7_14;
   }
   return [selectOp, keyConfigOp];
 }
@@ -700,19 +615,19 @@ function resolveKeyModeOps(data: PixiGameplayResultData): number[] {
 function resolveDifficultyOp(data: PixiGameplayResultData): number {
   switch (data.song.chart.metadata.difficulty) {
     case 1:
-      return RESULT_DYNAMIC_OPS.DIFFICULTY_EASY;
+      return LR2_OP.DIFFICULTY_BEGINNER;
     case 2:
-      return RESULT_DYNAMIC_OPS.DIFFICULTY_NORMAL;
+      return LR2_OP.DIFFICULTY_NORMAL;
     case 3:
-      return RESULT_DYNAMIC_OPS.DIFFICULTY_HYPER;
+      return LR2_OP.DIFFICULTY_HYPER;
     case 4:
-      return RESULT_DYNAMIC_OPS.DIFFICULTY_ANOTHER;
+      return LR2_OP.DIFFICULTY_ANOTHER;
     case 5:
-      return RESULT_DYNAMIC_OPS.DIFFICULTY_INSANE;
+      return LR2_OP.DIFFICULTY_INSANE;
     default:
       // Real LR2 maps "no difficulty declared" to the NORMAL slot for the result-screen panel split (the default skin
       // only ships per-difficulty graphics for 152..155 and would otherwise leave the panel blank). Mirror that.
-      return RESULT_DYNAMIC_OPS.DIFFICULTY_NORMAL;
+      return LR2_OP.DIFFICULTY_NORMAL;
   }
 }
 
@@ -764,111 +679,111 @@ function resolveResultNumber(num: number, data: PixiGameplayResultData): number 
   const rate = exMax > 0 ? score.exScore / exMax : 0;
   const minBp = score.bad + score.poor;
   switch (num) {
-    case 70:
+    case LR2_NUM.BEST_SCORE:
       return score.score;
-    case 71:
+    case LR2_NUM.BEST_EXSCORE:
       return score.exScore;
-    case 72:
+    case LR2_NUM.EXSCORE_MAX:
       return exMax;
-    case 73:
+    case LR2_NUM.BEST_RATE:
       // LR2 spec: rate as integer percent.
       return Math.round(rate * 100);
-    case 74:
+    case LR2_NUM.TOTAL_NOTES:
       return totalNotes;
-    case 75:
+    case LR2_NUM.BEST_MAX_COMBO:
       return data.maxCombo;
-    case 76:
+    case LR2_NUM.BEST_MIN_BP:
       return minBp;
-    case 77: // playcount
-    case 78: // clear
-    case 79: // fail
+    case LR2_NUM.PLAY_COUNT:
+    case LR2_NUM.CLEAR_COUNT:
+    case LR2_NUM.FAIL_COUNT:
       return 0;
-    case 80:
+    case LR2_NUM.BEST_PERFECT:
       return score.perfect;
-    case 81:
+    case LR2_NUM.BEST_GREAT:
       return score.great;
-    case 82:
+    case LR2_NUM.BEST_GOOD:
       return score.good;
-    case 83:
+    case LR2_NUM.BEST_BAD:
       return score.bad;
-    case 84:
+    case LR2_NUM.BEST_POOR:
       return score.poor;
-    case 85:
+    case LR2_NUM.BEST_PERFECT_RATE:
       return totalNotes > 0 ? Math.round((score.perfect / totalNotes) * 100) : 0;
-    case 86:
+    case LR2_NUM.BEST_GREAT_RATE:
       return totalNotes > 0 ? Math.round((score.great / totalNotes) * 100) : 0;
-    case 87:
+    case LR2_NUM.BEST_GOOD_RATE:
       return totalNotes > 0 ? Math.round((score.good / totalNotes) * 100) : 0;
-    case 88:
+    case LR2_NUM.BEST_BAD_RATE:
       return totalNotes > 0 ? Math.round((score.bad / totalNotes) * 100) : 0;
-    case 89:
+    case LR2_NUM.BEST_POOR_RATE:
       return totalNotes > 0 ? Math.round((score.poor / totalNotes) * 100) : 0;
-    case 90:
-    case 91:
+    case LR2_NUM.MAX_BPM:
+    case LR2_NUM.MIN_BPM:
       return data.song.bpm ?? data.song.chart.metadata.bpm;
-    case 100:
+    case LR2_NUM.SCORE:
       return score.score;
-    case 101:
+    case LR2_NUM.EXSCORE:
       return score.exScore;
-    case 102:
+    case LR2_NUM.SCORE_RATE:
       return Math.round(rate * 100);
-    case 103:
+    case LR2_NUM.SCORE_RATE_AFTERDOT:
       return Math.round(rate * 10000);
-    case 104:
+    case LR2_NUM.COMBO:
       // Result screen: there's no "live" combo, but the LR2 default skin reuses num=104 for the per-result "MAX COMBO"
       // digit panel as a fallback. Surface the achieved max combo so the panel doesn't read 0.
       return data.maxCombo;
-    case 105:
+    case LR2_NUM.MAX_COMBO:
       return data.maxCombo;
-    case 106:
+    case LR2_NUM.NOTES:
       return totalNotes;
-    case 107:
+    case LR2_NUM.GAUGE:
       return Math.round(data.gauge);
-    case 110:
+    case LR2_NUM.PERFECT:
       return score.perfect;
-    case 111:
+    case LR2_NUM.GREAT:
       return score.great;
-    case 112:
+    case LR2_NUM.GOOD:
       return score.good;
-    case 113:
+    case LR2_NUM.BAD:
       return score.bad;
-    case 114:
+    case LR2_NUM.POOR:
       return score.poor;
-    case 115:
+    case LR2_NUM.TOTAL_RATE:
       return Math.round(rate * 100);
-    case 116:
+    case LR2_NUM.TOTAL_RATE_AFTERDOT:
       return Math.round(rate * 10000) % 100;
-    case 161:
+    case LR2_NUM.PLAY_MINUTE:
       return Math.floor(data.playSeconds / 60);
-    case 162:
+    case LR2_NUM.PLAY_SECOND:
       return Math.floor(data.playSeconds % 60);
-    case 165:
+    case LR2_NUM.LOADING_PROGRESS:
       return 100;
     // Result-specific high-score deltas. "before" = 0 (no history), "now" = the live values, "diff" = "now" - "before"
     // = "now".
-    case 170: // EX score (before)
+    case LR2_NUM.RESULT_EXSCORE_BEFORE:
       return 0;
-    case 171: // EX score (now)
+    case LR2_NUM.RESULT_EXSCORE:
       return score.exScore;
-    case 172: // EX score (diff)
+    case LR2_NUM.RESULT_EXSCORE_DIFF:
       return score.exScore;
-    case 173: // max combo (before)
+    case LR2_NUM.RESULT_MAX_COMBO_BEFORE:
       return 0;
-    case 174: // max combo (now)
+    case LR2_NUM.RESULT_MAX_COMBO:
       return data.maxCombo;
-    case 175: // max combo (diff)
+    case LR2_NUM.RESULT_MAX_COMBO_DIFF:
       return data.maxCombo;
-    case 176: // min B+P (before)
+    case LR2_NUM.RESULT_MIN_BP_BEFORE:
       // Without history, treat the "before" number as the chart's theoretical worst (every note BAD) so the diff column
       // shows a positive improvement.
       return totalNotes;
-    case 177: // min B+P (now)
+    case LR2_NUM.RESULT_MIN_BP:
       return minBp;
-    case 178: // min B+P (diff)
+    case LR2_NUM.RESULT_MIN_BP_DIFF:
       return Math.max(0, totalNotes - minBp);
-    case 183: // rate (before)
+    case LR2_NUM.RESULT_RATE_BEFORE:
       return 0;
-    case 184: // rate (before, decimals)
+    case LR2_NUM.RESULT_RATE_BEFORE_AFTERDOT:
       return 0;
     default:
       return undefined;
@@ -879,36 +794,36 @@ function resolveResultText(st: number, data: PixiGameplayResultData): string | u
   const song = data.song;
   const subartists = song.chart.bmson.info?.subartists?.join(' / ');
   switch (st) {
-    case 1:
+    case LR2_TEXT.RIVAL:
       return 'TARGET';
-    case 2:
+    case LR2_TEXT.PLAYER:
       return 'PLAYER';
-    case 10:
-    case 20:
+    case LR2_TEXT.TITLE:
+    case LR2_TEXT.TITLE_ALT:
       return song.title;
-    case 11:
-    case 21:
+    case LR2_TEXT.SUBTITLE:
+    case LR2_TEXT.SUBTITLE_ALT:
       return song.subtitle ?? '';
-    case 12:
-    case 22:
+    case LR2_TEXT.FULL_TITLE:
+    case LR2_TEXT.FULL_TITLE_ALT:
       return [song.title, song.subtitle].filter((value): value is string => Boolean(value)).join(' ');
-    case 13:
-    case 23:
+    case LR2_TEXT.GENRE:
+    case LR2_TEXT.GENRE_ALT:
       return song.genre ?? '';
-    case 14:
-    case 24:
+    case LR2_TEXT.ARTIST:
+    case LR2_TEXT.ARTIST_ALT:
       return song.artist ?? '';
-    case 15:
-    case 25:
+    case LR2_TEXT.SUBARTIST:
+    case LR2_TEXT.SUBARTIST_ALT:
       return subartists ?? '';
-    case 16:
-    case 26:
+    case LR2_TEXT.FULL_ARTIST:
+    case LR2_TEXT.FULL_ARTIST_ALT:
       return song.fileLabel;
-    case 17:
-    case 27:
+    case LR2_TEXT.PLAY_LEVEL:
+    case LR2_TEXT.PLAY_LEVEL_ALT:
       return song.playLevel?.toString() ?? '';
-    case 18:
-    case 28:
+    case LR2_TEXT.DIFFICULTY:
+    case LR2_TEXT.DIFFICULTY_ALT:
       switch (song.chart.metadata.difficulty) {
         case 1:
           return 'BEGINNER';
