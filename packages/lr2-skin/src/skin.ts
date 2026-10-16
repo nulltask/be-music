@@ -12,6 +12,9 @@ import {
   type Lr2SkinKind,
 } from './paths.ts';
 import { LR2_SPECIAL_GRAPHIC, type Lr2SpecialGraphic } from './special-graphic.ts';
+import { LR2_BAR_BODY, LR2_BAR_LAMP } from './ids/bar.ts';
+import { LR2_GR } from './ids/graphics.ts';
+import { LR2_OP } from './ids/ops.ts';
 
 export { resolveLr2AssetBytes } from './assets.ts';
 export { LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from './special-graphic.ts';
@@ -1948,17 +1951,17 @@ function registerCustomFile(
 
 function specialGraphicPath(gr: number): Lr2SpecialGraphic | undefined {
   switch (gr) {
-    case 100:
+    case LR2_GR.STAGEFILE:
       return LR2_SPECIAL_GRAPHIC.STAGEFILE;
-    case 101:
+    case LR2_GR.BACKBMP:
       return LR2_SPECIAL_GRAPHIC.BACKBMP;
-    case 102:
+    case LR2_GR.BANNER:
       return LR2_SPECIAL_GRAPHIC.BANNER;
-    case 105:
+    case LR2_GR.SKIN_THUMBNAIL:
       return LR2_SPECIAL_GRAPHIC.SKIN_THUMBNAIL;
-    case 110:
+    case LR2_GR.BLACK:
       return LR2_SPECIAL_GRAPHIC.BLACK;
-    case 111:
+    case LR2_GR.WHITE:
       return LR2_SPECIAL_GRAPHIC.WHITE;
     default:
       return undefined;
@@ -1975,44 +1978,44 @@ function specialGraphicPath(gr: number): Lr2SpecialGraphic | undefined {
  */
 function defaultParseOps(): Set<number> {
   return new Set<number>([
-    5, // selected bar is playable
-    32, // autoplay off (default branch)
+    LR2_OP.PLAYABLE_BAR,
+    LR2_OP.AUTOPLAY_OFF,
     // Result-screen clear / fail flags. These are runtime-resolved (the parser doesn't know whether the player
     // cleared), but the LR2 default `Result/result_normal.csv` gates `#IF,90` / `#IF,91` blocks around the **`#IMAGE`
     // declarations themselves** (parts.tga vs parts_fail.tga). Without both ops marked true at parse time, one of the
     // two atlases never reaches `skin.images` — and the runtime op gate downstream is moot because there's no DST/SRC
     // pointing at the missing texture. Setting both makes the parser load both atlases; runtime DST gating on op 90 vs
     // 91 then picks which one is drawn on a per-frame basis.
-    90, // result: cleared
-    91, // result: failed
-    34, // ghost off
-    38, // scoregraph off
-    40, // BGA off
-    42, // 1P normal gauge
-    44, // 2P normal gauge
-    47, // difficulty filter disabled
-    50, // offline
-    54, // autolane 2P off
-    56, // autoscratch 2P off
-    61, // score saveable
-    81, // load complete
-    82, // replay off
-    160, // 7keys (default key mode for play_7.lr2skin)
-    170, // BGA absent
-    172, // long notes absent
-    174, // attached text absent
-    176, // BPM change absent
-    178, // RANDOM absent
-    182, // judge normal
-    // 190..195 — skins typically gate the STAGEFILE / BANNER / BACKBMP display block on the "present" op, so we mark
-    // those true at parse time even though the chart-level state is unknown until runtime. Without 191/193/195 the
+    LR2_OP.RESULT_CLEAR,
+    LR2_OP.RESULT_FAIL,
+    LR2_OP.GHOST_OFF,
+    LR2_OP.SCORE_GRAPH_OFF,
+    LR2_OP.BGA_OFF,
+    LR2_OP.GAUGE_1P_NORMAL,
+    LR2_OP.GAUGE_2P_NORMAL,
+    LR2_OP.DIFFICULTY_FILTER_OFF,
+    LR2_OP.OFFLINE,
+    LR2_OP.AUTO_SCRATCH_1P_OFF,
+    LR2_OP.AUTO_SCRATCH_2P_OFF,
+    LR2_OP.SCORE_SAVE_ON,
+    LR2_OP.LOADED,
+    LR2_OP.REPLAY_OFF,
+    // The default key mode, for `play_7.lr2skin`.
+    LR2_OP.KEYS_7,
+    LR2_OP.NO_BGA,
+    LR2_OP.NO_LN,
+    LR2_OP.NO_TEXT,
+    LR2_OP.NO_BPM_CHANGE,
+    LR2_OP.NO_RANDOM,
+    LR2_OP.JUDGE_NORMAL,
+    // Skins typically gate the STAGEFILE / BANNER / BACKBMP display block on the "present" op (191 / 193 / 195), so we
+    // mark those true at parse time even though the chart-level state is unknown until runtime. Without them the
     // load-screen branch never gets included by `#IF`, so the runtime renderer wouldn't have the SRC/DST entries to
     // draw at all.
-    191, // STAGEFILE present (per LR2 spec — the comment in the
-    // previous revision said "absent", which was wrong: 190 is absent, 191 is present)
-    193, // BANNER present
-    195, // BACKBMP present
-    196, // replay absent
+    LR2_OP.HAS_STAGEFILE,
+    LR2_OP.HAS_BANNER,
+    LR2_OP.HAS_BACKBMP,
+    LR2_OP.NO_REPLAY,
   ]);
 }
 
@@ -2500,25 +2503,25 @@ function createBarGraphElements(context: ParseContext): Lr2BarGraphElement[] {
 
 function parseBarBodyKind(value: string | undefined): Lr2BarBodyKind | undefined {
   switch (Math.trunc(toNumber(value, -1))) {
-    case 0:
+    case LR2_BAR_BODY.SONG:
       return 'song';
-    case 1:
+    case LR2_BAR_BODY.FOLDER:
       return 'folder';
-    case 2:
+    case LR2_BAR_BODY.CUSTOM_FOLDER:
       return 'customFolder';
-    case 3:
+    case LR2_BAR_BODY.NEW_SONG_FOLDER:
       return 'newSongFolder';
-    case 4:
+    case LR2_BAR_BODY.RIVAL_FOLDER:
       return 'rivalFolder';
-    case 5:
+    case LR2_BAR_BODY.RIVAL_SONG:
       return 'rivalSong';
-    case 6:
+    case LR2_BAR_BODY.COURSE_FOLDER:
       return 'courseFolder';
-    case 7:
+    case LR2_BAR_BODY.COURSE_CREATE:
       return 'courseCreate';
-    case 8:
+    case LR2_BAR_BODY.COURSE:
       return 'course';
-    case 9:
+    case LR2_BAR_BODY.RANDOM_COURSE:
       return 'randomCourse';
     default:
       return undefined;
@@ -2689,17 +2692,17 @@ function parseBarLevelKind(value: string | undefined): Lr2BarLevelKind | undefin
 
 function parseBarLampKind(value: string | undefined): Lr2BarLampKind | undefined {
   switch (Math.trunc(toNumber(value, -1))) {
-    case 0:
+    case LR2_BAR_LAMP.NO_PLAY:
       return 'noplay';
-    case 1:
+    case LR2_BAR_LAMP.FAILED:
       return 'failed';
-    case 2:
+    case LR2_BAR_LAMP.EASY:
       return 'easy';
-    case 3:
+    case LR2_BAR_LAMP.CLEAR:
       return 'clear';
-    case 4:
+    case LR2_BAR_LAMP.HARD:
       return 'hard';
-    case 5:
+    case LR2_BAR_LAMP.FULL_COMBO:
       return 'fullcombo';
     default:
       return undefined;
