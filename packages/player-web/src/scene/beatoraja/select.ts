@@ -32,7 +32,8 @@
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
 //
 // The scene is made of parts that read and drive it through one context it builds (`createContext`): the song list's
-// rows (`select/rows.ts`) and the search input (`select/search.ts`).
+// rows (`select/rows.ts`), the search input (`select/search.ts`) and the focused chart's images and graphs
+// (`select/chart-images.ts`).
 
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/chart';
@@ -60,6 +61,7 @@ import {
   type BeatorajaSystemSoundPaths,
 } from '@be-music/beatoraja-skin/scene';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
+import { BeatorajaSelectChartImages, type BeatorajaSelectChartImagesContext } from './select/chart-images.ts';
 import { BeatorajaSelectRows, type BeatorajaSelectRowsContext } from './select/rows.ts';
 import { BeatorajaSelectSearch, songMatchesQuery, type BeatorajaSelectSearchContext } from './select/search.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
@@ -70,10 +72,6 @@ import { computeBeatorajaChartDensity, type ChartDensity } from '../../chart/bea
 import { computeBeatorajaChartTotalSeconds } from '../../chart/beatoraja/duration.ts';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import {
-  computeBeatorajaChartNoteDistribution,
-  type BeatorajaChartNoteDistribution,
-} from '../../chart/beatoraja/note-distribution.ts';
 import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from '../../collection/collection.ts';
 import { resolveLr2ChartFeatures } from '@be-music/lr2-skin/state';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
@@ -284,7 +282,9 @@ const SCROLL_TWEEN_RATE = 0.25;
 const SCROLL_SNAP_THRESHOLD = 0.005;
 
 /** What the scene's parts read and drive on it. */
-type BeatorajaSelectSceneContext = BeatorajaSelectRowsContext & BeatorajaSelectSearchContext;
+type BeatorajaSelectSceneContext = BeatorajaSelectRowsContext &
+  BeatorajaSelectSearchContext &
+  BeatorajaSelectChartImagesContext;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root: Container = new Container();
@@ -324,19 +324,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private get searchPromptText(): Text | undefined {
     return this.search.searchPromptText;
   }
-  /**
-   * Per-song chart-image cache. Keyed by `BrowserSongEntry.id`; populated lazily by
-   * {@link refreshChartImagesForFocus} as the user moves the cursor. Re-focusing a
-   * previously-loaded song hits the cache and skips the IO. Sentinel `null` records a
-   * decode that resolved with no usable images so we don't retry every cursor move
-   * (e.g. chart with no `#STAGEFILE` / `#BACKBMP` / `#BANNER`).
-   */
-  private readonly chartImageCache = new Map<
-    string,
-    { stageFile?: Texture; backBmp?: Texture; banner?: Texture } | null
-  >();
-  /** Generation counter — bumps on every focus change so stale async resolves don't overwrite newer ones. */
-  private chartImageFocusGeneration = 0;
+  /** The focused chart's images and graphs. */
+  private readonly chartImages: BeatorajaSelectChartImages = new BeatorajaSelectChartImages(this.context);
 
   private readonly options: PixiBeatorajaSelectSceneOptions;
   private host?: PixiSceneHost;
@@ -481,16 +470,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // the FOCUSED song's bitmap when the chart shipped one. Default beatoraja's
       // select.json paints `-102` as the per-song banner; ModernChic uses `-100` as a
       // frosted backdrop on the chart-info panel.
-      chartImageProvider: (id) => this.resolveChartImageForFocus(id),
+      chartImageProvider: (id) => this.chartImages.resolveChartImageForFocus(id),
       // BPM segments + mainbpm reference for the focused chart's `bpmgraph` element.
       // The spec-faithful renderer path uses these to apply log-scaled, mainbpm-relative
       // y projection AND color-code segments by BPM identity (mainbpm = green, minbpm =
       // blue, maxbpm = red, others = yellow, stop = magenta).
-      resolveBpmGraphData: () => this.resolveBpmGraphDataForFocus(),
+      resolveBpmGraphData: () => this.chartImages.resolveBpmGraphDataForFocus(),
       // Per-second × per-category note distribution histogram for `judgegraph` type=0
       // (= the `notes-graph` element on the default skin). Mirrors upstream
       // `SkinNoteDistributionGraph.updateData()` with TYPE_NORMAL.
-      resolveNoteDistribution: () => this.resolveNoteDistributionForFocus(),
+      resolveNoteDistribution: () => this.chartImages.resolveNoteDistributionForFocus(),
     });
 
     this.root.addChild(this.backdrop);
@@ -613,6 +602,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       setSearchQuery: (query) => scene.setSearchQuery(query),
       moveCursor: (delta) => scene.moveCursor(delta),
       setCursor: (index) => scene.setCursor(index),
+      get disposed(): boolean {
+        return scene.disposed;
+      },
+      get currentIndex(): number {
+        return scene.currentIndex;
+      },
     };
   }
 
@@ -778,9 +773,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       onButtonAction: (act, mods) => this.handleButtonAction(act, mods),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
-      chartImageProvider: (id) => this.resolveChartImageForFocus(id),
-      resolveBpmGraphData: () => this.resolveBpmGraphDataForFocus(),
-      resolveNoteDistribution: () => this.resolveNoteDistributionForFocus(),
+      chartImageProvider: (id) => this.chartImages.resolveChartImageForFocus(id),
+      resolveBpmGraphData: () => this.chartImages.resolveBpmGraphDataForFocus(),
+      resolveNoteDistribution: () => this.chartImages.resolveNoteDistributionForFocus(),
     });
     // The old view's `container.destroy({children: false})` (inside `view.dispose()`) detaches
     // its children — listLayer was one of them, so it's now orphaned. Re-parent into the new
@@ -1556,7 +1551,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Always trigger the chart-image fetch (banner / backbmp / stagefile) on focus change,
     // independent of preview-engine availability — destinations gated on the synthetic
     // image ids paint regardless of whether audio is wired.
-    this.refreshChartImagesForFocus(song);
+    this.chartImages.refreshChartImagesForFocus(song);
     if (engine === undefined) return;
     if (song === undefined || this.options.collection === undefined) {
       engine.focus(undefined);
@@ -1568,112 +1563,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       return;
     }
     engine.focus({ song, source });
-  }
-
-  /**
-   * Lazily decode the focused song's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps via
-   * the host's `decodeChartImages` callback. Caches by `song.id` so re-focusing a
-   * previously-loaded song hits the cache. Generation counter guards against stale async
-   * resolves overwriting newer ones (rapid cursor moves through a folder).
-   */
-  private refreshChartImagesForFocus(song: BrowserSongEntry | undefined): void {
-    if (song === undefined) return;
-    if (this.options.decodeChartImages === undefined) return;
-    if (this.chartImageCache.has(song.id)) return;
-    // Mark as in-flight so concurrent focus changes don't fire duplicate decodes.
-    this.chartImageCache.set(song.id, null);
-    const generation = ++this.chartImageFocusGeneration;
-    const decoder = this.options.decodeChartImages;
-    void decoder(song)
-      .then((images) => {
-        if (this.disposed) return;
-        // Stale resolve: the user has moved on to another song since this fetch fired.
-        // Still cache the result so a later refocus on this song uses it without re-IO,
-        // but skip the visible-state side effects.
-        this.chartImageCache.set(song.id, images);
-        // The next tick's render pass picks up the new texture via `chartImageProvider`.
-        // No explicit refresh call needed — `update()` reads from the cache every frame.
-        void generation;
-      })
-      .catch((error) => {
-        // Decode failed; leave the cache entry as `null` so we don't retry on every
-        // cursor settle. User-visible: the banner / stagefile / backbmp slot stays hidden.
-        // eslint-disable-next-line no-console
-        console.warn('[beatoraja-select] chart-image decode failed', { songId: song.id, error });
-        this.chartImageCache.set(song.id, null);
-      });
-  }
-
-  /**
-   * Per-frame resolver for the synthetic chart-bitmap ids. Returns the FOCUSED song's
-   * matching texture from the cache, or `undefined` (= destination hides) when the chart
-   * didn't ship that bitmap or the decode is still in flight / failed.
-   */
-  private resolveChartImageForFocus(syntheticId: number): Texture | undefined {
-    const entry = this.entries[this.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const cached = this.chartImageCache.get(entry.song.id);
-    if (cached === null || cached === undefined) return undefined;
-    if (syntheticId === -100) return cached.stageFile;
-    if (syntheticId === -101) return cached.backBmp;
-    if (syntheticId === -102) return cached.banner;
-    return undefined;
-  }
-
-  /**
-   * Lazy analysis cache for the focused chart. `computeBeatorajaChartNoteDistribution`
-   * walks the chart's events once and produces both the per-bucket histogram AND the BPM
-   * segment list — sharing the walk between the bpmgraph and notes-graph renderers. Cached
-   * per song-id so cursor moves through a folder don't redundantly re-analyse.
-   */
-  private analysisFor(song: BrowserSongEntry): BeatorajaChartNoteDistribution {
-    const cached = this.chartAnalysisCache.get(song.id);
-    if (cached !== undefined) return cached;
-    const result = computeBeatorajaChartNoteDistribution(song.chart);
-    this.chartAnalysisCache.set(song.id, result);
-    return result;
-  }
-  private readonly chartAnalysisCache = new Map<string, BeatorajaChartNoteDistribution>();
-
-  /**
-   * Per-frame resolver for the focused chart's BPM segment data (consumed by `bpmgraph`
-   * destinations under the spec-faithful renderer path).
-   */
-  private resolveBpmGraphDataForFocus():
-    | {
-        segments: ReadonlyArray<{ timeMs: number; bpm: number }>;
-        mainBpm: number;
-        minBpm: number;
-        maxBpm: number;
-        totalMs: number;
-      }
-    | undefined {
-    const entry = this.entries[this.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const analysis = this.analysisFor(entry.song);
-    if (analysis.bpmSegments.length === 0 || analysis.totalMs <= 0) return undefined;
-    return {
-      segments: analysis.bpmSegments,
-      mainBpm: analysis.mainBpm,
-      minBpm: analysis.minBpm,
-      maxBpm: analysis.maxBpm,
-      totalMs: analysis.totalMs,
-    };
-  }
-
-  /**
-   * Per-frame resolver for the focused chart's note-distribution histogram (judgegraph
-   * type=0 under the spec-faithful renderer path). Returns the per-second × per-category
-   * bucket data the renderer needs for the upstream `SkinNoteDistributionGraph` look.
-   */
-  private resolveNoteDistributionForFocus():
-    | { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number }
-    | undefined {
-    const entry = this.entries[this.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const analysis = this.analysisFor(entry.song);
-    if (analysis.buckets.length === 0) return undefined;
-    return { buckets: analysis.buckets, maxCount: analysis.maxCount, totalMs: analysis.totalMs };
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
