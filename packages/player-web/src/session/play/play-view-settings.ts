@@ -13,17 +13,22 @@ import {
   DEFAULT_PLAYLOG_VIEW_REPLAY,
   resolveReplayHiSpeed,
   resolveReplayView,
-  roundPlaylogView,
   type PlaylogViewCoalescer,
   type PlaylogViewState,
 } from '@be-music/player/playlog';
-import { resolveLaneCover, type LaneCover, type LaneCoverState } from '@be-music/scene-model';
+import {
+  resolveHiSpeedForWhiteNumber,
+  resolveLaneCover,
+  resolvePlaylogView,
+  resolveWhiteNumber,
+  type LaneCover,
+  type LaneCoverState,
+} from '@be-music/scene-model';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { setVideoPlaybackTempo } from '../../runtime/play-tempo.ts';
 import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 import type { GameplayLaneRect } from '../../scene/core/gameplay-theme.ts';
 import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import { resolveHiSpeedForVisibleMs, resolveNoteVisibleMs } from '../../scene/core/lane-cover.ts';
 import { PIXELS_PER_BEAT } from '../../scene/gameplay-constants.ts';
 import { BE_MUSIC_HI_SPEED_SCALE, type PlaylogViewCursor } from '../../scene/playlog-view.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
@@ -90,26 +95,24 @@ export function resolveLaneCovers(ctx: PlayViewSettingsContext): readonly BeMusi
   return cache.drawn;
 }
 
-/** What the player sees now in the play log's units: the drawn hi-speed on this scene's scale, HS-FIX and covers. */
-function resolvePlaylogView(ctx: PlayViewSettingsContext): PlaylogViewState {
-  const covers = resolveLaneCovers(ctx).map(({ side, sudden, hidden, lift }) => ({ side, sudden, hidden, lift }));
-  const { hiSpeed, hsFix } = ctx.playState.view;
-  const view: PlaylogViewState = {
-    hiSpeed: hiSpeed.drawn,
-    hiSpeedScale: BE_MUSIC_HI_SPEED_SCALE,
-    hsFix: hsFix ?? 'OFF',
-    covers,
-  };
-  // The visible time at the main BPM without `#SCROLL`, so another scale's replay can match it.
-  const visibleMs = resolveVisibleMs(ctx, covers[0], ctx.chartBpmRange?.mainBpm, 1);
-  if (visibleMs !== undefined && visibleMs > 0) view.visibleMs = visibleMs;
-  // At the play log's precision, so cover fractions record without float noise.
-  return roundPlaylogView(view);
+/**
+ * What the player sees now in the play log's units (`resolvePlaylogView`): the drawn hi-speed on this scene's scale,
+ * the HS-FIX, each side's covers, and the visible time at the main BPM without `#SCROLL` — the white number over the
+ * lanes laid out last frame, the LIFT left out as beatoraja leaves it out — so another scale's replay can match it.
+ * Rounded to the play log's precision, so cover fractions record without float noise.
+ */
+function currentPlaylogView(ctx: PlayViewSettingsContext): PlaylogViewState {
+  const mainBpm = ctx.chartBpmRange?.mainBpm;
+  return resolvePlaylogView(ctx.playState.view, {
+    scale: BE_MUSIC_HI_SPEED_SCALE,
+    laneBeats: resolveLaneBeats(ctx),
+    ...(mainBpm !== undefined ? { mainBpm } : {}),
+  });
 }
 
 /** The view the recorded play log starts from (`play.view`); later changes go through {@link updatePlaylogView}. */
 export function startPlaylogView(ctx: PlayViewSettingsContext): PlaylogViewState {
-  const view = resolvePlaylogView(ctx);
+  const view = currentPlaylogView(ctx);
   ctx.playlogViewCoalescer = createPlaylogViewCoalescer(view);
   return view;
 }
@@ -128,7 +131,7 @@ export function updatePlaylogView(ctx: PlayViewSettingsContext, seconds: number)
   }
   const signals = ctx.sharedEngineInputSignals;
   if (ctx.playlogViewCoalescer === undefined || signals === undefined) return;
-  const change = ctx.playlogViewCoalescer.observe(resolvePlaylogView(ctx), performance.now());
+  const change = ctx.playlogViewCoalescer.observe(currentPlaylogView(ctx), performance.now());
   if (change !== undefined) signals.pushCommand({ kind: 'view', change });
 }
 
@@ -137,7 +140,7 @@ export function flushPlaylogView(ctx: PlayViewSettingsContext): void {
   const signals = ctx.sharedEngineInputSignals;
   if (ctx.replayViewCursor !== undefined || ctx.playlogViewCoalescer === undefined || signals === undefined) return;
   if (ctx.laneX.size === 0) return;
-  const change = ctx.playlogViewCoalescer.flush(resolvePlaylogView(ctx));
+  const change = ctx.playlogViewCoalescer.flush(currentPlaylogView(ctx));
   if (change !== undefined) signals.pushCommand({ kind: 'view', change });
 }
 
@@ -148,7 +151,7 @@ export function flushPlaylogView(ctx: PlayViewSettingsContext): void {
  */
 function applyReplayView(ctx: PlayViewSettingsContext, recorded: PlaylogViewState): void {
   const replay = ctx.options.replayView ?? DEFAULT_PLAYLOG_VIEW_REPLAY;
-  const view = resolveReplayView(recorded, resolvePlaylogView(ctx), replay);
+  const view = resolveReplayView(recorded, currentPlaylogView(ctx), replay);
   if (replay.covers && view.covers !== undefined) {
     applyPlayEvent(ctx, {
       type: 'cover-set',
@@ -167,15 +170,21 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: PlaylogViewStat
   const hiSpeed = resolveReplayHiSpeed(view, BE_MUSIC_HI_SPEED_SCALE, (visibleMs) =>
     mainBpm === undefined
       ? undefined
-      : resolveHiSpeedForVisibleMs(resolveLaneHeightPx(ctx), sudden, 0, PIXELS_PER_BEAT, mainBpm, visibleMs),
+      : resolveHiSpeedForWhiteNumber({
+          laneBeats: resolveLaneBeats(ctx),
+          sudden,
+          bpm: mainBpm,
+          whiteNumberMs: visibleMs,
+        }),
   );
   if (hiSpeed !== undefined) applyPlayEvent(ctx, { type: 'hi-speed-drawn', value: hiSpeed });
 }
 
 /**
  * How long a note stays visible below `cover` (the first play side's) at the current scroll and BPM, over the lanes
- * laid out last frame, divided by the `#SCROLL` × `#SPEED` rate at the playhead (0 while the chart scrolls backwards or
- * stands still, as beatoraja shows it). `undefined` until the lanes are laid out or while the BPM is unknown.
+ * laid out last frame: the white number (`resolveWhiteNumber`, the LIFT left out), divided by the `#SCROLL` × `#SPEED`
+ * rate at the playhead (0 while the chart scrolls backwards or stands still, as beatoraja shows it). `undefined` until
+ * the lanes are laid out or while the BPM is unknown.
  */
 export function resolveVisibleMs(
   ctx: PlayViewSettingsContext,
@@ -184,21 +193,23 @@ export function resolveVisibleMs(
   scrollRate: number,
 ): number | undefined {
   if (ctx.laneX.size === 0 || bpm === undefined || !(bpm > 0)) return undefined;
-  return resolveNoteVisibleMs(
-    resolveLaneHeightPx(ctx),
-    cover?.sudden ?? 0,
-    cover?.lift ?? 0,
-    PIXELS_PER_BEAT * ctx.playState.view.hiSpeed.drawn,
+  return resolveWhiteNumber({
+    laneBeats: resolveLaneBeats(ctx),
+    hiSpeed: ctx.playState.view.hiSpeed.drawn,
+    sudden: cover?.sudden ?? 0,
     bpm,
     scrollRate,
-  );
+  });
 }
 
-/** The tallest lane laid out last frame, in design pixels (0 before the lanes are laid out). */
-function resolveLaneHeightPx(ctx: PlayViewSettingsContext): number {
+/**
+ * The lanes laid out last frame in beats at hi-speed 1: the tallest lane's height in design pixels over the scroll of
+ * one beat (`PIXELS_PER_BEAT`). 0 before the lanes are laid out.
+ */
+function resolveLaneBeats(ctx: PlayViewSettingsContext): number {
   let laneHeight = 0;
   for (const lane of ctx.laneX.values()) {
     laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
   }
-  return laneHeight;
+  return laneHeight / PIXELS_PER_BEAT;
 }
