@@ -66,7 +66,7 @@ export class CoreGameplayState {
    * gameplay subtree as one operation.
    */
   public readonly root: Container = new Container();
-  readonly designRoot = new Container();
+  readonly designRoot: Container = new Container();
   /**
    * Clip mask for the design rect — sits as a child of `designRoot` so the same `position` / `scale` transform applies
    * to it as the sprites it clips. Pixi uses the mask's world-space bounds to decide what's visible; with the mask
@@ -75,7 +75,7 @@ export class CoreGameplayState {
    * slide-ins, etc.) gets clipped at the design edge instead of bleeding into the pillarbox / letterbox of a screen with
    * a different aspect ratio.
    */
-  readonly designClipMask = new Graphics();
+  readonly designClipMask: Graphics = new Graphics();
   /** Layout last handed to the be-music chrome, keyed by the lane set it was built for. */
   beMusicLayout:
     | {
@@ -98,8 +98,8 @@ export class CoreGameplayState {
    */
   cachedScreenWidth = -1;
   cachedScreenHeight = -1;
-  readonly viewportBackground = new Graphics();
-  readonly background = new Graphics();
+  readonly viewportBackground: Graphics = new Graphics();
+  readonly background: Graphics = new Graphics();
   /**
    * BGA composite layer. Sits below `skinLayer` so the skin's "BGA frame" decoration draws on top, and above
    * `background` so the BGA is visible inside the play screen. One `Sprite` per layer (base / layer1+2 / POOR override)
@@ -107,21 +107,21 @@ export class CoreGameplayState {
    */
   readonly bgaLayer: Container = new Container();
   readonly skinLayer: Container = new Container();
-  readonly laneLayer = new Graphics();
-  readonly noteLayer = new Container();
+  readonly laneLayer: Graphics = new Graphics();
+  readonly noteLayer: Container = new Container();
   /**
    * Shutter mask layer. Sits above `noteLayer` so the dark rectangles drawn here cover the scrolling notes underneath
    * but stay below the judgement-line / HUD overlays. Cleared and redrawn every frame from `playOptions.hiddenSudden` +
    * `playOptions.shutter`.
    */
-  readonly shutterLayer = new Graphics();
-  readonly bombLayer = new Container();
+  readonly shutterLayer: Graphics = new Graphics();
+  readonly bombLayer: Container = new Container();
   /**
    * Sits above `noteLayer` / `bombLayer` and below `textLayer`. Holds the chrome that should visually punch through the
    * note stream: the judgement plate, NOWCOMBO digits, and the AUTOPLAY indicator.
    */
   readonly overlayLayer: Container = new Container();
-  readonly textLayer = new Container();
+  readonly textLayer: Container = new Container();
   /**
    * Per-frame `Sprite` / `Graphics` / `Text` recyclers — one per layer that previously paid for
    * `disposeChildren(layer)` + fresh allocations on every render tick. The pool reuses parented children across
@@ -137,8 +137,8 @@ export class CoreGameplayState {
   overlayLayerPool: ChildPool = new ChildPool(this.overlayLayer);
   readonly textLayerPool: ChildPool = new ChildPool(this.textLayer);
   readonly bombLayerPool: ChildPool = new ChildPool(this.bombLayer);
-  readonly bgaLayerPool = new ChildPool(this.bgaLayer);
-  readonly overlay = new Text({
+  readonly bgaLayerPool: ChildPool = new ChildPool(this.bgaLayer);
+  readonly overlay: Text = new Text({
     text: '',
     style: new TextStyle({
       fill: 0xf8fafc,
@@ -225,7 +225,7 @@ export class CoreGameplayState {
       }
     | undefined;
   /** Notes and mines gone under LR2's rules, so the mirrored scroll past a negative-BPM reversal does not redraw them. */
-  readonly goneDrawObjects = new GoneDrawObjects();
+  readonly goneDrawObjects: GoneDrawObjects = new GoneDrawObjects();
   chartLastNoteEndSeconds = 0;
   songDurationSeconds = 0;
   laneChannels: string[] = [];
@@ -365,7 +365,7 @@ export class CoreGameplayState {
   /** True once the shared engine settled the chart (every note judged) and holds the play open for the outro. */
   sharedEngineChartSettled = false;
   /** Which lane each finger on the canvas holds (touch play). */
-  readonly touchLanes = new TouchLaneTracker();
+  readonly touchLanes: TouchLaneTracker = new TouchLaneTracker();
   /** Input token a touch on each lane channel presses, from the chart's lane bindings (built on the first touch). */
   touchTokenByChannel: Map<string, string> | undefined;
   /** The canvas `touch-action` before this scene set it to `none`, restored on dispose. */
@@ -378,7 +378,7 @@ export class CoreGameplayState {
    * PLAYSTART anchor and notes pass the judgment line ahead of the engine's actual judge event.
    */
   sharedEngineClockAnchored = false;
-  decodedSamples = new Map<string, AudioBuffer>();
+  decodedSamples: Map<string, AudioBuffer> = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
    * chart by {@link prepareSong} via the shared `collectChartVolumeMultipliers` helper, looked up on every
@@ -389,16 +389,16 @@ export class CoreGameplayState {
    * (playbackRate, loopStart / loopEnd) which the current pipeline doesn't surface yet — see the spec audit. Volume is
    * the dominant in-the-wild use of `#WAVCMD`, so this already covers the common case.
    */
-  wavCmdVolumeMultipliers = new Map<string, number>();
+  wavCmdVolumeMultipliers: Map<string, number> = new Map<string, number>();
   /**
    * Parsed `#SWBGAxx` directives keyed by slot id. Built once per chart by {@link prepareSong}, looked up on every BGA
    * frame draw — `pickSwitchingBgaFrame(entry, elapsedMs)` resolves the currently-visible source `#BMPxx` key to swap
    * into the layer draw. Slots without a `#SWBGAxx` declaration stay absent so the fast path (single texture lookup)
    * takes over.
    */
-  switchingBgas = new Map<string, BmsSwitchingBga>();
+  switchingBgas: Map<string, BmsSwitchingBga> = new Map<string, BmsSwitchingBga>();
   /** `#BGAxx` sub-region slot → its authored `dx dy` on the 256x256 BGA canvas. */
-  readonly bgaSubRegionOrigins = new Map<string, { x: number; y: number }>();
+  readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }> = new Map<string, { x: number; y: number }>();
   /**
    * bmson per-event slice playback map. For bmson charts the audio-renderer's `createBmsonSamplePlaybackMap`
    * precomputes which portion of each `sound_channels[]` WAV a given note is supposed to play — `offsetSeconds` is the
@@ -449,9 +449,9 @@ export class CoreGameplayState {
    * Timed judgements of the current play, fed from the engine's judge-combo bus. Its recent window reaches skins as
    * `runtime.judgeTimings`, the full list as the result data's `judgeTimings`.
    */
-  readonly judgeTimings = new JudgeTimingLog();
+  readonly judgeTimings: JudgeTimingLog = new JudgeTimingLog();
   /** Long-note holds of the current play, fed from the engine's `long-note-start` / `long-note-end` commands. */
-  readonly longNotes = new LongNoteTracker();
+  readonly longNotes: LongNoteTracker = new LongNoteTracker();
   /**
    * How the engine's ruleset plays long notes and its judge windows (ms), from `onRulesetResolved` at engine launch.
    * The windows are the ones in force when the chart starts: an LR2 mid-chart `#EXRANKxx` change narrows or widens
@@ -494,10 +494,10 @@ export class CoreGameplayState {
    */
   measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
   /** Judgement that set off each lane's live bomb, by channel; absent for bombs without one (an autoplayed LN head). */
-  readonly bombJudge = new Map<string, BeMusicJudge>();
+  readonly bombJudge: Map<string, BeMusicJudge> = new Map<string, BeMusicJudge>();
   /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
-  readonly lanePressedAt = new Map<string, number>();
-  readonly laneReleasedAt = new Map<string, number>();
+  readonly lanePressedAt: Map<string, number> = new Map<string, number>();
+  readonly laneReleasedAt: Map<string, number> = new Map<string, number>();
   lastJudge = '';
   lastJudgeUntil = 0;
   /**
@@ -537,7 +537,7 @@ export class CoreGameplayState {
    * `#STARTINPUT`). These are independent from
    * input flash timers and can otherwise retain a disposed gameplay scene until their delay elapses.
    */
-  readonly sceneStageTimeouts = new Set<number>();
+  readonly sceneStageTimeouts: Set<number> = new Set<number>();
   /**
    * True once {@link beginExitSequence} starts the FADEOUT → CLOSE → host-callback chain. Re-entry is suppressed so a
    * frantic second ESC press while the fade is animating doesn't leak a second callback or restart the timeline.
@@ -594,13 +594,13 @@ export class CoreGameplayState {
    * The hi-speed on the player's own scale: {@link hiSpeed} without the HS-FIX multiplier. It is what the player picked
    * (the select panel and the host show it), so the HUD's hi-speed readout shows it too, and the hotkey steps it.
    */
-  playerHiSpeed = this.hiSpeed;
+  playerHiSpeed: number = this.hiSpeed;
   /**
    * The scroll factor notes, bar lines and long notes are positioned with: it glides to each new {@link hiSpeed} over
    * `HISPEED_TRANSITION_MS` (wall clock) instead of jumping, while the HUD / readouts show the new target at once.
    * Visual only — judging never reads it.
    */
-  readonly scrollHiSpeed = new HiSpeedTransition(this.hiSpeed);
+  readonly scrollHiSpeed: HiSpeedTransition = new HiSpeedTransition(this.hiSpeed);
   /**
    * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering from
    * `gameplay-constants.ts`. The core scene drives the key-on bank (100–119) for the lane beams; theme families stamp
@@ -631,14 +631,14 @@ export class CoreGameplayState {
    * the playfield can start displaying samples while background images keep streaming in. Black pixels are preserved
    * (this is the bottommost BGA layer).
    */
-  bgaTextures = new Map<string, Texture>();
+  bgaTextures: Map<string, Texture> = new Map<string, Texture>();
   /**
    * BMP-resource → decoded `Texture` cache for the **layer** track (`#BMP` channels 07 and 0A). Decoded separately from
    * {@link bgaTextures} with a chroma-key that turns pure-black pixels transparent — mirrors the BMS BGA "layer"
    * convention used by `packages/player/src/bga.ts` so the foreground composites cleanly over the base track. Even when
    * the same BMP id appears on both tracks we keep two textures because `chroma-key` is destructive.
    */
-  bgaLayerTextures = new Map<string, Texture>();
+  bgaLayerTextures: Map<string, Texture> = new Map<string, Texture>();
   /**
    * BMP-key → `<video>` element for video BGA cues (`.mp4` / `.webm` / etc.). `renderBga` seeks + plays these on cue
    * transitions; `dispose` revokes their object URLs.
@@ -647,7 +647,10 @@ export class CoreGameplayState {
    * texture itself is also added to `bgaTextures` / `bgaLayerTextures` so the existing renderer paths pick it up
    * unchanged.
    */
-  bgaVideos = new Map<string, { video: HTMLVideoElement; objectUrl: string }>();
+  bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }> = new Map<
+    string,
+    { video: HTMLVideoElement; objectUrl: string }
+  >();
   /**
    * Tracks which video is currently associated with each BGA layer and the chart-time it was seeded at. We use this to
    * detect cue transitions in `renderBga` (start the new cue's video, pause the previous one) and to compute the
@@ -668,7 +671,7 @@ export class CoreGameplayState {
    * POOR cue's `seconds` (or `Infinity` when no POOR cues exist). The renderer compares the chart playhead against this
    * so a chart that authors POOR mid-song falls back to BMP00 only during the pre-roll.
    */
-  poorBgaFallbackUntilSeconds = Number.POSITIVE_INFINITY;
+  poorBgaFallbackUntilSeconds: number = Number.POSITIVE_INFINITY;
   /** Whether the chart actually carries any BGA events (drives LR2 op 170/171). */
   hasBga = false;
   /** Smoothed score for the count-up animation. Lerps toward `score.score`. */
@@ -684,7 +687,7 @@ export class CoreGameplayState {
    * Per-frame section timing tracker. Logs a console summary every second when enabled (via `?perf` URL flag or
    * `globalThis.__BE_MUSIC_PERF__ = true`). When disabled the wrapper adds no measurable overhead.
    */
-  readonly perf = new PerfTracker('gameplay');
+  readonly perf: PerfTracker = new PerfTracker('gameplay');
   /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
   beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
   /** `performance.now()` of the first rendered frame, for the be-music entrance fade. */
@@ -732,7 +735,7 @@ export class CoreGameplayState {
    * Cropped copies of the `#BGAxx` sub-region textures, for a skin that composites the BGA itself (a canvas image can't
    * carry the crop the way a Pixi sub-texture does). `null` while the crop is being made.
    */
-  readonly skinBgaCrops = new Map<Texture, ImageBitmap | null>();
+  readonly skinBgaCrops: Map<Texture, ImageBitmap | null> = new Map<Texture, ImageBitmap | null>();
   /**
    * Cached cumulative beats at each measure boundary, keyed by song identity. Computed on first access so we don't walk
    * the measure list every frame. Each entry is the beat count at the *start* of the measure with that index (measure 0

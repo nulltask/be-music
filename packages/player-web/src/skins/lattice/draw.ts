@@ -149,7 +149,7 @@ export function drawRulerTicks(
   y: number,
   w: number,
   direction: 1 | -1,
-  color = LAT_INK,
+  color: number = LAT_INK,
   alpha = 0.6,
   minor = 5,
   major = 20,

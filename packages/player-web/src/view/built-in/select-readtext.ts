@@ -32,7 +32,7 @@ export class SelectReadTextOverlay {
    * a song whose folder ships a `.txt` file. The skin's own readtext UI lives on its own panel timer (15 / 16) and we
    * don't have the chrome for that yet — render a no-frills modal so the feature is at least usable.
    */
-  readonly readTextLayer = new Container();
+  readonly readTextLayer: Container = new Container();
   private readonly readTextBackdrop = new Graphics();
   private readonly readTextCard = new Graphics();
   private readonly readTextTitle = new Text({

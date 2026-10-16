@@ -729,7 +729,7 @@ function stateTexture(side: number): RenderTexture {
  * runs as a GPU pass right before the frame is drawn.
  */
 export class ChargeCloud {
-  public readonly view = new Container();
+  public readonly view: Container = new Container();
   private readonly uniforms: UniformGroup;
   private readonly positions: [RenderTexture, RenderTexture];
   private readonly velocities: [RenderTexture, RenderTexture];
