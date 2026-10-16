@@ -32,7 +32,7 @@
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
 //
 // The scene is made of parts that read and drive it through one context it builds (`createContext`): the song list's
-// rows (`select/rows.ts`).
+// rows (`select/rows.ts`) and the search input (`select/search.ts`).
 
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/chart';
@@ -61,6 +61,7 @@ import {
 } from '@be-music/beatoraja-skin/scene';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import { BeatorajaSelectRows, type BeatorajaSelectRowsContext } from './select/rows.ts';
+import { BeatorajaSelectSearch, songMatchesQuery, type BeatorajaSelectSearchContext } from './select/search.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
@@ -283,7 +284,7 @@ const SCROLL_TWEEN_RATE = 0.25;
 const SCROLL_SNAP_THRESHOLD = 0.005;
 
 /** What the scene's parts read and drive on it. */
-type BeatorajaSelectSceneContext = BeatorajaSelectRowsContext;
+type BeatorajaSelectSceneContext = BeatorajaSelectRowsContext & BeatorajaSelectSearchContext;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root: Container = new Container();
@@ -316,6 +317,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   /** The rows' hit sprites, as the scene's tests reach them. */
   private get rowHitAreas(): (Sprite | undefined)[] {
     return this.rows.rowHitAreas;
+  }
+  /** The search input mode and its prompt. */
+  private readonly search: BeatorajaSelectSearch = new BeatorajaSelectSearch(this.context);
+  /** The search prompt, as the scene's tests reach it. */
+  private get searchPromptText(): Text | undefined {
+    return this.search.searchPromptText;
   }
   /**
    * Per-song chart-image cache. Keyed by `BrowserSongEntry.id`; populated lazily by
@@ -418,20 +425,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   /**
    * Live search query (case-insensitive substring match on title + artist + genre + sub
    * title). Empty string = no filter. Updated by the search input flow (see
-   * {@link searchActive} / handleKeyDown's `/` branch). Surfaced to the skin via
+   * {@link BeatorajaSelectSearch.searchActive} / handleKeyDown's `/` branch). Surfaced to the skin via
    * `BEATORAJA_TEXT.SEARCHWORD` so themes that author the search-display text node show
    * the live query while the user types.
    */
   private searchQuery = '';
-  /**
-   * `true` while the user is in search-input mode (after pressing `/`). In this mode
-   * keystrokes go to the search query instead of cursor navigation; Enter / Escape exit
-   * the mode (Enter keeps the filter, Escape clears + exits). Visual indicator: a small
-   * prompt at the top of the canvas (rendered as a transient Text node).
-   */
-  private searchActive = false;
-  /** Sprite holding the live search prompt — only mounted while `searchActive`. */
-  private searchPromptText: Text | undefined;
   private disposed = false;
   /**
    * Lazily-constructed chart-preview engine. Mirrors the LR2 `scene/lr2/select.ts` integration —
@@ -609,6 +607,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         return scene.scrollPosition;
       },
       handleRowPointerTap: (rowOffset, event) => scene.handleRowPointerTap(rowOffset, event),
+      get searchQuery(): string {
+        return scene.searchQuery;
+      },
+      setSearchQuery: (query) => scene.setSearchQuery(query),
+      moveCursor: (delta) => scene.moveCursor(delta),
+      setCursor: (index) => scene.setCursor(index),
     };
   }
 
@@ -695,7 +699,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       void this.previewAudioContext.close().catch(() => {});
       this.previewAudioContext = undefined;
     }
-    this.destroySearchPrompt();
+    this.search.destroySearchPrompt();
     this.rows.destroyRowVisuals();
     if (this.listLayer.parent) {
       this.listLayer.parent.removeChild(this.listLayer);
@@ -733,7 +737,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     fonts?: BeatorajaFontCache;
   }): void {
     if (this.disposed) return;
-    this.destroySearchPrompt();
+    this.search.destroySearchPrompt();
     this.view.dispose();
     this.cachedBaseOps = undefined;
 
@@ -802,7 +806,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.rows.valueElementsById = undefined;
     this.rows.buildRowVisuals(opts.fonts);
     this.rows.refreshRowVisuals();
-    this.refreshSearchPrompt();
+    this.search.refreshSearchPrompt();
 
     this.lastFitWidth = 0;
     this.lastFitHeight = 0;
@@ -975,7 +979,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Search-prompt suffix carries a live "N matches" count — refresh whenever the entry
     // list changes so the user sees the new result count after folder enter / sort cycle /
     // keymode filter change while a search query is active.
-    this.refreshSearchPrompt();
+    this.search.refreshSearchPrompt();
   }
 
   /**
@@ -1297,14 +1301,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   }
 
   // ─── Layout / visuals ─────────────────────────────────────────────────────────────────────────
-
-  private destroySearchPrompt(): void {
-    if (this.searchPromptText === undefined) return;
-    if (!this.searchPromptText.destroyed) {
-      this.searchPromptText.destroy();
-    }
-    this.searchPromptText = undefined;
-  }
 
   /** Map a chart's `playLevel` to a tint colour band — visual hint at glance. */
 
@@ -1687,8 +1683,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Search-input mode swallows most keys — ArrowUp/Down still navigate within the
     // filtered list (so the user can type, then arrow-pick), but printable characters /
     // Backspace mutate the query and Enter / Escape exit the mode.
-    if (this.searchActive) {
-      this.handleSearchKey(event);
+    if (this.search.searchActive) {
+      this.search.handleSearchKey(event);
       return;
     }
     switch (event.key) {
@@ -1767,127 +1763,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (this.searchQuery === query) return;
     this.searchQuery = query;
     this.refreshEntries(0);
-    this.refreshSearchPrompt();
+    this.search.refreshSearchPrompt();
   }
 
   private setSearchActive(active: boolean): void {
-    if (this.searchActive === active) return;
-    this.searchActive = active;
-    this.refreshSearchPrompt();
-  }
-
-  /**
-   * Field-keystroke handler for search-input mode. ArrowUp/Down still navigate (so the user
-   * can type → arrow-pick); Enter commits the filter and exits search mode; Escape clears
-   * + exits; Backspace deletes the last char; printable single-character keys append.
-   */
-  private handleSearchKey(event: KeyboardEvent): void {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      this.setSearchActive(false);
-      return;
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.setSearchActive(false);
-      this.setSearchQuery('');
-      return;
-    }
-    if (event.key === 'Backspace') {
-      event.preventDefault();
-      this.setSearchQuery(this.searchQuery.slice(0, -1));
-      return;
-    }
-    // Navigation keys still work inside search mode — the user can type a query, then
-    // page through the filtered results without exiting input mode. Mirrors the same set
-    // the navigation-mode handler exposes so muscle memory carries.
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      this.moveCursor(-1);
-      return;
-    }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      this.moveCursor(1);
-      return;
-    }
-    if (event.key === 'PageUp') {
-      event.preventDefault();
-      this.moveCursor(-10);
-      return;
-    }
-    if (event.key === 'PageDown') {
-      event.preventDefault();
-      this.moveCursor(10);
-      return;
-    }
-    if (event.key === 'Home') {
-      event.preventDefault();
-      this.setCursor(0);
-      return;
-    }
-    if (event.key === 'End') {
-      event.preventDefault();
-      this.setCursor(this.entries.length - 1);
-      return;
-    }
-    // Printable single-character keys append to the query. Filter out chord modifiers
-    // (Ctrl/Alt/Meta + letter) — those are typically OS shortcuts the user doesn't want
-    // landing in the search query.
-    if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
-      event.preventDefault();
-      this.setSearchQuery(this.searchQuery + event.key);
-    }
-  }
-
-  /**
-   * Show / hide / update the transient search prompt overlay. Mounted on the listLayer (=
-   * inside the scaled skin container) so its position scales with the rest of the chrome.
-   * Visible only while {@link searchActive}; the searchword display the skin authors via
-   * `BEATORAJA_TEXT.SEARCHWORD` is the canonical surface, but the transient prompt gives
-   * the user clear feedback that they're in input mode even on skins that don't author the
-   * text node.
-   */
-  private refreshSearchPrompt(): void {
-    if (!this.searchActive && this.searchQuery.length === 0) {
-      if (this.searchPromptText !== undefined) {
-        this.searchPromptText.visible = false;
-      }
-      return;
-    }
-    if (this.searchPromptText === undefined) {
-      const text = new Text({
-        text: '',
-        style: {
-          fontFamily: 'sans-serif',
-          fontSize: 24,
-          fill: 0xffe066,
-          fontWeight: '700',
-          stroke: { color: 0x000000, width: 4 },
-        },
-      });
-      text.anchor.set(0.5, 0);
-      text.x = this.view.width / 2;
-      text.y = 8;
-      this.view.container.addChild(text);
-      this.searchPromptText = text;
-    }
-    const prompt = this.searchActive ? '/ ' : '🔍 ';
-    const display = this.searchQuery.length > 0 ? this.searchQuery : '(type to search)';
-    // Append "no matches" suffix when the query yields zero entries — gives the user clear
-    // feedback that they typed too narrowly. Otherwise show the result count for queries
-    // with hits ("3 matches"), which doubles as a hint that filtering is working.
-    let suffix = '';
-    if (this.searchQuery.length > 0) {
-      if (this.entries.length === 0) {
-        suffix = ' — no matches';
-      } else {
-        suffix = ` — ${this.entries.length} match${this.entries.length === 1 ? '' : 'es'}`;
-      }
-    }
-    this.searchPromptText.text = `${prompt}${display}${suffix}`;
-    this.searchPromptText.tint = this.searchQuery.length > 0 && this.entries.length === 0 ? 0xff8888 : 0xffe066;
-    this.searchPromptText.visible = true;
+    this.search.setSearchActive(active);
   }
 
   /**
@@ -1916,22 +1796,6 @@ function clampIndex(value: number, length: number): number {
   if (truncated < 0) return 0;
   if (truncated >= length) return length - 1;
   return truncated;
-}
-
-/**
- * Case-insensitive substring match against a song's text-searchable fields. The query is
- * pre-lowercased by the caller so this hot-path doesn't re-allocate per song. Returns true
- * when ANY field contains the query — title / artist / genre / subtitle. Mirrors
- * beatoraja's reference search which treats fields uniformly.
- */
-function songMatchesQuery(song: BrowserSongEntry, lowerQuery: string): boolean {
-  const meta = song.chart.metadata;
-  const fields = [meta.title, meta.artist, meta.genre, meta.subtitle];
-  for (const field of fields) {
-    if (typeof field !== 'string' || field.length === 0) continue;
-    if (field.toLowerCase().includes(lowerQuery)) return true;
-  }
-  return false;
 }
 
 /**
