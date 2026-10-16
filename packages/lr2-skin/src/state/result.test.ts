@@ -382,7 +382,10 @@ describe('resolveLr2ResultState values', () => {
   it('draws the chart’s texts, the INSANE level among them', () => {
     const state = resolveLr2ResultState({ result: makeResult({ difficulty: 5 }) });
     expect(state.text(LR2_TEXT.RIVAL)).toBe('TARGET');
-    expect(state.text(LR2_TEXT.TITLE_ALT)).toBe('Test');
+    expect(state.text(LR2_TEXT.TITLE)).toBe('Test');
+    // Text 20 is the internet ranking's message on the result screen: none without one.
+    expect(state.text(LR2_TEXT.TITLE_ALT)).toBe('');
+    expect(state.text(LR2_TEXT.ARTIST_ALT)).toBe(state.text(LR2_TEXT.ARTIST));
     expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('5');
     expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBe(state.text(LR2_TEXT.PLAY_LEVEL));
     expect(state.text(LR2_TEXT.TAG)).toBe('');
