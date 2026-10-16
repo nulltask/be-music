@@ -115,6 +115,16 @@ describe('resolveBeatorajaResultNumber', () => {
       mode: BEATORAJA_GAUGE_MODE.CLASS,
     });
   });
+
+  it("reads the result's gauge border and TOTAL with its percentage", () => {
+    const result = input({
+      gauge: undefined,
+      result: facts({ gauge: 76.4, gaugeType: 'NORMAL', gaugeBorder: 80, gaugeTotal: 260 }),
+    });
+    expect(resolveBeatorajaResultGaugeState(result)).toMatchObject({ value: 76.4, max: 100, border: 80 });
+    expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.BMS_TOTAL, { ...result, chartTotal: 300 })).toBe(260);
+    expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.GROOVEGAUGE_AFTERDOT, result)).toBe(40);
+  });
 });
 
 describe('resolveBeatorajaResultOps', () => {
