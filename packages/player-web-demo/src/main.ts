@@ -23,8 +23,6 @@ import {
   HISPEED_MIN,
   HISPEED_STEP,
   snapHiSpeed,
-  beatorajaClearLampOp,
-  type BeatorajaSelectSystemSoundPaths,
   type PixiGameplayResultData,
   type PixiPlayOptions,
   type PixiSongSelectNavigation,
@@ -37,8 +35,6 @@ import {
   resolveBeMusicSkinSettings,
   type BeMusicSkin,
   type BeMusicSongRecord,
-  discoverBeatorajaSelectBgmPath,
-  discoverBeatorajaSystemSoundPaths,
   findBeatorajaThemeBgm,
   loadBeatorajaFonts,
   loadBeatorajaTexturesFromBundle,
@@ -54,6 +50,12 @@ import {
   type BeatorajaThemeBundle,
 } from '@be-music/player-web/skin';
 import { prepareBeatorajaGameplayChart, type PreparedBeatorajaGameplayChart } from '@be-music/player-web/chart';
+import {
+  beatorajaClearLampOp,
+  discoverBeatorajaSelectBgmPath,
+  discoverBeatorajaSystemSoundPaths,
+  type BeatorajaSystemSoundPaths,
+} from '@be-music/beatoraja-skin/scene';
 import {
   BrowserSongCollectionStore,
   checkBrowserCompat,
@@ -568,7 +570,7 @@ class PlayerWebDemoApp {
    * so cursor / decide / folder / option events fire the matching cues. Stays empty (`{}`)
    * for stripped LR2 themes that don't ship a `sound/` subdirectory.
    */
-  private beatorajaSystemSoundPaths: BeatorajaSelectSystemSoundPaths = {};
+  private beatorajaSystemSoundPaths: BeatorajaSystemSoundPaths = {};
   /**
    * Looping select-scene BGM path discovered from the active theme bundle. Re-probed on
    * every theme load via {@link discoverBeatorajaSelectBgmPath}; passed to the select scene

@@ -311,4 +311,6 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                 |
 
 The scenes still keep their own browse and play state (the core gameplay its `JudgeTimingLog` and covers, the beatoraja
-runtime adapter its histories and covers); the scene sessions of the web runtime move onto these models.
+runtime adapter its histories and covers); the scene sessions of the web runtime move onto these models. The skin
+packages map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
+[beatoraja-skin.md](./beatoraja-skin.md#scene-mapping)).

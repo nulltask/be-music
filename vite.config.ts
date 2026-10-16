@@ -20,11 +20,12 @@ const workspacePackages = [
 
 /**
  * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code,
- * the scene models and the LR2 state resolvers run unchanged in the browser and in Node, so they import no Node built-in
- * and read no DOM or Node-only global. Runtime services reach them through adapters (`PlayerOptions.createAudioSession`,
- * `createUiRuntime`, the parser's `node-file.ts`) instead.
+ * the scene models and the LR2 and beatoraja state resolvers run unchanged in the browser and in Node, so they import no
+ * Node built-in and read no DOM or Node-only global. Runtime services reach them through adapters
+ * (`PlayerOptions.createAudioSession`, `createUiRuntime`, the parser's `node-file.ts`) instead.
  */
 const runtimeNeutralSources = [
+  'packages/beatoraja-skin/src/scene/**/*.ts',
   'packages/chart/src/**/*.ts',
   'packages/json/src/**/*.ts',
   'packages/lr2-skin/src/state/**/*.ts',
@@ -41,9 +42,10 @@ const runtimeAdapterSources = ['packages/parser/src/cli.ts', 'packages/parser/sr
 /**
  * The deterministic judge (`judge-core*.ts`, `auto-judge-core.ts`, the ruleset rules and the play-log simulator): the
  * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number. The
- * LR2 state resolvers are held to the same rule: a scene's time comes in as an input.
+ * LR2 and beatoraja state resolvers are held to the same rule: a scene's time comes in as an input.
  */
 const deterministicJudgeSources = [
+  'packages/beatoraja-skin/src/scene/**/*.ts',
   'packages/lr2-skin/src/state/**/*.ts',
   'packages/player/src/core/judge-*.ts',
   'packages/player/src/core/auto-judge-core.ts',

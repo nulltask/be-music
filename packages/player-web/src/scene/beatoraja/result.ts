@@ -6,42 +6,32 @@
 //
 // What this scene resolves for the skin:
 //
-//   - `text[].ref` — TITLE / SUBTITLE / GENRE / ARTIST etc., from the picked song.
-//   - `value[].ref` — the entire LIVE-block of prop.lua's `num` table populated from the final
-//     `PlayerSummary`. Score (POINT, SCORE2), score-rate / total-rate (with afterdot pairs),
-//     judge counts (PERFECT … POOR / MISS), fast/slow totals (TOTALEARLY / TOTALLATE),
-//     combobreak aliases, max combo, gauge percent. Best-record and rival diff slots stay 0
-//     (no DB / IR layer yet).
-//
-// What this scene still leaves to a score database:
-//   - Best-record and rival-difference slots.
-//   - Per-rank / clear-lamp comparisons that need "vs best" deltas. Current clear/rank ops reflect
-//     only the just-finished run.
+// What the skin reads — the ops, numbers, texts, gauge and graphs of the run — is resolved by
+// `@be-music/beatoraja-skin/scene` from the run's result (`resolveBeatorajaResult*`); best-record,
+// target and rival numbers read 0 until records feed them.
 
 import type { SceneCourseInfo } from '../course-info.ts';
-import { resolveBeatorajaCourseStageOps, resolveBeatorajaCourseText } from './course.ts';
 import { Container, Graphics } from 'pixi.js';
 import type { PlayerSummary } from '@be-music/player/core/engine';
+import { buildBaseOpSet, type BeatorajaSkin, type BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
 import {
-  BEATORAJA_NUM,
-  BEATORAJA_OP,
-  BEATORAJA_TEXT,
-  beatorajaGaugeModeFromString,
-  buildBaseOpSet,
-  computeGenericRankOp,
-  computeJudgeExistOps,
-  computeRankOp,
-  computeResultRankOp,
-  type BeatorajaSkin,
-  type BeatorajaSkinConfig,
-} from '@be-music/beatoraja-skin';
+  resolveBeatorajaGaugePolyline,
+  resolveBeatorajaResultGaugePercent,
+  resolveBeatorajaResultGaugeState,
+  resolveBeatorajaResultGraphValue,
+  resolveBeatorajaResultJudgeGraph,
+  resolveBeatorajaResultNumber,
+  resolveBeatorajaResultOps,
+  resolveBeatorajaResultPolyline,
+  resolveBeatorajaResultText,
+  type BeatorajaNoteBreakdown,
+  type BeatorajaResultInput,
+} from '@be-music/beatoraja-skin/scene';
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import { resolveClearLamp } from '@be-music/player/ruleset';
-import { beatorajaClearLampOp } from './clear-lamp.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import { resolveChartTotalReadout } from '../../chart/beatoraja/meta.ts';
 import type { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
@@ -55,9 +45,9 @@ import {
   fitBeatorajaViewToStage,
   hasBeatorajaSceneLockedTransition,
   isBeatorajaSceneInputReady,
+  beatorajaSongTextOf,
   resolveBeatorajaChartImage,
   resolveBeatorajaSkinTimingMs,
-  resolveBeatorajaSongText,
   type BeatorajaChartImages,
   type BeatorajaSceneLoopAttachment,
 } from './shared-scene.ts';
@@ -174,27 +164,27 @@ export class PixiBeatorajaResultScene implements PixiScene {
   private cachedBaseOps: ReadonlySet<number> | undefined;
   /** Cached BPM polyline for the chart that was just played — `[]` when no chart was supplied. */
   private readonly chartBpmCurve: ReadonlyArray<BpmCurvePoint>;
+  /** What the skin reads of the run (`@be-music/beatoraja-skin/scene`). */
+  private readonly result: BeatorajaResultInput;
 
   constructor(options: PixiBeatorajaResultSceneOptions) {
     this.options = options;
     this.chartBpmCurve = options.chart !== undefined ? computeBeatorajaBpmCurve(options.chart) : [];
+    this.result = resultInputOf(options);
+    const result = this.result;
     this.view = new BeatorajaPlaySkinView({
       skin: options.skin,
       textures: options.textures,
-      resolveTextContent: (refOp) => this.resolveSongText(refOp),
-      resolveNumberValue: (refOp) => this.resolveResultNumber(refOp),
+      resolveTextContent: (refOp) => resolveBeatorajaResultText(refOp, result),
+      resolveNumberValue: (refOp) => resolveBeatorajaResultNumber(refOp, result),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
-      resolveGraphValue: (type) => this.resolveResultGraph(type),
-      resolveGraphPolyline: (type) => this.resolveResultPolyline(type),
-      resolveGaugePercent: () => {
-        const gauge = options.summary.gauge;
-        if (gauge === undefined || gauge.max <= 0) return 0;
-        return (gauge.current / gauge.max) * 100;
-      },
-      resolveJudgeGraphBars: (type) => this.resolveResultJudgeBars(type),
+      resolveGraphValue: (type) => resolveBeatorajaResultGraphValue(type, result),
+      resolveGraphPolyline: (type) => resolveBeatorajaResultPolyline(type, result),
+      resolveGaugePercent: () => resolveBeatorajaResultGaugePercent(result),
+      resolveJudgeGraphBars: (type) => resolveBeatorajaResultJudgeGraph(type, result),
       resolveBpmGraphPoints: () => (this.chartBpmCurve.length > 0 ? this.chartBpmCurve : undefined),
-      resolveGaugeGraphPoints: () => this.resolveResultGaugePolyline(),
+      resolveGaugeGraphPoints: () => resolveBeatorajaGaugePolyline(result.result.gaugeHistory ?? []),
       resolveTimingDistribution: () => options.timingHistory,
       // Synthetic chart-image ids — GdbG_Skin's result paints `-100 STAGEFILE` under the
       // top-right song-info pane gated on `op:[910, 191]`; default skin uses it for the
@@ -297,7 +287,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
       getTimerStart: (timerId) => this.timerStartedAt.get(timerId),
       // The gauge the play ended on, so `main_state.gauge_type()` and the gauge slab name it (a course's class gauge
       // included) instead of defaulting to NORMAL.
-      resolveGaugeState: () => resolveResultGaugeState(this.options.summary.gauge),
+      resolveGaugeState: () => resolveBeatorajaResultGaugeState(this.result),
       nowMs: elapsed,
       audioPlay:
         this.options.skinAudio === undefined ? undefined : (path, vol) => this.options.skinAudio!.play(path, vol),
@@ -311,414 +301,14 @@ export class PixiBeatorajaResultScene implements PixiScene {
     this.transitionToRetry?.tick();
   }
 
+  /** The skin config's option ops and the run's ops (rank, verdict, lamp, judgments, course stage). */
   private baseOps(): ReadonlySet<number> {
-    if (this.cachedBaseOps !== undefined) return this.cachedBaseOps;
-    // Start from the user's confirmed `property[]` picks, then merge in summary-derived gates
-    // (rank, clear lamp, result outcome, *_EXIST). The result scene's chrome is mostly built
-    // around these classifiers — without them the skin renders in a "no-data" state where
-    // every rank graphic is hidden and the clear-lamp panel stays blank.
-    const ops = new Set(buildBaseOpSet(this.options.skinConfig?.option));
-    const summary = this.options.summary;
-    const maxExScore = summary.total * 2;
-
-    // Rank ops — side / generic / result-only blocks. The first two mirror the live gameplay
-    // path (some skins reuse the live ops on result); the result-only block is set explicitly
-    // for skins that authored their rank graphics under `result_*_1p`.
-    ops.add(computeRankOp(summary.exScore, maxExScore, 1));
-    ops.add(computeGenericRankOp(summary.exScore, maxExScore));
-    ops.add(computeResultRankOp(summary.exScore, maxExScore));
-
-    // Clear lamp + outcome flag. The gauge variant ('GROOVE' / 'EASY' / 'HARD' / 'DEATH') comes
-    // from `summary.gauge.type` if the engine surfaced it; the lamp picker uses it to pick
-    // between NORMAL / EASY / HARD / EXHARD lamps. PERFECT and FULLCOMBO short-circuit ahead of
-    // gauge-type discrimination — those are independent of the gauge curve.
-    const cleared = summary.gauge?.cleared ?? false;
-    ops.add(cleared ? BEATORAJA_OP.RESULT_CLEAR : BEATORAJA_OP.RESULT_FAIL);
-    // The lamp every family resolves a play to (`resolveClearLamp`): a clear with every note a PERFECT is MAX.
-    ops.add(
-      beatorajaClearLampOp(
-        resolveClearLamp({
-          cleared,
-          score: summary,
-          ...(summary.gauge?.type !== undefined ? { gauge: summary.gauge.type } : {}),
-          ...(this.options.judgeRuleset !== undefined ? { ruleset: this.options.judgeRuleset } : {}),
-        }),
-      ),
-    );
-
-    // *_EXIST gates — same logic as the live adapter, but evaluated once against the final
-    // counters (no per-frame refresh needed).
-    for (const op of computeJudgeExistOps(summary)) ops.add(op);
-
-    if (this.options.courseInfo !== undefined) {
-      for (const op of resolveBeatorajaCourseStageOps(this.options.courseInfo)) ops.add(op);
-    }
-
-    this.cachedBaseOps = ops;
+    this.cachedBaseOps ??= new Set([
+      ...buildBaseOpSet(this.options.skinConfig?.option),
+      ...resolveBeatorajaResultOps(this.result),
+    ]);
     return this.cachedBaseOps;
   }
-
-  private resolveSongText(refOp: number): string | undefined {
-    const course = this.options.courseInfo;
-    if (course !== undefined) {
-      const courseText = resolveBeatorajaCourseText(refOp, course);
-      if (courseText !== undefined) return courseText;
-      if (course.stageIndex === undefined && (refOp === BEATORAJA_TEXT.TITLE || refOp === BEATORAJA_TEXT.FULLTITLE)) {
-        return course.title;
-      }
-    }
-    return resolveBeatorajaSongText(refOp, {
-      song: this.options.song,
-      skin: this.options.skin,
-    });
-  }
-
-  /**
-   * Result-scene `value[].ref` resolver. Result skins share the live-block num codes with
-   * gameplay (perfect/great/good/bad/poor/score/combo/etc.) — same prop.lua slots, just frozen
-   * at the chart's last frame. Mirrors the cases handled by `BeatorajaRuntimeAdapter`'s resolver
-   * but reads from the static `summary` payload instead of a live frame.
-   */
-  private resolveResultNumber(refOp: number): number | undefined {
-    const summary = this.options.summary;
-    const exScoreMax = summary.total * 2;
-    const exScoreRatePct = exScoreMax > 0 ? (summary.exScore / exScoreMax) * 100 : 0;
-    const scoreMax = summary.total * 1000;
-    const scoreRatePct = scoreMax > 0 ? (summary.score / scoreMax) * 100 : 0;
-    const gaugePct =
-      summary.gauge !== undefined && summary.gauge.max > 0 ? (summary.gauge.current / summary.gauge.max) * 100 : 0;
-
-    switch (refOp) {
-      // ─── Score ────────────────────────────────────────────────────────────────────────────
-      case BEATORAJA_NUM.POINT:
-      case BEATORAJA_NUM.SCORE2:
-        return summary.score;
-      case BEATORAJA_NUM.SCORE_RATE:
-        return Math.floor(exScoreRatePct);
-      case BEATORAJA_NUM.SCORE_RATE_AFTERDOT:
-        return Math.floor((exScoreRatePct - Math.floor(exScoreRatePct)) * 100);
-      case BEATORAJA_NUM.TOTAL_RATE:
-        return Math.floor(scoreRatePct);
-      case BEATORAJA_NUM.TOTAL_RATE_AFTERDOT:
-        return Math.floor((scoreRatePct - Math.floor(scoreRatePct)) * 100);
-
-      // ─── Combo / total notes ──────────────────────────────────────────────────────────────
-      // Final combo isn't tracked separately from max — beatoraja's `combo = 104` slot on result
-      // displays the max combo of the run (the running counter has long been reset by then).
-      // Surfacing `maxCombo` for both keeps skins that read either slot consistent.
-      case BEATORAJA_NUM.COMBO:
-      case BEATORAJA_NUM.MAXCOMBO_LIVE:
-        return this.options.maxCombo;
-      case BEATORAJA_NUM.TOTALNOTES:
-      case BEATORAJA_NUM.TOTALNOTES_LIVE:
-        return summary.total;
-
-      // ─── Gauge ────────────────────────────────────────────────────────────────────────────
-      // Chart TOTAL (368): the effective TOTAL the run's gauge used, as the play scene shows it.
-      case BEATORAJA_NUM.BMS_TOTAL:
-        return resolveChartTotalReadout(this.options.chart, summary.gauge) ?? 0;
-      case BEATORAJA_NUM.GROOVEGAUGE:
-        return Math.floor(gaugePct);
-      case BEATORAJA_NUM.GROOVEGAUGE_AFTERDOT:
-        return Math.floor((gaugePct - Math.floor(gaugePct)) * 100);
-
-      // ─── Per-judge counts ─────────────────────────────────────────────────────────────────
-      case BEATORAJA_NUM.PERFECT:
-        return summary.perfect;
-      case BEATORAJA_NUM.GREAT:
-        return summary.great;
-      case BEATORAJA_NUM.GOOD:
-        return summary.good;
-      case BEATORAJA_NUM.BAD:
-        return summary.bad;
-      case BEATORAJA_NUM.POOR:
-        return summary.poor;
-      case BEATORAJA_NUM.MISS:
-        return summary.poor;
-      case BEATORAJA_NUM.TOTALEARLY:
-        return summary.fast;
-      case BEATORAJA_NUM.TOTALLATE:
-        return summary.slow;
-
-      // Per-judge fast / slow split — derived from `timingHistory`. Engine doesn't aggregate
-      // these per-kind, so we fan out the full sample list once and cache. Each pair sums to
-      // the per-kind total (PERFECT, GREAT, …); empty timingHistory leaves all at 0.
-      case BEATORAJA_NUM.EARLY_PERFECT:
-        return this.cachedJudgeFastSlow().earlyPerfect;
-      case BEATORAJA_NUM.LATE_PERFECT:
-        return this.cachedJudgeFastSlow().latePerfect;
-      case BEATORAJA_NUM.EARLY_GREAT:
-        return this.cachedJudgeFastSlow().earlyGreat;
-      case BEATORAJA_NUM.LATE_GREAT:
-        return this.cachedJudgeFastSlow().lateGreat;
-      case BEATORAJA_NUM.EARLY_GOOD:
-        return this.cachedJudgeFastSlow().earlyGood;
-      case BEATORAJA_NUM.LATE_GOOD:
-        return this.cachedJudgeFastSlow().lateGood;
-      case BEATORAJA_NUM.EARLY_BAD:
-        return this.cachedJudgeFastSlow().earlyBad;
-      case BEATORAJA_NUM.LATE_BAD:
-        return this.cachedJudgeFastSlow().lateBad;
-      case BEATORAJA_NUM.EARLY_POOR:
-        return this.cachedJudgeFastSlow().earlyPoor;
-      case BEATORAJA_NUM.LATE_POOR:
-        return this.cachedJudgeFastSlow().latePoor;
-      case BEATORAJA_NUM.EARLY_MISS:
-        return this.cachedJudgeFastSlow().earlyPoor;
-      case BEATORAJA_NUM.LATE_MISS:
-        return this.cachedJudgeFastSlow().latePoor;
-      case BEATORAJA_NUM.COMBOBREAK:
-      case BEATORAJA_NUM.BAD_PLUS_POOR_PLUS_MISS:
-        return summary.bad + summary.poor;
-      case BEATORAJA_NUM.POOR_PLUS_MISS:
-        return summary.poor;
-
-      // ─── Timing statistics (374-377) — computed from the run's timingHistory ───────────
-      // GdbG_Skin authors `Avg N ms` / `Stdev N ms` labels from these refs; ModernChic uses
-      // them on its impression / centerinfo panes. Computed once via a memoized helper so the
-      // ms-pass-through doesn't recompute the stddev every frame.
-      case BEATORAJA_NUM.AVERAGE_TIMING:
-        return Math.floor(Math.abs(this.cachedTimingStats().mean));
-      case BEATORAJA_NUM.AVERAGE_TIMING_AFTERDOT: {
-        const mean = Math.abs(this.cachedTimingStats().mean);
-        return Math.floor((mean - Math.floor(mean)) * 100);
-      }
-      case BEATORAJA_NUM.STDDEV_TIMING:
-        return Math.floor(this.cachedTimingStats().stddev);
-      case BEATORAJA_NUM.STDDEV_TIMING_AFTERDOT: {
-        const stddev = this.cachedTimingStats().stddev;
-        return Math.floor((stddev - Math.floor(stddev)) * 100);
-      }
-
-      // ─── Best-record / target / IR — no live data, return 0 to silence "ref not wired" ──
-      // The result skin authors a lot of "vs best" / "vs target" slots; without a DB layer they
-      // all stay at 0. Returning 0 (not undefined) keeps the readouts visually present and the
-      // log clean.
-      default:
-        return 0;
-    }
-  }
-
-  /**
-   * Mean / stddev of the run's `timingHistory` deltas (positive = late, negative = early).
-   * Cached on first call — both stats are stable for the run's lifetime so per-frame resolves
-   * stay O(1). Empty history returns `{mean: 0, stddev: 0}` — matches beatoraja's "no data"
-   * behaviour where the stat readouts sit at 0.
-   */
-  private cachedTimingStats(): { mean: number; stddev: number } {
-    if (this.timingStatsCache !== undefined) return this.timingStatsCache;
-    const samples = this.options.timingHistory;
-    if (samples === undefined || samples.length === 0) {
-      this.timingStatsCache = { mean: 0, stddev: 0 };
-      return this.timingStatsCache;
-    }
-    let sum = 0;
-    for (const s of samples) sum += s.deltaMs;
-    const mean = sum / samples.length;
-    let sqSum = 0;
-    for (const s of samples) {
-      const d = s.deltaMs - mean;
-      sqSum += d * d;
-    }
-    const stddev = Math.sqrt(sqSum / samples.length);
-    this.timingStatsCache = { mean, stddev };
-    return this.timingStatsCache;
-  }
-  private timingStatsCache: { mean: number; stddev: number } | undefined;
-
-  /**
-   * Per-judge fast / slow counts derived from `timingHistory`. The engine emits a
-   * `(deltaMs, kind)` tuple for every judgement; we bucket by kind into the EARLY (deltaMs <
-   * 0) / LATE (deltaMs > 0) bins. Cached on first call — the history is static per run.
-   * Empty / missing history leaves every bucket at 0.
-   *
-   * MISS is mapped onto the POOR bucket because the engine treats missed-press as a POOR
-   * judgement (no separate kind). Skin authors who use ref 421 / 422 (EARLY_MISS / LATE_MISS)
-   * effectively see the same numbers as EARLY_POOR / LATE_POOR — same convention as our
-   * `MISS` (ref 420) which surfaces `summary.poor`.
-   */
-  private cachedJudgeFastSlow(): {
-    earlyPerfect: number;
-    latePerfect: number;
-    earlyGreat: number;
-    lateGreat: number;
-    earlyGood: number;
-    lateGood: number;
-    earlyBad: number;
-    lateBad: number;
-    earlyPoor: number;
-    latePoor: number;
-  } {
-    if (this.judgeFastSlowCache !== undefined) return this.judgeFastSlowCache;
-    const out = {
-      earlyPerfect: 0,
-      latePerfect: 0,
-      earlyGreat: 0,
-      lateGreat: 0,
-      earlyGood: 0,
-      lateGood: 0,
-      earlyBad: 0,
-      lateBad: 0,
-      earlyPoor: 0,
-      latePoor: 0,
-    };
-    for (const sample of this.options.timingHistory ?? []) {
-      const isEarly = sample.deltaMs < 0;
-      const isLate = sample.deltaMs > 0;
-      if (!isEarly && !isLate) continue; // Exactly-on-zero deltas don't count toward either bucket.
-      switch (sample.kind) {
-        case 'PERFECT':
-          if (isEarly) out.earlyPerfect += 1;
-          else out.latePerfect += 1;
-          break;
-        case 'GREAT':
-          if (isEarly) out.earlyGreat += 1;
-          else out.lateGreat += 1;
-          break;
-        case 'GOOD':
-          if (isEarly) out.earlyGood += 1;
-          else out.lateGood += 1;
-          break;
-        case 'BAD':
-          if (isEarly) out.earlyBad += 1;
-          else out.lateBad += 1;
-          break;
-        case 'POOR':
-          if (isEarly) out.earlyPoor += 1;
-          else out.latePoor += 1;
-          break;
-      }
-    }
-    this.judgeFastSlowCache = out;
-    return this.judgeFastSlowCache;
-  }
-  private judgeFastSlowCache:
-    | {
-        earlyPerfect: number;
-        latePerfect: number;
-        earlyGreat: number;
-        lateGreat: number;
-        earlyGood: number;
-        lateGood: number;
-        earlyBad: number;
-        lateBad: number;
-        earlyPoor: number;
-        latePoor: number;
-      }
-    | undefined;
-
-  /**
-   * Result-scene graph-value resolver. Surfaces the run's frozen ratios — gauge percent, score
-   * rate — for graph elements. Polyline-style graphs (`110` / `113` / `115`) return `undefined`
-   * so the renderer hides them; per-frame history rendering would require gameplay to plumb a
-   * `scoreHistory` array through `onComplete`, which it doesn't yet do.
-   */
-  private resolveResultGraph(type: number): number | undefined {
-    const summary = this.options.summary;
-    switch (type) {
-      // Gauge bars — 1P (`1`) and 2P (`6`). The result panel typically shows the final gauge level
-      // from the cleared / failed run.
-      case 1:
-      case 6: {
-        const gauge = summary.gauge;
-        if (gauge === undefined || gauge.max <= 0) return 0;
-        return gauge.current / gauge.max;
-      }
-      // EX-score rate — many result skins show a horizontal bar that fills with the score
-      // percentage. Mirrors the live `score_rate = 102` num convention.
-      case 7: {
-        const max = summary.total * 2;
-        return max > 0 ? summary.exScore / max : 0;
-      }
-      default:
-        return undefined;
-    }
-  }
-
-  /**
-   * Result-scene polyline resolver. Maps `graph[].type` codes to normalized `(x, y)` points in
-   * `[0, 1]²`. Coordinates are progress along the chart on x and the value's fraction-of-max on
-   * y; the renderer flips y so high values draw upward.
-   *
-   * Supported types:
-   *   - `110` — current run's EX-score over time (from `scoreHistory`, normalized by `total*2`)
-   *   - `107` — running gauge over time (from `gaugeHistory`, normalized by 100)
-   *
-   * Best-record / target codes (`113` / `115`) need a DB layer to source the comparison run's
-   * polyline; until that ships they return `undefined` so the renderer hides them.
-   */
-  private resolveResultPolyline(type: number): ReadonlyArray<{ x: number; y: number }> | undefined {
-    const summary = this.options.summary;
-    switch (type) {
-      case 110: {
-        const history = this.options.scoreHistory;
-        if (history === undefined || history.length === 0) return undefined;
-        const max = summary.total * 2;
-        if (max <= 0) return undefined;
-        return history.map((sample) => ({
-          x: sample.progress,
-          y: Math.max(0, Math.min(1, sample.exScore / max)),
-        }));
-      }
-      case 107: {
-        const history = this.options.gaugeHistory;
-        if (history === undefined || history.length === 0) return undefined;
-        return history.map((sample) => ({
-          x: sample.progress,
-          y: Math.max(0, Math.min(1, sample.value / 100)),
-        }));
-      }
-      default:
-        return undefined;
-    }
-  }
-
-  /**
-   * Build the gauge polyline for the result scene's `gaugegraph[]`. Maps `gaugeHistory`
-   * (sampled per-judge during the run) into normalized `{x, y}` points: `x = sample.progress`,
-   * `y = sample.value / 100` (gauge values arrive in 0..100 already). Returns `undefined` when
-   * no history is available — the renderer hides the graph in that case.
-   */
-  private resolveResultGaugePolyline(): ReadonlyArray<{ x: number; y: number }> | undefined {
-    const history = this.options.gaugeHistory;
-    if (history === undefined || history.length === 0) return undefined;
-    return history.map((sample) => ({
-      x: sample.progress,
-      y: Math.max(0, Math.min(1, sample.value / 100)),
-    }));
-  }
-
-  /**
-   * Resolve a `judgegraph[].type` for the result scene. Three histogram kinds:
-   *   - `0` note distribution → `[normal, ln, scratch, bss]` from the played chart's static
-   *     breakdown. ModernChic's centerinfo / impression panes author this for "what's in this
-   *     chart" stat strips. Cached on first call (the breakdown is static per chart).
-   *   - `1` judgement spread → `[perfect, great, good, bad, poor]` from the run's summary.
-   *   - `2` early/late → `[fast, slow]` from the run's summary.
-   *
-   * The result scene's snapshot is static, so the renderer paints once and short-circuits
-   * subsequent frames via the per-entry signature cache.
-   */
-  private resolveResultJudgeBars(type: number): ReadonlyArray<number> | undefined {
-    if (type === 0) {
-      if (this.options.chart === undefined) return undefined;
-      if (this.cachedNoteBreakdownBars === undefined) {
-        const breakdown = computeBeatorajaNoteBreakdown(this.options.chart);
-        this.cachedNoteBreakdownBars = [breakdown.normal, breakdown.ln, breakdown.scratch, breakdown.bss];
-      }
-      return this.cachedNoteBreakdownBars;
-    }
-    const summary = this.options.summary;
-    switch (type) {
-      case 1:
-        return [summary.perfect, summary.great, summary.good, summary.bad, summary.poor];
-      case 2:
-        return [summary.fast, summary.slow];
-      default:
-        return undefined;
-    }
-  }
-  private cachedNoteBreakdownBars: ReadonlyArray<number> | undefined;
 
   private fitToStage(): void {
     const fitted = fitBeatorajaViewToStage(this.host, this.view, this.backdrop, {
@@ -760,17 +350,41 @@ export class PixiBeatorajaResultScene implements PixiScene {
 }
 
 /**
- * The final gauge of a result as beatoraja's gauge state (`main_state.gauge_type()` reads its `mode`), or `undefined`
- * without a gauge.
+ * What the result skin reads of the run (`BeatorajaResultInput`): the final summary as the result's score, the max
+ * combo, the verdict and its lamp by the one clear-lamp rule, the graphs and timings, the course, and the final gauge,
+ * the chart's `#TOTAL` and note kinds (counted the first time a skin asks), the chart's song texts and the skin's own.
  */
-export function resolveResultGaugeState(
-  gauge: Pick<NonNullable<PlayerSummary['gauge']>, 'type' | 'current' | 'max' | 'clearThreshold'> | undefined,
-): { value: number; max: number; border: number; mode: number } | undefined {
-  if (gauge === undefined || gauge.max <= 0) return undefined;
+function resultInputOf(options: PixiBeatorajaResultSceneOptions): BeatorajaResultInput {
+  const { summary, chart } = options;
+  const cleared = summary.gauge?.cleared ?? false;
+  let breakdown: BeatorajaNoteBreakdown | undefined;
+  const song = beatorajaSongTextOf(options.song);
   return {
-    value: gauge.current,
-    max: gauge.max,
-    border: gauge.clearThreshold,
-    mode: beatorajaGaugeModeFromString(gauge.type),
+    result: {
+      score: summary,
+      fast: summary.fast,
+      slow: summary.slow,
+      maxCombo: options.maxCombo,
+      cleared,
+      lamp: resolveClearLamp({
+        cleared,
+        score: summary,
+        ...(summary.gauge?.type !== undefined ? { gauge: summary.gauge.type } : {}),
+        ...(options.judgeRuleset !== undefined ? { ruleset: options.judgeRuleset } : {}),
+      }),
+      gaugeHistory: options.gaugeHistory ?? [],
+      scoreHistory: options.scoreHistory ?? [],
+      judgeTimings: (options.timingHistory ?? []).map((sample) => ({ deltaMs: sample.deltaMs, judge: sample.kind })),
+      ...(options.courseInfo !== undefined ? { course: options.courseInfo } : {}),
+    },
+    ...(summary.gauge !== undefined ? { gauge: summary.gauge } : {}),
+    ...(chart?.metadata.total !== undefined ? { chartTotal: chart.metadata.total } : {}),
+    get breakdown(): BeatorajaNoteBreakdown | undefined {
+      if (chart === undefined) return undefined;
+      breakdown ??= computeBeatorajaNoteBreakdown(chart);
+      return breakdown;
+    },
+    ...(song !== undefined ? { song } : {}),
+    skin: { name: options.skin.name, author: options.skin.author },
   };
 }

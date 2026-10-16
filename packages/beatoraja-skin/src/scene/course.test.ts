@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { BrowserCourseEntry } from '../../collection/types.ts';
-import type { SceneCourseInfo } from '../course-info.ts';
+import type { CourseView, LibraryCourse } from '@be-music/scene-model';
 import {
+  beatorajaMissingCourseStages,
   resolveBeatorajaCourseBarOps,
   resolveBeatorajaCourseConstraintOps,
   resolveBeatorajaCourseStageOps,
@@ -9,7 +9,7 @@ import {
   withBeatorajaCourseStageOps,
 } from './course.ts';
 
-function course(stageCount: number, stageIndex?: number): SceneCourseInfo {
+function course(stageCount: number, stageIndex?: number): CourseView {
   return {
     kind: 'grade',
     title: 'Dan',
@@ -34,14 +34,14 @@ describe('resolveBeatorajaCourseConstraintOps', () => {
 });
 
 describe('resolveBeatorajaCourseBarOps', () => {
-  const bar = (random: boolean, playable = true): BrowserCourseEntry =>
+  const bar = (random: boolean, playable = true): LibraryCourse =>
     ({
       id: 'dan#0',
       definition: { name: 'Dan', kind: 'grade', stages: [], constraints: ['grade_mirror'], trophies: [] },
       stages: [{ title: 'a' }],
       playable,
       ...(random ? { random: { name: 'Dan', stages: [], constraints: [], trophies: [] } } : {}),
-    }) as unknown as BrowserCourseEntry;
+    }) as unknown as LibraryCourse;
 
   it('lights the course bar, PLAYABLEBAR, its constraints and its best lamp', () => {
     expect(resolveBeatorajaCourseBarOps(bar(false), 106)).toEqual([3, 5, 1003, 106]);
@@ -73,11 +73,11 @@ describe('resolveBeatorajaCourseStageOps', () => {
 });
 
 describe('withBeatorajaCourseStageOps', () => {
-  it('adds the stage ops to the static set for a course stage only', () => {
+  it('adds the stage ops to a new set for a course stage only, leaving the set given alone', () => {
     const ops = new Set([900]);
-    expect(withBeatorajaCourseStageOps(ops, course(3, 0))).toBe(ops);
-    expect([...ops]).toEqual([900, 290, 280]);
-    expect([...withBeatorajaCourseStageOps(new Set([900]), undefined)]).toEqual([900]);
+    expect([...withBeatorajaCourseStageOps(ops, course(3, 0))]).toEqual([900, 290, 280]);
+    expect([...ops]).toEqual([900]);
+    expect(withBeatorajaCourseStageOps(ops, undefined)).toBe(ops);
   });
 });
 
@@ -93,5 +93,14 @@ describe('resolveBeatorajaCourseText', () => {
 
   it('marks a missing stage on the select screen', () => {
     expect(resolveBeatorajaCourseText(151, course(3), { missingStages: new Set([1]) })).toBe('(no song) Song 2');
+  });
+});
+
+describe('beatorajaMissingCourseStages', () => {
+  it('lists the stages the library lacks', () => {
+    const missing = beatorajaMissingCourseStages({
+      stages: [{ title: 'a', song: {} }, { title: 'b' }, { title: 'c' }],
+    } as unknown as LibraryCourse);
+    expect([...missing]).toEqual([1, 2]);
   });
 });

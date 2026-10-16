@@ -7,7 +7,7 @@ import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BrowserCourseEntry, BrowserSongEntry } from '../../collection/types.ts';
 import { createEmptyJson } from '@be-music/json';
-import { lnModeDirectiveToIndex, PixiBeatorajaSelectScene } from './select.ts';
+import { PixiBeatorajaSelectScene } from './select.ts';
 
 function fakeTextureCache(): BeatorajaTextureCache {
   const empty = new Map<number | string, Texture>();
@@ -110,20 +110,6 @@ describe('PixiBeatorajaSelectScene row clicks', () => {
     const boundary = new EventBoundary(internals.listLayer);
     expect(boundary.hitTest(15, 20)).toBe(hit);
     scene.dispose();
-  });
-});
-
-describe('lnModeDirectiveToIndex', () => {
-  it('maps the 1-based `#LNMODE` values onto the 0-based LNMODE button index', () => {
-    expect(lnModeDirectiveToIndex(1)).toBe(0);
-    expect(lnModeDirectiveToIndex(2)).toBe(1);
-    expect(lnModeDirectiveToIndex(3)).toBe(2);
-  });
-
-  it('reads a missing or out-of-range `#LNMODE` as LN', () => {
-    expect(lnModeDirectiveToIndex(undefined)).toBe(0);
-    expect(lnModeDirectiveToIndex(0)).toBe(0);
-    expect(lnModeDirectiveToIndex(4)).toBe(0);
   });
 });
 

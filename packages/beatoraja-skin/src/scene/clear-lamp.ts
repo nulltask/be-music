@@ -1,5 +1,5 @@
-import { BEATORAJA_OP } from '@be-music/beatoraja-skin';
 import type { ClearLamp } from '@be-music/player/ruleset';
+import { BEATORAJA_OP } from '../runtime-ids.ts';
 
 const LAMP_OPS: Readonly<Record<ClearLamp, number>> = {
   NO_PLAY: BEATORAJA_OP.CLEAR_LAMP_NOPLAY,
