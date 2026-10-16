@@ -32,13 +32,8 @@ import {
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
 import { pickLr2BarBody } from './bar-body.ts';
-import {
-  computeSelectOps,
-  resolveKeyModeOp,
-  resolveLr2BarLampKind,
-  resolveLr2LampOp,
-  SELECT_DYNAMIC_OPS,
-} from '../select-ops.ts';
+import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
+import { computeSelectOps, resolveKeyModeOp, resolveLr2BarLampKind, resolveLr2LampOp } from '../select-ops.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
 import { resolveSceneCourseInfo, type SceneCourseInfo } from '../course-info.ts';
 import {
@@ -56,7 +51,7 @@ import {
 
 /** LR2 texts 171-179 on a bar that is not a course: the connection slots read `DISABLE` (OpenLR2 L8400-L8405). */
 function resolveLr2SongConnectionText(st: number): string | undefined {
-  return st >= 171 && st <= 179 ? 'DISABLE' : undefined;
+  return st >= LR2_TEXT.COURSE_CONNECTION1 && st <= LR2_TEXT.COURSE_CONNECTION9 ? 'DISABLE' : undefined;
 }
 import {
   Lr2ChartGraphicTextureStore,
@@ -253,10 +248,10 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       resolveLr2CourseMakerOps(maker.draft, course?.stages.length).forEach((op) => withCourse.add(op));
     }
     if (course === undefined || courseInfo === undefined) return withCourse;
-    withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_COURSE);
-    if (course.playable) withCourse.add(SELECT_DYNAMIC_OPS.BAR_IS_PLAYABLE);
+    withCourse.add(LR2_OP.COURSE_BAR);
+    if (course.playable) withCourse.add(LR2_OP.PLAYABLE_BAR);
     // The course's best lamp (ops 100-105), from the player's record on it as LR2 keeps one per course.
-    withCourse.delete(SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED);
+    withCourse.delete(LR2_OP.LAMP_NO_PLAY);
     withCourse.add(resolveLr2LampOp(this.options.resolveCourseRecord?.(course)?.lamp));
     resolveLr2CourseOps(courseInfo).forEach((op) => withCourse.add(op));
     return withCourse;
@@ -268,7 +263,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     const ops = this.computeOps(skin);
     const isDefaultTheme = skin.width === 1280 && skin.height === 720;
     for (const text of skin.texts) {
-      if (text.st !== 30 || !this.isPanelOpen(text.panel)) continue;
+      if (text.st !== LR2_TEXT.SEARCH_WORD || !this.isPanelOpen(text.panel)) continue;
       const dst = this.evaluateElementDst(text);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
       const rect = normalizeRect(dst);
@@ -433,7 +428,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       return true;
     }
     for (const text of skin.texts) {
-      if (text.st !== 30) continue; // 30 = search word
+      if (text.st !== LR2_TEXT.SEARCH_WORD) continue;
       // We deliberately DON'T require `text.edit === 1` here. The LR2 default theme paints the search box with a
       // `#SRC_TEXT st=30` chrome but routes the actual edit affordance through the skin's surrounding background sprite
       // (no `edit` flag on the text itself), so the strict `edit === 1` filter previously made the search- word area
@@ -478,35 +473,35 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     if (this.dispatchCourseMakerButton(type, direction)) return;
     // Panel-toggle buttons (LR2 button_type 1..9). Don't require a focused song — the LR2 default skin's "OPTION"
     // launcher is always clickable, even before any chart is selected.
-    if (type >= 1 && type <= 9) {
+    if (type >= LR2_BUTTON.PANEL1 && type <= LR2_BUTTON.PANEL9) {
       this.togglePanel(type);
       return;
     }
     // HS-1P / HS-2P (button_type 57 / 58). Spec: "numeric-change function only". The `plusOnly` field tells us the click direction: - `1` →
     // this button raises HS by one step - `-1` → this button lowers HS by one step - `0` → ambiguous; treat left-click
     // as +step (right-click could be wired to -step in a future pass, but we don't track button affinities yet)
-    if (type === 57 || type === 58) {
+    if (type === LR2_BUTTON.HISPEED_1P || type === LR2_BUTTON.HISPEED_2P) {
       const direction = button.plusOnly === -1 ? -1 : 1;
       this.adjustHiSpeed(direction);
       return;
     }
     // BGA on/off/autoplay-only (button_type 72). Cycles through {@link BGA_CYCLE} on each click.
-    if (type === 72) {
+    if (type === LR2_BUTTON.BGA) {
       this.cyclePlayOption('bga', BGA_CYCLE);
       return;
     }
     // BGA size NORMAL/EXTEND (button_type 73).
-    if (type === 73) {
+    if (type === LR2_BUTTON.BGA_SIZE) {
       this.cyclePlayOption('bgaSize', BGA_SIZE_CYCLE);
       return;
     }
     // SCOREGRAPH on/off (button_type 70).
-    if (type === 70) {
+    if (type === LR2_BUTTON.SCORE_GRAPH) {
       this.cyclePlayOption('scoreGraph', BOOLEAN_CYCLE);
       return;
     }
     // Difficulty filter cycle (button_type 10).
-    if (type === 10) {
+    if (type === LR2_BUTTON.DIFFICULTY_FILTER) {
       this.cyclePlayOption('difficultyFilter', DIFFICULTY_FILTER_CYCLE);
       this.snapCursorAfterFilterChange();
       return;
@@ -520,88 +515,88 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     }
     // Keymode filter cycle (button_type 11). Cycling re-filters the bar list; snap the cursor to the top so the user
     // lands on a visible entry immediately.
-    if (type === 11) {
+    if (type === LR2_BUTTON.KEY_MODE_FILTER) {
       this.cyclePlayOption('keysFilter', KEYS_FILTER_CYCLE);
       this.snapCursorAfterFilterChange();
       return;
     }
     // Sort cycle (button_type 12). Reorders the bar list; snap to the top so the cursor doesn't end up pointing at an
     // entry that just slid past on the rail.
-    if (type === 12) {
+    if (type === LR2_BUTTON.SORT) {
       this.cyclePlayOption('sort', SORT_CYCLE);
       this.snapCursorAfterFilterChange();
       return;
     }
     // HS-FIX cycle (button_type 55). Pure play-option setting — the value is applied at gameplay-mount time so the
     // running select view doesn't need to react beyond updating the panel button cell.
-    if (type === 55) {
+    if (type === LR2_BUTTON.HS_FIX) {
       this.cyclePlayOption('hsFix', HS_FIX_CYCLE);
       return;
     }
     // HIDDEN/SUDDEN effect cycle — split per side (button_type 50 = 1P, 51 = 2P). Each side cycles independently so a
     // player can run e.g. HIDDEN on 1P + OFF on 2P, matching the LR2 panel UI which exposes a separate cell for each
     // side.
-    if (type === 50) {
+    if (type === LR2_BUTTON.EFFECT_1P) {
       this.cyclePlayOption('hiddenSudden1P', HIDDEN_SUDDEN_CYCLE);
       return;
     }
-    if (type === 51) {
+    if (type === LR2_BUTTON.EFFECT_2P) {
       this.cyclePlayOption('hiddenSudden2P', HIDDEN_SUDDEN_CYCLE);
       return;
     }
     // LANE COVER (shutter) ON / OFF toggle (button_type 46). Per LR2's `button.txt`: type 46 is "shutter" with no declared
     // cycle values — it's a binary toggle. The height (slider type 4 / 5) is preserved across toggles via
     // `playOptions.shutter`.
-    if (type === 46) {
+    if (type === LR2_BUTTON.LANE_COVER) {
       this.cyclePlayOption('laneCover', BOOLEAN_CYCLE);
       return;
     }
     // Autoscratch 1P / 2P toggle (button_type 44 / 45). Each side stays independent — DP charts can have one side
     // auto-scratching while the other is fully manual.
-    if (type === 44) {
+    if (type === LR2_BUTTON.AUTO_SCRATCH_1P) {
       this.cyclePlayOption('autoScratch1P', BOOLEAN_CYCLE);
       return;
     }
-    if (type === 45) {
+    if (type === LR2_BUTTON.AUTO_SCRATCH_2P) {
       this.cyclePlayOption('autoScratch2P', BOOLEAN_CYCLE);
       return;
     }
     // DP FLIP toggle (button_type 54). Pure gameplay setting — the select view just tracks the value for the gameplay
     // launch hand-off.
-    if (type === 54) {
+    if (type === LR2_BUTTON.FLIP) {
       this.cyclePlayOption('dpFlip', BOOLEAN_CYCLE);
       return;
     }
     // Note arrangement RANDOM cycle (button_type 42 = 1P, 43 = 2P).
-    if (type === 42) {
+    if (type === LR2_BUTTON.RANDOM_1P) {
       this.cyclePlayOption('random1P', RANDOM_CYCLE);
       return;
     }
-    if (type === 43) {
+    if (type === LR2_BUTTON.RANDOM_2P) {
       this.cyclePlayOption('random2P', RANDOM_CYCLE);
       return;
     }
     // Gauge type cycle (button_type 40 = 1P, 41 = 2P).
-    if (type === 40) {
+    if (type === LR2_BUTTON.GAUGE_1P) {
       this.cyclePlayOption('gauge1P', GAUGE_TYPES);
       return;
     }
-    if (type === 41) {
+    if (type === LR2_BUTTON.GAUGE_2P) {
       this.cyclePlayOption('gauge2P', GAUGE_TYPES);
       return;
     }
     // PLAY / AUTOPLAY on a course bar start the course, as the built-in scene's PLAY / AUTO do.
-    if ((type === 15 || type === 16) && this.focusedCourse() !== undefined) {
-      this.launchFocusedSong(type === 16);
+    if ((type === LR2_BUTTON.PLAY || type === LR2_BUTTON.AUTOPLAY) && this.focusedCourse() !== undefined) {
+      this.launchFocusedSong(type === LR2_BUTTON.AUTOPLAY);
       return;
     }
     const focused = this.focusedSong();
     if (!focused) return;
-    if (type === 15) {
+    if (type === LR2_BUTTON.PLAY) {
       this.options.onSongSelected?.(focused);
-    } else if (type === 17) {
+    } else if (type === LR2_BUTTON.READ_TEXT) {
       this.toggleReadText(focused);
-    } else if (type === 16) {
+    } else if (type === LR2_BUTTON.AUTOPLAY) {
       // AUTOPLAY: prefer the dedicated callback when supplied, otherwise fall through to the regular start path so the
       // button isn't a dead end on hosts that haven't wired it.
       if (this.options.onSongAutoPlay) {
@@ -644,7 +639,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
   private hitsCourseName(skin: Lr2Skin, ops: ReadonlySet<number>, x: number, y: number): boolean {
     if (this.options.courseMaker?.draft === undefined && this.focusedCourse()?.editable !== true) return false;
     return skin.texts.some((text) => {
-      if (text.st !== 170 || !this.isPanelOpen(text.panel)) return false;
+      if (text.st !== LR2_TEXT.COURSE_TITLE || !this.isPanelOpen(text.panel)) return false;
       const dst = this.evaluateElementDst(text);
       return isDestinationVisible(dst, ops, this.timerActive) && containsPoint(dst, x, y);
     });
@@ -670,7 +665,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    * computed from `#STARTINPUT` lazily so we don't need a setTimeout.
    */
   private elapsedSinceTimer(timer: number): number {
-    if (timer === 1) {
+    if (timer === LR2_TIMER.START_INPUT) {
       const startInput = this.options.skin?.timing.startInput ?? 0;
       const fireAt = this.sceneStartedAt + startInput;
       return Math.max(0, performance.now() - fireAt);
@@ -691,31 +686,31 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    * losing `this`.
    */
   private readonly timerActive = (timer: number): boolean => {
-    if (timer === 0) return true;
-    if (timer === 1) {
+    if (timer === LR2_TIMER.SCENE_START) return true;
+    if (timer === LR2_TIMER.START_INPUT) {
       const startInput = this.options.skin?.timing.startInput ?? 0;
       return performance.now() - this.sceneStartedAt >= startInput;
     }
     // Song-list timers 10..13 — active once we've recorded a start (i.e. the cursor moved at least once or scene-mount
     // seeded timer 11). The keyframe interpolator clamps past the final frame, so leaving them "active" forever is
     // fine.
-    if (timer >= 10 && timer <= 13) {
+    if (timer >= LR2_TIMER.SONG_BAR_MOVE && timer <= LR2_TIMER.SONG_BAR_DOWN) {
       return this.timerStartedAt.has(timer);
     }
     // Panel-open timers 21..29 — active iff that panel is currently open. LR2 spec: the timer is OFF once the panel closes, so the timer
     // implicitly stops when `togglePanel` clears the state, even if the seed timestamp is left in `timerStartedAt`.
-    if (timer >= 21 && timer <= 29) {
-      const which = timer - 20;
+    if (timer >= LR2_TIMER.PANEL1_OPEN && timer <= LR2_TIMER.PANEL9_OPEN) {
+      const which = timer - LR2_TIMER.PANEL1_OPEN + 1;
       return this.panelStates.has(which);
     }
     // Panel-close timers 31..39 — active once seeded by `togglePanel`. The close-anim keyframes clamp at their final
     // frame, so leaving it "active" past the animation is harmless; reopening the same panel re-deletes this entry to
     // prevent a stale seed from triggering the close anim again.
-    if (timer >= 31 && timer <= 39) {
+    if (timer >= LR2_TIMER.PANEL1_CLOSE && timer <= LR2_TIMER.PANEL9_CLOSE) {
       return this.timerStartedAt.has(timer);
     }
     // Course-maker timers: 17 runs while a course is being made, 18 from when it was saved or cancelled.
-    if (timer === 17 || timer === 18) {
+    if (timer === LR2_TIMER.COURSE_MAKING_START || timer === LR2_TIMER.COURSE_MAKING_END) {
       return this.timerStartedAt.has(timer);
     }
     // Play timers (40+) etc. stay inactive on the select scene.
@@ -732,11 +727,11 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     this.makingCourse = making;
     const now = performance.now();
     if (making) {
-      this.timerStartedAt.set(17, now);
-      this.timerStartedAt.delete(18);
+      this.timerStartedAt.set(LR2_TIMER.COURSE_MAKING_START, now);
+      this.timerStartedAt.delete(LR2_TIMER.COURSE_MAKING_END);
     } else {
-      this.timerStartedAt.delete(17);
-      this.timerStartedAt.set(18, now);
+      this.timerStartedAt.delete(LR2_TIMER.COURSE_MAKING_START);
+      this.timerStartedAt.set(LR2_TIMER.COURSE_MAKING_END, now);
     }
   }
 
@@ -887,7 +882,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
           if (!isDestinationVisible(dst, ops, this.timerActive)) break;
           // The search word is the typed query, left to the host's field while the player types in it.
           const value =
-            entry.element.st === 30
+            entry.element.st === LR2_TEXT.SEARCH_WORD
               ? this.searchEditing
                 ? ''
                 : this.searchText
@@ -973,14 +968,14 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
    * to the new index as the offset decays. A 1-entry list pins to 0.
    */
   private resolveSelectSliderValue(type: number): number | undefined {
-    if (type === 1) {
+    if (type === LR2_SLIDER.SELECT_POSITION) {
       const entries = this.currentEntries();
       if (entries.length <= 1) return 0;
       const slotHeight = this.estimateSlotHeight();
       const visualIndex = slotHeight > 0 ? this.selectedIndex - this.listScrollOffset / slotHeight : this.selectedIndex;
       return Math.max(0, Math.min(1, visualIndex / (entries.length - 1)));
     }
-    if (type === 2 || type === 3) {
+    if (type === LR2_SLIDER.HISPEED_1P || type === LR2_SLIDER.HISPEED_2P) {
       // HiSpeed 1P / 2P — both 1P and 2P sliders read the same global HS today (we don't model side-split HS yet). The
       // value is `(hiSpeed - HISPEED_MIN) / (HISPEED_MAX - HISPEED_MIN)` so the knob spans the rail proportionally to
       // the configured range.
@@ -989,7 +984,7 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
       const ratio = (this.playOptions.hiSpeed - HISPEED_MIN) / span;
       return Math.max(0, Math.min(1, ratio));
     }
-    if (type === 4 || type === 5) {
+    if (type === LR2_SLIDER.LANE_COVER_1P || type === LR2_SLIDER.LANE_COVER_2P) {
       // Shutter 1P / 2P — both render the shared shutter coverage.
       return Math.max(0, Math.min(1, this.playOptions.shutter));
     }
@@ -1478,94 +1473,94 @@ function resolveSelectText(
 ): string | undefined {
   // Slots that don't depend on a focused song.
   switch (st) {
-    case 1:
+    case LR2_TEXT.RIVAL:
       // Target / rival name. LR2 displays "NO TARGET" when no rival has been selected; we ship without rival/IR support
       // so this is the permanent value.
       return 'NO TARGET';
-    case 2:
+    case LR2_TEXT.PLAYER:
       // Player name. Placeholder until a profile system exists.
       return 'PLAYER';
-    case 30:
+    case LR2_TEXT.SEARCH_WORD:
       // Search box content / jukebox name: the scene fills it with the typed query before calling here.
       return '';
-    case 50: // skin name
+    case LR2_TEXT.SKIN_NAME:
       return 'LR2 SELECT';
-    case 51: // skin author
+    case LR2_TEXT.SKIN_AUTHOR:
       return '';
     // Option-panel labels (60..85). LR2 default skin renders the current option-state name as readable text inside each
     // panel-1 box (mirrors what HI-SPEED's NUMBER readout does for HiSpeed). We return the matching `playOptions` enum
     // string so `makeLr2TextSprite` paints it with the system font; without these, the underlying #SRC_TEXT slot stayed
     // empty and the only thing visible was an unrelated background image.
-    case 60: {
+    case LR2_TEXT.OPTION_PLAY_STYLE: {
       // Playstyle / keymode label — derived from the focused chart's lane usage. Matches the "5KEYS" / "7KEYS" /
       // "10KEYS" / "14KEYS" / "9KEYS" wording the LR2 default skin paints for the panel-1 PLAYSTYLE box.
       if (!song) return 'SINGLE';
       switch (resolveKeyModeOp(song)) {
-        case 161:
+        case LR2_OP.KEYS_5:
           return '5KEYS';
-        case 160:
+        case LR2_OP.KEYS_7:
           return '7KEYS';
-        case 163:
+        case LR2_OP.KEYS_10:
           return '10KEYS';
-        case 162:
+        case LR2_OP.KEYS_14:
           return '14KEYS';
-        case 164:
+        case LR2_OP.KEYS_9:
           return '9KEYS';
         default:
           return 'SINGLE';
       }
     }
-    case 61: // sort
+    case LR2_TEXT.OPTION_SORT:
       return playOptions.sort;
-    case 62: // difficulty filter
+    case LR2_TEXT.OPTION_DIFFICULTY_FILTER:
       return playOptions.difficultyFilter;
-    case 63: // random 1P
+    case LR2_TEXT.OPTION_RANDOM_1P:
       return playOptions.random1P;
-    case 64: // random 2P
+    case LR2_TEXT.OPTION_RANDOM_2P:
       return playOptions.random2P;
-    case 65: // gauge 1P
+    case LR2_TEXT.OPTION_GAUGE_1P:
       return playOptions.gauge1P;
-    case 66: // gauge 2P
+    case LR2_TEXT.OPTION_GAUGE_2P:
       return playOptions.gauge2P;
-    case 67: // assist 1P (autoscratch)
+    case LR2_TEXT.OPTION_ASSIST_1P:
       return playOptions.autoScratch1P ? 'AUTOSCRATCH' : 'OFF';
-    case 68: // assist 2P
+    case LR2_TEXT.OPTION_ASSIST_2P:
       return playOptions.autoScratch2P ? 'AUTOSCRATCH' : 'OFF';
-    case 69: // battle
+    case LR2_TEXT.OPTION_BATTLE:
       return 'OFF';
-    case 70: // flip
+    case LR2_TEXT.OPTION_FLIP:
       return playOptions.dpFlip ? 'ON' : 'OFF';
-    case 71: // scoregraph
+    case LR2_TEXT.OPTION_SCORE_GRAPH:
       return playOptions.scoreGraph ? 'ON' : 'OFF';
-    case 72: // ghost
+    case LR2_TEXT.OPTION_GHOST:
       return 'OFF';
-    case 73: // LANE COVER (shutter)
+    case LR2_TEXT.OPTION_LANE_COVER:
       // LR2's SYSTEM OPTION row labels this slot "LANE COVER" and shows the binary ON / OFF state — the height
       // percentage belongs to the slider next to the value, not the value text itself. (We previously rendered a
       // percentage here, which made the row look like a numeric option instead of a toggle.)
       return playOptions.laneCover ? 'ON' : 'OFF';
-    case 74: // scroll type
+    case LR2_TEXT.OPTION_SCROLL_TYPE:
       return 'OFF';
-    case 75: // bga size
+    case LR2_TEXT.OPTION_BGA_SIZE:
       return playOptions.bgaSize;
-    case 76: // bga
+    case LR2_TEXT.OPTION_BGA:
       return playOptions.bga === 'AUTOPLAY_ONLY' ? 'AUTOPLAY' : playOptions.bga;
-    case 77: // color depth
+    case LR2_TEXT.OPTION_COLOR_DEPTH:
       return '32 BIT';
-    case 78: // vsync
+    case LR2_TEXT.OPTION_VSYNC:
       return 'ON';
-    case 79: // screen mode
+    case LR2_TEXT.OPTION_SCREEN_MODE:
       return 'FULL';
-    case 80: // judge auto-adjust
+    case LR2_TEXT.OPTION_JUDGE_AUTO_ADJUST:
       return 'OFF';
-    case 81: // replay save mode
+    case LR2_TEXT.OPTION_REPLAY_SAVE:
       return 'OFF';
-    case 82: // trial line 1
-    case 83: // trial line 2
+    case LR2_TEXT.OPTION_TRIAL_LINE_1:
+    case LR2_TEXT.OPTION_TRIAL_LINE_2:
       return '';
-    case 84: // effect 1P (HIDDEN / SUDDEN)
+    case LR2_TEXT.OPTION_EFFECT_1P:
       return playOptions.hiddenSudden1P;
-    case 85: // effect 2P
+    case LR2_TEXT.OPTION_EFFECT_2P:
       return playOptions.hiddenSudden2P;
   }
 
@@ -1574,34 +1569,34 @@ function resolveSelectText(
   }
   const subartists = song.chart.bmson.info?.subartists?.join(' / ');
   switch (st) {
-    case 10:
-    case 20:
+    case LR2_TEXT.TITLE:
+    case LR2_TEXT.TITLE_ALT:
       return song.title;
-    case 11:
-    case 21:
+    case LR2_TEXT.SUBTITLE:
+    case LR2_TEXT.SUBTITLE_ALT:
       return song.subtitle ?? '';
-    case 12:
-    case 22:
+    case LR2_TEXT.FULL_TITLE:
+    case LR2_TEXT.FULL_TITLE_ALT:
       return [song.title, song.subtitle].filter((value): value is string => Boolean(value)).join(' ');
-    case 13:
-    case 23:
+    case LR2_TEXT.GENRE:
+    case LR2_TEXT.GENRE_ALT:
       return song.genre ?? '';
-    case 14:
-    case 24:
+    case LR2_TEXT.ARTIST:
+    case LR2_TEXT.ARTIST_ALT:
       return song.artist ?? '';
-    case 15:
-    case 25:
+    case LR2_TEXT.SUBARTIST:
+    case LR2_TEXT.SUBARTIST_ALT:
       return subartists ?? '';
-    case 16:
-    case 26:
+    case LR2_TEXT.FULL_ARTIST:
+    case LR2_TEXT.FULL_ARTIST_ALT:
       return song.fileLabel;
-    case 17:
-    case 27:
+    case LR2_TEXT.PLAY_LEVEL:
+    case LR2_TEXT.PLAY_LEVEL_ALT:
       return song.playLevel?.toString() ?? '';
-    case 18:
-    case 28:
+    case LR2_TEXT.DIFFICULTY:
+    case LR2_TEXT.DIFFICULTY_ALT:
       return resolveDifficultyName(song.chart.metadata.difficulty);
-    case 29:
+    case LR2_TEXT.INSANE_LEVEL:
       // Insane level — same source as playLevel for now, since we don't ship a separate insane-table
       // integration.
       return song.chart.metadata.difficulty === 5 ? (song.playLevel?.toString() ?? '') : '';
@@ -1634,46 +1629,46 @@ function resolveSelectNumber(
 ): number | undefined {
   // Slots that don't depend on a focused song.
   switch (num) {
-    case 20:
+    case LR2_NUM.FPS:
       // FPS — `scene/lr2/select` doesn't sample its own frame rate yet, so surface 60 as a placeholder rather than leaving
       // the panel blank.
       return 60;
-    case 21:
+    case LR2_NUM.YEAR:
       return new Date().getFullYear();
-    case 22:
+    case LR2_NUM.MONTH:
       return new Date().getMonth() + 1;
-    case 23:
+    case LR2_NUM.DAY:
       return new Date().getDate();
-    case 24:
+    case LR2_NUM.HOUR:
       return new Date().getHours();
-    case 25:
+    case LR2_NUM.MINUTE:
       return new Date().getMinutes();
-    case 26:
+    case LR2_NUM.SECOND:
       return new Date().getSeconds();
     // Lifetime player stats (30..41). 0 placeholders until we add a persistence layer for play history.
-    case 30: // TOTAL PLAY COUNT
-    case 31: // TOTAL CLEAR COUNT
-    case 32: // TOTAL FAIL COUNT
-    case 33: // TOTAL PERFECT
-    case 34: // TOTAL GREAT
-    case 35: // TOTAL GOOD
-    case 36: // TOTAL BAD
-    case 37: // TOTAL POOR
-    case 38: // RUNNING COMBO (now)
-    case 39: // RUNNING COMBO (max)
-    case 40: // TRIAL LEVEL
-    case 41: // TRIAL LEVEL-1
+    case LR2_NUM.TOTAL_PLAY_COUNT:
+    case LR2_NUM.TOTAL_CLEAR_COUNT:
+    case LR2_NUM.TOTAL_FAIL_COUNT:
+    case LR2_NUM.TOTAL_PERFECT:
+    case LR2_NUM.TOTAL_GREAT:
+    case LR2_NUM.TOTAL_GOOD:
+    case LR2_NUM.TOTAL_BAD:
+    case LR2_NUM.TOTAL_POOR:
+    case LR2_NUM.RUNNING_COMBO:
+    case LR2_NUM.RUNNING_COMBO_MAX:
+    case LR2_NUM.TRIAL_LEVEL:
+    case LR2_NUM.TRIAL_LEVEL_PREVIOUS:
       return 0;
     // Play-option slots (10..15). HS values come from the live `playOptions.hiSpeed` so the LR2 default skin's HS
     // readout tracks the in-scene panel buttons. Other slots are placeholders until the corresponding option lands in
     // {@link PixiPlayOptions} (judge / target rate / SUD+).
-    case 10: // HS-1P (×100, e.g. 230 = 2.30×)
-    case 11: // HS-2P (we drive both from the same global HS today)
+    case LR2_NUM.HISPEED_1P: // HS-1P (×100, e.g. 230 = 2.30×)
+    case LR2_NUM.HISPEED_2P: // HS-2P (we drive both from the same global HS today)
       return Math.round(playOptions.hiSpeed * 100);
-    case 12: // JUDGE TIMING
-    case 13: // DEFAULT TARGET RATE
-    case 14: // SUD+ 1P
-    case 15: // SUD+ 2P
+    case LR2_NUM.JUDGE_TIMING:
+    case LR2_NUM.TARGET_RATE:
+    case LR2_NUM.LANE_COVER_1P:
+    case LR2_NUM.LANE_COVER_2P:
       return 0;
   }
 
@@ -1687,52 +1682,52 @@ function resolveSelectNumber(
   switch (num) {
     // Best-score panel (70..89). 0 placeholders for slots that need score history; chart-derived ones (72/74) compute
     // live.
-    case 70: // best score
-    case 71: // best exscore
+    case LR2_NUM.BEST_SCORE:
+    case LR2_NUM.BEST_EXSCORE:
       return 0;
-    case 72: // exscore theoretical max (= totalnotes * 2)
+    case LR2_NUM.EXSCORE_MAX: // exscore theoretical max (= totalnotes * 2)
       return totalNotes * 2;
-    case 73: // best rate
+    case LR2_NUM.BEST_RATE:
       return 0;
-    case 74: // totalnotes (the canonical LR2 slot)
+    case LR2_NUM.TOTAL_NOTES:
       return totalNotes;
-    case 75: // best maxcombo
-    case 76: // best min b+p
-    case 77: // playcount
-    case 78: // clearcount
-    case 79: // failcount
-    case 80: // best perfect
-    case 81: // best great
-    case 82: // best good
-    case 83: // best bad
-    case 84: // best poor
-    case 85: // best perfect %
-    case 86: // best great %
-    case 87: // best good %
-    case 88: // best bad %
-    case 89: // best poor %
+    case LR2_NUM.BEST_MAX_COMBO:
+    case LR2_NUM.BEST_MIN_BP:
+    case LR2_NUM.PLAY_COUNT:
+    case LR2_NUM.CLEAR_COUNT:
+    case LR2_NUM.FAIL_COUNT:
+    case LR2_NUM.BEST_PERFECT:
+    case LR2_NUM.BEST_GREAT:
+    case LR2_NUM.BEST_GOOD:
+    case LR2_NUM.BEST_BAD:
+    case LR2_NUM.BEST_POOR:
+    case LR2_NUM.BEST_PERFECT_RATE:
+    case LR2_NUM.BEST_GREAT_RATE:
+    case LR2_NUM.BEST_GOOD_RATE:
+    case LR2_NUM.BEST_BAD_RATE:
+    case LR2_NUM.BEST_POOR_RATE:
       return 0;
     // BPM range (90/91), from the chart's tempo map; charts without BPM changes get the initial BPM for both.
-    case 90:
+    case LR2_NUM.MAX_BPM:
       return resolveBpmRange(song).max;
-    case 91:
+    case LR2_NUM.MIN_BPM:
       return resolveBpmRange(song).min;
     // IR slots (92..94) — undefined until online support arrives.
-    case 92:
-    case 93:
-    case 94:
+    case LR2_NUM.IR_RANK:
+    case LR2_NUM.IR_PLAYERS:
+    case LR2_NUM.IR_CLEAR_RATE:
       return undefined;
     // Same-folder difficulty levels (45..49). We don't model folders yet, so surface the focused chart's level under
     // whichever slot matches its difficulty and leave the others blank.
-    case 45:
-    case 46:
-    case 47:
-    case 48:
-    case 49: {
-      const expectedDifficulty = num - 44; // 45 → diff=1 (beginner), 49 → diff=5 (insane)
+    case LR2_NUM.FOLDER_LEVEL_BEGINNER:
+    case LR2_NUM.FOLDER_LEVEL_NORMAL:
+    case LR2_NUM.FOLDER_LEVEL_HYPER:
+    case LR2_NUM.FOLDER_LEVEL_ANOTHER:
+    case LR2_NUM.FOLDER_LEVEL_INSANE: {
+      const expectedDifficulty = num - LR2_NUM.FOLDER_LEVEL_BEGINNER + 1; // BEGINNER → 1 … INSANE → 5
       return song.chart.metadata.difficulty === expectedDifficulty ? playLevelOrUndef : undefined;
     }
-    case 160:
+    case LR2_NUM.BPM:
       // Initial BPM. The LR2 spec marks this as "live BPM"; on the select screen the chart isn't playing, so the
       // initial BPM is the right read.
       return song.bpm;
@@ -1776,60 +1771,60 @@ function resolveDifficultyName(difficulty: number | undefined): string {
  */
 function resolveButtonStateIndex(type: number, cellCount: number, playOptions: PixiPlayOptions): number {
   let stateIndex = 0;
-  if (type === 72) {
+  if (type === LR2_BUTTON.BGA) {
     // BGA: cell 0 = OFF, cell 1 = ON, cell 2 = AUTOPLAY ONLY.
     stateIndex = BGA_CYCLE.indexOf(playOptions.bga);
-  } else if (type === 73) {
+  } else if (type === LR2_BUTTON.BGA_SIZE) {
     // BGA size: cell 0 = NORMAL, cell 1 = EXTEND.
     stateIndex = BGA_SIZE_CYCLE.indexOf(playOptions.bgaSize);
-  } else if (type === 70) {
+  } else if (type === LR2_BUTTON.SCORE_GRAPH) {
     // Score graph: cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.scoreGraph ? 1 : 0;
-  } else if (type === 10) {
+  } else if (type === LR2_BUTTON.DIFFICULTY_FILTER) {
     // Difficulty filter cycle button — cell index follows the {@link DIFFICULTY_FILTER_CYCLE} order.
     stateIndex = DIFFICULTY_FILTER_CYCLE.indexOf(playOptions.difficultyFilter);
-  } else if (type === 11) {
+  } else if (type === LR2_BUTTON.KEY_MODE_FILTER) {
     // Keymode filter cycle button — cell index follows the {@link KEYS_FILTER_CYCLE} order (off / 5K / 7K / 10K / 14K /
     // 9K).
     stateIndex = KEYS_FILTER_CYCLE.indexOf(playOptions.keysFilter);
-  } else if (type === 12) {
+  } else if (type === LR2_BUTTON.SORT) {
     // Sort cycle button — cell index follows the {@link SORT_CYCLE} order (off / level / title / clear).
     stateIndex = SORT_CYCLE.indexOf(playOptions.sort);
-  } else if (type === 55) {
+  } else if (type === LR2_BUTTON.HS_FIX) {
     // HS-FIX cycle button — cell index follows the {@link HS_FIX_CYCLE} order (off / maxbpm / minbpm / average /
     // constant).
     stateIndex = HS_FIX_CYCLE.indexOf(playOptions.hsFix);
-  } else if (type === 50) {
+  } else if (type === LR2_BUTTON.EFFECT_1P) {
     // HIDDEN/SUDDEN 1P — cell index follows the {@link HIDDEN_SUDDEN_CYCLE} order (off/hidden/sudden/hid+sud).
     stateIndex = HIDDEN_SUDDEN_CYCLE.indexOf(playOptions.hiddenSudden1P);
-  } else if (type === 51) {
+  } else if (type === LR2_BUTTON.EFFECT_2P) {
     // HIDDEN/SUDDEN 2P — independent cycle from the 1P button.
     stateIndex = HIDDEN_SUDDEN_CYCLE.indexOf(playOptions.hiddenSudden2P);
-  } else if (type === 46) {
+  } else if (type === LR2_BUTTON.LANE_COVER) {
     // LANE COVER (shutter): cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.laneCover ? 1 : 0;
-  } else if (type === 44) {
+  } else if (type === LR2_BUTTON.AUTO_SCRATCH_1P) {
     // Autoscratch 1P: cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.autoScratch1P ? 1 : 0;
-  } else if (type === 45) {
+  } else if (type === LR2_BUTTON.AUTO_SCRATCH_2P) {
     // Autoscratch 2P: cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.autoScratch2P ? 1 : 0;
-  } else if (type === 54) {
+  } else if (type === LR2_BUTTON.FLIP) {
     // DP FLIP: cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.dpFlip ? 1 : 0;
-  } else if (type === 42) {
+  } else if (type === LR2_BUTTON.RANDOM_1P) {
     // RANDOM 1P: cells follow {@link RANDOM_CYCLE} order.
     stateIndex = RANDOM_CYCLE.indexOf(playOptions.random1P);
-  } else if (type === 43) {
+  } else if (type === LR2_BUTTON.RANDOM_2P) {
     // RANDOM 2P.
     stateIndex = RANDOM_CYCLE.indexOf(playOptions.random2P);
-  } else if (type === 40) {
+  } else if (type === LR2_BUTTON.GAUGE_1P) {
     // Gauge 1P: cells follow {@link GAUGE_TYPES} order.
     stateIndex = GAUGE_TYPES.indexOf(playOptions.gauge1P);
-  } else if (type === 41) {
+  } else if (type === LR2_BUTTON.GAUGE_2P) {
     // Gauge 2P.
     stateIndex = GAUGE_TYPES.indexOf(playOptions.gauge2P);
-  } else if (type >= 91 && type <= 96) {
+  } else if (type >= LR2_BUTTON.DIFFICULTY_FILTER_ALL && type <= LR2_BUTTON.DIFFICULTY_FILTER_INSANE) {
     // Difficulty filter direct-set buttons — cell 0 / 1 = inactive / active depending on whether this button's specific
     // difficulty matches the live filter. Skins typically use these as separate "lit when selected" plates.
     const target = DIFFICULTY_FILTER_BY_DIRECT_BUTTON[type];

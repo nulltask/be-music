@@ -36,16 +36,40 @@ LR2 は BGM とシステムサウンドを、各ファイルを名指しする�
 
 LR2 はシーンが始まるたびにスキンを読み込むので、`#IF` ブロックはシーンの間ずっと変わらない状態を条件にできます。コースでは、それがコースの op です（OpenLR2 `LR2f.cpp` L5403-L5444）。
 
-| op              | 意味                                                |
-| --------------- | --------------------------------------------------- |
-| 280-288         | 1〜9 ステージ目を遊んでいて、最後のステージではない |
-| 289             | 最後のステージ                                      |
-| 290             | コース（選択中のバー、または遊んでいるコース）      |
-| 291 / 292 / 293 | コースの種類：NONSTOP / EXPERT / GRADE              |
+| op              | `LR2_OP`                                            | 意味                                                |
+| --------------- | --------------------------------------------------- | --------------------------------------------------- |
+| 280-288         | `COURSE_STAGE1`-`COURSE_STAGE9`                     | 1〜9 ステージ目を遊んでいて、最後のステージではない |
+| 289             | `COURSE_STAGE_FINAL`                                | 最後のステージ                                      |
+| 290             | `COURSE`                                            | コース（選択中のバー、または遊んでいるコース）      |
+| 291 / 292 / 293 | `COURSE_NONSTOP` / `COURSE_EXPERT` / `COURSE_GRADE` | コースの種類：NONSTOP / EXPERT / GRADE              |
 
 テーマは、これらの op をオフにした状態で一度だけ解析します。`Lr2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` は、読み込み済みのファイルからスキンの 1 つを解析し直します。そのとき `#IF` / `#ELSEIF` の評価中は、追加の op を真として扱います（`LoadLr2SkinOptions.parseOps`）。`pickLr2PlaySkinVariant` は譜面を遊ぶプレイスキンの variant を返すので、ホストはコースのステージ用にそのスキンを解析し直せます。
 
 コース用スキンが読む値（数値 250-259、テキスト 150-170、104 / 105 のコースのコンボ）はシーンの状態で、`@be-music/player-web` が渡します。[コースと段位認定](./player-web.ja.md#コースと段位認定) を参照してください。
+
+## 番号表
+
+スキンはエンジンの状態を番号で指します。`#DST_*` の行や `#IF` の op、その行が従う `timer`、`#SRC_NUMBER` の `num`、`#SRC_TEXT` の `st`、`#SRC_BUTTON` と `#SRC_SLIDER` の `type`、`#SRC_BAR_BODY` と `#SRC_BAR_LAMP` の番号、実行時に結び付ける画像の `gr` です。`@be-music/lr2-skin/ids` はこれらに種類ごとの表で名前を付け、各項目に意味を、節の見出しにそれを設定・参照する画面を書いています。
+
+| 表                                    | 名前を付けるもの        | 節                                                                                                                                                           |
+| ------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `LR2_OP`                              | op（`dst_option`）      | 選択中のバー、プレイオプション、読み込みとリプレイ、リザルトの結果、自己ベスト、譜面、プレイ中のランク・ゲージ・判定、コース、リザルトのランク、コースの作成 |
+| `LR2_TIMER`                           | `timer`                 | 全シーン、選曲（バーの一覧、パネル、コースの作成）、プレイ（READY、ゲージ、判定、フルコンボ、レーンのタイマー列、リズム）、リザルト                          |
+| `LR2_NUM`                             | `#SRC_NUMBER` の `num`  | オプションと時計、プレイヤーの累計、選択中の譜面、プレイ中のスコア、リザルトの更新前後、コースのステージのレベル                                             |
+| `LR2_TEXT`                            | `#SRC_TEXT` の `st`     | 曲の情報、検索語、スキン、オプションパネルの表示、コース                                                                                                     |
+| `LR2_BUTTON`                          | `#SRC_BUTTON` の `type` | パネル、バーの一覧とプレイ、プレイオプション、コースの作成                                                                                                   |
+| `LR2_SLIDER`                          | `#SRC_SLIDER` の `type` | バーの一覧の位置、ハイスピード、レーンカバー、プレイの進み                                                                                                   |
+| `LR2_BAR_BODY` / `LR2_BAR_BODY_KINDS` | `#SRC_BAR_BODY` の番号  | バーの種類と、解析後の `Lr2BarBodyKind`                                                                                                                      |
+| `LR2_BAR_LAMP` / `LR2_BAR_LAMP_KINDS` | `#SRC_BAR_LAMP` の番号  | クリアランプと、解析後の `Lr2BarLampKind`。ランプの op 100-105 も同じ順                                                                                      |
+| `LR2_GR`                              | `gr`                    | LR2 が実行時に結び付ける画像（STAGEFILE、BACKBMP、BANNER、スキンのサムネイル、黒、白）                                                                       |
+
+短い範囲は番号ごとに名前を付けます（コースのステージ 280-289、パネル 1〜9、NONSTOP のつなぎ）。長い範囲は最初の番号だけを持ちます。レーンのタイマー列（`LR2_TIMER.BOMB_1P`、`LN_HOLD_1P`、`KEY_ON_1P`、`KEY_OFF_1P` とその 2P 側）はスクラッチのタイマーで、`LR2_LANE_TIMER_BANK_SIZE` 本のレーンのうち鍵盤 N は `+ N` です。`LR2_OP.COURSE_STAGES_OVER + N`、`COURSE_SONGS_ADDED + N`、`COURSE_STAGE_DIFFICULTY + 10 × i + 難易度` はコースの作成とステージの難易度の op です。
+
+番号は標準スキンの説明と OpenLR2 に従い、両者が食い違うところは `LR2body.exe` に従います。292 が EXPERT、293 が GRADE です（標準スキンの説明は逆です）。op 571 は意図どおりコースを作っている間だけ立てます。バイナリでは 572 に抜け落ち、どちらでも立ちます。
+
+beatoraja は LR2 互換の番号を LR2 と同じ値で持つので、`@be-music/beatoraja-skin` はそれらを自分の名前のままこの表から取り（`BEATORAJA_OP.FOLDERBAR` は `LR2_OP.FOLDER_BAR`、`TIMER_READY` は `LR2_TIMER.READY`）、beatoraja 独自の番号だけを自分で持ちます。parser の解析時の op と `@be-music/player-web` の LR2 シーンもこの表を使います。
+
+ここで名前を付けないもの：op 900-999（スキン独自の `#CUSTOMOPTION`）、`#SRC_BARGRAPH` の種類、`#DST_*` の欄の小さな列挙（`blend`、`center`、`acc`。`skin/lr2/render.ts` が読むところで対応付けます）。
 
 ## 解析済み directive
 
@@ -99,6 +123,7 @@ TGA image は `tga.ts`、DDS image は `dds.ts` でデコードします（ブ�
 - `scene/lr2/result.ts`
 
 `skin/lr2/render.ts` と `skin/lr2/scene-render.ts` の共有 helper は destination keyframe、op-gated visibility、source cell、sprite transform、text、number、slider、bargraph を評価します。
+シーンは [番号表](#番号表) を通して op を立て、タイマーを始め、数値・テキスト・ボタン・スライダーを解決します。
 browser player は song metadata、current judge、combo、gauge、score、BGA texture、play option、result history などの runtime value を parsed skin element へ結び付けます。
 
 ## 互換性の境界

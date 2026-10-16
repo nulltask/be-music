@@ -2,6 +2,7 @@ import { dirname } from '@be-music/utils/core';
 import { resolveChartPlayVariant, resolveSongSource } from '../collection/collection.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../collection/types.ts';
 import type { Lr2BarLampKind } from '@be-music/lr2-skin';
+import { LR2_BAR_LAMP_KINDS, LR2_OP } from '@be-music/lr2-skin/ids';
 import type { ClearLamp, GaugeType } from '@be-music/player/ruleset';
 import type { PixiPlayOptions } from './core/select.ts';
 
@@ -10,83 +11,27 @@ import type { PixiPlayOptions } from './core/select.ts';
  * fallbacks, etc.
  */
 export const SELECT_BASE_OPS: ReadonlySet<number> = new Set<number>([
-  32, // autoplay off
-  34, // ghost off
-  50, // offline (no IR connection yet)
-  52, // EXTRA MODE OFF
-  60, // save impossible (no persistence yet)
-  62, // clear save impossible (no persistence yet)
-  81, // load complete
-  82, // replay off
+  LR2_OP.AUTOPLAY_OFF,
+  LR2_OP.GHOST_OFF,
+  // No internet-ranking connection yet.
+  LR2_OP.OFFLINE,
+  LR2_OP.EXTRA_MODE_OFF,
+  // No persistence yet: neither the score nor the clear lamp can be saved.
+  LR2_OP.SCORE_SAVE_OFF,
+  LR2_OP.CLEAR_SAVE_OFF,
+  LR2_OP.LOADED,
+  LR2_OP.REPLAY_OFF,
 ]);
-
-/**
- * Op slots that LR2 select skins flip per-song. The numeric values match `dst_option` in `docs/LR2SkinHelp.md`.
- */
-export const SELECT_DYNAMIC_OPS = {
-  BAR_IS_FOLDER: 1,
-  BAR_IS_SONG: 2,
-  BAR_IS_COURSE: 3,
-  BAR_IS_NEW_COURSE: 4,
-  BAR_IS_PLAYABLE: 5,
-  KEYS_7: 160,
-  KEYS_5: 161,
-  KEYS_14: 162,
-  KEYS_10: 163,
-  KEYS_9: 164,
-  BGA_ABSENT: 170,
-  BGA_PRESENT: 171,
-  LN_ABSENT: 172,
-  LN_PRESENT: 173,
-  TEXT_ABSENT: 174,
-  TEXT_PRESENT: 175,
-  BPM_CHANGE_ABSENT: 176,
-  BPM_CHANGE_PRESENT: 177,
-  RANDOM_ABSENT: 178,
-  RANDOM_PRESENT: 179,
-  JUDGE_VERY_HARD: 180,
-  JUDGE_HARD: 181,
-  JUDGE_NORMAL: 182,
-  JUDGE_EASY: 183,
-  STAGEFILE_ABSENT: 190,
-  STAGEFILE_PRESENT: 191,
-  BANNER_ABSENT: 192,
-  BANNER_PRESENT: 193,
-  BACKBMP_ABSENT: 194,
-  BACKBMP_PRESENT: 195,
-  REPLAY_ABSENT: 196,
-  REPLAY_PRESENT: 197,
-  LAMP_NOT_PLAYED: 100,
-  LAMP_FAILED: 101,
-  LAMP_EASY: 102,
-  LAMP_NORMAL: 103,
-  LAMP_HARD: 104,
-  LAMP_FULL_COMBO: 105,
-  RANK_AAA: 110,
-  RANK_AA: 111,
-  RANK_A: 112,
-  RANK_B: 113,
-  RANK_C: 114,
-  RANK_D: 115,
-  RANK_E: 116,
-  RANK_F: 117,
-  DIFFICULTY_UNDEFINED: 150,
-  DIFFICULTY_EASY: 151,
-  DIFFICULTY_NORMAL: 152,
-  DIFFICULTY_HYPER: 153,
-  DIFFICULTY_ANOTHER: 154,
-  DIFFICULTY_INSANE: 155,
-} as const;
 
 /**
  * Mapping from select key filter → LR2 keymode op.
  */
 export const SELECT_KEYS_FILTER_TO_OP = {
-  KEYS_5: SELECT_DYNAMIC_OPS.KEYS_5,
-  KEYS_7: SELECT_DYNAMIC_OPS.KEYS_7,
-  KEYS_9: SELECT_DYNAMIC_OPS.KEYS_9,
-  KEYS_10: SELECT_DYNAMIC_OPS.KEYS_10,
-  KEYS_14: SELECT_DYNAMIC_OPS.KEYS_14,
+  KEYS_5: LR2_OP.KEYS_5,
+  KEYS_7: LR2_OP.KEYS_7,
+  KEYS_9: LR2_OP.KEYS_9,
+  KEYS_10: LR2_OP.KEYS_10,
+  KEYS_14: LR2_OP.KEYS_14,
 } as const;
 
 /**
@@ -110,50 +55,50 @@ export function computeSelectOps(
   }
 
   const bgaActive = playOptions.bga === 'ON' || (playOptions.bga === 'AUTOPLAY_ONLY' && playOptions.autoPlay);
-  ops.add(bgaActive ? 41 : 40);
-  ops.add(playOptions.bgaSize === 'EXTEND' ? 31 : 30);
-  ops.add(playOptions.scoreGraph ? 39 : 38);
-  ops.add(playOptions.autoScratch1P ? 55 : 54);
-  ops.add(playOptions.autoScratch2P ? 57 : 56);
-  ops.add(isRedGauge(playOptions.gauge1P) ? 43 : 42);
-  ops.add(isRedGauge(playOptions.gauge2P) ? 45 : 44);
-  ops.add(playOptions.difficultyFilter !== 'ALL' ? 46 : 47);
+  ops.add(bgaActive ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF);
+  ops.add(playOptions.bgaSize === 'EXTEND' ? LR2_OP.BGA_EXTEND : LR2_OP.BGA_NORMAL);
+  ops.add(playOptions.scoreGraph ? LR2_OP.SCORE_GRAPH_ON : LR2_OP.SCORE_GRAPH_OFF);
+  ops.add(playOptions.autoScratch1P ? LR2_OP.AUTO_SCRATCH_1P_ON : LR2_OP.AUTO_SCRATCH_1P_OFF);
+  ops.add(playOptions.autoScratch2P ? LR2_OP.AUTO_SCRATCH_2P_ON : LR2_OP.AUTO_SCRATCH_2P_OFF);
+  ops.add(isRedGauge(playOptions.gauge1P) ? LR2_OP.GAUGE_1P_RED : LR2_OP.GAUGE_1P_NORMAL);
+  ops.add(isRedGauge(playOptions.gauge2P) ? LR2_OP.GAUGE_2P_RED : LR2_OP.GAUGE_2P_NORMAL);
+  ops.add(playOptions.difficultyFilter !== 'ALL' ? LR2_OP.DIFFICULTY_FILTER_ON : LR2_OP.DIFFICULTY_FILTER_OFF);
 
   if (!song) {
     addAbsentSongOps(ops);
     return ops;
   }
 
-  ops.add(SELECT_DYNAMIC_OPS.BAR_IS_SONG);
-  ops.add(SELECT_DYNAMIC_OPS.BAR_IS_PLAYABLE);
+  ops.add(LR2_OP.SONG_BAR);
+  ops.add(LR2_OP.PLAYABLE_BAR);
   ops.add(resolveKeyModeOp(song));
 
   const features = detectChartFeatures(song);
-  ops.add(features.bga ? SELECT_DYNAMIC_OPS.BGA_PRESENT : SELECT_DYNAMIC_OPS.BGA_ABSENT);
-  ops.add(features.longNote ? SELECT_DYNAMIC_OPS.LN_PRESENT : SELECT_DYNAMIC_OPS.LN_ABSENT);
+  ops.add(features.bga ? LR2_OP.HAS_BGA : LR2_OP.NO_BGA);
+  ops.add(features.longNote ? LR2_OP.HAS_LN : LR2_OP.NO_LN);
   const hasReadtext = collection !== undefined && hasReadtextForSong(collection, song);
-  ops.add(hasReadtext ? SELECT_DYNAMIC_OPS.TEXT_PRESENT : SELECT_DYNAMIC_OPS.TEXT_ABSENT);
-  ops.add(features.bpmChange ? SELECT_DYNAMIC_OPS.BPM_CHANGE_PRESENT : SELECT_DYNAMIC_OPS.BPM_CHANGE_ABSENT);
-  ops.add(features.random ? SELECT_DYNAMIC_OPS.RANDOM_PRESENT : SELECT_DYNAMIC_OPS.RANDOM_ABSENT);
+  ops.add(hasReadtext ? LR2_OP.HAS_TEXT : LR2_OP.NO_TEXT);
+  ops.add(features.bpmChange ? LR2_OP.HAS_BPM_CHANGE : LR2_OP.NO_BPM_CHANGE);
+  ops.add(features.random ? LR2_OP.HAS_RANDOM : LR2_OP.NO_RANDOM);
 
   ops.add(resolveJudgeRankOp(song));
   ops.add(resolveDifficultyOp(song));
-  ops.add(song.chart.metadata.stageFile ? SELECT_DYNAMIC_OPS.STAGEFILE_PRESENT : SELECT_DYNAMIC_OPS.STAGEFILE_ABSENT);
-  ops.add(song.chart.metadata.banner ? SELECT_DYNAMIC_OPS.BANNER_PRESENT : SELECT_DYNAMIC_OPS.BANNER_ABSENT);
-  ops.add(song.chart.metadata.backBmp ? SELECT_DYNAMIC_OPS.BACKBMP_PRESENT : SELECT_DYNAMIC_OPS.BACKBMP_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.REPLAY_ABSENT);
+  ops.add(song.chart.metadata.stageFile ? LR2_OP.HAS_STAGEFILE : LR2_OP.NO_STAGEFILE);
+  ops.add(song.chart.metadata.banner ? LR2_OP.HAS_BANNER : LR2_OP.NO_BANNER);
+  ops.add(song.chart.metadata.backBmp ? LR2_OP.HAS_BACKBMP : LR2_OP.NO_BACKBMP);
+  ops.add(LR2_OP.NO_REPLAY);
   ops.add(resolveLr2LampOp(songLamp));
 
   return ops;
 }
 
-/** The key count each LR2 key-mode op stands for (op 160 7 keys … 164 9 keys). */
+/** The key count each LR2 key-mode op stands for. */
 const KEY_MODE_OP_KEYS: Readonly<Record<number, number>> = {
-  [SELECT_DYNAMIC_OPS.KEYS_7]: 7,
-  [SELECT_DYNAMIC_OPS.KEYS_5]: 5,
-  [SELECT_DYNAMIC_OPS.KEYS_14]: 14,
-  [SELECT_DYNAMIC_OPS.KEYS_10]: 10,
-  [SELECT_DYNAMIC_OPS.KEYS_9]: 9,
+  [LR2_OP.KEYS_7]: 7,
+  [LR2_OP.KEYS_5]: 5,
+  [LR2_OP.KEYS_14]: 14,
+  [LR2_OP.KEYS_10]: 10,
+  [LR2_OP.KEYS_9]: 9,
 };
 
 /**
@@ -197,51 +142,51 @@ export function detectChartFeatures(song: BrowserSongEntry): {
 }
 
 function addAbsentSongOps(ops: Set<number>): void {
-  ops.add(SELECT_DYNAMIC_OPS.BGA_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.LN_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.TEXT_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.BPM_CHANGE_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.RANDOM_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.STAGEFILE_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.BANNER_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.BACKBMP_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.REPLAY_ABSENT);
-  ops.add(SELECT_DYNAMIC_OPS.JUDGE_NORMAL);
-  ops.add(SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED);
-  ops.add(SELECT_DYNAMIC_OPS.DIFFICULTY_UNDEFINED);
-  ops.add(SELECT_DYNAMIC_OPS.KEYS_7);
+  ops.add(LR2_OP.NO_BGA);
+  ops.add(LR2_OP.NO_LN);
+  ops.add(LR2_OP.NO_TEXT);
+  ops.add(LR2_OP.NO_BPM_CHANGE);
+  ops.add(LR2_OP.NO_RANDOM);
+  ops.add(LR2_OP.NO_STAGEFILE);
+  ops.add(LR2_OP.NO_BANNER);
+  ops.add(LR2_OP.NO_BACKBMP);
+  ops.add(LR2_OP.NO_REPLAY);
+  ops.add(LR2_OP.JUDGE_NORMAL);
+  ops.add(LR2_OP.LAMP_NO_PLAY);
+  ops.add(LR2_OP.DIFFICULTY_UNDEFINED);
+  ops.add(LR2_OP.KEYS_7);
 }
 
 function resolveJudgeRankOp(song: BrowserSongEntry): number {
   const rank = song.chart.metadata.rank;
   switch (rank) {
     case 0:
-      return SELECT_DYNAMIC_OPS.JUDGE_VERY_HARD;
+      return LR2_OP.JUDGE_VERY_HARD;
     case 1:
-      return SELECT_DYNAMIC_OPS.JUDGE_HARD;
+      return LR2_OP.JUDGE_HARD;
     case 2:
-      return SELECT_DYNAMIC_OPS.JUDGE_NORMAL;
+      return LR2_OP.JUDGE_NORMAL;
     case 3:
-      return SELECT_DYNAMIC_OPS.JUDGE_EASY;
+      return LR2_OP.JUDGE_EASY;
     default:
-      return SELECT_DYNAMIC_OPS.JUDGE_NORMAL;
+      return LR2_OP.JUDGE_NORMAL;
   }
 }
 
 function resolveDifficultyOp(song: BrowserSongEntry): number {
   switch (song.chart.metadata.difficulty) {
     case 1:
-      return SELECT_DYNAMIC_OPS.DIFFICULTY_EASY;
+      return LR2_OP.DIFFICULTY_BEGINNER;
     case 2:
-      return SELECT_DYNAMIC_OPS.DIFFICULTY_NORMAL;
+      return LR2_OP.DIFFICULTY_NORMAL;
     case 3:
-      return SELECT_DYNAMIC_OPS.DIFFICULTY_HYPER;
+      return LR2_OP.DIFFICULTY_HYPER;
     case 4:
-      return SELECT_DYNAMIC_OPS.DIFFICULTY_ANOTHER;
+      return LR2_OP.DIFFICULTY_ANOTHER;
     case 5:
-      return SELECT_DYNAMIC_OPS.DIFFICULTY_INSANE;
+      return LR2_OP.DIFFICULTY_INSANE;
     default:
-      return SELECT_DYNAMIC_OPS.DIFFICULTY_UNDEFINED;
+      return LR2_OP.DIFFICULTY_UNDEFINED;
   }
 }
 
@@ -249,31 +194,31 @@ const KEY_MODE_OP_CACHE = new WeakMap<BrowserSongEntry, number>();
 
 function computeKeyModeOp(song: BrowserSongEntry): number {
   const modeHint = song.chart.bmson.info?.modeHint?.toLowerCase() ?? '';
-  if (modeHint.includes('14k')) return SELECT_DYNAMIC_OPS.KEYS_14;
-  if (modeHint.includes('10k')) return SELECT_DYNAMIC_OPS.KEYS_10;
-  if (modeHint.includes('9k')) return SELECT_DYNAMIC_OPS.KEYS_9;
-  if (modeHint.includes('7k')) return SELECT_DYNAMIC_OPS.KEYS_7;
-  if (modeHint.includes('5k')) return SELECT_DYNAMIC_OPS.KEYS_5;
+  if (modeHint.includes('14k')) return LR2_OP.KEYS_14;
+  if (modeHint.includes('10k')) return LR2_OP.KEYS_10;
+  if (modeHint.includes('9k')) return LR2_OP.KEYS_9;
+  if (modeHint.includes('7k')) return LR2_OP.KEYS_7;
+  if (modeHint.includes('5k')) return LR2_OP.KEYS_5;
 
   const variant = resolveChartPlayVariant(song);
   switch (variant) {
     case '5':
-      return SELECT_DYNAMIC_OPS.KEYS_5;
+      return LR2_OP.KEYS_5;
     case '7':
-      return SELECT_DYNAMIC_OPS.KEYS_7;
+      return LR2_OP.KEYS_7;
     case '9':
-      return SELECT_DYNAMIC_OPS.KEYS_9;
+      return LR2_OP.KEYS_9;
     case '10':
-      return SELECT_DYNAMIC_OPS.KEYS_10;
+      return LR2_OP.KEYS_10;
     case '14':
-      return SELECT_DYNAMIC_OPS.KEYS_14;
+      return LR2_OP.KEYS_14;
     // LR2's `#OP` space stops at 5 / 7 / 9 / 10 / 14 keys — it predates the Keyboardmania modes entirely. Fold them
     // onto the closest same-shape op (SP → 7 keys, DP → 14 keys) so themes keep lighting a keys badge instead of
     // rendering none; the same SP / DP pairing drives `pickLr2PlaySkin`'s fallback chain.
     case '24':
-      return SELECT_DYNAMIC_OPS.KEYS_7;
+      return LR2_OP.KEYS_7;
     case '48':
-      return SELECT_DYNAMIC_OPS.KEYS_14;
+      return LR2_OP.KEYS_14;
   }
 }
 
@@ -306,8 +251,6 @@ const LR2_LAMP_KINDS: Readonly<Record<ClearLamp, Lr2BarLampKind>> = {
   MAX: 'fullcombo',
 };
 
-const LR2_LAMP_KIND_ORDER: readonly Lr2BarLampKind[] = ['noplay', 'failed', 'easy', 'clear', 'hard', 'fullcombo'];
-
 /**
  * The LR2 clear lamp of a best record (`#SRC_BAR_LAMP` kind): LR2 has one lamp below NORMAL (EASY, which ASSIST EASY
  * joins), one above it (HARD, which EX HARD joins) and FULL COMBO for PERFECT and MAX too. No record reads `noplay`.
@@ -318,5 +261,5 @@ export function resolveLr2BarLampKind(lamp: ClearLamp | undefined): Lr2BarLampKi
 
 /** LR2's select op for the selected bar's clear lamp (100 NO PLAY … 105 FULL COMBO). */
 export function resolveLr2LampOp(lamp: ClearLamp | undefined): number {
-  return SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED + LR2_LAMP_KIND_ORDER.indexOf(resolveLr2BarLampKind(lamp));
+  return LR2_OP.LAMP_NO_PLAY + LR2_BAR_LAMP_KINDS.indexOf(resolveLr2BarLampKind(lamp));
 }

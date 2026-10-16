@@ -14,6 +14,7 @@ import {
   LR2_SPECIAL_GRAPHIC,
   isLr2SpecialGraphic,
 } from '@be-music/lr2-skin';
+import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { loadAssetBytes, resolveChartImageAsset } from '../../collection/collection.ts';
 import { loadSkinAssetTexture, loadTextureFromBytes } from '../../skin/lr2/textures.ts';
 import {
@@ -34,13 +35,6 @@ import {
   DESIGN_WIDTH,
   HISPEED_MAX,
   HISPEED_MIN,
-  LR2_1P_BOMB_TIMER_BASE,
-  LR2_1P_KEYON_TIMER_BASE,
-  LR2_1P_LN_HOLD_TIMER_BASE,
-  LR2_2P_BOMB_TIMER_BASE,
-  LR2_2P_KEYON_TIMER_BASE,
-  LR2_2P_LN_HOLD_TIMER_BASE,
-  LR2_LANE_TIMER_BANK_SIZE,
   PLAYFIELD,
 } from '../gameplay-constants.ts';
 import { resolveLr2LaneIndex, resolveSideRelativeLaneIndex } from '../gameplay-lanes.ts';
@@ -351,13 +345,13 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
         // `#FADEOUT` / `#CLOSE` durations: the exit events stamp them at the actual transition moment (ESC / chart end)
         // so the LR2 default 7-keys "STAGE FAILED" plate (anchored to timer 3) only paints during the brief exit window
         // instead of bleeding over the gameplay field for the entire chart.
-        this.timerStartedAt.set(0, event.at);
-        this.seedSceneStageTimer(1, this.options.skin?.timing?.startInput);
+        this.timerStartedAt.set(LR2_TIMER.SCENE_START, event.at);
+        this.seedSceneStageTimer(LR2_TIMER.START_INPUT, this.options.skin?.timing?.startInput);
         // LR2 op 80 / 81 ("load not complete" / "load complete") gate the centered title / genre / artist display in
         // the play skin. Op 80 is on during the LOADING phase; the 80→81 flip fires alongside timer 40 once the gate
         // opens.
-        this.runtimeOps.add(80);
-        this.runtimeOps.delete(81);
+        this.runtimeOps.add(LR2_OP.LOADING);
+        this.runtimeOps.delete(LR2_OP.LOADED);
         if (this.loadCompleteTimerHandle !== undefined) {
           window.clearTimeout(this.loadCompleteTimerHandle);
           this.loadCompleteTimerHandle = undefined;
@@ -365,29 +359,29 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
         break;
       case 'load-end':
         // LOAD END fires LR2 timer 40 and flips op 80→81 (READY), which the skin's load-complete animations key off of.
-        this.timerStartedAt.set(40, event.at);
-        this.runtimeOps.delete(80);
-        this.runtimeOps.add(81);
+        this.timerStartedAt.set(LR2_TIMER.READY, event.at);
+        this.runtimeOps.delete(LR2_OP.LOADING);
+        this.runtimeOps.add(LR2_OP.LOADED);
         break;
       case 'play-start':
-        this.timerStartedAt.set(41, event.at);
+        this.timerStartedAt.set(LR2_TIMER.PLAY, event.at);
         break;
       case 'exit-fade-out':
-        this.timerStartedAt.set(2, event.at);
+        this.timerStartedAt.set(LR2_TIMER.FADE_OUT, event.at);
         break;
       case 'exit-close':
-        this.timerStartedAt.set(3, event.at);
+        this.timerStartedAt.set(LR2_TIMER.FAILED, event.at);
         break;
       case 'judge':
         // LR2 spec: timer 46 (1P judge) / 47 (2P judge) restarts on every judgement on its respective side so the
         // attached `#DST_NOWJUDGE` / `#DST_NOWCOMBO` chains animate from time=0 per hit. Without this the keyframe
         // playhead drifts hours into the song and the post-hit fade-out keyframes have long since passed.
-        this.timerStartedAt.set(event.side === '2P' ? 47 : 46, event.at);
+        this.timerStartedAt.set(event.side === '2P' ? LR2_TIMER.JUDGE_2P : LR2_TIMER.JUDGE_1P, event.at);
         break;
       case 'full-combo':
         // Both 48 and 49 are stamped at the same instant because we don't yet model per-side combos.
-        this.timerStartedAt.set(48, event.at);
-        this.timerStartedAt.set(49, event.at);
+        this.timerStartedAt.set(LR2_TIMER.FULL_COMBO_1P, event.at);
+        this.timerStartedAt.set(LR2_TIMER.FULL_COMBO_2P, event.at);
         break;
       case 'gauge':
         this.applyGaugeTimers(event.previous, event.next);
@@ -646,29 +640,30 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     this.options.skin?.customOptions.forEach((option) => this.runtimeOps.add(option.defaultOp));
     // Static-ish play-session ops that are conventionally true while gameplay runs.
     const defaults = [
-      5, // selected bar is playable
-      34, // ghost off
+      LR2_OP.PLAYABLE_BAR,
+      LR2_OP.GHOST_OFF,
       // ops 38 / 39 (scoregraph off / on) — set dynamically below from `options.scoreGraph`. ops 40 / 41 (BGA off / on)
       // — set dynamically below from `options.bga` so the runtime gating matches the live setting. ops 42 / 43 (1P
       // normal / red gauge), 44 / 45 (2P) — set dynamically below from `options.gauge`.
-      47, // difficulty filter disabled
-      50, // offline
-      52, // EXTRA MODE OFF — gates wallpaper / decoration elements in
-      // the LR2 default skin family. Op 53 is the EXTRA MODE ON variant; we never enable EXTRA MODE in the web build.
+      LR2_OP.DIFFICULTY_FILTER_OFF,
+      LR2_OP.OFFLINE,
+      // Gates wallpaper / decoration elements in the LR2 default skin family. Op 53 is the EXTRA MODE ON variant; we
+      // never enable EXTRA MODE in the web build.
+      LR2_OP.EXTRA_MODE_OFF,
       // ops 54 / 55 (autoscratch 1P off / on), 56 / 57 (autoscratch 2P off / on) — set dynamically below from
       // `options.autoScratch1P / 2P`.
-      61, // score saveable
-      81, // load complete
-      82, // replay off
-      174, // attached text absent
-      178, // RANDOM absent
-      182, // judge normal
-      196, // replay absent
+      LR2_OP.SCORE_SAVE_ON,
+      LR2_OP.LOADED,
+      LR2_OP.REPLAY_OFF,
+      LR2_OP.NO_TEXT,
+      LR2_OP.NO_RANDOM,
+      LR2_OP.JUDGE_NORMAL,
+      LR2_OP.NO_REPLAY,
     ];
     defaults.forEach((op) => this.runtimeOps.add(op));
     // Autoscratch 1P / 2P (54 / 55, 56 / 57).
-    this.runtimeOps.add(this.options.autoScratch1P ? 55 : 54);
-    this.runtimeOps.add(this.options.autoScratch2P ? 57 : 56);
+    this.runtimeOps.add(this.options.autoScratch1P ? LR2_OP.AUTO_SCRATCH_1P_ON : LR2_OP.AUTO_SCRATCH_1P_OFF);
+    this.runtimeOps.add(this.options.autoScratch2P ? LR2_OP.AUTO_SCRATCH_2P_ON : LR2_OP.AUTO_SCRATCH_2P_OFF);
     // Gauge type (42 / 43 1P, 44 / 45 2P) — fixed for the run; `updateGaugeOps` only refreshes the percentage buckets.
     // A course stage runs on the course gauge, which LR2 reports as the red one (OpenLR2 L4613-L4628).
     computeGaugeTypeOps(this.options.course !== undefined ? 'HARD' : this.resolveSelectedGauge()).forEach((op) =>
@@ -679,39 +674,39 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       resolveLr2CourseOps(this.options.courseInfo).forEach((op) => this.runtimeOps.add(op));
     }
     // Score graph (38 / 39).
-    this.runtimeOps.add(this.options.scoreGraph ? 39 : 38);
+    this.runtimeOps.add(this.options.scoreGraph ? LR2_OP.SCORE_GRAPH_ON : LR2_OP.SCORE_GRAPH_OFF);
     // BGA on/off (40 / 41). With AUTOPLAY_ONLY we mirror LR2: the BGA is "on" only when autoplay is also engaged.
     const bgaMode = this.options.bga ?? 'ON';
     const bgaActive = bgaMode === 'ON' || (bgaMode === 'AUTOPLAY_ONLY' && this.options.autoPlay);
-    this.runtimeOps.add(bgaActive ? 41 : 40);
+    this.runtimeOps.add(bgaActive ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF);
     // op 32 = autoplay off, op 33 = autoplay on (mutually exclusive).
-    this.runtimeOps.add(this.options.autoPlay ? 33 : 32);
+    this.runtimeOps.add(this.options.autoPlay ? LR2_OP.AUTOPLAY_ON : LR2_OP.AUTOPLAY_OFF);
     // Keymode op (160=7keys / 161=5keys / 162=14keys / 163=10keys / 164=9keys) — derived from the chart's actual lane
     // usage so 5K-only charts get the LR2 default skin's "DISABLE LANE" overlay on keys 6 & 7.
     this.runtimeOps.add(this.resolveKeymodeOp());
     // Long-note presence flag (172 = absent, 173 = present).
     const hasLongNotes = this.notes.some((note) => note.endBeat !== undefined);
-    this.runtimeOps.add(hasLongNotes ? 173 : 172);
+    this.runtimeOps.add(hasLongNotes ? LR2_OP.HAS_LN : LR2_OP.NO_LN);
     // BPM change presence flag (176 = absent, 177 = present).
     const hasBpmChanges = (this.timingResolver?.tempoPoints.length ?? 0) > 1;
-    this.runtimeOps.add(hasBpmChanges ? 177 : 176);
+    this.runtimeOps.add(hasBpmChanges ? LR2_OP.HAS_BPM_CHANGE : LR2_OP.NO_BPM_CHANGE);
     // BGA presence flag (170 = absent, 171 = present). Drives the LR2 default skin's BGA-frame visibility — without 171
     // the borders and per-side gating fail to switch on.
-    this.runtimeOps.add(this.hasBga ? 171 : 170);
+    this.runtimeOps.add(this.hasBga ? LR2_OP.HAS_BGA : LR2_OP.NO_BGA);
     // Resource-presence flags (per LR2 spec — see `dst_option` table in `docs/LR2SkinHelp.md`): 190 / 191 = STAGEFILE
     // absent / present 192 / 193 = BANNER absent / present 194 / 195 = BACKBMP absent / present The previous revision
     // swapped these — it set 191 (=present) any time a chart was loaded, regardless of whether `#STAGEFILE` was
     // actually defined, while leaving 190 (=absent) unset. Drive both halves dynamically from the chart's metadata so
     // skin elements gated on either branch render correctly.
     const meta = this.song?.chart.metadata;
-    this.runtimeOps.add(meta?.stageFile ? 191 : 190);
-    this.runtimeOps.add(meta?.banner ? 193 : 192);
-    this.runtimeOps.add(meta?.backBmp ? 195 : 194);
+    this.runtimeOps.add(meta?.stageFile ? LR2_OP.HAS_STAGEFILE : LR2_OP.NO_STAGEFILE);
+    this.runtimeOps.add(meta?.banner ? LR2_OP.HAS_BANNER : LR2_OP.NO_BANNER);
+    this.runtimeOps.add(meta?.backBmp ? LR2_OP.HAS_BACKBMP : LR2_OP.NO_BACKBMP);
     // BGA size: op 30 = normal, op 31 = extend. Defer to the CUSTOMOPTION default if the skin already declared one
     // (rare — most skins leave this to the runtime); otherwise pick from `options.bgaSize` so the LR2 panel-1 BGA size
     // toggle (`#SRC_BUTTON,type=73`) is honored.
-    if (!this.runtimeOps.has(30) && !this.runtimeOps.has(31)) {
-      this.runtimeOps.add(this.options.bgaSize === 'EXTEND' ? 31 : 30);
+    if (!this.runtimeOps.has(LR2_OP.BGA_NORMAL) && !this.runtimeOps.has(LR2_OP.BGA_EXTEND)) {
+      this.runtimeOps.add(this.options.bgaSize === 'EXTEND' ? LR2_OP.BGA_EXTEND : LR2_OP.BGA_NORMAL);
     }
   }
 
@@ -724,16 +719,16 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
    */
   private resolveKeymodeOp(): number {
     if (this.chartPlayVariant === '9') {
-      return 164; // 9keys (Pop'n / PMS)
+      return LR2_OP.KEYS_9; // Pop'n / PMS
     }
     const usesPlayer2 = this.laneChannels.some((channel) => channel.startsWith('2'));
     const uses6or7 = this.laneChannels.some(
       (channel) => channel === '18' || channel === '19' || channel === '28' || channel === '29',
     );
     if (usesPlayer2) {
-      return uses6or7 ? 162 : 163; // 14keys vs 10keys
+      return uses6or7 ? LR2_OP.KEYS_14 : LR2_OP.KEYS_10;
     }
-    return uses6or7 ? 160 : 161; // 7keys vs 5keys
+    return uses6or7 ? LR2_OP.KEYS_7 : LR2_OP.KEYS_5;
   }
 
   private isOpActive(op: number): boolean {
@@ -776,7 +771,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     // Judge timers (46 = 1P, 47 = 2P) restart on every judgement so the attached NOWJUDGE / NOWCOMBO keyframe chain
     // replays per hit. We use the recorded timestamp when present, falling back to scene start so the slot doesn't go
     // invisible before the first judgement happens.
-    if (timer === 46 || timer === 47) {
+    if (timer === LR2_TIMER.JUDGE_1P || timer === LR2_TIMER.JUDGE_2P) {
       const judgedAt = this.timerStartedAt.get(timer);
       const now = this.playClock();
       if (judgedAt !== undefined) {
@@ -790,7 +785,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     // and fades over the rest of the beat. We map the chart's current beat fractional part to that 0..1000 window so
     // the pulse stays beat-locked under soflan, hi-speed change, and STOP — anything that bends the seconds→beats
     // relationship is already absorbed by `currentBeat`.
-    if (timer === 140) {
+    if (timer === LR2_TIMER.RHYTHM) {
       if (!this.song) return 0;
       const beat = this.currentBeat(this.currentSeconds());
       if (!Number.isFinite(beat) || beat < 0) return 0;
@@ -823,7 +818,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     // destinations animate from time=0. We don't model the timer instant directly -- our `lastJudge` window already
     // gates the rendering -- so we simply mark them as always active and rely on the higher-level renderer to draw only
     // while a judgement is fresh.
-    if (timer === 46 || timer === 47) {
+    if (timer === LR2_TIMER.JUDGE_1P || timer === LR2_TIMER.JUDGE_2P) {
       return true;
     }
     // Timer 140 — rhythm timer. Beat-locked, but suppressed during the LR2 LOADING → DONE intro window so the lane- bottom
@@ -831,7 +826,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     // pulsing in the empty playfield while the title plate / ring chrome is still sliding in. `isIntroPlaying()` is the
     // same gate that hides falling notes / measure lines, so pinning the aura to it lines up with the "the chart has
     // started" moment users perceive.
-    if (timer === 140) {
+    if (timer === LR2_TIMER.RHYTHM) {
       return this.song !== undefined && !this.isIntroPlaying();
     }
     // Bomb (50-69) and key-on (100-119) timers are tracked explicitly via `timerStartedAt`. They become active the
@@ -842,12 +837,12 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     // player's combo hits the chart's note count, and elements anchored to those timers (the `Play/fullcombo/...` skin
     // graphic) read the running elapsed time afterward to slide in / fade out per the skin's keyframe chain.
     if (
-      (timer >= 42 && timer <= 45) ||
-      timer === 48 ||
-      timer === 49 ||
-      (timer >= 50 && timer <= 69) ||
-      (timer >= 70 && timer <= 89) ||
-      (timer >= 100 && timer <= 119)
+      (timer >= LR2_TIMER.GAUGE_UP_1P && timer <= LR2_TIMER.GAUGE_MAX_2P) ||
+      timer === LR2_TIMER.FULL_COMBO_1P ||
+      timer === LR2_TIMER.FULL_COMBO_2P ||
+      (timer >= LR2_TIMER.BOMB_1P && timer < LR2_TIMER.BOMB_2P + LR2_LANE_TIMER_BANK_SIZE) ||
+      (timer >= LR2_TIMER.LN_HOLD_1P && timer < LR2_TIMER.LN_HOLD_2P + LR2_LANE_TIMER_BANK_SIZE) ||
+      (timer >= LR2_TIMER.KEY_ON_1P && timer < LR2_TIMER.KEY_ON_2P + LR2_LANE_TIMER_BANK_SIZE)
     ) {
       // All explicitly-seeded timer ranges share the same gating: active iff `timerStartedAt` has an entry. Gauge rise
       // / max (42..45) are stamped by `applyGaugeDelta`, LN-hold (70..89) by `startLnHoldTimer`, bombs (50..69) /
@@ -896,18 +891,18 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
         window.clearTimeout(this.gaugeIncreaseTimeout);
         this.gaugeIncreaseTimeout = undefined;
       }
-      this.timerStartedAt.set(42, this.playClock());
-      const fadeMs = this.gaugeTimerDurationMs.get(42) ?? GAUGE_INCREASE_FALLBACK_MS;
+      this.timerStartedAt.set(LR2_TIMER.GAUGE_UP_1P, this.playClock());
+      const fadeMs = this.gaugeTimerDurationMs.get(LR2_TIMER.GAUGE_UP_1P) ?? GAUGE_INCREASE_FALLBACK_MS;
       this.gaugeIncreaseTimeout = window.setTimeout(() => {
         this.gaugeIncreaseTimeout = undefined;
         if (this.disposed) return;
-        this.timerStartedAt.delete(42);
+        this.timerStartedAt.delete(LR2_TIMER.GAUGE_UP_1P);
       }, fadeMs);
     }
     if (next >= 100 && previous < 100) {
-      this.timerStartedAt.set(44, this.playClock());
+      this.timerStartedAt.set(LR2_TIMER.GAUGE_MAX_1P, this.playClock());
     } else if (next < 100 && previous >= 100) {
-      this.timerStartedAt.delete(44);
+      this.timerStartedAt.delete(LR2_TIMER.GAUGE_MAX_1P);
     }
   }
 
@@ -926,7 +921,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     // PMS / 9 KEY routes every lane through the 1P-side bank (50..58) regardless of which side the chart sourced it
     // from.
     const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
-    const base = isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE;
+    const base = isPlayer2 ? LR2_TIMER.BOMB_2P : LR2_TIMER.BOMB_1P;
     return base + laneIndex;
   }
 
@@ -969,7 +964,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     }
     // PMS / 9 KEY collapses onto the 1P-side `70..79` bank.
     const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
-    const base = isPlayer2 ? LR2_2P_LN_HOLD_TIMER_BASE : LR2_1P_LN_HOLD_TIMER_BASE;
+    const base = isPlayer2 ? LR2_TIMER.LN_HOLD_2P : LR2_TIMER.LN_HOLD_1P;
     return base + laneIndex;
   }
 
@@ -1098,7 +1093,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
    */
   private updateRankOps(): void {
     // Clear the entire rank slot first; only one of these should be active.
-    for (let op = 200; op <= 207; op += 1) {
+    for (let op: number = LR2_OP.RANK_1P_AAA; op <= LR2_OP.RANK_1P_F; op += 1) {
       this.runtimeOps.delete(op);
     }
     const rank = computeRankOp(this.score);
@@ -1113,7 +1108,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
    * {@link initializeRuntimeOps} and left alone here.
    */
   private updateGaugeOps(): void {
-    for (let op = 230; op <= 240; op += 1) {
+    for (let op: number = LR2_OP.GAUGE_1P_0_9; op <= LR2_OP.GAUGE_1P_100; op += 1) {
       this.runtimeOps.delete(op);
     }
     this.runtimeOps.add(computeGaugeBucketOp(this.gaugeState.current));
@@ -1131,7 +1126,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     const stage = resolveLr2NonstopStage(nonstop.stages, this.currentSeconds());
     if (stage === this.nonstopStage) return;
     this.nonstopStage = stage;
-    for (let op = 280; op <= 289; op += 1) this.runtimeOps.delete(op);
+    for (let op: number = LR2_OP.COURSE_STAGE1; op <= LR2_OP.COURSE_STAGE_FINAL; op += 1) this.runtimeOps.delete(op);
     resolveLr2CourseOps({ ...courseInfo, stageIndex: stage }).forEach((op) => this.runtimeOps.add(op));
   }
 
@@ -1142,15 +1137,15 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
    * Idempotent — the lookups are O(1) and the second call after retirement is a no-op.
    */
   private cleanupFullComboTimer(): void {
-    const startedAt = this.timerStartedAt.get(48);
+    const startedAt = this.timerStartedAt.get(LR2_TIMER.FULL_COMBO_1P);
     if (startedAt === undefined) {
       return;
     }
     if (this.playClock() - startedAt < this.fullComboDurationMs) {
       return;
     }
-    this.timerStartedAt.delete(48);
-    this.timerStartedAt.delete(49);
+    this.timerStartedAt.delete(LR2_TIMER.FULL_COMBO_1P);
+    this.timerStartedAt.delete(LR2_TIMER.FULL_COMBO_2P);
   }
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -1392,7 +1387,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       renderNumberElement(this.skinLayerPool, number, value, this.textures, this.evaluateElementDst(number), {
         // Groove-gauge percentage is naturally variable-length; LR2 default skins specify keta=3 which would print
         // "020" / "100". Suppress leading zeros so the displayed value reads like a normal integer.
-        suppressLeadingZeros: number.source.num === 107,
+        suppressLeadingZeros: number.source.num === LR2_NUM.GAUGE,
       });
     }
     for (const gauge of skin.grooveGauges) {
@@ -1602,7 +1597,10 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       // on continuous SRC cycling for its blink animation, so we pass `undefined` and let `pickAnimatedCell` use its
       // default looping behavior.
       const dstTimer = image.destination.timer;
-      const isOneShotOverlayTimer = dstTimer === 48 || dstTimer === 49 || (dstTimer >= 50 && dstTimer <= 69);
+      const isOneShotOverlayTimer =
+        dstTimer === LR2_TIMER.FULL_COMBO_1P ||
+        dstTimer === LR2_TIMER.FULL_COMBO_2P ||
+        (dstTimer >= LR2_TIMER.BOMB_1P && dstTimer < LR2_TIMER.BOMB_2P + LR2_LANE_TIMER_BANK_SIZE);
       const srcLoop = isOneShotOverlayTimer ? dst.loop : undefined;
       const cellRect = pickAnimatedCell(image.source, this.elapsedSinceTimer(image.source.timer), srcLoop, {
         width: baseTexture.width,
@@ -1618,7 +1616,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     }
     // The AUTOPLAY label (any image gated on op 33) belongs in the same visual layer as the judgement plate — i.e.
     // above the falling notes. All other skin images stay in the regular skin layer.
-    const targetPool = image.destination.ops.includes(33) ? this.overlayLayerPool : this.skinLayerPool;
+    const targetPool = image.destination.ops.includes(LR2_OP.AUTOPLAY_ON) ? this.overlayLayerPool : this.skinLayerPool;
     const sprite = targetPool.acquireSprite();
     sprite.texture = texture;
     sprite.label = `image[${image.source.imagePath}]`;
@@ -1691,13 +1689,13 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
    * side teardown can leave `timerStartedAt` populated when the user is still physically holding the matching key.
    */
   private resolveChannelForKeyOnTimer(timerId: number): string | undefined {
-    if (timerId < LR2_1P_KEYON_TIMER_BASE || timerId >= LR2_2P_KEYON_TIMER_BASE + 10) {
+    if (timerId < LR2_TIMER.KEY_ON_1P || timerId >= LR2_TIMER.KEY_ON_2P + LR2_LANE_TIMER_BANK_SIZE) {
       return undefined;
     }
-    const isPlayer2 = timerId >= LR2_2P_KEYON_TIMER_BASE;
-    const base = isPlayer2 ? LR2_2P_KEYON_TIMER_BASE : LR2_1P_KEYON_TIMER_BASE;
+    const isPlayer2 = timerId >= LR2_TIMER.KEY_ON_2P;
+    const base = isPlayer2 ? LR2_TIMER.KEY_ON_2P : LR2_TIMER.KEY_ON_1P;
     const laneIndex = timerId - base;
-    if (laneIndex < 0 || laneIndex > 9) return undefined;
+    if (laneIndex < 0 || laneIndex > LR2_LANE_TIMER_BANK_SIZE - 1) return undefined;
     if (this.chartPlayVariant === '9') {
       return `1${laneIndex}`;
     }
@@ -1842,41 +1840,41 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
       this.options.courseInfo !== undefined ? resolveLr2CourseText(st, this.options.courseInfo) : undefined;
     if (courseText !== undefined) return courseText;
     // A stitched NONSTOP play titles the stage LR2 last announced (after a BLANK connection); before that, the course.
-    if (st === 10 && this.nonstopStage > 0) {
+    if (st === LR2_TEXT.TITLE && this.nonstopStage > 0) {
       const title = this.options.courseInfo?.stages[this.nonstopStage]?.title;
       if (title !== undefined) return title;
     }
     const subartists = song.chart.bmson.info?.subartists?.join(' / ');
     switch (st) {
-      case 1:
+      case LR2_TEXT.RIVAL:
         // Target / rival name. We don't have a multiplayer rival, so just show "TARGET" as a placeholder so the slot
         // isn't visually missing.
         return 'TARGET';
-      case 2:
+      case LR2_TEXT.PLAYER:
         return 'PLAYER';
-      case 10:
-      case 20:
+      case LR2_TEXT.TITLE:
+      case LR2_TEXT.TITLE_ALT:
         return song.title;
-      case 11:
-      case 21:
+      case LR2_TEXT.SUBTITLE:
+      case LR2_TEXT.SUBTITLE_ALT:
         return song.subtitle ?? '';
-      case 12:
-      case 22:
+      case LR2_TEXT.FULL_TITLE:
+      case LR2_TEXT.FULL_TITLE_ALT:
         return [song.title, song.subtitle].filter((value): value is string => Boolean(value)).join(' ');
-      case 13:
-      case 23:
+      case LR2_TEXT.GENRE:
+      case LR2_TEXT.GENRE_ALT:
         return song.genre ?? '';
-      case 14:
-      case 24:
+      case LR2_TEXT.ARTIST:
+      case LR2_TEXT.ARTIST_ALT:
         return song.artist ?? '';
-      case 15:
-      case 25:
+      case LR2_TEXT.SUBARTIST:
+      case LR2_TEXT.SUBARTIST_ALT:
         return subartists ?? '';
-      case 17:
-      case 27:
+      case LR2_TEXT.PLAY_LEVEL:
+      case LR2_TEXT.PLAY_LEVEL_ALT:
         return song.playLevel?.toString() ?? '';
-      case 18:
-      case 28:
+      case LR2_TEXT.DIFFICULTY:
+      case LR2_TEXT.DIFFICULTY_ALT:
         return resolveDifficultyName(song.chart.metadata.difficulty);
       default:
         return undefined;
@@ -2003,12 +2001,12 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
   /** Returns the 0..1 value for a slider type. */
   private resolveSliderValue(type: number): number {
     switch (type) {
-      case 2: {
+      case LR2_SLIDER.HISPEED_1P: {
         // HiSpeed 1P: map the multiplier into [0..1] over the supported range.
         const span = HISPEED_MAX - HISPEED_MIN;
         return span <= 0 ? 0 : Math.max(0, Math.min(1, (this.playerHiSpeed - HISPEED_MIN) / span));
       }
-      case 6: {
+      case LR2_SLIDER.PLAY_PROGRESS: {
         // Chart progress ratio
         const total = this.resolveSongDurationSeconds();
         return total <= 0 ? 0 : Math.max(0, Math.min(1, this.currentSeconds() / total));
@@ -2189,10 +2187,10 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
    * reference.
    */
   private isAutoLane(laneIndex: number): boolean {
-    if (this.runtimeOps.has(53)) {
+    if (this.runtimeOps.has(LR2_OP.EXTRA_MODE_ON)) {
       return true;
     }
-    if (laneIndex === 0 && this.runtimeOps.has(55)) {
+    if (laneIndex === 0 && this.runtimeOps.has(LR2_OP.AUTO_SCRATCH_1P_ON)) {
       return true;
     }
     return false;

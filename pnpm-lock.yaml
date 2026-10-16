@@ -120,6 +120,9 @@ importers:
 
   packages/beatoraja-skin:
     dependencies:
+      '@be-music/lr2-skin':
+        specifier: workspace:*
+        version: link:../lr2-skin
       '@be-music/utils':
         specifier: workspace:*
         version: link:../utils

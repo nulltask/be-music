@@ -6,6 +6,7 @@ import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from '../../col
 import { dirname } from '@be-music/utils/core';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
+import { LR2_BUTTON, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { courseMatchesKeysFilter, resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
 import { logger } from '../../logger.ts';
 import { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from '../hi-speed.ts';
@@ -177,12 +178,12 @@ export const DIFFICULTY_FILTER_CYCLE: readonly PixiDifficultyFilter[] = [
  * (`docs/LR2SkinHelp.md` 6171+): 91 all, 92 beginner, 93 normal, 94 hyper, 95 another, 96 insane.
  */
 export const DIFFICULTY_FILTER_BY_DIRECT_BUTTON: Record<number, PixiDifficultyFilter> = {
-  91: 'ALL',
-  92: 'BEGINNER',
-  93: 'NORMAL',
-  94: 'HYPER',
-  95: 'ANOTHER',
-  96: 'INSANE',
+  [LR2_BUTTON.DIFFICULTY_FILTER_ALL]: 'ALL',
+  [LR2_BUTTON.DIFFICULTY_FILTER_BEGINNER]: 'BEGINNER',
+  [LR2_BUTTON.DIFFICULTY_FILTER_NORMAL]: 'NORMAL',
+  [LR2_BUTTON.DIFFICULTY_FILTER_HYPER]: 'HYPER',
+  [LR2_BUTTON.DIFFICULTY_FILTER_ANOTHER]: 'ANOTHER',
+  [LR2_BUTTON.DIFFICULTY_FILTER_INSANE]: 'INSANE',
 };
 
 /**
@@ -1161,10 +1162,10 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     // know when "now=0" was. We don't seed timer 1 here; themes (the LR2 scene's `elapsedSinceTimer`) compute its fire
     // moment from `#STARTINPUT` lazily.
     this.timerStartedAt.clear();
-    this.timerStartedAt.set(0, this.sceneStartedAt);
+    this.timerStartedAt.set(LR2_TIMER.SCENE_START, this.sceneStartedAt);
     // Fire timer 11 (song change) at scene start so the BAR_BODY slide-in animations play once on every appearance,
     // just like they do in real LR2 when the cursor lands on the initial song.
-    this.timerStartedAt.set(11, this.sceneStartedAt);
+    this.timerStartedAt.set(LR2_TIMER.SONG_BAR_CHANGE, this.sceneStartedAt);
     // Drop any leftover smooth-scroll state from a previous session — the cursor isn't moving on re-entry, and a stale
     // `dt` from before the play round-trip would otherwise feed the decay formula a multi-minute interval and either
     // NaN or instantly zero out a fresh offset (depending on Math.exp's behavior).
@@ -1198,9 +1199,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     const now = performance.now();
     this.cursorChangedAt = now;
-    this.timerStartedAt.set(10, now);
-    this.timerStartedAt.set(11, now);
-    this.timerStartedAt.set(delta < 0 ? 12 : 13, now);
+    this.timerStartedAt.set(LR2_TIMER.SONG_BAR_MOVE, now);
+    this.timerStartedAt.set(LR2_TIMER.SONG_BAR_CHANGE, now);
+    this.timerStartedAt.set(delta < 0 ? LR2_TIMER.SONG_BAR_UP : LR2_TIMER.SONG_BAR_DOWN, now);
     // Seed the scroll offset only for themes that slide their list layer. The be-music chrome is also mounted on
     // `listLayer`, so offsetting that layer would scroll the entire screen. In that path, cursor movement simply changes
     // the active row.
@@ -1301,8 +1302,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   protected togglePanel(which: number): void {
     if (which < 1 || which > 9) return;
     const now = performance.now();
-    const openTimer = 20 + which; // panel 1 → timer 21
-    const closeTimer = 30 + which; // panel 1 → timer 31
+    const openTimer = LR2_TIMER.PANEL1_OPEN + which - 1;
+    const closeTimer = LR2_TIMER.PANEL1_CLOSE + which - 1;
     let opening: boolean;
     if (this.panelStates.has(which)) {
       // Closing: drop the open timer (so it goes inactive next frame) and seed the close timer for the close-anim
@@ -1319,8 +1320,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       const previouslyOpen = Array.from(this.panelStates);
       for (const open of previouslyOpen) {
         if (open === which) continue;
-        const otherOpenTimer = 20 + open;
-        const otherCloseTimer = 30 + open;
+        const otherOpenTimer = LR2_TIMER.PANEL1_OPEN + open - 1;
+        const otherCloseTimer = LR2_TIMER.PANEL1_CLOSE + open - 1;
         this.panelStates.delete(open);
         this.timerStartedAt.delete(otherOpenTimer);
         this.timerStartedAt.set(otherCloseTimer, now);
