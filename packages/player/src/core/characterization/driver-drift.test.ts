@@ -175,12 +175,18 @@ describe('driver drift', () => {
     expect(auto.playlog?.play).not.toHaveProperty('tempoChanges');
   });
 
-  test('drift: manualPlay follows replayTempoChanges only in a replay, autoPlay in any play', async () => {
+  test('manual and auto play both follow replayTempoChanges only in a replay', async () => {
     const options = { replayTempoChanges: [{ timeUs: 1_000_000, tempo: 0.75 }] };
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: ON_TIME, options });
     const auto = await observePlay({ driver: 'auto', chart: basicChart(), options });
+    const autoReplay = await observePlay({
+      driver: 'auto',
+      chart: basicChart(),
+      options: { ...options, replayInputs: [] },
+    });
     expect(manual.host.some((entry) => entry.includes(' tempo '))).toBe(false);
-    expect(auto.host.some((entry) => entry.includes(' tempo '))).toBe(true);
+    expect(auto.host.some((entry) => entry.includes(' tempo '))).toBe(false);
+    expect(autoReplay.host.some((entry) => entry.includes(' tempo '))).toBe(true);
   });
 
   test('drift: a replay of an ESC-aborted log plays on past the abort, while the simulators stop there', async () => {

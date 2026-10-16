@@ -308,7 +308,8 @@ export interface PlayerPlayRecording {
   /**
    * The tempo changes a replay follows (`play.tempoChanges` of its log, in chart time), on top of `speed` as the tempo
    * at the start (`play.tempo`). Each takes effect once the replay's chart time reaches it, as a live `{ kind: 'tempo' }`
-   * command would. Only `manualPlay` with {@link replayInputs} reads it; it changes no judgment.
+   * command would. Read only in a replay ({@link replayInputs} set), by `manualPlay` and `autoPlay` alike; it changes no
+   * judgment.
    */
   replayTempoChanges?: readonly PlaylogTempoChange[];
 }

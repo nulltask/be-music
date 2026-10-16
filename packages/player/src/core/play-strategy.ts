@@ -43,21 +43,10 @@ export interface PlayJudge {
   settledThroughSeconds(): number;
 }
 
-/**
- * Where a strategy still behaves the way its old driver did. Each one is a known drift between the manual and the
- * auto driver (`characterization/driver-drift.test.ts`), kept as it was so the one play loop changes no behaviour;
- * they are removed one by one.
- */
-export interface StrategyDrifts {
-  /** Follows `replayTempoChanges` outside a replay too. */
-  readonly followsReplayTempoChangesAlways: boolean;
-}
-
 /** How a play is judged: manual play from live input, a replay of a recorded input stream, or AUTO play. */
 export interface JudgeStrategy {
   /** The play log's `play.mode`, and the mode the input runtime and the audio session are created for. */
   readonly mode: PlaylogPlay['mode'];
-  readonly drifts: StrategyDrifts;
   /** Whether the play shows the active-audio debug readout from a chart estimate when the session reports none. */
   readonly estimatesActiveAudio: boolean;
   /** Writes the no-TUI introduction (mode, lane map, keys). */

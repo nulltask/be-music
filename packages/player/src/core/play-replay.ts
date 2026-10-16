@@ -1,7 +1,7 @@
 import { advanceJudgeCoreReplay, createJudgeCoreReplay } from './judge-core.ts';
 import type { PlaySession } from './play-session.ts';
 import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
-import { createPlayJudgeCore, judgeCoreJudge, MANUAL_DRIFTS, writeManualIntro } from './play-manual.ts';
+import { createPlayJudgeCore, judgeCoreJudge, writeManualIntro } from './play-manual.ts';
 
 /**
  * The replay judge strategy: the manual judge core re-driven by a recorded play-log input stream
@@ -37,7 +37,6 @@ function createReplayJudge(session: PlaySession): PlayJudge {
 /** A replay: a recorded play's inputs, re-driven at their recorded chart times. */
 export const replayStrategy: JudgeStrategy = {
   mode: 'manual',
-  drifts: MANUAL_DRIFTS,
   estimatesActiveAudio: false,
   writeIntro: writeManualIntro,
   createJudge: createReplayJudge,

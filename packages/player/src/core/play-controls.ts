@@ -38,7 +38,6 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
     activeStateSignals,
     playlogRecorder,
     inputSignals,
-    strategy: { drifts },
   } = session;
   let highSpeed = session.highSpeed;
   let interruptedReason: PlayerInterruptReason | undefined;
@@ -90,9 +89,8 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
     });
   };
 
-  // A replay follows its log's tempo changes as its chart time reaches each.
-  const replayTempoChanges =
-    session.replay || drifts.followsReplayTempoChangesAlways ? (options.replayTempoChanges ?? []) : [];
+  // A replay follows its log's tempo changes as its chart time reaches each; a live play takes its tempo from commands.
+  const replayTempoChanges = session.replay ? (options.replayTempoChanges ?? []) : [];
   let replayTempoChangeIndex = 0;
 
   const handleLaneCommand = judge.handleLaneCommand?.bind(judge);

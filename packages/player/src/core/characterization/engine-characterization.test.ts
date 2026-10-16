@@ -191,10 +191,11 @@ describe('engine characterization: play scenarios', () => {
       ...resolveChart(chart).notes.flatMap((note) => tap(Math.round(at(note.seconds)), note.channel)),
     ];
     const plays = await playThreeWays({ chart, script });
+    // A replay of an auto-played log with these tempo changes (its inputs are empty).
     const autoFollowingTheLog = await observePlay({
       driver: 'auto',
       chart,
-      options: { replayTempoChanges: plays.manual.playlog!.play.tempoChanges! },
+      options: { replayInputs: [], replayTempoChanges: plays.manual.playlog!.play.tempoChanges! },
     });
     const autoWithCommand = await observePlay({ driver: 'auto', chart, script: [script[0]!] });
     expect(plays.replay.summary).toEqual(plays.manual.summary);
