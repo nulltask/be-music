@@ -305,12 +305,14 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                         | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue` (re-exported under the old names) |
 | The hi-speed range and steps                                                     | `player-web` `scene/hi-speed.ts`          | Same names (re-exported)                                                           |
 | `SceneCourseInfo`, `resolveSceneCourseInfo`                                      | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (re-exported under the old names)                |
-| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                    | `player-web` `scene/core/course-combo.ts` | Same names (re-exported), with `reduceCourseCombo`                                 |
+| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                    | `player-web` `scene/core/course-combo.ts` | Same names, with `reduceCourseCombo`                                               |
 | `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                               | `player-web` `scene/playlog-view.ts`      | Same names (re-exported), over `resolvePlaylogView`                                |
 | `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation` | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)                     |
 | `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                 |
 
-The scenes still keep their own browse and play state (the core gameplay its `JudgeTimingLog` and covers, the beatoraja
+The built-in and LR2 play screens keep one `PlayState` and read their result off it (`playResultFromPlayState`), so
+they follow the model's play-state choices above: a full combo's max combo is every note for any play, and the result
+carries each judgment's early / late count. The other scenes still keep their own browse and play state (the beatoraja
 runtime adapter its histories and covers); the scene sessions of the web runtime move onto these models. The skin
 packages map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
 [beatoraja-skin.md](./beatoraja-skin.md#scene-mapping)).
