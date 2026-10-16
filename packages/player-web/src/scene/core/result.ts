@@ -1,7 +1,8 @@
 import { Application, Color, Container, Graphics } from 'pixi.js';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
-import { type PixiSceneHost } from '../host.ts';
+import type { PixiScene, PixiSceneHost } from '../host.ts';
+import type { SceneIdentity } from '../../host/family-kit.ts';
 import { disposeChildren } from '../pixi-utils.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
@@ -29,8 +30,8 @@ const log = logger('result');
  *
  * The timer ladder we drive:
  *
- * - **timer 0** — scene main, fired at mount.
- * - **timer 1** — input enable, fires {@link CoreResultView.startInputMs} ms after mount. Keyframes anchored to it
+ * - **timer 0** — scene main, fired on entry.
+ * - **timer 1** — input enable, fires {@link CoreResultView.startInputMs} ms after entry. Keyframes anchored to it
  *   animate from `time = 0` once the user is allowed to dismiss the result.
  * - **timer 150** — chart-draw start. We approximate "chart draw" as a fixed window after the input-enable delay;
  *   advancing to 150 is what pulls in the score numbers.
@@ -52,6 +53,8 @@ const log = logger('result');
 const FALLBACK_DESIGN_WIDTH = 640;
 const FALLBACK_DESIGN_HEIGHT = 480;
 const BG = new Color('#05070b');
+
+const IDENTITY: SceneIdentity = { kind: 'result', family: 'built-in' };
 
 /**
  * Approximate duration of the chart-draw animation. Mirrors the LR2 default skin's authored timeline (~3 s) so
@@ -93,7 +96,7 @@ export interface CoreResultViewOptions {
    * Callback fired when the user asks to play the same chart again from the result screen. Hosts typically start the
    * chart straight away with the options the play just ended with, skipping song select. Triggered by a bare R press
    * (no modifiers, not an auto-repeat) once the input-enable delay has elapsed, at any point of the timer ladder. Fires
-   * at most once per mount; R does nothing when this is unset.
+   * at most once per entry; R does nothing when this is unset.
    */
   onRetry?: () => void;
   /**
@@ -115,16 +118,15 @@ export interface CoreResultViewOptions {
 }
 
 /**
- * One-shot result scene. Mounted by the host with a {@link PixiGameplayResultData} payload, drives the result timer
- * ladder, and dismisses itself via `onContinue` when the user advances past timer 152.
- *
- * Lifecycle parallels the song-select view: `mount` → `render`-on-ticker until `dispose`. We don't pause the loop
- * on hide because a result scene is short-lived (host swaps it out wholesale rather than keeping it backgrounded).
+ * One-shot result scene. Shown by the host ({@link PixiSceneHost.setScene}) after {@link setResult} hands it a
+ * {@link PixiGameplayResultData} payload, drives the result timer ladder, and dismisses itself via `onContinue` when
+ * the user advances past timer 152. It renders on the ticker from {@link enter} to {@link exit}; the host disposes it
+ * once it is gone rather than keeping it backgrounded.
  */
-export class CoreResultView {
+export class CoreResultView implements PixiScene {
   private host: PixiSceneHost | undefined;
-  private readonly sceneRoot = new Container();
-  private readonly root = new Container();
+  public readonly root: Container = new Container();
+  private readonly designRoot = new Container();
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
   /** Layer the theme hook paints into; cleared (and its children destroyed) every frame. */
@@ -148,11 +150,13 @@ export class CoreResultView {
   private cachedDesignHeight = -1;
   protected result: PixiGameplayResultData | undefined;
   /**
-   * `performance.now()` of mount — reference point for timer 0 and the input-enable-derived timer 1 / 150.
+   * `performance.now()` of entry — reference point for timer 0 and the input-enable-derived timer 1 / 150.
    */
   private sceneStartedAt = 0;
   /** Whether the render loop is currently attached to the host's `app.ticker`; replaces the previous standalone rAF. */
   private tickerAttached = false;
+  /** Between {@link enter} and {@link exit}. */
+  private entered = false;
   /** Tick handler bound once so the host ticker can register / unregister it by reference. */
   private readonly tickerHandle = (): void => {
     if (this.disposed) return;
@@ -164,9 +168,8 @@ export class CoreResultView {
   /** Latched once `onContinue` fires: later clicks and keys (say, in the play the host starts next) are ignored. */
   private continued = false;
   /**
-   * Web Audio plumbing for the result-screen BGM. Created lazily the first time `mount` runs and torn down by
-   * `dispose`. The scene is one-shot (host destroys + recreates between charts) so we don't bother caching the decoded
-   * buffer across mounts.
+   * Web Audio plumbing for the result-screen BGM. Created on entry and torn down by `exit`. The scene is one-shot (host
+   * destroys + recreates between charts) so we don't bother caching the decoded buffer across entries.
    */
   private bgmContext: AudioContext | undefined;
   private bgmSource: AudioBufferSourceNode | undefined;
@@ -193,9 +196,13 @@ export class CoreResultView {
     this.skinBinding?.setSettings(stored);
   }
 
+  public get identity(): SceneIdentity {
+    return IDENTITY;
+  }
+
   private get app(): Application {
     if (!this.host) {
-      throw new Error('PixiResultView: app accessed before mount');
+      throw new Error('PixiResultView: app accessed before enter');
     }
     return this.host.app;
   }
@@ -208,17 +215,17 @@ export class CoreResultView {
     return undefined;
   }
 
-  /** Delay (ms after mount) before input is accepted and timers 1 / 150 fire. */
+  /** Delay (ms after entry) before input is accepted and timers 1 / 150 fire. */
   protected get startInputMs(): number {
     return DEFAULT_STARTINPUT_MS;
   }
 
-  /** Kicks off async theme asset loading at mount. Implementations call `render()` once assets land. */
+  /** Kicks off async theme asset loading at the first entry. Implementations call `render()` once assets land. */
   protected prepareTheme(): void {}
 
   /**
    * Paints the current frame into {@link skinLayer}. Return `true` when the theme painted the frame (the be-music
-   * fallback panel is then skipped), `false` to fall through to it. Only called while a result is mounted.
+   * fallback panel is then skipped), `false` to fall through to it. Only called while a result is set.
    */
   protected renderTheme(): boolean {
     return false;
@@ -228,27 +235,26 @@ export class CoreResultView {
   protected disposeTheme(): void {}
 
   /**
-   * Mounts the scene onto the shared host's stage and starts the render loop. The result payload is stored verbatim —
-   * no defensive copy — because the gameplay view that produced it will be disposed shortly after the host calls this
-   * method, so the snapshot won't change underneath us.
+   * The play the screen shows; set it before the scene is entered. Stored verbatim — no defensive copy — because the
+   * gameplay view that produced it is disposed once the result shows, so the snapshot won't change underneath us.
    */
-  public async mount(host: PixiSceneHost, result: PixiGameplayResultData): Promise<void> {
-    this.host = host;
+  public setResult(result: PixiGameplayResultData): void {
     this.result = result;
-    this.sceneRoot.label = 'result/scene';
-    this.root.label = 'result/root';
-    this.viewportBackground.label = 'result/viewport-bg';
-    this.background.label = 'result/background';
-    this.skinLayer.label = 'result/skin';
-    this.fallbackLayer.label = 'result/fallback';
-    this.designClipMask.label = 'result/design-clip';
-    this.sceneRoot.addChild(this.viewportBackground, this.root);
-    this.root.addChild(this.background, this.skinLayer, this.fallbackLayer, this.designClipMask);
-    this.root.mask = this.designClipMask;
-    host.app.stage.addChild(this.sceneRoot);
+  }
+
+  /**
+   * Shows the result (see {@link PixiScene.enter}): the first entry builds the scene graph and starts the theme's
+   * asset load; each one wires the keys and clicks, starts drawing, runs the timer ladder from timer 0 and plays the
+   * jingle.
+   */
+  public enter(host: PixiSceneHost): void {
+    if (this.disposed || this.entered) return;
+    const firstEntry = this.host === undefined;
+    if (firstEntry) this.build(host);
+    this.entered = true;
     window.addEventListener('keydown', this.handleKeyDown);
     host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
-    this.prepareTheme();
+    if (firstEntry) this.prepareTheme();
     this.sceneStartedAt = performance.now();
     this.timerStartedAt.clear();
     this.retryRequested = false;
@@ -277,7 +283,50 @@ export class CoreResultView {
     );
     this.render();
     this.startAnimationLoop();
-    void this.startResultBgm(result);
+    if (this.result) void this.startResultBgm(this.result);
+  }
+
+  /** Stops the timer ladder, drawing, input and the jingle (see {@link PixiScene.exit}). */
+  public exit(): void {
+    if (!this.entered) return;
+    this.entered = false;
+    for (const timeout of this.timeoutHandles) {
+      window.clearTimeout(timeout);
+    }
+    this.timeoutHandles.clear();
+    this.stopAnimationLoop();
+    if (this.bgmSource) {
+      try {
+        this.bgmSource.stop();
+        this.bgmSource.disconnect();
+      } catch {
+        // Already stopped / disconnected — ignore.
+      }
+      this.bgmSource = undefined;
+    }
+    if (this.bgmContext) {
+      void this.bgmContext.close().catch(() => undefined);
+      this.bgmContext = undefined;
+    }
+    window.removeEventListener('keydown', this.handleKeyDown);
+    if (this.host) {
+      this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
+    }
+  }
+
+  /** Builds the scene graph under {@link root}, once. */
+  private build(host: PixiSceneHost): void {
+    this.host = host;
+    this.root.label = 'result/scene';
+    this.designRoot.label = 'result/root';
+    this.viewportBackground.label = 'result/viewport-bg';
+    this.background.label = 'result/background';
+    this.skinLayer.label = 'result/skin';
+    this.fallbackLayer.label = 'result/fallback';
+    this.designClipMask.label = 'result/design-clip';
+    this.root.addChild(this.viewportBackground, this.designRoot);
+    this.designRoot.addChild(this.background, this.skinLayer, this.fallbackLayer, this.designClipMask);
+    this.designRoot.mask = this.designClipMask;
   }
 
   /**
@@ -299,9 +348,10 @@ export class CoreResultView {
       audioContext = new AudioContext();
       this.bgmContext = audioContext;
       const buffer = await audioContext.decodeAudioData(bytes.slice().buffer);
-      if (this.disposed) {
+      // Gone off stage (or disposed) while decoding: `exit` closed the context and let it go.
+      if (this.disposed || this.bgmContext !== audioContext) {
         await audioContext.close().catch(() => undefined);
-        this.bgmContext = undefined;
+        if (this.bgmContext === audioContext) this.bgmContext = undefined;
         return;
       }
       const source = audioContext.createBufferSource();
@@ -327,30 +377,9 @@ export class CoreResultView {
       return;
     }
     this.disposed = true;
-    for (const timeout of this.timeoutHandles) {
-      window.clearTimeout(timeout);
-    }
-    this.timeoutHandles.clear();
-    this.stopAnimationLoop();
-    if (this.bgmSource) {
-      try {
-        this.bgmSource.stop();
-        this.bgmSource.disconnect();
-      } catch {
-        // Already stopped / disconnected — ignore.
-      }
-      this.bgmSource = undefined;
-    }
-    if (this.bgmContext) {
-      void this.bgmContext.close().catch(() => undefined);
-      this.bgmContext = undefined;
-    }
-    window.removeEventListener('keydown', this.handleKeyDown);
-    if (this.host) {
-      this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
-    }
-    if (this.sceneRoot.parent) {
-      this.sceneRoot.parent.removeChild(this.sceneRoot);
+    this.exit();
+    if (this.root.parent) {
+      this.root.parent.removeChild(this.root);
     }
     try {
       this.disposeTheme();
@@ -362,9 +391,9 @@ export class CoreResultView {
       this.skinBinding = undefined;
       this.songImages?.dispose();
       this.songImages = undefined;
-      this.sceneRoot.destroy({ children: true, context: true });
+      this.root.destroy({ children: true, context: true });
     } catch (error) {
-      log.warn('sceneRoot.destroy threw', error);
+      log.warn('root.destroy threw', error);
     }
     this.host = undefined;
   }
@@ -415,8 +444,8 @@ export class CoreResultView {
       this.cachedScreenWidth = screenWidth;
       this.cachedScreenHeight = screenHeight;
     }
-    this.root.position.set(viewport.x, viewport.y);
-    this.root.scale.set(viewport.scale);
+    this.designRoot.position.set(viewport.x, viewport.y);
+    this.designRoot.scale.set(viewport.scale);
     this.host?.setStageOrientation(themeSize ? 'landscape' : resolveStageOrientation(stage));
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);

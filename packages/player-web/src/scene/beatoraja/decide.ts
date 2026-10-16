@@ -154,6 +154,7 @@ const DEFAULT_DECIDE_INPUT_MS = 500;
 
 export class PixiBeatorajaDecideScene implements PixiScene {
   readonly root: Container = new Container();
+  readonly identity = { kind: 'decide', family: 'beatoraja' } as const;
   private readonly backdrop = new Graphics();
   private view: BeatorajaPlaySkinView;
   private readonly options: PixiBeatorajaDecideSceneOptions;

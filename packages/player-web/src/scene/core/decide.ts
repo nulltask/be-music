@@ -1,5 +1,6 @@
 import { Color, Container, Graphics } from 'pixi.js';
-import { type PixiSceneHost } from '../host.ts';
+import type { PixiScene, PixiSceneHost } from '../host.ts';
+import type { SceneIdentity } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import { resolveSongSource } from '../../collection/collection.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
@@ -18,6 +19,8 @@ import { DEFAULT_PLAY_OPTIONS } from './select.ts';
 const log = logger('decide');
 
 const BG = new Color('#05070b');
+
+const IDENTITY: SceneIdentity = { kind: 'decide', family: 'built-in' };
 
 /** What a key press does on the decide screen. */
 export type DecideKeyAction = 'continue' | 'cancel';
@@ -64,12 +67,13 @@ export interface CoreDecideViewOptions {
  * The be-music skin's decide screen, shown between picking a chart and the play: draws `skin.decide` every frame for
  * its `durationMs`, then continues. Enter / Space / a click skip ahead and Escape cancels back to select, as on the LR2
  * decide scene (without its `#STARTINPUT` input lock, which a be-music skin doesn't declare). The view owns its scene
- * graph and the song images it loaded, both released by {@link dispose}.
+ * graph and the song images it loaded, both released by {@link dispose}. Hosts show it with
+ * {@link PixiSceneHost.setScene} after {@link setTarget}.
  */
-export class CoreDecideView {
+export class CoreDecideView implements PixiScene {
   private host: PixiSceneHost | undefined;
-  private readonly sceneRoot = new Container();
-  private readonly root = new Container();
+  public readonly root: Container = new Container();
+  private readonly designRoot = new Container();
   private readonly viewportBackground = new Graphics();
   private readonly designClipMask = new Graphics();
   private cachedScreenWidth = -1;
@@ -82,6 +86,8 @@ export class CoreDecideView {
   private mountedAt = 0;
   private advanceTimer: ReturnType<typeof setTimeout> | undefined;
   private tickerAttached = false;
+  /** Between {@link enter} and {@link exit}. */
+  private entered = false;
   private disposed = false;
   private finished = false;
   private readonly options: CoreDecideViewOptions;
@@ -105,35 +111,29 @@ export class CoreDecideView {
     this.binding?.setSettings(stored);
   }
 
+  public get identity(): SceneIdentity {
+    return IDENTITY;
+  }
+
   /** How long the screen shows before continuing: the skin's `decide.durationMs`, 0 when it has no decide screen. */
   public get durationMs(): number {
     return this.binding?.durationMs ?? 0;
   }
 
-  public async mount(host: PixiSceneHost, target: CoreDecideTarget): Promise<void> {
-    this.host = host;
+  /** What the screen shows: the chart about to be played. Set it before the scene is entered. */
+  public setTarget(target: CoreDecideTarget): void {
     this.target = target;
-    const skin = this.options.beMusicSkin;
-    this.sceneRoot.label = 'decide/scene';
-    this.root.label = 'decide/root';
-    this.viewportBackground.label = 'decide/viewport-bg';
-    this.designClipMask.label = 'decide/design-clip';
-    this.sceneRoot.addChild(this.viewportBackground, this.root);
-    if (skin.decide) {
-      const collection = target.collection;
-      this.songImages = new SongImageCache({
-        resolveSource: (song) => (collection ? resolveSongSource(collection, song) : undefined),
-      });
-      this.binding = new BeMusicDecideBinding(skin, {
-        songImage: this.songImages.lookup,
-        settings: this.beMusicSkinSettings,
-        renderer: host.app.renderer,
-      });
-      this.root.addChild(this.binding.view);
-    }
-    this.root.addChild(this.designClipMask);
-    this.root.mask = this.designClipMask;
-    host.app.stage.addChild(this.sceneRoot);
+  }
+
+  /**
+   * Shows the screen (see {@link PixiScene.enter}): the first entry builds the scene graph, each one wires Enter /
+   * Space / Escape and clicks, starts drawing and runs the screen's time from its start.
+   */
+  public enter(host: PixiSceneHost): void {
+    if (this.disposed || this.entered) return;
+    if (this.host === undefined) this.build(host);
+    this.entered = true;
+    this.finished = false;
     window.addEventListener('keydown', this.handleKeyDown);
     host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
     this.mountedAt = performance.now();
@@ -146,9 +146,10 @@ export class CoreDecideView {
     this.tickerAttached = true;
   }
 
-  public dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
+  /** Stops the screen's time, drawing and input (see {@link PixiScene.exit}). */
+  public exit(): void {
+    if (!this.entered) return;
+    this.entered = false;
     if (this.advanceTimer !== undefined) {
       clearTimeout(this.advanceTimer);
       this.advanceTimer = undefined;
@@ -159,13 +160,44 @@ export class CoreDecideView {
     }
     window.removeEventListener('keydown', this.handleKeyDown);
     this.host?.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
-    this.sceneRoot.parent?.removeChild(this.sceneRoot);
+  }
+
+  /** Builds the scene graph under {@link root} and the skin's binding, once. */
+  private build(host: PixiSceneHost): void {
+    this.host = host;
+    const skin = this.options.beMusicSkin;
+    this.root.label = 'decide/scene';
+    this.designRoot.label = 'decide/root';
+    this.viewportBackground.label = 'decide/viewport-bg';
+    this.designClipMask.label = 'decide/design-clip';
+    this.root.addChild(this.viewportBackground, this.designRoot);
+    if (skin.decide) {
+      const collection = this.target?.collection;
+      this.songImages = new SongImageCache({
+        resolveSource: (song) => (collection ? resolveSongSource(collection, song) : undefined),
+      });
+      this.binding = new BeMusicDecideBinding(skin, {
+        songImage: this.songImages.lookup,
+        settings: this.beMusicSkinSettings,
+        renderer: host.app.renderer,
+      });
+      this.designRoot.addChild(this.binding.view);
+    }
+    this.designRoot.addChild(this.designClipMask);
+    this.designRoot.mask = this.designClipMask;
+  }
+
+  public dispose(): void {
+    if (this.disposed) return;
+    this.exit();
+    this.disposed = true;
+    this.root.parent?.removeChild(this.root);
     try {
       this.binding?.dispose();
       this.binding = undefined;
       this.songImages?.dispose();
       this.songImages = undefined;
-      this.sceneRoot.destroy({ children: true, context: true });
+      this.root.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('decide cleanup threw', error);
     }
@@ -191,8 +223,8 @@ export class CoreDecideView {
       this.cachedScreenWidth = screenWidth;
       this.cachedScreenHeight = screenHeight;
     }
-    this.root.position.set(viewport.x, viewport.y);
-    this.root.scale.set(viewport.scale);
+    this.designRoot.position.set(viewport.x, viewport.y);
+    this.designRoot.scale.set(viewport.scale);
     host.setStageOrientation(resolveStageOrientation({ width: designWidth, height: designHeight }));
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);

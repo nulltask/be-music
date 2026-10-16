@@ -25,6 +25,7 @@ import {
   snapHiSpeed,
   type PixiGameplayResultData,
   type PixiPlayOptions,
+  type PixiScene,
   type PixiSongSelectNavigation,
   resolveSceneCourseInfo,
   type SceneCourseInfo,
@@ -329,7 +330,6 @@ import {
   resultFromSummary,
   judgedOf,
   TestHookRecorder,
-  type TestHookFamily,
   type TestHookLiveState,
 } from './test-hook.ts';
 import './styles.css';
@@ -1029,10 +1029,10 @@ class PlayerWebDemoApp {
       input.value = '';
       void (async () => {
         // Browser file-picker drops go through the same loading overlay as drag-drop so a folder picked via the GUI
-        // shows progress too. Hide the select scene up-front so its rendering / BGM stays paused while we read + parse
-        // — the user shouldn't see the song list flicker mid-load.
+        // shows progress too. Take the select scene off the stage up-front so its rendering / BGM stays paused while we
+        // read + parse — the user shouldn't see the song list flicker mid-load.
         showLoadingOverlay(this.elements);
-        this.selectView?.setVisible(false);
+        await this.leaveScene(this.selectView);
         try {
           // Route through the same post-enumeration pipeline as drag-drop so the picker's selection produces a theme +
           // songs split (handy when a user hand-picks a folder whose root carries both an LR2 theme and a BMS pack),
@@ -1134,6 +1134,28 @@ class PlayerWebDemoApp {
     this.sceneHost.app.ticker.add(this.syncGameplayShellState);
   }
 
+  /**
+   * Takes `scene` off the stage when it is the one showing, leaving no scene up; any other scene stays. The select
+   * scene goes off this way while files load or a play gets ready (its BGM, preview and drawing pause until it is shown
+   * again).
+   */
+  private async leaveScene(scene: PixiScene | undefined): Promise<void> {
+    if (scene !== undefined && this.sceneHost.getCurrentScene() === scene) await this.sceneHost.setScene(undefined);
+  }
+
+  /**
+   * Disposes a scene that is going away (with `dispose`, when it takes options), first taking it off the stage when it
+   * is the one showing, so the stage and the test hook then show no scene rather than a disposed one.
+   */
+  private disposeScene<T extends PixiScene>(
+    scene: T | undefined,
+    dispose: (scene: T) => void = (gone) => gone.dispose(),
+  ): void {
+    if (scene === undefined) return;
+    if (this.sceneHost.getCurrentScene() === scene) void this.sceneHost.setScene(undefined);
+    dispose(scene);
+  }
+
   /** Last state {@link syncGameplayShellState} applied, so the per-frame check only touches the DOM on a change. */
   private shellGameplayState = '';
 
@@ -1157,8 +1179,7 @@ class PlayerWebDemoApp {
   /**
    * Marks the shell `in-gameplay` while a play screen is up, so the select-screen overlays (the floating Help button and
    * the search box) step aside instead of covering the skin's track plate. Checked every frame because the gameplay
-   * views are created and torn down along many paths (and attach to the stage directly rather than through
-   * `setScene`).
+   * views are created and torn down along many paths; a play being prepared behind a decide splash counts already.
    */
   private readonly syncGameplayShellState = (): void => {
     const inGameplay = this.gameplayView !== undefined || this.beatorajaGameplayView !== undefined;
@@ -1889,26 +1910,19 @@ class PlayerWebDemoApp {
 
   /** What `window.__beMusicTest` reports now (`test-hook.ts`), read from the scenes up and the state kept here. */
   private testHookState(): TestHookLiveState {
-    const family = (lr2: boolean): TestHookFamily => (lr2 ? 'lr2' : 'built-in');
-    const select = this.beatorajaSelectScene ?? (this.selectView?.isVisible() === true ? this.selectView : undefined);
-    const scene: TestHookLiveState['scene'] = this.beatorajaResultScene
-      ? { kind: 'result', family: 'beatoraja' }
-      : this.resultView
-        ? { kind: 'result', family: family(this.resultView instanceof PixiResultView) }
-        : this.beatorajaDecideScene
-          ? { kind: 'decide', family: 'beatoraja' }
-          : this.decideView
-            ? { kind: 'decide', family: family(this.decideView instanceof PixiDecideView) }
-            : this.beatorajaGameplayView
-              ? { kind: 'play', family: 'beatoraja' }
-              : this.gameplayView && this.elements.shell.classList.contains('playing')
-                ? { kind: 'play', family: family(this.gameplayView instanceof PixiGameplayView) }
-                : select === this.beatorajaSelectScene && select !== undefined
-                  ? { kind: 'select', family: 'beatoraja' }
-                  : select !== undefined
-                    ? { kind: 'select', family: family(select instanceof PixiSongSelectView) }
-                    : { kind: 'none' };
-    const entry = scene.kind === 'select' ? select?.getFocusedEntry() : undefined;
+    // The scene showing names itself; none shows between screens.
+    const current = this.sceneHost.getCurrentScene();
+    const scene: TestHookLiveState['scene'] =
+      current === undefined ? { kind: 'none' } : { kind: current.identity.kind, family: current.identity.family };
+    const select =
+      scene.kind !== 'select'
+        ? undefined
+        : current === this.beatorajaSelectScene
+          ? this.beatorajaSelectScene
+          : current === this.selectView
+            ? this.selectView
+            : undefined;
+    const entry = select?.getFocusedEntry();
     const play = scene.kind === 'play' ? this.lastPlay : undefined;
     // The engine's frame on the beatoraja scene; the play's running result on the LR2 / built-in ones.
     const frame = this.beatorajaGameplayView?.getFrame();
@@ -1927,9 +1941,9 @@ class PlayerWebDemoApp {
         scene.kind === 'select'
           ? {
               folderPath: [
-                ...(this.beatorajaSelectScene?.captureSnapshot().folderPath ??
-                  this.selectView?.getNavigation().folderPath ??
-                  []),
+                ...((select instanceof PixiBeatorajaSelectScene
+                  ? select.captureSnapshot().folderPath
+                  : select?.getNavigation().folderPath) ?? []),
               ],
               bar:
                 entry &&
@@ -2017,16 +2031,17 @@ class PlayerWebDemoApp {
     // with tens of thousands of WAVs visibly stalls the UI for several seconds, and we want the user to see "we're
     // working on it" immediately rather than after the slow phase finishes.
     showLoadingOverlay(this.elements);
-    // Take the select scene offline for the duration of the load. `setVisible(false)` pauses BGM + the rAF tick + the
-    // song list rendering, so:
+    // Take the select scene off the stage for the duration of the load. Its exit pauses BGM + the rAF tick + the song
+    // list rendering, so:
     //
     // - the loaded LR2 theme's `select.wav` doesn't start the moment the (small) theme bundle finishes parsing while
     //   the (large) song collection is still being read,
     // - the song list doesn't visually shuffle as new entries land,
     // - and the user only sees the overlay until everything is ready — not a half-rendered scene behind it.
     //
-    // `showSelect()` at the end of the try block re-enables the scene with the freshly populated state in one shot.
-    this.selectView?.setVisible(false);
+    // `showSelect()` at the end of the try block shows the scene again with the freshly populated state in one shot.
+    // Not awaited: the drop's items must be read before this handler yields.
+    void this.leaveScene(this.selectView);
     try {
       const files = await readDroppedFiles(dataTransfer, {
         onProgress: (progress) => applyLoadProgress(this.elements, progress),
@@ -2782,7 +2797,7 @@ class PlayerWebDemoApp {
       return;
     }
     showLoadingOverlay(this.elements);
-    this.selectView?.setVisible(false);
+    await this.leaveScene(this.selectView);
     try {
       if (params.skinUrl) {
         this.setStatus('Fetching skin…');
@@ -2937,7 +2952,7 @@ class PlayerWebDemoApp {
     if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
       this.lastSelectNavigation = this.selectView.getNavigation();
     }
-    this.selectView?.dispose();
+    this.disposeScene(this.selectView);
     this.selectView = undefined;
     await this.mountLr2Theme(theme.files, theme.name);
     await this.showSelect();
@@ -3299,12 +3314,12 @@ class PlayerWebDemoApp {
     if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
       this.lastSelectNavigation = this.selectView.getNavigation();
     }
-    this.selectView?.dispose();
+    this.disposeScene(this.selectView);
     this.selectView = undefined;
     if (this.beatorajaSelectScene !== undefined) {
       this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
     }
-    this.beatorajaSelectScene?.dispose();
+    this.disposeScene(this.beatorajaSelectScene);
     this.beatorajaSelectScene = undefined;
     void this.showSelect();
   }
@@ -3375,10 +3390,10 @@ class PlayerWebDemoApp {
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
-    this.selectView?.setVisible(false);
-    this.decideView?.dispose();
+    await this.leaveScene(this.selectView);
+    this.disposeScene(this.decideView);
     this.decideView = undefined;
-    this.gameplayView?.dispose();
+    this.disposeScene(this.gameplayView);
     this.gameplayView = undefined;
     this.disposeBeatorajaGameplay();
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
@@ -3848,7 +3863,7 @@ class PlayerWebDemoApp {
     if (this.beatorajaSelectScene !== undefined) {
       this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
     }
-    this.beatorajaSelectScene?.dispose();
+    this.disposeScene(this.beatorajaSelectScene);
     this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
       skin: skinLoad.skin,
       // The page's search field (IME and all) does the typing; the scene only filters.
@@ -4181,7 +4196,7 @@ class PlayerWebDemoApp {
 
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
-    this.selectView?.setVisible(false);
+    await this.leaveScene(this.selectView);
     // Capture the select scene's state before disposing — the user picked a song and is
     // heading into decide → play. When they come back via the result scene's "back to
     // select" path we re-mount with this snapshot so they land in the same folder / cursor /
@@ -4189,9 +4204,9 @@ class PlayerWebDemoApp {
     if (this.beatorajaSelectScene !== undefined) {
       this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
     }
-    this.beatorajaSelectScene?.dispose();
+    this.disposeScene(this.beatorajaSelectScene);
     this.beatorajaSelectScene = undefined;
-    this.beatorajaDecideScene?.dispose();
+    this.disposeScene(this.beatorajaDecideScene);
 
     // Resolve `#IF` / `#RANDOM` once at decide entry so the decide skin's bpmgraph plots the SAME branches the
     // gameplay scene will play. The resolution (chart + draws) is cached on the demo and handed to
@@ -4336,7 +4351,7 @@ class PlayerWebDemoApp {
     }
 
     await this.ensureHostMounted();
-    this.beatorajaResultScene?.dispose();
+    this.disposeScene(this.beatorajaResultScene);
 
     // Decode the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps so the result skin's
     // synthetic-id destinations (-100 / -101 / -102) can paint them. Reuses the same loader
@@ -4743,7 +4758,7 @@ class PlayerWebDemoApp {
 
   /** Tear down the active beatoraja gameplay view + its prep bundle. Idempotent. */
   private disposeBeatorajaGameplay(): void {
-    this.beatorajaGameplayView?.dispose();
+    this.disposeScene(this.beatorajaGameplayView);
     this.beatorajaGameplayView = undefined;
     this.currentBeatorajaPlayVariant = undefined;
     if (this.beatorajaGameplayPrep) {
@@ -4788,14 +4803,14 @@ class PlayerWebDemoApp {
     // canvas.
     this.elements.shell.classList.toggle('empty', this.collection.songs.length === 0);
     await this.ensureHostMounted();
-    this.gameplayView?.dispose();
+    this.disposeScene(this.gameplayView);
     this.gameplayView = undefined;
     this.disposeBeatorajaGameplay();
-    this.resultView?.dispose();
+    this.disposeScene(this.resultView);
     this.resultView = undefined;
     // Decide splash is cleared too — Escape from the splash should land back on the select scene rather than leave the
     // splash drawing over it.
-    this.decideView?.dispose();
+    this.disposeScene(this.decideView);
     this.decideView = undefined;
     // Family dispatch. The Debug Menu's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default);
     // when the user hasn't overridden, the auto branch matches the legacy behaviour. The select scene also
@@ -4803,8 +4818,9 @@ class PlayerWebDemoApp {
     // non-empty library (it paints empty-state hints separately from the LR2 path).
     const activeFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'select');
     if (activeFamily === 'beatoraja' && this.collection.songs.length > 0) {
-      // Hide / dispose the LR2 select view if it was up — only one select can own the scene host.
-      this.selectView?.setVisible(false);
+      // Take the LR2 / built-in select view off the stage if it was up (it stays alive) — only one select can own the
+      // scene host.
+      await this.leaveScene(this.selectView);
       await this.showBeatorajaSelect();
       return;
     }
@@ -4815,13 +4831,13 @@ class PlayerWebDemoApp {
     if (this.beatorajaSelectScene !== undefined) {
       this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
     }
-    this.beatorajaSelectScene?.dispose();
+    this.disposeScene(this.beatorajaSelectScene);
     this.beatorajaSelectScene = undefined;
     // Decide / result splashes don't outlive a return to select either — the gameplay-skinned
     // chrome they paint would otherwise overlay the select scene.
-    this.beatorajaDecideScene?.dispose();
+    this.disposeScene(this.beatorajaDecideScene);
     this.beatorajaDecideScene = undefined;
-    this.beatorajaResultScene?.dispose();
+    this.disposeScene(this.beatorajaResultScene);
     this.beatorajaResultScene = undefined;
     // The active family for this select mount. `'lr2'` flows the loaded LR2 select skin through, `'default'` strips
     // it so the underlying scene paints built-in chrome regardless of what's loaded. The beatoraja branch returned
@@ -4833,24 +4849,25 @@ class PlayerWebDemoApp {
       // below as the LR2 scene, carrying the cursor and the live play options across.
       this.lastSelectNavigation ??= this.selectView.getNavigation();
       carriedPlayOptions = this.selectView.getPlayOptions();
-      this.selectView.dispose();
+      this.disposeScene(this.selectView);
       this.selectView = undefined;
     }
-    if (this.selectView) {
-      // Push the latest theme assets onto the view BEFORE flipping it visible. Order matters — `setSelectBgm` no-ops
-      // when the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps
-      // the bytes, and (because we're still hidden) defers the actual `start()` until `setVisible(true)` lands a moment
-      // later. Doing it the other way round would briefly start the prior theme's BGM during the visibility flip.
-      if (this.selectView instanceof PixiSongSelectView) {
-        this.selectView.setSkin(lr2SelectSkin);
+    const kept = this.selectView;
+    if (kept) {
+      // Push the latest theme assets onto the view BEFORE showing it again. Order matters — `setSelectBgm` no-ops when
+      // the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps the
+      // bytes, and (because the view is still off stage) defers the actual `start()` until it re-enters a moment
+      // later. Doing it the other way round would briefly start the prior theme's BGM as it comes back.
+      if (kept instanceof PixiSongSelectView) {
+        kept.setSkin(lr2SelectSkin);
       }
-      this.selectView.setSelectBgm(this.selectBgmBytes);
-      this.selectView.setDecideBgm(this.decideBgmBytes);
-      this.selectView.setSystemSounds(this.systemSoundBundle);
-      this.selectView.setCollection(this.collection);
-      this.selectView.setVisible(true);
+      kept.setSelectBgm(this.selectBgmBytes);
+      kept.setDecideBgm(this.decideBgmBytes);
+      kept.setSystemSounds(this.systemSoundBundle);
+      kept.setCollection(this.collection);
+      await this.sceneHost.setScene(kept);
       if (this.lastSelectNavigation) {
-        this.selectView.setNavigation(this.lastSelectNavigation);
+        kept.setNavigation(this.lastSelectNavigation);
       }
       return;
     }
@@ -4921,7 +4938,7 @@ class PlayerWebDemoApp {
       onCourseNameActivate: () => this.courseMakerPanel?.focusName(),
       onCourseDeleteRequest: (course: CourseDefinition) => this.courseMakerPanel?.confirmDelete(course),
     };
-    this.selectView = lr2SelectSkin
+    const view = lr2SelectSkin
       ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
       : new DefaultPixiSongSelectView({
           ...selectSceneOptions,
@@ -4929,8 +4946,9 @@ class PlayerWebDemoApp {
           beMusicEffects: this.guiState.skinEffects,
           beMusicSkinSettings: this.beMusicSkinSettings,
         });
-    await this.selectView.mount(this.sceneHost);
-    this.selectView.setCollection(this.collection);
+    this.selectView = view;
+    await this.sceneHost.setScene(view);
+    view.setCollection(this.collection);
     this.scheduleFirstRunResolutionDetect();
   }
 
@@ -5036,13 +5054,14 @@ class PlayerWebDemoApp {
     }
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
-    this.selectView?.setVisible(false);
-    this.decideView?.dispose();
-    this.gameplayView?.dispose();
+    await this.leaveScene(this.selectView);
+    this.disposeScene(this.decideView);
+    this.disposeScene(this.gameplayView);
     this.gameplayView = undefined;
     // Build the gameplay view eagerly and kick off its heavy load (chart parse, audio decode, BGA preload) IN PARALLEL
-    // with the Decide animation. The Decide splash typically runs ~3 s; chart asset decoding is mostly done by the time
-    // the splash auto-advances, so the hand-off to gameplay becomes instant instead of dropping a frozen frame.
+    // with the Decide animation, off stage (`prepare` attaches nothing until the play is shown). The Decide splash
+    // typically runs ~3 s; chart asset decoding is mostly done by the time the splash auto-advances, so the hand-off to
+    // gameplay becomes instant instead of dropping a frozen frame.
     // A course starts its own play once the splash is done, so nothing is preloaded for it; nor for a play on the
     // beatoraja scene, which prepares its own chart once the splash is done (`playSong`).
     const preloaded = then === undefined && !playsOnBeatoraja ? this.preloadGameplay(song, overrides) : undefined;
@@ -5058,7 +5077,7 @@ class PlayerWebDemoApp {
       onContinue: () =>
         advance(() => {
           if (preloaded === undefined) {
-            this.decideView?.dispose();
+            this.disposeScene(this.decideView);
             this.decideView = undefined;
             void start();
             return;
@@ -5068,7 +5087,7 @@ class PlayerWebDemoApp {
       onCancel: () =>
         advance(() => {
           // User backed out of the splash — abandon the prepared gameplay scene before falling back to the select view.
-          this.gameplayView?.dispose();
+          this.disposeScene(this.gameplayView);
           this.gameplayView = undefined;
           then?.cancel?.();
           void this.showSelect();
@@ -5086,13 +5105,14 @@ class PlayerWebDemoApp {
             : {}),
         })
       : new PixiDecideView({ ...callbacks, skin: this.decideSkin });
-    await this.decideView.mount(this.sceneHost, { song, collection: this.collection });
+    this.decideView.setTarget({ song, collection: this.collection });
+    await this.sceneHost.setScene(this.decideView);
   }
 
   /**
    * Constructs a fresh `PixiGameplayView` with the current play-options snapshot and starts its `prepare()` against the
-   * shared host. The returned promise resolves once chart audio is decoded — the host awaits it inside the Decide
-   * `onContinue` handler before flipping the scene visible.
+   * shared host, off stage. The returned promise resolves once chart audio is decoded — the host awaits it inside the
+   * Decide `onContinue` handler before showing the play.
    *
    * Wired up here (rather than inline in `showDecide`) because the same option-marshalling + callback wiring is needed
    * whether we're going through Decide or the no-decide fast-path. `playSong` shares this construction shape.
@@ -5292,7 +5312,7 @@ class PlayerWebDemoApp {
             this.testHook?.recordPlaylog(result.playlog);
             this.activeCourse?.run.recordStage(result.playlog, result);
             this.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
-            this.gameplayView?.dispose({ preserveAudioTail: true });
+            this.disposeScene(this.gameplayView, (view) => view.dispose({ preserveAudioTail: true }));
             this.gameplayView = undefined;
             this.unlockPlaylogOptions();
             this.continueCourse();
@@ -5356,19 +5376,23 @@ class PlayerWebDemoApp {
       await preloaded;
     } catch (error) {
       gameplayLog.warn('preload failed; falling back to no-decide path', error);
-      this.gameplayView?.dispose();
+      this.disposeScene(this.gameplayView);
       this.gameplayView = undefined;
-      this.decideView?.dispose();
+      this.disposeScene(this.decideView);
       this.decideView = undefined;
       await this.playSong(song, overrides);
       return;
     }
-    if (!this.gameplayView) return;
+    const view = this.gameplayView;
+    if (!view) return;
     this.elements.shell.classList.add('playing');
     this.lastSelectNavigation = this.selectView?.getNavigation();
-    this.selectView?.setVisible(false);
-    this.decideView?.dispose();
+    // The splash hands the stage over: it exits as the prepared play enters, then goes.
+    const decide = this.decideView;
     this.decideView = undefined;
+    await this.sceneHost.setScene(view);
+    decide?.dispose();
+    if (this.gameplayView !== view) return;
     this.setPlayStatus(
       describePlayingStatus(song.title, {
         tempoPercent: this.guiState.tempoPercent,
@@ -5378,10 +5402,10 @@ class PlayerWebDemoApp {
     this.lockPlaylogOptionsForPlay(
       allowsLiveTempo(this.guiState, {
         replay: this.lastPlay?.overrides.replay !== undefined,
-        tempo: this.gameplayView.getTempo(),
+        tempo: view.getTempo(),
       }),
     );
-    this.gameplayView.start();
+    view.start();
     startArmedRecording(this.recordingDeps());
   }
 
@@ -5423,12 +5447,12 @@ class PlayerWebDemoApp {
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
-    this.selectView?.setVisible(false);
-    // Tear down the decide splash before mounting gameplay — both share the host stage, so leaving the decide layer
-    // alive would draw the splash on top of the gameplay scene.
-    this.decideView?.dispose();
+    await this.leaveScene(this.selectView);
+    // Tear down the decide splash before the play shows — a live one would keep taking its keys and clicks. A play
+    // being restarted (F5, R on its result) goes too; the field keeps it until the new one replaces it.
+    this.disposeScene(this.decideView);
     this.decideView = undefined;
-    this.gameplayView?.dispose();
+    this.disposeScene(this.gameplayView);
     this.disposeBeatorajaGameplay();
     // Refresh the recording filename base for the upcoming play — each session writes to a unique file in the user's
     // downloads folder rather than overwriting the previous one.
@@ -5453,17 +5477,22 @@ class PlayerWebDemoApp {
       overrides.replay === undefined && overrides.nonstop === undefined
         ? await this.resolveChartHashes(song)
         : undefined;
-    this.gameplayView = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
+    const view = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
+    this.gameplayView = view;
     // A replay plays at its recorded tempo, unless the Replay / ghost options keep the viewer's own.
     const tempoPercent =
-      overrides.replay !== undefined ? tempoPercentFromTempo(this.gameplayView.getTempo()) : this.guiState.tempoPercent;
+      overrides.replay !== undefined ? tempoPercentFromTempo(view.getTempo()) : this.guiState.tempoPercent;
     this.setPlayStatus(describePlayingStatus(song.title, { tempoPercent, replay: overrides.replay !== undefined }));
     this.lockPlaylogOptionsForPlay(
-      allowsLiveTempo(this.guiState, { replay: overrides.replay !== undefined, tempo: this.gameplayView.getTempo() }),
+      allowsLiveTempo(this.guiState, { replay: overrides.replay !== undefined, tempo: view.getTempo() }),
     );
-    await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));
-    // Consume the "user pressed Record on the select screen" flag now that gameplay is mounted — `startRecording`
-    // requires the gameplay AudioContext to exist, which only happens after `mount`. Failing here is non-fatal: the
+    // No splash covers the load window here: the play shows first, so `prepare` draws the playfield in its loading
+    // state while the chart's audio decodes, then the play starts.
+    await this.sceneHost.setScene(view);
+    await view.prepare(this.sceneHost, song, resolveSongSource(this.collection, song));
+    view.start();
+    // Consume the "user pressed Record on the select screen" flag now that gameplay is prepared — `startRecording`
+    // requires the gameplay AudioContext to exist, which only happens after `prepare`. Failing here is non-fatal: the
     // select-screen click already nudged the user that capture would start; if it doesn't (codec missing / no
     // MediaRecorder), the surfaced error replaces the armed status without breaking gameplay.
     startArmedRecording(this.recordingDeps());
@@ -5496,7 +5525,7 @@ class PlayerWebDemoApp {
     } = {},
   ): Promise<void> {
     await this.ensureHostMounted();
-    this.resultView?.dispose();
+    this.disposeScene(this.resultView);
     // A stage of a running course: its play log carries the course on, and dismissing its result plays the next stage.
     const courseStage = mode.course === undefined && mode.nonstop === undefined && this.activeCourse !== undefined;
     const run =
@@ -5560,7 +5589,7 @@ class PlayerWebDemoApp {
         if (courseStage && this.activeCourse !== undefined) {
           // The next stage does not tear the result view down, and a live one would keep taking its clicks and keys
           // (Enter / Space / Escape) during that stage, starting it over: drop it first.
-          this.resultView?.dispose();
+          this.disposeScene(this.resultView);
           this.resultView = undefined;
           this.continueCourse();
           return;
@@ -5572,7 +5601,7 @@ class PlayerWebDemoApp {
             onRetry: () => {
               // Straight back into the chart, skipping select and decide. `playSong` tears down gameplay / decide but
               // not the result view, so drop it (and its BGM) first.
-              this.resultView?.dispose();
+              this.disposeScene(this.resultView);
               this.resultView = undefined;
               retry();
             },
@@ -5591,8 +5620,10 @@ class PlayerWebDemoApp {
           beMusicEffects: this.guiState.skinEffects,
           beMusicSkinSettings: this.beMusicSkinSettings,
         });
-    await this.resultView.mount(this.sceneHost, data);
-    this.gameplayView?.dispose({ preserveAudioTail: true });
+    this.resultView.setResult(data);
+    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`).
+    await this.sceneHost.setScene(this.resultView);
+    this.disposeScene(this.gameplayView, (view) => view.dispose({ preserveAudioTail: true }));
     this.gameplayView = undefined;
     this.setPlayStatus(`Result: ${data.song.title}`);
     if (this.testHook !== undefined) {
