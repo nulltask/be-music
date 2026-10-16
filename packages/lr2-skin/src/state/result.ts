@@ -200,6 +200,10 @@ function resultText(st: number, input: Lr2ResultInput): string | undefined {
       return 'TARGET';
     case LR2_TEXT.PLAYER:
       return 'PLAYER';
+    case LR2_TEXT.TITLE_ALT:
+      // LR2 reuses text 20 for the internet ranking's message once a play is saved (OpenLR2 `SaveResult` clears it,
+      // `ProcI_Result` sets it): with no internet ranking there is none.
+      return '';
     default:
       return resolveLr2ChartText(st, input.result.song);
   }
