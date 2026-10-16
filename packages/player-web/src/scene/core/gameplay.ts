@@ -29,7 +29,7 @@ import {
   type PlayerTempoChange,
   type TempoClock,
 } from '@be-music/player/core/engine';
-import { LR2_TIMER } from '@be-music/lr2-skin/ids';
+import { resolveLr2LaneTimer } from '@be-music/lr2-skin/state';
 import { resolveClearLamp, type GaugeType } from '@be-music/player/ruleset';
 import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
 import { type ChartPlayVariant, resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
@@ -3116,20 +3116,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.scrollHiSpeed.jump(this.hiSpeed);
   }
 
+  /**
+   * The LR2 key-on timer of `channel`'s lane (`resolveLr2LaneTimer`): 100 + lane on 1P, 110 + lane on 2P, keys 1-7 (1-9
+   * for 9 KEY, whose lanes all run through the 1P bank).
+   */
   private resolveKeyOnTimerId(channel: string): number | undefined {
-    const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
-    // 9 KEY (Pop'n) uses lane slots 1..9 — the 7-cap below would otherwise drop slots 8 / 9. Other modes top out at
-    // slot 7.
-    const maxSlot = this.chartPlayVariant === '9' ? 9 : 7;
-    if (laneIndex < 0 || laneIndex > maxSlot) {
-      return undefined;
-    }
-    // LR2 spec: timer 100 = 1P SC, 101..107 = 1P key1..7; timer 110 = 2P SC, 111..117 = 2P key1..7. PMS / 9 KEY is
-    // single-side so every lane (whether the chart sources it from `1X` or `2X`) routes through the 1P-side base; the
-    // resolver already collapses both layouts onto slots 1..9.
-    const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
-    const base = isPlayer2 ? LR2_TIMER.KEY_ON_2P : LR2_TIMER.KEY_ON_1P;
-    return base + laneIndex;
+    return resolveLr2LaneTimer('key-on', {
+      channel,
+      laneIndex: resolveSideRelativeLaneIndex(channel, this.chartPlayVariant),
+      playVariant: this.chartPlayVariant,
+    });
   }
 
   private startKeyOnTimer(channel: string): void {
