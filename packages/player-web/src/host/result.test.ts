@@ -1,7 +1,7 @@
 import { createEmptyJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
-import type { PlayResult } from '@be-music/scene-model';
+import type { PlayResult, SystemSoundSet } from '@be-music/scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { AudioService } from '../runtime/audio-service.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
@@ -239,6 +239,34 @@ describe('createResultScene with an LR2 kit', () => {
     expect(on.continue).toHaveBeenCalledTimes(1);
     scene.dispose();
     expect(fake.pointer.size).toBe(0);
+  });
+
+  it("plays the verdict's jingle, else the generic one, and never the other verdict's", async () => {
+    const clear = { bytes: new Uint8Array([1]) };
+    const fail = { bytes: new Uint8Array([2]) };
+    const generic = { bytes: new Uint8Array([3]) };
+    const played = async (cleared: boolean, sounds: SystemSoundSet) => {
+      const audio = { playJingle: vi.fn(async () => true), stopOwned: vi.fn() };
+      const scene = createResultScene(
+        { family: 'lr2', skin: lr2ResultSkin() },
+        {
+          result: { ...RESULT, cleared },
+          sounds,
+          audio: audio as unknown as AudioService,
+          on: { continue: () => undefined },
+          keyTarget: NO_KEYS,
+          now: () => 0,
+        },
+      );
+      await scene.enter(createDrawingHost().host);
+      scene.dispose();
+      return audio.playJingle.mock.calls.map((call) => (call as unknown[])[0]);
+    };
+    expect(await played(true, { clear, fail, result: generic })).toEqual([clear]);
+    expect(await played(false, { clear, fail, result: generic })).toEqual([fail]);
+    expect(await played(true, { fail, result: generic })).toEqual([generic]);
+    expect(await played(true, { fail })).toEqual([]);
+    expect(await played(false, { clear })).toEqual([]);
   });
 
   it('keeps its family and its skin', () => {
