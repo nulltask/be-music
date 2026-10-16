@@ -22,7 +22,7 @@ export class JudgeTimingLog {
 
   // A plain field rather than a parameter property: the benchmarks run this file through Node's type stripping, which
   // only accepts erasable syntax.
-  constructor(capacity = RECENT_JUDGE_TIMING_COUNT) {
+  constructor(capacity: number = RECENT_JUDGE_TIMING_COUNT) {
     this.capacity = capacity;
   }
 

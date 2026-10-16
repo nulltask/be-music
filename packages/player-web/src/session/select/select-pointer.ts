@@ -81,7 +81,7 @@ export class SelectPointer {
    * trackpad / hi-res-mouse input to one cursor step per {@link WHEEL_THROTTLE_INTERVAL_MS} so a fast flick doesn't
    * fly past the user's target. `-Infinity` lets the very first wheel tick after mount fire immediately.
    */
-  lastWheelMoveAt = Number.NEGATIVE_INFINITY;
+  lastWheelMoveAt: number = Number.NEGATIVE_INFINITY;
   /**
    * The finger currently on the list (touch / pen only): where it touched down and last was, in canvas CSS pixels,
    * whether it has moved far enough to be a swipe, and the swipe travel not yet turned into a cursor step. A touch acts
