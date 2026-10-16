@@ -27,10 +27,27 @@ function afterDot(percent: number): number {
   return Math.floor((percent - Math.floor(percent)) * 100);
 }
 
-/** The EX score in percent of its maximum (twice the judgments); 0 without notes. */
-export function beatorajaExScoreRate(score: Pick<BeatorajaScoreInput, 'total' | 'exScore'> | undefined): number {
-  const max = (score?.total ?? 0) * 2;
-  return max > 0 ? ((score?.exScore ?? 0) / max) * 100 : 0;
+/** A rate as beatoraja's numbers draw it: the whole percent and its two digits after the dot. */
+export interface BeatorajaRate {
+  readonly whole: number;
+  readonly afterDot: number;
+}
+
+/**
+ * The EX score as a percentage of the highest one `notes` notes can give (beatoraja `ScoreDataProperty`: `exscore /
+ * (notes × 2)`, 100 % for no notes), truncated to hundredths of a percent as the `*_RATE` / `*_AFTERDOT` pairs draw it.
+ */
+export function beatorajaScoreRate(exScore: number, notes: number): BeatorajaRate {
+  if (notes <= 0) return { whole: 100, afterDot: 0 };
+  const hundredths = Math.floor((exScore * 10_000) / (notes * 2));
+  return { whole: Math.floor(hundredths / 100), afterDot: hundredths % 100 };
+}
+
+/** The notes judged so far: every PERFECT … POOR (an empty POOR judges no note). */
+export function beatorajaNotesJudged(
+  score: Pick<BeatorajaScoreInput, 'perfect' | 'great' | 'good' | 'bad' | 'poor'>,
+): number {
+  return score.perfect + score.great + score.good + score.bad + score.poor;
 }
 
 /**
@@ -65,8 +82,9 @@ function late(earlyLate: BeatorajaEarlyLate | undefined, judge: keyof NonNullabl
  * not one of them.
  *
  * - `POINT` (100) shows the displayed score and `SCORE2` (101) the EX score (beatoraja's `createScoreProperty`, LR2's
- *   number 101); `SCORE_RATE` (102 / 103) the EX score in percent of its maximum, `TOTAL_RATE` (115 / 116) the
- *   displayed score in percent of 1000 per judgment.
+ *   number 101); `TOTAL_RATE` (115 / 116) the EX score as a rate of every note ({@link beatorajaScoreRate}), and so does
+ *   `SCORE_RATE` (102 / 103) here: a finished run's rate, as beatoraja's result reads it (a play reads it over the notes
+ *   judged so far, `resolveBeatorajaPlayNumber`). The rates read 0 before the engine reports a score.
  * - The engine has no MISS judgment (beatoraja's empty POOR): `MISS` (420) reads the POOR count, and its early / late
  *   rows (421 / 422) the `MISS` entry of the early / late counts, else POOR's.
  * - `COMBOBREAK` (425) and `BAD_PLUS_POOR_PLUS_MISS` (427) count BAD + POOR, `POOR_PLUS_MISS` (426) POOR.
@@ -79,15 +97,11 @@ export function resolveBeatorajaScoreNumber(id: number, input: BeatorajaScoreNum
     case BEATORAJA_NUM.SCORE2:
       return score?.exScore ?? 0;
     case BEATORAJA_NUM.SCORE_RATE:
-      return Math.floor(beatorajaExScoreRate(score));
-    case BEATORAJA_NUM.SCORE_RATE_AFTERDOT:
-      return afterDot(beatorajaExScoreRate(score));
     case BEATORAJA_NUM.TOTAL_RATE:
-    case BEATORAJA_NUM.TOTAL_RATE_AFTERDOT: {
-      const total = score?.total ?? 0;
-      const rate = total > 0 ? ((score?.score ?? 0) / (total * 1000)) * 100 : 0;
-      return id === BEATORAJA_NUM.TOTAL_RATE ? Math.floor(rate) : afterDot(rate);
-    }
+      return score !== undefined ? beatorajaScoreRate(score.exScore, score.total).whole : 0;
+    case BEATORAJA_NUM.SCORE_RATE_AFTERDOT:
+    case BEATORAJA_NUM.TOTAL_RATE_AFTERDOT:
+      return score !== undefined ? beatorajaScoreRate(score.exScore, score.total).afterDot : 0;
     case BEATORAJA_NUM.COMBO:
       return input.combo;
     case BEATORAJA_NUM.MAXCOMBO_LIVE:

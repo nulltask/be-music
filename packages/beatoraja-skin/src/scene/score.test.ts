@@ -3,7 +3,8 @@ import { BEATORAJA_NUM, BEATORAJA_OP } from '../runtime-ids.ts';
 import type { BeatorajaScoreInput } from './inputs.ts';
 import {
   beatorajaChartTotalReadout,
-  beatorajaExScoreRate,
+  beatorajaNotesJudged,
+  beatorajaScoreRate,
   resolveBeatorajaPlayScoreOps,
   resolveBeatorajaScoreNumber,
   type BeatorajaScoreNumberInput,
@@ -46,11 +47,15 @@ describe('resolveBeatorajaScoreNumber', () => {
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.POINT, numbers)).toBe(81_234);
     // 101 is the EX score (beatoraja `createScoreProperty`, LR2 number 101), not a second POINT.
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.SCORE2, numbers)).toBe(140);
-    // EX 140 / 200 = 70 %; displayed score 81234 / 100000 = 81.234 %.
+    // Both rates are the EX score over every note here (a finished run's, as beatoraja's result reads them): 140 / 200.
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.SCORE_RATE, numbers)).toBe(70);
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.SCORE_RATE_AFTERDOT, numbers)).toBe(0);
-    expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.TOTAL_RATE, numbers)).toBe(81);
-    expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.TOTAL_RATE_AFTERDOT, numbers)).toBe(23);
+    expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.TOTAL_RATE, numbers)).toBe(70);
+    expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.TOTAL_RATE_AFTERDOT, numbers)).toBe(0);
+    const odd = input({ score: { ...SCORE, total: 3, exScore: 5 } });
+    // 5 / 6 = 83.333… %, truncated to 83.33 (not the displayed score's rate).
+    expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.TOTAL_RATE, odd)).toBe(83);
+    expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.TOTAL_RATE_AFTERDOT, odd)).toBe(33);
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.COMBO, numbers)).toBe(33);
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.MAXCOMBO_LIVE, numbers)).toBe(57);
     expect(resolveBeatorajaScoreNumber(BEATORAJA_NUM.TOTALNOTES, numbers)).toBe(100);
@@ -120,11 +125,18 @@ describe('resolveBeatorajaScoreNumber', () => {
   });
 });
 
-describe('beatorajaExScoreRate / beatorajaChartTotalReadout', () => {
-  it('rates the EX score against twice the judgments', () => {
-    expect(beatorajaExScoreRate({ total: 50, exScore: 75 })).toBe(75);
-    expect(beatorajaExScoreRate({ total: 0, exScore: 0 })).toBe(0);
-    expect(beatorajaExScoreRate(undefined)).toBe(0);
+describe('beatorajaScoreRate / beatorajaNotesJudged / beatorajaChartTotalReadout', () => {
+  it('rates the EX score against twice the notes, truncated to hundredths, 100 % for no notes', () => {
+    expect(beatorajaScoreRate(75, 50)).toEqual({ whole: 75, afterDot: 0 });
+    // 57 / 100 is exactly 57 %, not the 56.99 % floating point gives.
+    expect(beatorajaScoreRate(57, 50)).toEqual({ whole: 57, afterDot: 0 });
+    expect(beatorajaScoreRate(2, 3)).toEqual({ whole: 33, afterDot: 33 });
+    expect(beatorajaScoreRate(0, 0)).toEqual({ whole: 100, afterDot: 0 });
+  });
+
+  it('counts the notes judged so far', () => {
+    expect(beatorajaNotesJudged(SCORE)).toBe(100);
+    expect(beatorajaNotesJudged({ perfect: 1, great: 0, good: 2, bad: 0, poor: 3 })).toBe(6);
   });
 
   it('prefers the TOTAL the gauge runs on, floored', () => {

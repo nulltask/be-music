@@ -59,7 +59,9 @@ describe('resolveBeatorajaResultNumber', () => {
     const result = input();
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.POINT, result)).toBe(140_000);
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.SCORE2, result)).toBe(14);
+    // A result rates the run over every note on both 102 and 115, as beatoraja's result does.
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.SCORE_RATE, result)).toBe(70);
+    expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.TOTAL_RATE, result)).toBe(70);
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.COMBO, result)).toBe(8);
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.MAXCOMBO_LIVE, result)).toBe(8);
     expect(resolveBeatorajaResultNumber(BEATORAJA_NUM.GROOVEGAUGE, result)).toBe(64);

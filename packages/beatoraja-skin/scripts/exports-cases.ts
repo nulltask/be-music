@@ -193,9 +193,14 @@ export function registerBeatorajaSkinExportsCases(define: DefineBenchmarkCase): 
       sceneApi.beatorajaWallClockOf(BENCH_DATE);
     },
   });
-  define('beatoraja-skin.scene.beatorajaExScoreRate', {
+  define('beatoraja-skin.scene.beatorajaScoreRate', {
     run: () => {
-      sceneApi.beatorajaExScoreRate(BENCH_SCORE);
+      sceneApi.beatorajaScoreRate(BENCH_SCORE.exScore, 1200);
+    },
+  });
+  define('beatoraja-skin.scene.beatorajaNotesJudged', {
+    run: () => {
+      sceneApi.beatorajaNotesJudged(BENCH_SCORE);
     },
   });
   define('beatoraja-skin.scene.beatorajaChartTotalReadout', {

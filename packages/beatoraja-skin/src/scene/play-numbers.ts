@@ -6,7 +6,12 @@ import {
   SYNTHETIC_NUM_JUDGE_COMBO_3P,
 } from '../runtime-ids.ts';
 import type { BeatorajaWallClock } from './inputs.ts';
-import { resolveBeatorajaScoreNumber, type BeatorajaScoreNumberInput } from './score.ts';
+import {
+  beatorajaNotesJudged,
+  beatorajaScoreRate,
+  resolveBeatorajaScoreNumber,
+  type BeatorajaScoreNumberInput,
+} from './score.ts';
 
 /** One tempo change of a chart, in chart time: STOPs read as BPM 0. */
 export interface BeatorajaBpmSegment {
@@ -149,6 +154,8 @@ function playLevelNumber(level: number | string | undefined): number {
  * A play skin's number (`value[].ref`, `IntegerPropertyFactory`) for the play as it is, or `undefined` for an id the
  * play does not show. Besides the score numbers ({@link resolveBeatorajaScoreNumber}):
  *
+ * - the score rate (102 / 103) over the notes judged so far, 100 % before the first (beatoraja's `nowrate`; 115 / 116
+ *   are over every note);
  * - the hi-speed (310 its integer part, 311 two decimals, 10 times 100, all truncated as beatoraja's `(int)` casts),
  *   the lane cover and LIFT in percent (14, 314);
  * - the white and green numbers (312 / 313, and 1312-1327 at the main, lowest and highest BPM, with and without the
@@ -164,6 +171,12 @@ function playLevelNumber(level: number | string | undefined): number {
 export function resolveBeatorajaPlayNumber(id: number, input: BeatorajaPlayNumberInput): number | undefined {
   const { chart, clock, hiSpeed } = input;
   switch (id) {
+    case BEATORAJA_NUM.SCORE_RATE:
+    case BEATORAJA_NUM.SCORE_RATE_AFTERDOT: {
+      if (input.score === undefined) return 0;
+      const rate = beatorajaScoreRate(input.score.exScore, beatorajaNotesJudged(input.score));
+      return id === BEATORAJA_NUM.SCORE_RATE ? rate.whole : rate.afterDot;
+    }
     case BEATORAJA_NUM.HISPEED:
       return Math.trunc(hiSpeed);
     case BEATORAJA_NUM.HISPEED_LR2:
