@@ -4,6 +4,7 @@ import type { LibraryChart } from '@be-music/scene-model';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { BrowserSongEntry } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
+import type { PixiSceneHost } from '../scene/host.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
 import { createDecideScene } from './decide.ts';
@@ -47,8 +48,58 @@ function create(overrides: Partial<PlaySceneOptions> = {}) {
   return { scene, on };
 }
 
+/** A host with a ticker the test fires and a canvas the play listens on, and the window and document it listens on. */
+function createFakeHost() {
+  const ticks = new Set<() => void>();
+  const listeners = new Map<string, Set<unknown>>();
+  const target = () => ({
+    addEventListener: (type: string, listener: unknown) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(listener);
+    },
+    removeEventListener: (type: string, listener: unknown) => listeners.get(type)?.delete(listener),
+  });
+  vi.stubGlobal('window', { ...target(), setTimeout, clearTimeout, setInterval, clearInterval });
+  // The be-music skin's surface asks for a canvas; one without a context leaves the skin undrawn.
+  const createElement = () => ({ width: 0, height: 0, style: {}, getContext: () => null });
+  vi.stubGlobal('document', {
+    ...target(),
+    hidden: false,
+    visibilityState: 'visible',
+    hasFocus: () => true,
+    createElement,
+  });
+  const canvas = { ...target(), style: { touchAction: 'auto' }, focus: vi.fn() };
+  const host = {
+    app: {
+      ticker: {
+        add: (callback: () => void) => ticks.add(callback),
+        remove: (callback: () => void) => ticks.delete(callback),
+      },
+      canvas,
+      screen: { width: 1280, height: 720 },
+      renderer: { resolution: 1 },
+      stage: { children: [] },
+    },
+    setStageOrientation: vi.fn(),
+    isDisposed: () => false,
+    onAfterRender: () => () => undefined,
+  } as unknown as PixiSceneHost;
+  return {
+    host,
+    canvas,
+    listening: (type: string) => listeners.get(type)?.size ?? 0,
+    tick: () => {
+      for (const callback of Array.from(ticks)) callback();
+    },
+    ticking: () => ticks.size,
+  };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('createPlayScene', () => {
@@ -99,6 +150,48 @@ describe('createPlayScene', () => {
     expect(scene.progress()?.score.total).toBe(2);
     scene.dispose();
     decide.dispose();
+  });
+
+  it('shows a play prepared off stage, draws its frames once started, and stops listening as it leaves', async () => {
+    vi.useFakeTimers();
+    const fake = createFakeHost();
+    const { scene, on } = create({ host: fake.host });
+    await scene.prepare();
+    await scene.enter(fake.host);
+    // The play's own keys and the canvas's touch lanes listen from the entry on.
+    expect(fake.listening('keydown')).toBe(1);
+    expect(fake.listening('pointerdown')).toBe(2);
+    expect(fake.canvas.style.touchAction).toBe('none');
+    expect(scene.root.visible).toBe(false);
+    scene.start();
+    expect(fake.canvas.focus).toHaveBeenCalled();
+    fake.tick();
+    expect(scene.root.visible).toBe(true);
+    // Escape's way out: the be-music fade-out, then the host hears of it.
+    scene.requestExit();
+    fake.tick();
+    expect(on.exit).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(450);
+    expect(on.exit).toHaveBeenCalledTimes(1);
+    fake.tick();
+    scene.exit();
+    expect(fake.ticking()).toBe(0);
+    expect(fake.listening('keydown')).toBe(0);
+    expect(fake.canvas.style.touchAction).toBe('auto');
+    scene.dispose();
+  });
+
+  it('draws the loading playfield when it loads while shown (no splash)', async () => {
+    vi.useFakeTimers();
+    const fake = createFakeHost();
+    const { scene } = create();
+    await scene.enter(fake.host);
+    fake.tick();
+    expect(scene.root.visible).toBe(false);
+    await scene.prepare();
+    fake.tick();
+    expect(scene.root.visible).toBe(true);
+    scene.dispose();
   });
 
   it('a disposed play ends without leading anywhere', () => {
