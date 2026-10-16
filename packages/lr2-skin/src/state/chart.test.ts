@@ -86,6 +86,9 @@ describe('resolveLr2ChartText', () => {
     expect(resolveLr2ChartText(LR2_TEXT.ARTIST_ALT, chart)).toBe('A');
     expect(resolveLr2ChartText(LR2_TEXT.PLAY_LEVEL, chart)).toBe('7');
     expect(resolveLr2ChartText(LR2_TEXT.DIFFICULTY, chart)).toBe('');
+    // LR2's song database tag, not the file name: be-music keeps no tags.
+    expect(resolveLr2ChartText(LR2_TEXT.TAG, chart)).toBe('');
+    expect(resolveLr2ChartText(LR2_TEXT.TAG_ALT, chart)).toBe('');
     expect(resolveLr2ChartText(LR2_TEXT.SEARCH_WORD, chart)).toBeUndefined();
   });
 });

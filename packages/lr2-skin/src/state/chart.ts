@@ -153,8 +153,8 @@ export function lr2PlayLevel(chart: Pick<LibraryChart, 'playLevel'>): number | u
 
 /**
  * The chart texts LR2 draws for a library chart: the title, subtitle, genre, artist, subartist (bmson `subartists`),
- * play level and difficulty name (10-18; texts 20-28 repeat them) and the INSANE level (29). `undefined` for any other
- * text.
+ * tag (empty: be-music keeps no tags), play level and difficulty name (10-18; texts 20-28 repeat them) and the INSANE
+ * level (29). `undefined` for any other text.
  */
 export function resolveLr2ChartText(st: number, chart: LibraryChart): string | undefined {
   switch (st) {
@@ -176,9 +176,10 @@ export function resolveLr2ChartText(st: number, chart: LibraryChart): string | u
     case LR2_TEXT.SUBARTIST:
     case LR2_TEXT.SUBARTIST_ALT:
       return chart.chart.bmson.info?.subartists?.join(' / ') ?? '';
-    case LR2_TEXT.FULL_ARTIST:
-    case LR2_TEXT.FULL_ARTIST_ALT:
-      return chart.fileLabel;
+    case LR2_TEXT.TAG:
+    case LR2_TEXT.TAG_ALT:
+      // LR2's song database tag: be-music keeps none.
+      return '';
     case LR2_TEXT.PLAY_LEVEL:
     case LR2_TEXT.PLAY_LEVEL_ALT:
       return chart.playLevel?.toString() ?? '';

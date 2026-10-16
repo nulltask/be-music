@@ -239,13 +239,6 @@ function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): numb
   }
 }
 
-/** The chart texts the play screen does not draw: the file name and the INSANE level. */
-const UNDRAWN_PLAY_TEXTS: ReadonlySet<number> = new Set([
-  LR2_TEXT.FULL_ARTIST,
-  LR2_TEXT.FULL_ARTIST_ALT,
-  LR2_TEXT.INSANE_LEVEL,
-]);
-
 function playText(st: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): string | undefined {
   const chart = setup.chart;
   if (chart === undefined) return undefined;
@@ -264,7 +257,8 @@ function playText(st: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): string 
     case LR2_TEXT.PLAYER:
       return 'PLAYER';
   }
-  return UNDRAWN_PLAY_TEXTS.has(st) ? undefined : resolveLr2ChartText(st, chart);
+  // The play screen draws no INSANE level.
+  return st === LR2_TEXT.INSANE_LEVEL ? undefined : resolveLr2ChartText(st, chart);
 }
 
 function playSlider(type: number, frame: Lr2PlayFrame): number {
