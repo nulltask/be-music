@@ -37,13 +37,15 @@ import type { BrowserSongEntry } from '../../collection/types.ts';
 import {
   attachBeatorajaSceneLifecycle,
   BeatorajaSceneBgmPlayer,
-  fitBeatorajaViewToStage,
   hasBeatorajaSceneFadingTransition,
   isBeatorajaSceneInputReady,
-  resolveBeatorajaSkinTimingMs,
-  resolveBeatorajaSongText,
   type BeatorajaSceneLoopAttachment,
 } from './shared-scene.ts';
+import {
+  fitBeatorajaViewToStage,
+  resolveBeatorajaSkinTimingMs,
+  resolveBeatorajaSongText,
+} from '../../view/beatoraja/scene-frame.ts';
 import { resolveBeatorajaChartImage, type BeatorajaChartImages } from '../../skin/beatoraja/chart-images.ts';
 
 export interface PixiBeatorajaDecideSceneOptions {
