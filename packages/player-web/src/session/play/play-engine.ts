@@ -47,11 +47,11 @@ import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { LiveTempo } from '../../scene/live-tempo.ts';
 import { resolvePlayEnding } from '../../scene/play-ending.ts';
 import { PlaylogViewCursor } from '../../scene/playlog-view.ts';
-import { QUIT_HOLD_KEY_CODE } from '../../scene/quit-hold.ts';
 import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import { beginExitSequence, type PlayEndingContext } from './play-ending.ts';
+import { shouldSkipPlayKey } from './play-input.ts';
 import { samplePlaybackRate } from './play-media.ts';
 import {
   flushPlaylogView,
@@ -437,26 +437,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
     // currently holds focus — matches the legacy `window.addEventListener('keydown', ...)` behaviour. The
     // canvas's `tabIndex = 0` only makes it focusable, not auto-focused, so a canvas-scoped listener would
     // only fire after the user clicked the canvas first.
-    shouldSkipKey: (event) => {
-      // Suppress lane-input dispatch when the user is typing into a focused text input (search box, etc.).
-      const target = event.target as HTMLElement | null;
-      if (target) {
-        const tag = target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
-        if (target.isContentEditable === true) return true;
-      }
-      // ESC and F5 are handled by the view's own listener (set up in `enter`) so the LR2 `#FADEOUT` animation
-      // runs to completion BEFORE the engine's `PlayerInterruptedError` flow disposes the audio session. If
-      // we let the runtime push `interrupt(escape)` directly, the engine's `dispose()` would `node.stop()`
-      // every in-flight BufferSource immediately, killing the chart audio mid-fade. Same idea for Space:
-      // routing the toggle through the view's `togglePause` keeps the view's `paused` flag, the audio bus's
-      // suspend, the BGA video pause, and the engine's playback clock all on the same single entry-point.
-      if (event.code === 'Escape' || event.code === 'F5' || event.code === 'Space') return true;
-      // Backspace is the view's hold-to-quit key (`QuitHoldController`), never a lane.
-      if (event.code === QUIT_HOLD_KEY_CODE) return true;
-      if (event.code === 'ArrowUp' || event.code === 'ArrowDown') return true;
-      return false;
-    },
+    shouldSkipKey: shouldSkipPlayKey,
     engineOptions: {
       // The draws `resolvedChart` was resolved with; the engine plays that chart as is and names them in its summary.
       ...(ctx.randomDraws !== undefined ? { randomDraws: ctx.randomDraws } : {}),
