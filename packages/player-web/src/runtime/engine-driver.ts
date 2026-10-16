@@ -89,7 +89,8 @@ export type EngineDriverResult = PlayerSummary;
  *   early BAD window has already opened.
  * - Out-of-window presses do not play the next pending lane keysound before that note's judgment window opens.
  * - Free-Zone (`17` / `27`) channels stay excluded from score/gauge targets and keep their scratch aliases.
- * - LN suppress windows + 380 ms initial / 120 ms repeat hold-grace.
+ * - Key releases inferred for input that reports none (`play-key-inference.ts`): 380 ms after a long note's head,
+ *   120 ms after any other press or key repeat.
  * - LN early-release audio cut via `AudioSession.stopChannel`.
  * - Mine vs note delta-based priority (closest delta wins).
  * - Multi-channel input mapping for scratch / Free-Zone aliases.
