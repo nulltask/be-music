@@ -9,8 +9,8 @@ import type { SkinFamily } from '../family.ts';
  *   `play_7.lr2skin` — the LR2 path takes over, but at the gameplay scene it falls back to this family's chrome).
  *
  * Scene classes for this family live under `scene/default/` (`DefaultPixiGameplayView` / `DefaultPixiSongSelectView`);
- * its result screen is `createResultScene`. The default family has no decide scene — themes without a decide skin
- * simply skip the splash and hand straight off to gameplay.
+ * its decide and result screens are `createDecideScene` and `createResultScene`. A be-music skin without a decide
+ * screen skips the splash and hands straight off to gameplay.
  */
 export const defaultSkinFamily: SkinFamily = {
   id: 'default',

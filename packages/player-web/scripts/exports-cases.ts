@@ -8,6 +8,7 @@ import type {
   BeatorajaSourceBundle,
 } from '@be-music/beatoraja-skin';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import type { Lr2Skin } from '@be-music/lr2-skin';
 import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData } from '@be-music/player/course';
 import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -41,6 +42,18 @@ const BENCH_VIEW_HOST = {
   },
   setStageOrientation: () => undefined,
 } as unknown as playerWebCoreApi.PixiSceneHost;
+/** An LR2 decide skin with nothing to draw, for the LR2 decide scene. */
+const BENCH_LR2_DECIDE_SKIN = {
+  width: 640,
+  height: 480,
+  timing: { startInput: 300 },
+  images: [],
+  numbers: [],
+  texts: [],
+  lr2FontPaths: [],
+  systemFontSizes: [],
+  files: new Map(),
+} as unknown as Lr2Skin;
 /** No keys reach a benchmarked scene. */
 const BENCH_KEY_TARGET: playerWebCoreApi.SessionKeyTarget = {
   addEventListener: () => undefined,
@@ -354,20 +367,23 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   });
   define('player-web.createDecideScene', {
     run: async () => {
-      const scene = playerWebCoreApi.createDecideScene(
+      const kits: playerWebCoreApi.DecideSceneKit[] = [
         { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
-        {
+        { family: 'lr2', skin: BENCH_LR2_DECIDE_SKIN },
+      ];
+      for (const kit of kits) {
+        const scene = playerWebCoreApi.createDecideScene(kit, {
           chart: BENCH_SONG,
           sounds: { decideBgm: { bytes: BENCH_BYTES } },
           audio: playerWebCoreApi.createAudioService({ createContext: () => undefined }),
           on: { continue: () => undefined, cancel: () => undefined },
           keyTarget: BENCH_KEY_TARGET,
           now: () => 0,
-        },
-      );
-      await scene.enter(BENCH_VIEW_HOST);
-      scene.exit();
-      scene.dispose();
+        });
+        await scene.enter(BENCH_VIEW_HOST);
+        scene.exit();
+        scene.dispose();
+      }
     },
   });
   define('player-web.createResultScene', {
@@ -891,12 +907,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       new playerWebCoreApi.PixiBeatorajaSelectScene(
         {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaSelectScene>[0],
       );
-    },
-    interactive: true,
-  });
-  define('player-web.PixiDecideView', {
-    run: () => {
-      new playerWebCoreApi.PixiDecideView();
     },
     interactive: true,
   });
