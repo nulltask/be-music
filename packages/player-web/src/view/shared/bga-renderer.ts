@@ -20,7 +20,7 @@ import {
   type NonstopStageBgaTimeline,
 } from '../../scene/core/gameplay-bga.ts';
 import type { GameplayBgaTarget, GameplayThemeHooks } from '../../scene/core/gameplay-theme.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay.ts';
+import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 import type { ChildPool } from '../../scene/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { BeMusicImage } from '../../skin/be-music/types.ts';

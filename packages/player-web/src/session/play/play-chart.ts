@@ -43,7 +43,7 @@ import {
   type NonstopStageBgaTimeline,
 } from '../../scene/core/gameplay-bga.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay.ts';
+import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 import type { JudgeTimingLog } from '../../scene/core/judge-timing-log.ts';
 import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../scene/core/note-draw-window.ts';

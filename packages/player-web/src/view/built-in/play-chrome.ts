@@ -21,7 +21,7 @@ import {
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay.ts';
+import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
 import type { JudgeTimingLog } from '../../scene/core/judge-timing-log.ts';
 import { resolveGreenNumber } from '../../scene/core/lane-cover.ts';
 import type { SkinlessGameplayChromeRuntime, SkinlessGameplayJudgeState } from '../../scene/gameplay-chrome.ts';
