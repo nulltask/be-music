@@ -1144,6 +1144,27 @@ export const BEATORAJA_NUM = {
    * surface it through `value[]` ref 368. Sourced from `chart.metadata.total`.
    */
   BMS_TOTAL: 368,
+  /** SkinProperty `NUMBER_FOLDER_TOTALSONGS = 300`: the charts in the focused folder bar (select screen). */
+  FOLDER_TOTALSONGS: 300,
+  /** SkinProperty `NUMBER_TOTALNOTE_NORMAL = 350`: the focused chart's key taps. */
+  TOTALNOTE_NORMAL: 350,
+  /** SkinProperty `NUMBER_TOTALNOTE_LN = 351`: the focused chart's long notes on the keys. */
+  TOTALNOTE_LN: 351,
+  /** SkinProperty `NUMBER_TOTALNOTE_SCRATCH = 352`: the focused chart's scratch taps. */
+  TOTALNOTE_SCRATCH: 352,
+  /** SkinProperty `NUMBER_TOTALNOTE_BSS = 353`: the focused chart's long scratches. */
+  TOTALNOTE_BSS: 353,
+  /** SkinProperty `NUMBER_DENSITY_PEAK = 360` / `_AFTERDOT = 361`: the busiest second's notes. */
+  DENSITY_PEAK: 360,
+  DENSITY_PEAK_AFTERDOT: 361,
+  /** SkinProperty `NUMBER_DENSITY_END = 362` / `_AFTERDOT = 363`: the notes of the second with the last note. */
+  DENSITY_END: 362,
+  DENSITY_END_AFTERDOT: 363,
+  /** SkinProperty `NUMBER_DENSITY_AVERAGE = 364` / `_AFTERDOT = 365`: notes per second over the chart. */
+  DENSITY_AVERAGE: 364,
+  DENSITY_AVERAGE_AFTERDOT: 365,
+  /** SkinProperty `NUMBER_CLEAR = 370`: the focused chart's best clear lamp (0 NO PLAY … 10 MAX). */
+  CLEAR: 370,
   /**
    * Result-scene timing-statistics block (374-377). GdbG_Skin's result authors
    * `Avg X ms` / `Stdev X ms` text labels backed by these refs. ModernChic surfaces them on

@@ -14,6 +14,11 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./scene": {
+      "source": "./src/scene/index.ts",
+      "types": "./dist/scene.d.ts",
+      "default": "./dist/scene.js"
     }
   },
   "scripts": {
@@ -24,6 +29,8 @@
   },
   "dependencies": {
     "@be-music/lr2-skin": "workspace:*",
+    "@be-music/player": "workspace:*",
+    "@be-music/scene-model": "workspace:*",
     "@be-music/utils": "workspace:*",
     "fengari": "^0.1.4",
     "fengari-web": "^0.1.4"

@@ -5,6 +5,7 @@ import {
   type PackageName,
 } from '../exports.types.ts';
 import { audioRendererBenchmarkPackage } from './audio-renderer.ts';
+import { beatorajaSkinBenchmarkPackage } from './beatoraja-skin.ts';
 import { chartBenchmarkPackage } from './chart.ts';
 import { editorBenchmarkPackage } from './editor.ts';
 import { jsonBenchmarkPackage } from './json.ts';
@@ -30,6 +31,7 @@ export const PACKAGE_DEFINITIONS: Record<PackageName, BenchmarkPackageDefinition
   'scene-model': sceneModelBenchmarkPackage,
   'player-tui': playerTuiBenchmarkPackage,
   'lr2-skin': lr2SkinBenchmarkPackage,
+  'beatoraja-skin': beatorajaSkinBenchmarkPackage,
   'skin-sdk': skinSdkBenchmarkPackage,
   'player-web': playerWebCoreBenchmarkPackage,
 };
