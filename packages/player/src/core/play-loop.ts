@@ -98,15 +98,106 @@ function startChart(session: PlaySession): PlaybackClock {
   return clock;
 }
 
+/**
+ * Plays the chart from its start to the end of the play: ticks until an interrupt, a failed gauge, the chart being
+ * over and judged, or the horizon (held open past it while the host holds the play), then applies the end-of-play
+ * rules. Returns whether judging closed on a failed gauge.
+ */
+async function playChart(
+  session: PlaySession,
+  judge: PlayJudge,
+  controls: PlayControls,
+  wakeUp: InputWakeUp,
+): Promise<boolean> {
+  const { options, tempoClock, totalSeconds, tracer, publishUiFrame, beatAtSeconds } = session;
+  const clock = startChart(session);
+  controls.chartStarted();
+
+  // A held play (`holdAfterChart`) runs past its horizon until the host ends it.
+  const hold = options.holdAfterChart;
+  // The chart's end, the widest BAD reach (its last notes can still be judged until then) and a second of grace for the
+  // audio to play out. On the play clock, which starts after the lead-in, so a tempo change during the play moves it.
+  const widestReachMs = 1000 * widestJudgeReachSeconds(session);
+  const horizonMs = (): number => tempoClock.clockMsAt(totalSeconds) + widestReachMs + 1000;
+  // Without audio to play out a play ends as soon as its chart is over and judged — unless the host holds it open.
+  const endsWithChart = session.audioSession === undefined && hold === undefined;
+  // A replay of an ESC-aborted log stops where the play was aborted, as the play-log simulators do.
+  const replayStopSeconds =
+    session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
+  let settled = false;
+  const pastHorizon = (): boolean => {
+    if (clock.nowMs() < horizonMs()) return false;
+    if (hold === undefined || hold.signal.aborted) return true;
+    if (!settled) {
+      settled = true;
+      hold.onSettled?.();
+    }
+    return hold.signal.aborted;
+  };
+
+  let failedAtSeconds: number | undefined;
+  while (!pastHorizon()) {
+    controls.consume();
+    if (controls.interruptedReason !== undefined) {
+      return false;
+    }
+    const nowMs = clock.nowMs();
+    if (clock.isPaused()) {
+      const nowSec = tempoClock.chartSecondsAt(nowMs);
+      publishUiFrame(nowSec, beatAtSeconds(nowSec));
+      // Resume / ESC arrive as input commands; cutting the poll short on their arrival makes resuming immediate.
+      await waitPreciseOrInput(PAUSE_POLL_INTERVAL_MS, wakeUp);
+      continue;
+    }
+    controls.followReplayTempoChanges(tempoClock.chartSecondsAt(nowMs));
+    const nowSec = tempoClock.chartSecondsAt(nowMs);
+    // The tick that reaches a replay's stop judges up to it and no further.
+    const stopping = replayStopSeconds !== undefined && nowSec >= replayStopSeconds;
+    const tick: PlayTick = stopping
+      ? { nowMs, nowSec: replayStopSeconds, scheduledSec: replayStopSeconds }
+      : { nowMs, nowSec, scheduledSec: tempoClock.chartSecondsAt(clock.scheduledMs()) };
+    judge.beforeAudio?.(tick);
+    tracer.flushUntil(tick.nowSec);
+    // Queue audio against the write head, then judge and render against what is actually audible.
+    session.volumeChanges.triggerUntil(tick.scheduledSec);
+    session.backgroundAudio.triggerUntil(tick.scheduledSec);
+    judge.judge(tick);
+    publishUiFrame(tick.nowSec, beatAtSeconds(tick.nowSec));
+
+    // A play that ends on failure stops the moment its gauge empties.
+    if (judge.isClosed()) {
+      failedAtSeconds = tick.nowSec;
+      break;
+    }
+    if (stopping) {
+      controls.interrupt('escape', tick.nowSec);
+      return false;
+    }
+    const safeNowSeconds = Math.max(0, judge.judgedThroughSeconds(tick)) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+    if (endsWithChart && judge.isSettled() && safeNowSeconds >= totalSeconds) {
+      break;
+    }
+    // Race the 60 Hz tick against the next input arrival.
+    await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, wakeUp);
+  }
+
+  judge.beforeFinish?.();
+  tracer.flushUntil(totalSeconds);
+  judge.finish();
+  // A closing frame shows the state `finish` left at the play's end: the chart's end, whatever tick the loop stopped
+  // on, or where the play failed.
+  const endSeconds = failedAtSeconds ?? totalSeconds;
+  publishUiFrame(endSeconds, beatAtSeconds(endSeconds));
+  return failedAtSeconds !== undefined;
+}
+
 /** Runs a play from its lead-in to its end, then closes its runtimes. */
 export async function runPlayLoop(
   session: PlaySession,
   judge: PlayJudge,
   controls: PlayControls,
 ): Promise<PlayOutcome> {
-  const { options, tempoClock, totalSeconds, audioSession, tracer, publishUiFrame, beatAtSeconds } = session;
   openPlay(session);
-
   // Event-driven wake-up: the loop's sleep is cut short the moment a command arrives, so a keysound, a lane flash, a
   // pause or an ESC lands within ~1 ms instead of at the next 60 Hz tick (the judge timestamp itself comes from
   // `pressedAt`).
@@ -118,94 +209,13 @@ export async function runPlayLoop(
     await waitOutLeadIn(session, controls, wakeUp);
     // An ESC (or a restart) during the lead-in ends the play before its chart starts.
     if (controls.interruptedReason === undefined) {
-      const clock = startChart(session);
-      controls.chartStarted();
-      const loopWakeUp = wakeUp;
-
-      // A held play (`holdAfterChart`) runs past its horizon until the host ends it.
-      const hold = options.holdAfterChart;
-      // The chart's end, the widest BAD reach (its last notes can still be judged until then) and a second of grace
-      // for the audio to play out. On the play clock, which starts after the lead-in, so a tempo change during the
-      // play moves it.
-      const widestReachMs = 1000 * widestJudgeReachSeconds(session);
-      const horizonMs = (): number => tempoClock.clockMsAt(totalSeconds) + widestReachMs + 1000;
-      // Without audio to play out a play ends as soon as its chart is over and judged — unless the host holds it open.
-      const endsWithChart = audioSession === undefined && hold === undefined;
-      let endSeconds = totalSeconds;
-      // A replay of an ESC-aborted log stops where the play was aborted, as the play-log simulators do.
-      const replayStopSeconds =
-        session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
-      let settled = false;
-      const pastHorizon = (): boolean => {
-        if (clock.nowMs() < horizonMs()) return false;
-        if (hold === undefined || hold.signal.aborted) return true;
-        if (!settled) {
-          settled = true;
-          hold.onSettled?.();
-        }
-        return hold.signal.aborted;
-      };
-
-      while (!pastHorizon()) {
-        controls.consume();
-        if (controls.interruptedReason !== undefined) {
-          break;
-        }
-        const nowMs = clock.nowMs();
-        if (clock.isPaused()) {
-          const nowSec = tempoClock.chartSecondsAt(nowMs);
-          publishUiFrame(nowSec, beatAtSeconds(nowSec));
-          // Resume / ESC arrive as input commands; cutting the poll short on their arrival makes resuming immediate.
-          await waitPreciseOrInput(PAUSE_POLL_INTERVAL_MS, loopWakeUp);
-          continue;
-        }
-        controls.followReplayTempoChanges(tempoClock.chartSecondsAt(nowMs));
-        const nowSec = tempoClock.chartSecondsAt(nowMs);
-        // The tick that reaches a replay's stop judges up to it and no further.
-        const stopping = replayStopSeconds !== undefined && nowSec >= replayStopSeconds;
-        const tick: PlayTick = stopping
-          ? { nowMs, nowSec: replayStopSeconds, scheduledSec: replayStopSeconds }
-          : { nowMs, nowSec, scheduledSec: tempoClock.chartSecondsAt(clock.scheduledMs()) };
-        judge.beforeAudio?.(tick);
-        tracer.flushUntil(tick.nowSec);
-        // Queue audio against the write head, then judge and render against what is actually audible.
-        session.volumeChanges.triggerUntil(tick.scheduledSec);
-        session.backgroundAudio.triggerUntil(tick.scheduledSec);
-        judge.judge(tick);
-        publishUiFrame(tick.nowSec, beatAtSeconds(tick.nowSec));
-
-        // A play that ends on failure stops the moment its gauge empties.
-        if (judge.isClosed()) {
-          endedOnFailure = true;
-          endSeconds = tick.nowSec;
-          break;
-        }
-        if (stopping) {
-          controls.interrupt('escape', tick.nowSec);
-          break;
-        }
-        const safeNowSeconds = Math.max(0, judge.judgedThroughSeconds(tick)) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
-        if (endsWithChart && judge.isSettled() && safeNowSeconds >= totalSeconds) {
-          break;
-        }
-        // Race the 60 Hz tick against the next input arrival.
-        await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, loopWakeUp);
-      }
-
-      if (controls.interruptedReason === undefined) {
-        judge.beforeFinish?.();
-        tracer.flushUntil(totalSeconds);
-        judge.finish();
-        // A closing frame shows the state `finish` left at the play's end — the chart's end, whatever tick the loop
-        // stopped on, or where the play failed.
-        publishUiFrame(endSeconds, beatAtSeconds(endSeconds));
-      }
+      endedOnFailure = await playChart(session, judge, controls, wakeUp);
     }
   } finally {
     if (controls.interruptedReason !== undefined || endedOnFailure) {
-      await disposeAudioSessionSafely(audioSession);
+      await disposeAudioSessionSafely(session.audioSession);
     } else {
-      await finalizeAudioSessionSafely(audioSession);
+      await finalizeAudioSessionSafely(session.audioSession);
     }
     session.inputRuntime?.stop();
     wakeUp.dispose();
