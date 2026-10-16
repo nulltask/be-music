@@ -1,4 +1,5 @@
 import { Application, Color, Container, Graphics } from 'pixi.js';
+import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
 import { type PixiSceneHost } from '../host.ts';
 import { disposeChildren } from '../pixi-utils.ts';
@@ -252,25 +253,25 @@ export class CoreResultView {
     this.timerStartedAt.clear();
     this.retryRequested = false;
     this.continued = false;
-    this.timerStartedAt.set(0, this.sceneStartedAt);
+    this.timerStartedAt.set(LR2_TIMER.SCENE_START, this.sceneStartedAt);
     // Schedule timer 1 (input enable) and timer 150 (chart-draw) from wall clock so the intro animation plays out even
     // without user interaction. Timer 151 fires automatically once the chart-draw window elapses; 152 needs an input.
     const startInput = this.startInputMs;
     this.setTimer(
       () => {
         if (this.disposed) return;
-        this.timerStartedAt.set(1, performance.now());
+        this.timerStartedAt.set(LR2_TIMER.START_INPUT, performance.now());
         // The LR2 reference timeline starts the chart draw the moment input becomes available — keep the same anchor so
         // the numbers panel slide-in lines up with the chrome animation.
-        this.timerStartedAt.set(150, performance.now());
+        this.timerStartedAt.set(LR2_TIMER.RESULT_GRAPH_START, performance.now());
       },
       Math.max(0, startInput),
     );
     this.setTimer(
       () => {
         if (this.disposed) return;
-        if (this.timerStartedAt.has(151)) return;
-        this.timerStartedAt.set(151, performance.now());
+        if (this.timerStartedAt.has(LR2_TIMER.RESULT_GRAPH_END)) return;
+        this.timerStartedAt.set(LR2_TIMER.RESULT_GRAPH_END, performance.now());
       },
       Math.max(0, startInput) + CHART_DRAW_DURATION_MS,
     );
@@ -443,7 +444,7 @@ export class CoreResultView {
     if (!result) return;
     const now = performance.now();
     // A skip (Enter before the chart draw finishes → timer 151) jumps the skin's entrance to its settled layout.
-    const skipped = this.timerStartedAt.has(151);
+    const skipped = this.timerStartedAt.has(LR2_TIMER.RESULT_GRAPH_END);
     if (!this.skinBinding) {
       const collection = this.options.collection;
       this.songImages = new SongImageCache({
@@ -487,9 +488,14 @@ export class CoreResultView {
    * Defined as an arrow-property so it survives extraction into free visibility helpers without losing `this`.
    */
   protected readonly timerActive = (timer: number): boolean => {
-    if (timer === 0) return true;
+    if (timer === LR2_TIMER.SCENE_START) return true;
     // Driven timers — active iff fired.
-    if (timer === 1 || timer === 150 || timer === 151 || timer === 152) {
+    if (
+      timer === LR2_TIMER.START_INPUT ||
+      timer === LR2_TIMER.RESULT_GRAPH_START ||
+      timer === LR2_TIMER.RESULT_GRAPH_END ||
+      timer === LR2_TIMER.RESULT_UPDATE
+    ) {
       return this.timerStartedAt.has(timer);
     }
     return false;
@@ -510,7 +516,7 @@ export class CoreResultView {
     if (this.options.onRetry !== undefined && isResultRetryKey(event)) {
       event.preventDefault();
       // Same input-enable gate as Enter / Space, so the R can't land while the hand is still coming off the keys.
-      if (!this.timerStartedAt.has(1)) return;
+      if (!this.timerStartedAt.has(LR2_TIMER.START_INPUT)) return;
       this.retryRequested = true;
       this.options.onRetry();
       return;
@@ -538,19 +544,19 @@ export class CoreResultView {
    * specific event preventDefault / key-filter logic in the respective handlers.
    */
   private advance(): void {
-    if (!this.timerStartedAt.has(1)) {
+    if (!this.timerStartedAt.has(LR2_TIMER.START_INPUT)) {
       // Input-enable delay hasn't elapsed — ignore the press. LR2 suppresses input here so the player can't
       // accidentally skip past the slide-in animation before the score panel appears.
       return;
     }
-    if (!this.timerStartedAt.has(151)) {
+    if (!this.timerStartedAt.has(LR2_TIMER.RESULT_GRAPH_END)) {
       // Skip the chart draw — fire timer 151 so the score panel appears immediately. Mirrors LR2's gacha-press
       // behavior.
-      this.timerStartedAt.set(151, performance.now());
+      this.timerStartedAt.set(LR2_TIMER.RESULT_GRAPH_END, performance.now());
       return;
     }
-    if (!this.timerStartedAt.has(152)) {
-      this.timerStartedAt.set(152, performance.now());
+    if (!this.timerStartedAt.has(LR2_TIMER.RESULT_UPDATE)) {
+      this.timerStartedAt.set(LR2_TIMER.RESULT_UPDATE, performance.now());
       return;
     }
     this.continued = true;
