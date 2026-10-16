@@ -360,6 +360,36 @@ pnpm bench -- --packages player-web
 - With "Submit to Leaderboard" on (Debug Menu → Leaderboard, OFF by default, latched like the auto-save), a finished manual play is sent to the Leaderboard ([leaderboard.md](./leaderboard.md)) when the result scene mounts: the demo signs in anonymously the first time, rebuilds the play's fingerprint documents from the song's chart and checks them against the log before sending, resends with the chart document when the server asks for it, and shows the rank in the status line. The deployed Worker forwards `/api/*` and `/leaderboard/*` to the Leaderboard Worker through a Service Binding; `pnpm player:web` proxies them to a local one (`pnpm --filter @be-music/leaderboard-api run dev`, or `LEADERBOARD_DEV_ORIGIN`).
 - The account starts anonymous (the first submission signs in anonymously). "Create passkey (keep this account)" registers a passkey for it, which also lists its plays under its handle instead of behind the anonymous filter; "Sign in with passkey" brings the account to another browser and moves that browser's anonymous plays into it.
 
+### Audio service
+
+`createAudioService()` (`@be-music/player-web/runtime`) is the one way the player plays sounds outside a play's chart ([ADR 0007](./adr/0007-one-system-audio-context.md)). The scenes do not use it yet; each scene session adopts it as it lands.
+
+```mermaid
+flowchart LR
+  subgraph system["System context, shared"]
+    bgm[BGM] --> duck[Duck under preview]
+    duck --> music[Music bus]
+    jingle[Jingles] --> music
+    preview[Chart preview] --> music
+    music --> analyzer[Analyzer]
+    cue[Cues, skin sounds] --> cues[Cue bus]
+  end
+  subgraph play["Play context, per play"]
+    samples[Chart samples] --> bus[Audio bus]
+  end
+  music --> master[Master volume]
+  cues --> master
+  bus --> master
+```
+
+- The system context is created on first use, so a page without a user gesture does not start one the browser refuses. Each sound is decoded once per bytes (or theme file), and a failed decode is remembered.
+- `setTheme({ sounds, files })` sets the theme's `SystemSoundSet` (scene-model) and, for a beatoraja theme, its files. `playCue(slot)` plays a cue of that set once. `playBgm` and `playJingle` take a slot or a resolved `SystemSound`. A sound given by path, such as a beatoraja theme's cues, is read from the theme's files.
+- `playBgm(sound, { owner, volume, loop, duckUnderPreview })` keeps one BGM. A new one replaces it; the same one again keeps playing and only its owner and level change. It goes silent while a chart preview is audible, unless `duckUnderPreview` is `false`.
+- `skinSounds.play` / `loop` / `stop` are a beatoraja skin's `main_state.audio_*` calls; `skinSounds.owned(owner)` makes the same calls with an owner.
+- `preview.focus(target, owner)` drives the one `ChartPreviewEngine`. `analyzer.sample(now)` reads the music bus for audio-reactive be-music skins.
+- `openPlayGraph(chart, mode, busOptions, { owner })` opens a play's own `interactive` context and audio bus with `#VOLWAV` applied, and an analyzer on the bus output. `close({ delayMs, beforeClose })` ends it once the tail has rung out.
+- `stopOwned(owner)` stops everything an owner started: its BGM, jingles, cues and skin sounds, the preview it focused, and its play graphs that are not closing yet. A scene calls it on exit, since closing a context no longer stops its sounds. A sound started without an owner plays out, such as the decide cue as the select screen leaves. `dispose()` stops everything and closes every context.
+
 ## Compatibility boundary
 
 The browser player is a runtime consumer of the repository's shared parser, chart, audio-renderer, player, utils, LR2 skin, and beatoraja skin packages.
