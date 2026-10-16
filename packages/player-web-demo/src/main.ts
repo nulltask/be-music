@@ -167,6 +167,7 @@ import {
   resolveCoursePlaylogFilename,
   serializeCoursePlaylog,
   type BeMusicCoursePlaylog,
+  type PlaylogCourseResult,
 } from '@be-music/player/playlog';
 import {
   buildCourseResultData,
@@ -317,6 +318,18 @@ import {
   storeRenderResolution,
 } from './render-resolution.ts';
 import type { ChartImageTexture, DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
+import {
+  describeBar,
+  isTestHookEnabled,
+  nameJingle,
+  resultFromCourseLog,
+  resultFromData,
+  resultFromSummary,
+  judgedOf,
+  TestHookRecorder,
+  type TestHookFamily,
+  type TestHookLiveState,
+} from './test-hook.ts';
 import './styles.css';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -852,6 +865,10 @@ class PlayerWebDemoApp {
   private silentModeController: Controller | undefined;
   /** The start card's "Play in silent mode" checkbox, when the browser offers the setting. */
   private startSilentModeOption: StartSilentModeOption | undefined;
+  /** `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`). */
+  private readonly testHook = isTestHookEnabled(window.location.href, import.meta.env.DEV)
+    ? new TestHookRecorder()
+    : undefined;
   private readonly elements: PlayerWebDemoElements;
   public constructor(elements: PlayerWebDemoElements) {
     this.elements = elements;
@@ -987,6 +1004,7 @@ class PlayerWebDemoApp {
   }
 
   public start(): void {
+    this.testHook?.install(window, () => this.testHookState());
     this.buildGui();
     this.courseMakerPanel = new CourseMakerPanel(this.courseMaker, { onStatus: (text) => this.setStatus(text) });
     void loadMadeCourses().then(async (made) => {
@@ -1020,6 +1038,7 @@ class PlayerWebDemoApp {
           await load(fileList);
         } finally {
           hideLoadingOverlay(this.elements);
+          this.testHook?.recordLoad();
         }
       })();
     };
@@ -1857,12 +1876,104 @@ class PlayerWebDemoApp {
     this.guiState.status = text;
     this.playStatusShown = false;
     this.statusController?.updateDisplay();
+    this.testHook?.recordStatus(text);
   }
 
   /** Shows a status about the play or result on screen, which the select screen replaces when it comes back. */
   private setPlayStatus(text: string): void {
     this.setStatus(text);
     this.playStatusShown = true;
+  }
+
+  /** What `window.__beMusicTest` reports now (`test-hook.ts`), read from the scenes up and the state kept here. */
+  private testHookState(): TestHookLiveState {
+    const family = (lr2: boolean): TestHookFamily => (lr2 ? 'lr2' : 'built-in');
+    const select = this.beatorajaSelectScene ?? (this.selectView?.isVisible() === true ? this.selectView : undefined);
+    const scene: TestHookLiveState['scene'] = this.beatorajaResultScene
+      ? { kind: 'result', family: 'beatoraja' }
+      : this.resultView
+        ? { kind: 'result', family: family(this.resultView instanceof PixiResultView) }
+        : this.beatorajaDecideScene
+          ? { kind: 'decide', family: 'beatoraja' }
+          : this.decideView
+            ? { kind: 'decide', family: family(this.decideView instanceof PixiDecideView) }
+            : this.beatorajaGameplayView
+              ? { kind: 'play', family: 'beatoraja' }
+              : this.gameplayView && this.elements.shell.classList.contains('playing')
+                ? { kind: 'play', family: family(this.gameplayView instanceof PixiGameplayView) }
+                : select === this.beatorajaSelectScene && select !== undefined
+                  ? { kind: 'select', family: 'beatoraja' }
+                  : select !== undefined
+                    ? { kind: 'select', family: family(select instanceof PixiSongSelectView) }
+                    : { kind: 'none' };
+    const entry = scene.kind === 'select' ? select?.getFocusedEntry() : undefined;
+    const play = scene.kind === 'play' ? this.lastPlay : undefined;
+    // The engine's frame on the beatoraja scene; the play's running result on the LR2 / built-in ones.
+    const frame = this.beatorajaGameplayView?.getFrame();
+    const progress = this.beatorajaGameplayView === undefined ? this.gameplayView?.getResultData() : undefined;
+    const active = this.activeCourse;
+    const draft = this.courseMaker.draft;
+    return {
+      scene,
+      status: this.guiState.status,
+      loading: this.elements.loadingOverlay.classList.contains('visible'),
+      library: {
+        songs: this.collection.songs.length,
+        courseFolders: (this.collection.courseFolders ?? []).map((folder) => folder.label),
+      },
+      cursor:
+        scene.kind === 'select'
+          ? {
+              folderPath: [
+                ...(this.beatorajaSelectScene?.captureSnapshot().folderPath ??
+                  this.selectView?.getNavigation().folderPath ??
+                  []),
+              ],
+              bar:
+                entry &&
+                describeBar(
+                  entry,
+                  entry.kind === 'song'
+                    ? this.lookupSongRecord(entry.song)
+                    : entry.kind === 'course'
+                      ? lookupCourseRecord(entry.course, this.songRecords, this.guiState.nonstopPlacement)
+                      : undefined,
+                ),
+            }
+          : undefined,
+      play: play && {
+        title: play.song.title,
+        autoPlay: play.overrides.autoPlay,
+        replay: play.overrides.replay !== undefined,
+        tempo: this.beatorajaGameplayView?.getTempo() ?? this.gameplayView?.getTempo() ?? 1,
+        hiSpeed: this.beatorajaGameplayView === undefined ? this.gameplayView?.getHiSpeed() : undefined,
+        seconds: frame?.currentSeconds ?? progress?.playSeconds,
+        judged: frame ? judgedOf(frame.summary) : progress && judgedOf(progress.score),
+        gauge: frame
+          ? { type: frame.summary.gauge?.type, value: frame.summary.gauge?.current ?? 0 }
+          : progress && { type: progress.gaugeType, value: progress.gauge },
+        course: active && {
+          name: active.course.definition.name,
+          stage: active.run.stagesPlayed + 1,
+          stageCount: active.run.stageCount,
+        },
+      },
+      courseDraft: draft && { kind: draft.kind, stages: draft.stages.map((stage) => stage.title ?? stage.md5) },
+    };
+  }
+
+  /** Which theme slot a result jingle came from (`lr2:courseClear`, `beatoraja:fail`, ...), for the test hook. */
+  private nameResultJingle(bytes: Uint8Array | undefined): string | undefined {
+    return nameJingle(bytes, {
+      lr2: {
+        clear: this.clearBgmBytes,
+        fail: this.failBgmBytes,
+        result: this.resultBgmBytes,
+        courseClear: this.courseClearBgmBytes,
+        courseFail: this.courseFailBgmBytes,
+      },
+      beatoraja: { ...this.beatorajaThemeBgm },
+    });
   }
 
   /**
@@ -1923,6 +2034,7 @@ class PlayerWebDemoApp {
       // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedSongAndThemeFiles`
       // produced an empty bucket. Otherwise a failed drop would leave the UI permanently masked.
       hideLoadingOverlay(this.elements);
+      this.testHook?.recordLoad();
     }
   }
 
@@ -2428,6 +2540,7 @@ class PlayerWebDemoApp {
     playlog: BeMusicPlaylog | undefined,
     fallback?: PixiGameplayResultData,
   ): Promise<void> {
+    this.testHook?.recordPlaylog(playlog);
     if (playlog === undefined) {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
@@ -2540,7 +2653,7 @@ class PlayerWebDemoApp {
           ),
           timingHistory: [],
         },
-        { info: courseInfo, result: true },
+        { info: courseInfo, result: { log: courseLog, native: result } },
       );
       if (mounted) {
         this.unlockPlaylogOptions();
@@ -2551,6 +2664,7 @@ class PlayerWebDemoApp {
     const playSeconds = run.playSeconds;
     await this.showResult(buildCourseResultData(course, result, courseLog, histories.at(-1), { playSeconds }), {
       course: courseInfo,
+      courseLog: { log: courseLog, native: result },
     });
   }
 
@@ -3512,6 +3626,7 @@ class PlayerWebDemoApp {
           ]);
           void this.finishBeatorajaGameplayThen(async () => {
             await settled;
+            this.testHook?.recordPlaylog(view?.getPlaylog());
             active.run.giveUp(view?.getPlaylog());
             this.activeCourse = active;
             await this.showCourseResult();
@@ -3529,6 +3644,7 @@ class PlayerWebDemoApp {
         // The play-log is captured HERE (while the gameplay view is guaranteed alive) — the finish
         // transition below disposes the scene before the result mounts.
         const playlog = this.beatorajaGameplayView?.getPlaylog();
+        this.testHook?.recordPlaylog(playlog);
         void this.finishBeatorajaGameplayThen(async () => {
           // A course stage: its play log carries the course on, and leaving its result plays the next stage.
           if (courseStage !== undefined && this.activeCourse !== undefined) {
@@ -4151,12 +4267,12 @@ class PlayerWebDemoApp {
       gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
       timingHistory: ReadonlyArray<{ deltaMs: number; kind: string }>;
     },
-    course?: { info: SceneCourseInfo; result?: boolean },
+    course?: { info: SceneCourseInfo; result?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult } },
   ): Promise<boolean> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return false;
     // The course result (`course.result`) shows on the theme's COURSE_RESULT skin, falling back to its result skin.
-    const courseResult = course?.result === true;
+    const courseResult = course?.result !== undefined;
 
     // Same fix as decide — fall back to the discovery's `theme.resultSkin` rather than
     // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default
@@ -4230,6 +4346,11 @@ class PlayerWebDemoApp {
     // never in a course (beatoraja disables quick retry there).
     const retry = course === undefined && this.lastPlay?.song.id === song.id ? this.lastPlay : undefined;
     const cleared = summary.gauge?.cleared ?? false;
+    // The course result plays `course_clear` / `course_fail`, falling back to the result ones as beatoraja does.
+    const bgmBytes =
+      (courseResult ? (cleared ? this.beatorajaThemeBgm.courseClear : this.beatorajaThemeBgm.courseFail) : undefined) ??
+      (cleared ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
+      this.beatorajaThemeBgm.result;
     this.beatorajaResultScene = new PixiBeatorajaResultScene({
       judgeRuleset: this.guiState.judgeRuleset,
       skin: result.skin,
@@ -4255,15 +4376,7 @@ class PlayerWebDemoApp {
       // Pick the outcome-specific jingle when one was discovered, falling back to the generic
       // `result` slot. Beatoraja themes that ship a single result BGM authoredit as `result.*`,
       // while themes that distinguish clear / fail (most reference themes) ship dedicated tracks.
-      // The course result plays `course_clear` / `course_fail`, falling back to the result ones as beatoraja does.
-      bgmBytes:
-        (courseResult
-          ? cleared
-            ? this.beatorajaThemeBgm.courseClear
-            : this.beatorajaThemeBgm.courseFail
-          : undefined) ??
-        (cleared ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
-        this.beatorajaThemeBgm.result,
+      bgmBytes,
       ...(course !== undefined ? { courseInfo: course.info } : {}),
       skinAudio: this.beatorajaSkinAudio,
       onContinue: () => {
@@ -4293,6 +4406,17 @@ class PlayerWebDemoApp {
     await this.sceneHost.setScene(this.beatorajaResultScene);
     this.setPlayStatus(
       `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · ex=${summary.exScore} maxCombo=${maxCombo}`,
+    );
+    const jingle = this.nameResultJingle(bgmBytes);
+    this.testHook?.recordResult(
+      course?.result !== undefined
+        ? resultFromCourseLog(course.result.log, course.result.native, { family: 'beatoraja', jingle })
+        : resultFromSummary(summary, {
+            run: course !== undefined ? 'stage' : 'single',
+            title: song.title,
+            lamp: recordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset).lamp,
+            ...(jingle !== undefined ? { jingle } : {}),
+          }),
     );
     return true;
   }
@@ -5130,7 +5254,9 @@ class PlayerWebDemoApp {
         const exit = resolveGameplayExit({ courseStage: active !== undefined, nonstop: nonstop !== undefined });
         if (exit === 'give-up-course') {
           void this.finishGameplayThen(async () => {
-            active!.run.giveUp(await view?.waitForPlaylog());
+            const playlog = await view?.waitForPlaylog();
+            this.testHook?.recordPlaylog(playlog);
+            active!.run.giveUp(playlog);
             this.activeCourse = active;
             await this.showCourseResult();
           });
@@ -5161,6 +5287,7 @@ class PlayerWebDemoApp {
           })
         ) {
           void this.finishGameplayThen(async () => {
+            this.testHook?.recordPlaylog(result.playlog);
             this.activeCourse?.run.recordStage(result.playlog, result);
             this.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             this.gameplayView?.dispose({ preserveAudioTail: true });
@@ -5359,15 +5486,20 @@ class PlayerWebDemoApp {
    */
   private async showResult(
     data: PixiGameplayResultData,
-    mode: { course?: SceneCourseInfo; nonstop?: { info: SceneCourseInfo; retry: () => void } } = {},
+    mode: {
+      course?: SceneCourseInfo;
+      /** The course result's play log and native result (what the test hook reports of it). */
+      courseLog?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult };
+      nonstop?: { info: SceneCourseInfo; retry: () => void };
+    } = {},
   ): Promise<void> {
     await this.ensureHostMounted();
     this.resultView?.dispose();
     // A stage of a running course: its play log carries the course on, and dismissing its result plays the next stage.
     const courseStage = mode.course === undefined && mode.nonstop === undefined && this.activeCourse !== undefined;
-    const presentation = resolveResultPresentation(
-      mode.course !== undefined ? 'course' : mode.nonstop !== undefined ? 'nonstop' : courseStage ? 'stage' : 'single',
-    );
+    const run =
+      mode.course !== undefined ? 'course' : mode.nonstop !== undefined ? 'nonstop' : courseStage ? 'stage' : 'single';
+    const presentation = resolveResultPresentation(run);
     if (courseStage) {
       this.activeCourse!.run.recordStage(data.playlog, data);
       this.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
@@ -5408,19 +5540,20 @@ class PlayerWebDemoApp {
         : retryTarget?.kind === 'replay'
           ? () => void this.playSong(retryTarget.play.song, retryTarget.play.overrides)
           : undefined;
+    // The active theme's jingles: a beatoraja theme's when its result falls back to this view (a NONSTOP course).
+    const jingles = resolveResultViewJingles(resultFamily, presentation.courseJingles, {
+      lr2: {
+        clear: this.clearBgmBytes,
+        fail: this.failBgmBytes,
+        result: this.resultBgmBytes,
+        courseClear: this.courseClearBgmBytes,
+        courseFail: this.courseFailBgmBytes,
+      },
+      beatoraja: this.beatorajaThemeBgm,
+    });
     const sharedResultOptions = {
       collection: this.collection,
-      // The active theme's jingles: a beatoraja theme's when its result falls back to this view (a NONSTOP course).
-      ...resolveResultViewJingles(resultFamily, presentation.courseJingles, {
-        lr2: {
-          clear: this.clearBgmBytes,
-          fail: this.failBgmBytes,
-          result: this.resultBgmBytes,
-          courseClear: this.courseClearBgmBytes,
-          courseFail: this.courseFailBgmBytes,
-        },
-        beatoraja: this.beatorajaThemeBgm,
-      }),
+      ...jingles,
       onContinue: () => {
         if (courseStage && this.activeCourse !== undefined) {
           // The next stage does not tear the result view down, and a live one would keep taking its clicks and keys
@@ -5460,6 +5593,20 @@ class PlayerWebDemoApp {
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
     this.setPlayStatus(`Result: ${data.song.title}`);
+    if (this.testHook !== undefined) {
+      if (mode.course === undefined) this.testHook.recordPlaylog(data.playlog);
+      const family = lr2ResultSkin !== undefined ? 'lr2' : 'built-in';
+      const jingle = this.nameResultJingle(data.cleared ? jingles.clearBgm : jingles.failBgm);
+      this.testHook.recordResult(
+        mode.courseLog !== undefined
+          ? resultFromCourseLog(mode.courseLog.log, mode.courseLog.native, {
+              family,
+              playSeconds: data.playSeconds,
+              jingle,
+            })
+          : resultFromData(data, run, family, jingle),
+      );
+    }
     this.recordActivePlay(recordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (presentation.quickRetry && mode.nonstop === undefined) {
