@@ -5337,6 +5337,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
               ...(this.replayTempo !== undefined && this.replayTempo.changes.length > 0
                 ? { replayTempoChanges: this.replayTempo.changes }
                 : {}),
+              // A play given up with ESC replays up to where it was given up, as its re-simulations do.
+              ...(this.options.replay.play.aborted === true && this.options.replay.play.abortedAtUs !== undefined
+                ? { replayAbortedAtUs: this.options.replay.play.abortedAtUs }
+                : {}),
               autoScratch: this.options.replay.play.autoScratch,
               judgeRuleset: this.options.replay.play.judgeRuleset ?? 'lr2',
               // Logs from before plays ended on failure kept judging to the end; replay them that way.
@@ -5387,7 +5391,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         this.applyFinalComboSummary(summary);
         // A play the view interrupted (ESC / F5 / teardown) has already handed the host over; it does not finish.
         if (this.sharedEngineInterrupt !== undefined) return;
-        // A held play ends when its outro lets go; one that ended on its own (auto play, a failed gauge) starts it now.
+        // A held play ends when its outro lets go; one that ended on its own (a failed gauge, a replay stopping where its
+        // log was given up) starts it now.
         const waiting = this.onHeldPlayEnded;
         if (waiting !== undefined) {
           this.onHeldPlayEnded = undefined;
