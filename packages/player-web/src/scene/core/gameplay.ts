@@ -29,6 +29,7 @@ import {
   type PlayerTempoChange,
   type TempoClock,
 } from '@be-music/player/core/engine';
+import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { resolveClearLamp, type GaugeType } from '@be-music/player/ruleset';
 import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
 import { type ChartPlayVariant, resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
@@ -143,8 +144,6 @@ import {
   DESIGN_WIDTH,
   HISPEED_STEP,
   FALLBACK_INTRO_DELAY_MS,
-  LR2_1P_KEYON_TIMER_BASE,
-  LR2_2P_KEYON_TIMER_BASE,
   PIXELS_PER_BEAT,
   PLAYFIELD,
 } from '../gameplay-constants.ts';
@@ -3129,7 +3128,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // single-side so every lane (whether the chart sources it from `1X` or `2X`) routes through the 1P-side base; the
     // resolver already collapses both layouts onto slots 1..9.
     const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
-    const base = isPlayer2 ? LR2_2P_KEYON_TIMER_BASE : LR2_1P_KEYON_TIMER_BASE;
+    const base = isPlayer2 ? LR2_TIMER.KEY_ON_2P : LR2_TIMER.KEY_ON_1P;
     return base + laneIndex;
   }
 
