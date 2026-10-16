@@ -797,6 +797,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     };
   }
 
+  /** The bar under the cursor (a folder, song or course), or `undefined` when the list is empty. */
+  getFocusedEntry(): BrowserBrowseEntry | undefined {
+    return this.entries[this.currentIndex];
+  }
+
   enter(host: PixiSceneHost): void {
     if (this.disposed) return;
     this.host = host;
