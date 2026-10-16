@@ -16,21 +16,22 @@ import type { PlayDisposeOptions, PlaySessionOptions } from '../session/play/pla
 import type { PixiSceneHost } from '../scene/host.ts';
 import { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import { PlaySession } from '../session/play/play-session.ts';
-import type { PlaySessionTheme } from '../session/play/play-session-theme.ts';
+import type { PlayPlaylogViewScale, PlaySessionTheme } from '../session/play/play-session-theme.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
+import { BeatorajaPlayView } from '../view/beatoraja/play-view.ts';
 import { BuiltInPlayView } from '../view/built-in/play-view.ts';
 import { Lr2PlayView } from '../view/lr2/play-view.ts';
 import type { PlayFrame, PlayIntent, PlayView, PlayfieldSkin } from '../view/types.ts';
-import type { BuiltInKit, Lr2PlayKit } from './family-kit.ts';
+import type { BeatorajaKit, BuiltInKit, Lr2PlayKit } from './family-kit.ts';
 
 const log = logger('gameplay');
 
 /**
- * The kits the play scene takes: a be-music skin, or an LR2 play skin (with the 9-keys skin for invisible notes). The
- * beatoraja play screen is still `PixiBeatorajaGameplayView`.
+ * The kits the play scene takes: a be-music skin, an LR2 play skin (with the 9-keys skin for invisible notes), or a
+ * beatoraja theme's play entry.
  */
-export type PlaySceneKit = BuiltInKit | Lr2PlayKit;
+export type PlaySceneKit = BuiltInKit | Lr2PlayKit | BeatorajaKit;
 
 /**
  * How a play runs, apart from its chart, its skin and where it leads: the play options it judges and scrolls with
@@ -133,6 +134,11 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   readonly recording: PlaySceneRecording;
   /** The play as a result so far (the test hook reads it); `undefined` before the chart is loaded. */
   progress(): PlayResult | undefined;
+  /**
+   * The chart as the play plays it — its `#RANDOM` / `#SWITCH` branches drawn, with the draws — once it is loaded and
+   * until the scene is disposed: what a result's graphs plot.
+   */
+  readonly resolved: ResolvedPlayChart | undefined;
   /** The play log once the engine has recorded it, also after Escape; `undefined` after `timeoutMs` without one. */
   waitForPlaylog(timeoutMs?: number): Promise<BeMusicPlaylog | undefined>;
   /**
@@ -161,6 +167,8 @@ interface FamilyPlayView {
   prepareOn(host: PixiSceneHost): void;
   /** Loads the view's own assets once the chart is prepared (the session theme's `prepareView`). */
   prepareView?(): Promise<void>;
+  /** The scale the view's hi-speed reads on in the play log, when it has its own (the session theme's `playlogView`). */
+  playlogView?(): PlayPlaylogViewScale | undefined;
   uploadTextures(textures: Iterable<Texture | undefined>, isCancelled: () => boolean): Promise<void>;
   setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void;
   setShowInvisibleNotes(enabled: boolean): void;
@@ -171,9 +179,31 @@ interface FamilyPlayView {
 function createPlayView(
   kit: PlaySceneKit,
   play: PlaySession,
-  options: Pick<PlaySceneOptions, 'settings' | 'course' | 'source'>,
+  options: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio'>,
 ): FamilyPlayView {
   const { settings, course, source } = options;
+  if (kit.family === 'beatoraja') {
+    const view = new BeatorajaPlayView(kit, play, {
+      ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
+      ...(settings.dpFlip !== undefined ? { dpFlip: settings.dpFlip } : {}),
+      ...(course?.view !== undefined ? { course: course.view } : {}),
+      ...(source !== undefined ? { source } : {}),
+      // The skin's Lua sounds play through the audio service, owned by the play.
+      skinSounds: options.audio.skinSounds.owned(play),
+    });
+    return {
+      view,
+      playfieldSkin: view.playfieldSkin,
+      prepareOn: (host) => view.prepareOn(host),
+      prepareView: () => view.prepare(),
+      playlogView: () => view.playlogView(),
+      uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
+      // A beatoraja skin draws its own notes: neither drawing option applies.
+      setJudgedNoteDisplay: () => {},
+      setShowInvisibleNotes: () => {},
+      updateKit: (next) => (next.family === 'beatoraja' ? view.updateKit(next) : ignoreKit(next, 'beatoraja')),
+    };
+  }
   const drawing = {
     ...(settings.bga !== undefined ? { bga: settings.bga } : {}),
     ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
@@ -319,6 +349,11 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     return this.play.getResultData();
   }
 
+  public get resolved(): ResolvedPlayChart | undefined {
+    const { resolvedChart, randomDraws } = this.play;
+    return resolvedChart !== undefined && randomDraws !== undefined ? { chart: resolvedChart, randomDraws } : undefined;
+  }
+
   public waitForPlaylog(timeoutMs?: number): Promise<BeMusicPlaylog | undefined> {
     return this.play.waitForPlaylog(timeoutMs);
   }
@@ -383,10 +418,12 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     stage: () => family!.playfieldSkin.stage,
     prepareView: () => family?.prepareView?.() ?? Promise.resolve(),
     uploadTextures: (textures) => family?.uploadTextures(textures, () => play.disposed) ?? Promise.resolve(),
+    playlogView: () => family?.playlogView?.(),
   };
   const play = new PlaySession(
     {
       ...settings,
+      ...(kit.family === 'beatoraja' ? BEATORAJA_PLAY_SETTINGS : {}),
       ...(course !== undefined
         ? { course: course.stage, ...(course.view !== undefined ? { courseInfo: course.view } : {}) }
         : {}),
@@ -424,3 +461,19 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
 }
 
 const NO_KEYS = { addEventListener: (): void => {}, removeEventListener: (): void => {} };
+
+/**
+ * What a beatoraja play runs with over the host's settings, until the beatoraja play takes them as the other families
+ * do: no lane options (RANDOM, MIRROR, S-RANDOM, SCATTER) and no HS-FIX, the lane covers starting off, and beatoraja's
+ * cover keys.
+ */
+const BEATORAJA_PLAY_SETTINGS: Pick<
+  PlaySessionOptions,
+  'random1P' | 'random2P' | 'hsFix' | 'coverStart' | 'coverKeys'
+> = {
+  random1P: 'OFF',
+  random2P: 'OFF',
+  hsFix: 'OFF',
+  coverStart: 'none',
+  coverKeys: true,
+};

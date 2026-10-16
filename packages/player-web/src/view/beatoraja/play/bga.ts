@@ -177,6 +177,26 @@ export class BeatorajaBgaLayer {
     }
   }
 
+  /**
+   * Plays the current cue's video again when it is paused: a paused play pauses every BGA video, and the layer only
+   * starts one on a cue change.
+   */
+  resume(): void {
+    if (this.disposed || this.currentKey === undefined) return;
+    const video = this.videoElements.get(this.currentKey);
+    if (video === undefined || !video.paused) return;
+    try {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Autoplay policy or a codec refused it: the video stays on its frame.
+        });
+      }
+    } catch {
+      // Same as above.
+    }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
