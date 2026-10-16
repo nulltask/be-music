@@ -6,6 +6,7 @@ export * from './eligibility.ts';
 export * from './format.ts';
 export * from './nonstop.ts';
 export * from './recorder.ts';
+export * from './result-lamp.ts';
 export * from './simulate.ts';
 export * from './view.ts';
 // The chart a play was played on, rebuilt without the engine's audio driver: a verifier needs it to check what a log
