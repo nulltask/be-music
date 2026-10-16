@@ -477,6 +477,11 @@ EX-SCORE は IIDX 互換です。
   判定内訳だけで決まり、コンボ項はありません。
 - `beatoraja` と `iidx` は EX-SCORE を返します。これが実機の表示です（IIDX は BISTROVER でマネースコアを廃止）。
 
+スコアの語彙はルールセットのもので、`@be-music/player/ruleset` が公開します。`ScoreSummary`、`JudgeKind`、
+`createEmptyScore`、`computeScoreRate`、DJ ランク（`resolveIidxRankIndexFromScore`、`resolveIidxRankLabel`、
+`IIDX_RANK_LABELS`）、`resolveLr2MoneyScore`、`resolveDisplayedPoor` です。`@be-music/player/core/scoring` は
+その非推奨の別名で、ほかの `core/*` subpath とともに削除します。
+
 ### 空 POOR
 
 空 POOR は「届く範囲にノートは無いが、ルールセットの miss 窓の中にノートがある」押下です。ゲージを削り POOR

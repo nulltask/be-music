@@ -493,6 +493,11 @@ EX-SCORE is IIDX compatible.
 - `beatoraja` and `iidx` report EX-SCORE, which is what they display. IIDX retired its own money score in
   BISTROVER.
 
+The score vocabulary is the ruleset's, exported from `@be-music/player/ruleset`: `ScoreSummary`, `JudgeKind`,
+`createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolveIidxRankIndexFromScore`, `resolveIidxRankLabel`,
+`IIDX_RANK_LABELS`), `resolveLr2MoneyScore` and `resolveDisplayedPoor`. `@be-music/player/core/scoring` is a
+deprecated alias of it, removed with the other `core/*` subpaths.
+
 ### Empty POOR
 
 An empty POOR (空POOR) is a press with no note in reach but one inside the ruleset's miss window. It costs gauge
