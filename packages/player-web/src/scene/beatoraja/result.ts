@@ -29,7 +29,7 @@ import {
 } from '@be-music/beatoraja-skin/scene';
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
-import { resolveClearLamp } from '@be-music/player/ruleset';
+import { resolveClearLamp, type PlaylogRulesetId } from '@be-music/player/ruleset';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
 import type { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
@@ -56,7 +56,7 @@ export interface PixiBeatorajaResultSceneOptions {
   /** Result skin (`header.type === 7`). */
   skin: BeatorajaSkin;
   /** The judge ruleset the play ran under: keeps the clear lamp to that game's own lamps (see `resolveClearLamp`). */
-  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset?: PlaylogRulesetId;
   textures: BeatorajaTextureCache;
   fonts?: BeatorajaFontCache;
   /** Confirmed user picks for the skin's `property[]`. */

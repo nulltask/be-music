@@ -1,6 +1,6 @@
 import type { SkinFamilyId, loadTextureFromBytes } from '@be-music/player-web/skin';
 import type { PlaylogViewReplay } from '@be-music/player/playlog';
-import type { GaugeType } from '@be-music/player/ruleset';
+import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 
 /**
@@ -166,7 +166,7 @@ export interface DemoGuiState extends PlayTempoSettings {
    * Only the window widths switch — note selection, empty POOR, LN mechanics, and the gauge stay LR2-aligned.
    * Latched at song start (the Play options folder is disabled during a play) and recorded into the play-log.
    */
-  judgeRuleset: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset: PlaylogRulesetId;
   /**
    * Hi-speed (note scroll multiplier) the next play starts at. Two-way synced with the LR2 select panel's HS and the
    * in-game `ArrowUp` / `ArrowDown` keys, applied live to a running play when changed here, and remembered across
