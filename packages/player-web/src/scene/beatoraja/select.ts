@@ -32,36 +32,25 @@
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
 //
 // The scene is made of parts that read and drive it through one context it builds (`createContext`): the song list's
-// rows (`select/rows.ts`), the search input (`select/search.ts`) and the focused chart's images and graphs
-// (`select/chart-images.ts`).
+// rows (`select/rows.ts`), the search input (`select/search.ts`), the focused chart's images and graphs
+// (`select/chart-images.ts`) and what the skin reads of the screen (`select/skin-state.ts`). What the skin reads of a
+// chart bar is in `select/chart-facts.ts`.
 
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
 import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
+import { parseBeatorajaSongList, TIMER_SCENE_START, TIMER_SONGBAR_CHANGE } from '@be-music/beatoraja-skin';
 import {
-  buildBaseOpSet,
-  parseBeatorajaSongList,
-  TIMER_SCENE_START,
-  TIMER_SONGBAR_CHANGE,
-} from '@be-music/beatoraja-skin';
-import {
-  BEATORAJA_KEYS_FILTERS,
-  BEATORAJA_SORTS,
   beatorajaKeyModeIndex,
   beatorajaLnModeIndex,
-  beatorajaWallClockOf,
-  resolveBeatorajaSelectBarOps,
-  resolveBeatorajaSelectNumber,
-  resolveBeatorajaSelectRefValue,
   resolveBeatorajaSelectSliderValue,
-  resolveBeatorajaSelectText,
-  type BeatorajaSelectInput,
   type BeatorajaSystemSoundPaths,
 } from '@be-music/beatoraja-skin/scene';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
-import { safeResolveChartVariant, selectChartFacts } from './select/chart-facts.ts';
+import { safeResolveChartVariant } from './select/chart-facts.ts';
 import { BeatorajaSelectChartImages, type BeatorajaSelectChartImagesContext } from './select/chart-images.ts';
 import { BeatorajaSelectRows, type BeatorajaSelectRowsContext } from './select/rows.ts';
 import { BeatorajaSelectSearch, songMatchesQuery, type BeatorajaSelectSearchContext } from './select/search.ts';
+import { BeatorajaSelectSkinState, type BeatorajaSelectSkinStateContext } from './select/skin-state.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
@@ -257,15 +246,6 @@ export interface PixiBeatorajaSelectSceneSnapshot {
 }
 
 /**
- * How long a `BUTTON_*` op stays active after a click fires (audit 2.1). 200ms is long
- * enough for the player to perceive the press-state highlight in skins that author short
- * "press feedback" tweens, short enough that subsequent clicks don't pile up if the user
- * mashes a button. Beatoraja itself gates press feedback on Java's input-frame state which
- * lasts a single frame; our 200ms window gives smooth animation under a 60fps tick.
- */
-const BUTTON_PRESS_WINDOW_MS = 200;
-
-/**
  * Per-frame tween rate for `scrollPosition` chasing `currentIndex`. Fraction of the remaining
  * delta closed each frame at 60 Hz — `0.25` lands inside ~150 ms which feels responsive without
  * looking jumpy. We snap to the integer once the gap drops below `SCROLL_SNAP_THRESHOLD` so the
@@ -277,7 +257,8 @@ const SCROLL_SNAP_THRESHOLD = 0.005;
 /** What the scene's parts read and drive on it. */
 type BeatorajaSelectSceneContext = BeatorajaSelectRowsContext &
   BeatorajaSelectSearchContext &
-  BeatorajaSelectChartImagesContext;
+  BeatorajaSelectChartImagesContext &
+  BeatorajaSelectSkinStateContext;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root: Container = new Container();
@@ -319,6 +300,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   }
   /** The focused chart's images and graphs. */
   private readonly chartImages: BeatorajaSelectChartImages = new BeatorajaSelectChartImages(this.context);
+  /** What the skin reads of the screen: the frame's select input, its texts and values, and the active ops. */
+  private readonly skinState: BeatorajaSelectSkinState = new BeatorajaSelectSkinState(this.context);
 
   private readonly options: PixiBeatorajaSelectSceneOptions;
   private host?: PixiSceneHost;
@@ -435,19 +418,19 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // the catch-all fallback regardless of the user's chosen layout. Routed through
       // `baseOps()` so a `replaceSkin` mid-session reuses the same cached set the per-frame
       // op-resolution path uses.
-      skinConfigOps: this.baseOps(),
+      skinConfigOps: this.skinState.baseOps(),
       // Text content tracks the highlighted song. The skin's title / artist / genre text destinations
       // therefore reflect the live cursor, matching beatoraja's own select-screen behavior.
-      resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
+      resolveTextContent: (refOp) => this.skinState.resolveSelectionText(refOp),
       // Numeric values from the focused song — total notes, BPM, level. Skins render
       // these via `value[]` elements with `ref = 74 (TOTALNOTES)`, `92 (MAINBPM)`,
       // `96 (PLAYLEVEL)`, etc. Without this, the chart-info panel sits on its idle
       // zeros even after the cursor moves to a different song.
-      resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
+      resolveNumberValue: (refOp) => this.skinState.resolveSelectionNumber(refOp),
       // Imageset / generic ref values. Drives `imageset[]` sub-image picks (e.g. `modeset`
       // ref 11 picks "5keys" / "7keys" / etc. from the skin's array based on the focused
       // chart's keymode) plus any other `ref`-driven selectors the skin authored.
-      resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
+      resolveRefValue: (refOp) => this.skinState.resolveSelectionRefValue(refOp),
       // Slider values — volume / lanecover / lift translate sliders. Without a value the
       // renderer hides the slider entirely; we report `1.0` (max position) for volume types
       // so ModernChic's volume sliders sit at full instead of vanishing.
@@ -601,6 +584,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       get currentIndex(): number {
         return scene.currentIndex;
       },
+      get keymodeFilter(): number {
+        return scene.keymodeFilter;
+      },
+      get sortMode(): number {
+        return scene.sortMode;
+      },
+      get lnModeOverride(): 0 | 1 | 2 | undefined {
+        return scene.lnModeOverride;
+      },
+      currentFolderLabel: () => scene.currentFolderLabel(),
     };
   }
 
@@ -727,7 +720,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (this.disposed) return;
     this.search.destroySearchPrompt();
     this.view.dispose();
-    this.cachedBaseOps = undefined;
+    this.skinState.cachedBaseOps = undefined;
 
     // Mirror upstream `MainState.setSkin` (`MainState.java:113-132`): swap in the new skin AND
     // its companion resource set so subsequent calls to `buildRowVisuals` /
@@ -758,10 +751,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // `cachedBaseOps` was nulled above — `getCachedBaseOps` rebuilds against the NEW
       // `skinConfig.option` map so layout-variant dst alts re-resolve to the user's
       // (possibly changed) option picks for the swapped skin.
-      skinConfigOps: this.baseOps(),
-      resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
-      resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
-      resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
+      skinConfigOps: this.skinState.baseOps(),
+      resolveTextContent: (refOp) => this.skinState.resolveSelectionText(refOp),
+      resolveNumberValue: (refOp) => this.skinState.resolveSelectionNumber(refOp),
+      resolveRefValue: (refOp) => this.skinState.resolveSelectionRefValue(refOp),
       resolveSliderValue: (type) => resolveBeatorajaSelectSliderValue(type),
       onButtonAction: (act, mods) => this.handleButtonAction(act, mods),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
@@ -840,10 +833,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // `timer=0` (scene-start) path to use 0 elapsed already, so passing `undefined` for
     // anything else is the correct behaviour.
     const skinAudio = this.options.skinAudio;
-    this.frameInput = undefined;
-    this.frameInput = this.selectInput();
+    this.skinState.frameInput = undefined;
+    this.skinState.frameInput = this.skinState.selectInput();
     this.view.update({
-      activeOps: this.computeActiveOps(),
+      activeOps: this.skinState.computeActiveOps(),
       // Consult the per-scene timer ladder. Returning `undefined` for unstamped timers keeps
       // those destinations hidden (matches the play-scene runtime adapter's behaviour and
       // upstream `getTimerStart` semantics — only fired timers produce a non-null start
@@ -856,61 +849,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       audioLoop: skinAudio === undefined ? undefined : (path, vol) => skinAudio.loop(path, vol),
       audioStop: skinAudio === undefined ? undefined : (path) => skinAudio.stop(path),
     });
-    this.frameInput = undefined;
-  }
-
-  /**
-   * Stable per-skin op set — `skin_config.option` picks plus any always-on flags. Cached because
-   * `buildBaseOpSet` walks the option map; recompute only when `replaceSkin` invalidates the
-   * cache. Live per-frame ops (focused-bar kind, chart keymode) are added on top in
-   * {@link computeActiveOps}.
-   */
-  private baseOps(): ReadonlySet<number> {
-    if (this.cachedBaseOps !== undefined) return this.cachedBaseOps;
-    this.cachedBaseOps = buildBaseOpSet(this.options.skinConfig?.option);
-    return this.cachedBaseOps;
-  }
-  private cachedBaseOps: ReadonlySet<number> | undefined;
-  /**
-   * Transient BUTTON-press tracker (audit 2.1). Maps each clicked `act` code to the
-   * `performance.now()` timestamp at which the press happened. `computeActiveOps` adds the
-   * code to the active op set while it's still within {@link BUTTON_PRESS_WINDOW_MS}, so
-   * skins gating press-state chrome on the matching op see the highlight in flight. Older
-   * entries get garbage-collected lazily during op resolution; the map stays bounded since
-   * the user can only click so many buttons per second.
-   */
-  private readonly buttonPressedAt = new Map<number, number>();
-
-  /**
-   * Per-frame active op set: the stable base ops, the focused bar's ops and the buttons pressed a moment ago. Without
-   * the bar's ops the info pane stays hidden: its destinations are gated on `op:[2]` (`SONGBAR`).
-   */
-  private computeActiveOps(): ReadonlySet<number> {
-    const base = this.baseOps();
-    // Fast path: no active entry → just the base set (includes `skin_config.option` picks).
-    const entry = this.entries[this.currentIndex];
-    if (entry === undefined) return base;
-
-    const ops = new Set(base);
-    // The bar's ops: the screen's fixed state, and the folder, course or chart bar with its key mode, traits,
-    // difficulty, judge rank and clear lamp (`resolveBeatorajaSelectBarOps`).
-    for (const op of resolveBeatorajaSelectBarOps(this.selectInput())) ops.add(op);
-
-    // Transient BUTTON-press feedback (audit 2.1). Each `act` code clicked within the last
-    // `BUTTON_PRESS_WINDOW_MS` lights its matching op so destinations gating press-state
-    // chrome on `op = {act}` show their pressed visual. GC stale entries lazily — the map's
-    // size is bounded by user-click rate, which can never exceed ~10/sec.
-    if (this.buttonPressedAt.size > 0) {
-      const now = performance.now();
-      for (const [act, pressedAtMs] of this.buttonPressedAt) {
-        if (now - pressedAtMs >= BUTTON_PRESS_WINDOW_MS) {
-          this.buttonPressedAt.delete(act);
-          continue;
-        }
-        ops.add(act);
-      }
-    }
-    return ops;
+    this.skinState.frameInput = undefined;
   }
 
   /**
@@ -968,53 +907,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // list changes so the user sees the new result count after folder enter / sort cycle /
     // keymode filter change while a search query is active.
     this.search.refreshSearchPrompt();
-  }
-
-  /**
-   * What the skin reads of the screen (`@be-music/beatoraja-skin/scene`): the focused bar and its chart's facts, the
-   * folder, the search, the MODE / SORT / LNMODE choices, the skin, the judge timing, the bar's best lamp and the clock.
-   * Built once per frame in {@link tick}; read through it for every value, text and image of the frame.
-   */
-  private selectInput(): BeatorajaSelectInput {
-    if (this.frameInput !== undefined) return this.frameInput;
-    const entry = this.entries[this.currentIndex];
-    const offset = this.options.skinConfig?.offset;
-    const lampOp =
-      entry?.kind === 'song'
-        ? this.options.resolveSongLampOp?.(entry.song)
-        : entry?.kind === 'course' && entry.course.random === undefined
-          ? this.options.resolveCourseLampOp?.(entry.course)
-          : undefined;
-    return {
-      focused: entry,
-      ...(entry?.kind === 'song' ? { chart: selectChartFacts(entry.song) } : {}),
-      folderLabel: this.currentFolderLabel(),
-      searchText: this.searchQuery,
-      list: {
-        keysFilter: BEATORAJA_KEYS_FILTERS[this.keymodeFilter] ?? 'ALL',
-        sort: BEATORAJA_SORTS[this.sortMode] ?? 'OFF',
-      },
-      ...(this.lnModeOverride !== undefined ? { lnMode: this.lnModeOverride } : {}),
-      skin: { name: this.options.skin.name, author: this.options.skin.author },
-      judgeTiming: typeof offset === 'number' && Number.isFinite(offset) ? offset : 0,
-      ...(lampOp !== undefined ? { lampOp } : {}),
-      wallClock: beatorajaWallClockOf(new Date()),
-    };
-  }
-
-  /** The frame's {@link selectInput}, while `tick` draws it. */
-  private frameInput: BeatorajaSelectInput | undefined;
-
-  private resolveSelectionText(refOp: number): string | undefined {
-    return resolveBeatorajaSelectText(refOp, this.selectInput());
-  }
-
-  private resolveSelectionNumber(refOp: number): number | undefined {
-    return resolveBeatorajaSelectNumber(refOp, this.selectInput());
-  }
-
-  private resolveSelectionRefValue(refOp: number): number {
-    return resolveBeatorajaSelectRefValue(refOp, this.selectInput());
   }
 
   /**
@@ -1155,7 +1047,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // gates each entry on `BUTTON_PRESS_WINDOW_MS` so press-feedback chrome lights up for
     // the duration regardless of which action arm we end up taking (or whether we early-out
     // because the song / folder isn't pickable).
-    this.buttonPressedAt.set(act, performance.now());
+    this.skinState.buttonPressedAt.set(act, performance.now());
     const entry = this.entries[this.currentIndex];
     const song = entry?.kind === 'song' ? entry.song : entry?.kind === 'folder' ? entry.folder.songs[0] : undefined;
     // PLAY / AUTO PLAY on a course bar start the course (`MusicSelector` reads the course bar the same way).
