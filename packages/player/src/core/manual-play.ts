@@ -11,6 +11,7 @@ import {
   applyPlaybackHighSpeedAction,
   applyPlaybackTempoChange,
   consumePlaybackInputCommands,
+  recordPendingViewChanges,
   createNoopPlaybackStateLogger,
   createUiFramePublisher,
   togglePlaybackPause,
@@ -717,6 +718,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     await settleMaybeAsyncWithTimeout(uiRuntime?.stop(), 300);
     await settleMaybeAsyncWithTimeout(uiRuntime?.dispose(), 300);
   }
+  // View changes the host sent as the play ended, after the loop's last drain, still belong to it.
+  recordPendingViewChanges(inputSignals, playlogRecorder, tempoClock.chartSecondsAt(playbackClock.nowMs()));
 
   if (interruptedReason) {
     if (interruptedReason === 'escape') {

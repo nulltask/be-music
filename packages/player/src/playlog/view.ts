@@ -243,6 +243,11 @@ export interface PlaylogViewCoalescer {
    * A change held back is returned on a later call once the interval has passed, merged with what changed meanwhile.
    */
   observe(view: PlaylogViewState, nowMs: number): PlaylogViewState | undefined;
+  /**
+   * Returns what changed since the last change it returned, whatever the interval: called once as the play ends, so a
+   * change still held back is not lost.
+   */
+  flush(view: PlaylogViewState): PlaylogViewState | undefined;
 }
 
 /**
@@ -264,6 +269,12 @@ export function createPlaylogViewCoalescer(
       if (change === undefined) return undefined;
       recorded = resolvePlaylogViewAt(recorded, [{ timeUs: 0, ...change }], 0);
       lastAtMs = nowMs;
+      return change;
+    },
+    flush: (view) => {
+      const change = diffPlaylogView(recorded, view);
+      if (change === undefined) return undefined;
+      recorded = resolvePlaylogViewAt(recorded, [{ timeUs: 0, ...change }], 0);
       return change;
     },
   };

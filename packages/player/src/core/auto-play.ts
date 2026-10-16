@@ -11,6 +11,7 @@ import {
   applyPlaybackHighSpeedAction,
   applyPlaybackTempoChange,
   consumePlaybackInputCommands,
+  recordPendingViewChanges,
   createNoopPlaybackStateLogger,
   createUiFramePublisher,
   togglePlaybackPause,
@@ -601,6 +602,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   if (interruptedReason === 'restart') {
     throw new PlayerInterruptedError(interruptedReason);
   }
+  // View changes the host sent as the play ended, after the loop's last drain, still belong to it.
+  recordPendingViewChanges(inputSignals, playlogRecorder, Math.max(0, resolveAutoCommandSeconds()));
 
   if (!uiEnabled) {
     writeRuntimeEventLog(writeOutput, 'playback-end', [
