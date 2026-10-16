@@ -110,8 +110,10 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **give up**: Leaving a course run with ESC. A run given up is a failed run.
 - **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
 - **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `iidx`.
-- **clear lamp**: The class of clear a play earned (FAILED to MAX). Each judge ruleset awards its own subset.
-- **best record**: The best clear lamp, EX-SCORE, max combo and BP a player has on a chart or course under one judge ruleset.
+- **gauge type**: The gauge the player picks, in LR2's names: `GROOVE`, `HARD`, `DEATH` or `EASY` (`GaugeType`). Each judge ruleset plays it on a gauge of its own line-up, named by its gauge id (`NORMAL`, `HAZARD`, `CLASS`, ...).
+- **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player/ruleset`).
+- **BP**: The miss count: BADs, POORs and empty POORs, plus, for a course, the notes the run never judged (`resolveMissCount`).
+- **best record**: The best clear lamp, EX-SCORE, max combo and BP a player has on a chart or course under one judge ruleset (`BestRecord`, kept by the rules of `@be-music/player/records`).
 - **view settings**: What the player saw, apart from what was judged: hi-speed, hi-speed fix, visible time and each side's SUDDEN+, HIDDEN+ and LIFT. _Avoid_: display options.
 - **play tempo**: How fast a play runs relative to the chart (`speed`). A play at another tempo is practice.
 
