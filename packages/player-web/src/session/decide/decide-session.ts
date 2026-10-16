@@ -4,8 +4,13 @@
  * screen moves on to the play by itself after the auto advance, and a leaving screen fades out before the host hears
  * where it goes. Enter, Space or a click continue to the play once input is open; Escape backs out to select at any
  * time. The decide jingle plays through the audio service and stops when the screen leaves the stage.
+ *
+ * The session draws the chart's `#RANDOM` / `#SWITCH` branches once, when it is made ({@link DecideSession.resolved}):
+ * the screen's graphs show those branches, and the host hands the same chart and draws to the play, so the play plays
+ * what the screen showed.
  */
 
+import { resolvePlayChart, type ResolvedPlayChart } from '@be-music/player/core/engine';
 import {
   DEFAULT_PLAY_OPTIONS,
   type CourseView,
@@ -56,6 +61,8 @@ export interface DecideSessionOptions {
   readonly timing: SceneViewTiming;
   /** How far the play behind the screen has loaded, 0..1, read every frame; `undefined` while nothing loads. */
   readonly progress?: () => number | undefined;
+  /** The random source the chart's `#RANDOM` / `#SWITCH` branches are drawn with, in `[0, 1)`. Defaults to `Math.random`. */
+  readonly random?: () => number;
   readonly on: DecideSessionEvents;
 }
 
@@ -70,6 +77,11 @@ function clampProgress(value: number | undefined): number | undefined {
 /** The decide screen's session. See the module comment. */
 export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
   public readonly kind = 'decide' as const;
+  /**
+   * The chart as the play will play it: its `#RANDOM` / `#SWITCH` branches drawn once, when the session was made, with
+   * the draws (`resolvePlayChart`). The host hands it to the play (`preResolved`).
+   */
+  public readonly resolved: ResolvedPlayChart;
   private readonly options: DecideSessionOptions;
   private readonly playOptions: PlayOptions;
   private entered = false;
@@ -83,6 +95,10 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
   public constructor(options: DecideSessionOptions) {
     this.options = options;
     this.playOptions = options.playOptions ?? DEFAULT_PLAY_OPTIONS;
+    this.resolved = resolvePlayChart(
+      options.chart.chart,
+      options.random !== undefined ? { random: options.random } : {},
+    );
   }
 
   /** On the clock, when input opens. */
@@ -141,6 +157,7 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       chart: this.options.chart,
+      playChart: this.resolved.chart,
       ...(this.options.course !== undefined ? { course: this.options.course } : {}),
       playOptions: this.playOptions,
       ...(progress !== undefined ? { progress } : {}),

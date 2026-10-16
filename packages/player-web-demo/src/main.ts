@@ -5085,6 +5085,8 @@ class PlayerWebDemoApp {
     // gameplay becomes instant instead of dropping a frozen frame.
     // A course starts its own play once the splash is done, so nothing is preloaded for it; nor for a play on the
     // beatoraja scene, which prepares its own chart once the splash is done (`playSong`).
+    // The LR2 / built-in play draws its own `#RANDOM` branches: it takes no pre-resolved chart yet, so the built-in
+    // decide screen's (`DecideScene.resolved`) are not handed on. No built-in decide view draws them.
     const preloaded = then === undefined && !playsOnBeatoraja ? this.preloadGameplay(song, overrides) : undefined;
     let advanced = false;
     const advance = (then: () => void): void => {

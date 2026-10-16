@@ -1,4 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
+import { parseChart } from '@be-music/parser';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart, type SystemSoundSet } from '@be-music/scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { SceneViewTiming } from '../../view/types.ts';
@@ -84,6 +85,7 @@ describe('DecideSession', () => {
     expect(session.frame(1000)).toEqual({
       clock: { nowMs: 1000, enteredAtMs: 1000 },
       chart: CHART,
+      playChart: session.resolved.chart,
       playOptions: DEFAULT_PLAY_OPTIONS,
       inputOpenAtMs: 1500,
     });
@@ -218,5 +220,34 @@ describe('DecideSession', () => {
     const frame = session.frame(0);
     expect(frame.course).toBe(course);
     expect(frame.playOptions).toBe(playOptions);
+  });
+
+  it("draws the chart's #RANDOM branches once, for the screen and the play alike", () => {
+    const chart = parseChart(
+      ['#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'].join('\n'),
+      'bms',
+    );
+    for (const [roll, value, channel] of [
+      [0, 1, '11'],
+      [0.9, 2, '12'],
+    ] as const) {
+      const random = vi.fn(() => roll);
+      const session = new DecideSession({
+        chart: { ...CHART, chart },
+        sounds: {},
+        audio: createAudio(),
+        timing: { inputDelayMs: 0, fadeOutMs: 0 },
+        random,
+        on: { continue: () => undefined, cancel: () => undefined },
+      });
+      expect(session.resolved.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value }]);
+      expect(session.resolved.chart.events.map((event) => event.channel)).toEqual([channel]);
+      session.enter(0);
+      expect(session.frame(0).playChart).toBe(session.resolved.chart);
+      session.exit();
+      session.enter(100);
+      expect(session.frame(100).playChart).toBe(session.resolved.chart);
+      expect(random).toHaveBeenCalledTimes(1);
+    }
   });
 });

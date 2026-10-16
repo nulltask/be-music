@@ -7,6 +7,7 @@
  * Keys do not pass through the view: the scene (`SessionScene`) hands them to the session.
  */
 
+import type { BeMusicJson } from '@be-music/json';
 import type { BeMusicAudioFrame, BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/skin-sdk';
 import type {
   BrowseCommand,
@@ -150,6 +151,11 @@ export type SelectView = FamilyView<SelectFrame, SelectIntent>;
 export interface DecideFrame {
   readonly clock: SceneClock;
   readonly chart: LibraryChart;
+  /**
+   * The chart as the play will play it: its `#RANDOM` / `#SWITCH` branches drawn once for this screen, which the play
+   * plays too. A skin's graphs (beatoraja's BPM graph) read it.
+   */
+  readonly playChart: BeMusicJson;
   /** The course and the stage about to be played, for a course stage. */
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
