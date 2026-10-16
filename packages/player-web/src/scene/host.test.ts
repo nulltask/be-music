@@ -6,7 +6,6 @@ import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { PixiBeatorajaSelectScene } from './beatoraja/select.ts';
 import { CoreSongSelectView } from './core/select.ts';
 import { PixiSceneHost, resolveRendererPreference, resolveRenderResolution, type PixiScene } from './host.ts';
-import { PixiSongSelectView } from './lr2/select.ts';
 
 function makeScene(overrides: Partial<PixiScene> = {}): PixiScene {
   return {
@@ -261,7 +260,6 @@ describe('scene identities', () => {
   // The getters live on each class's prototype, so they read without building a scene.
   const cases: [string, SceneIdentity, SceneIdentity][] = [
     ['CoreSongSelectView', CoreSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
-    ['PixiSongSelectView', PixiSongSelectView.prototype.identity, { kind: 'select', family: 'lr2' }],
   ];
 
   it.each(cases)('%s names its screen and family', (_name, identity, expected) => {

@@ -1047,12 +1047,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       scene.dispose();
     },
   });
-  define('player-web.PixiSongSelectView', {
-    run: () => {
-      new playerWebCoreApi.PixiSongSelectView();
-    },
-    interactive: true,
-  });
   define('player-web.prepareBeatorajaGameplayChart', {
     run: async () => {
       await playerWebCoreApi.prepareBeatorajaGameplayChart({
