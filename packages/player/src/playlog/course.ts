@@ -357,7 +357,8 @@ export function extractCourseStage(courseLog: BeMusicCoursePlaylog, index: numbe
 
 /**
  * Assembles a course play log from the stages a host played (their own play logs, in order) and the facts of the
- * stages it never reached. The native course result is aggregated from the stage logs' native results.
+ * stages it never reached. The native course result is aggregated from the stage logs' native results and lamped under
+ * the judge ruleset the stages were played on.
  */
 export function createCoursePlaylog(options: {
   course: PlaylogCourseInfo;
@@ -382,7 +383,11 @@ export function createCoursePlaylog(options: {
       const stageNative = options.stages.flatMap((entry) =>
         entry.played && entry.playlog.results?.native !== undefined ? [entry.playlog.results.native] : [],
       );
-      log.results = { native: nonstopCourseResult(log, native, stageNative) };
+      const result = nonstopCourseResult(log, native, stageNative);
+      // The engine judged the run under its judge ruleset: lamp it by that ruleset's lamps, as a re-simulation does.
+      const judgeRuleset = options.nonstop.playlog.play.judgeRuleset ?? 'lr2';
+      const lamp = resolveCourseLamp(judgeRuleset, result, options.nonstop.playlog.play.gauge);
+      log.results = { native: { ...result, lamp } };
     }
     return log;
   }
@@ -396,15 +401,16 @@ export function createCoursePlaylog(options: {
     const noteCounts = options.stages.map((entry, index) =>
       index < native.length ? native[index]!.noteCount : stageNoteCount(entry, ruleset),
     );
-    log.results = {
-      native: aggregateCourseResult(
-        native[0]!.ruleset,
-        options.course,
-        native as PlaylogRulesetResult[],
-        noteCounts,
-        played.at(-1)!.playlog.play.gauge,
-      ),
-    };
+    const pick = played.at(-1)!.playlog.play.gauge;
+    const result = aggregateCourseResult(
+      native[0]!.ruleset,
+      options.course,
+      native as PlaylogRulesetResult[],
+      noteCounts,
+      pick,
+    );
+    // The engine judged the run under its judge ruleset: lamp it by that ruleset's lamps, as a re-simulation does.
+    log.results = { native: { ...result, lamp: resolveCourseLamp(ruleset, result, pick) } };
   }
   return log;
 }
