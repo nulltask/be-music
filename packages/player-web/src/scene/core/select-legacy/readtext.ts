@@ -6,9 +6,8 @@
  * The overlay reads the library and plays its cues through {@link SelectReadTextContext}; the select scene passes it.
  */
 
-import { dirname } from '@be-music/utils/core';
 import { Color, Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { loadAssetBytes, resolveSongSource } from '../../../collection/collection.ts';
+import { findReadtextForSong } from '../../../session/select/select-readtext.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../../../collection/types.ts';
 import { CORE_TEXT_FONT } from '../fonts.ts';
 
@@ -223,56 +222,4 @@ export class SelectReadTextOverlay {
       this.readTextScrollbar.rect(trackX, thumbY, trackW, thumbH).fill({ color: 0xffffff, alpha: 0.45 });
     }
   }
-}
-
-/**
- * Looks up a `.txt` companion file in the same directory as the focused song's chart and returns its decoded contents.
- * Used by the LR2 READTEXT button (`#SRC_BUTTON,...,17,...`) to surface per-song notes / changelogs that BMS authors
- * traditionally ship alongside the chart files.
- *
- * Resolution rules — kept deliberately tolerant so we don't need the source to follow any specific naming convention:
- *
- * - Only files **directly inside** the chart's directory are considered (no recursing into sub-folders, no walking up
- *   to the source root).
- * - The first matching file wins. The map iteration order is the source's insertion order (which mirrors the directory
- *   listing on the directory loader / the central directory order on the ZIP loader), so this is stable per source.
- * - Returns `undefined` when the song has no resolvable source or no sibling `.txt` exists, letting the caller play the
- *   "no readtext" feedback cue instead of opening an empty modal.
- */
-async function findReadtextForSong(
-  collection: BrowserSongCollection,
-  song: BrowserSongEntry,
-): Promise<string | undefined> {
-  const source = resolveSongSource(collection, song);
-  if (!source) return undefined;
-  const dir = dirname(song.chartPath).toLowerCase();
-  for (const [path, entry] of source.files) {
-    if (!path.toLowerCase().endsWith('.txt')) continue;
-    if (dirname(path).toLowerCase() !== dir) continue;
-    // Song-bundle files are lazy `File` references — pull the bytes on demand. The .txt is small so the read is cheap;
-    // the bytes go out of scope once decoded into the modal text, so they don't pin any extra memory.
-    const bytes = await loadAssetBytes(entry);
-    if (!bytes) continue;
-    return decodeReadtextBytes(bytes);
-  }
-  return undefined;
-}
-
-/**
- * Decodes raw `.txt` bytes to a string. BMS author notes are historically Shift-JIS (the LR2 era's default codepage on
- * Japanese Windows installs), but modern releases sometimes ship as UTF-8 with or without a BOM. Try UTF-8 first when a
- * BOM is present (unambiguous), then probe Shift-JIS, and finally fall back to lossy UTF-8 so we always return *some*
- * string rather than failing the modal open.
- */
-function decodeReadtextBytes(bytes: Uint8Array): string {
-  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(3));
-  }
-  try {
-    const sjis = new TextDecoder('shift-jis', { fatal: false }).decode(bytes);
-    if (sjis.length > 0 && !sjis.includes('�')) return sjis;
-  } catch {
-    // `shift-jis` not available in this runtime — fall through.
-  }
-  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
 }
