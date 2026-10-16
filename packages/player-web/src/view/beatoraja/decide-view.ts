@@ -129,10 +129,6 @@ export class BeatorajaDecideView implements DecideView {
         chartImageProvider: (id) => this.chartImages.resolve(id),
       }),
     );
-    log.info('beatoraja decide skin', {
-      canvas: { w: this.stage.view.width, h: this.stage.view.height },
-      skinName: skin.name,
-    });
   }
 
   public get root(): Container {
