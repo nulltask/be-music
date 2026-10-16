@@ -14,7 +14,6 @@ import {
   PixiBeatorajaGameplayView,
   PixiBeatorajaResultScene,
   PixiBeatorajaSelectScene,
-  PixiGameplayView,
   PixiSceneHost,
   PixiSongSelectView,
   HISPEED_MAX,
@@ -27,6 +26,7 @@ import {
   type PixiGameplayResultData,
   type PixiPlayOptions,
   type PlayScene,
+  type PlaySceneKit,
   type ResultScene,
   type ResultSceneKit,
   type PixiScene,
@@ -610,9 +610,8 @@ class PlayerWebDemoApp {
     optionChange?: Uint8Array;
   } = {};
   private selectView: PixiSongSelectView | DefaultPixiSongSelectView | undefined;
-  /** LR2-family or default-family gameplay view (both share the core gameplay API). */
-  /** The play on the stage: the built-in play scene (`createPlayScene`), or the LR2 family's `PixiGameplayView`. */
-  private gameplayView: PixiGameplayView | PlayScene | undefined;
+  /** The built-in or LR2 play on the stage (`createPlayScene`). */
+  private gameplayView: PlayScene | undefined;
   /**
    * Beatoraja gameplay view. Active in place of `gameplayView` when the user toggles
    * `useBeatorajaGameplay` and the loaded theme has a skin variant matching the chart shape. Held
@@ -1828,7 +1827,7 @@ class PlayerWebDemoApp {
         'clear',
       )
       .name('Clear best records');
-    // BGA video transcode controls. Both settings are seeded into the next `PixiGameplayView` constructor (see
+    // BGA video transcode controls. Both settings are seeded into the next play scene's settings (see
     // `preloadGameplay` / `playSong` for the wiring), so changing them mid-session takes effect on the next chart mount
     // — no need to rebuild gameplay if the user is between songs. We don't push live into the running gameplay because
     // BGA assets are loaded once at chart- prepare time and the codec / resize decisions are encoded into the cached
@@ -1967,12 +1966,7 @@ class PlayerWebDemoApp {
     const play = scene.kind === 'play' ? this.lastPlay : undefined;
     // The engine's frame on the beatoraja scene; the play's running result on the LR2 / built-in ones.
     const frame = this.beatorajaGameplayView?.getFrame();
-    const progress =
-      this.beatorajaGameplayView !== undefined
-        ? undefined
-        : this.gameplayView instanceof PixiGameplayView
-          ? this.gameplayView.getResultData()
-          : this.gameplayView?.progress();
+    const progress = this.beatorajaGameplayView !== undefined ? undefined : this.gameplayView?.progress();
     const active = this.activeCourse;
     const draft = this.courseMaker.draft;
     return {
@@ -2065,9 +2059,7 @@ class PlayerWebDemoApp {
     return {
       sceneHost: this.sceneHost,
       recordController: this.recordController,
-      getActiveGameplay: () =>
-        (this.gameplayView instanceof PixiGameplayView ? this.gameplayView : this.gameplayView?.recording) ??
-        this.beatorajaGameplayView,
+      getActiveGameplay: () => this.gameplayView?.recording ?? this.beatorajaGameplayView,
       getAutoRecordArmed: () => this.autoRecordArmed,
       setAutoRecordArmed: (value) => {
         this.autoRecordArmed = value;
@@ -3346,8 +3338,7 @@ class PlayerWebDemoApp {
   private applyBeMusicSkinSettings(): void {
     const settings = this.beMusicSkinSettings;
     this.selectView?.setBeMusicSkinSettings(settings);
-    if (this.gameplayView instanceof PixiGameplayView) this.gameplayView.setBeMusicSkinSettings(settings);
-    else this.gameplayView?.updateKit(this.builtInKit);
+    if (this.gameplayView?.identity.family === 'built-in') this.gameplayView.updateKit(this.builtInKit);
     if (this.resultView?.identity.family === 'built-in') this.resultView.updateKit(this.builtInKit);
     if (this.decideView?.identity.family === 'built-in') this.decideView.updateKit(this.builtInKit);
   }
@@ -4968,9 +4959,9 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Constructs a fresh `PixiGameplayView` with the current play-options snapshot and starts its `prepare()` against the
-   * shared host, off stage. The returned promise resolves once chart audio is decoded — the host awaits it inside the
-   * Decide `onContinue` handler before showing the play.
+   * Makes the play scene (`createPlayScene`) with the current play-options snapshot and starts its `prepare()` off
+   * stage. The returned promise resolves once chart audio is decoded — the host awaits it inside the Decide
+   * `onContinue` handler before showing the play.
    *
    * Wired up here (rather than inline in `showDecide`) because the same option-marshalling + callback wiring is needed
    * whether we're going through Decide or the no-decide fast-path. `playSong` shares this construction shape.
@@ -4988,21 +4979,19 @@ class PlayerWebDemoApp {
     const chartHashes = await this.resolveChartHashes(song);
     const view = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
     this.gameplayView = view;
-    return view instanceof PixiGameplayView
-      ? view.prepare(this.sceneHost, song, resolveSongSource(this.collection, song))
-      : view.prepare();
+    return view.prepare();
   }
 
   /**
-   * Constructs the LR2-family (or default-family fallback) gameplay scene for `song` with the current option snapshot.
-   * Branches on `playSkin`:
+   * Makes the LR2-family (or default-family fallback) play scene for `song` with the current option snapshot
+   * (`createPlayScene`). The kit follows `playSkin`:
    *
-   * - **`Lr2Skin`** present → constructs {@link PixiGameplayView} with that skin. LR2 chrome paints from the skin.
+   * - **`Lr2Skin`** present → an LR2 kit with that skin (and the theme's 9-keys skin for invisible notes). LR2 chrome
+   *   paints from the skin.
    * - **`undefined`** (no LR2 theme dropped, or the dropped theme has no skin for this chart's key mode) → the built-in
-   *   play scene (`createPlayScene`) with the active be-music skin.
+   *   kit with the active be-music skin.
    *
-   * The two branches share every other option — pulling the option-marshalling into one helper avoids the previous
-   * two-place duplication between `preloadGameplay` and `playSong` (LR2 fallback path).
+   * Both share every other option, so `preloadGameplay` and `playSong` marshal them in one place.
    */
   private buildLr2GameplayView(
     song: BrowserSongEntry,
@@ -5015,7 +5004,7 @@ class PlayerWebDemoApp {
       nonstop?: NonstopPlay;
       preResolved?: ResolvedPlayChart;
     },
-  ): PixiGameplayView | PlayScene {
+  ): PlayScene {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
@@ -5088,7 +5077,7 @@ class PlayerWebDemoApp {
       laneCover: playOptions?.laneCover,
       // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge / judge ruleset govern
       // judging and the gauge readout, and the lane transforms stay off because the view re-applies the recorded
-      // arrangement directly (see `PixiGameplayViewOptions.replay`).
+      // arrangement directly (see `PlaySceneOptions.replay`).
       autoScratch1P: replay !== undefined ? replay.play.autoScratch : lanes.autoScratch1P,
       autoScratch2P: replay !== undefined ? false : lanes.autoScratch2P,
       dpFlip: replay !== undefined ? false : lanes.dpFlip,
@@ -5204,51 +5193,48 @@ class PlayerWebDemoApp {
         void this.finishGameplayThen(() => this.playSong(song));
       },
     };
-    if (playSkin === undefined) {
-      // Built-in path: no LR2 skin loaded for this chart. The active be-music skin draws the play (`builtInKit`).
-      const {
-        onExit,
-        onChartFinished,
-        onRestart,
-        onHiSpeedChange,
-        onTempoChange,
-        replay: replayLog,
-        course,
-        courseInfo,
-        ...settings
-      } = sharedOptions;
-      const source = resolveSongSource(this.collection, song);
-      return createPlayScene(this.builtInKit, {
-        chart: song,
-        ...(source !== undefined ? { source } : {}),
-        settings: { ...settings, layoutMode: resolvePlayLayoutMode(this.guiState.playLayout, deviceProfile) },
-        ...(course !== undefined
-          ? { course: { stage: course, ...(courseInfo !== undefined ? { view: courseInfo } : {}) } }
-          : {}),
-        ...(replayLog !== undefined ? { replay: replayLog } : {}),
-        ...(overrides.preResolved !== undefined ? { preResolved: overrides.preResolved } : {}),
-        audio: this.audio,
-        host: this.sceneHost,
-        ...(playOptions !== undefined ? { playOptions } : {}),
-        on: {
-          exit: onExit,
-          finish: (result) => onChartFinished(result),
-          restart: onRestart,
-          hiSpeed: onHiSpeedChange,
-          tempo: onTempoChange,
-        },
-      });
-    }
-    return new PixiGameplayView({
-      ...sharedOptions,
+    const {
+      onExit,
+      onChartFinished,
+      onRestart,
+      onHiSpeedChange,
+      onTempoChange,
+      replay: replayLog,
+      course,
+      courseInfo,
+      ...settings
+    } = sharedOptions;
+    const invisibleNoteSkin = this.playSkins['9'];
+    // No LR2 skin loaded for this chart: the active be-music skin draws the play (`builtInKit`). With one, the LR2 kit
+    // also carries the loaded 9-keys play variant: Pop'n's green wide note at index 3 is drawn over each invisible note
+    // when {@link DemoGuiState.showInvisibleNotes} is on (a flat green bar when the theme ships no `play_9.lr2skin`).
+    const kit: PlaySceneKit =
+      playSkin === undefined
+        ? this.builtInKit
+        : { family: 'lr2', skin: playSkin, ...(invisibleNoteSkin !== undefined ? { invisibleNoteSkin } : {}) };
+    const source = resolveSongSource(this.collection, song);
+    return createPlayScene(kit, {
+      chart: song,
+      ...(source !== undefined ? { source } : {}),
+      settings:
+        playSkin === undefined
+          ? { ...settings, layoutMode: resolvePlayLayoutMode(this.guiState.playLayout, deviceProfile) }
+          : settings,
+      ...(course !== undefined
+        ? { course: { stage: course, ...(courseInfo !== undefined ? { view: courseInfo } : {}) } }
+        : {}),
+      ...(replayLog !== undefined ? { replay: replayLog } : {}),
       ...(overrides.preResolved !== undefined ? { preResolved: overrides.preResolved } : {}),
-      skin: playSkin,
-      // Pass the loaded 9-keys play variant as the invisible-note sprite source — Pop'n's green wide note at index 3
-      // is the sprite the gameplay view paints over each invisible note when
-      // {@link DemoGuiState.showInvisibleNotes} is on. Falls back to a flat green rectangle when the dropped theme
-      // didn't ship `play_9.lr2skin`. Only meaningful with an LR2 theme loaded — the default family wouldn't have
-      // anywhere to source the sprite from.
-      invisibleNoteSkin: this.playSkins['9'],
+      audio: this.audio,
+      host: this.sceneHost,
+      ...(playOptions !== undefined ? { playOptions } : {}),
+      on: {
+        exit: onExit,
+        finish: (result) => onChartFinished(result),
+        restart: onRestart,
+        hiSpeed: onHiSpeedChange,
+        tempo: onTempoChange,
+      },
     });
   }
 
@@ -5348,9 +5334,9 @@ class PlayerWebDemoApp {
     // downloads folder rather than overwriting the previous one.
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
     // Resolve the LR2 play skin only when the family pick actually says LR2 — overriding to `'default'` skips the
-    // skin even if one is loaded. `buildLr2GameplayView` then makes the built-in play scene (`createPlayScene`) when
-    // the skin is undefined and `PixiGameplayView` otherwise; see `preloadGameplay` for the matching call shape (both
-    // feed the same helper so option marshalling stays in one place).
+    // skin even if one is loaded. `buildLr2GameplayView` then makes the play scene (`createPlayScene`) with the
+    // built-in kit when the skin is undefined and an LR2 kit otherwise; see `preloadGameplay` for the matching call
+    // shape (both feed the same helper so option marshalling stays in one place).
     const playSkin =
       gameplayFamily !== 'lr2'
         ? undefined
@@ -5379,11 +5365,7 @@ class PlayerWebDemoApp {
     // No splash covers the load window here: the play shows first, so `prepare` draws the playfield in its loading
     // state while the chart's audio decodes, then the play starts.
     await this.sceneHost.setScene(view);
-    if (view instanceof PixiGameplayView) {
-      await view.prepare(this.sceneHost, song, resolveSongSource(this.collection, song));
-    } else {
-      await view.prepare();
-    }
+    await view.prepare();
     view.start();
     // Consume the "user pressed Record on the select screen" flag now that gameplay is prepared — `startRecording`
     // requires the gameplay AudioContext to exist, which only happens after `prepare`. Failing here is non-fatal: the
