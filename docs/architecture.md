@@ -156,6 +156,67 @@ What the play log (`PlaylogPlay` in [`playlog/format.ts`](../packages/player/src
 
 Play-log fields with no matching option: `play.mode` (the driver), `play.randomLane` and `play.dpFlip` (host lane options, applied through `preparedChart` and declared through `recordPlaylog`), `play.native`, and `play.aborted` / `play.abortedAtUs` (an outcome).
 
+## Target architecture
+
+The packages are being reshaped on `feat/course-definitions` before it goes to `devel` (phases below). New code follows this target; the [architecture decisions](./adr/README.md) record why.
+
+```mermaid
+flowchart TD
+  subgraph data["Data"]
+    d["json · chart · parser · stringifier · utils"]
+  end
+  subgraph domain["Rules and engine — @be-music/player"]
+    rules["ruleset · playlog · course · records"]
+    engine["engine: one play loop<br/>manual · auto · replay"]
+  end
+  subgraph models["Models"]
+    scene["@be-music/scene-model"]
+    skins["skin-sdk · lr2-skin · beatoraja-skin"]
+  end
+  subgraph web["Web runtime — @be-music/player-web"]
+    sessions["scene sessions"]
+    views["family views"]
+  end
+  hosts["hosts: player-web-demo · player-tui · leaderboard-api"]
+
+  d --> rules --> engine
+  rules --> scene --> skins
+  engine --> sessions
+  scene --> sessions --> views
+  skins --> views
+  sessions --> hosts
+  rules --> hosts
+```
+
+- **Rules and engine** (`@be-music/player`). One vocabulary for gauges, clear lamps and BP; course runs, the NONSTOP pipeline, course stage rules and best-record merging ([ADR 0004](./adr/0004-domain-rules-in-player.md)); one play loop with manual, auto and replay judge strategies ([ADR 0003](./adr/0003-one-play-loop.md)).
+- **Scene models** (`@be-music/scene-model`, new). What every screen shows and how it behaves, independent of the skin family: library entries, browse state and its snapshot, play options, play state, play result, course view models, system sound sets ([ADR 0002](./adr/0002-scene-model-package.md)).
+- **Skin models** (`skin-sdk`, `lr2-skin`, `beatoraja-skin`). Parse a skin and map scene models to its vocabulary: one table of LR2-compatible op / number / text / timer ids, and the beatoraja state resolution that used to live in the web layer.
+- **Web runtime** (`@be-music/player-web`). Scene sessions own each screen's behaviour once (chart preparation, RANDOM / FLIP, audio and BGA, engine options, input, endings); family views only draw and return intents; one scene lifecycle, one audio service, one host API ([ADR 0001](./adr/0001-skin-families-only-draw.md)).
+- **Hosts.** The web demo is a set of services wired by `main.ts`, with one scene router owning every transition ([ADR 0006](./adr/0006-scene-router.md)).
+
+Rules that keep it cheap to change:
+
+- One concept is defined in one place: a vocabulary type, a rule, a piece of state.
+- What differs between skin families is how a scene is drawn and how a model maps to a skin's vocabulary, nothing else.
+- Compose parts; do not absorb differences with base-class hooks.
+- Rules, engine and models stay runtime-neutral and run in tests without Pixi, the DOM or Node.
+- Packages export designed entry points, not their file layout ([ADR 0005](./adr/0005-public-entry-points.md)).
+- No source file over 1,500 lines: the allowlist below ends empty.
+
+### Migration
+
+| Phase | Work                                                                                                                                                                                                                  | Status  |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| P0    | Safety net: engine characterization snapshots (charts × manual / auto / replay × tempo, ESC, failure, hold, NONSTOP); the course browser checklist automated end to end with fixture charts and minimal fixture skins | planned |
+| P1    | One play loop with judge strategies                                                                                                                                                                                   | planned |
+| P2    | Domain rules into `@be-music/player`: vocabulary, course runs, the shared NONSTOP pipeline (the Leaderboard included), course stage rules, best records per judge ruleset                                             | planned |
+| P3    | `@be-music/scene-model`; LR2 id tables and state mapping in `lr2-skin`; beatoraja state resolution into `beatoraja-skin`                                                                                              | planned |
+| P4    | Web runtime: one scene lifecycle, scene sessions, family views (built-in, then LR2, then beatoraja), one audio service, one host API; the old scene classes removed                                                   | planned |
+| P5    | Web demo split into services behind a scene router, on the new host API                                                                                                                                               | planned |
+| P6    | Public entry points, documentation, an empty file-size allowlist, changesets, a full check on real skins; then `devel`                                                                                                | planned |
+
+Each pull request keeps behaviour unless it says otherwise: a behaviour change (a fixed drift, a play-log or fingerprint change) goes in its own pull request with its specification, golden values and changeset. Every pull request passes `pnpm run check`, the full test suite and the engine snapshots; each phase ends with the browser checklist, automated and on real skins.
+
 ## Layering and size guards
 
 `pnpm run check` enforces these structural rules besides format, lint and types.

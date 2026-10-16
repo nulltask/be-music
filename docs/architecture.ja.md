@@ -156,6 +156,67 @@ flowchart TD
 
 対応するオプションがないプレイログのフィールド：`play.mode`（ドライバ）、`play.randomLane` と `play.dpFlip`（ホストのレーンオプション。`preparedChart` で適用し、`recordPlaylog` で宣言します）、`play.native`、`play.aborted` / `play.abortedAtUs`（結果）。
 
+## 目指す構造
+
+パッケージの構成を、`feat/course-definitions` を `devel` に入れる前に作り直しています（下の段階）。新しいコードはこの構造に従います。理由は[設計判断の記録](./adr/README.ja.md)にあります。
+
+```mermaid
+flowchart TD
+  subgraph data["データ"]
+    d["json · chart · parser · stringifier · utils"]
+  end
+  subgraph domain["規則とエンジン — @be-music/player"]
+    rules["ruleset · playlog · course · records"]
+    engine["engine: 1 つのプレイループ<br/>手動 · AUTO · リプレイ"]
+  end
+  subgraph models["モデル"]
+    scene["@be-music/scene-model"]
+    skins["skin-sdk · lr2-skin · beatoraja-skin"]
+  end
+  subgraph web["Web 実行層 — @be-music/player-web"]
+    sessions["シーンセッション"]
+    views["ファミリービュー"]
+  end
+  hosts["ホスト: player-web-demo · player-tui · leaderboard-api"]
+
+  d --> rules --> engine
+  rules --> scene --> skins
+  engine --> sessions
+  scene --> sessions --> views
+  skins --> views
+  sessions --> hosts
+  rules --> hosts
+```
+
+- **規則とエンジン**（`@be-music/player`）。ゲージ・クリアランプ・BP の語彙を 1 つにし、コースの実行、NONSTOP の流れ、コースのステージの規則、自己ベストの統合を持ちます（[ADR 0004](./adr/0004-domain-rules-in-player.ja.md)）。プレイループは 1 つで、手動・AUTO・リプレイの判定の戦略を差し込みます（[ADR 0003](./adr/0003-one-play-loop.ja.md)）。
+- **シーンモデル**（`@be-music/scene-model`、新規）。スキンの種類によらず、各画面が何を見せ、どう振る舞うか。ライブラリの項目、一覧の状態とその保存形、プレイオプション、プレイ状態、プレイ結果、コースの表示用モデル、効果音セットです（[ADR 0002](./adr/0002-scene-model-package.ja.md)）。
+- **スキンモデル**（`skin-sdk`、`lr2-skin`、`beatoraja-skin`）。スキンを解析し、シーンモデルをそのスキンの語彙に写します。LR2 互換の op・数値・テキスト・タイマーの番号表は 1 つにし、Web 層にあった beatoraja の状態の計算もここに移します。
+- **Web 実行層**（`@be-music/player-web`）。シーンセッションが各画面の振る舞い（譜面の準備、RANDOM / FLIP、音と BGA、エンジンの設定、入力、終わり方）を 1 つだけ持ち、ファミリービューは描いてインテントを返すだけです。画面のライフサイクル、音のサービス、ホスト向けの API はそれぞれ 1 つです（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。
+- **ホスト**。Web のデモは `main.ts` がつなぐサービスの集まりで、画面の切り替えはすべて 1 つのシーンルーターが受け持ちます（[ADR 0006](./adr/0006-scene-router.ja.md)）。
+
+変更しやすさを保つための規則：
+
+- 1 つの概念は 1 か所で定義する。語彙の型、規則、状態のいずれも。
+- スキンの種類ごとの違いは、画面の描き方と、モデルをスキンの語彙に写す方法だけにする。
+- 部品を組み合わせる。基底クラスのフックで違いを吸収しない。
+- 規則・エンジン・モデルは実行環境に依存せず、Pixi・DOM・Node なしでテストできる。
+- パッケージは、ファイル構成ではなく設計した入口を公開する（[ADR 0005](./adr/0005-public-entry-points.ja.md)）。
+- 1,500 行を超えるソースファイルを置かない。下の許可リストは最後に空にする。
+
+### 移行
+
+| 段階 | 作業                                                                                                                                                                                   | 状態 |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| P0   | 安全網：エンジンの挙動のスナップショット（譜面 × 手動 / AUTO / リプレイ × テンポ・ESC・ゲージ切れ・保持・NONSTOP）、コースのブラウザ確認をテスト用の譜面と最小のテスト用スキンで自動化 | 予定 |
+| P1   | 判定の戦略を差し込む 1 つのプレイループ                                                                                                                                                | 予定 |
+| P2   | 規則を `@be-music/player` に集める：語彙、コースの実行、共有する NONSTOP の流れ（リーダーボードも）、コースのステージの規則、判定ルールセットごとの自己ベスト                          | 予定 |
+| P3   | `@be-music/scene-model`、`lr2-skin` の LR2 の番号表と状態の写し方、beatoraja の状態の計算を `beatoraja-skin` へ                                                                        | 予定 |
+| P4   | Web 実行層：画面のライフサイクルの統一、シーンセッション、ファミリービュー（標準 → LR2 → beatoraja の順）、音のサービス、ホスト向けの API。古い画面のクラスは削除                      | 予定 |
+| P5   | Web のデモをシーンルーターの下のサービスに分け、新しいホスト向けの API に載せる                                                                                                        | 予定 |
+| P6   | 公開する入口、ドキュメント、ファイルサイズの許可リストを空に、changeset、実在のスキンでの総点検。そのあと `devel` へ                                                                   | 予定 |
+
+プルリクエストは、断りのない限り挙動を変えません。挙動を変えるもの（ずれの修正、プレイログやフィンガープリントの変更）は専用のプルリクエストにし、仕様書・golden の値・changeset を一緒に更新します。どのプルリクエストも `pnpm run check`、全テスト、エンジンのスナップショットを通し、各段階の終わりにはブラウザ確認を、自動と実在のスキンの両方で行います。
+
 ## 層の規則とサイズの上限
 
 `pnpm run check` は、フォーマット・lint・型のほかに、構造に関する次の規則を検査します。
