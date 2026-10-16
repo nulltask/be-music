@@ -1,5 +1,4 @@
-import { clearLampRank } from '@be-music/player/ruleset';
-import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/playlog';
+import { clearLampRank, computeScoreRate, resolveIidxRankLabel } from '@be-music/player/ruleset';
 import { en, type Messages } from './i18n/en.ts';
 
 /** Display name and colour of each clear lamp, LR2 / beatoraja style, by the rank the Leaderboard stores it as. */
