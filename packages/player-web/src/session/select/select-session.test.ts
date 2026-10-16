@@ -124,22 +124,47 @@ describe('SelectSession browse position', () => {
 });
 
 describe('SelectSession list options', () => {
-  it('puts the cursor on the top of the list when the player changes the sort', () => {
+  it('keeps the cursor on the focused bar when the player changes the sort', () => {
     const { session, cues } = createSession();
     session.setCollection(makeLibrary());
     session.setNavigation({ folderPath: ['pack'], cursors: [1, 2] });
+    expect(focusedTitle(session)).toBe('c');
     session.setPlayOption('sort', 'LEVEL');
     expect(titles(session)).toEqual(['b', 'c', 'a']);
-    expect(focusedTitle(session)).toBe('b');
+    expect(focusedTitle(session)).toBe('c');
     expect(cues).toEqual(['option-change']);
   });
 
-  it('keeps the cursor’s place when the host changes the sort', () => {
+  it('keeps the cursor on the focused bar when the host changes the sort or a filter', () => {
     const { session } = createSession();
     session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: ['pack'], cursors: [1, 2] });
+    session.setNavigation({ folderPath: ['pack'], cursors: [1, 0] });
     session.setPlayOptions({ sort: 'LEVEL' });
     expect(focusedTitle(session)).toBe('a');
+    session.setPlayOptions({ keysFilter: 'KEYS_7' });
+    expect(focusedTitle(session)).toBe('a');
+  });
+
+  it('keeps the cursor on the focused bar through a filter, and on its row when the filter takes the bar out', () => {
+    const { session } = createSession();
+    session.setCollection(
+      makeCollection([
+        makeChart('beginner', 'pack', { difficulty: 1 }),
+        makeChart('normal', 'pack', { difficulty: 2 }),
+        makeChart('hyper', 'pack', { difficulty: 3 }),
+        makeChart('another', 'pack', { difficulty: 4 }),
+      ]),
+    );
+    session.setNavigation({ folderPath: ['pack'], cursors: [0, 2] });
+    session.cyclePlayOption('difficultyFilter', ['ALL', 'HYPER']);
+    expect(titles(session)).toEqual(['hyper']);
+    expect(focusedTitle(session)).toBe('hyper');
+    session.setPlayOption('difficultyFilter', 'ALL');
+    expect(focusedTitle(session)).toBe('hyper');
+    session.stepCursor(1);
+    session.setPlayOption('difficultyFilter', 'NORMAL');
+    // `another` is not a NORMAL chart: the cursor stays on the row it was on, clamped to the one bar listed.
+    expect(focusedTitle(session)).toBe('normal');
   });
 });
 
