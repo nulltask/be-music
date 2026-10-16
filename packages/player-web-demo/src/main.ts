@@ -15,7 +15,6 @@ import {
   PixiBeatorajaResultScene,
   PixiBeatorajaSelectScene,
   PixiGameplayView,
-  PixiResultView,
   PixiSceneHost,
   PixiSongSelectView,
   HISPEED_MAX,
@@ -28,6 +27,7 @@ import {
   type PixiGameplayResultData,
   type PixiPlayOptions,
   type ResultScene,
+  type ResultSceneKit,
   type PixiScene,
   type PixiSongSelectNavigation,
   resolveSceneCourseInfo,
@@ -590,7 +590,7 @@ class PlayerWebDemoApp {
    * theme drops mid-session.
    */
   private selectBgmBytes: Uint8Array | undefined;
-  /** Result-screen BGM bytes — picked per outcome inside `PixiResultView`. */
+  /** LR2 result jingles (`clear` / `fail` / `result`); the result scene picks one per outcome (`resolveResultJingle`). */
   private clearBgmBytes: Uint8Array | undefined;
   private failBgmBytes: Uint8Array | undefined;
   private resultBgmBytes: Uint8Array | undefined;
@@ -729,7 +729,7 @@ class PlayerWebDemoApp {
    * by `onExit` (ESC at root) since that's the user explicitly leaving the select altogether.
    */
   private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
-  private resultView: PixiResultView | ResultScene | undefined;
+  private resultView: ResultScene | undefined;
   /**
    * The chart and play mode of the most recent play start (LR2 / default and beatoraja alike), so the result screen's
    * R key can start the same chart again. `autoPlay` is resolved at play start so a retry keeps the mode the play ran
@@ -3323,8 +3323,7 @@ class PlayerWebDemoApp {
     const settings = this.beMusicSkinSettings;
     this.selectView?.setBeMusicSkinSettings(settings);
     this.gameplayView?.setBeMusicSkinSettings(settings);
-    if (this.resultView instanceof PixiResultView) this.resultView.setBeMusicSkinSettings(settings);
-    else this.resultView?.updateKit(this.builtInKit);
+    if (this.resultView?.identity.family === 'built-in') this.resultView.updateKit(this.builtInKit);
     if (this.decideView?.identity.family === 'built-in') this.decideView.updateKit(this.builtInKit);
   }
 
@@ -5634,27 +5633,16 @@ class PlayerWebDemoApp {
             this.resultView = undefined;
             retry();
           };
-    if (lr2ResultSkin !== undefined) {
-      const view = new PixiResultView({
-        skin: lr2ResultSkin,
-        collection: this.collection,
-        ...jingles,
-        onContinue,
-        ...(onRetry !== undefined ? { onRetry } : {}),
-        ...(courseInfo !== undefined ? { courseInfo } : {}),
-      });
-      view.setResult(data);
-      this.resultView = view;
-    } else {
-      this.resultView = createResultScene(this.builtInKit, {
-        result: data,
-        run,
-        source: resolveSongSource(this.collection, data.song),
-        sounds: resolveResultSoundSet(resultFamily, themeJingles),
-        audio: this.audio,
-        on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
-      });
-    }
+    const kit: ResultSceneKit = lr2ResultSkin !== undefined ? { family: 'lr2', skin: lr2ResultSkin } : this.builtInKit;
+    this.resultView = createResultScene(kit, {
+      // The LR2 skin shows the course of the result (`result.course`): the stage's course, or the course run.
+      result: lr2ResultSkin !== undefined && courseInfo !== undefined ? { ...data, course: courseInfo } : data,
+      run,
+      source: resolveSongSource(this.collection, data.song),
+      sounds: resolveResultSoundSet(resultFamily, themeJingles),
+      audio: this.audio,
+      on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
+    });
     // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`).
     await this.sceneHost.setScene(this.resultView);
     this.disposeScene(this.gameplayView, (view) => view.dispose({ preserveAudioTail: true }));
