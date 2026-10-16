@@ -278,7 +278,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-What a scene shows is handed to it before it is shown: the options of `createDecideScene` for the built-in decide screen, `setTarget` on the LR2 and beatoraja decide scenes, `setResult` on the result scenes, the song in `prepare(host, song, source)` on the gameplay scenes, and the constructor options for the rest.
+What a scene shows is handed to it before it is shown: the options of `createDecideScene` for the built-in decide screen, `setTarget` on the LR2 and beatoraja decide scenes, the options of `createResultScene` for the built-in result screen, `setResult` on the LR2 and beatoraja result scenes, the song in `prepare(host, song, source)` on the gameplay scenes, and the constructor options for the rest.
 
 - **The select scene is kept alive.** The built-in and LR2 select scene stays across a decide, play and result: its `exit()` pauses the BGM, stops the chart preview (which keeps its focused chart) and the render loop, and it keeps its cursor, browse state and decoded BGM. Its input listeners stay attached and ignore input while it is off stage. Entering it again re-seeds its scene timers, so the skin's entrance plays again, and resumes the BGM and the preview. The beatoraja select scene is rebuilt from its snapshot instead.
 - **A play loads off stage.** `prepare()` parses the chart and decodes its audio without touching the stage or adding listeners, so the demo prepares the play behind a decide splash. When the splash is done, `setScene(play)` exits the decide scene and enters the play, then `start()` begins it; keys pressed during the splash reach only the splash. Without a splash the demo shows the play first, and a `prepare()` that runs while the play is showing draws the playfield in its loading state.
@@ -331,7 +331,7 @@ flowchart TD
 
 ## Scene sessions and family views
 
-The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). The built-in decide screen is the first ([The decide screen](#the-decide-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
+The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). The built-in decide and result screens are on them ([The decide screen](#the-decide-screen), [The result screen](#the-result-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
 
 ```mermaid
 flowchart LR
@@ -412,6 +412,28 @@ stateDiagram-v2
 
 The web demo prepares the play behind the screen as before and shows it from `on.continue`.
 
+### The result screen
+
+`createResultScene(kit, options)` (`@be-music/player-web/scenes`) makes the built-in result screen: a result session (`session/result/result-session.ts`) drawn by the built-in result view (`view/built-in/result-view.ts`), as a `SessionScene` to show with `setScene`. The LR2 and beatoraja result screens are still `PixiResultView` and `PixiBeatorajaResultScene`.
+
+- **Options.** `result` (the `PlayResult`), `run` (which play it is of, when `result.run` does not say, as for a course stage), `source` (the chart's files, for the skin's images), `sounds` (the theme's `SystemSoundSet`), `audio` (the host's audio service) and `on: { continue, retry? }`.
+- **Presentation.** The session presents the run with `resolveResultPresentation(run)`: a course run plays the course jingles, and only a single play or a NONSTOP run offers the quick retry.
+- **Jingle.** The session plays the result's jingle from `sounds` (`resolveResultJingles`, then `resolveResultJingle`: the clear or the fail one by the verdict, else the generic one; the course ones first for a course run) through the audio service as the screen enters, as its owner, and stops it with `stopOwned` as the screen leaves the stage. A scene used to stop its jingle by closing its own context.
+- **Steps.** Input opens after the view's input delay (1500 ms for a be-music skin, LR2's default `#STARTINPUT`), and the result's graphs start drawing then. They finish by themselves 3 s later; Enter, Space or a click before that skips them. The next press shows the record update, and the one after that calls `on.continue`. The frame carries when each step showed (`graphShownAtMs`, `updateShownAtMs`: LR2's timers 151 and 152); a be-music skin's entrance jumps to its settled layout once the graphs show.
+- **Leaving.** Escape calls `on.continue` at any step. A bare R calls `on.retry` once input is open, when the run offers the quick retry and the host gave `on.retry`. Each fires once per entry.
+- **Skin settings.** `updateKit(kit)` takes the player's new settings for the skin; the next frame draws with them.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Waiting: enter
+  Waiting --> Graphs: input delay
+  Graphs --> Shown: Enter, click or 3 s
+  Shown --> Update: Enter, click
+  Update --> [*]: Enter, click
+```
+
+The web demo shows every built-in result this way: a single play, a course stage, a course run and a NONSTOP run (whose result falls back to the built-in screen on a beatoraja theme, with that theme's jingles).
+
 ## Note visibility
 
 Drawing is not part of a judge ruleset, so the ruleset plays no part in it. The gameplay view picks one of two rule sets for which notes, mines and bar lines it draws and where ([`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)):
@@ -489,7 +511,7 @@ pnpm bench -- --packages player-web
 
 ### Audio service
 
-`createAudioService()` (`@be-music/player-web/runtime`) is the one way the player plays sounds outside a play's chart ([ADR 0007](./adr/0007-one-system-audio-context.md)). The scene sessions play through it as they land, the decide screen first; the other scenes still use contexts of their own. The web demo creates one service at start-up and hands it to every scene made on it.
+`createAudioService()` (`@be-music/player-web/runtime`) is the one way the player plays sounds outside a play's chart ([ADR 0007](./adr/0007-one-system-audio-context.md)). The scene sessions play through it as they land, the decide and result screens so far; the other scenes still use contexts of their own. The web demo creates one service at start-up and hands it to every scene made on it.
 
 ```mermaid
 flowchart LR

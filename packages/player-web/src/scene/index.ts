@@ -48,3 +48,5 @@ export {
 // The host API: each screen as a scene, made of its session and the view of the kit's family.
 export { createDecideScene, type DecideScene, type DecideSceneKit, type DecideSceneOptions } from '../host/decide.ts';
 export type { DecideSessionEvents } from '../session/decide/decide-session.ts';
+export { createResultScene, type ResultScene, type ResultSceneKit, type ResultSceneOptions } from '../host/result.ts';
+export type { ResultSessionEvents } from '../session/result/result-session.ts';

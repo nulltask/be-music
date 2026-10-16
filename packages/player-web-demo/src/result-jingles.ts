@@ -1,4 +1,4 @@
-import { resolveResultJingles, type SystemSound, type SystemSoundSet } from '@be-music/scene-model';
+import { hasResultJingle, resolveResultJingles, type SystemSound, type SystemSoundSet } from '@be-music/scene-model';
 import type { BeatorajaThemeBgm, SkinFamilyId } from '@be-music/player-web/skin';
 
 /** An LR2 theme's result jingles (`Sound/<theme>/clear.wav` and the rest). */
@@ -29,21 +29,32 @@ function resultJingleSet(jingles: Lr2ResultJingles | BeatorajaThemeBgm): SystemS
 }
 
 /**
- * The jingles a result shown on the LR2 or built-in result view plays (`resolveResultJingles` of
- * `@be-music/scene-model`). They come from the theme whose result skin is active (`family`, the family picked for the
- * result scene): a result that falls back to the built-in view while a beatoraja theme is active (a NONSTOP course has
- * no beatoraja scene) plays that theme's sound set, as beatoraja plays every result from its one set, and the LR2 set
- * only when the beatoraja theme has no result jingle at all. `courseJingles` plays the course-result ones, falling back
- * to the clear / fail ones.
+ * The sound set a result shown on the LR2 or built-in result view plays its jingles from: the theme whose result skin
+ * is active (`family`, the family picked for the result scene). A result that falls back to the built-in view while a
+ * beatoraja theme is active (a NONSTOP course has no beatoraja scene) plays that theme's set, as beatoraja plays every
+ * result from its one set, and the LR2 set only when the beatoraja theme has no result jingle at all. The result scene
+ * picks the jingle from it (`resolveResultJingles` of `@be-music/scene-model`).
+ */
+export function resolveResultSoundSet(
+  family: SkinFamilyId,
+  sets: { lr2: Lr2ResultJingles; beatoraja: BeatorajaThemeBgm },
+): SystemSoundSet {
+  const lr2 = resultJingleSet(sets.lr2);
+  if (family !== 'beatoraja') return lr2;
+  const beatoraja = resultJingleSet(sets.beatoraja);
+  return hasResultJingle(beatoraja) ? beatoraja : lr2;
+}
+
+/**
+ * The jingles a result shown on the LR2 or built-in result view plays, from {@link resolveResultSoundSet}'s set.
+ * `courseJingles` plays the course-result ones, falling back to the clear / fail ones.
  */
 export function resolveResultViewJingles(
   family: SkinFamilyId,
   courseJingles: boolean,
   sets: { lr2: Lr2ResultJingles; beatoraja: BeatorajaThemeBgm },
 ): ResultViewJingles {
-  const lr2 = resultJingleSet(sets.lr2);
-  const beatoraja = resultJingleSet(sets.beatoraja);
-  const jingles = resolveResultJingles(family === 'beatoraja' ? [beatoraja, lr2] : [lr2], courseJingles);
+  const jingles = resolveResultJingles([resolveResultSoundSet(family, sets)], courseJingles);
   const out: ResultViewJingles = {};
   if (jingles.clear?.bytes !== undefined) out.clearBgm = jingles.clear.bytes;
   if (jingles.fail?.bytes !== undefined) out.failBgm = jingles.fail.bytes;

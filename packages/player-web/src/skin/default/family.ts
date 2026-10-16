@@ -8,9 +8,9 @@ import type { SkinFamily } from '../family.ts';
  * - the dropped theme(s) don't cover the chart's key mode (e.g. a 9-key chart and an LR2 theme that ships only
  *   `play_7.lr2skin` — the LR2 path takes over, but at the gameplay scene it falls back to this family's chrome).
  *
- * Scene classes for this family live under `scene/default/` (`DefaultPixiGameplayView` /
- * `DefaultPixiSongSelectView` / `DefaultPixiResultView`). The default family has no decide scene — themes without a
- * decide skin simply skip the splash and hand straight off to gameplay.
+ * Scene classes for this family live under `scene/default/` (`DefaultPixiGameplayView` / `DefaultPixiSongSelectView`);
+ * its result screen is `createResultScene`. The default family has no decide scene — themes without a decide skin
+ * simply skip the splash and hand straight off to gameplay.
  */
 export const defaultSkinFamily: SkinFamily = {
   id: 'default',

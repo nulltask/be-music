@@ -7,7 +7,7 @@ import { disposeChildren } from '../pixi-utils.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
-import { isResultRetryKey } from './result-keys.ts';
+import { isResultRetryKey } from '../../session/result/result-keys.ts';
 import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
 import { BeMusicResultBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
