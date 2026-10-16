@@ -116,7 +116,8 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
 - playable note、legacy long note、`#LNOBJ`、FREE ZONE、mine、invisible note の共通抽出
 - 判定幅、動的 `#EXRANKxx`、score、groove gauge、scroll distance、BGA timeline、result summary の共通意味論
-- `core/engine`、`core/bga-timeline`、`core/scroll-distance`、`core/groove-gauge`、`playable-notes`、`playlog` などの browser-safe subpath export
+- `core/engine`、`core/bga-timeline`、`core/scroll-distance`、`playable-notes`、`playlog`、`records`、`ruleset` などの browser-safe subpath export
+- `ruleset`: ホスト・スキン・リーダーボードが共有する語彙。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）。`core/scoring` はスコアの部分の非推奨の別名です
 
 ### terminal player (`@be-music/player-tui`)
 
