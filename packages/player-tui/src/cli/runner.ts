@@ -28,7 +28,7 @@ import {
   type ImageResizeAlgorithm,
 } from '@be-music/player/image-resize-algorithm';
 import { JUDGE_WINDOW_RULESETS, type JudgeWindowRuleset } from '@be-music/player/core/judge-window';
-import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
+import type { GaugeType } from '@be-music/player/ruleset';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
 import { ensureSeaEmbeddedNodeModules } from '../node/sea-embedded-modules.ts';
 import {
@@ -146,7 +146,7 @@ interface CliArgs {
   /** Compat ruleset the engine judges under (`PlayerOptions.judgeRuleset`). Defaults to LR2. */
   judgeRuleset?: JudgeWindowRuleset;
   /** Gauge pick, in LR2's names; each ruleset maps it onto its own line-up. Defaults to `GROOVE`. */
-  gauge?: GrooveGaugeType;
+  gauge?: GaugeType;
   debugActiveAudio: boolean;
   renderAudioPath?: string;
   audio: boolean;
@@ -1437,7 +1437,8 @@ export function parseArgs(rawArgs: string[]): CliArgs {
   return args;
 }
 
-const CLI_GAUGES: readonly GrooveGaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH'];
+/** The gauge types, in the order the CLI lists them. */
+const CLI_GAUGES: readonly GaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH'];
 
 function parseCliRuleset(rawValue: string): JudgeWindowRuleset {
   const value = rawValue.trim().toLowerCase();
@@ -1448,7 +1449,7 @@ function parseCliRuleset(rawValue: string): JudgeWindowRuleset {
   return match;
 }
 
-function parseCliGauge(rawValue: string): GrooveGaugeType {
+function parseCliGauge(rawValue: string): GaugeType {
   const value = rawValue.trim().toUpperCase();
   const match = CLI_GAUGES.find((gauge) => gauge === value);
   if (!match) {
