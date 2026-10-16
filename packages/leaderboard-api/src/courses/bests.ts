@@ -4,7 +4,6 @@ import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import type { Database } from '../db/client.ts';
 import { courseBestScore, courseScore, courseScoreResult } from '../db/schema.ts';
 import { mergeBestScores, type BestScores } from '../scoring/best.ts';
-import type { ClearLamp } from '../scoring/lamp.ts';
 import { mergeCourseTrophy, type CourseTrophyBest } from './figures.ts';
 
 export type CourseBestScoreRow = typeof courseBestScore.$inferInsert;
@@ -33,7 +32,7 @@ export async function loadCourseBestScores(
         bestEx: row.bestEx,
         bestExScoreId: row.bestExScoreId,
         bestExAt: row.bestExAt.getTime(),
-        bestLamp: row.bestLamp as ClearLamp,
+        bestLamp: row.bestLamp,
         bestLampScoreId: row.bestLampScoreId,
         minMiss: row.minMiss,
         minMissScoreId: row.minMissScoreId,
@@ -116,7 +115,7 @@ export async function rebuildCourseBestScores(
       scoreId: row.scoreId,
       playedAt: row.createdAt.getTime(),
       exScore: row.exScore,
-      lamp: row.clearLamp as ClearLamp,
+      lamp: row.clearLamp,
       missCount: row.missCount,
     });
     const trophy = mergeCourseTrophy(current?.trophy, {

@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { mergeBestScores, type BestScores } from './best.ts';
-import { ClearLamp } from './lamp.ts';
+import { clearLampRank } from '@be-music/player/ruleset';
 
 const current: BestScores = {
   bestEx: 1000,
   bestExScoreId: 'a',
   bestExAt: 100,
-  bestLamp: ClearLamp.NORMAL,
+  bestLamp: clearLampRank('NORMAL'),
   bestLampScoreId: 'a',
   minMiss: 20,
   minMissScoreId: 'a',
@@ -19,14 +19,14 @@ describe('mergeBestScores', () => {
       scoreId: 'x',
       playedAt: 5,
       exScore: 10,
-      lamp: ClearLamp.FAILED,
+      lamp: clearLampRank('FAILED'),
       missCount: 50,
     });
     expect(next).toEqual({
       bestEx: 10,
       bestExScoreId: 'x',
       bestExAt: 5,
-      bestLamp: ClearLamp.FAILED,
+      bestLamp: clearLampRank('FAILED'),
       bestLampScoreId: 'x',
       minMiss: 50,
       minMissScoreId: 'x',
@@ -40,14 +40,14 @@ describe('mergeBestScores', () => {
       scoreId: 'b',
       playedAt: 200,
       exScore: 1100,
-      lamp: ClearLamp.EASY,
+      lamp: clearLampRank('EASY'),
       missCount: 15,
     });
     expect(next).toEqual({
       bestEx: 1100,
       bestExScoreId: 'b',
       bestExAt: 200,
-      bestLamp: ClearLamp.NORMAL,
+      bestLamp: clearLampRank('NORMAL'),
       bestLampScoreId: 'a',
       minMiss: 15,
       minMissScoreId: 'b',
@@ -61,7 +61,7 @@ describe('mergeBestScores', () => {
       scoreId: 'c',
       playedAt: 300,
       exScore: 1000,
-      lamp: ClearLamp.NORMAL,
+      lamp: clearLampRank('NORMAL'),
       missCount: 20,
     });
     expect(next).toMatchObject({ bestExScoreId: 'a', bestExAt: 100, bestLampScoreId: 'a', minMissScoreId: 'a' });
