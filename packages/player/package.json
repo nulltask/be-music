@@ -96,7 +96,7 @@
       "default": "./dist/core/lane-layout.js"
     },
     "./core/scoring": {
-      "source": "./src/core/scoring.ts",
+      "source": "./src/core/scoring-entry.ts",
       "types": "./dist/core/scoring.d.ts",
       "default": "./dist/core/scoring.js"
     },

@@ -20,7 +20,7 @@ export default defineConfig({
       'core/input-signal-bus': 'src/core/input-signal-bus.ts',
       'core/judge-window': 'src/core/judge-window.ts',
       'core/lane-layout': 'src/core/lane-layout.ts',
-      'core/scoring': 'src/core/scoring.ts',
+      'core/scoring': 'src/core/scoring-entry.ts',
       'core/scroll-distance': 'src/core/scroll-distance.ts',
       'core/timeline': 'src/core/timeline.ts',
       'core/ui-options': 'src/core/ui-options.ts',
