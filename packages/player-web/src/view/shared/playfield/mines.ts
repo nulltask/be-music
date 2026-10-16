@@ -31,7 +31,7 @@ export function renderMineNote(
   const binding = ctx.skinBinding;
   if (binding?.drawsMines) {
     binding.addMine({
-      kind: resolveBeMusicLaneKind(channel, laneIndex, ctx.chartPlayVariant),
+      kind: resolveBeMusicLaneKind(channel, laneIndex, ctx.play.chartPlayVariant),
       x: lane.x,
       w: lane.w,
       y,
