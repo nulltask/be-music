@@ -1,16 +1,20 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { crc32, deflateSync } from 'node:zlib';
 
 /**
  * Builds the tiny BMS library and `.lr2crs` course files the course browser checklist runs on
  * (`docs/course-checklist.md`): short charts with sine keysounds and a continuous BGM tone (so fades show), courses of
- * every LR2 kind, a GRADE course with a dense stage that empties the gauge, and a seven-stage file for the five-stage
- * warning.
+ * every LR2 kind, a GRADE course with a dense stage that empties the gauge, a course with a stage missing from the
+ * library, and a seven-stage file for the five-stage warning. It also writes two minimal skins made for the checklist
+ * (`skins/`, no third-party assets): an LR2 theme with its sound set and a beatoraja JSON skin, each with the
+ * course scenes, PLAY / AUTO buttons and solid-colour images. The end-to-end suite (`packages/player-web-demo/e2e`)
+ * writes the same files with {@link writeChecklistFixtures}.
  *
- * Usage: `node scripts/course-checklist/fixtures.ts <out-dir>` writes `<out-dir>/songs/…` and
- * `<out-dir>/seven-stages.lr2crs`.
+ * Usage: `node scripts/course-checklist/fixtures.ts <out-dir>` writes `<out-dir>/songs/…`,
+ * `<out-dir>/seven-stages.lr2crs` and `<out-dir>/skins/{lr2,beatoraja}/…`.
  */
 
 const SAMPLE_RATE = 22050;
@@ -41,6 +45,98 @@ export function sineWav(frequency: number, seconds: number, amplitude: number, d
     view.setInt16(44 + index * 2, sample, true);
   }
   return bytes;
+}
+
+/**
+ * A PNG of horizontal bands of solid colour, `bandHeight` rows each, top to bottom: what the fixture skins cut their
+ * images from.
+ */
+export function bandsPng(
+  width: number,
+  bandHeight: number,
+  colours: ReadonlyArray<readonly [number, number, number]>,
+): Uint8Array {
+  const height = bandHeight * colours.length;
+  const stride = width * 4 + 1;
+  const pixels = new Uint8Array(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    const [r, g, b] = colours[Math.floor(y / bandHeight)]!;
+    // Each scanline starts with its filter type, 0 (none).
+    for (let x = 0; x < width; x += 1) pixels.set([r, g, b, 255], y * stride + 1 + x * 4);
+  }
+  const header = new Uint8Array(13);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, width);
+  view.setUint32(4, height);
+  // Bit depth 8, colour type 6 (RGBA), default compression, filter and no interlace.
+  header.set([8, 6, 0, 0, 0], 8);
+  const chunk = (type: string, data: Uint8Array): Uint8Array => {
+    const body = new Uint8Array(4 + data.length);
+    body.set(new TextEncoder().encode(type));
+    body.set(data, 4);
+    const out = new Uint8Array(8 + data.length + 4);
+    const chunkView = new DataView(out.buffer);
+    chunkView.setUint32(0, data.length);
+    out.set(body, 4);
+    chunkView.setUint32(8 + data.length, crc32(body));
+    return out;
+  };
+  const parts = [
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(pixels)),
+    chunk('IEND', new Uint8Array()),
+  ];
+  const png = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    png.set(part, offset);
+    offset += part.length;
+  }
+  return png;
+}
+
+/** The fixture skins' image: grey, blue, orange and green bands of 64 pixels. */
+const SKIN_IMAGE_BANDS: ReadonlyArray<readonly [number, number, number]> = [
+  [40, 40, 48],
+  [48, 96, 200],
+  [224, 128, 32],
+  [64, 176, 96],
+];
+
+/**
+ * The files of the fixture skins that are not text: each skin's image and the sounds of its sound set, a short tone
+ * of its own pitch each. The skins' text files are kept in `scripts/course-checklist/skins/`.
+ */
+const SKIN_BINARIES: ReadonlyArray<{ path: string; tone?: number }> = [
+  { path: 'lr2/LR2files/Theme/E2E/parts.png' },
+  { path: 'lr2/LR2files/Bgm/e2e/select.wav', tone: 330 },
+  { path: 'lr2/LR2files/Bgm/e2e/decide.wav', tone: 392 },
+  ...['f-open', 'f-close', 'o-open', 'o-close', 'o-change', 'scratch'].map((name, index) => ({
+    path: `lr2/LR2files/Sound/e2e/${name}.wav`,
+    tone: 1000 + index * 100,
+  })),
+  { path: 'lr2/LR2files/Sound/e2e/clear.wav', tone: 523 },
+  { path: 'lr2/LR2files/Sound/e2e/fail.wav', tone: 262 },
+  { path: 'lr2/LR2files/Sound/e2e/course_clear.wav', tone: 659 },
+  { path: 'lr2/LR2files/Sound/e2e/course_fail.wav', tone: 196 },
+  { path: 'beatoraja/skin/E2E/parts.png' },
+  { path: 'beatoraja/skin/E2E/sound/decide.wav', tone: 392 },
+  { path: 'beatoraja/skin/E2E/sound/clear.wav', tone: 523 },
+  { path: 'beatoraja/skin/E2E/sound/fail.wav', tone: 262 },
+  { path: 'beatoraja/skin/E2E/sound/course_clear.wav', tone: 659 },
+  { path: 'beatoraja/skin/E2E/sound/course_fail.wav', tone: 196 },
+];
+
+/** Writes the fixture skins to `<outDir>/skins`: the text files kept here, then their images and sounds. */
+export async function writeFixtureSkins(outDir: string): Promise<void> {
+  const skins = join(outDir, 'skins');
+  await cp(fileURLToPath(new URL('./skins', import.meta.url)), skins, { recursive: true });
+  for (const { path, tone } of SKIN_BINARIES) {
+    const file = join(skins, path);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, tone === undefined ? bandsPng(256, 64, SKIN_IMAGE_BANDS) : sineWav(tone, 0.3, 6000, true));
+  }
 }
 
 export interface FixtureChart {
@@ -107,6 +203,9 @@ export function lr2CourseList(
 const K7 = ['11', '12', '13', '14', '15', '18', '19', '16'];
 const K5 = ['11', '12', '13', '14', '15', '16'];
 
+/** The MD5 a course lists for a stage no chart of the library has (`FIX MISSING STAGE`). */
+export const MISSING_STAGE_MD5 = '0123456789abcdef0123456789abcdef';
+
 /** The checklist library: id → folder and chart. `D` is dense enough to empty the gauge of a no-input run. */
 export const FIXTURE_CHARTS: Readonly<Record<string, { folder: string; chart: FixtureChart }>> = {
   A: {
@@ -143,7 +242,12 @@ export const FIXTURE_CHARTS: Readonly<Record<string, { folder: string; chart: Fi
   },
 };
 
-async function main(outDir: string): Promise<void> {
+/**
+ * Writes the checklist library to `<outDir>/songs`, the seven-stage course file to `<outDir>` and the fixture skins
+ * to `<outDir>/skins`.
+ */
+export async function writeChecklistFixtures(outDir: string): Promise<void> {
+  await writeFixtureSkins(outDir);
   const songs = join(outDir, 'songs');
   const md5 = new Map<string, string>();
   for (const [id, { folder, chart }] of Object.entries(FIXTURE_CHARTS)) {
@@ -168,6 +272,7 @@ async function main(outDir: string): Promise<void> {
       { title: 'FIX EXPERT', type: 0, md5s: stages('ABC') },
       { title: 'FIX NONSTOP', type: 1, md5s: stages('ABG') },
       { title: 'FIX GRADE FAIL', type: 2, md5s: stages('ADB') },
+      { title: 'FIX MISSING STAGE', type: 0, md5s: [md5.get('A')!, MISSING_STAGE_MD5] },
     ]),
   );
   // Kept outside `songs/` so it is dropped on its own, for the five-stage warning.
@@ -175,7 +280,6 @@ async function main(outDir: string): Promise<void> {
     join(outDir, 'seven-stages.lr2crs'),
     lr2CourseList([{ title: 'FIX SEVEN STAGES', type: 0, md5s: stages('ABCEFGA') }]),
   );
-  console.log(`fixtures written to ${outDir}`);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -184,5 +288,6 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
     console.error('usage: node scripts/course-checklist/fixtures.ts <out-dir>');
     process.exit(1);
   }
-  await main(resolve(outDir));
+  await writeChecklistFixtures(resolve(outDir));
+  console.log(`fixtures written to ${resolve(outDir)}`);
 }
