@@ -301,7 +301,7 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `groupSongsByFolder`・`resolveChartPlayVariant`                                  | `player-web` の collection                   | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（再 export）     |
 | `matchesSearchQuery`・`wrappedCursorDelta`                                       | `player-web` のコアの選曲                    | 同じ名前（再 export）                                                    |
 | コアの選曲のソートと難易度フィルター                                             | `player-web` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                     |
-| `resolveSelectNavigation`                                                        | `player-web` のコアの選曲                    | そのまま。`restoreBrowse` の上に実装                                     |
+| `resolveSelectNavigation`                                                        | `player-web` のコアの選曲                    | `select-session.ts` へ移動（再 export）。`restoreBrowse` の上に実装      |
 | `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                       | `player-web` のコアの選曲                    | 同じ名前（再 export）                                                    |
 | `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                         | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`（旧名で再 export）      |
 | ハイスピードの範囲と刻み                                                         | `player-web` の `scene/hi-speed.ts`          | 同じ名前（再 export）                                                    |
