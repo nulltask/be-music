@@ -488,7 +488,8 @@ The running play is one scene-model `PlayState` (`playState`): the gauge and EX 
   - `play-chart.ts`: `prepareSong`, the lane options (RANDOM, MIRROR, S-RANDOM, SCATTER, DP FLIP) and a replay's arrangement;
   - `play-media.ts`: the audio graph, the samples and the BGA textures, and their teardown;
   - `play-engine.ts`: the shared engine's launch, its UI signals, the judgements and lane effects, and the start of the ending;
-  - `play-input.ts`: ESC, F5, Space and the arrows, the quit hold, the auto-pause and touch lanes; `PLAY_SCENE_KEY_CODES` lists the keys the engine's web input runtime skips;
+  - `play-input.ts`: ESC, F5, Space and the arrows, the quit hold, the auto-pause and touch lanes;
+  - `play-keys.ts`: `PLAY_SCENE_KEY_CODES`, the keys the play handles itself and the engine's web input runtime skips;
   - `play-state.ts`: `applyPlayEvent`, the one way the play state changes;
   - `play-view-settings.ts`: the hi-speed keys, the tempo the engine follows, the lane covers as drawn and the play log's view;
   - `play-ending.ts`: the exit timeline and the result snapshot.
