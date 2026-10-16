@@ -139,6 +139,8 @@ import {
   courseStageRecordKey,
   readStoredSongRecords,
   playRecordKey,
+  rulesetRecordKey,
+  rulesetRecords,
   songRecordKey,
   storeSongRecords,
 } from './song-records.ts';
@@ -1731,7 +1733,9 @@ class PlayerWebDemoApp {
               return;
             }
             if (
-              !window.confirm(`Clear the best records of ${this.songRecords.size} chart(s)? This cannot be undone.`)
+              !window.confirm(
+                `Clear ${this.songRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
+              )
             ) {
               return;
             }
@@ -1793,7 +1797,9 @@ class PlayerWebDemoApp {
     this.trackPlayOption(
       developer
         .add(this.guiState, 'judgeRuleset', { LR2: 'lr2', beatoraja: 'beatoraja', IIDX: 'iidx' })
-        .name('Judge windows'),
+        .name('Judge windows')
+        // Each ruleset keeps its own best records: the select screen switches to the new ruleset's.
+        .onChange(() => this.refreshSelectRecords()),
     );
 
     developer
@@ -2591,7 +2597,24 @@ class PlayerWebDemoApp {
     if (hashes === undefined) {
       void this.resolveChartHashes(song);
     }
-    return this.songRecords.get(songRecordKey(song, hashes?.sha256));
+    return this.songRecords.get(rulesetRecordKey(this.guiState.judgeRuleset, songRecordKey(song, hashes?.sha256)));
+  }
+
+  /** The best records of the current judge ruleset, by chart or course key: the ones the select screen shows. */
+  private currentRulesetRecords(): { get(key: string): BeMusicSongRecord | undefined } {
+    return rulesetRecords(this.songRecords, this.guiState.judgeRuleset);
+  }
+
+  /**
+   * Redraws the select screen with the records of the current judge ruleset, after it changed: the LR2 and default
+   * selects redraw in place, a beatoraja select is mounted again where it was.
+   */
+  private refreshSelectRecords(): void {
+    if (this.beatorajaSelectScene !== undefined) {
+      void this.showSelect();
+      return;
+    }
+    this.selectView?.setCollection(this.collection);
   }
 
   /** Records the running play's result under its chart, when the play counts ({@link playRecordKey}). */
@@ -3404,15 +3427,17 @@ class PlayerWebDemoApp {
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay } };
     // The same record rule as the LR2 / default play (`playRecordKey`).
+    const judgeRuleset = this.guiState.judgeRuleset;
     this.activePlayRecordKey = playRecordKey(song, chartHashes?.sha256, {
       autoPlay,
       replay: false,
       course: courseStage !== undefined,
       tempo,
+      judgeRuleset,
     });
     this.activeStageRecordKey =
       courseStage !== undefined
-        ? courseStageRecordKey(song, chartHashes?.sha256, { autoPlay, replay: false, tempo })
+        ? courseStageRecordKey(song, chartHashes?.sha256, { autoPlay, replay: false, tempo, judgeRuleset })
         : undefined;
     // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
     let givingUp = false;
@@ -3509,7 +3534,9 @@ class PlayerWebDemoApp {
           if (courseStage !== undefined && this.activeCourse !== undefined) {
             const active = this.activeCourse;
             const goesOn = active.run.recordStage(playlog, history) === 'next';
-            this.recordActiveCourseStage(courseStageRecordPlayFromSummary(summary, maxCombo));
+            this.recordActiveCourseStage(
+              courseStageRecordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset),
+            );
             // With stage results skipped (or an auto-played stage the course goes on after, as LR2 skips it), go
             // straight on to the next stage (or the course result).
             const mounted =
@@ -3737,7 +3764,7 @@ class PlayerWebDemoApp {
       },
       // A course bar's lamp comes from the course's record, kept under the course's key.
       resolveCourseLampOp: (course) => {
-        const record = lookupCourseRecord(course, this.songRecords, this.guiState.nonstopPlacement);
+        const record = lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement);
         return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
       },
       // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
@@ -4739,7 +4766,7 @@ class PlayerWebDemoApp {
       },
       resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
       resolveCourseRecord: (course: BrowserCourseEntry) =>
-        lookupCourseRecord(course, this.songRecords, this.guiState.nonstopPlacement),
+        lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement),
       onSongSelected: (song: BrowserSongEntry) => {
         if (this.addSongToCourseBeingMade(song)) return;
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
@@ -5011,16 +5038,24 @@ class PlayerWebDemoApp {
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
     // course instead.
     // A play at another tempo is practice: it is not ranked, and leaves the records alone too.
+    // A play keeps the record of the judge ruleset it runs under (a replay keeps none).
+    const judgeRuleset = this.guiState.judgeRuleset;
     this.activePlayRecordKey = playRecordKey(song, overrides.chartHashes?.sha256, {
       autoPlay,
       replay: replay !== undefined,
       course: courseStage !== undefined || nonstop !== undefined,
       tempo,
+      judgeRuleset,
     });
     // An EXPERT / GRADE stage also updates its chart's record, as LR2 does (not a NONSTOP run's stitched play).
     this.activeStageRecordKey =
       courseStage !== undefined
-        ? courseStageRecordKey(song, overrides.chartHashes?.sha256, { autoPlay, replay: replay !== undefined, tempo })
+        ? courseStageRecordKey(song, overrides.chartHashes?.sha256, {
+            autoPlay,
+            replay: replay !== undefined,
+            tempo,
+            judgeRuleset,
+          })
         : undefined;
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
