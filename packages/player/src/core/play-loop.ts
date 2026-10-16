@@ -135,7 +135,9 @@ async function playChart(
     return hold.signal.aborted;
   };
 
-  let failedAtSeconds: number | undefined;
+  let failed = false;
+  // The chart second of the last frame the loop published: the closing frame never shows an earlier one.
+  let lastFrameSeconds: number | undefined;
   while (!pastHorizon()) {
     controls.consume();
     if (controls.interruptedReason !== undefined) {
@@ -145,6 +147,7 @@ async function playChart(
     if (clock.isPaused()) {
       const nowSec = tempoClock.chartSecondsAt(nowMs);
       publishUiFrame(nowSec, beatAtSeconds(nowSec));
+      lastFrameSeconds = nowSec;
       // Resume / ESC arrive as input commands; cutting the poll short on their arrival makes resuming immediate.
       await waitPreciseOrInput(PAUSE_POLL_INTERVAL_MS, wakeUp);
       continue;
@@ -163,10 +166,11 @@ async function playChart(
     session.backgroundAudio.triggerUntil(tick.scheduledSec);
     judge.judge(tick);
     publishUiFrame(tick.nowSec, beatAtSeconds(tick.nowSec));
+    lastFrameSeconds = tick.nowSec;
 
     // A play that ends on failure stops the moment its gauge empties.
     if (judge.isClosed()) {
-      failedAtSeconds = tick.nowSec;
+      failed = true;
       break;
     }
     if (stopping) {
@@ -184,11 +188,11 @@ async function playChart(
   judge.beforeFinish?.();
   tracer.flushUntil(totalSeconds);
   judge.finish();
-  // A closing frame shows the state `finish` left at the play's end: the chart's end, whatever tick the loop stopped
-  // on, or where the play failed.
-  const endSeconds = failedAtSeconds ?? totalSeconds;
+  // A closing frame shows the state `finish` left, at the time of the loop's last frame — past the chart's end, or
+  // where the play failed — so the time a host is shown never steps back.
+  const endSeconds = lastFrameSeconds ?? totalSeconds;
   publishUiFrame(endSeconds, beatAtSeconds(endSeconds));
-  return failedAtSeconds !== undefined;
+  return failed;
 }
 
 /** Runs a play from its lead-in to its end, then closes its runtimes. */

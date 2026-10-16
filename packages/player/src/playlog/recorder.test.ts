@@ -196,11 +196,16 @@ describe('playlog recorder', () => {
     recorder.recordInput('down', 1.234567, ['z'], sourceChannels);
     sourceChannels.push('19'); // later mutation must not leak into the recorded event
     recorder.recordInput('up', 1.3, [], new Set(['11', '12']));
+    // A release the engine inferred is marked; the mark means nothing on a press.
+    recorder.recordInput('down', 1.4, ['x'], ['13'], true);
+    recorder.recordInput('up', 1.52, ['x'], ['13'], true);
 
     const playlog = recorder.finalize({ summary: makeSummary() });
     expect(playlog.inputs).toEqual([
       { seq: 0, timeUs: 1_234_567, action: 'down', channels: ['11'], tokens: ['z'] },
       { seq: 1, timeUs: 1_300_000, action: 'up', channels: ['11', '12'] },
+      { seq: 2, timeUs: 1_400_000, action: 'down', channels: ['13'], tokens: ['x'] },
+      { seq: 3, timeUs: 1_520_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
     ]);
   });
 

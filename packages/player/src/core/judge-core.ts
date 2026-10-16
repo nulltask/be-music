@@ -37,6 +37,7 @@ export {
   toJudgeClock,
 } from './judge-core-score.ts';
 export { resolveLandmineExplosionEvent } from './judge-core-advance.ts';
+export { isLongNoteKeyRepeat } from './judge-core-press.ts';
 
 /** Builds the initial judge state of a play. */
 export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreScore): JudgeCoreState {
@@ -96,7 +97,9 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
       state.keyStateInput = true;
       for (const channel of input.channels) {
         state.heldChannels.add(channel);
-        emit({ kind: 'ui', command: { kind: 'press-lane', channel } });
+        if (input.inferred !== true) {
+          emit({ kind: 'ui', command: { kind: 'press-lane', channel } });
+        }
       }
       return;
     case 'release':
@@ -225,6 +228,7 @@ function processReplayEventsUntil(
           nowSec: eventSec,
           nowMs: eventMs,
           recordSec: eventSec,
+          ...(event.inferred === true ? { inferred: true } : {}),
         },
         emit,
       );

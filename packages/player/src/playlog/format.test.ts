@@ -50,6 +50,7 @@ function makePlaylog(): BeMusicPlaylog {
     inputs: [
       { seq: 0, timeUs: 499_000, action: 'down', channels: ['11'], tokens: ['z'] },
       { seq: 1, timeUs: 520_000, action: 'up', channels: ['11', '12'] },
+      { seq: 2, timeUs: 640_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
     ],
     play: {
       mode: 'manual',
@@ -242,6 +243,13 @@ describe('playlog format', () => {
         }),
       ),
     ).toThrow('inputs: expected an array');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.inputs[0].inferred = true;
+        }),
+      ),
+    ).toThrow("inputs[0].inferred: expected true on an 'up'");
     expect(() =>
       parsePlaylog(
         corrupt((value) => {
