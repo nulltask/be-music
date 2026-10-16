@@ -9,6 +9,7 @@ import {
 } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { HiSpeedTransition } from '../../scene/hi-speed.ts';
+import type { PlaySessionTheme } from './play-session-theme.ts';
 import {
   resolveLaneCovers,
   resolveVisibleMs,
@@ -20,7 +21,9 @@ import {
 /** A 1P lane 576 design pixels tall: eight beats at hi-speed 1 (`PIXELS_PER_BEAT` is 72). */
 const LANE = { x: 0, w: 40, top: 0, bottom: 576 };
 
-function createView(options: { replay?: PlaylogViewState } = {}): PlayViewSettingsContext {
+function createView(
+  options: { replay?: PlaylogViewState; theme?: Partial<PlaySessionTheme> } = {},
+): PlayViewSettingsContext {
   const covers = laneCoversFromPlayOptions(
     { hiddenSudden1P: 'SUDDEN', hiddenSudden2P: 'OFF', shutter: 0.25, laneCover: true },
     ['1P'],
@@ -35,6 +38,7 @@ function createView(options: { replay?: PlaylogViewState } = {}): PlayViewSettin
     playlogViewCoalescer: undefined,
     replayViewCursor: options.replay !== undefined ? new PlaylogViewCursor(options.replay) : undefined,
     sharedEngineInputSignals: undefined,
+    theme: options.theme ?? {},
     currentSeconds: () => 0,
   } as unknown as PlayViewSettingsContext;
 }
@@ -84,6 +88,22 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
     expect(ctx.scrollHiSpeed.target).toBe(3);
     // SUDDEN+ and HIDDEN+ as recorded; the scene draws no LIFT.
     expect(resolveLaneCovers(ctx)).toEqual([{ side: '1P', sudden: 0.25, hidden: 0.1, lift: 0 }]);
+  });
+
+  test("records on the view's own scale when the view has one, with no lanes laid out", () => {
+    const ctx = createView({
+      theme: { playlogView: () => ({ scale: 'beatoraja', laneBeats: 4, mainBpm: 150 }) },
+    });
+    ctx.laneX.clear();
+    const view = startPlaylogView(ctx);
+    // 4 beats / 2 × (1 - 0.25) at 150 BPM.
+    expect(view).toEqual({
+      hiSpeed: 2,
+      hiSpeedScale: 'beatoraja',
+      hsFix: 'OFF',
+      covers: [{ side: '1P', sudden: 0.25, hidden: 0, lift: 0 }],
+      visibleMs: 600,
+    });
   });
 
   test('a replay on the same scale takes the recorded hi-speed as drawn', () => {

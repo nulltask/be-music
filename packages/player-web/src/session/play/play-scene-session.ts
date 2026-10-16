@@ -5,7 +5,7 @@
  * play directly rather than through the scene.
  */
 
-import { isJudge, type CourseView, type LibraryChart, type PlayOptions } from '@be-music/scene-model';
+import type { CourseView, LibraryChart, PlayOptions } from '@be-music/scene-model';
 import { SILENT_AUDIO } from '@be-music/skin-sdk';
 import type { PlayDisposeOptions } from './play-options.ts';
 import type { PlayFrame, PlayIntent, PlayStage, PlayViewEvent } from '../../view/types.ts';
@@ -43,8 +43,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
 
   /** A moment the play raised for its view (the session's theme `moment`), queued for the next frame. */
   public queueEvent(event: PlayMoment): void {
-    const judge = this.play.lastJudge;
-    const mapped = playViewEventFromMoment(event, isJudge(judge) ? { judge } : undefined);
+    const mapped = playViewEventFromMoment(event);
     if (mapped !== undefined) this.pending.push(mapped);
   }
 
