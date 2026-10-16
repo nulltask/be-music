@@ -4127,20 +4127,16 @@ class PlayerWebDemoApp {
     const run: PlayRunKind = courseResult ? 'course' : course !== undefined ? 'stage' : 'single';
     const presentation = resolveResultPresentation(run);
     // The beatoraja play hands its result in its own shape until it produces a `PlayResult` itself (PL8). Its graphs
-    // stay as the play sampled them, from the first judgment to the last.
-    const result = {
-      ...playResultFromBeatoraja(
-        { summary, maxCombo, history },
-        {
-          song,
-          run,
-          judgeRuleset: this.guiState.judgeRuleset,
-          ...(course !== undefined ? { course: course.info } : {}),
-        },
-      ),
-      gaugeHistory: [...history.gaugeHistory],
-      scoreHistory: [...history.scoreHistory],
-    };
+    // run from the chart's start to its end, as the built-in and LR2 results' do.
+    const result = playResultFromBeatoraja(
+      { summary, maxCombo, history },
+      {
+        song,
+        run,
+        judgeRuleset: this.guiState.judgeRuleset,
+        ...(course !== undefined ? { course: course.info } : {}),
+      },
+    );
     // The chart as the play played it, for any `bpmgraph[]` and note-kind graph of the result skin. The prep bundle is
     // disposed at gameplay teardown, so the chart is kept in `lastBeatorajaChart`; it is only handed on when it is this
     // song's, so a graph never plots another chart. A course run's result plots none.
