@@ -1,0 +1,16 @@
+// be-music course checklist fixture skin (LR2): the result screen of a play or a course stage, with the EX score
+// (number 71) and, for a course stage (op 290), the course's first stage title (text 150).
+#INFORMATION,7,BE-MUSIC E2E,be-music,
+#ENDOFHEADER
+#STARTINPUT,300
+#FADEOUT,200
+#IMAGE,LR2files\Theme\E2E\parts.png
+#FONT,16,1,0,sans-serif
+#SRC_IMAGE,0,0,0,64,64,64,1,1,0,0
+#DST_IMAGE,0,0,0,0,640,480,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_NUMBER,0,0,0,192,250,16,10,1,0,0,71,0,4
+#DST_NUMBER,0,0,20,20,24,32,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#IF,290
+#SRC_TEXT,0,0,150,0,0,0
+#DST_TEXT,0,0,20,80,600,18,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#ENDIF

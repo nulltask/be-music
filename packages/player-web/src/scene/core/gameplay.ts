@@ -3634,6 +3634,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return this.tempo;
   }
 
+  /** The player's hi-speed in force (on the scale of `initialHiSpeed`), a replay's recorded one included. */
+  public getHiSpeed(): number {
+    return this.playerHiSpeed;
+  }
+
   /**
    * Changes the play tempo during the play (clamped by `clampPlayTempo`). Only in `pitch` mode: the samples follow it
    * through their playback rate, playing ones included, and so do the BGA videos and a NONSTOP chart's fades. Keep

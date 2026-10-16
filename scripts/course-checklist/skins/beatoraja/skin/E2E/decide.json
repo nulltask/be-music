@@ -1,0 +1,17 @@
+{
+  "type": 6,
+  "name": "be-music e2e decide",
+  "w": 640,
+  "h": 480,
+  "fadeout": 200,
+  "scene": 800,
+  "input": 200,
+  "source": [{ "id": 0, "path": "parts.png" }],
+  "font": [],
+  "image": [{ "id": "bg", "src": 0, "x": 0, "y": 128, "w": 64, "h": 64 }],
+  "text": [{ "id": "course1", "font": 0, "size": 16, "ref": 150 }],
+  "destination": [
+    { "id": "bg", "dst": [{ "x": 0, "y": 0, "w": 640, "h": 480 }] },
+    { "id": "course1", "op": [290], "dst": [{ "x": 20, "y": 440, "w": 600, "h": 18 }] }
+  ]
+}
