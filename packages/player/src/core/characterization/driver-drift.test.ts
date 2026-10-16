@@ -189,7 +189,7 @@ describe('driver drift', () => {
     expect(autoReplay.host.some((entry) => entry.includes(' tempo '))).toBe(true);
   });
 
-  test('drift: a replay of an ESC-aborted log plays on past the abort, while the simulators stop there', async () => {
+  test('a replay of an ESC-aborted log stops where the play was aborted, like the simulators', async () => {
     const live = await observePlay({
       driver: 'manual',
       chart: basicChart(),
@@ -198,12 +198,16 @@ describe('driver drift', () => {
     const replay = await observePlay({
       driver: 'manual',
       chart: basicChart(),
-      options: { replayInputs: live.playlog!.inputs },
+      options: { replayInputs: live.playlog!.inputs, replayAbortedAtUs: live.playlog!.play.abortedAtUs },
     });
     expect(live.simulated?.lr2.judge.poor).toBe(0);
     expect(live.summary?.poor).toBe(0);
-    // The replay misses every note after the abort.
-    expect(replay.summary?.poor).toBe(9);
+    // The replay misses nothing after the abort: it ends there, as an ESC, with the live play's result and log.
+    expect(replay.outcome).toBe('completed');
+    expect(replay.summary).toEqual(live.summary);
+    expect(replay.playlog?.inputs).toEqual(live.playlog?.inputs);
+    expect(replay.playlog?.play).toMatchObject({ aborted: true, abortedAtUs: live.playlog!.play.abortedAtUs });
+    expect(replay.endedAtMs).toBeLessThan(1100 + 1000 / 60);
   });
 
   test('drift: a replay of a log recorded without key releases judges differently from the live play', async () => {

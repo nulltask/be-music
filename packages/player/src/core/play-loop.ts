@@ -132,6 +132,9 @@ export async function runPlayLoop(
       // Without audio to play out a play ends as soon as its chart is over and judged — unless the host holds it open.
       const endsWithChart = audioSession === undefined && hold === undefined;
       let endSeconds = totalSeconds;
+      // A replay of an ESC-aborted log stops where the play was aborted, as the play-log simulators do.
+      const replayStopSeconds =
+        session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
       let settled = false;
       const pastHorizon = (): boolean => {
         if (clock.nowMs() < horizonMs()) return false;
@@ -157,11 +160,12 @@ export async function runPlayLoop(
           continue;
         }
         controls.followReplayTempoChanges(tempoClock.chartSecondsAt(nowMs));
-        const tick: PlayTick = {
-          nowMs,
-          nowSec: tempoClock.chartSecondsAt(nowMs),
-          scheduledSec: tempoClock.chartSecondsAt(clock.scheduledMs()),
-        };
+        const nowSec = tempoClock.chartSecondsAt(nowMs);
+        // The tick that reaches a replay's stop judges up to it and no further.
+        const stopping = replayStopSeconds !== undefined && nowSec >= replayStopSeconds;
+        const tick: PlayTick = stopping
+          ? { nowMs, nowSec: replayStopSeconds, scheduledSec: replayStopSeconds }
+          : { nowMs, nowSec, scheduledSec: tempoClock.chartSecondsAt(clock.scheduledMs()) };
         judge.beforeAudio?.(tick);
         tracer.flushUntil(tick.nowSec);
         // Queue audio against the write head, then judge and render against what is actually audible.
@@ -174,6 +178,10 @@ export async function runPlayLoop(
         if (judge.isClosed()) {
           endedOnFailure = true;
           endSeconds = tick.nowSec;
+          break;
+        }
+        if (stopping) {
+          controls.interrupt('escape', tick.nowSec);
           break;
         }
         const safeNowSeconds = Math.max(0, judge.judgedThroughSeconds(tick)) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;

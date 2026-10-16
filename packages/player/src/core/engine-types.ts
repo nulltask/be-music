@@ -312,6 +312,12 @@ export interface PlayerPlayRecording {
    * judgment.
    */
   replayTempoChanges?: readonly PlaylogTempoChange[];
+  /**
+   * Where the replayed play was aborted (`play.abortedAtUs` of a log with `play.aborted`), in chart microseconds: the
+   * replay judges up to it and stops there, as an ESC, as the play-log simulators stop there, instead of missing the
+   * rest of the chart. Read only in a replay ({@link replayInputs} set).
+   */
+  replayAbortedAtUs?: number;
 }
 
 /**

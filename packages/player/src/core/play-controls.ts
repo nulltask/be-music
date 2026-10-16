@@ -20,6 +20,8 @@ export interface PlayControls {
   consume(): void;
   /** Applies the replay's recorded tempo changes due by `nowSec`. */
   followReplayTempoChanges(nowSec: number): void;
+  /** Interrupts the play at chart second `seconds` (a replay reaching the instant its log was aborted at). */
+  interrupt(reason: PlayerInterruptReason, seconds: number): void;
   /** The chart has started: applies a pause sent during the lead-in. */
   chartStarted(): void;
   /** Records the view changes still on the input bus once the loop is over (sent as the play ended). */
@@ -94,6 +96,13 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
   let replayTempoChangeIndex = 0;
 
   const handleLaneCommand = judge.handleLaneCommand?.bind(judge);
+  const traceInterrupt = (reason: PlayerInterruptReason, seconds: number): void => {
+    if (uiEnabled || session.clock === undefined) return;
+    writeRuntimeEventLog(writeOutput, 'interrupt', [
+      ['time', formatSeconds(seconds)],
+      ['reason', reason],
+    ]);
+  };
 
   return {
     consume: () => {
@@ -129,16 +138,13 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
             : (command) => {
                 if (command.kind === 'lane-input' || command.kind === 'kitty-state') handleLaneCommand(command);
               },
-        logInterrupt: !uiEnabled
-          ? (reason) => {
-              if (session.clock === undefined) return;
-              writeRuntimeEventLog(writeOutput, 'interrupt', [
-                ['time', formatSeconds(commandSeconds())],
-                ['reason', reason],
-              ]);
-            }
-          : undefined,
+        logInterrupt: (reason) => traceInterrupt(reason, commandSeconds()),
       });
+    },
+    interrupt: (reason, seconds) => {
+      if (interruptedReason !== undefined) return;
+      traceInterrupt(reason, seconds);
+      interruptedReason = reason;
     },
     followReplayTempoChanges: (nowSec) => {
       while (replayTempoChangeIndex < replayTempoChanges.length) {
