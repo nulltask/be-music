@@ -12,7 +12,9 @@ import type {
   PlaylogViewReplay,
 } from '@be-music/player/playlog';
 import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
+import type { ResolvedPlayChart } from '@be-music/player/core/engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
+import type { AudioService } from '../../runtime/audio-service.ts';
 import type { TempoPitchMode, TimeStretchAlgorithm } from '../../runtime/play-tempo.ts';
 import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
@@ -305,6 +307,16 @@ export interface CoreGameplayViewOptions {
    * Only tap notes are gated. Long notes stay until their end either way, so this option doesn't disturb them.
    */
   judgedNoteDisplay?: 'KEEP_SCROLLING' | 'HIDE';
+  /**
+   * The chart's `#RANDOM` / `#SWITCH` branches as the decide screen drew them (`DecideScene.resolved`), so the play
+   * plays the branches the screen showed. Without it the play draws its own; a replay always plays its log's.
+   */
+  preResolved?: ResolvedPlayChart;
+  /**
+   * The host's audio service: the play opens its own context and bus through it (`openPlayGraph`). Without one the play
+   * makes them itself.
+   */
+  audio?: AudioService;
 }
 
 export interface CoreGameplayDisposeOptions {

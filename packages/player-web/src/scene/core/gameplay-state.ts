@@ -20,9 +20,9 @@ import { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { GameplayBgaTarget } from './gameplay-theme.ts';
-import { PlaySessionState } from '../../session/play/play-session-state.ts';
+import { PlaySession } from '../../session/play/play-session.ts';
 
-export class CoreGameplayState extends PlaySessionState {
+export class CoreGameplayState extends PlaySession {
   /**
    * Top-level Container the scene host attaches to its `app.stage` while gameplay is active. All visible nodes
    * (`viewportBackground` + `designRoot`) live as children of this root, so the host can attach / detach the whole

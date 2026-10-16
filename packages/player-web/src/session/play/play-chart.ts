@@ -65,6 +65,7 @@ export interface PlayChartContext {
     Pick<
       CoreGameplayViewOptions,
       | 'hsFix'
+      | 'preResolved'
       | 'hiSpeedLocked'
       | 'hiddenSudden1P'
       | 'hiddenSudden2P'
@@ -142,10 +143,15 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.
-  const { chart: resolved, randomDraws } = resolvePlayChart(
-    song.chart,
-    ctx.options.replay?.play.randomDraws !== undefined ? { randomDraws: ctx.options.replay.play.randomDraws } : {},
-  );
+  const { chart: resolved, randomDraws } =
+    ctx.options.replay === undefined && ctx.options.preResolved !== undefined
+      ? ctx.options.preResolved
+      : resolvePlayChart(
+          song.chart,
+          ctx.options.replay?.play.randomDraws !== undefined
+            ? { randomDraws: ctx.options.replay.play.randomDraws }
+            : {},
+        );
   ctx.resolvedChart = resolved;
   ctx.randomDraws = randomDraws;
   // BMS spec — `#WAVCMD 01 xx vv` and `#EXWAVxx` per-slot volumes, collected once so every sample trigger is a single

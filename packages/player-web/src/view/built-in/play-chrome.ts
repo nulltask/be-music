@@ -13,7 +13,14 @@ import { resolveGameplayLaneGeometry, resolveGameplayLayout, type GameplayLayout
 import { recentJudgeTimings, resolveGreenNumber } from '@be-music/scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
-import type { SkinlessGameplayChromeRuntime, SkinlessGameplayJudgeState } from '../../scene/gameplay-chrome.ts';
+import type { Container } from 'pixi.js';
+import type {
+  SkinlessGameplayChromeRenderer,
+  SkinlessGameplayChromeRuntime,
+  SkinlessGameplayJudgeState,
+} from '../../scene/gameplay-chrome.ts';
+import type { ChildPool } from '../../scene/pixi-utils.ts';
+import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { PlayfieldRuntime } from '../shared/playfield/context.ts';
 import type { BeMusicGameplayLayout, BeMusicStage } from '../../skin/be-music/types.ts';
 import type { GameplayBgaTarget, GameplayStageSize } from '../../scene/core/gameplay-theme.ts';
@@ -254,4 +261,50 @@ export function resolveBeMusicLayout(ctx: BeMusicLayoutContext): BeMusicGameplay
   );
   ctx.beMusicLayout = { channels: ctx.play.laneChannels, variant: ctx.play.chartPlayVariant, stage, layout };
   return layout;
+}
+
+/** What {@link renderBuiltInChrome} draws into: the chrome layers and pools, the BGA layer and the be-music binding. */
+export interface BuiltInChromeContext extends PlayChromeContext, BeMusicLayoutContext {
+  readonly skinLayer: Container;
+  readonly overlayLayer: Container;
+  readonly bgaLayer: Container;
+  readonly skinLayerPool: ChildPool;
+  readonly overlayLayerPool: ChildPool;
+  readonly skinBinding: BeMusicGameplayBinding | undefined;
+}
+
+/**
+ * Paints the built-in chrome layers (`skinLayer` / `overlayLayer`) for this frame and resets their transforms together
+ * with the BGA layer's: the skinless chrome through a host's `skinlessChromeRenderer`, else the be-music skin's
+ * `gameplay.renderChrome`, in raw design coordinates.
+ */
+export function renderBuiltInChrome(
+  ctx: BuiltInChromeContext,
+  skinlessChromeRenderer: SkinlessGameplayChromeRenderer | undefined,
+): void {
+  ctx.skinLayerPool.begin();
+  ctx.overlayLayerPool.begin();
+  try {
+    ctx.skinLayer.scale.set(1);
+    ctx.skinLayer.position.set(0, 0);
+    ctx.overlayLayer.scale.set(1);
+    ctx.overlayLayer.position.set(0, 0);
+    ctx.bgaLayer.scale.set(1);
+    ctx.bgaLayer.position.set(0, 0);
+    const context = {
+      layer: ctx.skinLayer,
+      overlayLayer: ctx.overlayLayer,
+      layerPool: ctx.skinLayerPool,
+      overlayLayerPool: ctx.overlayLayerPool,
+      runtime: resolveSkinlessGameplayChromeRuntime(ctx),
+    };
+    if (skinlessChromeRenderer) {
+      skinlessChromeRenderer(context);
+    } else {
+      ctx.skinBinding?.renderChrome({ ...context, layout: resolveBeMusicLayout(ctx) });
+    }
+  } finally {
+    ctx.skinLayerPool.end();
+    ctx.overlayLayerPool.end();
+  }
 }

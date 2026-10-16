@@ -14,7 +14,7 @@ import type { Texture } from 'pixi.js';
 import { createPlayAudioGraph, loadPlaySamples } from '../../chart/play-audio.ts';
 import { loadPlayBga } from '../../chart/play-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
-import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
+import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import type {
   AudioBusChannel,
   AudioBusHandle,
@@ -22,6 +22,7 @@ import type {
   CompressorParams,
   TunableCompressor,
 } from '../../runtime/audio-bus.ts';
+import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
@@ -42,6 +43,7 @@ export interface PlayMediaContext {
       | 'nonstop'
       | 'bgaTranscodeMaxLongEdgePx'
       | 'bgaTranscodeUseWebCodecs'
+      | 'audio'
     >
   >;
   readonly song: BrowserSongEntry | undefined;
@@ -52,6 +54,8 @@ export interface PlayMediaContext {
   audioContext: AudioContext | undefined;
   audioBus: AudioBusHandle | undefined;
   audioAnalyzer: AudioAnalyzer | undefined;
+  /** The play's graph as the host's audio service opened it (`options.audio`); undefined when the play made its own. */
+  playAudio: PlayAudioHandle | undefined;
   audioCompressorMode: CompressorMode;
   readonly audioCompressorParams: Partial<Record<TunableCompressor, Partial<CompressorParams>>>;
   readonly audioVolumes: Record<AudioBusChannel, number>;
@@ -89,17 +93,28 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
   // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
   const chart = ctx.resolvedChart ?? ctx.song.chart;
   // The AudioContext, the bus and `#VOLWAV` are built, and the samples decoded, as the beatoraja prep does
-  // (`chart/play-audio.ts`).
-  const graph = createPlayAudioGraph(chart, initialMode, {
+  // (`chart/play-audio.ts`). With the host's audio service the play opens them through it (`openPlayGraph`, ADR 0007),
+  // which taps the bus for the analyser and owns the context's teardown.
+  const busOptions = {
     initialStages: ctx.options.audioCompressorStages,
     initialVolumes: ctx.audioVolumes,
     initialCompressorParams: ctx.audioCompressorParams,
-  });
-  ctx.audioContext = graph.audioContext;
-  ctx.audioBus = graph.audioBus;
-  // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
-  ctx.audioAnalyzer = new AudioAnalyzer(ctx.audioContext);
-  ctx.audioBus.outputNode.connect(ctx.audioAnalyzer.input);
+  };
+  const audio = ctx.options.audio;
+  if (audio !== undefined) {
+    const handle = audio.openPlayGraph(chart, initialMode, busOptions, { owner: ctx });
+    ctx.playAudio = handle;
+    ctx.audioContext = handle.audioContext;
+    ctx.audioBus = handle.audioBus;
+    ctx.audioAnalyzer = handle.analyzer;
+  } else {
+    const graph = createPlayAudioGraph(chart, initialMode, busOptions);
+    ctx.audioContext = graph.audioContext;
+    ctx.audioBus = graph.audioBus;
+    // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
+    ctx.audioAnalyzer = new AudioAnalyzer(ctx.audioContext);
+    ctx.audioBus.outputNode.connect(ctx.audioAnalyzer.input);
+  }
   const pitchMode = ctx.options.tempoPitchMode ?? 'pitch';
   // Keep pitch: the samples are stretched to the play tempo (times a NONSTOP FIT stage's rate) once, here, and then
   // play at their own pitch.
@@ -219,7 +234,6 @@ export interface PlayMediaTeardownContext extends PlayMediaContext {
   readonly chartEnded: boolean;
   readonly notes: readonly TimedPlayableNote[];
   readonly autoSampleTriggers: readonly TimedSampleTrigger[];
-  audioFrame: AudioFeatures | undefined;
   currentSeconds(): number;
 }
 
@@ -252,11 +266,23 @@ export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: CoreGam
   ctx.webAudioSession = undefined;
   ctx.nonstopMixer?.dispose();
   ctx.nonstopMixer = undefined;
+  const playAudio = ctx.playAudio;
+  if (playAudio !== undefined) {
+    // The audio service closes the graph it opened (its analyser included), the session's sources first.
+    ctx.playAudio = undefined;
+    ctx.audioAnalyzer = undefined;
+    ctx.audioBus = undefined;
+    ctx.audioContext = undefined;
+    playAudio.close({
+      delayMs: preserveAudioTail ? audioTailCleanupDelayMs : 0,
+      beforeClose: () => webAudioSession?.dispose(),
+    });
+    return;
+  }
   // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
   // The bus doesn't own the AudioContext itself; closing that is the next step.
   ctx.audioAnalyzer?.dispose();
   ctx.audioAnalyzer = undefined;
-  ctx.audioFrame = undefined;
   const audioBus = ctx.audioBus;
   ctx.audioBus = undefined;
   const audioContext = ctx.audioContext;
@@ -269,4 +295,27 @@ export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: CoreGam
     },
     preserveAudioTail ? audioTailCleanupDelayMs : 0,
   );
+}
+
+/** Stops the BGA videos and lets go of them as the play is disposed. */
+export function disposeBgaVideos(ctx: {
+  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }>;
+  bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
+}): void {
+  // Pause every BGA video BEFORE we touch textures. The Pixi `VideoSource` wrapping each video registers a
+  // `requestVideoFrameCallback` that re-uploads frames into the GL texture as they decode — leaving those callbacks
+  // in flight while we destroy the textures throws inside the GL texture system. Pausing also revokes the Blob URL so
+  // the underlying buffer can be released.
+  for (const { video, objectUrl } of ctx.bgaVideos.values()) {
+    try {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    } catch {
+      // Defensive — `load()` can throw on detached videos.
+    }
+    URL.revokeObjectURL(objectUrl);
+  }
+  ctx.bgaVideos.clear();
+  ctx.bgaActiveVideos = {};
 }

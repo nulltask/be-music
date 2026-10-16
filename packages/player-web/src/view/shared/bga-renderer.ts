@@ -365,23 +365,3 @@ function syncBgaVideo(
     // Autoplay policy / codec rejections — silently swallow so the still-image fallback keeps working.
   });
 }
-
-/** Stops the BGA videos and lets go of them as the scene is disposed (`CoreGameplayView.dispose`). */
-export function disposeBgaVideos(ctx: BgaRendererContext): void {
-  // Pause every BGA video BEFORE we touch textures. The Pixi `VideoSource` wrapping each video registers a
-  // `requestVideoFrameCallback` that re-uploads frames into the GL texture as they decode — leaving those callbacks
-  // in flight while we destroy the textures throws inside the GL texture system. Pausing also revokes the Blob URL so
-  // the underlying buffer can be released.
-  for (const { video, objectUrl } of ctx.play.bgaVideos.values()) {
-    try {
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-    } catch {
-      // Defensive — `load()` can throw on detached videos.
-    }
-    URL.revokeObjectURL(objectUrl);
-  }
-  ctx.play.bgaVideos.clear();
-  ctx.play.bgaActiveVideos = {};
-}
