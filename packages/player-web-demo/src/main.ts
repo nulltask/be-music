@@ -71,8 +71,6 @@ import {
   readCourseFile,
   resolveCourseFolders,
   resolveCourseMakerFolders,
-  resolveCourseLaneOptions,
-  resolveCourseStageSettings,
   CourseMaker,
   createCourseSongRecord,
   type BrowserCourseEntry,
@@ -209,6 +207,8 @@ import {
   countLr2UnplayedStages,
   LR2_COURSE_MAKER_MAX_STAGES,
   LR2_MAX_PLAYED_STAGES,
+  resolveCourseLaneOptions,
+  resolveCourseStageSettings,
   type CourseDefinition,
 } from '@be-music/player/course';
 import { CourseMakerPanel } from './course-maker-panel.ts';

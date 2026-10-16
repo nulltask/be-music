@@ -52,7 +52,7 @@ XML の `<courselist>` に、`title`、`line`（キーモード）、`type`、`h
 - **`hash`**：32 文字のヘッダーに続き、ステージごとに 32 文字の譜面 MD5 が並びます。コースのバーには 10 ステージまで並びますが、LR2 は EXPERT・GRADE も含めどのコースも先頭の 5 ステージだけを遊びます（譜面の読み込み処理がプレイのたびにステージ数を 1〜5 に収める。`LR2body.exe` 0x4b0b0f）。そのためコースはその 5 ステージとして読みます。読まなかったステージの数は `countLr2UnplayedStages(course)` で数えられ、Web デモはファイルを読み込んだときに知らせます。ヘッダーの 10 文字目がコースの種類です。
 - **`type`**：OpenLR2 にならい（`expert` / `nonstop` / `grade` テーブルとスキンの op 291-293）、`0` が EXPERT、`1` が NONSTOP、`2` が GRADE です。`type` 要素がなければヘッダーの 10 文字目を使います。
 - **制約**：この形式には制約の欄がありません。GRADE のコースには `grade` と `gauge_lr2` を付けます。LR2 は GRADE コースの開始時に両サイドのレーンオプションをオフにする（[Main.cpp M1124-M1170](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1124-L1170)）ので、正規しか使えません。表の旧形式 `grade` リストは jbmstable-parser の読み方どおり `grade_mirror` のままです。
-- **LR2 のその他のリセット**：同じ処理で、EASY と G-ATTACK のゲージは GROOVE になり、HIDDEN / SUDDEN、アシスト（オートスクラッチなど）、BATTLE、DP の FLIP、プレイテンポ（ピッチ）、追加の変化オプションがオフになります。LR2 はこれを設定に書き込みますが、ホストはコースのステージにだけ適用するので、プレイヤーの設定はコースの後に戻ります（`@be-music/player-web/collection` の `isLr2GradeCourse`、`resolveLr2GradeCoursePlaySettings`）。対象は `.lr2crs` から読んだ GRADE コースとコース作成で作った GRADE コースで、表や beatoraja の段位は対象外です。
+- **LR2 のその他のリセット**：同じ処理で、EASY と G-ATTACK のゲージは GROOVE になり、HIDDEN / SUDDEN、アシスト（オートスクラッチなど）、BATTLE、DP の FLIP、プレイテンポ（ピッチ）、追加の変化オプションがオフになります。LR2 はこれを設定に書き込みますが、ホストはコースのステージにだけ適用するので、プレイヤーの設定はコースの後に戻ります（`@be-music/player/course` の `isLr2GradeCourse`、`resolveLr2GradeCoursePlaySettings`）。対象は `.lr2crs` から読んだ GRADE コースとコース作成で作った GRADE コースで、表や beatoraja の段位は対象外です。
 - ステージがない、ステージの hash が不正、種類が未知のコースは読み飛ばします。
 
 ### beatoraja の `course/*.json`
@@ -182,6 +182,14 @@ stateDiagram-v2
 ## コースのステージを遊ぶ
 
 ホストはコースを 1 ステージずつ遊び、それぞれに `PlayerOptions.course` を渡します。中身は、コースの `kind`、コースの `gaugeSet`（`gauge_*` 制約）と `judge` 制約（`no-good` / `no-great`）、前のステージが残した状態を表す `carryIn`（最初のステージにはなし）です。ステージはこのオブジェクトをそのままプレイログの `play.course` に記録するので、ログは単体で再生・再シミュレーションできます。
+
+各ステージの遊び方はコースの制約で決まります。この規則は `@be-music/player/course` にあります。
+
+- `resolveCourseStageSettings` はコースから `PlayerOptions.course`（種類、ゲージの組、判定の制約）を読みます。
+- `resolveCourseLaneOptions` は beatoraja の `MusicSelector` と同じくレーンオプションを制限します。`grade` は両サイドと DP の FLIP をオフにし、`grade_mirror` は 1P の MIRROR を残してそのとき 2P も MIRROR、FLIP をオンにします（ほかの選択ではすべてオフ）。`grade_random` は各サイドのランダム系を残します。
+- `isCourseHiSpeedLocked` は `no_speed` を読みます。
+- `applyCourseLongNoteConstraint` は、ロングノートのモードを決めていないステージの譜面にコースの `ln` / `cn` / `hcn` を与えます。
+- LR2 の GRADE コースでは LR2 のリセットも加わります（`resolveLr2GradeCoursePlaySettings`。[LR2 の `.lr2crs`](#lr2-の-lr2crs) を参照）。
 
 ```mermaid
 flowchart LR

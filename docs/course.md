@@ -52,7 +52,7 @@ An XML `<courselist>` of `<course>` elements with `title`, `line` (key mode), `t
 - **`hash`.** A 32-character header followed by one 32-character chart MD5 per stage. A course bar lists up to ten stages, but LR2 plays only the first five of any course, EXPERT and GRADE included (its chart loader clamps the stage count to 1-5 on every play, `LR2body.exe` 0x4b0b0f), so a course is read as those five. `countLr2UnplayedStages(course)` counts the stages left out, which the web demo reports when a file is loaded. Character 10 of the header is the course type.
 - **`type`.** `0` EXPERT, `1` NONSTOP, `2` GRADE, following OpenLR2 (its `expert` / `nonstop` / `grade` tables and skin ops 291-293). Without a `type` element the header's character 10 is used.
 - **Constraints.** The format has none. A grade course gets `grade` and `gauge_lr2`: when a GRADE course starts, LR2 turns both sides' lane options off ([Main.cpp M1124-M1170](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1124-L1170)), so only OFF is allowed. A table's legacy `grade` list keeps jbmstable-parser's `grade_mirror`.
-- **LR2's other resets.** The same code also moves an EASY or G-ATTACK gauge pick to GROOVE and turns off HIDDEN / SUDDEN, the assists (auto scratch and the rest), BATTLE, DP FLIP, the play tempo (pitch) and the extra modifiers. LR2 writes them into its config; a host applies them to the course's stages only, so the player's settings come back afterwards (`isLr2GradeCourse`, `resolveLr2GradeCoursePlaySettings` in `@be-music/player-web/collection`). They apply to a GRADE course read from `.lr2crs` or made with the course maker, not to a table's or beatoraja's grade.
+- **LR2's other resets.** The same code also moves an EASY or G-ATTACK gauge pick to GROOVE and turns off HIDDEN / SUDDEN, the assists (auto scratch and the rest), BATTLE, DP FLIP, the play tempo (pitch) and the extra modifiers. LR2 writes them into its config; a host applies them to the course's stages only, so the player's settings come back afterwards (`isLr2GradeCourse`, `resolveLr2GradeCoursePlaySettings` in `@be-music/player/course`). They apply to a GRADE course read from `.lr2crs` or made with the course maker, not to a table's or beatoraja's grade.
 - A course with no stage, a malformed stage hash or an unknown type is skipped.
 
 ### beatoraja `course/*.json`
@@ -182,6 +182,14 @@ stateDiagram-v2
 ## Playing a course stage
 
 A host plays a course one stage at a time, passing `PlayerOptions.course` for each: the course `kind`, the course's `gaugeSet` (its `gauge_*` constraint) and `judge` constraint (`no-good` / `no-great`), and `carryIn`, the state the previous stage left (absent for the first stage). The stage records the same object as `play.course` in its play log, so the log replays and re-simulates on its own.
+
+The course's constraints decide how each stage plays. These rules are in `@be-music/player/course`:
+
+- `resolveCourseStageSettings` reads `PlayerOptions.course` (kind, gauge set, judge constraint) from the course;
+- `resolveCourseLaneOptions` limits the lane options as beatoraja's `MusicSelector` does: `grade` turns both sides and DP FLIP off, `grade_mirror` keeps a 1P MIRROR and then plays 2P on MIRROR with FLIP on (any other pick turns them all off), and `grade_random` keeps the random family on each side;
+- `isCourseHiSpeedLocked` reads `no_speed`;
+- `applyCourseLongNoteConstraint` gives a stage chart that leaves its long-note mode undefined the course's `ln` / `cn` / `hcn`;
+- an LR2 GRADE course also plays with LR2's resets (`resolveLr2GradeCoursePlaySettings`, see [LR2 `.lr2crs`](#lr2-lr2crs)).
 
 ```mermaid
 flowchart LR
