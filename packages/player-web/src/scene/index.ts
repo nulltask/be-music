@@ -19,7 +19,6 @@ export * from './default/index.ts';
 
 // LR2 family — Lunatic Rave 2 skin-driven scenes.
 export * from './lr2/gameplay.ts';
-export * from './lr2/result.ts';
 export * from './lr2/select.ts';
 
 // beatoraja family — beatoraja Lua skin-driven scenes.
