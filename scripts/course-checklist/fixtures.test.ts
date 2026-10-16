@@ -1,6 +1,7 @@
+import { inflateSync } from 'node:zlib';
 import { describe, expect, test } from 'vite-plus/test';
 import { parseLr2CourseFile } from '../../packages/player/src/course/lr2crs.ts';
-import { fixtureBms, lr2CourseList, sineWav } from './fixtures.ts';
+import { bandsPng, fixtureBms, lr2CourseList, sineWav } from './fixtures.ts';
 
 describe('course checklist fixtures', () => {
   test('writes a playable WAV header for the sample length', () => {
@@ -38,5 +39,20 @@ describe('course checklist fixtures', () => {
       ['G', 'grade', 2],
       ['N', 'nonstop', 2],
     ]);
+  });
+
+  test('draws the skin image as bands of solid colour, top to bottom', () => {
+    const png = bandsPng(2, 1, [
+      [10, 20, 30],
+      [40, 50, 60],
+    ]);
+    const view = new DataView(png.buffer);
+    expect(String.fromCharCode(...png.slice(1, 4))).toBe('PNG');
+    // IHDR: 2 × 2, 8-bit RGBA.
+    expect([view.getUint32(16), view.getUint32(20), png[24], png[25]]).toEqual([2, 2, 8, 6]);
+    const dataLength = view.getUint32(33);
+    const pixels = inflateSync(png.slice(41, 41 + dataLength));
+    // Each row: filter 0, then two RGBA pixels of its band's colour.
+    expect([...pixels]).toEqual([0, 10, 20, 30, 255, 10, 20, 30, 255, 0, 40, 50, 60, 255, 40, 50, 60, 255]);
   });
 });
