@@ -1,14 +1,29 @@
+import {
+  BEATORAJA_OP,
+  TIMER_FADEOUT,
+  TIMER_PLAY,
+  TIMER_READY,
+  TIMER_SCENE_START,
+  type BeatorajaSkin,
+} from '@be-music/beatoraja-skin';
 import { createEmptyJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { parseChart } from '@be-music/parser';
 import type { LibraryChart } from '@be-music/scene-model';
+import type { Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { BrowserSongEntry } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
+import { BeatorajaPlaySkinView } from '../scene/beatoraja/skin-view.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
+import type { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
+import type { BeatorajaRenderContext } from '../skin/beatoraja/render.ts';
+import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
+import { resolveBeatorajaPlayTiming } from '../view/beatoraja/play-view.ts';
 import { createDecideScene } from './decide.ts';
+import type { BeatorajaKit } from './family-kit.ts';
 import { resolveLr2LaneRect } from '../view/lr2/play-elements.ts';
 import { resolveLr2PlayTiming } from '../view/lr2/play-view.ts';
 import { createPlayScene, type PlaySceneOptions } from './play.ts';
@@ -92,6 +107,10 @@ function createFakeHost() {
     host,
     canvas,
     listening: (type: string) => listeners.get(type)?.size ?? 0,
+    /** Hands `event` to every listener of `type` on the window, the document or the canvas. */
+    fire: (type: string, event: object) => {
+      for (const listener of Array.from(listeners.get(type) ?? [])) (listener as (event: object) => void)(event);
+    },
     tick: () => {
       for (const callback of Array.from(ticks)) callback();
     },
@@ -310,5 +329,164 @@ describe('createPlayScene with an LR2 kit', () => {
     expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
     expect(() => scene.updateKit({ family: 'lr2', skin: lr2PlaySkin() })).not.toThrow();
     scene.dispose();
+  });
+});
+
+describe('createPlayScene with a beatoraja kit', () => {
+  /** The audio service the play's skin sounds go through. */
+  const SKIN_AUDIO = {
+    stopOwned: vi.fn(),
+    playJingle: vi.fn(async () => true),
+    skinSounds: { owned: () => ({ play: vi.fn(), loop: vi.fn(), stop: vi.fn() }) },
+  } as unknown as AudioService;
+
+  function beatorajaKit(skin: Partial<BeatorajaSkin> = {}): BeatorajaKit {
+    const empty = new Map<number | string, Texture>();
+    const textures: BeatorajaTextureCache = {
+      get: (id) => empty.get(id),
+      values: () => empty.values(),
+      pathOf: () => undefined,
+    };
+    return {
+      family: 'beatoraja',
+      kit: {
+        skin: { type: 0, w: 1280, h: 720, image: [], destination: [], fadeout: 300, ...skin },
+        textures,
+        files: new Map(),
+      },
+    };
+  }
+
+  function createBeatoraja(overrides: Partial<PlaySceneOptions> = {}) {
+    const on = { finish: vi.fn(), exit: vi.fn(), restart: vi.fn(), hiSpeed: vi.fn() };
+    const scene = createPlayScene(beatorajaKit(), {
+      chart: { ...CHART, chart: RANDOM_CHART } as BrowserSongEntry,
+      settings: {
+        initialHiSpeed: 2,
+        random1P: 'MIRROR',
+        hsFix: 'MAXBPM',
+        hiddenSudden1P: 'SUDDEN',
+        laneCover: true,
+        shutter: 0.3,
+      },
+      audio: SKIN_AUDIO,
+      on,
+      keyTarget: NO_KEYS,
+      ...overrides,
+    });
+    const play = (scene as unknown as { playSession: PlaySceneSession }).playSession.play;
+    return { scene, on, play };
+  }
+
+  const keydown = (key: string) => ({ key, code: key, shiftKey: false, repeat: false, preventDefault: vi.fn() });
+
+  it('is the beatoraja play screen, timed by the skin', () => {
+    const { scene } = createBeatoraja();
+    expect(scene.identity).toEqual({ kind: 'play', family: 'beatoraja' });
+    expect(scene.getHiSpeed()).toBe(2);
+    expect(resolveBeatorajaPlayTiming({ fadeout: 300 })).toEqual({
+      loadEndOffsetMs: 0,
+      playStartOffsetMs: 1500,
+      fadeOutMs: 300,
+      closeMs: 0,
+    });
+    expect(resolveBeatorajaPlayTiming({}).fadeOutMs).toBe(500);
+    scene.dispose();
+  });
+
+  it('plays without lane options and HS-FIX, its covers off, taking the cover keys', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    const { scene, play } = createBeatoraja();
+    await scene.prepare();
+    expect(play.options).toMatchObject({ random1P: 'OFF', random2P: 'OFF', hsFix: 'OFF', coverKeys: true });
+    expect(play.playState.view.hsFix).toBe('OFF');
+    expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 2 });
+    expect(play.playState.view.covers).toEqual([
+      { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 },
+    ]);
+    // The #RANDOM draw of 1 puts its one note on lane 1, and no MIRROR moves it.
+    expect(play.notes.map((note) => note.channel)).toEqual(['11']);
+    scene.dispose();
+  });
+
+  it("starts READY and the play at once, and leaves over the skin's fadeout", async () => {
+    vi.useFakeTimers();
+    const update = vi.spyOn(BeatorajaPlaySkinView.prototype, 'update');
+    const fake = createFakeHost();
+    const { scene, on } = createBeatoraja({ host: fake.host });
+    await scene.prepare();
+    await scene.enter(fake.host);
+    scene.start();
+    fake.tick();
+    expect(scene.root.visible).toBe(true);
+    const first = update.mock.calls.at(-1)![0] as BeatorajaRenderContext;
+    expect(first.getTimerStart(TIMER_SCENE_START)).toBeDefined();
+    expect(first.getTimerStart(TIMER_READY)).toBeUndefined();
+    expect(first.activeOps.has(BEATORAJA_OP.NOW_LOADING)).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    fake.tick();
+    const loaded = update.mock.calls.at(-1)![0] as BeatorajaRenderContext;
+    expect(loaded.getTimerStart(TIMER_READY)).toBeDefined();
+    expect(loaded.getTimerStart(TIMER_PLAY)).toBe(loaded.getTimerStart(TIMER_READY));
+    expect(loaded.activeOps.has(BEATORAJA_OP.LOADED)).toBe(true);
+    scene.requestExit();
+    fake.tick();
+    expect((update.mock.calls.at(-1)![0] as BeatorajaRenderContext).getTimerStart(TIMER_FADEOUT)).toBeDefined();
+    vi.advanceTimersByTime(299);
+    expect(on.exit).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(on.exit).toHaveBeenCalledTimes(1);
+    scene.exit();
+    scene.dispose();
+  });
+
+  it('moves the covers with the cover keys and the wheel, unless a course locks them', async () => {
+    const fake = createFakeHost();
+    const { scene, play } = createBeatoraja({ host: fake.host });
+    await scene.prepare();
+    await scene.enter(fake.host);
+    fake.fire('keydown', keydown('PageDown'));
+    fake.fire('keydown', keydown('End'));
+    fake.fire('keydown', keydown('h'));
+    fake.fire('wheel', { deltaY: 1, shiftKey: true, preventDefault: vi.fn() });
+    expect(play.playState.view.covers[0]).toEqual({
+      side: '1P',
+      sudden: 0.035,
+      suddenOn: true,
+      hidden: 0.25,
+      hiddenOn: true,
+      lift: 0.01,
+    });
+    scene.dispose();
+
+    const locked = createBeatoraja({ host: fake.host, settings: { hiSpeedLocked: true } });
+    await locked.scene.prepare();
+    await locked.scene.enter(fake.host);
+    fake.fire('keydown', keydown('PageDown'));
+    fake.fire('wheel', { deltaY: 1, shiftKey: false, preventDefault: vi.fn() });
+    expect(locked.play.playState.view.covers[0]).toMatchObject({ sudden: 0, suddenOn: false });
+    locked.scene.dispose();
+  });
+
+  it('leaves the cover keys to a play that takes them (not the built-in or LR2 play)', async () => {
+    const fake = createFakeHost();
+    const { scene } = create({ host: fake.host });
+    await scene.prepare();
+    await scene.enter(fake.host);
+    const play = (scene as unknown as { playSession: PlaySceneSession }).playSession.play;
+    const before = play.playState.view.covers;
+    fake.fire('keydown', keydown('PageDown'));
+    expect(play.playState.view.covers).toBe(before);
+    scene.dispose();
+  });
+
+  it('takes a kit of its own family (the skin options changed mid-play), and ignores another family', async () => {
+    const { scene } = createBeatoraja();
+    await scene.prepare();
+    expect(scene.resolved?.chart).toBeDefined();
+    expect(() => scene.updateKit(beatorajaKit({ fadeout: 100 }))).not.toThrow();
+    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    scene.dispose();
+    expect(scene.resolved).toBeUndefined();
   });
 });
