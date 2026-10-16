@@ -44,11 +44,19 @@ import {
 import { resolveSongSource } from '../../collection/collection.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
-import type { SelectFrame, SelectIntent, SelectRecords, SelectViewEvent } from '../../view/types.ts';
+import type { CourseMaker } from '../../collection/course-maker.ts';
+import type {
+  SelectCourseMakerAction,
+  SelectCourseMakerState,
+  SelectFrame,
+  SelectIntent,
+  SelectRecords,
+  SelectViewEvent,
+} from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { resolveSelectKeyAction } from './select-keys.ts';
 import { openLibrary, restoreSelectBrowse, SELECT_POLICIES, type SelectPolicy } from './select-policy.ts';
-import { findReadtextForSong } from './select-readtext.ts';
+import { findReadtextForSong } from '../../collection/readtext.ts';
 
 /** A bar the player starts: a chart or a course. */
 export type SelectStartEntry = Exclude<LibraryEntry, { kind: 'folder' }>;
@@ -101,8 +109,19 @@ export interface SelectSessionOptions {
   readonly launchOutroMs?: () => number;
   /** The clock events are stamped with when no key timestamp is at hand. Defaults to `performance.now()`. */
   readonly now?: () => number;
+  /**
+   * The player's own courses and the course being made (LR2's course maker): its finish, cancel and connection buttons
+   * run on it, and its state shows in the frame.
+   */
+  readonly courseMaker?: SelectCourseMaker;
   readonly on: SelectSessionEvents;
 }
+
+/** The part of the course maker the select screen drives. */
+export type SelectCourseMaker = Pick<
+  CourseMaker,
+  'draft' | 'defaultConnection' | 'owns' | 'finish' | 'cancel' | 'stepDefaultConnection' | 'stepConnection'
+>;
 
 /** The select BGM's level: about -6 dB, under the cues and the preview, as the select scenes always played it. */
 const SELECT_BGM_VOLUME = 0.5;
@@ -350,11 +369,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'readtext':
         this.toggleReadText();
         return;
-      case 'course-maker': {
-        const entry = this.focused();
-        this.options.on.courseMaker?.(intent.action, entry?.kind === 'course' ? entry.course : undefined);
+      case 'course-maker':
+        this.runCourseMaker(intent.action);
         return;
-      }
       case 'skin-config':
         this.options.on.skinConfig?.();
         return;
@@ -387,6 +404,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       searchEditing: this.searchEditing,
       ...(this.launch !== undefined ? { startedAtMs: this.launch.atMs } : {}),
       ...(this.readText !== undefined ? { readText: this.readText } : {}),
+      ...(this.options.courseMaker !== undefined
+        ? { courseMaker: this.courseMakerState(this.options.courseMaker) }
+        : {}),
       audio: this.options.audio.analyzer.sample(nowMs),
     };
   }
@@ -566,6 +586,49 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     const { state, event } = reduceBrowse(this.library, this.browse, { type: 'list', options: list });
     this.browse = state;
     if (event.kind !== 'none') this.events.push({ kind: 'browse', event, atMs: this.now() });
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // The course maker
+  // ---------------------------------------------------------------------------------------------------------------------
+
+  private courseMakerState(maker: SelectCourseMaker): SelectCourseMakerState {
+    const draft = maker.draft;
+    return { ...(draft !== undefined ? { draft } : {}), defaultConnection: maker.defaultConnection };
+  }
+
+  /**
+   * Runs a course-maker action: finishing or cancelling the course being made and stepping the default connection run
+   * on the course maker; deleting a course, or stepping one of its connections, only on a course of the player's own
+   * under the cursor; naming the course being made (or the player's course under the cursor) is the host's.
+   */
+  private runCourseMaker(action: SelectCourseMakerAction): void {
+    const maker = this.options.courseMaker;
+    const entry = this.focused();
+    const course = entry?.kind === 'course' ? entry.course : undefined;
+    const own = course?.editable === true && maker?.owns(course.definition) === true ? course : undefined;
+    switch (action.kind) {
+      case 'name':
+        if (maker?.draft !== undefined || course?.editable === true) this.options.on.courseMaker?.('name', course);
+        return;
+      case 'delete':
+        // LR2 asks before it deletes: the host confirms.
+        if (own !== undefined) this.options.on.courseMaker?.('delete', own);
+        return;
+      case 'finish':
+        maker?.finish();
+        break;
+      case 'cancel':
+        maker?.cancel();
+        break;
+      case 'default-connection':
+        maker?.stepDefaultConnection(action.step);
+        break;
+      case 'connection':
+        if (own !== undefined) maker?.stepConnection(own.definition, action.slot, action.step);
+        break;
+    }
+    this.changed();
   }
 
   // ---------------------------------------------------------------------------------------------------------------------

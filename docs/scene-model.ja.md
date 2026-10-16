@@ -310,8 +310,8 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `matchesSearchQuery`・`wrappedCursorDelta`                                       | `player-web` のコアの選曲                    | 同じ名前（再 export）                                                    |
 | コアの選曲のソートと難易度フィルター                                             | `player-web` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                     |
 | `resolveSelectNavigation`                                                        | `player-web` のコアの選曲                    | 削除。選曲セッションは `BrowseSnapshot` を `restoreBrowse` で戻す        |
-| `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                       | `player-web` のコアの選曲                    | 同じ名前（再 export）                                                    |
-| `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                         | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`（旧名で再 export）      |
+| `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                       | `player-web` のコアの選曲                    | 同じ名前（`DEFAULT_PLAY_OPTIONS` は再 export）                           |
+| `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                         | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`                         |
 | ハイスピードの範囲と刻み                                                         | `player-web` の `scene/hi-speed.ts`          | 同じ名前（再 export）                                                    |
 | `SceneCourseInfo`・`resolveSceneCourseInfo`                                      | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名で再 export）                     |
 | `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                    | `player-web` の `scene/core/course-combo.ts` | 同じ名前。`reduceCourseCombo` を追加                                     |
