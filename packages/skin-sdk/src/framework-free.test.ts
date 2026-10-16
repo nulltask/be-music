@@ -10,8 +10,8 @@ import { describe, expect, it } from 'vite-plus/test';
  */
 const SDK_BARREL = resolve(import.meta.dirname, 'index.ts');
 const SRC_DIR = import.meta.dirname;
-/** Packages the SDK may build on: the chart model and engine, which import no renderer. */
-const ALLOWED_PACKAGES = ['@be-music/chart', '@be-music/json', '@be-music/player/'];
+/** Packages the SDK may build on: the chart model, the engine and the scene models, which import no renderer. */
+const ALLOWED_PACKAGES = ['@be-music/chart', '@be-music/json', '@be-music/player/', '@be-music/scene-model'];
 const SPECIFIER = /\b(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu;
 
 function packageImports(entry: string): string[] {

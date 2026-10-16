@@ -459,6 +459,9 @@ importers:
       '@be-music/player':
         specifier: workspace:*
         version: link:../player
+      '@be-music/scene-model':
+        specifier: workspace:*
+        version: link:../scene-model
     devDependencies:
       '@be-music/parser':
         specifier: workspace:*
