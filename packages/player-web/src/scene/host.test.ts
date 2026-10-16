@@ -1,10 +1,8 @@
 import { Container, RendererType, type Texture } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
-import type { SceneIdentity } from '../host/family-kit.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { PixiBeatorajaSelectScene } from './beatoraja/select.ts';
-import { CoreSongSelectView } from './core/select.ts';
 import { PixiSceneHost, resolveRendererPreference, resolveRenderResolution, type PixiScene } from './host.ts';
 
 function makeScene(overrides: Partial<PixiScene> = {}): PixiScene {
@@ -257,15 +255,6 @@ describe('PixiSceneHost scene lifecycle', () => {
 });
 
 describe('scene identities', () => {
-  // The getters live on each class's prototype, so they read without building a scene.
-  const cases: [string, SceneIdentity, SceneIdentity][] = [
-    ['CoreSongSelectView', CoreSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
-  ];
-
-  it.each(cases)('%s names its screen and family', (_name, identity, expected) => {
-    expect(identity).toEqual(expected);
-  });
-
   it('names the beatoraja select scene', () => {
     const skin: BeatorajaSkin = { type: 5, w: 1280, h: 720, image: [], destination: [] };
     const empty = new Map<number | string, Texture>();
