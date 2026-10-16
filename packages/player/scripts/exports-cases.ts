@@ -255,6 +255,45 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseApi.applyCourseLongNoteConstraint(benchNonstopChart, ['cn']);
     },
   });
+  define('player.course.resolveCourseStageSettings', {
+    run: () => {
+      courseApi.resolveCourseStageSettings(benchCourse);
+    },
+  });
+  define('player.course.resolveCourseLaneOptions', {
+    run: () => {
+      courseApi.resolveCourseLaneOptions(benchCourse.constraints, {
+        random1P: 'RANDOM',
+        random2P: 'MIRROR',
+        dpFlip: true,
+      });
+      courseApi.resolveCourseLaneOptions(['grade_mirror'], { random1P: 'MIRROR', random2P: 'OFF', dpFlip: false });
+    },
+  });
+  const benchLr2GradeDefinition = courseApi.parseLr2CourseFile(benchLr2Course)[0]!;
+  define('player.course.isLr2GradeCourse', {
+    run: () => {
+      courseApi.isLr2GradeCourse(benchLr2GradeDefinition);
+    },
+  });
+  define('player.course.resolveLr2GradeCoursePlaySettings', {
+    run: () => {
+      courseApi.resolveLr2GradeCoursePlaySettings(benchLr2GradeDefinition, {
+        gauge: 'EASY',
+        hiddenSudden1P: 'SUDDEN',
+        hiddenSudden2P: 'OFF',
+        autoScratch1P: true,
+        autoScratch2P: false,
+        dpFlip: true,
+        tempo: 1.1,
+      });
+    },
+  });
+  define('player.course.isCourseHiSpeedLocked', {
+    run: () => {
+      courseApi.isCourseHiSpeedLocked(['no_speed', 'gauge_lr2']);
+    },
+  });
   const benchStitched = courseApi.stitchNonstopCourse(benchNonstopInputs, { connections: ['fade', 'cut-fit'] });
   const benchStitchedMap = benchStitched.ok ? benchStitched.map : { stages: [], tempo: [], stageRanks: [] };
   const benchReadoutPlacements = courseApi.planNonstopCourse(benchNonstopStages.slice(0, 3), ['fade', 'cut-fit']);

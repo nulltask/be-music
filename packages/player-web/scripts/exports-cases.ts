@@ -493,51 +493,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveCourseFolders(BENCH_COURSE_GROUPS, BENCH_COURSE_LOOKUP);
     },
   });
-  define('player-web.resolveCourseStageSettings', {
-    run: () => {
-      playerWebCoreApi.resolveCourseStageSettings(BENCH_COURSE_DEFINITION);
-    },
-  });
-  define('player-web.resolveCourseLaneOptions', {
-    run: () => {
-      playerWebCoreApi.resolveCourseLaneOptions(BENCH_COURSE_DEFINITION.constraints, {
-        random1P: 'RANDOM',
-        random2P: 'MIRROR',
-        dpFlip: true,
-      });
-      playerWebCoreApi.resolveCourseLaneOptions(['grade_mirror'], {
-        random1P: 'MIRROR',
-        random2P: 'OFF',
-        dpFlip: false,
-      });
-    },
-  });
-  define('player-web.isLr2GradeCourse', {
-    run: () => {
-      playerWebCoreApi.isLr2GradeCourse(BENCH_COURSE_DEFINITION);
-    },
-  });
-  define('player-web.resolveLr2GradeCoursePlaySettings', {
-    run: () => {
-      playerWebCoreApi.resolveLr2GradeCoursePlaySettings(
-        { kind: 'grade', source: { format: 'lr2crs', type: 2, header: '0'.repeat(32), hash: '0'.repeat(64) } },
-        {
-          gauge: 'EASY',
-          hiddenSudden1P: 'SUDDEN',
-          hiddenSudden2P: 'OFF',
-          autoScratch1P: true,
-          autoScratch2P: false,
-          dpFlip: true,
-          tempo: 1.1,
-        },
-      );
-    },
-  });
-  define('player-web.isCourseHiSpeedLocked', {
-    run: () => {
-      playerWebCoreApi.isCourseHiSpeedLocked(BENCH_COURSE_DEFINITION.constraints);
-    },
-  });
   define('player-web.applyCourseLongNoteConstraint', {
     run: () => {
       playerWebCoreApi.applyCourseLongNoteConstraint(BENCH_SONG.chart, BENCH_COURSE_DEFINITION.constraints);

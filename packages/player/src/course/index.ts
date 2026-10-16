@@ -13,3 +13,4 @@ export * from './nonstop/compose.ts';
 export * from './nonstop/readouts.ts';
 export * from './maker.ts';
 export * from './long-note.ts';
+export * from './stage-rules.ts';

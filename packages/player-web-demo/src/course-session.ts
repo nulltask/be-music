@@ -19,7 +19,7 @@ import {
   resolveCourseStageSettings,
   type CourseLaneOptions,
   type Lr2GradeResetSettings,
-} from '@be-music/player-web/collection';
+} from '@be-music/player/course';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import type {
   BeMusicCourseRecord,
