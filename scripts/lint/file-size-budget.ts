@@ -31,7 +31,6 @@ export const FILE_SIZE_BUDGET_ALLOWLIST: readonly string[] = [
   'packages/player-web/src/scene/core/gameplay.ts',
   'packages/player-web/src/scene/core/select.ts',
   'packages/player-web/src/scene/lr2/gameplay.ts',
-  'packages/player-web/src/skin/beatoraja/runtime-adapter.ts',
   'packages/stringifier/src/index.ts',
 ];
 
