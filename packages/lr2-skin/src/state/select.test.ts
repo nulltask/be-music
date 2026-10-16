@@ -138,6 +138,18 @@ describe('resolveLr2SelectState ops', () => {
     expect(open.has(LR2_OP.COURSE_BAR)).toBe(false);
   });
 
+  it('lights op 1 on a folder bar, and only there', () => {
+    const folder: LibraryEntry = { kind: 'folder', folder: { label: 'Folder', songs: [] } };
+    const onFolder = resolveLr2SelectState({ focused: folder, options: DEFAULT_PLAY_OPTIONS }).ops;
+    expect(onFolder.has(LR2_OP.FOLDER_BAR)).toBe(true);
+    expect(onFolder.has(LR2_OP.SONG_BAR)).toBe(false);
+    expect(onFolder.has(LR2_OP.PLAYABLE_BAR)).toBe(false);
+    const onSong = resolveLr2SelectState({ focused: song({}), options: DEFAULT_PLAY_OPTIONS }).ops;
+    expect(onSong.has(LR2_OP.FOLDER_BAR)).toBe(false);
+    expect(onSong.has(LR2_OP.SONG_BAR)).toBe(true);
+    expect(resolveLr2SelectState({ options: DEFAULT_PLAY_OPTIONS }).ops.has(LR2_OP.FOLDER_BAR)).toBe(false);
+  });
+
   it('lights the course maker’s ops', () => {
     const making = resolveLr2SelectState({
       options: DEFAULT_PLAY_OPTIONS,
@@ -218,7 +230,7 @@ describe('resolveLr2SelectState texts', () => {
     expect(state.text(LR2_TEXT.FULL_TITLE_ALT)).toBe('T S');
     expect(state.text(LR2_TEXT.GENRE)).toBe('G');
     expect(state.text(LR2_TEXT.ARTIST)).toBe('A');
-    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('INSANE');
+    expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('5');
     expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBe('12');
     expect(state.text(LR2_TEXT.TAG)).toBe('');
     expect(state.text(LR2_TEXT.COURSE_CONNECTION1)).toBe('DISABLE');

@@ -225,13 +225,36 @@ describe('resolveBeatorajaPlayScoreOps', () => {
     expect(resolveBeatorajaPlayScoreOps(SCORE, { current: 100, max: 100 })).toContain(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
   });
 
-  it('lights no gauge op without a gauge, and the lowest rank without notes', () => {
+  it('ranks the 1P and now-rank ops over the notes judged so far, from AAA before the first', () => {
+    const rankOps = (score: Partial<BeatorajaScoreInput>): number[] =>
+      resolveBeatorajaPlayScoreOps({ ...SCORE, ...score }, undefined).filter(
+        (op) =>
+          (op >= BEATORAJA_OP.P1_RANK_AAA && op <= BEATORAJA_OP.P1_RANK_F) ||
+          (op >= BEATORAJA_OP.NOW_AAA_1P && op <= BEATORAJA_OP.NOW_F_1P),
+      );
+    const nothingJudged = { perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0 };
+    // beatoraja's running rate is 100 % before the first note is judged.
+    expect(rankOps(nothingJudged)).toEqual([BEATORAJA_OP.P1_RANK_AAA, BEATORAJA_OP.NOW_AAA_1P]);
+    // 10 PGREATs of the chart's 100 notes: AAA over the notes judged, not the F of the EX score over every note.
+    expect(rankOps({ ...nothingJudged, perfect: 10, exScore: 20 })).toEqual([
+      BEATORAJA_OP.P1_RANK_AAA,
+      BEATORAJA_OP.NOW_AAA_1P,
+    ]);
+    // 9 notes judged, 18 points: 16 is exactly 24/27, AAA; 15 is AA. 4 is exactly 6/27, E; 3 is F.
+    const judged = (exScore: number): number[] => rankOps({ ...nothingJudged, perfect: 7, great: 2, exScore });
+    expect(judged(16)).toContain(BEATORAJA_OP.P1_RANK_AAA);
+    expect(judged(15)).toContain(BEATORAJA_OP.P1_RANK_AA);
+    expect(judged(4)).toContain(BEATORAJA_OP.P1_RANK_E);
+    expect(judged(3)).toEqual([BEATORAJA_OP.P1_RANK_F, BEATORAJA_OP.NOW_F_1P]);
+  });
+
+  it('lights no gauge op without a gauge, and no 1P rank without notes', () => {
     expect(
       resolveBeatorajaPlayScoreOps(
         { total: 0, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 },
         undefined,
       ),
-    ).toEqual([BEATORAJA_OP.P1_RANK_F, BEATORAJA_OP.RANK_F, BEATORAJA_OP.NOW_F_1P]);
+    ).toEqual([BEATORAJA_OP.RANK_F]);
     expect(rangesLit(resolveBeatorajaPlayScoreOps(SCORE, { current: 0, max: 0 }))).toEqual([]);
   });
 });

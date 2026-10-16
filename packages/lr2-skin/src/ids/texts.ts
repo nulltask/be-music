@@ -2,7 +2,8 @@
  * LR2's texts: the string a `#SRC_TEXT` draws (its `st` column). beatoraja keeps these numbers for its LR2-compatible
  * strings (`text[].ref`).
  *
- * Texts 20-28 repeat 10-18 (`*_ALT`); be-music resolves them the same.
+ * Texts 20-29 are the fields LR2's tag editor edits (OpenLR2 `textOp.txt` `TAGEDIT_*`): 20-28 repeat 10-18 (`*_ALT`),
+ * except text 20 on the result screen, which LR2 reuses for the internet ranking's message.
  */
 export const LR2_TEXT = {
   // ─── Every scene ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -30,9 +31,15 @@ export const LR2_TEXT = {
   TAG: 16,
   /** The chart's play level. */
   PLAY_LEVEL: 17,
-  /** The chart's difficulty name (BEGINNER … INSANE). */
+  /**
+   * The chart's `#DIFFICULTY` as a number, 0-5 (OpenLR2 `ProcS_Select` sets text 18 with `SetObjectStringInt`); the
+   * difficulty ops (150-155) name it.
+   */
   DIFFICULTY: 18,
-  /** Text 20: as `TITLE`. */
+  /**
+   * Text 20: as `TITLE`; on the result screen, the internet ranking's message instead (OpenLR2 `SaveResult` /
+   * `ProcI_Result`).
+   */
   TITLE_ALT: 20,
   /** Text 21: as `SUBTITLE`. */
   SUBTITLE_ALT: 21,
@@ -50,7 +57,10 @@ export const LR2_TEXT = {
   PLAY_LEVEL_ALT: 27,
   /** Text 28: as `DIFFICULTY`. */
   DIFFICULTY_ALT: 28,
-  /** The play level of an INSANE chart. */
+  /**
+   * LR2's ex level: a level a player sets in LR2's song database, which LR2 draws in the INSANE bar-level digits
+   * (OpenLR2 `exlevel`). be-music keeps none and reads an INSANE chart's play level here.
+   */
   INSANE_LEVEL: 29,
 
   // ─── Select ─────────────────────────────────────────────────────────────────────────────────────────────────────

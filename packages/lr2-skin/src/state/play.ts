@@ -10,7 +10,7 @@ import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TI
 import { resolveLr2ChartText } from './chart.ts';
 import { lr2ShowsCourseCombo, resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 import { isLr2BgaShown, isLr2RedGauge, lr2HiSpeedSlider } from './options.ts';
-import { resolveLr2RateNumber } from './score.ts';
+import { notesJudged, resolveLr2RateNumber } from './score.ts';
 import { lr2TimerUpdate, type Lr2SceneState, type Lr2TimerUpdate } from './scene-state.ts';
 
 /** The lanes a play is laid out on: its play variant and the lane channels in use. */
@@ -155,9 +155,14 @@ export function resolveLr2GaugeRangeOp(gaugePercent: number): number {
   return LR2_OP.GAUGE_1P_0_9 + Math.min(10, Math.max(0, Math.floor(gaugePercent / 10)));
 }
 
-/** LR2's 1P rank op (200 AAA … 207 F) for the score so far; none before the chart has notes. */
-export function resolveLr2RankOp(score: Pick<ScoreSummary, 'total' | 'exScore'>): number | undefined {
-  const rankIndex = resolveIidxRankIndexFromScore(score);
+/**
+ * LR2's 1P rank op (200 AAA … 207 F): the DJ Rank of the EX score over the notes judged so far, not over every note
+ * (OpenLR2 `GetOptionFlag_dst` ranks `exscore × 9 / (note_current × 2)`); none before the first note is judged.
+ */
+export function resolveLr2RankOp(
+  score: Pick<ScoreSummary, 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'exScore'>,
+): number | undefined {
+  const rankIndex = resolveIidxRankIndexFromScore({ total: notesJudged(score), exScore: score.exScore });
   return rankIndex === undefined ? undefined : LR2_OP.RANK_1P_AAA + rankIndex;
 }
 
@@ -168,13 +173,17 @@ function frameCourse(setup: Lr2PlaySetup, frame: Lr2PlayFrame): CourseView | und
   return { ...course, stageIndex: frame.nonstopStage };
 }
 
-/** EX score still needed for the next rank (number 154); 0 at AAA or before the chart has notes. */
-function nextRankDiff(score: ScoreSummary): number {
-  if (score.total <= 0) return 0;
+/**
+ * LR2's distance to the next DJ Rank (numbers 109 / 154, OpenLR2 `SetObjectValue_Num`): the EX score less the next
+ * rank's border over every note, `floor(notes × 2 × (rank + 1) / 9)` for the rank `exscore × 9 / (notes × 2)` held
+ * between E's border and AAA. So it reads negative until the border is reached, F counts down to E, and AAA to the
+ * maximum. 0 at the maximum or before the chart has notes.
+ */
+function nextRankDiff(score: Pick<ScoreSummary, 'total' | 'exScore'>): number {
   const max = score.total * 2;
-  const thresholds = [8 / 9, 7 / 9, 6 / 9, 5 / 9, 4 / 9, 3 / 9, 2 / 9, 1 / 9];
-  const next = thresholds.find((threshold) => score.exScore < max * threshold) ?? 0;
-  return Math.max(0, Math.ceil(max * next - score.exScore));
+  if (score.total <= 0 || score.exScore === max) return 0;
+  const rank = Math.min(8, Math.max(1, Math.floor((score.exScore * 9) / max)));
+  return score.exScore - Math.floor((max * (rank + 1)) / 9);
 }
 
 function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): number | undefined {
@@ -225,6 +234,7 @@ function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): numb
     case LR2_NUM.TARGET_SCORE_DIFF:
       return score.exScore;
     case LR2_NUM.NEXT_RANK_DIFF:
+    case LR2_NUM.NEXT_RANK_DIFF_ALT:
       return nextRankDiff(score);
     case LR2_NUM.BPM:
       return frame.bpm ?? setup.chart?.bpm;
@@ -261,8 +271,7 @@ function playText(st: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): string 
     case LR2_TEXT.PLAYER:
       return 'PLAYER';
   }
-  // The play screen draws no INSANE level.
-  return st === LR2_TEXT.INSANE_LEVEL ? undefined : resolveLr2ChartText(st, chart);
+  return resolveLr2ChartText(st, chart);
 }
 
 function playSlider(type: number, frame: Lr2PlayFrame): number {
@@ -300,7 +309,7 @@ const SETUP_OPS = new WeakMap<Lr2PlaySetup, readonly number[]>();
 
 /**
  * The LR2 play screen's state for a frame: the ops (the play's fixed ops from its setup — options, gauge type, key
- * mode, chart features, course — and the frame's: loading (80 / 81), the 1P rank (200-207), the gauge range (230-240)
+ * mode, chart features, course — and the frame's: loading (80 / 81), the 1P rank so far (200-207), the gauge range (230-240)
  * and a NONSTOP play's stage), the numbers (the score, combo, gauge, judgement counts, rates, BPM, time, the course's
  * stage levels), the texts (the chart's and the course's), the sliders (hi-speed, progress) and the bar graphs. The
  * setup's ops are kept per setup object, so a scene builds its setup once and passes it every frame.
