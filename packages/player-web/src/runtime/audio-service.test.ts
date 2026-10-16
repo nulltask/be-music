@@ -169,6 +169,16 @@ describe('createAudioService', () => {
     expect(new Set(fake.sources.map(busOf)).size).toBe(1);
   });
 
+  it('plays a resolved sound as a cue, without a theme, on the cue bus', async () => {
+    const { service, fake } = createService();
+    await expect(service.playCue({ bytes: new Uint8Array([1]) })).resolves.toBe(true);
+    await expect(service.playCue(undefined)).resolves.toBe(false);
+    service.setTheme({ sounds: { cursor: { bytes: new Uint8Array([2]) } } });
+    await service.playCue('cursor');
+    expect(fake.sources).toHaveLength(2);
+    expect(new Set(fake.sources.map(busOf)).size).toBe(1);
+  });
+
   it('reads a path-only sound from the theme files, case-insensitively', async () => {
     const bytes = new Uint8Array([4, 5]);
     const { service, fake } = createService();
