@@ -4,7 +4,17 @@
  *
  * - Library: the charts, folders and courses a select screen lists (`LibraryChart`, `LibraryFolder`, `LibraryCourse`,
  *   `LibraryEntry`), their root folders and key modes.
+ * - Browse: the folder stack, cursor, search, sort, filters and favourites of the select screen as one immutable state
+ *   (`BrowseState`, `reduceBrowse`), the list derived from it (`browseEntries`) and its snapshot (`captureBrowse`,
+ *   `restoreBrowse`).
  */
 export * from './library/entries.ts';
 export * from './library/folders.ts';
 export * from './library/key-mode.ts';
+
+export * from './browse/list-options.ts';
+export * from './browse/filter.ts';
+export * from './browse/search.ts';
+export * from './browse/sort.ts';
+export * from './browse/state.ts';
+export * from './browse/snapshot.ts';
