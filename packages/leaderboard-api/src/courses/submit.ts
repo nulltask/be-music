@@ -3,6 +3,7 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import {
   checkCoursePlaylogEligibility,
   PLAYLOG_ENGINE_VERSION,
+  resolveCoursePlayedRuleset,
   simulateCoursePlaylog,
   type BeMusicCoursePlaylog,
   type BeMusicPlaylog,
@@ -23,12 +24,12 @@ import {
 } from '../scores/played-chart.ts';
 import { identifyPlay, type SubmissionDeps } from '../scores/submit.ts';
 import { mergeBestScores } from '../scoring/best.ts';
-import { toCourseClearLamp, type ClearLamp } from '../scoring/lamp.ts';
+import { clearLampRank } from '@be-music/player/ruleset';
 import { loadCourseBestScores, toCourseBestScoreRow } from './bests.ts';
 import { courseTrophyRank, mergeCourseTrophy, toCourseStageFigures } from './figures.ts';
 import { countCoursePlayers, rankOfCourseExScore } from './ranking.ts';
 import { checkNonstopStageCharts, checkUnreachedStageCharts, type StageChartInput } from './stage-charts.ts';
-import { checkCourseRun, resolveCoursePlayedRuleset } from './verify.ts';
+import { checkCourseRun } from './verify.ts';
 
 /** The fingerprint documents of one played stage, in the order the stages were played. */
 export interface CourseStageDocuments {
@@ -53,7 +54,8 @@ export interface CourseRulesetOutcome {
   rulesetRevision: string;
   exScore: number;
   noteCount: number;
-  clearLamp: ClearLamp;
+  /** The course lamp, by its rank (`clearLampRank`). */
+  clearLamp: number;
   missCount: number;
   maxCombo: number;
   stagesPlayed: number;
@@ -160,7 +162,7 @@ export async function submitCourseScore(
 
   const figures = RULESET_IDS.map((ruleset) => {
     const result = simulated.get(ruleset)!;
-    const lamp = toCourseClearLamp(result.lamp);
+    const lamp = clearLampRank(result.lamp);
     const current = currentBests.get(ruleset);
     const update = mergeBestScores(current, {
       scoreId: courseScoreId,
@@ -354,7 +356,7 @@ async function loadCourseOutcomes(
         rulesetRevision: row.rulesetRevision,
         exScore: row.exScore,
         noteCount: row.noteCount,
-        clearLamp: row.clearLamp as ClearLamp,
+        clearLamp: row.clearLamp,
         missCount: row.missCount,
         maxCombo: row.maxCombo,
         stagesPlayed: row.stagesPlayed,

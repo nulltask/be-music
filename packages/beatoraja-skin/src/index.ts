@@ -187,7 +187,6 @@ export {
   BEATORAJA_TEXT,
   bombTimerId,
   comboTimerId,
-  computeClearLampOp,
   computeGenericRankOp,
   computeJudgeExistOps,
   computeRankOp,

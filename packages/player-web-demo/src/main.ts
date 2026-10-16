@@ -136,19 +136,23 @@ import {
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
 import {
-  courseStagePlayFromResult,
-  courseStagePlayFromSummary,
   courseStageRecordKey,
-  mergeCourseStageRecord,
-  mergeSongRecord,
   readStoredSongRecords,
   playRecordKey,
+  rulesetRecordKey,
+  rulesetRecords,
   songRecordKey,
-  songRecordPlayFromResult,
-  songRecordPlayFromSummary,
-  type SongRecordPlay,
   storeSongRecords,
 } from './song-records.ts';
+import {
+  courseStageRecordPlayFromResult,
+  courseStageRecordPlayFromSummary,
+  mergeBestRecord,
+  mergeCourseStageRecord,
+  recordPlayFromResult,
+  recordPlayFromSummary,
+  type RecordPlay,
+} from '@be-music/player/records';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
 import {
   describeSkinSettingControllers,
@@ -1729,7 +1733,9 @@ class PlayerWebDemoApp {
               return;
             }
             if (
-              !window.confirm(`Clear the best records of ${this.songRecords.size} chart(s)? This cannot be undone.`)
+              !window.confirm(
+                `Clear ${this.songRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
+              )
             ) {
               return;
             }
@@ -1791,7 +1797,9 @@ class PlayerWebDemoApp {
     this.trackPlayOption(
       developer
         .add(this.guiState, 'judgeRuleset', { LR2: 'lr2', beatoraja: 'beatoraja', IIDX: 'iidx' })
-        .name('Judge windows'),
+        .name('Judge windows')
+        // Each ruleset keeps its own best records: the select screen switches to the new ruleset's.
+        .onChange(() => this.refreshSelectRecords()),
     );
 
     developer
@@ -2589,18 +2597,35 @@ class PlayerWebDemoApp {
     if (hashes === undefined) {
       void this.resolveChartHashes(song);
     }
-    return this.songRecords.get(songRecordKey(song, hashes?.sha256));
+    return this.songRecords.get(rulesetRecordKey(this.guiState.judgeRuleset, songRecordKey(song, hashes?.sha256)));
+  }
+
+  /** The best records of the current judge ruleset, by chart or course key: the ones the select screen shows. */
+  private currentRulesetRecords(): { get(key: string): BeMusicSongRecord | undefined } {
+    return rulesetRecords(this.songRecords, this.guiState.judgeRuleset);
+  }
+
+  /**
+   * Redraws the select screen with the records of the current judge ruleset, after it changed: the LR2 and default
+   * selects redraw in place, a beatoraja select is mounted again where it was.
+   */
+  private refreshSelectRecords(): void {
+    if (this.beatorajaSelectScene !== undefined) {
+      void this.showSelect();
+      return;
+    }
+    this.selectView?.setCollection(this.collection);
   }
 
   /** Records the running play's result under its chart, when the play counts ({@link playRecordKey}). */
-  private recordActivePlay(play: SongRecordPlay): void {
+  private recordActivePlay(play: RecordPlay): void {
     if (this.activePlayRecordKey === undefined) return;
     this.recordSongResult(this.activePlayRecordKey, play);
     this.activePlayRecordKey = undefined;
   }
 
   /** Folds the running course stage into its chart's record ({@link mergeCourseStageRecord}), when the stage counts. */
-  private recordActiveCourseStage(play: SongRecordPlay): void {
+  private recordActiveCourseStage(play: RecordPlay): void {
     const key = this.activeStageRecordKey;
     this.activeStageRecordKey = undefined;
     if (key === undefined) return;
@@ -2609,8 +2634,8 @@ class PlayerWebDemoApp {
   }
 
   /** Folds a finished play into its chart's best record and persists the records. */
-  private recordSongResult(key: string, play: SongRecordPlay): void {
-    this.songRecords.set(key, mergeSongRecord(this.songRecords.get(key), play));
+  private recordSongResult(key: string, play: RecordPlay): void {
+    this.songRecords.set(key, mergeBestRecord(this.songRecords.get(key), play));
     storeSongRecords(this.songRecords);
   }
 
@@ -2618,9 +2643,9 @@ class PlayerWebDemoApp {
    * Keeps a course run's best lamp, EX score, course max combo and BP under the course's key, when the run keeps a
    * record ({@link resolveCourseRecordUpdate}).
    */
-  private recordCourseResult(update: { key: string; play: SongRecordPlay } | undefined): void {
+  private recordCourseResult(update: { key: string; play: RecordPlay } | undefined): void {
     if (update === undefined) return;
-    this.songRecords.set(update.key, mergeSongRecord(this.songRecords.get(update.key), update.play));
+    this.songRecords.set(update.key, mergeBestRecord(this.songRecords.get(update.key), update.play));
     storeSongRecords(this.songRecords);
   }
 
@@ -3402,15 +3427,17 @@ class PlayerWebDemoApp {
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     this.lastPlay = { song, overrides: { autoPlay } };
     // The same record rule as the LR2 / default play (`playRecordKey`).
+    const judgeRuleset = this.guiState.judgeRuleset;
     this.activePlayRecordKey = playRecordKey(song, chartHashes?.sha256, {
       autoPlay,
       replay: false,
       course: courseStage !== undefined,
       tempo,
+      judgeRuleset,
     });
     this.activeStageRecordKey =
       courseStage !== undefined
-        ? courseStageRecordKey(song, chartHashes?.sha256, { autoPlay, replay: false, tempo })
+        ? courseStageRecordKey(song, chartHashes?.sha256, { autoPlay, replay: false, tempo, judgeRuleset })
         : undefined;
     // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
     let givingUp = false;
@@ -3507,7 +3534,9 @@ class PlayerWebDemoApp {
           if (courseStage !== undefined && this.activeCourse !== undefined) {
             const active = this.activeCourse;
             const goesOn = active.run.recordStage(playlog, history) === 'next';
-            this.recordActiveCourseStage(courseStagePlayFromSummary(summary, maxCombo));
+            this.recordActiveCourseStage(
+              courseStageRecordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset),
+            );
             // With stage results skipped (or an auto-played stage the course goes on after, as LR2 skips it), go
             // straight on to the next stage (or the course result).
             const mounted =
@@ -3523,7 +3552,7 @@ class PlayerWebDemoApp {
             this.unlockPlaylogOptions();
             return;
           }
-          this.recordActivePlay(songRecordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset));
+          this.recordActivePlay(recordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset));
           const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
           if (!mounted) await this.showSelect();
           // Auto-save fires even when the theme ships no result skin — falling back to select
@@ -3735,7 +3764,7 @@ class PlayerWebDemoApp {
       },
       // A course bar's lamp comes from the course's record, kept under the course's key.
       resolveCourseLampOp: (course) => {
-        const record = lookupCourseRecord(course, this.songRecords, this.guiState.nonstopPlacement);
+        const record = lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement);
         return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
       },
       // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
@@ -4737,7 +4766,7 @@ class PlayerWebDemoApp {
       },
       resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
       resolveCourseRecord: (course: BrowserCourseEntry) =>
-        lookupCourseRecord(course, this.songRecords, this.guiState.nonstopPlacement),
+        lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement),
       onSongSelected: (song: BrowserSongEntry) => {
         if (this.addSongToCourseBeingMade(song)) return;
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
@@ -5009,16 +5038,24 @@ class PlayerWebDemoApp {
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
     // course instead.
     // A play at another tempo is practice: it is not ranked, and leaves the records alone too.
+    // A play keeps the record of the judge ruleset it runs under (a replay keeps none).
+    const judgeRuleset = this.guiState.judgeRuleset;
     this.activePlayRecordKey = playRecordKey(song, overrides.chartHashes?.sha256, {
       autoPlay,
       replay: replay !== undefined,
       course: courseStage !== undefined || nonstop !== undefined,
       tempo,
+      judgeRuleset,
     });
     // An EXPERT / GRADE stage also updates its chart's record, as LR2 does (not a NONSTOP run's stitched play).
     this.activeStageRecordKey =
       courseStage !== undefined
-        ? courseStageRecordKey(song, overrides.chartHashes?.sha256, { autoPlay, replay: replay !== undefined, tempo })
+        ? courseStageRecordKey(song, overrides.chartHashes?.sha256, {
+            autoPlay,
+            replay: replay !== undefined,
+            tempo,
+            judgeRuleset,
+          })
         : undefined;
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
@@ -5125,7 +5162,7 @@ class PlayerWebDemoApp {
         ) {
           void this.finishGameplayThen(async () => {
             this.activeCourse?.run.recordStage(result.playlog, result);
-            this.recordActiveCourseStage(courseStagePlayFromResult(result));
+            this.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             this.gameplayView?.dispose({ preserveAudioTail: true });
             this.gameplayView = undefined;
             this.unlockPlaylogOptions();
@@ -5333,7 +5370,7 @@ class PlayerWebDemoApp {
     );
     if (courseStage) {
       this.activeCourse!.run.recordStage(data.playlog, data);
-      this.recordActiveCourseStage(courseStagePlayFromResult(data));
+      this.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
     }
     // Family dispatch for result. We currently only model the LR2 / default split here — the beatoraja result
     // scene is constructed inside `playSongBeatoraja`'s onComplete handler, not via `showResult`, so this method
@@ -5423,7 +5460,7 @@ class PlayerWebDemoApp {
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
     this.setPlayStatus(`Result: ${data.song.title}`);
-    this.recordActivePlay(songRecordPlayFromResult(data));
+    this.recordActivePlay(recordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (presentation.quickRetry && mode.nonstop === undefined) {
       this.maybeAutoSavePlaylog(data.playlog);

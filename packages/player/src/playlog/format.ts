@@ -1,5 +1,5 @@
 import type { RandomDraw } from '@be-music/chart';
-import type { GrooveGaugeType } from '../core/groove-gauge.ts';
+import { GAUGE_TYPES, isGaugeType, type GaugeType } from '../ruleset/gauge-type.ts';
 import type { LongNoteMode } from '../playable-notes.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
 import {
@@ -157,7 +157,7 @@ export interface PlaylogPlay {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
-  gauge: GrooveGaugeType;
+  gauge: GaugeType;
   /** Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / ...). */
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
@@ -533,21 +533,19 @@ function parseInputs(value: unknown): PlaylogInputEvent[] {
   });
 }
 
-const GAUGE_TYPES: ReadonlySet<string> = new Set(['GROOVE', 'HARD', 'DEATH', 'EASY']);
-
 function parsePlay(play: Record<string, unknown>): PlaylogPlay {
   const mode = play.mode;
   if (mode !== 'manual' && mode !== 'auto') {
     throw new PlaylogParseError(`play.mode: expected 'manual' | 'auto'`);
   }
   const gauge = play.gauge;
-  if (typeof gauge !== 'string' || !GAUGE_TYPES.has(gauge)) {
-    throw new PlaylogParseError(`play.gauge: expected one of ${[...GAUGE_TYPES].join(' | ')}`);
+  if (!isGaugeType(gauge)) {
+    throw new PlaylogParseError(`play.gauge: expected one of ${GAUGE_TYPES.join(' | ')}`);
   }
   const parsed: PlaylogPlay = {
     mode,
     autoScratch: play.autoScratch === true,
-    gauge: gauge as GrooveGaugeType,
+    gauge,
   };
   if (play.randomLane !== undefined) {
     const randomLane = expectRecord(play.randomLane, 'play.randomLane');

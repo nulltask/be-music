@@ -28,6 +28,10 @@ describe('resolveResultLamp', () => {
   it('reads CLEAR for a chart without notes', () => {
     expect(resolveResultLamp({ cleared: true, score: score({ total: 0 }) })).toBe('CLEAR');
   });
+
+  it('reads CLEAR for a play that stopped before its last note', () => {
+    expect(resolveResultLamp({ cleared: true, score: score({ perfect: 60 }) })).toBe('CLEAR');
+  });
 });
 
 describe('resolveResultTrackRows', () => {

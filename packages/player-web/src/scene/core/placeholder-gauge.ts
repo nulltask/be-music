@@ -1,4 +1,4 @@
-import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
+import type { GaugeType } from '@be-music/player/ruleset';
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
 import { resolveCourseStageStartGauge, type PlaylogCourseStage } from '@be-music/player/playlog';
 
@@ -11,7 +11,7 @@ import { resolveCourseStageStartGauge, type PlaylogCourseStage } from '@be-music
  * previous stage (100 on the first), so the stage neither shows `GROOVE 20 %` nor graphs it before the engine runs.
  */
 export function createPlaceholderGaugeState(
-  type: GrooveGaugeType = 'GROOVE',
+  type: GaugeType = 'GROOVE',
   course?: { stage: PlaylogCourseStage; ruleset: 'lr2' | 'beatoraja' | 'iidx' },
 ): PlayerGaugeSummary {
   if (course !== undefined) {

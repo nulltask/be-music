@@ -46,7 +46,7 @@ describe('gaugeExBase', () => {
 });
 
 describe('beatorajaGaugeModeFromString', () => {
-  it('maps the engine GrooveGaugeType strings to GrooveGauge ints', () => {
+  it('maps the engine gauge ids to GrooveGauge ints', () => {
     expect(beatorajaGaugeModeFromString('GROOVE')).toBe(BEATORAJA_GAUGE_MODE.NORMAL);
     expect(beatorajaGaugeModeFromString('EASY')).toBe(BEATORAJA_GAUGE_MODE.EASY);
     expect(beatorajaGaugeModeFromString('HARD')).toBe(BEATORAJA_GAUGE_MODE.HARD);

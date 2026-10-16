@@ -1,5 +1,6 @@
 import type { SkinFamilyId, loadTextureFromBytes } from '@be-music/player-web/skin';
 import type { PlaylogViewReplay } from '@be-music/player/playlog';
+import type { GaugeType } from '@be-music/player/ruleset';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 
 /**
@@ -173,7 +174,7 @@ export interface DemoGuiState extends PlayTempoSettings {
    */
   hiSpeed: number;
   /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
-  gauge: 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
+  gauge: GaugeType;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
   random1P: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
   /** 2P lane arrangement for the next play. Two-way synced with the LR2 select panel. */

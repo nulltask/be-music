@@ -2,8 +2,8 @@ import { dirname } from '@be-music/utils/core';
 import { resolveChartPlayVariant, resolveSongSource } from '../collection/collection.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../collection/types.ts';
 import type { Lr2BarLampKind } from '@be-music/lr2-skin';
-import type { BeMusicClearLamp } from '../skin/be-music/types.ts';
-import type { PixiGaugeType, PixiPlayOptions } from './core/select.ts';
+import type { ClearLamp, GaugeType } from '@be-music/player/ruleset';
+import type { PixiPlayOptions } from './core/select.ts';
 
 /**
  * Globally-true ops that hold regardless of which song is focused: filter / mode toggles, gauge defaults, "no rival"
@@ -99,7 +99,7 @@ export function computeSelectOps(
   playOptions: PixiPlayOptions,
   customOptions: ReadonlyArray<{ defaultOp: number }> = [],
   collection?: BrowserSongCollection,
-  songLamp?: BeMusicClearLamp,
+  songLamp?: ClearLamp,
 ): ReadonlySet<number> {
   const ops = new Set<number>(SELECT_BASE_OPS);
   for (const which of panelStates) {
@@ -288,12 +288,12 @@ function hasReadtextForSong(collection: BrowserSongCollection, song: BrowserSong
   return false;
 }
 
-function isRedGauge(type: PixiGaugeType): boolean {
+function isRedGauge(type: GaugeType): boolean {
   return type === 'HARD' || type === 'DEATH';
 }
 
 /** LR2's six clear lamps (`#SRC_BAR_LAMP` kinds, ops 100-105) for each of the host's lamps. */
-const LR2_LAMP_KINDS: Readonly<Record<BeMusicClearLamp, Lr2BarLampKind>> = {
+const LR2_LAMP_KINDS: Readonly<Record<ClearLamp, Lr2BarLampKind>> = {
   NO_PLAY: 'noplay',
   FAILED: 'failed',
   ASSIST_EASY: 'easy',
@@ -312,11 +312,11 @@ const LR2_LAMP_KIND_ORDER: readonly Lr2BarLampKind[] = ['noplay', 'failed', 'eas
  * The LR2 clear lamp of a best record (`#SRC_BAR_LAMP` kind): LR2 has one lamp below NORMAL (EASY, which ASSIST EASY
  * joins), one above it (HARD, which EX HARD joins) and FULL COMBO for PERFECT and MAX too. No record reads `noplay`.
  */
-export function resolveLr2BarLampKind(lamp: BeMusicClearLamp | undefined): Lr2BarLampKind {
+export function resolveLr2BarLampKind(lamp: ClearLamp | undefined): Lr2BarLampKind {
   return lamp === undefined ? 'noplay' : LR2_LAMP_KINDS[lamp];
 }
 
 /** LR2's select op for the selected bar's clear lamp (100 NO PLAY … 105 FULL COMBO). */
-export function resolveLr2LampOp(lamp: BeMusicClearLamp | undefined): number {
+export function resolveLr2LampOp(lamp: ClearLamp | undefined): number {
   return SELECT_DYNAMIC_OPS.LAMP_NOT_PLAYED + LR2_LAMP_KIND_ORDER.indexOf(resolveLr2BarLampKind(lamp));
 }

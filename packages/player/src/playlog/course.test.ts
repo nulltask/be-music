@@ -194,6 +194,50 @@ describe('course play logs', () => {
     expect(log.results?.native?.lamp).toBe('FAILED');
   });
 
+  test('the engine’s course result is lamped by the judge ruleset the run was played on', async () => {
+    // LR2: an EASY pick lamps a grade course EASY, though it plays on the GRADE gauge.
+    const easyFirst = await playStage(
+      presses((index) => index !== 3),
+      { kind: 'grade' },
+      { gauge: 'EASY' },
+    );
+    const easySecond = await playStage(
+      presses(() => true),
+      { kind: 'grade', carryIn: carryFrom(easyFirst) },
+      { gauge: 'EASY' },
+    );
+    const easy = createCoursePlaylog({
+      course: COURSE,
+      stages: [
+        { played: true, playlog: easyFirst },
+        { played: true, playlog: easySecond },
+      ],
+    });
+    expect(easy.results?.native?.lamp).toBe('EASY');
+    expect(simulateCoursePlaylog(easy, { ruleset: 'lr2' }).lamp).toBe('EASY');
+
+    // beatoraja: every note a PGREAT is a MAX, beyond LR2's FULL COMBO.
+    const maxFirst = await playStage(
+      presses(() => true),
+      { kind: 'grade' },
+      { judgeRuleset: 'beatoraja' },
+    );
+    const maxSecond = await playStage(
+      presses(() => true),
+      { kind: 'grade', carryIn: carryFrom(maxFirst) },
+      { judgeRuleset: 'beatoraja' },
+    );
+    const max = createCoursePlaylog({
+      course: COURSE,
+      stages: [
+        { played: true, playlog: maxFirst },
+        { played: true, playlog: maxSecond },
+      ],
+    });
+    expect(max.results?.native?.lamp).toBe('MAX');
+    expect(simulateCoursePlaylog(max, { ruleset: 'beatoraja' }).lamp).toBe('MAX');
+  });
+
   test('a cleared course re-simulates to the result the engine recorded', async () => {
     const first = await playStage(
       presses((index) => index !== 3),

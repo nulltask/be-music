@@ -17,6 +17,7 @@ import type {
   BrowserSongEntry,
 } from '../../collection/types.ts';
 import type { CourseDefinition } from '@be-music/player/course';
+import { GAUGE_TYPES } from '@be-music/player/ruleset';
 import type { CourseMaker } from '../../collection/course-maker.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
 import type {
@@ -24,7 +25,6 @@ import type {
   BeMusicBgaSize,
   BeMusicDifficultyFilter,
   BeMusicEffectLevel,
-  BeMusicGaugeType,
   BeMusicHiddenSudden,
   BeMusicHsFix,
   BeMusicKeysFilter,
@@ -139,8 +139,6 @@ export type PixiHsFix = BeMusicHsFix;
 export type PixiHiddenSudden = BeMusicHiddenSudden;
 /** Allowed values for {@link PixiPlayOptions.random1P} / `random2P`. */
 export type PixiRandomMode = BeMusicRandomMode;
-/** Allowed values for {@link PixiPlayOptions.gauge1P} / `gauge2P`. */
-export type PixiGaugeType = BeMusicGaugeType;
 /** Allowed values for {@link PixiPlayOptions.bga}. */
 export type PixiBgaMode = BeMusicBgaMode;
 /** Allowed values for {@link PixiPlayOptions.bgaSize}. */
@@ -218,12 +216,6 @@ export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
  * off / mirror / random / s-random / scatter.
  */
 export const RANDOM_CYCLE: readonly PixiRandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'];
-
-/**
- * Cycle order for {@link PixiPlayOptions.gauge1P} / `gauge2P`. LR2 button cells 0..3 on `#SRC_BUTTON,type=40 / 41`:
- * groove / survival / death / easy.
- */
-export const GAUGE_CYCLE: readonly PixiGaugeType[] = ['GROOVE', 'HARD', 'DEATH', 'EASY'];
 
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
@@ -312,8 +304,8 @@ const PLAY_OPTION_CHOICES: BeMusicPlayOptionChoices = {
   dpFlip: BOOLEAN_CYCLE,
   random1P: RANDOM_CYCLE,
   random2P: RANDOM_CYCLE,
-  gauge1P: GAUGE_CYCLE,
-  gauge2P: GAUGE_CYCLE,
+  gauge1P: GAUGE_TYPES,
+  gauge2P: GAUGE_TYPES,
 };
 
 /** Numeric play options a be-music skin may set, each with the clamp the select scene applies to it. */
@@ -934,8 +926,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     if (typeof next.dpFlip !== 'boolean') next.dpFlip = DEFAULT_PLAY_OPTIONS.dpFlip;
     if (!RANDOM_CYCLE.includes(next.random1P)) next.random1P = DEFAULT_PLAY_OPTIONS.random1P;
     if (!RANDOM_CYCLE.includes(next.random2P)) next.random2P = DEFAULT_PLAY_OPTIONS.random2P;
-    if (!GAUGE_CYCLE.includes(next.gauge1P)) next.gauge1P = DEFAULT_PLAY_OPTIONS.gauge1P;
-    if (!GAUGE_CYCLE.includes(next.gauge2P)) next.gauge2P = DEFAULT_PLAY_OPTIONS.gauge2P;
+    if (!GAUGE_TYPES.includes(next.gauge1P)) next.gauge1P = DEFAULT_PLAY_OPTIONS.gauge1P;
+    if (!GAUGE_TYPES.includes(next.gauge2P)) next.gauge2P = DEFAULT_PLAY_OPTIONS.gauge2P;
     this.playOptions = next;
     // Re-render only when panel 1 (the play-options panel) is currently open — that's the only surface that visualizes
     // these values today, so a closed-panel write doesn't need a frame.
@@ -2458,7 +2450,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       }
       if (event.code === 'KeyD') {
         event.preventDefault();
-        this.cyclePlayOption('gauge1P', GAUGE_CYCLE);
+        this.cyclePlayOption('gauge1P', GAUGE_TYPES);
         return;
       }
       if (event.code === 'KeyC') {

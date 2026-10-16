@@ -1,9 +1,7 @@
 import { BEATORAJA_OP } from '@be-music/beatoraja-skin';
-import type { BeMusicClearLamp } from '@be-music/skin-sdk';
+import type { ClearLamp } from '@be-music/player/ruleset';
 
-export { resolveClearLamp } from '../core/clear-lamp.ts';
-
-const LAMP_OPS: Readonly<Record<BeMusicClearLamp, number>> = {
+const LAMP_OPS: Readonly<Record<ClearLamp, number>> = {
   NO_PLAY: BEATORAJA_OP.CLEAR_LAMP_NOPLAY,
   FAILED: BEATORAJA_OP.CLEAR_LAMP_FAILED,
   ASSIST_EASY: BEATORAJA_OP.CLEAR_LAMP_ASSIST_EASY,
@@ -17,10 +15,10 @@ const LAMP_OPS: Readonly<Record<BeMusicClearLamp, number>> = {
 };
 
 /**
- * The beatoraja skin op (`BEATORAJA_OP.CLEAR_LAMP_*`) that shows `lamp`. The lamp itself comes from `resolveClearLamp`,
- * the one clear-lamp rule every family uses (the LR2 / default result, the be-music records and the beatoraja result
- * and select), so a play gets the same lamp whichever skin shows it.
+ * The beatoraja skin op (`BEATORAJA_OP.CLEAR_LAMP_*`) that shows `lamp`. The lamp itself comes from `resolveClearLamp`
+ * (`@be-music/player/ruleset`), the one clear-lamp rule every family uses (the LR2 / default result, the records and
+ * the beatoraja result and select), so a play gets the same lamp whichever skin shows it.
  */
-export function beatorajaClearLampOp(lamp: BeMusicClearLamp): number {
+export function beatorajaClearLampOp(lamp: ClearLamp): number {
   return LAMP_OPS[lamp] ?? BEATORAJA_OP.CLEAR_LAMP_NOPLAY;
 }
