@@ -14,7 +14,7 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
 - `@be-music/player`: 再生 engine、timing、判定、score、gauge、BGA timeline、UI/audio adapter 契約を共有する core package
 - `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびプレイログ再シミュレータ `bms-playlog`
-- `@be-music/scene-model`: ライブラリの項目・一覧・プレイオプションなど、スキンの種類によらず共有する実行環境非依存のシーンモデル
+- `@be-music/scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
 - `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
 - `@be-music/skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK

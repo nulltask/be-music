@@ -11,7 +11,7 @@ each screen's session will work on; the families only draw them.
 ```mermaid
 flowchart TD
   player["@be-music/player<br/>ruleset · course · records · engine"]
-  model["@be-music/scene-model<br/>library · browse · play options"]
+  model["@be-music/scene-model<br/>library · browse · play options<br/>play state · play result · course view · sounds"]
   skins["skin-sdk · lr2-skin · beatoraja-skin<br/>map the models to each skin's vocabulary"]
   sessions["@be-music/player-web<br/>scene sessions · family views"]
 
@@ -25,9 +25,10 @@ The package is runtime-neutral: it imports no renderer, reads no DOM or Node glo
 number. Time and randomness come in as inputs. `pnpm run check` holds it to that with the runtime-neutral lint rules,
 and a test checks that it builds on `@be-music/chart`, `@be-music/json` and `@be-music/player` only.
 
-The models are derived from what the select scenes did before them. Where the built-in / LR2 scene and the beatoraja
-scene differed, the model picks one behaviour, following the compatibility policy: what LR2 does, and beatoraja's
-behaviour for what LR2 does not have. [Behaviour choices](#behaviour-choices) lists each one.
+The models are derived from what the scenes did before them. Where the built-in / LR2 scenes and the beatoraja
+scenes differed, the model picks one behaviour, following the compatibility policy: what LR2 does, and beatoraja's
+behaviour for what LR2 does not have. The behaviour choices of the [browse model](#behaviour-choices) and the [play
+state](#behaviour-choices-1) list each one.
 
 ## Library
 
@@ -172,18 +173,142 @@ FLIP, note arrangement and gauge type per side. `@be-music/skin-sdk` exports it 
   (`stepPlayerHiSpeed`: the player's hi-speed moves on its own grid, the drawn one is that times the chart's HS-FIX
   multiplier) and the eased scroll (`easeHiSpeed`, `HiSpeedTransition`).
 
-## Where the select-side helpers moved
+## Play state
 
-| Helper                                                           | Was in                             | Now                                                                                |
-| ---------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------- |
-| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, … | `@be-music/skin-sdk`               | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (aliased in skin-sdk)          |
-| `BeMusicPlayOptions` and its value types                         | `@be-music/skin-sdk`               | `PlayOptions`, … (aliased in skin-sdk)                                             |
-| `groupSongsByFolder`, `resolveChartPlayVariant`                  | `player-web` collection            | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (re-exported)              |
-| `matchesSearchQuery`, `wrappedCursorDelta`                       | `player-web` core select           | Same names (re-exported)                                                           |
-| The core select's sort and difficulty filter                     | `player-web` core select (private) | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                               |
-| `resolveSelectNavigation`                                        | `player-web` core select           | Stays, over `restoreBrowse`                                                        |
-| `DEFAULT_PLAY_OPTIONS`, the option cycles                        | `player-web` core select           | Same names (re-exported)                                                           |
-| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`         | `player-web` core select           | `resolvePlayOptionValue`, `cyclePlayOptionValue` (re-exported under the old names) |
-| The hi-speed range and steps                                     | `player-web` `scene/hi-speed.ts`   | Same names (re-exported)                                                           |
+The play state (`PlayState`) is what every gameplay screen reads of a play: the running gauge and EX score with their
+graphs, the combo and max combo (and a course stage's course-wide combo), every timed judgment with the early / late
+count of each judgment, and the view — the hi-speed and the lane covers. It is immutable and fed by events through
+`reducePlayState`: the engine's frames and judgments, its `trigger-poor-bga` command (an empty POOR, through
+`playEventFromUiCommand`), the final summary, and the player's and the host's hi-speed and cover changes. No clock is
+read: chart time and play-clock time come in with the events.
 
-The scenes still keep their own browse state; the scene sessions of the web runtime move onto these models.
+```mermaid
+flowchart LR
+  engine["engine<br/>frames · judgments · commands"]
+  input["player · host<br/>hi-speed · covers"]
+  reduce["reducePlayState"]
+  state["PlayState"]
+  toResult["playResultFromPlayState"]
+  result["PlayResult"]
+  views["family views"]
+
+  engine --> reduce
+  input --> reduce
+  reduce --> state
+  state --> views
+  state --> toResult --> result --> views
+```
+
+- **Graphs.** They start at the gauge the play starts with (from `createPlayState`, else the first frame) and take a
+  sample of the gauge (in percent of its maximum) and the EX score at each judgment and each empty POOR, at the
+  judgment's chart-time fraction. The result adds a last sample where the play ended.
+- **Combo.** The combo the engine publishes, the longest kept as the max combo; a final summary that is a full combo
+  (every note GOOD or better, none BAD or POOR) makes the max combo every note, as the combo never broke. A course stage
+  runs the course combo on from the one carried in (`reduceCourseCombo`).
+- **Judge timings.** Each PERFECT … POOR judgment with a timing, with its play-clock time and lane;
+  `recentJudgeTimings` is the latest 64 for a live meter (one array per judgment list). Each judgment's early and late
+  count (beatoraja's) comes with them.
+- **Hi-speed** (`HiSpeedState`). The player's hi-speed, on their own scale, and the drawn one the notes scroll with: the
+  player's times the chart's HS-FIX multiplier (`resolveHsFixMultiplier`: MAXBPM, MINBPM and AVERAGE keep that BPM at
+  the player's hi-speed, CONSTANT scrolls as AVERAGE for now). The player's keys step the player's value; a drawn value
+  reported by the engine or a replay is taken as it is. A course's `no_speed` locks the player's changes; the host's
+  setting still applies.
+- **Lane covers** (`LaneCoverState` per side). SUDDEN+, HIDDEN+ and LIFT, each with a height kept while it is off. A
+  play starts with the select screen's options (`laneCoversFromPlayOptions`: the HIDDEN / SUDDEN mode per side, the one
+  lane cover height and the LANE COVER switch); during the play a cover is raised (coming on), lowered (going off at
+  nothing), switched or set outright (a replay), on one side or every side, and locked with the hi-speed.
+  `resolveLaneCover` gives the covers as drawn, as fractions of the lane, HIDDEN+ scaled to the lane above the LIFT.
+- **View settings.** `resolvePlaylogView` is the view in the play log's units: the drawn hi-speed on the scene's
+  hi-speed scale, the HS-FIX, each side's covers and the visible time at the main BPM (`resolveWhiteNumber`, the white
+  number for a lane of a given length in beats: four for beatoraja's). `PlaylogViewCursor` walks a replayed log's view
+  along the playhead.
+
+### Behaviour choices
+
+| Behaviour                    | Built-in / LR2 gameplay                           | beatoraja gameplay                                              | The model                                                         |
+| ---------------------------- | ------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Graph start                  | The starting gauge at 0                           | None                                                            | The starting gauge at 0                                           |
+| Graph samples                | Each judgment and each empty POOR                 | Each judgment                                                   | Each judgment and each empty POOR                                 |
+| Graph gauge value            | The gauge as it is                                | Percent of its maximum                                          | Percent of its maximum (the same on a gauge out of 100)           |
+| Graph end                    | A last sample where the play ended                | None                                                            | A last sample where the play ended                                |
+| Max combo of a full combo    | Every note, for AUTO only                         | The published combo                                             | Every note, for any play                                          |
+| Timed judgments              | PERFECT … POOR, with time and lane; the latest 64 | Any kind, offset and kind only; the latest 50                   | PERFECT … POOR, with time and lane; the latest 64 by default      |
+| Early / late per judgment    | None                                              | Counted                                                         | Counted (beatoraja; LR2 has none)                                 |
+| HS-FIX                       | Applied                                           | Not applied                                                     | Applied (beatoraja's fixed hi-speed modes; LR2 has none)          |
+| Hi-speed lock (`no_speed`)   | Keys ignored, host taken                          | Keys ignored, engine change reverted, host taken                | Player and engine changes ignored, host taken                     |
+| Covers at the start          | From the play options                             | Off                                                             | From the play options (LR2)                                       |
+| Covers during the play       | Fixed                                             | Lane cover, LIFT and HIDDEN keys, wheel and buttons; every side | beatoraja's adjustments (LR2 has none), on one side or every side |
+| HIDDEN+ lowered to nothing   | —                                                 | Keys keep it on, the button turns it off                        | Off                                                               |
+| Covers under `no_speed`      | —                                                 | Locked                                                          | Locked                                                            |
+| Visible time in the play log | Lane height less SUDDEN+ and LIFT                 | beatoraja's white number (LIFT ignored)                         | The white number (LIFT ignored)                                   |
+| HS-FIX in the play log       | Recorded                                          | Not recorded                                                    | Recorded when set                                                 |
+
+## Play result
+
+`PlayResult` is the one payload every result screen reads, for a single play, a course stage, a whole EXPERT / GRADE
+course run and a NONSTOP run (`run`: `single`, `stage`, `course`, `nonstop`): the score and the gauge's verdict, the
+clear lamp by the one clear-lamp rule, the graphs, the timed judgments and their early / late counts, the play log, and
+the course a stage or a run belongs to (`course`, a course view). `@be-music/skin-sdk` exports it as
+`BeMusicResultData`.
+
+- `playResultFromPlayState` reads a play's result off its final play state.
+- `playResultFromBeatoraja` reads the beatoraja gameplay scene's `onComplete(summary, maxCombo, history)`; its graphs
+  get the start and end samples the other scenes take, and its timing samples, which have no time, read `atMs` 0.
+  `beatorajaCompletionFromPlayResult` goes back to that shape for a beatoraja result skin.
+- `playResultFromCourseRun` reads a course run (`PlaylogCourseResult`) as one play: the summed score, LR2's money score
+  over the course's notes under LR2, the course under its first stage's chart, the stages reached and the trophy
+  (`courseRun`). Its graphs are the last stage's, as LR2 draws a course result; `courseRun.stageHistories` keeps every
+  stage's for beatoraja's joined graph (`joinCourseStageHistories`).
+- `resolveResultPresentation` says how a run is shown, as LR2 does: a course run on the course-result skin with the
+  course jingles and no quick retry; a NONSTOP run as a single play.
+
+A course run's verdict reads COURSE CLEAR / COURSE FAILED from `run: 'course'`, which replaces the `courseResult` flag.
+
+## Course view
+
+`CourseView` is the course a screen shows — the bar under the cursor, the running course and its stage, the course of a
+result: its kind, title, stages (title, subtitle, level, difficulty), the stage being played, and a NONSTOP course's
+connections (`resolveCourseView`). `CourseComboState` is a course stage's course-wide combo: carried in, running on with
+the stage combo until the first break, then the stage combo (`createCourseCombo`, `reduceCourseCombo`).
+
+## System sounds
+
+A theme's sounds are a `SystemSoundSet`: one `SystemSound` (bytes, a path in the theme's files, or both) per slot —
+the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `optionOpen`, `optionClose`,
+`optionChange`), the select BGM and the decide jingle, and the result jingles (`clear`, `fail`, `result`,
+`courseClear`, `courseFail`).
+
+- `systemSoundSetFromLr2Theme` reads an LR2 theme load's audio (by bytes); `LR2_SOUND_SET_SLOTS` maps each command of an
+  LR2 sound set to its slot (`SCRATCH` is the cursor cue, `PANEL_*` the option panel ones).
+- `systemSoundSetFromBeatoraja` reads a beatoraja theme's cue paths and select BGM path (played through the theme's
+  audio) and its jingles (by bytes). beatoraja has no option panel cues; LR2 has no cancel cue.
+- `resolveResultJingles` picks a result's jingles from the first set with any (the theme whose result skin is shown,
+  then the others), kept whole; a course run's plays the course jingles, falling back to clear / fail.
+  `resolveResultJingle` picks one by the verdict, falling back to the generic one.
+- `browseSystemSound` is the cue for what a browse command did: the cursor cue, the folder cues, the cancel cue on
+  backing out at the root, the option-change cue when the sort or a filter changed the list. `startSystemSound` is the
+  decide cue for a chart or a playable course and the cancel cue for a course with a stage missing.
+
+## Where the helpers moved
+
+| Helper                                                                           | Was in                                    | Now                                                                                |
+| -------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- |
+| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                 | `@be-music/skin-sdk`                      | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (aliased in skin-sdk)          |
+| `BeMusicPlayOptions` and its value types                                         | `@be-music/skin-sdk`                      | `PlayOptions`, … (aliased in skin-sdk)                                             |
+| `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                  | `@be-music/skin-sdk`                      | `PlayResult`, … (aliased in skin-sdk)                                              |
+| `BeMusicJudge`, `BeMusicSide`, `BeMusicJudgeTiming`, `BeMusicLaneCover`          | `@be-music/skin-sdk`                      | `Judge`, `PlaySide`, `JudgeTiming`, `LaneCover` (aliased in skin-sdk)              |
+| `groupSongsByFolder`, `resolveChartPlayVariant`                                  | `player-web` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (re-exported)              |
+| `matchesSearchQuery`, `wrappedCursorDelta`                                       | `player-web` core select                  | Same names (re-exported)                                                           |
+| The core select's sort and difficulty filter                                     | `player-web` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                               |
+| `resolveSelectNavigation`                                                        | `player-web` core select                  | Stays, over `restoreBrowse`                                                        |
+| `DEFAULT_PLAY_OPTIONS`, the option cycles                                        | `player-web` core select                  | Same names (re-exported)                                                           |
+| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                         | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue` (re-exported under the old names) |
+| The hi-speed range and steps                                                     | `player-web` `scene/hi-speed.ts`          | Same names (re-exported)                                                           |
+| `SceneCourseInfo`, `resolveSceneCourseInfo`                                      | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (re-exported under the old names)                |
+| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                    | `player-web` `scene/core/course-combo.ts` | Same names (re-exported), with `reduceCourseCombo`                                 |
+| `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                               | `player-web` `scene/playlog-view.ts`      | Same names (re-exported), over `resolvePlaylogView`                                |
+| `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation` | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)                     |
+| `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                 |
+
+The scenes still keep their own browse and play state (the core gameplay its `JudgeTimingLog` and covers, the beatoraja
+runtime adapter its histories and covers); the scene sessions of the web runtime move onto these models.
