@@ -32,3 +32,8 @@ export * from './beatoraja/notes.ts';
 export * from './beatoraja/result.ts';
 export * from './beatoraja/select.ts';
 export * from './beatoraja/skin-view.ts';
+
+// Scene sessions and family views (ADR 0001): the kit a host hands each skin family, the frames and intents between a
+// session and its view, and the scene that pairs them.
+export type * from '../host/family-kit.ts';
+export type * from '../view/types.ts';
