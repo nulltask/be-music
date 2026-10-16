@@ -56,7 +56,7 @@ Chrome と Edge ではフルスクリーン中に Keyboard Lock API で `Esc` �
 右上の lil-gui **Debug Menu**（起動時は折りたたみ）は、よく使う操作を先頭に置き、残りをフォルダーにまとめています。各フォルダーの開閉状態は記憶されます（`localStorage` の `be-music-demo.debug-menu-folders`）。パネル自体は常に折りたたんだ状態で始まります。
 
 - **トップレベル:** Status（読み取り専用）、Open folder、Open files (ZIP / play log)。Open files では譜面の ZIP アーカイブ（`?music=` と同じ読み込み）や、リプレイするプレイログ（`*.bmplay.json`）を選べます。Open folder はフォルダー選択ダイアログを使い、ドロップと同じ経路で読み込みます。
-- **Play options**（既定で開く）: Auto play、Gauge、Random 1P / 2P、DP flip、Auto scratch 1P / 2P、Hi-speed。Hi-speed（その場で反映）以外は曲の開始時に確定し、プレイ中は無効になります。
+- **Play options**（既定で開く）: Auto play、Gauge、Random 1P / 2P、DP flip、Auto scratch 1P / 2P、Sort、Key filter、Difficulty filter、Hi-speed。Hi-speed（その場で反映）以外は曲の開始時に確定し、プレイ中は無効になります。Sort と二つのフィルターは標準と LR2 の選曲画面の一覧を決め、LR2 スキンのソートとフィルターのボタンでも変わります。
   - **Replay / ghost**（既定で閉じる）: Tempo、Hi-speed、SUDDEN+ / HIDDEN+、LIFT — 記録したプレイヤーが見ていたもののうち、リプレイで再現するもの。それ以外は自分の設定のままです。既定ですべてオンで、次回以降も保持され、曲の開始時に確定し、プレイ中は無効になります。シーンには `replayView`（`PlaylogViewReplay`）として渡ります。
 - **Tempo**（既定で開く）: Tempo (%)、Pitch、Keep-pitch stretcher（[プレイテンポ](#プレイテンポ) を参照）。曲の開始時に確定し、プレイ中は無効になります。ただしピッチがテンポに追従するときの Tempo (%) はプレイ中も有効で、プレイのテンポをその場で変えます。
 - **Course**（既定で開く）: Skip stage results、My courses…、NONSTOP placement（曲の開始時に確定し、プレイ中は無効）、Table URL と Import table courses。
@@ -397,6 +397,16 @@ flowchart LR
   - `session/**` は Pixi を型にしか使いません。そのためセッションは、偽のビューを相手に Node のテストで動きます。
   - `view/**` は `@be-music/player/core/engine`、`runtime/engine-driver`、`runtime/web-*-runtime` のどれも import しません。
   - `view/**` は `AudioContext` も `OfflineAudioContext` も使いません。
+
+### 選曲画面の一覧
+
+標準と LR2 の選曲画面は、`@be-music/scene-model` の一覧のモデル（[一覧](./scene-model.ja.md#一覧ブラウズ)）でライブラリをたどります。そのセッション（`session/select/select-session.ts`）は `BrowseState` を持ちます。キー、ホイール、スワイプ、バーのクリックは `reduceBrowse` を通り、描く一覧は `browseEntries`、フォルダとオプションの効果音は `browseSystemSound` から決まります。ソート、キーモードフィルター、難易度フィルターはプレイオプション（LR2 のオプションパネル、LR2 スキンのボタン、be-music スキンのプレイオプション、ホストの `setPlayOptions`）に置いたままで、一覧はそれに従います。
+
+- **一覧。** ソートやフィルターを変えても、カーソルはそれまでのバーに残ります。フィルターでそのバーが消えたときは同じ行に、範囲に収めて残ります。検索を変えるとカーソルは先頭に移ります。キーモードフィルターは譜面をそのキーモードの下に並べるので、24 鍵の譜面は ALL にだけ並びます。LR2 のキーモードフィルターに 24 鍵の選択肢はありません。
+- **一覧の位置。** `getNavigation()` は `BrowseSnapshot`（`captureBrowse`）を返し、`setNavigation` と `initialNavigation` オプションはそれを戻します（`restoreBrowse`）。保存したときの検索、ラベルでたどれる限りのフォルダ、各親のカーソルを開いたフォルダのバーに置き（戻るとそのバーに着きます）、保存したバーがまだ並んでいればキーで探してカーソルをそこに置きます。ソートとフィルターはそのときのものを保ちます。
+- **選曲ポリシー。** モデルが画面に任せることは、ファミリーの選曲ポリシー（`session/select/select-policy.ts`）で決めます。標準と LR2 の画面では、ルートで戻っても何もせず、戻す位置がなければ譜面フォルダが一つだけのライブラリはそれを開きます。
+
+Web demo はプレイ、コース（カーソルはコースのバーに戻ります）、スキンの変更をまたいでスナップショットを保持し、ドロップしたフォルダもスナップショットで開きます。Debug Menu の Play options でもソートとフィルターを設定できます。
 
 ### 決定画面
 
