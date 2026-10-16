@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { basicChart, exRankChart, longNoteChart } from './charts.ts';
+import { basicChart, denseChart, exRankChart, longNoteChart } from './charts.ts';
 import { command, observePlay, tap, type PlayObservation, type ScriptStep } from './harness.ts';
 
 /**
@@ -132,12 +132,26 @@ describe('driver drift', () => {
     expect(silentAuto.endedAtMs).toBeLessThan(4600);
   });
 
-  test('manual and auto play both publish a closing frame at the chart’s end', async () => {
+  test('manual and auto play both close on a frame at the end of the play, never earlier than the one before', async () => {
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: ON_TIME });
     const auto = await observePlay({ driver: 'auto', chart: basicChart() });
-    // Published once the play is over (past the horizon), showing the chart's end.
-    expect(manual.frames.last).toMatch(/^4\d{3}\.\d{3} seconds=3\.5 beat=7$/);
-    expect(auto.frames.last).toMatch(/^4\d{3}\.\d{3} seconds=3\.5 beat=7$/);
+    const lastFrame = (observation: PlayObservation): { atMs: number; seconds: number } => {
+      const [, atMs, seconds] = /^(\S+) seconds=(\S+) /.exec(observation.frames.last!)!;
+      return { atMs: Number(atMs), seconds: Number(seconds) };
+    };
+    for (const observation of [manual, auto]) {
+      // Published once the play is over (within a tick of the end), showing the chart time of the last tick before the
+      // horizon (3.5 s chart + 0.2 s BAD reach + 1 s; the play clock runs at tempo 1 from 0 here) rather than going back
+      // to the chart's end.
+      const { atMs, seconds } = lastFrame(observation);
+      expect(seconds).toBeGreaterThan(4.7 - TICK_MS / 1000);
+      expect(atMs - seconds * 1000).toBeGreaterThanOrEqual(0);
+      expect(atMs - seconds * 1000).toBeLessThanOrEqual(TICK_MS);
+    }
+    // A play that ends on failure closes where it failed, not at the chart's end.
+    const failed = await observePlay({ driver: 'manual', chart: denseChart(), options: { gauge: 'DEATH' } });
+    expect(failed.summary?.gauge?.failedMidPlay).toBe(true);
+    expect(lastFrame(failed).seconds).toBeLessThan(1);
   });
 
   test('manual and auto play both send each note’s keysound to the audio session once', async () => {
