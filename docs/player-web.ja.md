@@ -222,6 +222,22 @@ default family は通常テキストに LINE Seed JP、判定と combo 表示に
 `@be-music/player-web` は `loadBeatorajaThemeFromFiles()` 経由で `@be-music/beatoraja-skin` を利用します。
 browser layer は JSON / Lua skin entry の discovery 後、同じ dropped bundle から source、texture、font、theme BGM、system sound を読み込みます。
 
+beatoraja の各 scene は、スキンのエントリを `loadBeatorajaSceneKit()`（`@be-music/player-web/skin`）でシーンキットとして読み込みます。
+
+```mermaid
+flowchart LR
+  header[ヘッダーの読み込み] --> options[オプション]
+  options --> skin[スキンの読み込み]
+  skin --> textures[テクスチャ]
+  skin --> fonts[フォント]
+  textures --> kit[シーンキット]
+  fonts --> kit
+```
+
+- スキンは 2 回読み込みます。1 回目はヘッダーの `property[]`、`filepath[]`、`offset[]` を読み、その既定値でエントリのオプションを用意します（`defaultBeatorajaSkinConfig`）。2 回目はそのオプションで Lua スキンの `main()` を実行します。ホストがオプションをすでに持っているとき（スキンのオプションを変えたとき）は 1 回だけ読み込みます。決定画面とリザルト画面のスキンには、譜面の難易度の op を点けた読み込み時の `main_state` を渡します（`createBeatorajaSkinLoadContext`）。ModernChic が `main()` の中で色を決めるためです。
+- `source[]` はテーマのファイルから解決して（`bundleBeatorajaSources`。オプションの `filepath[]` の選択を反映します）テクスチャにデコードし、`font[]` を登録します。
+- ホストは `BeatorajaSceneKitCaches` を 1 つ持ち、エントリごとのテクスチャ、フォント、オプションをエントリのパスで保持します。同じエントリの次の scene はそれを使い回します。PixiJS v8 は破棄したあとに同じバイト列をデコードし直すとクラッシュするので、テクスチャは破棄しません。新しいテーマを読み込むと、テクスチャを手放してフォントを破棄します（`releaseBeatorajaSceneKitAssets`）。
+
 実装済みの beatoraja browser feature:
 
 - `BeatorajaPlaySkinView` を使う select、decide、gameplay、result scene

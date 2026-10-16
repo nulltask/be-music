@@ -5,6 +5,7 @@ import type {
   BeatorajaSkin,
   BeatorajaSkinEntry,
   BeatorajaSkinFileEntry,
+  BeatorajaSkinHeader,
   BeatorajaSourceBundle,
 } from '@be-music/beatoraja-skin';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
@@ -159,6 +160,27 @@ const BENCH_BEATORAJA_THEME_BUNDLE = {
   theme: { playSkins: BENCH_BEATORAJA_PLAY_SKINS, entries: [BENCH_BEATORAJA_SKIN_ENTRY] },
   warnings: [],
 };
+/** A theme with one JSON select skin and no sources or fonts, so loading it as a scene kit decodes nothing. */
+const BENCH_BEATORAJA_KIT_ENTRY_PATH = 'skin/bench/select.json';
+const BENCH_BEATORAJA_KIT_HEADER = {
+  type: 5,
+  name: 'Bench Select',
+  w: 1280,
+  h: 720,
+  property: [
+    {
+      name: 'Bench Option',
+      def: 'On',
+      item: [
+        { name: 'Off', op: 900 },
+        { name: 'On', op: 901 },
+      ],
+    },
+  ],
+} satisfies BeatorajaSkinHeader;
+const BENCH_BEATORAJA_KIT_FILES = new Map<string, BeatorajaSkinFileEntry>([
+  [BENCH_BEATORAJA_KIT_ENTRY_PATH, new TextEncoder().encode(JSON.stringify(BENCH_BEATORAJA_KIT_HEADER))],
+]);
 const BENCH_BEATORAJA_SOURCE_BUNDLE = {
   assets: [],
   byId: new Map(),
@@ -690,6 +712,62 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.loadBeatorajaThemeFromFiles', {
     run: async () => {
       await playerWebCoreApi.loadBeatorajaThemeFromFiles([]);
+    },
+  });
+  define('player-web.createBeatorajaSceneKitCaches', {
+    run: () => {
+      playerWebCoreApi.createBeatorajaSceneKitCaches();
+    },
+  });
+  define('player-web.defaultBeatorajaSkinConfig', {
+    run: () => {
+      playerWebCoreApi.defaultBeatorajaSkinConfig(
+        BENCH_BEATORAJA_KIT_HEADER,
+        BENCH_BEATORAJA_KIT_FILES,
+        BENCH_BEATORAJA_KIT_ENTRY_PATH,
+      );
+    },
+  });
+  define('player-web.resolveBeatorajaSkinConfig', {
+    run: () => {
+      const caches = playerWebCoreApi.createBeatorajaSceneKitCaches();
+      playerWebCoreApi.resolveBeatorajaSkinConfig(
+        caches,
+        BENCH_BEATORAJA_KIT_ENTRY_PATH,
+        BENCH_BEATORAJA_KIT_HEADER,
+        BENCH_BEATORAJA_KIT_FILES,
+      );
+      playerWebCoreApi.resolveBeatorajaSkinConfig(
+        caches,
+        BENCH_BEATORAJA_KIT_ENTRY_PATH,
+        BENCH_BEATORAJA_KIT_HEADER,
+        BENCH_BEATORAJA_KIT_FILES,
+      );
+    },
+  });
+  define('player-web.createBeatorajaSkinLoadContext', {
+    run: () => {
+      const context = playerWebCoreApi.createBeatorajaSkinLoadContext({
+        difficulty: 4,
+        skinConfig: { option: { 'Bench Option': 901 } },
+      });
+      context.option?.(901);
+    },
+  });
+  define('player-web.loadBeatorajaSceneKit', {
+    run: async () => {
+      const caches = playerWebCoreApi.createBeatorajaSceneKitCaches();
+      await playerWebCoreApi.loadBeatorajaSceneKit({
+        files: BENCH_BEATORAJA_KIT_FILES,
+        entryPath: BENCH_BEATORAJA_KIT_ENTRY_PATH,
+        caches,
+      });
+      playerWebCoreApi.releaseBeatorajaSceneKitAssets(caches);
+    },
+  });
+  define('player-web.releaseBeatorajaSceneKitAssets', {
+    run: () => {
+      playerWebCoreApi.releaseBeatorajaSceneKitAssets(playerWebCoreApi.createBeatorajaSceneKitCaches());
     },
   });
   define('player-web.logger', {
