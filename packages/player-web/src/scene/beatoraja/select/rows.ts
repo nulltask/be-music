@@ -25,7 +25,7 @@ import { type Container, type FederatedPointerEvent, Sprite, Text, Texture } fro
 import type { BrowserBrowseEntry } from '../../../collection/types.ts';
 import type { BeatorajaFontCache } from '../../../skin/beatoraja/fonts.ts';
 import { createCroppedBeatorajaTexture } from '../../../skin/beatoraja/render.ts';
-import type { PixiBeatorajaSelectSceneOptions } from '../select.ts';
+import type { PixiBeatorajaSelectSceneOptions } from './options.ts';
 import type { BeatorajaPlaySkinView } from '../skin-view.ts';
 
 /**
