@@ -606,6 +606,13 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.createNewCourseEntry('nonstop');
     },
   });
+  define('player-web.CourseMaker', {
+    run: () => {
+      const maker = new playerWebCoreApi.CourseMaker({ md5Of: async () => undefined });
+      maker.start('expert');
+      maker.finish();
+    },
+  });
   define('player-web.resolveCourseMakerFolders', {
     run: () => {
       playerWebCoreApi.resolveCourseMakerFolders([BENCH_COURSE_DEFINITION], BENCH_COURSE_LOOKUP);
