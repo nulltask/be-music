@@ -6,7 +6,6 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   activeCourseInfo,
   courseDecideSong,
-  courseRecordPlay,
   courseStageHistories,
   describeNonstopPrepareFailure,
   describeRandomCourseDrawFailure,
@@ -131,9 +130,8 @@ describe('resolveCourseRecordUpdate', () => {
   test('keeps the run’s lamp, EX score, max combo and BP under the course key', () => {
     expect(resolveCourseRecordUpdate(courseLog({}), RESULT, 'course:k')).toEqual({
       key: 'course:k',
-      play: courseRecordPlay(RESULT),
+      play: { lamp: 'NORMAL', exScore: 22, maxCombo: 9, missCount: 3 },
     });
-    expect(courseRecordPlay(RESULT)).toEqual({ lamp: 'NORMAL', exScore: 22, maxCombo: 9, missCount: 3 });
   });
 
   test('keeps nothing for an auto-played run or one at another tempo', () => {

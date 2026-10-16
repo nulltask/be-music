@@ -4,7 +4,7 @@ import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/
 import { resolveSceneCourseInfo, type SceneCourseInfo } from '@be-music/player-web/scenes';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPlayFailure } from './nonstop-course.ts';
-import { courseRunKeepsRecord, type SongRecordPlay } from './song-records.ts';
+import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player/records';
 
 /**
  * The decisions the demo's course flow takes, kept apart from the scenes that act on them so they can be tested: what
@@ -102,11 +102,6 @@ export function describeNonstopPrepareFailure(
   return `${name}: cannot stitch the NONSTOP course: ${failure.reason}${stage}`;
 }
 
-/** The record facts of a course run's result, as a chart's best record keeps them. */
-export function courseRecordPlay(result: PlaylogCourseResult): SongRecordPlay {
-  return { lamp: result.lamp, exScore: result.exScore, maxCombo: result.maxCombo, missCount: result.missCount };
-}
-
 /**
  * The record a course run leaves under `key`, or `undefined` when the run keeps none: an auto-played run, or one at
  * another tempo, which is practice (and the Leaderboard refuses it as `tempo`).
@@ -115,8 +110,8 @@ export function resolveCourseRecordUpdate(
   courseLog: Pick<BeMusicCoursePlaylog, 'stages' | 'nonstop'>,
   result: PlaylogCourseResult,
   key: string,
-): { key: string; play: SongRecordPlay } | undefined {
-  return courseRunKeepsRecord(courseLog) ? { key, play: courseRecordPlay(result) } : undefined;
+): { key: string; play: RecordPlay } | undefined {
+  return courseRunKeepsRecord(courseLog) ? { key, play: courseRunRecordPlay(result) } : undefined;
 }
 
 /** What a play is, for the gameplay exits below. */
