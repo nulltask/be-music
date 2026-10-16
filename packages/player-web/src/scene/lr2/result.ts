@@ -26,6 +26,7 @@ import { isDestinationVisible, makeLr2TextSprite } from '../../skin/lr2/scene-re
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { CoreResultView, type CoreResultViewOptions } from '../core/result.ts';
+import type { SceneIdentity } from '../../host/family-kit.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { resolveLr2ResultState, type Lr2ResultState } from '@be-music/lr2-skin/state';
 
@@ -45,10 +46,12 @@ export interface PixiResultViewOptions extends CoreResultViewOptions {
   courseInfo?: SceneCourseInfo;
 }
 
+const IDENTITY: SceneIdentity = { kind: 'result', family: 'lr2' };
+
 /**
- * One-shot LR2 result scene. Mounted by the host with a `PixiGameplayResultData` payload; {@link CoreResultView}
+ * One-shot LR2 result scene. Shown by the host with a `PixiGameplayResultData` payload; {@link CoreResultView}
  * drives the result timer ladder (0 / 1 / 150 / 151 / 152, LR2's result timers; timer 1 fires `#STARTINPUT` ms after
- * mount) and dismissal, this class paints the LR2 result skin through the theme hooks from the result's LR2 state
+ * entry) and dismissal, this class paints the LR2 result skin through the theme hooks from the result's LR2 state
  * (`resolveLr2ResultState`).
  */
 export class PixiResultView extends CoreResultView {
@@ -65,6 +68,10 @@ export class PixiResultView extends CoreResultView {
 
   public constructor(options: PixiResultViewOptions = {}) {
     super(options);
+  }
+
+  public override get identity(): SceneIdentity {
+    return IDENTITY;
   }
 
   /** The LR2 skin's declared canvas size; falls back to the core 640×480 canvas without a skin. */

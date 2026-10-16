@@ -1,21 +1,24 @@
 import { Application, type ApplicationOptions, Container, RendererType, UPDATE_PRIORITY } from 'pixi.js';
+import type { SceneIdentity } from '../host/family-kit.ts';
 import { logger } from '../logger.ts';
 
 const log = logger('scene-host');
 
 /**
- * A single PixiJS scene that lives inside a {@link PixiSceneHost}. Each scene owns a `root` Container and is
- * responsible for adding its own children to it; the host attaches/detaches that root from the shared `app.stage` on
- * transitions.
+ * A single PixiJS scene that lives inside a {@link PixiSceneHost}. Each scene owns a `root` Container and builds its
+ * scene graph under it; the host puts that root on the shared `app.stage` while the scene is active and takes it off
+ * when another one takes over. Scenes never add themselves to the stage.
  *
- * Implementation contract:
+ * Lifecycle, driven by {@link PixiSceneHost.setScene}:
  *
- * - `enter(host)` is called once when the scene becomes active. Allocate per-scene resources (textures / event
- *   listeners / ticker callbacks) here.
- * - `exit()` is called when another scene takes over. Stop ticker callbacks and detach window-level event listeners.
- *   Heavy GPU resources can stay alive if the scene is meant to be re-entered later (see {@link
- *   PixiSceneHost.setScene}'s `keepAlive` option).
- * - `dispose()` is the permanent cleanup. After this call the scene must not be re-entered.
+ * - `enter(host)` runs each time the scene becomes the active one, before the host puts `root` on the stage. The first
+ *   entry builds the scene graph and wires input and ticker work; a later one (a scene kept alive across others, as
+ *   the select screen is across a play) resumes what `exit()` paused and restarts the screen's entrance.
+ * - `exit()` runs when another scene takes over or the stage is cleared, before the host takes `root` off the stage.
+ *   The scene stops its ticker work, its input and the sound it plays as a screen (BGM, previews, jingles); heavy GPU
+ *   resources stay so it can be entered again. It is a no-op on a scene that is not active or already disposed.
+ * - `dispose()` is the permanent cleanup, from any state; the host's owner calls it once the scene is no longer
+ *   wanted. A disposed scene is never entered again.
  *
  * Scenes do **not** call `Application.destroy()` — that's the host's job, and only at process / page shutdown. This is
  * the central idea behind the multi-scene refactor: keeping a single Application (and therefore a single WebGL context)
@@ -28,6 +31,11 @@ export interface PixiScene {
    * children of this `root`.
    */
   readonly root: Container;
+  /**
+   * Which screen the scene is and which skin family draws it, fixed for the scene's lifetime. Hosts read the scene
+   * showing through it ({@link PixiSceneHost.getCurrentScene}).
+   */
+  readonly identity: SceneIdentity;
   enter(host: PixiSceneHost): Promise<void> | void;
   exit(): Promise<void> | void;
   dispose(): void;
@@ -175,8 +183,11 @@ export class PixiSceneHost {
   }
 
   /**
-   * Replaces the active scene. Awaitable so callers can chain follow-up work (loading a song, etc.) once the new
-   * scene's `enter()` has resolved. Idempotent — passing the already-active scene returns immediately.
+   * Replaces the active scene: the previous one exits and its root leaves the stage, then the next one enters and its
+   * root goes on the stage. `undefined` clears the stage. Transitions run one at a time, in call order. The previous
+   * scene is only exited, never disposed — its owner disposes it, or keeps it to enter again later. Awaitable so
+   * callers can chain follow-up work (loading a song, etc.) once the new scene's `enter()` has resolved. Idempotent —
+   * passing the already-active scene returns immediately.
    */
   public setScene(scene: PixiScene | undefined): Promise<void> {
     const next = (async () => {
@@ -248,6 +259,10 @@ export class PixiSceneHost {
     return this.orientation;
   }
 
+  /**
+   * The active scene: the one the latest transition switched to (from the moment that transition starts), or
+   * `undefined` when the stage is clear. Its {@link PixiScene.identity} says what is showing.
+   */
   public getCurrentScene(): PixiScene | undefined {
     return this.current;
   }

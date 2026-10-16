@@ -1,6 +1,7 @@
 import { Application, Color, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { PerfTracker } from '../perf.ts';
-import { type PixiSceneHost } from '../host.ts';
+import type { PixiScene, PixiSceneHost } from '../host.ts';
+import type { SceneIdentity } from '../../host/family-kit.ts';
 import { disposeChildren } from '../pixi-utils.ts';
 import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from '../../collection/collection.ts';
 import { dirname } from '@be-music/utils/core';
@@ -330,34 +331,42 @@ export interface SelectDesignSize {
   height: number;
 }
 
+const IDENTITY: SceneIdentity = { kind: 'select', family: 'built-in' };
+
 /**
- * Family-neutral song-select scene. Owns everything that doesn't depend on a particular skin format: mounting on the
- * shared {@link PixiSceneHost}, collection / folder browsing / search, keyboard + pointer input, cursor movement with its
- * system sounds, select BGM, chart preview, play options, the readtext overlay, and the ticker loop.
+ * Family-neutral song-select scene. Owns everything that doesn't depend on a particular skin format: the scene shown
+ * on the shared {@link PixiSceneHost}, collection / folder browsing / search, keyboard + pointer input, cursor movement
+ * with its system sounds, select BGM, chart preview, play options, the readtext overlay, and the ticker loop.
+ *
+ * Hosts keep it alive across the screens a play goes through: the host's `setScene` exits it for a decide, play or
+ * result screen and enters it again on the way back, and it keeps its browse state, cursor and decoded BGM meanwhile.
  *
  * Without a theme the frame renders through the be-music skin (`beMusicSkin`, defaulting to the built-in Phantom skin) on
  * a 640×480 design canvas. Skin families (e.g. the LR2 scene) take over the frame by overriding the protected `theme*`
  * hooks: {@link themeDesignSize} decides whether the theme is active, and the remaining hooks prepare, render, hit-test
  * and dispose the theme's resources.
  */
-export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = CoreSongSelectViewOptions> {
+export class CoreSongSelectView<
+  TOptions extends CoreSongSelectViewOptions = CoreSongSelectViewOptions,
+> implements PixiScene {
   /**
-   * Host owning the shared `Application`. Set in {@link mount}; the `app` accessor below throws before that. With one
-   * Application shared across scenes we sidestep the Pixi v8 module-shared `batchPool` race that two-Application setups
-   * hit.
+   * Host owning the shared `Application`. Set on the first {@link enter}; the `app` accessor below throws before that.
+   * With one Application shared across scenes we sidestep the Pixi v8 module-shared `batchPool` race that
+   * two-Application setups hit.
    */
   private host: PixiSceneHost | undefined;
   /**
    * Top-level Container the host attaches to its `app.stage` while the select scene is active. Holds
-   * `viewportBackground` + `root` so the host can mount/unmount as one operation.
+   * `viewportBackground` + `designRoot` so the host can attach / detach the scene as one operation.
    */
-  private readonly sceneRoot = new Container();
-  private readonly root = new Container();
+  public readonly root: Container = new Container();
+  private readonly designRoot = new Container();
   /**
    * Clip mask for the design rectangle (`skin.width × skin.height` or the no-skin fallback canvas). Sits as a child of
-   * `root` so the same `position` / `scale` transform applies to it. Pixi clips against the mask's world-space bounds,
-   * so any skin element that animates from off-canvas (LR2 default's `#DST_BAR_BODY_OFF` slide-ins, etc.) gets cut at
-   * the design edge instead of bleeding into the pillarbox / letterbox of a screen with a different aspect ratio.
+   * `designRoot` so the same `position` / `scale` transform applies to it. Pixi clips against the mask's world-space
+   * bounds, so any skin element that animates from off-canvas (LR2 default's `#DST_BAR_BODY_OFF` slide-ins, etc.)
+   * gets cut at the design edge instead of bleeding into the pillarbox / letterbox of a screen with a different aspect
+   * ratio.
    */
   private readonly designClipMask = new Graphics();
   /**
@@ -607,9 +616,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   protected mouseX = -1;
   protected mouseY = -1;
   /**
-   * Whether the canvas is currently shown. Tracked separately from the DOM `display` style so the keyboard handler can
-   * short-circuit when the host has hidden the view (e.g. while the gameplay view is on top — both views' keydown
-   * listeners are bound at the window level so we'd otherwise compete for arrow keys).
+   * Whether the select is the scene showing: from {@link enter} to {@link exit}. The input handlers short-circuit while
+   * it is off stage (e.g. while the gameplay view is up — both views' keydown listeners are bound at the window level
+   * so we'd otherwise compete for arrow keys).
    */
   private visible = true;
   /**
@@ -902,24 +911,74 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     };
   }
 
+  public get identity(): SceneIdentity {
+    return IDENTITY;
+  }
+
   /**
-   * Convenience accessor for the host's `Application`. Throws if called before {@link mount}; same contract as the
+   * Convenience accessor for the host's `Application`. Throws if called before {@link enter}; same contract as the
    * gameplay scene.
    */
   protected get app(): Application {
     if (!this.host) {
-      throw new Error('PixiSongSelectView: app accessed before mount');
+      throw new Error('PixiSongSelectView: app accessed before enter');
     }
     return this.host.app;
   }
 
-  public async mount(host: PixiSceneHost): Promise<void> {
+  /**
+   * Shows the select screen (see {@link PixiScene.enter}). The first entry builds the scene graph, wires keyboard and
+   * pointer input and starts the BGM, the chart preview and the render loop. A later one — back from a decide, play or
+   * result screen — re-seeds the scene timers so the skin's entrance plays again and resumes what {@link exit} paused.
+   */
+  public enter(host: PixiSceneHost): void {
+    if (this.disposed) return;
+    if (this.host === undefined) {
+      this.build(host);
+      return;
+    }
+    if (this.visible) return;
+    this.visible = true;
+    this.root.visible = true;
+    // Re-seed scene-mount timers so DST animations anchored to timer 0 / 11 (slide-in, fade-in, bar pulses) replay on
+    // re-entry from a play session — see `resetSceneTimers` for the rationale. Without this the persistent select
+    // scene's `sceneStartedAt` would be minutes-stale on return.
+    this.resetSceneTimers();
+    this.startAnimationLoop();
+    // Resume the BGM. Always safe — a no-op if no BGM is set or if a gesture hasn't unlocked the AudioContext yet.
+    void this.startSelectBgm();
+    // Re-arm the chart preview against the focused song. On back-from-play the engine was stopped by the prior
+    // `exit()` and the cursor likely moved while off stage (folder unwind etc.); kicking it here makes the preview
+    // start matching the current focus rather than the stale one we left mid-play with.
+    this.refreshChartPreview();
+  }
+
+  /**
+   * Leaves the stage (see {@link PixiScene.exit}): pauses the BGM so it doesn't bleed into gameplay audio, silences the
+   * chart preview and stops the render loop. The decoded BGM stays cached so the next {@link enter} is an instant
+   * resume. The keyboard and pointer listeners stay attached and ignore input until then (`visible`), as both scenes'
+   * keydown listeners sit on the window.
+   */
+  public exit(): void {
+    if (this.disposed || !this.visible) return;
+    this.visible = false;
+    this.root.visible = false;
+    this.pauseSelectBgm();
+    // Always silence the preview when leaving the scene. Otherwise a 1-second focus delay that hadn't fired would have
+    // spent its `setTimeout` budget while the user was already in gameplay and start blasting keysounds through the
+    // gameplay AudioContext on top of the chart.
+    this.chartPreviewEngine?.stop();
+    this.stopAnimationLoop();
+  }
+
+  /** The first {@link enter}: builds the scene graph under {@link root}, wires input and starts the screen. */
+  private build(host: PixiSceneHost): void {
     this.host = host;
     this.mountedContainer = host.app.canvas.parentElement ?? undefined;
     // Label every top-level node so PixiJS Devtools renders the scene graph as `select > {viewport-bg, root > {bg,
     // skin, list, title, hint}}` instead of an unlabelled tower of `Container`s.
-    this.sceneRoot.label = 'select/scene';
-    this.root.label = 'select/root';
+    this.root.label = 'select/scene';
+    this.designRoot.label = 'select/root';
     this.viewportBackground.label = 'select/viewport-bg';
     this.background.label = 'select/background';
     this.skinLayer.label = 'select/skin';
@@ -927,7 +986,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     this.skinForegroundLayer.label = 'select/skin-fg';
     this.title.label = 'select/title';
     this.hint.label = 'select/hint';
-    this.sceneRoot.addChild(this.viewportBackground, this.root);
+    this.root.addChild(this.viewportBackground, this.designRoot);
     // Stack order (back → front): background → skinLayer (chrome behind bars) → listLayer (the song bars) →
     // skinForegroundLayer (chrome that the CSV declared AFTER bars, e.g. scroll slider) → title / hint (Drop hints,
     // fallback chrome). LR2 panels (op 1..9) live inside skinLayer / skinForegroundLayer — they're regular `#SRC_*`
@@ -937,7 +996,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     this.beMusicFrontHolder.label = 'select/be-music-front';
     this.beMusicBackHolder.visible = false;
     this.beMusicFrontHolder.visible = false;
-    this.root.addChild(
+    this.designRoot.addChild(
       this.background,
       this.skinLayer,
       this.beMusicBackHolder,
@@ -949,7 +1008,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       this.readTextLayer,
       this.designClipMask,
     );
-    this.root.mask = this.designClipMask;
+    this.designRoot.mask = this.designClipMask;
     this.readTextLayer.label = 'select/read-text';
     this.readTextLayer.visible = false;
     this.readTextViewport.addChild(this.readTextBody);
@@ -966,8 +1025,6 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       this.readTextScrollbar,
       this.readTextFooter,
     );
-    // Attach to the host's already-initialized stage. The canvas is owned by the host and shared across scenes.
-    host.app.stage.addChild(this.sceneRoot);
     // Bind keyboard handlers at the window level so the user can navigate without first clicking the canvas. The canvas
     // itself is a child of the document body and naturally won't have focus until interacted with — which would
     // otherwise eat ↑/↓/Enter/Esc. Pointer events still bind on the canvas because their offset coordinates are
@@ -995,8 +1052,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   }
 
   /**
-   * Re-seeds every scene-mount timer to "now" plus clears any leftover scroll state. Called by both {@link mount}
-   * (initial entry) and {@link setVisible}`(true)` (returning from a play session) so DST keyframe sequences anchored
+   * Re-seeds every scene-mount timer to "now" plus clears any leftover scroll state. Called on every {@link enter}
+   * (the initial one and the return from a play session) so DST keyframe sequences anchored
    * to timer 0 re-fire on every entry — matching what real LR2 does, where each `select` scene transition restarts the
    * slide-in / fade- in animations from `time = 0`.
    *
@@ -1287,8 +1344,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     this.selectBgmBuffer = undefined;
     // Detach our scene-graph subtree from the host's stage. The host owns the `Application` lifetime; it (or whoever
     // else owns the host) is responsible for `app.destroy()`.
-    if (this.sceneRoot.parent) {
-      this.sceneRoot.parent.removeChild(this.sceneRoot);
+    if (this.root.parent) {
+      this.root.parent.removeChild(this.root);
     }
     try {
       this.disposeTheme();
@@ -1296,9 +1353,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       log.warn('texture cleanup threw', error);
     }
     try {
-      this.sceneRoot.destroy({ children: true, context: true });
+      this.root.destroy({ children: true, context: true });
     } catch (error) {
-      log.warn('sceneRoot.destroy threw', error);
+      log.warn('root.destroy threw', error);
     }
     this.host = undefined;
     this.mountedContainer = undefined;
@@ -1317,45 +1374,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
   }
 
-  /** Whether the select screen is showing (not hidden behind a decide / play / result screen). */
+  /** Whether the select screen is showing: entered, and not exited for a decide / play / result screen since. */
   public isVisible(): boolean {
     return this.visible;
-  }
-
-  /**
-   * Hides / shows the select scene's subtree on the shared host stage. Toggles `sceneRoot.visible` (so we keep
-   * contributing zero pixels while hidden) and pauses our rAF tick — the keyframe-driven re-render is wasted CPU when
-   * nothing is being shown. Re-entering re-arms the rAF loop so DST animations resume cleanly. The host's `Application`
-   * ticker keeps running either way; we no longer touch it from here because gameplay shares the same ticker.
-   */
-  public setVisible(visible: boolean): void {
-    if (this.visible === visible) {
-      return;
-    }
-    this.visible = visible;
-    this.sceneRoot.visible = visible;
-    if (visible) {
-      // Re-seed scene-mount timers so DST animations anchored to timer 0 / 11 (slide-in, fade-in, bar pulses) replay on
-      // re-entry from a play session — see `resetSceneTimers` for the rationale. Without this the persistent select
-      // scene's `sceneStartedAt` would be minutes-stale on return.
-      this.resetSceneTimers();
-      this.startAnimationLoop();
-      // Resume the BGM. Always safe — a no-op if no BGM is set or if a gesture hasn't unlocked the AudioContext yet.
-      void this.startSelectBgm();
-      // Re-arm the chart preview against the focused song. On back-from-play the engine was stopped by the prior
-      // `setVisible(false)` and the cursor likely moved while hidden (folder unwind etc.); kicking it here makes the
-      // preview start matching the current focus rather than the stale one we left mid-play with.
-      this.refreshChartPreview();
-    } else {
-      // Hidden — pause BGM so it doesn't bleed into gameplay audio. Decoded buffer stays cached so the next show is an
-      // instant resume (no re-decode).
-      this.pauseSelectBgm();
-      // Always silence the preview when leaving the scene. Otherwise a 1-second focus delay that hadn't fired would
-      // have spent its `setTimeout` budget while the user was already in gameplay and start blasting keysounds through
-      // the gameplay AudioContext on top of the chart.
-      this.chartPreviewEngine?.stop();
-      this.stopAnimationLoop();
-    }
   }
 
   public setCollection(collection: BrowserSongCollection): void {
@@ -1672,7 +1693,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * helper.
    *
    * Skipped while the scene is hidden — there's no scenario in which we want a preview firing through a hidden select
-   * view (every visibility toggle re-arms via the `setVisible(true)` branch).
+   * view (every re-entry re-arms it in {@link enter}).
    */
   protected refreshChartPreview(): void {
     if (this.disposed || !this.visible) return;
@@ -2095,7 +2116,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   private readonly handlePointerDown = (event: PointerEvent): void => {
     if (!this.visible || this.launchAt !== undefined) return;
     // Retry BGM start on the first user gesture — browsers gate `AudioContext.resume()` behind a user-input event, so
-    // the mount-time / setVisible-time start may have left the context suspended. Cheap to call repeatedly
+    // the start on entering the scene may have left the context suspended. Cheap to call repeatedly
     // (early-returns when a source is already playing).
     void this.startSelectBgm();
     // A finger may be starting a swipe over the list, so its tap waits for the lift (`handlePointerUp`).
@@ -2363,8 +2384,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       this.cachedScreenWidth = screenWidth;
       this.cachedScreenHeight = screenHeight;
     }
-    this.root.position.set(viewport.x, viewport.y);
-    this.root.scale.set(viewport.scale);
+    this.designRoot.position.set(viewport.x, viewport.y);
+    this.designRoot.scale.set(viewport.scale);
     this.lastViewport = viewport;
     this.host?.setStageOrientation(
       useTheme ? 'landscape' : resolveStageOrientation({ width: designWidth, height: designHeight }),
@@ -2592,7 +2613,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     return undefined;
   }
 
-  /** Theme hook: kicks off async asset loads (textures, fonts) at mount time. Default: nothing to load. */
+  /** Theme hook: kicks off async asset loads (textures, fonts) on the first entry. Default: nothing to load. */
   protected prepareTheme(): void {}
 
   /**

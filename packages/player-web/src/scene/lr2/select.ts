@@ -58,6 +58,7 @@ import { resolveSongSource } from '../../collection/collection.ts';
 import { dirname } from '@be-music/utils/core';
 import { LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
 import { CoreSongSelectView, type CoreSongSelectViewOptions, type SelectDesignSize } from '../core/select.ts';
+import type { SceneIdentity } from '../../host/family-kit.ts';
 
 // The family-neutral half of the select scene (navigation, input, audio, play options, be-music fallback) lives in
 // `scene/core/select.ts`; re-export its public surface so existing `scene/lr2/select` importers keep working.
@@ -106,6 +107,8 @@ type SortedSelectChromeEntry =
   | { kind: 'onMouse'; order: number; layerIsForeground: boolean; element: Lr2OnMouseElement }
   | { kind: 'slider'; order: number; layerIsForeground: boolean; element: Lr2SliderElement };
 
+const IDENTITY: SceneIdentity = { kind: 'select', family: 'lr2' };
+
 /**
  * LR2-skinned song-select scene. Extends {@link CoreSongSelectView} with the `#SRC_*` / `#DST_*` frame, the bar list,
  * the skin's buttons / panels / sliders / mouse cursor, and the `#STARTINPUT`-driven timers. Without a select-capable
@@ -147,6 +150,10 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
 
   public constructor(options: PixiSongSelectViewOptions = {}) {
     super(options);
+  }
+
+  public override get identity(): SceneIdentity {
+    return IDENTITY;
   }
 
   /**
