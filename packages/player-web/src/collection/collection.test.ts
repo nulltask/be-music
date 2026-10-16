@@ -7,14 +7,12 @@ import {
   resolveChartAudioAsset,
   resolveChartBgaAsset,
   resolveChartImageAsset,
-  resolveChartPlayVariant,
 } from './collection.ts';
 import { resolveChart } from '@be-music/chart';
 import { parseChart } from '@be-music/parser';
 import { preparePlaybackChart } from '@be-music/player/core/engine';
 import { DeferredDroppedFile } from './dropped-file.ts';
-import type { BeMusicEvent, BeMusicJson } from '../../../json/src/index.ts';
-import type { BrowserSongAssetEntry, BrowserSongAssetSource, BrowserSongEntry, LoadProgress } from './types.ts';
+import type { BrowserSongAssetEntry, BrowserSongAssetSource, LoadProgress } from './types.ts';
 
 /**
  * The drag-drop loader fires `LoadProgress` events as it walks the `reading` and `parsing` phases so the host UI can
@@ -259,135 +257,6 @@ describe('BrowserSongCollectionStore', () => {
     expect(loaded).toBe(store.collection);
     expect(loaded.sources.map((source) => source.id)).toEqual(['files:0']);
     expect(loaded.songs.map((song) => song.sourceId)).toEqual(['files:0']);
-  });
-});
-
-/**
- * Minimal `BrowserSongEntry` factory for `resolveChartPlayVariant` tests. Only the fields the resolver consults
- * (`chartPath` for the `.pms` extension hint, `chart.events[*].channel` for lane usage, `chart.bms.player` for the
- * legacy `#PLAYER=3` 9K marker) are populated — everything else is left at minimal defaults.
- */
-function makeSong(params: { chartPath: string; channels?: ReadonlyArray<string>; player?: number }): BrowserSongEntry {
-  const events: BeMusicEvent[] = (params.channels ?? []).map((channel, index) => ({
-    measure: 1,
-    channel,
-    position: [index, Math.max(1, params.channels?.length ?? 1)],
-    value: '01',
-  }));
-  const chart = {
-    events,
-    bms: { player: params.player } as BeMusicJson['bms'],
-    bmson: { info: { modeHint: undefined } } as BeMusicJson['bmson'],
-  } as BeMusicJson;
-  return {
-    chartPath: params.chartPath,
-    chart,
-  } as BrowserSongEntry;
-}
-
-describe('resolveChartPlayVariant', () => {
-  test('classifies SP 5K (channels 11..15 only)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '12', '15'] }))).toBe('5');
-  });
-
-  test('classifies SP 7K (channel 18 / 19 present)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '15', '18', '19'] }))).toBe(
-      '7',
-    );
-  });
-
-  test('classifies DP 14K (2P-side keyboard 6 / 7)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '18', '21', '28'] }))).toBe(
-      '14',
-    );
-  });
-
-  test('classifies DP 10K (2P-side keyboard, no 6 / 7)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '21', '25'] }))).toBe('10');
-  });
-
-  test('a `.bme` chart without a 6 / 7 key column is 5 / 10 KEY, as the engine and CLI read it', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('10');
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '16'] }))).toBe('5');
-  });
-
-  test('classifies the play from the resolved chart when one is given (lanes added by a `#RANDOM` branch count)', () => {
-    const song = makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15'] });
-    // Lanes 8 / 9 live only in a `#RANDOM` branch, so the unresolved chart's top-level events are 5 KEY.
-    expect(resolveChartPlayVariant(song)).toBe('5');
-    const resolved = {
-      ...song.chart,
-      events: [...song.chart.events, { measure: 2, channel: '18', position: [0, 1], value: '01' }],
-    } as BeMusicJson;
-    expect(resolveChartPlayVariant(song, resolved)).toBe('7');
-    // The song-level answer is unaffected (cached per chart object).
-    expect(resolveChartPlayVariant(song)).toBe('5');
-  });
-
-  test('PMS / 9 KEY: `.pms` extension wins regardless of channel layout', () => {
-    // A `.pms` chart can use either the BME-COMPAT channel layout (`16..19`) or the PMS-STD layout (`22..25`). The
-    // extension alone is enough to commit to `play_9.lr2skin`.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.pms', channels: ['11', '12', '13', '14', '15', '16', '17', '18', '19'] }),
-      ),
-    ).toBe('9');
-    expect(
-      resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.PMS', channels: ['11', '15', '22', '23', '24', '25'] })),
-    ).toBe('9');
-  });
-
-  test('PMS / 9 KEY: `#PLAYER=3` paired with channel 17 is the legacy `.bms` marker', () => {
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '17', '18', '19'], player: 3 }),
-      ),
-    ).toBe('9');
-  });
-
-  test('PMS / 9 KEY: any of `22..25` (without traditional IIDX 2P channels `21`/`26..29`) routes to 9', () => {
-    // PMS-STD detection: presence of any POPN-specific channel (`22..25`) combined with the ABSENCE
-    // of `21` / `26..29` (the genuine IIDX 2P-side channels). Holds across `.bme` / `.bms` extensions
-    // and across various 1P-side configurations (with / without scratch, with / without 6-7K). User-
-    // reported symptom: charts that author PMS-STD content under a non-`.pms` extension were silently
-    // classified as IIDX `'10'` / `'14'` and the engine's POPN-9 lane bindings on `22..25` were lost.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.bme', channels: ['11', '12', '13', '14', '15', '22', '23', '24', '25'] }),
-      ),
-    ).toBe('9');
-    // Hybrid PMS-STD with 1P scratch — non-standard authoring but `22..25` is the POPN-specific
-    // discriminator, so still POPN-9.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({
-          chartPath: 'Song/main.bme',
-          channels: ['11', '12', '13', '14', '15', '16', '22', '23', '24', '25'],
-        }),
-      ),
-    ).toBe('9');
-    // Sparse — single POPN-side channel use.
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '22'] }))).toBe('9');
-    // Genuine IIDX 5K DP — has scratch on both sides AND channel `21`. PMS-STD detection requires the
-    // ABSENCE of `21`/`26..29`, so this stays at `'10'`.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '16', '21', '22', '25', '26'] }),
-      ),
-    ).toBe('10');
-  });
-
-  test('PMS / 9 KEY: a `.bme` chart that authors all of `11..19` on `#PLAYER 1` is BME POPN-9', () => {
-    // POPN-9 charts authored as `.bme` (the BME-COMPAT layout — `16`/`17`/`18`/`19` as POPN keys 6-9
-    // instead of IIDX scratch / FREE-ZONE / 6 / 7) typically populate every one of `11..19`. IIDX 7K
-    // uses at most 8 of those (`11..15 + 16 + 18 + 19`), so a full 1P keyboard is a strong POPN-9 signal.
-    // Without this detection the chart fell through to `'7'` and the engine bound `16` as scratch and
-    // `17` as FREE-ZONE.
-    expect(
-      resolveChartPlayVariant(
-        makeSong({ chartPath: 'Song/main.bme', channels: ['11', '12', '13', '14', '15', '16', '17', '18', '19'] }),
-      ),
-    ).toBe('9');
   });
 });
 

@@ -4,12 +4,38 @@ import { type PixiSceneHost } from '../host.ts';
 import { disposeChildren } from '../pixi-utils.ts';
 import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from '../../collection/collection.ts';
 import { dirname } from '@be-music/utils/core';
+import {
+  BGA_CYCLE,
+  BGA_SIZE_CYCLE,
+  BOOLEAN_CYCLE,
+  browseCursor,
+  browseSnapshotFromSelectNavigation,
+  chartMatchesDifficultyFilter,
+  clampHiSpeed,
+  clampShutter,
+  cyclePlayOptionValue,
+  DEFAULT_PLAY_OPTIONS,
+  DIFFICULTY_FILTER_CYCLE,
+  HIDDEN_SUDDEN_CYCLE,
+  HS_FIX_CYCLE,
+  isListPlayOption,
+  KEYS_FILTER_CYCLE,
+  matchesSearchQuery,
+  nextChoice,
+  PLAY_OPTION_CHOICES,
+  RANDOM_CYCLE,
+  resolvePlayOptionValue,
+  restoreBrowse,
+  SORT_CYCLE,
+  sortLibraryEntries,
+  wrappedCursorDelta,
+} from '@be-music/scene-model';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import { LR2_BUTTON, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { courseMatchesKeysFilter, resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
 import { logger } from '../../logger.ts';
-import { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from '../hi-speed.ts';
+import { HISPEED_MAX, HISPEED_MIN, HISPEED_STEP } from '../hi-speed.ts';
 import type {
   BrowserBrowseEntry,
   BrowserCourseEntry,
@@ -29,7 +55,6 @@ import type {
   BeMusicHiddenSudden,
   BeMusicHsFix,
   BeMusicKeysFilter,
-  BeMusicPlayOptionChoices,
   BeMusicPlayOptions,
   BeMusicRandomMode,
   BeMusicSelectActions,
@@ -145,33 +170,22 @@ export type PixiBgaMode = BeMusicBgaMode;
 /** Allowed values for {@link PixiPlayOptions.bgaSize}. */
 export type PixiBgaSize = BeMusicBgaSize;
 
-const SHUTTER_DEFAULT = 0.25;
-
-/**
- * Cycle order for {@link PixiPlayOptions.bga}. Matches the LR2 default-skin cell order on the `#SRC_BUTTON,type=72`
- * sprite — `divx*divy` produces 3 cells (`OFF` / `ON` / `AUTOPLAY ONLY`) and clicks advance through them in this order.
- */
-export const BGA_CYCLE: readonly PixiBgaMode[] = ['OFF', 'ON', 'AUTOPLAY_ONLY'];
-
-/**
- * Cycle order for {@link PixiPlayOptions.bgaSize}. LR2 button cell order on `#SRC_BUTTON,type=73`: cell 0 = NORMAL,
- * cell 1 = EXTEND.
- */
-export const BGA_SIZE_CYCLE: readonly PixiBgaSize[] = ['NORMAL', 'EXTEND'];
-
-/**
- * Cycle order for {@link PixiPlayOptions.difficultyFilter}. Matches the LR2 `#SRC_BUTTON,type=10` cell order (off /
- * easy / normal / hard / expert / insane). The direct-set buttons (types 91..96) map onto specific entries here via {@link
- * DIFFICULTY_FILTER_BY_DIRECT_BUTTON}.
- */
-export const DIFFICULTY_FILTER_CYCLE: readonly PixiDifficultyFilter[] = [
-  'ALL',
-  'BEGINNER',
-  'NORMAL',
-  'HYPER',
-  'ANOTHER',
-  'INSANE',
-];
+// The play options model — the defaults, each option's choices in LR2 button order, and the validation of values set
+// from a skin — lives in `@be-music/scene-model`; it is re-exported here under the names this module has always used.
+export {
+  BGA_CYCLE,
+  BGA_SIZE_CYCLE,
+  BOOLEAN_CYCLE,
+  DEFAULT_PLAY_OPTIONS,
+  DIFFICULTY_FILTER_CYCLE,
+  HIDDEN_SUDDEN_CYCLE,
+  HS_FIX_CYCLE,
+  KEYS_FILTER_CYCLE,
+  RANDOM_CYCLE,
+  SORT_CYCLE,
+  cyclePlayOptionValue as cycleSkinPlayOptionValue,
+  resolvePlayOptionValue as resolveSkinPlayOptionValue,
+};
 
 /**
  * Mapping from `#SRC_BUTTON,type=91..96` to the {@link PixiDifficultyFilter} they directly select. Per LR2 spec
@@ -187,174 +201,10 @@ export const DIFFICULTY_FILTER_BY_DIRECT_BUTTON: Record<number, PixiDifficultyFi
 };
 
 /**
- * Cycle order for {@link PixiPlayOptions.keysFilter}. Matches the LR2 `#SRC_BUTTON,type=11` cell order (off / 5keys /
- * 7keys / 10keys / 14keys / 9keys).
- */
-export const KEYS_FILTER_CYCLE: readonly PixiKeysFilter[] = ['ALL', 'KEYS_5', 'KEYS_7', 'KEYS_10', 'KEYS_14', 'KEYS_9'];
-
-/**
- * Cycle order for {@link PixiPlayOptions.sort}. LR2 button cells 0 / 1 / 2 / 3 = off / level / title / clear.
- */
-export const SORT_CYCLE: readonly PixiSelectSort[] = ['OFF', 'LEVEL', 'TITLE', 'CLEAR'];
-
-/**
- * Cycle order for {@link PixiPlayOptions.hsFix}. LR2 button cells 0..4 on `#SRC_BUTTON,type=55`: off / maxbpm / minbpm
- * / average / constant.
- */
-export const HS_FIX_CYCLE: readonly PixiHsFix[] = ['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'CONSTANT'];
-
-/**
- * Cycle order for {@link PixiPlayOptions.hiddenSudden1P} / `hiddenSudden2P`. LR2 button cells 0..3 on
- * `#SRC_BUTTON,type=50` (1P) and `type=51` (2P): off / hidden / sudden / hid+sud.
- */
-export const HIDDEN_SUDDEN_CYCLE: readonly PixiHiddenSudden[] = ['OFF', 'HIDDEN', 'SUDDEN', 'HID+SUD'];
-
-/** Cycle for boolean OFF/ON LR2 buttons (e.g. autoscratch). */
-export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
-
-/**
- * Cycle order for {@link PixiPlayOptions.random1P} / `random2P`. LR2 button cells 0..4 on `#SRC_BUTTON,type=42 / 43`:
- * off / mirror / random / s-random / scatter.
- */
-export const RANDOM_CYCLE: readonly PixiRandomMode[] = ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'];
-
-/** Default play-option values, applied at view construction time. */
-export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
-  // Seed at 2.0× rather than upstream beatoraja's `PlayConfig.java:16` default of `1.0f`.
-  // 1.0 produces an extremely slow scroll on most charts (ones BPM in the 130-180 range cover
-  // about a full lane in 1.8 seconds at hispeed=1) which reads as "the chart isn't moving" to
-  // anyone coming from LR2 / iidx-style defaults. 2.0 is the lowest preset most contemporary
-  // BMS players actually use; the Up/Down hotkeys can adjust from there.
-  hiSpeed: DEFAULT_HISPEED,
-  autoPlay: false,
-  bga: 'ON',
-  // BGA renders at LR2's `#DST_BGA,...,30` rect (NORMAL) at `'NORMAL'` — a 256×256 window squeezed in beside the lane
-  // chrome. `'EXTEND'` uses the larger `op 31` rect (392×392) which fills more of the playfield and is the default LR2
-  // experience players expect; flip the seed accordingly.
-  bgaSize: 'EXTEND',
-  // Score graph (the per-judge prediction line gated on op 39) on by default — same intent: ship with the richer LR2
-  // chrome visible up-front rather than hidden behind a panel toggle.
-  scoreGraph: true,
-  difficultyFilter: 'ALL',
-  keysFilter: 'ALL',
-  sort: 'OFF',
-  hsFix: 'OFF',
-  hiddenSudden1P: 'OFF',
-  hiddenSudden2P: 'OFF',
-  shutter: SHUTTER_DEFAULT,
-  laneCover: false,
-  autoScratch1P: false,
-  autoScratch2P: false,
-  dpFlip: false,
-  random1P: 'OFF',
-  random2P: 'OFF',
-  gauge1P: 'GROOVE',
-  gauge2P: 'GROOVE',
-};
-
-/**
  * Allowed range for {@link PixiPlayOptions.hiSpeed} — the shared hi-speed range (`scene/hi-speed.ts`), so values seeded
  * from the select scene cover the same domain the in-play adjust hotkeys (`ArrowUp` / `ArrowDown`) can produce.
  */
 export { HISPEED_MAX, HISPEED_MIN };
-
-/**
- * Snaps a hiSpeed value to the 1/1000 grid and clamps to [{@link HISPEED_MIN}, {@link HISPEED_MAX}] ({@link
- * snapHiSpeed}), falling back to the default for non-finite input.
- */
-function clampHiSpeed(value: number): number {
-  return snapHiSpeed(value) ?? DEFAULT_PLAY_OPTIONS.hiSpeed;
-}
-
-/**
- * Clamps a shutter coverage value to [0, 1] and snaps to the 1/100 grid so repeated keyboard +0.05 nudges land on round
- * values rather than drifting through float-rounding.
- */
-function clampShutter(value: number): number {
-  if (!Number.isFinite(value)) return SHUTTER_DEFAULT;
-  const snapped = Math.round(value * 100) / 100;
-  return Math.max(0, Math.min(1, snapped));
-}
-
-/**
- * Returns the next value of `current` in `values`, wrapping back to the start past the end. Used to advance enum-style
- * play options on each `#SRC_BUTTON` click (type 40, 42, 50, 72, 73, etc.). Falls back to `values[0]` when `current`
- * isn't a member of the cycle (defensive against host-supplied junk values).
- */
-function cycleNext<T>(values: readonly T[], current: T): T {
-  const index = values.indexOf(current);
-  if (index < 0) return values[0]!;
-  return values[(index + 1) % values.length]!;
-}
-
-/** Choices of every enum / on-off play option, in their LR2 button cycle order — what be-music skins can pick from. */
-const PLAY_OPTION_CHOICES: BeMusicPlayOptionChoices = {
-  autoPlay: BOOLEAN_CYCLE,
-  bga: BGA_CYCLE,
-  bgaSize: BGA_SIZE_CYCLE,
-  scoreGraph: BOOLEAN_CYCLE,
-  difficultyFilter: DIFFICULTY_FILTER_CYCLE,
-  keysFilter: KEYS_FILTER_CYCLE,
-  sort: SORT_CYCLE,
-  hsFix: HS_FIX_CYCLE,
-  hiddenSudden1P: HIDDEN_SUDDEN_CYCLE,
-  hiddenSudden2P: HIDDEN_SUDDEN_CYCLE,
-  laneCover: BOOLEAN_CYCLE,
-  autoScratch1P: BOOLEAN_CYCLE,
-  autoScratch2P: BOOLEAN_CYCLE,
-  dpFlip: BOOLEAN_CYCLE,
-  random1P: RANDOM_CYCLE,
-  random2P: RANDOM_CYCLE,
-  gauge1P: GAUGE_TYPES,
-  gauge2P: GAUGE_TYPES,
-};
-
-/** Numeric play options a be-music skin may set, each with the clamp the select scene applies to it. */
-const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PixiPlayOptions]?: (value: number) => number } = {
-  hiSpeed: clampHiSpeed,
-  shutter: clampShutter,
-};
-
-/**
- * Validates a be-music skin's `setPlayOption(key, value)`. Returns the value to store — clamped for the numeric options
- * (`hiSpeed`, `shutter`) — or `undefined` when the change must be ignored: an unknown key, a value outside the option's
- * choices, or a non-finite / non-numeric value for a numeric option. Skins are untyped at runtime, so every input is
- * checked rather than trusted.
- */
-export function resolveSkinPlayOptionValue<K extends keyof PixiPlayOptions>(
-  key: K,
-  value: unknown,
-): PixiPlayOptions[K] | undefined {
-  if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
-  const choices = PLAY_OPTION_CHOICES[key] as readonly unknown[] | undefined;
-  if (choices) return choices.includes(value) ? (value as PixiPlayOptions[K]) : undefined;
-  const clamp = NUMERIC_PLAY_OPTION_CLAMPS[key];
-  if (!clamp || typeof value !== 'number' || !Number.isFinite(value)) return undefined;
-  return clamp(value) as PixiPlayOptions[K];
-}
-
-/**
- * The choice `step` places after `current` in `key`'s choices, wrapping around either end — what a be-music skin's
- * `cyclePlayOption(key, step)` moves to. Any negative `step` goes back one and anything else forward one. A value
- * outside the choices lands on the first choice; options without a fixed set of choices (`hiSpeed`, `shutter`, or an
- * unknown key) return `undefined`.
- */
-export function cycleSkinPlayOptionValue<K extends keyof PixiPlayOptions>(
-  key: K,
-  current: PixiPlayOptions[K],
-  step: number = 1,
-): PixiPlayOptions[K] | undefined {
-  if (!Object.hasOwn(PLAY_OPTION_CHOICES, key)) return undefined;
-  const choices = PLAY_OPTION_CHOICES[key] as readonly PixiPlayOptions[K][] | undefined;
-  if (!choices || choices.length === 0) return undefined;
-  const index = choices.indexOf(current);
-  if (index < 0) return choices[0];
-  const delta = step < 0 ? -1 : 1;
-  return choices[(index + delta + choices.length) % choices.length];
-}
-
-/** Play options that filter or reorder the song list: changing one moves the cursor back to the top. */
-const LIST_PLAY_OPTIONS: ReadonlySet<keyof PixiPlayOptions> = new Set(['difficultyFilter', 'keysFilter', 'sort']);
 
 /**
  * Bundle of LR2 system sound-effect bytes (typically loaded from `LR2files\Sound\lr2\*.wav`). Each field is the encoded
@@ -1628,8 +1478,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
           );
     let filtered = baseEntries;
     if (this.playOptions.difficultyFilter !== 'ALL') {
-      const target = DIFFICULTY_FILTER_CYCLE.indexOf(this.playOptions.difficultyFilter);
-      filtered = filtered.filter((entry) => entry.kind !== 'song' || matchesDifficultyFilter(entry.song, target));
+      const filter = this.playOptions.difficultyFilter;
+      filtered = filtered.filter((entry) => entry.kind !== 'song' || chartMatchesDifficultyFilter(entry.song, filter));
     }
     if (this.playOptions.keysFilter !== 'ALL') {
       const targetOp = SELECT_KEYS_FILTER_TO_OP[this.playOptions.keysFilter];
@@ -1644,7 +1494,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       filtered = filtered.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
     }
     if (this.playOptions.sort !== 'OFF') {
-      filtered = sortBrowseEntries([...filtered], this.playOptions.sort);
+      filtered = sortLibraryEntries(filtered, this.playOptions.sort);
     }
     this.cachedEntries = filtered;
     this.cachedEntriesInputs = inputs;
@@ -2175,7 +2025,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * new enum option is a one-liner.
    */
   protected cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void {
-    const next = cycleNext(cycle, this.playOptions[key]);
+    const next = nextChoice(cycle, this.playOptions[key]);
     if (next === this.playOptions[key]) return;
     this.playOptions = { ...this.playOptions, [key]: next };
     this.options.onPlayOptionsChange?.({ ...this.playOptions });
@@ -2648,7 +2498,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     activateSearch: (): void => this.options.onSearchActivate?.(),
     setPlayOption: (key, value): void => this.setSkinPlayOption(key, value),
     cyclePlayOption: (key, step = 1): void => {
-      const next = cycleSkinPlayOptionValue(key, this.playOptions[key], step);
+      const next = cyclePlayOptionValue(key, this.playOptions[key], step);
       if (next !== undefined) this.setSkinPlayOption(key, next);
     },
     toggleReadme: (): void => {
@@ -2659,14 +2509,13 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
   /**
    * A be-music skin's play-option change: values outside the option's choices (or range) are dropped (see {@link
-   * resolveSkinPlayOptionValue}), and a list filter / sort change moves the cursor back to the top like the LR2 buttons
-   * do.
+   * resolvePlayOptionValue}), and a list filter / sort change moves the cursor back to the top like the LR2 buttons do.
    */
   private setSkinPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
-    const next = resolveSkinPlayOptionValue(key, value);
+    const next = resolvePlayOptionValue(key, value);
     if (next === undefined || this.playOptions[key] === next) return;
     this.setPlayOption(key, next);
-    if (LIST_PLAY_OPTIONS.has(key)) this.snapCursorAfterFilterChange();
+    if (isListPlayOption(key)) this.snapCursorAfterFilterChange();
   }
 
   /**
@@ -2781,55 +2630,21 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
 /**
  * The browse stack and cursor a saved {@link PixiSongSelectNavigation} restores in `collection`: its folder path matched
- * by label (song folders, then course folders, at the root), the cursor clamped to the deepest list. `undefined` when
- * none of the saved labels matches.
+ * by label (song folders, then course folders, at the root), the cursor clamped to the deepest list, as the browse model
+ * of `@be-music/scene-model` restores it (`restoreBrowse`). `undefined` when none of the saved labels matches.
  */
 export function resolveSelectNavigation(
   collection: Pick<BrowserSongCollection, 'songs' | 'courseFolders'>,
   navigation: PixiSongSelectNavigation,
 ): { stack: BrowserFolderNode[]; selectedIndex: number } | undefined {
-  // The root lists the course folders after the song folders, as `currentEntries` does, so a cursor left in a course
-  // folder comes back too (e.g. after a NONSTOP run, whose stitched source replaces the collection).
-  const rootFolders = [...groupSongsByFolder(collection.songs), ...(collection.courseFolders ?? [])];
-  const stack: BrowserFolderNode[] = [];
-  let folders = rootFolders;
-  for (const label of navigation.folderPath) {
-    const match = folders.find((folder) => folder.label === label);
-    if (!match) break;
-    stack.push(match);
-    // Inside a folder, the next-level "folders" are derived from the folder's own songs; today we only group at the top,
-    // so a restored deeper path simply terminates here.
-    folders = groupSongsByFolder(match.songs);
-  }
-  if (stack.length === 0 && navigation.folderPath.length > 0) return undefined;
-  const deepest = stack.at(-1);
-  const entries = deepest === undefined ? rootFolders.length : (deepest.courses?.length ?? deepest.songs.length);
-  return { stack, selectedIndex: Math.max(0, Math.min(navigation.selectedIndex, Math.max(0, entries - 1))) };
+  const { state, restoredDepth } = restoreBrowse(collection, browseSnapshotFromSelectNavigation(navigation));
+  if (restoredDepth === 0 && navigation.folderPath.length > 0) return undefined;
+  return { stack: [...state.path], selectedIndex: browseCursor(state) };
 }
 
-/**
- * Maps a raw `(new - old)` cursor delta into a "shortest visible step" delta. Used so a wrap-around move (e.g. from
- * `entries[0]` ↑ to `entries[length-1]`) animates as a single "back by 1" step rather than a long slide spanning the
- * whole list.
- *
- * Examples (length = 10): delta=+1 → +1 (forward 1 step) delta=-1 → -1 (backward 1 step) delta=+9 → -1 (wrap forward =
- * visually 1 step back) delta=-9 → +1 (wrap backward = visually 1 step forward)
- *
- * Special case for tiny lists (notably `count = 2`): forward 1 and backward 1 are the same distance around a 2-element
- * ring, and the symmetric `((rawDelta + half) % count) - half` formula collapses both onto `-1`. That made pressing the
- * down arrow on a folder list of length 2 visually slide the cursor *upward* — confusing and inconsistent with the
- * keypress. We fix this by preferring the raw direction when the move already fits inside the half-window (`|rawDelta|
- * <= half`), which is exactly the "short trip, no wrap needed" case. Wrapping kicks in only for genuine long jumps that
- * should be re-interpreted as a short step in the opposite direction.
- */
-export function wrappedCursorDelta(rawDelta: number, count: number): number {
-  if (count <= 0) return 0;
-  const half = count / 2;
-  if (Math.abs(rawDelta) <= half) {
-    return rawDelta;
-  }
-  return ((((rawDelta + half) % count) + count) % count) - half;
-}
+// The search and cursor rules of the browse model in `@be-music/scene-model`, re-exported under the names this module
+// has always used.
+export { matchesSearchQuery, wrappedCursorDelta };
 
 /**
  * Returns `true` when the keydown target is a text-editable element (`<input>` / `<textarea>` / `<select>` /
@@ -2889,80 +2704,6 @@ function currentEntriesInputsEqual(a: CurrentEntriesInputs, b: CurrentEntriesInp
 }
 
 /**
- * Sorts a list of browse entries in place by the chosen LR2 sort mode. Folders always sort by label (LEVEL / CLEAR
- * don't meaningfully apply to a folder bar). Songs sort by: - LEVEL: ascending `#PLAYLEVEL` (missing levels last) -
- * TITLE: case-insensitive `#TITLE` - CLEAR: no-op until per-song clear-history persistence lands; falls back to title
- * order so the result is deterministic.
- *
- * Stable for entries that compare equal — preserves the input order, which matches the original drop-folder layout.
- */
-function sortBrowseEntries(entries: BrowserBrowseEntry[], sort: PixiSelectSort): BrowserBrowseEntry[] {
-  const indexed = entries.map((entry, index) => ({ entry, index }));
-  indexed.sort((a, b) => {
-    const cmp = compareEntriesForSort(a.entry, b.entry, sort);
-    return cmp !== 0 ? cmp : a.index - b.index;
-  });
-  return indexed.map((item) => item.entry);
-}
-
-function compareEntriesForSort(a: BrowserBrowseEntry, b: BrowserBrowseEntry, sort: PixiSelectSort): number {
-  // Mixed folder + song lists shouldn't happen at any single nav depth today, but keep folders ahead of songs so the
-  // result is sensible if that invariant changes.
-  if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
-  if (a.kind === 'folder' && b.kind === 'folder') {
-    return compareStrings(a.folder.label, b.folder.label);
-  }
-  if (a.kind !== 'song' || b.kind !== 'song') return 0;
-  const songA = a.song;
-  const songB = b.song;
-  switch (sort) {
-    case 'LEVEL': {
-      const levelA = coercePlayLevel(songA.playLevel);
-      const levelB = coercePlayLevel(songB.playLevel);
-      if (levelA !== levelB) return levelA - levelB;
-      return compareStrings(songA.title, songB.title);
-    }
-    case 'TITLE':
-      return compareStrings(songA.title, songB.title);
-    case 'CLEAR':
-      // No play-history persistence yet — fall through to a deterministic title sort so the cycle-button still reorders
-      // the list visibly.
-      return compareStrings(songA.title, songB.title);
-    case 'OFF':
-      return 0;
-  }
-}
-
-function compareStrings(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' });
-}
-
-/**
- * Normalizes a `playLevel` value (declared as `number | string | undefined` on `BrowserSongEntry`) to a numeric sort
- * key. Missing / non-numeric levels sort to the END of an ascending list.
- */
-function coercePlayLevel(value: number | string | undefined): number {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
-  if (typeof value === 'string') {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
-  }
-  return Number.POSITIVE_INFINITY;
-}
-
-/**
- * Returns whether `song`'s `#DIFFICULTY` field matches the target difficulty enum value. The {@link
- * DIFFICULTY_FILTER_CYCLE} index maps onto LR2's 1=BEGINNER..5=INSANE numbering directly: `target = 1` ↔ BEGINNER, ...,
- * `target = 5` ↔ INSANE. Charts with no `#DIFFICULTY` (`undefined` / 0) never match a non-ALL filter — there's no
- * defined bucket for them and showing them everywhere would defeat the filter's purpose.
- */
-function matchesDifficultyFilter(song: BrowserSongEntry, target: number): boolean {
-  const value = song.chart.metadata.difficulty;
-  if (value === undefined || value === 0) return false;
-  return value === target;
-}
-
-/**
  * Looks up a `.txt` companion file in the same directory as the focused song's chart and returns its decoded contents.
  * Used by the LR2 READTEXT button (`#SRC_BUTTON,...,17,...`) to surface per-song notes / changelogs that BMS authors
  * traditionally ship alongside the chart files.
@@ -3012,30 +2753,4 @@ function decodeReadtextBytes(bytes: Uint8Array): string {
     // `shift-jis` not available in this runtime — fall through.
   }
   return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-}
-
-/**
- * Returns whether `entry` matches the lower-cased search query. Folder bars match on label only (no per-song fan-out —
- * folders are coarse navigation, not searchable content). Song bars match if any of title / subtitle / artist / genre /
- * file label contain the query as a substring.
- *
- * Pure / exported for testing. Hosts shouldn't call this directly — `CoreSongSelectView.setSearchQuery` is the front
- * door.
- */
-export function matchesSearchQuery(entry: BrowserBrowseEntry, lowerQuery: string): boolean {
-  if (lowerQuery.length === 0) return true;
-  if (entry.kind === 'folder') {
-    return entry.folder.label.toLowerCase().includes(lowerQuery);
-  }
-  if (entry.kind === 'course') {
-    return entry.course.definition.name.toLowerCase().includes(lowerQuery);
-  }
-  const song = entry.song;
-  const haystacks: Array<string | undefined> = [song.title, song.subtitle, song.artist, song.genre, song.fileLabel];
-  for (const value of haystacks) {
-    if (typeof value === 'string' && value.toLowerCase().includes(lowerQuery)) {
-      return true;
-    }
-  }
-  return false;
 }

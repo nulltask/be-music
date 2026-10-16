@@ -13,6 +13,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Player implementation specification](./player-spec.md)
 - [Terminal player implementation notes](./player-tui.md)
 - [Browser player implementation notes](./player-web.md)
+- [Scene models (`@be-music/scene-model`)](./scene-model.md)
 - [Play log (play history) specification](./playlog.md)
 - [Courses and dan certification](./course.md)
 - [Course browser checklist](./course-checklist.md)
