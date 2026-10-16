@@ -47,6 +47,12 @@ describe('resolveClearLamp', () => {
     );
   });
 
+  test('a chart without notes takes its gauge’s lamp, not a full combo', () => {
+    const empty = { ...result({ type: 'HARD', cleared: true }, { pgreat: 0, great: 0, good: 0, bad: 0, poor: 0 }) };
+    expect(resolveClearLamp({ ...empty, noteCount: 0 }, 'beatoraja')).toBe(ClearLamp.HARD);
+    expect(resolveClearLamp({ ...empty, noteCount: 0 }, 'lr2')).toBe(ClearLamp.HARD);
+  });
+
   test('beatoraja awards PERFECT and MAX; LR2 and IIDX stop at FULL COMBO', () => {
     const perfect = result({ type: 'NORMAL', cleared: true }, { bad: 0, poor: 0, good: 0 });
     const max = result({ type: 'NORMAL', cleared: true }, { bad: 0, poor: 0, good: 0, great: 0 });
