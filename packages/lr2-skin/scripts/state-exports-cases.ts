@@ -70,6 +70,13 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
       lr2StateApi.resolveLr2ChartFeatures(BENCH_CHART.chart);
     },
   });
+  define('lr2-skin.state.resolveLr2DecideState', {
+    run: () => {
+      const state = lr2StateApi.resolveLr2DecideState({ chart: BENCH_CHART, course: BENCH_COURSE });
+      state.text(10);
+      state.text(150);
+    },
+  });
   define('lr2-skin.state.resolveLr2KeyModeOp', {
     run: () => {
       lr2StateApi.resolveLr2KeyModeOp(BENCH_CHART);

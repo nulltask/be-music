@@ -7,10 +7,10 @@ import {
   type Lr2SpecialGraphic,
   LR2_SPECIAL_GRAPHIC,
 } from '@be-music/lr2-skin';
-import { LR2_OP, LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
+import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { type PixiSceneHost } from '../host.ts';
 import { disposeChildren } from '../pixi-utils.ts';
-import { resolveLr2KeyModeOp } from '@be-music/lr2-skin/state';
+import { resolveLr2DecideState, type Lr2SceneState } from '@be-music/lr2-skin/state';
 import {
   Lr2ChartGraphicTextureStore,
   Lr2SkinTextureStore,
@@ -69,13 +69,6 @@ const AUTO_ADVANCE_AFTER_STARTINPUT_MS = 1200;
  * beat as the keypress-ready cue.
  */
 const DEFAULT_STARTINPUT_MS = 1500;
-
-const DECIDE_BASE_OPS: ReadonlySet<number> = new Set<number>([
-  // Per-frame "always true" flags shared with select / result: no IR connection yet, and the data is ready by the time
-  // we mount the decide scene.
-  LR2_OP.OFFLINE,
-  LR2_OP.LOADED,
-]);
 
 export interface PixiDecideTarget {
   song: BrowserSongEntry;
@@ -304,8 +297,8 @@ export class PixiDecideView {
     // `info.back_image`; the solid background underneath shows through unchanged in that case.
     this.renderStageFileBackdrop(designWidth, designHeight);
     if (useSkin && skin) {
-      const ops = computeDecideOps(this.target, skin);
-      this.renderSkin(skin, ops);
+      // The decide skin's ops and texts: the chart's difficulty and key mode, its title, artist, …
+      this.renderSkin(skin, resolveLr2DecideState({ chart: this.target.song }));
       return;
     }
     this.renderFallbackPanel(designWidth, designHeight);
@@ -337,7 +330,8 @@ export class PixiDecideView {
     this.stageFileLayer.addChild(sprite);
   }
 
-  private renderSkin(skin: Lr2Skin, ops: ReadonlySet<number>): void {
+  private renderSkin(skin: Lr2Skin, state: Lr2SceneState): void {
+    const ops = state.ops;
     if (!this.target) return;
     for (const image of skin.images) {
       const dst = this.evaluateElementDst(image);
@@ -348,7 +342,7 @@ export class PixiDecideView {
     for (const text of skin.texts) {
       const dst = this.evaluateElementDst(text);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const value = resolveDecideText(text.st, this.target.song);
+      const value = state.text(text.st);
       if (value === undefined || value.length === 0) continue;
       this.skinLayer.addChild(
         makeLr2TextSprite(value, text, dst, {
@@ -545,85 +539,4 @@ export class PixiDecideView {
     if (this.disposed || !this.inputUnlocked) return;
     this.fireContinue();
   };
-}
-
-function computeDecideOps(target: PixiDecideTarget, skin: Lr2Skin): ReadonlySet<number> {
-  const ops = new Set<number>(DECIDE_BASE_OPS);
-  const meta = target.song.chart.metadata;
-  // Difficulty plates — the LR2 default decide skin gates per- difficulty stickers off these. Difficulty 0 (undefined)
-  // maps to op 150 ("???") so the skin draws a generic plate when the chart didn't author a `#DIFFICULTY` field.
-  switch (meta.difficulty) {
-    case 1:
-      ops.add(LR2_OP.DIFFICULTY_BEGINNER);
-      break;
-    case 2:
-      ops.add(LR2_OP.DIFFICULTY_NORMAL);
-      break;
-    case 3:
-      ops.add(LR2_OP.DIFFICULTY_HYPER);
-      break;
-    case 4:
-      ops.add(LR2_OP.DIFFICULTY_ANOTHER);
-      break;
-    case 5:
-      ops.add(LR2_OP.DIFFICULTY_INSANE);
-      break;
-    default:
-      ops.add(LR2_OP.DIFFICULTY_UNDEFINED);
-      break;
-  }
-  // Key mode — the select scene's op (160..164), from the chart's play variant.
-  ops.add(resolveLr2KeyModeOp(target.song));
-  // Suppress the `Lr2Skin` argument linter — keeps the parser signature future-proof if we later need to peek at the
-  // skin's authored op declarations to filter the active set.
-  void skin;
-  return ops;
-}
-
-function resolveDecideText(st: number, song: BrowserSongEntry): string | undefined {
-  const subartists = song.chart.bmson.info?.subartists?.join(' / ');
-  switch (st) {
-    case LR2_TEXT.TITLE:
-    case LR2_TEXT.TITLE_ALT:
-      return song.title;
-    case LR2_TEXT.SUBTITLE:
-    case LR2_TEXT.SUBTITLE_ALT:
-      return song.subtitle ?? '';
-    case LR2_TEXT.FULL_TITLE:
-    case LR2_TEXT.FULL_TITLE_ALT:
-      return [song.title, song.subtitle].filter((value): value is string => Boolean(value)).join(' ');
-    case LR2_TEXT.GENRE:
-    case LR2_TEXT.GENRE_ALT:
-      return song.genre ?? '';
-    case LR2_TEXT.ARTIST:
-    case LR2_TEXT.ARTIST_ALT:
-      return song.artist ?? '';
-    case LR2_TEXT.SUBARTIST:
-    case LR2_TEXT.SUBARTIST_ALT:
-      return subartists ?? '';
-    case LR2_TEXT.FULL_ARTIST:
-    case LR2_TEXT.FULL_ARTIST_ALT:
-      return song.fileLabel;
-    case LR2_TEXT.PLAY_LEVEL:
-    case LR2_TEXT.PLAY_LEVEL_ALT:
-      return song.playLevel?.toString() ?? '';
-    case LR2_TEXT.DIFFICULTY:
-    case LR2_TEXT.DIFFICULTY_ALT:
-      switch (song.chart.metadata.difficulty) {
-        case 1:
-          return 'BEGINNER';
-        case 2:
-          return 'NORMAL';
-        case 3:
-          return 'HYPER';
-        case 4:
-          return 'ANOTHER';
-        case 5:
-          return 'INSANE';
-        default:
-          return '';
-      }
-    default:
-      return undefined;
-  }
 }

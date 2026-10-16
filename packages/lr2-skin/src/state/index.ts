@@ -6,6 +6,7 @@
  * - Scene state: {@link Lr2SceneState}, what a skin reads of a scene (ops, numbers, texts, sliders).
  * - Select: {@link resolveLr2SelectState} for the bar under the cursor, the buttons' actions, the bars' bodies, levels
  *   and lamps, and the select timers.
+ * - Decide: {@link resolveLr2DecideState} for the chart about to be played (and its course).
  * - Charts and records: a chart's key-mode op and features, a record's clear-lamp op and bar lamp.
  * - Courses: the course ops, numbers and texts of a `CourseView`, the course maker's ops, texts and buttons.
  */
@@ -18,6 +19,7 @@ export {
   type Lr2ChartFeatures,
 } from './chart.ts';
 export { resolveLr2BarLamp, resolveLr2LampOp } from './records.ts';
+export { resolveLr2DecideState, type Lr2DecideInput } from './decide.ts';
 export {
   pickLr2BarBody,
   resolveLr2BarLevel,
