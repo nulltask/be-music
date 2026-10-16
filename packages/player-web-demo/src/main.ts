@@ -14,7 +14,6 @@ import {
   PixiBeatorajaGameplayView,
   PixiBeatorajaResultScene,
   PixiBeatorajaSelectScene,
-  PixiDecideView,
   PixiGameplayView,
   PixiResultView,
   PixiSceneHost,
@@ -25,6 +24,7 @@ import {
   snapHiSpeed,
   type BuiltInKit,
   type DecideScene,
+  type DecideSceneKit,
   type PixiGameplayResultData,
   type PixiPlayOptions,
   type ResultScene,
@@ -737,7 +737,7 @@ class PlayerWebDemoApp {
    * on any play start.
    */
   private lastPlay: { song: BrowserSongEntry; overrides: { autoPlay: boolean; replay?: BeMusicPlaylog } } | undefined;
-  private decideView: PixiDecideView | DecideScene | undefined;
+  private decideView: DecideScene | undefined;
   /**
    * The player's audio service (ADR 0007): one system AudioContext for the sounds of the screens built on it, the
    * built-in decide and result screens so far. The other screens still play on contexts of their own.
@@ -3325,9 +3325,7 @@ class PlayerWebDemoApp {
     this.gameplayView?.setBeMusicSkinSettings(settings);
     if (this.resultView instanceof PixiResultView) this.resultView.setBeMusicSkinSettings(settings);
     else this.resultView?.updateKit(this.builtInKit);
-    if (this.decideView !== undefined && !(this.decideView instanceof PixiDecideView)) {
-      this.decideView.updateKit(this.builtInKit);
-    }
+    if (this.decideView?.identity.family === 'built-in') this.decideView.updateKit(this.builtInKit);
   }
 
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
@@ -5044,8 +5042,9 @@ class PlayerWebDemoApp {
   /**
    * Mounts the decide-screen splash and routes the user into gameplay when it dismisses (auto-advance OR Enter / Space
    * / Escape input). Without a decide skin, falls straight through to `playSong` so themes that don't ship a Decide
-   * directory still play the chart immediately. On the default family the splash is the be-music skin's own decide
-   * screen, shown only when the skin declares one.
+   * directory still play the chart immediately. The LR2 and built-in splashes are `createDecideScene`'s: on the LR2
+   * family the theme's decide skin, on the default family the be-music skin's own decide screen, shown only when the
+   * skin declares one.
    *
    * The decide view runs alongside the select view's AudioContext — `playDecideSound` was already fired at song-pick
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
@@ -5069,7 +5068,13 @@ class PlayerWebDemoApp {
     // the play itself runs on a beatoraja theme.
     const playsOnBeatoraja = this.playsOnBeatoraja(song, {});
     const beMusicDecide = decideFamily === 'default' && this.beMusicSkin.decide !== undefined && !playsOnBeatoraja;
-    if (!beMusicDecide && (decideFamily === 'default' || !this.decideSkin)) {
+    const lr2DecideSkin = decideFamily === 'default' ? undefined : this.decideSkin;
+    const kit: DecideSceneKit | undefined = beMusicDecide
+      ? this.builtInKit
+      : lr2DecideSkin !== undefined
+        ? { family: 'lr2', skin: lr2DecideSkin }
+        : undefined;
+    if (kit === undefined) {
       // No decide splash: a be-music skin without one, or an LR2-only setup that didn't ship a decide skin. The select
       // view's `playDecideSound` already fired so the audio cue still plays.
       await start();
@@ -5087,8 +5092,8 @@ class PlayerWebDemoApp {
     // gameplay becomes instant instead of dropping a frozen frame.
     // A course starts its own play once the splash is done, so nothing is preloaded for it; nor for a play on the
     // beatoraja scene, which prepares its own chart once the splash is done (`playSong`).
-    // The LR2 / built-in play draws its own `#RANDOM` branches: it takes no pre-resolved chart yet, so the built-in
-    // decide screen's (`DecideScene.resolved`) are not handed on. No built-in decide view draws them.
+    // The LR2 / built-in play draws its own `#RANDOM` branches: it takes no pre-resolved chart yet, so the decide
+    // screen's (`DecideScene.resolved`) are not handed on. Neither the built-in nor the LR2 decide view draws them.
     const preloaded = then === undefined && !playsOnBeatoraja ? this.preloadGameplay(song, overrides) : undefined;
     let advanced = false;
     const advance = (then: () => void): void => {
@@ -5118,25 +5123,19 @@ class PlayerWebDemoApp {
           void this.showSelect();
         }),
     };
-    if (beMusicDecide) {
-      const playOptions = this.selectView?.getPlayOptions();
-      this.decideView = createDecideScene(this.builtInKit, {
-        chart: song,
-        ...(playOptions !== undefined
-          ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
-          : {}),
-        source: resolveSongSource(this.collection, song),
-        // The select screen plays the theme's decide jingle as the chart is picked, and lets it ring on into the play;
-        // this screen plays none of its own.
-        sounds: {},
-        audio: this.audio,
-        on: { continue: callbacks.onContinue, cancel: callbacks.onCancel },
-      });
-    } else {
-      const view = new PixiDecideView({ ...callbacks, skin: this.decideSkin });
-      view.setTarget({ song, collection: this.collection });
-      this.decideView = view;
-    }
+    const playOptions = this.selectView?.getPlayOptions();
+    this.decideView = createDecideScene(kit, {
+      chart: song,
+      ...(playOptions !== undefined
+        ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
+        : {}),
+      source: resolveSongSource(this.collection, song),
+      // The select screen plays the theme's decide jingle as the chart is picked, and lets it ring on into the play;
+      // this screen plays none of its own.
+      sounds: {},
+      audio: this.audio,
+      on: { continue: callbacks.onContinue, cancel: callbacks.onCancel },
+    });
     await this.sceneHost.setScene(this.decideView);
   }
 
