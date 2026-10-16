@@ -31,6 +31,21 @@ const BENCH_AUDIO_SESSION_HOST: playerWebCoreApi.SystemAudioSessionHost = { audi
 const BENCH_SCENE_HOST = {
   app: { ticker: { add: () => undefined, remove: () => undefined } },
 } as unknown as playerWebCoreApi.PixiSceneHost;
+/** A host a family view can draw on: the ticker, a canvas for its pointer listeners, the screen and the renderer. */
+const BENCH_VIEW_HOST = {
+  app: {
+    ticker: { add: () => undefined, remove: () => undefined },
+    canvas: { addEventListener: () => undefined, removeEventListener: () => undefined },
+    screen: { width: 1280, height: 720 },
+    renderer: { resolution: 1 },
+  },
+  setStageOrientation: () => undefined,
+} as unknown as playerWebCoreApi.PixiSceneHost;
+/** No keys reach a benchmarked scene. */
+const BENCH_KEY_TARGET: playerWebCoreApi.SessionKeyTarget = {
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+};
 const BENCH_SCENE_SESSION: playerWebCoreApi.SceneSession<number, never> = {
   kind: 'select',
   enter: () => undefined,
@@ -327,6 +342,24 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       service.dispose();
     },
   });
+  define('player-web.createDecideScene', {
+    run: async () => {
+      const scene = playerWebCoreApi.createDecideScene(
+        { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
+        {
+          chart: BENCH_SONG,
+          sounds: { decideBgm: { bytes: BENCH_BYTES } },
+          audio: playerWebCoreApi.createAudioService({ createContext: () => undefined }),
+          on: { continue: () => undefined, cancel: () => undefined },
+          keyTarget: BENCH_KEY_TARGET,
+          now: () => 0,
+        },
+      );
+      await scene.enter(BENCH_VIEW_HOST);
+      scene.exit();
+      scene.dispose();
+    },
+  });
   define('player-web.createSkinFamilyRegistry', {
     run: () => {
       const registry = playerWebCoreApi.createSkinFamilyRegistry([
@@ -393,12 +426,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     run: () => {
       playerWebCoreApi.createCroppedBeatorajaTexture(undefined, { x: 0, y: 0, w: 16, h: 16 });
     },
-  });
-  define('player-web.DefaultPixiDecideView', {
-    run: () => {
-      new playerWebCoreApi.DefaultPixiDecideView({ beMusicSkin: playerWebCoreApi.phantomSkin });
-    },
-    interactive: true,
   });
   define('player-web.DefaultPixiGameplayView', {
     run: () => {

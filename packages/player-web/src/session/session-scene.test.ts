@@ -253,6 +253,21 @@ describe('SessionScene', () => {
     expect(scene.entered).toBe(false);
   });
 
+  it('draws nothing more once the session ended the scene while making a frame', async () => {
+    const { scene, session, view } = createScene();
+    const { host, fire } = createFakeHost();
+    await scene.enter(host);
+    session.frame.mockImplementationOnce((nowMs) => {
+      // The screen's time ran out, and its host disposed the scene right away.
+      scene.dispose();
+      return { nowMs, index: -1 };
+    });
+    fire();
+    expect(view.dispose).toHaveBeenCalledTimes(1);
+    expect(view.draw).toHaveBeenCalledTimes(1);
+    expect(view.draw).not.toHaveBeenCalledWith({ nowMs: 100, index: -1 });
+  });
+
   it('disposes the view and the session once, leaving the stage first', async () => {
     const { scene, session, view } = createScene();
     const { host, callbacks } = createFakeHost();
