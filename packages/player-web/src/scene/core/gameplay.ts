@@ -106,7 +106,7 @@ import {
 } from '../../runtime/play-tempo.ts';
 import { fillLaneCover, resolveGreenNumber, resolveHiSpeedForVisibleMs, resolveNoteVisibleMs } from './lane-cover.ts';
 import { BE_MUSIC_HI_SPEED_SCALE, PlaylogViewCursor } from '../playlog-view.ts';
-import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
+import { resolveSideLaneRuns, type SideLaneRun } from '../../view/shared/playfield/measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { SceneIdentity } from '../../host/family-kit.ts';
