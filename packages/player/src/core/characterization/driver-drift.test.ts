@@ -212,7 +212,8 @@ describe('driver drift', () => {
 
   test('drift: a replay of a log recorded without key releases judges differently from the live play', async () => {
     // A terminal without the kitty keyboard protocol sends repeated presses and no releases; the live play holds long
-    // notes on hold-grace windows, but the log has only `down` inputs, so its replay holds every key forever.
+    // notes on hold-grace windows, but the log has only `down` inputs, so its replay — like the simulators, which it
+    // agrees with — holds every key forever. Kept as a known divergence: see docs/playlog.md, "Fidelity notes".
     const repeats: ScriptStep[] = Array.from({ length: 11 }, (_, index) => ({
       atMs: 500 + index * 100,
       press: ['11'],
@@ -227,5 +228,6 @@ describe('driver drift', () => {
     expect(live.summary?.emptyPoor).toBe(0);
     expect(replay.summary?.emptyPoor).toBeGreaterThan(0);
     expect(replay.summary).not.toEqual(live.summary);
+    expect(replay.playlog?.results?.native?.judge).toEqual(live.simulated?.lr2.judge);
   });
 });
