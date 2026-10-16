@@ -581,6 +581,65 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.serializePlaylog(BENCH_PLAYLOG);
     },
   });
+  define('player.playlog.createPlaylogRecorder', {
+    run: () => {
+      const json = parseChart('#BPM 120\n#00111:01\n');
+      playlogApi
+        .createPlaylogRecorder({
+          json,
+          chart: {
+            notes: [],
+            landmineNotes: [],
+            invisibleNotes: [],
+            activeFreeZoneChannels: new Set<string>(),
+            scorableNotes: [],
+            laneDisplayMode: '7keys',
+          },
+          play: { mode: 'manual', autoScratch: false },
+        })
+        .recordInput('down', 0.5, ['z'], ['11']);
+    },
+  });
+  define('player.playlog.PlaylogParseError', {
+    run: () => {
+      void new playlogApi.PlaylogParseError('bench');
+    },
+  });
+  define('player.playlog.resolvePlaylogFilename', {
+    run: () => {
+      playlogApi.resolvePlaylogFilename(BENCH_PLAYLOG, new Date(0));
+    },
+  });
+  define('player.playlog.resolveRulesetConfig', {
+    run: () => {
+      playlogApi.resolveRulesetConfig(BENCH_PLAYLOG, 'beatoraja');
+    },
+  });
+  define('player.playlog.resolveLr2DefaultTotal', {
+    run: () => {
+      playlogApi.resolveLr2DefaultTotal(1200);
+    },
+  });
+  define('player.playlog.resolveBeatorajaDefaultTotal', {
+    run: () => {
+      playlogApi.resolveBeatorajaDefaultTotal(1200);
+    },
+  });
+  define('player.playlog.resolveIidxGaugeUnit', {
+    run: () => {
+      playlogApi.resolveIidxGaugeUnit(1200);
+    },
+  });
+  define('player.playlog.resolveLr2HardDamageMultiplier', {
+    run: () => {
+      playlogApi.resolveLr2HardDamageMultiplier(300, 1200);
+    },
+  });
+  define('player.playlog.resolveBeatorajaHardRecoverMultiplier', {
+    run: () => {
+      playlogApi.resolveBeatorajaHardRecoverMultiplier(300, 1200);
+    },
+  });
   define('player.playlog.parsePlaylog', {
     run: () => {
       playlogApi.parsePlaylog(BENCH_PLAYLOG_JSON);

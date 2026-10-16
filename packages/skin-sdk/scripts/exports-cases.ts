@@ -141,6 +141,11 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
       skinSdkApi.binJudgeTimings(BENCH_JUDGE_TIMINGS, 2, 100);
     },
   });
+  define('skin-sdk.describeCourseCard', {
+    run: () => {
+      skinSdkApi.describeCourseCard(BENCH_COURSE_ENTRY.course);
+    },
+  });
   define('skin-sdk.comboTier', {
     run: () => {
       skinSdkApi.comboTier(120);
