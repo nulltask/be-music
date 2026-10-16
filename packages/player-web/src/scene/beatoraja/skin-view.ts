@@ -3,25 +3,15 @@
 // every destination keyframe per frame. Engine-driven dynamics (notes, judge flashes, key-on, BGA, lamps) are
 // owned by the gameplay scene that drives this view from outside.
 
-import { BitmapText, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import {
-  centerToAnchor,
-  composeBeatorajaValueCells,
-  composeBeatorajaValueShift,
-  valueFrameAt,
   evaluateBeatorajaCustomEvents,
   evaluateBeatorajaCustomTimers,
   normalizeBeatorajaCustomEvents,
   normalizeBeatorajaCustomTimers,
-  BEATORAJA_LUA_TIMER_OFF_VALUE,
-  BEATORAJA_NUM,
-  evaluateBeatorajaLuaNumber,
-  evaluateBeatorajaLuaString,
   expandBeatorajaJudgeDestinations,
   flattenBeatorajaElements,
-  imageFrameAt,
   imageFrameRect,
-  imageRefFrame,
   normalizeBeatorajaBpmGraphs,
   normalizeBeatorajaDestinations,
   normalizeBeatorajaGaugeGraphs,
@@ -41,49 +31,32 @@ import {
   normalizeBeatorajaValues,
   OFFSET_HIDDEN_COVER,
   OFFSET_LIFT,
-  beatorajaFloatValueSlotCount,
-  composeBeatorajaFloatValueCells,
-  floatValueFrameAt,
-  composeBeatorajaFloatValueShift,
   type BeatorajaBpmGraphElement,
   type BeatorajaCustomEvent,
   type BeatorajaCustomEventState,
   type BeatorajaCustomTimer,
-  type BeatorajaDestinationGroup,
   type BeatorajaGaugeGraphElement,
   type BeatorajaJudgeGraphElement,
   type BeatorajaTimingDistributionGraphElement,
   type BeatorajaTimingVisualizerElement,
   type BeatorajaGaugeElement,
   type BeatorajaGraphElement,
-  type BeatorajaFloatPropertyRef,
   type BeatorajaFloatValueElement,
   type BeatorajaImageElement,
   type BeatorajaImageId,
   type BeatorajaImagesetElement,
   type BeatorajaPmCharaElement,
-  type BeatorajaIntegerPropertyRef,
-  type BeatorajaLuaRuntimeContext,
-  type BeatorajaSkinFontId,
-  type BeatorajaStringPropertyRef,
   type BeatorajaSliderElement,
   type BeatorajaTextElement,
   type BeatorajaValueElement,
 } from '@be-music/beatoraja-skin';
 import {
-  applyBeatorajaStretchRect,
   createCroppedBeatorajaTexture,
   destinationToSpriteProps,
   type BeatorajaRenderContext,
 } from '../../skin/beatoraja/render.ts';
-import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import { BeatorajaChartGraphRenderer, type BpmGraphEntry, type JudgeGraphEntry } from './skin-view/chart-graphs.ts';
-import {
-  applyTextureFilterMode,
-  BEATORAJA_VIEW_DIAGNOSTICS,
-  destroyTextureView,
-  updateDynamicCropTexture,
-} from './skin-view/common.ts';
+import { applyTextureFilterMode, destroyTextureView } from './skin-view/common.ts';
 import { BeatorajaGaugeRenderer, type GaugeEntry } from './skin-view/gauge.ts';
 import {
   BeatorajaGraphRenderer,
@@ -92,7 +65,23 @@ import {
   type PolylineGraphEntry,
   type SliderEntry,
 } from './skin-view/graphs.ts';
+import {
+  BeatorajaImageRenderer,
+  ensureBlackTexture,
+  makeSyntheticChartImage,
+  SYNTHETIC_BLACK_IMAGE,
+  SYNTHETIC_IMAGE_BACKBMP_ID,
+  SYNTHETIC_IMAGE_BANNER_ID,
+  SYNTHETIC_IMAGE_BLACK_ID,
+  SYNTHETIC_IMAGE_STAGEFILE_ID,
+  type ImagesetEntry,
+  type PmCharaEntry,
+  type SpriteEntry,
+} from './skin-view/images.ts';
+import { BeatorajaSkinLuaContext } from './skin-view/lua-context.ts';
+import { BeatorajaNumberRenderer, type FloatValueEntry, type ValueEntry } from './skin-view/numbers.ts';
 import type { BeatorajaPlaySkinViewOptions } from './skin-view/options.ts';
+import { BeatorajaTextRenderer, type TextEntry } from './skin-view/text.ts';
 import {
   BeatorajaTimingGraphRenderer,
   type TimingDistributionEntry,
@@ -100,122 +89,6 @@ import {
 } from './skin-view/timing-graphs.ts';
 
 export type { BeatorajaPlaySkinViewOptions } from './skin-view/options.ts';
-
-interface SpriteEntry {
-  kind: 'image';
-  group: BeatorajaDestinationGroup;
-  image: BeatorajaImageElement;
-  /** Base texture (whole source). Sprite's texture is a cropped view of this. */
-  baseTexture: ReturnType<BeatorajaTextureCache['get']>;
-  sprite: Sprite;
-  /** Frame index currently uploaded to `sprite.texture`. -1 means "no texture set yet". */
-  currentFrame: number;
-  /**
-   * Last visible-height ratio painted by the disapearLine clip path. Hidden-cover entries (with
-   * `image.disapearLine >= 0`) shrink the source crop and the sprite height proportionally as
-   * the lift slider moves; this caches the last applied ratio so the per-frame crop only
-   * rebuilds when the value actually changes. `1` (the default) is "no clip" — the full source
-   * crop is used.
-   */
-  lastDisapearRatio: number;
-  /** Reused for runtime-dependent crop rects so lift / hidden-cover animation does not grow the global crop cache. */
-  dynamicCropTexture: Texture | undefined;
-}
-
-interface FloatValueEntry {
-  kind: 'floatvalue';
-  group: BeatorajaDestinationGroup;
-  value: BeatorajaFloatValueElement;
-  /** Source strip texture (uncropped). Each digit / dot sprite crops a sub-rect from this. */
-  baseTexture: ReturnType<BeatorajaTextureCache['get']>;
-  /**
-   * One sprite per slot. Slot count is `iketa + (fketa > 0 ? 1 : 0) + fketa`. Each frame the
-   * composer hands back per-slot cell descriptors; the matching sprite gets a cropped
-   * sub-texture and laid out side-by-side along the dst rect.
-   */
-  slotSprites: Sprite[];
-  /** Last resolved float value — used to skip re-cropping when nothing changed. */
-  lastValue: number;
-  /**
-   * Last animation frame index applied to the slot textures. Mirrors {@link ValueEntry}'s
-   * `lastFrameIndex` — re-crop runs whenever the strip's `cycle/divy` advances or the value
-   * changes. `-1` is the initial sentinel.
-   */
-  lastFrameIndex: number;
-}
-
-interface ValueEntry {
-  kind: 'value';
-  group: BeatorajaDestinationGroup;
-  value: BeatorajaValueElement;
-  baseTexture: ReturnType<BeatorajaTextureCache['get']>;
-  /** One sprite per digit position. Created upfront sized to `value.digit`. */
-  digitSprites: Sprite[];
-  /** Last numeric value rendered, used to skip cell-texture rebuilds when the number hasn't changed. */
-  lastValue: number;
-  /**
-   * Last animation frame index applied to the digit textures. When the value's `cycle > 0` and
-   * the frame index advances, the per-digit textures are re-cropped from the matching strip row.
-   * `-1` is the initial sentinel — first update always re-crops. Mirrors upstream's
-   * `SkinSourceImageSet.getImageIndex` flow which re-evaluates per draw call.
-   */
-  lastFrameIndex: number;
-}
-
-interface TextEntry {
-  kind: 'text';
-  group: BeatorajaDestinationGroup;
-  element: BeatorajaTextElement;
-  /**
-   * Either a Pixi `Text` (CSS-fonts pipe) or a `BitmapText` (BMFont pipe). Both extend
-   * `AbstractText` and share `text` / position / `style.*` accessors, so the per-frame update path
-   * is identical. The pick is made once at build-time from `resolveFontKind` — no runtime
-   * branching during the `update` hot path.
-   */
-  text: Text | BitmapText;
-}
-
-interface ImagesetEntry {
-  kind: 'imageset';
-  group: BeatorajaDestinationGroup;
-  element: BeatorajaImagesetElement;
-  /**
-   * Pre-resolved sub-image data, one entry per `images[]` slot. Each carries the matching
-   * `BeatorajaImageElement` (so per-frame stepping still works inside a sub-image with
-   * `divx` / `divy`) plus the cropped cell-0 texture for fast first-frame rendering. Slots
-   * whose image lookup failed are `undefined`; the renderer falls back to the previous valid
-   * slot (or hides the entry if none).
-   */
-  subImages: ReadonlyArray<
-    | {
-        image: BeatorajaImageElement;
-        baseTexture: ReturnType<BeatorajaTextureCache['get']>;
-      }
-    | undefined
-  >;
-  sprite: Sprite;
-  /** Last `images[]` index painted, used to skip the texture rebuild when the ref hasn't changed. */
-  lastSubIndex: number;
-  /** Last frame index uploaded to the sprite. -1 = never uploaded. */
-  lastFrame: number;
-}
-
-/**
- * `pmchara[]` POMYU character entry. Popn-style 9K skins author dancing-character displays
- * keyed off a `source[]` slot's full texture (no sub-rect crop). The renderer paints the
- * source's whole image at the destination rect — frame-cycled animation driven by chart cues
- * is a follow-up patch; until then this entry behaves like a static fullscreen image. Source
- * resolution gracefully hides the sprite when the slot has no texture (typical case: the
- * `def: "Off"` filepath default is set, so no character pack loads).
- */
-interface PmCharaEntry {
-  kind: 'pmchara';
-  group: BeatorajaDestinationGroup;
-  element: BeatorajaPmCharaElement;
-  /** Full source texture (whole `source[].path` image) — `undefined` when no character pack loaded. */
-  baseTexture: ReturnType<BeatorajaTextureCache['get']>;
-  sprite: Sprite;
-}
 
 type ViewEntry =
   | SpriteEntry
@@ -234,17 +107,6 @@ type ViewEntry =
   | GaugeEntry
   | PmCharaEntry;
 
-/** `main_state.judge(n)`'s number ids: PERFECT, GREAT, GOOD, BAD, POOR, combo break. */
-const LUA_JUDGE_NUMBERS = [
-  BEATORAJA_NUM.PERFECT,
-  BEATORAJA_NUM.GREAT,
-  BEATORAJA_NUM.GOOD,
-  BEATORAJA_NUM.BAD,
-  BEATORAJA_NUM.POOR,
-  BEATORAJA_NUM.COMBOBREAK,
-] as const;
-
-type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 export class BeatorajaPlaySkinView {
   readonly container: Container = new Container();
   readonly width: number;
@@ -313,14 +175,6 @@ export class BeatorajaPlaySkinView {
    */
   readonly songListLayerInsertIndex: number;
   private readonly entries: ViewEntry[] = [];
-  private readonly resolveRefValue: (refOp: number) => number;
-  private readonly resolveTextContent: (refOp: number) => string | undefined;
-  private readonly resolveNumberValue: (refOp: number) => number | undefined;
-  private readonly resolveFontFamily: (fontId: BeatorajaSkinFontId) => string | undefined;
-  private readonly resolveFontKind: (fontId: BeatorajaSkinFontId) => 'css' | 'bitmap' | undefined;
-  private readonly resolveGraphValue: (type: number) => number | undefined;
-  private readonly resolveSliderValue: (type: number) => number | undefined;
-  private readonly resolveGaugePercent: () => number | undefined;
   private readonly onButtonAction:
     | ((act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }) => void)
     | undefined;
@@ -329,6 +183,10 @@ export class BeatorajaPlaySkinView {
   private readonly customEventState: BeatorajaCustomEventState[] = [];
   private readonly customTimers: ReadonlyArray<BeatorajaCustomTimer>;
   private readonly customTimerState: number[] = [];
+  private readonly lua: BeatorajaSkinLuaContext;
+  private readonly images: BeatorajaImageRenderer;
+  private readonly numbers: BeatorajaNumberRenderer;
+  private readonly texts: BeatorajaTextRenderer;
   private readonly graphs: BeatorajaGraphRenderer;
   private readonly chartGraphs: BeatorajaChartGraphRenderer;
   private readonly timingGraphs: BeatorajaTimingGraphRenderer;
@@ -348,18 +206,20 @@ export class BeatorajaPlaySkinView {
     const rawH = (options.skin as { h?: unknown }).h;
     this.width = typeof rawW === 'number' && Number.isFinite(rawW) && rawW > 0 ? rawW : 1280;
     this.height = typeof rawH === 'number' && Number.isFinite(rawH) && rawH > 0 ? rawH : 720;
-    this.resolveRefValue = options.resolveRefValue ?? (() => 0);
-    this.resolveTextContent = options.resolveTextContent ?? (() => undefined);
-    this.resolveNumberValue = options.resolveNumberValue ?? (() => undefined);
-    this.resolveFontFamily = options.resolveFontFamily ?? (() => undefined);
-    this.resolveFontKind = options.resolveFontKind ?? (() => undefined);
-    this.resolveGraphValue = options.resolveGraphValue ?? (() => undefined);
-    this.resolveSliderValue = options.resolveSliderValue ?? (() => undefined);
-    this.resolveGaugePercent = options.resolveGaugePercent ?? (() => undefined);
     this.onButtonAction = options.onButtonAction;
     this.chartImageProvider = options.chartImageProvider;
+    this.lua = new BeatorajaSkinLuaContext(options);
+    this.images = new BeatorajaImageRenderer(this.container, this.height, options, (property, luaContext) =>
+      this.lua.resolveIntegerProperty(property, luaContext),
+    );
+    this.numbers = new BeatorajaNumberRenderer(this.container, options, (property, luaContext) =>
+      this.lua.resolveIntegerProperty(property, luaContext),
+    );
+    this.texts = new BeatorajaTextRenderer(this.container, options, (property, luaContext) =>
+      this.lua.resolveStringProperty(property, luaContext),
+    );
     this.graphs = new BeatorajaGraphRenderer(this.container, options, (property, luaContext, kind) =>
-      this.resolveFloatProperty(property, luaContext, kind),
+      this.lua.resolveFloatProperty(property, luaContext, kind),
     );
     this.chartGraphs = new BeatorajaChartGraphRenderer(this.container, options);
     this.timingGraphs = new BeatorajaTimingGraphRenderer(this.container, options);
@@ -770,25 +630,25 @@ export class BeatorajaPlaySkinView {
         // re-introduce the imageset-dead-last bug.
         const imagesetElement = imagesetById.get(group.id);
         if (imagesetElement !== undefined) {
-          const imagesetEntry = this.buildImagesetEntry(group, imagesetElement, imageById, options.textures);
+          const imagesetEntry = this.images.buildImagesetEntry(group, imagesetElement, imageById, options.textures);
           if (imagesetEntry !== undefined) this.entries.push(imagesetEntry);
           continue;
         }
         const valueElement = valueById.get(group.id);
         if (valueElement !== undefined) {
-          const valueEntry = this.buildValueEntry(group, valueElement, options.textures);
+          const valueEntry = this.numbers.buildValueEntry(group, valueElement, options.textures);
           if (valueEntry !== undefined) this.entries.push(valueEntry);
           continue;
         }
         const floatValueElement = floatValueById.get(group.id);
         if (floatValueElement !== undefined) {
-          const floatValueEntry = this.buildFloatValueEntry(group, floatValueElement, options.textures);
+          const floatValueEntry = this.numbers.buildFloatValueEntry(group, floatValueElement, options.textures);
           if (floatValueEntry !== undefined) this.entries.push(floatValueEntry);
           continue;
         }
         const textElement = textById.get(group.id);
         if (textElement !== undefined) {
-          this.entries.push(this.buildTextEntry(group, textElement));
+          this.entries.push(this.texts.buildTextEntry(group, textElement));
           continue;
         }
         const sliderElement = sliderById.get(group.id);
@@ -830,7 +690,7 @@ export class BeatorajaPlaySkinView {
         }
         const pmcharaElement = pmcharaById.get(group.id);
         if (pmcharaElement !== undefined) {
-          this.entries.push(this.buildPmCharaEntry(group, pmcharaElement, options.textures));
+          this.entries.push(this.images.buildPmCharaEntry(group, pmcharaElement, options.textures));
           continue;
         }
         // Gauge id matching uses string-coerced equality. Upstream's `JsonSkin.Gauge.id` is
@@ -996,350 +856,12 @@ export class BeatorajaPlaySkinView {
     }
   }
 
-  private buildValueEntry(
-    group: BeatorajaDestinationGroup,
-    element: BeatorajaValueElement,
-    textures: BeatorajaTextureCache,
-  ): ValueEntry | undefined {
-    const baseTexture = textures.get(element.src);
-    const digits = Math.max(1, Math.trunc(element.digit));
-    const digitSprites: Sprite[] = [];
-    // Pre-build one sprite per digit slot. Mount with `alpha: 0` to dodge the same first-pass
-    // bind-group race the image entries handle. The actual textures get cropped on first `update()`
-    // when we know the resolved numeric value — until then each slot uses cell 0 as a placeholder so
-    // PixiJS sees a non-EMPTY texture from frame 0.
-    const baseIsBindable = baseTexture !== undefined && baseTexture !== Texture.EMPTY;
-    for (let i = 0; i < digits; i += 1) {
-      let initialTexture: Texture | undefined;
-      if (baseIsBindable) {
-        const placeholderCells = composeBeatorajaValueCells(element, 0);
-        const cell = placeholderCells[i] ?? placeholderCells[0]!;
-        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
-        if (cropped !== undefined) initialTexture = cropped;
-      }
-      const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
-      this.container.addChild(sprite);
-      digitSprites.push(sprite);
-    }
-    return { kind: 'value', group, value: element, baseTexture, digitSprites, lastValue: 0, lastFrameIndex: -1 };
-  }
-
-  /**
-   * Build a `floatvalue[]` entry. Pre-allocates one sprite per slot — the slot count is fixed
-   * by `iketa` + (`fketa > 0 ? 1 : 0`) + `fketa` regardless of value magnitude, so we mount
-   * the row once at construction. Each slot's texture gets cropped on first `update()` from
-   * the source strip via {@link composeBeatorajaFloatValueCells}.
-   */
-  private buildFloatValueEntry(
-    group: BeatorajaDestinationGroup,
-    element: BeatorajaFloatValueElement,
-    textures: BeatorajaTextureCache,
-  ): FloatValueEntry | undefined {
-    const baseTexture = textures.get(element.src);
-    const slotCount = beatorajaFloatValueSlotCount(element);
-    const slotSprites: Sprite[] = [];
-    const baseIsBindable = baseTexture !== undefined && baseTexture !== Texture.EMPTY;
-    for (let i = 0; i < slotCount; i += 1) {
-      let initialTexture: Texture | undefined;
-      if (baseIsBindable) {
-        const placeholderCells = composeBeatorajaFloatValueCells(element, 0);
-        const cell = placeholderCells[i] ?? placeholderCells[0]!;
-        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
-        if (cropped !== undefined) initialTexture = cropped;
-      }
-      const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
-      this.container.addChild(sprite);
-      slotSprites.push(sprite);
-    }
-    return { kind: 'floatvalue', group, value: element, baseTexture, slotSprites, lastValue: 0, lastFrameIndex: -1 };
-  }
-
-  private buildTextEntry(group: BeatorajaDestinationGroup, element: BeatorajaTextElement): TextEntry {
-    // Pick the skin-author's font (TTF or BMFont) when one was loaded for this `font` slot; fall
-    // back to the platform sans-serif chain otherwise. For CSS fonts the stack fallback
-    // (`sans-serif` after the skin family) covers two cases at once: (1) the skin family hasn't
-    // finished registering yet, and (2) a glyph not present in the skin font (Japanese full-width,
-    // emoji, etc.) gets borrowed from the system font without showing tofu. BMFonts don't get a
-    // sans-serif fallback baked into the family — Pixi's BitmapText cache lookup is exact, so
-    // appending `, sans-serif` would just miss the cache.
-    const skinFamily = this.resolveFontFamily(element.fontId);
-    const fontKind = this.resolveFontKind(element.fontId) ?? 'css';
-    const fontFamily =
-      skinFamily === undefined ? 'sans-serif' : fontKind === 'bitmap' ? skinFamily : `'${skinFamily}', sans-serif`;
-    // Mirror beatoraja's `SkinTextFont.draw()`:
-    //
-    //     font.getData().setScale(region.height / parameter.size);
-    //
-    // The font is loaded ONCE at `text[].size` glyph height (= `parameter.size`), then
-    // scaled at draw time so the rendered glyph height matches the destination rect's
-    // current `h`. Final on-screen text height = `dst.h` regardless of the authored
-    // `size` — that's why default beatoraja's `genre` / `artist` (dst.h=20) render
-    // visibly smaller than `title` (dst.h=24) even though all three set `size: 24`.
-    //
-    // We rasterize Pixi's `Text` / `BitmapText` at the AUTHORED `text[].size` (so the
-    // glyph bitmap is sharp at the author's intended baseline), then apply a per-frame
-    // `text.scale.y = props.height / fontSize` in `updateTextEntry` to mirror upstream's
-    // `setScale`. This handles two cases the previous "fontSize = dst[0].h" approach
-    // got wrong:
-    //   1. Animated text (h changes over time): we used to lock fontSize at the t=0
-    //      keyframe and never updated, so a 540→24 zoom-down would render at 540 forever.
-    //      Now scale tracks the current keyframe's h.
-    //   2. Layout-variant gated dst[]: when the t=0 frame's `if[]` resolves to a huge
-    //      catch-all variant (because the matching layout op isn't in activeOps), we'd
-    //      lock fontSize at that giant value. Now the visible size is governed by the
-    //      runtime keyframe's h, which is bounded sensibly by the resolver fallback.
-    //
-    // Falls back to `dst[0].h` only when `text[].size` is omitted (some Lua skins author
-    // size on the destination rather than the element); final guard at 24 for skins
-    // authoring neither.
-    //
-    // **Sign normalization** — AngelCode BMFont's authoring convention is "POSITIVE = points,
-    // NEGATIVE = pixels", and the sign is also baked into the .fnt's `info size=N` line. Skins
-    // pair the two: when the .fnt declares `size=-120` (the GroundbreakinG `Title.fnt` does
-    // exactly this), the skin authors `text.size = -118` to match. Upstream
-    // `SkinTextBitmap.draw` line 59 computes `scale = this.size / source.getOriginalSize()`,
-    // and the matched signs cancel to a positive scale (`-118 / -120 = +0.983`); the rendered
-    // glyph height ends up `|text.size|` px. We mirror this by taking `Math.abs(element.size)`
-    // — Pixi's `style.fontSize` doesn't have well-defined semantics for negative values
-    // (BMFont layout would compute a NEGATIVE scale and render the text 180° flipped), so we
-    // can't pass the sign through. Pairing this with the `Math.abs(parsed.fontSize)` we apply
-    // when registering the BitmapFont (see `beatoraja-fonts.ts`) reproduces upstream's
-    // "rendered height = |text.size|" identity exactly.
-    const firstFrame = group.dst[0];
-    const rectH = firstFrame !== undefined && firstFrame.h > 0 ? firstFrame.h : 0;
-    const absElementSize = Math.abs(element.size);
-    const requestedSize = absElementSize > 0 ? absElementSize : rectH > 0 ? rectH : 24;
-    // Pick `BitmapText` for BMFonts and `Text` for everything else. Both share the same constructor
-    // surface (`text`, `style.fontFamily`, `style.fontSize`, `style.align`, `alpha`, anchors), so
-    // downstream update code doesn't branch — see `updateTextEntry`.
-    const TextCtor: typeof Text | typeof BitmapText =
-      fontKind === 'bitmap' && skinFamily !== undefined ? BitmapText : Text;
-    // Outline / drop-shadow styling (audit 2.10). Beatoraja's text element carries
-    // `outlineColor`/`outlineWidth` and `shadowColor`/`shadowOffset{X,Y}`/`shadowSmoothness`;
-    // the alpha byte of the color string is `00` when the feature is disabled, so we gate
-    // application on `alpha > 0` (matching beatoraja's "outline color disabled" sentinel).
-    // ModernChic Decide's title / genre / artist / stage labels (textproperty.lua:62-71)
-    // rely on this — without the styling the text reads as flat white-on-bg with no outline,
-    // which loses the difficulty-tinted ring the skin uses to communicate the chart's
-    // difficulty level.
-    const stroke =
-      element.outlineColor.alpha > 0 && element.outlineWidth > 0
-        ? { color: element.outlineColor.rgb, alpha: element.outlineColor.alpha, width: element.outlineWidth }
-        : undefined;
-    // Pixi expresses drop shadow as `{ distance, angle }` polar coordinates. Beatoraja
-    // authors offsets in `(x, y)` cartesian — convert via hypot / atan2.
-    const dropShadow =
-      element.shadowColor.alpha > 0 && (element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0)
-        ? {
-            color: element.shadowColor.rgb,
-            alpha: element.shadowColor.alpha,
-            distance: Math.hypot(element.shadowOffsetX, element.shadowOffsetY),
-            angle: Math.atan2(element.shadowOffsetY, element.shadowOffsetX),
-            blur: element.shadowSmoothness,
-          }
-        : undefined;
-    const text = new TextCtor({
-      text: '',
-      style: {
-        fontFamily,
-        fontSize: requestedSize,
-        fill: 0xffffff,
-        align: element.align,
-        // Pixi types treat `wordWrap` and `wordWrapWidth` as a pair; we leave the width
-        // unset so it falls back to the dst rect bounds the entry sets per-frame in
-        // `updateTextEntry` (via `style.wordWrapWidth`).
-        wordWrap: element.wrapping,
-        ...(stroke !== undefined ? { stroke } : {}),
-        ...(dropShadow !== undefined ? { dropShadow } : {}),
-      },
-      alpha: 0,
-    });
-    // Anchor controls the (x, y) origin point. Beatoraja's reference theme positions text by the
-    // dst rect's TOP-LEFT (or top-center / top-right with `align`); the y-anchor stays 0 so the
-    // text's top edge sits at `props.y`.
-    if (element.align === 'center') text.anchor.set(0.5, 0);
-    else if (element.align === 'right') text.anchor.set(1, 0);
-    this.container.addChild(text);
-    // eslint-disable-next-line no-console
-    console.log(
-      '[beatoraja-view] text entry built',
-      JSON.stringify({
-        id: element.id,
-        ref: element.ref,
-        fontId: element.fontId,
-        size: requestedSize,
-        align: element.align,
-        family: fontFamily,
-        kind: fontKind,
-        firstRect: firstFrame ? { x: firstFrame.x, y: firstFrame.y, w: firstFrame.w, h: firstFrame.h } : undefined,
-      }),
-    );
-    return { kind: 'text', group, element, text };
-  }
-
-  /**
-   * Build an imageset entry. Pre-resolves each `images[]` slot to its `image[]` element + base
-   * texture so the per-frame update only swaps the cropped texture without re-walking the
-   * imageById map. Returns `undefined` when none of the sub-images resolved (skin omitted them
-   * all — better to skip than render an always-hidden sprite).
-   */
-  private buildImagesetEntry(
-    group: BeatorajaDestinationGroup,
-    element: BeatorajaImagesetElement,
-    imageById: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>,
-    textures: BeatorajaTextureCache,
-  ): ImagesetEntry | undefined {
-    const subImages: ImagesetEntry['subImages'] = element.images.map((subId) => {
-      const image = imageById.get(subId);
-      if (image === undefined) return undefined;
-      const baseTexture = textures.get(image.src);
-      if (baseTexture === undefined) return undefined;
-      return { image, baseTexture };
-    });
-    if (subImages.every((s) => s === undefined)) return undefined;
-    // Pre-bind the first non-undefined sub-image's cell-0 texture so the first render pass has
-    // something to paint (same WebGPU bind-group warm-up reasoning as the image / graph paths).
-    let initialTexture: Texture | undefined;
-    for (const sub of subImages) {
-      if (sub === undefined) continue;
-      const cell = imageFrameRect(sub.image, 0);
-      const cropped = createCroppedBeatorajaTexture(sub.baseTexture, cell);
-      if (cropped !== undefined) {
-        initialTexture = cropped;
-        break;
-      }
-    }
-    const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
-    this.container.addChild(sprite);
-    // Apply filter mode to the first resolvable sub-image's source. Sub-images typically share
-    // a source (it's the same atlas), so this propagates to siblings.
-    for (const sub of subImages) {
-      if (sub !== undefined) {
-        applyTextureFilterMode(sub.baseTexture, group.filter);
-        break;
-      }
-    }
-    // Click dispatch (audit 2.5). `imageset[].act` was previously dropped at the parser layer,
-    // so default's `modeset` (act:11 cycles keymode filter) and similar imageset-driven cycle
-    // buttons in GdbG / ModernChic didn't react to clicks. Mirror the `image[]` interactive
-    // wiring — when `act > 0` and the host wires `onButtonAction`, hook a `pointertap`
-    // handler that forwards the action code.
-    if (element.act > 0 && this.onButtonAction !== undefined) {
-      sprite.eventMode = 'static';
-      sprite.cursor = 'pointer';
-      const handler = this.onButtonAction;
-      const actCode = element.act;
-      sprite.on('pointertap', (event) => {
-        const orig = event as unknown as { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean };
-        handler(actCode, {
-          shift: orig.shiftKey === true,
-          ctrl: orig.ctrlKey === true,
-          alt: orig.altKey === true,
-        });
-      });
-    }
-    return { kind: 'imageset', group, element, subImages, sprite, lastSubIndex: -1, lastFrame: -1 };
-  }
-
-  /**
-   * Build a `pmchara[]` entry — POMYU character display. The source's full texture is used as
-   * the sprite (no sub-rect crop, no cell-strip animation). Hidden cleanly when the source
-   * has no resolved texture (e.g. the user picked `def: "Off"` for the character filepath, or
-   * the wildcard's `|TAG|` syntax didn't match any file in the pack — both are graceful
-   * degradation paths for the common "no character pack dropped" case).
-   */
-  private buildPmCharaEntry(
-    group: BeatorajaDestinationGroup,
-    element: BeatorajaPmCharaElement,
-    textures: BeatorajaTextureCache,
-  ): PmCharaEntry {
-    const baseTexture = textures.get(element.src);
-    const sprite = new Sprite({ texture: baseTexture, alpha: 0 });
-    this.container.addChild(sprite);
-    applyTextureFilterMode(baseTexture, group.filter);
-    return { kind: 'pmchara', group, element, baseTexture, sprite };
-  }
-
-  /**
-   * The Lua runtime context for this frame. Built once and kept: its functions read the frame through
-   * {@link luaFrame}, set here each frame, instead of a fresh set of closures being made every frame. The Lua bridge
-   * only reads the context while it evaluates a call (`update` does that synchronously), never later.
-   */
-  private buildLuaRuntimeContext(context: BeatorajaRenderContext): BeatorajaLuaRuntimeContext {
-    this.luaFrame = context;
-    const lua = (this.luaRuntimeContext ??= this.createLuaRuntimeContext());
-    // Forward host audio hooks so BooleanProperty / customEvent callbacks evaluated at draw
-    // time can fire SE. The hooks themselves come from the demo's `BeatorajaSkinAudioPlayer`
-    // (one per loaded theme bundle); the skin-view never owns audio state.
-    lua.audioPlay = context.audioPlay;
-    lua.audioLoop = context.audioLoop;
-    lua.audioStop = context.audioStop;
-    return lua;
-  }
-
-  private luaFrame: BeatorajaRenderContext | undefined;
-  private luaRuntimeContext: Mutable<BeatorajaLuaRuntimeContext> | undefined;
-
-  private createLuaRuntimeContext(): Mutable<BeatorajaLuaRuntimeContext> {
-    const frame = (): BeatorajaRenderContext => this.luaFrame!;
-    return {
-      option: (id) => frame().activeOps.has(id),
-      number: (id) => this.resolveNumberValue(id),
-      floatNumber: (id) => this.resolveSliderValue(id) ?? this.resolveGraphValue(id),
-      text: (id) => this.resolveTextContent(id),
-      offset: (id) => frame().resolveOffset?.(id),
-      timer: (id) => {
-        const start = id === 0 ? 0 : frame().getTimerStart(id);
-        return start === undefined ? BEATORAJA_LUA_TIMER_OFF_VALUE : start * 1000;
-      },
-      time: () => frame().nowMs * 1000,
-      rate: () => this.resolveNumberValue(BEATORAJA_NUM.SCORE_RATE),
-      exscore: () => this.resolveNumberValue(BEATORAJA_NUM.POINT),
-      judge: (judge) => {
-        const ref = LUA_JUDGE_NUMBERS[judge];
-        return ref === undefined ? undefined : this.resolveNumberValue(ref);
-      },
-      gauge: () => {
-        const percent = this.resolveGaugePercent();
-        return percent;
-      },
-      // `main_state.gauge_type()` — beatoraja's `BEATORAJA_GAUGE_MODE.*` int constant.
-      // Sourced from the runtime adapter's `resolveGaugeState`. Returns `undefined` when no
-      // frame has landed yet; the Lua bridge defaults to 0 in that case.
-      gaugeType: () => frame().resolveGaugeState?.()?.mode,
-    };
-  }
-
-  private resolveIntegerProperty(
-    property: BeatorajaIntegerPropertyRef,
-    luaContext: BeatorajaLuaRuntimeContext,
-  ): number {
-    if (typeof property === 'number') return this.resolveNumberValue(property) ?? 0;
-    return evaluateBeatorajaLuaNumber(property, luaContext) ?? 0;
-  }
-
-  private resolveStringProperty(property: BeatorajaStringPropertyRef, luaContext: BeatorajaLuaRuntimeContext): string {
-    if (typeof property === 'number') return this.resolveTextContent(property) ?? '';
-    return evaluateBeatorajaLuaString(property, luaContext) ?? '';
-  }
-
-  private resolveFloatProperty(
-    property: BeatorajaFloatPropertyRef,
-    luaContext: BeatorajaLuaRuntimeContext,
-    kind: 'graph' | 'slider',
-  ): number | undefined {
-    if (typeof property === 'number') {
-      return kind === 'graph' ? this.resolveGraphValue(property) : this.resolveSliderValue(property);
-    }
-    return evaluateBeatorajaLuaNumber(property, luaContext);
-  }
-
   /**
    * Re-sample every destination at `context.nowMs` and update the matching `Sprite` / `Text`. Call once per frame.
    */
   update(context: BeatorajaRenderContext): void {
     if (this.disposed) return;
-    const luaContext = this.buildLuaRuntimeContext(context);
+    const luaContext = this.lua.buildLuaRuntimeContext(context);
     const renderContext: BeatorajaRenderContext = { ...context, lua: luaContext };
     // customEvents / customTimers (audit 2.2). Fire any condition-flipped event actions and
     // stamp any updated custom timers BEFORE walking the destination entries — that way
@@ -1364,16 +886,16 @@ export class BeatorajaPlaySkinView {
       const props = destinationToSpriteProps(entry.group, renderContext, canvasHeight);
       switch (entry.kind) {
         case 'image':
-          this.updateImageEntry(entry, renderContext, props);
+          this.images.updateImageEntry(entry, renderContext, props);
           break;
         case 'value':
-          this.updateValueEntry(entry, props, luaContext, context.resolveOffset, context.nowMs);
+          this.numbers.updateValueEntry(entry, props, luaContext, context.resolveOffset, context.nowMs);
           break;
         case 'floatvalue':
-          this.updateFloatValueEntry(entry, props, luaContext, context.resolveOffset, context.nowMs);
+          this.numbers.updateFloatValueEntry(entry, props, luaContext, context.resolveOffset, context.nowMs);
           break;
         case 'text':
-          this.updateTextEntry(entry, props, luaContext);
+          this.texts.updateTextEntry(entry, props, luaContext);
           break;
         case 'graph':
           this.graphs.updateGraphEntry(entry, props, luaContext);
@@ -1400,722 +922,16 @@ export class BeatorajaPlaySkinView {
           this.graphs.updateSliderEntry(entry, props, luaContext);
           break;
         case 'imageset':
-          this.updateImagesetEntry(entry, renderContext, props, luaContext);
+          this.images.updateImagesetEntry(entry, renderContext, props, luaContext);
           break;
         case 'gauge':
           this.gauges.updateGaugeEntry(entry, props, renderContext);
           break;
         case 'pmchara':
-          this.updatePmCharaEntry(entry, props);
+          this.images.updatePmCharaEntry(entry, props);
           break;
       }
     }
-  }
-
-  private updateImageEntry(
-    entry: SpriteEntry,
-    context: BeatorajaRenderContext,
-    props: ReturnType<typeof destinationToSpriteProps>,
-  ): void {
-    const sprite = entry.sprite;
-
-    // No base texture (or `Texture.EMPTY`, source-less) → must not enter the renderer's batch; WebGPU's
-    // `_createBindGroup` deref's a null source.
-    const baseTexture = entry.baseTexture;
-    if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
-      sprite.visible = false;
-      return;
-    }
-
-    sprite.visible = props.visible;
-    if (!props.visible) return;
-
-    // `ref` (op-driven frame) takes precedence over `cycle` animation — that's how lamp / judge-icon textures
-    // swap between cells.
-    const frameIndex =
-      entry.image.ref !== 0
-        ? imageRefFrame(entry.image, this.resolveRefValue(entry.image.ref))
-        : imageFrameAt(entry.image, computeAnimationElapsed(entry, context));
-
-    // `disapearLine` clip — hidden-cover sprites trim the BOTTOM portion of the rect (skin Y-UP
-    // semantics: only `y > disapearLineAddedLift` is shown). In Pixi Y-DOWN that means the
-    // sprite's TOP edge stays at `props.y` and the bottom edge gets pulled up to a Pixi y of
-    // `canvasH - disapearLineAddedLift`. Without this, hidden-cover entries paint as plain
-    // sprites at their full rect — which is why the reference theme's hidden-cover used to
-    // appear at the bottom of the screen even when the lift slider was at home. The lift offset
-    // resolution depends on `OFFSET_LIFT` going through `context.resolveOffset`; until that's
-    // wired, lift defaults to 0 and the hidden-cover collapses to invisible (matching beatoraja's
-    // "lift hides the cover by default" behavior — the player has to drag to reveal it).
-    const disapearRatio = computeDisapearVisibleRatio(entry.image, props, this.height, context.resolveOffset);
-    if (disapearRatio === 0) {
-      // Whole rect is below the disappear line → nothing to paint.
-      sprite.visible = false;
-      return;
-    }
-    const visibleHeight = props.height * disapearRatio;
-
-    if (frameIndex !== entry.currentFrame || disapearRatio !== entry.lastDisapearRatio) {
-      const cell = imageFrameRect(entry.image, frameIndex);
-      // ModernChic `Play/lua/sp/bomb.lua` (and similar Lua-driven skins) author `image[]`
-      // entries with `w = -1, h = -1` — beatoraja's loader interprets that as "use the
-      // texture's natural size, no crop" rather than as a flip flag (audit 3.17). Without
-      // honoring the sentinel our impl returned `undefined` from the cropper and the bomb
-      // sprites were silently hidden. Detect the sentinel here and pass the base texture
-      // through unscaled — `disapearRatio < 1` cases still use the cropper for their partial
-      // re-crop, but those are mutually exclusive with the "full texture" sentinel.
-      const useFullTexture = entry.image.w <= 0 || entry.image.h <= 0;
-      let cropped: Texture | undefined;
-      if (useFullTexture) {
-        entry.dynamicCropTexture = destroyTextureView(entry.dynamicCropTexture);
-        cropped = entry.baseTexture;
-      } else {
-        const rect = {
-          x: cell.x,
-          y: cell.y,
-          w: cell.w,
-          h: cell.h * disapearRatio,
-        };
-        if (disapearRatio === 1) {
-          entry.dynamicCropTexture = destroyTextureView(entry.dynamicCropTexture);
-          cropped = createCroppedBeatorajaTexture(entry.baseTexture, rect);
-        } else {
-          entry.dynamicCropTexture = updateDynamicCropTexture(entry.dynamicCropTexture, entry.baseTexture, rect);
-          cropped = entry.dynamicCropTexture;
-        }
-      }
-      if (cropped === undefined) {
-        // Cell width/height collapsed to 0 — hiding avoids the same null-source bind-group crash above.
-        sprite.visible = false;
-        return;
-      }
-      sprite.texture = cropped;
-      entry.currentFrame = frameIndex;
-      entry.lastDisapearRatio = disapearRatio;
-    }
-
-    // Apply the destination's `stretch` mode (audit 2.12). `stretch=0` (default = STRETCH)
-    // is a no-op; FIT_INNER / FIT_OUTER / FIT_WIDTH / FIT_HEIGHT / NO_RESIZE / NO_EXPANDING
-    // all preserve the source sprite's natural aspect ratio in some way. Without this the
-    // dst rect always wins, so banner / jacket / stagefile elements that author `stretch:1`
-    // got squashed to the dst rect's aspect (most visible: ModernChic Result mainmenu's
-    // stagefile thumbnail authored `stretch = MAIN.STRETCH.FIT_OUTER_TRIMMED`).
-    //
-    // `stretchSource` reflects the source sprite's natural cell size from the texture; for
-    // multi-cell `divx/divy` strips this is the cell size, not the entire atlas dimensions.
-    const cellRectAtFrame = imageFrameRect(entry.image, entry.currentFrame);
-    const stretched = applyBeatorajaStretchRect(
-      { x: props.x, y: props.y, width: props.width, height: visibleHeight },
-      { width: cellRectAtFrame.w, height: cellRectAtFrame.h },
-      entry.group.stretch,
-    );
-    const center = centerToAnchor(entry.group.center);
-    sprite.anchor.set(center.x, center.y);
-    sprite.x = stretched.x + center.x * stretched.width;
-    // Top edge is fixed at the stretched y; clip-trimmed bottom uses `visibleHeight`-scaled
-    // height (already absorbed into `stretched.height` via the dst rect we passed in).
-    sprite.y = stretched.y + center.y * stretched.height;
-    sprite.width = stretched.width;
-    sprite.height = stretched.height;
-    // Honor the destination's authored mirror flag (negative `w` / `h` in beatoraja's skin).
-    // `props.width` is already non-negative; we apply the mirror via `scale` so the texture
-    // flips horizontally without disturbing the positioning math above.
-    if (props.mirrorX) sprite.scale.x = -Math.abs(sprite.scale.x);
-    if (props.mirrorY) sprite.scale.y = -Math.abs(sprite.scale.y);
-    sprite.alpha = props.alpha;
-    sprite.tint = props.tint;
-    sprite.angle = props.angle;
-    sprite.blendMode = props.blendMode;
-    // Note: `dst.filter` (= `SkinObject.java:536-538`) is applied at BUILD time via
-    // `applyTextureFilterMode(baseTexture, group.filter)` higher up in this file. Pixi's
-    // `scaleMode` lives on the texture source (not the sprite), so a single application
-    // when the entry is first mounted is sufficient — the mode persists across update
-    // ticks regardless of which sprite is sampling the texture.
-  }
-
-  /**
-   * Convert one digit slot's libGDX-space rect (after per-digit offset) into Pixi-space sprite
-   * props honoring the parent's `center` anchor. Shared between `updateValueEntry` and
-   * `updateFloatValueEntry` so the two paths can't drift.
-   *
-   * Mirrors upstream `SkinNumber.draw()` (`SkinNumber.java:189-199`):
-   *
-   *     draw(sprite, currentImages[j],
-   *          region.x + (region.width + space) * j - shift + offsets[j].x,
-   *          region.y + offsets[j].y,
-   *          region.width + offsets[j].w,
-   *          region.height + offsets[j].h);
-   *
-   * Two upstream-faithfulness points:
-   *
-   *   1. **Y sign.** `offsets[j].y > 0` shifts the slot UP in libGDX (Y-UP) — i.e., its libGDX
-   *      bottom-edge moves to a HIGHER y. After the Pixi Y-flip
-   *      (`pixiTop = canvasH - libgdxBottom - libgdxHeight`), the slot's Pixi top must DECREASE
-   *      by `offsets[j].y` AND by `offsets[j].h` (because libGDX height grew upward).
-   *      The previous impl added `+ offsets[j].y` directly to `sprite.y`, flipping the sign.
-   *
-   *   2. **Center anchor on post-offset rect.** The rotation pivot in libGDX is at
-   *      `(slot.x + centerx*slot.w, slot.y + centery*slot.h)` — using the FULL post-offset
-   *      width/height, NOT the base slotWidth. The previous impl multiplied centerx by the
-   *      base `slotWidth`, leaving the pivot off-center whenever `offsets[j].w/h ≠ 0`.
-   *
-   * The `relative` flag from the parent destination does NOT apply here. SkinObject's
-   * `region.x += off.x - off.w/2` center-shift is applied at the destination level (already
-   * baked into `parent.x/y`); per-digit offsets in `SkinNumber.draw()` are added without
-   * center-shift regardless of `relative`.
-   */
-  private static perDigitSlotPixiProps(args: {
-    /** Pixi-space parent destination rect (already Y-flipped). */
-    parent: { x: number; y: number; height: number };
-    /** `(slotWidth + space) * j`, the per-slot horizontal step before alignment shift. */
-    slotIndexX: number;
-    /** Un-offset slot width (= the per-digit `region.width`). */
-    slotBaseWidth: number;
-    /** Alignment shift (subtracted from x — see `composeBeatorajaValueShift`). */
-    alignShift: number;
-    /** Per-digit offset in libGDX semantics (or all-zeros when no offset id is set). */
-    off: { x: number; y: number; w: number; h: number };
-    /** Pixi anchor for the parent destination's `center` field (already Y-flipped). */
-    centerPixi: { x: number; y: number };
-  }): { x: number; y: number; width: number; height: number } {
-    const { parent, slotIndexX, slotBaseWidth, alignShift, off, centerPixi } = args;
-    // Slot's libGDX bottom-left, after per-digit offset. (Bottom-left is the natural anchor
-    // because libGDX `SpriteBatch.draw(image, x, y, w, h)` interprets x/y as bottom-left in
-    // Y-UP, mirrored by our parent.x = libGDX bottom-left x.)
-    const slotPixiLeft = parent.x + slotIndexX - alignShift + off.x;
-    // Pixi top = parent's Pixi top, MINUS off.y (slot moves up = Pixi-y decreases) and
-    // MINUS off.h (height grew upward in libGDX → Pixi top moves up by full off.h).
-    const slotPixiTop = parent.y - off.y - off.h;
-    const slotWidth = slotBaseWidth + off.w;
-    const slotHeight = parent.height + off.h;
-    return {
-      x: slotPixiLeft + slotWidth * centerPixi.x,
-      y: slotPixiTop + slotHeight * centerPixi.y,
-      width: slotWidth,
-      height: slotHeight,
-    };
-  }
-
-  /**
-   * Resolve a per-digit offset id (or `undefined` when the slot has no offset). Returns the
-   * zero offset when the resolver isn't wired or the id maps to nothing — keeps the caller's
-   * arithmetic uniform regardless of authoring.
-   */
-  private static readonly ZERO_PER_DIGIT_OFFSET = Object.freeze({ x: 0, y: 0, w: 0, h: 0 });
-  private resolvePerDigitOffsetOrZero(
-    offsetId: number | undefined,
-    resolveOffset: BeatorajaRenderContext['resolveOffset'],
-  ): { x: number; y: number; w: number; h: number } {
-    if (offsetId === undefined || resolveOffset === undefined) {
-      return BeatorajaPlaySkinView.ZERO_PER_DIGIT_OFFSET;
-    }
-    const off = resolveOffset(offsetId);
-    return off ?? BeatorajaPlaySkinView.ZERO_PER_DIGIT_OFFSET;
-  }
-
-  private updateValueEntry(
-    entry: ValueEntry,
-    props: ReturnType<typeof destinationToSpriteProps>,
-    luaContext: BeatorajaLuaRuntimeContext,
-    resolveOffset: BeatorajaRenderContext['resolveOffset'],
-    nowMs: number,
-  ): void {
-    const baseTexture = entry.baseTexture;
-    if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
-      for (const sprite of entry.digitSprites) sprite.visible = false;
-      return;
-    }
-    if (!props.visible) {
-      for (const sprite of entry.digitSprites) sprite.visible = false;
-      return;
-    }
-
-    // Resolve the dynamic numeric value through the host's `prop.lua num` adapter. The host
-    // returns `undefined` when the ref doesn't apply to the current scene state (e.g.
-    // `folder_totalsongs = 300` returns `MIN_VALUE` upstream while the cursor is on a song
-    // bar — our adapter's equivalent is `undefined`). Mirrors upstream `SkinNumber.prepare`
-    // (`SkinNumber.java:133-136`) which sets `draw = false` and skips rendering when the
-    // resolved value is `Integer.MIN_VALUE`. Hide every digit sprite in that case.
-    //
-    // Refs returning a real number (including `0`) keep rendering — many score / combo
-    // readouts legitimately read 0 in the idle state. The skin-side `valueProperty` (Lua
-    // function) path always returns a finite number from `resolveIntegerProperty`, so it
-    // skips the hide branch (matches upstream where Lua-driven values can't return MIN_VALUE).
-    const resolved =
-      entry.value.valueProperty !== undefined
-        ? this.resolveIntegerProperty(entry.value.valueProperty, luaContext)
-        : entry.value.ref !== 0
-          ? this.resolveNumberValue(entry.value.ref)
-          : 0;
-    if (resolved === undefined) {
-      for (const sprite of entry.digitSprites) sprite.visible = false;
-      return;
-    }
-    const value = resolved;
-
-    // Animation frame for `cycle`-driven strips — picks the current `divy` row. Mirrors
-    // upstream `SkinSourceImageSet.getImageIndex(time, state)` (with `timer == null`, since
-    // our value-element schema doesn't expose the source-level `timer` field yet — most skins
-    // including ModernChic / default authors omit it). Re-crop runs whenever the frame index
-    // changes OR the value changes.
-    const frameIndex = valueFrameAt(entry.value, nowMs);
-
-    // Re-compose digit-cell textures when the value OR animation frame changes. The composer
-    // hands back one source-rect per digit slot (with the row's y-offset baked in); we crop a
-    // sub-texture per slot and assign it to the matching sprite.
-    let cells: ReturnType<typeof composeBeatorajaValueCells> | undefined;
-    const valueChanged = value !== entry.lastValue;
-    const frameChanged = frameIndex !== entry.lastFrameIndex;
-    if (valueChanged || frameChanged) {
-      entry.lastValue = value;
-      entry.lastFrameIndex = frameIndex;
-      cells = composeBeatorajaValueCells(entry.value, value, frameIndex);
-      for (let i = 0; i < entry.digitSprites.length; i += 1) {
-        const cell = cells[i];
-        if (cell === undefined || cell.hidden) continue;
-        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
-        if (cropped !== undefined) {
-          entry.digitSprites[i]!.texture = cropped;
-        }
-      }
-    }
-    // Always recompute hidden flags — visibility depends on the latest value even when textures
-    // weren't refreshed (the composer might emit `hidden: true` for slots that don't paint).
-    if (cells === undefined) cells = composeBeatorajaValueCells(entry.value, value, frameIndex);
-
-    // Lay the digit row across the destination rect. Per beatoraja's convention, `dst.w` is the
-    // PER-DIGIT slot width (NOT the total strip width) — the reference theme writes things like
-    // `{w = 18, h = 18}` with `digit = 4` for BPM readouts and expects each digit to render as an
-    // 18×18 square (total strip = 72px wide). Treating `dst.w` as the total instead made every
-    // digit collapse to `dst.w / digit` pixels wide, which is what produced the "potsubureteru"
-    // (squashed-text) reports. Height stays at `dst.h`.
-    const slotWidth = props.width;
-    // Inter-digit gap from beatoraja's `value.space`. Most authoring uses 0; some banner-style
-    // digit fonts use small positive values (1-3 px) to recover natural letter spacing. Per
-    // beatoraja, each subsequent slot is offset by `slotWidth + space`, NOT just `slotWidth`.
-    const space = Number.isFinite(entry.value.space) ? entry.value.space : 0;
-    const slotStep = slotWidth + space;
-    // Honor `value.align` (0 = right / no shift, 1 = left, 2 = center) — see
-    // `composeBeatorajaValueShift` for the formula. Without this, every authored `align: 1`
-    // (left-flush) and `align: 2` (centered) rendered identically to `align: 0`, which is what
-    // ModernChic's Result mainmenu (40+ sites) was hitting — score / miss / FAST / SLOW digits
-    // showed natural-right-aligned with leading blanks instead of flush-left.
-    const alignShift = composeBeatorajaValueShift(entry.value, value, slotWidth);
-    // Apply the destination's center anchor across the whole digit strip — each digit slot
-    // shares the same pivot proportions, computed against the strip's full width (not the per-
-    // digit width) so rotation pivots around the strip's authored center, not each digit's
-    // local middle. The +i*slotWidth offset stays as before.
-    const center = centerToAnchor(entry.group.center);
-    // Per-digit offsets — `value[].offset = [id0, id1, ...]` (parallel array, one offset
-    // id per slot). Mirrors upstream `SkinNumber.draw()`'s `+ offsets[j].x / .y / .w / .h`
-    // terms. Empty (= the default) keeps every slot at the un-offset position. Per-digit
-    // offsets operate on a single sprite and DO NOT inherit the parent's `relative` flag —
-    // SkinObject's center-shift is already baked into the parent's region; SkinNumber.draw
-    // adds offsets[j].* without center-shift regardless of `relative`.
-    const perDigitOffsets = entry.value.offsets;
-    for (let i = 0; i < entry.digitSprites.length; i += 1) {
-      const sprite = entry.digitSprites[i]!;
-      const cell = cells[i];
-      if (cell !== undefined && cell.hidden) {
-        sprite.visible = false;
-        continue;
-      }
-      sprite.visible = true;
-      sprite.anchor.set(center.x, center.y);
-      const off = this.resolvePerDigitOffsetOrZero(perDigitOffsets[i], resolveOffset);
-      const slot = BeatorajaPlaySkinView.perDigitSlotPixiProps({
-        parent: { x: props.x, y: props.y, height: props.height },
-        slotIndexX: i * slotStep,
-        slotBaseWidth: slotWidth,
-        alignShift,
-        off,
-        centerPixi: center,
-      });
-      sprite.x = slot.x;
-      sprite.y = slot.y;
-      sprite.width = slot.width;
-      sprite.height = slot.height;
-      sprite.alpha = props.alpha;
-      sprite.tint = props.tint;
-      sprite.angle = props.angle;
-      sprite.blendMode = props.blendMode;
-    }
-  }
-
-  /**
-   * Update a `floatvalue[]` entry. Resolves the live value via the host's `resolveNumberValue`
-   * (or `valueProperty` when authored), formats it as `<integer>.<fractional>` with the
-   * declared `iketa` / `fketa` widths and `gain` multiplier, then crops one cell per slot from
-   * the source strip and lays the row across the dst rect — same alignment / spacing logic as
-   * the integer value path. Skips the re-crop pass when the value hasn't changed.
-   */
-  private updateFloatValueEntry(
-    entry: FloatValueEntry,
-    props: ReturnType<typeof destinationToSpriteProps>,
-    luaContext: BeatorajaLuaRuntimeContext,
-    resolveOffset: BeatorajaRenderContext['resolveOffset'],
-    nowMs: number,
-  ): void {
-    const baseTexture = entry.baseTexture;
-    if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
-      for (const sprite of entry.slotSprites) sprite.visible = false;
-      return;
-    }
-    if (!props.visible) {
-      for (const sprite of entry.slotSprites) sprite.visible = false;
-      return;
-    }
-
-    // Resolve the dynamic value through `valueProperty` (Lua function) when authored, else
-    // fall through to the host's `resolveNumberValue(ref)`. `undefined` from the ref path
-    // mirrors upstream `MIN_VALUE` (= "ref doesn't apply now") — same hide-everything
-    // behaviour as the integer-value path above. See that block's comment for the
-    // upstream-faithfulness rationale.
-    const resolved =
-      entry.value.valueProperty !== undefined
-        ? this.resolveIntegerProperty(entry.value.valueProperty, luaContext)
-        : entry.value.ref !== 0
-          ? this.resolveNumberValue(entry.value.ref)
-          : 0;
-    if (resolved === undefined) {
-      for (const sprite of entry.slotSprites) sprite.visible = false;
-      return;
-    }
-    const value = resolved;
-
-    // Animation frame for `cycle`-driven strips — selects which `divy` row the slot textures
-    // crop from. Mirrors `SkinSourceImageSet.getImageIndex(time, state)` (with `timer == null`).
-    const frameIndex = floatValueFrameAt(entry.value, nowMs);
-
-    let cells: ReturnType<typeof composeBeatorajaFloatValueCells> | undefined;
-    const valueChanged = value !== entry.lastValue;
-    const frameChanged = frameIndex !== entry.lastFrameIndex;
-    if (valueChanged || frameChanged) {
-      entry.lastValue = value;
-      entry.lastFrameIndex = frameIndex;
-      cells = composeBeatorajaFloatValueCells(entry.value, value, frameIndex);
-      for (let i = 0; i < entry.slotSprites.length; i += 1) {
-        const cell = cells[i];
-        if (cell === undefined || cell.hidden) continue;
-        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
-        if (cropped !== undefined) {
-          entry.slotSprites[i]!.texture = cropped;
-        }
-      }
-    }
-    if (cells === undefined) cells = composeBeatorajaFloatValueCells(entry.value, value, frameIndex);
-
-    // Lay the slot row across the dst rect — same convention as `value[]`: `dst.w` is per-slot
-    // width, `space` adds inter-slot gap.
-    const slotWidth = props.width;
-    const space = Number.isFinite(entry.value.space) ? entry.value.space : 0;
-    const slotStep = slotWidth + space;
-    // Honor `value.align` — same formula as the integer `value[]` path. For float, leading
-    // hidden slots are the leading-blank pads on the integer half (when the value's int part
-    // has fewer digits than `iketa`). align=1 (LEFT) shifts the row left so significant
-    // digits flush with the dst's left edge; align=2 (CENTER) shifts half. Without this,
-    // ModernChic / GdbG result-screen `floatvalue` displays (BPM avg, accuracy %, ms delta)
-    // with explicit `align` rendered with leading blanks on the wrong side.
-    // Compute shift, then NEGATE — `SkinFloat.java:193` ADDS the shift to slot.x while our
-    // `perDigitSlotPixiProps` helper SUBTRACTS the `alignShift` parameter (modeled after
-    // `SkinNumber.draw()`'s `- shift`). Negating preserves a single helper for both element
-    // types: `slot.x = parent.x + j*slotStep - alignShift` with `alignShift = -upstreamShift`
-    // is equivalent to upstream's `slot.x = parent.x + j*slotStep + upstreamShift`.
-    const alignShift = -composeBeatorajaFloatValueShift(entry.value, value, slotWidth);
-    const center = centerToAnchor(entry.group.center);
-    // Per-digit offsets — same semantics as `value[]`. See `perDigitSlotPixiProps` for the
-    // upstream-faithful x/y/w/h derivation (mirrors `SkinFloat.java:189-199`).
-    const perDigitOffsets = entry.value.offsets;
-    for (let i = 0; i < entry.slotSprites.length; i += 1) {
-      const sprite = entry.slotSprites[i]!;
-      const cell = cells[i];
-      if (cell !== undefined && cell.hidden) {
-        sprite.visible = false;
-        continue;
-      }
-      sprite.visible = true;
-      sprite.anchor.set(center.x, center.y);
-      const off = this.resolvePerDigitOffsetOrZero(perDigitOffsets[i], resolveOffset);
-      const slot = BeatorajaPlaySkinView.perDigitSlotPixiProps({
-        parent: { x: props.x, y: props.y, height: props.height },
-        slotIndexX: i * slotStep,
-        slotBaseWidth: slotWidth,
-        alignShift,
-        off,
-        centerPixi: center,
-      });
-      sprite.x = slot.x;
-      sprite.y = slot.y;
-      sprite.width = slot.width;
-      sprite.height = slot.height;
-      sprite.alpha = props.alpha;
-      sprite.tint = props.tint;
-      sprite.angle = props.angle;
-      sprite.blendMode = props.blendMode;
-    }
-  }
-
-  private updateTextEntry(
-    entry: TextEntry,
-    props: ReturnType<typeof destinationToSpriteProps>,
-    luaContext: BeatorajaLuaRuntimeContext,
-  ): void {
-    const text = entry.text;
-    text.visible = props.visible;
-    if (!props.visible) return;
-
-    // Skip the assignment when the string hasn't changed — assigning the same string still triggers
-    // a Pixi glyph relayout, which is expensive (canvas rasterization).
-    //
-    // Resolution priority:
-    //   1. `constantText` — Lua-baked literal (GdbG result's `Avg N ms` strings, etc.) wins
-    //      unconditionally. Beatoraja's reference renderer treats this as a static label
-    //      regardless of `ref` / `valueProperty`.
-    //   2. `valueProperty` — Lua function-as-string-property (uncommon).
-    //   3. `ref` — runtime-resolved op code (titles / artists / etc.).
-    //   4. Empty fallback for `ref = 0` placeholder rows.
-    const next =
-      entry.element.constantText !== undefined
-        ? entry.element.constantText
-        : entry.element.valueProperty !== undefined
-          ? this.resolveStringProperty(entry.element.valueProperty, luaContext)
-          : entry.element.ref !== 0
-            ? (this.resolveTextContent(entry.element.ref) ?? '')
-            : '';
-    if (text.text !== next) {
-      text.text = next;
-      if (BEATORAJA_VIEW_DIAGNOSTICS) {
-        // eslint-disable-next-line no-console
-        console.log(
-          '[beatoraja-view] text content',
-          JSON.stringify({ id: entry.element.id, ref: entry.element.ref, text: next }),
-        );
-      }
-    }
-
-    // The destination's `x` is the ANCHOR POINT, not the bounding-box left edge. Upstream
-    // `SkinTextFont.java:107` interprets `region.x` per align:
-    //
-    //     final float x = (getAlign() == 2 ? region.x - region.width
-    //                    : getAlign() == 1 ? region.x - region.width / 2
-    //                    : region.x);
-    //     sprite.draw(font, layout, x + offsetX, ...);   // layout halign = ALIGN[getAlign()]
-    //
-    // After libGDX's `GlyphLayout` applies the layout's `halign` within `[x, x + region.width]`:
-    //   - align=0 LEFT:   text's LEFT edge at `region.x` (no shift).
-    //   - align=1 CENTER: text's CENTER at `region.x` (shifted by -region.width/2 then centered).
-    //   - align=2 RIGHT:  text's RIGHT edge at `region.x` (shifted by -region.width then right-anchored).
-    //
-    // In Pixi we get the same effect by setting `text.x = props.x` regardless of align, with
-    // the Pixi `text.anchor.x = 0 / 0.5 / 1` set at build time per the same align value. The
-    // anchor's local-space pivot lands at `text.x` in parent coords, so the LEFT / CENTER /
-    // RIGHT of the text span sits at `region.x` exactly as upstream — no per-frame offset.
-    //
-    // Audit A-4 (2024-12): the previous TS impl added `+ props.width / 2` (center) and
-    // `+ props.width` (right) to text.x, treating the dst rect as a bounding box rather than
-    // an anchor point. That landed `align=2 RIGHT` text `region.width` to the RIGHT of where
-    // upstream paints it.
-    //
-    // Width / height aren't forced onto the Text node: beatoraja's `text[]` semantics is
-    // "render glyphs at `size` px with auto-width" — clamping to the dst rect would scale
-    // the type, which is what beatoraja explicitly avoids.
-    text.x = props.x;
-    text.y = props.y;
-    text.alpha = props.alpha;
-    text.tint = props.tint;
-    text.angle = props.angle;
-    text.blendMode = props.blendMode;
-    // Word-wrap width — Pixi's text style treats `wordWrap` and `wordWrapWidth` as a pair, so
-    // when authors set `wrapping = true` we need a width or Pixi falls back to its 100px
-    // default. Mirror the destination's current width so wrapping happens at the dst rect
-    // boundary (matches beatoraja's libGDX `BitmapFontCache.addText(..., maxWidth, ...)` where
-    // `maxWidth = region.width`). Skip when wrapping is off — wordWrapWidth is harmless then,
-    // but keeping it untouched avoids gratuitous Pixi style invalidation on non-wrap text.
-    if (entry.element.wrapping && props.width > 0 && text.style.wordWrapWidth !== props.width) {
-      text.style.wordWrapWidth = props.width;
-    }
-    // Per-frame scale — diverges between TTF (CSS-fonts) and bitmap (.fnt) text per upstream:
-    //
-    //  - **TTF / FreeType** (`SkinTextFont.java:103`):
-    //        font.getData().setScale(region.height / parameter.size);
-    //    The font is rasterized at `text[].size` and the per-frame scale tracks the current
-    //    keyframe's `region.height`. Animated-h dst rects scale the glyphs proportionally.
-    //
-    //  - **Bitmap font / .fnt** (`SkinTextBitmap.java:59`):
-    //        float scale = this.size / source.getOriginalSize();
-    //        font.getData().setScale(scale);
-    //    The scale is a CONSTANT derived from the authored `text[].size` and the .fnt's
-    //    natural size. `region.height` is IGNORED for sizing — the displayed glyph height
-    //    equals `text[].size` regardless of the dst rect's height.
-    //
-    //    Pixi's BitmapText resolves the bitmap's natural size automatically and renders at
-    //    `style.fontSize` (= `text[].size`, set at build time). With `scale = 1` the rendered
-    //    height equals `text[].size` — matching upstream's effective output.
-    //
-    // `overflow = 1` (= shrink-to-fit, `SkinTextFont.java:124-130` & `SkinTextBitmap.java:94-100`):
-    // when the rendered text is wider than the destination box at the height-derived scale,
-    // x-shrink proportionally so it stays inside. Applies to both TTF and bitmap. Other
-    // `overflow` modes (`0` = no handling, `2` = clip — uncommon) leave xScale at the
-    // height-derived value (no horizontal shrink applied).
-    //
-    // `Math.abs` mirrors the build-time `absElementSize` derivation in `buildTextEntry` — the
-    // BMFont sign convention treats `text.size`'s sign as a pixel-vs-point unit hint, not a
-    // signed magnitude, and upstream's `scale = this.size / originalSize` cancels the matched
-    // negatives. We strip the sign on both sides (.fnt fontSize and skin text.size) so the
-    // resulting Pixi scale is positive and the rendered glyph height equals `|text.size|`.
-    const referenceSize = Math.abs(entry.element.size) > 0 ? Math.abs(entry.element.size) : 24;
-    const isBitmap = text instanceof BitmapText;
-    const baseScale = isBitmap ? 1 : props.height > 0 ? props.height / referenceSize : 1;
-    let scaleX = baseScale;
-    const scaleY = baseScale;
-    if (entry.element.overflow === 1 && props.width > 0) {
-      // text.width is the natural width at the current scale (Pixi reports post-scale
-      // dimensions). Recover the unscaled width by dividing by the current scale, then check
-      // if the would-be drawn width at `baseScale` exceeds the box — shrink x if so.
-      const unscaledWidth = text.width / Math.max(text.scale.x, 0.0001);
-      const drawnWidth = unscaledWidth * baseScale;
-      if (drawnWidth > props.width && drawnWidth > 0) {
-        scaleX = baseScale * (props.width / drawnWidth);
-      }
-    }
-    text.scale.set(scaleX, scaleY);
-  }
-
-  /**
-   * Update an imageset entry. Resolves the runtime ref op to a sub-image index (clamped to the
-   * `images[]` range), then paints the matching sub-image's cell-0 texture into the sprite. The
-   * sub-image's own `divx` / `divy` / `timer` / `cycle` settings still apply — multi-frame
-   * sub-images animate the same way regular `image[]` entries do, with the extra wrinkle that
-   * the active sub-image switches based on `ref`.
-   *
-   * Hidden when:
-   *   - The destination's standard `props` say so
-   *   - The resolved sub-image is `undefined` (skin omitted that slot)
-   *   - The sub-image's frame crop fails (degenerate `divx` / `divy` / source-rect)
-   */
-  private updateImagesetEntry(
-    entry: ImagesetEntry,
-    context: BeatorajaRenderContext,
-    props: ReturnType<typeof destinationToSpriteProps>,
-    luaContext: BeatorajaLuaRuntimeContext,
-  ): void {
-    const sprite = entry.sprite;
-    sprite.visible = props.visible;
-    if (!props.visible) return;
-    // Resolve the sub-image index from the ref op. `ref = 0` means "no ref" → always slot 0.
-    // Out-of-range values clamp to the available images so a runtime that pushes a 1 into a
-    // 1-slot imageset doesn't blank the sprite.
-    let subIndex = 0;
-    if (entry.element.valueProperty !== undefined || entry.element.ref !== 0) {
-      const raw =
-        entry.element.valueProperty !== undefined
-          ? this.resolveIntegerProperty(entry.element.valueProperty, luaContext)
-          : this.resolveRefValue(entry.element.ref);
-      if (Number.isFinite(raw) && raw >= 0) {
-        subIndex = Math.min(entry.element.images.length - 1, Math.floor(raw));
-      }
-    }
-    const sub = entry.subImages[subIndex];
-    if (sub === undefined) {
-      // Fall back to the first valid slot — better than blanking when the skin authored a sub-id
-      // that didn't resolve to a known image.
-      let fallback: (typeof entry.subImages)[number];
-      for (const s of entry.subImages) {
-        if (s !== undefined) {
-          fallback = s;
-          break;
-        }
-      }
-      if (fallback === undefined) {
-        sprite.visible = false;
-        return;
-      }
-      this.paintImagesetSprite(sprite, fallback, entry, context, props);
-      return;
-    }
-    // Track the last index so we can short-circuit the texture rebuild when the ref didn't change.
-    if (entry.lastSubIndex !== subIndex) {
-      entry.lastSubIndex = subIndex;
-      // Force a frame rebuild on the next branch so the sprite picks up the new sub-image.
-      entry.lastFrame = -1;
-    }
-    this.paintImagesetSprite(sprite, sub, entry, context, props);
-  }
-
-  /**
-   * Helper for `updateImagesetEntry`. Computes the active frame index for the picked sub-image
-   * (using its own `divx` / `divy` / `timer` / `cycle`), crops the matching cell, and writes
-   * sprite props. Extracted because the resolver-fallback path needs the same logic.
-   */
-  private paintImagesetSprite(
-    sprite: Sprite,
-    sub: NonNullable<ImagesetEntry['subImages'][number]>,
-    entry: ImagesetEntry,
-    context: BeatorajaRenderContext,
-    props: ReturnType<typeof destinationToSpriteProps>,
-  ): void {
-    const baseTexture = sub.baseTexture;
-    if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
-      sprite.visible = false;
-      return;
-    }
-    // Frame selection mirrors `updateImageEntry` — when the sub-image carries its own `ref` op,
-    // sample that and let `imageRefFrame` map the op value to a frame index; otherwise advance
-    // by timer / cycle. (Distinct from the OUTER `element.ref` which selects WHICH sub-image is
-    // active — that one already happened in `updateImagesetEntry`.)
-    const refFrame = sub.image.ref !== 0 ? imageRefFrame(sub.image, this.resolveRefValue(sub.image.ref)) : -1;
-    const frame = refFrame >= 0 ? refFrame : imageFrameAt(sub.image, computeImagesetTimerElapsed(sub.image, context));
-    if (frame !== entry.lastFrame) {
-      entry.lastFrame = frame;
-      const cell = imageFrameRect(sub.image, frame);
-      const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
-      if (cropped === undefined) {
-        sprite.visible = false;
-        return;
-      }
-      sprite.texture = cropped;
-    }
-    const center = centerToAnchor(entry.group.center);
-    sprite.anchor.set(center.x, center.y);
-    sprite.x = props.x + center.x * props.width;
-    sprite.y = props.y + center.y * props.height;
-    sprite.width = props.width;
-    sprite.height = props.height;
-    sprite.alpha = props.alpha;
-    sprite.tint = props.tint;
-    sprite.angle = props.angle;
-    sprite.blendMode = props.blendMode;
-  }
-
-  /**
-   * Update a `pmchara` entry — popn-style 9K POMYU character. Paints the source's full texture
-   * at the destination rect (no sub-rect crop, no animation cycling). Hidden when:
-   *
-   *   - The destination's standard `props.visible` says so
-   *   - The source has no texture (no character pack loaded, the wildcard's `|TAG|` syntax
-   *     didn't match anything, or the `def: "Off"` filepath default is in effect)
-   *
-   * Frame-cycling animation driven by chart cues is a follow-up patch — most users running
-   * 9K charts won't have a character pack dropped anyway, so the static rendering is graceful
-   * out of the box.
-   */
-  private updatePmCharaEntry(entry: PmCharaEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
-    const sprite = entry.sprite;
-    if (!props.visible || entry.baseTexture === undefined || entry.baseTexture === Texture.EMPTY) {
-      sprite.visible = false;
-      return;
-    }
-    sprite.visible = true;
-    sprite.texture = entry.baseTexture;
-    const center = centerToAnchor(entry.group.center);
-    sprite.anchor.set(center.x, center.y);
-    sprite.x = props.x + center.x * props.width;
-    sprite.y = props.y + center.y * props.height;
-    sprite.width = props.width;
-    sprite.height = props.height;
-    sprite.alpha = props.alpha;
-    sprite.tint = props.tint;
-    sprite.angle = props.angle;
-    sprite.blendMode = props.blendMode;
   }
 
   /** Tear down sprites and the container. Textures live on the cache (no `dispose()` by design). */
@@ -2190,157 +1006,6 @@ export class BeatorajaPlaySkinView {
     this.clipMask.destroy({ children: false, texture: false, textureSource: false, context: true });
     this.container.destroy({ children: false });
   }
-}
-
-/**
- * Per-sub-image animation clock — same lookup as `computeAnimationElapsed` but typed against the
- * sub-image's own `BeatorajaImageElement` instead of the SpriteEntry wrapper. Imageset sub-images
- * animate independently of one another even though they share an enclosing destination.
- */
-function computeImagesetTimerElapsed(image: BeatorajaImageElement, context: BeatorajaRenderContext): number {
-  const start = imageTimerStart(image, context);
-  if (start === undefined) return 0;
-  return Math.max(0, context.nowMs - start);
-}
-
-function computeAnimationElapsed(entry: SpriteEntry, context: BeatorajaRenderContext): number {
-  // Animation timer defaults to "scene start" when the image's `timer` is 0. Otherwise wait for the named timer to
-  // fire before advancing the cycle (mirrors beatoraja's behavior — a key-bomb animation only animates after the
-  // matching key-bomb timer started).
-  const start = imageTimerStart(entry.image, context);
-  if (start === undefined) return 0;
-  return Math.max(0, context.nowMs - start);
-}
-
-function imageTimerStart(image: BeatorajaImageElement, context: BeatorajaRenderContext): number | undefined {
-  if (image.timerFunction !== undefined) {
-    const value = evaluateBeatorajaLuaNumber(image.timerFunction, context.lua);
-    if (value === undefined || value < 0) return undefined;
-    return value / 1000;
-  }
-  if (image.timer === 0) return 0;
-  return context.getTimerStart(image.timer);
-}
-
-/**
- * Compute the visible-height ratio for a sprite carrying a `disapearLine` clip (= the hidden-
- * cover behavior). Returns `1` when no clip is active (no disapearLine on the image OR the
- * line sits above the rect's top edge), `0` when the rect is entirely below the line (totally
- * hidden), and a fractional `[0, 1]` when the rect straddles the line. Mirrors `SkinHidden.java`'s
- * draw-time logic: only `y_skin > disapearLineAddedLift` shows.
- */
-function computeDisapearVisibleRatio(
-  image: BeatorajaImageElement,
-  props: { y: number; height: number },
-  canvasHeight: number,
-  resolveOffset: BeatorajaRenderContext['resolveOffset'],
-): number {
-  if (!(image.disapearLine >= 0)) return 1;
-  if (props.height <= 0) return 0;
-  // OFFSET_LIFT.y is the player's lift slider in skin-pixel Y-UP units. `OFFSET_LIFT` is
-  // property id `3` in beatoraja's `SkinProperty` constants. Without a wired resolver (or with
-  // the lift slider at home) the value is 0 and the cover stays fully tucked away — matching
-  // the reference theme's "lift hides the cover by default" behavior.
-  const liftY = image.isDisapearLineLinkLift && resolveOffset !== undefined ? (resolveOffset(3)?.y ?? 0) : 0;
-  const lineSkin = image.disapearLine + liftY;
-  // Convert the skin-Y-UP line to a Pixi Y-DOWN coordinate so we can compare against the
-  // sprite's screen-space rect. `props.y` is the sprite's top in Pixi (smaller y = higher up);
-  // `props.y + props.height` is the bottom.
-  const linePixi = canvasHeight - lineSkin;
-  if (linePixi <= props.y) return 0; // Entire rect below the line — nothing visible.
-  if (linePixi >= props.y + props.height) return 1; // Line above the rect's bottom — full draw.
-  return (linePixi - props.y) / props.height;
-}
-
-/**
- * Synthetic image id `-110` BLACK — beatoraja's renderer recognises it as a virtual solid-black
- * panel. Skin authors reference it directly in `destination[]` for transition overlays / panel
- * backings without bundling a black PNG.
- */
-const SYNTHETIC_IMAGE_BLACK_ID = -110;
-/** `-100` STAGEFILE — the chart's `#STAGEFILE` bitmap (loading-screen art). */
-const SYNTHETIC_IMAGE_STAGEFILE_ID = -100;
-/** `-101` BACKBMP — the chart's `#BACKBMP` bitmap (select-scene preview). */
-const SYNTHETIC_IMAGE_BACKBMP_ID = -101;
-/** `-102` BANNER — the chart's `#BANNER` bitmap (small song-bar banner). */
-const SYNTHETIC_IMAGE_BANNER_ID = -102;
-
-/**
- * Build a synthetic `BeatorajaImageElement` for one of the chart-image sentinel ids. `w / h` are
- * sourced from the texture's natural pixel size so the destination's cell-cropping math
- * produces the right source rect — the dst rect handles the on-screen scaling separately.
- */
-function makeSyntheticChartImage(id: number, w: number, h: number): BeatorajaImageElement {
-  return {
-    id,
-    src: 0,
-    x: 0,
-    y: 0,
-    w,
-    h,
-    divx: 1,
-    divy: 1,
-    timer: 0,
-    cycle: 0,
-    ref: 0,
-    len: 0,
-    act: 0,
-    click: 0,
-    disapearLine: -1,
-    isDisapearLineLinkLift: false,
-    ifCodes: [],
-  };
-}
-
-/**
- * `BeatorajaImageElement` shape for the synthetic black panel. The `src` is irrelevant since we
- * supply the texture directly (1×1 black canvas via `ensureBlackTexture`); the `w / h` need to
- * be `1 × 1` so the destination's cell-cropping math leaves the texture intact.
- */
-const SYNTHETIC_BLACK_IMAGE: BeatorajaImageElement = {
-  id: SYNTHETIC_IMAGE_BLACK_ID,
-  src: 0,
-  x: 0,
-  y: 0,
-  w: 1,
-  h: 1,
-  divx: 1,
-  divy: 1,
-  timer: 0,
-  cycle: 0,
-  ref: 0,
-  len: 0,
-  act: 0,
-  click: 0,
-  disapearLine: -1,
-  isDisapearLineLinkLift: false,
-  ifCodes: [],
-};
-
-/**
- * Module-singleton 1×1 black texture. Built lazily on first use so headless test environments
- * (no `document`) can construct `BeatorajaPlaySkinView` without crashing — they fall back to
- * `Texture.EMPTY` (renders as transparent, which still keeps the rest of the scene functional).
- */
-let blackTextureCache: Texture | undefined;
-function ensureBlackTexture(): Texture {
-  if (blackTextureCache !== undefined) return blackTextureCache;
-  if (typeof document === 'undefined') {
-    blackTextureCache = Texture.EMPTY;
-    return blackTextureCache;
-  }
-  const canvas = document.createElement('canvas');
-  canvas.width = 1;
-  canvas.height = 1;
-  const ctx = canvas.getContext('2d');
-  if (ctx === null) {
-    blackTextureCache = Texture.EMPTY;
-    return blackTextureCache;
-  }
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, 1, 1);
-  blackTextureCache = Texture.from(canvas);
-  return blackTextureCache;
 }
 
 /**
