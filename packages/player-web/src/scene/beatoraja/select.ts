@@ -44,9 +44,11 @@ import {
   courseMatchesKeysFilter,
   matchesSearchQuery,
   normalizeSearchQuery,
+  sortLibraryEntries,
 } from '@be-music/scene-model';
 import {
   BEATORAJA_KEYS_FILTERS,
+  BEATORAJA_SORTS,
   beatorajaLnModeIndex,
   resolveBeatorajaSelectSliderValue,
   type BeatorajaSystemSoundPaths,
@@ -210,8 +212,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    *   6 TOTALNOTES      — by playable-note count ascending
    *   7 LASTPLAY        — by most-recent play (DB-required; falls back to DEFAULT today)
    *
-   * Cycled via the SORT button (act=12). Affects only flat song lists (inside a folder); at
-   * the root, songs are still grouped by `directoryLabel` so a sort would jumble folders.
+   * Cycled via the SORT button (act=12). At the root it orders the folder bars by their labels, as the browse model
+   * does (every order but DEFAULT and LASTPLAY).
    */
   private sortMode = 0;
   /**
@@ -705,7 +707,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         this.entries = sorted.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
       } else {
         const folders = [...groupSongsByFolder(this.options.songs), ...(this.options.courseFolders ?? [])];
-        this.entries = folders.map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
+        const bars = folders.map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
+        // A sort orders the folder bars too, by their labels, as the browse model sorts them (`sortLibraryEntries`).
+        this.entries = this.sortMode !== 0 ? sortLibraryEntries(bars, BEATORAJA_SORTS[this.sortMode] ?? 'OFF') : bars;
       }
     } else if (this.folderStack[this.folderStack.length - 1]!.courses !== undefined) {
       const courses = this.folderStack[this.folderStack.length - 1]!.courses!.filter(
