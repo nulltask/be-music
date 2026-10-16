@@ -34,6 +34,8 @@ describe('status line', () => {
   test('adds the tempo and the skin family to the playing status', () => {
     expect(describePlayingStatus('Song')).toBe('Playing: Song');
     expect(describePlayingStatus('Song', { tempoPercent: -20 })).toBe('Playing (tempo -20%): Song');
+    // A replay says so, tempo and all.
+    expect(describePlayingStatus('Song', { tempoPercent: 20, replay: true })).toBe('Replaying (tempo +20%): Song');
     expect(describePlayingStatus('Song', { family: 'beatoraja' })).toBe('Playing (beatoraja): Song');
     expect(describePlayingStatus('Song', { family: 'beatoraja', tempoPercent: 10 })).toBe(
       'Playing (beatoraja, tempo +10%): Song',

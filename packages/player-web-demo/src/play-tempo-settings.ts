@@ -68,9 +68,12 @@ export function describeTempo(percent: number): string | undefined {
  * The status line of a play starting: `Playing: <title>`, with the notes in parentheses (`Playing (beatoraja, tempo
  * -20%): <title>`).
  */
-export function describePlayingStatus(title: string, options: { family?: string; tempoPercent?: number } = {}): string {
+export function describePlayingStatus(
+  title: string,
+  options: { family?: string; tempoPercent?: number; replay?: boolean } = {},
+): string {
   const notes = [options.family, describeTempo(options.tempoPercent ?? 0)].filter((note) => note !== undefined);
-  return `Playing${notes.length > 0 ? ` (${notes.join(', ')})` : ''}: ${title}`;
+  return `${options.replay === true ? 'Replaying' : 'Playing'}${notes.length > 0 ? ` (${notes.join(', ')})` : ''}: ${title}`;
 }
 
 /** Stored settings, each field checked on its own; the defaults for anything missing or unreadable. */
