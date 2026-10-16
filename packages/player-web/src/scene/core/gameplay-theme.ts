@@ -119,9 +119,11 @@ export type GameplayThemeEvent =
 /**
  * `CoreGameplayView`'s overridable theme hooks, for the modules the scene's parts live in. The hooks stay `protected`
  * for the theme families that override them, so the scene hands the modules this object (`CoreGameplayView.theme`),
- * whose functions call them; `themeOwnsPlayfield` is the hook's getter.
+ * whose functions call them; `themeTiming`, `stageSize` and `themeOwnsPlayfield` are the hooks' getters.
  */
 export interface GameplayThemeHooks {
+  themeTiming(): GameplayThemeTiming;
+  stageSize(): GameplayStageSize;
   themeOwnsPlayfield(): boolean;
   resolveThemeLaneRect(channel: string, width: number, height: number): GameplayLaneRect | undefined;
   resolveThemeNoteCell(kind: GameplayThemeNoteKind, laneIndex: number): GameplayThemeNoteCell | undefined;

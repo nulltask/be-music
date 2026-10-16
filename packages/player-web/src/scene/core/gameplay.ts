@@ -282,7 +282,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Convenience accessor for the host's `Application`. Throws if called before {@link prepare} / {@link enter}; this is
    * intentional — every code path that touches `this.app` runs after one of them.
    */
-  private get app(): Application {
+  get app(): Application {
     if (!this.host) {
       throw new Error('CoreGameplayView: app accessed before prepare / enter');
     }
@@ -452,6 +452,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `protected` for the theme families that override them, so the modules call them through this object.
    */
   readonly theme: GameplayThemeHooks = {
+    themeTiming: () => this.themeTiming,
+    stageSize: () => this.stageSize,
     themeOwnsPlayfield: () => this.themeOwnsPlayfield,
     resolveThemeLaneRect: (channel, width, height) => this.resolveThemeLaneRect(channel, width, height),
     resolveThemeNoteCell: (kind, laneIndex) => this.resolveThemeNoteCell(kind, laneIndex),
@@ -1228,7 +1230,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Does the ruleset this run judges under show empty POORs inside its POOR counter? LR2 does; beatoraja shows a
    * figure of its own, and IIDX's counter is unmeasured, so both keep them apart.
    */
-  private resolveEmptyPoorCountsInPoorDisplay(): boolean {
+  resolveEmptyPoorCountsInPoorDisplay(): boolean {
     const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
     return ruleset === 'lr2';
   }
@@ -1359,7 +1361,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * conflicting with this listener — `togglePause` is a symmetric flip, and we only fire it when the visibility state
    * actually changes.
    */
-  private readonly handleVisibilityChange = (): void => {
+  readonly handleVisibilityChange = (): void => {
     log.info('visibilitychange', {
       visibilityState: document.visibilityState,
       hidden: document.hidden,
@@ -1386,7 +1388,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * document `visible` across Cmd-Tab app switches, so `visibilitychange` alone misses those cases. We treat `blur` /
    * `focus` the same way as `visibilitychange`, gated on the same `autoPaused` flag so the two listeners cooperate.
    */
-  private readonly handleWindowBlur = (): void => {
+  readonly handleWindowBlur = (): void => {
     log.info('window blur', {
       paused: this.paused,
       autoPaused: this.autoPaused,
@@ -1400,7 +1402,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
   };
 
-  private readonly handleWindowFocus = (): void => {
+  readonly handleWindowFocus = (): void => {
     log.info('window focus', { paused: this.paused, autoPaused: this.autoPaused });
     if (this.autoPaused && this.paused) {
       this.togglePause();
@@ -1408,21 +1410,21 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
   };
 
-  private readonly focus = (): void => {
+  readonly focus = (): void => {
     this.app.canvas.focus();
   };
 
   /** Holding Backspace for `QUIT_HOLD_THRESHOLD_MS` leaves the play the way Escape does. */
-  private readonly quitHold = new QuitHoldController({
+  readonly quitHold = new QuitHoldController({
     onComplete: () => this.requestExit(),
     now: () => performance.now(),
   });
 
-  private readonly handleQuitHoldKeyUp = (event: KeyboardEvent): void => {
+  readonly handleQuitHoldKeyUp = (event: KeyboardEvent): void => {
     this.quitHold.handleKeyUp(event);
   };
 
-  private readonly cancelQuitHold = (): void => {
+  readonly cancelQuitHold = (): void => {
     this.quitHold.cancel();
   };
 
@@ -1438,7 +1440,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * unwinds normally — the audio session is already silent by then, so the in-flight-source `node.stop()` calls
    * have nothing audible to interrupt.
    */
-  private readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => {
+  readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => {
     // Backspace first: its auto-repeat must still be `preventDefault`ed, which the repeat filter below would skip.
     if (this.quitHold.handleKeyDown(event)) return;
     if (event.repeat) return;
@@ -1621,7 +1623,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * A finger touching down on or moving over the canvas: presses the lane under it, or — when it slid out of the lane it
    * held — releases that lane and presses the new one. Mouse pointers are left alone (a click only focuses the canvas).
    */
-  private readonly handleTouchPointer = (event: PointerEvent): void => {
+  readonly handleTouchPointer = (event: PointerEvent): void => {
     if (!isTouchPlayPointer(event.pointerType)) return;
     if (event.type === 'pointermove' && !this.touchLanes.isTracking(event.pointerId)) return;
     const { width: designWidth, height: designHeight } = this.stageSize;
@@ -1642,7 +1644,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.pushTouchLaneChange(change, event.timeStamp);
   };
 
-  private readonly handleTouchPointerUp = (event: PointerEvent): void => {
+  readonly handleTouchPointerUp = (event: PointerEvent): void => {
     if (!isTouchPlayPointer(event.pointerType)) return;
     this.pushTouchLaneChange(this.touchLanes.up(event.pointerId), event.timeStamp);
   };
@@ -1732,7 +1734,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Pauses every BGA video element in the chart's video pool. The `<video>` element doesn't honor the audio-context
    * suspend, so without this the video keeps playing during a pause overlay.
    */
-  private pauseAllBgaVideos(): void {
+  pauseAllBgaVideos(): void {
     for (const handle of this.bgaVideos.values()) {
       if (!handle.video.paused) {
         handle.video.pause();
@@ -1744,7 +1746,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Resumes only the videos tied to currently-active base / layer cues. Avoids touching videos that were paused for a
    * different reason (e.g. an earlier cue switched away from them in `syncBgaVideo`).
    */
-  private resumeActiveBgaVideos(): void {
+  resumeActiveBgaVideos(): void {
     for (const track of ['base', 'layer'] as const) {
       const active = this.bgaActiveVideos[track];
       if (!active) continue;
