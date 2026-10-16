@@ -148,6 +148,40 @@ describe('DecideSession', () => {
     expect(on.continue).not.toHaveBeenCalled();
   });
 
+  it('holds Escape back until input opens when the skin holds every key back', () => {
+    const { session, on } = createSession({ timing: { inputDelayMs: 500, escapeWaitsForInput: true } });
+    session.enter(0);
+    session.frame(0);
+    session.handleKey(key('Escape', { timeStamp: 499 }));
+    session.dispatch({ type: 'cancel' });
+    session.frame(499);
+    expect(on.cancel).not.toHaveBeenCalled();
+    session.handleKey(key('Escape', { timeStamp: 500 }));
+    expect(on.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows how much of the auto advance has gone by while the host reports no progress, the host's once it does", () => {
+    let loaded: number | undefined;
+    const { session } = createSession({ timing: { autoAdvanceMs: 2000 }, progress: () => loaded });
+    session.enter(1000);
+    expect(session.frame(1000).progress).toBe(0);
+    expect(session.frame(1500).progress).toBe(0.25);
+    loaded = 0.9;
+    expect(session.frame(1600).progress).toBe(0.9);
+    loaded = undefined;
+    expect(session.frame(2999).progress).toBeCloseTo(0.9995);
+    expect(session.frame(3000).progress).toBe(1);
+  });
+
+  it('shows no progress without the host reporting one or an auto advance', () => {
+    const { session } = createSession({ timing: { autoAdvanceMs: 0 } });
+    session.enter(0);
+    expect(session.frame(0)).not.toHaveProperty('progress');
+    const { session: waiting } = createSession();
+    waiting.enter(0);
+    expect(waiting.frame(5000)).not.toHaveProperty('progress');
+  });
+
   it('leaves keys it does not use, key releases and auto-repeats to the page', () => {
     const { session, on } = createSession();
     session.enter(0);

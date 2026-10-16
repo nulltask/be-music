@@ -123,8 +123,8 @@ discovery so a single bad skin can't break the whole theme.
 `@be-music/beatoraja-skin/scene` maps the family-neutral scene models of `@be-music/scene-model` to a beatoraja
 skin's vocabulary: which ops are lit, what each number and text reads, which timers start and stop, the gauge, the
 graphs and the live offsets ([ADR 0002](./adr/0002-scene-model-package.md)). It is the beatoraja state resolution that
-used to live next to the renderer in `@be-music/player-web`; the play, select and result scenes read it today, and the
-beatoraja family view will in place of the runtime adapter.
+used to live next to the renderer in `@be-music/player-web`; the play, select and result scenes and the decide family
+view read it today, and the beatoraja play view will in place of the runtime adapter.
 
 ```mermaid
 flowchart LR
@@ -132,24 +132,28 @@ flowchart LR
     play["PlayState · engine frame"]
     result["PlayResult"]
     entry["LibraryEntry · list options"]
+    chart["LibraryChart · load progress"]
     course["CourseView"]
   end
   subgraph mapping["@be-music/beatoraja-skin/scene"]
     playR["play resolvers"]
     resultR["result resolvers"]
     selectR["select resolvers"]
+    decideR["decide resolvers"]
     courseR["course ids"]
   end
   ids["beatoraja ids<br/>ops · numbers · texts · timers<br/>gauge · graphs · offsets"]
-  view["play / select / result view"]
+  view["play / select / decide / result view"]
 
   play --> playR
   result --> resultR
   entry --> selectR
+  chart --> decideR
   course --> courseR
   playR --> ids
   resultR --> ids
   selectR --> ids
+  decideR --> ids
   courseR --> ids
   ids --> view
 ```
@@ -166,6 +170,7 @@ skin parser.
 | Play   | The play state, the engine's latest frame, the chart's facts, the clock       | `resolveBeatorajaPlayNumber` (the number table), `resolveBeatorajaPlayText`, `resolveBeatorajaPlayStartOps` / `ScoreOps` / `CoverOps`, `resolveBeatorajaJudgeEffect`, `resolveBeatorajaLaneTimers`, `resolveBeatorajaFrameTimers`, `resolveBeatorajaGaugeState`, the graph, slider, judge-graph and judge-state resolvers, `writeBeatorajaPlayOffset` |
 | Result | A `PlayResult`, the final gauge, the chart's `#TOTAL` and note kinds          | `resolveBeatorajaResultNumber`, `resolveBeatorajaResultOps`, `resolveBeatorajaResultText`, the result gauge and graph resolvers                                                                                                                                                                                                                       |
 | Select | The focused `LibraryEntry` and its chart's facts, the list options, the clock | `resolveBeatorajaSelectBarOps`, `resolveBeatorajaSelectNumber`, `resolveBeatorajaSelectText`, `resolveBeatorajaSelectRefValue`, `resolveBeatorajaSelectSliderValue`                                                                                                                                                                                   |
+| Decide | The `LibraryChart` about to be played, the play's loading progress            | `resolveBeatorajaDecideOps`, `resolveBeatorajaDecideNumber`, `resolveBeatorajaDecideGraphValue`                                                                                                                                                                                                                                                       |
 | Course | A `LibraryCourse` (a bar) or a `CourseView` (a running course)                | `resolveBeatorajaCourseBarOps`, `resolveBeatorajaCourseStageOps`, `resolveBeatorajaCourseText`                                                                                                                                                                                                                                                        |
 | Sounds | The theme's file map                                                          | `discoverBeatorajaSystemSoundPaths`, `discoverBeatorajaSelectBgmPath`, `pickBeatorajaThemeBgmPaths`                                                                                                                                                                                                                                                   |
 
@@ -173,7 +178,8 @@ The number tables share one score table (`resolveBeatorajaScoreNumber`): the sco
 judgment counts and their early / late split, the gauge and the chart TOTAL. The play adds the hi-speed, the lane
 covers, the white and green numbers (`resolveWhiteNumber`), the BPM at the playhead, time and the clock; the result adds
 the timing mean and deviation and reads every number it does not cover as 0; the select screen reads the focused
-chart's facts and 0 for the play's live numbers.
+chart's facts and 0 for the play's live numbers. The decide screen does not use the score table: it reads the chart's
+`#PLAYLEVEL`, its listed BPM on the BPM numbers and the loading progress (165), and 0 for every other number.
 
 ### Timers as data
 
@@ -240,6 +246,9 @@ them per entry. The state lives in parallel with LR2 theme state, so the demo ca
 The browser renderer uses `BeatorajaPlaySkinView` as the shared view for select, decide, gameplay, and result
 skins. The scenes read `TEXT`, `NUM`, `OPTION`, timers, gauges and graphs from the [scene mapping](#scene-mapping) and
 provide the runtime-specific parts themselves: chart images, note layers, BGA layers, audio and the result histories.
+The decide screen is player-web's beatoraja decide family view, made with `createDecideScene`
+([player-web.md](./player-web.md#the-decide-screen)): it draws the decide session's frames through the decide resolvers
+and reads beatoraja's scene timers off each frame.
 Gameplay uses `BeatorajaRuntimeAdapter` as the bridge: it keeps the play's state between engine UI signals and applies
 the ops and timers the mapping resolves for each frame, judgment and lane action.
 

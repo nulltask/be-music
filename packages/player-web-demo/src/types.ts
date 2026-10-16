@@ -1,4 +1,4 @@
-import type { SkinFamilyId, loadTextureFromBytes } from '@be-music/player-web/skin';
+import type { SkinFamilyId } from '@be-music/player-web/skin';
 import type { PlaylogViewReplay } from '@be-music/player/playlog';
 import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '@be-music/scene-model';
@@ -223,11 +223,3 @@ export interface DemoGuiState extends PlayTempoSettings {
   /** Triggered by clicking the GUI's "Screenshot" button. Captures the Pixi stage at its native size. */
   screenshot: () => void;
 }
-
-/**
- * Pixi `Texture` type as exposed by player-web's re-exported `loadTextureFromBytes`. Derived
- * from the function's return type so the demo doesn't need a direct `pixi.js` dependency for
- * the chart-image plumbing. `Awaited<…>` strips the `Promise` wrapper; `NonNullable<…>` strips
- * the `| undefined` so callers can branch on presence.
- */
-export type ChartImageTexture = NonNullable<Awaited<ReturnType<typeof loadTextureFromBytes>>>;

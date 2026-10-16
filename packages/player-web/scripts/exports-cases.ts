@@ -408,6 +408,10 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       const kits: playerWebCoreApi.DecideSceneKit[] = [
         { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
         { family: 'lr2', skin: BENCH_LR2_DECIDE_SKIN },
+        {
+          family: 'beatoraja',
+          kit: { skin: makeBenchBeatorajaSkin(), textures: makeEmptyBeatorajaTextureCache(), files: new Map() },
+        },
       ];
       for (const kit of kits) {
         const scene = playerWebCoreApi.createDecideScene(kit, {
@@ -705,6 +709,18 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreApi.loadAssetBytes(BENCH_BYTES);
     },
   });
+  define('player-web.loadBeatorajaChartImages', {
+    run: async () => {
+      // The bench chart has no images, so the source is walked without decoding anything.
+      await playerWebCoreApi.loadBeatorajaChartImages(BENCH_SONG, BENCH_SOURCE);
+    },
+  });
+  define('player-web.resolveBeatorajaChartImage', {
+    run: () => {
+      playerWebCoreApi.resolveBeatorajaChartImage({}, -100);
+      playerWebCoreApi.resolveBeatorajaChartImage(undefined, -102);
+    },
+  });
   define('player-web.loadBeatorajaFonts', {
     run: async () => {
       const cache = await playerWebCoreApi.loadBeatorajaFonts({
@@ -985,14 +1001,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.pickBeatorajaPlayableVariant({ keys: 7, isDouble: false, isPms: false });
       playerWebCoreApi.pickBeatorajaPlayableVariant({ keys: 9, isDouble: false, isPms: true });
     },
-  });
-  define('player-web.PixiBeatorajaDecideScene', {
-    run: () => {
-      new playerWebCoreApi.PixiBeatorajaDecideScene(
-        {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaDecideScene>[0],
-      );
-    },
-    interactive: true,
   });
   define('player-web.PixiBeatorajaGameplayView', {
     run: () => {
