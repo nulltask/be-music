@@ -39,7 +39,12 @@
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, type Ticker } from 'pixi.js';
 import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
 import { parseBeatorajaSongList, TIMER_SCENE_START, TIMER_SONGBAR_CHANGE } from '@be-music/beatoraja-skin';
-import { chartMatchesKeysFilter, courseMatchesKeysFilter } from '@be-music/scene-model';
+import {
+  chartMatchesKeysFilter,
+  courseMatchesKeysFilter,
+  matchesSearchQuery,
+  normalizeSearchQuery,
+} from '@be-music/scene-model';
 import {
   BEATORAJA_KEYS_FILTERS,
   beatorajaLnModeIndex,
@@ -50,7 +55,7 @@ import { BeatorajaPlaySkinView } from './skin-view.ts';
 import { BeatorajaSelectChartImages, type BeatorajaSelectChartImagesContext } from './select/chart-images.ts';
 import type { PixiBeatorajaSelectSceneOptions, PixiBeatorajaSelectSceneSnapshot } from './select/options.ts';
 import { BeatorajaSelectRows, type BeatorajaSelectRowsContext } from './select/rows.ts';
-import { BeatorajaSelectSearch, songMatchesQuery, type BeatorajaSelectSearchContext } from './select/search.ts';
+import { BeatorajaSelectSearch, type BeatorajaSelectSearchContext } from './select/search.ts';
 import { BeatorajaSelectSkinState, type BeatorajaSelectSkinStateContext } from './select/skin-state.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
@@ -210,8 +215,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    */
   private sortMode = 0;
   /**
-   * Live search query (case-insensitive substring match on title + artist + genre + sub
-   * title). Empty string = no filter. Updated by the search input flow (see
+   * Live search query (the browse model's search: `matchesSearchQuery` over the trimmed, lower-cased text). Empty
+   * string = no filter. Updated by the search input flow (see
    * {@link BeatorajaSelectSearch.searchActive} / handleKeyDown's `/` branch). Surfaced to the skin via
    * `BEATORAJA_TEXT.SEARCHWORD` so themes that author the search-display text node show
    * the live query while the user types.
@@ -682,12 +687,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const keysFilter = BEATORAJA_KEYS_FILTERS[filter] ?? 'ALL';
     const keymodeFiltered =
       filter === 0 ? this.options.songs : this.options.songs.filter((song) => chartMatchesKeysFilter(song, keysFilter));
-    // Search query — case-insensitive substring match on title / artist / genre / subtitle.
-    // Empty string short-circuits (no filter). Applied AFTER the keymode filter so a search
-    // narrows whatever the user already filtered to via the MODE button.
-    const query = this.searchQuery.toLowerCase();
+    // Search query — the browse model's search (`matchesSearchQuery`): a chart's title, subtitle, artist, genre or
+    // file label, a course's name, by the text trimmed and lower-cased. Empty string short-circuits (no filter).
+    // Applied AFTER the keymode filter so a search narrows whatever the user already filtered to via the MODE button.
+    const query = normalizeSearchQuery(this.searchQuery);
     const searchFiltered =
-      query.length === 0 ? keymodeFiltered : keymodeFiltered.filter((song) => songMatchesQuery(song, query));
+      query.length === 0
+        ? keymodeFiltered
+        : keymodeFiltered.filter((song) => matchesSearchQuery({ kind: 'song', song }, query));
     if (this.folderStack.length === 0) {
       // When a search is active at the root, beatoraja flattens the result into a song list
       // (no folder grouping) — matches the user's mental model of "show me every chart whose
@@ -701,8 +708,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         this.entries = folders.map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
       }
     } else if (this.folderStack[this.folderStack.length - 1]!.courses !== undefined) {
-      const courses = this.folderStack[this.folderStack.length - 1]!.courses!.filter((course) =>
-        courseMatchesKeysFilter(course, keysFilter),
+      const courses = this.folderStack[this.folderStack.length - 1]!.courses!.filter(
+        (course) =>
+          courseMatchesKeysFilter(course, keysFilter) && matchesSearchQuery({ kind: 'course', course }, query),
       );
       this.entries = courses.map((course): BrowserBrowseEntry => ({ kind: 'course', course }));
     } else {
@@ -710,7 +718,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // When a filter is active, the folder's pre-stored `songs` may include charts the
       // current filter excludes — re-filter on read so what the user sees matches the badge.
       let folderSongs = filter === 0 ? top.songs : top.songs.filter((s) => keymodeFiltered.includes(s));
-      if (query.length > 0) folderSongs = folderSongs.filter((s) => songMatchesQuery(s, query));
+      if (query.length > 0)
+        folderSongs = folderSongs.filter((song) => matchesSearchQuery({ kind: 'song', song }, query));
       if (this.sortMode !== 0) folderSongs = sortSongsByMode(folderSongs, this.sortMode);
       this.entries = folderSongs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
     }
