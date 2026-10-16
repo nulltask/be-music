@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { basicChart, denseChart, exRankChart, longNoteChart } from './charts.ts';
+import type { BeMusicJson } from '@be-music/json';
+import type { PlaylogRulesetResult } from '../../playlog/format.ts';
+import { basicChart, denseChart, exRankChart, longNoteChart, mineChart } from './charts.ts';
 import { command, observePlay, tap, type PlayObservation, type ScriptStep } from './harness.ts';
 
 /**
@@ -225,24 +227,89 @@ describe('driver drift', () => {
     expect(replay.endedAtMs).toBeLessThan(1100 + 1000 / 60);
   });
 
-  test('drift: a replay of a log recorded without key releases judges differently from the live play', async () => {
-    // A terminal without the kitty keyboard protocol sends repeated presses and no releases; the live play holds long
-    // notes on hold-grace windows, but the log has only `down` inputs, so its replay — like the simulators, which it
-    // agrees with — holds every key forever. Kept as a known divergence: see docs/playlog.md, "Fidelity notes".
-    const repeats: ScriptStep[] = Array.from({ length: 11 }, (_, index) => ({
-      atMs: 500 + index * 100,
-      press: ['11'],
-    }));
-    const live = await observePlay({ driver: 'manual', chart: longNoteChart(1), script: repeats });
-    expect(live.playlog?.inputs.every((input) => input.action === 'down')).toBe(true);
-    const replay = await observePlay({
-      driver: 'manual',
-      chart: longNoteChart(1),
-      options: { replayInputs: live.playlog!.inputs },
+  test('a play from input without key releases, its replay and the simulators agree', async () => {
+    // A terminal without the kitty keyboard protocol sends a key as one press and then, while it is held, as repeated
+    // presses, with no releases. The engine infers when each key came up and records it (`inferred` ups), so the log
+    // says what the judge saw: its replay and the play-log simulator of the play's ruleset reach the same result.
+    const presses = (fromMs: number, toMs: number, everyMs: number, lane: string): ScriptStep[] =>
+      Array.from({ length: Math.floor((toMs - fromMs) / everyMs) + 1 }, (_, index) => ({
+        atMs: fromMs + index * everyMs,
+        press: [lane],
+      }));
+    const press = (atMs: number, lane: string, pressedAtMs?: number): ScriptStep =>
+      pressedAtMs === undefined ? { atMs, press: [lane] } : { atMs, press: [lane], pressedAtMs };
+    const cases: Array<{ name: string; chart: BeMusicJson; script: ScriptStep[] }> = [];
+    for (const lnMode of [1, 2, 3] as const) {
+      // Held through a long note's tail, a long note let go early, a tap, a scratch long note, a late press.
+      cases.push({
+        name: `long notes, LNMODE ${lnMode}`,
+        chart: longNoteChart(lnMode),
+        script: [
+          ...presses(500, 1500, 100, '11'),
+          press(1012, '12'),
+          press(1260, '13', 1250),
+          press(2010, '16', 1995),
+          press(3600, '15', 3480),
+        ],
+      });
+      // A long note whose repeats start after the grace (it is let go, and the late repeats press nothing), one
+      // repeated past its tail, one let go before it, and a key mashed faster than the grace.
+      cases.push({
+        name: `key repeat, LNMODE ${lnMode}`,
+        chart: longNoteChart(lnMode),
+        script: [
+          press(500, '11'),
+          ...presses(1000, 1440, 40, '11'),
+          press(1000, '12'),
+          ...presses(1300, 2100, 40, '12'),
+          press(1200, '13'),
+          press(1250, '13'),
+          press(2500, '14'),
+          ...presses(2800, 3400, 40, '14'),
+          press(3500, '15'),
+        ],
+      });
+    }
+    // Mines under a held key, a mashed key and a press onto a mine.
+    cases.push({
+      name: 'mines',
+      chart: mineChart(),
+      script: [
+        press(450, '11'),
+        press(520, '11'),
+        ...presses(900, 1100, 50, '11'),
+        press(1240, '12'),
+        press(2000, '12'),
+        press(2400, '16'),
+        ...presses(2700, 2900, 50, '16'),
+      ],
     });
-    expect(live.summary?.emptyPoor).toBe(0);
-    expect(replay.summary?.emptyPoor).toBeGreaterThan(0);
-    expect(replay.summary).not.toEqual(live.summary);
-    expect(replay.playlog?.results?.native?.judge).toEqual(live.simulated?.lr2.judge);
+    for (const { name, chart, script } of cases) {
+      for (const judgeRuleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+        const play = `${name} / ${judgeRuleset}`;
+        const live = await observePlay({ driver: 'manual', chart, script, options: { judgeRuleset } });
+        expect(
+          live.playlog?.inputs.some((input) => input.inferred === true),
+          play,
+        ).toBe(true);
+        const replay = await observePlay({
+          driver: 'manual',
+          chart,
+          options: { judgeRuleset, replayInputs: live.playlog!.inputs },
+        });
+        expect(replay.summary, play).toEqual(live.summary);
+        expect(replay.playlog?.inputs, play).toEqual(live.playlog?.inputs);
+        const outcome = (result: PlaylogRulesetResult | undefined) => ({
+          judge: result?.judge,
+          fast: result?.fast,
+          slow: result?.slow,
+          exScore: result?.exScore,
+          maxCombo: result?.maxCombo,
+          gauge: { final: result?.gauge.final, cleared: result?.gauge.cleared },
+        });
+        expect(live.playlog?.results?.native?.judge, play).toBeDefined();
+        expect(outcome(live.simulated?.[judgeRuleset]), play).toEqual(outcome(live.playlog?.results?.native));
+      }
+    }
   });
 });

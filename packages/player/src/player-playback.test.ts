@@ -1117,7 +1117,13 @@ describe('player', () => {
       ]),
     });
     expect(recorded).toBeDefined();
-    expect(recorded!.inputs).toHaveLength(2);
+    // The two presses, and the release the engine inferred for the first (the input reports none); the play is over
+    // before the second key's hold grace lapses.
+    expect(recorded!.inputs.map((input) => `${input.action}${input.inferred === true ? ' inferred' : ''}`)).toEqual([
+      'down',
+      'up inferred',
+      'down',
+    ]);
     const originalJudged = original.perfect + original.great + original.good + original.bad;
     expect(originalJudged).toBeGreaterThan(0);
 

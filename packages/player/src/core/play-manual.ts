@@ -10,12 +10,15 @@ import {
 } from './judge-core.ts';
 import { resolveJudgeNowMsFromPressedAt } from './engine-clock.ts';
 import { formatJudgeWindowSet, printLaneMap, writeRuntimeEventLog } from './engine-trace.ts';
+import { createKeyStateInference } from './play-key-inference.ts';
 import type { PlaySession } from './play-session.ts';
 import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 
 /**
  * The manual judge strategy: the deterministic judge core (`judge-core.ts`) fed the play clock's time once per tick and
- * every key the player presses and releases, stamped with the instant it went down (`pressedAt`).
+ * every key the player presses and releases, stamped with the instant it went down (`pressedAt`). Until the input
+ * reports a release (`kitty-state`), its presses go through a key-state inference (`play-key-inference.ts`), which
+ * infers when each key came up.
  */
 
 /**
@@ -110,10 +113,20 @@ function createManualJudge(session: PlaySession): PlayJudge {
       ['tokens', tokens.join(',')],
     ]);
   };
+  // Input without key releases: when each key came up is inferred, until the input reports a release itself.
+  let inputReportsReleases = false;
+  const keyState = createKeyStateInference(
+    judgeCore,
+    step,
+    uiEnabled ? undefined : (seconds, tokens) => traceInput(seconds, 'inferred-release', tokens),
+  );
 
   return {
     ...judgeCoreJudge(session, judgeCore),
     judge: (tick) => {
+      if (!inputReportsReleases) {
+        keyState.releaseBefore(tick.nowSec);
+      }
       step({ kind: 'advance', nowSec: tick.nowSec, nowMs: tempoClock.initialTempoMsAt(tick.nowMs) });
     },
     judgedThroughSeconds: (tick) => tick.nowSec,
@@ -125,6 +138,11 @@ function createManualJudge(session: PlaySession): PlayJudge {
       }
       const commandSeconds = (): number => tempoClock.chartSecondsAt(clock.nowMs());
       if (command.kind === 'kitty-state') {
+        if (!inputReportsReleases) {
+          // The input reports its keys' state: its own releases take over from the inference.
+          inputReportsReleases = true;
+          keyState.stop();
+        }
         if (!uiEnabled) {
           if (command.pressTokens.length > 0) traceInput(commandSeconds(), 'press', command.pressTokens);
           if (command.repeatTokens.length > 0) traceInput(commandSeconds(), 'repeat', command.repeatTokens);
@@ -164,13 +182,12 @@ function createManualJudge(session: PlaySession): PlayJudge {
       if (candidateChannels.size === 0) {
         return;
       }
-      step({
-        kind: 'press',
-        channels: candidateChannels,
-        tokens: command.tokens,
-        nowSec,
-        nowMs: tempoClock.initialTempoMsAt(pressedAtMs),
-      });
+      const nowMs = tempoClock.initialTempoMsAt(pressedAtMs);
+      if (!inputReportsReleases) {
+        keyState.press(candidateChannels, command.tokens, nowSec, nowMs);
+        return;
+      }
+      step({ kind: 'press', channels: candidateChannels, tokens: command.tokens, nowSec, nowMs });
     },
   };
 }
