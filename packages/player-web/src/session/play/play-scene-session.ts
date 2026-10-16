@@ -7,7 +7,7 @@
 
 import { isJudge, type CourseView, type LibraryChart, type PlayOptions } from '@be-music/scene-model';
 import { SILENT_AUDIO } from '@be-music/skin-sdk';
-import type { CoreGameplayDisposeOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlayDisposeOptions } from './play-options.ts';
 import type { PlayFrame, PlayIntent, PlayStage, PlayViewEvent } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { drainSharedEngineSignals } from './play-engine.ts';
@@ -31,7 +31,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   /** How far the play has loaded, 0..1, while it loads (`PlayScene.prepare`). */
   public loadProgress: number | undefined;
   /** How the play's audio ends when the scene is disposed. */
-  public disposeOptions: CoreGameplayDisposeOptions = {};
+  public disposeOptions: PlayDisposeOptions = {};
   private readonly facts: PlaySceneFacts;
   private pending: PlayViewEvent[] = [];
   private enteredAtMs = 0;

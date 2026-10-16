@@ -20,7 +20,7 @@ import type { BrowserSongEntry } from '../../../collection/types.ts';
 import type { AudioAnalyzer, AudioFeatures } from '../../../runtime/audio-analysis.ts';
 import type { BgaCue, NonstopStageBgaTimeline } from '../../../scene/core/gameplay-bga.ts';
 import type { ChartBpmRange } from '../../../scene/core/gameplay-bpm-range.ts';
-import type { CoreGameplayViewOptions } from '../../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from '../../../session/play/play-options.ts';
 import type { LongNoteTracker } from '../../../scene/core/long-note-tracker.ts';
 import type { GoneDrawObjects } from '../../../scene/core/note-draw-window.ts';
 import type { HiSpeedTransition } from '../../../scene/hi-speed.ts';
@@ -163,9 +163,7 @@ export interface PlayChrome {
 
 /** The view's members the playfield passes use (a play view's members of these names), with the running play as `play`. */
 export interface PlayfieldContext extends LaneGeometryContext {
-  readonly options: Readonly<
-    Pick<CoreGameplayViewOptions, 'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay'>
-  >;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay'>>;
   /** How the family's skin answers the playfield: the stage, the lanes, the note and bomb cells, the effect lengths. */
   readonly playfieldSkin: PlayfieldSkin;
   readonly chrome: PlayChrome;

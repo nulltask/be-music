@@ -38,7 +38,7 @@ import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { supportsLiveTempoChange, type ReplayTempo } from '../../runtime/play-tempo.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from './play-options.ts';
 import { toBeMusicJudgeWindows } from '../../scene/core/judge-windows.ts';
 import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
@@ -65,7 +65,7 @@ const log = logger('gameplay');
 export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingContext {
   readonly options: Readonly<
     Pick<
-      CoreGameplayViewOptions,
+      PlaySessionOptions,
       | 'autoPlay'
       | 'autoScratch1P'
       | 'autoScratch2P'

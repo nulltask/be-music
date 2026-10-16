@@ -10,7 +10,7 @@ import type { Application, Texture } from 'pixi.js';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import { KEY_ON_FADE_OUT_MS } from '../../scene/gameplay-constants.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
@@ -48,7 +48,7 @@ export const BUILT_IN_PLAY_TIMING: PlayViewTiming = {
 
 /** What the built-in play view draws with besides its kit: the options of the play that change what is drawn. */
 export type BuiltInPlayViewOptions = Pick<
-  CoreGameplayViewOptions,
+  PlaySessionOptions,
   'bga' | 'autoPlay' | 'nonstop' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'layoutMode'
 > & {
   /** Where the chart's files are, for the skin's song images. */

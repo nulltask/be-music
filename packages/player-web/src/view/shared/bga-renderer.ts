@@ -17,7 +17,7 @@ import {
   resolveNonstopBgaAlpha,
   type BgaCue,
 } from '../../scene/core/gameplay-bga.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import type { ChildPool } from '../../scene/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { BeMusicImage } from '../../skin/be-music/types.ts';
@@ -27,7 +27,7 @@ import type { PlayfieldRuntime } from './playfield/context.ts';
 /** The view's members the BGA passes use: a play view's members of these names. */
 export interface BgaRendererContext {
   readonly play: PlayfieldRuntime;
-  readonly options: Readonly<Pick<CoreGameplayViewOptions, 'bga' | 'autoPlay' | 'nonstop'>>;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'bga' | 'autoPlay' | 'nonstop'>>;
   readonly playfieldSkin: PlayfieldSkin;
   readonly bgaLayerPool: ChildPool;
   readonly bgaTargetsScratch: PlayfieldBgaTarget[];

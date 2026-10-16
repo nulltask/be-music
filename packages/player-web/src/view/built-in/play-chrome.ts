@@ -12,7 +12,7 @@ import { resolveIidxRankLabel } from '@be-music/player/ruleset';
 import { resolveGameplayLaneGeometry, resolveGameplayLayout, type GameplayLayoutMode } from '@be-music/skin-sdk';
 import { recentJudgeTimings, resolveGreenNumber } from '@be-music/scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import type { Container } from 'pixi.js';
 import type {
   SkinlessGameplayChromeRenderer,
@@ -71,7 +71,7 @@ export interface LaneGeometryContext {
 /** What the skinless chrome's runtime is made from each frame: a play view's members of these names. */
 export interface PlayChromeContext {
   readonly play: PlayfieldRuntime;
-  readonly options: Readonly<Pick<CoreGameplayViewOptions, 'autoPlay' | 'beMusicEffects'>>;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects'>>;
   readonly audioFrame: AudioFeatures | undefined;
 }
 

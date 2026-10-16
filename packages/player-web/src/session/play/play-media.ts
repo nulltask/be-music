@@ -27,14 +27,14 @@ import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/n
 import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
-import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveGameplayAudioTailCleanupDelayMs } from '../../scene/core/gameplay-result-delay.ts';
 
 /** The play state the media preparation reads and fills: the play session's fields of these names. */
 export interface PlayMediaContext {
   readonly options: Readonly<
     Pick<
-      CoreGameplayViewOptions,
+      PlaySessionOptions,
       | 'audioCompressor'
       | 'audioCompressorMode'
       | 'audioCompressorStages'
@@ -241,7 +241,7 @@ export interface PlayMediaTeardownContext extends PlayMediaContext {
  * Releases the play's audio graph as the play is disposed (`PlaySession.dispose`); after a natural end with
  * `preserveAudioTail`, the graph is kept until the last samples have rung out.
  */
-export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: CoreGameplayDisposeOptions): void {
+export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: PlayDisposeOptions): void {
   // WebAudioSession owns the in-flight BufferSource tracking that the bus's connected sources hang off of, so
   // dispose it BEFORE we tear the bus down — that gives the session a chance to call `node.stop()` on every
   // still-playing source so they don't survive into the next chart's bus and bleed audio through. Fire-and-
