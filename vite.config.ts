@@ -77,6 +77,34 @@ const clockGlobals = ['Date', 'performance', 'setTimeout', 'setInterval', 'setIm
   (name) => ({ name, message: 'Deterministic code takes time as an input instead of reading a clock.' }),
 );
 
+/**
+ * The web runtime's scene sessions and family views (docs/player-web.md, "Scene sessions and family views"; ADR 0001).
+ * A session holds a screen's behaviour and is tested in Node with a fake view, so it uses Pixi only for types: the
+ * view owns everything drawn. A view only draws frames and returns intents, so it reaches neither the engine nor its
+ * web runtimes, and plays no sound of its own.
+ */
+const sceneSessionSources = ['packages/player-web/src/session/**/*.ts'];
+const familyViewSources = ['packages/player-web/src/view/**/*.ts'];
+const sceneSessionPixiMessage = 'A scene session uses Pixi only for types; the family view draws.';
+const sceneSessionImports = {
+  paths: [{ name: 'pixi.js', allowTypeImports: true, message: sceneSessionPixiMessage }],
+  patterns: [{ group: ['pixi.js/*', '@pixi/*'], allowTypeImports: true, message: sceneSessionPixiMessage }],
+};
+const familyViewEngineMessage = 'A family view draws frames and returns intents; the scene session drives the engine.';
+const familyViewImports = {
+  paths: [{ name: '@be-music/player/core/engine', message: familyViewEngineMessage }],
+  patterns: [{ group: ['**/runtime/engine-driver*', '**/runtime/web-*-runtime*'], message: familyViewEngineMessage }],
+};
+const familyViewAudioMessage =
+  'A family view plays no sound itself; the scene session plays it through the audio service.';
+const familyViewGlobals = ['AudioContext', 'OfflineAudioContext'].map((name) => ({
+  name,
+  message: familyViewAudioMessage,
+}));
+const familyViewProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
+  ['AudioContext', 'OfflineAudioContext'].map((property) => ({ object, property, message: familyViewAudioMessage })),
+);
+
 const workspaceProjects = workspacePackages.map((name) => ({
   extends: true as const,
   test: {
@@ -313,6 +341,20 @@ export default defineConfig({
               message: 'Deterministic code takes randomness as an input.',
             },
           ],
+        },
+      },
+      {
+        files: sceneSessionSources,
+        rules: {
+          'no-restricted-imports': ['error', sceneSessionImports],
+        },
+      },
+      {
+        files: familyViewSources,
+        rules: {
+          'no-restricted-imports': ['error', familyViewImports],
+          'no-restricted-globals': ['error', ...familyViewGlobals],
+          'no-restricted-properties': ['error', ...familyViewProperties],
         },
       },
       {
