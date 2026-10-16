@@ -38,7 +38,7 @@ import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { BrowserSongEntry } from '../../collection/types.ts';
-import { isResultRetryKey } from '../core/result-keys.ts';
+import { isResultRetryKey } from '../../session/result/result-keys.ts';
 import {
   attachBeatorajaSceneLifecycle,
   BeatorajaSceneBgmPlayer,
