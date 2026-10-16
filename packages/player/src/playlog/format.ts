@@ -2,6 +2,7 @@ import type { RandomDraw } from '@be-music/chart';
 import { GAUGE_TYPES, isGaugeType, type GaugeType } from '../ruleset/gauge-type.ts';
 import type { LongNoteMode } from '../playable-notes.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
+import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
 import {
   parsePlaylogTempoChanges,
   parsePlaylogViewChanges,
@@ -170,7 +171,7 @@ export interface PlaylogPlay {
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — simulations of such plays are non-standard. */
   judgeWindowOverrideMs?: number;
   /** Judge-window ruleset the live engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'` (the default). */
-  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset?: PlaylogRulesetId;
   /**
    * The play's `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes (`RandomDraws` from `@be-music/chart`): one
    * entry per such line of the chart, in file order. With the chart file, `resolveBmsControlFlowWithDraws(json,

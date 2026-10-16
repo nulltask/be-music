@@ -14,6 +14,7 @@ import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { GaugeType } from '../ruleset/gauge-type.ts';
+import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
 import packageJson from '../../package.json' with { type: 'json' };
 import {
   BE_MUSIC_PLAYLOG_FORMAT,
@@ -55,7 +56,7 @@ export interface PlaylogRecorderPlaySettings {
   dpFlip?: boolean;
   judgeWindowOverrideMs?: number;
   /** Judge-window ruleset the engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'`. */
-  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  judgeRuleset?: PlaylogRulesetId;
   /** The play's `#RANDOM` / `#SWITCH` outcomes (`PlayerOptions.randomDraws`). Recorded when non-empty. */
   randomDraws?: RandomDraws;
   /** The play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`). Recorded when true. */
