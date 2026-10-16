@@ -128,6 +128,9 @@ describe('resolveBeatorajaJudgeEffect', () => {
       startOnce: [TIMER_FULLCOMBO_2P],
       stop: [],
     });
+    expect(resolveBeatorajaJudgeEffect({ judge: 'GOOD', combo: 100 }, key2, 100).timers.startOnce).toEqual([
+      TIMER_FULLCOMBO_1P,
+    ]);
     expect(resolveBeatorajaJudgeEffect({ judge: 'GREAT', combo: 99 }, key2, 100).timers.startOnce).toEqual([]);
     expect(resolveBeatorajaJudgeEffect({ judge: 'GREAT', combo: 0 }, key2, 0).timers.startOnce).toEqual([]);
   });

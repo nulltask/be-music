@@ -48,6 +48,10 @@ describe('resolveBeatorajaGaugeState', () => {
       border: 0,
       mode: BEATORAJA_GAUGE_MODE.EXCLASS,
     });
+    expect(resolveBeatorajaGaugeState({ current: 64, max: 100, clearThreshold: 2, type: 'HARD' })).toMatchObject({
+      border: 2,
+      mode: BEATORAJA_GAUGE_MODE.HARD,
+    });
     expect(resolveBeatorajaGaugeState({ current: 0, max: 0 })).toBeUndefined();
     expect(resolveBeatorajaGaugeState(undefined)).toBeUndefined();
     expect(beatorajaGaugePercent({ current: 30, max: 120 })).toBe(25);

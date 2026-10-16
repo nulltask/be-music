@@ -11,13 +11,12 @@ export * from './registry.ts';
 export * from './lr2/family.ts';
 export { loadTextureFromBytes } from './lr2/textures.ts';
 
-// beatoraja family — theme loaders, runtime adapter, audio / fonts / textures / system sounds.
+// beatoraja family — theme loaders, runtime adapter, audio / fonts / textures.
 export * from './beatoraja/audio.ts';
 export * from './beatoraja/family.ts';
 export * from './beatoraja/fonts.ts';
 export * from './beatoraja/render.ts';
 export * from './beatoraja/runtime-adapter.ts';
-export * from './beatoraja/system-sounds.ts';
 export * from './beatoraja/textures.ts';
 export * from './beatoraja/theme.ts';
 

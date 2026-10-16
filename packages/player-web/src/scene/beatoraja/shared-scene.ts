@@ -6,6 +6,11 @@ import {
   TIMER_STARTINPUT,
   type BeatorajaSkin,
 } from '@be-music/beatoraja-skin';
+import {
+  resolveBeatorajaSkinText,
+  resolveBeatorajaSongText as resolveBeatorajaSongTextOf,
+  type BeatorajaSongTextInput,
+} from '@be-music/beatoraja-skin/scene';
 import { Container, Graphics, type Texture, type Ticker } from 'pixi.js';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
@@ -88,6 +93,30 @@ export function resolveBeatorajaChartImage(
   }
 }
 
+const SONG_TEXTS = new WeakMap<BrowserSongEntry, BeatorajaSongTextInput>();
+
+/** What a beatoraja skin's song texts read of a library chart (its sub-artist read off the chart once). */
+export function beatorajaSongTextOf(song: BrowserSongEntry | undefined): BeatorajaSongTextInput | undefined {
+  if (song === undefined) return undefined;
+  let text = SONG_TEXTS.get(song);
+  if (text === undefined) {
+    text = {
+      title: song.title,
+      subtitle: song.subtitle,
+      genre: song.genre,
+      artist: song.artist,
+      subartist: extractChartSubartist(song.chart),
+      directory: song.directoryLabel,
+    };
+    SONG_TEXTS.set(song, text);
+  }
+  return text;
+}
+
+/**
+ * The song and skin texts of the decide and result screens (`@be-music/beatoraja-skin/scene`); the difficulty-table
+ * texts read `tableTextFallback`.
+ */
 export function resolveBeatorajaSongText(
   refOp: number,
   options: {
@@ -96,35 +125,16 @@ export function resolveBeatorajaSongText(
     tableTextFallback?: string;
   },
 ): string | undefined {
-  const { song, skin } = options;
   switch (refOp) {
-    case BEATORAJA_TEXT.TITLE:
-      return song?.title ?? '';
-    case BEATORAJA_TEXT.SUBTITLE:
-      return song?.subtitle ?? '';
-    case BEATORAJA_TEXT.FULLTITLE:
-      return joinNonEmpty(song?.title, song?.subtitle);
-    case BEATORAJA_TEXT.GENRE:
-      return song?.genre ?? '';
-    case BEATORAJA_TEXT.ARTIST:
-      return song?.artist ?? '';
-    case BEATORAJA_TEXT.SUBARTIST:
-      return extractChartSubartist(song?.chart);
-    case BEATORAJA_TEXT.FULLARTIST:
-      return joinNonEmpty(song?.artist, extractChartSubartist(song?.chart));
-    case BEATORAJA_TEXT.SKIN_NAME:
-      return skin.name ?? '';
-    case BEATORAJA_TEXT.SKIN_AUTHOR:
-      return skin.author ?? '';
-    case BEATORAJA_TEXT.DIRECTORY:
-      return song?.directoryLabel ?? '';
     case BEATORAJA_TEXT.TABLE_NAME:
     case BEATORAJA_TEXT.TABLE_LEVEL:
     case BEATORAJA_TEXT.TABLE_FULL:
       return options.tableTextFallback;
-    default:
-      return undefined;
   }
+  return (
+    resolveBeatorajaSongTextOf(refOp, beatorajaSongTextOf(options.song)) ??
+    resolveBeatorajaSkinText(refOp, options.skin)
+  );
 }
 
 export function fitBeatorajaViewToStage(
@@ -287,8 +297,4 @@ export class BeatorajaSceneBgmPlayer {
       this.audioContext = undefined;
     }
   }
-}
-
-function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
-  return parts.filter((p): p is string => typeof p === 'string' && p.length > 0).join(' ');
 }
