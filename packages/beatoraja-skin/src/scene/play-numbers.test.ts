@@ -166,6 +166,29 @@ describe('resolveBeatorajaPlayNumber — BPMs and time', () => {
   });
 });
 
+describe('resolveBeatorajaPlayNumber — score rates', () => {
+  const score = { total: 100, perfect: 30, great: 8, good: 2, bad: 0, poor: 0, exScore: 68, score: 0 };
+
+  it('rates the EX score over the notes judged so far on 102 / 103, over every note on 115 / 116', () => {
+    // 68 / (40 × 2) = 85 % so far; 68 / 200 = 34 % of the chart.
+    const numbers = input({ score });
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.SCORE_RATE, numbers)).toBe(85);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.SCORE_RATE_AFTERDOT, numbers)).toBe(0);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.TOTAL_RATE, numbers)).toBe(34);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.TOTAL_RATE_AFTERDOT, numbers)).toBe(0);
+    const odd = input({ score: { ...score, perfect: 2, great: 1, good: 0, exScore: 5 } });
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.SCORE_RATE, odd)).toBe(83);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.SCORE_RATE_AFTERDOT, odd)).toBe(33);
+  });
+
+  it('reads 100 % before the first note is judged and 0 before the engine reports a score', () => {
+    const start = input({ score: { ...score, perfect: 0, great: 0, good: 0, exScore: 0 } });
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.SCORE_RATE, start)).toBe(100);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.TOTAL_RATE, start)).toBe(0);
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.SCORE_RATE, input())).toBe(0);
+  });
+});
+
 describe('resolveBeatorajaPlayNumber — judge popup and records', () => {
   it("reads each plate's combo at its latest judgment and the latest offset, truncated", () => {
     const numbers = input({ plateCombos: [12, 0, 7], lastJudgeDeltaMs: -12.7, maxCombo: 40 });

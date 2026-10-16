@@ -205,6 +205,8 @@ sequenceDiagram
   its border or more), as beatoraja's `GaugeDrawCondition` / `Gauge.isQualified` and LR2 read them (#430).
 - Number 101 (`SCORE2`) is the EX score, as beatoraja's `createScoreProperty` and LR2's 101 read it; 100 (`POINT`) is the
   displayed score (#430).
+- The rates are beatoraja's `ScoreDataProperty`: 102 / 103 the EX score over the notes judged so far during a play (100 %
+  before the first), 115 / 116 over every note; a result reads both over every note. Each is truncated to hundredths.
 - The engine has no MISS judgment (beatoraja's empty POOR): number 420 reads the POOR count; its early / late rows
   (421 / 422) read 0 during a play and POOR's on a result.
 - A result reads its max combo as the combo (104) too, and 75 as 0 (LR2's best-record max combo); the play reads the
