@@ -157,7 +157,7 @@ describe('driver drift', () => {
     expect(keepingOn.playlog?.play).not.toHaveProperty('endOnFailure');
   });
 
-  test('drift: autoPlay records the tempo and the tempo changes of a play it re-drives, a manual replay records neither', async () => {
+  test('a replay records neither the tempo nor the tempo changes it is re-driven at, in manual and auto play', async () => {
     const options = { speed: 1.5, replayTempoChanges: [{ timeUs: 1_000_000, tempo: 0.75 }] };
     const live = await observePlay({ driver: 'manual', chart: basicChart(), script: ON_TIME });
     const replay = await observePlay({
@@ -165,13 +165,14 @@ describe('driver drift', () => {
       chart: basicChart(),
       options: { ...options, replayInputs: live.playlog!.inputs },
     });
-    const auto = await observePlay({ driver: 'auto', chart: basicChart(), options });
+    // A replay of an auto-played log: its inputs are empty.
+    const auto = await observePlay({ driver: 'auto', chart: basicChart(), options: { ...options, replayInputs: [] } });
     expect(replay.host.filter((entry) => entry.includes(' tempo '))).toHaveLength(1);
     expect(replay.playlog?.play).not.toHaveProperty('tempo');
     expect(replay.playlog?.play).not.toHaveProperty('tempoChanges');
     expect(auto.host.filter((entry) => entry.includes(' tempo '))).toHaveLength(1);
-    expect(auto.playlog?.play.tempo).toBe(1.5);
-    expect(auto.playlog?.play.tempoChanges).toHaveLength(1);
+    expect(auto.playlog?.play).not.toHaveProperty('tempo');
+    expect(auto.playlog?.play).not.toHaveProperty('tempoChanges');
   });
 
   test('drift: manualPlay follows replayTempoChanges only in a replay, autoPlay in any play', async () => {

@@ -13,7 +13,6 @@ import type { JudgeStrategy, PlayJudge, StrategyDrifts } from './play-strategy.t
 
 /** AUTO play's drifts from manual play (see {@link StrategyDrifts}). */
 const AUTO_DRIFTS: StrategyDrifts = {
-  recordsTempoInReplay: true,
   followsReplayTempoChangesAlways: true,
 };
 
