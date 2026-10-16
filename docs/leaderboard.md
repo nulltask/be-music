@@ -289,18 +289,19 @@ with its own rankings per ruleset, and never as single-chart plays.
   has, is recorded so in the course log (`course.release: false`), and its runs are refused as `unreleased`, as
   beatoraja keeps them off IR.
 - **NONSTOP runs.** A NONSTOP course is played as one stitched chart, and that play (`nonstop.playlog`) is what is
-  judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it, since
-  `stitchNonstopCourse` is deterministic: each stage chart must hash to its stage's chart fingerprint, is resolved with
-  the `#RANDOM` draws its stage recorded (`nonstop.stages[].randomDraws`), gets the course's long-note constraint
-  (`applyCourseLongNoteConstraint`), and the stages are stitched with the recorded connections, placement and stitching
+  judged and ranked. The server rebuilds the stitched chart from the stage charts exactly as the client built it: both
+  take the same deterministic pipeline (`prepareNonstopCourse` in `@be-music/player/course`, see
+  [Courses and dan certification](./course.md#nonstop-courses)). Each stage chart must hash to its stage's chart
+  fingerprint, is resolved with the `#RANDOM` draws its stage recorded (`nonstop.stages[].randomDraws`), gets the
+  course's long-note constraint, and the stages are stitched with the recorded connections, placement and stitching
   rules (`nonstop.stitch`, version 1 when absent; rules the server does not know are `nonstop-stitch-unsupported`). The
   stitched play must have been recorded on that chart — its play fingerprint is the rebuilt chart's
-  (`nonstop-chart-mismatch`) — and the stage map must be the rebuilt one: the stage placements, the stage of every
-  note, and the number of stages the play reached (`nonstop-stage-mismatch`). The stitched play must pass the
-  single-play eligibility check and play under the course's constraints; it is re-simulated under every ruleset, and a
-  play given up with ESC is a failed run. The run is ranked under the course fingerprint, like any course run. A
-  NONSTOP run registers no stage charts: its cut-out stages carry the stitched play's judge rank and TOTAL, not their
-  charts' own.
+  (`nonstop-chart-mismatch`) — and the stage map must be the rebuilt one (`resolveNonstopRun`): the stage
+  placements, the stage of every note, and the number of stages the play reached (`nonstop-stage-mismatch`). The
+  stitched play must pass the single-play eligibility check and play under the course's constraints; it is
+  re-simulated under every ruleset, and a play given up with ESC is a failed run. The run is ranked under the course
+  fingerprint, like any course run. A NONSTOP run registers no stage charts: its cut-out stages carry the stitched
+  play's judge rank and TOTAL, not their charts' own.
 - **Figures and bests.** Per ruleset: EX score, lamp (the course lamp on the chart lamp scale), BP, course max combo,
   stages reached and trophy, and each reached stage's own figures (EX score, notes, BP, max combo, judgments, the gauge
   it handed on, cleared or not), which the run page breaks the run down by. Bests are kept beatoraja style, as for
@@ -350,11 +351,13 @@ A NONSTOP run takes the place of the stage loops with one rebuild of its stitche
 ```mermaid
 flowchart TD
   charts["stage charts"] --> fp{"each hashes to its<br/>chartFingerprint?"}
-  fp -->|yes| resolve["resolvePlayChart<br/>with the recorded draws"]
-  resolve --> ln["applyCourseLongNoteConstraint"]
-  ln --> stitch["stitchNonstopCourse<br/>connections, placement, stitch"]
-  stitch --> same{"play fingerprint ==<br/>nonstop.playlog's?"}
-  same -->|yes| map{"stage map ==<br/>the rebuilt one?"}
+  fp -->|yes| prepare
+  subgraph prepare["prepareNonstopCourse"]
+    resolve["resolve with<br/>the recorded draws"] --> ln["long-note constraint"]
+    ln --> stitch["stitch: connections,<br/>placement, stitch"]
+  end
+  prepare --> same{"play fingerprint ==<br/>nonstop.playlog's?"}
+  same -->|yes| map{"stage map ==<br/>resolveNonstopRun's?"}
   map -->|yes| sim["simulateCoursePlaylog<br/>on the stitched play"]
   fp -->|no| refuse["422"]
   same -->|no| refuse

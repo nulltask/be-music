@@ -1,16 +1,14 @@
 import { computeChartFingerprint, computePlayFingerprint } from '@be-music/chart';
 import {
-  applyCourseLongNoteConstraint,
   normalizeCourseConstraints,
   NONSTOP_STITCH_VERSIONS,
-  stitchNonstopCourse,
+  prepareNonstopCourse,
+  resolveNonstopRun,
+  type PrepareNonstopCourseResult,
 } from '@be-music/player/course';
 import {
   resolveChartRulesetFacts,
   resolveCourseStageChartFingerprints,
-  resolveNonstopNoteStages,
-  resolveNonstopPlaylogStages,
-  resolvePlayChart,
   splitNonstopPlaylog,
   type BeMusicCoursePlaylog,
   type PlaylogNonstopStage,
@@ -146,12 +144,14 @@ const sameStage = (left: PlaylogNonstopStage, right: PlaylogNonstopStage): boole
   left.rate === right.rate;
 
 /**
- * Rebuilds a NONSTOP run's stitched chart from its stage charts, as the host stitched it: each stage chart (checked
- * against its chart fingerprint) resolved with the `#RANDOM` draws its stage recorded, the course's long-note constraint
- * applied, and the stages stitched with the recorded connections, placement and stitching rules (`stitchNonstopCourse`,
- * which is deterministic; rules this server does not know are refused). The stitched play (`nonstop.playlog`) must have been recorded on that chart — its play fingerprint
- * must be the rebuilt chart's — and the run's stage map must be the one the rebuilt chart gives: the stage placements,
- * which stage each note belongs to, and how many stages the play reached (the cut-out stages the log lists).
+ * Rebuilds a NONSTOP run's stitched chart from its stage charts with the pipeline the host stitched it with
+ * (`prepareNonstopCourse` in `@be-music/player/course`, which is deterministic): each stage chart (checked against its
+ * chart fingerprint) resolved with the `#RANDOM` draws its stage recorded, the course's long-note constraint applied,
+ * and the stages stitched with the recorded connections, placement and stitching rules (rules this server does not know
+ * are refused). The stitched play (`nonstop.playlog`) must have been recorded on that chart — its play fingerprint must
+ * be the rebuilt chart's — and the run's stage map must be the one the rebuilt chart gives (`resolveNonstopRun`): the
+ * stage placements, which stage each note belongs to, and how many stages the play reached (the cut-out stages the log
+ * lists).
  */
 export function checkNonstopStageCharts(
   courseLog: BeMusicCoursePlaylog,
@@ -168,39 +168,35 @@ export function checkNonstopStageCharts(
     courseLog.stages.map((_entry, index) => index),
   );
   if (!loaded.ok) return loaded;
-  const constraints = normalizeCourseConstraints(courseLog.course.constraints);
-  const stageInputs = [];
-  for (const [index, stage] of run.stages.entries()) {
-    const { json, chartPath } = loaded.charts.get(index)!;
-    try {
-      const { chart } = resolvePlayChart(json, { randomDraws: stage.randomDraws ?? [] });
-      stageInputs.push({ chart: applyCourseLongNoteConstraint(chart, constraints), pms: chartPath === '.pms' });
-    } catch {
-      return { ok: false, reason: 'nonstop-chart-mismatch', stage: index };
-    }
-  }
-  let stitched: ReturnType<typeof stitchNonstopCourse>;
+  let prepared: PrepareNonstopCourseResult;
   try {
-    stitched = stitchNonstopCourse(stageInputs, {
-      connections: run.connections,
-      placement: run.placement,
-      stitch,
-    });
+    prepared = prepareNonstopCourse(
+      run.stages.map((stage, index) => {
+        const { json, chartPath } = loaded.charts.get(index)!;
+        return { chart: json, chartPath, randomDraws: stage.randomDraws ?? [] };
+      }),
+      {
+        constraints: normalizeCourseConstraints(courseLog.course.constraints),
+        connections: run.connections,
+        placement: run.placement,
+        stitch,
+      },
+    );
   } catch {
     return { ok: false, reason: 'nonstop-chart-mismatch' };
   }
-  if (!stitched.ok) return { ok: false, reason: 'nonstop-chart-mismatch', ...stageOf(stitched.stage) };
+  if (!prepared.ok) return { ok: false, reason: 'nonstop-chart-mismatch', ...stageOf(prepared.stage) };
+  const { course } = prepared;
   // The stitched chart is played as `nonstop.bms`: no lane-mode extension, unless its stages are `.pms` charts.
-  const pms = stageInputs.some((stage) => stage.pms);
-  const fingerprints = [computePlayFingerprint(stitched.chart, { chartPath: undefined })];
-  if (pms) fingerprints.push(computePlayFingerprint(stitched.chart, { chartPath: '.pms' }));
+  const pms = course.stages.some((stage) => stage.chartPath === '.pms');
+  const fingerprints = [computePlayFingerprint(course.chart, { chartPath: undefined })];
+  if (pms) fingerprints.push(computePlayFingerprint(course.chart, { chartPath: '.pms' }));
   if (!fingerprints.includes(options.playFingerprint)) return { ok: false, reason: 'nonstop-chart-mismatch' };
 
-  const stages = resolveNonstopPlaylogStages(stitched.map);
-  const misplaced = stages.findIndex((stage, index) => !sameStage(stage, run.stages[index]!));
+  const rebuilt = resolveNonstopRun(course, run.playlog);
+  const misplaced = rebuilt.stages.findIndex((stage, index) => !sameStage(stage, run.stages[index]!));
   if (misplaced >= 0) return { ok: false, reason: 'nonstop-stage-mismatch', stage: misplaced };
-  const noteStages = resolveNonstopNoteStages(stitched.chart, stitched.map, run.playlog.chart.notes);
-  if (noteStages.some((stage, index) => stage !== run.noteStages[index])) {
+  if (rebuilt.noteStages.some((stage, index) => stage !== run.noteStages[index])) {
     return { ok: false, reason: 'nonstop-stage-mismatch' };
   }
   const reached = splitNonstopPlaylog(run, [], { ruleset: options.ruleset }).length;
