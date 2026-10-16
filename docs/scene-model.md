@@ -123,8 +123,9 @@ list options and the favourites. `restoreBrowse` takes it back over the library 
 
 This covers the course-folder restore fixes: the root lists the course folders after the chart folders, so a cursor
 left in a course folder comes back; the cursor kept is the live one at every depth; and a course bar is found by its
-key after a course run, even when a NONSTOP run replaced the library. `browseSnapshotFromSelectNavigation` and
-`browseSnapshotFromBeatorajaSelect` read the snapshots today's select scenes keep.
+key after a course run, even when a NONSTOP run replaced the library. The built-in and LR2 select screens keep a
+`BrowseSnapshot` across a play; `browseSnapshotFromSelectNavigation` converts the `{ folderPath, selectedIndex }` they
+kept before, and `browseSnapshotFromBeatorajaSelect` reads the beatoraja select scene's snapshot.
 
 ### Behaviour choices
 
@@ -155,6 +156,12 @@ key after a course run, even when a NONSTOP run replaced the library. `browseSna
 
 beatoraja's LN mode override (the LNMODE button) is not part of browsing; nothing plays it yet, so it is not in the
 models.
+
+A select session of the web runtime makes the choices the model leaves to it with its family's select policy
+(`session/select/select-policy.ts` in `@be-music/player-web`). On the built-in and LR2 screens a back-out at the root
+does nothing, a library of one chart folder opens it when there is no position to restore, a restore goes as far as
+the path matches, and the sort and the filters are the play options', which a restore keeps. The beatoraja policy
+leaves the screen at the root with the cancel cue and keeps its MODE and SORT in the browse position.
 
 ## Play options
 
@@ -301,7 +308,7 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | `groupSongsByFolder`, `resolveChartPlayVariant`                                  | `player-web` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (re-exported)              |
 | `matchesSearchQuery`, `wrappedCursorDelta`                                       | `player-web` core select                  | Same names (re-exported)                                                           |
 | The core select's sort and difficulty filter                                     | `player-web` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                               |
-| `resolveSelectNavigation`                                                        | `player-web` core select                  | Moved to `session/select/select-session.ts` (re-exported), over `restoreBrowse`    |
+| `resolveSelectNavigation`                                                        | `player-web` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse`       |
 | `DEFAULT_PLAY_OPTIONS`, the option cycles                                        | `player-web` core select                  | Same names (re-exported)                                                           |
 | `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                         | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue` (re-exported under the old names) |
 | The hi-speed range and steps                                                     | `player-web` `scene/hi-speed.ts`          | Same names (re-exported)                                                           |
@@ -311,9 +318,12 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation` | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)                     |
 | `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                 |
 
-The built-in and LR2 play screens keep one `PlayState` and read their result off it (`playResultFromPlayState`), so
-they follow the model's play-state choices above: a full combo's max combo is every note for any play, the result
-carries each judgment's early / late count, and the play log's visible time is the white number (`resolvePlaylogView`). The other scenes still keep their own browse and play state (the beatoraja
-runtime adapter its histories and covers); the scene sessions of the web runtime move onto these models. The skin
+The built-in and LR2 select screens browse with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
+`restoreBrowse`, `browseSystemSound`). The built-in and LR2 play screens keep one `PlayState` and read their result off
+it (`playResultFromPlayState`), so they follow the model's play-state choices above: a full combo's max combo is every
+note for any play, the result carries each judgment's early / late count, and the play log's visible time is the white
+number (`resolvePlaylogView`). The other scenes still keep their own browse and play state (the beatoraja select its own
+browse model, the beatoraja runtime adapter its histories and covers); the scene sessions of the web runtime move onto
+these models. The skin
 packages map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
 [beatoraja-skin.md](./beatoraja-skin.md#scene-mapping)).

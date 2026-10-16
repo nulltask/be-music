@@ -7,7 +7,6 @@
  * The pointer reads and drives the select scene through {@link SelectPointerContext}; the scene passes it.
  */
 
-import { wrappedCursorDelta } from '@be-music/scene-model';
 import type { BeMusicSelectLayout } from '@be-music/skin-sdk';
 import type { Application } from 'pixi.js';
 import type { BrowserBrowseEntry } from '../../collection/types.ts';
@@ -54,7 +53,8 @@ export interface SelectPointerContext {
   readonly themeDesignSize: SelectDesignSize | undefined;
   readonly beMusicDesignSize: SelectDesignSize;
   readonly beMusicSelectLayout: BeMusicSelectLayout;
-  selectedIndex: number;
+  /** The cursor in the list shown. */
+  readonly selectedIndex: number;
   /** The pointer in design pixels, `-1` while it is off the canvas. */
   mouseX: number;
   mouseY: number;
@@ -63,11 +63,15 @@ export interface SelectPointerContext {
   scrollReadText(delta: number): void;
   closeReadText(): void;
   resolveDesignSize(): SelectDesignSize;
-  currentEntries(): BrowserBrowseEntry[];
+  currentEntries(): readonly BrowserBrowseEntry[];
+  /** Moves the cursor bar by bar (`SelectSession.moveCursorBy`). */
   moveCursorBy(steps: number): void;
-  noteCursorChange(delta: number): void;
-  render(): void;
-  activateEntry(entry: BrowserBrowseEntry): void;
+  /** Moves the cursor one bar, wrapping past either end (`SelectSession.stepCursor`). */
+  stepCursor(direction: 1 | -1): void;
+  /** Puts the cursor on a bar (`SelectSession.jumpCursor`). */
+  jumpCursor(index: number): void;
+  /** Opens the folder or starts the bar under the cursor (`SelectSession.activateFocused`). */
+  activateFocused(): void;
   handleThemePointerDown(virtualX: number, virtualY: number): void;
   startSelectBgm(): Promise<void>;
 }
@@ -271,15 +275,9 @@ export class SelectPointer {
     const now = performance.now();
     if (now - this.lastWheelMoveAt < WHEEL_THROTTLE_INTERVAL_MS) return;
     this.lastWheelMoveAt = now;
-    const direction = event.deltaY > 0 ? 1 : -1;
-    this.ctx.selectedIndex = (this.ctx.selectedIndex + direction + entries.length) % entries.length;
-    // Use the wheel direction directly rather than the wrapped (new - old) delta. With a tiny list (e.g. 2 entries),
-    // wrapping from `last` back to `first` produces a `rawDelta` of `-(N-1)` whose shortest-path interpretation is
-    // "back by one", which would slide the bars in the wrong direction even though the user wheeled DOWN. Treating
-    // wheel input as an "infinite rail" — every notch always slides one slot in the wheel's direction — preserves the
-    // LR2 selection feel.
-    this.ctx.noteCursorChange(direction);
-    this.ctx.render();
+    // One bar in the wheel's direction, wrapping, and the bars slide that way even where the cursor wraps on a tiny
+    // list: wheel input is an "infinite rail", every notch one slot in its direction, as LR2's selection feels.
+    this.ctx.stepCursor(event.deltaY > 0 ? 1 : -1);
   };
 
   readonly handlePointerDown = (event: PointerEvent): void => {
@@ -360,14 +358,8 @@ export class SelectPointer {
     if (entryIndex < 0 || entryIndex >= fallbackEntries.length) {
       return;
     }
-    const entry = fallbackEntries[entryIndex];
-    if (!entry) return;
-    const previous = this.ctx.selectedIndex;
-    if (entryIndex !== previous) {
-      this.ctx.noteCursorChange(wrappedCursorDelta(entryIndex - previous, fallbackEntries.length));
-    }
-    this.ctx.selectedIndex = entryIndex;
-    this.ctx.render();
-    this.ctx.activateEntry(entry);
+    // The bar clicked comes under the cursor (sliding the shortest way round) and starts at once.
+    this.ctx.jumpCursor(entryIndex);
+    this.ctx.activateFocused();
   }
 }

@@ -1,6 +1,6 @@
 // be-music course checklist fixture skin (LR2): the select screen.
-// It only has to exercise behaviour: the bar list, the PLAY / AUTO buttons (15 / 16), the course maker's
-// finish / cancel buttons (230 / 231) and the course texts behind op 290. parts.png is four bands of colour,
+// It only has to exercise behaviour: the bar list, the PLAY / AUTO buttons (15 / 16), the filter and sort buttons
+// (10 / 11 / 12, 91-96), the course maker's finish / cancel buttons (230 / 231) and the course texts behind op 290. parts.png is four bands of colour,
 // 64 pixels each: grey, blue, orange, green (written by scripts/course-checklist/fixtures.ts).
 #INFORMATION,5,BE-MUSIC E2E,be-music,
 #ENDOFHEADER
@@ -47,6 +47,27 @@
 #DST_BUTTON,0,0,10,390,140,80,0,255,255,255,255,0,0,0,0,0,0,0,0,0
 #SRC_BUTTON,0,0,0,192,64,32,1,1,0,0,16,1,0,0
 #DST_BUTTON,0,0,160,390,140,80,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+
+// The difficulty filter (10), the key filter (11) and the sort (12): each click steps to the next choice.
+#SRC_BUTTON,0,0,0,0,64,32,1,1,0,0,10,1,0,0
+#DST_BUTTON,0,0,10,100,80,40,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,0,64,32,1,1,0,0,11,1,0,0
+#DST_BUTTON,0,0,110,100,80,40,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,0,64,32,1,1,0,0,12,1,0,0
+#DST_BUTTON,0,0,210,100,80,40,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+// The difficulty filter set at once (91 ALL, 92 BEGINNER … 96 INSANE).
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,91,1,0,0
+#DST_BUTTON,0,0,10,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,92,1,0,0
+#DST_BUTTON,0,0,56,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,93,1,0,0
+#DST_BUTTON,0,0,102,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,94,1,0,0
+#DST_BUTTON,0,0,148,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,95,1,0,0
+#DST_BUTTON,0,0,194,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
+#SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,96,1,0,0
+#DST_BUTTON,0,0,240,150,40,30,0,255,255,255,255,0,0,0,0,0,0,0,0,0
 
 // Course maker: finish (230) and cancel (231) while a course is being made.
 #SRC_BUTTON,0,0,0,64,64,32,1,1,0,0,230,1,0,0

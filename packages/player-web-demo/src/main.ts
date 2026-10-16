@@ -30,10 +30,10 @@ import {
   type ResultScene,
   type ResultSceneKit,
   type PixiScene,
-  type PixiSongSelectNavigation,
   resolveSceneCourseInfo,
   type SceneCourseInfo,
 } from '@be-music/player-web/scenes';
+import { DIFFICULTY_FILTER_CYCLE, KEYS_FILTER_CYCLE, SORT_CYCLE, type BrowseSnapshot } from '@be-music/scene-model';
 import {
   BeatorajaSkinAudioPlayer,
   createBeMusicSkinRegistry,
@@ -748,12 +748,12 @@ class PlayerWebDemoApp {
    * Last-known cursor / folder state of the select view, captured before gameplay so returning to song select restores
    * the user's position.
    */
-  private lastSelectNavigation: PixiSongSelectNavigation | undefined;
+  private lastSelectNavigation: BrowseSnapshot | undefined;
   /**
    * Where the select screen was when a course started. A later stage starts with no select screen up, so the course
    * keeps this to put the cursor back on the course bar once it is over.
    */
-  private courseReturnNavigation: PixiSongSelectNavigation | undefined;
+  private courseReturnNavigation: BrowseSnapshot | undefined;
   /** Whether the status line describes a play or result, which a return to the select screen replaces. */
   private playStatusShown = false;
   /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
@@ -934,6 +934,9 @@ class PlayerWebDemoApp {
       dpFlip: false,
       autoScratch1P: false,
       autoScratch2P: false,
+      sort: 'OFF',
+      keysFilter: 'ALL',
+      difficultyFilter: 'ALL',
       hiSpeed: readStoredHiSpeed(),
       // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
       // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
@@ -1469,6 +1472,32 @@ class PlayerWebDemoApp {
           this.selectView?.setPlayOptions({ autoScratch2P: value });
         }),
     );
+    // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
+    // the bar under the cursor.
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'sort', [...SORT_CYCLE])
+        .name('Sort')
+        .onChange((value: DemoGuiState['sort']) => {
+          this.selectView?.setPlayOptions({ sort: value });
+        }),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'keysFilter', [...KEYS_FILTER_CYCLE])
+        .name('Key filter')
+        .onChange((value: DemoGuiState['keysFilter']) => {
+          this.selectView?.setPlayOptions({ keysFilter: value });
+        }),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'difficultyFilter', [...DIFFICULTY_FILTER_CYCLE])
+        .name('Difficulty filter')
+        .onChange((value: DemoGuiState['difficultyFilter']) => {
+          this.selectView?.setPlayOptions({ difficultyFilter: value });
+        }),
+    );
     // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
     // visual only, so it stays enabled during a play and applies to it live.
     this.hiSpeedController = folder
@@ -1933,6 +1962,8 @@ class PlayerWebDemoApp {
             ? this.selectView
             : undefined;
     const entry = select?.getFocusedEntry();
+    // The built-in and LR2 select screens' browse position: their folders, sort, filters and search.
+    const navigation = select instanceof PixiBeatorajaSelectScene ? undefined : select?.getNavigation();
     const play = scene.kind === 'play' ? this.lastPlay : undefined;
     // The engine's frame on the beatoraja scene; the play's running result on the LR2 / built-in ones.
     const frame = this.beatorajaGameplayView?.getFrame();
@@ -1958,7 +1989,7 @@ class PlayerWebDemoApp {
               folderPath: [
                 ...((select instanceof PixiBeatorajaSelectScene
                   ? select.captureSnapshot().folderPath
-                  : select?.getNavigation().folderPath) ?? []),
+                  : navigation?.folderPath) ?? []),
               ],
               bar:
                 entry &&
@@ -1970,6 +2001,12 @@ class PlayerWebDemoApp {
                       ? lookupCourseRecord(entry.course, this.songRecords, this.guiState.nonstopPlacement)
                       : undefined,
                 ),
+              list: navigation && {
+                sort: navigation.list?.sort ?? 'OFF',
+                keysFilter: navigation.list?.keysFilter ?? 'ALL',
+                difficultyFilter: navigation.list?.difficultyFilter ?? 'ALL',
+                search: navigation.searchText ?? '',
+              },
             }
           : undefined,
       play: play && {
@@ -4696,6 +4733,9 @@ class PlayerWebDemoApp {
         dpFlip: this.guiState.dpFlip,
         autoScratch1P: this.guiState.autoScratch1P,
         autoScratch2P: this.guiState.autoScratch2P,
+        sort: this.guiState.sort,
+        keysFilter: this.guiState.keysFilter,
+        difficultyFilter: this.guiState.difficultyFilter,
         hiSpeed: this.guiState.hiSpeed,
       },
       onPlayOptionsChange: (options: PixiPlayOptions) => {
@@ -4708,6 +4748,9 @@ class PlayerWebDemoApp {
         this.guiState.dpFlip = options.dpFlip;
         this.guiState.autoScratch1P = options.autoScratch1P;
         this.guiState.autoScratch2P = options.autoScratch2P;
+        this.guiState.sort = options.sort;
+        this.guiState.keysFilter = options.keysFilter;
+        this.guiState.difficultyFilter = options.difficultyFilter;
         if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
         this.refreshPlayOptionControllers();
       },

@@ -124,8 +124,9 @@ flowchart LR
 これでコースフォルダの復元の修正をすべて満たします。ルートでは譜面フォルダのあとにコースフォルダが並ぶので、
 コースフォルダの中に残したカーソルが戻ります。保持するのはどの階層でも実際のカーソルです。コースが終わったあとは、
 NONSTOP がライブラリを置き換えていても、コースのバーをキーで見つけ直します。
-`browseSnapshotFromSelectNavigation` と `browseSnapshotFromBeatorajaSelect` は、現在の選曲シーンが保持する
-スナップショットを読み込みます。
+標準と LR2 の選曲画面は、プレイをまたいで `BrowseSnapshot` を保持します。`browseSnapshotFromSelectNavigation` は
+それらが以前保持していた `{ folderPath, selectedIndex }` を変換し、`browseSnapshotFromBeatorajaSelect` は beatoraja の
+選曲シーンのスナップショットを読み込みます。
 
 ### 振る舞いの選択
 
@@ -156,6 +157,12 @@ NONSTOP がライブラリを置き換えていても、コースのバーをキ
 
 beatoraja の LN モードの上書き（LNMODE ボタン）は一覧の状態には含めません。まだ何もそれでプレイしないので、モデルにも
 入れていません。
+
+Web 実行層の選曲セッションは、モデルが任せる選択をファミリーの選曲ポリシー（`@be-music/player-web` の
+`session/select/select-policy.ts`）で決めます。標準と LR2 の画面では、ルートで戻っても何もせず、戻す位置がなければ
+譜面フォルダが一つだけのライブラリはそれを開き、復元はパスが一致するところまで戻し、ソートとフィルターはプレイオプションの
+ものとして復元でも保ちます。beatoraja のポリシーはルートでキャンセル音を鳴らして画面を出て、MODE と SORT を一覧の位置に
+含めます。
 
 ## プレイオプション
 
@@ -302,7 +309,7 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `groupSongsByFolder`・`resolveChartPlayVariant`                                  | `player-web` の collection                   | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（再 export）     |
 | `matchesSearchQuery`・`wrappedCursorDelta`                                       | `player-web` のコアの選曲                    | 同じ名前（再 export）                                                    |
 | コアの選曲のソートと難易度フィルター                                             | `player-web` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                     |
-| `resolveSelectNavigation`                                                        | `player-web` のコアの選曲                    | `select-session.ts` へ移動（再 export）。`restoreBrowse` の上に実装      |
+| `resolveSelectNavigation`                                                        | `player-web` のコアの選曲                    | 削除。選曲セッションは `BrowseSnapshot` を `restoreBrowse` で戻す        |
 | `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                       | `player-web` のコアの選曲                    | 同じ名前（再 export）                                                    |
 | `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                         | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`（旧名で再 export）      |
 | ハイスピードの範囲と刻み                                                         | `player-web` の `scene/hi-speed.ts`          | 同じ名前（再 export）                                                    |
@@ -312,8 +319,10 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation` | `player-web-demo` の `course-result.ts`      | `playResultFromCourseRun` など（旧名で再 export）                        |
 | `resolveResultViewJingles`                                                       | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                              |
 
-標準と LR2 のプレイ画面は `PlayState` を一つ持ち、リザルトをそこから読みます（`playResultFromPlayState`）。そのため上の
-プレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、リザルトは判定ごとの早い / 遅いの数を
-持ち、プレイログの表示時間は白数字（`resolvePlaylogView`）です。ほかのシーンはまだ自分の一覧とプレイの状態を持っています（beatoraja のランタイムアダプターは記録とカバー）。
+標準と LR2 の選曲画面はこれらのモデル（`reduceBrowse`・`browseEntries`・`captureBrowse` / `restoreBrowse`・
+`browseSystemSound`）で一覧をたどります。標準と LR2 のプレイ画面は `PlayState` を一つ持ち、リザルトをそこから読みます
+（`playResultFromPlayState`）。そのため上のプレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、
+リザルトは判定ごとの早い / 遅いの数を持ち、プレイログの表示時間は白数字（`resolvePlaylogView`）です。ほかのシーンはまだ
+自分の一覧とプレイの状態を持っています（beatoraja の選曲は自前の一覧のモデル、beatoraja のランタイムアダプターは記録とカバー）。
 Web 実行層のシーンセッションがこれらのモデルへ移ります。スキンのパッケージはモデルを各スキンの
 語彙に写します。beatoraja の番号へは `@be-music/beatoraja-skin/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。
