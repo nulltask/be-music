@@ -6,6 +6,7 @@ import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TI
 import { resolveLr2ChartText } from './chart.ts';
 import { lr2ShowsCourseCombo, resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 import { isLr2BgaShown, isLr2RedGauge, lr2HiSpeedSlider } from './options.ts';
+import { resolveLr2RateNumber } from './score.ts';
 import { lr2TimerUpdate, type Lr2SceneState, type Lr2TimerUpdate } from './scene-state.ts';
 
 /** The lanes a play is laid out on: its play variant and the lane channels in use. */
@@ -179,9 +180,10 @@ function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): numb
     const courseNumber = resolveLr2CourseNumber(num, course);
     if (courseNumber !== undefined) return courseNumber;
   }
+  const rateNumber = resolveLr2RateNumber(num, score);
+  if (rateNumber !== undefined) return rateNumber;
   // In an expert or grade course the combo numbers count the whole course.
   const courseCombo = course !== undefined && lr2ShowsCourseCombo(course.kind) ? play.courseCombo : undefined;
-  const rate = computeScoreRate(score);
   const remaining = Math.max(0, play.totalSeconds - frame.seconds);
   switch (num) {
     case LR2_NUM.HISPEED_1P:
@@ -192,10 +194,6 @@ function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): numb
       return Math.round(frame.displayedScore ?? score.score);
     case LR2_NUM.EXSCORE:
       return score.exScore;
-    case LR2_NUM.SCORE_RATE:
-      return frame.fps !== undefined ? Math.round(frame.fps) : undefined;
-    case LR2_NUM.SCORE_RATE_AFTERDOT:
-      return Math.round(rate * 10000);
     case LR2_NUM.COMBO:
       return courseCombo?.combo ?? play.combo;
     case LR2_NUM.MAX_COMBO:
@@ -216,10 +214,6 @@ function playNumber(num: number, setup: Lr2PlaySetup, frame: Lr2PlayFrame): numb
       return score.bad;
     case LR2_NUM.POOR:
       return score.poor;
-    case LR2_NUM.TOTAL_RATE:
-      return Math.round(rate * 100);
-    case LR2_NUM.TOTAL_RATE_AFTERDOT:
-      return Math.round(rate * 10000) % 100;
     case LR2_NUM.HIGH_SCORE:
     case LR2_NUM.TARGET_SCORE:
       return 0;

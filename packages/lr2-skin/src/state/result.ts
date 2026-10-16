@@ -5,6 +5,7 @@ import { LR2_NUM, LR2_OP, LR2_TEXT } from '../ids/index.ts';
 import { resolveLr2ChartText, resolveLr2DifficultyOp, resolveLr2KeyModeOp } from './chart.ts';
 import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 import { resolveLr2LampOp } from './records.ts';
+import { resolveLr2RateNumber } from './score.ts';
 import type { Lr2SceneState } from './scene-state.ts';
 
 /** What the LR2 result screen shows: a play's result, the course it belongs to, and the skins' facts. */
@@ -104,6 +105,8 @@ function resultOps(input: Lr2ResultInput): number[] {
  */
 function resultNumber(num: number, result: PlayResult): number | undefined {
   const { score } = result;
+  const rateNumber = resolveLr2RateNumber(num, score);
+  if (rateNumber !== undefined) return rateNumber;
   const totalNotes = score.total;
   const exMax = totalNotes * 2;
   const rate = exMax > 0 ? score.exScore / exMax : 0;
@@ -121,13 +124,7 @@ function resultNumber(num: number, result: PlayResult): number | undefined {
     case LR2_NUM.EXSCORE_MAX:
       return exMax;
     case LR2_NUM.BEST_RATE:
-    case LR2_NUM.SCORE_RATE:
-    case LR2_NUM.TOTAL_RATE:
       return Math.round(rate * 100);
-    case LR2_NUM.SCORE_RATE_AFTERDOT:
-      return Math.round(rate * 10000);
-    case LR2_NUM.TOTAL_RATE_AFTERDOT:
-      return Math.round(rate * 10000) % 100;
     case LR2_NUM.TOTAL_NOTES:
     case LR2_NUM.NOTES:
       return totalNotes;

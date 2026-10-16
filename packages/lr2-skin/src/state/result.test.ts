@@ -349,6 +349,16 @@ describe('resolveLr2ResultState values', () => {
     expect(state.number(LR2_NUM.IR_RANK)).toBeUndefined();
   });
 
+  it('draws the rate over the notes judged on 102 / 103 and over every note on 115 / 116', () => {
+    // A play that failed after 95 of 100 notes: 150 of the 190 points judged (78.94 %), of the 200 of the chart (75 %).
+    const result = makeResult({ cleared: false, total: 100, exScore: 150, perfect: 60, bad: 2, poor: 3 });
+    const state = resolveLr2ResultState({ result: { ...result, score: { ...result.score, great: 30 } } });
+    expect(state.number(LR2_NUM.SCORE_RATE)).toBe(78);
+    expect(state.number(LR2_NUM.SCORE_RATE_AFTERDOT)).toBe(94);
+    expect(state.number(LR2_NUM.TOTAL_RATE)).toBe(75);
+    expect(state.number(LR2_NUM.TOTAL_RATE_AFTERDOT)).toBe(0);
+  });
+
   it('reads the course’s stage levels and texts before the chart’s', () => {
     const course = { kind: 'grade' as const, title: 'Dan', stages: [{ title: 'A', level: 12 }] };
     const state = resolveLr2ResultState({ result: makeResult(), course });
