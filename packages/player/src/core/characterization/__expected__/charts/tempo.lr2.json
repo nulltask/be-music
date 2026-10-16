@@ -385,7 +385,7 @@
   },
   "auto": {
     "outcome": "completed",
-    "endedAtMs": 3666.667,
+    "endedAtMs": 4866.667,
     "summary": {
       "total": 9,
       "perfect": 9,
@@ -489,8 +489,8 @@
       "3166.667 trigger 13:02@2+0/2",
       "3666.667 trigger 13:02@2+1/2",
       "3666.667 trigger 13:02@2+1/2",
-      "3666.667 finish",
-      "3666.667 dispose"
+      "4866.667 finish",
+      "4866.667 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
@@ -516,7 +516,7 @@
       "3666.667 flash-lane 13"
     ],
     "frames": {
-      "count": 232,
+      "count": 303,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "1000.000 seconds=1 note 11@1",
@@ -528,7 +528,7 @@
         "3166.667 seconds=3.166667 note 13@3.166667",
         "3666.667 seconds=3.666667 note 13@3.666667"
       ],
-      "last": "3666.667 seconds=3.666667 beat=10"
+      "last": "4866.667 seconds=3.666667 beat=10"
     },
     "host": [
       "0.000 ruleset lr2/0 ln note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -536,9 +536,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "3666.667 input-runtime stop",
-      "3666.667 ui stop",
-      "3666.667 ui dispose"
+      "4866.667 input-runtime stop",
+      "4866.667 ui stop",
+      "4866.667 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"auto\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":3.6666666666666665}",
