@@ -52,7 +52,7 @@ An XML `<courselist>` of `<course>` elements with `title`, `line` (key mode), `t
 - **`hash`.** A 32-character header followed by one 32-character chart MD5 per stage. A course bar lists up to ten stages, but LR2 plays only the first five of any course, EXPERT and GRADE included (its chart loader clamps the stage count to 1-5 on every play, `LR2body.exe` 0x4b0b0f), so a course is read as those five. `countLr2UnplayedStages(course)` counts the stages left out, which the web demo reports when a file is loaded. Character 10 of the header is the course type.
 - **`type`.** `0` EXPERT, `1` NONSTOP, `2` GRADE, following OpenLR2 (its `expert` / `nonstop` / `grade` tables and skin ops 291-293). Without a `type` element the header's character 10 is used.
 - **Constraints.** The format has none. A grade course gets `grade` and `gauge_lr2`: when a GRADE course starts, LR2 turns both sides' lane options off ([Main.cpp M1124-M1170](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1124-L1170)), so only OFF is allowed. A table's legacy `grade` list keeps jbmstable-parser's `grade_mirror`.
-- **LR2's other resets.** The same code also moves an EASY or G-ATTACK gauge pick to GROOVE and turns off HIDDEN / SUDDEN, the assists (auto scratch and the rest), BATTLE, DP FLIP, the play tempo (pitch) and the extra modifiers. LR2 writes them into its config; a host applies them to the course's stages only, so the player's settings come back afterwards (`isLr2GradeCourse`, `resolveLr2GradeCoursePlaySettings` in `@be-music/player-web/collection`). They apply to a GRADE course read from `.lr2crs` or made with the course maker, not to a table's or beatoraja's grade.
+- **LR2's other resets.** The same code also moves an EASY or G-ATTACK gauge pick to GROOVE and turns off HIDDEN / SUDDEN, the assists (auto scratch and the rest), BATTLE, DP FLIP, the play tempo (pitch) and the extra modifiers. LR2 writes them into its config; a host applies them to the course's stages only, so the player's settings come back afterwards (`isLr2GradeCourse`, `resolveLr2GradeCoursePlaySettings` in `@be-music/player/course`). They apply to a GRADE course read from `.lr2crs` or made with the course maker, not to a table's or beatoraja's grade.
 - A course with no stage, a malformed stage hash or an unknown type is skipped.
 
 ### beatoraja `course/*.json`
@@ -152,6 +152,22 @@ flowchart LR
 - **For the host.** The result's map gives each stage its keys (for its sound bus and BGA layer), its window, the sound fades and the 3 s BGA crossfade the connection calls for, and whether LR2 announces the stage (only after a BLANK connection), plus the BPM readout (`tempo`) and the judge rank changes (`stageRanks`, for the engine's `stageRanks` option, which the play log records as `chart.judgeRank.stageRanks` so a replay and a re-simulation judge with them). `assetPath` lets the host prefix each stage's file paths.
 - **Not covered yet.** The scroll of an object of one stage that sounds during another stage's STOP. Only BMS stages can be stitched.
 
+**The pipeline** (`prepareNonstopCourse`, `resolveNonstopRun`, `buildNonstopCoursePlaylog`). A host stitches a course to play it, and the Leaderboard rebuilds a run's stitched chart to verify it, with the same steps, so the two agree on the chart that was played:
+
+```mermaid
+flowchart TD
+  charts["stage charts, as loaded"] --> resolve["resolve control flow<br/>(drawn, or the recorded draws)"]
+  resolve --> ln["applyCourseLongNoteConstraint"]
+  ln --> stitch["stitchNonstopCourse"]
+  stitch --> play["play the stitched chart"]
+  play --> run["resolveNonstopRun"]
+  run --> log["buildNonstopCoursePlaylog"]
+```
+
+- `prepareNonstopCourse(stages, options)` resolves each stage chart's `#RANDOM` / `#SWITCH` (with the stage's `randomDraws` when given, else drawn with `random`), applies the course's long-note constraint, and stitches the stages with the connections, placement and stitching rules. The host's asset plumbing comes in through `assetPath`, which gets the stage charts as played. A stage chart that does not resolve is refused as `stage-chart`.
+- `resolveNonstopRun(course, playlog)` gives a play's `nonstop` record: how the chart was stitched, where each stage sat in the play with its draws, and the stage of every note.
+- `buildNonstopCoursePlaylog(definition, course, playlog)` builds the course play log: the stitched play, each reached stage cut out of it and named by its chart (the host's title and file hashes, and the chart fingerprint of the chart as loaded), and every stage never reached with the facts of its chart as played.
+
 ## Finding the stages
 
 `resolveCourseStages(course, lookup)` matches each stage to a local chart: by SHA-256 when the stage has one, else by MD5, as beatoraja's `TableBar` does. A stage carrying both falls back to its MD5 when no chart has the SHA-256. A course with a missing stage is still listed, but it is not `playable`; LR2 shows such a stage as a song you do not own, and beatoraja refuses to start the course.
@@ -182,6 +198,14 @@ stateDiagram-v2
 ## Playing a course stage
 
 A host plays a course one stage at a time, passing `PlayerOptions.course` for each: the course `kind`, the course's `gaugeSet` (its `gauge_*` constraint) and `judge` constraint (`no-good` / `no-great`), and `carryIn`, the state the previous stage left (absent for the first stage). The stage records the same object as `play.course` in its play log, so the log replays and re-simulates on its own.
+
+The course's constraints decide how each stage plays. These rules are in `@be-music/player/course`:
+
+- `resolveCourseStageSettings` reads `PlayerOptions.course` (kind, gauge set, judge constraint) from the course;
+- `resolveCourseLaneOptions` limits the lane options as beatoraja's `MusicSelector` does: `grade` turns both sides and DP FLIP off, `grade_mirror` keeps a 1P MIRROR and then plays 2P on MIRROR with FLIP on (any other pick turns them all off), and `grade_random` keeps the random family on each side;
+- `isCourseHiSpeedLocked` reads `no_speed`;
+- `applyCourseLongNoteConstraint` gives a stage chart that leaves its long-note mode undefined the course's `ln` / `cn` / `hcn`;
+- an LR2 GRADE course also plays with LR2's resets (`resolveLr2GradeCoursePlaySettings`, see [LR2 `.lr2crs`](#lr2-lr2crs)).
 
 ```mermaid
 flowchart LR
@@ -223,6 +247,24 @@ A survival gauge that empties ends the play there (`PlayerOptions.endOnFailure`,
 A stage given up with ESC also ends the course as a failed run. This departs from LR2 on purpose: `LR2body.exe` shows the given-up stage's result as FAILED and, when the gauge is still at 2 % or more and stages remain, goes on to the next stage (the course lamp is FAILED in the end, since a stage was left unplayed); with no GOOD or better judged it returns to the select screen without saving. be-music treats ESC as giving up the course.
 
 A course stage cannot be ranked as a single-chart play: `checkPlaylogEligibility` rejects it as `course-stage`.
+
+### The course run
+
+`CourseRun` (`@be-music/player/course`) is one run of an EXPERT or GRADE course; a NONSTOP course is played as one stitched chart instead ([NONSTOP courses](#nonstop-courses)). A host gives it the course definition and each stage's chart: its own entries (a song entry, a chart file), anything with a `chart` and a `chartPath`, which it hands back with the chart as the course plays it. The run is runtime-neutral, so every host plays courses by the same rules.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stage: nextStage
+    Stage --> Stage: recordStage (goes on)
+    Stage --> Over: recordStage (gauge empty or last stage)
+    Stage --> Over: giveUp (ESC)
+    Over --> [*]: buildPlaylog
+```
+
+- `nextStage` plans the next stage: its chart with the course's long-note constraint applied, `PlayerOptions.course` with the carry-in, and whether the hi-speed is locked. `playSettings` gives the settings it plays with in place of the player's picks (`resolveCourseStagePlaySettings`: the lane options the course allows, then an LR2 GRADE course's resets).
+- `recordStage` records a stage's play log and says whether the run goes on (`goesOnAfter` asks first); `giveUp` records a stage given up with ESC and ends the run as a failed one.
+- `playSeconds` adds up the stages' play time, a stage given up up to where it was left (`resolveGivenUpPlaySeconds`). `stageExtras` keeps what the host kept of each stage, such as its result graphs.
+- `buildPlaylog` writes the course play log: the stages played, then every stage never reached with its chart facts, its file hashes and its chart fingerprint.
 
 ### The course result
 

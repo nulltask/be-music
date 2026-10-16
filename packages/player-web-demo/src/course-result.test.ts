@@ -1,5 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
-import { parseBeatorajaCourseData, parseLr2CourseFile, type NonstopConnection } from '@be-music/player/course';
+import { parseBeatorajaCourseData, type NonstopConnection } from '@be-music/player/course';
 import type {
   BeMusicCoursePlaylog,
   BeMusicPlaylog,
@@ -12,14 +12,12 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   buildCourseResultData,
   buildCourseResultSummary,
-  CourseSession,
   courseRecordKey,
   joinCourseStageHistories,
   lookupCourseRecord,
   resolveResultPresentation,
   skipsCourseStageResult,
-  resolveGivenUpPlaySeconds,
-} from './course-session.ts';
+} from './course-result.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
@@ -67,153 +65,7 @@ function stageLog(native: Partial<PlaylogRulesetResult>): BeMusicPlaylog {
   } as unknown as BeMusicPlaylog;
 }
 
-describe('CourseSession', () => {
-  test('plans each stage with the course settings and the state the previous stage left', () => {
-    const session = new CourseSession(course());
-    const first = session.nextStage()!;
-    expect(first).toMatchObject({ index: 0, stageCount: 3, hiSpeedLocked: true });
-    expect(first.course).toEqual({ kind: 'grade', gaugeSet: 'lr2' });
-    // The HCN constraint applies to a chart that leaves its long-note mode undefined.
-    expect(first.song.chart.sourceFormat === 'bms' && first.song.chart.bms.lnMode).toBe(3);
-    expect(session.laneOptions({ random1P: 'RANDOM', random2P: 'RANDOM', dpFlip: true })).toEqual({
-      random1P: 'OFF',
-      random2P: 'OFF',
-      dpFlip: false,
-    });
-    expect(session.laneOptions({ random1P: 'MIRROR', random2P: 'OFF', dpFlip: false })).toEqual({
-      random1P: 'MIRROR',
-      random2P: 'MIRROR',
-      dpFlip: true,
-    });
-
-    expect(
-      session.recordStage(
-        stageLog({ gauge: { type: 'GRADE', final: 71.5, cleared: true }, course: { combo: 4, maxCombo: 10 } }),
-      ),
-    ).toBe('next');
-    expect(session.nextStage()!.course.carryIn).toEqual({ gauge: 71.5, combo: 4, maxCombo: 10 });
-  });
-
-  test('names the stage being played for the skins', () => {
-    const session = new CourseSession(course());
-    expect(session.nextStage()!.courseInfo).toMatchObject({ kind: 'grade', title: 'Dan', stageIndex: 0 });
-    expect(session.courseInfo.stageIndex).toBeUndefined();
-    session.recordStage(stageLog({}));
-    expect(session.courseInfo).toMatchObject({
-      stageIndex: 0,
-      stages: [{ title: 'a' }, { title: 'b' }, { title: 'c' }],
-    });
-    expect(session.nextStage()!.courseInfo.stageIndex).toBe(1);
-  });
-
-  test('records a stage given up with ESC and ends the course there', () => {
-    const session = new CourseSession(course([]));
-    session.recordStage(stageLog({}));
-    const givenUp = stageLog({ gauge: { type: 'GRADE', final: 70, cleared: true } });
-    givenUp.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', aborted: true };
-    session.giveUp(givenUp);
-    expect(session.finished).toBe(true);
-    expect(session.stagesPlayed).toBe(2);
-    expect(session.nextStage()).toBeUndefined();
-  });
-
-  test('ends on a failed stage and after the last stage', () => {
-    const failing = new CourseSession(course());
-    expect(
-      failing.recordStage(stageLog({ gauge: { type: 'GRADE', final: 0, cleared: false, failedMidPlay: true } })),
-    ).toBe('finished');
-    expect(failing.finished).toBe(true);
-    expect(failing.nextStage()).toBeUndefined();
-
-    const full = new CourseSession(course([]));
-    expect(full.recordStage(stageLog({}))).toBe('next');
-    expect(full.recordStage(stageLog({}))).toBe('next');
-    expect(full.recordStage(stageLog({}))).toBe('finished');
-    expect(full.stagesPlayed).toBe(3);
-    // A stage without a play log ends the course too.
-    expect(new CourseSession(course()).recordStage(undefined)).toBe('finished');
-  });
-
-  test('builds the course play log with each unreached stage’s facts and chart fingerprint', () => {
-    const session = new CourseSession(course());
-    const failed = stageLog({ gauge: { type: 'GRADE', final: 0, cleared: false, failedMidPlay: true } });
-    failed.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', course: { kind: 'grade' } };
-    session.recordStage(failed);
-    const seen: Array<number | undefined> = [];
-    const log = session.buildPlaylog(
-      (song) => {
-        seen.push(song.chart.sourceFormat === 'bms' ? song.chart.bms.lnMode : undefined);
-        return {
-          sourceFormat: 'bms',
-          laneMode: '7keys',
-          lnMode: 3,
-          judgeRank: { percent: 75 },
-          notes: { normal: 10, long: { 1: 0, 2: 0, 3: 0 } },
-        };
-      },
-      { chartFingerprintOf: (song) => `bmfp0:${song.id}` },
-    );
-    expect(log.stages[0]).toMatchObject({ played: true });
-    expect(log.stages.slice(1)).toMatchObject([
-      { played: false, md5: MD5[1], chartFingerprint: 'bmfp0:b' },
-      { played: false, md5: MD5[2], chartFingerprint: 'bmfp0:c' },
-    ]);
-    // The unreached stages are read as the course plays them: the HCN constraint applied.
-    expect(seen).toEqual([3, 3]);
-  });
-
-  test('tells whether the course goes on after a stage before it is recorded', () => {
-    const session = new CourseSession(course([]));
-    expect(session.goesOnAfter(stageLog({}))).toBe(true);
-    expect(session.goesOnAfter(stageLog({ gauge: { type: 'GRADE', final: 0, cleared: false } }))).toBe(false);
-    expect(session.goesOnAfter(undefined)).toBe(false);
-    // Asking records nothing.
-    expect(session.stagesPlayed).toBe(0);
-    session.recordStage(stageLog({}));
-    session.recordStage(stageLog({}));
-    // After the last stage the course result follows.
-    expect(session.goesOnAfter(stageLog({}))).toBe(false);
-  });
-
-  test('keeps each played stage’s graphs', () => {
-    const session = new CourseSession(course([]));
-    const history = { gaugeHistory: [{ progress: 1, value: 80 }], scoreHistory: [{ progress: 1, exScore: 20 }] };
-    session.recordStage(stageLog({}), history);
-    session.giveUp(stageLog({}));
-    expect(session.stageHistories).toEqual([history, { gaugeHistory: [], scoreHistory: [] }]);
-  });
-
-  test('adds up the play time of the stages played, a given-up stage up to where it was left', () => {
-    const session = new CourseSession(course([]));
-    session.recordStage(stageLog({}), { gaugeHistory: [], scoreHistory: [], playSeconds: 92.5 });
-    const givenUp = stageLog({});
-    givenUp.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', aborted: true, abortedAtUs: 30_250_000 };
-    session.giveUp(givenUp);
-    expect(session.playSeconds).toBeCloseTo(122.75);
-    expect(new CourseSession(course([])).playSeconds).toBe(0);
-  });
-
-  test('counts a stage left after its chart settled up to its last note', () => {
-    const settled = {
-      play: { mode: 'manual' as const, autoScratch: false, gauge: 'GROOVE' as const },
-      chart: {
-        notes: [
-          { id: 0, channel: '11', type: 'normal' as const, timeUs: 1_000_000 },
-          { id: 1, channel: '12', type: 'long' as const, timeUs: 2_000_000, endTimeUs: 9_500_000 },
-          { id: 2, channel: '13', type: 'normal' as const, timeUs: 8_000_000 },
-        ],
-      },
-    } as unknown as BeMusicPlaylog;
-    expect(resolveGivenUpPlaySeconds(settled)).toBe(9.5);
-    // An abort without its time says nothing.
-    expect(resolveGivenUpPlaySeconds({ play: { ...settled.play, aborted: true } })).toBeUndefined();
-    expect(resolveGivenUpPlaySeconds({ play: { ...settled.play, aborted: true, abortedAtUs: 3_000_000 } })).toBe(3);
-  });
-
-  test('refuses a course with a missing stage', () => {
-    expect(() => new CourseSession({ ...course(), playable: false })).toThrow('not in the collection');
-  });
-
+describe('courseRecordKey', () => {
   test('courseRecordKey is stable across constraint order', () => {
     const a = courseRecordKey(course(['MIRROR', 'GAUGE_LR2']));
     expect(a).toBe(courseRecordKey(course(['GAUGE_LR2', 'MIRROR'])));
@@ -416,43 +268,6 @@ describe('joinCourseStageHistories', () => {
   test('shares the width evenly when no stage has a length', () => {
     const joined = joinCourseStageHistories([], [0, 0]);
     expect(joined.gaugeHistory.map((sample) => sample.progress)).toEqual([0, 0.5, 0.5, 1]);
-  });
-});
-
-describe('CourseSession.playSettings', () => {
-  const picks = {
-    random1P: 'RANDOM' as const,
-    random2P: 'MIRROR' as const,
-    dpFlip: true,
-    gauge: 'EASY' as const,
-    hiddenSudden1P: 'SUDDEN' as const,
-    hiddenSudden2P: 'OFF' as const,
-    autoScratch1P: true,
-    autoScratch2P: false,
-    tempo: 0.9,
-  };
-
-  test('resets an LR2 GRADE course’s stage to what LR2 allows, lane options included', () => {
-    const definition = parseLr2CourseFile(
-      `<courselist><course><title>Dan</title><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${MD5[0]}</hash></course></courselist>`,
-    )[0]!;
-    const session = new CourseSession({ ...course(), definition });
-    expect(session.playSettings(picks)).toEqual({
-      random1P: 'OFF',
-      random2P: 'OFF',
-      dpFlip: false,
-      gauge: 'GROOVE',
-      hiddenSudden1P: 'OFF',
-      hiddenSudden2P: 'OFF',
-      autoScratch1P: false,
-      autoScratch2P: false,
-      tempo: 1,
-    });
-  });
-
-  test('applies only the lane-option constraint to another course', () => {
-    const session = new CourseSession(course(['MIRROR']));
-    expect(session.playSettings(picks)).toEqual({ ...picks, random1P: 'OFF', random2P: 'OFF', dpFlip: false });
   });
 });
 
