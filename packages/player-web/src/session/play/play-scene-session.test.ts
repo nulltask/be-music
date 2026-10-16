@@ -41,10 +41,11 @@ describe('PlaySceneSession', () => {
   test('hands each moment the play raised to one frame, in the view’s words', () => {
     const { session } = createSceneSession();
     session.queueEvent({ kind: 'scene-start', at: 5 });
-    session.queueEvent({ kind: 'bomb-retired', channel: '11' });
+    session.queueEvent({ kind: 'gauge', previous: 20, next: 22, at: 8 });
     session.queueEvent({ kind: 'lane-command', command: { kind: 'press-lane', channel: '11' } });
     expect(session.frame(10).events).toEqual([
       { kind: 'scene-start', atMs: 5 },
+      { kind: 'gauge', previous: 20, next: 22, atMs: 8 },
       { kind: 'lane', channel: '11', action: 'press' },
     ]);
     expect(session.frame(20).events).toEqual([]);

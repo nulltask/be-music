@@ -7,14 +7,14 @@
 
 import { isJudge, type CourseView, type LibraryChart, type PlayOptions } from '@be-music/scene-model';
 import { SILENT_AUDIO } from '@be-music/skin-sdk';
-import type { GameplayThemeEvent } from '../../scene/core/gameplay-theme.ts';
-import type { CoreGameplayDisposeOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlayDisposeOptions } from './play-options.ts';
 import type { PlayFrame, PlayIntent, PlayStage, PlayViewEvent } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { drainSharedEngineSignals } from './play-engine.ts';
 import type { PlaySession } from './play-session.ts';
 import { applyPlayEvent } from './play-state.ts';
-import { playViewEventFromTheme } from './play-view-events.ts';
+import type { PlayMoment } from './play-session-theme.ts';
+import { playViewEventFromMoment } from './play-view-events.ts';
 import { updatePlaylogView } from './play-view-settings.ts';
 
 /** What a play's frames carry besides the play itself: the chart picked, its course stage and the play options. */
@@ -31,7 +31,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   /** How far the play has loaded, 0..1, while it loads (`PlayScene.prepare`). */
   public loadProgress: number | undefined;
   /** How the play's audio ends when the scene is disposed. */
-  public disposeOptions: CoreGameplayDisposeOptions = {};
+  public disposeOptions: PlayDisposeOptions = {};
   private readonly facts: PlaySceneFacts;
   private pending: PlayViewEvent[] = [];
   private enteredAtMs = 0;
@@ -41,10 +41,10 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     this.facts = facts;
   }
 
-  /** A moment the play raised for its view (the session's theme `onThemeEvent`), queued for the next frame. */
-  public queueEvent(event: GameplayThemeEvent): void {
+  /** A moment the play raised for its view (the session's theme `moment`), queued for the next frame. */
+  public queueEvent(event: PlayMoment): void {
     const judge = this.play.lastJudge;
-    const mapped = playViewEventFromTheme(event, isJudge(judge) ? { judge } : undefined);
+    const mapped = playViewEventFromMoment(event, isJudge(judge) ? { judge } : undefined);
     if (mapped !== undefined) this.pending.push(mapped);
   }
 

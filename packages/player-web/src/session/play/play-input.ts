@@ -1,10 +1,10 @@
 /**
- * The input of a play on the built-in and LR2 gameplay scenes (`CoreGameplayView`) that the scene handles itself rather
+ * The input of a play on the built-in and LR2 play screens (`PlaySession`) that the scene handles itself rather
  * than the engine's web input runtime: ESC and F5 (after the theme's fade-out), Space (pause), the hi-speed arrows,
  * holding Backspace to quit, the auto-pause when the page loses focus, and touch lanes. Lane keys go straight to the
  * engine through its input runtime.
  *
- * The functions read and write the scene's state through {@link PlayInputContext}; the scene passes itself.
+ * The functions read and write the scene's state through {@link PlayInputContext}; the play session passes itself.
  */
 
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
@@ -27,7 +27,7 @@ import { adjustHiSpeed } from './play-view-settings.ts';
 
 const log = logger('gameplay');
 
-/** The scene's members the input reads and writes: `CoreGameplayView`'s members of these names. */
+/** The scene's members the input reads and writes: the play session's members of these names. */
 export interface PlayInputContext extends PlayEngineContext {
   readonly host: PixiSceneHost | undefined;
   readonly app: Application;
@@ -59,7 +59,7 @@ export interface PlayInputContext extends PlayEngineContext {
   resumeActiveBgaVideos(): void;
 }
 
-/** Wires the play's own input as the scene enters (`CoreGameplayView.enter`); {@link detachPlayInput} undoes it. */
+/** Wires the play's own input as the play goes on the stage (`PlaySession.attachInput`); {@link detachPlayInput} undoes it. */
 export function attachPlayInput(ctx: PlayInputContext, host: PixiSceneHost): void {
   // ESC / F5 / Space / ArrowUp / ArrowDown stay on the view so the LR2 `#FADEOUT` exit animation runs to
   // completion BEFORE the engine's interrupt flow disposes the audio session, and so HiSpeed adjustment
@@ -121,7 +121,7 @@ export function attachPlayInput(ctx: PlayInputContext, host: PixiSceneHost): voi
   });
 }
 
-/** Unwires what {@link attachPlayInput} wired, as the scene exits (`CoreGameplayView.exit`). */
+/** Unwires what {@link attachPlayInput} wired, as the play leaves the stage (`PlaySession.detachInput`). */
 export function detachPlayInput(ctx: PlayInputContext): void {
   // Detach window-level event listeners so a stray keypress doesn't hit a view that is off stage.
   window.removeEventListener('keydown', ctx.handleSharedEngineExitKey);
@@ -257,7 +257,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
 export function handleTouchPointer(ctx: PlayInputContext, event: PointerEvent): void {
   if (!isTouchPlayPointer(event.pointerType)) return;
   if (event.type === 'pointermove' && !ctx.touchLanes.isTracking(event.pointerId)) return;
-  const { width: designWidth, height: designHeight } = ctx.theme.stageSize();
+  const { width: designWidth, height: designHeight } = ctx.theme.stage();
   const viewport = resolveScaledViewport(ctx.app.screen.width, ctx.app.screen.height, designWidth, designHeight);
   const point = canvasPointToDesign(event.offsetX, event.offsetY, viewport);
   const zones = resolveTouchLaneZones(

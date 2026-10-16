@@ -9,8 +9,8 @@ Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as ti
 
 The browser player drives gameplay through `@be-music/player/core/engine`.
 The engine owns judgment, keysound trigger routing, long-note handling, mine detonation, score, gauge, and chart-finish
-semantics. The LR2 gameplay scene starts one engine run at the LR2 `PLAYSTART` gate, while the beatoraja gameplay
-scene mounts the engine behind `BeatorajaRuntimeAdapter`. Both paths mirror engine frame snapshots into scene state
+semantics. The play session of the built-in and LR2 play screens starts one engine run at the skin's `PLAYSTART`
+gate, while the beatoraja gameplay scene mounts the engine behind `BeatorajaRuntimeAdapter`. Both paths mirror engine frame snapshots into scene state
 and translate engine UI commands into Pixi visual effects.
 
 The browser runtime uses these adapter modules:
@@ -196,7 +196,7 @@ The select scene exposes in-scene LR2 PLAY OPTION controls for hi-speed, autopla
 Select-time options are carried into gameplay during chart preparation.
 The selected gauge is passed to the shared engine, which resolves it against the active ruleset's gauge line-up and runs its curve (HARD really drains, DEATH really ends the run); a replay runs the gauge recorded in its play log. Independent 2P gauge math is not wired yet.
 
-The groove-gauge bar renders as LR2's 50 beads (2 % each) using the single `#SRC_GROOVEGAUGE` 4-cell sprite (`表赤/表緑/裏赤/裏緑` = lit-red, lit-green, unlit-red, unlit-green). Beads at or above the 80 % clear border use the green cell; below it they use red. Survival gauges (HARD / DEATH) have no clear border in LR2, so the whole bar renders red. The bar tracks the live gauge value only — there is no peak-hold / afterimage bead (LR2 has none). The bead cell-selection logic is the pure `resolveGrooveGaugeBeads` helper in `scene/lr2/gameplay-hud.ts`.
+The groove-gauge bar renders as LR2's 50 beads (2 % each) using the single `#SRC_GROOVEGAUGE` 4-cell sprite (`表赤/表緑/裏赤/裏緑` = lit-red, lit-green, unlit-red, unlit-green). Beads at or above the 80 % clear border use the green cell; below it they use red. Survival gauges (HARD / DEATH) have no clear border in LR2, so the whole bar renders red. The bar tracks the live gauge value only — there is no peak-hold / afterimage bead (LR2 has none). The bead cell-selection logic is the pure `resolveGrooveGaugeBeads` helper in `view/lr2/play-hud.ts`.
 
 Scene-independent LR2 Pixi helpers live in [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) and
 [`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts). They handle destination keyframe evaluation,
@@ -212,10 +212,10 @@ files.
 The family draws every screen through a be-music skin, a code-defined skin built on the public
 `@be-music/skin-sdk` package. See [Writing a be-music skin](./be-music-skin.md) to make one.
 
-The play screen (`createPlayScene`, [The play screen](#the-play-screen)) shares the common engine, playfield, BGA
-renderer, audio bus and input handling with the LR2 gameplay scene through the play session; the be-music skin draws
-its chrome. The LR2 gameplay scene does not import the default renderer, and LR2 skin rendering remains tied to
-parsed `.lr2skin` data.
+The play screen (`createPlayScene`, [The play screen](#the-play-screen)) shares the play session (the engine, the
+audio bus and the input) and the shared playfield and BGA renderer with the LR2 play screen; the be-music skin draws
+its chrome. The LR2 play view does not import the be-music renderer, and LR2 skin rendering remains tied to parsed
+`.lr2skin` data.
 
 Default gameplay chrome uses the shared lane geometry helpers in `scene/gameplay-lanes.ts`. Scratch lanes are wider
 than key lanes, 2P scratch lanes render on the right side, and DP layouts preserve the single-side lane width instead
@@ -293,7 +293,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-What a scene shows is handed to it before it is shown: the options of `createDecideScene` for the built-in and LR2 decide screens, `setTarget` on the beatoraja decide scene, the options of `createResultScene` for the built-in and LR2 result screens, `setResult` on the beatoraja result scene, the options of `createPlayScene` for the built-in play screen, the song in `prepare(host, song, source)` on the LR2 gameplay scene, and the constructor options for the rest.
+What a scene shows is handed to it before it is shown: the options of `createDecideScene` for the built-in and LR2 decide screens, `setTarget` on the beatoraja decide scene, the options of `createResultScene` for the built-in and LR2 result screens, `setResult` on the beatoraja result scene, the options of `createPlayScene` for the built-in and LR2 play screens, and the constructor options for the rest.
 
 - **The select scene is kept alive.** The built-in and LR2 select scene stays across a decide, play and result: its `exit()` pauses the BGM, stops the chart preview (which keeps its focused chart) and the render loop, and it keeps its cursor, browse state and decoded BGM. Its input listeners stay attached and ignore input while it is off stage. Entering it again re-seeds its scene timers, so the skin's entrance plays again, and resumes the BGM and the preview. The beatoraja select scene is rebuilt from its snapshot instead.
 - **A play loads off stage.** `prepare()` parses the chart and decodes its audio without touching the stage or adding listeners, so the demo prepares the play behind a decide splash. When the splash is done, `setScene(play)` exits the decide scene and enters the play, then `start()` begins it; keys pressed during the splash reach only the splash. Without a splash the demo shows the play first, and a `prepare()` that runs while the play is showing draws the playfield in its loading state.
@@ -319,7 +319,7 @@ sequenceDiagram
 
 ### What the gameplay families share
 
-The LR2 / default gameplay view and the beatoraja gameplay view render with their own skins, but everything that decides how a play sounds, looks and ends comes from one place, so the two cannot drift apart:
+The built-in / LR2 play session and the beatoraja gameplay view render with their own skins, but everything that decides how a play sounds, looks and ends comes from one place, so the two cannot drift apart:
 
 ```mermaid
 flowchart TD
@@ -329,7 +329,7 @@ flowchart TD
     ending[scene/play-ending.ts]
     lamp[resolveClearLamp]
   end
-  core[LR2 / default gameplay view] --> audio
+  core[built-in / LR2 play session] --> audio
   core --> bga
   core --> ending
   prep[prepareBeatorajaGameplayChart] --> audio
@@ -346,7 +346,7 @@ flowchart TD
 
 ## Scene sessions and family views
 
-The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). The built-in and LR2 decide and result screens and the built-in play screen are on them ([The decide screen](#the-decide-screen), [The result screen](#the-result-screen), [The play screen](#the-play-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
+The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). The built-in and LR2 decide, play and result screens are on them ([The decide screen](#the-decide-screen), [The result screen](#the-result-screen), [The play screen](#the-play-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
 
 ```mermaid
 flowchart LR
@@ -377,25 +377,25 @@ flowchart LR
   - The ticker asks the session for a frame and has the view draw it.
   - Key events go to the session as plain data, except while a text field has the focus. The view's intents go to the session while the scene is entered.
   - `exit()` detaches both and keeps them for the next `enter`; `dispose()` ends them.
-- **`PlayfieldSkin`** is what a family's skin gives the shared playfield: the stage, the lanes, the note, measure-line and bomb images, and the effect lengths. It replaces the hooks that `CoreGameplayView` subclasses override:
+- **`PlayfieldSkin`** is what a family's skin gives the shared playfield: the stage, the lanes, the note, measure-line and bomb images, and the effect lengths. A play view also hands the shared frame pass its own drawing around the playfield, as a **`PlayChrome`**: its layers, its chrome, its late text and what it stops when a bomb goes out. Together they replaced the hooks the subclasses of the removed `CoreGameplayView` overrode:
 
-  | `CoreGameplayView` hook                                   | Replaced by                                                   |
-  | --------------------------------------------------------- | ------------------------------------------------------------- |
-  | `stageSize`                                               | `PlayfieldSkin.stage`                                         |
-  | `themeOwnsPlayfield`                                      | `PlayfieldSkin.ownsLanes`                                     |
-  | `resolveThemeLaneRect`                                    | `PlayfieldSkin.laneRect`                                      |
-  | `resolveThemeNoteCell`                                    | `PlayfieldSkin.noteCell`, by channel                          |
-  | `renderThemeMeasureLines`                                 | `PlayfieldSkin.measureLines`, placed by the playfield         |
-  | `collectBgaTargets`                                       | `PlayfieldSkin.bgaTargets`                                    |
-  | `renderBombEffects`                                       | `PlayfieldSkin.bombCell`                                      |
-  | `resolveBombDurationMs`                                   | `PlayfieldSkin.bombDurationMs`                                |
-  | `resolveKeyOnFadeMs`                                      | `PlayfieldSkin.keyOnFadeMs`, by channel                       |
-  | `themeTiming`                                             | `PlayView.timing`                                             |
-  | `onThemeEvent`                                            | `PlayFrame.events`, read in `draw`                            |
-  | `updateThemeState`, `renderThemeLayer`, `renderThemeText` | `FamilyView.draw`                                             |
-  | `attachThemeLayers`                                       | `FamilyView.attach`                                           |
-  | `prepareTheme`                                            | loading the `PlayKit` before the scene is made, then `attach` |
-  | `disposeTheme`                                            | `FamilyView.dispose`                                          |
+  | `CoreGameplayView` hook                                   | Replaced by                                                                  |
+  | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+  | `stageSize`                                               | `PlayfieldSkin.stage`                                                        |
+  | `themeOwnsPlayfield`                                      | `PlayfieldSkin.ownsLanes`                                                    |
+  | `resolveThemeLaneRect`                                    | `PlayfieldSkin.laneRect`                                                     |
+  | `resolveThemeNoteCell`                                    | `PlayfieldSkin.noteCell`, by channel                                         |
+  | `renderThemeMeasureLines`                                 | `PlayfieldSkin.measureLines`, placed by the playfield                        |
+  | `collectBgaTargets`                                       | `PlayfieldSkin.bgaTargets`                                                   |
+  | `renderBombEffects`                                       | `PlayfieldSkin.bombCell`                                                     |
+  | `resolveBombDurationMs`                                   | `PlayfieldSkin.bombDurationMs`                                               |
+  | `resolveKeyOnFadeMs`                                      | `PlayfieldSkin.keyOnFadeMs`, by channel                                      |
+  | `themeTiming`                                             | `PlayView.timing`                                                            |
+  | `onThemeEvent`                                            | `PlayFrame.events`, read in `draw`; a retired bomb, `PlayChrome.bombRetired` |
+  | `updateThemeState`, `renderThemeLayer`, `renderThemeText` | `FamilyView.draw`, around `PlayChrome.draw` and `drawText`                   |
+  | `attachThemeLayers`                                       | `PlayChrome.attachLayers`                                                    |
+  | `prepareTheme`                                            | the view's loading, run by the session (`PlaySessionTheme.prepareView`)      |
+  | `disposeTheme`                                            | `FamilyView.dispose`                                                         |
 
   The LR2 lane index and LR2 timer ids stay inside the LR2 view: the playfield asks by channel.
 
@@ -423,7 +423,7 @@ The web demo keeps the snapshot across a play, a course (the cursor comes back t
 - **Input.** Enter, Space and a click on the canvas continue once input is open. Escape backs out at any time, as LR2 lets it before `#STARTINPUT`. Auto-repeats are ignored, so the Enter still held from the select screen does not skip the screen.
 - **LR2 drawing.** The LR2 view draws the decide skin over the chart's `#STAGEFILE` through `resolveLr2DecideState` (the chart's difficulty, key mode and texts, and the course's for a course stage). It reads LR2's timers off each frame: timer 0 from the entry, timer 1 from when input opens and timer 2 from when the screen starts leaving. The timer ids stay in the view.
 - **Sound.** The session plays the theme's decide jingle (`sounds.decideBgm`) through the audio service as the screen enters, as its owner, and stops it with `stopOwned` as the screen leaves the stage. The web demo hands the decide screen no jingle (`sounds: {}`), on every family; see [The decide jingle](#the-decide-jingle).
-- **`#RANDOM`.** The session draws the chart's `#RANDOM` / `#SWITCH` branches once, when the scene is made, as beatoraja's decide screen does. `scene.resolved` is the resolved chart with its draws, to hand to the play (`preResolved`), and `DecideFrame.playChart` is the same chart for the view's graphs, so the screen shows the branches the play plays. The demo's LR2 / built-in play takes no resolved chart yet and draws its own; neither the built-in nor the LR2 decide view draws the branches.
+- **`#RANDOM`.** The session draws the chart's `#RANDOM` / `#SWITCH` branches once, when the scene is made, as beatoraja's decide screen does. `scene.resolved` is the resolved chart with its draws, to hand to the play (`preResolved`), and `DecideFrame.playChart` is the same chart for the view's graphs, so the screen shows the branches the play plays. The web demo hands it to the built-in and LR2 play it preloads behind the screen; neither the built-in nor the LR2 decide view draws the branches.
 - **Skin settings.** `updateKit(kit)` takes the player's new settings for the skin; the next frame draws with them.
 
 ```mermaid
@@ -489,39 +489,45 @@ The web demo shows every built-in and LR2 result this way: a single play, a cour
 
 ### The play screen
 
-`createPlayScene(kit, options)` (`@be-music/player-web/scenes`) makes the built-in play screen: a play session (`session/play/play-session.ts`) drawn by the built-in play view (`view/built-in/play-view.ts`), as a `SessionScene` to load, show with `setScene` and start. The LR2 play screen is still `PixiGameplayView` on `CoreGameplayView`, which extends the same play session and is its own view; the beatoraja one is still `PixiBeatorajaGameplayView`.
+`createPlayScene(kit, options)` (`@be-music/player-web/scenes`) makes the built-in and LR2 play screens: a play session (`session/play/play-session.ts`) drawn by the view of the kit's family, as a `SessionScene` to load, show with `setScene` and start. A built-in kit (`{ family: 'built-in', skin }`) is drawn by the built-in play view (`view/built-in/play-view.ts`), an LR2 kit (`{ family: 'lr2', skin, invisibleNoteSkin? }`, the chart's play skin and the theme's 9-keys skin for invisible notes) by the LR2 play view (`view/lr2/play-view.ts`). The beatoraja play screen is still `PixiBeatorajaGameplayView`.
 
 ```mermaid
 flowchart LR
   subgraph scene["PlayScene (a SessionScene)"]
-    adapter[PlaySceneSession] -->|PlayFrame| view[BuiltInPlayView]
+    adapter[PlaySceneSession] -->|PlayFrame| view["BuiltInPlayView<br/>Lr2PlayView"]
     view -->|PlayIntent| adapter
   end
   adapter --> session[PlaySession]
   session --> state[PlayState]
   session --> parts["chart · media · engine<br/>input · view settings · ending"]
   view --> playfield[Shared playfield]
+  playfield -->|PlayfieldSkin| view
   playfield -->|ctx.play| session
 ```
 
-- **Options.** `chart` and `source`; `settings`, everything a host set on the old scene class but the skin and the callbacks (the play options it judges and scrolls with, the tempo, the audio mix, the BGA and the drawing options); `course` (the stage's rules and its course view); `replay` (a play log to play back); `preResolved` (the decide screen's `#RANDOM` draws); `audio` (the host's audio service); `playOptions` (as the select screen set them, for the frames); `host` (to build the layers while the play loads off stage); and `on: { finish(result, playlog), exit, restart, hiSpeed?, tempo? }`.
-- **Lifecycle.** `prepare(onProgress)` loads the chart, decodes its samples and starts the BGA loading in the background, without touching the stage. `setScene` shows the play, and `start()` runs the intro and then the chart. `dispose({ preserveAudioTail })` ends the scene, after the play finished, once its last samples have rung out. The scene also has `requestExit`, `requestTogglePause`, the tempo and hi-speed setters, `recording` (for the host's recorder), `progress()` (the result so far, which the demo's test hook reads), `waitForPlaylog`, `updateKit` and the audio and drawing knobs.
-- **Session.** `PlaySession` holds the play's behaviour around one `PlayState`: the chart (`play-chart.ts`), the media (`play-media.ts`; it opens its own `interactive` context through the audio service's `openPlayGraph`, as the session's owner), the engine (`play-engine.ts`), the play's own input (`play-input.ts`), the view settings (`play-view-settings.ts`) and the ending (`play-ending.ts`). What it needs of the view (the intro and fade-out timing, the moments it animates against, the key-beam fade, the stage the touch lanes map onto, the GPU upload of the BGA) comes through `PlaySessionTheme`.
-- **Frame.** Every tick `PlaySceneSession` drains the engine's UI signals into the play state, records or replays the play log's view, and hands the view a `PlayFrame`: the play state and its stage, the chart time and beat, the notes and held lanes, the moments since the last frame (`playViewEventFromTheme`), the analysed mix, whether the play shows yet (`shown`), and the running play itself (`playfield`).
-- **View.** `BuiltInPlayView` draws the shared playfield over its layers (`PlayLayers`) and answers it through a `PlayfieldSkin`: the be-music skin's stage, the playfield's own lane layout, notes, measure lines and bombs (the skin draws them as data), the built-in BGA rect, the skin's bomb length and the default key-beam fade. The be-music chrome draws around the playfield (`renderBuiltInChrome`).
+- **Options.** `chart` and `source`; `settings`, everything a host set on the old scene classes but the skin and the callbacks (the play options it judges and scrolls with, the tempo, the audio mix, the BGA and the drawing options); `course` (the stage's rules and its course view); `replay` (a play log to play back); `preResolved` (the decide screen's `#RANDOM` draws); `audio` (the host's audio service); `playOptions` (as the select screen set them, for the frames); `host` (to build the layers while the play loads off stage); and `on: { finish(result, playlog), exit, restart, hiSpeed?, tempo? }`.
+- **Lifecycle.** `prepare(onProgress)` loads the chart, the view's own assets (an LR2 skin's images and fonts) and the samples, and starts the BGA loading in the background, without touching the stage. `setScene` shows the play, and `start()` runs the intro and then the chart. `dispose({ preserveAudioTail })` ends the scene, after the play finished, once its last samples have rung out. The scene also has `requestExit`, `requestTogglePause`, the tempo and hi-speed setters, `recording` (for the host's recorder), `progress()` (the result so far, which the demo's test hook reads), `waitForPlaylog`, `updateKit` (a built-in skin's settings; a scene keeps its family and skin) and the audio and drawing knobs.
+- **Session.** `PlaySession` holds the play's behaviour around one `PlayState`: the chart (`play-chart.ts`), the media (`play-media.ts`; it opens its own `interactive` context through the audio service's `openPlayGraph`, as the session's owner), the engine (`play-engine.ts`), the play's own input (`play-input.ts`), the view settings (`play-view-settings.ts`) and the ending (`play-ending.ts`). What it needs of the view comes through `PlaySessionTheme` (`play-session-theme.ts`): the intro and fade-out timing, the moments it animates against (`PlayMoment`), the key-beam fade by channel, the stage the touch lanes map onto, the view's own loading once the chart is prepared (`prepareView`) and the GPU upload of the BGA.
+- **Frame.** Every tick `PlaySceneSession` drains the engine's UI signals into the play state, records or replays the play log's view, and hands the view a `PlayFrame`: the play state and its stage, the chart time and beat, the notes and held lanes, the moments since the last frame (`playViewEventFromMoment`), the analysed mix, whether the play shows yet (`shown`), and the running play itself (`playfield`).
+- **Built-in view.** `BuiltInPlayView` draws the shared playfield over its layers (`PlayLayers`) and answers it through a `PlayfieldSkin`: the be-music skin's stage, the playfield's own lane layout, notes, measure lines and bombs (the skin draws them as data), the built-in BGA rect, the skin's bomb length and the default key-beam fade. The be-music chrome draws around the playfield (`renderBuiltInChrome`, its `PlayChrome`).
+- **LR2 view.** `Lr2PlayView` draws an LR2 play skin on LR2's 640x480 canvas around the same playfield:
+  - its ops, numbers, texts, sliders and bar graphs come from the frame's LR2 state (`resolveLr2PlayState` over the frame's `PlayState`, the score, the time and the frame rate), its timers from the frame's moments ([LR2 skin implementation notes](./lr2-skin.md#scene-state));
+  - its `PlayfieldSkin` gives the skin's `#DST_NOTE` lane rects, its note cells (the `#SRC_AUTO_*` dummy notes on an auto-scratch lane), its `#DST_LINE` measure lines, its `#DST_BGA` rects, and the bomb and key-beam spans of its timers; the skin owns the lanes, so it draws the lane backgrounds, key beams and bombs itself;
+  - its `PlayChrome` draws the skin's elements (`view/lr2/play-elements.ts`), retires the full-combo timers once played out, draws the judgment as text when the skin has no judge images, and stops a bomb's timer when the playfield retires the bomb;
+  - the session times the play from the skin's `#LOADSTART` + `#LOADEND` (READY), `#PLAYSTART`, `#FADEOUT` and `#CLOSE` (`resolveLr2PlayTiming`).
 - **Input.** The play's keys (ESC, F5, Space, the arrows, the Backspace hold) and touch lanes stay the play's own listeners on the window and the canvas; the scene listens for no keys.
 - **`#RANDOM`.** With `preResolved` the play plays the draws the decide screen showed. The web demo makes the decide screen first and preloads the play with its `resolved`, on the built-in and LR2 play screens; a course stage and a replay draw their own (a replay plays its log's).
 
-The web demo plays every built-in play this way: a single play, AUTO, a replay, a course stage, a NONSTOP run, a quick retry and F5.
+The web demo plays every built-in and LR2 play this way: a single play, AUTO, a replay, a course stage, a NONSTOP run, a quick retry and F5.
 
 ### Where the play's parts live
 
-`CoreGameplayView` (the LR2 family's base until its view moves onto the play session) and the play session share the play's parts. Each module takes the play as an explicit context (`ctx`) and reads and writes its state through an interface of its own. The session's state is `PlaySessionState`; `CoreGameplayState` adds the LR2 scene's layers to the session, and the built-in view keeps its layers in `PlayLayers`. The theme hooks that the LR2 family overrides stay `protected`, and the modules call them through the scene's `theme` object (`GameplayThemeHooks`; the session calls only `GameplaySessionHooks`).
+The play session and the play views share the play's parts. Each module takes the play (or the view) as an explicit context (`ctx`) and reads and writes its state through an interface of its own. The session's state is `PlaySessionState`; a view keeps its layers in `PlayLayers` and reads the running play through `PlayfieldRuntime`.
 
 The running play is one scene-model `PlayState` (`playState`): the gauge and EX score with their graphs, the combo, max combo and course combo, the timed judgments with their early / late counts, and the view (the hi-speed under HS-FIX and the lane covers). Every change to it goes through `applyPlayEvent` (`session/play/play-state.ts`), which reduces it with `reducePlayState` and glides the note scroll to a new drawn hi-speed: the engine's frames, judgments and empty POORs, its final summary, the player's hi-speed keys, the host's `setHiSpeed` and a replay's recorded view. The skins' runtime, the LR2 state resolver (`resolveLr2PlayState`) and the result (`playResultFromPlayState`) read it. The session keeps the engine's judgment counts as the readouts show them (`score`, with LR2's empty POORs in the POOR count) and the engine's gauge summary (`gaugeState`) beside it.
 
 - `session/play/`:
-  - `play-session.ts`: `PlaySession`, the composition, the clocks, the pause, the recording and the teardown; `play-session-state.ts`: its state;
+  - `play-session.ts`: `PlaySession`, the composition, the clocks, the pause, the recording and the teardown; `play-session-state.ts`: its state; `play-options.ts`: its options (`PlaySessionOptions`); `play-session-theme.ts`: what it asks of its view (`PlaySessionTheme`) and the moments it raises (`PlayMoment`);
   - `play-scene-session.ts`: the session as a `SceneSession`, its frames and intents; `play-view-events.ts`: the moments as view events;
   - `play-chart.ts`: `prepareSong`, the lane options (RANDOM, MIRROR, S-RANDOM, SCATTER, DP FLIP), a replay's arrangement and the decide screen's draws;
   - `play-media.ts`: the audio graph, the samples, the BGA textures and videos, and their teardown;
@@ -531,8 +537,9 @@ The running play is one scene-model `PlayState` (`playState`): the gauge and EX 
   - `play-state.ts`: `applyPlayEvent`, the one way the play state changes;
   - `play-view-settings.ts`: the hi-speed keys, the tempo the engine follows, the lane covers as drawn and the play log's view;
   - `play-ending.ts`: the exit timeline and the result snapshot.
-- `view/shared/`: `playfield/*` (lanes, notes, long notes, mines, measure lines, bombs, covers, text; the running play as `ctx.play`, `PlayfieldRuntime`), `bga-renderer.ts`, `play-frame.ts` (the layer tree, its fit to the screen, the fades), `play-layers.ts` and `texture-upload.ts`.
+- `view/shared/`: `playfield/*` (lanes, notes, long notes and the long-note tracker, mines, measure lines, bombs, covers, text; the running play as `ctx.play`, `PlayfieldRuntime`; the view's `PlayfieldSkin` and `PlayChrome`), `bga-renderer.ts`, `play-frame.ts` (the layer tree, its fit to the screen, the fades), `play-layers.ts` and `texture-upload.ts`.
 - `view/built-in/`: `play-view.ts` (the built-in play view and its `PlayfieldSkin`) and `play-chrome.ts` (the built-in lane geometry, BGA rect and be-music layout, and the chrome's runtime and pass).
+- `view/lr2/`: `play-view.ts` (the LR2 play view, its `PlayfieldSkin`, its loading and the frame's LR2 state), `play-elements.ts` (the skin's elements and the playfield's lane rects, note cells, measure lines and BGA rects), `play-timers.ts` (the skin's timers), `play-turntable.ts` (the scratch turntable) and `play-hud.ts` (the judge, combo and groove-gauge drawing and the skin's timer spans).
 
 ## Note visibility
 

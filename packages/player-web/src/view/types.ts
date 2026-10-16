@@ -199,8 +199,8 @@ export interface PlayfieldNote {
 }
 
 /**
- * Something that happened in a play since the last frame, for the skin's timers and effects (the moments
- * `CoreGameplayView.onThemeEvent` received, and the engine's lane commands in the view's own words). `atMs` is on the
+ * Something that happened in a play since the last frame, for the skin's timers and effects (the play session's
+ * moments, and the engine's lane commands in the view's own words). `atMs` is on the
  * play clock.
  */
 export type PlayViewEvent =
@@ -214,7 +214,7 @@ export type PlayViewEvent =
       readonly atMs: number;
     }
   | { readonly kind: 'full-combo'; readonly atMs: number }
-  | { readonly kind: 'gauge'; readonly previous: number; readonly next: number }
+  | { readonly kind: 'gauge'; readonly previous: number; readonly next: number; readonly atMs: number }
   | { readonly kind: 'bomb'; readonly channel: string; readonly atMs: number }
   | { readonly kind: 'bomb-retired'; readonly channel: string }
   /** A lane's key went down or up, or flashed (an auto lane). */
@@ -407,7 +407,7 @@ export interface PlayfieldBgaTarget {
  * line and bomb images, and the effect lengths. The playfield walks the notes and lays them out; the skin only answers
  * where and with what. A method that returns `undefined` leaves that part to the playfield's built-in drawing.
  *
- * It replaces the theme hooks `CoreGameplayView` subclasses override. Each one maps as follows:
+ * It replaced the theme hooks the subclasses of the removed `CoreGameplayView` overrode, as follows:
  *
  * | `CoreGameplayView` hook | Replaced by |
  * | --- | --- |
@@ -444,7 +444,10 @@ export interface PlayfieldSkin {
   measureLines(): readonly PlayfieldMeasureLine[] | undefined;
   /** Pushes this frame's BGA rects; pushing none hides the BGA. */
   bgaTargets(out: PlayfieldBgaTarget[]): void;
-  /** The cell of `channel`'s bomb `elapsedMs` after it went off, or `undefined` for the playfield's own bomb. */
+  /**
+   * The cell of `channel`'s bomb `elapsedMs` after it went off, drawn centred on the lane's judgement line, or
+   * `undefined` for the playfield's own bomb. Not asked when the skin {@link ownsLanes}.
+   */
   bombCell(channel: string, elapsedMs: number): PlayfieldCell | undefined;
   /** How long `channel`'s bomb lasts, in ms. */
   bombDurationMs(channel: string): number;

@@ -2,14 +2,13 @@
  * The state of a play the play session works on, apart from what draws it: the chart and its notes, the audio graph,
  * the engine's handles, the play state (gauge, score, judgements, hi-speed and covers), the lane effects, the BGA's
  * timelines and textures, the pause and the exit timeline. The modules of the play session (`session/play/*`) and the
- * shared playfield read and write it through their own context interfaces. `CoreGameplayState` extends it with the
- * built-in and LR2 scenes' layers.
+ * shared playfield read and write it through their own context interfaces; the play views keep their layers apart
+ * (`PlayLayers`).
  */
 import type { Texture } from 'pixi.js';
 import type { TimedSampleTrigger, TimingResolver } from '@be-music/audio-renderer/triggers';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player/core/engine';
-import { createEmptyScore, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
-import type { LongNoteStyle } from '@be-music/player/core/engine';
+import { createEmptyScore, type JudgeKind, type LongNoteStyle, type ScoreSummary } from '@be-music/player/ruleset';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerStateSignals } from '@be-music/player/state-signals';
@@ -28,7 +27,7 @@ import type {
 } from '../../runtime/audio-bus.ts';
 import type { GameplayRecorder } from '../../recording/gameplay-recorder.ts';
 import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
+import { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import type { PlaylogViewCursor } from '../../scene/playlog-view.ts';
@@ -44,7 +43,7 @@ import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import { TouchLaneTracker } from '../../scene/core/touch-lanes.ts';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
-import type { GameplayLaneRect } from '../../scene/core/gameplay-theme.ts';
+import type { PlayfieldLaneRect } from '../../view/types.ts';
 
 export class PlaySessionState {
   /**
@@ -108,7 +107,7 @@ export class PlaySessionState {
    * sample. The extractor already remaps `3x → 1x` / `4x → 2x` so each entry's `channel` lines up with the playable
    * lane it shares.
    *
-   * Populated only when {@link CoreGameplayViewOptions.showInvisibleNotes} is on — this is a debug visualization, not
+   * Populated only when {@link PlaySessionOptions.showInvisibleNotes} is on — this is a debug visualization, not
    * gameplay state. The renderer paints a thin green bar per entry so the chart author's hidden keysound layout is
    * legible alongside the regular note stream.
    */
@@ -124,7 +123,7 @@ export class PlaySessionState {
    * 7K-flavored fallbacks keep behaving as before for skinless / pre-prepare code paths.
    */
   chartPlayVariant: ChartPlayVariant = '7';
-  laneX: Map<string, GameplayLaneRect> = new Map();
+  laneX: Map<string, PlayfieldLaneRect> = new Map();
   /**
    * `playClock()` value captured at `start()`. Theme animations (LR2 timer 0/40/41 — scene-start / READY / play-start)
    * anchor here so the intro slide-ins, scratch turntable rotation, and similar visuals play from the
@@ -395,7 +394,7 @@ export class PlaySessionState {
   readonly pressedChannels: Set<string> = new Set();
   /**
    * Per-key-on-timer (`100..117`) play-clock timestamp of an in-flight release fade. When set, the lane beam (and a
-   * theme's key-on sprites) taper from 1 → 0 over {@link resolveKeyOnFadeMs} starting at the recorded value, so an LN
+   * theme's key-on sprites) taper from 1 → 0 over the view's key-beam fade starting at the recorded value, so an LN
    * release decays instead of popping off. {@link releaseKeyOnTimer} populates this; {@link
    * startKeyOnTimer} clears it on a fresh press.
    */

@@ -1,10 +1,10 @@
-/** The text pass of the shared playfield: the theme's late text layer and the pause overlay. */
+/** The text pass of the shared playfield: the view's late text layer and the pause overlay. */
 
 import type { PlayfieldContext } from './context.ts';
 
 export function renderText(ctx: PlayfieldContext, width: number, height: number, seconds: number): void {
   ctx.textLayerPool.begin();
-  ctx.theme.renderThemeText(seconds);
+  ctx.chrome.drawText?.(seconds);
   ctx.textLayerPool.end();
   ctx.overlay.visible = ctx.play.paused;
   ctx.overlay.text = 'Paused';

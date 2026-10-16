@@ -6,7 +6,6 @@
 
 import { findFirstIndexAtOrAfter } from '@be-music/utils/core';
 import type { TimedLandmineNote } from '@be-music/player/playable-notes';
-import type { GameplayLaneRect } from '../../../scene/core/gameplay-theme.ts';
 import {
   advanceDrawCursor,
   isDrawnAtTime,
@@ -23,6 +22,7 @@ import { PIXELS_PER_BEAT } from '../../../scene/gameplay-constants.ts';
 import { resolveLr2LaneIndex } from '../../../scene/gameplay-lanes.ts';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { renderPhantomNote } from '../../../skins/phantom/playfield.ts';
+import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
 import { renderLongNote } from './long-notes.ts';
 import { renderMeasureLines } from './measure-lines.ts';
@@ -86,10 +86,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       if (!lane) continue;
       const y = lane.bottom - beatDistance(invisible.beat) * pixelsPerBeat;
       if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
-      const cell = ctx.theme.resolveThemeNoteCell(
-        'invisible',
-        resolveLr2LaneIndex(invisible.channel, ctx.play.chartPlayVariant),
-      );
+      const cell = ctx.playfieldSkin.noteCell('invisible', invisible.channel);
       if (cell?.texture) {
         const sprite = ctx.noteLayerPool.acquireSprite();
         sprite.texture = cell.texture;
@@ -134,8 +131,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       continue;
     }
     const y = resolveDrawY(drawWindow, lane.bottom - beatDistance(note.beat) * pixelsPerBeat, lane.bottom);
-    // Use the LR2-spec lane index for theme note lookups (LR2 `#SRC_NOTE,...,index`): 2P side notes need to read
-    // `skin.notes[kind][10..17]`, not the position-based `[8..15]` that `resolveLaneIndex` would give.
+    // The LR2-spec lane index (LR2 `#SRC_NOTE,...,index`), for the lane kind a be-music skin draws and the labels.
     const laneIndex = resolveLr2LaneIndex(note.channel, ctx.play.chartPlayVariant);
     // Long-note render: draw LN_BODY between start and end beats, capped with LN_START / LN_END sprites. Falls
     // through to single-note render if the chart has no long-note end-beat for this entry.
@@ -227,13 +223,13 @@ function renderSingleNote(
   ctx: PlayfieldContext,
   laneIndex: number,
   channel: string,
-  lane: GameplayLaneRect,
+  lane: PlayfieldLaneRect,
   y: number,
 ): void {
   // `y` is where the chart timing intersects the judgement line for this note. We anchor the sprite by its **bottom
   // edge** so the just-timing moment lines up with the bottom edge of the visual note (LR2 / BMS convention) instead
   // of the center.
-  const cell = ctx.theme.resolveThemeNoteCell('note', laneIndex);
+  const cell = ctx.playfieldSkin.noteCell('note', channel);
   if (cell?.texture) {
     const sprite = ctx.noteLayerPool.acquireSprite();
     sprite.texture = cell.texture;

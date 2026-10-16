@@ -1,14 +1,14 @@
 /** The long notes of the shared playfield: one long note's body and caps. */
 
-import type { GameplayLaneRect } from '../../../scene/core/gameplay-theme.ts';
 import { resolveLongNoteAlpha } from '../../../scene/core/note-draw-window.ts';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { renderPhantomLongNote } from '../../../skins/phantom/playfield.ts';
+import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
 
 /**
  * Renders a long note as a vertical band: LN_BODY tiled (or stretched) between LN_START (lower) and LN_END (upper).
- * The body / caps come from the theme per lane index when available ({@link resolveThemeNoteCell}); otherwise the
+ * The body / caps come from the skin by channel when it draws them (`PlayfieldSkin.noteCell`); otherwise the
  * body falls back to the be-music skin's long-note drawing. A long note missed at the head or let go early draws at
  * half alpha until it goes, as in LR2 ({@link resolveLongNoteAlpha}); a be-music skin gets its `state` and dims it
  * itself.
@@ -17,7 +17,7 @@ export function renderLongNote(
   ctx: PlayfieldContext,
   laneIndex: number,
   note: RuntimeNote,
-  lane: GameplayLaneRect,
+  lane: PlayfieldLaneRect,
   yStart: number,
   yEnd: number,
   drawBottom: number,
@@ -33,7 +33,7 @@ export function renderLongNote(
   // where the head has already passed but the tail is still above.
   const top = Math.max(lane.top - ctx.noteOverscan, Math.min(yStart, yEnd));
   const bottom = Math.min(drawBottom, Math.max(yStart, yEnd));
-  const bodyCell = ctx.theme.resolveThemeNoteCell('lnbody', laneIndex);
+  const bodyCell = ctx.playfieldSkin.noteCell('lnbody', channel);
   if (bodyCell) {
     if (bodyCell.texture) {
       const sprite = ctx.noteLayerPool.acquireSprite();
@@ -78,7 +78,7 @@ export function renderLongNote(
     }
   }
   // LN_END at the top (yEnd), LN_START at the bottom (yStart).
-  const endCell = ctx.theme.resolveThemeNoteCell('lnend', laneIndex);
+  const endCell = ctx.playfieldSkin.noteCell('lnend', channel);
   if (endCell?.texture) {
     const sprite = ctx.noteLayerPool.acquireSprite();
     sprite.texture = endCell.texture;
@@ -92,7 +92,7 @@ export function renderLongNote(
   // The head draws wherever it is above the draw bottom: on the judgement line once passed (both rule sets hold it
   // there), and under beatoraja's rules skipped while a negative `#SCROLL` has it below the stage.
   if (yStart <= drawBottom) {
-    const startCell = ctx.theme.resolveThemeNoteCell('lnstart', laneIndex);
+    const startCell = ctx.playfieldSkin.noteCell('lnstart', channel);
     if (startCell?.texture) {
       const sprite = ctx.noteLayerPool.acquireSprite();
       sprite.texture = startCell.texture;

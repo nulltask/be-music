@@ -5,11 +5,9 @@ import type { SceneIdentity } from '../host/family-kit.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { PixiBeatorajaDecideScene } from './beatoraja/decide.ts';
 import { PixiBeatorajaSelectScene } from './beatoraja/select.ts';
-import { CoreGameplayView } from './core/gameplay.ts';
 import { CoreSongSelectView } from './core/select.ts';
 import { DefaultPixiSongSelectView } from './default/index.ts';
 import { PixiSceneHost, resolveRendererPreference, resolveRenderResolution, type PixiScene } from './host.ts';
-import { PixiGameplayView } from './lr2/gameplay.ts';
 import { PixiSongSelectView } from './lr2/select.ts';
 
 function makeScene(overrides: Partial<PixiScene> = {}): PixiScene {
@@ -267,8 +265,6 @@ describe('scene identities', () => {
     ['CoreSongSelectView', CoreSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
     ['DefaultPixiSongSelectView', DefaultPixiSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
     ['PixiSongSelectView', PixiSongSelectView.prototype.identity, { kind: 'select', family: 'lr2' }],
-    ['CoreGameplayView', CoreGameplayView.prototype.identity, { kind: 'play', family: 'built-in' }],
-    ['PixiGameplayView', PixiGameplayView.prototype.identity, { kind: 'play', family: 'lr2' }],
   ];
 
   it.each(cases)('%s names its screen and family', (_name, identity, expected) => {

@@ -1,10 +1,10 @@
 /**
- * The engine side of a play on the built-in and LR2 gameplay scenes (`CoreGameplayView`): launches the shared engine
+ * The engine side of a play on the built-in and LR2 play screens (`PlaySession`): launches the shared engine
  * (`runEngineDriver`) on the prepared chart, drains its UI signals each frame into the score, gauge, judgement, combo
  * and lane-effect state the scene draws (key-on timers, bombs, POOR BGA, long-note holds), and starts the ending once
  * the chart settles. ESC / F5 / a teardown interrupt the engine here.
  *
- * The functions read and write the scene's state through {@link PlayEngineContext}; the scene passes itself.
+ * The functions read and write the scene's state through {@link PlayEngineContext}; the play session passes itself.
  */
 
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
@@ -12,7 +12,6 @@ import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import {
   PlayerInterruptedError,
-  type LongNoteStyle,
   type PlayerRulesetInfo,
   type PlayerSummary,
   type PreparedPlaybackChartData,
@@ -27,7 +26,13 @@ import type {
 } from '@be-music/player/core/ui-signal-bus';
 import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
-import { resolveDisplayedPoor, type GaugeType, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
+import {
+  resolveDisplayedPoor,
+  type GaugeType,
+  type JudgeKind,
+  type LongNoteStyle,
+  type ScoreSummary,
+} from '@be-music/player/ruleset';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import { playEventFromUiCommand } from '@be-music/scene-model';
 import { resolveLr2LaneIndex } from '../../scene/gameplay-lanes.ts';
@@ -38,9 +43,9 @@ import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { supportsLiveTempoChange, type ReplayTempo } from '../../runtime/play-tempo.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { PlaySessionOptions } from './play-options.ts';
 import { toBeMusicJudgeWindows } from '../../scene/core/judge-windows.ts';
-import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
+import type { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { LiveTempo } from '../../scene/live-tempo.ts';
 import { resolvePlayEnding } from '../../scene/play-ending.ts';
@@ -61,11 +66,11 @@ import {
 
 const log = logger('gameplay');
 
-/** The scene's members the engine side reads and writes: `CoreGameplayView`'s members of these names. */
+/** The scene's members the engine side reads and writes: the play session's members of these names. */
 export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingContext {
   readonly options: Readonly<
     Pick<
-      CoreGameplayViewOptions,
+      PlaySessionOptions,
       | 'autoPlay'
       | 'autoScratch1P'
       | 'autoScratch2P'
@@ -164,7 +169,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
 }
 
 /**
- * "Fully on" hold time before {@link CoreGameplayView.flashKeyOnTimer} hands the lane laser to the release-fade path.
+ * "Fully on" hold time before {@link flashKeyOnTimer} hands the lane laser to the release-fade path.
  * Without this hold the sprite would only stay at peak alpha for the first frame (≈16 ms at 60 fps) before the fade
  * tween kicked in, which made auto-judged short-note flashes look like a single-frame blink. ~60 ms is enough to
  * register visually as a deliberate "tap" without lingering through the next note.
@@ -202,7 +207,7 @@ function startKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
 
 /**
  * Smoothly extinguishes the lane laser when a key (or auto LN head) releases: the LR2 key-on timer (100..117) stays
- * in its currently-active state for {@link resolveKeyOnFadeMs} ms while a render-time alpha taper drives the visible
+ * in its currently-active state for the view's key-beam fade (`PlaySessionTheme.keyOnFadeMs`) while a render-time alpha taper drives the visible
  * amplitude down to 0, then the timer entry itself is deleted. Anchored on `playClock` so the fade pauses cleanly
  * with the rest of the scene.
  *
@@ -223,7 +228,7 @@ function releaseKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
   // any still-visible laser through to alpha=0.
   ctx.keyOnFadeOutStart.set(timerId, ctx.playClock());
   if (!ctx.timerStartedAt.has(timerId)) return;
-  const fadeMs = ctx.theme.resolveKeyOnFadeMs(timerId);
+  const fadeMs = ctx.theme.keyOnFadeMs(channel);
   const timeout = window.setTimeout(() => {
     ctx.keyFlashTimeouts.delete(timeout);
     if (ctx.disposed) return;
@@ -246,7 +251,7 @@ function triggerBomb(ctx: PlayEngineContext, channel: string, judge?: BeMusicJud
   ctx.bombStartedAt.set(channel, now);
   if (judge) ctx.bombJudge.set(channel, judge);
   else ctx.bombJudge.delete(channel);
-  ctx.theme.onThemeEvent({ kind: 'bomb', channel, at: now });
+  ctx.theme.moment({ kind: 'bomb', channel, at: now });
 }
 
 /**
@@ -297,7 +302,7 @@ function publishJudge(ctx: PlayEngineContext, judge: JudgeKind, seconds: number,
   // right half of the Pop'n nine-lane bank, not the second player).
   const isPlayer2 = ctx.chartPlayVariant !== '9' && typeof channel === 'string' && channel.startsWith('2');
   const side: '1P' | '2P' = isPlayer2 ? '2P' : '1P';
-  ctx.theme.onThemeEvent({ kind: 'judge', side, at: ctx.playClock() });
+  ctx.theme.moment({ kind: 'judge', side, at: ctx.playClock() });
   // Snapshot the verdict + combo for this side so DP rendering shows each lane group's *own* combo number — frozen at
   // the moment that side last hit a note — rather than mirroring the global running combo on both sides.
   // A course stage also snapshots the course combo, which an LR2 skin shows there during an expert or grade course.
@@ -335,7 +340,7 @@ function maybeFireFullCombo(ctx: PlayEngineContext): void {
   if (ctx.score.total <= 0) return;
   if (ctx.playState.combo < ctx.score.total) return;
   ctx.fullComboFired = true;
-  ctx.theme.onThemeEvent({ kind: 'full-combo', at: ctx.playClock() });
+  ctx.theme.moment({ kind: 'full-combo', at: ctx.playClock() });
   log.info('FULL COMBO');
 }
 
@@ -653,7 +658,7 @@ function applyEngineSummary(ctx: PlayEngineContext, summary: Readonly<PlayerSumm
     // not through judge deltas.
     const next = summary.gauge.current;
     if (next !== previous) {
-      ctx.theme.onThemeEvent({ kind: 'gauge', previous, next });
+      ctx.theme.moment({ kind: 'gauge', previous, next, at: ctx.playClock() });
       // Latch the first rise above the starting value and the first time the gauge tops out.
       const moments = ctx.playMoments;
       if (next > summary.gauge.initial) moments.gaugeRiseAtMs ??= ctx.playClock();
@@ -742,7 +747,7 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUiCommand): v
       ctx.longNotes.end(command.channel, command.outcome);
       break;
   }
-  ctx.theme.onThemeEvent({ kind: 'lane-command', command });
+  ctx.theme.moment({ kind: 'lane-command', command });
 }
 
 /** Keeps the engine's long-note style and its judge windows (converted to ms) for the skin runtime. */
@@ -804,7 +809,7 @@ function handleSharedEngineChartFinished(
     timing: ctx.timingResolver,
     currentSeconds: ctx.currentSeconds(),
     tempo: ctx.tempo,
-    themeFadeOutMs: ctx.theme.themeTiming().fadeOutMs,
+    themeFadeOutMs: ctx.theme.timing().fadeOutMs,
   });
   // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
   // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
@@ -841,7 +846,7 @@ function handleSharedEngineChartFinished(
   }, ending.leadOutMs);
 }
 
-/** Stops the shared engine as the scene is disposed (`CoreGameplayView.dispose`) and lets go of its buses. */
+/** Stops the shared engine as the play is disposed (`PlaySession.dispose`) and lets go of its buses. */
 export function stopSharedEngine(ctx: PlayEngineContext): void {
   // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
   // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via

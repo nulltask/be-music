@@ -1,5 +1,5 @@
 /**
- * The measure lines of the shared playfield: the chart's bar lines from the playhead, drawn by the theme, by the
+ * The measure lines of the shared playfield: the chart's bar lines from the playhead, drawn with the skin's lines, by the
  * be-music skin, or as a thin bar across each run of adjacent lanes.
  */
 
@@ -30,9 +30,10 @@ function resolveMeasureBeats(ctx: PlayfieldContext): number[] {
 }
 
 /**
- * Draws horizontal measure lines on the playfield at every `#MEASURE` boundary. A theme may draw its own
- * ({@link renderThemeMeasureLines}; the LR2 family uses `#SRC_LINE` / `#DST_LINE`); otherwise we fall back to a thin
- * bar across each run of adjacent lanes, so double play's banks get one each and the gap between them stays clear.
+ * Draws horizontal measure lines on the playfield at every `#MEASURE` boundary. A skin may give its own lines
+ * (`PlayfieldSkin.measureLines`; the LR2 family's `#SRC_LINE` / `#DST_LINE`), each repeated at every boundary; otherwise
+ * we fall back to a thin bar across each run of adjacent lanes, so double play's banks get one each and the gap between
+ * them stays clear.
  */
 export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWindow, pixelsPerBeat: number): void {
   const { currentBeat } = drawWindow;
@@ -78,19 +79,31 @@ export function renderMeasureLines(ctx: PlayfieldContext, drawWindow: NoteDrawWi
     : (toBeat: number): number => toBeat - currentBeat;
   const drawBottom = resolveDrawBottom(drawWindow, bottom);
   const lineY = (beat: number): number => resolveDrawY(drawWindow, bottom - beatDistance(beat) * pixelsPerBeat, bottom);
-  if (
-    ctx.theme.renderThemeMeasureLines({
-      beats,
-      firstBeatIndex,
-      maxBeat,
-      pixelsPerBeat,
-      beatDistance,
-      lineY,
-      top,
-      bottom,
-      drawBottom,
-    })
-  ) {
+  const skinLines = ctx.playfieldSkin.measureLines();
+  if (skinLines !== undefined) {
+    // Each of the skin's lines (one per side under double play) at every boundary, in the skin's order.
+    for (let lineIndex = 0; lineIndex < skinLines.length; lineIndex += 1) {
+      const line = skinLines[lineIndex]!;
+      const texture = line.cell.texture;
+      if (texture === undefined) continue;
+      for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
+        const beat = beats[beatIndex]!;
+        if (beat > maxBeat) {
+          break;
+        }
+        const y = lineY(beat);
+        if (y < top - 1 || y > drawBottom + 1) {
+          continue;
+        }
+        const sprite = ctx.noteLayerPool.acquireSprite();
+        sprite.texture = texture;
+        sprite.label = `measure-line[idx=${lineIndex},beat=${beat}]`;
+        sprite.position.set(line.x, Math.round(y));
+        sprite.width = line.width;
+        sprite.height = line.height;
+        line.applyToSprite?.(sprite);
+      }
+    }
     return;
   }
   const binding = ctx.skinBinding;

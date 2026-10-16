@@ -1,6 +1,6 @@
 /**
- * The lanes of the shared playfield: lays out each lane's rect (the theme's, else the built-in layout's) into `laneX`,
- * and draws the lane backgrounds and key beams through the be-music skin (or Phantom's) unless the theme owns them.
+ * The lanes of the shared playfield: lays out each lane's rect (the skin's, else the built-in layout's) into `laneX`,
+ * and draws the lane backgrounds and key beams through the be-music skin (or Phantom's) unless the skin owns them.
  */
 
 import { PLAYFIELD } from '../../../scene/gameplay-constants.ts';
@@ -14,7 +14,8 @@ import type { PlayfieldContext } from './context.ts';
 export function renderLanes(ctx: PlayfieldContext, width: number, height: number): void {
   ctx.laneLayer.clear();
   ctx.play.laneX.clear();
-  const themeOwnsPlayfield = ctx.theme.themeOwnsPlayfield();
+  const skin = ctx.playfieldSkin;
+  const skinOwnsLanes = skin.ownsLanes;
   const {
     lanes: fallbackLanes,
     left: fallbackLeft,
@@ -24,8 +25,8 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
 
   const skinlessLanes: BeMusicLaneFrame[] = [];
   ctx.play.laneChannels.forEach((channel, index) => {
-    // A theme-authored lane rect wins; channels the theme doesn't place use the default-family layout.
-    const themeLane = ctx.theme.resolveThemeLaneRect(channel, width, height);
+    // A skin-authored lane rect wins; channels the skin doesn't place use the default-family layout.
+    const themeLane = skin.laneRect(channel, { width, height });
     const fallbackLane = fallbackLanes[index];
     const x = themeLane ? themeLane.x : (fallbackLane?.x ?? fallbackLeft);
     const w = themeLane ? themeLane.w : Math.max(4, fallbackLane?.w ?? PLAYFIELD.w);
@@ -33,9 +34,9 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
     const bottom = themeLane ? themeLane.bottom : fallbackBottom;
     ctx.play.laneX.set(channel, { x, w, top, bottom });
 
-    if (themeOwnsPlayfield) {
-      // With a theme owning the playfield, the lane background, judgement line and key lasers are all rendered by the
-      // theme itself. Drawing our own colored rectangles on top of that just paints over the skin -- which is exactly
+    if (skinOwnsLanes) {
+      // With a skin owning the lanes, the lane background, judgement line and key lasers are all rendered by the skin
+      // itself. Drawing our own colored rectangles on top of that just paints over the skin -- which is exactly
       // the "scratch lane is too red" / "judgement line is white" problem we want to avoid. Skip them here.
       return;
     }
@@ -58,7 +59,7 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
     });
   });
 
-  if (!themeOwnsPlayfield && skinlessLanes.length > 0) {
+  if (!skinOwnsLanes && skinlessLanes.length > 0) {
     const beat = ctx.play.currentBeat(ctx.play.currentSeconds());
     const binding = ctx.skinBinding;
     if (binding) {
@@ -92,7 +93,7 @@ function resolveFallbackLaneLaserAlpha(ctx: PlayfieldContext, channel: string): 
   if (fadeStart === undefined) {
     return 1;
   }
-  const fadeMs = ctx.theme.resolveKeyOnFadeMs(timerId);
+  const fadeMs = ctx.playfieldSkin.keyOnFadeMs(channel);
   const elapsed = Math.max(0, ctx.play.playClock() - fadeStart);
   if (elapsed >= fadeMs) {
     ctx.play.keyOnFadeOutStart.delete(timerId);

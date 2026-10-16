@@ -1,10 +1,10 @@
 /**
- * Chart preparation for a play on the built-in and LR2 gameplay scenes (`CoreGameplayView`): resolves the chart's
+ * Chart preparation for a play on the built-in and LR2 play screens (`PlaySession`): resolves the chart's
  * `#RANDOM` / `#SWITCH` control flow, prepares the notes the engine judges and the playfield draws (one shared
  * `PreparedPlaybackChartData`), applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM / SCATTER) or a replay's
  * recorded arrangement, and resets the play's state for the new chart.
  *
- * `prepareSong` reads and writes the play's state through {@link PlayChartContext}; the scene passes itself.
+ * `prepareSong` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
  */
 
 import {
@@ -41,8 +41,8 @@ import {
   type NonstopStageBgaTimeline,
 } from '../../scene/core/gameplay-bga.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import type { CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
-import type { LongNoteTracker } from '../../scene/core/long-note-tracker.ts';
+import type { PlaySessionOptions } from './play-options.ts';
+import type { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../scene/core/note-draw-window.ts';
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
 import { isPlayableInputChannel, resolvePlayVariantLaneChannels } from '../../scene/gameplay-lanes.ts';
@@ -59,11 +59,11 @@ import {
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
 import type { HiSpeedTransition } from '../../scene/hi-speed.ts';
 
-/** The play state {@link prepareSong} resets and fills for a new chart: `CoreGameplayView`'s fields of these names. */
+/** The play state {@link prepareSong} resets and fills for a new chart: the play session's fields of these names. */
 export interface PlayChartContext {
   readonly options: Readonly<
     Pick<
-      CoreGameplayViewOptions,
+      PlaySessionOptions,
       | 'hsFix'
       | 'preResolved'
       | 'hiSpeedLocked'

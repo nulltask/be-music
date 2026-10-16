@@ -46,7 +46,7 @@ export interface EngineDriverOptions {
   chart: BeMusicJson;
   /** Audio backend resources prepared by the host. The driver constructs a {@link createWebAudioSession} on top. */
   audio: EngineDriverAudioContext;
-  /** Engine play mode. Mirrors the existing `PixiGameplayView` `autoPlay` flag. */
+  /** Engine play mode. Mirrors the play session's `autoPlay` option. */
   mode: 'manual' | 'auto';
   /** Pixi-side rendering callbacks. The driver subscribes them to the engine's `uiSignals`. */
   ui: WebUiRuntimeCallbacks;
@@ -80,7 +80,7 @@ export type EngineDriverResult = PlayerSummary;
  * `PlayerSummary` when the chart ends (or rejects with `PlayerInterruptedError` when the player aborts).
  *
  * The driver is intentionally stateless — every per-chart cache (decoded samples, WAVCMD multipliers, BGA video
- * handles) lives on the host side. That matches how the existing `PixiGameplayView.prepare*` chain already builds
+ * handles) lives on the host side. That matches how the play session's `load` chain (`session/play/*`) already builds
  * those caches, so adopting the driver in Phase 4b is a drop-in replacement for the gameplay view's self-judge
  * loop rather than a state-ownership refactor.
  *
