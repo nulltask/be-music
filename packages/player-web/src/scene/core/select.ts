@@ -1,9 +1,7 @@
-import { Application, Color, Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Application, Container } from 'pixi.js';
 import { PerfTracker } from '../perf.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { SceneIdentity } from '../../host/family-kit.ts';
-import { disposeChildren } from '../pixi-utils.ts';
-import { resolveSongSource } from '../../collection/collection.ts';
 import {
   BGA_CYCLE,
   BGA_SIZE_CYCLE,
@@ -16,7 +14,6 @@ import {
   HS_FIX_CYCLE,
   KEYS_FILTER_CYCLE,
   matchesSearchQuery,
-  PLAY_OPTION_CHOICES,
   RANDOM_CYCLE,
   resolvePlayOptionValue,
   SORT_CYCLE,
@@ -34,7 +31,6 @@ import type {
 } from '../../collection/types.ts';
 import type { CourseDefinition } from '@be-music/player/course';
 import type { CourseMaker } from '../../collection/course-maker.ts';
-import { CORE_TEXT_FONT } from './fonts.ts';
 import type {
   BeMusicBgaMode,
   BeMusicBgaSize,
@@ -45,47 +41,24 @@ import type {
   BeMusicKeysFilter,
   BeMusicPlayOptions,
   BeMusicRandomMode,
-  BeMusicSelectActions,
   BeMusicSelectSort,
   BeMusicSkin,
   BeMusicSongRecord,
   BeMusicCourseRecord,
 } from '../../skin/be-music/types.ts';
-import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
-import { SongImageCache } from '../../skin/be-music/song-images.ts';
-import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
-import { phantomSkin } from '../../skins/phantom/index.ts';
-import {
-  designRectToCanvas,
-  resolveDesignTextResolution,
-  resolveScaledViewport,
-  setDesignPixelRatio,
-  setDesignTextResolution,
-} from './viewport.ts';
-import { resolveBeMusicSelectLayout, resolveStageOrientation, type BeMusicSelectLayout } from '@be-music/skin-sdk';
-import { SelectReadTextOverlay, type SelectReadTextContext } from '../../view/built-in/select-readtext.ts';
+import type { BeMusicSelectBinding } from '../../skin/be-music/binding.ts';
+import type { SongImageCache } from '../../skin/be-music/song-images.ts';
+import { designRectToCanvas } from './viewport.ts';
+import type { BeMusicSelectLayout } from '@be-music/skin-sdk';
+import type { SelectReadTextContext } from '../../view/built-in/select-readtext.ts';
 import { renderEmptyStateHint, type SelectEmptyHintContext } from '../../view/built-in/select-empty-hint.ts';
+import { BuiltInSelectView, type BuiltInSelectViewContext } from '../../view/built-in/select-view.ts';
 import { SelectPointer, type SelectPointerContext } from '../../session/select/select-pointer.ts';
 import { SelectSession, type SelectSessionContext } from '../../session/select/select-session.ts';
 import { SelectAudio, type SelectAudioContext } from '../../session/select/select-audio.ts';
 import { SelectKeys, type SelectKeysContext } from '../../session/select/select-keys.ts';
 
 const log = logger('select');
-const BG = new Color('#050912');
-const TEXT = new Color('#f6f2e8');
-const MUTED = new Color('#a9a39a');
-/**
- * Design canvas the no-skin select scene renders into. 640×480 matches the LR2 default `select.lr2skin` (no
- * `#RESOLUTION` declared, so the loader's seed at width=640 / height=480 wins).
- *
- * Aligning the fallback design with LR2's native canvas means dropping an LR2 theme mid-session doesn't change the
- * on-screen aspect ratio (4:3 either way) — without this the no-skin path letterboxed at 16:9 and the LR2-skin path
- * pillarboxed at 4:3, causing the song list to visibly shrink when a theme loaded.
- *
- * The LR2 decide / result scenes carry the same constant for the same reason.
- */
-const FALLBACK_DESIGN_WIDTH = 640;
-const FALLBACK_DESIGN_HEIGHT = 480;
 
 /**
  * Serializable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
@@ -287,7 +260,8 @@ type SelectSceneContext = SelectReadTextContext &
   SelectPointerContext &
   SelectSessionContext &
   SelectKeysContext &
-  SelectAudioContext;
+  SelectAudioContext &
+  BuiltInSelectViewContext;
 
 /**
  * Family-neutral song-select scene. Owns everything that doesn't depend on a particular skin format: the scene shown
@@ -301,6 +275,11 @@ type SelectSceneContext = SelectReadTextContext &
  * a 640×480 design canvas. Skin families (e.g. the LR2 scene) take over the frame by overriding the protected `theme*`
  * hooks: {@link themeDesignSize} decides whether the theme is active, and the remaining hooks prepare, render, hit-test
  * and dispose the theme's resources.
+ *
+ * The scene is made of parts that read and drive it through one context it builds ({@link createContext}): the browsing
+ * (`session/select/select-session.ts`), the keyboard and the pointer (`select-keys.ts`, `select-pointer.ts`), the sound
+ * (`select-audio.ts`) and the drawing (`view/built-in/select-view.ts`, with the README overlay and the empty-library
+ * hint beside it). What a theme scene reads and calls stays here as protected members over those parts.
  */
 export class CoreSongSelectView<
   TOptions extends CoreSongSelectViewOptions = CoreSongSelectViewOptions,
@@ -311,45 +290,14 @@ export class CoreSongSelectView<
    * two-Application setups hit.
    */
   private host: PixiSceneHost | undefined;
-  /**
-   * Top-level Container the host attaches to its `app.stage` while the select scene is active. Holds
-   * `viewportBackground` + `designRoot` so the host can attach / detach the scene as one operation.
-   */
-  public readonly root: Container = new Container();
-  private readonly designRoot = new Container();
-  /**
-   * Clip mask for the design rectangle (`skin.width × skin.height` or the no-skin fallback canvas). Sits as a child of
-   * `designRoot` so the same `position` / `scale` transform applies to it. Pixi clips against the mask's world-space
-   * bounds, so any skin element that animates from off-canvas (LR2 default's `#DST_BAR_BODY_OFF` slide-ins, etc.)
-   * gets cut at the design edge instead of bleeding into the pillarbox / letterbox of a screen with a different aspect
-   * ratio.
-   */
-  private readonly designClipMask = new Graphics();
-  /**
-   * Last dimensions baked into the design / viewport / mask graphics. Compared against the per-frame values so we only
-   * rebuild the geometry when the canvas actually resizes (skin swap, browser resize). Pixi v8's `Graphics.clear()` +
-   * `.rect()` + `.fill()` chain rebuilds the underlying GraphicsContext on every call — fine for occasional resize
-   * events, but redrawing the same three rectangles every `requestAnimationFrame` tick was on the hot path of the
-   * select scene's 60 fps loop.
-   */
-  private cachedScreenWidth = -1;
-  private cachedScreenHeight = -1;
-  private cachedDesignWidth = -1;
-  private cachedDesignHeight = -1;
-  private readonly viewportBackground = new Graphics();
-  private readonly background = new Graphics();
-  /** Theme chrome drawn behind the song list (LR2 static images, empty-state hint, …). Cleared every render. */
-  protected readonly skinLayer: Container = new Container();
-  /**
-   * Theme chrome drawn on top of the song list. The LR2 scene routes elements its CSV declared AFTER the bar list
-   * (`#SRC_BAR_BODY`) here — the canonical use case is the song-list scroll-position slider that lives to the right of
-   * the bars. Cleared every render.
-   */
-  protected readonly skinForegroundLayer: Container = new Container();
+  /** The scene graph the host attaches to its stage while the select is showing (`BuiltInSelectView.root`). */
+  public get root(): Container {
+    return this.view.root;
+  }
   /** This scene as the parts it is made of read and drive it (see {@link createContext}). */
   private readonly context: SelectSceneContext = CoreSongSelectView.createContext(this);
-  /** The README overlay the LR2 READTEXT button and a be-music skin open over the song list. */
-  private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay(this.context);
+  /** The drawing: the letterboxed design canvas, a theme's layers, the be-music skin and the README overlay. */
+  private readonly view: BuiltInSelectView = new BuiltInSelectView(this.context);
   /** The browsing: the folder stack and the cursor, the play options and the panels, the search, the launch. */
   private readonly session: SelectSession = new SelectSession(this.context);
   /** The sound: the select BGM, the system cues and the chart preview. */
@@ -361,34 +309,6 @@ export class CoreSongSelectView<
    * `globalThis.__BE_MUSIC_PERF__ = true`.
    */
   protected readonly perf: PerfTracker = new PerfTracker('select');
-  /** Song-bar slots — one sprite per visible bar plus its overlay text. */
-  protected readonly listLayer: Container = new Container();
-  /**
-   * Persistent mount points for the be-music select renderer's back / front layers (skinless path only). The renderer
-   * owns what's inside; the scene only toggles visibility and keeps them around `listLayer`.
-   */
-  private readonly beMusicBackHolder = new Container();
-  private readonly beMusicFrontHolder = new Container();
-  private beMusicRenderer: BeMusicSelectBinding | undefined;
-  /** Song images handed to the be-music skin (`frame.songImage`); created with the renderer. */
-  private songImages: SongImageCache | undefined;
-  /** Set when the last skinless render reported an unfinished transition, so the next tick renders again. */
-  private beMusicNeedsFrame = false;
-  /** `performance.now()` of the last cursor move — drives the skin's focus transitions. */
-  private cursorChangedAt = 0;
-  private readonly title = new Text({
-    text: 'Drop a BMS folder or ZIP',
-    style: new TextStyle({
-      fill: TEXT,
-      fontSize: 28,
-      fontWeight: '700',
-      fontFamily: CORE_TEXT_FONT,
-    }),
-  });
-  private readonly hint = new Text({
-    text: 'Select: Arrow keys / Enter',
-    style: new TextStyle({ fill: MUTED, fontSize: 14, fontFamily: CORE_TEXT_FONT }),
-  });
   private mountedContainer: HTMLElement | undefined;
   /**
    * `performance.now()` at the moment the select scene was mounted. Drives the elapsed-time clock for LR2 timer 0
@@ -429,22 +349,6 @@ export class CoreSongSelectView<
     for (const timer of update.stop) this.timerStartedAt.delete(timer);
     for (const [timer, at] of update.start) this.timerStartedAt.set(timer, at);
   }
-  /**
-   * Pixel offset applied to `listLayer` during a skinned bar-list scroll transition. Right after a cursor move, the
-   * entry-to-slot mapping shifts instantly; we counter that by pushing `listLayer.y` so the bars appear to stay where they
-   * were, then decay the offset back to 0 over a few frames to produce a smooth slide.
-   *
-   * Convention: positive offset = "bars look like they're still at the previous song's positions". For a `down` press
-   * (selectedIndex +1) the entries move up one slot, so we add `+slotHeight` and decay to 0 — visually this looks like
-   * the bars sliding up. The built-in default select screen does not use this because its background chrome also lives in
-   * `listLayer`; applying the offset there makes the whole screen move instead of just changing the highlighted row.
-   */
-  protected listScrollOffset = 0;
-  /**
-   * `performance.now()` of the previous render frame, used to compute `dt` for the scroll-offset decay so the slide
-   * speed is wall-clock consistent across refresh rates.
-   */
-  private lastScrollUpdate = 0;
   /** The pointer input: taps, swipes and their glide, and the wheel. */
   private readonly pointer: SelectPointer = new SelectPointer(this.context);
   /**
@@ -459,15 +363,11 @@ export class CoreSongSelectView<
    * so we'd otherwise compete for arrow keys).
    */
   private visible = true;
-  /** The viewport of the last render, to place the search box on the page. */
-  private lastViewport: { x: number; y: number; scale: number } | undefined;
   protected options: TOptions;
-  /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
-  private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
 
   public constructor(options: TOptions = {} as TOptions) {
     this.options = options;
-    this.beMusicSkinSettings = options.beMusicSkinSettings;
+    this.view.beMusicSkinSettings = options.beMusicSkinSettings;
     this.audio.selectBgmBytes = options.selectBgm;
     this.audio.setOneShotBytes('decide', options.decideBgm);
     this.setSystemSounds(options.systemSounds);
@@ -479,8 +379,9 @@ export class CoreSongSelectView<
 
   /**
    * `scene` as the parts it is made of read and drive it (`SelectSessionContext`, `SelectKeysContext`,
-   * `SelectPointerContext`, `SelectAudioContext`, `SelectReadTextContext`, `SelectEmptyHintContext`): getters and
-   * methods over its own state and its parts, so that state keeps its access modifiers.
+   * `SelectPointerContext`, `SelectAudioContext`, `BuiltInSelectViewContext`, `SelectReadTextContext`,
+   * `SelectEmptyHintContext`): getters and methods over its own state and its parts, so that state keeps its access
+   * modifiers.
    */
   private static createContext(scene: CoreSongSelectView): SelectSceneContext {
     return {
@@ -502,6 +403,15 @@ export class CoreSongSelectView<
       get screen(): Application['screen'] {
         return scene.app.screen;
       },
+      get app(): Application {
+        return scene.app;
+      },
+      get host(): PixiSceneHost | undefined {
+        return scene.host;
+      },
+      get mountedContainer(): HTMLElement | undefined {
+        return scene.mountedContainer;
+      },
       get options(): CoreSongSelectViewOptions {
         return scene.options;
       },
@@ -509,22 +419,25 @@ export class CoreSongSelectView<
         return scene.themeDesignSize;
       },
       get beMusicDesignSize(): SelectDesignSize {
-        return scene.beMusicDesignSize;
+        return scene.view.beMusicDesignSize;
       },
       get beMusicSelectLayout(): BeMusicSelectLayout {
-        return scene.beMusicSelectLayout;
+        return scene.view.beMusicSelectLayout;
       },
       get beMusicRenderer(): BeMusicSelectBinding | undefined {
-        return scene.beMusicRenderer;
+        return scene.view.beMusicRenderer;
       },
       get beMusicNeedsFrame(): boolean {
-        return scene.beMusicNeedsFrame;
+        return scene.view.beMusicNeedsFrame;
       },
       set beMusicNeedsFrame(value: boolean) {
-        scene.beMusicNeedsFrame = value;
+        scene.view.beMusicNeedsFrame = value;
       },
       get songImages(): SongImageCache | undefined {
-        return scene.songImages;
+        return scene.view.songImages;
+      },
+      get sceneStartedAt(): number {
+        return scene.sceneStartedAt;
       },
       get selectedIndex(): number {
         return scene.selectedIndex;
@@ -532,8 +445,20 @@ export class CoreSongSelectView<
       set selectedIndex(value: number) {
         scene.selectedIndex = value;
       },
+      get browseStack(): BrowserFolderNode[] {
+        return scene.session.browseStack;
+      },
+      get playOptions(): PixiPlayOptions {
+        return scene.playOptions;
+      },
       get panelStates(): Set<number> {
         return scene.panelStates;
+      },
+      get searchQuery(): string {
+        return scene.session.searchQuery;
+      },
+      get searchEditing(): boolean {
+        return scene.searchEditing;
       },
       get mouseX(): number {
         return scene.mouseX;
@@ -548,16 +473,17 @@ export class CoreSongSelectView<
         scene.mouseY = value;
       },
       get readTextOpen(): boolean {
-        return scene.readText.readTextOpen;
+        return scene.view.readText.readTextOpen;
       },
-      scrollReadText: (delta) => scene.readText.scrollReadText(delta),
-      closeReadText: () => scene.readText.closeReadText(),
+      scrollReadText: (delta) => scene.view.readText.scrollReadText(delta),
+      closeReadText: () => scene.view.readText.closeReadText(),
       playOneShotSound: (name) => scene.audio.playOneShotSound(name),
       startSelectBgm: () => scene.audio.startSelectBgm(),
       refreshChartPreview: () => scene.refreshChartPreview(),
-      resolveDesignSize: () => scene.resolveDesignSize(),
+      resolveDesignSize: () => scene.view.resolveDesignSize(),
       currentEntries: () => scene.currentEntries(),
       focusedSong: () => scene.focusedSong(),
+      focusedCourse: () => scene.focusedCourse(),
       moveCursorBy: (steps) => scene.session.moveCursorBy(steps),
       noteCursorChange: (delta) => scene.noteCursorChange(delta),
       activateEntry: (entry) => scene.activateEntry(entry),
@@ -567,8 +493,14 @@ export class CoreSongSelectView<
       cyclePlayOption<K extends keyof PixiPlayOptions>(key: K, cycle: readonly PixiPlayOptions[K][]): void {
         scene.cyclePlayOption(key, cycle);
       },
+      setSkinPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
+        scene.session.setSkinPlayOption(key, value);
+      },
+      launchFocusedSong: (autoPlay) => scene.launchFocusedSong(autoPlay),
+      toggleReadText: (song) => scene.toggleReadText(song),
       applyLr2Timers: (update) => scene.applyLr2Timers(update),
       handleThemePointerDown: (virtualX, virtualY) => scene.handleThemePointerDown(virtualX, virtualY),
+      renderTheme: (designWidth, designHeight) => scene.renderTheme(designWidth, designHeight),
       render: () => scene.render(),
     };
   }
@@ -582,8 +514,8 @@ export class CoreSongSelectView<
    * draws with them from the next frame. `undefined` goes back to the skin's defaults.
    */
   public setBeMusicSkinSettings(stored: Readonly<Record<string, unknown>> | undefined): void {
-    this.beMusicSkinSettings = stored;
-    this.beMusicRenderer?.setSettings(stored);
+    this.view.beMusicSkinSettings = stored;
+    this.view.beMusicRenderer?.setSettings(stored);
   }
 
   public getPlayOptions(): PixiPlayOptions {
@@ -699,40 +631,7 @@ export class CoreSongSelectView<
   private build(host: PixiSceneHost): void {
     this.host = host;
     this.mountedContainer = host.app.canvas.parentElement ?? undefined;
-    // Label every top-level node so PixiJS Devtools renders the scene graph as `select > {viewport-bg, root > {bg,
-    // skin, list, title, hint}}` instead of an unlabelled tower of `Container`s.
-    this.root.label = 'select/scene';
-    this.designRoot.label = 'select/root';
-    this.viewportBackground.label = 'select/viewport-bg';
-    this.background.label = 'select/background';
-    this.skinLayer.label = 'select/skin';
-    this.listLayer.label = 'select/list';
-    this.skinForegroundLayer.label = 'select/skin-fg';
-    this.title.label = 'select/title';
-    this.hint.label = 'select/hint';
-    this.root.addChild(this.viewportBackground, this.designRoot);
-    // Stack order (back → front): background → skinLayer (chrome behind bars) → listLayer (the song bars) →
-    // skinForegroundLayer (chrome that the CSV declared AFTER bars, e.g. scroll slider) → title / hint (Drop hints,
-    // fallback chrome). LR2 panels (op 1..9) live inside skinLayer / skinForegroundLayer — they're regular `#SRC_*`
-    // elements gated by their `panel` field, so no separate overlay layer is needed.
-    this.designClipMask.label = 'select/design-clip';
-    this.beMusicBackHolder.label = 'select/be-music-back';
-    this.beMusicFrontHolder.label = 'select/be-music-front';
-    this.beMusicBackHolder.visible = false;
-    this.beMusicFrontHolder.visible = false;
-    this.designRoot.addChild(
-      this.background,
-      this.skinLayer,
-      this.beMusicBackHolder,
-      this.listLayer,
-      this.beMusicFrontHolder,
-      this.skinForegroundLayer,
-      this.title,
-      this.hint,
-      this.readText.readTextLayer,
-      this.designClipMask,
-    );
-    this.designRoot.mask = this.designClipMask;
+    this.view.build();
     // Bind keyboard handlers at the window level so the user can navigate without first clicking the canvas. The canvas
     // itself is a child of the document body and naturally won't have focus until interacted with — which would
     // otherwise eat ↑/↓/Enter/Esc. Pointer events still bind on the canvas because their offset coordinates are
@@ -781,8 +680,8 @@ export class CoreSongSelectView<
     // Drop any leftover smooth-scroll state from a previous session — the cursor isn't moving on re-entry, and a stale
     // `dt` from before the play round-trip would otherwise feed the decay formula a multi-minute interval and either
     // NaN or instantly zero out a fresh offset (depending on Math.exp's behavior).
-    this.listScrollOffset = 0;
-    this.lastScrollUpdate = 0;
+    this.view.listScrollOffset = 0;
+    this.view.lastScrollUpdate = 0;
     // Reset the wheel throttle so the first wheel tick after a re-mount fires immediately rather than being eaten by
     // a stale `lastWheelMoveAt` from before the play round-trip.
     this.pointer.lastWheelMoveAt = Number.NEGATIVE_INFINITY;
@@ -805,21 +704,21 @@ export class CoreSongSelectView<
     // Cursor moved → readtext modal's content no longer matches the focused song. Close it without an audible cue (the
     // `cursor-move` click below already conveys the bar move) so the user doesn't get a double-blip on every wheel
     // notch.
-    if (this.readText.readTextOpen) {
-      this.readText.readTextOpen = false;
-      this.readText.readTextLayer.visible = false;
+    if (this.view.readText.readTextOpen) {
+      this.view.readText.readTextOpen = false;
+      this.view.readText.readTextLayer.visible = false;
     }
     const now = performance.now();
-    this.cursorChangedAt = now;
+    this.view.cursorChangedAt = now;
     this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'cursor', delta, at: now }));
     // Seed the scroll offset only for themes that slide their list layer. The be-music chrome is also mounted on
     // `listLayer`, so offsetting that layer would scroll the entire screen. In that path, cursor movement simply changes
     // the active row.
     if (this.themeDesignSize) {
       const slotHeight = this.themeListSlotHeight();
-      this.listScrollOffset += delta * slotHeight;
+      this.view.listScrollOffset += delta * slotHeight;
     } else {
-      this.listScrollOffset = 0;
+      this.view.listScrollOffset = 0;
     }
     // LR2 system effect — `Sound\lr2\scratch.wav` fires on every bar move regardless of direction. Fire-and-forget; the
     // one-shot decode caches after the first use so a fast wheel-scroll doesn't thrash the audio decoder.
@@ -876,18 +775,23 @@ export class CoreSongSelectView<
       // Also re-render when the screen was resized: a rotation can switch the skin to its other stage.
       const screen = this.app.screen;
       if (
-        this.beMusicNeedsFrame ||
-        screen.width !== this.cachedScreenWidth ||
-        screen.height !== this.cachedScreenHeight
+        this.view.beMusicNeedsFrame ||
+        screen.width !== this.view.cachedScreenWidth ||
+        screen.height !== this.view.cachedScreenHeight
       ) {
         this.perf.time('render', () => this.render());
       }
-      if (this.beMusicBackHolder.visible && this.beMusicRenderer) {
-        const { width, height } = this.beMusicDesignSize;
+      if (this.view.beMusicBackHolder.visible && this.view.beMusicRenderer) {
+        const { width, height } = this.view.beMusicDesignSize;
         const onStage = this.mouseX >= 0 && this.mouseY >= 0 && this.mouseX < width && this.mouseY < height;
-        this.beMusicRenderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
-        this.beMusicRenderer.setListScroll(this.pointer.shownListPull());
-        this.beMusicRenderer.tick(now, this.focusedSong(), this.launchAt, this.audio.selectAudioAnalyzer?.sample(now));
+        this.view.beMusicRenderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
+        this.view.beMusicRenderer.setListScroll(this.pointer.shownListPull());
+        this.view.beMusicRenderer.tick(
+          now,
+          this.focusedSong(),
+          this.launchAt,
+          this.audio.selectAudioAnalyzer?.sample(now),
+        );
       }
     }
     const report = this.perf.endFrame(() => ({
@@ -909,10 +813,10 @@ export class CoreSongSelectView<
     this.disposed = true;
     this.stopAnimationLoop();
     if (this.session.launchTimer !== undefined) window.clearTimeout(this.session.launchTimer);
-    this.beMusicRenderer?.dispose();
-    this.beMusicRenderer = undefined;
-    this.songImages?.dispose();
-    this.songImages = undefined;
+    this.view.beMusicRenderer?.dispose();
+    this.view.beMusicRenderer = undefined;
+    this.view.songImages?.dispose();
+    this.view.songImages = undefined;
     window.removeEventListener('keydown', this.keys.handleKeyDown);
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.pointer.handlePointerDown);
@@ -996,14 +900,14 @@ export class CoreSongSelectView<
    */
   public getSearchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
     const rect = this.designSearchFieldRect();
-    const viewport = this.lastViewport;
+    const viewport = this.view.lastViewport;
     if (rect === undefined || viewport === undefined) return undefined;
     return designRectToCanvas(rect, viewport);
   }
 
   /** The search box in design pixels: the be-music skin's search hit area. Theme scenes override it. */
   protected designSearchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
-    return this.themeDesignSize === undefined ? this.beMusicRenderer?.searchFieldRect : undefined;
+    return this.themeDesignSize === undefined ? this.view.beMusicRenderer?.searchFieldRect : undefined;
   }
 
   /** Draws the empty-library hint into `skinLayer`; themes call it from {@link renderTheme}. */
@@ -1011,185 +915,33 @@ export class CoreSongSelectView<
     renderEmptyStateHint(this.context, designWidth, designHeight);
   }
 
-  /** Toggles the README overlay for `song` (see {@link SelectReadTextOverlay.toggleReadText}). */
+  /** Toggles the README overlay for `song` (`SelectReadTextOverlay.toggleReadText`). */
   protected toggleReadText(song: BrowserSongEntry): void {
-    this.readText.toggleReadText(song);
-  }
-
-  protected render(): void {
-    const screenWidth = this.app.screen.width || this.mountedContainer?.clientWidth || FALLBACK_DESIGN_WIDTH;
-    const screenHeight = this.app.screen.height || this.mountedContainer?.clientHeight || FALLBACK_DESIGN_HEIGHT;
-    const themeSize = this.themeDesignSize;
-    const useTheme = themeSize !== undefined;
-    const { width: designWidth, height: designHeight } = themeSize ?? this.beMusicDesignSize;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
-    setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
-    setDesignPixelRatio(viewport.scale * this.app.renderer.resolution);
-    // Only rebuild the static rect graphics when the dimensions they depend on actually change. The previous
-    // unconditional `.clear().rect().fill()` chain ran on every rAF tick and was a measurable contributor to the select
-    // scene's frame budget under LR2 default skin (~hundreds of skin elements already redraw per frame).
-    if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
-      this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
-      this.cachedScreenWidth = screenWidth;
-      this.cachedScreenHeight = screenHeight;
-    }
-    this.designRoot.position.set(viewport.x, viewport.y);
-    this.designRoot.scale.set(viewport.scale);
-    this.lastViewport = viewport;
-    this.host?.setStageOrientation(
-      useTheme ? 'landscape' : resolveStageOrientation({ width: designWidth, height: designHeight }),
-    );
-    if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
-      this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
-      this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
-      this.cachedDesignWidth = designWidth;
-      this.cachedDesignHeight = designHeight;
-    }
-
-    // `disposeChildren` (vs bare `removeChildren`) frees the GraphicsContext / glyph-atlas state Pixi v8 keeps
-    // registered for every detached node. The select scene rebuilds its skin and song-list sprites every frame, so
-    // without this we'd leak renderer-side resources for as long as the player browses the song list. See
-    // `pixi-utils.ts` for the full story (the same leak caused the post-chart browser hang on the gameplay scene).
-    disposeChildren(this.skinLayer);
-    disposeChildren(this.listLayer);
-    disposeChildren(this.skinForegroundLayer);
-
-    // Decay the smooth-scroll offset toward 0. Exponential decay with a ~80 ms time constant gives a snappy slide
-    // that's substantially complete in a quarter second; rapid cursor presses compose naturally because each new step
-    // adds onto the residual offset.
-    const now = performance.now();
-    if (this.lastScrollUpdate === 0) {
-      this.lastScrollUpdate = now;
-    }
-    const dt = now - this.lastScrollUpdate;
-    this.lastScrollUpdate = now;
-    if (useTheme && this.listScrollOffset !== 0) {
-      const decay = Math.exp(-dt / 80);
-      this.listScrollOffset *= decay;
-      if (Math.abs(this.listScrollOffset) < 0.5) {
-        this.listScrollOffset = 0;
-      }
-    }
-    this.listLayer.y = useTheme ? this.listScrollOffset : 0;
-
-    if (useTheme) {
-      this.title.visible = false;
-      this.hint.visible = false;
-      this.beMusicBackHolder.visible = false;
-      this.beMusicFrontHolder.visible = false;
-      this.renderTheme(designWidth, designHeight);
-      this.readText.renderReadTextOverlay(designWidth, designHeight);
-      return;
-    }
-
-    // Default-family chrome paints only live library / focused-chart data, so the legacy `this.title` / `this.hint`
-    // overlays are hidden; the host-level drop overlay remains responsible for the empty-library callout.
-    const entries = this.currentEntries();
-    this.title.visible = false;
-    this.hint.visible = false;
-    const renderer = this.ensureBeMusicRenderer();
-    const selectWindow = resolveSelectListWindow(
-      this.beMusicSelectLayout,
-      designHeight,
-      this.selectedIndex,
-      entries.length,
-    );
-    const currentFolder = this.session.browseStack[this.session.browseStack.length - 1];
-    this.beMusicBackHolder.visible = true;
-    this.beMusicFrontHolder.visible = true;
-    renderer.render({
-      designWidth,
-      designHeight,
-      nowMs: performance.now(),
-      sceneStartedAt: this.sceneStartedAt,
-      cursorChangedAt: this.cursorChangedAt,
-      entries,
-      selectedIndex: this.selectedIndex,
-      firstVisibleIndex: selectWindow.firstVisibleIndex,
-      visibleRows: selectWindow.visibleRows,
-      focusedSong: this.focusedSong(),
-      focusedCourse: this.focusedCourse(),
-      folderLabel: currentFolder?.label,
-      searchQuery: this.session.searchQuery,
-      searchEditing: this.searchEditing,
-      totalCharts: this.collection.songs.length,
-      actions: this.beMusicActions,
-      effects: this.options.beMusicEffects ?? 'full',
-      launchAt: this.launchAt,
-      playOptions: this.playOptions,
-      playOptionChoices: PLAY_OPTION_CHOICES,
-    });
-    // The binding draws the skin every frame in `tick`; nothing needs a re-render here.
-    this.beMusicNeedsFrame = this.launchAt !== undefined;
-    this.readText.renderReadTextOverlay(designWidth, designHeight);
-  }
-
-  /** Active be-music skin for the skinless path — the built-in Phantom skin unless the host picked one. */
-  private get beMusicSkin(): BeMusicSkin {
-    return this.options.beMusicSkin ?? phantomSkin;
-  }
-
-  private ensureBeMusicRenderer(): BeMusicSelectBinding {
-    if (!this.beMusicRenderer) {
-      const songImages = new SongImageCache({
-        resolveSource: (song) => resolveSongSource(this.collection, song),
-        onLoaded: () => this.beMusicRenderer?.invalidate(),
-      });
-      this.songImages = songImages;
-      this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin, {
-        resolveSongRecord: this.options.resolveSongRecord,
-        resolveCourseRecord: this.options.resolveCourseRecord,
-        songImage: songImages.lookup,
-        settings: this.beMusicSkinSettings,
-        renderer: this.host?.app.renderer,
-      });
-      this.beMusicBackHolder.addChild(this.beMusicRenderer.backLayer);
-      this.beMusicFrontHolder.addChild(this.beMusicRenderer.frontLayer);
-    }
-    return this.beMusicRenderer;
-  }
-
-  /** PLAY / AUTO PLAY / search / play-option / readme callbacks handed to the skin's hit areas. */
-  private readonly beMusicActions: BeMusicSelectActions = {
-    play: (): void => this.launchFocusedSong(false),
-    autoPlay: (): void => this.launchFocusedSong(true),
-    activateSearch: (): void => this.options.onSearchActivate?.(),
-    setPlayOption: (key, value): void => this.session.setSkinPlayOption(key, value),
-    cyclePlayOption: (key, step = 1): void => {
-      const next = cyclePlayOptionValue(key, this.playOptions[key], step);
-      if (next !== undefined) this.session.setSkinPlayOption(key, next);
-    },
-    toggleReadme: (): void => {
-      const song = this.focusedSong();
-      if (song) this.toggleReadText(song);
-    },
-  };
-
-  /** Design canvas for the current frame: the active theme's, or the be-music skin's stage. */
-  private resolveDesignSize(): SelectDesignSize {
-    return this.themeDesignSize ?? this.beMusicDesignSize;
-  }
-
-  /**
-   * The be-music skin's stage for the current screen: its portrait stage while the screen is upright and the skin has
-   * one, its landscape stage otherwise.
-   */
-  private get beMusicDesignSize(): SelectDesignSize {
-    const screen = this.host?.app.screen;
-    const stage = resolveBeMusicSkinStage(
-      this.beMusicSkin,
-      screen && screen.width > 0 && screen.height > 0 ? screen : undefined,
-    );
-    return { width: stage.width, height: stage.height };
-  }
-
-  /** Where the skin's song list sits on the current stage. */
-  private get beMusicSelectLayout(): BeMusicSelectLayout {
-    return resolveBeMusicSelectLayout(this.beMusicSkin.select, this.beMusicDesignSize);
+    this.view.readText.toggleReadText(song);
   }
 
   // The scene's state and operations as theme scenes (the LR2 select) read and call them, kept over the parts that now
   // hold them.
+
+  /** Theme chrome drawn behind the song list (`BuiltInSelectView.skinLayer`). */
+  protected get skinLayer(): Container {
+    return this.view.skinLayer;
+  }
+
+  /** Theme chrome drawn on top of the song list (`BuiltInSelectView.skinForegroundLayer`). */
+  protected get skinForegroundLayer(): Container {
+    return this.view.skinForegroundLayer;
+  }
+
+  /** The song bars (`BuiltInSelectView.listLayer`). */
+  protected get listLayer(): Container {
+    return this.view.listLayer;
+  }
+
+  /** The list's slide offset after a cursor move (`BuiltInSelectView.listScrollOffset`). */
+  protected get listScrollOffset(): number {
+    return this.view.listScrollOffset;
+  }
 
   /** The library (`SelectSession.collection`). */
   protected get collection(): BrowserSongCollection {
@@ -1296,6 +1048,11 @@ export class CoreSongSelectView<
   /** Points the chart preview at the bar under the cursor (`SelectAudio.refreshChartPreview`). */
   protected refreshChartPreview(): void {
     this.audio.refreshChartPreview();
+  }
+
+  /** Draws one frame (`BuiltInSelectView.render`). */
+  protected render(): void {
+    this.view.render();
   }
 
   /**
