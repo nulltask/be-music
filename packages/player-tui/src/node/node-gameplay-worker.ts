@@ -130,6 +130,8 @@ async function bootstrap(): Promise<void> {
     let stopped = false;
 
     return {
+      // The main thread's input runtime reads the keys; it knew before the play whether they report their releases.
+      ...(initData.inputReportsKeyReleases === true ? { reportsKeyReleases: true } : {}),
       start: () => {
         if (started || stopped) {
           return;
