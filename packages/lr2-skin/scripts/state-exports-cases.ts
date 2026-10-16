@@ -2,7 +2,13 @@ import { createEmptyJson } from '@be-music/json';
 import * as lr2StateApi from '@be-music/lr2-skin/state';
 import { createEmptyScore } from '@be-music/player/core/scoring';
 import type { Lr2BarBodySource } from '@be-music/lr2-skin';
-import { DEFAULT_PLAY_OPTIONS, type CourseView, type LibraryChart, type LibraryEntry } from '@be-music/scene-model';
+import {
+  DEFAULT_PLAY_OPTIONS,
+  type CourseView,
+  type LibraryChart,
+  type LibraryEntry,
+  type PlayResult,
+} from '@be-music/scene-model';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_COURSE: CourseView = {
@@ -64,6 +70,17 @@ const BENCH_PLAY_FRAME: lr2StateApi.Lr2PlayFrame = {
   fps: 60,
 };
 const BENCH_LANE = { channel: '13', laneIndex: 3, playVariant: '7' as const };
+const BENCH_RESULT: PlayResult = {
+  score: BENCH_PLAY_FRAME.score,
+  maxCombo: 120,
+  gauge: 84,
+  cleared: true,
+  playSeconds: 118,
+  song: BENCH_CHART,
+  gaugeHistory: [],
+  scoreHistory: [],
+  lamp: 'NORMAL',
+};
 
 /** Cases for `@be-music/lr2-skin/state`, keyed `lr2-skin.state.<export>`. */
 export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): void {
@@ -135,6 +152,18 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
     run: () => {
       lr2StateApi.resolveLr2PlayTimers({ kind: 'gauge', previous: 98, next: 100, at: 0 });
       lr2StateApi.resolveLr2PlayTimers({ kind: 'lane', bank: 'bomb', lane: BENCH_LANE, at: 0 });
+    },
+  });
+  define('lr2-skin.state.resolveLr2ResultState', {
+    run: () => {
+      const state = lr2StateApi.resolveLr2ResultState({
+        result: BENCH_RESULT,
+        course: BENCH_COURSE,
+        flipResult: false,
+      });
+      state.number(171);
+      state.text(10);
+      state.bargraph(2);
     },
   });
   define('lr2-skin.state.resolveLr2RankOp', {

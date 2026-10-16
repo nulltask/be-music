@@ -9,7 +9,6 @@ import type {
 } from '@be-music/beatoraja-skin';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData } from '@be-music/player/course';
-import type { Lr2Skin } from '@be-music/lr2-skin';
 import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
@@ -62,17 +61,6 @@ const BENCH_RANDOM_ENTRY = playerWebCoreApi.createRandomCourseEntry('Bench#r0', 
 const BENCH_LR2CRS_BYTES = new TextEncoder().encode(
   `<?xml version="1.0"?><courselist><course><title>Bench</title><line>7</line><type>2</type><hash>${'0'.repeat(32)}${BENCH_SONG_MD5}</hash></course></courselist>`,
 );
-const BENCH_SCORE = {
-  total: 100,
-  perfect: 60,
-  great: 30,
-  good: 5,
-  bad: 3,
-  poor: 2,
-  emptyPoor: 0,
-  exScore: 150,
-  score: 75_000,
-};
 const BENCH_BEATORAJA_FILES = new Map<string, BeatorajaSkinFileEntry>([
   ['sound/cursor.wav', BENCH_BYTES],
   ['sound/decide.wav', BENCH_BYTES],
@@ -282,11 +270,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
         timeIntervalSec: 1,
         totalSeconds: 5,
       });
-    },
-  });
-  define('player-web.computeResultOps', {
-    run: () => {
-      playerWebCoreApi.computeResultOps(makeResultData(), makeLr2Skin());
     },
   });
   define('player-web.computeChartFileSha256', {
@@ -1157,14 +1140,6 @@ function makeBenchPmsSong(): playerWebCoreApi.BrowserSongEntry {
   };
 }
 
-function makeLr2Skin(): Lr2Skin {
-  return {
-    name: 'bench',
-    scratchFlip: { flipResult: false, flipSide: false, disableFlip: false, reloadBanner: false },
-    files: new Map([['parts.tga', BENCH_BYTES]]),
-  } as unknown as Lr2Skin;
-}
-
 function makeBenchBeatorajaSkin(): BeatorajaSkin {
   return {
     type: 0,
@@ -1190,19 +1165,6 @@ function makeEmptyBeatorajaTextureCache(): playerWebCoreApi.BeatorajaTextureCach
     get: () => undefined,
     values: () => textures.values(),
     pathOf: () => undefined,
-  };
-}
-
-function makeResultData(): playerWebCoreApi.PixiGameplayResultData {
-  return {
-    cleared: true,
-    score: BENCH_SCORE,
-    maxCombo: 90,
-    gauge: 80,
-    playSeconds: 120,
-    song: BENCH_SONG,
-    gaugeHistory: [],
-    scoreHistory: [],
   };
 }
 
