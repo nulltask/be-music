@@ -275,35 +275,6 @@ export function resultFromData(
   };
 }
 
-/** A result shown on a beatoraja result skin, from the engine's final summary. */
-export function resultFromSummary(
-  summary: {
-    perfect: number;
-    great: number;
-    good: number;
-    bad: number;
-    poor: number;
-    exScore: number;
-    gauge?: { type?: string; current: number; cleared: boolean };
-  },
-  options: { run: TestHookResult['run']; title: string; lamp?: string; jingle?: string },
-): TestHookResult {
-  return {
-    run: options.run,
-    family: 'beatoraja',
-    title: options.title,
-    ...(options.lamp !== undefined ? { lamp: options.lamp } : {}),
-    cleared: summary.gauge?.cleared ?? false,
-    exScore: summary.exScore,
-    judged: judgedOf(summary),
-    gauge: {
-      ...(summary.gauge?.type !== undefined ? { type: summary.gauge.type } : {}),
-      value: summary.gauge?.current ?? 0,
-    },
-    ...(options.jingle !== undefined ? { jingle: options.jingle } : {}),
-  };
-}
-
 /** An EXPERT / GRADE course result, from its course play log and the native course result. */
 export function resultFromCourseLog(
   courseLog: BeMusicCoursePlaylog,
