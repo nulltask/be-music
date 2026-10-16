@@ -150,6 +150,8 @@ function selectOps(input: Lr2SelectInput, chart: LibraryChart | undefined, cours
   for (const op of input.customOps ?? []) ops.push(op);
   ops.push(...resolveLr2PlayOptionOps(input.options));
   ops.push(...(chart !== undefined ? chartOps(chart, input.readme === true, input.record?.lamp) : NO_CHART_OPS));
+  // A folder bar lights op 1 (OpenLR2 `GetOptionFlag_dst`: LR2's folder, level-folder and custom-folder bars).
+  if (input.focused?.kind === 'folder') ops.push(LR2_OP.FOLDER_BAR);
   // Ops 700-745: the difficulty of the selected course's stages 1-5 (the `x0` ops on any other bar, as LR2 reads 0).
   ops.push(...resolveLr2CourseStageDifficultyOps(course));
   if (input.courseMaker !== undefined) {
