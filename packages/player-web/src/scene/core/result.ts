@@ -331,17 +331,16 @@ export class CoreResultView implements PixiScene {
 
   /**
    * Decodes and plays the matching result-screen jingle. Picks `clearBgm` / `failBgm` based on `data.cleared` and falls
-   * back to the generic `resultBgm` when the theme doesn't differentiate. Silently no-ops when no slot is populated
-   * (skinless / non-LR2 themes) and when the browser refuses autoplay — neither path is fatal for the result scene.
+   * back to the generic `resultBgm` when the theme doesn't differentiate, as `resolveResultJingle` does; the other
+   * verdict's jingle never plays. Silently no-ops when no such slot is populated (skinless / non-LR2 themes) and when
+   * the browser refuses autoplay — neither path is fatal for the result scene.
    *
    * Plays once (no loop) because LR2's `clear` / `fail` / `result` are one-shot jingles living under
    * `LR2files/Sound/<theme>/`, not looping BGM. Looping would keep the fanfare playing indefinitely while the user
    * reads their score, which isn't how LR2 behaves.
    */
   private async startResultBgm(data: PixiGameplayResultData): Promise<void> {
-    const bytes = data.cleared
-      ? (this.options.clearBgm ?? this.options.resultBgm ?? this.options.failBgm)
-      : (this.options.failBgm ?? this.options.resultBgm ?? this.options.clearBgm);
+    const bytes = (data.cleared ? this.options.clearBgm : this.options.failBgm) ?? this.options.resultBgm;
     if (!bytes || this.disposed) return;
     let audioContext: AudioContext | undefined;
     try {
