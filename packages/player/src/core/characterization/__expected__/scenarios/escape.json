@@ -446,7 +446,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","aborted":true,"abortedAtUs":1800000},
+      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","aborted":true,"abortedAtUs":1783333},
       "results": {
         "native": {
           "ruleset": "be-music/native",

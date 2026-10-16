@@ -50,8 +50,6 @@ export interface PlayJudge {
  * they are removed one by one.
  */
 export interface StrategyDrifts {
-  /** Records the play clock's chart time as `abortedAtUs` of an ESC, not where its judge had settled. */
-  readonly abortsAtClockTime: boolean;
   /** Its no-TUI trace reports an ESC as `complete`. */
   readonly tracesEscapeAsComplete: boolean;
   /** Starts the chart after the lead-in whatever was sent during it, stopping only at its first tick. */

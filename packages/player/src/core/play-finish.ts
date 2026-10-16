@@ -47,10 +47,9 @@ export function finishPlay(
         ...(aborted
           ? {
               aborted: true,
-              // Where the play stopped, so a re-simulation stops there and a course counts the stage's time up to it.
-              abortedAtSeconds: strategy.drifts.abortsAtClockTime
-                ? Math.max(0, controls.commandSeconds())
-                : judge.settledThroughSeconds(),
+              // Where the judge had settled through, so a re-simulation stops there and a course counts the stage's
+              // time up to it.
+              abortedAtSeconds: judge.settledThroughSeconds(),
             }
           : {}),
       }),
