@@ -31,7 +31,7 @@ import {
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { SceneIdentity } from '../../host/family-kit.ts';
 import { staggerDestroyTextures } from '../pixi-utils.ts';
-import { BG, FALLBACK_INTRO_DELAY_MS } from '../gameplay-constants.ts';
+import { FALLBACK_INTRO_DELAY_MS } from '../gameplay-constants.ts';
 import { snapHiSpeed, stepPlayerHiSpeed } from '../hi-speed.ts';
 import { resolveSideRelativeLaneIndex } from '../gameplay-lanes.ts';
 import type { BeMusicLaneCover, BeMusicStage } from '../../skin/be-music/types.ts';
@@ -39,12 +39,6 @@ import { resolveStageOrientation, type BeMusicLongNote, type GameplayLayoutMode 
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import { PHANTOM_BOMB_DURATION_MS } from '../../skins/phantom/playfield.ts';
-import {
-  resolveDesignTextResolution,
-  resolveScaledViewport,
-  setDesignPixelRatio,
-  setDesignTextResolution,
-} from './viewport.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
 import { logger } from '../../logger.ts';
 import { QuitHoldController } from '../quit-hold.ts';
@@ -75,13 +69,10 @@ import {
   resolveBeMusicLayout,
   resolveSkinlessGameplayChromeRuntime,
 } from '../../view/built-in/play-chrome.ts';
-import { disposeBgaVideos, renderBga } from '../../view/shared/bga-renderer.ts';
-import { renderBombEffects, renderBombs } from '../../view/shared/playfield/bombs.ts';
+import { disposeBgaVideos } from '../../view/shared/bga-renderer.ts';
+import { build, render } from '../../view/shared/play-frame.ts';
+import { renderBombEffects } from '../../view/shared/playfield/bombs.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
-import { renderLanes } from '../../view/shared/playfield/lanes.ts';
-import { renderNotes } from '../../view/shared/playfield/notes.ts';
-import { renderShutter } from '../../view/shared/playfield/shutter.ts';
-import { renderText } from '../../view/shared/playfield/text.ts';
 import type {
   GameplayBgaTarget,
   GameplayLaneRect,
@@ -136,7 +127,6 @@ const DEFAULT_THEME_TIMING: GameplayThemeTiming = {
  * dark) and fades back to black, with the audio, before the result or select screen takes over — instead of cutting
  * in and out mid-animation.
  */
-const BE_MUSIC_ENTER_FADE_MS = 400;
 const BE_MUSIC_THEME_TIMING: GameplayThemeTiming = { ...DEFAULT_THEME_TIMING, fadeOutMs: 450 };
 
 /**
@@ -400,7 +390,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * concurrently and is allowed to land mid-play; the playfield is up by the time `start()` fires regardless.
    */
   public async prepare(host: PixiSceneHost, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
-    this.build(host);
+    build.call(this, host);
     this.song = song;
     this.source = source;
     // Hidden until {@link start} fires, so a scene shown before the play begins draws nothing of it yet.
@@ -438,7 +428,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   public enter(host: PixiSceneHost): void {
     if (this.disposed || this.entered) return;
-    this.build(host);
+    build.call(this, host);
     this.entered = true;
     attachPlayInput.call(this, host);
     if (this.resumeAnimationOnEnter) this.startAnimationLoop();
@@ -454,78 +444,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.resumeAnimationOnEnter = this.tickerAttached;
     this.stopAnimationLoop();
     detachPlayInput.call(this);
-  }
-
-  /** Builds the scene graph under {@link root} on the first {@link prepare} or {@link enter}; later calls no-op. */
-  private build(host: PixiSceneHost): void {
-    if (this.host !== undefined) return;
-    this.host = host;
-    // Label every top-level node so the PixiJS Devtools "Scene Graph" panel reads as `gameplay > {bga,skin,lane,…}`
-    // instead of a wall of `Container` rows. Layer ordering matches `addChild` below.
-    this.root.label = 'gameplay/scene';
-    this.designRoot.label = 'gameplay/root';
-    this.viewportBackground.label = 'gameplay/viewport-bg';
-    this.background.label = 'gameplay/background';
-    this.bgaLayer.label = 'gameplay/bga';
-    this.skinLayer.label = 'gameplay/skin';
-    this.laneLayer.label = 'gameplay/lanes';
-    this.noteLayer.label = 'gameplay/notes';
-    this.bombLayer.label = 'gameplay/bombs';
-    this.overlayLayer.label = 'gameplay/overlay';
-    this.textLayer.label = 'gameplay/text';
-    this.overlay.label = 'gameplay/pause-overlay';
-    this.designClipMask.label = 'gameplay/design-clip';
-    // The mask and design background only change shape with the stage (a rotation can switch a skin between its
-    // landscape and portrait stages), so they are stamped here and restamped by `render` only when the stage changes,
-    // skipping the per-frame rebuild that was contributing to the rAF handler's runtime.
-    this.stampDesignRect(this.stageSize);
-    // The gameplay scene owns its own pointerdown listener on the canvas itself (`this.focus`) and a window-level
-    // keydown listener — none of the per-layer children need to participate in Pixi's interaction system. Marking
-    // each render-only Container as `eventMode = 'none'` lets the interaction manager skip the entire subtree
-    // during hit-testing every pointermove / pointerdown, which is otherwise an O(N) walk over hundreds of skin
-    // children per event.
-    //
-    // CAUTION: `this.background` and `this.designClipMask` are intentionally NOT marked `'none'`. The mask is
-    // referenced via `this.designRoot.mask = this.designClipMask` and Pixi v8's mask resolution path interacts with the
-    // event-mode setting in subtle ways — clearing it on the mask Graphics has been observed to leave the root
-    // unclipped (residual previous-frame content visible, e.g. the LR2 intro title strip stays painted across
-    // subsequent frames) and has the side effect of dropping the rendered frame rate. The mask + the static
-    // `background` Graphics don't carry interactive children either way, so leaving their `eventMode` at the
-    // default is the safest choice.
-    for (const layer of [
-      this.bgaLayer,
-      this.skinLayer,
-      this.laneLayer,
-      this.noteLayer,
-      this.shutterLayer,
-      this.bombLayer,
-      this.overlayLayer,
-      this.textLayer,
-    ]) {
-      layer.eventMode = 'none';
-    }
-    // Theme sub-layers (e.g. the LR2 bitmap-text layer) must be parked inside `skinLayer` before the scene graph is
-    // assembled so their z-order matches the theme's own layering.
-    this.attachThemeLayers();
-    this.designRoot.addChild(
-      this.background,
-      this.bgaLayer,
-      this.skinLayer,
-      this.laneLayer,
-      this.noteLayer,
-      this.shutterLayer,
-      this.bombLayer,
-      this.overlayLayer,
-      this.textLayer,
-      this.overlay,
-      this.designClipMask,
-    );
-    // Clip every child of `designRoot` to the design rectangle. The mask graphic itself is a child of `designRoot`, so
-    // the same viewport scale / translate applies to both the mask and the masked content — Pixi clips against the
-    // mask's world-space bounds, which matches the on-screen design rectangle.
-    this.designRoot.mask = this.designClipMask;
-    this.shutterLayer.label = 'gameplay/shutter';
-    this.root.addChild(this.viewportBackground, this.designRoot);
   }
 
   /**
@@ -1231,7 +1149,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.updateThemeState();
     });
     this.perf.time('render', () => {
-      this.render(seconds);
+      render.call(this, seconds);
       // A skin drawing through the player's renderer draws the frame just collected now, before Pixi renders.
       this.skinBindingInstance?.flush();
     });
@@ -1309,40 +1227,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /**
-   * Drives the global "fade everything to black" tween while {@link beginExitSequence} is in flight. The skin's
-   * authored `#FADEOUT` overlay (if any) only covers whatever the skin artist drew — gameplay-side layers (notes, lane
-   * chrome, BGA, shutters, bombs, overlay text) sit *above* `skinLayer` in `designRoot` and would otherwise stay
-   * fully visible until the scene is torn down. Fading `designRoot` itself dims every layer uniformly;
-   * `viewportBackground` is a sibling of `designRoot` (under `root`), so the page reveals the same `BG` (near-black)
-   * the playfield sat against, giving a clean fade-to-black appearance regardless of which lanes are still painting.
-   *
-   * Called every frame from {@link render}; cheap when the exit sequence isn't running (`designRoot.alpha` is set
-   * back to 1 only when it diverges from 1, so steady-state has no GPU cost).
-   */
-  private applyExitFadeAlpha(): void {
-    if (!this.exiting) {
-      let alpha = 1;
-      if (this.paintsThroughBeMusicSkin) {
-        const now = performance.now();
-        this.enteredAt ??= now;
-        alpha = Math.min(1, (now - this.enteredAt) / BE_MUSIC_ENTER_FADE_MS);
-      }
-      if (this.designRoot.alpha !== alpha) this.designRoot.alpha = alpha;
-      return;
-    }
-    const fadeOutMs = this.exitFadeOutMs;
-    const fadeStart = this.exitFadeStartedAt;
-    if (fadeStart === undefined || fadeOutMs <= 0) {
-      // Fade hasn't been seeded (or the theme has no fade-out); leave designRoot at full alpha. Close-only themes keep
-      // the scene visible until the host transitions us out.
-      if (this.designRoot.alpha !== 1) this.designRoot.alpha = 1;
-      return;
-    }
-    const elapsed = this.playClock() - fadeStart;
-    this.designRoot.alpha = Math.max(0, Math.min(1, 1 - elapsed / fadeOutMs));
-  }
-
-  /**
    * Captures the current play session as a {@link PixiGameplayResultData} snapshot. Returns `undefined` when no song is
    * mounted (defensive — normal flow only calls this after `prepareSong` has run). The snapshot is a plain object so
    * the host can hand it to a result scene that outlives this view.
@@ -1388,41 +1272,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   public setTempo(tempo: number): boolean {
     return !this.disposed && this.liveTempo.request(tempo);
-  }
-
-  private render(seconds: number): void {
-    const screenWidth = this.app.screen.width;
-    const screenHeight = this.app.screen.height;
-    const { width: designWidth, height: designHeight } = this.stageSize;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
-    setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
-    setDesignPixelRatio(viewport.scale * this.app.renderer.resolution);
-    // Only rebuild the static rect graphics when their backing dimensions actually change. The previous unconditional
-    // `.clear().rect().fill()` chain ran on every rAF tick and rebuilt the GraphicsContext for each — Pixi v8 has no
-    // change-detection built in.
-    if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
-      this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
-      this.cachedScreenWidth = screenWidth;
-      this.cachedScreenHeight = screenHeight;
-    }
-    this.designRoot.position.set(viewport.x, viewport.y);
-    this.designRoot.scale.set(viewport.scale);
-    this.stampDesignRect(this.stageSize);
-    this.host?.setStageOrientation(resolveStageOrientation(this.stageSize));
-    this.applyExitFadeAlpha();
-    this.audioFrame = this.audioAnalyzer?.sample(this.playClock());
-    this.perf.time('renderSkin', () => this.renderThemeLayer(designWidth, designHeight));
-    // LR2 negative-BPM reversal: the event pump stops firing BGA cues there, so the cue clock is clamped (freeze, not
-    // rewind) while an already-playing movie keeps running on the true clock. All other `seconds` readers here
-    // (progress ratio, time readouts, judge-until comparisons) stay on the true clock.
-    const reversalSeconds = this.timingResolver?.reversal?.seconds;
-    const bgaCueSeconds = reversalSeconds === undefined ? seconds : Math.min(seconds, reversalSeconds);
-    this.perf.time('renderBga', () => renderBga(this, seconds, bgaCueSeconds));
-    this.perf.time('renderLanes', () => renderLanes(this, designWidth, designHeight));
-    this.perf.time('renderNotes', () => renderNotes(this, seconds, designHeight));
-    this.perf.time('renderShutter', () => renderShutter(this));
-    this.perf.time('renderBombs', () => renderBombs(this));
-    this.perf.time('renderText', () => renderText(this, designWidth, designHeight, seconds));
   }
 
   /**
@@ -1519,15 +1368,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.skinLayerPool.end();
       this.overlayLayerPool.end();
     }
-  }
-
-  /** Redraws the design clip mask and background for a stage of `size`, when it differs from the last one drawn. */
-  private stampDesignRect(size: GameplayStageSize): void {
-    if (size.width === this.stampedDesignWidth && size.height === this.stampedDesignHeight) return;
-    this.stampedDesignWidth = size.width;
-    this.stampedDesignHeight = size.height;
-    this.designClipMask.clear().rect(0, 0, size.width, size.height).fill(0xffffff);
-    this.background.clear().rect(0, 0, size.width, size.height).fill(BG);
   }
 
   /** Approximate total duration of the loaded chart in seconds. */
