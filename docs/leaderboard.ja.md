@@ -283,14 +283,15 @@ play document の位置とタイムラインから、エンジンと一致する
   これに当たります）は、コースのログにそのことを記録し（`course.release: false`）、beatoraja が IR に送らないのと
   同じく `unreleased` として拒否します。
 - **NONSTOP のプレイ。** NONSTOP コースはつないだ 1 本の譜面として遊び、判定して順位を付けるのはそのプレイ
-  （`nonstop.playlog`）です。`stitchNonstopCourse` は決定的なので、サーバーはステージの譜面から、クライアントと
-  まったく同じようにつないだ譜面を作り直します。各ステージの譜面はそのステージの譜面フィンガープリントになる必要が
-  あり、ステージが記録した `#RANDOM` の抽選結果（`nonstop.stages[].randomDraws`）で解決し、コースの LN 制約を当て
-  （`applyCourseLongNoteConstraint`）、記録したつなぎ方・配置・結合規則の版（`nonstop.stitch`。ないときは版 1。
+  （`nonstop.playlog`）です。サーバーはステージの譜面から、クライアントとまったく同じようにつないだ譜面を作り直し
+  ます。両者は同じ決定的な処理（`@be-music/player/course` の `prepareNonstopCourse`。
+  [コースと段位認定](./course.ja.md#nonstop-コース) を参照）を使います。各ステージの譜面はそのステージの譜面
+  フィンガープリントになる必要があり、ステージが記録した `#RANDOM` の抽選結果（`nonstop.stages[].randomDraws`）で
+  解決し、コースの LN 制約を当て、記録したつなぎ方・配置・結合規則の版（`nonstop.stitch`。ないときは版 1。
   サーバーの知らない版は `nonstop-stitch-unsupported`）でつなぎます。つないだプレイはその譜面で記録されたもの
   でなければならず（プレイフィンガープリントが作り直した譜面のものと一致する。`nonstop-chart-mismatch`）、ステージの
-  対応も作り直したものと一致する必要があります。ステージの配置、各ノーツのステージ、プレイが到達したステージ数です
-  （`nonstop-stage-mismatch`）。つないだプレイは単曲と同じ対象確認を通り、コースの制約に従う必要があります。すべての
+  対応も作り直したもの（`resolveNonstopRun`）と一致する必要があります。ステージの配置、各ノーツのステージ、プレイが
+  到達したステージ数です（`nonstop-stage-mismatch`）。つないだプレイは単曲と同じ対象確認を通り、コースの制約に従う必要があります。すべての
   ルールセットで計算し直し、ESC で投げたプレイは落ちたプレイとします。ほかのコースと同じくコースのフィンガープリント
   でランキングに載せます。NONSTOP のプレイはステージの譜面を登録しません。切り出したステージが持つ判定ランクと TOTAL
   はつないだプレイのもので、各譜面のものではないからです。
@@ -343,11 +344,13 @@ NONSTOP のプレイでは、ステージごとのループの代わりに、つ
 ```mermaid
 flowchart TD
   charts["ステージの譜面"] --> fp{"それぞれ chartFingerprint<br/>になるか"}
-  fp -->|はい| resolve["記録した抽選結果で<br/>resolvePlayChart"]
-  resolve --> ln["applyCourseLongNoteConstraint"]
-  ln --> stitch["stitchNonstopCourse<br/>つなぎ方、配置、版"]
-  stitch --> same{"プレイフィンガープリントが<br/>nonstop.playlog と一致するか"}
-  same -->|はい| map{"ステージの対応が<br/>作り直したものと一致するか"}
+  fp -->|はい| prepare
+  subgraph prepare["prepareNonstopCourse"]
+    resolve["記録した抽選結果で<br/>解決"] --> ln["ロングノート制約"]
+    ln --> stitch["つなぐ：つなぎ方、<br/>配置、版"]
+  end
+  prepare --> same{"プレイフィンガープリントが<br/>nonstop.playlog と一致するか"}
+  same -->|はい| map{"ステージの対応が<br/>resolveNonstopRun と一致するか"}
   map -->|はい| sim["つないだプレイで<br/>simulateCoursePlaylog"]
   fp -->|いいえ| refuse["422"]
   same -->|いいえ| refuse
