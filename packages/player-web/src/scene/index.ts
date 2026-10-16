@@ -3,7 +3,7 @@
  * primitive that owns the renderer. Importers that only need scene rendering should reach for this barrel directly so
  * they don't pull in unrelated skin / chart / collection symbols.
  *
- * Private scene helpers (`perf`, `pixi-utils`, `select-ops`, gameplay sub-modules) stay internal to the package — they
+ * Private scene helpers (`perf`, `pixi-utils`, gameplay sub-modules) stay internal to the package — they
  * compose the scene classes' implementations and aren't part of the public contract.
  */
 export * from './host.ts';
