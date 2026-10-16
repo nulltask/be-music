@@ -86,7 +86,7 @@ interface PlaybackClockSource {
   scheduledMs?: () => number;
 }
 
-export const TUI_FRAME_INTERVAL_MS = 1000 / 60;
+export const TUI_FRAME_INTERVAL_MS: number = 1000 / 60;
 
 export const PAUSE_POLL_INTERVAL_MS = 16;
 

@@ -128,7 +128,7 @@ export class BuiltInSelectView {
    * Persistent mount points for the be-music select renderer's back / front layers (skinless path only). The renderer
    * owns what's inside; the scene only toggles visibility and keeps them around `listLayer`.
    */
-  readonly beMusicBackHolder = new Container();
+  readonly beMusicBackHolder: Container = new Container();
   private readonly beMusicFrontHolder = new Container();
   beMusicRenderer: BeMusicSelectBinding | undefined;
   /** Song images handed to the be-music skin (`frame.songImage`); created with the renderer. */

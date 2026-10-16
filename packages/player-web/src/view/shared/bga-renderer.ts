@@ -66,7 +66,7 @@ export interface BgaRendererContext {
  * frames). They differ only past an LR2 negative-BPM reversal, where the event pump stops firing new BGA cues but a
  * movie that is already playing keeps running.
  */
-export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds = seconds): void {
+export function renderBga(ctx: BgaRendererContext, seconds: number, cueSeconds: number = seconds): void {
   ctx.bgaLayerPool.begin();
   ctx.bgaTargetsScratch.length = 0;
   // Honor the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). - `'OFF'` → never render - `'AUTOPLAY_ONLY'` → render
