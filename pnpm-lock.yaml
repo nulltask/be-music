@@ -352,6 +352,9 @@ importers:
       '@be-music/player':
         specifier: workspace:*
         version: link:../player
+      '@be-music/scene-model':
+        specifier: workspace:*
+        version: link:../scene-model
       '@be-music/skin-sdk':
         specifier: workspace:*
         version: link:../skin-sdk
