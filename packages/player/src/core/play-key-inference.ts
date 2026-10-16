@@ -33,6 +33,10 @@ export interface KeyStateInference {
   press(channels: ReadonlySet<string>, tokens: readonly string[], nowSec: number, nowMs: number): void;
   /** Releases the keys whose grace lapsed before chart second `nowSec`; the judge advances to `nowSec` next. */
   releaseBefore(nowSec: number): void;
+  /** Releases the keys whose grace lapses at or before chart second `seconds`, each at its own instant. */
+  releaseThrough(seconds: number): void;
+  /** The chart second the earliest grace lapses at, or `Infinity` while no inferred key is down. */
+  nextReleaseSeconds(): number;
   /** An effect the judge core produced: a long-note head a press hit starts that lane's long-note key repeats. */
   observe(effect: JudgeCoreEffect): void;
   /** The input reports key releases after all: its own releases take over every lane held now. */
@@ -155,6 +159,12 @@ export function createKeyStateInference(
     releaseBefore: (nowSec) => {
       releaseLapsedBefore(nowSec);
       advancingTo(nowSec);
+    },
+    releaseThrough: (seconds) => releaseDue((hold) => hold.untilSec <= seconds),
+    nextReleaseSeconds: () => {
+      let next = Number.POSITIVE_INFINITY;
+      for (const hold of holds.values()) next = Math.min(next, hold.untilSec);
+      return next;
     },
     observe: (effect) => {
       // A long note AUTO SCRATCH starts is recorded too, but no press on its lane reaches the inference.
