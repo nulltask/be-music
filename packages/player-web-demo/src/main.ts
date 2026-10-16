@@ -150,7 +150,6 @@ import {
   storeSongRecords,
 } from './song-records.ts';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
-import { courseStageChartFingerprint } from './leaderboard.ts';
 import {
   describeSkinSettingControllers,
   readStoredSkinSettings,
@@ -201,12 +200,13 @@ import {
   readStoredCourseTableUrls,
   rememberCourseTableUrl,
 } from './course-table-import.ts';
-import { buildNonstopCoursePlaylog, prepareNonstopCourse, type PreparedNonstopCourse } from './nonstop-course.ts';
+import { prepareNonstopPlay, type PreparedNonstopPlay } from './nonstop-course.ts';
 import {
   countLr2UnplayedStages,
   LR2_COURSE_MAKER_MAX_STAGES,
   LR2_MAX_PLAYED_STAGES,
-  resolveCourseLaneOptions,
+  buildNonstopCoursePlaylog,
+  resolveCourseStagePlaySettings,
   resolveCourseStageSettings,
   type CourseDefinition,
 } from '@be-music/player/course';
@@ -216,7 +216,7 @@ import { loadMadeCourses, saveMadeCourses } from './course-maker-store.ts';
 /** A NONSTOP course being played as its stitched chart. */
 interface NonstopPlay {
   course: BrowserCourseEntry;
-  prepared: PreparedNonstopCourse;
+  prepared: PreparedNonstopPlay;
 }
 import demoPackageJson from '../package.json' with { type: 'json' };
 
@@ -2373,8 +2373,9 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Starts a NONSTOP course: its stages are stitched into one chart (`prepareNonstopCourse`) played from their own
-   * files, as LR2 plays a NONSTOP course in one go. Quick retry stitches and plays it again.
+   * Starts a NONSTOP course: its stages are stitched into one chart (`prepareNonstopPlay`, on the shared NONSTOP
+   * pipeline) played from their own files, as LR2 plays a NONSTOP course in one go. Quick retry stitches and plays it
+   * again.
    */
   private async startNonstopCourse(course: BrowserCourseEntry, options: { decide?: boolean } = {}): Promise<void> {
     const hashes = new Map<string, ChartFileHashes>();
@@ -2383,10 +2384,9 @@ class PlayerWebDemoApp {
       const found = await this.resolveChartHashes(stage.song);
       if (found !== undefined) hashes.set(stage.song.id, found);
     }
-    const prepared = prepareNonstopCourse(course, {
+    const prepared = prepareNonstopPlay(course, {
       sourceOf: (song) => resolveSongSource(this.collection, song),
       hashesOf: (song) => hashes.get(song.id),
-      chartFingerprintOf: courseStageChartFingerprint,
       placement: this.guiState.nonstopPlacement,
     });
     if (!prepared.ok) {
@@ -2424,7 +2424,7 @@ class PlayerWebDemoApp {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    const courseLog = buildNonstopCoursePlaylog(nonstop.course, nonstop.prepared, playlog, {
+    const courseLog = buildNonstopCoursePlaylog(nonstop.course.definition, nonstop.prepared.stitched, playlog, {
       createdAt: new Date().toISOString(),
       recorder: PLAYLOG_RECORDER,
     });
@@ -2434,7 +2434,11 @@ class PlayerWebDemoApp {
       return;
     }
     this.recordCourseResult(
-      resolveCourseRecordUpdate(courseLog, native, courseRecordKey(nonstop.course, nonstop.prepared.placement)),
+      resolveCourseRecordUpdate(
+        courseLog,
+        native,
+        courseRecordKey(nonstop.course, nonstop.prepared.stitched.placement),
+      ),
     );
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
@@ -4999,7 +5003,7 @@ class PlayerWebDemoApp {
       this.activeCourse !== undefined && courseStage !== undefined
         ? this.activeCourse.run.playSettings(picked)
         : nonstop !== undefined
-          ? { ...picked, ...resolveCourseLaneOptions(nonstop.course.definition.constraints, picked) }
+          ? resolveCourseStagePlaySettings(nonstop.course.definition, picked)
           : picked;
     const tempo = lanes.tempo;
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
@@ -5050,7 +5054,7 @@ class PlayerWebDemoApp {
         ? {
             course: resolveCourseStageSettings(nonstop.course.definition),
             courseInfo: resolveSceneCourseInfo(nonstop.course, 0),
-            nonstop: nonstop.prepared.map,
+            nonstop: nonstop.prepared.stitched.map,
           }
         : {}),
       // A replay plays at the tempo its log recorded (the scene reads it from `replay`); the pitch setting applies to
