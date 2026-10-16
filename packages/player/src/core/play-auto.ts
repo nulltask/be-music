@@ -4,17 +4,12 @@ import { clampToReversal } from './judge-core.ts';
 import { printLaneMap, writePlayableSampleTriggerEventLog } from './engine-trace.ts';
 import { createRealtimeAudioCursor } from './play-audio-cursor.ts';
 import type { PlaySession } from './play-session.ts';
-import type { JudgeStrategy, PlayJudge, StrategyDrifts } from './play-strategy.ts';
+import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 
 /**
  * The AUTO judge strategy: the auto judge core (`auto-judge-core.ts`) resolves every note as chart time reaches it,
  * and the strategy queues each note's keysound against the audio write head, ahead of its judgment.
  */
-
-/** AUTO play's drifts from manual play (see {@link StrategyDrifts}). */
-const AUTO_DRIFTS: StrategyDrifts = {
-  followsReplayTempoChangesAlways: true,
-};
 
 function writeAutoIntro(session: PlaySession): void {
   const { writeOutput, playbackChart } = session;
@@ -88,7 +83,6 @@ function createAutoJudge(session: PlaySession): PlayJudge {
 /** AUTO play: every note played and judged PGREAT on time. */
 export const autoStrategy: JudgeStrategy = {
   mode: 'auto',
-  drifts: AUTO_DRIFTS,
   estimatesActiveAudio: true,
   writeIntro: writeAutoIntro,
   createJudge: createAutoJudge,
