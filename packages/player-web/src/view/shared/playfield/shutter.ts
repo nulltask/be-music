@@ -13,8 +13,8 @@ export function renderShutter(ctx: PlayfieldContext): void {
   ctx.shutterLayer.clear();
   // A be-music skin that draws its own covers reads them from `runtime.laneCovers` instead.
   if (ctx.skinBinding?.drawsLaneCover) return;
-  if (ctx.laneX.size === 0) return;
-  for (const cover of ctx.resolveLaneCovers()) {
+  if (ctx.play.laneX.size === 0) return;
+  for (const cover of ctx.play.resolveLaneCovers()) {
     paintSideShutter(ctx, collectSideBounds(ctx, cover.side), cover.sudden, cover.hidden);
   }
 }
@@ -35,7 +35,7 @@ function collectSideBounds(
   let top = Number.POSITIVE_INFINITY;
   let bottom = Number.NEGATIVE_INFINITY;
   let any = false;
-  for (const [channel, lane] of ctx.laneX) {
+  for (const [channel, lane] of ctx.play.laneX) {
     const onSide = isChannelOnSide(channel, side);
     if (!onSide) continue;
     any = true;

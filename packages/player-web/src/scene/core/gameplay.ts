@@ -210,6 +210,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return IDENTITY;
   }
 
+  /** The running play the shared playfield and the chrome read (`ctx.play`): the scene is its own play. */
+  get play(): this {
+    return this;
+  }
+
   /**
    * Convenience accessor for the host's `Application`. Throws if called before {@link prepare} / {@link enter}; this is
    * intentional — every code path that touches `this.app` runs after one of them.
