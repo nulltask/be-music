@@ -491,14 +491,14 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 - **Hosts:** a host registers skins in a registry:
 
   ```ts
-  import { BUILT_IN_BE_MUSIC_SKINS, DefaultPixiGameplayView } from '@be-music/player-web/scenes';
+  import { BUILT_IN_BE_MUSIC_SKINS, createPlayScene } from '@be-music/player-web/scenes';
   import { createBeMusicSkinRegistry } from '@be-music/player-web/skin';
   import mySkin from 'my-be-music-skin';
 
   const skins = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
   const problems = skins.add(mySkin); // [] when added; otherwise why it was refused
   const skin = skins.resolve('my-skin'); // falls back to the first skin for unknown ids
-  // Pass it to the default-family views: new DefaultPixiGameplayView({ …, beMusicSkin: skin })
+  // Pass it to the built-in scenes in their kit: createPlayScene({ family: 'built-in', skin }, { … })
   ```
 
   - `add` validates the skin. A skin with an id that is already registered replaces the old one, which is handy while developing.

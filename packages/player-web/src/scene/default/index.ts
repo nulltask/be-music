@@ -16,7 +16,6 @@ export {
   type FallbackGameplayRenderOptions,
   type FallbackGameplayRuntime,
 } from '../../skins/phantom/chrome.ts';
-export * from './gameplay.ts';
 export * from './select.ts';
 export { latticeSkin } from '../../skins/lattice/index.ts';
 export { phantomSkin } from '../../skins/phantom/index.ts';
