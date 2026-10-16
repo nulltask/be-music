@@ -47,7 +47,7 @@ import {
   resolveLr2CourseOps,
   resolveLr2CourseStageDifficultyOps,
   resolveLr2CourseText,
-} from './course.ts';
+} from '@be-music/lr2-skin/state';
 
 /** LR2 texts 171-179 on a bar that is not a course: the connection slots read `DISABLE` (OpenLR2 L8400-L8405). */
 function resolveLr2SongConnectionText(st: number): string | undefined {

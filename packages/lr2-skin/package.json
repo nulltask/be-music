@@ -19,6 +19,11 @@
       "source": "./src/ids/index.ts",
       "types": "./dist/ids.d.ts",
       "default": "./dist/ids.js"
+    },
+    "./state": {
+      "source": "./src/state/index.ts",
+      "types": "./dist/state.d.ts",
+      "default": "./dist/state.js"
     }
   },
   "scripts": {
@@ -30,6 +35,8 @@
   "dependencies": {
     "@be-music/chart": "workspace:*",
     "@be-music/json": "workspace:*",
+    "@be-music/player": "workspace:*",
+    "@be-music/scene-model": "workspace:*",
     "@be-music/utils": "workspace:*"
   }
 }

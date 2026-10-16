@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { SceneCourseInfo } from '../course-info.ts';
+import type { CourseView } from '@be-music/scene-model';
 import {
   lr2ShowsCourseCombo,
   resolveLr2JudgeCombo,
@@ -16,7 +16,7 @@ import {
   resolveLr2NonstopStage,
 } from './course.ts';
 
-function course(stageCount: number, stageIndex?: number, kind: SceneCourseInfo['kind'] = 'grade'): SceneCourseInfo {
+function course(stageCount: number, stageIndex?: number, kind: CourseView['kind'] = 'grade'): CourseView {
   return {
     kind,
     title: 'Dan',
@@ -81,7 +81,7 @@ describe('lr2ShowsCourseCombo', () => {
 
 describe('resolveLr2CourseConnectionText', () => {
   it('names the NONSTOP connections on 171-179 and shows DISABLE for other courses', () => {
-    const nonstop: SceneCourseInfo = { ...course(3), kind: 'nonstop', connections: ['cut', 'blank1', 'fade-fit'] };
+    const nonstop: CourseView = { ...course(3), kind: 'nonstop', connections: ['cut', 'blank1', 'fade-fit'] };
     expect(resolveLr2CourseConnectionText(171, nonstop)).toBe('CUT');
     expect(resolveLr2CourseConnectionText(172, nonstop)).toBe('BLANK1');
     expect(resolveLr2CourseConnectionText(173, nonstop)).toBe('FADE+FIT');
@@ -146,7 +146,7 @@ describe('LR2 course maker', () => {
   });
 
   it('draws the connection buttons at the value they edit', () => {
-    const nonstop: SceneCourseInfo = { ...course(3), kind: 'nonstop', connections: ['blank1', 'cut'] };
+    const nonstop: CourseView = { ...course(3), kind: 'nonstop', connections: ['blank1', 'cut'] };
     expect(resolveLr2CourseMakerButtonState(240, nonstop, 'fade')).toBe(4);
     expect(resolveLr2CourseMakerButtonState(241, nonstop, 'fade')).toBe(2);
     expect(resolveLr2CourseMakerButtonState(245, nonstop, 'fade')).toBe(0);
@@ -171,7 +171,7 @@ describe('resolveLr2JudgeCombo', () => {
 
 describe('resolveLr2CourseStageDifficultyOps', () => {
   it('lights 700 + 10 × stage + difficulty for the first five stages', () => {
-    const course: SceneCourseInfo = {
+    const course: CourseView = {
       kind: 'grade',
       title: 'Dan',
       stages: [

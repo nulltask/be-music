@@ -1,6 +1,6 @@
-import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_TEXT } from '@be-music/lr2-skin/ids';
+import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_TEXT } from '../ids/index.ts';
 import type { CourseDraft, CourseKind, NonstopConnection } from '@be-music/player/course';
-import type { SceneCourseInfo } from '../course-info.ts';
+import type { CourseView } from '@be-music/scene-model';
 
 const KIND_OPS: Record<CourseKind, number> = {
   nonstop: LR2_OP.COURSE_NONSTOP,
@@ -13,7 +13,7 @@ const KIND_OPS: Record<CourseKind, number> = {
  * stages 1-9 that are not the last, 289 for the last). LR2 reads a skin at each scene start, so these also serve as
  * parse-time ops for a course stage's skin (`Lr2ThemeSkins.loadSkin`).
  */
-export function resolveLr2CourseOps(course: SceneCourseInfo): number[] {
+export function resolveLr2CourseOps(course: CourseView): number[] {
   const ops: number[] = [LR2_OP.COURSE, KIND_OPS[course.kind]];
   const index = course.stageIndex;
   if (index === undefined) return ops;
@@ -27,7 +27,7 @@ export function resolveLr2CourseOps(course: SceneCourseInfo): number[] {
  * of the selected bar's course, by the stage chart's `#DIFFICULTY` (0 undefined, 1 BEGINNER … 5 INSANE). LR2 reads
  * 0 for a stage it does not have, a chart it does not own and any bar that is not a course, so those light the `x0` op.
  */
-export function resolveLr2CourseStageDifficultyOps(course: SceneCourseInfo | undefined): number[] {
+export function resolveLr2CourseStageDifficultyOps(course: CourseView | undefined): number[] {
   return [0, 1, 2, 3, 4].map((index) => {
     const difficulty = Math.trunc(course?.stages[index]?.difficulty ?? 0);
     return LR2_OP.COURSE_STAGE_DIFFICULTY + index * 10 + (difficulty >= 0 && difficulty <= 5 ? difficulty : 0);
@@ -35,7 +35,7 @@ export function resolveLr2CourseStageDifficultyOps(course: SceneCourseInfo | und
 }
 
 /** LR2 numbers 250-259: the play level of course stage 1-10 (OpenLR2 L923-L942). */
-export function resolveLr2CourseNumber(num: number, course: SceneCourseInfo): number | undefined {
+export function resolveLr2CourseNumber(num: number, course: CourseView): number | undefined {
   if (num < LR2_NUM.COURSE_STAGE1_LEVEL || num > LR2_NUM.COURSE_STAGE10_LEVEL) return undefined;
   return course.stages[num - LR2_NUM.COURSE_STAGE1_LEVEL]?.level;
 }
@@ -44,7 +44,7 @@ export function resolveLr2CourseNumber(num: number, course: SceneCourseInfo): nu
  * LR2 course texts (OpenLR2 L8408-L8420): 150-154 the titles of stages 1-5, 160-164 their subtitles, 170 the course
  * title. A stage the course does not have reads empty.
  */
-export function resolveLr2CourseText(st: number, course: SceneCourseInfo): string | undefined {
+export function resolveLr2CourseText(st: number, course: CourseView): string | undefined {
   if (st >= LR2_TEXT.COURSE_STAGE1_TITLE && st <= LR2_TEXT.COURSE_STAGE5_TITLE) {
     return course.stages[st - LR2_TEXT.COURSE_STAGE1_TITLE]?.title ?? '';
   }
@@ -89,7 +89,7 @@ const LR2_CONNECTION_LABELS: Readonly<Record<NonstopConnection, string>> = {
  * LR2 texts 171-179 (OpenLR2 L8400-L8405): the connection after stages 1-9 of the selected NONSTOP course, or
  * `DISABLE` for any other course. Returns `undefined` for other text ids.
  */
-export function resolveLr2CourseConnectionText(st: number, course: SceneCourseInfo): string | undefined {
+export function resolveLr2CourseConnectionText(st: number, course: CourseView): string | undefined {
   if (st < LR2_TEXT.COURSE_CONNECTION1 || st > LR2_TEXT.COURSE_CONNECTION9) return undefined;
   if (course.kind !== 'nonstop' || course.connections === undefined) return 'DISABLE';
   return LR2_CONNECTION_LABELS[course.connections[st - LR2_TEXT.COURSE_CONNECTION1] ?? 'fade'];
@@ -131,7 +131,7 @@ export function resolveLr2CourseMakerOps(draft: CourseDraft | undefined, selecte
  * and the name being typed on text 170 (`namePrompt` while it is empty), in place of the selected bar's course
  * (OpenLR2 L8408-L8414).
  */
-export function resolveLr2CourseDraftInfo(draft: CourseDraft, namePrompt = ''): SceneCourseInfo {
+export function resolveLr2CourseDraftInfo(draft: CourseDraft, namePrompt = ''): CourseView {
   return {
     kind: draft.kind,
     title: draft.name.length > 0 ? draft.name : namePrompt,
@@ -178,7 +178,7 @@ export function resolveLr2CourseMakerAction(type: number): Lr2CourseMakerAction 
  */
 export function resolveLr2CourseMakerButtonState(
   type: number,
-  course: SceneCourseInfo | undefined,
+  course: CourseView | undefined,
   defaultConnection: NonstopConnection,
 ): number | undefined {
   const action = resolveLr2CourseMakerAction(type);

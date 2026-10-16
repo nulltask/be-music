@@ -32,7 +32,7 @@ import { CoreResultView, type CoreResultViewOptions } from '../core/result.ts';
 import { LR2_NUM, LR2_OP, LR2_TEXT } from '@be-music/lr2-skin/ids';
 import { resolveKeyModeOp, resolveLr2LampOp } from '../select-ops.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
-import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
+import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from '@be-music/lr2-skin/state';
 
 /**
  * LR2 result scene. Layers LR2's result-skin rendering on top of {@link CoreResultView}, which owns the mount / ticker /

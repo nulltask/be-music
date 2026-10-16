@@ -63,7 +63,7 @@ import {
   resolveLr2CourseOps,
   resolveLr2CourseText,
   resolveLr2NonstopStage,
-} from './course.ts';
+} from '@be-music/lr2-skin/state';
 import {
   CoreGameplayView,
   KEY_ON_FADE_OUT_MS,
