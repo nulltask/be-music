@@ -134,7 +134,26 @@ describe('resolveLr2PlayState numbers', () => {
     expect(state.number(LR2_NUM.REMAINING_SECOND)).toBe(45);
     expect(state.number(LR2_NUM.BPM)).toBe(151);
     expect(resolveLr2PlayState(SETUP, frame()).number(LR2_NUM.BPM)).toBe(150);
-    expect(state.number(LR2_NUM.NEXT_RANK_DIFF)).toBe(68);
+    // 110 of 200 points is rank 4 (C): B's border is floor(200 × 5 / 9) = 111, one point away.
+    expect(state.number(LR2_NUM.NEXT_RANK_DIFF)).toBe(-1);
+    expect(state.number(LR2_NUM.NEXT_RANK_DIFF_ALT)).toBe(-1);
+  });
+
+  it('reads LR2’s distance to the next rank on 109 / 154: negative, toward the maximum from AAA', () => {
+    const diff = (exScore: number, total = 100): number | undefined =>
+      resolveLr2PlayState(SETUP, frame({ score: { ...createEmptyScore(total), exScore } })).number(
+        LR2_NUM.NEXT_RANK_DIFF,
+      );
+    // F counts down to E's border (floor(200 × 2 / 9) = 44), from no score as well.
+    expect(diff(0)).toBe(-44);
+    expect(diff(30)).toBe(-14);
+    // AA counts down to AAA's border (floor(200 × 8 / 9) = 177), and AAA to the maximum.
+    expect(diff(156)).toBe(-21);
+    expect(diff(178)).toBe(-22);
+    expect(diff(199)).toBe(-1);
+    // 0 at the maximum and on a chart without notes.
+    expect(diff(200)).toBe(0);
+    expect(diff(0, 0)).toBe(0);
   });
 
   it('counts the whole course in the combo numbers of an expert or grade course', () => {
