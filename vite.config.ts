@@ -19,14 +19,15 @@ const workspacePackages = [
 ] as const;
 
 /**
- * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code and
- * the scene models run unchanged in the browser and in Node, so they import no Node built-in and read no DOM or
- * Node-only global. Runtime services reach them through adapters (`PlayerOptions.createAudioSession`,
+ * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code,
+ * the scene models and the LR2 state resolvers run unchanged in the browser and in Node, so they import no Node built-in
+ * and read no DOM or Node-only global. Runtime services reach them through adapters (`PlayerOptions.createAudioSession`,
  * `createUiRuntime`, the parser's `node-file.ts`) instead.
  */
 const runtimeNeutralSources = [
   'packages/chart/src/**/*.ts',
   'packages/json/src/**/*.ts',
+  'packages/lr2-skin/src/state/**/*.ts',
   'packages/parser/src/**/*.ts',
   'packages/player/src/core/**/*.ts',
   'packages/player/src/course/**/*.ts',
@@ -39,9 +40,11 @@ const runtimeNeutralSources = [
 const runtimeAdapterSources = ['packages/parser/src/cli.ts', 'packages/parser/src/node-file.ts'];
 /**
  * The deterministic judge (`judge-core*.ts`, `auto-judge-core.ts`, the ruleset rules and the play-log simulator): the
- * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number.
+ * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number. The
+ * LR2 state resolvers are held to the same rule: a scene's time comes in as an input.
  */
 const deterministicJudgeSources = [
+  'packages/lr2-skin/src/state/**/*.ts',
   'packages/player/src/core/judge-*.ts',
   'packages/player/src/core/auto-judge-core.ts',
   'packages/player/src/ruleset/**/*.ts',
@@ -69,7 +72,7 @@ const runtimeGlobals = [
   '__filename',
 ].map((name) => ({ name, message: 'Runtime-neutral code must not read DOM or Node globals; use a runtime adapter.' }));
 const clockGlobals = ['Date', 'performance', 'setTimeout', 'setInterval', 'setImmediate', 'queueMicrotask'].map(
-  (name) => ({ name, message: 'The judge core is deterministic: take time as an input instead of reading a clock.' }),
+  (name) => ({ name, message: 'Deterministic code takes time as an input instead of reading a clock.' }),
 );
 
 const workspaceProjects = workspacePackages.map((name) => ({
@@ -305,7 +308,7 @@ export default defineConfig({
             {
               object: 'Math',
               property: 'random',
-              message: 'The judge core is deterministic: take randomness as an input.',
+              message: 'Deterministic code takes randomness as an input.',
             },
           ],
         },

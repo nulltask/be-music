@@ -32,8 +32,13 @@ import {
 } from '@be-music/scene-model';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
-import { LR2_BUTTON, LR2_TIMER } from '@be-music/lr2-skin/ids';
-import { courseMatchesKeysFilter, resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
+import {
+  LR2_KEYS_FILTER_OPS,
+  lr2CourseMatchesKeysFilter,
+  resolveLr2KeyModeOp,
+  resolveLr2SelectTimers,
+  type Lr2TimerUpdate,
+} from '@be-music/lr2-skin/state';
 import { logger } from '../../logger.ts';
 import { HISPEED_MAX, HISPEED_MIN, HISPEED_STEP } from '../hi-speed.ts';
 import type {
@@ -185,19 +190,6 @@ export {
   SORT_CYCLE,
   cyclePlayOptionValue as cycleSkinPlayOptionValue,
   resolvePlayOptionValue as resolveSkinPlayOptionValue,
-};
-
-/**
- * Mapping from `#SRC_BUTTON,type=91..96` to the {@link PixiDifficultyFilter} they directly select. Per LR2 spec
- * (`docs/LR2SkinHelp.md` 6171+): 91 all, 92 beginner, 93 normal, 94 hyper, 95 another, 96 insane.
- */
-export const DIFFICULTY_FILTER_BY_DIRECT_BUTTON: Record<number, PixiDifficultyFilter> = {
-  [LR2_BUTTON.DIFFICULTY_FILTER_ALL]: 'ALL',
-  [LR2_BUTTON.DIFFICULTY_FILTER_BEGINNER]: 'BEGINNER',
-  [LR2_BUTTON.DIFFICULTY_FILTER_NORMAL]: 'NORMAL',
-  [LR2_BUTTON.DIFFICULTY_FILTER_HYPER]: 'HYPER',
-  [LR2_BUTTON.DIFFICULTY_FILTER_ANOTHER]: 'ANOTHER',
-  [LR2_BUTTON.DIFFICULTY_FILTER_INSANE]: 'INSANE',
 };
 
 /**
@@ -501,7 +493,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    */
   protected playOptions: PixiPlayOptions = { ...DEFAULT_PLAY_OPTIONS };
   /**
-   * Set of currently-open LR2 panels (1..9). Drives op 1..9 in `computeSelectOps` and gates panel-scoped `#SRC_*`
+   * Set of currently-open LR2 panels (1..9). Feeds the panel ops of `resolveLr2SelectState` and gates panel-scoped `#SRC_*`
    * elements via {@link isPanelOpen}. Convention: panel 1 is the play- options panel — opened with the START button
    * (Enter / Space) per LR2's select-skin spec (LR2SkinHelp line 9101).
    *
@@ -549,6 +541,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * time=0.
    */
   protected readonly timerStartedAt: Map<number, number> = new Map<number, number>();
+
+  /** Starts and stops the LR2 timers a moment of the screen changes (`resolveLr2SelectTimers`). */
+  protected applyLr2Timers(update: Lr2TimerUpdate): void {
+    for (const timer of update.stop) this.timerStartedAt.delete(timer);
+    for (const [timer, at] of update.start) this.timerStartedAt.set(timer, at);
+  }
   /**
    * Pixel offset applied to `listLayer` during a skinned bar-list scroll transition. Right after a cursor move, the
    * entry-to-slot mapping shifts instantly; we counter that by pushing `listLayer.y` so the bars appear to stay where they
@@ -1012,10 +1010,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     // know when "now=0" was. We don't seed timer 1 here; themes (the LR2 scene's `elapsedSinceTimer`) compute its fire
     // moment from `#STARTINPUT` lazily.
     this.timerStartedAt.clear();
-    this.timerStartedAt.set(LR2_TIMER.SCENE_START, this.sceneStartedAt);
-    // Fire timer 11 (song change) at scene start so the BAR_BODY slide-in animations play once on every appearance,
-    // just like they do in real LR2 when the cursor lands on the initial song.
-    this.timerStartedAt.set(LR2_TIMER.SONG_BAR_CHANGE, this.sceneStartedAt);
+    // Timer 11 (song change) fires too, so the BAR_BODY slide-in animations play once on every appearance, as in LR2
+    // when the cursor lands on the first song.
+    this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'scene-start', at: this.sceneStartedAt }));
     // Drop any leftover smooth-scroll state from a previous session — the cursor isn't moving on re-entry, and a stale
     // `dt` from before the play round-trip would otherwise feed the decay formula a multi-minute interval and either
     // NaN or instantly zero out a fresh offset (depending on Math.exp's behavior).
@@ -1049,9 +1046,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     const now = performance.now();
     this.cursorChangedAt = now;
-    this.timerStartedAt.set(LR2_TIMER.SONG_BAR_MOVE, now);
-    this.timerStartedAt.set(LR2_TIMER.SONG_BAR_CHANGE, now);
-    this.timerStartedAt.set(delta < 0 ? LR2_TIMER.SONG_BAR_UP : LR2_TIMER.SONG_BAR_DOWN, now);
+    this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'cursor', delta, at: now }));
     // Seed the scroll offset only for themes that slide their list layer. The be-music chrome is also mounted on
     // `listLayer`, so offsetting that layer would scroll the entire screen. In that path, cursor movement simply changes
     // the active row.
@@ -1152,15 +1147,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   protected togglePanel(which: number): void {
     if (which < 1 || which > 9) return;
     const now = performance.now();
-    const openTimer = LR2_TIMER.PANEL1_OPEN + which - 1;
-    const closeTimer = LR2_TIMER.PANEL1_CLOSE + which - 1;
     let opening: boolean;
     if (this.panelStates.has(which)) {
       // Closing: drop the open timer (so it goes inactive next frame) and seed the close timer for the close-anim
       // keyframes that #DST elements anchored to timer 31..39 depend on.
       this.panelStates.delete(which);
-      this.timerStartedAt.delete(openTimer);
-      this.timerStartedAt.set(closeTimer, now);
+      this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'panel', panel: which, open: false, at: now }));
       opening = false;
     } else {
       // Opening: only one option panel may be open at a time (LR2 mutual-exclusion convention — clicking PLAY OPTION
@@ -1170,16 +1162,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       const previouslyOpen = Array.from(this.panelStates);
       for (const open of previouslyOpen) {
         if (open === which) continue;
-        const otherOpenTimer = LR2_TIMER.PANEL1_OPEN + open - 1;
-        const otherCloseTimer = LR2_TIMER.PANEL1_CLOSE + open - 1;
         this.panelStates.delete(open);
-        this.timerStartedAt.delete(otherOpenTimer);
-        this.timerStartedAt.set(otherCloseTimer, now);
+        this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'panel', panel: open, open: false, at: now }));
       }
       // Drop our own (potentially leftover) close timer and seed the open timer.
       this.panelStates.add(which);
-      this.timerStartedAt.delete(closeTimer);
-      this.timerStartedAt.set(openTimer, now);
+      this.applyLr2Timers(resolveLr2SelectTimers({ kind: 'panel', panel: which, open: true, at: now }));
       opening = true;
     }
     // LR2 system effects — `Sound\lr2\o-open.wav` / `o-close.wav`. Fire-and-forget; the cached buffer makes rapid
@@ -1482,12 +1470,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       filtered = filtered.filter((entry) => entry.kind !== 'song' || chartMatchesDifficultyFilter(entry.song, filter));
     }
     if (this.playOptions.keysFilter !== 'ALL') {
-      const targetOp = SELECT_KEYS_FILTER_TO_OP[this.playOptions.keysFilter];
+      const targetOp = LR2_KEYS_FILTER_OPS[this.playOptions.keysFilter];
       // A course bar is listed under its key mode, as LR2 lists courses by their `line`.
       filtered = filtered.filter((entry) =>
         entry.kind === 'song'
-          ? resolveKeyModeOp(entry.song) === targetOp
-          : entry.kind !== 'course' || courseMatchesKeysFilter(entry.course, targetOp),
+          ? resolveLr2KeyModeOp(entry.song) === targetOp
+          : entry.kind !== 'course' || lr2CourseMatchesKeysFilter(entry.course, targetOp),
       );
     }
     if (this.searchQuery.length > 0) {

@@ -1,13 +1,5 @@
 import { Texture } from 'pixi.js';
 import {
-  computeScoreRate,
-  createEmptyScore,
-  resolveIidxSelectRankOp,
-  type ScoreSummary,
-} from '@be-music/player/core/scoring';
-import type { GaugeType } from '@be-music/player/ruleset';
-import type { BrowserSongEntry } from '../../collection/types.ts';
-import {
   type Lr2DestinationRect,
   type Lr2GrooveGaugeElement,
   type Lr2ImageElement,
@@ -15,7 +7,7 @@ import {
   type Lr2NowComboKind,
   type Lr2Skin,
 } from '@be-music/lr2-skin';
-import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_TIMER } from '@be-music/lr2-skin/ids';
+import { LR2_LANE_TIMER_BANK_SIZE, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { applyDestinationToSprite, createCroppedTexture, type SpriteSink } from '../../skin/lr2/render.ts';
 
 export function isLr2OverlayImage(image: Lr2ImageElement): boolean {
@@ -25,112 +17,6 @@ export function isLr2OverlayImage(image: Lr2ImageElement): boolean {
     (t >= LR2_TIMER.BOMB_1P && t < LR2_TIMER.LN_HOLD_2P + LR2_LANE_TIMER_BANK_SIZE) ||
     (t >= LR2_TIMER.KEY_ON_1P && t < LR2_TIMER.KEY_OFF_2P + LR2_LANE_TIMER_BANK_SIZE)
   );
-}
-
-export function resolveNumberValue(
-  num: number,
-  score: ScoreSummary,
-  song: BrowserSongEntry | undefined,
-  gauge: number,
-  combo: number,
-  hiSpeed: number,
-  seconds: number,
-  displayedScore: number,
-  fps: number,
-  liveBpm: number | undefined,
-  totalSeconds: number,
-  maxCombo: number,
-): number | undefined {
-  const rate = computeScoreRate(score);
-  const ratePct = Math.round(rate * 100);
-  const rateDecimals = Math.round(rate * 10000) % 100;
-  const remaining = Math.max(0, totalSeconds - seconds);
-  switch (num) {
-    case LR2_NUM.HISPEED_1P:
-      return Math.round(hiSpeed * 100);
-    case LR2_NUM.FPS:
-      return Math.round(fps);
-    case LR2_NUM.SCORE:
-      return Math.round(displayedScore);
-    case LR2_NUM.EXSCORE:
-      return score.exScore;
-    case LR2_NUM.SCORE_RATE:
-      return Math.round(fps);
-    case LR2_NUM.SCORE_RATE_AFTERDOT:
-      return Math.round(rate * 10000);
-    case LR2_NUM.COMBO:
-      return combo;
-    case LR2_NUM.MAX_COMBO:
-      return maxCombo;
-    case LR2_NUM.NOTES:
-      return score.total;
-    case LR2_NUM.GAUGE:
-      return Math.round(gauge);
-    case LR2_NUM.EXSCORE_DIFF:
-      return 0;
-    case LR2_NUM.PERFECT:
-      return score.perfect;
-    case LR2_NUM.GREAT:
-      return score.great;
-    case LR2_NUM.GOOD:
-      return score.good;
-    case LR2_NUM.BAD:
-      return score.bad;
-    case LR2_NUM.POOR:
-      return score.poor;
-    case LR2_NUM.TOTAL_RATE:
-      return ratePct;
-    case LR2_NUM.TOTAL_RATE_AFTERDOT:
-      return rateDecimals;
-    case LR2_NUM.HIGH_SCORE:
-    case LR2_NUM.TARGET_SCORE:
-      return 0;
-    case LR2_NUM.HIGH_SCORE_DIFF:
-    case LR2_NUM.TARGET_SCORE_DIFF:
-      return score.exScore;
-    case LR2_NUM.NEXT_RANK_DIFF: {
-      if (score.total <= 0) {
-        return 0;
-      }
-      const max = score.total * 2;
-      const thresholds = [8 / 9, 7 / 9, 6 / 9, 5 / 9, 4 / 9, 3 / 9, 2 / 9, 1 / 9];
-      const next = thresholds.find((threshold) => score.exScore < max * threshold) ?? 0;
-      return Math.max(0, Math.ceil(max * next - score.exScore));
-    }
-    case LR2_NUM.BPM:
-      return liveBpm ?? song?.bpm;
-    case LR2_NUM.PLAY_MINUTE:
-      return Math.floor(seconds / 60);
-    case LR2_NUM.PLAY_SECOND:
-      return Math.floor(seconds % 60);
-    case LR2_NUM.REMAINING_MINUTE:
-      return Math.floor(remaining / 60);
-    case LR2_NUM.REMAINING_SECOND:
-      return Math.floor(remaining % 60);
-    case LR2_NUM.LOADING_PROGRESS:
-      return 100;
-    default:
-      return undefined;
-  }
-}
-
-export function computeRankOp(score: ScoreSummary): number | undefined {
-  return resolveIidxSelectRankOp(score);
-}
-
-/**
- * LR2 gauge-type ops for the play's gauge, as `[1P, 2P]`: HARD / DEATH light the "red" gauge ops (43 / 45), GROOVE /
- * EASY share the normal ones (42 / 44). Skins gate their gauge frame plate on these (`#IF op43` for the red plate).
- */
-export function computeGaugeTypeOps(gauge: GaugeType): readonly [number, number] {
-  return gauge === 'HARD' || gauge === 'DEATH'
-    ? [LR2_OP.GAUGE_1P_RED, LR2_OP.GAUGE_2P_RED]
-    : [LR2_OP.GAUGE_1P_NORMAL, LR2_OP.GAUGE_2P_NORMAL];
-}
-
-/** LR2 1P gauge-percentage bucket op: 230 = 0–9 %, 231 = 10–19 %, …, 240 = 100 %. */
-export function computeGaugeBucketOp(gaugePercent: number): number {
-  return LR2_OP.GAUGE_1P_0_9 + Math.min(10, Math.max(0, Math.floor(gaugePercent / 10)));
 }
 
 export function lastJudgeToNowComboKind(lastJudge: string): Lr2NowComboKind | undefined {
@@ -429,31 +315,4 @@ function collectMaxKeyframeTimePerTimer(skin: Lr2Skin, minTimer: number, maxTime
   for (const bargraph of skin.bargraphs) visit(bargraph);
   for (const slider of skin.sliders) visit(slider);
   return result;
-}
-
-export { createEmptyScore };
-
-export function formatTime(seconds: number): string {
-  const minute = Math.floor(seconds / 60);
-  const second = Math.floor(seconds % 60)
-    .toString()
-    .padStart(2, '0');
-  return `${minute}:${second}`;
-}
-
-export function resolveDifficultyName(difficulty: number | undefined): string {
-  switch (difficulty) {
-    case 1:
-      return 'BEGINNER';
-    case 2:
-      return 'NORMAL';
-    case 3:
-      return 'HYPER';
-    case 4:
-      return 'ANOTHER';
-    case 5:
-      return 'INSANE';
-    default:
-      return '';
-  }
 }

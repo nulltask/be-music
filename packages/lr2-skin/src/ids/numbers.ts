@@ -126,7 +126,7 @@ export const LR2_NUM = {
   SCORE: 100,
   /** The EX score. */
   EXSCORE: 101,
-  /** The EX score as a percentage of the highest one. */
+  /** The EX score as a percentage of the highest one for the notes judged so far (LR2's running rate). */
   SCORE_RATE: 102,
   /** The digits after the dot of `SCORE_RATE`. */
   SCORE_RATE_AFTERDOT: 103,
@@ -150,7 +150,7 @@ export const LR2_NUM = {
   BAD: 113,
   /** POORs. */
   POOR: 114,
-  /** The EX score as a percentage of the notes judged so far. */
+  /** The EX score as a percentage of the highest one for every note of the chart. */
   TOTAL_RATE: 115,
   /** The digits after the dot of `TOTAL_RATE`. */
   TOTAL_RATE_AFTERDOT: 116,

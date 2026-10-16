@@ -1,6 +1,4 @@
 import { Graphics, Texture } from 'pixi.js';
-import { resolveIidxRankIndexFromScore } from '@be-music/player/core/scoring';
-import { resolveClearLamp } from '@be-music/player/ruleset';
 import type {
   Lr2DestinationRect,
   Lr2GaugeChartElement,
@@ -27,53 +25,11 @@ import {
 import { isDestinationVisible, makeLr2TextSprite } from '../../skin/lr2/scene-render.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
-import type { PixiGameplayResultData } from '../core/result-data.ts';
 import { CoreResultView, type CoreResultViewOptions } from '../core/result.ts';
-import { LR2_NUM, LR2_OP, LR2_TEXT } from '@be-music/lr2-skin/ids';
-import { resolveKeyModeOp, resolveLr2LampOp } from '../select-ops.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
-import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
+import { resolveLr2ResultState, type Lr2ResultState } from '@be-music/lr2-skin/state';
 
-/**
- * LR2 result scene. Layers LR2's result-skin rendering on top of {@link CoreResultView}, which owns the mount / ticker /
- * timer ladder / input / BGM lifecycle and the skinless be-music panel.
- *
- * Why a dedicated module: the result screen has its own LR2 timer sequence (`docs/LR2SkinHelp.md` lines 10198+) that
- * doesn't match either gameplay or select. Stuffing it into one of those views would pollute their state machines with
- * result-only branches; a sibling scene file mirrors the existing `scene/lr2/gameplay.ts` / `scene/lr2/select.ts` split and keeps
- * each scene's lifecycle independent.
- *
- * The core timer ladder (0 / 1 / 150 / 151 / 152) maps onto LR2's result timers directly; timer 1 fires `#STARTINPUT`
- * ms after mount (see {@link PixiResultView.startInputMs}).
- */
-/**
- * Op set that's always true on the result screen. Mirrors `SELECT_BASE_OPS` in `scene/lr2/select.ts` — the ops that don't
- * depend on the played chart but on global state (filter / mode toggles, IR connectivity, etc.). Numbers follow
- * `dst_option` in `docs/LR2SkinHelp.md`.
- */
-const RESULT_BASE_OPS: ReadonlySet<number> = new Set<number>([
-  LR2_OP.AUTOPLAY_OFF,
-  LR2_OP.GHOST_OFF,
-  LR2_OP.SCORE_GRAPH_OFF,
-  // No live BGA on the result screen.
-  LR2_OP.BGA_OFF,
-  LR2_OP.GAUGE_1P_NORMAL,
-  LR2_OP.GAUGE_2P_NORMAL,
-  LR2_OP.DIFFICULTY_FILTER_OFF,
-  // No IR connection yet.
-  LR2_OP.OFFLINE,
-  LR2_OP.AUTO_SCRATCH_1P_OFF,
-  LR2_OP.AUTO_SCRATCH_2P_OFF,
-  // No persistence yet.
-  LR2_OP.SCORE_SAVE_OFF,
-  LR2_OP.CLEAR_SAVE_OFF,
-  LR2_OP.LOADED,
-  LR2_OP.REPLAY_OFF,
-  // No #FLIPRESULT in the skin — most LR2 default skins gate the score panel against op 350, so set it. Skins that DO
-  // declare #FLIPRESULT need op 351 instead, which we toggle below from the gameplay's skin.
-  LR2_OP.RESULT_FLIP_OFF,
-]);
-
+/** Constructor options for {@link PixiResultView}: the core result options plus the LR2 result skin and course. */
 export interface PixiResultViewOptions extends CoreResultViewOptions {
   /**
    * LR2 result skin to render with. When provided, renders the skin's `#IMAGE` / `#NUMBER` / `#TEXT` / `#SLIDER` /
@@ -90,8 +46,10 @@ export interface PixiResultViewOptions extends CoreResultViewOptions {
 }
 
 /**
- * One-shot LR2 result scene. Mounted by the host with a {@link PixiGameplayResultData} payload; {@link CoreResultView}
- * drives the result timer ladder and dismissal, this class paints the LR2 result skin through the theme hooks.
+ * One-shot LR2 result scene. Mounted by the host with a `PixiGameplayResultData` payload; {@link CoreResultView}
+ * drives the result timer ladder (0 / 1 / 150 / 151 / 152, LR2's result timers; timer 1 fires `#STARTINPUT` ms after
+ * mount) and dismissal, this class paints the LR2 result skin through the theme hooks from the result's LR2 state
+ * (`resolveLr2ResultState`).
  */
 export class PixiResultView extends CoreResultView {
   declare protected options: PixiResultViewOptions;
@@ -137,8 +95,17 @@ export class PixiResultView extends CoreResultView {
   protected override renderTheme(): boolean {
     const skin = this.options.skin;
     if (!skin || !this.result) return false;
-    const ops = computeResultOps(this.result, skin, this.options.courseInfo);
-    this.renderSkin(skin, ops);
+    this.renderSkin(
+      skin,
+      resolveLr2ResultState({
+        result: this.result,
+        ...(this.options.courseInfo !== undefined ? { course: this.options.courseInfo } : {}),
+        // The `#FLIPRESULT` of the skin the result is shown on (op 351).
+        flipResult: skin.scratchFlip?.flipResult === true,
+        // The skin's CUSTOMOPTION defaults: LITONE4-style result skins gate most of their chrome on `#IF,<default>`.
+        customOps: (skin.customOptions ?? []).map((option) => option.defaultOp),
+      }),
+    );
     // No empty-state hint here — the skin's own artwork covers the whole canvas. If a skin author wired a result skin
     // but no #IMAGE / #TEXT to display, that's their decision.
     return true;
@@ -173,8 +140,9 @@ export class PixiResultView extends CoreResultView {
     this.render();
   }
 
-  private renderSkin(skin: Lr2Skin, ops: ReadonlySet<number>): void {
+  private renderSkin(skin: Lr2Skin, state: Lr2ResultState): void {
     if (!this.result) return;
+    const ops = state.ops;
     // Build a unified work list keyed on `declarationOrder` so the resulting paint order matches LR2's CSV-stream
     // contract ("later declarations paint on top"). The previous kind-grouped loop (images first, then numbers, then
     // texts, …) inverted the z-order whenever a later-kind element was authored EARLIER than a same-layer earlier-kind
@@ -202,10 +170,7 @@ export class PixiResultView extends CoreResultView {
     for (const number of skin.numbers) {
       const dst = this.evaluateElementDst(number);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const course = this.options.courseInfo;
-      const value =
-        (course !== undefined ? resolveLr2CourseNumber(number.source.num, course) : undefined) ??
-        resolveResultNumber(number.source.num, this.result);
+      const value = state.number(number.source.num);
       if (value === undefined) continue;
       work.push({
         order: number.declarationOrder,
@@ -224,10 +189,7 @@ export class PixiResultView extends CoreResultView {
     for (const text of skin.texts) {
       const dst = this.evaluateElementDst(text);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const course = this.options.courseInfo;
-      const value =
-        (course !== undefined ? resolveLr2CourseText(text.st, course) : undefined) ??
-        resolveResultText(text.st, this.result);
+      const value = state.text(text.st);
       if (value === undefined || value.length === 0) continue;
       work.push({
         order: text.declarationOrder,
@@ -247,7 +209,7 @@ export class PixiResultView extends CoreResultView {
     for (const bargraph of skin.bargraphs) {
       const dst = this.evaluateElementDst(bargraph);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const value = resolveResultBargraphValue(bargraph.type, this.result);
+      const value = state.bargraph(bargraph.type);
       if (value === undefined) continue;
       work.push({
         order: bargraph.declarationOrder,
@@ -261,7 +223,7 @@ export class PixiResultView extends CoreResultView {
     for (const slider of skin.sliders) {
       const dst = this.evaluateElementDst(slider);
       if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
-      const value = resolveResultSliderValue(slider.type, this.result);
+      const value = state.slider(slider.type);
       if (value === undefined) continue;
       work.push({
         order: slider.declarationOrder,
@@ -513,367 +475,6 @@ export class PixiResultView extends CoreResultView {
     if (!result || !collection) return undefined;
     return this.chartGraphicTextures.resolve(collection, result.song, path, () => this.render());
   }
-}
-
-// -- Free helpers ------------------------------------------------------------
-
-/**
- * Computes the LR2 op set for the result screen. Combines the always-true `RESULT_BASE_OPS` with per-result flags
- * derived from the chart and the score:
- *
- * - **Cleared / failed** (op 90 / 91) — gates the chrome atlas (`parts.tga` vs `parts_fail.tga`) plus the big "CLEARED"
- *   / "FAILED" graphic in the LR2 default skin.
- * - **Bar / playable** — the result screen is always "on a song", so op 2/5 stay set.
- * - **Key mode** — set in BOTH the SELECT range (160..164, for skins that mirror select gating) AND the KEYCONFIG range
- *   (400..402, used by the default `result_normal.csv`).
- * - **Difficulty** (op 150..155) — echoed onto the result screen so per-difficulty panels (`#IF,400,152`) gate
- *   correctly.
- * - **Clear lamp** (op 101..105) — the play's clear lamp (`data.lamp`) on LR2's six lamps.
- * - **Result rank** — current rank lives in 300..308 (1P), pre- update in 320..328, post-update in 340..347. Without
- *   score history the "previous" rank is rank-0 (op 328 / "F" tier).
- * - **Updated flags** (op 330/331/332/335) — until score history persists, every play is treated as an update so the
- *   LR2 default skin's congratulatory artwork shows.
- * - **Result flip** (op 350/351) — toggled from the played skin's `scratchFlip.flipResult`.
- * - **Course** (op 290 + kind, 280-289 for a stage) — when the result belongs to a course.
- */
-export function computeResultOps(
-  data: PixiGameplayResultData,
-  skin: Lr2Skin,
-  course?: SceneCourseInfo,
-): ReadonlySet<number> {
-  const ops = new Set<number>(RESULT_BASE_OPS);
-  // CUSTOMOPTION defaults declared by the loaded skin — same idiom as `computeSelectOps` (see `select-ops.ts`) and
-  // `PixiGameplayView.initializeRuntimeOps`. Without this, every `#IF,N` block gated on a CUSTOMOPTION's default
-  // value gets filtered out at render time, leaving the LITONE4-style result screen with only the few elements that
-  // happen to lack CUSTOMOPTION gating. Visible symptom on LITONE4 RESULT: most chrome missing, only the BACKBMP +
-  // bitmap-font title / artist labels survive.
-  //
-  // Defensive iteration guard — existing unit tests build stub `Lr2Skin` objects that only fill the fields they
-  // exercise (`customOptions` was previously unused by `computeResultOps`). Treat a missing array as empty.
-  for (const option of skin.customOptions ?? []) {
-    ops.add(option.defaultOp);
-  }
-  ops.add(data.cleared ? LR2_OP.RESULT_CLEAR : LR2_OP.RESULT_FAIL);
-  ops.add(LR2_OP.SONG_BAR);
-  ops.add(LR2_OP.PLAYABLE_BAR);
-
-  // Key mode set in both ranges so a skin can gate either way.
-  for (const op of resolveKeyModeOps(data)) {
-    ops.add(op);
-  }
-  ops.add(resolveDifficultyOp(data));
-  ops.add(resolveResultLampOp(data));
-  // Current 1P rank goes into the 300 / 340 ranges (the result- screen-specific slots — 200..207 is the SELECT-side
-  // rank op and the LR2 default skin doesn't gate on it). Both "now" and "next" carry the same value because we don't
-  // yet persist a best-score baseline to compare against.
-  const rankIndex = resolveResultRankIndex(data);
-  ops.add(LR2_OP.RESULT_RANK_AAA + rankIndex);
-  ops.add(LR2_OP.UPDATED_RANK_AAA + rankIndex);
-  // Pre-update rank is rank-0 (no prior history) — the default skin uses 328 ("0" tier) for that, with 320..327
-  // reserved for each historical rank.
-  ops.add(LR2_OP.PREVIOUS_RANK_0);
-
-  // No score history yet — claim "updated" on every result.
-  ops.add(LR2_OP.SCORE_UPDATED);
-  ops.add(LR2_OP.MAX_COMBO_UPDATED);
-  ops.add(LR2_OP.MIN_BP_UPDATED);
-  ops.add(LR2_OP.RANK_UPDATED);
-
-  // Result-flip status toggled from the gameplay skin (#FLIPRESULT). Default-disabled is already in `RESULT_BASE_OPS`;
-  // if the skin declares flipResult we swap to the enabled slot.
-  if (skin.scratchFlip.flipResult) {
-    ops.delete(LR2_OP.RESULT_FLIP_OFF);
-    ops.add(LR2_OP.RESULT_FLIP_ON);
-  }
-
-  if (course !== undefined) resolveLr2CourseOps(course).forEach((op) => ops.add(op));
-  return ops;
-}
-
-/**
- * Returns the LR2 ops needed to advertise the played chart's key mode on the result screen. Sets the matching slot in
- * BOTH the select-screen range (160..164) and the result-screen KEYCONFIG range (400..402) — different skin authors
- * gate either way and the two ranges aren't redundant gating-wise (KEYCONFIG groups 7+14 / 5+10 together).
- */
-function resolveKeyModeOps(data: PixiGameplayResultData): number[] {
-  // The same key-mode op the select and decide screens light: the chart's play variant (`resolveChartPlayVariant`),
-  // so `.pms` / 9 KEY, `#LNTYPE` lanes and the extended modes read the way the gameplay scene lays the chart out.
-  const selectOp = resolveKeyModeOp(data.song);
-  // Map the select-range op onto the KEYCONFIG range. 7K + 14K share op 400 because the LR2 default skin doesn't draw a
-  // separate 14K layout. Likewise 5K + 10K share 402.
-  let keyConfigOp: number;
-  if (selectOp === LR2_OP.KEYS_9) {
-    keyConfigOp = LR2_OP.KEY_CONFIG_9;
-  } else if (selectOp === LR2_OP.KEYS_5 || selectOp === LR2_OP.KEYS_10) {
-    keyConfigOp = LR2_OP.KEY_CONFIG_5_10;
-  } else {
-    keyConfigOp = LR2_OP.KEY_CONFIG_7_14;
-  }
-  return [selectOp, keyConfigOp];
-}
-
-function resolveDifficultyOp(data: PixiGameplayResultData): number {
-  switch (data.song.chart.metadata.difficulty) {
-    case 1:
-      return LR2_OP.DIFFICULTY_BEGINNER;
-    case 2:
-      return LR2_OP.DIFFICULTY_NORMAL;
-    case 3:
-      return LR2_OP.DIFFICULTY_HYPER;
-    case 4:
-      return LR2_OP.DIFFICULTY_ANOTHER;
-    case 5:
-      return LR2_OP.DIFFICULTY_INSANE;
-    default:
-      // Real LR2 maps "no difficulty declared" to the NORMAL slot for the result-screen panel split (the default skin
-      // only ships per-difficulty graphics for 152..155 and would otherwise leave the panel blank). Mirror that.
-      return LR2_OP.DIFFICULTY_NORMAL;
-  }
-}
-
-/**
- * The clear-lamp op for the play: its lamp (`data.lamp`, else the one clear-lamp rule over its result) on LR2's lamps,
- * as the select screen lights a record's (`resolveLr2LampOp`): EASY for an ASSIST EASY or EASY clear, HARD for a HARD
- * or EX HARD one, FULL COMBO for a full combo.
- */
-function resolveResultLampOp(data: PixiGameplayResultData): number {
-  const lamp =
-    data.lamp ??
-    resolveClearLamp({
-      cleared: data.cleared,
-      score: data.score,
-      ...(data.gaugeType !== undefined ? { gauge: data.gaugeType } : {}),
-      ...(data.judgeRuleset !== undefined ? { ruleset: data.judgeRuleset } : {}),
-    });
-  return resolveLr2LampOp(lamp);
-}
-
-/**
- * Returns the rank index 0..7 (0=AAA, 7=F) for the played chart. Used to seed both the "current" (300+i) and
- * "after-update" (340+i) result-rank slots. The rank-0 slot (308 / 348) is reserved for charts with `total === 0` — we
- * map those to AAA here so something visible always renders.
- */
-function resolveResultRankIndex(data: PixiGameplayResultData): number {
-  return resolveIidxRankIndexFromScore(data.score) ?? 0;
-}
-
-/**
- * Resolves an LR2 `#SRC_NUMBER` slot to a numeric value from the play result. Coverage matches `docs/LR2SkinHelp.md`'s
- * `# num list` section (`# num 一覧` in the original Japanese):
- *
- * - **70..76** — best-score panel slots, treated here as the just-played chart's totals (no history yet, so "best" =
- *   "current"). 72 = theoretical EX max = `totalNotes * 2`.
- * - **77..89** — best-score-style "perfect / great / …". Mapped to the just-played counts since the result screen is
- *   the one place they actually mean "this play".
- * - **100..116** — gameplay-side panel reused for live readouts. The skin authors use these on the result screen too
- *   because they share a num namespace.
- * - **170..184** — result-specific high-score deltas. Without persistence the "before" value is 0 and the "now" /
- *   "diff" values are the live scores.
- *
- * Returning `undefined` makes the renderer skip the slot.
- */
-function resolveResultNumber(num: number, data: PixiGameplayResultData): number | undefined {
-  const score = data.score;
-  const totalNotes = score.total;
-  const exMax = totalNotes * 2;
-  const rate = exMax > 0 ? score.exScore / exMax : 0;
-  const minBp = score.bad + score.poor;
-  switch (num) {
-    case LR2_NUM.BEST_SCORE:
-      return score.score;
-    case LR2_NUM.BEST_EXSCORE:
-      return score.exScore;
-    case LR2_NUM.EXSCORE_MAX:
-      return exMax;
-    case LR2_NUM.BEST_RATE:
-      // LR2 spec: rate as integer percent.
-      return Math.round(rate * 100);
-    case LR2_NUM.TOTAL_NOTES:
-      return totalNotes;
-    case LR2_NUM.BEST_MAX_COMBO:
-      return data.maxCombo;
-    case LR2_NUM.BEST_MIN_BP:
-      return minBp;
-    case LR2_NUM.PLAY_COUNT:
-    case LR2_NUM.CLEAR_COUNT:
-    case LR2_NUM.FAIL_COUNT:
-      return 0;
-    case LR2_NUM.BEST_PERFECT:
-      return score.perfect;
-    case LR2_NUM.BEST_GREAT:
-      return score.great;
-    case LR2_NUM.BEST_GOOD:
-      return score.good;
-    case LR2_NUM.BEST_BAD:
-      return score.bad;
-    case LR2_NUM.BEST_POOR:
-      return score.poor;
-    case LR2_NUM.BEST_PERFECT_RATE:
-      return totalNotes > 0 ? Math.round((score.perfect / totalNotes) * 100) : 0;
-    case LR2_NUM.BEST_GREAT_RATE:
-      return totalNotes > 0 ? Math.round((score.great / totalNotes) * 100) : 0;
-    case LR2_NUM.BEST_GOOD_RATE:
-      return totalNotes > 0 ? Math.round((score.good / totalNotes) * 100) : 0;
-    case LR2_NUM.BEST_BAD_RATE:
-      return totalNotes > 0 ? Math.round((score.bad / totalNotes) * 100) : 0;
-    case LR2_NUM.BEST_POOR_RATE:
-      return totalNotes > 0 ? Math.round((score.poor / totalNotes) * 100) : 0;
-    case LR2_NUM.MAX_BPM:
-    case LR2_NUM.MIN_BPM:
-      return data.song.bpm ?? data.song.chart.metadata.bpm;
-    case LR2_NUM.SCORE:
-      return score.score;
-    case LR2_NUM.EXSCORE:
-      return score.exScore;
-    case LR2_NUM.SCORE_RATE:
-      return Math.round(rate * 100);
-    case LR2_NUM.SCORE_RATE_AFTERDOT:
-      return Math.round(rate * 10000);
-    case LR2_NUM.COMBO:
-      // Result screen: there's no "live" combo, but the LR2 default skin reuses num=104 for the per-result "MAX COMBO"
-      // digit panel as a fallback. Surface the achieved max combo so the panel doesn't read 0.
-      return data.maxCombo;
-    case LR2_NUM.MAX_COMBO:
-      return data.maxCombo;
-    case LR2_NUM.NOTES:
-      return totalNotes;
-    case LR2_NUM.GAUGE:
-      return Math.round(data.gauge);
-    case LR2_NUM.PERFECT:
-      return score.perfect;
-    case LR2_NUM.GREAT:
-      return score.great;
-    case LR2_NUM.GOOD:
-      return score.good;
-    case LR2_NUM.BAD:
-      return score.bad;
-    case LR2_NUM.POOR:
-      return score.poor;
-    case LR2_NUM.TOTAL_RATE:
-      return Math.round(rate * 100);
-    case LR2_NUM.TOTAL_RATE_AFTERDOT:
-      return Math.round(rate * 10000) % 100;
-    case LR2_NUM.PLAY_MINUTE:
-      return Math.floor(data.playSeconds / 60);
-    case LR2_NUM.PLAY_SECOND:
-      return Math.floor(data.playSeconds % 60);
-    case LR2_NUM.LOADING_PROGRESS:
-      return 100;
-    // Result-specific high-score deltas. "before" = 0 (no history), "now" = the live values, "diff" = "now" - "before"
-    // = "now".
-    case LR2_NUM.RESULT_EXSCORE_BEFORE:
-      return 0;
-    case LR2_NUM.RESULT_EXSCORE:
-      return score.exScore;
-    case LR2_NUM.RESULT_EXSCORE_DIFF:
-      return score.exScore;
-    case LR2_NUM.RESULT_MAX_COMBO_BEFORE:
-      return 0;
-    case LR2_NUM.RESULT_MAX_COMBO:
-      return data.maxCombo;
-    case LR2_NUM.RESULT_MAX_COMBO_DIFF:
-      return data.maxCombo;
-    case LR2_NUM.RESULT_MIN_BP_BEFORE:
-      // Without history, treat the "before" number as the chart's theoretical worst (every note BAD) so the diff column
-      // shows a positive improvement.
-      return totalNotes;
-    case LR2_NUM.RESULT_MIN_BP:
-      return minBp;
-    case LR2_NUM.RESULT_MIN_BP_DIFF:
-      return Math.max(0, totalNotes - minBp);
-    case LR2_NUM.RESULT_RATE_BEFORE:
-      return 0;
-    case LR2_NUM.RESULT_RATE_BEFORE_AFTERDOT:
-      return 0;
-    default:
-      return undefined;
-  }
-}
-
-function resolveResultText(st: number, data: PixiGameplayResultData): string | undefined {
-  const song = data.song;
-  const subartists = song.chart.bmson.info?.subartists?.join(' / ');
-  switch (st) {
-    case LR2_TEXT.RIVAL:
-      return 'TARGET';
-    case LR2_TEXT.PLAYER:
-      return 'PLAYER';
-    case LR2_TEXT.TITLE:
-    case LR2_TEXT.TITLE_ALT:
-      return song.title;
-    case LR2_TEXT.SUBTITLE:
-    case LR2_TEXT.SUBTITLE_ALT:
-      return song.subtitle ?? '';
-    case LR2_TEXT.FULL_TITLE:
-    case LR2_TEXT.FULL_TITLE_ALT:
-      return [song.title, song.subtitle].filter((value): value is string => Boolean(value)).join(' ');
-    case LR2_TEXT.GENRE:
-    case LR2_TEXT.GENRE_ALT:
-      return song.genre ?? '';
-    case LR2_TEXT.ARTIST:
-    case LR2_TEXT.ARTIST_ALT:
-      return song.artist ?? '';
-    case LR2_TEXT.SUBARTIST:
-    case LR2_TEXT.SUBARTIST_ALT:
-      return subartists ?? '';
-    case LR2_TEXT.FULL_ARTIST:
-    case LR2_TEXT.FULL_ARTIST_ALT:
-      return song.fileLabel;
-    case LR2_TEXT.PLAY_LEVEL:
-    case LR2_TEXT.PLAY_LEVEL_ALT:
-      return song.playLevel?.toString() ?? '';
-    case LR2_TEXT.DIFFICULTY:
-    case LR2_TEXT.DIFFICULTY_ALT:
-      switch (song.chart.metadata.difficulty) {
-        case 1:
-          return 'BEGINNER';
-        case 2:
-          return 'NORMAL';
-        case 3:
-          return 'HYPER';
-        case 4:
-          return 'ANOTHER';
-        case 5:
-          return 'INSANE';
-        default:
-          return '';
-      }
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Resolves an LR2 `#SRC_BARGRAPH` `type` to the 0..1 fill ratio. Result-screen bargraphs are usually anchored to score
- * / EX-score progress against theoretical max, so the same value drives both the "rate" digits and the bargraph fill.
- *
- * Returns `undefined` for type codes outside the result-relevant range; the renderer skips those.
- */
-function resolveResultBargraphValue(type: number, data: PixiGameplayResultData): number | undefined {
-  // Per `bargraph.txt`: 1 = score, 2 = exscore, 3 = exscore best, 4 = exscore target, 6 = gauge, 7 = max-combo, 9 =
-  // rate. Many result skins use type 1 / 2 / 9 for the EX-score progress bar.
-  const exMax = data.score.total * 2;
-  switch (type) {
-    case 1:
-      // Score uses the IIDX 200000 scale per the gameplay code.
-      return Math.max(0, Math.min(1, data.score.score / 200000));
-    case 2:
-    case 9:
-      return exMax > 0 ? data.score.exScore / exMax : 0;
-    case 6:
-      return Math.max(0, Math.min(1, data.gauge / 100));
-    case 7:
-      return data.score.total > 0 ? Math.max(0, Math.min(1, data.maxCombo / data.score.total)) : 0;
-    default:
-      return undefined;
-  }
-}
-
-function resolveResultSliderValue(type: number, data: PixiGameplayResultData): number | undefined {
-  // Slider types overlap with bargraph types in the LR2 spec; the result screen typically only wires "song progress"
-  // (type 1) and "rate" (type 6). Reuse the bargraph resolver so any new slot landing in either gets one shared
-  // implementation.
-  return resolveResultBargraphValue(type, data);
 }
 
 // Re-export this small LR2 geometry type so result-scene consumers do not have to import from `skin.ts` directly.

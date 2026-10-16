@@ -70,7 +70,7 @@ import {
 } from '@be-music/beatoraja-skin';
 import { createCroppedBeatorajaTexture } from '../../skin/beatoraja/render.ts';
 import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from '../../collection/collection.ts';
-import { detectChartFeatures } from '../select-ops.ts';
+import { resolveLr2ChartFeatures } from '@be-music/lr2-skin/state';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import type {
   BrowserBrowseEntry,
@@ -1111,9 +1111,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
       // Chart traits — gates per-feature chrome. Beatoraja's trait op codes match the LR2
       // `dst_option` block 1:1 (HAS_LN=173, HAS_BGA=171, HAS_BPMCHANGE=177, HAS_RANDOMSEQUENCE=179),
-      // so reusing `detectChartFeatures` (originally written for the LR2 select scene) gives us
+      // so reusing `resolveLr2ChartFeatures` (LR2's select-screen chart features) gives us
       // matching semantics for free.
-      const features = detectChartFeatures(entry.song);
+      const features = resolveLr2ChartFeatures(entry.song.chart);
       ops.add(features.longNote ? BEATORAJA_OP.HAS_LN : BEATORAJA_OP.NO_LN);
       ops.add(features.bga ? BEATORAJA_OP.HAS_BGA : BEATORAJA_OP.NO_BGA);
       ops.add(features.bpmChange ? BEATORAJA_OP.HAS_BPMCHANGE : BEATORAJA_OP.NO_BPMCHANGE);
@@ -2553,11 +2553,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    */
   private chartHasLabelFeature(entry: BrowserBrowseEntry, labelId: string | number): boolean {
     if (entry.kind !== 'song') return false;
-    const features = detectChartFeatures(entry.song);
+    const features = resolveLr2ChartFeatures(entry.song.chart);
     const id = String(labelId).toLowerCase();
     if (id.includes('ln')) return features.longNote;
     if (id.includes('random')) return features.random;
-    // `mine` / `landmine` covered by direct event-channel scan since `detectChartFeatures`
+    // `mine` / `landmine` covered by direct event-channel scan since `resolveLr2ChartFeatures`
     // doesn't expose it (it's not in the LR2 dst_option op gate set the LR2 helper was
     // built against). BMS landmine channels are `D1..D9` (1P) and `E1..E9` (2P).
     if (id.includes('mine') || id.includes('landmine')) {
@@ -3435,7 +3435,7 @@ const BPM_RANGE_CACHE = new WeakMap<BrowserSongEntry, { min: number; max: number
 /**
  * `true` when the chart authored at least one stop event (channel `09` in BMS, scaled stop in
  * bmson). Used to fire `HAS_BPMSTOP` (1177). Iterates events linearly — at typical chart sizes
- * (a few thousand events) this is microseconds; the WeakMap-cached `detectChartFeatures` next to
+ * (a few thousand events) this is microseconds; the WeakMap-cached `resolveLr2ChartFeatures` next to
  * it amortises any worst-case cost across the same select-scene tick.
  */
 function chartHasStop(song: BrowserSongEntry): boolean {

@@ -1,5 +1,6 @@
 import * as lr2SkinApi from '@be-music/lr2-skin';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
+import { registerLr2SkinStateExportsCases } from './state-exports-cases.ts';
 
 const BENCH_LR2_SKIN_BYTES = new Uint8Array([
   35, 73, 78, 70, 79, 82, 77, 65, 84, 73, 79, 78, 44, 98, 101, 110, 99, 104, 10,
@@ -29,6 +30,7 @@ const BENCH_PMS_SONG = {
 } satisfies lr2SkinApi.Lr2PlaySkinSong;
 
 export function registerLr2SkinExportsCases(define: DefineBenchmarkCase): void {
+  registerLr2SkinStateExportsCases(define);
   define('lr2-skin.autoDetectCanvasFromObservedCoordinates', {
     run: () => {
       lr2SkinApi.autoDetectCanvasFromObservedCoordinates([
