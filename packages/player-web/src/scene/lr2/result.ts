@@ -30,9 +30,14 @@ import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import type { PixiGameplayResultData } from '../core/result-data.ts';
 import { CoreResultView, type CoreResultViewOptions } from '../core/result.ts';
 import { LR2_NUM, LR2_OP, LR2_TEXT } from '@be-music/lr2-skin/ids';
-import { resolveKeyModeOp, resolveLr2LampOp } from '../select-ops.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
-import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from '@be-music/lr2-skin/state';
+import {
+  resolveLr2CourseNumber,
+  resolveLr2CourseOps,
+  resolveLr2CourseText,
+  resolveLr2KeyModeOp,
+  resolveLr2LampOp,
+} from '@be-music/lr2-skin/state';
 
 /**
  * LR2 result scene. Layers LR2's result-skin rendering on top of {@link CoreResultView}, which owns the mount / ticker /
@@ -542,7 +547,7 @@ export function computeResultOps(
   course?: SceneCourseInfo,
 ): ReadonlySet<number> {
   const ops = new Set<number>(RESULT_BASE_OPS);
-  // CUSTOMOPTION defaults declared by the loaded skin — same idiom as `computeSelectOps` (see `select-ops.ts`) and
+  // CUSTOMOPTION defaults declared by the loaded skin — same idiom as `resolveLr2SelectState` and
   // `PixiGameplayView.initializeRuntimeOps`. Without this, every `#IF,N` block gated on a CUSTOMOPTION's default
   // value gets filtered out at render time, leaving the LITONE4-style result screen with only the few elements that
   // happen to lack CUSTOMOPTION gating. Visible symptom on LITONE4 RESULT: most chrome missing, only the BACKBMP +
@@ -598,7 +603,7 @@ export function computeResultOps(
 function resolveKeyModeOps(data: PixiGameplayResultData): number[] {
   // The same key-mode op the select and decide screens light: the chart's play variant (`resolveChartPlayVariant`),
   // so `.pms` / 9 KEY, `#LNTYPE` lanes and the extended modes read the way the gameplay scene lays the chart out.
-  const selectOp = resolveKeyModeOp(data.song);
+  const selectOp = resolveLr2KeyModeOp(data.song);
   // Map the select-range op onto the KEYCONFIG range. 7K + 14K share op 400 because the LR2 default skin doesn't draw a
   // separate 14K layout. Likewise 5K + 10K share 402.
   let keyConfigOp: number;

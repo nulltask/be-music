@@ -10,7 +10,7 @@ import {
 import { LR2_OP, LR2_TEXT, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { type PixiSceneHost } from '../host.ts';
 import { disposeChildren } from '../pixi-utils.ts';
-import { resolveKeyModeOp } from '../select-ops.ts';
+import { resolveLr2KeyModeOp } from '@be-music/lr2-skin/state';
 import {
   Lr2ChartGraphicTextureStore,
   Lr2SkinTextureStore,
@@ -573,7 +573,7 @@ function computeDecideOps(target: PixiDecideTarget, skin: Lr2Skin): ReadonlySet<
       break;
   }
   // Key mode — the select scene's op (160..164), from the chart's play variant.
-  ops.add(resolveKeyModeOp(target.song));
+  ops.add(resolveLr2KeyModeOp(target.song));
   // Suppress the `Lr2Skin` argument linter — keeps the parser signature future-proof if we later need to peek at the
   // skin's authored op declarations to filter the active set.
   void skin;

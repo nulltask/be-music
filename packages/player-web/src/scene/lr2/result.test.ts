@@ -93,7 +93,7 @@ describe('computeResultOps', () => {
   // -- CUSTOMOPTION defaults --------------------------------------- LITONE4 (and many 1920×1080 LR2 themes) gates a
   // large fraction of its result chrome on `#IF,<customOptionDefault>` blocks. The runtime op set MUST include the
   // skin's CUSTOMOPTION default values or those elements get filtered out at render time. Mirrors how
-  // `computeSelectOps` / `PixiGameplayView.initializeRuntimeOps` already feed the same defaults into their op sets.
+  // `resolveLr2SelectState` / `PixiGameplayView.initializeRuntimeOps` already feed the same defaults into their op sets.
   describe('skin CUSTOMOPTION defaults', () => {
     it('adds every customOptions[*].defaultOp to the runtime op set', () => {
       const skin = {

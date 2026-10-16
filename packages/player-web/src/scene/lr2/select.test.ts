@@ -1,59 +1,6 @@
-import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
-import { DEFAULT_PLAY_OPTIONS, isInsideLr2DefaultSearchBox, PixiSongSelectView } from './select.ts';
-import { LR2_OP } from '@be-music/lr2-skin/ids';
-import { computeSelectOps, resolveKeyModeOp } from '../select-ops.ts';
-import type {
-  BrowserBrowseEntry,
-  BrowserCourseEntry,
-  BrowserFolderNode,
-  BrowserSongEntry,
-} from '../../collection/types.ts';
-
-/**
- * Builds a minimal `BrowserSongEntry` for tests. Only the fields `matchesSearchQuery` consults are populated; the rest
- * get placeholder values that satisfy the type without affecting the filter.
- */
-function makeSongEntry(overrides: Partial<BrowserSongEntry>): BrowserBrowseEntry {
-  const song: BrowserSongEntry = {
-    id: 'test:song',
-    sourceId: 'test',
-    sourceLabel: 'test',
-    sourceKind: 'files',
-    chartPath: 'test/song.bms',
-    directoryLabel: 'test',
-    fileLabel: 'song.bms',
-    title: 'Untitled',
-    totalNotes: 0,
-    chart: createEmptyJson(),
-    ...overrides,
-  };
-  return { kind: 'song', song };
-}
-
-describe('select ops', () => {
-  it('seeds empty-list defaults without a focused song', () => {
-    const ops = computeSelectOps(undefined, new Set(), DEFAULT_PLAY_OPTIONS);
-    expect(ops.has(LR2_OP.NO_BGA)).toBe(true);
-    expect(ops.has(LR2_OP.NO_LN)).toBe(true);
-    expect(ops.has(LR2_OP.NO_TEXT)).toBe(true);
-    expect(ops.has(LR2_OP.KEYS_7)).toBe(true);
-    expect(ops.has(41)).toBe(true);
-    expect(ops.has(31)).toBe(true);
-  });
-
-  it('uses shared chart play-variant classification for key-mode ops', () => {
-    const entry = makeSongEntry({
-      chartPath: 'test/song.pms',
-      chart: {
-        ...createEmptyJson(),
-        events: [{ measure: 0, channel: '22', position: [0, 1], value: '01' }],
-      },
-    });
-    if (entry.kind !== 'song') throw new Error('expected song entry');
-    expect(resolveKeyModeOp(entry.song)).toBe(LR2_OP.KEYS_9);
-  });
-});
+import { isInsideLr2DefaultSearchBox, PixiSongSelectView } from './select.ts';
+import type { BrowserCourseEntry, BrowserFolderNode } from '../../collection/types.ts';
 
 describe('isInsideLr2DefaultSearchBox', () => {
   it('accepts the LR2 default search-box chrome on the canonical 1280x720 design canvas', () => {
