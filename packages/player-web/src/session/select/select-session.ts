@@ -377,20 +377,14 @@ export class SelectSession {
   }
 
   /**
-   * The browse state `snapshot` restores over the library (`restoreSelectBrowse`): its folders walked by label as far
-   * as they are still found, each parent cursor on the bar of the folder opened from it (so backing out lands there),
-   * and the cursor saved for the depth the walk reached, clamped.
+   * The browse state `snapshot` restores over the library (`restoreSelectBrowse`): its search (the one in force when it
+   * names none), its folders walked by label as far as they are still found, each parent cursor on the bar of the
+   * folder opened from it (so backing out lands there), and the cursor on the saved bar when it is still listed, else on
+   * the cursor saved for the depth the walk reached, clamped. The sort and the filters in force are kept: they are the
+   * play options'.
    */
   private restore(snapshot: BrowseSnapshot): BrowseState {
-    // Kept as the select scene restored before it kept its browse position as a scene-model snapshot: by the cursor's
-    // index rather than the focused bar's key, with the search in force.
-    const { focusKey: _focusKey, ...byIndex } = snapshot;
-    return restoreSelectBrowse(
-      this.collection,
-      { ...byIndex, searchText: this.browse.searchText },
-      this.browse,
-      this.policy,
-    ).state;
+    return restoreSelectBrowse(this.collection, snapshot, this.browse, this.policy).state;
   }
 
   /**

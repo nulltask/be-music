@@ -190,6 +190,45 @@ describe('SelectSession restore', () => {
     expect(focusedTitle(session)).toBe('courses');
   });
 
+  it('puts the cursor back on the bar it was on when the list moved under it', () => {
+    const { session } = createSession();
+    const library = makeLibrary();
+    session.setCollection(library);
+    session.setNavigation({ folderPath: ['courses'], cursors: [2, 1] });
+    const snapshot = session.getNavigation();
+    expect(snapshot.focusKey).toBe('course:two');
+    // A course added before it (the player made one), as the course folders are listed again after a run.
+    const [folder] = library.courseFolders!;
+    session.setCollection({
+      ...library,
+      courseFolders: [makeCourseFolder('courses', [makeCourse('zero'), ...folder!.courses!])],
+    });
+    session.setNavigation(snapshot);
+    expect(focusedTitle(session)).toBe('two');
+  });
+
+  it('brings the saved search back, and keeps the one in force when the snapshot names none', () => {
+    const { session } = createSession();
+    session.setCollection(makeLibrary());
+    session.setSearchQuery('x');
+    const snapshot = session.getNavigation();
+    session.setSearchQuery('');
+    session.setNavigation(snapshot);
+    expect(session.searchText).toBe('x');
+    expect(titles(session)).toEqual(['x']);
+    session.setNavigation({ folderPath: ['pack'], cursors: [1, 0] });
+    expect(session.searchText).toBe('x');
+  });
+
+  it('keeps the sort and the filters in force over the ones a snapshot saved', () => {
+    const { session } = createSession();
+    session.setCollection(makeLibrary());
+    session.setNavigation({ folderPath: ['pack'], cursors: [1, 0] });
+    session.setPlayOptions({ sort: 'LEVEL' });
+    session.setNavigation({ ...session.getNavigation(), list: { sort: 'TITLE' } });
+    expect(titles(session)).toEqual(['b', 'c', 'a']);
+  });
+
   it('opens a new library as far as its saved position is found, rather than its one folder', () => {
     const { session } = createSession({ initialNavigation: { folderPath: ['gone'], cursors: [0, 3] } });
     session.setCollection(makeCollection([makeChart('a', 'pack')], [makeCourseFolder('courses', [])]));
