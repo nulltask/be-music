@@ -1,5 +1,6 @@
 import { Graphics, Texture } from 'pixi.js';
 import { resolveIidxRankIndexFromScore } from '@be-music/player/core/scoring';
+import { resolveClearLamp } from '@be-music/player/ruleset';
 import type {
   Lr2DestinationRect,
   Lr2GaugeChartElement,
@@ -28,7 +29,7 @@ import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import type { PixiGameplayResultData } from '../core/result-data.ts';
 import { CoreResultView, type CoreResultViewOptions } from '../core/result.ts';
-import { resolveKeyModeOp } from '../select-ops.ts';
+import { resolveKeyModeOp, resolveLr2LampOp } from '../select-ops.ts';
 import type { SceneCourseInfo } from '../course-info.ts';
 import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 
@@ -103,8 +104,7 @@ export const RESULT_DYNAMIC_OPS = {
   KEYS_10: 163,
   KEYS_9: 164,
   // Clear lamp for THIS play. 100 = not played (won't fire on the result screen — we always ran the chart), 101 =
-  // failed, 102 = easy clear, 103 = normal clear, 104 = hard clear, 105 = full combo. Picked from `data.cleared` +
-  // judge counts.
+  // failed, 102 = easy clear, 103 = normal clear, 104 = hard clear, 105 = full combo. The play's lamp on LR2's lamps.
   LAMP_FAILED: 101,
   LAMP_EASY: 102,
   LAMP_NORMAL: 103,
@@ -613,7 +613,7 @@ export class PixiResultView extends CoreResultView {
  *   (400..402, used by the default `result_normal.csv`).
  * - **Difficulty** (op 150..155) — echoed onto the result screen so per-difficulty panels (`#IF,400,152`) gate
  *   correctly.
- * - **Clear lamp** (op 101..105) — derived from `data.cleared`, judge counts, and `maxCombo`.
+ * - **Clear lamp** (op 101..105) — the play's clear lamp (`data.lamp`) on LR2's six lamps.
  * - **Result rank** — current rank lives in 300..308 (1P), pre- update in 320..328, post-update in 340..347. Without
  *   score history the "previous" rank is rank-0 (op 328 / "F" tier).
  * - **Updated flags** (op 330/331/332/335) — until score history persists, every play is treated as an update so the
@@ -717,23 +717,20 @@ function resolveDifficultyOp(data: PixiGameplayResultData): number {
 }
 
 /**
- * Picks the clear-lamp op for the played chart. Priority:
- *
- * - 1. **Failed** (op 101) — gauge ended below the pass threshold. 2. **Full combo** (op 105) — every note hit
- *   GREAT-or-better AND at least one note exists. 3. **Hard clear** (op 104) — placeholder for HARD-style gauges (not
- *   yet selectable; we never set this today). 4. **Normal clear** (op 103) — the default for any cleared play with at
- *   least one BAD/POOR. 5. **Easy clear** (op 102) — placeholder for EASY-style gauge.
+ * The clear-lamp op for the play: its lamp (`data.lamp`, else the one clear-lamp rule over its result) on LR2's lamps,
+ * as the select screen lights a record's (`resolveLr2LampOp`): EASY for an ASSIST EASY or EASY clear, HARD for a HARD
+ * or EX HARD one, FULL COMBO for a full combo.
  */
 function resolveResultLampOp(data: PixiGameplayResultData): number {
-  if (!data.cleared) {
-    return RESULT_DYNAMIC_OPS.LAMP_FAILED;
-  }
-  if (data.score.total > 0 && data.score.bad === 0 && data.score.poor === 0) {
-    return RESULT_DYNAMIC_OPS.LAMP_FULL_COMBO;
-  }
-  // Single gauge type today — every clear maps to NORMAL. Once gauge-type selection lands, branch on that here for HARD
-  // / EASY.
-  return RESULT_DYNAMIC_OPS.LAMP_NORMAL;
+  const lamp =
+    data.lamp ??
+    resolveClearLamp({
+      cleared: data.cleared,
+      score: data.score,
+      ...(data.gaugeType !== undefined ? { gauge: data.gaugeType } : {}),
+      ...(data.judgeRuleset !== undefined ? { ruleset: data.judgeRuleset } : {}),
+    });
+  return resolveLr2LampOp(lamp);
 }
 
 /**
