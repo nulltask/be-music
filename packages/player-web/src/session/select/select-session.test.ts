@@ -181,11 +181,18 @@ describe('SelectSession restore', () => {
     expect(focusedTitle(session)).toBe('courses');
   });
 
-  it('restores nothing when the saved folder is gone', () => {
+  it('restores as far as the saved folders are still found, at the cursor saved there', () => {
     const { session } = createSession();
     session.setCollection(makeLibrary());
-    session.setNavigation({ folderPath: [], cursors: [1] });
+    session.setNavigation({ folderPath: ['pack'], cursors: [1, 2] });
     session.setNavigation({ folderPath: ['gone'], cursors: [2, 0] });
+    expect(session.browseStack).toEqual([]);
+    expect(focusedTitle(session)).toBe('courses');
+  });
+
+  it('opens a new library as far as its saved position is found, rather than its one folder', () => {
+    const { session } = createSession({ initialNavigation: { folderPath: ['gone'], cursors: [0, 3] } });
+    session.setCollection(makeCollection([makeChart('a', 'pack')], [makeCourseFolder('courses', [])]));
     expect(session.browseStack).toEqual([]);
     expect(focusedTitle(session)).toBe('pack');
   });
