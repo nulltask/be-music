@@ -20,7 +20,7 @@ import {
   type BeatorajaSelectInput,
 } from '@be-music/beatoraja-skin/scene';
 import type { BrowserBrowseEntry } from '../../../collection/types.ts';
-import type { PixiBeatorajaSelectSceneOptions } from '../select.ts';
+import type { PixiBeatorajaSelectSceneOptions } from './options.ts';
 import { selectChartFacts } from './chart-facts.ts';
 
 /**

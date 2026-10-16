@@ -12,7 +12,7 @@ import {
   type BeatorajaChartNoteDistribution,
 } from '../../../chart/beatoraja/note-distribution.ts';
 import type { BrowserBrowseEntry, BrowserSongEntry } from '../../../collection/types.ts';
-import type { PixiBeatorajaSelectSceneOptions } from '../select.ts';
+import type { PixiBeatorajaSelectSceneOptions } from './options.ts';
 
 /** What the chart images read on the select scene: its fields of these names. */
 export interface BeatorajaSelectChartImagesContext {
