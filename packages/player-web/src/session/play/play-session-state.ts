@@ -35,6 +35,7 @@ import type { PlaylogViewCursor } from '../../scene/playlog-view.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import type { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
+import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { BmsSwitchingBga, RandomDraws, ResolvedChart } from '@be-music/chart';
 import { DEFAULT_HISPEED, HiSpeedTransition } from '../../scene/hi-speed.ts';
@@ -174,6 +175,8 @@ export class PlaySessionState {
   audioBus: AudioBusHandle | undefined;
   /** Analyser tapped off the bus output; feeds audio-reactive be-music skins. */
   audioAnalyzer: AudioAnalyzer | undefined;
+  /** The play's graph as the host's audio service opened it (`options.audio`); undefined when the play made its own. */
+  playAudio: PlayAudioHandle | undefined;
   /**
    * Most-recently-applied compressor mode. Distinct from the bus's `mode` getter so we can decide what to flip back to
    * when `setAudioCompressor(true)` re-enables compression after a temporary `'off'` (we restore whatever

@@ -1,0 +1,930 @@
+/**
+ * The play session: one play's behaviour, whatever skin family draws it (ADR 0001). It composes the play's parts around
+ * one `PlayState` — the chart (`play-chart.ts`), the media (`play-media.ts`, through the audio service's play graph when
+ * the host gives one), the engine (`play-engine.ts`), the play's own input (`play-input.ts`), the view settings
+ * (`play-view-settings.ts`) and the ending (`play-ending.ts`) — and keeps the clocks, the pause, the recording and the
+ * result. Each part takes the session as its context.
+ *
+ * The session draws nothing. What it needs of the view that draws it — the timing of its intro and fade-out, the scene
+ * moments it animates against, the key-beam fade, the stage the touch lanes map onto and the GPU upload of the BGA —
+ * comes through {@link PlaySessionTheme}. The built-in play view pairs with a session through `createPlayScene`
+ * (`host/play.ts`), which reads a {@link PlayFrame} off it every tick; until the LR2 view moves onto the session too,
+ * `CoreGameplayView` extends it and is its own view.
+ */
+
+import { mirrorBeatAtTempoReversal } from '@be-music/audio-renderer/triggers';
+import { createTempoClock, type TempoClock } from '@be-music/player/core/engine';
+import { nonstopBpmAt } from '@be-music/player/course';
+import { resolveLr2LaneTimer } from '@be-music/lr2-skin/state';
+import { DEFAULT_PLAYLOG_VIEW_REPLAY, type BeMusicPlaylog } from '@be-music/player/playlog';
+import type { GaugeType } from '@be-music/player/ruleset';
+import { createHiSpeedState, createPlayState } from '@be-music/scene-model';
+import type { BeMusicLongNote } from '@be-music/skin-sdk';
+import type { Application, Texture } from 'pixi.js';
+import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
+import { logger } from '../../logger.ts';
+import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
+import type { RecordingFormat } from '../../recording/recording-format.ts';
+import {
+  sanitizeBusVolume,
+  type AudioBusChannel,
+  type CompressorParams,
+  type CompressorStage,
+  type TunableCompressor,
+} from '../../runtime/audio-bus.ts';
+import {
+  clampPlayTempo,
+  resolveReplayTempo,
+  supportsLiveTempoChange,
+  type ReplayTempo,
+} from '../../runtime/play-tempo.ts';
+import type { CoreGameplayDisposeOptions, CoreGameplayViewOptions } from '../../scene/core/gameplay-options.ts';
+import type { GameplaySessionHooks, GameplayThemeTiming } from '../../scene/core/gameplay-theme.ts';
+import { resolveBeMusicLongNoteMode } from '../../scene/core/long-note-tracker.ts';
+import {
+  DESIGN_HEIGHT,
+  DESIGN_WIDTH,
+  FALLBACK_INTRO_DELAY_MS,
+  KEY_ON_FADE_OUT_MS,
+} from '../../scene/gameplay-constants.ts';
+import { resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
+import type { PixiSceneHost } from '../../scene/host.ts';
+import { LiveTempo } from '../../scene/live-tempo.ts';
+import { staggerDestroyTextures } from '../../scene/pixi-utils.ts';
+import { QuitHoldController } from '../../scene/quit-hold.ts';
+import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
+import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
+import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
+import { prepareSong } from './play-chart.ts';
+import { beginExitSequence, getResultData } from './play-ending.ts';
+import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
+import {
+  attachPlayInput,
+  detachPlayInput,
+  handleSharedEngineExitKey,
+  handleTouchPointer,
+  handleTouchPointerUp,
+  handleVisibilityChange,
+  handleWindowBlur,
+  handleWindowFocus,
+  togglePause,
+} from './play-input.ts';
+import { disposeBgaVideos, disposePlayAudio, prepareAudio, prepareBga } from './play-media.ts';
+import { PlaySessionState } from './play-session-state.ts';
+import { applyPlayEvent } from './play-state.ts';
+import { resolveLaneCovers, resolveVisibleMs } from './play-view-settings.ts';
+
+const log = logger('gameplay');
+
+/**
+ * What a play session asks of the view that draws it: the view's timing (intro gates, fade-out, close), the scene
+ * moments it animates against (`onThemeEvent`), how long a key beam fades, the stage the touch lanes map onto, and the
+ * GPU upload of the textures the session loads (the BGA), which only the view's renderer can do.
+ */
+export type PlaySessionTheme = GameplaySessionHooks & {
+  /** Uploads `textures` to the GPU now, so the first frame that draws them does not stall. */
+  uploadTextures?(textures: Iterable<Texture | undefined>): Promise<void>;
+};
+
+const NO_TIMING: GameplayThemeTiming = { loadEndOffsetMs: 0, playStartOffsetMs: 0, fadeOutMs: 0, closeMs: 0 };
+
+/** The theme of a session without a view: skinless timing, no moments heard, the default beam fade, LR2's stage. */
+const NO_THEME: PlaySessionTheme = {
+  onThemeEvent: () => {},
+  themeTiming: () => NO_TIMING,
+  resolveKeyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
+  stageSize: () => ({ width: DESIGN_WIDTH, height: DESIGN_HEIGHT }),
+};
+
+/** The options a play session runs with: the play settings, the host's callbacks and the chart it may start from. */
+export type PlaySessionOptions = CoreGameplayViewOptions;
+
+/** The play session. See the module comment. */
+export class PlaySession extends PlaySessionState {
+  /**
+   * The play tempo in force ({@link CoreGameplayViewOptions.tempo}, or a replay's recorded one, then every live change):
+   * chart seconds per clock second.
+   */
+  tempo: number;
+  /** The tempo a replay plays at and the changes it follows (`resolveReplayTempo`). */
+  readonly replayTempo: ReplayTempo | undefined;
+  /**
+   * The play tempo over the view's clock (seconds since `audioContextStartTime`, in ms): re-anchored at the chart second
+   * of every change the engine reports, so the view's chart time stays the engine's.
+   */
+  tempoClock: TempoClock;
+  /** The live tempo changes asked for ({@link setTempo}), pushed to the engine (held until its input bus is up). */
+  readonly liveTempo: LiveTempo;
+  readonly options: PlaySessionOptions;
+  /** What the session asks of the view that draws it. */
+  readonly theme: PlaySessionTheme;
+  /**
+   * Whether the view shows the play: from {@link start}, or from the chart's preparation when the play is already on
+   * the stage (no splash covers the load), so the playfield draws in its loading state.
+   */
+  shown = false;
+
+  public constructor(options: PlaySessionOptions = {}, theme: PlaySessionTheme = NO_THEME) {
+    super();
+    this.options = options;
+    this.theme = theme;
+    // A replay plays back at the tempo it was played at, unless its viewer keeps their own (`replayView.tempo`).
+    this.replayTempo =
+      options.replay !== undefined
+        ? resolveReplayTempo(options.replay.play, {
+            ownTempo: options.tempo,
+            pitchMode: options.tempoPitchMode ?? 'pitch',
+            // The recorded tempo timeline only when the viewer's replay options reproduce the tempo (default on).
+            reproduce: (options.replayView ?? DEFAULT_PLAYLOG_VIEW_REPLAY).tempo,
+          })
+        : undefined;
+    this.tempo = this.replayTempo?.tempo ?? clampPlayTempo(options.tempo);
+    this.tempoClock = createTempoClock(this.tempo);
+    // Only in pitch mode (kept pitch stretched the samples to the tempo they loaded at), and not for a replay.
+    this.liveTempo = new LiveTempo(
+      this.tempo,
+      options.replay === undefined && supportsLiveTempoChange(options.tempoPitchMode ?? 'pitch'),
+    );
+    // The player's hi-speed, snapped to the 1/1000 grid the hotkey steps on, so a host-supplied `1.5000000000000002`
+    // (the float drift of repeated +0.1 steps) lands on the canonical grid value; the default without a valid one.
+    // HS-FIX applies once the chart is prepared.
+    this.playState = createPlayState({
+      view: {
+        hiSpeed: createHiSpeedState({
+          ...(options.initialHiSpeed !== undefined ? { hiSpeed: options.initialHiSpeed } : {}),
+          locked: options.hiSpeedLocked === true,
+        }),
+      },
+    });
+    this.scrollHiSpeed.jump(this.playState.view.hiSpeed.drawn);
+    this.autoPauseOnBlur = options.autoPauseOnBlur ?? false;
+    this.audioVolumes = {
+      key: sanitizeBusVolume(options.audioVolumes?.key ?? 1),
+      bgm: sanitizeBusVolume(options.audioVolumes?.bgm ?? 1),
+    };
+    this.audioCompressorParams = { ...options.audioCompressorParams };
+  }
+
+  /**
+   * Convenience accessor for the host's `Application`. Throws before the play has a host; this is intentional — every
+   * code path that touches `this.app` runs once the play is prepared or shown.
+   */
+  get app(): Application {
+    if (!this.host) {
+      throw new Error('PlaySession: app accessed before the play has a host');
+    }
+    return this.host.app;
+  }
+
+  /**
+   * Loads the play: parses the chart, and decodes every audio sample the chart references — the slow part of going from
+   * "song picked" to "gameplay can begin". It touches no stage and adds no listeners. Returns once chart audio is
+   * decoded; the BGA preload runs on in the background and {@link start} waits for it before the chart begins (the
+   * ffmpeg.wasm fallback for unsupported codecs can take tens of seconds, and the play should show its LOADING
+   * animation meanwhile instead of freezing the decide screen).
+   */
+  public async load(song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
+    this.song = song;
+    this.source = source;
+    // Hidden until {@link start} fires, so a play shown before it begins draws nothing of it yet.
+    this.shown = false;
+    this.assetsLoading = true;
+    prepareSong(this, song);
+    if (this.entered) {
+      // No splash covers the load window: hold the chart clock before its start (see `start()`) and draw the loading
+      // playfield while assets decode, instead of a blank stage.
+      this.startTime = Number.POSITIVE_INFINITY;
+      this.shown = true;
+    }
+    this.onChartPrepared();
+    await this.prepareTheme();
+    if (this.disposed) return;
+    await prepareAudio(this);
+    if (this.disposed) return;
+    this.bgaReadyPromise = prepareBga(this).catch((error) => {
+      log.warn('BGA preload failed; continuing without it', error);
+    });
+    void this.bgaReadyPromise.then(() => {
+      this.assetsLoading = false;
+    });
+  }
+
+  /** The chart is prepared ({@link load}); {@link shown} says whether the play shows already. */
+  protected onChartPrepared(): void {}
+
+  /**
+   * Loads the view's own assets (an LR2 theme's textures, fonts and timing spans) right after the chart is prepared and
+   * before audio decoding starts. Implementations should bail out early once {@link disposed} flips. Default: nothing.
+   */
+  protected async prepareTheme(): Promise<void> {}
+
+  /**
+   * The play goes on the stage: wires its keys (ESC / F5 / Space / arrows, the Backspace hold), touch lanes, canvas
+   * focus and the auto-pause on losing focus. The play itself starts with {@link start}.
+   */
+  public attachInput(host: PixiSceneHost): void {
+    if (this.disposed || this.entered) return;
+    this.host ??= host;
+    this.entered = true;
+    attachPlayInput(this, host);
+  }
+
+  /** The play leaves the stage: its input stops. The engine and sound run on, a play that ended keeps its tail. */
+  public detachInput(): void {
+    if (!this.entered) return;
+    this.entered = false;
+    detachPlayInput(this);
+  }
+
+  /**
+   * Shows the play and starts the intro timeline (the theme's `scene-start`, `load-end` and `play-start` moments). Must
+   * be called after {@link load} resolves; calling it before skips the chart-start scheduling because
+   * `audioContextStartTime` only lands in the right ballpark when the audio context is up.
+   *
+   * Idempotent — repeated calls after the play has already started no-op.
+   */
+  public start(): void {
+    if (this.disposed) return;
+    if (this.sceneStartTime !== 0) return;
+    this.shown = true;
+    this.onShown();
+    // The intro timeline comes from the theme (the LR2 family maps `#LOADSTART` / `#LOADEND` / `#PLAYSTART`). `start()`
+    // only runs when `paused` is false and `pauseTotal` is still 0, so `playClock()` and `performance.now()` are
+    // equivalent here — but seeding through `playClock()` keeps the animation clocks all in the same coordinate system
+    // as the pause-aware reads further below.
+    const now = this.playClock();
+    this.sceneStartTime = now;
+    const { loadEndOffsetMs, playStartOffsetMs } = this.theme.themeTiming();
+    // Skinless / non-LR2 demos have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
+    // of the built-in fallback frame still has room to land before notes begin.
+    const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
+    this.scheduledIntroMs = introMs;
+    // The chart waits on BOTH the configured PLAY START delay AND the BGA preload (which may still be transcoding video
+    // in the background — see `load()`). Until the gate opens below, `startTime = +Infinity` keeps `isIntroPlaying`
+    // true and the play in the intro (LR2 LOADING) phase.
+    this.startTime = Number.POSITIVE_INFINITY;
+    // Scene start fires immediately; load-end and play-start — the events that drive "READY" / chart-start cues — fire
+    // later via the `Promise.all` gates below so they wait for the BGA preload too. Exit-phase events are deliberately
+    // NOT raised here: `beginExitSequence` raises them at the actual transition moment (ESC / chart end).
+    this.theme.onThemeEvent({ kind: 'scene-start', at: now });
+    // The `start()` invocation we belong to — captured so the gate handlers below can detect a dispose-and-re-mount and
+    // bail out instead of mutating a fresh play's state.
+    const sceneEpoch = this.sceneStartTime;
+    const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
+    // LOAD END gate — both the configured load-end delay AND the BGA preload need to finish.
+    void Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
+      if (this.disposed) return;
+      if (this.sceneStartTime !== sceneEpoch) return;
+      this.theme.onThemeEvent({ kind: 'load-end', at: this.playClock() });
+    });
+    // PLAY START gate — same pattern, but for the configured play-start (or fallback intro). Raises the theme's
+    // play-start event (animation clock) and anchors the wall-clock + audio-context start times (chart-engine clock) so
+    // the chart engine and BGM samples share a single t=0.
+    void Promise.all([bgaReady, this.delaySceneStage(introMs)]).then(() => {
+      if (this.disposed) return;
+      if (this.sceneStartTime !== sceneEpoch) return;
+      this.theme.onThemeEvent({ kind: 'play-start', at: this.playClock() });
+      // `startTime` is consumed by `isIntroPlaying` and `currentSeconds`, both of which work in raw wall-clock units
+      // (with `currentSeconds` subtracting `pauseTotal` explicitly), so it MUST stay on `performance.now()`.
+      this.startTime = performance.now();
+      if (this.audioContext) {
+        this.audioContextStartTime = this.audioContext.currentTime;
+        this.nonstopMixer?.schedule(this.audioContextStartTime);
+      }
+      // Hand chart playback over to `@be-music/player`'s engine. Fires only after the play-start gate, so the engine's
+      // chart-time t=0 lines up with the `audioContextStartTime` anchor — no double lead-in.
+      launchSharedEngine(this);
+    });
+    this.host?.app.canvas.focus();
+    this.onStarted();
+  }
+
+  /** The play shows from {@link start} on. */
+  protected onShown(): void {}
+
+  /** {@link start} has scheduled the intro. */
+  protected onStarted(): void {}
+
+  private delaySceneStage(offsetMs: number): Promise<void> {
+    return new Promise((resolve) => this.setSceneStageTimeout(resolve, Math.max(0, offsetMs)));
+  }
+
+  /**
+   * Schedules `callback` after `offsetMs`, tracked so {@link dispose} cancels it. Themes use it for their own
+   * scene-stage timers (e.g. LR2 `#STARTINPUT`).
+   */
+  protected setSceneStageTimeout(callback: () => void, offsetMs: number): void {
+    let handle = 0;
+    handle = window.setTimeout(
+      () => {
+        this.sceneStageTimeouts.delete(handle);
+        callback();
+      },
+      Math.max(0, offsetMs),
+    );
+    this.sceneStageTimeouts.add(handle);
+  }
+
+  /**
+   * Pauses or resumes the play, as Space does. For hosts that offer on-screen controls — a touch device has no keyboard
+   * to press Space or Escape on.
+   */
+  public requestTogglePause(): void {
+    if (this.disposed || this.exiting) return;
+    togglePause(this);
+  }
+
+  /** Whether the play is paused (by Space, {@link requestTogglePause}, or the auto-pause on losing focus). */
+  public isPaused(): boolean {
+    return this.paused;
+  }
+
+  /**
+   * The play log of this play once the engine has recorded it — also after Escape, which records the play as given up
+   * (`play.aborted`) a moment after `onExit` fires. Resolves `undefined` when none arrives within `timeoutMs` (a replay
+   * records none).
+   */
+  public waitForPlaylog(timeoutMs = 2000): Promise<BeMusicPlaylog | undefined> {
+    if (this.playlog !== undefined) return Promise.resolve(this.playlog);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        const index = this.playlogWaiters.indexOf(settle);
+        if (index >= 0) this.playlogWaiters.splice(index, 1);
+        resolve(undefined);
+      }, timeoutMs);
+      const settle = (playlog: BeMusicPlaylog): void => {
+        clearTimeout(timer);
+        resolve(playlog);
+      };
+      this.playlogWaiters.push(settle);
+    });
+  }
+
+  /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
+  public requestExit(): void {
+    beginExitSequence(this, () => {
+      interruptSharedEngine(this, 'escape');
+      this.sharedEngineAbortController?.abort();
+      this.options.onExit?.();
+    });
+  }
+
+  /**
+   * Toggles the dynamics compressor stack on the audio bus at runtime. Mid-play safe: the bus's `setMode` only re-wires
+   * downstream stages, so in-flight `BufferSourceNode`s keep playing through the unchanged `keyMixer` / `bgmMixer`
+   * nodes.
+   *
+   * - `setAudioCompressor(false)` → bus mode `'off'` (every stage bypassed; both mixers connect directly to
+   *   destination).
+   * - `setAudioCompressor(true)` → bus mode is restored to the architecture the constructor chose
+   *   (`audioCompressorMode`, default `'split'`). To switch architectures at runtime use {@link setAudioCompressorMode}
+   *   instead.
+   *
+   * Idempotent and a no-op before `prepareAudio` has run; the constructor's `audioCompressor` option seeds the initial
+   * state at mount time.
+   */
+  public setAudioCompressor(enabled: boolean): void {
+    if (!this.audioBus) {
+      // Bus will be wired with the right mode the next time `prepareAudio` runs. We can't pre-seed
+      // `audioCompressorMode` here either: the constructor option is the source of truth until then.
+      return;
+    }
+    const next = enabled ? this.audioCompressorMode : 'off';
+    this.audioBus.setMode(next);
+  }
+
+  /**
+   * Toggles the auto-pause-on-blur behavior at runtime. Future `visibilitychange` / `blur` events will only auto-pause
+   * when `enabled` is true; the auto-RESUME path stays unconditional so a user who blurs (auto-pauses) then disables
+   * this option still gets back to play state on the next focus.
+   *
+   * Idempotent — calling with the same value no-ops.
+   */
+  public setAutoPauseOnBlur(enabled: boolean): void {
+    this.autoPauseOnBlur = enabled;
+  }
+
+  /**
+   * Switches the compressor architecture between `'split'` (default 3-stage) and `'legacy'` (original
+   * single-compressor) at runtime. Mostly useful for the demo's `?compressor=` URL flag and for live A/B comparison
+   * while debugging.
+   *
+   * Calling this while `setAudioCompressor(false)` has the bus in `'off'` mode just remembers the choice — the new
+   * architecture will be applied next time compression is re-enabled.
+   */
+  public setAudioCompressorMode(mode: 'split' | 'legacy'): void {
+    this.audioCompressorMode = mode;
+    if (this.audioBus && this.audioBus.getMode() !== 'off') {
+      this.audioBus.setMode(mode);
+    }
+  }
+
+  /**
+   * Toggle one compressor stage (`'key'` / `'bgm'` / `'master'`) within the split-bus architecture. The stage flag is
+   * remembered even when the active mode isn't `'split'` — a future toggle to split mode will pick the user's choice
+   * back up.
+   *
+   * No-op before `prepareAudio` has run; the stage state will be applied via the bus's defaults the next time gameplay
+   * mounts.
+   */
+  public setAudioCompressorStageEnabled(stage: CompressorStage, enabled: boolean): void {
+    this.audioBus?.setStageEnabled(stage, enabled);
+  }
+
+  /**
+   * Sets the user volume of the keysound (`'key'`) or BGM (`'bgm'`) bus, as a linear gain (1 = unity, clamped to
+   * `0..2`). Applies live to a running chart; before the audio bus exists the value is kept for when it is built.
+   */
+  public setAudioVolume(channel: AudioBusChannel, volume: number): void {
+    this.audioVolumes[channel] = sanitizeBusVolume(volume);
+    this.audioBus?.setBusVolume(channel, volume);
+  }
+
+  /**
+   * Retunes one compressor (`'key'` / `'bgm'` / `'master'` split stages or `'legacy'`); unspecified fields keep their
+   * current value. Applies live to a running chart; before the audio bus exists the tuning is kept for when it is built.
+   */
+  public setAudioCompressorParams(compressor: TunableCompressor, params: Partial<CompressorParams>): void {
+    this.audioCompressorParams[compressor] = { ...this.audioCompressorParams[compressor], ...params };
+    this.audioBus?.setCompressorParams(compressor, params);
+  }
+
+  /**
+   * Begins recording the play (canvas video + bus audio mix) into a WebM Blob. Throws when the play's audio is not up
+   * yet, or when the browser doesn't expose `MediaRecorder` / `canvas.captureStream` / a usable codec — UI hosts should
+   * surface these failures to the user (the codec case is common on older Safari).
+   *
+   * Idempotent in the sense that calling while a recording is already active is a no-op (`isRecording()` is the
+   * canonical gate hosts should check).
+   */
+  public startRecording(options: { format?: RecordingFormat } = {}): void {
+    if (this.recorder?.isActive()) return;
+    if (!this.host || !this.audioContext || !this.audioBus) {
+      throw new Error('PlaySession.startRecording: gameplay audio is not ready yet');
+    }
+    // Recreate the recorder per session — instances are one-shot by design (chunk buffer + audio tap lifecycle), so the
+    // host gets a clean blob on every start.
+    const host = this.host;
+    this.recorder = new GameplayRecorder({
+      canvas: host.app.canvas,
+      subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
+      audioContext: this.audioContext,
+      audioOutput: this.audioBus.outputNode,
+      format: options.format,
+    });
+    this.recorder.start();
+  }
+
+  /**
+   * Ends the active recording and resolves with the assembled Blob plus its MIME type / duration. Resolves with
+   * `undefined` when no recording is in progress, so callers can call this unconditionally on chart end / unmount.
+   */
+  public async stopRecording(): Promise<GameplayRecorderResult | undefined> {
+    const recorder = this.recorder;
+    if (!recorder) return undefined;
+    this.recorder = undefined;
+    return recorder.stop();
+  }
+
+  public isRecording(): boolean {
+    return this.recorder?.isActive() ?? false;
+  }
+
+  /**
+   * Ends the play: its input, timers, BGA videos, recording, engine and audio (kept until the tail has rung out after a
+   * natural end with `preserveAudioTail`), then the BGA textures, released over the next frames, and the per-song state.
+   */
+  public dispose(options: CoreGameplayDisposeOptions = {}): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.detachInput();
+    this.stopPlay(options);
+    const textures = [...this.bgaTextures.values(), ...this.bgaLayerTextures.values()];
+    this.bgaTextures.clear();
+    this.bgaLayerTextures.clear();
+    this.releaseTextures(textures);
+    this.clearPlay();
+  }
+
+  /**
+   * Stops what runs on as the play is disposed: the exit and stage timers, the key flashes, the BGA videos, a
+   * recording, the engine, and the audio graph (after its tail with `preserveAudioTail`). The textures stay.
+   */
+  protected stopPlay(options: CoreGameplayDisposeOptions): void {
+    if (this.exitFadeOutHandle !== undefined) {
+      window.clearTimeout(this.exitFadeOutHandle);
+      this.exitFadeOutHandle = undefined;
+    }
+    if (this.exitCloseHandle !== undefined) {
+      window.clearTimeout(this.exitCloseHandle);
+      this.exitCloseHandle = undefined;
+    }
+    for (const timeout of this.sceneStageTimeouts) {
+      window.clearTimeout(timeout);
+    }
+    this.sceneStageTimeouts.clear();
+    if (this.chartEndTimeout !== undefined) {
+      window.clearTimeout(this.chartEndTimeout);
+      this.chartEndTimeout = undefined;
+    }
+    for (const timeout of this.keyFlashTimeouts) {
+      window.clearTimeout(timeout);
+    }
+    this.keyFlashTimeouts.clear();
+    log.info('listeners detached');
+    disposeBgaVideos(this);
+    // Hard-stop any active recording before tearing down the bus. `GameplayRecorder.dispose` calls
+    // `MediaRecorder.stop()` synchronously (no chunk-flush wait) and disconnects its audio tap from the bus's output
+    // node, so the bus can be disposed cleanly afterwards.
+    this.recorder?.dispose();
+    this.recorder = undefined;
+    stopSharedEngine(this);
+    disposePlayAudio(this, options);
+  }
+
+  /**
+   * Destroys `textures` a few per frame on the host's ticker (a macrotask loop without one), all at once when the host
+   * itself is going: a sync sweep over a play's textures stalls the next scene's first frames on lower-end devices.
+   */
+  protected releaseTextures(textures: readonly (Texture | undefined)[]): void {
+    if (textures.length === 0) return;
+    try {
+      const ticker = this.host?.app.ticker;
+      const hostIsDisposing = this.host?.isDisposed() === true;
+      const cleanup = staggerDestroyTextures(
+        textures,
+        ticker !== undefined
+          ? (callback) => {
+              ticker.add(callback);
+              return () => ticker.remove(callback);
+            }
+          : (callback) => {
+              let cancelled = false;
+              let timeout: ReturnType<typeof setTimeout> | undefined;
+              const loop = (): void => {
+                if (cancelled) return;
+                callback();
+                if (!cancelled) timeout = setTimeout(loop, 0);
+              };
+              timeout = setTimeout(loop, 0);
+              return () => {
+                cancelled = true;
+                if (timeout !== undefined) clearTimeout(timeout);
+              };
+            },
+      );
+      if (hostIsDisposing) cleanup.drain();
+    } catch (error) {
+      log.warn('texture cleanup threw', error);
+    }
+  }
+
+  /**
+   * Drops the large per-song reference holders. Async gates and cancelled browser decode tasks can retain the play for
+   * a little while after `dispose()` returns; clearing these keeps that short tail from pinning a full chart bundle,
+   * decoded PCM and BGA timelines.
+   */
+  protected clearPlay(): void {
+    this.decodedSamples.clear();
+    this.bmsonSlicePlayback = undefined;
+    this.autoSampleTriggers = [];
+    this.pressedChannels.clear();
+    this.lanePressedAt.clear();
+    this.laneReleasedAt.clear();
+    this.longNotes.clear();
+    this.longNoteStyle = undefined;
+    this.judgeWindows = undefined;
+    this.timerStartedAt.clear();
+    this.bombStartedAt.clear();
+    this.bombJudge.clear();
+    this.keyOnFadeOutStart.clear();
+    this.wavCmdVolumeMultipliers.clear();
+    this.switchingBgas.clear();
+    this.bgaSubRegionOrigins.clear();
+    this.playState = createPlayState();
+    this.notes = [];
+    this.mineNotes = [];
+    this.invisibleNotes.length = 0;
+    this.preparedChart = undefined;
+    this.touchTokenByChannel = undefined;
+    this.resolvedChart = undefined;
+    this.resolvedPlayChart = undefined;
+    this.randomDraws = undefined;
+    this.beatAtSeconds = undefined;
+    this.scrollMapper = undefined;
+    this.timingResolver = undefined;
+    this.bgaTimeline = { base: [], layer: [], poor: [] };
+    this.laneChannels = [];
+    this.laneX.clear();
+    this.poorBgaFallbackKey = undefined;
+    this.poorBgaFallbackUntilSeconds = Number.POSITIVE_INFINITY;
+    this.hasBga = false;
+    this.bgaReadyPromise = undefined;
+    this.song = undefined;
+    this.source = undefined;
+    this.host = undefined;
+  }
+
+  /**
+   * The gauge this run actually plays on. A replay restores the recorded pick so the played-back run judges, drains,
+   * and clears exactly as the original did; otherwise it is the host's selection, defaulting to LR2 GROOVE.
+   */
+  resolveSelectedGauge(): GaugeType {
+    return this.options.replay?.play.gauge ?? this.options.gauge ?? 'GROOVE';
+  }
+
+  /**
+   * Does the ruleset this run judges under show empty POORs inside its POOR counter? LR2 does; beatoraja shows a
+   * figure of its own, and IIDX's counter is unmeasured, so both keep them apart.
+   */
+  resolveEmptyPoorCountsInPoorDisplay(): boolean {
+    const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
+    return ruleset === 'lr2';
+  }
+
+  /** The compat ruleset judging the play (a replay's recorded one wins). */
+  resolveJudgeRuleset(): string {
+    return this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
+  }
+
+  /** Whether the engine plays `channel`'s notes itself: every lane under autoplay, the scratch under auto-scratch. */
+  isAutoplayedChannel(channel: string): boolean {
+    return this.options.autoPlay === true || this.autoScratchChannels.has(channel);
+  }
+
+  /** True while the wall-clock playhead is still inside the intro buffer. */
+  isIntroPlaying(): boolean {
+    if (this.startTime === 0) {
+      return true;
+    }
+    return performance.now() < this.startTime;
+  }
+
+  /**
+   * The tempo the BPM readouts show at `seconds`. Past an LR2 negative-BPM reversal (issue #134) it holds the value at
+   * the reversal — LR2's frozen event pump never applies a later BPM event — even though the reverse scroll itself
+   * keeps following the forward tempo map.
+   */
+  nowBpm(seconds: number): number | undefined {
+    const resolver = this.timingResolver;
+    if (!resolver) return undefined;
+    // `displayBpmAtBeat`: a negative `#BPMxx` reads as |trunc(BPM)|, LR2's int NOWBPM.
+    return resolver.displayBpmAtBeat(
+      this.currentBeat(Math.min(seconds, resolver.reversal?.seconds ?? Number.POSITIVE_INFINITY)),
+    );
+  }
+
+  /**
+   * The BPM the readouts (NOWBPM, the HUD) show at `seconds`: for a stitched NONSTOP chart, whose scroll runs at a
+   * constant 150 BPM, the BPM of the stage being played, scaled by its FIT rate (`NonstopStitchMap.tempo`), as LR2
+   * shows it; otherwise {@link nowBpm}.
+   */
+  displayBpm(seconds: number): number | undefined {
+    const tempo = this.options.nonstop?.tempo;
+    return tempo !== undefined && tempo.length > 0 ? nonstopBpmAt(tempo, seconds) : this.nowBpm(seconds);
+  }
+
+  /**
+   * The song's beat at `seconds`, from the BPM- and STOP-aware tempo map: charts change tempo mid-song (`#BPM`), and
+   * the initial BPM alone would drift notes after a change out of sync with the audio.
+   */
+  currentBeat(seconds: number): number {
+    // LR2 negative-BPM reversal (issue #134): past the first negative `#BPMxx` the chart *visually* scrolls backwards.
+    // LR2 mirrors the chart POSITION around the reversal (`2 * pos(R) - pos(now)`), so the reverse scroll runs at the
+    // post-reversal |BPM| and pauses through post-reversal STOPs. Every display consumer — renderNotes, measure
+    // lines, beatPhase — funnels through this method, so mirroring here covers them all; the forward beat underneath
+    // keeps `beatAtSeconds`'s monotonic stop-window cursor intact.
+    return mirrorBeatAtTempoReversal(this.timingResolver?.reversal, seconds, this.forwardBeat(seconds));
+  }
+
+  private forwardBeat(seconds: number): number {
+    // Prefer the proper STOP-aware resolver (built once per song in `prepareSong`). Falls back to a flat-BPM
+    // extrapolation when the resolver isn't ready yet (very early frames during mount).
+    const resolver = this.timingResolver;
+    if (this.beatAtSeconds && resolver && resolver.tempoPoints.length > 0) {
+      return this.beatAtSeconds(seconds);
+    }
+    if (!resolver || resolver.tempoPoints.length === 0) {
+      const bpm = this.song?.bpm ?? 130;
+      return Math.max(0, seconds * (bpm / 60));
+    }
+    let active = resolver.tempoPoints[0]!;
+    for (const point of resolver.tempoPoints) {
+      if (point.seconds <= seconds) {
+        active = point;
+      } else {
+        break;
+      }
+    }
+    return Math.max(0, active.beat + ((seconds - active.seconds) * active.bpm) / 60);
+  }
+
+  /** Uploads `textures` to the GPU through the view (the BGA the session loaded), so the first cue does not stall. */
+  preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void> {
+    return this.theme.uploadTextures?.(textures) ?? Promise.resolve();
+  }
+
+  readonly handleVisibilityChange = (): void => handleVisibilityChange(this);
+
+  readonly handleWindowBlur = (): void => handleWindowBlur(this);
+
+  readonly handleWindowFocus = (): void => handleWindowFocus(this);
+
+  readonly focus = (): void => {
+    this.app.canvas.focus();
+  };
+
+  /** Holding Backspace for `QUIT_HOLD_THRESHOLD_MS` leaves the play the way Escape does. */
+  readonly quitHold: QuitHoldController = new QuitHoldController({
+    onComplete: () => this.requestExit(),
+    now: () => performance.now(),
+  });
+
+  readonly handleQuitHoldKeyUp = (event: KeyboardEvent): void => {
+    this.quitHold.handleKeyUp(event);
+  };
+
+  readonly cancelQuitHold = (): void => {
+    this.quitHold.cancel();
+  };
+
+  readonly handleSharedEngineExitKey = (event: KeyboardEvent): void => handleSharedEngineExitKey(this, event);
+
+  /**
+   * Sets the hi-speed from the host (e.g. a settings menu) during the play. `value` is on the scale of
+   * {@link CoreGameplayViewOptions.initialHiSpeed}: the chart's HS-FIX multiplier is applied on top, as at the start.
+   * Snapped and clamped like the in-game hotkey; non-finite values are ignored.
+   */
+  public setHiSpeed(value: number): void {
+    applyPlayEvent(this, { type: 'hi-speed-set', value });
+  }
+
+  /**
+   * The LR2 key-on timer of `channel`'s lane (`resolveLr2LaneTimer`): 100 + lane on 1P, 110 + lane on 2P, keys 1-7 (1-9
+   * for 9 KEY, whose lanes all run through the 1P bank).
+   */
+  resolveKeyOnTimerId(channel: string): number | undefined {
+    return resolveLr2LaneTimer('key-on', {
+      channel,
+      laneIndex: resolveSideRelativeLaneIndex(channel, this.chartPlayVariant),
+      playVariant: this.chartPlayVariant,
+    });
+  }
+
+  readonly handleTouchPointer = (event: PointerEvent): void => handleTouchPointer(this, event);
+
+  readonly handleTouchPointerUp = (event: PointerEvent): void => handleTouchPointerUp(this, event);
+
+  /**
+   * Pause-aware monotonic clock used by every "time since X" animation of the play (LR2 timer keyframes,
+   * scratch-disc rotation, bomb / FC / POOR-BGA windows, NOWJUDGE / NOWCOMBO decay, …). Returns wall clock minus the
+   * accumulated pause duration, and freezes at `pauseTime - pauseTotal` while the play is paused. Seed sites that
+   * drive these animations store `playClock()` values, and the read sites compute `playClock() - seed` — so animations
+   * resume exactly where they left off rather than jumping forward by the pause duration.
+   */
+  playClock(): number {
+    if (this.paused) {
+      return this.pauseTime - this.pauseTotal;
+    }
+    return performance.now() - this.pauseTotal;
+  }
+
+  /**
+   * Pauses every BGA video element in the chart's video pool. The `<video>` element doesn't honor the audio-context
+   * suspend, so without this the video keeps playing during a pause overlay.
+   */
+  pauseAllBgaVideos(): void {
+    for (const handle of this.bgaVideos.values()) {
+      if (!handle.video.paused) {
+        handle.video.pause();
+      }
+    }
+  }
+
+  /**
+   * Resumes only the videos tied to currently-active base / layer cues. Avoids touching videos that were paused for a
+   * different reason (e.g. an earlier cue switched away from them in `syncBgaVideo`).
+   */
+  resumeActiveBgaVideos(): void {
+    for (const track of ['base', 'layer'] as const) {
+      const active = this.bgaActiveVideos[track];
+      if (!active) continue;
+      const handle = this.bgaVideos.get(active.key);
+      if (!handle || !handle.video.paused) continue;
+      void handle.video.play().catch(() => {
+        // Autoplay-policy / codec rejections — ignore silently.
+      });
+    }
+  }
+
+  /**
+   * Lerps the displayed score toward the real score so the SCORE panel rolls up after each judgement instead of
+   * jumping. Speed is tuned so a single PERFECT (~1000 score) catches up in ~6 frames at 60 fps.
+   */
+  updateDisplayedScore(): void {
+    const target = this.score.score;
+    if (this.displayedScore === target) {
+      return;
+    }
+    const diff = target - this.displayedScore;
+    if (Math.abs(diff) < 1) {
+      this.displayedScore = target;
+      return;
+    }
+    // Frame-rate independent ease: cover ~30 % of remaining distance per frame.
+    const next = this.displayedScore + diff * 0.3;
+    this.displayedScore = diff > 0 ? Math.min(next, target) : Math.max(next, target);
+  }
+
+  /**
+   * The play as a result so far ({@link PixiGameplayResultData}): read off the play state, a plain object a result
+   * screen that outlives the play can keep. `undefined` before a chart is prepared.
+   */
+  public getResultData(): PixiGameplayResultData | undefined {
+    return getResultData(this);
+  }
+
+  /**
+   * Chart-time seconds since the first beat, derived from the audio context clock so it stays *bit-exact* with
+   * scheduled `node.start()` times across pause / resume cycles. The wall-clock approach we used previously
+   * (`performance.now() - pauseTotal`) drifted out of sync with the audio context on every pause because `suspend()`
+   * and `resume()` are asynchronous: the audio clock paused a few ms after we recorded `pauseTime` and resumed a few ms
+   * before we credited `pauseTotal`, so each toggle slid the two clocks apart by ~10–30 ms.
+   *
+   * Anchoring everything on `audioContext.currentTime` removes that accumulating drift entirely. For environments where
+   * the audio context isn't ready yet we fall back to the wall-clock model.
+   */
+  currentSeconds(): number {
+    if (this.audioContext && this.audioContextStartTime > 0) {
+      return this.tempoClock.chartSecondsAt((this.audioContext.currentTime - this.audioContextStartTime) * 1000);
+    }
+    const nowMs = this.paused ? this.pauseTime : performance.now();
+    return this.tempoClock.chartSecondsAt(nowMs - this.startTime - this.pauseTotal);
+  }
+
+  /** The play tempo in force: the one the play started at, or the last change. */
+  public getTempo(): number {
+    return this.tempo;
+  }
+
+  /** The player's hi-speed in force (on the scale of `initialHiSpeed`), a replay's recorded one included. */
+  public getHiSpeed(): number {
+    return this.playState.view.hiSpeed.player;
+  }
+
+  /**
+   * Changes the play tempo during the play (clamped by `clampPlayTempo`). Only in `pitch` mode: the samples follow it
+   * through their playback rate, playing ones included, and so do the BGA videos and a NONSTOP chart's fades. Keep
+   * pitch stretched the samples to the tempo they loaded at, and a replay follows its log, so both refuse it. The
+   * engine applies it at the chart time it takes the command and records it in the play log; the view follows from the
+   * chart second the engine reports. Returns whether the change was taken.
+   */
+  public setTempo(tempo: number): boolean {
+    return !this.disposed && this.liveTempo.request(tempo);
+  }
+
+  /**
+   * Milliseconds since the chart's first beat for chrome count-ins. Before the play-start gate opens (`startTime` is
+   * still +Infinity) it counts toward the scheduled intro end and holds just below zero if the BGA preload runs long.
+   */
+  resolveChartMs(): number | undefined {
+    if (this.startTime === 0) return undefined;
+    if (Number.isFinite(this.startTime))
+      return this.tempoClock.chartSecondsAt(performance.now() - this.startTime) * 1000;
+    return Math.min(-1, this.playClock() - this.sceneStartTime - this.scheduledIntroMs);
+  }
+
+  /** The lane covers each play side shows (`resolveLaneCovers` in `play-view-settings.ts`), for the playfield and chrome. */
+  resolveLaneCovers(): readonly BeMusicLaneCover[] {
+    return resolveLaneCovers(this);
+  }
+
+  /** How long a note stays visible below `cover` (`resolveVisibleMs` in `play-view-settings.ts`), for the chrome. */
+  resolveVisibleMs(
+    cover: BeMusicLaneCover | undefined,
+    bpm: number | undefined,
+    scrollRate: number,
+  ): number | undefined {
+    return resolveVisibleMs(this, cover, bpm, scrollRate);
+  }
+
+  /** Approximate total duration of the loaded chart in seconds. */
+  resolveSongDurationSeconds(): number {
+    if (!this.song) {
+      return 0;
+    }
+    return this.songDurationSeconds;
+  }
+
+  /**
+   * The mode a long note plays in: the one the engine announced while it is held, otherwise worked out from the
+   * ruleset's long-note style (unknown until the engine reports its ruleset).
+   */
+  resolveLongNoteMode(note: RuntimeNote): BeMusicLongNote['mode'] {
+    const held = this.longNotes.heldMode(note.channel, note.beat);
+    if (held !== undefined) return held;
+    return this.longNoteStyle === undefined
+      ? undefined
+      : resolveBeMusicLongNoteMode(this.longNoteStyle, note.longNoteMode);
+  }
+}

@@ -10,12 +10,12 @@ import type { ScoreSummary } from '@be-music/player/ruleset';
 import { playResultFromPlayState, type PlayState } from '@be-music/scene-model';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
-import type { GameplayThemeHooks } from '../../scene/core/gameplay-theme.ts';
+import type { GameplaySessionHooks } from '../../scene/core/gameplay-theme.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 
 /** The scene's members the ending reads and writes: `CoreGameplayView`'s members of these names. */
 export interface PlayEndingContext {
-  readonly theme: GameplayThemeHooks;
+  readonly theme: GameplaySessionHooks;
   readonly disposed: boolean;
   exiting: boolean;
   exitFadeOutMs: number;
