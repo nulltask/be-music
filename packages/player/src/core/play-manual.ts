@@ -20,7 +20,6 @@ import type { JudgeStrategy, PlayJudge, StrategyDrifts } from './play-strategy.t
 
 /** Manual play's drifts from the auto driver (see {@link StrategyDrifts}); the replay strategy shares them. */
 export const MANUAL_DRIFTS: StrategyDrifts = {
-  queuesLaneKeysoundsAsRealtimeAudio: false,
   omitsEndOnFailure: false,
   recordsTempoInReplay: false,
   followsReplayTempoChangesAlways: false,

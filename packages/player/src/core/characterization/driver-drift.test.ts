@@ -139,13 +139,13 @@ describe('driver drift', () => {
     expect(auto.frames.last).toMatch(/^4\d{3}\.\d{3} seconds=3\.5 beat=7$/);
   });
 
-  test('drift: autoPlay sends every note’s keysound to the audio session twice, manualPlay once per press', async () => {
+  test('manual and auto play both send each note’s keysound to the audio session once', async () => {
     const manual = await observePlay({ driver: 'manual', chart: basicChart(), script: ON_TIME });
     const auto = await observePlay({ driver: 'auto', chart: basicChart() });
     const lane11 = (observation: PlayObservation) =>
       audioCalls(observation, 'trigger').filter((entry) => entry.includes(' trigger 11:'));
     expect(lane11(manual)).toHaveLength(3);
-    expect(lane11(auto)).toHaveLength(6);
+    expect(lane11(auto)).toHaveLength(3);
   });
 
   test('drift: autoPlay does not record endOnFailure', async () => {
