@@ -5,6 +5,7 @@
 このディレクトリは、`be-music` リポジトリで使う仕様を Markdown でまとめたものです。
 
 - [アーキテクチャ: Source 層と Resolved 層](architecture.ja.md)
+- [設計判断の記録](adr/README.ja.md)
 - [BMS 実装仕様](bms-spec.ja.md)
 - [BMSON 実装仕様](bmson-spec.ja.md)
 - [BMS / bmson 互換性ノート（de jure と de facto）](format-compat.ja.md)

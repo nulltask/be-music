@@ -102,6 +102,28 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **play log (playlog)**: Recorded input replay of one play (`*.bmplay.json`): the resolved chart, every key press and release, and the play settings. `bms-playlog` re-simulates it under the LR2, beatoraja, and IIDX rulesets.
 - **PlayerSummary**: Final playback summary containing judge counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
+## Courses, Records And View
+
+- **course run**: One play of a course: its stages in order, or, for NONSTOP, one stitched play. It is ranked and recorded as one run. _Avoid_: course session, course play.
+- **stage**: One chart of a course run.
+- **carry-in**: The gauge value, course combo and course max combo a stage starts from, left by the stage before it.
+- **give up**: Leaving a course run with ESC. A run given up is a failed run.
+- **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
+- **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `iidx`.
+- **clear lamp**: The class of clear a play earned (FAILED to MAX). Each judge ruleset awards its own subset.
+- **best record**: The best clear lamp, EX-SCORE, max combo and BP a player has on a chart or course under one judge ruleset.
+- **view settings**: What the player saw, apart from what was judged: hi-speed, hi-speed fix, visible time and each side's SUDDEN+, HIDDEN+ and LIFT. _Avoid_: display options.
+- **play tempo**: How fast a play runs relative to the chart (`speed`). A play at another tempo is practice.
+
+## Architecture
+
+- **scene model**: The state and rules of one screen, independent of the skin family: what it shows and how it responds. See [ADR 0002](./adr/0002-scene-model-package.md).
+- **scene session**: The one implementation of a screen's behaviour, shared by every skin family. See [ADR 0001](./adr/0001-skin-families-only-draw.md).
+- **family view**: How one skin family draws a scene model; it returns the player's actions as intents.
+- **intent**: What a player's action on a view means for the scene: open a folder, start a course, cycle the gauge.
+- **play loop / judge strategy**: The one engine loop every play runs through, and the manual, auto or replay judging plugged into it. See [ADR 0003](./adr/0003-one-play-loop.md).
+- **scene router**: The host's single owner of the current scene and every transition. See [ADR 0006](./adr/0006-scene-router.md).
+
 ## Related Documents
 
 - [Specification top](./README.md)

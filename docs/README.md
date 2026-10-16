@@ -5,6 +5,7 @@
 This directory is a Markdown collection of specifications used in the `be-music` repository.
 
 - [Architecture: the Source layer and the Resolved layer](./architecture.md)
+- [Architecture decisions](./adr/README.md)
 - [BMS implementation specification](./bms-spec.md)
 - [BMSON implementation specification](./bmson-spec.md)
 - [BMS / bmson compatibility notes (de jure vs de facto)](./format-compat.md)
