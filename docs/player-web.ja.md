@@ -271,7 +271,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-scene が表示する内容は表示の前に渡します。標準の decide 画面は `createDecideScene` の option、LR2 と beatoraja の decide scene は `setTarget`、標準の result 画面は `createResultScene` の option、LR2 と beatoraja の result scene は `setResult`、gameplay scene は `prepare(host, song, source)` の song、ほかは constructor の option です。
+scene が表示する内容は表示の前に渡します。標準と LR2 の decide 画面は `createDecideScene` の option、beatoraja の decide scene は `setTarget`、標準の result 画面は `createResultScene` の option、LR2 と beatoraja の result scene は `setResult`、gameplay scene は `prepare(host, song, source)` の song、ほかは constructor の option です。
 
 - **select scene は生かしておきます。** 標準と LR2 の select scene は decide、プレイ、result のあいだも残ります。`exit()` で BGM を一時停止し、chart preview（focus 中の譜面は覚えたまま）と描画ループを止めますが、cursor、一覧の状態、decode 済みの BGM は保ちます。input の listener はつないだままで、stage にないあいだは入力を無視します。もう一度 enter すると scene timer を始め直して skin の入場演出を再び流し、BGM と preview を再開します。beatoraja の select scene は snapshot から作り直します。
 - **プレイは stage の外で読み込みます。** `prepare()` は stage にも listener にも触れずに譜面を parse して音声を decode するので、demo は decide 画面の裏でプレイを準備します。decide 画面が終わると `setScene(play)` で decide scene を exit してプレイを enter し、`start()` で始めます。decide 画面のあいだに押した key は decide 画面にだけ届きます。decide 画面がないときは demo が先にプレイを表示し、表示中に走る `prepare()` は読み込み中の playfield を描きます。
@@ -324,7 +324,7 @@ flowchart TD
 
 ## シーンセッションとファミリービュー
 
-scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。標準の決定画面とリザルト画面はすでに移りました（[決定画面](#決定画面)、[リザルト画面](#リザルト画面)）。ほかの scene は、まだ [Scene lifecycle](#scene-lifecycle) で説明したクラスのままです。
+scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。標準と LR2 の決定画面と、標準のリザルト画面はすでに移りました（[決定画面](#決定画面)、[リザルト画面](#リザルト画面)）。ほかの scene は、まだ [Scene lifecycle](#scene-lifecycle) で説明したクラスのままです。
 
 ```mermaid
 flowchart LR
@@ -384,13 +384,14 @@ flowchart LR
 
 ### 決定画面
 
-`createDecideScene(kit, options)`（`@be-music/player-web/scenes`）は標準の決定画面を作ります。決定画面のセッション（`session/decide/decide-session.ts`）を標準の決定画面のビュー（`view/built-in/decide-view.ts`）が描くもので、`setScene` で表示する `SessionScene` です。LR2 と beatoraja の決定画面は、まだ `PixiDecideView` と `PixiBeatorajaDecideScene` です。
+`createDecideScene(kit, options)`（`@be-music/player-web/scenes`）は標準と LR2 の決定画面を作ります。決定画面のセッション（`session/decide/decide-session.ts`）を kit の種類のビューが描くもので、`setScene` で表示する `SessionScene` です。標準の kit（`{ family: 'built-in', skin }`）は標準の決定画面のビュー（`view/built-in/decide-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin }`。テーマの決定画面のスキン）は LR2 の決定画面のビュー（`view/lr2/decide-view.ts`）が描きます。beatoraja の決定画面は、まだ `PixiBeatorajaDecideScene` です。
 
 - **オプション。** `chart`（これから遊ぶ譜面）、`course`（コースのステージなら、そのコース）、`playOptions`（スキンに見せるプレイオプション）、`source`（スキンの画像のための譜面のファイル）、`sounds`（テーマの `SystemSoundSet`）、`audio`（ホストのオーディオサービス）、`progress`（裏で準備しているプレイの読み込みの進み具合）、`on: { continue, cancel }` です。
-- **タイミング。** セッションは、ビューのスキンのタイミング（`DecideView.timing`）で画面を進めます。入力は入力までの待ちのあとに受け付けます。自動で進むまでの時間がたつと、画面はひとりでにプレイへ進みます。その時間がなければ、プレイヤーの操作を待ちます。画面を出るときはまずフェードアウトし、そのあと `on.continue`（プレイへ）か `on.cancel`（選曲画面へ戻る）を、enter ごとに 1 回だけ呼びます。be-music スキンの画面はすぐに入力を受け付け、`decide.durationMs`（既定は 2000 ms）のあとに進み、フェードアウトはありません。
+- **タイミング。** セッションは、ビューのスキンのタイミング（`DecideView.timing`）で画面を進めます。入力は入力までの待ちのあとに受け付けます。自動で進むまでの時間がたつと、画面はひとりでにプレイへ進みます。その時間がなければ、プレイヤーの操作を待ちます。画面を出るときはまずフェードアウトし、そのあと `on.continue`（プレイへ）か `on.cancel`（選曲画面へ戻る）を、enter ごとに 1 回だけ呼びます。be-music スキンの画面はすぐに入力を受け付け、`decide.durationMs`（既定は 2000 ms）のあとに進み、フェードアウトはありません。LR2 スキンの画面は `#STARTINPUT`（なければ 1500 ms）のあとに入力を受け付け、その 1200 ms 後に進み、`#FADEOUT` の間フェードアウトします。
 - **入力。** Enter、Space、キャンバスのクリックは、入力を受け付けてから進みます。Escape はいつでも戻ります。LR2 が `#STARTINPUT` の前でも Escape を受け付けるのと同じです。キーリピートは無視するので、選曲画面から押したままの Enter で画面を飛ばすことはありません。
-- **音。** セッションは、画面に入るときにテーマの決定音（`sounds.decideBgm`）をオーナーとしてオーディオサービスで鳴らし、画面がステージから外れるときに `stopOwned` で止めます。Web のデモは、決定音がプレイまで鳴り続けるように、今も譜面を選んだときに選曲画面から鳴らしており、決定画面には決定音を渡しません。
-- **`#RANDOM`。** セッションは、scene を作るときに譜面の `#RANDOM` / `#SWITCH` の分岐を 1 回だけ引きます。beatoraja の決定画面と同じです。`scene.resolved` は分岐を解決した譜面と引いた値で、プレイに渡す（`preResolved`）ためのものです。`DecideFrame.playChart` はビューのグラフのための同じ譜面なので、画面はプレイが遊ぶ分岐を表示します。Web のデモの LR2 / 標準のプレイは、まだ解決済みの譜面を受け取らず、自分で分岐を引きます。標準の決定画面のビューは分岐を描きません。
+- **LR2 の描画。** LR2 のビューは、譜面の `#STAGEFILE` の上に決定画面のスキンを `resolveLr2DecideState`（譜面の難易度、キーモード、テキスト。コースのステージならコースのもの）で描きます。LR2 のタイマーはフレームごとにフレームから読みます。タイマー 0 は画面に入った時刻から、タイマー 1 は入力を受け付けた時刻から、タイマー 2 は画面を出始めた時刻からです。タイマーの ID はビューの中にとどめます。
+- **音。** セッションは、画面に入るときにテーマの決定音（`sounds.decideBgm`）をオーナーとしてオーディオサービスで鳴らし、画面がステージから外れるときに `stopOwned` で止めます。Web のデモは、どの種類でも決定画面に決定音を渡しません（`sounds: {}`）。[決定音](#決定音) を見てください。
+- **`#RANDOM`。** セッションは、scene を作るときに譜面の `#RANDOM` / `#SWITCH` の分岐を 1 回だけ引きます。beatoraja の決定画面と同じです。`scene.resolved` は分岐を解決した譜面と引いた値で、プレイに渡す（`preResolved`）ためのものです。`DecideFrame.playChart` はビューのグラフのための同じ譜面なので、画面はプレイが遊ぶ分岐を表示します。Web のデモの LR2 / 標準のプレイは、まだ解決済みの譜面を受け取らず、自分で分岐を引きます。標準の決定画面のビューも LR2 の決定画面のビューも分岐を描きません。
 - **スキンの設定。** `updateKit(kit)` は、プレイヤーが変えたスキンの設定値を受け取り、次のフレームからそれで描きます。
 
 ```mermaid
@@ -407,6 +408,25 @@ stateDiagram-v2
 ```
 
 Web のデモは、これまでどおり画面の裏でプレイを準備し、`on.continue` でそれを表示します。
+
+#### 決定音
+
+LR2 のサウンドセットの決定音（`#DECIDE`）は、今は標準 / LR2 の選曲 scene にあります。Web のデモは、譜面かコースを選んだときに選曲 scene の `playDecideSound` で、選曲 scene 自身の AudioContext で鳴らします。選曲 scene の exit はこれを止めません。決定音は LR2 と同じく決定画面を通ってプレイまで鳴り続け、決定画面が出ないとき（決定画面のスキンのないテーマ）にも鳴ります。beatoraja の決定画面は、今もテーマの決定音を自分で鳴らします。
+
+```mermaid
+sequenceDiagram
+  participant Demo as デモ
+  participant Select as 選曲 scene
+  participant Decide as 決定 scene
+  participant Play as プレイ scene
+  Demo->>Select: playDecideSound
+  Note right of Select: 決定音が鳴り始める
+  Demo->>Decide: setScene、決定音なし
+  Demo->>Play: setScene
+  Note over Select,Play: 決定音は終わるまで鳴り続ける
+```
+
+決定画面のセッションも決定音を鳴らせます（`sounds.decideBgm`）。ただしそれは決定 scene 自身の音で、scene が出るときに `stopOwned` が止めるので、プレイが始まるところで決定音が切れます。そのためデモは、どの決定画面にも `sounds: {}` を渡します。決定音は選曲画面と一緒に移ります（S4、オーディオサービスを使う選曲画面のセッション）。選曲画面のセッションは決定音をオーナーなしでオーディオサービスから鳴らすので、続く scene をまたいで最後まで鳴ります。
 
 ### リザルト画面
 
