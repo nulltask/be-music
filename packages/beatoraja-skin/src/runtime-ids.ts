@@ -1221,8 +1221,11 @@ export const BEATORAJA_TEXT = {
   ARTIST: LR2_TEXT.ARTIST as typeof LR2_TEXT.ARTIST,
   /** prop.lua `subartist = 15`. */
   SUBARTIST: LR2_TEXT.SUBARTIST as typeof LR2_TEXT.SUBARTIST,
-  /** prop.lua `fullartist = 16` (`artist` + `" "` + `subartist`). */
-  FULLARTIST: LR2_TEXT.FULL_ARTIST as typeof LR2_TEXT.FULL_ARTIST,
+  /**
+   * prop.lua `fullartist = 16` (`artist` + `" "` + `subartist`): beatoraja's own meaning of the number, where LR2 draws
+   * the chart's tag (`LR2_TEXT.TAG`).
+   */
+  FULLARTIST: 16,
   /**
    * SkinProperty `STRING_COURSE1_TITLE = 150`: the title of course stage 1. Stages 2-10 follow at 151-159
    * (`STRING_COURSE10_TITLE = 159`), on the select screen for the focused course and elsewhere for the running one.

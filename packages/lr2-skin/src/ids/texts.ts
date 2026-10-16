@@ -22,8 +22,12 @@ export const LR2_TEXT = {
   ARTIST: 14,
   /** The chart's subartist. */
   SUBARTIST: 15,
-  /** The artist and the subartist (beatoraja's `fullartist`; be-music draws the chart's file name). */
-  FULL_ARTIST: 16,
+  /**
+   * The chart's tag: a field of LR2's own song database, which a player edits (OpenLR2 `ProcS_Select` sets text 16
+   * from `cur.tag`). be-music keeps no tags, so it reads empty. beatoraja draws the artist and subartist here
+   * (`fullartist`).
+   */
+  TAG: 16,
   /** The chart's play level. */
   PLAY_LEVEL: 17,
   /** The chart's difficulty name (BEGINNER … INSANE). */
@@ -40,8 +44,8 @@ export const LR2_TEXT = {
   ARTIST_ALT: 24,
   /** Text 25: as `SUBARTIST`. */
   SUBARTIST_ALT: 25,
-  /** Text 26: as `FULL_ARTIST`. */
-  FULL_ARTIST_ALT: 26,
+  /** Text 26: as `TAG`. */
+  TAG_ALT: 26,
   /** Text 27: as `PLAY_LEVEL`. */
   PLAY_LEVEL_ALT: 27,
   /** Text 28: as `DIFFICULTY`. */

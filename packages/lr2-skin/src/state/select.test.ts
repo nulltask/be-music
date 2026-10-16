@@ -220,6 +220,7 @@ describe('resolveLr2SelectState texts', () => {
     expect(state.text(LR2_TEXT.ARTIST)).toBe('A');
     expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('INSANE');
     expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBe('12');
+    expect(state.text(LR2_TEXT.TAG)).toBe('');
     expect(state.text(LR2_TEXT.COURSE_CONNECTION1)).toBe('DISABLE');
   });
 

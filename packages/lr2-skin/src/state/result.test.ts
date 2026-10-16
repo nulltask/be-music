@@ -373,6 +373,7 @@ describe('resolveLr2ResultState values', () => {
     expect(state.text(LR2_TEXT.TITLE_ALT)).toBe('Test');
     expect(state.text(LR2_TEXT.DIFFICULTY)).toBe('INSANE');
     expect(state.text(LR2_TEXT.INSANE_LEVEL)).toBeUndefined();
+    expect(state.text(LR2_TEXT.TAG)).toBe('');
   });
 
   it('fills the bar graphs and sliders', () => {
