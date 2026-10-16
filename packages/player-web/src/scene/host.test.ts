@@ -7,7 +7,7 @@ import { PixiBeatorajaDecideScene } from './beatoraja/decide.ts';
 import { PixiBeatorajaSelectScene } from './beatoraja/select.ts';
 import { CoreGameplayView } from './core/gameplay.ts';
 import { CoreSongSelectView } from './core/select.ts';
-import { DefaultPixiGameplayView, DefaultPixiSongSelectView } from './default/index.ts';
+import { DefaultPixiSongSelectView } from './default/index.ts';
 import { PixiSceneHost, resolveRendererPreference, resolveRenderResolution, type PixiScene } from './host.ts';
 import { PixiGameplayView } from './lr2/gameplay.ts';
 import { PixiSongSelectView } from './lr2/select.ts';
@@ -268,7 +268,6 @@ describe('scene identities', () => {
     ['DefaultPixiSongSelectView', DefaultPixiSongSelectView.prototype.identity, { kind: 'select', family: 'built-in' }],
     ['PixiSongSelectView', PixiSongSelectView.prototype.identity, { kind: 'select', family: 'lr2' }],
     ['CoreGameplayView', CoreGameplayView.prototype.identity, { kind: 'play', family: 'built-in' }],
-    ['DefaultPixiGameplayView', DefaultPixiGameplayView.prototype.identity, { kind: 'play', family: 'built-in' }],
     ['PixiGameplayView', PixiGameplayView.prototype.identity, { kind: 'play', family: 'lr2' }],
   ];
 
