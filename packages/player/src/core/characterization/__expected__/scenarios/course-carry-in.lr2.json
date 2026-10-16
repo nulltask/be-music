@@ -397,6 +397,7 @@
         "autoScratch": false,
         "gauge": "HARD",
         "judgeRuleset": "lr2",
+        "endOnFailure": true,
         "course": {"kind":"grade","carryIn":{"gauge":76.5,"combo":7,"maxCombo":30}}
       },
       "results": {

@@ -216,7 +216,7 @@ export async function createPlaySession(
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
             ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
-            ...(endOnFailure && !drifts.omitsEndOnFailure ? { endOnFailure } : {}),
+            ...(endOnFailure ? { endOnFailure } : {}),
             ...(options.course !== undefined ? { course: options.course } : {}),
             ...hostPlaySettings,
             gauge: selectedGauge,

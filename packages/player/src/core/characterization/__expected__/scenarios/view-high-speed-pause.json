@@ -329,6 +329,7 @@
         "mode": "auto",
         "autoScratch": false,
         "gauge": "GROOVE",
+        "endOnFailure": true,
         "view": {"hiSpeed":2,"hsFix":"MAIN","visibleMs":800,"covers":[{"side":"1P","sudden":0.2,"hidden":0,"lift":0}]},
         "viewChanges": [
           {"timeUs":300000,"hiSpeed":2.5},
