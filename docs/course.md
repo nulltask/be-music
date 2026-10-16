@@ -152,6 +152,22 @@ flowchart LR
 - **For the host.** The result's map gives each stage its keys (for its sound bus and BGA layer), its window, the sound fades and the 3 s BGA crossfade the connection calls for, and whether LR2 announces the stage (only after a BLANK connection), plus the BPM readout (`tempo`) and the judge rank changes (`stageRanks`, for the engine's `stageRanks` option, which the play log records as `chart.judgeRank.stageRanks` so a replay and a re-simulation judge with them). `assetPath` lets the host prefix each stage's file paths.
 - **Not covered yet.** The scroll of an object of one stage that sounds during another stage's STOP. Only BMS stages can be stitched.
 
+**The pipeline** (`prepareNonstopCourse`, `resolveNonstopRun`, `buildNonstopCoursePlaylog`). A host stitches a course to play it, and the Leaderboard rebuilds a run's stitched chart to verify it, with the same steps, so the two agree on the chart that was played:
+
+```mermaid
+flowchart TD
+  charts["stage charts, as loaded"] --> resolve["resolve control flow<br/>(drawn, or the recorded draws)"]
+  resolve --> ln["applyCourseLongNoteConstraint"]
+  ln --> stitch["stitchNonstopCourse"]
+  stitch --> play["play the stitched chart"]
+  play --> run["resolveNonstopRun"]
+  run --> log["buildNonstopCoursePlaylog"]
+```
+
+- `prepareNonstopCourse(stages, options)` resolves each stage chart's `#RANDOM` / `#SWITCH` (with the stage's `randomDraws` when given, else drawn with `random`), applies the course's long-note constraint, and stitches the stages with the connections, placement and stitching rules. The host's asset plumbing comes in through `assetPath`, which gets the stage charts as played. A stage chart that does not resolve is refused as `stage-chart`.
+- `resolveNonstopRun(course, playlog)` gives a play's `nonstop` record: how the chart was stitched, where each stage sat in the play with its draws, and the stage of every note.
+- `buildNonstopCoursePlaylog(definition, course, playlog)` builds the course play log: the stitched play, each reached stage cut out of it and named by its chart (the host's title and file hashes, and the chart fingerprint of the chart as loaded), and every stage never reached with the facts of its chart as played.
+
 ## Finding the stages
 
 `resolveCourseStages(course, lookup)` matches each stage to a local chart: by SHA-256 when the stage has one, else by MD5, as beatoraja's `TableBar` does. A stage carrying both falls back to its MD5 when no chart has the SHA-256. A course with a missing stage is still listed, but it is not `playable`; LR2 shows such a stage as a song you do not own, and beatoraja refuses to start the course.

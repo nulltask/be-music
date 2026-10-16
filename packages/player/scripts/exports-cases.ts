@@ -364,6 +364,33 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  const benchPipelineStages = benchNonstopInputs.map((input, index) => ({
+    chart: input.chart,
+    chartPath: `stage${index}.bms`,
+    facts: { title: `Stage ${index + 1}` },
+  }));
+  const benchPipelineOptions = { constraints: ['cn' as const], connections: ['fade' as const, 'cut-fit' as const] };
+  define('player.course.prepareNonstopCourse', {
+    run: () => {
+      courseApi.prepareNonstopCourse(benchPipelineStages, { ...benchPipelineOptions, random: () => 0 });
+    },
+  });
+  const benchPrepared = courseApi.prepareNonstopCourse(benchPipelineStages, benchPipelineOptions);
+  if (!benchPrepared.ok) throw new Error(`bench NONSTOP course failed to stitch: ${benchPrepared.reason}`);
+  define('player.course.resolveNonstopRun', {
+    run: () => {
+      courseApi.resolveNonstopRun(benchPrepared.course, BENCH_PLAYLOG);
+    },
+  });
+  define('player.course.buildNonstopCoursePlaylog', {
+    run: () => {
+      courseApi.buildNonstopCoursePlaylog(
+        { name: 'Nonstop', kind: 'nonstop', constraints: ['cn'], trophies: [], release: true },
+        benchPrepared.course,
+        BENCH_PLAYLOG,
+      );
+    },
+  });
   define('player.course.planNonstopCourse', {
     run: () => {
       courseApi.planNonstopCourse(benchNonstopStages, ['fade', 'cut-fit', 'blank1']);
