@@ -4,12 +4,11 @@ import { Application, Texture, VideoSource } from 'pixi.js';
 // large optional system that not every app needs); the import has to land before any `Application.init` runs that
 // expects `renderer.prepare` to exist.
 import 'pixi.js/prepare';
-import { mirrorBeatAtTempoReversal, type TimingResolver } from '@be-music/audio-renderer/triggers';
+import { mirrorBeatAtTempoReversal } from '@be-music/audio-renderer/triggers';
 import {
   createTempoClock,
   PlayerInterruptedError,
   type PlayerSummary,
-  type PlayerTempoChange,
   type TempoClock,
 } from '@be-music/player/core/engine';
 import { resolveLr2LaneTimer } from '@be-music/lr2-skin/state';
@@ -17,15 +16,7 @@ import { resolveClearLamp, resolveDisplayedPoor, type GaugeType, type JudgeKind 
 import type { PlayerRulesetInfo } from '@be-music/player/core/engine';
 import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
-import {
-  createPlaylogViewCoalescer,
-  DEFAULT_PLAYLOG_VIEW_REPLAY,
-  resolveReplayHiSpeed,
-  resolveReplayView,
-  roundPlaylogView,
-  type BeMusicPlaylog,
-  type PlaylogViewState,
-} from '@be-music/player/playlog';
+import { DEFAULT_PLAYLOG_VIEW_REPLAY, type BeMusicPlaylog } from '@be-music/player/playlog';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import {
   type AudioBusChannel,
@@ -45,27 +36,17 @@ import {
   chartToElapsedSeconds,
   clampPlayTempo,
   resolveReplayTempo,
-  setVideoPlaybackTempo,
   supportsLiveTempoChange,
   type ReplayTempo,
 } from '../../runtime/play-tempo.ts';
-import { fillLaneCover, resolveHiSpeedForVisibleMs, resolveNoteVisibleMs } from './lane-cover.ts';
-import { BE_MUSIC_HI_SPEED_SCALE, PlaylogViewCursor } from '../playlog-view.ts';
+import { PlaylogViewCursor } from '../playlog-view.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { SceneIdentity } from '../../host/family-kit.ts';
 import { staggerDestroyTextures } from '../pixi-utils.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import type { BeMusicJson } from '@be-music/json';
-import {
-  BG,
-  BGA,
-  DESIGN_HEIGHT,
-  DESIGN_WIDTH,
-  HISPEED_STEP,
-  FALLBACK_INTRO_DELAY_MS,
-  PIXELS_PER_BEAT,
-} from '../gameplay-constants.ts';
+import { BG, BGA, DESIGN_HEIGHT, DESIGN_WIDTH, HISPEED_STEP, FALLBACK_INTRO_DELAY_MS } from '../gameplay-constants.ts';
 import { snapHiSpeed, stepPlayerHiSpeed } from '../hi-speed.ts';
 import { resolveLr2LaneIndex, resolveSideRelativeLaneIndex } from '../gameplay-lanes.ts';
 import { resolveGameplayAudioTailCleanupDelayMs } from './gameplay-result-delay.ts';
@@ -97,7 +78,16 @@ import {
 } from './touch-lanes.ts';
 import { logger } from '../../logger.ts';
 import { QUIT_HOLD_KEY_CODE, QuitHoldController } from '../quit-hold.ts';
-import { isChannelOnSide, prepareSong } from '../../session/play/play-chart.ts';
+import { prepareSong } from '../../session/play/play-chart.ts';
+import {
+  adjustHiSpeed,
+  flushPlaylogView,
+  followTempoChange,
+  resolveLaneCovers,
+  resolveVisibleMs,
+  startPlaylogView,
+  updatePlaylogView,
+} from '../../session/play/play-view-settings.ts';
 import {
   disposeGameplayAudioGraphAfterDelay,
   prepareAudio,
@@ -811,7 +801,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const signals = this.sharedEngineInputSignals;
     if (signals === undefined) return;
     this.sharedEngineInterrupt = reason;
-    this.flushPlaylogView();
+    flushPlaylogView.call(this);
     if (this.sharedEngineChartSettled) {
       this.chartEndHold?.abort();
       return;
@@ -1469,32 +1459,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // way to push HiSpeed changes back to the renderer; we handle them directly here.
     if (event.code === 'ArrowUp') {
       event.preventDefault();
-      this.adjustHiSpeed(HISPEED_STEP);
+      adjustHiSpeed.call(this, HISPEED_STEP);
       return;
     }
     if (event.code === 'ArrowDown') {
       event.preventDefault();
-      this.adjustHiSpeed(-HISPEED_STEP);
+      adjustHiSpeed.call(this, -HISPEED_STEP);
     }
   };
-
-  /**
-   * Adjust the visual hi-speed and clamp to [HISPEED_MIN, HISPEED_MAX]. Snap to a 1/1000 grid so accumulated press
-   * deltas don't drift off the natural 0.1 grid through float-rounding noise — `0.1` has no exact IEEE-754
-   * representation, so adding it 13 times in a row would otherwise produce `1.5000000000000002` and then
-   * `1.6000000000000003` etc., visibly off-by-one in the digit panel. The 1/1000 snap absorbs that without breaking
-   * even finer steps if HISPEED_STEP shrinks again later.
-   */
-  private adjustHiSpeed(delta: number): void {
-    if (this.options.hiSpeedLocked === true) return;
-    // The step moves the player's hi-speed (on their own scale, as the readout shows it); HS-FIX scales the drawn one.
-    const next = stepPlayerHiSpeed(this.playerHiSpeed, delta, this.hsFixMultiplier);
-    if (next === undefined || next.player === this.playerHiSpeed) return;
-    this.playerHiSpeed = next.player;
-    this.hiSpeed = next.drawn;
-    this.scrollHiSpeed.retarget(next.drawn, performance.now());
-    this.options.onHiSpeedChange?.(next.player);
-  }
 
   /**
    * Sets the hi-speed from the host (e.g. a settings menu) while the scene is mounted. `value` is on the scale of
@@ -1508,55 +1480,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (next.drawn === this.hiSpeed) return;
     this.hiSpeed = next.drawn;
     this.scrollHiSpeed.retarget(next.drawn, performance.now());
-  }
-
-  /**
-   * Applies the HS-FIX multiplier to {@link hiSpeed} once `prepareSong` has installed the timing resolver. The player's
-   * hi-speed is the one they want at `referenceBpm` (`#BASEBPM`, else the start BPM); HS-FIX rescales it so the scroll
-   * at another BPM of the chart feels like that, as beatoraja's fixed hi-speed modes do (`LaneRenderer.init`):
-   *
-   * - `OFF` — leave HS as-is (beatoraja `OFF`; its `STARTBPM` is the same here, since the reference is the start BPM).
-   * - `MAXBPM` — scale by `referenceBpm / maxBPM` (beatoraja `MAXBPM`).
-   * - `MINBPM` — scale by `referenceBpm / minBPM` (beatoraja `MINBPM`).
-   * - `AVERAGE` — scale by `referenceBpm / mainBPM`, the BPM the most notes sit at ({@link resolveChartMainBpm},
-   *   beatoraja `MAINBPM`). A time average is skewed by the split-second BPM spikes and STOPs of BPM × N + STOP
-   *   gimmicks (an average of ~810 on a 145 BPM chart), the main BPM is not.
-   * - `CONSTANT` — true per-frame "constant scroll" needs a render-pipeline change that hasn't landed; falls through
-   *   to the `AVERAGE` multiplier so the option still produces a sensible shift instead of doing nothing.
-   *
-   * Skipped when there are no tempo points (defensive — the resolver can be constructed empty during edge-case mounts)
-   * or the chart has no BPM info.
-   */
-  applyHsFix(resolver: TimingResolver, referenceBpmCandidate: number | undefined, mainBpm: number | undefined): void {
-    const mode = this.options.hsFix ?? 'OFF';
-    if (mode === 'OFF') return;
-    const referenceBpm =
-      typeof referenceBpmCandidate === 'number' && referenceBpmCandidate > 0 ? referenceBpmCandidate : undefined;
-    if (referenceBpm === undefined) return;
-    const tempoPoints = resolver.tempoPoints;
-    if (tempoPoints.length === 0) return;
-    // |BPM| — a negative `#BPMxx` (LR2 reverse-scroll gimmick) integrates at its magnitude, so the HS-fix range
-    // math uses the magnitude too. Zero / non-finite points still drop out via the `> 0` filter.
-    const bpms = tempoPoints.map((point) => Math.abs(point.bpm)).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
-    if (bpms.length === 0) return;
-    let targetBpm: number;
-    switch (mode) {
-      case 'MAXBPM':
-        targetBpm = Math.max(...bpms);
-        break;
-      case 'MINBPM':
-        targetBpm = Math.min(...bpms);
-        break;
-      default:
-        targetBpm = mainBpm ?? referenceBpm;
-        break;
-    }
-    const multiplier = referenceBpm / targetBpm;
-    if (!Number.isFinite(multiplier) || multiplier <= 0) return;
-    this.hsFixMultiplier = multiplier;
-    this.hiSpeed = snapHiSpeed(this.hiSpeed * multiplier) ?? this.hiSpeed;
-    // Chart setup, before the notes are on screen — no glide.
-    this.scrollHiSpeed.jump(this.hiSpeed);
   }
 
   /**
@@ -1786,7 +1709,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // engine itself owns judge / sample / chart-end bookkeeping and runs its own tick loop at
       // TUI_FRAME_INTERVAL_MS independent of this rAF.
       this.drainSharedEngineSignals();
-      this.updatePlaylogView(seconds);
+      updatePlaylogView.call(this, seconds);
     }
     this.perf.time('updateFps', () => this.updateFps());
     this.perf.time('updateScores', () => {
@@ -2082,25 +2005,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return !this.disposed && this.liveTempo.request(tempo);
   }
 
-  /** Follows a tempo change the engine made: the view's clock, the BGA videos, the NONSTOP fades and the host. */
-  private followTempoChange(change: PlayerTempoChange): void {
-    if (this.disposed) return;
-    this.tempo = change.tempo;
-    this.tempoClock.setTempoAtChartSeconds(change.seconds, change.tempo);
-    setVideoPlaybackTempo(
-      [...this.bgaVideos.values()].map((handle) => handle.video),
-      change.tempo,
-    );
-    if (this.audioContext && this.audioContextStartTime > 0) {
-      const chartStart = this.audioContextStartTime;
-      this.nonstopMixer?.retime(
-        this.currentSeconds(),
-        (seconds) => chartStart + this.tempoClock.clockMsAt(seconds) / 1000,
-      );
-    }
-    this.options.onTempoChange?.(change.tempo);
-  }
-
   private publishJudge(judge: JudgeKind, seconds: number, channel?: string): void {
     const until = seconds + 0.6;
     this.lastJudge = judge;
@@ -2262,140 +2166,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     );
   }
 
-  /**
-   * The lane covers of each play side with lanes, as {@link renderShutter} draws them (whether or not it does: a skin
-   * that sets `drawsLaneCover` reads them to draw its own). The array and its entries are reused across frames.
-   */
+  /** The lane covers each play side shows (`resolveLaneCovers` in `play-view-settings.ts`), for the playfield and chrome. */
   resolveLaneCovers(): readonly BeMusicLaneCover[] {
-    let cache = this.laneCovers;
-    if (!cache || cache.channels !== this.laneChannels) {
-      const covers: BeMusicLaneCover[] = [];
-      for (const side of ['1P', '2P'] as const) {
-        if (this.laneChannels.some((channel) => isChannelOnSide(channel, side))) {
-          covers.push({ side, sudden: 0, hidden: 0, lift: 0 });
-        }
-      }
-      cache = { channels: this.laneChannels, covers };
-      this.laneCovers = cache;
-    }
-    const { laneCover, shutter } = this.options;
-    for (const cover of cache.covers) {
-      const mode = (cover.side === '1P' ? this.options.hiddenSudden1P : this.options.hiddenSudden2P) ?? 'OFF';
-      fillLaneCover(cover, mode, shutter, laneCover);
-      // A replay's SUDDEN+ / HIDDEN+ (the scene draws no LIFT, so that stays 0).
-      const replayed = this.replayCovers?.find((entry) => entry.side === cover.side);
-      if (replayed !== undefined) {
-        cover.sudden = replayed.sudden;
-        cover.hidden = replayed.hidden;
-      }
-    }
-    return cache.covers;
+    return resolveLaneCovers.call(this);
   }
 
-  /** What the player sees now in the play log's units: the drawn hi-speed on this scene's scale, HS-FIX and covers. */
-  private resolvePlaylogView(): PlaylogViewState {
-    const covers = this.resolveLaneCovers().map(({ side, sudden, hidden, lift }) => ({ side, sudden, hidden, lift }));
-    const view: PlaylogViewState = {
-      hiSpeed: this.hiSpeed,
-      hiSpeedScale: BE_MUSIC_HI_SPEED_SCALE,
-      hsFix: this.options.hsFix ?? 'OFF',
-      covers,
-    };
-    // The visible time at the main BPM without `#SCROLL`, so another scale's replay can match it.
-    const visibleMs = this.resolveVisibleMs(covers[0], this.chartBpmRange?.mainBpm, 1);
-    if (visibleMs !== undefined && visibleMs > 0) view.visibleMs = visibleMs;
-    // At the play log's precision, so cover fractions record without float noise.
-    return roundPlaylogView(view);
-  }
-
-  /** The view the recorded play log starts from (`play.view`); later changes go through {@link updatePlaylogView}. */
-  private startPlaylogView(): PlaylogViewState {
-    const view = this.resolvePlaylogView();
-    this.playlogViewCoalescer = createPlaylogViewCoalescer(view);
-    return view;
-  }
-
-  /**
-   * Per frame, once the lanes are laid out: while recording, sends the engine what changed in the view (at most one
-   * change per 100 ms, so a held key records a few); while replaying, shows the recorded view at the playhead as far as
-   * {@link CoreGameplayViewOptions.replayView} asks.
-   */
-  private updatePlaylogView(seconds: number): void {
-    if (this.laneX.size === 0) return;
-    if (this.replayViewCursor !== undefined) {
-      const recorded = this.replayViewCursor.next(Math.round(seconds * 1_000_000));
-      if (recorded !== undefined) this.applyReplayView(recorded);
-      return;
-    }
-    const signals = this.sharedEngineInputSignals;
-    if (this.playlogViewCoalescer === undefined || signals === undefined) return;
-    const change = this.playlogViewCoalescer.observe(this.resolvePlaylogView(), performance.now());
-    if (change !== undefined) signals.pushCommand({ kind: 'view', change });
-  }
-
-  /** Sends the engine the view change still held back by the coalescer, as the play ends ({@link updatePlaylogView}). */
-  private flushPlaylogView(): void {
-    const signals = this.sharedEngineInputSignals;
-    if (this.replayViewCursor !== undefined || this.playlogViewCoalescer === undefined || signals === undefined) return;
-    if (this.laneX.size === 0) return;
-    const change = this.playlogViewCoalescer.flush(this.resolvePlaylogView());
-    if (change !== undefined) signals.pushCommand({ kind: 'view', change });
-  }
-
-  /**
-   * Shows a replay's recorded view over the viewer's own: the covers as recorded, and the hi-speed as recorded on this
-   * scale, or matching the recorded visible time when it was played on another (`resolveReplayHiSpeed`).
-   */
-  private applyReplayView(recorded: PlaylogViewState): void {
-    const replay = this.options.replayView ?? DEFAULT_PLAYLOG_VIEW_REPLAY;
-    this.replayCovers = undefined;
-    const view = resolveReplayView(recorded, this.resolvePlaylogView(), replay);
-    if (replay.covers) this.replayCovers = view.covers;
-    if (!replay.hiSpeed) return;
-    const sudden = view.covers?.[0]?.sudden ?? 0;
-    const mainBpm = this.chartBpmRange?.mainBpm;
-    const hiSpeed = resolveReplayHiSpeed(view, BE_MUSIC_HI_SPEED_SCALE, (visibleMs) =>
-      mainBpm === undefined
-        ? undefined
-        : resolveHiSpeedForVisibleMs(this.resolveLaneHeightPx(), sudden, 0, PIXELS_PER_BEAT, mainBpm, visibleMs),
-    );
-    const next = hiSpeed === undefined ? undefined : snapHiSpeed(hiSpeed);
-    if (next === undefined || next === this.hiSpeed) return;
-    this.hiSpeed = next;
-    this.playerHiSpeed = snapHiSpeed(next / this.hsFixMultiplier) ?? this.playerHiSpeed;
-    this.scrollHiSpeed.retarget(next, performance.now());
-  }
-
-  /**
-   * How long a note stays visible below `cover` (the first play side's) at the current scroll and BPM, over the lanes
-   * laid out last frame, divided by the `#SCROLL` × `#SPEED` rate at the playhead (0 while the chart scrolls backwards or
-   * stands still, as beatoraja shows it). `undefined` until the lanes are laid out or while the BPM is unknown.
-   */
+  /** How long a note stays visible below `cover` (`resolveVisibleMs` in `play-view-settings.ts`), for the chrome. */
   resolveVisibleMs(
     cover: BeMusicLaneCover | undefined,
     bpm: number | undefined,
     scrollRate: number,
   ): number | undefined {
-    if (this.laneX.size === 0 || bpm === undefined || !(bpm > 0)) return undefined;
-    return resolveNoteVisibleMs(
-      this.resolveLaneHeightPx(),
-      cover?.sudden ?? 0,
-      cover?.lift ?? 0,
-      PIXELS_PER_BEAT * this.hiSpeed,
-      bpm,
-      scrollRate,
-    );
+    return resolveVisibleMs.call(this, cover, bpm, scrollRate);
   }
-
-  /** The tallest lane laid out last frame, in design pixels (0 before the lanes are laid out). */
-  private resolveLaneHeightPx(): number {
-    let laneHeight = 0;
-    for (const lane of this.laneX.values()) {
-      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
-    }
-    return laneHeight;
-  }
-
   /**
    * Paints the chrome layers (`skinLayer` / `overlayLayer`) for this frame and sets their transforms together with the
    * BGA layer's. The default draws the skinless chrome through `skinlessChromeRenderer` (or the be-music skin's
@@ -2571,7 +2354,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // The play tempo: the engine's clock runs `tempo` times as fast and judges in chart time. A change during the
         // play comes back through `onTempoChange`, at the chart second the engine took it.
         speed: this.tempo,
-        onTempoChange: (change) => this.followTempoChange(change),
+        onTempoChange: (change) => followTempoChange.call(this, change),
         // Forward AUTO SCRATCH: engine has a single boolean rather than per-side, so either-side AUTO SCRATCH
         // turns scratch auto on for both 16 / 26 channels. That's a per-side fidelity loss for rare DP charts
         // where only one player's scratch should auto-spin (the demo's lil-gui surfaces them as two separate
@@ -2668,7 +2451,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
                   : {}),
                 ...(this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {}),
                 // What the player sees at the start; the changes during the play go in as `view` commands.
-                view: this.startPlaylogView(),
+                view: startPlaylogView.call(this),
                 ...(this.song?.chartPath !== undefined ? { native: { chartPath: this.song.chartPath } } : {}),
               },
               onPlaylogRecorded: (playlog) => {
@@ -3004,7 +2787,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           this.onHeldPlayEnded = () => {
             if (!this.disposed) finish();
           };
-          this.flushPlaylogView();
+          flushPlaylogView.call(this);
           this.chartEndHold?.abort();
         },
         { fadeAudio: ending.fadeAudio, minFadeOutMs: ending.fadeOutMs },
