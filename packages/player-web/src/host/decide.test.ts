@@ -1,17 +1,21 @@
+import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import { createEmptyJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { parseChart } from '@be-music/parser';
 import type { LibraryChart } from '@be-music/scene-model';
+import type { Texture } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { AudioService } from '../runtime/audio-service.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
+import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
+import { resolveBeatorajaDecideTiming } from '../view/beatoraja/decide-view.ts';
 import { BuiltInDecideView, resolveBuiltInDecideTiming } from '../view/built-in/decide-view.ts';
 import { resolveLr2DecideTimers, resolveLr2DecideTiming } from '../view/lr2/decide-view.ts';
 import { createDecideScene } from './decide.ts';
-import type { BuiltInKit, Lr2Kit } from './family-kit.ts';
+import type { BeatorajaKit, BuiltInKit, Lr2Kit } from './family-kit.ts';
 
 const CHART: LibraryChart = {
   id: 'chart',
@@ -328,6 +332,156 @@ describe('createDecideScene with an LR2 kit', () => {
     expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
     expect(() => scene.updateKit({ family: 'lr2', skin: lr2DecideSkin() })).not.toThrow();
     expect(() => scene.updateKit(kit)).not.toThrow();
+    scene.dispose();
+  });
+});
+
+/** A beatoraja decide skin with nothing to draw, with the skin's timing fields. */
+function beatorajaDecideKit(timing: Pick<BeatorajaSkin, 'scene' | 'input' | 'fadeout'> = {}): BeatorajaKit {
+  const skin: BeatorajaSkin = { type: 6, w: 1280, h: 720, image: [], destination: [], ...timing };
+  const empty = new Map<number | string, Texture>();
+  const textures: BeatorajaTextureCache = {
+    get: (id) => empty.get(id),
+    values: () => empty.values(),
+    pathOf: () => undefined,
+  };
+  return { family: 'beatoraja', kit: { skin, textures, files: new Map() } };
+}
+
+describe('resolveBeatorajaDecideTiming', () => {
+  it("takes input after the skin's input, moves on after its scene and fades out over its fadeout", () => {
+    expect(resolveBeatorajaDecideTiming({ scene: 2000, input: 300, fadeout: 200 })).toEqual({
+      inputDelayMs: 300,
+      autoAdvanceMs: 2000,
+      fadeOutMs: 200,
+      escapeWaitsForInput: true,
+    });
+  });
+
+  it("falls back to decidemain.lua's 500 ms input, 3000 ms scene and 500 ms fadeout", () => {
+    expect(resolveBeatorajaDecideTiming({})).toEqual({
+      inputDelayMs: 500,
+      autoAdvanceMs: 3000,
+      fadeOutMs: 500,
+      escapeWaitsForInput: true,
+    });
+    expect(resolveBeatorajaDecideTiming({ input: Number.NaN, fadeout: -1 })).toMatchObject({
+      inputDelayMs: 500,
+      fadeOutMs: 500,
+    });
+  });
+
+  it('waits for the player when the skin sets scene to 0', () => {
+    expect(resolveBeatorajaDecideTiming({ scene: 0 })).not.toHaveProperty('autoAdvanceMs');
+    expect(resolveBeatorajaDecideTiming({ scene: -1 }).autoAdvanceMs).toBe(3000);
+  });
+});
+
+describe('createDecideScene with a beatoraja kit', () => {
+  function createAudioWithSkinSounds() {
+    const skinSounds = { play: vi.fn(() => true), loop: vi.fn(() => true), stop: vi.fn(() => true) };
+    const audio = {
+      playJingle: vi.fn(async () => true),
+      stopOwned: vi.fn(),
+      skinSounds: { ...skinSounds, owned: vi.fn(() => skinSounds) },
+    };
+    return { audio, service: audio as unknown as AudioService };
+  }
+
+  function create(timing: Pick<BeatorajaSkin, 'scene' | 'input' | 'fadeout'> = { scene: 2000, input: 300 }) {
+    const listeners = new Set<(event: KeyboardEvent) => void>();
+    const keyTarget: SessionKeyTarget = {
+      addEventListener: (type, listener) => {
+        if (type === 'keydown') listeners.add(listener);
+      },
+      removeEventListener: (_type, listener) => listeners.delete(listener),
+    };
+    const press = (key: string, timeStamp: number) => {
+      const event = { key, code: key, repeat: false, timeStamp, target: null, preventDefault: vi.fn() };
+      for (const listener of Array.from(listeners)) listener(event as unknown as KeyboardEvent);
+    };
+    const { audio, service } = createAudioWithSkinSounds();
+    const on = { continue: vi.fn(), cancel: vi.fn() };
+    const clock = { now: 1000 };
+    const jingle = { bytes: new Uint8Array([1]) };
+    const scene = createDecideScene(beatorajaDecideKit(timing), {
+      chart: CHART,
+      sounds: { decideBgm: jingle },
+      audio: service,
+      on,
+      keyTarget,
+      now: () => clock.now,
+    });
+    return { scene, audio, on, clock, jingle, press };
+  }
+
+  it('is the beatoraja decide screen', () => {
+    const { scene } = create();
+    expect(scene.identity).toEqual({ kind: 'decide', family: 'beatoraja' });
+    scene.dispose();
+  });
+
+  it("moves on by itself once the skin's scene is up, after its 500 ms fade-out", async () => {
+    const { scene, on, clock } = create();
+    const fake = createFakeHost();
+    await scene.enter(fake.host);
+    clock.now = 2999;
+    fake.tick();
+    clock.now = 3000;
+    fake.tick();
+    clock.now = 3499;
+    fake.tick();
+    expect(on.continue).not.toHaveBeenCalled();
+    clock.now = 3500;
+    fake.tick();
+    expect(on.continue).toHaveBeenCalledTimes(1);
+    scene.dispose();
+  });
+
+  it("takes neither Enter nor Escape before the skin's input, then backs out on Escape", async () => {
+    const { scene, on, clock, press } = create({ scene: 0, input: 300, fadeout: 0 });
+    const fake = createFakeHost();
+    await scene.enter(fake.host);
+    press('Escape', 1299);
+    press('Enter', 1299);
+    clock.now = 1299;
+    fake.tick();
+    expect(on.cancel).not.toHaveBeenCalled();
+    expect(on.continue).not.toHaveBeenCalled();
+    clock.now = 1300;
+    fake.tick();
+    press('Escape', 1300);
+    expect(on.cancel).toHaveBeenCalledTimes(1);
+    scene.dispose();
+  });
+
+  it('takes no click, as beatoraja does not', async () => {
+    const { scene, on, clock } = create({ scene: 0, input: 0, fadeout: 0 });
+    const fake = createFakeHost();
+    await scene.enter(fake.host);
+    clock.now = 2000;
+    fake.tick();
+    fake.click();
+    expect(fake.pointer.size).toBe(0);
+    expect(on.continue).not.toHaveBeenCalled();
+    scene.dispose();
+  });
+
+  it("plays the theme's decide sound and the skin's Lua sounds as the screen's own, and stops them as it leaves", async () => {
+    const { scene, audio, jingle } = create();
+    await scene.enter(createFakeHost().host);
+    expect(audio.playJingle).toHaveBeenCalledWith(jingle, { owner: expect.any(Object) });
+    const owner = (audio.playJingle.mock.calls[0] as unknown[])[1] as { owner: object };
+    expect(audio.skinSounds.owned).toHaveBeenCalledWith(owner.owner);
+    scene.exit();
+    expect(audio.stopOwned).toHaveBeenCalledWith(owner.owner);
+    scene.dispose();
+  });
+
+  it('keeps its family and its skin', () => {
+    const { scene } = create();
+    expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
+    expect(() => scene.updateKit(beatorajaDecideKit())).not.toThrow();
     scene.dispose();
   });
 });

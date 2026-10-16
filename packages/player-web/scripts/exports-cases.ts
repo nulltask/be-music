@@ -408,6 +408,10 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       const kits: playerWebCoreApi.DecideSceneKit[] = [
         { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
         { family: 'lr2', skin: BENCH_LR2_DECIDE_SKIN },
+        {
+          family: 'beatoraja',
+          kit: { skin: makeBenchBeatorajaSkin(), textures: makeEmptyBeatorajaTextureCache(), files: new Map() },
+        },
       ];
       for (const kit of kits) {
         const scene = playerWebCoreApi.createDecideScene(kit, {

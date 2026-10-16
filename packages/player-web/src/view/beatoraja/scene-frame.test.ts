@@ -1,8 +1,22 @@
-import { BEATORAJA_TEXT, type BeatorajaSkin } from '@be-music/beatoraja-skin';
+import {
+  BEATORAJA_TEXT,
+  TIMER_FADEOUT,
+  TIMER_PLAY,
+  TIMER_READY,
+  TIMER_SCENE_START,
+  TIMER_STARTINPUT,
+  type BeatorajaSkin,
+} from '@be-music/beatoraja-skin';
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import type { BrowserSongEntry } from '../../collection/types.ts';
-import { resolveBeatorajaSkinTimingMs, resolveBeatorajaSongText } from './scene-frame.ts';
+import {
+  beatorajaSceneNowMs,
+  resolveBeatorajaFadeOutMs,
+  resolveBeatorajaSceneTimers,
+  resolveBeatorajaSkinTimingMs,
+  resolveBeatorajaSongText,
+} from './scene-frame.ts';
 
 function makeSong(overrides: Partial<BrowserSongEntry> = {}): BrowserSongEntry {
   const chart = createEmptyJson();
@@ -53,5 +67,38 @@ describe('resolveBeatorajaSkinTimingMs', () => {
     expect(resolveBeatorajaSkinTimingMs(undefined, 500)).toBe(500);
     expect(resolveBeatorajaSkinTimingMs(Number.NaN, 500)).toBe(500);
     expect(resolveBeatorajaSkinTimingMs(-1, 500, { min: 0 })).toBe(500);
+  });
+});
+
+describe('resolveBeatorajaFadeOutMs', () => {
+  it("reads the skin's fadeout, else the reference themes' 500 ms", () => {
+    expect(resolveBeatorajaFadeOutMs(200)).toBe(200);
+    expect(resolveBeatorajaFadeOutMs(0)).toBe(0);
+    expect(resolveBeatorajaFadeOutMs(undefined)).toBe(500);
+    expect(resolveBeatorajaFadeOutMs(-1)).toBe(500);
+    expect(resolveBeatorajaFadeOutMs(Number.NaN)).toBe(500);
+  });
+});
+
+describe('resolveBeatorajaSceneTimers', () => {
+  const clock = { nowMs: 1100, enteredAtMs: 1000 };
+
+  it("runs the scene, input, READY and PLAY timers on the screen's own clock", () => {
+    expect(beatorajaSceneNowMs(clock)).toBe(100);
+    const timers = resolveBeatorajaSceneTimers({ clock, inputOpenAtMs: 1500 }, 'input');
+    expect([...timers]).toEqual([
+      [TIMER_SCENE_START, 0],
+      [TIMER_STARTINPUT, 500],
+      [TIMER_READY, 500],
+      [TIMER_PLAY, 500],
+    ]);
+    expect(timers.has(TIMER_FADEOUT)).toBe(false);
+  });
+
+  it('starts READY and PLAY at the entry, and the fade-out once the screen leaves', () => {
+    const timers = resolveBeatorajaSceneTimers({ clock, inputOpenAtMs: 1500, leaving: { atMs: 1800 } }, 'entry');
+    expect(timers.get(TIMER_READY)).toBe(0);
+    expect(timers.get(TIMER_PLAY)).toBe(0);
+    expect(timers.get(TIMER_FADEOUT)).toBe(800);
   });
 });
