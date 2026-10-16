@@ -9,7 +9,7 @@ timing、note、判定、score、gauge、BGA event の意味など、CLI と共�
 
 browser player は gameplay を `@be-music/player/core/engine` 経由で駆動します。
 判定、keysound trigger routing、long note、地雷の発動、score、gauge、chart finish の意味論は engine が担当します。
-LR2 gameplay scene は LR2 の `PLAYSTART` gate で 1 回 engine を起動し、beatoraja gameplay scene は `BeatorajaRuntimeAdapter` の背後に engine を mount します。
+標準と LR2 のプレイ画面のプレイのセッションはスキンの `PLAYSTART` gate で 1 回 engine を起動し、beatoraja gameplay scene は `BeatorajaRuntimeAdapter` の背後に engine を mount します。
 どちらの経路も engine の frame snapshot を scene state へ反映し、UI command を Pixi の視覚効果へ変換します。
 
 browser runtime は次の adapter module を使います。
@@ -195,7 +195,7 @@ select scene は、hi-speed、autoplay、BGA mode/size、filter、sort、HS-FIX�
 select 時の option は chart preparation 時に gameplay へ引き継ぎます。
 選んだ gauge は shared engine に渡り、engine は有効なルールセットの gauge 一覧からそれを解決して、そのカーブで進めます（HARD は実際に減り、DEATH は実際に途中終了します）。リプレイはプレイログに記録された gauge で進みます。2P independent gauge math はまだ接続していません。
 
-グルーヴゲージのバーは LR2 の 50 ビード(各 2 %)として、単一の `#SRC_GROOVEGAUGE` の 4 セルスプライト(`表赤/表緑/裏赤/裏緑` = lit-red, lit-green, unlit-red, unlit-green)で描画します。80 % のクリア境界以上のビードは緑セル、未満は赤セルを使います。survival 系ゲージ(HARD / DEATH)は LR2 ではクリア境界が無いため、バー全体を赤で描画します。バーは現在のゲージ値のみを追従し、peak-hold(残像)ビードは描きません(LR2 にも無い)。ビードのセル選択ロジックは `scene/lr2/gameplay-hud.ts` の純関数 `resolveGrooveGaugeBeads` です。
+グルーヴゲージのバーは LR2 の 50 ビード(各 2 %)として、単一の `#SRC_GROOVEGAUGE` の 4 セルスプライト(`表赤/表緑/裏赤/裏緑` = lit-red, lit-green, unlit-red, unlit-green)で描画します。80 % のクリア境界以上のビードは緑セル、未満は赤セルを使います。survival 系ゲージ(HARD / DEATH)は LR2 ではクリア境界が無いため、バー全体を赤で描画します。バーは現在のゲージ値のみを追従し、peak-hold(残像)ビードは描きません(LR2 にも無い)。ビードのセル選択ロジックは `view/lr2/play-hud.ts` の純関数 `resolveGrooveGaugeBeads` です。
 
 scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) と
 [`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts) にあります。destination keyframe 評価、sprite transform、source cell 選択、text rendering、number、slider、bargraph を共通化します。scene module は state 固有の値解決、timer、input behavior だけを保持します。
@@ -208,8 +208,8 @@ theme file なしで select、gameplay、result の表示を提供します。
 この family はすべての画面を be-music スキン（公開パッケージ `@be-music/skin-sdk` 上に書かれたコード定義のスキン）で描きます。
 スキンの作り方は [be-music スキンの作り方](./be-music-skin.ja.md) を参照してください。
 
-プレイ画面（`createPlayScene`、[プレイ画面](#プレイ画面)）は、プレイのセッションを通して LR2 の gameplay scene と共通の engine、プレイフィールド、BGA renderer、audio bus、input handling を共有し、クロームは be-music スキンが描きます。
-LR2 gameplay scene は default renderer を import せず、LR2 skin rendering は parse 済み `.lr2skin` data に紐づいたままです。
+プレイ画面（`createPlayScene`、[プレイ画面](#プレイ画面)）は、LR2 のプレイ画面とプレイのセッション（engine、audio bus、input）と共通のプレイフィールド・BGA renderer を共有し、クロームは be-music スキンが描きます。
+LR2 のプレイビューは be-music の renderer を import せず、LR2 skin rendering は parse 済み `.lr2skin` data に紐づいたままです。
 
 default gameplay chrome は `scene/gameplay-lanes.ts` の共通 lane geometry helper を使います。
 scratch lane は key lane より幅広く、2P scratch は右側に表示し、DP layout では両 side を SP 幅へ押し込んで全 lane を縮小するのではなく、片側分の lane 幅を保持します。
@@ -285,7 +285,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-scene が表示する内容は表示の前に渡します。標準と LR2 の decide 画面は `createDecideScene` の option、beatoraja の decide scene は `setTarget`、標準と LR2 の result 画面は `createResultScene` の option、beatoraja の result scene は `setResult`、標準のプレイ画面は `createPlayScene` の option、LR2 の gameplay scene は `prepare(host, song, source)` の song、ほかは constructor の option です。
+scene が表示する内容は表示の前に渡します。標準と LR2 の decide 画面は `createDecideScene` の option、beatoraja の decide scene は `setTarget`、標準と LR2 の result 画面は `createResultScene` の option、beatoraja の result scene は `setResult`、標準と LR2 のプレイ画面は `createPlayScene` の option、ほかは constructor の option です。
 
 - **select scene は生かしておきます。** 標準と LR2 の select scene は decide、プレイ、result のあいだも残ります。`exit()` で BGM を一時停止し、chart preview（focus 中の譜面は覚えたまま）と描画ループを止めますが、cursor、一覧の状態、decode 済みの BGM は保ちます。input の listener はつないだままで、stage にないあいだは入力を無視します。もう一度 enter すると scene timer を始め直して skin の入場演出を再び流し、BGM と preview を再開します。beatoraja の select scene は snapshot から作り直します。
 - **プレイは stage の外で読み込みます。** `prepare()` は stage にも listener にも触れずに譜面を parse して音声を decode するので、demo は decide 画面の裏でプレイを準備します。decide 画面が終わると `setScene(play)` で decide scene を exit してプレイを enter し、`start()` で始めます。decide 画面のあいだに押した key は decide 画面にだけ届きます。decide 画面がないときは demo が先にプレイを表示し、表示中に走る `prepare()` は読み込み中の playfield を描きます。
@@ -311,7 +311,7 @@ sequenceDiagram
 
 ### gameplay family が共有するもの
 
-LR2 / default の gameplay view と beatoraja の gameplay view は、描画はそれぞれの skin で行いますが、プレイの音、見た目、終わり方を決める処理は 1 か所にまとめてあり、両者がずれることはありません。
+標準 / LR2 のプレイのセッションと beatoraja の gameplay view は、描画はそれぞれの skin で行いますが、プレイの音、見た目、終わり方を決める処理は 1 か所にまとめてあり、両者がずれることはありません。
 
 ```mermaid
 flowchart TD
@@ -321,7 +321,7 @@ flowchart TD
     ending[scene/play-ending.ts]
     lamp[resolveClearLamp]
   end
-  core[LR2 / default の gameplay view] --> audio
+  core[標準 / LR2 のプレイのセッション] --> audio
   core --> bga
   core --> ending
   prep[prepareBeatorajaGameplayChart] --> audio
@@ -338,7 +338,7 @@ flowchart TD
 
 ## シーンセッションとファミリービュー
 
-scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。標準と LR2 の決定画面とリザルト画面、標準のプレイ画面はすでに移りました（[決定画面](#決定画面)、[リザルト画面](#リザルト画面)、[プレイ画面](#プレイ画面)）。ほかの scene は、まだ [Scene lifecycle](#scene-lifecycle) で説明したクラスのままです。
+scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。標準と LR2 の決定画面、プレイ画面、リザルト画面はすでに移りました（[決定画面](#決定画面)、[リザルト画面](#リザルト画面)、[プレイ画面](#プレイ画面)）。ほかの scene は、まだ [Scene lifecycle](#scene-lifecycle) で説明したクラスのままです。
 
 ```mermaid
 flowchart LR
@@ -369,25 +369,25 @@ flowchart LR
   - ティッカーがセッションにフレームを求め、ビューに描かせます。
   - キーイベントは素のデータとしてセッションに渡します。テキスト欄にフォーカスがあるときは渡しません。ビューのインテントは、scene に入っている間だけセッションに渡します。
   - `exit()` は両方を外し、次の `enter` のために保ちます。`dispose()` で両方を終えます。
-- **`PlayfieldSkin`** は、種類ごとのスキンが共通のプレイフィールドに渡すものです。ステージ、レーン、ノート・小節線・ボムの画像、エフェクトの長さです。`CoreGameplayView` のサブクラスが上書きしていたフックを置き換えます。
+- **`PlayfieldSkin`** は、種類ごとのスキンが共通のプレイフィールドに渡すものです。ステージ、レーン、ノート・小節線・ボムの画像、エフェクトの長さです。プレイのビューは、プレイフィールドのまわりに自分で描くものも **`PlayChrome`** として共通のフレームの処理に渡します。自分のレイヤー、クローム、最後に描くテキスト、ボムが消えたときに止めるものです。この 2 つで、削除した `CoreGameplayView` のサブクラスが上書きしていたフックを置き換えました。
 
-  | `CoreGameplayView` のフック                               | 置き換え先                                               |
-  | --------------------------------------------------------- | -------------------------------------------------------- |
-  | `stageSize`                                               | `PlayfieldSkin.stage`                                    |
-  | `themeOwnsPlayfield`                                      | `PlayfieldSkin.ownsLanes`                                |
-  | `resolveThemeLaneRect`                                    | `PlayfieldSkin.laneRect`                                 |
-  | `resolveThemeNoteCell`                                    | `PlayfieldSkin.noteCell`（チャンネルで引く）             |
-  | `renderThemeMeasureLines`                                 | `PlayfieldSkin.measureLines`（配置はプレイフィールド）   |
-  | `collectBgaTargets`                                       | `PlayfieldSkin.bgaTargets`                               |
-  | `renderBombEffects`                                       | `PlayfieldSkin.bombCell`                                 |
-  | `resolveBombDurationMs`                                   | `PlayfieldSkin.bombDurationMs`                           |
-  | `resolveKeyOnFadeMs`                                      | `PlayfieldSkin.keyOnFadeMs`（チャンネルで引く）          |
-  | `themeTiming`                                             | `PlayView.timing`                                        |
-  | `onThemeEvent`                                            | `PlayFrame.events`（`draw` で読む）                      |
-  | `updateThemeState`、`renderThemeLayer`、`renderThemeText` | `FamilyView.draw`                                        |
-  | `attachThemeLayers`                                       | `FamilyView.attach`                                      |
-  | `prepareTheme`                                            | scene を作る前に `PlayKit` を読み込み、`attach` で初期化 |
-  | `disposeTheme`                                            | `FamilyView.dispose`                                     |
+  | `CoreGameplayView` のフック                               | 置き換え先                                                                 |
+  | --------------------------------------------------------- | -------------------------------------------------------------------------- |
+  | `stageSize`                                               | `PlayfieldSkin.stage`                                                      |
+  | `themeOwnsPlayfield`                                      | `PlayfieldSkin.ownsLanes`                                                  |
+  | `resolveThemeLaneRect`                                    | `PlayfieldSkin.laneRect`                                                   |
+  | `resolveThemeNoteCell`                                    | `PlayfieldSkin.noteCell`（チャンネルで引く）                               |
+  | `renderThemeMeasureLines`                                 | `PlayfieldSkin.measureLines`（配置はプレイフィールド）                     |
+  | `collectBgaTargets`                                       | `PlayfieldSkin.bgaTargets`                                                 |
+  | `renderBombEffects`                                       | `PlayfieldSkin.bombCell`                                                   |
+  | `resolveBombDurationMs`                                   | `PlayfieldSkin.bombDurationMs`                                             |
+  | `resolveKeyOnFadeMs`                                      | `PlayfieldSkin.keyOnFadeMs`（チャンネルで引く）                            |
+  | `themeTiming`                                             | `PlayView.timing`                                                          |
+  | `onThemeEvent`                                            | `PlayFrame.events`（`draw` で読む）。消えたボムは `PlayChrome.bombRetired` |
+  | `updateThemeState`、`renderThemeLayer`、`renderThemeText` | `FamilyView.draw`（`PlayChrome.draw` と `drawText` のまわり）              |
+  | `attachThemeLayers`                                       | `PlayChrome.attachLayers`                                                  |
+  | `prepareTheme`                                            | ビューの読み込み。セッションが走らせる（`PlaySessionTheme.prepareView`）   |
+  | `disposeTheme`                                            | `FamilyView.dispose`                                                       |
 
   LR2 のレーン番号と LR2 のタイマー番号は LR2 のビューの中にとどめ、プレイフィールドはチャンネルで尋ねます。
 
@@ -415,7 +415,7 @@ Web demo はプレイ、コース（カーソルはコースのバーに戻り�
 - **入力。** Enter、Space、キャンバスのクリックは、入力を受け付けてから進みます。Escape はいつでも戻ります。LR2 が `#STARTINPUT` の前でも Escape を受け付けるのと同じです。キーリピートは無視するので、選曲画面から押したままの Enter で画面を飛ばすことはありません。
 - **LR2 の描画。** LR2 のビューは、譜面の `#STAGEFILE` の上に決定画面のスキンを `resolveLr2DecideState`（譜面の難易度、キーモード、テキスト。コースのステージならコースのもの）で描きます。LR2 のタイマーはフレームごとにフレームから読みます。タイマー 0 は画面に入った時刻から、タイマー 1 は入力を受け付けた時刻から、タイマー 2 は画面を出始めた時刻からです。タイマーの ID はビューの中にとどめます。
 - **音。** セッションは、画面に入るときにテーマの決定音（`sounds.decideBgm`）をオーナーとしてオーディオサービスで鳴らし、画面がステージから外れるときに `stopOwned` で止めます。Web のデモは、どの種類でも決定画面に決定音を渡しません（`sounds: {}`）。[決定音](#決定音) を見てください。
-- **`#RANDOM`。** セッションは、scene を作るときに譜面の `#RANDOM` / `#SWITCH` の分岐を 1 回だけ引きます。beatoraja の決定画面と同じです。`scene.resolved` は分岐を解決した譜面と引いた値で、プレイに渡す（`preResolved`）ためのものです。`DecideFrame.playChart` はビューのグラフのための同じ譜面なので、画面はプレイが遊ぶ分岐を表示します。Web のデモの LR2 / 標準のプレイは、まだ解決済みの譜面を受け取らず、自分で分岐を引きます。標準の決定画面のビューも LR2 の決定画面のビューも分岐を描きません。
+- **`#RANDOM`。** セッションは、scene を作るときに譜面の `#RANDOM` / `#SWITCH` の分岐を 1 回だけ引きます。beatoraja の決定画面と同じです。`scene.resolved` は分岐を解決した譜面と引いた値で、プレイに渡す（`preResolved`）ためのものです。`DecideFrame.playChart` はビューのグラフのための同じ譜面なので、画面はプレイが遊ぶ分岐を表示します。Web のデモは、画面の裏で読み込む標準と LR2 のプレイにこれを渡します。標準の決定画面のビューも LR2 の決定画面のビューも分岐を描きません。
 - **スキンの設定。** `updateKit(kit)` は、プレイヤーが変えたスキンの設定値を受け取り、次のフレームからそれで描きます。
 
 ```mermaid
@@ -488,39 +488,45 @@ Web のデモは、標準と LR2 のリザルトをすべてこの画面で表�
 
 ### プレイ画面
 
-`createPlayScene(kit, options)`（`@be-music/player-web/scenes`）は組み込みのプレイ画面を作ります。プレイのセッション（`session/play/play-session.ts`）を組み込みのプレイビュー（`view/built-in/play-view.ts`）が描く `SessionScene` で、読み込み、`setScene` で表示し、開始します。LR2 のプレイ画面はまだ `CoreGameplayView` の上の `PixiGameplayView` です。`CoreGameplayView` は同じプレイのセッションを継承し、自分自身がビューです。beatoraja のプレイ画面はまだ `PixiBeatorajaGameplayView` です。
+`createPlayScene(kit, options)`（`@be-music/player-web/scenes`）は標準と LR2 のプレイ画面を作ります。プレイのセッション（`session/play/play-session.ts`）を kit の種類のビューが描く `SessionScene` で、読み込み、`setScene` で表示し、開始します。標準の kit（`{ family: 'built-in', skin }`）は組み込みのプレイビュー（`view/built-in/play-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin, invisibleNoteSkin? }`。譜面のプレイスキンと、見えないノート用のテーマの 9 鍵スキン）は LR2 のプレイビュー（`view/lr2/play-view.ts`）が描きます。beatoraja のプレイ画面はまだ `PixiBeatorajaGameplayView` です。
 
 ```mermaid
 flowchart LR
   subgraph scene["PlayScene（SessionScene）"]
-    adapter[PlaySceneSession] -->|PlayFrame| view[BuiltInPlayView]
+    adapter[PlaySceneSession] -->|PlayFrame| view["BuiltInPlayView<br/>Lr2PlayView"]
     view -->|PlayIntent| adapter
   end
   adapter --> session[PlaySession]
   session --> state[PlayState]
   session --> parts["譜面 · メディア · エンジン<br/>入力 · 見え方 · 終わり方"]
   view --> playfield[共有のプレイフィールド]
+  playfield -->|PlayfieldSkin| view
   playfield -->|ctx.play| session
 ```
 
 - **オプション。** `chart` と `source`。`settings` は、旧来のシーンのクラスにホストが渡していたもののうち、スキンとコールバック以外のすべてです（判定とスクロールに使うプレイオプション、テンポ、音量とミックス、BGA、描画の設定）。`course`（ステージの規則とコースの表示）、`replay`（再生するプレイログ）、`preResolved`（決定画面が引いた `#RANDOM`）、`audio`（ホストのオーディオサービス）、`playOptions`（選曲画面で設定されたもの。フレーム用）、`host`（画面外で読み込む間にレイヤーを組み立てるため）、`on: { finish(result, playlog), exit, restart, hiSpeed?, tempo? }` です。
-- **ライフサイクル。** `prepare(onProgress)` は譜面を読み、サンプルをデコードし、BGA の読み込みを裏で始めます。ステージには触れません。`setScene` でプレイを表示し、`start()` でイントロに続いて譜面を始めます。`dispose({ preserveAudioTail })` はシーンを終わらせ、プレイが最後まで終わったときは最後のサンプルが鳴り終わるのを待ちます。ほかに `requestExit`、`requestTogglePause`、テンポとハイスピードの設定、`recording`（ホストの録画用）、`progress()`（ここまでの結果。デモのテストフックが読みます）、`waitForPlaylog`、`updateKit`、音と描画の調整があります。
-- **セッション。** `PlaySession` は一つの `PlayState` を中心にプレイの振る舞いを持ちます。譜面（`play-chart.ts`）、メディア（`play-media.ts`。オーディオサービスの `openPlayGraph` で専用の `interactive` なコンテキストを開き、所有者はセッションです）、エンジン（`play-engine.ts`）、プレイ自身の入力（`play-input.ts`）、見え方の設定（`play-view-settings.ts`）、終わり方（`play-ending.ts`）です。ビューに求めるもの（イントロとフェードアウトの時間、アニメーションのきっかけ、キービームのフェード、タッチのレーンを写すステージ、BGA の GPU への転送）は `PlaySessionTheme` で受け取ります。
-- **フレーム。** `PlaySceneSession` は毎ティック、エンジンの UI シグナルをプレイ状態に取り込み、プレイログの見え方を記録または再生し、ビューに `PlayFrame` を渡します。プレイ状態とその段階、譜面時刻と拍、ノートと押されているレーン、前のフレームからのきっかけ（`playViewEventFromTheme`）、解析したミックス、プレイをもう表示するか（`shown`）、進行中のプレイそのもの（`playfield`）です。
-- **ビュー。** `BuiltInPlayView` は自分のレイヤー（`PlayLayers`）に共有のプレイフィールドを描き、`PlayfieldSkin` で答えます。be-music スキンのステージ、プレイフィールド自身のレーン配置・ノート・小節線・ボム（スキンはこれらをデータとして描きます）、組み込みの BGA の矩形、スキンのボムの長さ、既定のキービームのフェードです。be-music のクロームがプレイフィールドの周りを描きます（`renderBuiltInChrome`）。
+- **ライフサイクル。** `prepare(onProgress)` は譜面、ビュー自身の素材（LR2 スキンの画像とフォント）、サンプルを読み、BGA の読み込みを裏で始めます。ステージには触れません。`setScene` でプレイを表示し、`start()` でイントロに続いて譜面を始めます。`dispose({ preserveAudioTail })` はシーンを終わらせ、プレイが最後まで終わったときは最後のサンプルが鳴り終わるのを待ちます。ほかに `requestExit`、`requestTogglePause`、テンポとハイスピードの設定、`recording`（ホストの録画用）、`progress()`（ここまでの結果。デモのテストフックが読みます）、`waitForPlaylog`、`updateKit`（標準のスキンの設定。シーンは種類とスキンを変えません）、音と描画の調整があります。
+- **セッション。** `PlaySession` は一つの `PlayState` を中心にプレイの振る舞いを持ちます。譜面（`play-chart.ts`）、メディア（`play-media.ts`。オーディオサービスの `openPlayGraph` で専用の `interactive` なコンテキストを開き、所有者はセッションです）、エンジン（`play-engine.ts`）、プレイ自身の入力（`play-input.ts`）、見え方の設定（`play-view-settings.ts`）、終わり方（`play-ending.ts`）です。ビューに求めるものは `PlaySessionTheme`（`play-session-theme.ts`）で受け取ります。イントロとフェードアウトの時間、アニメーションのきっかけ（`PlayMoment`）、チャンネルごとのキービームのフェード、タッチのレーンを写すステージ、譜面の準備のあとのビュー自身の読み込み（`prepareView`）、BGA の GPU への転送です。
+- **フレーム。** `PlaySceneSession` は毎ティック、エンジンの UI シグナルをプレイ状態に取り込み、プレイログの見え方を記録または再生し、ビューに `PlayFrame` を渡します。プレイ状態とその段階、譜面時刻と拍、ノートと押されているレーン、前のフレームからのきっかけ（`playViewEventFromMoment`）、解析したミックス、プレイをもう表示するか（`shown`）、進行中のプレイそのもの（`playfield`）です。
+- **組み込みのビュー。** `BuiltInPlayView` は自分のレイヤー（`PlayLayers`）に共有のプレイフィールドを描き、`PlayfieldSkin` で答えます。be-music スキンのステージ、プレイフィールド自身のレーン配置・ノート・小節線・ボム（スキンはこれらをデータとして描きます）、組み込みの BGA の矩形、スキンのボムの長さ、既定のキービームのフェードです。be-music のクロームがプレイフィールドの周りを描きます（`renderBuiltInChrome`。ビューの `PlayChrome` です）。
+- **LR2 のビュー。** `Lr2PlayView` は、同じプレイフィールドのまわりに LR2 のプレイスキンを LR2 の 640x480 のキャンバスで描きます。
+  - op、数字、テキスト、スライダー、バーグラフはフレームの LR2 の状態（フレームの `PlayState`、スコア、時刻、フレームレートからの `resolveLr2PlayState`）から、タイマーはフレームのきっかけから取ります（[LR2 skin 実装メモ](./lr2-skin.ja.md#シーンの状態)）。
+  - `PlayfieldSkin` は、スキンの `#DST_NOTE` のレーンの矩形、ノートのセル（オートスクラッチのレーンでは `#SRC_AUTO_*` のダミーノート）、`#DST_LINE` の小節線、`#DST_BGA` の矩形、タイマーから求めたボムとキービームの長さを渡します。レーンはスキンのものなので、レーンの背景、キービーム、ボムはスキンが自分で描きます。
+  - `PlayChrome` はスキンの要素を描き（`view/lr2/play-elements.ts`）、フルコンボのタイマーを演出が終わったら止め、スキンに判定の画像がなければ判定を文字で描き、プレイフィールドがボムを消したらそのタイマーを止めます。
+  - セッションはスキンの `#LOADSTART` + `#LOADEND`（READY）、`#PLAYSTART`、`#FADEOUT`、`#CLOSE` でプレイの時間を決めます（`resolveLr2PlayTiming`）。
 - **入力。** プレイのキー（ESC、F5、Space、矢印キー、Backspace の長押し）とタッチのレーンは、window と canvas にあるプレイ自身のリスナーのままです。シーンはキーを聞きません。
 - **`#RANDOM`。** `preResolved` があると、決定画面が見せた抽選のとおりにプレイします。Web のデモは先に決定画面を作り、その `resolved` を渡してプレイを先読みします（組み込みと LR2 のプレイ画面）。コースのステージとリプレイは自分で引きます（リプレイはログのとおりです）。
 
-Web のデモは組み込みのプレイをすべてこの方法で表示します。単曲、AUTO、リプレイ、コースのステージ、NONSTOP、クイックリトライ、F5 です。
+Web のデモは組み込みと LR2 のプレイをすべてこの方法で表示します。単曲、AUTO、リプレイ、コースのステージ、NONSTOP、クイックリトライ、F5 です。
 
 ### プレイの部品の置き場所
 
-`CoreGameplayView`（LR2 のビューがプレイのセッションに移るまでの LR2 ファミリーの土台）とプレイのセッションは、プレイの部品を共有します。各モジュールはプレイを明示的なコンテキスト（`ctx`）として受け取り、自分のインターフェースを通してその状態を読み書きします。セッションの状態は `PlaySessionState` です。`CoreGameplayState` はセッションに LR2 のシーンのレイヤーを足し、組み込みのビューはレイヤーを `PlayLayers` に持ちます。LR2 のファミリーが上書きするテーマのフックは `protected` のままで、モジュールはシーンの `theme` オブジェクト（`GameplayThemeHooks`。セッションが呼ぶのは `GameplaySessionHooks` だけ）を通してそれらを呼びます。
+プレイのセッションとプレイのビューは、プレイの部品を共有します。各モジュールはプレイ（またはビュー）を明示的なコンテキスト（`ctx`）として受け取り、自分のインターフェースを通してその状態を読み書きします。セッションの状態は `PlaySessionState` です。ビューはレイヤーを `PlayLayers` に持ち、進行中のプレイを `PlayfieldRuntime` として読みます。
 
 進行中のプレイは scene-model の `PlayState`（`playState`）一つです。ゲージと EX スコアとそのグラフ、コンボ、最大コンボ、コースのコンボ、時刻つきの判定と判定ごとの早い / 遅いの数、見え方（HS-FIX のかかったハイスピードとレーンカバー）を持ちます。これを変えるものはすべて `applyPlayEvent`（`session/play/play-state.ts`）を通ります。`applyPlayEvent` は `reducePlayState` で状態を進め、描くハイスピードが変わればノートのスクロールをそこへなめらかに移します。エンジンのフレーム、判定、空 POOR、最終の集計、プレイヤーのハイスピードのキー、ホストの `setHiSpeed`、リプレイが記録した見え方がこれを通ります。スキンのランタイム、LR2 の状態の解決（`resolveLr2PlayState`）、リザルト（`playResultFromPlayState`）はこれを読みます。セッションはその横に、表示のとおりのエンジンの判定数（`score`。LR2 では空 POOR を POOR の数に含めます）と、エンジンのゲージの集計（`gaugeState`）を持ちます。
 
 - `session/play/`：
-  - `play-session.ts`：`PlaySession`。部品の組み立て、時計、一時停止、録画、後片付け。`play-session-state.ts`：その状態
+  - `play-session.ts`：`PlaySession`。部品の組み立て、時計、一時停止、録画、後片付け。`play-session-state.ts`：その状態。`play-options.ts`：そのオプション（`PlaySessionOptions`）。`play-session-theme.ts`：ビューに求めるもの（`PlaySessionTheme`）と、知らせるきっかけ（`PlayMoment`）
   - `play-scene-session.ts`：`SceneSession` としてのセッション、そのフレームとインテント。`play-view-events.ts`：ビューのイベントとしてのきっかけ
   - `play-chart.ts`：`prepareSong`、レーンオプション（RANDOM、MIRROR、S-RANDOM、SCATTER、DP FLIP）、リプレイの配置、決定画面の抽選
   - `play-media.ts`：オーディオグラフ、サンプル、BGA のテクスチャと動画、それらの後片付け
@@ -530,8 +536,9 @@ Web のデモは組み込みのプレイをすべてこの方法で表示しま�
   - `play-state.ts`：`applyPlayEvent`。プレイの状態を変える唯一の道です
   - `play-view-settings.ts`：ハイスピードのキー、エンジンが従うテンポ、描くとおりのレーンカバー、プレイログの見え方
   - `play-ending.ts`：退出のタイムラインと、結果のスナップショット
-- `view/shared/`：`playfield/*`（レーン、ノート、ロングノート、地雷、小節線、ボム、カバー、テキスト。進行中のプレイは `ctx.play`、`PlayfieldRuntime`）、`bga-renderer.ts`、`play-frame.ts`（レイヤーの木、画面への合わせ込み、フェード）、`play-layers.ts`、`texture-upload.ts`
+- `view/shared/`：`playfield/*`（レーン、ノート、ロングノートとその記録、地雷、小節線、ボム、カバー、テキスト。進行中のプレイは `ctx.play`、`PlayfieldRuntime`。ビューの `PlayfieldSkin` と `PlayChrome`）、`bga-renderer.ts`、`play-frame.ts`（レイヤーの木、画面への合わせ込み、フェード）、`play-layers.ts`、`texture-upload.ts`
 - `view/built-in/`：`play-view.ts`（組み込みのプレイビューとその `PlayfieldSkin`）、`play-chrome.ts`（組み込みのレーンの配置、BGA の矩形、be-music のレイアウトと、クロームのランタイムと描画）
+- `view/lr2/`：`play-view.ts`（LR2 のプレイビュー、その `PlayfieldSkin`、読み込み、フレームの LR2 の状態）、`play-elements.ts`（スキンの要素と、プレイフィールドに渡すレーンの矩形・ノートのセル・小節線・BGA の矩形）、`play-timers.ts`（スキンのタイマー）、`play-turntable.ts`（スクラッチのターンテーブル）、`play-hud.ts`（判定・コンボ・グルーヴゲージの描画とスキンのタイマーの長さ）
 
 ## ノートの表示範囲
 

@@ -127,7 +127,22 @@ flowchart LR
 | `resolveLr2ResultState`                                     | `PlayResult`、そのコース、遊んだスキンの `#FLIPRESULT`、スキンのカスタムオプション                                                                | op、数値、テキスト、スライダー、バーグラフ                                         |
 | `resolveLr2CourseOps`、`resolveLr2CourseText` など          | `CourseView`、作成中のコース                                                                                                                      | コースの op・数値・テキスト、コース作成の op・テキスト・ボタン                     |
 
-これらの関数は純粋で決定的です。時計も DOM もレンダラーも読まず、乱数も引かず、import するのはシーンモデル、エンジンのルール、譜面モデル、番号表だけです。時刻は入力として受け取ります。時計の数値は `Lr2Clock` で、プレイの時刻はフレームで、各タイマーの開始は瞬間の `at` で渡します。`pnpm run check` は `src/state/` に、実行環境に依存しないことと時計を読まないことの lint 規則を課します。Web ランタイムの LR2 ファミリーのビュー（今は決定画面とリザルト画面のもの）がこれらを呼び、`@be-music/player-web` の LR2 シーンも、ビューに置き換わるまではこれらを呼びます。
+これらの関数は純粋で決定的です。時計も DOM もレンダラーも読まず、乱数も引かず、import するのはシーンモデル、エンジンのルール、譜面モデル、番号表だけです。時刻は入力として受け取ります。時計の数値は `Lr2Clock` で、プレイの時刻はフレームで、各タイマーの開始は瞬間の `at` で渡します。`pnpm run check` は `src/state/` に、実行環境に依存しないことと時計を読まないことの lint 規則を課します。Web ランタイムの LR2 ファミリーのビュー（決定画面、プレイ画面、リザルト画面のもの）がこれらを呼び、`@be-music/player-web` の LR2 の選曲シーンも、ビューに置き換わるまではこれらを呼びます。
+
+LR2 のプレイビュー（`@be-music/player-web` の `view/lr2/play-view.ts`）は、プレイの op、数値、テキスト、スライダー、バーグラフを、フレームごとに `resolveLr2PlayState` で読みます。渡すのはフレームの `PlayState`、スコア、時刻、スコアの表示値、BPM、フレームレートです。プレイのタイマーは、フレームごとのきっかけから `resolveLr2PlayTimers` で始めて止め、一度きりのものはビュー自身のタイマー管理が終わらせます。
+
+| きっかけ                           | タイマー                                                                      |
+| ---------------------------------- | ----------------------------------------------------------------------------- |
+| シーンの開始                       | 0 と 1（`#STARTINPUT` のあと）                                                |
+| 読み込みの終わり、譜面の開始       | 40（READY）、41                                                               |
+| プレイの終わり                     | 2（`#FADEOUT`）、3（`#CLOSE`）                                                |
+| 片側の判定                         | 46 / 47。判定ごとに始め直す                                                   |
+| フルコンボ                         | 48 と 49。スキンの演出が終わるまで                                            |
+| ゲージの上昇、100 % への到達       | 42 は上昇の演出が終わるまで。44 は 100 % を下回るまで                         |
+| レーンのボム                       | そのレーンのボムのタイマー（50-69）。プレイフィールドがボムを消すまで         |
+| レーンでロングノートを押している間 | そのレーンのホールドのタイマー（70-89）。離したあと、その長さでフェードアウト |
+
+キーオンの組（100-119）はプレイのセッションのものです。セッションはどの種類のキービームも LR2 のキーオンの番号（`resolveLr2LaneTimer('key-on', …)`）で持ち、LR2 のビューはそれをそのまま読みます。レーンの番号とタイマーの番号は LR2 のビューの中にとどめ、共有のプレイフィールドはチャンネルで尋ねます。
 
 ## 解析済み directive
 
@@ -177,7 +192,7 @@ TGA image は `tga.ts`、DDS image は `dds.ts` でデコードします（ブ�
 
 - `scene/lr2/select.ts`
 - `view/lr2/decide-view.ts`
-- `scene/lr2/gameplay.ts`
+- `view/lr2/play-view.ts`（`play-elements.ts`、`play-timers.ts`、`play-hud.ts` とともに）
 - `view/lr2/result-view.ts`
 
 `skin/lr2/render.ts` と `skin/lr2/scene-render.ts` の共有 helper は destination keyframe、op-gated visibility、source cell、sprite transform、text、number、slider、bargraph を評価します。

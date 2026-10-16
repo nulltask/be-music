@@ -127,7 +127,22 @@ flowchart LR
 | `resolveLr2ResultState`                                     | A `PlayResult`, its course, the played skin's `#FLIPRESULT`, the skin's custom options                                                                  | Ops, numbers, texts, sliders, bar graphs                                      |
 | `resolveLr2CourseOps`, `resolveLr2CourseText`, …            | A `CourseView`, a course being made                                                                                                                     | The course ops, numbers and texts, the course maker's ops, texts and buttons  |
 
-The resolvers are pure and deterministic: they read no clock, no DOM and no renderer, draw no random number, and import only the scene models, the engine's rules, the chart model and the id tables. Time comes in as an input — the clock numbers through an `Lr2Clock`, a play's time through its frame, each timer's start through the moment's `at` — and `pnpm run check` holds `src/state/` to the runtime-neutral and clock-free lint rules. The LR2 family views of the web runtime call them, the decide and result screens' so far, and the LR2 scenes of `@be-music/player-web` call them until their views replace them.
+The resolvers are pure and deterministic: they read no clock, no DOM and no renderer, draw no random number, and import only the scene models, the engine's rules, the chart model and the id tables. Time comes in as an input — the clock numbers through an `Lr2Clock`, a play's time through its frame, each timer's start through the moment's `at` — and `pnpm run check` holds `src/state/` to the runtime-neutral and clock-free lint rules. The LR2 family views of the web runtime call them (the decide, play and result screens'), and the LR2 select scene of `@be-music/player-web` calls them until its view replaces it.
+
+The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-web`) reads the play's ops, numbers, texts, sliders and bar graphs off each frame with `resolveLr2PlayState`: the frame's `PlayState`, the score, the time, the score readout, the BPM and the frame rate. It starts and stops the play's timers from each frame's moments with `resolveLr2PlayTimers`, and the view's own timer keeping retires the one-shot ones:
+
+| Moment                         | Timers                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| The scene starts               | 0, and 1 (`#STARTINPUT` later)                                           |
+| Loading ends, the chart starts | 40 (READY), 41                                                           |
+| The play ends                  | 2 (`#FADEOUT`), 3 (`#CLOSE`)                                             |
+| A judgment on a side           | 46 / 47, restarted on each one                                           |
+| A full combo                   | 48 and 49, until the skin's animation on them has played out             |
+| The gauge rises, reaches 100 % | 42, until the skin's rise flash has played out; 44, until it drops       |
+| A bomb on a lane               | the lane's bomb timer (50-69), until the playfield retires the bomb      |
+| A long note held on a lane     | the lane's hold timer (70-89), faded out over its span after the release |
+
+The key-on bank (100-119) is the play session's: it keeps every family's key beams by LR2's key-on ids (`resolveLr2LaneTimer('key-on', …)`), and the LR2 view reads them as they are. The lane index and the timer ids stay in the LR2 view; the shared playfield asks it by channel.
 
 ## Parsed directives
 
@@ -177,7 +192,7 @@ TGA images are decoded by `tga.ts` and DDS images by `dds.ts` (the browser playe
 
 - `scene/lr2/select.ts`
 - `view/lr2/decide-view.ts`
-- `scene/lr2/gameplay.ts`
+- `view/lr2/play-view.ts` (with `play-elements.ts`, `play-timers.ts` and `play-hud.ts`)
 - `view/lr2/result-view.ts`
 
 Shared rendering helpers in `skin/lr2/render.ts` and `skin/lr2/scene-render.ts` evaluate destination keyframes, op-gated visibility, source cells, sprite transforms, text, numbers, sliders, and bargraphs.
