@@ -482,12 +482,15 @@ Web のデモは、標準と LR2 のリザルトをすべてこの画面で表�
 
 プレイのセッションが独り立ちするまでは、`CoreGameplayView` が組み込みと LR2 のプレイのシーンのままです。ただし、その部品は新しいツリーに置いてあります。各モジュールはシーンを明示的なコンテキスト（`ctx`）として受け取り、自分のインターフェースを通してその状態を読み書きします。シーンは自分自身を渡します。状態は `CoreGameplayState`（`scene/core/gameplay-state.ts`）にあり、シーンはこれを継承します。LR2 のファミリーが上書きするテーマのフックは `protected` のままで、モジュールはシーンの `theme` オブジェクト（`GameplayThemeHooks`）を通してそれらを呼びます。
 
+進行中のプレイは scene-model の `PlayState`（`playState`）一つです。ゲージと EX スコアとそのグラフ、コンボ、最大コンボ、コースのコンボ、時刻つきの判定と判定ごとの早い / 遅いの数、見え方（HS-FIX のかかったハイスピードとレーンカバー）を持ちます。これを変えるものはすべて `applyPlayEvent`（`session/play/play-state.ts`）を通ります。`applyPlayEvent` は `reducePlayState` で状態を進め、描くハイスピードが変わればノートのスクロールをそこへなめらかに移します。エンジンのフレーム、判定、空 POOR、最終の集計、プレイヤーのハイスピードのキー、ホストの `setHiSpeed`、リプレイが記録した見え方がこれを通ります。スキンのランタイム、LR2 の状態の解決（`resolveLr2PlayState`）、リザルト（`playResultFromPlayState`）はこれを読みます。シーンはその横に、表示のとおりのエンジンの判定数（`score`。LR2 では空 POOR を POOR の数に含めます）と、エンジンのゲージの集計（`gaugeState`）を持ちます。
+
 - `session/play/`：
   - `play-chart.ts`：`prepareSong`、レーンオプション（RANDOM、MIRROR、S-RANDOM、SCATTER、DP FLIP）、リプレイの配置
   - `play-media.ts`：オーディオグラフ、サンプル、BGA のテクスチャと、それらの後片付け
   - `play-engine.ts`：共通エンジンの起動、その UI シグナル、判定とレーンの演出、エンディングの開始
   - `play-input.ts`：ESC、F5、Space、矢印キー、長押しでの終了、自動一時停止、タッチのレーン。`PLAY_SCENE_KEY_CODES` は、エンジンの Web 入力ランタイムが読み飛ばすキーの一覧です
-  - `play-view-settings.ts`：ハイスピードと HS-FIX、エンジンが従うテンポ、レーンカバー、プレイログの見え方
+  - `play-state.ts`：`applyPlayEvent`。プレイの状態を変える唯一の道です
+  - `play-view-settings.ts`：ハイスピードのキー、エンジンが従うテンポ、描くとおりのレーンカバー、プレイログの見え方
   - `play-ending.ts`：退出のタイムラインと、結果のスナップショット
 - `view/shared/`：`playfield/*`（レーン、ノート、ロングノート、地雷、小節線、ボム、カバー、テキスト）、`bga-renderer.ts`、`play-frame.ts`（レイヤーの木、画面への合わせ込み、フェード）
 - `view/built-in/play-chrome.ts`：組み込みのレーンの配置、BGA の矩形、be-music のレイアウトと、スキンなしのクロームのランタイム

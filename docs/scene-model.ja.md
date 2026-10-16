@@ -306,11 +306,13 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                         | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`（旧名で再 export）      |
 | ハイスピードの範囲と刻み                                                         | `player-web` の `scene/hi-speed.ts`          | 同じ名前（再 export）                                                    |
 | `SceneCourseInfo`・`resolveSceneCourseInfo`                                      | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名で再 export）                     |
-| `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                    | `player-web` の `scene/core/course-combo.ts` | 同じ名前（再 export）。`reduceCourseCombo` を追加                        |
+| `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                    | `player-web` の `scene/core/course-combo.ts` | 同じ名前。`reduceCourseCombo` を追加                                     |
 | `PlaylogViewCursor`・`resolveBeatorajaPlaylogView`                               | `player-web` の `scene/playlog-view.ts`      | 同じ名前（再 export）。`resolvePlaylogView` の上に実装                   |
 | `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation` | `player-web-demo` の `course-result.ts`      | `playResultFromCourseRun` など（旧名で再 export）                        |
 | `resolveResultViewJingles`                                                       | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                              |
 
-各シーンはまだ自分の一覧とプレイの状態を持っています（コアのプレイは `JudgeTimingLog` とカバー、beatoraja のランタイム
-アダプターは記録とカバー）。Web 実行層のシーンセッションがこれらのモデルへ移ります。スキンのパッケージはモデルを各スキンの
+標準と LR2 のプレイ画面は `PlayState` を一つ持ち、リザルトをそこから読みます（`playResultFromPlayState`）。そのため上の
+プレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、リザルトは判定ごとの早い / 遅いの数を
+持ちます。ほかのシーンはまだ自分の一覧とプレイの状態を持っています（beatoraja のランタイムアダプターは記録とカバー）。
+Web 実行層のシーンセッションがこれらのモデルへ移ります。スキンのパッケージはモデルを各スキンの
 語彙に写します。beatoraja の番号へは `@be-music/beatoraja-skin/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。
