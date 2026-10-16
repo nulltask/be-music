@@ -3,7 +3,7 @@ import type { LibraryChart, PlayResult, PlayRunKind, SystemSoundSet } from '@be-
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { SceneViewTiming } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
-import { pickResultJingle, RESULT_GRAPH_DRAW_MS, ResultSession, type ResultAudio } from './result-session.ts';
+import { RESULT_GRAPH_DRAW_MS, ResultSession, type ResultAudio } from './result-session.ts';
 
 const CHART: LibraryChart = {
   id: 'chart',
@@ -89,18 +89,6 @@ function createSession(
   });
   return { session, audio, on };
 }
-
-describe('pickResultJingle', () => {
-  it('plays the jingle of the verdict, else the generic one, else the other one', () => {
-    expect(pickResultJingle({ clear: CLEAR, fail: FAIL, result: RESULT }, true)).toBe(CLEAR);
-    expect(pickResultJingle({ clear: CLEAR, fail: FAIL, result: RESULT }, false)).toBe(FAIL);
-    expect(pickResultJingle({ fail: FAIL, result: RESULT }, true)).toBe(RESULT);
-    expect(pickResultJingle({ clear: CLEAR, result: RESULT }, false)).toBe(RESULT);
-    expect(pickResultJingle({ fail: FAIL }, true)).toBe(FAIL);
-    expect(pickResultJingle({ clear: CLEAR }, false)).toBe(CLEAR);
-    expect(pickResultJingle({}, true)).toBeUndefined();
-  });
-});
 
 describe('ResultSession', () => {
   it('draws the result with its presentation, and the graphs once their time is up', () => {
@@ -228,6 +216,18 @@ describe('ResultSession', () => {
     const fallback = createSession({ run: 'course', sounds: { clear: CLEAR, fail: FAIL } });
     fallback.session.enter(0);
     expect(fallback.audio.playJingle).toHaveBeenCalledWith(CLEAR, expect.anything());
+  });
+
+  it("plays the verdict's jingle, else the generic one, and never the other verdict's", () => {
+    const generic = createSession({ sounds: { fail: FAIL, result: RESULT } });
+    generic.session.enter(0);
+    expect(generic.audio.playJingle).toHaveBeenCalledWith(RESULT, expect.anything());
+    const clearOnly = createSession({ result: playResult({ cleared: false }), sounds: { clear: CLEAR } });
+    clearOnly.session.enter(0);
+    expect(clearOnly.audio.playJingle).not.toHaveBeenCalled();
+    const failOnly = createSession({ sounds: { fail: FAIL } });
+    failOnly.session.enter(0);
+    expect(failOnly.audio.playJingle).not.toHaveBeenCalled();
   });
 
   it('plays nothing for a theme without result jingles', () => {

@@ -15,11 +15,11 @@
 
 import {
   playResultRun,
+  resolveResultJingle,
   resolveResultJingles,
   resolveResultPresentation,
   type PlayResult,
   type PlayRunKind,
-  type ResultJingles,
   type ResultPresentation,
   type SystemSound,
   type SystemSoundSet,
@@ -58,16 +58,6 @@ export interface ResultSessionOptions {
 /** Where a leaving result screen goes. */
 type ResultLeavingTo = 'continue' | 'retry';
 
-/**
- * The jingle a result plays from the theme's result jingles: the clear or the fail one by its verdict, else the generic
- * one, else the other verdict's (a theme with a single result jingle still plays it).
- */
-export function pickResultJingle(jingles: ResultJingles, cleared: boolean): SystemSound | undefined {
-  return cleared
-    ? (jingles.clear ?? jingles.result ?? jingles.fail)
-    : (jingles.fail ?? jingles.result ?? jingles.clear);
-}
-
 /** The result screen's session. See the module comment. */
 export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
   public readonly kind = 'result' as const;
@@ -94,10 +84,13 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     return this.presentation.quickRetry && this.options.on.retry !== undefined;
   }
 
-  /** The jingle this result plays, if the theme has one for it. */
+  /**
+   * The jingle this result plays, if the theme has one for it: the clear or the fail one by its verdict, else the
+   * generic one (`resolveResultJingle`).
+   */
   public get jingle(): SystemSound | undefined {
     const jingles = resolveResultJingles([this.options.sounds], this.presentation.courseJingles);
-    return pickResultJingle(jingles, this.options.result.cleared);
+    return resolveResultJingle(jingles, this.options.result.cleared);
   }
 
   /** On the clock, when input opens and the graphs start drawing. */
