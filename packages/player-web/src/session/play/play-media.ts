@@ -143,7 +143,7 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
 }
 
 /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
-export function samplePlaybackRate(ctx: PlayMediaContext): number {
+export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'tempo'>): number {
   return resolveSamplePlaybackRate(ctx.options.tempoPitchMode ?? 'pitch', ctx.tempo);
 }
 
