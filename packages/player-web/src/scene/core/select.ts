@@ -4,6 +4,15 @@ import { type PixiSceneHost } from '../host.ts';
 import { disposeChildren } from '../pixi-utils.ts';
 import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from '../../collection/collection.ts';
 import { dirname } from '@be-music/utils/core';
+import {
+  browseCursor,
+  browseSnapshotFromSelectNavigation,
+  chartMatchesDifficultyFilter,
+  matchesSearchQuery,
+  restoreBrowse,
+  sortLibraryEntries,
+  wrappedCursorDelta,
+} from '@be-music/scene-model';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import { LR2_BUTTON, LR2_TIMER } from '@be-music/lr2-skin/ids';
@@ -1628,8 +1637,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
           );
     let filtered = baseEntries;
     if (this.playOptions.difficultyFilter !== 'ALL') {
-      const target = DIFFICULTY_FILTER_CYCLE.indexOf(this.playOptions.difficultyFilter);
-      filtered = filtered.filter((entry) => entry.kind !== 'song' || matchesDifficultyFilter(entry.song, target));
+      const filter = this.playOptions.difficultyFilter;
+      filtered = filtered.filter((entry) => entry.kind !== 'song' || chartMatchesDifficultyFilter(entry.song, filter));
     }
     if (this.playOptions.keysFilter !== 'ALL') {
       const targetOp = SELECT_KEYS_FILTER_TO_OP[this.playOptions.keysFilter];
@@ -1644,7 +1653,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       filtered = filtered.filter((entry) => matchesSearchQuery(entry, this.searchQuery));
     }
     if (this.playOptions.sort !== 'OFF') {
-      filtered = sortBrowseEntries([...filtered], this.playOptions.sort);
+      filtered = sortLibraryEntries(filtered, this.playOptions.sort);
     }
     this.cachedEntries = filtered;
     this.cachedEntriesInputs = inputs;
@@ -2781,55 +2790,21 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
 /**
  * The browse stack and cursor a saved {@link PixiSongSelectNavigation} restores in `collection`: its folder path matched
- * by label (song folders, then course folders, at the root), the cursor clamped to the deepest list. `undefined` when
- * none of the saved labels matches.
+ * by label (song folders, then course folders, at the root), the cursor clamped to the deepest list, as the browse model
+ * of `@be-music/scene-model` restores it (`restoreBrowse`). `undefined` when none of the saved labels matches.
  */
 export function resolveSelectNavigation(
   collection: Pick<BrowserSongCollection, 'songs' | 'courseFolders'>,
   navigation: PixiSongSelectNavigation,
 ): { stack: BrowserFolderNode[]; selectedIndex: number } | undefined {
-  // The root lists the course folders after the song folders, as `currentEntries` does, so a cursor left in a course
-  // folder comes back too (e.g. after a NONSTOP run, whose stitched source replaces the collection).
-  const rootFolders = [...groupSongsByFolder(collection.songs), ...(collection.courseFolders ?? [])];
-  const stack: BrowserFolderNode[] = [];
-  let folders = rootFolders;
-  for (const label of navigation.folderPath) {
-    const match = folders.find((folder) => folder.label === label);
-    if (!match) break;
-    stack.push(match);
-    // Inside a folder, the next-level "folders" are derived from the folder's own songs; today we only group at the top,
-    // so a restored deeper path simply terminates here.
-    folders = groupSongsByFolder(match.songs);
-  }
-  if (stack.length === 0 && navigation.folderPath.length > 0) return undefined;
-  const deepest = stack.at(-1);
-  const entries = deepest === undefined ? rootFolders.length : (deepest.courses?.length ?? deepest.songs.length);
-  return { stack, selectedIndex: Math.max(0, Math.min(navigation.selectedIndex, Math.max(0, entries - 1))) };
+  const { state, restoredDepth } = restoreBrowse(collection, browseSnapshotFromSelectNavigation(navigation));
+  if (restoredDepth === 0 && navigation.folderPath.length > 0) return undefined;
+  return { stack: [...state.path], selectedIndex: browseCursor(state) };
 }
 
-/**
- * Maps a raw `(new - old)` cursor delta into a "shortest visible step" delta. Used so a wrap-around move (e.g. from
- * `entries[0]` ↑ to `entries[length-1]`) animates as a single "back by 1" step rather than a long slide spanning the
- * whole list.
- *
- * Examples (length = 10): delta=+1 → +1 (forward 1 step) delta=-1 → -1 (backward 1 step) delta=+9 → -1 (wrap forward =
- * visually 1 step back) delta=-9 → +1 (wrap backward = visually 1 step forward)
- *
- * Special case for tiny lists (notably `count = 2`): forward 1 and backward 1 are the same distance around a 2-element
- * ring, and the symmetric `((rawDelta + half) % count) - half` formula collapses both onto `-1`. That made pressing the
- * down arrow on a folder list of length 2 visually slide the cursor *upward* — confusing and inconsistent with the
- * keypress. We fix this by preferring the raw direction when the move already fits inside the half-window (`|rawDelta|
- * <= half`), which is exactly the "short trip, no wrap needed" case. Wrapping kicks in only for genuine long jumps that
- * should be re-interpreted as a short step in the opposite direction.
- */
-export function wrappedCursorDelta(rawDelta: number, count: number): number {
-  if (count <= 0) return 0;
-  const half = count / 2;
-  if (Math.abs(rawDelta) <= half) {
-    return rawDelta;
-  }
-  return ((((rawDelta + half) % count) + count) % count) - half;
-}
+// The search and cursor rules of the browse model in `@be-music/scene-model`, re-exported under the names this module
+// has always used.
+export { matchesSearchQuery, wrappedCursorDelta };
 
 /**
  * Returns `true` when the keydown target is a text-editable element (`<input>` / `<textarea>` / `<select>` /
@@ -2887,81 +2862,6 @@ function currentEntriesInputsEqual(a: CurrentEntriesInputs, b: CurrentEntriesInp
     a.search === b.search
   );
 }
-
-/**
- * Sorts a list of browse entries in place by the chosen LR2 sort mode. Folders always sort by label (LEVEL / CLEAR
- * don't meaningfully apply to a folder bar). Songs sort by: - LEVEL: ascending `#PLAYLEVEL` (missing levels last) -
- * TITLE: case-insensitive `#TITLE` - CLEAR: no-op until per-song clear-history persistence lands; falls back to title
- * order so the result is deterministic.
- *
- * Stable for entries that compare equal — preserves the input order, which matches the original drop-folder layout.
- */
-function sortBrowseEntries(entries: BrowserBrowseEntry[], sort: PixiSelectSort): BrowserBrowseEntry[] {
-  const indexed = entries.map((entry, index) => ({ entry, index }));
-  indexed.sort((a, b) => {
-    const cmp = compareEntriesForSort(a.entry, b.entry, sort);
-    return cmp !== 0 ? cmp : a.index - b.index;
-  });
-  return indexed.map((item) => item.entry);
-}
-
-function compareEntriesForSort(a: BrowserBrowseEntry, b: BrowserBrowseEntry, sort: PixiSelectSort): number {
-  // Mixed folder + song lists shouldn't happen at any single nav depth today, but keep folders ahead of songs so the
-  // result is sensible if that invariant changes.
-  if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
-  if (a.kind === 'folder' && b.kind === 'folder') {
-    return compareStrings(a.folder.label, b.folder.label);
-  }
-  if (a.kind !== 'song' || b.kind !== 'song') return 0;
-  const songA = a.song;
-  const songB = b.song;
-  switch (sort) {
-    case 'LEVEL': {
-      const levelA = coercePlayLevel(songA.playLevel);
-      const levelB = coercePlayLevel(songB.playLevel);
-      if (levelA !== levelB) return levelA - levelB;
-      return compareStrings(songA.title, songB.title);
-    }
-    case 'TITLE':
-      return compareStrings(songA.title, songB.title);
-    case 'CLEAR':
-      // No play-history persistence yet — fall through to a deterministic title sort so the cycle-button still reorders
-      // the list visibly.
-      return compareStrings(songA.title, songB.title);
-    case 'OFF':
-      return 0;
-  }
-}
-
-function compareStrings(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' });
-}
-
-/**
- * Normalizes a `playLevel` value (declared as `number | string | undefined` on `BrowserSongEntry`) to a numeric sort
- * key. Missing / non-numeric levels sort to the END of an ascending list.
- */
-function coercePlayLevel(value: number | string | undefined): number {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
-  if (typeof value === 'string') {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
-  }
-  return Number.POSITIVE_INFINITY;
-}
-
-/**
- * Returns whether `song`'s `#DIFFICULTY` field matches the target difficulty enum value. The {@link
- * DIFFICULTY_FILTER_CYCLE} index maps onto LR2's 1=BEGINNER..5=INSANE numbering directly: `target = 1` ↔ BEGINNER, ...,
- * `target = 5` ↔ INSANE. Charts with no `#DIFFICULTY` (`undefined` / 0) never match a non-ALL filter — there's no
- * defined bucket for them and showing them everywhere would defeat the filter's purpose.
- */
-function matchesDifficultyFilter(song: BrowserSongEntry, target: number): boolean {
-  const value = song.chart.metadata.difficulty;
-  if (value === undefined || value === 0) return false;
-  return value === target;
-}
-
 /**
  * Looks up a `.txt` companion file in the same directory as the focused song's chart and returns its decoded contents.
  * Used by the LR2 READTEXT button (`#SRC_BUTTON,...,17,...`) to surface per-song notes / changelogs that BMS authors
@@ -3012,30 +2912,4 @@ function decodeReadtextBytes(bytes: Uint8Array): string {
     // `shift-jis` not available in this runtime — fall through.
   }
   return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-}
-
-/**
- * Returns whether `entry` matches the lower-cased search query. Folder bars match on label only (no per-song fan-out —
- * folders are coarse navigation, not searchable content). Song bars match if any of title / subtitle / artist / genre /
- * file label contain the query as a substring.
- *
- * Pure / exported for testing. Hosts shouldn't call this directly — `CoreSongSelectView.setSearchQuery` is the front
- * door.
- */
-export function matchesSearchQuery(entry: BrowserBrowseEntry, lowerQuery: string): boolean {
-  if (lowerQuery.length === 0) return true;
-  if (entry.kind === 'folder') {
-    return entry.folder.label.toLowerCase().includes(lowerQuery);
-  }
-  if (entry.kind === 'course') {
-    return entry.course.definition.name.toLowerCase().includes(lowerQuery);
-  }
-  const song = entry.song;
-  const haystacks: Array<string | undefined> = [song.title, song.subtitle, song.artist, song.genre, song.fileLabel];
-  for (const value of haystacks) {
-    if (typeof value === 'string' && value.toLowerCase().includes(lowerQuery)) {
-      return true;
-    }
-  }
-  return false;
 }
