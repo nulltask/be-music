@@ -1,4 +1,4 @@
-import { createEmptyScore, type ScoreSummary } from '@be-music/player/core/scoring';
+import { createEmptyScore, type ScoreSummary } from '@be-music/player/ruleset';
 import { describe, expect, it } from 'vite-plus/test';
 import { LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
 import {

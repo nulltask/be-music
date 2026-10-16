@@ -12,7 +12,7 @@ import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
-import { resolveIidxRankLabel } from '../core/scoring.ts';
+import { resolveIidxRankLabel } from '../ruleset/score.ts';
 import type { GaugeType } from '../ruleset/gauge-type.ts';
 import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
 import packageJson from '../../package.json' with { type: 'json' };

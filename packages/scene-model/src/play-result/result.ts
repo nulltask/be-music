@@ -1,5 +1,5 @@
-import type { BeMusicPlaylog, ScoreSummary } from '@be-music/player/playlog';
-import { resolveClearLamp, type ClearLamp } from '@be-music/player/ruleset';
+import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import { resolveClearLamp, type ClearLamp, type ScoreSummary } from '@be-music/player/ruleset';
 import type { CourseView } from '../course-view/course-view.ts';
 import type { LibraryChart } from '../library/entries.ts';
 import type { EarlyLateCount, PlayState } from '../play-state/state.ts';
