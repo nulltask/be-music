@@ -30,6 +30,9 @@ importers:
       '@be-music/audio-renderer':
         specifier: workspace:*
         version: link:packages/audio-renderer
+      '@be-music/beatoraja-skin':
+        specifier: workspace:*
+        version: link:packages/beatoraja-skin
       '@be-music/chart':
         specifier: workspace:*
         version: link:packages/chart
@@ -126,6 +129,12 @@ importers:
       '@be-music/lr2-skin':
         specifier: workspace:*
         version: link:../lr2-skin
+      '@be-music/player':
+        specifier: workspace:*
+        version: link:../player
+      '@be-music/scene-model':
+        specifier: workspace:*
+        version: link:../scene-model
       '@be-music/utils':
         specifier: workspace:*
         version: link:../utils

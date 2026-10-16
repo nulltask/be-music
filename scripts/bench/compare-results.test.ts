@@ -45,6 +45,7 @@ function createSnapshot(
       'player-tui': [],
       'scene-model': [],
       'lr2-skin': [],
+      'beatoraja-skin': [],
       'skin-sdk': [],
       'player-web': [],
     },
