@@ -10,7 +10,7 @@ export interface Lr2ResultJingles {
   courseFail?: Uint8Array | undefined;
 }
 
-/** The jingle slots the LR2 / built-in result view takes (`clearBgm` / `failBgm` / `resultBgm`). */
+/** A result's jingles by slot (`clearBgm` / `failBgm` / `resultBgm`), as the test hook names the one played. */
 export interface ResultViewJingles {
   clearBgm?: Uint8Array;
   failBgm?: Uint8Array;
@@ -46,8 +46,9 @@ export function resolveResultSoundSet(
 }
 
 /**
- * The jingles a result shown on the LR2 or built-in result view plays, from {@link resolveResultSoundSet}'s set.
- * `courseJingles` plays the course-result ones, falling back to the clear / fail ones.
+ * The jingles a result shown on the LR2 or built-in result screen picks from, out of {@link resolveResultSoundSet}'s
+ * set, for the test hook to name the one played. `courseJingles` takes the course-result ones, falling back to the
+ * clear / fail ones.
  */
 export function resolveResultViewJingles(
   family: SkinFamilyId,

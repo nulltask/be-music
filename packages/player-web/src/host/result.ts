@@ -8,18 +8,25 @@ import type { BrowserSongAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { ResultSession, type ResultSessionEvents } from '../session/result/result-session.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
+import { logger } from '../logger.ts';
 import { BuiltInResultView } from '../view/built-in/result-view.ts';
-import type { ResultFrame, ResultIntent } from '../view/types.ts';
-import type { BuiltInKit } from './family-kit.ts';
+import { Lr2ResultView } from '../view/lr2/result-view.ts';
+import type { ResultFrame, ResultIntent, ResultView } from '../view/types.ts';
+import type { BuiltInKit, Lr2Kit } from './family-kit.ts';
+
+const log = logger('result');
 
 /**
- * The kits the result scene takes. The LR2 and beatoraja result screens are still `PixiResultView` and
- * `PixiBeatorajaResultScene`.
+ * The kits the result scene takes: a be-music skin, or an LR2 result skin (the course-result skin for a course run).
+ * The beatoraja result screen is still `PixiBeatorajaResultScene`.
  */
-export type ResultSceneKit = BuiltInKit;
+export type ResultSceneKit = BuiltInKit | Lr2Kit;
 
 export interface ResultSceneOptions extends SessionSceneOptions {
-  /** The play (or the course run) the screen shows. */
+  /**
+   * The play (or the course run) the screen shows. An LR2 skin shows the course of `result.course` (its ops, numbers and
+   * texts): the course a stage belongs to, with the stage, or the course run.
+   */
   readonly result: PlayResult;
   /**
    * Which play the result is of, when `result.run` does not say (a course stage's result): a course run plays the course
@@ -40,20 +47,50 @@ export interface ResultSceneOptions extends SessionSceneOptions {
 
 /** The result screen as a scene. */
 export interface ResultScene extends SessionScene<ResultFrame, ResultIntent> {
-  /** Takes the player's new settings for the kit's skin; the next frame draws with them. */
+  /**
+   * Takes the player's new settings for the kit's skin; the next frame draws with them. The scene keeps its family and
+   * its skin: a kit of another family or skin is ignored.
+   */
   updateKit(kit: ResultSceneKit): void;
 }
 
-class BuiltInResultScene extends SessionScene<ResultFrame, ResultIntent> implements ResultScene {
-  private readonly resultView: BuiltInResultView;
+/** A family's result view, and how it takes a new kit. */
+interface FamilyResultView {
+  readonly view: ResultView;
+  updateKit(kit: ResultSceneKit): void;
+}
 
-  public constructor(session: ResultSession, view: BuiltInResultView, options: SessionSceneOptions) {
-    super(session, view, options);
-    this.resultView = view;
+/** The result view of `kit`'s family, reading the chart's files from `source`. */
+function createResultView(kit: ResultSceneKit, source: BrowserSongAssetSource | undefined): FamilyResultView {
+  const options = source !== undefined ? { source } : {};
+  if (kit.family === 'lr2') {
+    const view = new Lr2ResultView(kit, options);
+    return {
+      view,
+      updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),
+    };
+  }
+  const view = new BuiltInResultView(kit, options);
+  return {
+    view,
+    updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
+  };
+}
+
+function ignoreKit(kit: ResultSceneKit, family: ResultSceneKit['family']): void {
+  log.warn(`a ${family} result scene keeps its family; ignoring a ${kit.family} kit`);
+}
+
+class FamilyResultScene extends SessionScene<ResultFrame, ResultIntent> implements ResultScene {
+  private readonly familyView: FamilyResultView;
+
+  public constructor(session: ResultSession, familyView: FamilyResultView, options: SessionSceneOptions) {
+    super(session, familyView.view, options);
+    this.familyView = familyView;
   }
 
   public updateKit(kit: ResultSceneKit): void {
-    this.resultView.updateKit(kit);
+    this.familyView.updateKit(kit);
   }
 }
 
@@ -62,7 +99,8 @@ class BuiltInResultScene extends SessionScene<ResultFrame, ResultIntent> impleme
  * where it leads; the kit's family view draws it. Show it with `PixiSceneHost.setScene`, and dispose it once it is gone.
  */
 export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptions): ResultScene {
-  const view = new BuiltInResultView(kit, options.source !== undefined ? { source: options.source } : {});
+  const familyView = createResultView(kit, options.source);
+  const { view } = familyView;
   const session = new ResultSession({
     result: options.result,
     ...(options.run !== undefined ? { run: options.run } : {}),
@@ -71,7 +109,7 @@ export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptio
     timing: view.timing,
     on: options.on,
   });
-  return new BuiltInResultScene(session, view, {
+  return new FamilyResultScene(session, familyView, {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
   });

@@ -127,7 +127,7 @@ flowchart LR
 | `resolveLr2ResultState`                                     | A `PlayResult`, its course, the played skin's `#FLIPRESULT`, the skin's custom options                                                                  | Ops, numbers, texts, sliders, bar graphs                                      |
 | `resolveLr2CourseOps`, `resolveLr2CourseText`, …            | A `CourseView`, a course being made                                                                                                                     | The course ops, numbers and texts, the course maker's ops, texts and buttons  |
 
-The resolvers are pure and deterministic: they read no clock, no DOM and no renderer, draw no random number, and import only the scene models, the engine's rules, the chart model and the id tables. Time comes in as an input — the clock numbers through an `Lr2Clock`, a play's time through its frame, each timer's start through the moment's `at` — and `pnpm run check` holds `src/state/` to the runtime-neutral and clock-free lint rules. The LR2 family views of the web runtime call them, the decide screen's so far, and the LR2 scenes of `@be-music/player-web` call them until their views replace them.
+The resolvers are pure and deterministic: they read no clock, no DOM and no renderer, draw no random number, and import only the scene models, the engine's rules, the chart model and the id tables. Time comes in as an input — the clock numbers through an `Lr2Clock`, a play's time through its frame, each timer's start through the moment's `at` — and `pnpm run check` holds `src/state/` to the runtime-neutral and clock-free lint rules. The LR2 family views of the web runtime call them, the decide and result screens' so far, and the LR2 scenes of `@be-music/player-web` call them until their views replace them.
 
 ## Parsed directives
 
@@ -178,7 +178,7 @@ TGA images are decoded by `tga.ts` and DDS images by `dds.ts` (the browser playe
 - `scene/lr2/select.ts`
 - `view/lr2/decide-view.ts`
 - `scene/lr2/gameplay.ts`
-- `scene/lr2/result.ts`
+- `view/lr2/result-view.ts`
 
 Shared rendering helpers in `skin/lr2/render.ts` and `skin/lr2/scene-render.ts` evaluate destination keyframes, op-gated visibility, source cells, sprite transforms, text, numbers, sliders, and bargraphs.
 The scenes light ops, start timers and resolve numbers, texts, buttons and sliders through the [scene-state resolvers](#scene-state).

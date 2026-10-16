@@ -127,7 +127,7 @@ flowchart LR
 | `resolveLr2ResultState`                                     | `PlayResult`、そのコース、遊んだスキンの `#FLIPRESULT`、スキンのカスタムオプション                                                                | op、数値、テキスト、スライダー、バーグラフ                                         |
 | `resolveLr2CourseOps`、`resolveLr2CourseText` など          | `CourseView`、作成中のコース                                                                                                                      | コースの op・数値・テキスト、コース作成の op・テキスト・ボタン                     |
 
-これらの関数は純粋で決定的です。時計も DOM もレンダラーも読まず、乱数も引かず、import するのはシーンモデル、エンジンのルール、譜面モデル、番号表だけです。時刻は入力として受け取ります。時計の数値は `Lr2Clock` で、プレイの時刻はフレームで、各タイマーの開始は瞬間の `at` で渡します。`pnpm run check` は `src/state/` に、実行環境に依存しないことと時計を読まないことの lint 規則を課します。Web ランタイムの LR2 ファミリーのビュー（今は決定画面のもの）がこれらを呼び、`@be-music/player-web` の LR2 シーンも、ビューに置き換わるまではこれらを呼びます。
+これらの関数は純粋で決定的です。時計も DOM もレンダラーも読まず、乱数も引かず、import するのはシーンモデル、エンジンのルール、譜面モデル、番号表だけです。時刻は入力として受け取ります。時計の数値は `Lr2Clock` で、プレイの時刻はフレームで、各タイマーの開始は瞬間の `at` で渡します。`pnpm run check` は `src/state/` に、実行環境に依存しないことと時計を読まないことの lint 規則を課します。Web ランタイムの LR2 ファミリーのビュー（今は決定画面とリザルト画面のもの）がこれらを呼び、`@be-music/player-web` の LR2 シーンも、ビューに置き換わるまではこれらを呼びます。
 
 ## 解析済み directive
 
@@ -178,7 +178,7 @@ TGA image は `tga.ts`、DDS image は `dds.ts` でデコードします（ブ�
 - `scene/lr2/select.ts`
 - `view/lr2/decide-view.ts`
 - `scene/lr2/gameplay.ts`
-- `scene/lr2/result.ts`
+- `view/lr2/result-view.ts`
 
 `skin/lr2/render.ts` と `skin/lr2/scene-render.ts` の共有 helper は destination keyframe、op-gated visibility、source cell、sprite transform、text、number、slider、bargraph を評価します。
 シーンは [シーンの状態を求める関数](#シーンの状態) を通して op を立て、タイマーを始め、数値・テキスト・ボタン・スライダーを解決します。
