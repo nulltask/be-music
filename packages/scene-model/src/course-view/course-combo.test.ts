@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { advanceCourseCombo, createCourseCombo } from './course-combo.ts';
+import { advanceCourseCombo, createCourseCombo, reduceCourseCombo } from './course-combo.ts';
 
 describe('course combo', () => {
   it('runs on from the carried-in combo until the first break', () => {
@@ -31,5 +31,12 @@ describe('course combo', () => {
     const state = createCourseCombo();
     advanceCourseCombo(state, 3);
     expect(state).toMatchObject({ combo: 3, maxCombo: 3 });
+  });
+
+  it('reduces without changing the state it is given', () => {
+    const state = createCourseCombo({ combo: 4, maxCombo: 9 });
+    const next = reduceCourseCombo(state, 2);
+    expect(next).toEqual({ combo: 6, maxCombo: 9, stageCombo: 2 });
+    expect(state).toEqual({ combo: 4, maxCombo: 9, stageCombo: 0 });
   });
 });

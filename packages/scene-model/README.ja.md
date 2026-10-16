@@ -25,6 +25,15 @@ be-music プレイヤーの各画面が何を表示し、どう振る舞うか�
 - **プレイオプション**: プレイ前にプレイヤーが選ぶもの（`PlayOptions`）、既定値、各オプションの選択肢、型のない入力
   から設定された値の検証（`resolvePlayOptionValue`・`resolvePlayOptions`）、巡回（`cyclePlayOptionValue`）、
   ハイスピードの範囲（`snapHiSpeed`・`stepPlayerHiSpeed`・`HiSpeedTransition`）。
+- **プレイ状態**: 進行中のゲージと EX スコアとそのグラフ、コンボ（コースのステージではコースのコンボも）、早い / 遅いの
+  数つきの判定タイミング、HS-FIX を含むハイスピード、LIFT と HIDDEN を含むレーンカバーを、エンジンのフレームと判定で
+  進む一つのイミュータブルな状態にまとめたもの（`PlayState`・`reducePlayState`）と、プレイログの単位での見え方
+  （`resolvePlaylogView`）。
+- **プレイ結果**: 単独のプレイ、コースのステージ、コース全体、NONSTOP のプレイの唯一の結果の形（`PlayResult`）。
+  プレイ状態、beatoraja のシーンの終了時の値、コースの実行から読みます。
+- **コースの表示用モデル**: 画面が見せるコース（`CourseView`・`resolveCourseView`）とコース全体のコンボ。
+- **効果音セット**: テーマの効果音とジングルをスロットごとに持つもの（`SystemSoundSet`）。LR2 テーマや beatoraja
+  テーマから作り、結果で鳴らすジングルと一覧のコマンドで鳴らす効果音を選びます。
 
 ## 例
 

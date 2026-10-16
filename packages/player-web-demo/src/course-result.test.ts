@@ -1,21 +1,12 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseBeatorajaCourseData, type NonstopConnection } from '@be-music/player/course';
-import type {
-  BeMusicCoursePlaylog,
-  BeMusicPlaylog,
-  PlaylogCourseResult,
-  PlaylogRulesetResult,
-} from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import type { BeMusicSongRecord } from '@be-music/player-web/skin';
 import { describe, expect, test } from 'vite-plus/test';
 import {
-  buildCourseResultData,
   buildCourseResultSummary,
   courseRecordKey,
-  joinCourseStageHistories,
   lookupCourseRecord,
-  resolveResultPresentation,
   skipsCourseStageResult,
 } from './course-result.ts';
 
@@ -44,25 +35,6 @@ function course(constraint: string[] = ['MIRROR', 'GAUGE_LR2', 'NO_SPEED', 'HCN'
     stages: ['a', 'b', 'c'].map((id) => ({ title: id, song: song(id) })),
     playable: true,
   };
-}
-
-function stageLog(native: Partial<PlaylogRulesetResult>): BeMusicPlaylog {
-  return {
-    results: {
-      native: {
-        ruleset: 'be-music/native',
-        judge: { pgreat: 10, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
-        fast: 0,
-        slow: 0,
-        exScore: 20,
-        noteCount: 10,
-        maxCombo: 10,
-        gauge: { type: 'GRADE', final: 90, cleared: true },
-        course: { combo: 10, maxCombo: 10 },
-        ...native,
-      },
-    },
-  } as unknown as BeMusicPlaylog;
 }
 
 describe('courseRecordKey', () => {
@@ -122,52 +94,6 @@ describe('buildCourseResultSummary', () => {
   });
 });
 
-describe('buildCourseResultData', () => {
-  const result: PlaylogCourseResult = {
-    ruleset: 'lr2',
-    judge: { pgreat: 36, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
-    fast: 0,
-    slow: 0,
-    exScore: 72,
-    noteCount: 36,
-    missCount: 0,
-    maxCombo: 36,
-    djLevel: 'AAA',
-    gauge: { type: 'GRADE', final: 100, cleared: true },
-    stagesPlayed: 3,
-    lamp: 'MAX',
-    stages: [],
-  };
-  const courseLog = (judgeRuleset?: 'lr2' | 'beatoraja'): BeMusicCoursePlaylog => {
-    const playlog = stageLog({});
-    playlog.play = { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...(judgeRuleset ? { judgeRuleset } : {}) };
-    return { stages: [{ played: true, playlog }] } as unknown as BeMusicCoursePlaylog;
-  };
-
-  test('shows LR2 courses on the stage results’ 200000 scale and the stages’ play time', () => {
-    const data = buildCourseResultData(course([]), result, courseLog(), undefined, { playSeconds: 241.5 });
-    expect(data.score).toMatchObject({ exScore: 72, score: 200000 });
-    expect(data.playSeconds).toBe(241.5);
-    expect(data.courseResult).toBe(true);
-  });
-
-  test('keeps the EX score where the ruleset scores with it', () => {
-    expect(buildCourseResultData(course([]), result, courseLog('beatoraja')).score.score).toBe(72);
-  });
-
-  test('reads a NONSTOP run as one play, timed by the stitched play', () => {
-    const base = course([]);
-    const nonstop: BrowserCourseEntry = { ...base, definition: { ...base.definition, kind: 'nonstop' } };
-    const data = buildCourseResultData(nonstop, result, courseLog(), {
-      gaugeHistory: [],
-      scoreHistory: [],
-      playSeconds: 180,
-    });
-    expect(data.playSeconds).toBe(180);
-    expect(data.courseResult).toBeUndefined();
-  });
-});
-
 describe('skipsCourseStageResult', () => {
   test('skips every stage result when stage results are skipped', () => {
     expect(skipsCourseStageResult({ skipStageResults: true, autoPlay: false, courseGoesOn: false })).toBe(true);
@@ -217,79 +143,5 @@ describe('lookupCourseRecord', () => {
     const random = { ...dan(), random: { name: 'r', stages: [], constraints: [], trophies: [] } };
     expect(lookupCourseRecord(random as unknown as BrowserCourseEntry, records)).toBeUndefined();
     expect(lookupCourseRecord(dan(), records)).toEqual({ lamp: 'HARD' });
-  });
-});
-
-describe('joinCourseStageHistories', () => {
-  test('lays the stages side by side by length, the EX score running on, an unreached stage at gauge 0', () => {
-    const joined = joinCourseStageHistories(
-      [
-        {
-          gaugeHistory: [
-            { progress: 0, value: 100 },
-            { progress: 1, value: 60 },
-          ],
-          scoreHistory: [
-            { progress: 0, exScore: 0 },
-            { progress: 1, exScore: 30 },
-          ],
-        },
-        {
-          gaugeHistory: [
-            { progress: 0, value: 60 },
-            { progress: 1, value: 10 },
-          ],
-          scoreHistory: [
-            { progress: 0, exScore: 0 },
-            { progress: 1, exScore: 10 },
-          ],
-        },
-      ],
-      [2, 1, 1],
-    );
-    expect(joined.gaugeHistory).toEqual([
-      { progress: 0, value: 100 },
-      { progress: 0.5, value: 60 },
-      { progress: 0.5, value: 60 },
-      { progress: 0.75, value: 10 },
-      { progress: 0.75, value: 0 },
-      { progress: 1, value: 0 },
-    ]);
-    expect(joined.scoreHistory).toEqual([
-      { progress: 0, exScore: 0 },
-      { progress: 0.5, exScore: 30 },
-      { progress: 0.5, exScore: 30 },
-      { progress: 0.75, exScore: 40 },
-      { progress: 0.75, exScore: 40 },
-      { progress: 1, exScore: 40 },
-    ]);
-  });
-
-  test('shares the width evenly when no stage has a length', () => {
-    const joined = joinCourseStageHistories([], [0, 0]);
-    expect(joined.gaugeHistory.map((sample) => sample.progress)).toEqual([0, 0.5, 0.5, 1]);
-  });
-});
-
-describe('resolveResultPresentation', () => {
-  test('shows a course run on the course-result skin with the course jingles and no retry', () => {
-    expect(resolveResultPresentation('course')).toEqual({
-      courseResultSkin: true,
-      courseJingles: true,
-      quickRetry: false,
-    });
-  });
-
-  test('shows a NONSTOP run as LR2 does: the result skin, the clear / fail jingles and quick retry', () => {
-    expect(resolveResultPresentation('nonstop')).toEqual({
-      courseResultSkin: false,
-      courseJingles: false,
-      quickRetry: true,
-    });
-  });
-
-  test('offers quick retry on a single play only, not on a course stage', () => {
-    expect(resolveResultPresentation('single').quickRetry).toBe(true);
-    expect(resolveResultPresentation('stage').quickRetry).toBe(false);
   });
 });

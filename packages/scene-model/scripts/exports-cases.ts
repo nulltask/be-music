@@ -288,4 +288,309 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       transition.valueAt(1_100);
     },
   });
+
+  // Play state
+  define('scene-model.isJudge', {
+    run: () => {
+      sceneModelApi.isJudge('GREAT');
+    },
+  });
+  define('scene-model.gaugePercent', {
+    run: () => {
+      sceneModelApi.gaugePercent({ current: 80, max: 100 });
+    },
+  });
+  define('scene-model.resolveHsFixMultiplier', {
+    run: () => {
+      sceneModelApi.resolveHsFixMultiplier('MAXBPM', BENCH_HS_FIX_TEMPO);
+    },
+  });
+  define('scene-model.createHiSpeedState', {
+    run: () => {
+      sceneModelApi.createHiSpeedState({ hiSpeed: 2.5, multiplier: 0.8 });
+    },
+  });
+  define('scene-model.reduceHiSpeed', {
+    run: () => {
+      sceneModelApi.reduceHiSpeed(BENCH_HI_SPEED, { type: 'hi-speed-step', delta: 0.1 });
+    },
+  });
+  define('scene-model.laneCoversFromPlayOptions', {
+    run: () => {
+      sceneModelApi.laneCoversFromPlayOptions(BENCH_COVER_OPTIONS, ['1P', '2P']);
+    },
+  });
+  define('scene-model.resolveLaneCover', {
+    run: () => {
+      sceneModelApi.resolveLaneCover(BENCH_COVERS[0]!);
+    },
+  });
+  define('scene-model.reduceLaneCovers', {
+    run: () => {
+      sceneModelApi.reduceLaneCovers(BENCH_COVERS, { type: 'cover-adjust', part: 'sudden', delta: 0.05 });
+    },
+  });
+  define('scene-model.createPlayState', {
+    run: () => {
+      sceneModelApi.createPlayState({ gauge: 20, totalSeconds: 120, courseCarryIn: { combo: 10, maxCombo: 20 } });
+    },
+  });
+  define('scene-model.playEventFromUiCommand', {
+    run: () => {
+      sceneModelApi.playEventFromUiCommand({ kind: 'trigger-poor-bga', seconds: 12 });
+    },
+  });
+  define('scene-model.playProgress', {
+    run: () => {
+      sceneModelApi.playProgress(BENCH_PLAY_STATE, 30);
+    },
+  });
+  define('scene-model.reducePlayState', {
+    run: () => {
+      let state = sceneModelApi.reducePlayState(BENCH_PLAY_STATE, BENCH_FRAME);
+      state = sceneModelApi.reducePlayState(state, BENCH_JUDGE);
+      sceneModelApi.reducePlayState(state, { type: 'hi-speed-step', delta: 0.1 });
+    },
+  });
+  define('scene-model.recentJudgeTimings', {
+    run: () => {
+      sceneModelApi.recentJudgeTimings(BENCH_PLAYED, 16);
+    },
+  });
+  define('scene-model.resolveWhiteNumber', {
+    run: () => {
+      sceneModelApi.resolveWhiteNumber({ laneBeats: 4, hiSpeed: 2.5, sudden: 0.3, bpm: 150 });
+    },
+  });
+  define('scene-model.resolveGreenNumber', {
+    run: () => {
+      sceneModelApi.resolveGreenNumber(640);
+    },
+  });
+  define('scene-model.resolvePlaylogView', {
+    run: () => {
+      sceneModelApi.resolvePlaylogView(BENCH_PLAYED.view, {
+        scale: sceneModelApi.BE_MUSIC_HI_SPEED_SCALE,
+        laneBeats: 4,
+        mainBpm: 150,
+      });
+    },
+  });
+  define('scene-model.resolveBeatorajaPlaylogView', {
+    run: () => {
+      sceneModelApi.resolveBeatorajaPlaylogView({
+        hiSpeed: 2,
+        lanecover: 0.25,
+        lift: 0.1,
+        hiddenRatio: 0.5,
+        hiddenEnabled: true,
+        mainBpm: 150,
+        sides: ['1P'],
+      });
+    },
+  });
+  define('scene-model.PlaylogViewCursor', {
+    run: () => {
+      const cursor = new sceneModelApi.PlaylogViewCursor({ hiSpeed: 2 }, [{ timeUs: 1_000_000, hiSpeed: 2.5 }]);
+      cursor.next(0);
+      cursor.next(2_000_000);
+    },
+  });
+
+  // Play result
+  define('scene-model.playResultRun', {
+    run: () => {
+      sceneModelApi.playResultRun({ run: 'stage' });
+    },
+  });
+  define('scene-model.resolveResultPresentation', {
+    run: () => {
+      sceneModelApi.resolveResultPresentation('nonstop');
+    },
+  });
+  define('scene-model.playResultFromPlayState', {
+    run: () => {
+      sceneModelApi.playResultFromPlayState(BENCH_PLAYED, {
+        song: BENCH_CHARTS[0]!,
+        score: BENCH_SCORE,
+        seconds: 100,
+        judgeRuleset: 'lr2',
+      });
+    },
+  });
+  define('scene-model.playResultFromBeatoraja', {
+    run: () => {
+      sceneModelApi.playResultFromBeatoraja(BENCH_BEATORAJA_COMPLETION, {
+        song: BENCH_CHARTS[0]!,
+        judgeRuleset: 'beatoraja',
+      });
+    },
+  });
+  define('scene-model.beatorajaCompletionFromPlayResult', {
+    run: () => {
+      sceneModelApi.beatorajaCompletionFromPlayResult(BENCH_RESULT);
+    },
+  });
+  define('scene-model.joinCourseStageHistories', {
+    run: () => {
+      sceneModelApi.joinCourseStageHistories([BENCH_STAGE_HISTORY, BENCH_STAGE_HISTORY], [120, 90, 100]);
+    },
+  });
+  define('scene-model.playResultFromCourseRun', {
+    run: () => {
+      sceneModelApi.playResultFromCourseRun(BENCH_COURSE, BENCH_COURSE_RESULT, BENCH_COURSE_LOG, BENCH_STAGE_HISTORY);
+    },
+  });
+
+  // Course view
+  define('scene-model.resolveCourseView', {
+    run: () => {
+      sceneModelApi.resolveCourseView(BENCH_COURSE, 0);
+    },
+  });
+  define('scene-model.createCourseCombo', {
+    run: () => {
+      sceneModelApi.createCourseCombo({ combo: 12, maxCombo: 30 });
+    },
+  });
+  define('scene-model.reduceCourseCombo', {
+    run: () => {
+      sceneModelApi.reduceCourseCombo({ combo: 12, maxCombo: 30, stageCombo: 4 }, 5);
+    },
+  });
+  define('scene-model.advanceCourseCombo', {
+    run: () => {
+      sceneModelApi.advanceCourseCombo({ combo: 12, maxCombo: 30, stageCombo: 4 }, 5);
+    },
+  });
+
+  // System sounds
+  define('scene-model.systemSoundSetFromLr2Theme', {
+    run: () => {
+      sceneModelApi.systemSoundSetFromLr2Theme(BENCH_LR2_THEME_SOUNDS);
+    },
+  });
+  define('scene-model.systemSoundSetFromBeatoraja', {
+    run: () => {
+      sceneModelApi.systemSoundSetFromBeatoraja({
+        paths: { cursor: 'sound/cursor.wav', decide: 'sound/decide.wav' },
+        selectBgmPath: 'Bgm/select.wav',
+        bgm: { clear: BENCH_BYTES },
+      });
+    },
+  });
+  define('scene-model.hasResultJingle', {
+    run: () => {
+      sceneModelApi.hasResultJingle(BENCH_SOUND_SET);
+    },
+  });
+  define('scene-model.resolveResultJingles', {
+    run: () => {
+      sceneModelApi.resolveResultJingles([undefined, BENCH_SOUND_SET], true);
+    },
+  });
+  define('scene-model.resolveResultJingle', {
+    run: () => {
+      sceneModelApi.resolveResultJingle({ clear: { bytes: BENCH_BYTES } }, true);
+    },
+  });
+  define('scene-model.browseSystemSound', {
+    run: () => {
+      sceneModelApi.browseSystemSound({ type: 'move', delta: 1 }, { kind: 'cursor', from: 0, to: 1, delta: 1 });
+    },
+  });
+  define('scene-model.startSystemSound', {
+    run: () => {
+      sceneModelApi.startSystemSound(BENCH_CHART_ENTRY);
+    },
+  });
 }
+
+const BENCH_BYTES = new Uint8Array([1, 2, 3]);
+const BENCH_HS_FIX_TEMPO = { referenceBpm: 150, bpms: [150, 300, 75], mainBpm: 150 };
+const BENCH_HI_SPEED = sceneModelApi.createHiSpeedState({ hiSpeed: 2.5, multiplier: 0.8 });
+const BENCH_COVER_OPTIONS = {
+  ...sceneModelApi.DEFAULT_PLAY_OPTIONS,
+  hiddenSudden1P: 'HID+SUD',
+  laneCover: true,
+} as const satisfies sceneModelApi.PlayOptions;
+const BENCH_COVERS = sceneModelApi.laneCoversFromPlayOptions(BENCH_COVER_OPTIONS, ['1P', '2P']);
+const BENCH_PLAY_STATE = sceneModelApi.createPlayState({
+  gauge: 20,
+  totalSeconds: 120,
+  view: { hiSpeed: BENCH_HI_SPEED, covers: BENCH_COVERS },
+});
+const BENCH_FRAME: sceneModelApi.PlayEvent = {
+  type: 'frame',
+  frame: {
+    totalSeconds: 120,
+    summary: { exScore: 40, gauge: { current: 46, max: 100, cleared: false, type: 'GROOVE' } },
+  },
+};
+const BENCH_JUDGE: sceneModelApi.PlayEvent = {
+  type: 'judge',
+  judge: { judge: 'GREAT', combo: 21, channel: '11', deltaMs: -12 },
+  seconds: 30,
+  atMs: 30_000,
+};
+const BENCH_PLAYED = Array.from({ length: 200 }, (_, index): sceneModelApi.PlayEvent => ({
+  type: 'judge',
+  judge: { judge: index % 3 === 0 ? 'GREAT' : 'PERFECT', combo: index + 1, deltaMs: (index % 21) - 10 },
+  seconds: index / 2,
+  atMs: index * 500,
+})).reduce(sceneModelApi.reducePlayState, sceneModelApi.reducePlayState(BENCH_PLAY_STATE, BENCH_FRAME));
+const BENCH_SCORE = {
+  total: 200,
+  perfect: 133,
+  great: 67,
+  good: 0,
+  bad: 0,
+  poor: 0,
+  emptyPoor: 0,
+  exScore: 333,
+  score: 333,
+};
+const BENCH_BEATORAJA_COMPLETION: sceneModelApi.BeatorajaPlayCompletion = {
+  summary: {
+    ...BENCH_SCORE,
+    fast: 30,
+    slow: 37,
+    gauge: { current: 80, max: 100, initial: 20, cleared: true, type: 'NORMAL' },
+  },
+  maxCombo: 200,
+  history: {
+    scoreHistory: BENCH_PLAYED.scoreHistory,
+    gaugeHistory: BENCH_PLAYED.gaugeHistory,
+    timingHistory: BENCH_PLAYED.judgeTimings.map((timing) => ({ deltaMs: timing.deltaMs, kind: timing.judge })),
+  },
+};
+const BENCH_RESULT = sceneModelApi.playResultFromBeatoraja(BENCH_BEATORAJA_COMPLETION, { song: BENCH_CHARTS[0]! });
+const BENCH_STAGE_HISTORY: sceneModelApi.CourseStageHistory = {
+  gaugeHistory: BENCH_PLAYED.gaugeHistory,
+  scoreHistory: BENCH_PLAYED.scoreHistory,
+  playSeconds: 100,
+};
+const BENCH_COURSE_RESULT: Parameters<typeof sceneModelApi.playResultFromCourseRun>[1] = {
+  ruleset: 'lr2',
+  judge: { pgreat: 133, great: 67, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
+  fast: 30,
+  slow: 37,
+  exScore: 333,
+  noteCount: 200,
+  missCount: 0,
+  maxCombo: 200,
+  djLevel: 'AA',
+  gauge: { type: 'GRADE', final: 80, cleared: true },
+  stagesPlayed: 1,
+  lamp: 'FULL_COMBO',
+  stages: [],
+};
+const BENCH_COURSE_LOG = {
+  stages: [{ played: true, playlog: { play: { judgeRuleset: 'lr2' } } }],
+} as unknown as Parameters<typeof sceneModelApi.playResultFromCourseRun>[2];
+const BENCH_LR2_THEME_SOUNDS: sceneModelApi.Lr2ThemeSounds = {
+  selectBgm: { path: 'LR2files/Bgm/x/select.wav', bytes: BENCH_BYTES },
+  clearBgm: { path: 'LR2files/Sound/lr2/clear.wav', bytes: BENCH_BYTES },
+  systemSounds: { cursorMove: { path: 'LR2files/Sound/lr2/scratch.wav', bytes: BENCH_BYTES } },
+};
+const BENCH_SOUND_SET = sceneModelApi.systemSoundSetFromLr2Theme(BENCH_LR2_THEME_SOUNDS);
