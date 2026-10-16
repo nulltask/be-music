@@ -278,7 +278,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-What a scene shows is handed to it before it is shown: the options of `createDecideScene` for the built-in and LR2 decide screens, `setTarget` on the beatoraja decide scene, the options of `createResultScene` for the built-in result screen, `setResult` on the LR2 and beatoraja result scenes, the song in `prepare(host, song, source)` on the gameplay scenes, and the constructor options for the rest.
+What a scene shows is handed to it before it is shown: the options of `createDecideScene` for the built-in and LR2 decide screens, `setTarget` on the beatoraja decide scene, the options of `createResultScene` for the built-in and LR2 result screens, `setResult` on the beatoraja result scene, the song in `prepare(host, song, source)` on the gameplay scenes, and the constructor options for the rest.
 
 - **The select scene is kept alive.** The built-in and LR2 select scene stays across a decide, play and result: its `exit()` pauses the BGM, stops the chart preview (which keeps its focused chart) and the render loop, and it keeps its cursor, browse state and decoded BGM. Its input listeners stay attached and ignore input while it is off stage. Entering it again re-seeds its scene timers, so the skin's entrance plays again, and resumes the BGM and the preview. The beatoraja select scene is rebuilt from its snapshot instead.
 - **A play loads off stage.** `prepare()` parses the chart and decodes its audio without touching the stage or adding listeners, so the demo prepares the play behind a decide splash. When the splash is done, `setScene(play)` exits the decide scene and enters the play, then `start()` begins it; keys pressed during the splash reach only the splash. Without a splash the demo shows the play first, and a `prepare()` that runs while the play is showing draws the playfield in its loading state.
@@ -331,7 +331,7 @@ flowchart TD
 
 ## Scene sessions and family views
 
-The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). The built-in and LR2 decide screens and the built-in result screen are on them ([The decide screen](#the-decide-screen), [The result screen](#the-result-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
+The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). The built-in and LR2 decide and result screens are on them ([The decide screen](#the-decide-screen), [The result screen](#the-result-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
 
 ```mermaid
 flowchart LR
@@ -434,13 +434,21 @@ The decide session could play it (`sounds.decideBgm`), but as the decide scene's
 
 ### The result screen
 
-`createResultScene(kit, options)` (`@be-music/player-web/scenes`) makes the built-in result screen: a result session (`session/result/result-session.ts`) drawn by the built-in result view (`view/built-in/result-view.ts`), as a `SessionScene` to show with `setScene`. The LR2 and beatoraja result screens are still `PixiResultView` and `PixiBeatorajaResultScene`.
+`createResultScene(kit, options)` (`@be-music/player-web/scenes`) makes the built-in and LR2 result screens: a result session (`session/result/result-session.ts`) drawn by the view of the kit's family, as a `SessionScene` to show with `setScene`. A built-in kit (`{ family: 'built-in', skin }`) is drawn by the built-in result view (`view/built-in/result-view.ts`), an LR2 kit (`{ family: 'lr2', skin }`, the theme's result skin, or its course-result skin for a course run) by the LR2 result view (`view/lr2/result-view.ts`). The beatoraja result screen is still `PixiBeatorajaResultScene`.
 
-- **Options.** `result` (the `PlayResult`), `run` (which play it is of, when `result.run` does not say, as for a course stage), `source` (the chart's files, for the skin's images), `sounds` (the theme's `SystemSoundSet`), `audio` (the host's audio service) and `on: { continue, retry? }`.
+- **Options.** `result` (the `PlayResult`; an LR2 skin shows the course of `result.course`), `run` (which play it is of, when `result.run` does not say, as for a course stage), `source` (the chart's files, for the skin's images), `sounds` (the theme's `SystemSoundSet`), `audio` (the host's audio service) and `on: { continue, retry? }`.
 - **Presentation.** The session presents the run with `resolveResultPresentation(run)`: a course run plays the course jingles, and only a single play or a NONSTOP run offers the quick retry.
-- **Jingle.** The session plays the result's jingle from `sounds` (`resolveResultJingles`, then `resolveResultJingle`: the clear or the fail one by the verdict, else the generic one; the course ones first for a course run) through the audio service as the screen enters, as its owner, and stops it with `stopOwned` as the screen leaves the stage. A scene used to stop its jingle by closing its own context.
-- **Steps.** Input opens after the view's input delay (1500 ms for a be-music skin, LR2's default `#STARTINPUT`), and the result's graphs start drawing then. They finish by themselves 3 s later; Enter, Space or a click before that skips them. The next press shows the record update, and the one after that calls `on.continue`. The frame carries when each step showed (`graphShownAtMs`, `updateShownAtMs`: LR2's timers 151 and 152); a be-music skin's entrance jumps to its settled layout once the graphs show.
+- **Jingle.** The session plays the result's jingle from `sounds` (`resolveResultJingles`, then `resolveResultJingle`: the clear or the fail one by the verdict, else the generic one; the course ones first for a course run) through the audio service as the screen enters, as its owner, and stops it with `stopOwned` as the screen leaves the stage. A scene used to stop its jingle by closing its own context. A theme with only the other verdict's jingle plays none, on the LR2 screen as on the built-in one.
+- **Steps.** Input opens after the view's input delay (an LR2 skin's `#STARTINPUT`; 1500 ms, LR2's default, for a be-music skin or an LR2 skin without one), and the result's graphs start drawing then. They finish by themselves 3 s later; Enter, Space or a click before that skips them. The next press shows the record update, and the one after that calls `on.continue`. The frame carries when each step showed (`graphShownAtMs`, `updateShownAtMs`: LR2's timers 151 and 152); a be-music skin's entrance jumps to its settled layout once the graphs show.
 - **Leaving.** Escape calls `on.continue` at any step. A bare R calls `on.retry` once input is open, when the run offers the quick retry and the host gave `on.retry`. Each fires once per entry.
+- **LR2 drawing.** The LR2 view draws the result skin through `resolveLr2ResultState`: the result, the course of `result.course`, the skin's `#FLIPRESULT` and the defaults of its custom options. It reads LR2's result timers off each frame, and the timer ids stay in the view:
+  - timer 0 from the entry;
+  - timers 1 and 150 from when input opens;
+  - timer 151 from `graphShownAtMs`, when the rank and the score show;
+  - timer 152 from `updateShownAtMs`, when the record update shows.
+
+  The gauge and score graphs sweep in over their `start` and `end` after their timer, as LR2's stock skin draws them 500 to 2000 ms after timer 150.
+
 - **Skin settings.** `updateKit(kit)` takes the player's new settings for the skin; the next frame draws with them.
 
 ```mermaid
@@ -452,7 +460,7 @@ stateDiagram-v2
   Update --> [*]: Enter, click
 ```
 
-The web demo shows every built-in result this way: a single play, a course stage, a course run and a NONSTOP run (whose result falls back to the built-in screen on a beatoraja theme, with that theme's jingles).
+The web demo shows every built-in and LR2 result this way: a single play, a course stage, a course run (on the LR2 theme's course-result skin when it has one) and a NONSTOP run (whose result falls back to the built-in screen on a beatoraja theme, with that theme's jingles).
 
 ### Where the play scene's parts live
 
