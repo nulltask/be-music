@@ -362,6 +362,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelApi.resolveWhiteNumber({ laneBeats: 4, hiSpeed: 2.5, sudden: 0.3, bpm: 150 });
     },
   });
+  define('scene-model.resolveHiSpeedForWhiteNumber', {
+    run: () => {
+      sceneModelApi.resolveHiSpeedForWhiteNumber({ laneBeats: 4, sudden: 0.3, bpm: 150, whiteNumberMs: 448 });
+    },
+  });
   define('scene-model.resolveGreenNumber', {
     run: () => {
       sceneModelApi.resolveGreenNumber(640);
