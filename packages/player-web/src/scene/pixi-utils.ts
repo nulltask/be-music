@@ -134,3 +134,45 @@ export function staggerDestroyTextures(
     cancel: stopScheduler,
   };
 }
+
+/** What {@link releaseTexturesOnHost} needs of a scene host: its ticker, and whether it is going. */
+export interface TextureReleaseHost {
+  readonly app: { readonly ticker: { add(callback: () => void): unknown; remove(callback: () => void): unknown } };
+  isDisposed(): boolean;
+}
+
+/**
+ * Destroys `textures` a few per frame on `host`'s ticker ({@link staggerDestroyTextures}), on a macrotask loop without
+ * a host, and all at once when the host itself is going: a sync sweep over a play's textures stalls the next scene's
+ * first frames on lower-end devices.
+ */
+export function releaseTexturesOnHost(
+  host: TextureReleaseHost | undefined,
+  textures: readonly (Texture | undefined)[],
+): void {
+  if (textures.length === 0) return;
+  const ticker = host?.app.ticker;
+  const cleanup = staggerDestroyTextures(
+    textures,
+    ticker !== undefined
+      ? (callback) => {
+          ticker.add(callback);
+          return () => ticker.remove(callback);
+        }
+      : (callback) => {
+          let cancelled = false;
+          let timeout: ReturnType<typeof setTimeout> | undefined;
+          const loop = (): void => {
+            if (cancelled) return;
+            callback();
+            if (!cancelled) timeout = setTimeout(loop, 0);
+          };
+          timeout = setTimeout(loop, 0);
+          return () => {
+            cancelled = true;
+            if (timeout !== undefined) clearTimeout(timeout);
+          };
+        },
+  );
+  if (host?.isDisposed() === true) cleanup.drain();
+}

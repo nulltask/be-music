@@ -75,6 +75,8 @@ export interface PlayfieldRuntime {
   readonly tempo: number;
   readonly playState: PlayState;
   readonly score: ScoreSummary;
+  /** The score readout, easing toward the score after each judgment. */
+  readonly displayedScore: number;
   readonly gaugeState: PlayerGaugeSummary;
   readonly fastCount: number;
   readonly slowCount: number;
