@@ -98,8 +98,8 @@ it.
 
 In the browser player:
 
-- The LR2 / default gameplay scene exposes the recorded log through `PixiGameplayResultData.playlog`.
-- The beatoraja gameplay scene exposes it through `PixiBeatorajaGameplayView.getPlaylog()`.
+- Every play screen (`createPlayScene`) hands the recorded log to `on.finish(result, playlog)`, and
+  `waitForPlaylog()` waits for the log of a play that was left.
 - The demo auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
   the **Auto-save play history** checkbox in the Debug Menu's **Library & records** folder (OFF by default). Play-log options are latched at song start
   and cannot change mid-play — the controls are disabled while a song is playing, and the values in effect when
