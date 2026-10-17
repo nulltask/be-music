@@ -1,6 +1,5 @@
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import { flipRectToPixi } from '../../../skin/beatoraja/render.ts';
-import { DEFAULT_BEATORAJA_FADEOUT_MS } from '../../../skin/beatoraja/scene-transition.ts';
 
 // Values the beatoraja play scene reads off its skin at construction: the lane's authored bottom, the judge combo digit
 // pitch, and the fade-out window.
@@ -105,11 +104,4 @@ export function readJudgeComboMetrics(skin: BeatorajaSkin): {
     }
   }
   return result;
-}
-
-/** The skin's fade-out window in ms: its `fadeout`, or beatoraja's 500 ms when it has none. */
-export function resolveFadeoutMs(fadeout: number | undefined): number {
-  return typeof fadeout === 'number' && Number.isFinite(fadeout) && fadeout >= 0
-    ? fadeout
-    : DEFAULT_BEATORAJA_FADEOUT_MS;
 }
