@@ -3446,13 +3446,12 @@ class PlayerWebDemoApp {
     }
     const kept = this.beatorajaSelectKit;
     if (kept !== undefined && kept.bundle === bundle && kept.entryPath === selectedEntry.entryPath) return kept.kit;
-    // Its first decode resolves `source[]` without the options' `filepath[]` picks, as it always has; a change of the
-    // options applies them.
+    // The options' `filepath[]` picks (the header's default file of each wildcard the first time) choose the files of
+    // `source[]`, as on the other screens.
     const load = await loadBeatorajaSceneKit({
       files: bundle.files,
       entryPath: selectedEntry.entryPath,
       caches: this.beatorajaKitCaches,
-      applyFilepathPicks: false,
       onSources: (sourceBundle) => {
         gameplayLog.info(
           `beatoraja select source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${selectedEntry.entryPath})`,
