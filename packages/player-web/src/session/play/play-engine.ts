@@ -25,7 +25,7 @@ import type {
   PlayerUiSignalBus,
 } from '@be-music/player/core/ui-signal-bus';
 import type { TimedPlayableNote } from '@be-music/player/playable-notes';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicPlaylog, PlaylogRecordingOptions, PlaylogViewState } from '@be-music/player/playlog';
 import {
   resolveDisplayedPoor,
   type GaugeType,
@@ -390,6 +390,40 @@ function buildSharedEngineChart(ctx: PlayEngineContext): BeMusicJson {
   return ctx.resolvedChart ?? ctx.song!.chart;
 }
 
+/**
+ * What a recorded play's log says of its settings and chart, for every family: the gauge, the file hashes and the
+ * recorder the host gave, the lane options and DP FLIP it played with, the view at the start, and the chart path in
+ * `native` so a dropped log can be matched back to its song. The engine plays the chart the session resolved (and
+ * flipped); the song's chart is the source both fingerprints describe (`#RANDOM` unresolved, no lane option applied).
+ */
+export function resolvePlaylogRecording(
+  options: Pick<
+    PlaySessionOptions,
+    'gauge' | 'chartSha256' | 'chartMd5' | 'playlogRecorder' | 'random1P' | 'random2P' | 'dpFlip'
+  >,
+  song: Pick<BrowserSongEntry, 'chart' | 'chartPath'> | undefined,
+  view: PlaylogViewState,
+): PlaylogRecordingOptions {
+  return {
+    gauge: options.gauge,
+    ...(options.chartSha256 !== undefined ? { chartSha256: options.chartSha256 } : {}),
+    ...(options.chartMd5 !== undefined ? { chartMd5: options.chartMd5 } : {}),
+    ...(options.playlogRecorder !== undefined ? { recorder: options.playlogRecorder } : {}),
+    ...(song !== undefined ? { sourceChart: song.chart } : {}),
+    ...(options.random1P !== undefined || options.random2P !== undefined
+      ? {
+          randomLane: {
+            ...(options.random1P !== undefined ? { p1: options.random1P } : {}),
+            ...(options.random2P !== undefined ? { p2: options.random2P } : {}),
+          },
+        }
+      : {}),
+    ...(options.dpFlip !== undefined ? { dpFlip: options.dpFlip } : {}),
+    view,
+    ...(song?.chartPath !== undefined ? { native: { chartPath: song.chartPath } } : {}),
+  };
+}
+
 export function launchSharedEngine(ctx: PlayEngineContext): void {
   if (ctx.disposed || ctx.sharedEnginePromise) return;
   if (!ctx.song || !ctx.audioContext || !ctx.audioBus) return;
@@ -529,27 +563,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // Play-log recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
             // replay, then hands the assembled log here right before the play promise settles. The host reads it
             // back through `getResultData().playlog` for the result screen's auto-save.
-            recordPlaylog: {
-              gauge: ctx.options.gauge,
-              ...(ctx.options.chartSha256 !== undefined ? { chartSha256: ctx.options.chartSha256 } : {}),
-              ...(ctx.options.chartMd5 !== undefined ? { chartMd5: ctx.options.chartMd5 } : {}),
-              ...(ctx.options.playlogRecorder !== undefined ? { recorder: ctx.options.playlogRecorder } : {}),
-              // The engine plays the chart this view resolved; the song's chart is the source both fingerprints
-              // describe (`#RANDOM` unresolved, no lane option applied).
-              ...(ctx.song !== undefined ? { sourceChart: ctx.song.chart } : {}),
-              ...(ctx.options.random1P !== undefined || ctx.options.random2P !== undefined
-                ? {
-                    randomLane: {
-                      ...(ctx.options.random1P !== undefined ? { p1: ctx.options.random1P } : {}),
-                      ...(ctx.options.random2P !== undefined ? { p2: ctx.options.random2P } : {}),
-                    },
-                  }
-                : {}),
-              ...(ctx.options.dpFlip !== undefined ? { dpFlip: ctx.options.dpFlip } : {}),
-              // What the player sees at the start; the changes during the play go in as `view` commands.
-              view: startPlaylogView(ctx),
-              ...(ctx.song?.chartPath !== undefined ? { native: { chartPath: ctx.song.chartPath } } : {}),
-            },
+            // What the player sees at the start; the changes during the play go in as `view` commands.
+            recordPlaylog: resolvePlaylogRecording(ctx.options, ctx.song, startPlaylogView(ctx)),
             onPlaylogRecorded: (playlog) => {
               ctx.playlog = playlog;
               const waiters = ctx.playlogWaiters.splice(0);
