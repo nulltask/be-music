@@ -9,8 +9,20 @@ const BEATORAJA = SELECT_POLICIES.beatoraja;
 describe('SELECT_POLICIES', () => {
   it('has the built-in screens follow LR2, and beatoraja leave at the root', () => {
     expect(SELECT_POLICIES['built-in']).toEqual(LR2);
-    expect(LR2).toEqual({ atRoot: 'stay', openSingleFolder: true, listOptions: 'play-options' });
-    expect(BEATORAJA).toEqual({ atRoot: 'exit', openSingleFolder: false, listOptions: 'browse' });
+    expect(LR2).toEqual({
+      atRoot: 'stay',
+      openSingleFolder: true,
+      listOptions: 'play-options',
+      keys: 'lr2',
+      folderCursorCue: true,
+    });
+    expect(BEATORAJA).toEqual({
+      atRoot: 'exit',
+      openSingleFolder: false,
+      listOptions: 'browse',
+      keys: 'beatoraja',
+      folderCursorCue: false,
+    });
   });
 });
 

@@ -1,9 +1,9 @@
 /**
- * The beatoraja select scene's chart images and graphs (`PixiBeatorajaSelectScene`): the focused chart's `#STAGEFILE`,
- * `#BACKBMP` and `#BANNER` bitmaps for the skin's synthetic image ids (-100 / -101 / -102), decoded through the host and
- * kept per chart, and the data of its BPM graph and notes graph, worked out once per chart.
+ * The beatoraja select view's chart images and graphs (`BeatorajaSelectView`): the focused chart's `#STAGEFILE`,
+ * `#BACKBMP` and `#BANNER` bitmaps for the skin's synthetic image ids (-100 / -101 / -102), decoded through the view and
+ * kept per chart until the part is disposed, and the data of its BPM graph and notes graph, worked out once per chart.
  *
- * The part reads the scene's state through {@link BeatorajaSelectChartImagesContext}; the select scene passes it.
+ * The part reads the view's state through {@link BeatorajaSelectChartImagesContext}; the select view passes it.
  */
 
 import type { Texture } from 'pixi.js';
@@ -12,11 +12,16 @@ import {
   type BeatorajaChartNoteDistribution,
 } from '../../../chart/beatoraja/note-distribution.ts';
 import type { BrowserBrowseEntry, BrowserSongEntry } from '../../../collection/types.ts';
-import type { PixiBeatorajaSelectSceneOptions } from '../../../scene/beatoraja/select/options.ts';
+import { logger } from '../../../logger.ts';
+import { destroyTextureAndRevokeBlobUrl } from '../../../media/textures.ts';
+import type { BeatorajaChartImages } from '../../../skin/beatoraja/chart-images.ts';
 
-/** What the chart images read on the select scene: its fields of these names. */
+const log = logger('beatoraja-select');
+
+/** What the chart images read on the select view: its fields of these names. */
 export interface BeatorajaSelectChartImagesContext {
-  readonly options: Pick<PixiBeatorajaSelectSceneOptions, 'decodeChartImages'>;
+  /** Decodes a chart's own images; without it the synthetic image ids stay hidden. */
+  readonly decodeChartImages: ((song: BrowserSongEntry) => Promise<BeatorajaChartImages>) | undefined;
   readonly disposed: boolean;
   readonly entries: ReadonlyArray<BrowserBrowseEntry>;
   /** The cursor: `entries[currentIndex]` is the focused bar. */
@@ -31,52 +36,53 @@ export class BeatorajaSelectChartImages {
    * Per-song chart-image cache. Keyed by `BrowserSongEntry.id`; populated lazily by
    * {@link refreshChartImagesForFocus} as the user moves the cursor. Re-focusing a
    * previously-loaded song hits the cache and skips the IO. Sentinel `null` records a
-   * decode that resolved with no usable images so we don't retry every cursor move
-   * (e.g. chart with no `#STAGEFILE` / `#BACKBMP` / `#BANNER`).
+   * decode in flight, or one that failed, so we don't retry every cursor move.
    */
-  private readonly chartImageCache = new Map<
-    string,
-    { stageFile?: Texture; backBmp?: Texture; banner?: Texture } | null
-  >();
-  /** Generation counter — bumps on every focus change so stale async resolves don't overwrite newer ones. */
-  private chartImageFocusGeneration = 0;
+  private readonly chartImageCache = new Map<string, BeatorajaChartImages | null>();
+  private disposed = false;
 
   constructor(ctx: BeatorajaSelectChartImagesContext) {
     this.ctx = ctx;
   }
 
   /**
-   * Lazily decode the focused song's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps via
-   * the host's `decodeChartImages` callback. Caches by `song.id` so re-focusing a
-   * previously-loaded song hits the cache. Generation counter guards against stale async
-   * resolves overwriting newer ones (rapid cursor moves through a folder).
+   * Lazily decode the focused song's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps via the context's
+   * `decodeChartImages`. Caches by `song.id` so re-focusing a previously-loaded song hits the cache. Images that land
+   * after the cursor moved on are kept for when it comes back; those that land after the part is disposed are
+   * destroyed.
    */
   refreshChartImagesForFocus(song: BrowserSongEntry | undefined): void {
     if (song === undefined) return;
-    if (this.ctx.options.decodeChartImages === undefined) return;
+    const decoder = this.ctx.decodeChartImages;
+    if (decoder === undefined) return;
     if (this.chartImageCache.has(song.id)) return;
     // Mark as in-flight so concurrent focus changes don't fire duplicate decodes.
     this.chartImageCache.set(song.id, null);
-    const generation = ++this.chartImageFocusGeneration;
-    const decoder = this.ctx.options.decodeChartImages;
     void decoder(song)
       .then((images) => {
-        if (this.ctx.disposed) return;
-        // Stale resolve: the user has moved on to another song since this fetch fired.
-        // Still cache the result so a later refocus on this song uses it without re-IO,
-        // but skip the visible-state side effects.
+        if (this.ctx.disposed || this.disposed) {
+          destroyChartImages(images);
+          return;
+        }
+        // The next frame picks up the new texture via `chartImageProvider`, which reads the cache every frame.
         this.chartImageCache.set(song.id, images);
-        // The next tick's render pass picks up the new texture via `chartImageProvider`.
-        // No explicit refresh call needed — `update()` reads from the cache every frame.
-        void generation;
       })
-      .catch((error) => {
-        // Decode failed; leave the cache entry as `null` so we don't retry on every
-        // cursor settle. User-visible: the banner / stagefile / backbmp slot stays hidden.
-        // eslint-disable-next-line no-console
-        console.warn('[beatoraja-select] chart-image decode failed', { songId: song.id, error });
+      .catch((error: unknown) => {
+        // Decode failed; leave the cache entry as `null` so we don't retry on every cursor settle. User-visible: the
+        // banner / stagefile / backbmp slot stays hidden.
+        log.warn('chart-image decode failed', { songId: song.id, error });
         this.chartImageCache.set(song.id, null);
       });
+  }
+
+  /** Destroys the decoded images; nothing decodes after. */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const images of this.chartImageCache.values()) {
+      if (images !== null) destroyChartImages(images);
+    }
+    this.chartImageCache.clear();
   }
 
   /**
@@ -149,5 +155,11 @@ export class BeatorajaSelectChartImages {
     const analysis = this.analysisFor(entry.song);
     if (analysis.buckets.length === 0) return undefined;
     return { buckets: analysis.buckets, maxCount: analysis.maxCount, totalMs: analysis.totalMs };
+  }
+}
+
+function destroyChartImages(images: BeatorajaChartImages): void {
+  for (const texture of [images.stageFile, images.backBmp, images.banner]) {
+    if (texture !== undefined) destroyTextureAndRevokeBlobUrl(texture, true);
   }
 }

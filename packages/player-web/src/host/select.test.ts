@@ -1,4 +1,8 @@
+// Pixi's event mixin (`eventMode`, `isInteractive`) is installed by its events entry; nothing else loads it in Node.
+import 'pixi.js/events';
+import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import type { Lr2Skin } from '@be-music/lr2-skin';
+import type { Texture } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import { SILENT_AUDIO } from '../runtime/audio-analysis.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
@@ -6,7 +10,8 @@ import { makeChart, makeCollection } from '../session/select/test-support.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
 import { BuiltInSelectView } from '../view/built-in/select-view.ts';
-import type { BuiltInKit } from './family-kit.ts';
+import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
+import type { BeatorajaKit, BuiltInKit } from './family-kit.ts';
 import { createSelectScene } from './select.ts';
 
 /** A key target the test presses keys on. */
@@ -103,6 +108,50 @@ describe('createSelectScene with an LR2 kit', () => {
     expect(scene.identity).toEqual({ kind: 'select', family: 'lr2' });
     expect(() => scene.updateKit(KIT)).not.toThrow();
     expect(scene.identity).toEqual({ kind: 'select', family: 'lr2' });
+    scene.dispose();
+  });
+});
+
+describe('createSelectScene with a beatoraja kit', () => {
+  /** A beatoraja select skin with nothing to draw. */
+  function beatorajaKit(): BeatorajaKit {
+    const skin: BeatorajaSkin = { type: 5, w: 1280, h: 720, image: [], destination: [] };
+    const empty = new Map<number | string, Texture>();
+    const textures: BeatorajaTextureCache = {
+      get: (id) => empty.get(id),
+      values: () => empty.values(),
+      pathOf: () => undefined,
+    };
+    return { family: 'beatoraja', kit: { skin, textures, files: new Map() } };
+  }
+
+  function createAudioWithSkinSounds() {
+    const { audio } = createFakeAudio();
+    const skinSounds = { play: vi.fn(() => true), loop: vi.fn(() => true), stop: vi.fn(() => true) };
+    const withSkinSounds = { ...audio, skinSounds: { ...skinSounds, owned: vi.fn(() => skinSounds) } };
+    return { audio: withSkinSounds, service: withSkinSounds as unknown as AudioService };
+  }
+
+  it('is the beatoraja family’s select screen, its skin sounds the session’s, and keeps its family', () => {
+    const { audio, service } = createAudioWithSkinSounds();
+    const scene = createSelectScene(beatorajaKit(), {
+      library: makeCollection([makeChart('a', 'one'), makeChart('b', 'two')]),
+      sounds: {},
+      audio: service,
+      on: { start: () => undefined },
+      now: () => 0,
+    });
+    expect(scene.identity).toEqual({ kind: 'select', family: 'beatoraja' });
+    expect(audio.skinSounds.owned).toHaveBeenCalledTimes(1);
+    // The beatoraja screen keeps its sort and filters in the browse position: the play options leave the list alone.
+    scene.setPlayOptions({ sort: 'TITLE' });
+    expect(scene.snapshot().list?.sort).toBe('OFF');
+    // A library of one chart folder stays at the root, as beatoraja's does.
+    expect(scene.snapshot().folderPath).toEqual([]);
+    expect(scene.searchFieldRect()).toBeUndefined();
+    expect(() => scene.updateKit(KIT)).not.toThrow();
+    expect(() => scene.updateKit(beatorajaKit())).not.toThrow();
+    expect(scene.identity).toEqual({ kind: 'select', family: 'beatoraja' });
     scene.dispose();
   });
 });
