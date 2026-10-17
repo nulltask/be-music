@@ -112,7 +112,7 @@ play skin は variant ごと (`'7' / '5' / '9' / '10' / '14' / '24' / '24d'`) �
 
 `@be-music/beatoraja-skin/scene` は、`@be-music/scene-model` の skin family に依存しない scene model を beatoraja skin の語彙に写します。
 どの op が点くか、各 number と text が何を読むか、どの timer が始まり止まるか、gauge、graph、live offset です（[ADR 0002](./adr/0002-scene-model-package.ja.md)）。
-以前は `@be-music/player-web` の renderer のそばにあった beatoraja の state 解決で、今は play、select scene と decide、result の family view が読み、P4 では runtime adapter の代わりに beatoraja の play の view が読みます。
+以前は `@be-music/player-web` の renderer のそばにあった beatoraja の state 解決で、今は play scene と select、decide、result の family view が読み、P4 では runtime adapter の代わりに beatoraja の play の view が読みます。
 
 ```mermaid
 flowchart LR
@@ -213,7 +213,7 @@ state は LR2 theme state と並列に保持されるため、demo は両方の 
 
 browser renderer は select、decide、gameplay、result skin の共有 view として `BeatorajaPlaySkinView` を使います。
 scene は `TEXT`、`NUM`、`OPTION`、timer、gauge、graph を [scene mapping](#scene-mapping) から読み、chart image、note layer、BGA layer、audio、result history など runtime 固有の部分を自分で提供します。
-decide 画面と result 画面は player-web の beatoraja の family view で、`createDecideScene` と `createResultScene` で作ります（[player-web.ja.md](./player-web.ja.md#決定画面)）。decide と result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。
+select 画面、decide 画面、result 画面は player-web の beatoraja の family view で、`createSelectScene`、`createDecideScene`、`createResultScene` で作ります（[player-web.ja.md](./player-web.ja.md#選曲画面)）。select、decide、result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。select の view は MODE と SORT の imageset のために一覧の位置の一覧の設定を読み（順番は `BEATORAJA_KEYS_FILTERS` と `BEATORAJA_SORTS`、設定の位置は `beatorajaKeysFilterIndex` と `beatorajaSortIndex` で決まります）、LNMODE の選択は自分で持ちます（select の入力の `lnMode`、なければ `beatorajaLnModeIndex` で読む譜面の `#LNMODE`）。ボタンはインテントとして選曲画面のセッションに返ります。
 gameplay は `BeatorajaRuntimeAdapter` を橋渡しに使います。engine UI signal の間の play の state を持ち、frame、判定、レーン操作ごとに mapping が解決した op と timer を適用します。
 
 browser gameplay path は parser が discovery する chart variant `5`、`7`、`9`、`10`、`14`、`24`、`24d` をすべて mount します。

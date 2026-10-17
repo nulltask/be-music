@@ -123,8 +123,8 @@ discovery so a single bad skin can't break the whole theme.
 `@be-music/beatoraja-skin/scene` maps the family-neutral scene models of `@be-music/scene-model` to a beatoraja
 skin's vocabulary: which ops are lit, what each number and text reads, which timers start and stop, the gauge, the
 graphs and the live offsets ([ADR 0002](./adr/0002-scene-model-package.md)). It is the beatoraja state resolution that
-used to live next to the renderer in `@be-music/player-web`; the play and select scenes and the decide and result
-family views read it today, and the beatoraja play view will in place of the runtime adapter.
+used to live next to the renderer in `@be-music/player-web`; the play scene and the select, decide and result family
+views read it today, and the beatoraja play view will in place of the runtime adapter.
 
 ```mermaid
 flowchart LR
@@ -246,10 +246,13 @@ them per entry. The state lives in parallel with LR2 theme state, so the demo ca
 The browser renderer uses `BeatorajaPlaySkinView` as the shared view for select, decide, gameplay, and result
 skins. The scenes read `TEXT`, `NUM`, `OPTION`, timers, gauges and graphs from the [scene mapping](#scene-mapping) and
 provide the runtime-specific parts themselves: chart images, note layers, BGA layers, audio and the result histories.
-The decide and result screens are player-web's beatoraja family views, made with `createDecideScene` and
-`createResultScene` ([player-web.md](./player-web.md#the-decide-screen)): they draw the sessions' frames through the
-decide and result resolvers, the result view reading a `PlayResult` directly, and read beatoraja's scene timers off each
-frame.
+The select, decide and result screens are player-web's beatoraja family views, made with `createSelectScene`,
+`createDecideScene` and `createResultScene` ([player-web.md](./player-web.md#the-select-screen)): they draw the
+sessions' frames through the select, decide and result resolvers, the result view reading a `PlayResult` directly, and
+read beatoraja's scene timers off each frame. The select view reads the browse position's list options for the MODE and
+SORT image sets (`BEATORAJA_KEYS_FILTERS` and `BEATORAJA_SORTS` give their order, `beatorajaKeysFilterIndex` and
+`beatorajaSortIndex` an option's place) and keeps the LNMODE choice itself (`lnMode` of the select input, else the
+chart's `#LNMODE` through `beatorajaLnModeIndex`); its buttons come back to the select session as intents.
 Gameplay uses `BeatorajaRuntimeAdapter` as the bridge: it keeps the play's state between engine UI signals and applies
 the ops and timers the mapping resolves for each frame, judgment and lane action.
 

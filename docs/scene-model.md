@@ -123,11 +123,14 @@ list options and the favourites. `restoreBrowse` takes it back over the library 
 
 This covers the course-folder restore fixes: the root lists the course folders after the chart folders, so a cursor
 left in a course folder comes back; the cursor kept is the live one at every depth; and a course bar is found by its
-key after a course run, even when a NONSTOP run replaced the library. The built-in and LR2 select screens keep a
-`BrowseSnapshot` across a play; `browseSnapshotFromSelectNavigation` converts the `{ folderPath, selectedIndex }` they
-kept before, and `browseSnapshotFromBeatorajaSelect` reads the beatoraja select scene's snapshot.
+key after a course run, even when a NONSTOP run replaced the library. Every select screen keeps a `BrowseSnapshot`
+across a play; `browseSnapshotFromSelectNavigation` converts the `{ folderPath, selectedIndex }` the built-in and LR2
+screens kept before.
 
 ### Behaviour choices
+
+The built-in / LR2 and beatoraja columns are how the select scenes behaved before they moved onto the model; every
+family's select screen follows the model now.
 
 | Behaviour                            | Built-in / LR2 select                                                 | beatoraja select                                                         | The model                                                                                |
 | ------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
@@ -155,13 +158,15 @@ kept before, and `browseSnapshotFromBeatorajaSelect` reads the beatoraja select 
 | A new library with one chart folder  | Opens it                                                              | Root                                                                     | Left to the session                                                                      |
 
 beatoraja's LN mode override (the LNMODE button) is not part of browsing; nothing plays it yet, so it is not in the
-models.
+models: the beatoraja select view keeps it.
 
 A select session of the web runtime makes the choices the model leaves to it with its family's select policy
 (`session/select/select-policy.ts` in `@be-music/player-web`). On the built-in and LR2 screens a back-out at the root
 does nothing, a library of one chart folder opens it when there is no position to restore, a restore goes as far as
 the path matches, and the sort and the filters are the play options', which a restore keeps. The beatoraja policy
-leaves the screen at the root with the cancel cue and keeps its MODE and SORT in the browse position.
+leaves the screen at the root with the cancel cue, opens a library at its root, keeps its MODE and SORT in the browse
+position (a restore brings them back), reads beatoraja's keys (page keys, Home / End, R for a random bar) and plays a
+folder's cue without the cursor cue.
 
 ## Play options
 
@@ -318,12 +323,11 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation` | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)               |
 | `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                           |
 
-The built-in and LR2 select screens browse with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
+Every family's select screen browses with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
 `restoreBrowse`, `browseSystemSound`). The built-in and LR2 play screens keep one `PlayState` and read their result off
 it (`playResultFromPlayState`), so they follow the model's play-state choices above: a full combo's max combo is every
 note for any play, the result carries each judgment's early / late count, and the play log's visible time is the white
-number (`resolvePlaylogView`). The other scenes still keep their own browse and play state (the beatoraja select its own
-browse model, the beatoraja runtime adapter its histories and covers); the scene sessions of the web runtime move onto
-these models. The skin
+number (`resolvePlaylogView`). The beatoraja play still keeps its own play state (the runtime adapter its histories and
+covers); the scene sessions of the web runtime move onto these models. The skin
 packages map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
 [beatoraja-skin.md](./beatoraja-skin.md#scene-mapping)).
