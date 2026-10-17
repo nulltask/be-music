@@ -84,6 +84,13 @@ import {
 import { createChartFocusKey, createMusicSelectState, getEntryFocusKey } from './music-select-state.ts';
 import { createChartPreviewController, formatMusicSelectAudioBackendLabel } from './chart-preview.ts';
 import { type CliArgs, parseArgs, printUsage } from './args.ts';
+import {
+  type RawInputCapture,
+  beginRawInputCapture,
+  beginLoadingAbortCapture,
+  resolveLoadingCancelReason,
+  applyLoadingCancel,
+} from './input-capture.ts';
 
 export {
   applyPersistedPlayerConfigToArgs,
@@ -209,19 +216,6 @@ type DirectorySceneState =
       kind: 'exit';
       exitCode: number;
     };
-
-interface RawInputCapture {
-  stdin: NodeJS.ReadStream & { isRaw?: boolean };
-  restore: () => void;
-}
-
-type LoadingCancelReason = 'escape' | 'ctrl-c';
-
-interface LoadingAbortCapture {
-  signal: AbortSignal;
-  getReason: () => LoadingCancelReason | undefined;
-  dispose: () => void;
-}
 
 interface ResultScreenOptions {
   allowReplay?: boolean;
@@ -1355,56 +1349,6 @@ function formatCliParseError(error: unknown): string {
     return error.message;
   }
   return 'Failed to parse CLI arguments';
-}
-
-function beginRawInputCapture(): RawInputCapture {
-  return beginSharedRawInputCapture();
-}
-
-function beginLoadingAbortCapture(): LoadingAbortCapture | undefined {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    return undefined;
-  }
-  const inputCapture = beginRawInputCapture();
-  const controller = new AbortController();
-  let reason: LoadingCancelReason | undefined;
-  const onKeyPress = (_chunk: string | undefined, key: readline.Key): void => {
-    if (key.sequence === '\u0003') {
-      reason = 'ctrl-c';
-      controller.abort();
-      return;
-    }
-    if (key.name?.toLowerCase() === 'escape' || key.sequence === '\u001b') {
-      reason = 'escape';
-      controller.abort();
-    }
-  };
-  inputCapture.stdin.on('keypress', onKeyPress);
-  return {
-    signal: controller.signal,
-    getReason: () => reason,
-    dispose: () => {
-      inputCapture.stdin.removeListener('keypress', onKeyPress);
-      inputCapture.restore();
-    },
-  };
-}
-
-function resolveLoadingCancelReason(
-  error: unknown,
-  capture: LoadingAbortCapture | undefined,
-): LoadingCancelReason | undefined {
-  if (!isAbortError(error)) {
-    return undefined;
-  }
-  return capture?.getReason();
-}
-
-function applyLoadingCancel(reason: LoadingCancelReason): void {
-  process.exitCode = reason === 'ctrl-c' ? 130 : 0;
-  if (process.stdout.isTTY) {
-    process.stdout.write('\u001b[2J\u001b[H');
-  }
 }
 
 async function loadChartSelectionEntries(rootDir: string, files: string[]): Promise<ChartSelectionEntry[] | undefined> {
