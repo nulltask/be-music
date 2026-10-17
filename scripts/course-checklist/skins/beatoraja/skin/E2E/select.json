@@ -20,6 +20,8 @@
     { "id": "bar-nosong", "src": 0, "x": 0, "y": 0, "w": 64, "h": 32 },
     { "id": "button_play", "src": 0, "x": 0, "y": 128, "w": 64, "h": 32, "act": 15 },
     { "id": "button_autoplay", "src": 0, "x": 0, "y": 192, "w": 64, "h": 32, "act": 16 },
+    { "id": "button_mode", "src": 0, "x": 0, "y": 128, "w": 64, "h": 32, "act": 11 },
+    { "id": "button_sort", "src": 0, "x": 0, "y": 192, "w": 64, "h": 32, "act": 12 },
     { "id": "course-marker", "src": 0, "x": 0, "y": 192, "w": 64, "h": 64 }
   ],
   "imageset": [
@@ -80,6 +82,8 @@
     { "id": "songlist" },
     { "id": "button_play", "dst": [{ "x": 10, "y": 10, "w": 140, "h": 80 }] },
     { "id": "button_autoplay", "dst": [{ "x": 160, "y": 10, "w": 140, "h": 80 }] },
+    { "id": "button_mode", "dst": [{ "x": 10, "y": 430, "w": 140, "h": 40 }] },
+    { "id": "button_sort", "dst": [{ "x": 160, "y": 430, "w": 140, "h": 40 }] },
     { "id": "course-marker", "op": [3], "dst": [{ "x": 10, "y": 380, "w": 20, "h": 20 }] },
     { "id": "course1", "op": [3], "dst": [{ "x": 40, "y": 380, "w": 260, "h": 16 }] },
     { "id": "course2", "op": [3], "dst": [{ "x": 40, "y": 356, "w": 260, "h": 16 }] },
