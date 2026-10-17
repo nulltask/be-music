@@ -2,8 +2,8 @@ import { Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaImageElement, BeatorajaImageId } from '@be-music/beatoraja-skin';
 import { BeatorajaMarkerLayer } from './markers.ts';
-import { resolveNoteDrawWindow } from '../core/note-draw-window.ts';
-import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
+import { resolveNoteDrawWindow } from '../../../scene/core/note-draw-window.ts';
+import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
 
 // Match the skin-view tests' fake-texture pattern: a 1×1 non-EMPTY texture so the marker layer
 // treats the entry as a real texture without needing a GPU device.
