@@ -3832,8 +3832,6 @@ class PlayerWebDemoApp {
     this.disposeScene(this.beatorajaSelectScene);
     this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
       skin,
-      // The page's search field (IME and all) does the typing; the scene only filters.
-      externalSearch: true,
       textures,
       fonts,
       skinConfig: config,
