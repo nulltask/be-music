@@ -265,10 +265,14 @@ describe('BeatorajaSelectView', () => {
   });
 
   it('builds the skin again for a new kit, keeping its place', () => {
-    const { view, draw, session } = setup(makeCollection([makeChart('a', 'one'), makeChart('b', 'two')]));
+    const kit = beatorajaSelectKit();
+    const { view, draw, session } = setup(makeCollection([makeChart('a', 'one'), makeChart('b', 'two')]), { kit });
     session.dispatch({ type: 'browse', command: { type: 'move', delta: 1 } });
     draw();
     const before = view.getStageInfo().container;
+    // The entry as loaded before: nothing is built again.
+    view.updateKit({ family: 'beatoraja', kit: kit.kit });
+    expect(view.getStageInfo().container).toBe(before);
     view.updateKit(beatorajaSelectKit({ offset: 0, option: {}, file: {} }));
     expect(view.getStageInfo().container).not.toBe(before);
     expect(before.destroyed).toBe(true);
