@@ -13,12 +13,6 @@ import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts'
 
 export interface PixiBeatorajaSelectSceneOptions {
   skin: BeatorajaSkin;
-  /**
-   * The host edits the search query in its own text field (with IME) and passes it in through
-   * {@link PixiBeatorajaSelectScene.setSearchQuery}: the scene then leaves `/` and typed keys to that field instead of
-   * running its own key-by-key search mode.
-   */
-  externalSearch?: boolean;
   textures: BeatorajaTextureCache;
   /** Optional skin TTF cache (`loadBeatorajaFonts`). Absent → platform sans-serif fallback. */
   fonts?: BeatorajaFontCache;

@@ -109,6 +109,8 @@ export interface SelectSessionOptions {
   readonly launchOutroMs?: () => number;
   /** The clock events are stamped with when no key timestamp is at hand. Defaults to `performance.now()`. */
   readonly now?: () => number;
+  /** The random draw in [0, 1) a random select takes (beatoraja's R key). Defaults to `Math.random`. */
+  readonly random?: () => number;
   /**
    * The player's own courses and the course being made (LR2's course maker): its finish, cancel and connection buttons
    * run on it, and its state shows in the frame.
@@ -149,6 +151,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   private readonly options: SelectSessionOptions;
   private readonly policy: SelectPolicy;
   private readonly now: () => number;
+  private readonly random: () => number;
   private library: BrowserSongCollection;
   private browse: BrowseState;
   private playOptions: PlayOptions;
@@ -177,12 +180,18 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     this.options = options;
     this.policy = options.policy ?? SELECT_POLICIES.lr2;
     this.now = options.now ?? (() => performance.now());
+    this.random = options.random ?? Math.random;
     this.library = options.library;
     this.records = options.records ?? NO_RECORDS;
     this.sounds = options.sounds;
     this.playOptions = resolvePlayOptions({ ...DEFAULT_PLAY_OPTIONS, ...options.playOptions });
-    const list = listOptionsOf(this.playOptions);
-    const base = openLibrary(this.library, this.policy, { list });
+    // Under a policy that keeps the sort and the filters in the browse position (beatoraja's MODE and SORT), the play
+    // options' do not shape the list.
+    const base = openLibrary(
+      this.library,
+      this.policy,
+      this.policy.listOptions === 'play-options' ? { list: listOptionsOf(this.playOptions) } : {},
+    );
     this.browse =
       options.browse === undefined ? base : restoreSelectBrowse(this.library, options.browse, base, this.policy).state;
   }
@@ -208,8 +217,8 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   /**
    * Takes play options from the host (a settings menu): merged onto the ones in force and checked
-   * (`resolvePlayOptions`). A sort or a filter reshapes the list, keeping the cursor on its bar. Not reported back
-   * through `on.playOptions`, and no cue plays.
+   * (`resolvePlayOptions`). A sort or a filter reshapes the list, keeping the cursor on its bar, under a policy that
+   * keeps them in the play options. Not reported back through `on.playOptions`, and no cue plays.
    */
   public setPlayOptions(partial: Partial<PlayOptions>): void {
     this.playOptions = resolvePlayOptions({ ...this.playOptions, ...partial });
@@ -303,19 +312,29 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     this.options.audio.resume();
     // The chart is chosen while a launch outro plays.
     if (this.launch !== undefined) return false;
-    const action = resolveSelectKeyAction(event, { panel: this.panel, readTextOpen: this.readText !== undefined });
+    const action = resolveSelectKeyAction(
+      event,
+      { panel: this.panel, readTextOpen: this.readText !== undefined },
+      this.policy.keys,
+    );
     if (action === undefined) return false;
     const atMs = event.timeStamp;
     switch (action.type) {
       case 'step':
         this.stepCursor(action.direction, atMs);
         return true;
+      case 'browse':
+        this.applyBrowse(action.command, atMs);
+        return true;
+      case 'random':
+        this.applyBrowse({ type: 'random', value: this.random() }, atMs);
+        return true;
       case 'activate':
         this.activate(atMs);
         return true;
       case 'back':
         // Backing out of nothing leaves the key to the page.
-        return this.back(atMs);
+        return this.back(atMs, action.inFolder === true);
       case 'panel':
         this.togglePanel(action.panel, atMs);
         return true;
@@ -442,8 +461,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       // The README shown belongs to the bar left; it closes without a cue, as the cursor cue plays.
       this.readText = undefined;
       this.readTextLookup += 1;
-      // The cursor cue plays with every slide of the list, a folder opened or closed included, as it always has.
-      this.playCue('cursor');
+      // On LR2 the cursor cue plays with every slide of the list, a folder opened or closed included; beatoraja plays
+      // the folder's cue alone.
+      if (event.kind === 'cursor' || this.policy.folderCursorCue) this.playCue('cursor');
     }
     const slot = browseSystemSound(command, event);
     if (slot !== undefined && slot !== 'cursor') this.playCue(slot);
@@ -483,9 +503,14 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     this.launchEntry(entry, autoPlay, atMs);
   }
 
-  /** Escape, Backspace, ←: backs out of the folder shown. Returns whether it did. */
-  private back(atMs: number): boolean {
-    return this.applyBrowse({ type: 'close' }, atMs).kind === 'folder-closed';
+  /**
+   * Escape, Backspace, ←: backs out of the folder shown, or at the root does what the policy says, unless `inFolder`
+   * limits the key to a folder. Returns whether it did something.
+   */
+  private back(atMs: number, inFolder: boolean): boolean {
+    if (inFolder && this.browse.path.length === 0) return false;
+    const event = this.applyBrowse({ type: 'close' }, atMs);
+    return event.kind === 'folder-closed' || (event.kind === 'at-root' && this.policy.atRoot === 'exit');
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -577,10 +602,11 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   }
 
   /**
-   * Shapes the list by the play options' sort and filters, when they changed: the cursor stays on the bar it was on
-   * while it is still listed, else on its row, clamped.
+   * Shapes the list by the play options' sort and filters, when they changed, under a policy that keeps them there:
+   * the cursor stays on the bar it was on while it is still listed, else on its row, clamped.
    */
   private syncListOptions(): void {
+    if (this.policy.listOptions !== 'play-options') return;
     const list = listOptionsOf(this.playOptions);
     if (sameBrowseListOptions(list, this.browse.list)) return;
     const { state, event } = reduceBrowse(this.library, this.browse, { type: 'list', options: list });

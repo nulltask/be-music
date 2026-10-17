@@ -38,7 +38,6 @@ type SelectSceneInternals = {
   listLayer: Container;
   rowLabels: (Text | undefined)[];
   searchPromptText?: Text;
-  setSearchActive(active: boolean): void;
 };
 
 describe('PixiBeatorajaSelectScene disposal', () => {
@@ -51,7 +50,7 @@ describe('PixiBeatorajaSelectScene disposal', () => {
     });
     const internals = scene as unknown as SelectSceneInternals;
 
-    internals.setSearchActive(true);
+    scene.setSearchQuery('search');
     const listLayer = internals.listLayer;
     const rowLabel = internals.rowLabels.find((label): label is Text => label !== undefined);
     const prompt = internals.searchPromptText;
@@ -78,7 +77,7 @@ describe('PixiBeatorajaSelectScene disposal', () => {
     });
     const internals = scene as unknown as SelectSceneInternals;
 
-    internals.setSearchActive(true);
+    scene.setSearchQuery('search');
     const oldPrompt = internals.searchPromptText;
 
     scene.replaceSkin({ skin: makeSkin(), textures: fakeTextureCache() });

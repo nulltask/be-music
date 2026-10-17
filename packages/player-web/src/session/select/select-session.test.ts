@@ -486,3 +486,146 @@ describe('SelectSession course maker', () => {
     expect(courseMakerEvent).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('SelectSession on the beatoraja family', () => {
+  const BEATORAJA = SELECT_POLICIES.beatoraja;
+
+  /** A grade course named `id`, of `keyMode` keys when given. */
+  function courseOf(id: string, keyMode?: number) {
+    const course = makeCourse(id);
+    return keyMode === undefined ? course : { ...course, definition: { ...course.definition, keyMode } };
+  }
+
+  it('moves a page, jumps to either end and picks a random bar on its keys', () => {
+    const library = makeCollection(Array.from({ length: 12 }, (_, index) => makeChart(`c${index}`, 'pack')));
+    const { key, advance } = createSession({
+      library,
+      policy: BEATORAJA,
+      browse: { folderPath: ['pack'], cursors: [0, 0] },
+      random: () => 0.5,
+    });
+    key('PageDown');
+    expect(focusedTitle(advance(10))).toBe('c10');
+    key('PageDown');
+    expect(focusedTitle(advance(10))).toBe('c8');
+    key('Home');
+    expect(focusedTitle(advance(10))).toBe('c0');
+    key('End');
+    expect(focusedTitle(advance(10))).toBe('c11');
+    key('KeyR', 'r');
+    expect(focusedTitle(advance(10))).toBe('c6');
+    // Not with a modifier: Ctrl / Cmd + R reloads the page.
+    const { session } = createSession({ library, policy: BEATORAJA });
+    expect(session.handleKey({ ...keyEvent('KeyR', 'r', 0), metaKey: true })).toBe(false);
+  });
+
+  it('backs out of a folder on Backspace and Escape, and leaves the screen at the root on Escape only', () => {
+    const exit = vi.fn();
+    const { key, advance } = createSession({
+      policy: BEATORAJA,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      on: { exit },
+    });
+    expect(key('Backspace')).toBe(true);
+    expect(advance(10).browse.path).toEqual([]);
+    expect(key('Backspace')).toBe(false);
+    expect(exit).not.toHaveBeenCalled();
+    expect(key('Escape')).toBe(true);
+    expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it('plays the folder cues alone as a folder opens or closes', () => {
+    const { key, cues } = createSession({ policy: BEATORAJA });
+    key('ArrowDown');
+    key('Enter');
+    key('Escape');
+    expect(cues()).toEqual(['cursor', 'folderOpen', 'folderClose']);
+  });
+
+  it('keeps its sort and key filter in the browse position, whatever the play options say', () => {
+    const { session, intent, advance, cues } = createSession({
+      policy: BEATORAJA,
+      playOptions: { sort: 'LEVEL' },
+      browse: { folderPath: ['pack'], cursors: [1, 0], list: { sort: 'TITLE' } },
+    });
+    let frame = advance(10);
+    expect(frame.browse.list.sort).toBe('TITLE');
+    expect(titles(frame)).toEqual(['a', 'b', 'c']);
+    session.setPlayOptions({ sort: 'LEVEL', keysFilter: 'KEYS_5' });
+    frame = advance(10);
+    expect(frame.browse.list).toMatchObject({ sort: 'TITLE', keysFilter: 'ALL' });
+    intent({ type: 'browse', command: { type: 'list', options: { sort: 'LEVEL' } } });
+    frame = advance(10);
+    expect(titles(frame)).toEqual(['b', 'c', 'a']);
+    expect(cues()).toEqual(['optionChange']);
+    expect(session.snapshot().list?.sort).toBe('LEVEL');
+    // Without a position to restore the list starts in the library's order: the play options' sort is LR2's.
+    const fresh = createSession({ policy: BEATORAJA, playOptions: { sort: 'LEVEL' } });
+    expect(fresh.frame().browse.list.sort).toBe('OFF');
+  });
+
+  it('lists every folder bar under the key filter, and the courses of its key mode', () => {
+    const library = makeCollection(
+      [makeChart('five', 'Five', { channels: ['11', '16'] }), makeChart('seven', 'Seven')],
+      [makeCourseFolder('Dan', [courseOf('seven-dan', 7), courseOf('five-dan', 5), courseOf('any')])],
+    );
+    const { intent, advance } = createSession({ library, policy: BEATORAJA });
+    intent({ type: 'browse', command: { type: 'list', options: { keysFilter: 'KEYS_5' } } });
+    expect(titles(advance(10))).toEqual(['Five', 'Seven', 'Dan']);
+    intent({ type: 'browse', command: { type: 'jump', index: 2 } });
+    intent({ type: 'activate' });
+    expect(titles(advance(10))).toEqual(['five-dan', 'any']);
+  });
+
+  it("searches a chart's file label and a course folder's courses by name, by the trimmed text", () => {
+    const library = makeCollection(
+      [
+        { ...makeChart('lapis', 'Pack'), fileLabel: 'lapis [ANOTHER].bms' },
+        { ...makeChart('hikari', 'Pack'), fileLabel: 'hikari.bms' },
+      ],
+      [makeCourseFolder('Dan', [courseOf('First Dan'), courseOf('Tenth Dan')])],
+    );
+    const { session, intent, advance } = createSession({ library, policy: BEATORAJA });
+    session.setSearch('  another ');
+    expect(titles(advance(10))).toEqual(['lapis']);
+    session.setSearch('   ');
+    expect(titles(advance(10))).toEqual(['Pack', 'Dan']);
+    intent({ type: 'browse', command: { type: 'jump', index: 1 } });
+    intent({ type: 'activate' });
+    session.setSearch('tenth');
+    expect(titles(advance(10))).toEqual(['Tenth Dan']);
+  });
+
+  it('orders the root folders by label under a sort, the course folders among them', () => {
+    const library = makeCollection(
+      [makeChart('z', 'Zeta'), makeChart('b', 'Beta')],
+      [makeCourseFolder('Dan', [courseOf('First Dan')])],
+    );
+    const { intent, advance } = createSession({ library, policy: BEATORAJA });
+    expect(titles(advance(10))).toEqual(['Beta', 'Zeta', 'Dan']);
+    intent({ type: 'browse', command: { type: 'move', delta: 1 } });
+    intent({ type: 'browse', command: { type: 'list', options: { sort: 'TITLE' } } });
+    const frame = advance(10);
+    expect(titles(frame)).toEqual(['Beta', 'Dan', 'Zeta']);
+    expect(focusedTitle(frame)).toBe('Zeta');
+  });
+
+  it('orders titles case-insensitively in the runtime locale, and levels by value with equal levels by title', () => {
+    const library = makeCollection([
+      { ...makeChart('Charlie', 'Pack'), playLevel: '12.5' },
+      { ...makeChart('beta', 'Pack'), playLevel: 12 },
+      { ...makeChart('Beta', 'Pack'), playLevel: '12' },
+      makeChart('alpha', 'Pack'),
+    ]);
+    const { intent, advance } = createSession({
+      library,
+      policy: BEATORAJA,
+      browse: { folderPath: ['Pack'], cursors: [0, 0] },
+    });
+    intent({ type: 'browse', command: { type: 'list', options: { sort: 'TITLE' } } });
+    // `beta` and `Beta` differ only in case: they keep the library's order.
+    expect(titles(advance(10))).toEqual(['alpha', 'beta', 'Beta', 'Charlie']);
+    intent({ type: 'browse', command: { type: 'list', options: { sort: 'LEVEL' } } });
+    expect(titles(advance(10))).toEqual(['beta', 'Beta', 'Charlie', 'alpha']);
+  });
+});

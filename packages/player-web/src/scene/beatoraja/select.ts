@@ -218,8 +218,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private sortMode = 0;
   /**
    * Live search query (the browse model's search: `matchesSearchQuery` over the trimmed, lower-cased text). Empty
-   * string = no filter. Updated by the search input flow (see
-   * {@link BeatorajaSelectSearch.searchActive} / handleKeyDown's `/` branch). Surfaced to the skin via
+   * string = no filter. Set by the host's search field ({@link setSearchQuery}). Surfaced to the skin via
    * `BEATORAJA_TEXT.SEARCHWORD` so themes that author the search-display text node show
    * the live query while the user types.
    */
@@ -399,25 +398,32 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       get searchQuery(): string {
         return scene.searchQuery;
       },
-      setSearchQuery: (query) => scene.setSearchQuery(query),
-      moveCursor: (delta) => scene.moveCursor(delta),
-      setCursor: (index) => scene.setCursor(index),
+      get decodeChartImages() {
+        return scene.options.decodeChartImages;
+      },
       get disposed(): boolean {
         return scene.disposed;
       },
       get currentIndex(): number {
         return scene.currentIndex;
       },
-      get keymodeFilter(): number {
-        return scene.keymodeFilter;
-      },
-      get sortMode(): number {
-        return scene.sortMode;
+      get list() {
+        return {
+          keysFilter: BEATORAJA_KEYS_FILTERS[scene.keymodeFilter] ?? ('ALL' as const),
+          sort: BEATORAJA_SORTS[scene.sortMode] ?? ('OFF' as const),
+        };
       },
       get lnModeOverride(): 0 | 1 | 2 | undefined {
         return scene.lnModeOverride;
       },
       currentFolderLabel: () => scene.currentFolderLabel(),
+      lampOpOf: (entry) =>
+        entry.kind === 'song'
+          ? scene.options.resolveSongLampOp?.(entry.song)
+          : entry.kind === 'course'
+            ? scene.options.resolveCourseLampOp?.(entry.course)
+            : undefined,
+      nowMs: () => performance.now(),
     };
   }
 
@@ -1283,13 +1289,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (this.disposed) return;
     // Typing in the host's search field (or any text field) is not navigation.
     if (isEditableKeyTarget(event.target)) return;
-    // Search-input mode swallows most keys — ArrowUp/Down still navigate within the
-    // filtered list (so the user can type, then arrow-pick), but printable characters /
-    // Backspace mutate the query and Enter / Escape exit the mode.
-    if (this.search.searchActive) {
-      this.search.handleSearchKey(event);
-      return;
-    }
     switch (event.key) {
       case 'ArrowUp':
         event.preventDefault();
@@ -1334,14 +1333,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         }
         this.leaveFolder();
         break;
-      case '/':
-        // With the host's field doing the typing, `/` is its shortcut, not ours.
-        if (this.options.externalSearch === true) break;
-        // `/` enters search-input mode. Subsequent keystrokes type into the query (see
-        // `handleSearchKey`) until Enter (commit) or Escape (clear + exit) lands.
-        event.preventDefault();
-        this.setSearchActive(true);
-        break;
       case 'r':
       case 'R':
         // Random song / folder pick. Mirrors beatoraja's "random select" feature (the engine
@@ -1357,7 +1348,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   };
 
   /**
-   * Mutate the search query / search-mode state. Called from the `/`-search input flow.
+   * Mutate the search query. Called by the host's search field.
    * Re-runs `refreshEntries` so the visible row list narrows in real time as the user
    * types. The cursor resets to the top of the new filtered list (otherwise an old
    * `currentIndex` would point at a now-out-of-bounds slot).
@@ -1367,10 +1358,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.searchQuery = query;
     this.refreshEntries(0);
     this.search.refreshSearchPrompt();
-  }
-
-  private setSearchActive(active: boolean): void {
-    this.search.setSearchActive(active);
   }
 
   /**
