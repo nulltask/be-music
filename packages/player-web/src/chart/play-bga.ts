@@ -1,5 +1,5 @@
-// BGA resource loading shared by both gameplay families: the built-in / LR2 play session (`session/play/play-media.ts`) and the
-// beatoraja prep (`chart/beatoraja/prep.ts`). One place decides which `#BMPxx` / bmson BGA resources a play needs, decodes
+// BGA resource loading for the play session (`session/play/play-media.ts`), which every gameplay family plays
+// through. One place decides which `#BMPxx` / bmson BGA resources a play needs, decodes
 // them (stills through the shared texture loader, videos through the video loader with its transcode fallback), keys the
 // BMS layer track's black out and cuts the `#BGAxx` sub-region views.
 

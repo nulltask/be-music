@@ -624,7 +624,7 @@ export class BeatorajaNoteLayer {
     yEnd: number,
     yStart: number,
     /**
-     * `true` when the player is actively holding this LN's lane (the runtime adapter's
+     * `true` when the player is actively holding this LN's lane (the play bridge's
      * `isLaneLnHeld` returned true for the note's channel). Drives held-vs-unheld body
      * sprite switching:
      *

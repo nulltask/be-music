@@ -314,19 +314,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
     interactive: true,
   });
-  define('player-web.BeatorajaRuntimeAdapter', {
-    run: () => {
-      const adapter = new playerWebCoreApi.BeatorajaRuntimeAdapter({
-        chartPlayVariant: '7',
-        baseOps: new Set(),
-        getNowMs: () => 1000,
-        chart: BENCH_SONG.chart,
-        directoryLabel: BENCH_SONG.directoryLabel,
-      });
-      adapter.getRenderContext();
-      adapter.reset();
-    },
-  });
   define('player-web.BeatorajaSkinAudioPlayer', {
     run: () => {
       const player = new playerWebCoreApi.BeatorajaSkinAudioPlayer({ files: BENCH_BEATORAJA_FILES });
@@ -1017,14 +1004,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.pickBeatorajaPlayableVariant({ keys: 9, isDouble: false, isPms: true });
     },
   });
-  define('player-web.PixiBeatorajaGameplayView', {
-    run: () => {
-      new playerWebCoreApi.PixiBeatorajaGameplayView(
-        {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaGameplayView>[0],
-      );
-    },
-    interactive: true,
-  });
   define('player-web.PixiBeatorajaSelectScene', {
     run: () => {
       new playerWebCoreApi.PixiBeatorajaSelectScene(
@@ -1046,15 +1025,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       scene.exit();
       scene.dispose();
     },
-  });
-  define('player-web.prepareBeatorajaGameplayChart', {
-    run: async () => {
-      await playerWebCoreApi.prepareBeatorajaGameplayChart({
-        song: BENCH_SONG,
-        source: BENCH_SOURCE,
-      });
-    },
-    interactive: true,
   });
   define('player-web.readDroppedFiles', {
     run: async () => {

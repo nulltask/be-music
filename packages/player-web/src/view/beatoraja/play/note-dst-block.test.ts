@@ -36,7 +36,7 @@ describe('resolveBeatorajaNoteDstBlockIndex', () => {
     }
   });
 
-  it('follows in-place mutation of the same Set (the runtime adapter reuses one Set every frame)', () => {
+  it('follows in-place mutation of the same Set (the play bridge reuses one Set every frame)', () => {
     const activeOps = new Set<number>();
     expect(resolveBeatorajaNoteDstBlockIndex(section, activeOps)).toBe(2);
     activeOps.add(922);

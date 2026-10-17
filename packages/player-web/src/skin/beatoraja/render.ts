@@ -1,7 +1,7 @@
 // Pure helpers for translating beatoraja `destination[]` samples into PixiJS `Sprite` props.
 //
 // Keeping the math pure (no Pixi imports here) means the test suite can exercise every keyframe interaction
-// without touching a GPU. The actual `Sprite` mutation is a one-liner inside `scene/beatoraja/gameplay.ts`:
+// without touching a GPU. The actual `Sprite` mutation is a one-liner in the skin view's draw loop:
 //
 //     sprite.x = props.x;
 //     sprite.y = props.y;
