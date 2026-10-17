@@ -24,6 +24,21 @@ import {
   resolveLaneWidths,
   SPLIT_PANEL_INNER_WIDTH,
 } from './layout.ts';
+import {
+  ANSI_RESET,
+  type RgbColor,
+  BLACK_RGB,
+  centerVisible,
+  colorizeText,
+  dimRgb,
+  blendRgb,
+  padVisibleWidth,
+  clampColorByte,
+  isSameRgb,
+  visibleWidth,
+  getCharacterDisplayWidth,
+  findAnsiSgrSequenceEnd,
+} from './ansi-text.ts';
 export { resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 
 interface TuiLane {
@@ -159,7 +174,6 @@ const INVISIBLE_NOTE_HEAD_SYMBOL = '◯';
 const INVISIBLE_LONG_NOTE_HEAD_SYMBOL = '△';
 const INVISIBLE_LONG_NOTE_BODY_SYMBOL = '□';
 const INVISIBLE_LONG_NOTE_TAIL_SYMBOL = '◇';
-const ANSI_RESET = '\u001b[0m';
 const KITTY_BGA_IMAGE_IDS = [1_337, 1_338] as const;
 const SCORE_COUNTUP_MIN_PER_SEC = 4000;
 const SCORE_COUNTUP_DISTANCE_FACTOR = 6;
@@ -170,12 +184,6 @@ const FPS_SMOOTHING_FACTOR = 0.2;
 const MEASURE_SIGNATURE_MAX_DENOMINATOR = 32;
 const HIGH_SPEED_MODIFIER_LABEL = resolveAltModifierLabel();
 const MEASURE_SIGNATURE_TOLERANCE = 1e-8;
-
-interface RgbColor {
-  r: number;
-  g: number;
-  b: number;
-}
 
 interface JudgeComboDisplayState {
   latestJudge: string;
@@ -198,7 +206,6 @@ type StructuredLaneCellRenderer = (
 
 type StructuredLaneSectionRenderer = (cells: string[], noteHeight: TuiNoteHeight) => string;
 
-const BLACK_RGB: RgbColor = { r: 0, g: 0, b: 0 };
 const WHITE_KEY_LANE_BG_RGB: RgbColor = { r: 24, g: 36, b: 56 };
 const BLACK_KEY_LANE_BG_RGB: RgbColor = { r: 2, g: 4, b: 8 };
 const SCRATCH_LANE_BG_RGB: RgbColor = { r: 5, g: 8, b: 12 };
@@ -1689,19 +1696,6 @@ function center(value: string, width: number): string {
   return `${' '.repeat(leftPadding)}${value}${' '.repeat(rightPadding)}`;
 }
 
-function centerVisible(value: string, width: number): string {
-  const safeWidth = Math.max(1, Math.floor(width));
-  const clipped = visibleWidth(value) > safeWidth ? truncateVisibleWidth(value, safeWidth) : value;
-  const clippedWidth = visibleWidth(clipped);
-  if (clippedWidth >= safeWidth) {
-    return clipped;
-  }
-  const totalPadding = safeWidth - clippedWidth;
-  const leftPadding = Math.floor(totalPadding / 2);
-  const rightPadding = totalPadding - leftPadding;
-  return `${' '.repeat(leftPadding)}${clipped}${' '.repeat(rightPadding)}`;
-}
-
 function resolveRegularNoteSymbol(noteHeight: TuiNoteHeight): string {
   const symbols: Record<TuiNoteHeight, string> = {
     1: '▁',
@@ -1967,17 +1961,6 @@ function colorizeBlinkingRainbow(value: string, nowMs: number): string {
   return colorizeRainbow(value, blinkOn);
 }
 
-function colorizeText(value: string, foreground: RgbColor, background?: RgbColor, underline = false): string {
-  const sgr = [`38;2;${foreground.r};${foreground.g};${foreground.b}`];
-  if (background) {
-    sgr.push(`48;2;${background.r};${background.g};${background.b}`);
-  }
-  if (underline) {
-    sgr.push('4');
-  }
-  return `\u001b[${sgr.join(';')}m${value}${ANSI_RESET}`;
-}
-
 function colorizeRainbow(value: string, bright = true): string {
   const brightness = bright ? 1 : 0.5;
   const characters = Array.from(value);
@@ -1986,24 +1969,6 @@ function colorizeRainbow(value: string, bright = true): string {
       colorizeText(character, dimRgb(RAINBOW_RGB_STEPS[index % RAINBOW_RGB_STEPS.length]!, brightness)),
     )
     .join('');
-}
-
-function dimRgb(color: RgbColor, factor: number): RgbColor {
-  const safeFactor = clamp(factor, 0, 1);
-  return {
-    r: clampColorByte(color.r * safeFactor),
-    g: clampColorByte(color.g * safeFactor),
-    b: clampColorByte(color.b * safeFactor),
-  };
-}
-
-function blendRgb(from: RgbColor, to: RgbColor, ratio: number): RgbColor {
-  const safeRatio = clamp(ratio, 0, 1);
-  return {
-    r: clampColorByte(from.r + (to.r - from.r) * safeRatio),
-    g: clampColorByte(from.g + (to.g - from.g) * safeRatio),
-    b: clampColorByte(from.b + (to.b - from.b) * safeRatio),
-  };
 }
 
 function renderLaneBlockWithBga(laneLines: string[], bgaAnsiLines?: string[]): string[] {
@@ -2128,15 +2093,6 @@ function fitLinesToHeight(lines: string[], targetHeight: number, width: number):
   ];
 }
 
-function padVisibleWidth(line: string, width: number): string {
-  const clipped = truncateVisibleWidth(line, width);
-  const currentWidth = visibleWidth(clipped);
-  if (currentWidth >= width) {
-    return clipped;
-  }
-  return `${clipped}${' '.repeat(width - currentWidth)}`;
-}
-
 function normalizeTerminalDimension(value: number | undefined): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined;
@@ -2259,127 +2215,6 @@ function composeBackgroundRow(
   return output;
 }
 
-function clampColorByte(value: number | undefined): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return 0;
-  }
-  return clamp(Math.floor(value), 0, 255);
-}
-
-function isSameRgb(left: RgbColor | undefined, right: RgbColor | undefined): boolean {
-  if (left === right) {
-    return true;
-  }
-  if (!left || !right) {
-    return false;
-  }
-  return left.r === right.r && left.g === right.g && left.b === right.b;
-}
-
-function visibleWidth(value: string): number {
-  let width = 0;
-  let index = 0;
-  while (index < value.length) {
-    if (value.charCodeAt(index) !== 0x1b || index + 1 >= value.length || value[index + 1] !== '[') {
-      const codePoint = value.codePointAt(index);
-      if (typeof codePoint !== 'number') {
-        index += 1;
-        continue;
-      }
-      width += getCharacterDisplayWidth(codePoint);
-      index += codePoint > 0xffff ? 2 : 1;
-      continue;
-    }
-
-    const sequenceEnd = findAnsiSgrSequenceEnd(value, index + 2);
-    if (sequenceEnd < 0) {
-      width += 1;
-      index += 1;
-      continue;
-    }
-    index = sequenceEnd + 1;
-  }
-  return width;
-}
-
-function truncateVisibleWidth(value: string, width: number): string {
-  const safeWidth = Math.max(0, Math.floor(width));
-  if (safeWidth <= 0) {
-    return '';
-  }
-
-  let visible = 0;
-  let index = 0;
-  let output = '';
-
-  while (index < value.length) {
-    if (value.charCodeAt(index) === 0x1b && index + 1 < value.length && value[index + 1] === '[') {
-      const sequenceEnd = findAnsiSgrSequenceEnd(value, index + 2);
-      if (sequenceEnd < 0) {
-        break;
-      }
-      const sequence = value.slice(index, sequenceEnd + 1);
-      output += sequence;
-      index = sequenceEnd + 1;
-      continue;
-    }
-
-    const codePoint = value.codePointAt(index);
-    if (typeof codePoint !== 'number') {
-      index += 1;
-      continue;
-    }
-    const charWidth = getCharacterDisplayWidth(codePoint);
-    if (visible + charWidth > safeWidth) {
-      break;
-    }
-    output += String.fromCodePoint(codePoint);
-    visible += charWidth;
-    index += codePoint > 0xffff ? 2 : 1;
-  }
-
-  if (output.endsWith(ANSI_RESET)) {
-    return output;
-  }
-  return `${output}${ANSI_RESET}`;
-}
-
-function getCharacterDisplayWidth(codePoint: number): number {
-  if (isCombiningCharacter(codePoint)) {
-    return 0;
-  }
-  if (isWideCharacter(codePoint)) {
-    return 2;
-  }
-  return 1;
-}
-
-function isCombiningCharacter(codePoint: number): boolean {
-  return (
-    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
-    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
-    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
-    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
-    (codePoint >= 0xfe20 && codePoint <= 0xfe2f)
-  );
-}
-
-function isWideCharacter(codePoint: number): boolean {
-  return (
-    (codePoint >= 0x1100 && codePoint <= 0x115f) ||
-    codePoint === 0x2329 ||
-    codePoint === 0x232a ||
-    (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
-    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
-    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
-    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
-    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
-    (codePoint >= 0x1f300 && codePoint <= 0x1faff)
-  );
-}
-
 function canDropNoteFromRenderWindow(note: TuiNote, currentBeat: number, scrollWindowBeats: number): boolean {
   const keepVisible =
     typeof note.visibleUntilBeat === 'number' &&
@@ -2407,23 +2242,6 @@ function inferLaneSideByChannel(channel: string): '1P' | '2P' {
     return '2P';
   }
   return '1P';
-}
-
-function findAnsiSgrSequenceEnd(value: string, start: number): number {
-  let index = start;
-  while (index < value.length) {
-    const code = value.charCodeAt(index);
-    if (code === 0x6d) {
-      return index;
-    }
-    const isDigit = code >= 0x30 && code <= 0x39;
-    const isSemicolon = code === 0x3b;
-    if (!isDigit && !isSemicolon) {
-      return -1;
-    }
-    index += 1;
-  }
-  return -1;
 }
 
 function formatPlayerLabel(value: number | undefined): string {
