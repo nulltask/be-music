@@ -8,7 +8,7 @@ import {
   type BeatorajaSkinConfig,
 } from '@be-music/beatoraja-skin';
 import type { SelectRecords } from '../types.ts';
-import { Texture } from 'pixi.js';
+import { Container, EventBoundary, Matrix, Sprite, Text, Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
@@ -262,6 +262,49 @@ describe('BeatorajaSelectView', () => {
     expect(internals.chartImages.resolveChartImageForFocus(-102)).toBe(banner);
     draw();
     expect(loadChartImages).toHaveBeenCalledTimes(1);
+  });
+
+  it('hits the row’s hit sprite, not the list layer, through the title text above it', () => {
+    const { view, draw } = setup(makeCollection([makeChart('a', 'pack')]));
+    draw();
+    const internals = view as unknown as {
+      listLayer: Container;
+      rows: { rowHitAreas: (Sprite | undefined)[]; rowLabels: (Text | undefined)[] };
+    };
+    const hit = internals.rows.rowHitAreas.find((sprite): sprite is Sprite => sprite !== undefined)!;
+    const label = internals.rows.rowLabels.find((text): text is Text => text !== undefined)!;
+    // Lay one row out by hand: the title text over the left of the row's hit sprite.
+    hit.visible = true;
+    hit.position.set(0, 0);
+    hit.setSize(200, 40);
+    label.visible = true;
+    label.text = 'Title';
+    label.position.set(10, 20);
+    // Nothing renders here, so bring the world transforms the hit test reads up to date by hand.
+    for (const node of [internals.listLayer, hit, label]) {
+      node.worldTransform.copyFrom(node.getGlobalTransform(new Matrix(), false));
+    }
+    expect(new EventBoundary(internals.listLayer).hitTest(15, 20)).toBe(hit);
+  });
+
+  it('destroys its rows, the search prompt and the skin on dispose', () => {
+    const { view, draw, session } = setup(makeCollection([makeChart('a', 'pack')]));
+    session.setSearch('a');
+    draw();
+    const internals = view as unknown as {
+      listLayer: Container;
+      search: { searchPromptText: Text | undefined };
+      rows: { rowLabels: (Text | undefined)[] };
+    };
+    const prompt = internals.search.searchPromptText;
+    const label = internals.rows.rowLabels.find((text): text is Text => text !== undefined);
+    expect(prompt?.visible).toBe(true);
+    view.dispose();
+    expect(internals.listLayer.destroyed).toBe(true);
+    expect(prompt?.destroyed).toBe(true);
+    expect(label?.destroyed).toBe(true);
+    expect(internals.search.searchPromptText).toBeUndefined();
+    expect(view.root.destroyed).toBe(true);
   });
 
   it('builds the skin again for a new kit, keeping its place', () => {
