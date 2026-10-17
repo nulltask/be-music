@@ -98,8 +98,8 @@ TypeScript 型・シリアライザ・防御的パーサは
 
 ブラウザプレイヤーでは:
 
-- LR2 / default ゲームプレイシーンは `PixiGameplayResultData.playlog` として公開します。
-- beatoraja ゲームプレイシーンは `PixiBeatorajaGameplayView.getPlaylog()` として公開します。
+- どのプレイ画面（`createPlayScene`）も、記録したログを `on.finish(result, playlog)` に渡します。途中で抜けたプレイのログは
+  `waitForPlaylog()` で待ちます。
 - デモはリザルトシーンのマウント時に `<タイトル>-<タイムスタンプ>.bmplay.json` を自動ダウンロードします。
   Debug Menu の **Library & records** フォルダにある **Auto-save play history** チェックボックス（デフォルト OFF）で制御します。プレイログ関連
   オプションは曲の開始時にラッチされ、曲の途中では変更できません — プレイ中はコントロールが disabled

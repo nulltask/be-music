@@ -112,7 +112,7 @@ play skin は variant ごと (`'7' / '5' / '9' / '10' / '14' / '24' / '24d'`) �
 
 `@be-music/beatoraja-skin/scene` は、`@be-music/scene-model` の skin family に依存しない scene model を beatoraja skin の語彙に写します。
 どの op が点くか、各 number と text が何を読むか、どの timer が始まり止まるか、gauge、graph、live offset です（[ADR 0002](./adr/0002-scene-model-package.ja.md)）。
-以前は `@be-music/player-web` の renderer のそばにあった beatoraja の state 解決で、今は play、select scene と decide、result の family view が読み、P4 では runtime adapter の代わりに beatoraja の play の view が読みます。
+以前は `@be-music/player-web` の renderer のそばにあった beatoraja の state 解決で、今は select scene と decide、play、result の family view が読みます（play の view は play bridge を通して読みます）。
 
 ```mermaid
 flowchart LR
@@ -170,22 +170,21 @@ decide は score の表を使いません。chart の `#PLAYLEVEL`、BPM の num
 
 play の変化は、始める timer と止める timer を返します（`BeatorajaTimerChanges`）。
 `start` はその場で（再）開始し、`startOnce` は play 中にまだ始まっていなければ開始し（失敗、各 side の note 終了、フルコンボ、gauge の満タン）、`stop` は止めて、それで gate された要素を隠します。
-呼び出し側が自分の clock で stamp し、1 回だけの timer の集合を持ちます。今は runtime adapter がそうします。
+呼び出し側が自分の clock で stamp し、1 回だけの timer の集合を持ちます。beatoraja の play の view の bridge（`BeatorajaPlayBridge`）がそうします。
 
 ```mermaid
 sequenceDiagram
-  participant E as engine
-  participant A as runtime adapter
+  participant P as play view
+  participant B as play bridge
   participant M as scene mapping
   participant V as skin view
-  E->>A: 判定
-  A->>M: resolveBeatorajaJudgeEffect
-  M-->>A: op、始める timer
-  A->>A: op を点け timer を stamp
-  V->>A: getRenderContext
-  A-->>V: op、timer の開始時刻、now
-  V->>A: number / text / graph の ref
-  A->>M: resolveBeatorajaPlayNumber など
+  P->>B: 判定を含む frame
+  B->>M: resolveBeatorajaJudgeEffect
+  M-->>B: op、始める timer
+  B->>B: op を点け timer を stamp
+  B-->>V: op、timer の開始時刻、now
+  V->>B: number / text / graph の ref
+  B->>M: resolveBeatorajaPlayNumber など
   M-->>V: 値
 ```
 
@@ -213,8 +212,8 @@ state は LR2 theme state と並列に保持されるため、demo は両方の 
 
 browser renderer は select、decide、gameplay、result skin の共有 view として `BeatorajaPlaySkinView` を使います。
 scene は `TEXT`、`NUM`、`OPTION`、timer、gauge、graph を [scene mapping](#scene-mapping) から読み、chart image、note layer、BGA layer、audio、result history など runtime 固有の部分を自分で提供します。
-decide 画面と result 画面は player-web の beatoraja の family view で、`createDecideScene` と `createResultScene` で作ります（[player-web.ja.md](./player-web.ja.md#決定画面)）。decide と result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。
-gameplay は `BeatorajaRuntimeAdapter` を橋渡しに使います。engine UI signal の間の play の state を持ち、frame、判定、レーン操作ごとに mapping が解決した op と timer を適用します。
+decide 画面、play 画面、result 画面は player-web の beatoraja の family view で、`createDecideScene`、`createPlayScene`、`createResultScene` で作ります（[player-web.ja.md](./player-web.ja.md#決定画面)）。decide と result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。
+play の view は `BeatorajaPlayBridge` を通して描きます。play の state は play のセッションの `PlayState` で、bridge は frame、判定、レーン操作ごとに mapping が解決した op と timer を適用します（[player-web.ja.md](./player-web.ja.md#プレイ画面)）。
 
 browser gameplay path は parser が discovery する chart variant `5`、`7`、`9`、`10`、`14`、`24`、`24d` をすべて mount します。
 keyboard mode のレーンは、upstream の `play24main.lua` が使う `1000` 番台 timer base (`bomb_1p_key10 = 1010` など) で参照します。これらは `runtime-ids.ts` に実装済みです。

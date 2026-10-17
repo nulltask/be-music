@@ -9,8 +9,8 @@ timing、note、判定、score、gauge、BGA event の意味など、CLI と共�
 
 browser player は gameplay を `@be-music/player/core/engine` 経由で駆動します。
 判定、keysound trigger routing、long note、地雷の発動、score、gauge、chart finish の意味論は engine が担当します。
-標準と LR2 のプレイ画面のプレイのセッションはスキンの `PLAYSTART` gate で 1 回 engine を起動し、beatoraja gameplay scene は `BeatorajaRuntimeAdapter` の背後に engine を mount します。
-どちらの経路も engine の frame snapshot を scene state へ反映し、UI command を Pixi の視覚効果へ変換します。
+どのプレイ画面も、その裏のプレイのセッションがスキンの `PLAYSTART` gate で 1 回 engine を起動します（beatoraja のスキンでは読み込み終了の 1.5 秒後）。
+セッションは engine の frame snapshot をプレイ状態へ反映し、engine の UI command をフレームのきっかけとしてファミリービューに渡し、ビューがそれを Pixi の視覚効果にします。
 
 browser runtime は次の adapter module を使います。
 
@@ -86,9 +86,9 @@ flowchart LR
     J --> L[プレイログ<br/>play.tempo]
 ```
 
-プレイ中の変更（LR2 / 既定と beatoraja のゲームプレイビューの `setTempo(tempo)`。`pitch` モードのみ）は、入力コマンド `{ kind: 'tempo' }` としてエンジンへ送ります。エンジンはコマンドを取り出した譜面時刻で時計を付け替えるので譜面時刻は途切れず、その譜面秒とともに変更を知らせます（`onTempoChange`）。そこから、ビューの時計、後から鳴らすサンプルと鳴っているサンプル（`playbackRate` を 30 ms かけて新しい倍率へ動かします。`WebAudioSession.setTempo`。bmson のスライスはサンプル時間での長さを保つので、ノートの位置で終わります）、BGA の動画、NONSTOP の譜面のステージのフェードが新しいテンポで進みます。プレイログは変更を `play.tempoChanges` に記録し、一度でも別のテンポで進んだプレイは練習です。リプレイは、Replay / ghost のオプションでテンポを再現するとき、`pitch` モードで記録された変更に従います（`resolveReplayTempo`）。
+プレイ中の変更（プレイ画面の `setTempo(tempo)`。`pitch` モードのみ）は、入力コマンド `{ kind: 'tempo' }` としてエンジンへ送ります。エンジンはコマンドを取り出した譜面時刻で時計を付け替えるので譜面時刻は途切れず、その譜面秒とともに変更を知らせます（`onTempoChange`）。そこから、ビューの時計、後から鳴らすサンプルと鳴っているサンプル（`playbackRate` を 30 ms かけて新しい倍率へ動かします。`WebAudioSession.setTempo`。bmson のスライスはサンプル時間での長さを保つので、ノートの位置で終わります）、BGA の動画、NONSTOP の譜面のステージのフェードが新しいテンポで進みます。プレイログは変更を `play.tempoChanges` に記録し、一度でも別のテンポで進んだプレイは練習です。リプレイは、Replay / ghost のオプションでテンポを再現するとき、`pitch` モードで記録された変更に従います（`resolveReplayTempo`）。
 
-すべてが `tempo` 倍の速さで進みます。エンジンの時計（`PlayerOptions.speed`）、予約・発音するサンプル、スクロールと判定ライン、BGA の画像と動画（`playbackRate`）、NONSTOP のステージのフェード、結果画面までの譜面時刻での待ちです。スキンのアニメーションのタイマーは実時間のままです。判定は譜面時刻のままなので、プレイの入力と判定はテンポに左右されません。プレイログには `play.tempo` として記録し（[playlog.ja.md](./playlog.ja.md)）、リプレイはそのテンポで再生します。テンポを変えたプレイは、beatoraja の周波数トレーナーと同じく練習として扱います。Leaderboard には送らず（状態表示に理由を出します。サーバーも `tempo` として拒否します。[leaderboard.ja.md](./leaderboard.ja.md) を参照）、ベスト記録も更新しません。プレイログの自動保存はします。コースもテンポを変えて遊べます。すべてのステージがそのテンポで進み、そのプレイは順位付けせず、コースの記録も更新しません。LR2、既定、beatoraja のどのゲームプレイシーンでも使えます。LR2 / 既定のシーンには `tempo`、`tempoPitchMode`、`tempoStretchAlgorithm` を渡し、beatoraja のシーンでは `prepareBeatorajaGameplayChart` に同じ 3 つを渡し、ホストが `tempo` を `engineOptions.speed` として渡します。
+すべてが `tempo` 倍の速さで進みます。エンジンの時計（`PlayerOptions.speed`）、予約・発音するサンプル、スクロールと判定ライン、BGA の画像と動画（`playbackRate`）、NONSTOP のステージのフェード、結果画面までの譜面時刻での待ちです。スキンのアニメーションのタイマーは実時間のままです。判定は譜面時刻のままなので、プレイの入力と判定はテンポに左右されません。プレイログには `play.tempo` として記録し（[playlog.ja.md](./playlog.ja.md)）、リプレイはそのテンポで再生します。テンポを変えたプレイは、beatoraja の周波数トレーナーと同じく練習として扱います。Leaderboard には送らず（状態表示に理由を出します。サーバーも `tempo` として拒否します。[leaderboard.ja.md](./leaderboard.ja.md) を参照）、ベスト記録も更新しません。プレイログの自動保存はします。コースもテンポを変えて遊べます。すべてのステージがそのテンポで進み、そのプレイは順位付けせず、コースの記録も更新しません。どの種類のプレイ画面でも使えます。`createPlayScene` の settings に `tempo`、`tempoPitchMode`、`tempoStretchAlgorithm` を渡します。
 
 ### スマートフォンとタブレット
 
@@ -157,10 +157,10 @@ flowchart LR
   - EXPERT と GRADE のコースでは、数値 104 / 105（コンボ、最大コンボ）と判定の横のコンボ（`#DST_NOWCOMBO`）がコース全体を数えます。前のステージが残したコンボは、最初に途切れるまで続きます（OpenLR2 L2019-L2034、L2516）。
   - コースのステージでは、LR2 のコース用ゲージと同じく、ゲージの種類の op が赤ゲージ（43 / 45）になります。
   - EXPERT と GRADE のコースの結果は、テーマにコースリザルト用スキン（`#INFORMATION` の type 15）があればそれで、なければ結果のスキンで表示します。BGM はサウンドセットの `#COURSECLEAR` / `#COURSEFAIL`（標準では `course_clear` / `course_fail`）を流し、なければ `clear` / `fail` を流します。NONSTOP は、LR2 と同じく結果のスキンで表示し、`clear` / `fail` を流します。
-- **beatoraja スキン**（beatoraja のプレイと結果のシーンに `courseInfo` を渡します。beatoraja の `BooleanPropertyFactory` / `StringPropertyFactory` に合わせています）：
+- **beatoraja スキン**（プレイ画面とリザルト画面のコースの表示から読みます。beatoraja の `BooleanPropertyFactory` / `StringPropertyFactory` に合わせています）：
   - 選曲：コースバーは `GRADEBAR`（3。beatoraja の `RandomCourseBar` は `GradeBar` ではないので、ランダムコースでは代わりに `OPTION_RANDOMCOURSEBAR`（1031））、開始できるときは `PLAYABLEBAR`（5）、制約ごとの `OPTION_GRADEBAR_*` op（1002-1007、1010-1017）を点けます。文字列 150-159 にはステージの曲名を出し、コレクションにないステージは `(no song) <曲名>` とします。
   - プレイとステージの結果では `MODE_COURSE`（290）とステージの op を点けます。最後ではない 1〜4 ステージ目は 280-283、最後のステージは 289 です。文字列 150-159 は遊んでいるコースのステージ名です。
-  - `no_speed` では、beatoraja の `ControlInputProcessor` と同じく、ハイスピード、レーンカバー、リフト、HIDDEN カバーを固定します。矢印キー、PageUp / PageDown、Home / End、H / J / K、ホイール、スキンのカバーのボタン（act 330-332）は効かず、エンジンの Option + レーンキーによる変更も元に戻します。何も変わらないので、次のプレイ用に保存されるものもありません。
+  - `no_speed` では、beatoraja の `ControlInputProcessor` と同じく、ハイスピード、レーンカバー、リフト、HIDDEN カバーを固定します。矢印キー、PageUp / PageDown、Home / End、H / J / K、ホイール、スキンのカバーのボタン（act 330-332）は効きません。何も変わらないので、次のプレイ用に保存されるものもありません。
   - コースの結果は、テーマに `COURSE_RESULT` スキン（type 15）があればそれで、なければ結果のスキンで表示します。`MODE_COURSE` を点け、タイトルの文字列（10 / 12）はコース名になります。BGM は `course_clear` / `course_fail` を流し、なければ `clear` / `fail` を流します。
 
 - **NONSTOP：** デモは LR2 の NONSTOP コースを 1 本の譜面として遊びます。始めると、共通の NONSTOP の処理でステージをつなぎます（`@be-music/player/course` の `prepareNonstopCourse`。Leaderboard もこれでプレイを作り直します。各ステージの `#RANDOM` を引き、コースのロングノーツ制約を適用します。デモの `prepareNonstopPlay` はアセットの扱いを加えます）。つないだ譜面は LR2 / 既定のシーンで遊び（beatoraja のテーマではこちらに切り替えます）、結果はつないだプレイのコースのログ（`buildNonstopCoursePlaylog`）から出します。このログはほかのコースと同じく記録し、自動保存します。LR2 には NONSTOP のコースの結果の段階がない（OpenLR2 `Main.cpp` M1406-M1412）ので、結果はコースリザルト用ではなく結果のスキンで表示し、BGM は `clear` / `fail` を流します。LR2 と同じくクイックリトライができ（L2854）、プレイ中の F5 と結果画面の R でつなぎ直して遊び直します。Debug Menu → Course → **NONSTOP placement** で、意図どおりの配置（既定）か LR2 どおりの配置かを選べます。**Pitch**（[プレイテンポ](#プレイテンポ)と共通）では、FIT のステージが前のステージのテンポに合わせる方法を選べます。**Pitch follows tempo (LR2)**（既定）はサンプルを速く・遅く再生するので、テンポと一緒にピッチも変わります。**Keep pitch** は読み込み時にサンプルを時間方向に伸縮し、ピッチを保ちます。伸縮の方式は **Keep-pitch stretcher** で選べます。**Signalsmith Stretch**（既定。MIT ライセンスの `signalsmith-stretch` の WASM AudioWorklet で、サンプルを並べて倍率ごとに 1 回オフラインでレンダリングします）か **WSOLA**（`timeStretchChannels`。内蔵で軽い）です。前者が動かないブラウザでは WSOLA に切り替えます。いずれも次のプレイから反映されます。テンポを変えて遊ぶ NONSTOP コースでは、すべてのステージがそのテンポで進み、FIT の倍率はその上に掛かります。シーン側の扱い： つないだ NONSTOP の譜面は、合成したアセットソース（`createNonstopAssets`）から鳴らします。各ステージのファイルは、そのステージ単体と同じ探し方（`#PATH_WAV`、コーデックと画像拡張子の代替、LR2 の親フォルダ）で見つけ、`s<ステージ>/<キー>` の名前にします。譜面は `NONSTOP_CHART_PATH` として遊びます。ゲームプレイシーンの `nonstop` オプション（結合のマップ）を渡すと、各ステージのサンプルを FIT の再生レートで鳴らし、背景音はステージごとのゲインを通して、つなぎ目で LR2 と同じ `音量²` の曲線でフェードします。プレイヤーのキー音はフェードしません。一時停止はオーディオコンテキストを止めるので、フェードも一緒に止まります。LR2 スキンでは、LR2 と同じく、最初のステージの op でプレイ全体を 1 回だけ解析します。その後、ステージの op（280-289）と曲名テキスト 10 が次のステージに移るのは、BLANK でつないだステージに入ったときだけです（`resolveLr2NonstopStage`）。FADE や CUT の後は前のステージの表示のままで、それまで曲名テキスト 10 にはコース名が出ます。LR2 の選曲画面のテキスト 171-179 には、選んだ NONSTOP コースのつなぎ方（`FADE`、`FADE+FIT`、`CUT`、`CUT+FIT`、`BLANK1`、`BLANK2`）を出し、それ以外のバーでは `DISABLE` を出します。ボタン 240-248 は、プレイヤーが作ったコースのつなぎ方を変えます。BGA はステージごとに base / layer / POOR の重なりを 1 組ずつ持ちます。キューは BMP キーを持つステージごとに分け、つなぎ目の前後 3 秒で直線的にクロスフェードします。POOR の間は、各ステージの base と layer の代わりにそのステージ自身の POOR 画像を出します。`#BMP00` による代替はしません。LR2 は毎フレーム、クロスフェードの重みを使ってランダムに 1 つのステージを選び、その 3 枚の画像を描きます（`LR2body.exe` 0x4350df）。クロスフェードはその平均にあたります。beatoraja の BGA 描画は、まだステージで分けません。BPM の表示（LR2 の NOWBPM と組み込みの HUD）は、各ステージ自身の BPM に FIT の倍率を掛けた値を出します（`map.tempo`）。スクロールは結合後の 150 BPM のままです。エンジンには `map.stageRanks` を渡すので、後のステージはそのステージの `#RANK` で判定します（リプレイではログに記録した切り替えを使います）。
@@ -239,7 +239,7 @@ flowchart LR
 
 実装済みの beatoraja browser feature:
 
-- `BeatorajaPlaySkinView` を使う select、decide、gameplay、result scene。決定画面とリザルト画面は `createDecideScene` と `createResultScene` で作るファミリービューです（[決定画面](#決定画面)、[リザルト画面](#リザルト画面)）
+- `BeatorajaPlaySkinView` を使う select、decide、gameplay、result scene。決定画面、プレイ画面、リザルト画面は `createDecideScene`、`createPlayScene`、`createResultScene` で作るファミリービューです（[決定画面](#決定画面)、[プレイ画面](#プレイ画面)、[リザルト画面](#リザルト画面)）
 - play variant `5`, `7`, `9`, `10`, `14`。`24` / `24d` skin は discovery しますが、chart gameplay では mount しません
 - skin `property[]`、`filepath[]`、custom offset、category group、mid-session `replaceSkin()` refresh
 - score、combo、judge、gauge、chart metadata、clear lamp、rank、play option 向けの runtime `TIMER_*`、`OPTION_*`、`TEXT`、`NUM` wiring
@@ -286,7 +286,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-scene が表示する内容は表示の前に渡します。decide 画面はどれも `createDecideScene` の option、result 画面はどれも `createResultScene` の option、標準と LR2 のプレイ画面は `createPlayScene` の option、標準と LR2 の select 画面は `createSelectScene` の option、ほかは constructor の option です。
+scene が表示する内容は表示の前に渡します。decide 画面はどれも `createDecideScene` の option、result 画面はどれも `createResultScene` の option、プレイ画面はどれも `createPlayScene` の option、標準と LR2 の select 画面は `createSelectScene` の option、ほかは constructor の option です。
 
 - **select scene は生かしておきます。** 標準と LR2 の select 画面は decide、プレイ、result のあいだも残ります。`exit()` で BGM と chart preview と描画を止めますが、cursor、一覧の状態、decode 済みの BGM は保ちます。もう一度 enter すると scene timer を始め直して skin の入場演出を再び流し、BGM を再開します。preview は、離れたときと別の譜面にカーソルが乗ってから始め直します。select 画面（`createSelectScene`）は exit で音を `stopOwned` で止め、input を外します。beatoraja の select scene は snapshot から作り直します。
 - **プレイは stage の外で読み込みます。** `prepare()` は stage にも listener にも触れずに譜面を parse して音声を decode するので、demo は decide 画面の裏でプレイを準備します。decide 画面が終わると `setScene(play)` で decide scene を exit してプレイを enter し、`start()` で始めます。decide 画面のあいだに押した key は decide 画面にだけ届きます。decide 画面がないときは demo が先にプレイを表示し、表示中に走る `prepare()` は読み込み中の playfield を描きます。
@@ -312,23 +312,21 @@ sequenceDiagram
 
 ### gameplay family が共有するもの
 
-標準 / LR2 のプレイのセッションと beatoraja の gameplay view は、描画はそれぞれの skin で行いますが、プレイの音、見た目、終わり方を決める処理は 1 か所にまとめてあり、両者がずれることはありません。
+どのプレイ画面も、同じプレイのセッションをそれぞれの種類のビューが描いたものです（[プレイ画面](#プレイ画面)）。プレイの音、見た目、終わり方を決める処理は 1 か所にまとまっていて、種類のあいだでずれることはありません。
 
 ```mermaid
 flowchart TD
+  views["標準 · LR2 · beatoraja のプレイビュー"]
+  session[プレイのセッション] -->|PlayFrame| views
   subgraph shared [共有モジュール]
     audio[chart/play-audio.ts]
     bga[chart/play-bga.ts]
     ending[scene/play-ending.ts]
     lamp[resolveClearLamp]
   end
-  core[標準 / LR2 のプレイのセッション] --> audio
-  core --> bga
-  core --> ending
-  prep[prepareBeatorajaGameplayChart] --> audio
-  prep --> bga
-  bview[beatoraja の gameplay view] --> ending
-  bview --> prep
+  session --> audio
+  session --> bga
+  session --> ending
   lamp --> results[リザルトと記録]
 ```
 
@@ -339,7 +337,7 @@ flowchart TD
 
 ## シーンセッションとファミリービュー
 
-scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。どの種類の決定画面とリザルト画面も、標準と LR2 の選曲画面とプレイ画面も、すでに移りました（[選曲画面](#選曲画面)、[決定画面](#決定画面)、[リザルト画面](#リザルト画面)、[プレイ画面](#プレイ画面)）。ほかの scene は、まだ [Scene lifecycle](#scene-lifecycle) で説明したクラスのままです。
+scene は 1 つの形に移りつつあります（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。**シーンセッション**は、画面の振る舞いをスキンの種類によらず 1 か所に持ちます。**ファミリービュー**は、それを自分の種類のスキンで描きます。以下の取り決めはできていて、scene は画面ごとに（決定、リザルト、選曲、プレイの順に）移ります。どの種類の決定画面、プレイ画面、リザルト画面も、標準と LR2 の選曲画面も、すでに移りました（[選曲画面](#選曲画面)、[決定画面](#決定画面)、[リザルト画面](#リザルト画面)、[プレイ画面](#プレイ画面)）。ほかの scene は、まだ [Scene lifecycle](#scene-lifecycle) で説明したクラスのままです。
 
 ```mermaid
 flowchart LR
@@ -364,7 +362,7 @@ flowchart LR
   - 決定: 進む、戻る
   - プレイ: タッチのレーン、ハイスピード、カバー、一時停止、中断
   - リザルト: 進む、リトライ
-- **`FamilyView`** は `attach(host, emit)`・`draw(frame)`・`detach()`・`dispose()` を持ちます。外したビューは読み込んだものを保ちます。決定・プレイ・リザルトのビューは、スキンのタイミングも渡します。入力までの待ち、自動で進むまでの時間、フェードアウト（beatoraja のように Escape も入力を待つかどうかも）で、プレイなら LR2 の読み込み終了・譜面開始・フェードアウト・クローズのオフセットです。
+- **`FamilyView`** は `attach(host, emit)`・`draw(frame)`・`detach()`・`dispose()` を持ちます。外したビューは読み込んだものを保ちます。決定・プレイ・リザルトのビューは、スキンのタイミングも渡します。入力までの待ち、自動で進むまでの時間、フェードアウト（beatoraja のように Escape も入力を待つかどうかも）で、プレイなら読み込み終了・譜面開始・フェードアウト・クローズのオフセット（LR2 のスキンのもの、または beatoraja のスキンの 1.5 秒の前置きとフェードアウト）です。
 - **`SessionScene`** は、セッションとビューから作る `PixiScene` です。
   - `enter(host)` でビューを付け、セッションを始め、最初のフレームを描きます。
   - ティッカーがセッションにフレームを求め、ビューに描かせます。
@@ -444,7 +442,7 @@ stateDiagram-v2
   ToSelect --> [*]: フェードアウト、cancel
 ```
 
-Web のデモは、これまでどおり標準と LR2 の画面の裏で LR2 / 標準のプレイを準備し、`on.continue` でそれを表示します。beatoraja の画面のあとは、これまでどおり `on.continue` でプレイを始めます。
+Web のデモは、どの決定画面の裏でもプレイを準備し、`on.continue` でそれを表示します。
 
 #### 決定音
 
@@ -504,24 +502,25 @@ Web のデモは、リザルトをすべてこの画面で表示します。単�
 
 ### プレイ画面
 
-`createPlayScene(kit, options)`（`@be-music/player-web/scenes`）は標準と LR2 のプレイ画面を作ります。プレイのセッション（`session/play/play-session.ts`）を kit の種類のビューが描く `SessionScene` で、読み込み、`setScene` で表示し、開始します。標準の kit（`{ family: 'built-in', skin }`）は組み込みのプレイビュー（`view/built-in/play-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin, invisibleNoteSkin? }`。譜面のプレイスキンと、見えないノート用のテーマの 9 鍵スキン）は LR2 のプレイビュー（`view/lr2/play-view.ts`）が描きます。beatoraja のプレイ画面はまだ `PixiBeatorajaGameplayView` です。
+`createPlayScene(kit, options)`（`@be-music/player-web/scenes`）はどの種類のプレイ画面も作ります。プレイのセッション（`session/play/play-session.ts`）を kit の種類のビューが描く `SessionScene` で、読み込み、`setScene` で表示し、開始します。標準の kit（`{ family: 'built-in', skin }`）は組み込みのプレイビュー（`view/built-in/play-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin, invisibleNoteSkin? }`。譜面のプレイスキンと、見えないノート用のテーマの 9 鍵スキン）は LR2 のプレイビュー（`view/lr2/play-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。譜面の鍵盤数に合うテーマのプレイのエントリ）は beatoraja のプレイビュー（`view/beatoraja/play-view.ts`）が描きます。
 
 ```mermaid
 flowchart LR
   subgraph scene["PlayScene（SessionScene）"]
-    adapter[PlaySceneSession] -->|PlayFrame| view["BuiltInPlayView<br/>Lr2PlayView"]
+    adapter[PlaySceneSession] -->|PlayFrame| view["BuiltInPlayView<br/>Lr2PlayView<br/>BeatorajaPlayView"]
     view -->|PlayIntent| adapter
   end
   adapter --> session[PlaySession]
   session --> state[PlayState]
   session --> parts["譜面 · メディア · エンジン<br/>入力 · 見え方 · 終わり方"]
-  view --> playfield[共有のプレイフィールド]
+  view --> playfield["共有のプレイフィールド<br/>（標準、LR2）"]
+  view --> skinview["スキンのビュー、ノートのレイヤー<br/>（beatoraja）"]
   playfield -->|PlayfieldSkin| view
   playfield -->|ctx.play| session
 ```
 
-- **オプション。** `chart` と `source`。`settings` は、旧来のシーンのクラスにホストが渡していたもののうち、スキンとコールバック以外のすべてです（判定とスクロールに使うプレイオプション、テンポ、音量とミックス、BGA、描画の設定）。`course`（ステージの規則とコースの表示）、`replay`（再生するプレイログ）、`preResolved`（決定画面が引いた `#RANDOM`）、`audio`（ホストのオーディオサービス）、`playOptions`（選曲画面で設定されたもの。フレーム用）、`host`（画面外で読み込む間にレイヤーを組み立てるため）、`on: { finish(result, playlog), exit, restart, hiSpeed?, tempo? }` です。
-- **ライフサイクル。** `prepare(onProgress)` は譜面、ビュー自身の素材（LR2 スキンの画像とフォント）、サンプルを読み、BGA の読み込みを裏で始めます。ステージには触れません。`setScene` でプレイを表示し、`start()` でイントロに続いて譜面を始めます。`dispose({ preserveAudioTail })` はシーンを終わらせ、プレイが最後まで終わったときは最後のサンプルが鳴り終わるのを待ちます。ほかに `requestExit`、`requestTogglePause`、テンポとハイスピードの設定、`recording`（ホストの録画用）、`progress()`（ここまでの結果。デモのテストフックが読みます）、`waitForPlaylog`、`updateKit`（標準のスキンの設定。シーンは種類とスキンを変えません）、音と描画の調整があります。
+- **オプション。** `chart` と `source`。`settings` は、旧来のシーンのクラスにホストが渡していたもののうち、スキンとコールバック以外のすべてです（判定とスクロールに使うプレイオプション、テンポ、音量とミックス、BGA、描画の設定）。`course`（ステージの規則とコースの表示）、`replay`（再生するプレイログ）、`preResolved`（決定画面が引いた `#RANDOM`）、`audio`（ホストのオーディオサービス。beatoraja のスキンの音もこれで鳴らします）、`playOptions`（選曲画面で設定されたもの。フレーム用）、`host`（画面外で読み込む間にレイヤーを組み立てるため）、`on: { finish(result, playlog), exit, restart, hiSpeed?, tempo? }` です。
+- **ライフサイクル。** `prepare(onProgress)` は譜面、ビュー自身の素材（LR2 スキンの画像とフォント。beatoraja のプレイではノートの配置、レイヤー、譜面の画像）、サンプルを読み、BGA の読み込みを裏で始めます。ステージには触れません。`setScene` でプレイを表示し、`start()` でイントロに続いて譜面を始めます。`dispose({ preserveAudioTail })` はシーンを終わらせ、プレイが最後まで終わったときは最後のサンプルが鳴り終わるのを待ちます。ほかに `requestExit`、`requestTogglePause`、テンポとハイスピードの設定、`recording`（ホストの録画用）、`progress()`（ここまでの結果。デモのテストフックが読みます）、`waitForPlaylog`、`resolved`（プレイが遊ぶとおりの譜面と `#RANDOM` の抽選。リザルトのグラフ用）、`updateKit`（標準のスキンの設定、または beatoraja のエントリのオプションや別のエントリのスキン。シーンは種類を変えません）、音と描画の調整があります。
 - **セッション。** `PlaySession` は一つの `PlayState` を中心にプレイの振る舞いを持ちます。譜面（`play-chart.ts`）、メディア（`play-media.ts`。オーディオサービスの `openPlayGraph` で専用の `interactive` なコンテキストを開き、所有者はセッションです）、エンジン（`play-engine.ts`）、プレイ自身の入力（`play-input.ts`）、見え方の設定（`play-view-settings.ts`）、終わり方（`play-ending.ts`）です。ビューに求めるものは `PlaySessionTheme`（`play-session-theme.ts`）で受け取ります。イントロとフェードアウトの時間、アニメーションのきっかけ（`PlayMoment`）、チャンネルごとのキービームのフェード、タッチのレーンを写すステージ、譜面の準備のあとのビュー自身の読み込み（`prepareView`）、BGA の GPU への転送です。
 - **フレーム。** `PlaySceneSession` は毎ティック、エンジンの UI シグナルをプレイ状態に取り込み、プレイログの見え方を記録または再生し、ビューに `PlayFrame` を渡します。プレイ状態とその段階、譜面時刻と拍、ノートと押されているレーン、前のフレームからのきっかけ（`playViewEventFromMoment`）、解析したミックス、プレイをもう表示するか（`shown`）、進行中のプレイそのもの（`playfield`）です。
 - **組み込みのビュー。** `BuiltInPlayView` は自分のレイヤー（`PlayLayers`）に共有のプレイフィールドを描き、`PlayfieldSkin` で答えます。be-music スキンのステージ、プレイフィールド自身のレーン配置・ノート・小節線・ボム（スキンはこれらをデータとして描きます）、組み込みの BGA の矩形、スキンのボムの長さ、既定のキービームのフェードです。be-music のクロームがプレイフィールドの周りを描きます（`renderBuiltInChrome`。ビューの `PlayChrome` です）。
@@ -530,16 +529,22 @@ flowchart LR
   - `PlayfieldSkin` は、スキンの `#DST_NOTE` のレーンの矩形、ノートのセル（オートスクラッチのレーンでは `#SRC_AUTO_*` のダミーノート）、`#DST_LINE` の小節線、`#DST_BGA` の矩形、タイマーから求めたボムとキービームの長さを渡します。レーンはスキンのものなので、レーンの背景、キービーム、ボムはスキンが自分で描きます。
   - `PlayChrome` はスキンの要素を描き（`view/lr2/play-elements.ts`）、フルコンボのタイマーを演出が終わったら止め、スキンに判定の画像がなければ判定を文字で描き、プレイフィールドがボムを消したらそのタイマーを止めます。
   - セッションはスキンの `#LOADSTART` + `#LOADEND`（READY）、`#PLAYSTART`、`#FADEOUT`、`#CLOSE` でプレイの時間を決めます（`resolveLr2PlayTiming`）。
-- **入力。** プレイのキー（ESC、F5、Space、矢印キー、Backspace の長押し）とタッチのレーンは、window と canvas にあるプレイ自身のリスナーのままです。シーンはキーを聞きません。
-- **`#RANDOM`。** `preResolved` があると、決定画面が見せた抽選のとおりにプレイします。Web のデモは先に決定画面を作り、その `resolved` を渡してプレイを先読みします（組み込みと LR2 のプレイ画面）。コースのステージとリプレイは自分で引きます（リプレイはログのとおりです）。
+- **beatoraja のビュー。** `BeatorajaPlayView` は beatoraja のプレイスキンを `BeatorajaPlaySkinView` で描き、ノート、小節線などの印、BGA のレイヤー（`view/beatoraja/play/*`）をスキンが置く位置に差し込みます（`BeatorajaPlayStage`）。
+  - `BeatorajaPlayBridge`（`view/beatoraja/play-bridge.ts`）は、フレームごとにスキンの描画コンテキストを作ります。op、数字、テキスト、ゲージ、グラフは、フレームの `PlayState` とエンジンの最新のフレームから [Scene mapping](./beatoraja-skin.ja.md#scene-mapping) で求め、タイマーはフレームのきっかけ（判定、レーンの光りと押しっぱなし、読み込み終了、フェードアウト）で始めます。判定の状態のグラフは自分で持ち、レーンの光りも自分で終わらせます。
+  - ノートは beatoraja のスケールで、譜面の `#SCROLL` / `#SPEED` のタイムラインに沿って、フレームの描くハイスピードとプレイ状態のレーンカバーで流れます。プレイログはそのスケールで見え方を記録します（`PlaySessionTheme.playlogView`）。
+  - セッションは読み込み終了からプレイの時間を決めます。READY、PLAY、STARTINPUT はそのとき、譜面はその 1.5 秒後に始まり（`resolveBeatorajaPlayTiming`）、退出はスキンの `fadeout` をかけてフェードします。
+  - beatoraja の kit では RANDOM と HS-FIX を切り、レーンカバーを 0 から始め（`coverStart: 'none'`）、カバーのキーを有効にします（`coverKeys`）。PageUp / PageDown で SUDDEN+、Home / End でリフトを動かし、H で HIDDEN+ を切り替え、J / K で動かします（Shift で大きく動きます）。ホイールとスキンのカバーのボタン（act 330-332）はカバーのインテントを送ります。
+  - スキンの `main_state.audio_*` は、オーディオサービスのスキンの音として、プレイを所有者にして鳴らします。
+- **入力。** プレイのキー（ESC、F5、Space、矢印キー、Backspace の長押し、beatoraja のプレイのカバーのキー）とタッチのレーンは、window と canvas にあるプレイ自身のリスナーのままです。シーンはキーを聞きません。
+- **`#RANDOM`。** `preResolved` があると、決定画面が見せた抽選のとおりにプレイします。Web のデモは先に決定画面を作り、その `resolved` を渡してプレイを先読みします（どのプレイ画面も）。コースのステージとリプレイは自分で引きます（リプレイはログのとおりです）。
 
-Web のデモは組み込みと LR2 のプレイをすべてこの方法で表示します。単曲、AUTO、リプレイ、コースのステージ、NONSTOP、クイックリトライ、F5 です。
+Web のデモはどの種類のプレイもすべてこの方法で表示します。単曲、AUTO、リプレイ、コースのステージ、NONSTOP、クイックリトライ、F5 です。
 
 ### プレイの部品の置き場所
 
 プレイのセッションとプレイのビューは、プレイの部品を共有します。各モジュールはプレイ（またはビュー）を明示的なコンテキスト（`ctx`）として受け取り、自分のインターフェースを通してその状態を読み書きします。セッションの状態は `PlaySessionState` です。ビューはレイヤーを `PlayLayers` に持ち、進行中のプレイを `PlayfieldRuntime` として読みます。
 
-進行中のプレイは scene-model の `PlayState`（`playState`）一つです。ゲージと EX スコアとそのグラフ、コンボ、最大コンボ、コースのコンボ、時刻つきの判定と判定ごとの早い / 遅いの数、見え方（HS-FIX のかかったハイスピードとレーンカバー）を持ちます。これを変えるものはすべて `applyPlayEvent`（`session/play/play-state.ts`）を通ります。`applyPlayEvent` は `reducePlayState` で状態を進め、描くハイスピードが変わればノートのスクロールをそこへなめらかに移します。エンジンのフレーム、判定、空 POOR、最終の集計、プレイヤーのハイスピードのキー、ホストの `setHiSpeed`、リプレイが記録した見え方がこれを通ります。スキンのランタイム、LR2 の状態の解決（`resolveLr2PlayState`）、リザルト（`playResultFromPlayState`）はこれを読みます。セッションはその横に、表示のとおりのエンジンの判定数（`score`。LR2 では空 POOR を POOR の数に含めます）と、エンジンのゲージの集計（`gaugeState`）を持ちます。
+進行中のプレイは scene-model の `PlayState`（`playState`）一つです。ゲージと EX スコアとそのグラフ、コンボ、最大コンボ、コースのコンボ、時刻つきの判定と判定ごとの早い / 遅いの数、見え方（HS-FIX のかかったハイスピードとレーンカバー）を持ちます。これを変えるものはすべて `applyPlayEvent`（`session/play/play-state.ts`）を通ります。`applyPlayEvent` は `reducePlayState` で状態を進め、描くハイスピードが変わればノートのスクロールをそこへなめらかに移します。エンジンのフレーム、判定、空 POOR、最終の集計、プレイヤーのハイスピードのキー、ホストの `setHiSpeed`、リプレイが記録した見え方がこれを通ります。スキンのランタイム、LR2 の状態の解決（`resolveLr2PlayState`）、beatoraja のプレイのブリッジ、リザルト（`playResultFromPlayState`）はこれを読みます。セッションはその横に、表示のとおりのエンジンの判定数（`score`。LR2 では空 POOR を POOR の数に含めます）と、エンジンのゲージの集計（`gaugeState`）を持ちます。
 
 - `session/play/`：
   - `play-session.ts`：`PlaySession`。部品の組み立て、時計、一時停止、録画、後片付け。`play-session-state.ts`：その状態。`play-options.ts`：そのオプション（`PlaySessionOptions`）。`play-session-theme.ts`：ビューに求めるもの（`PlaySessionTheme`）と、知らせるきっかけ（`PlayMoment`）
@@ -547,7 +552,7 @@ Web のデモは組み込みと LR2 のプレイをすべてこの方法で表�
   - `play-chart.ts`：`prepareSong`、レーンオプション（RANDOM、MIRROR、S-RANDOM、SCATTER、DP FLIP）、リプレイの配置、決定画面の抽選
   - `play-media.ts`：オーディオグラフ、サンプル、BGA のテクスチャと動画、それらの後片付け
   - `play-engine.ts`：共通エンジンの起動、その UI シグナル、判定とレーンの演出、エンディングの開始
-  - `play-input.ts`：ESC、F5、Space、矢印キー、長押しでの終了、自動一時停止、タッチのレーン
+  - `play-input.ts`：ESC、F5、Space、矢印キー、長押しでの終了、自動一時停止、タッチのレーン。`play-cover-keys.ts`：beatoraja のプレイのカバーのキー（`coverKeys`）
   - `play-keys.ts`：`PLAY_SCENE_KEY_CODES`。プレイが自分で扱い、エンジンの Web 入力ランタイムが読み飛ばすキーの一覧です
   - `play-state.ts`：`applyPlayEvent`。プレイの状態を変える唯一の道です
   - `play-view-settings.ts`：ハイスピードのキー、エンジンが従うテンポ、描くとおりのレーンカバー、プレイログの見え方
@@ -555,6 +560,7 @@ Web のデモは組み込みと LR2 のプレイをすべてこの方法で表�
 - `view/shared/`：`playfield/*`（レーン、ノート、ロングノートとその記録、地雷、小節線、ボム、カバー、テキスト。進行中のプレイは `ctx.play`、`PlayfieldRuntime`。ビューの `PlayfieldSkin` と `PlayChrome`）、`bga-renderer.ts`、`play-frame.ts`（レイヤーの木、画面への合わせ込み、フェード）、`play-layers.ts`、`texture-upload.ts`
 - `view/built-in/`：`play-view.ts`（組み込みのプレイビューとその `PlayfieldSkin`）、`play-chrome.ts`（組み込みのレーンの配置、BGA の矩形、be-music のレイアウトと、クロームのランタイムと描画）
 - `view/lr2/`：`play-view.ts`（LR2 のプレイビュー、その `PlayfieldSkin`、読み込み、フレームの LR2 の状態）、`play-elements.ts`（スキンの要素と、プレイフィールドに渡すレーンの矩形・ノートのセル・小節線・BGA の矩形）、`play-timers.ts`（スキンのタイマー）、`play-turntable.ts`（スクラッチのターンテーブル）、`play-hud.ts`（判定・コンボ・グルーヴゲージの描画とスキンのタイマーの長さ）
+- `view/beatoraja/`：`play-view.ts`（beatoraja のプレイビュー、その読み込み、時間、プレイログの見え方のスケール）、`play-bridge.ts`（スキンの描画コンテキストとしてのフレーム。op、タイマー、数字、グラフ）、`play-stage.ts`（ノート、印、BGA のレイヤーを差し込んだスキンのビュー）、`play/*`（ノート、印、BGA のレイヤー、スクロールの配置、ノートの `dst` のブロック、スキンの寸法）
 
 ## ノートの表示範囲
 
@@ -625,13 +631,13 @@ pnpm bench -- --packages player-web
 - chart の自然終了時は、短い post-chart delay を置いてから result scene を開きます。視覚的に result へ遷移しても、残っている gameplay audio tail は中断しません。
 - gameplay recorder は WebM output を書き出し、active recording が gameplay bus の破棄前に flush されるよう、scene disposal より前に stop / finalization を終えます。
 - リプレイ再生を除く毎プレイでプレイログ（`*.bmplay.json` 入力リプレイ — 解決済み譜面、生の押下/解放列、プレイ設定。[playlog.ja.md](./playlog.ja.md) 参照）を記録します。demo は result scene のマウント時に自動ダウンロードし、Debug Menu の「Library & records」フォルダにある「Auto-save play history」チェックボックス（デフォルト OFF。曲開始時にラッチされ、プレイ中は disabled）で制御します。`bms-playlog` CLI がこのファイルから LR2 / beatoraja / IIDX のリザルトを再現します。プレイログをページへドロップすると、対応する楽曲がロード済みの場合に記録されたランをリプレイ再生します。ESC で諦めたランは、再シミュレーションと同じく諦めた所（`play.abortedAtUs`）までをリプレイします。
-- どのゲームプレイシーンも、プレイヤーが見ていたもの（`play.view`、`play.viewChanges`）を記録します。そのスケールでのハイスピード、HS-FIX、メイン BPM での表示時間、各サイドの SUDDEN+ / HIDDEN+ / LIFT で、変更は `{ kind: 'view' }` コマンドとして 100 ms に高々 1 回送ります。LR2 / default のシーンでのリプレイは、`replayView` オプションが求める範囲でその見え方を再生位置に沿って表示します。同じスケール（LR2 / default のシーンは共通）で遊ばれたなら記録されたハイスピード、そうでなければ記録された表示時間になるハイスピードと、記録されたカバーです。単位と規則は [playlog.ja.md](./playlog.ja.md#プレイヤーが見ていたもの) を参照してください。
+- どのゲームプレイシーンも、プレイヤーが見ていたもの（`play.view`、`play.viewChanges`）を記録します。そのスケールでのハイスピード、HS-FIX、メイン BPM での表示時間、各サイドの SUDDEN+ / HIDDEN+ / LIFT で、変更は `{ kind: 'view' }` コマンドとして 100 ms に高々 1 回送ります。リプレイは、`replayView` オプションが求める範囲でその見え方を再生位置に沿って表示します。同じスケール（LR2 / default の画面は共通、beatoraja のスキンは独自）で遊ばれたなら記録されたハイスピード、そうでなければ記録された表示時間になるハイスピードと、記録されたカバーです。単位と規則は [playlog.ja.md](./playlog.ja.md#プレイヤーが見ていたもの) を参照してください。
 - Debug Menu の Leaderboard フォルダにある「Submit to Leaderboard」（デフォルト OFF。自動保存と同じく曲開始時にラッチ）をオンにすると、終了した手動プレイを result scene のマウント時に Leaderboard（[leaderboard.ja.md](./leaderboard.ja.md)）へ送信します。demo は初回に匿名でログインし、楽曲の譜面からプレイの fingerprint ドキュメントを作り直してログと照合してから送り、サーバーに求められたら chart document を付けて再送し、順位をステータス行に表示します。デプロイ先の Worker は `/api/*` と `/leaderboard/*` を Service Binding で Leaderboard の Worker に転送し、`pnpm player:web` はローカルの Leaderboard（`pnpm --filter @be-music/leaderboard-api run dev`、または `LEADERBOARD_DEV_ORIGIN`）にプロキシします。
 - アカウントは匿名で始まります（最初の送信で匿名ログインします）。「Create passkey (keep this account)」でそのアカウントに passkey を登録すると、プレイは匿名フィルタの陰ではなく handle で一覧に載るようになります。「Sign in with passkey」で別のブラウザーからそのアカウントにログインすると、そのブラウザーの匿名のプレイはこのアカウントに移ります。
 
 ### オーディオサービス
 
-`createAudioService()`（`@be-music/player-web/runtime`）は、プレイ中の譜面の音以外を鳴らす唯一の入口です（[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）。scene session はできるごとにこれで音を鳴らします。今のところ標準と LR2 の選曲画面、決定画面とリザルト画面、標準のプレイ画面で（プレイは `openPlayGraph` で専用のグラフを開きます）、ほかの scene はまだそれぞれの AudioContext を使います。Web のデモは起動時にサービスを 1 つ作り、これで作るすべての scene に渡します。beatoraja のテーマを読み込むと、beatoraja の決定画面とリザルト画面のスキンの音のために、そのファイルを設定します（`setTheme({ files })`）。
+`createAudioService()`（`@be-music/player-web/runtime`）は、プレイ中の譜面の音以外を鳴らす唯一の入口です（[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）。scene session はできるごとにこれで音を鳴らします。今のところ標準と LR2 の選曲画面、決定画面とリザルト画面、どのプレイ画面でも（プレイは `openPlayGraph` で専用のグラフを開きます）、ほかの scene はまだそれぞれの AudioContext を使います。Web のデモは起動時にサービスを 1 つ作り、これで作るすべての scene に渡します。beatoraja のテーマを読み込むと、beatoraja の決定画面、プレイ画面、リザルト画面のスキンの音のために、そのファイルを設定します（`setTheme({ files })`）。
 
 ```mermaid
 flowchart LR

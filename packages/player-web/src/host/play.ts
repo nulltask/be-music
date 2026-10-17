@@ -142,8 +142,9 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   /** The play log once the engine has recorded it, also after Escape; `undefined` after `timeoutMs` without one. */
   waitForPlaylog(timeoutMs?: number): Promise<BeMusicPlaylog | undefined>;
   /**
-   * Takes the player's new settings for the kit's skin; the next frame draws with them. The scene keeps its family and
-   * its skin: a kit of another family or skin is ignored.
+   * Takes the player's new settings for the kit's skin; the next frame draws with them. The scene keeps its family: a
+   * kit of another family is ignored. A built-in or LR2 scene keeps its skin too, while a beatoraja scene takes another
+   * entry's skin (the demo's play-skin picker) and rebuilds its stage.
    */
   updateKit(kit: PlaySceneKit): void;
   setAudioVolume(channel: AudioBusChannel, volume: number): void;

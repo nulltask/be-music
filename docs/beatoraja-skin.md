@@ -123,8 +123,8 @@ discovery so a single bad skin can't break the whole theme.
 `@be-music/beatoraja-skin/scene` maps the family-neutral scene models of `@be-music/scene-model` to a beatoraja
 skin's vocabulary: which ops are lit, what each number and text reads, which timers start and stop, the gauge, the
 graphs and the live offsets ([ADR 0002](./adr/0002-scene-model-package.md)). It is the beatoraja state resolution that
-used to live next to the renderer in `@be-music/player-web`; the play and select scenes and the decide and result
-family views read it today, and the beatoraja play view will in place of the runtime adapter.
+used to live next to the renderer in `@be-music/player-web`; the select scene and the decide, play and result family
+views read it (the play view through its play bridge).
 
 ```mermaid
 flowchart LR
@@ -186,22 +186,21 @@ chart's facts and 0 for the play's live numbers. The decide screen does not use 
 A change of the play returns the timers it starts and stops (`BeatorajaTimerChanges`): `start` restarts each timer
 now, `startOnce` starts each unless it already started during the play (the failure, each side's end of notes, the full
 combo, the full gauge), and `stop` turns each off so what is gated on it hides. The caller stamps them on its own clock
-and keeps the once-only set; the runtime adapter does this today.
+and keeps the once-only set; the beatoraja play view's bridge (`BeatorajaPlayBridge`) does this.
 
 ```mermaid
 sequenceDiagram
-  participant E as engine
-  participant A as runtime adapter
+  participant P as play view
+  participant B as play bridge
   participant M as scene mapping
   participant V as skin view
-  E->>A: judgment
-  A->>M: resolveBeatorajaJudgeEffect
-  M-->>A: ops, timers to start
-  A->>A: light ops, stamp timers
-  V->>A: getRenderContext
-  A-->>V: ops, timer starts, now
-  V->>A: number / text / graph refs
-  A->>M: resolveBeatorajaPlayNumber, …
+  P->>B: frame with a judgment
+  B->>M: resolveBeatorajaJudgeEffect
+  M-->>B: ops, timers to start
+  B->>B: light ops, stamp timers
+  B-->>V: ops, timer starts, now
+  V->>B: number / text / graph refs
+  B->>M: resolveBeatorajaPlayNumber, …
   M-->>V: values
 ```
 
@@ -246,12 +245,13 @@ them per entry. The state lives in parallel with LR2 theme state, so the demo ca
 The browser renderer uses `BeatorajaPlaySkinView` as the shared view for select, decide, gameplay, and result
 skins. The scenes read `TEXT`, `NUM`, `OPTION`, timers, gauges and graphs from the [scene mapping](#scene-mapping) and
 provide the runtime-specific parts themselves: chart images, note layers, BGA layers, audio and the result histories.
-The decide and result screens are player-web's beatoraja family views, made with `createDecideScene` and
-`createResultScene` ([player-web.md](./player-web.md#the-decide-screen)): they draw the sessions' frames through the
+The decide, play and result screens are player-web's beatoraja family views, made with `createDecideScene`,
+`createPlayScene` and `createResultScene` ([player-web.md](./player-web.md#the-decide-screen)): they draw the sessions' frames through the
 decide and result resolvers, the result view reading a `PlayResult` directly, and read beatoraja's scene timers off each
 frame.
-Gameplay uses `BeatorajaRuntimeAdapter` as the bridge: it keeps the play's state between engine UI signals and applies
-the ops and timers the mapping resolves for each frame, judgment and lane action.
+The play view draws through `BeatorajaPlayBridge`: the play's state is the play session's `PlayState`, and the bridge
+applies the ops and timers the mapping resolves for each frame, judgment and lane action
+([player-web.md](./player-web.md#the-play-screen)).
 
 The browser gameplay path mounts every chart variant the parser discovers — `5`, `7`, `9`, `10`, `14`, `24`, and
 `24d`. The keyboard modes address their lanes through the `1000`-block timer bases upstream's `play24main.lua` uses
