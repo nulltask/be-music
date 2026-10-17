@@ -26,7 +26,6 @@ export const FILE_SIZE_BUDGET_ALLOWLIST: readonly string[] = [
   'packages/player-tui/src/cli/runner.ts',
   'packages/player-tui/src/tui/tui.ts',
   'packages/player-web-demo/src/main.ts',
-  'packages/stringifier/src/index.ts',
 ];
 
 export interface SourceFileSize {
