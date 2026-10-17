@@ -183,8 +183,7 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   // instance means the parallel arrays are no longer parallel — they're the same array, the engine mutates
   // `judged` directly, and the renderer just reads it. There is no second extract that could disagree.
   // Resolve the chart's intended play variant up front so the lane-binding pass sees the host's
-  // classification (instead of falling back to the engine's content heuristic). Mirrors the beatoraja
-  // path's `composeBeatorajaEngineOptions` wiring in the beatoraja gameplay scene. Without this:
+  // classification (instead of falling back to the engine's content heuristic). Without this:
   //   - `.bme` POPN-9 charts (full `11..19` on `#PLAYER 1`) classify as `'7'` via the engine's heuristic
   //     and lose the POPN-9 `f/v/g/b` lane bindings on channels `16..19`.
   //   - `.bms` / `.bme` charts that author PMS-STD content (`11..15 + 22..25`, no scratch) classify as

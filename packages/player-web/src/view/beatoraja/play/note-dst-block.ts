@@ -1,5 +1,5 @@
 // Which `note.dst[]` block (lane geometry) a beatoraja play skin's note section uses for the live op set. Skins gate
-// alternate layouts — lift, lane-width variants — on `if` ops that toggle mid-play, and the runtime adapter mutates one
+// alternate layouts — lift, lane-width variants — on `if` ops that toggle mid-play, and the play bridge mutates one
 // `activeOps` Set in place every frame, so the note layer keys its lane-rect cache on the block picked here rather than
 // on the Set's identity.
 

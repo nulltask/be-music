@@ -86,7 +86,7 @@ export class BeatorajaSkinLuaContext {
         return percent;
       },
       // `main_state.gauge_type()` — beatoraja's `BEATORAJA_GAUGE_MODE.*` int constant.
-      // Sourced from the runtime adapter's `resolveGaugeState`. Returns `undefined` when no
+      // Sourced from the play bridge's `resolveGaugeState`. Returns `undefined` when no
       // frame has landed yet; the Lua bridge defaults to 0 in that case.
       gaugeType: () => frame().resolveGaugeState?.()?.mode,
     };
