@@ -43,7 +43,6 @@ export * from './beatoraja/bga.ts';
 export * from './beatoraja/gameplay.ts';
 export * from './beatoraja/markers.ts';
 export * from './beatoraja/notes.ts';
-export * from './beatoraja/select.ts';
 export * from './beatoraja/skin-view.ts';
 
 // Scene sessions and family views (ADR 0001): the kit a host hands each skin family, the frames and intents between a

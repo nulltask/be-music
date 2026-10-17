@@ -1,8 +1,5 @@
-import { Container, RendererType, type Texture } from 'pixi.js';
+import { Container, RendererType } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
-import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
-import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
-import { PixiBeatorajaSelectScene } from './beatoraja/select.ts';
 import { PixiSceneHost, resolveRendererPreference, resolveRenderResolution, type PixiScene } from './host.ts';
 
 function makeScene(overrides: Partial<PixiScene> = {}): PixiScene {
@@ -251,24 +248,6 @@ describe('PixiSceneHost scene lifecycle', () => {
     await toPlay;
     await host.setScene(undefined);
     expect(host.getCurrentScene()).toBeUndefined();
-  });
-});
-
-describe('scene identities', () => {
-  it('names the beatoraja select scene', () => {
-    const skin: BeatorajaSkin = { type: 5, w: 1280, h: 720, image: [], destination: [] };
-    const empty = new Map<number | string, Texture>();
-    const textures: BeatorajaTextureCache = {
-      get: (id) => empty.get(id),
-      values: () => empty.values(),
-      pathOf: () => undefined,
-    };
-    const select = new PixiBeatorajaSelectScene({ skin, textures, songs: [], onSongPicked: () => undefined });
-    try {
-      expect(select.identity).toEqual({ kind: 'select', family: 'beatoraja' });
-    } finally {
-      select.dispose();
-    }
   });
 });
 

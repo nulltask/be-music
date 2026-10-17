@@ -1,5 +1,5 @@
 /**
- * What the beatoraja select scene's skin reads of a chart bar beyond its library entry (`PixiBeatorajaSelectScene`): the
+ * What the beatoraja select view's skin reads of a chart bar beyond its library entry (`BeatorajaSelectView`): the
  * chart's key mode, traits, note kinds, densities, length and BPM range, worked out once per chart and kept in weak maps
  * keyed by the library entry.
  */
