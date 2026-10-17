@@ -10,6 +10,10 @@ export const scoreHref = (scoreId: string): string => `/leaderboard/scores/${enc
 export const chartHref = (chartFingerprint: string): string =>
   `/leaderboard/charts/${encodeURIComponent(chartFingerprint)}`;
 export const playerHref = (handle: string): string => `/leaderboard/players/${encodeURIComponent(handle)}`;
+export const courseHref = (courseFingerprint: string): string =>
+  `/leaderboard/courses/${encodeURIComponent(courseFingerprint)}`;
+export const courseRunHref = (courseScoreId: string): string =>
+  `/leaderboard/course-scores/${encodeURIComponent(courseScoreId)}`;
 
 export const LINK = 'font-medium underline-offset-4 hover:underline';
 export const NUM = 'text-end tabular-nums';

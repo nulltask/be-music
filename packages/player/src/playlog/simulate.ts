@@ -1,5 +1,5 @@
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart';
-import { resolveIidxRankLabel } from '../core/scoring.ts';
+import { resolveIidxRankLabel } from '../ruleset/score.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
 import {
   classifyRulesetJudge,
@@ -23,6 +23,7 @@ import {
   type RulesetJudgeIndex,
 } from '../ruleset/index.ts';
 import {
+  courseStageCarryCombo,
   resolveRulesetConfig,
   type JudgeWindowSetUs,
   type PlaylogRulesetId,
@@ -43,6 +44,8 @@ export {
 
 export interface SimulatePlaylogOptions extends ResolveRulesetOptions {
   ruleset: PlaylogRulesetId;
+  /** Overrides the log's `play.endOnFailure`: whether judging stops the moment a survival gauge empties. */
+  endOnFailure?: boolean;
 }
 
 /** The rulesets `simulatePlaylog` scores under, in display order. */
@@ -58,7 +61,7 @@ export const PLAYLOG_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', 'iidx'] =
  */
 export function simulatePlaylog(playlog: BeMusicPlaylog, options: SimulatePlaylogOptions): PlaylogRulesetResult {
   const config = resolveRulesetConfig(playlog, options.ruleset, options);
-  return new PlaylogSimulation(playlog, config).run();
+  return new PlaylogSimulation(playlog, config, options.endOnFailure ?? playlog.play.endOnFailure === true).run();
 }
 
 /** Runs {@link simulatePlaylog} for each requested ruleset (default: LR2, beatoraja, IIDX). */
@@ -186,6 +189,10 @@ class PlaylogSimulation {
   private readonly gauge: RulesetGauge;
   private combo = 0;
   private maxCombo = 0;
+  /** The course-wide combo and max combo, for a course stage (carried in from the previous stage). */
+  private readonly course: { combo: number; maxCombo: number } | undefined;
+  /** Judging stops the moment the survival gauge empties (`play.endOnFailure`). */
+  private readonly endOnFailure: boolean;
   private fast = 0;
   private slow = 0;
   private exScore = 0;
@@ -195,9 +202,11 @@ class PlaylogSimulation {
   /** The scratch lanes of the play mode the log was played in (none in PMS and the keyboard modes). */
   private readonly scratchChannels: ReadonlySet<string>;
 
-  constructor(playlog: BeMusicPlaylog, config: RulesetConfig) {
+  constructor(playlog: BeMusicPlaylog, config: RulesetConfig, endOnFailure: boolean) {
     this.playlog = playlog;
     this.config = config;
+    this.endOnFailure = endOnFailure;
+    this.course = playlog.play.course === undefined ? undefined : courseStageCarryCombo(playlog.play.course);
     this.scratchChannels = resolveScratchChannels(playlog.chart.laneMode);
     this.gauge = new RulesetGauge(config.gauge);
     this.buildLanes();
@@ -226,7 +235,7 @@ class PlaylogSimulation {
     // rules (the reversal's HP = 0 included) never run.
     const abortedAtUs = this.playlog.play.aborted === true ? this.playlog.play.abortedAtUs : undefined;
     this.advanceTime(abortedAtUs ?? Number.POSITIVE_INFINITY);
-    if (reversalUs !== undefined && abortedAtUs === undefined && this.hasOutstandingNotes()) {
+    if (reversalUs !== undefined && abortedAtUs === undefined && !this.closed() && this.hasOutstandingNotes()) {
       // LR2 zeroes HP when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`): a reversed run that
       // leaves notes past the reversal behind — open holds included — is always FAILED.
       this.gauge.drainToZero();
@@ -256,6 +265,9 @@ class PlaylogSimulation {
     };
     if (this.gauge.failedMidPlay) {
       result.gauge.failedMidPlay = true;
+    }
+    if (this.course !== undefined) {
+      result.course = { combo: this.course.combo, maxCombo: this.course.maxCombo };
     }
     if (this.config.moneyScore) {
       const notes = Math.max(1, this.config.noteCount);
@@ -538,6 +550,7 @@ class PlaylogSimulation {
   private detonateMine(mine: SimMine): void {
     if (mine.applied) return;
     mine.applied = true;
+    if (this.closed()) return;
     // Applied even at 0 damage, as the engine does: the raw path still settles a gauge sitting on its floor.
     this.gauge.applyRawDelta(-mine.damage);
   }
@@ -585,6 +598,7 @@ class PlaylogSimulation {
   }
 
   private applyHcnTick(gain: boolean): void {
+    if (this.closed()) return;
     const tick = this.config.hcnTick;
     this.gauge.applyJudge(
       (gain ? tick.heldJudge : tick.releasedJudge) as GaugeJudgeIndex,
@@ -894,22 +908,39 @@ class PlaylogSimulation {
     }
   }
 
+  /**
+   * Judging has stopped: the survival gauge emptied in a play that ends on failure. Nothing after the judgment that
+   * emptied it counts, as in the engine (`isJudgingClosed`).
+   */
+  private closed(): boolean {
+    return this.endOnFailure && this.gauge.failedMidPlay;
+  }
+
   private applyJudge(judgeIndex: GaugeJudgeIndex, dmUs: number | undefined): void {
+    if (this.closed()) return;
     this.counts[judgeIndex]! += 1;
     if (judgeIndex === JUDGE_PGREAT) {
       this.exScore += 2;
     } else if (judgeIndex === JUDGE_GREAT) {
       this.exScore += 1;
     }
+    const course = this.course;
     if (judgeIndex <= JUDGE_GOOD) {
       this.combo += 1;
       if (this.combo > this.maxCombo) {
         this.maxCombo = this.combo;
       }
-    } else if (judgeIndex === JUDGE_BAD || judgeIndex === JUDGE_MISS_POOR) {
+      if (course !== undefined) {
+        course.combo += 1;
+        course.maxCombo = Math.max(course.maxCombo, course.combo);
+      }
+    } else if (
+      judgeIndex === JUDGE_BAD ||
+      judgeIndex === JUDGE_MISS_POOR ||
+      (judgeIndex === JUDGE_EMPTY_POOR && this.config.comboBreaksOnEmptyPoor)
+    ) {
       this.combo = 0;
-    } else if (judgeIndex === JUDGE_EMPTY_POOR && this.config.comboBreaksOnEmptyPoor) {
-      this.combo = 0;
+      if (course !== undefined) course.combo = 0;
     }
     if (dmUs !== undefined && (judgeIndex === JUDGE_GREAT || judgeIndex === JUDGE_GOOD)) {
       // A delta of exactly 0 is neither, as in the engine (it is always inside PGREAT, so this is only consistency).

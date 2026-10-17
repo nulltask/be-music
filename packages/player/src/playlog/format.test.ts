@@ -50,6 +50,7 @@ function makePlaylog(): BeMusicPlaylog {
     inputs: [
       { seq: 0, timeUs: 499_000, action: 'down', channels: ['11'], tokens: ['z'] },
       { seq: 1, timeUs: 520_000, action: 'up', channels: ['11', '12'] },
+      { seq: 2, timeUs: 640_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
     ],
     play: {
       mode: 'manual',
@@ -65,6 +66,8 @@ function makePlaylog(): BeMusicPlaylog {
       ],
       aborted: true,
       abortedAtUs: 1_234_567,
+      endOnFailure: true,
+      course: { kind: 'grade', gaugeSet: 'lr2', judge: 'no-good', carryIn: { gauge: 62.4, combo: 31, maxCombo: 120 } },
       native: { hiSpeed: 2.5, skin: 'default', assist: false, memo: null },
     },
     results: {
@@ -79,6 +82,7 @@ function makePlaylog(): BeMusicPlaylog {
         score: 100000,
         djLevel: 'AA',
         gauge: { type: 'HARD', final: 0, cleared: false, failedMidPlay: true },
+        course: { combo: 0, maxCombo: 120 },
       },
     },
   };
@@ -155,6 +159,24 @@ describe('playlog format', () => {
     expect(withoutReversal.chart).not.toHaveProperty('reversalTimeUs');
   });
 
+  test('play.tempo survives the round-trip, a tempo of 1 is dropped and a non-positive one is refused', () => {
+    const playlog = makePlaylog();
+    playlog.play.tempo = 0.75;
+    const parsed = parsePlaylog(serializePlaylog(playlog));
+    expect(parsed.play.tempo).toBe(0.75);
+    expect(parsed).toEqual(playlog);
+    // Logs without the field (every log before it existed) played at tempo 1.
+    expect(parsePlaylog(serializePlaylog(makePlaylog())).play).not.toHaveProperty('tempo');
+    const unit = makePlaylog() as unknown as { play: Record<string, unknown> };
+    unit.play.tempo = 1;
+    expect(parsePlaylog(JSON.stringify(unit)).play).not.toHaveProperty('tempo');
+    for (const tempo of [0, -0.5, 'fast']) {
+      const log = makePlaylog() as unknown as { play: Record<string, unknown> };
+      log.play.tempo = tempo;
+      expect(() => parsePlaylog(JSON.stringify(log))).toThrow(/play\.tempo/);
+    }
+  });
+
   test('writes the unstable revision 0 and still reads logs stamped 1, as revision 0', () => {
     expect(BE_MUSIC_PLAYLOG_VERSION).toBe(0);
     const legacy = parsePlaylog(
@@ -192,6 +214,27 @@ describe('playlog format', () => {
     ).toThrow(/^clock:/);
   });
 
+  test('reads a course stage without a carry-in and rejects malformed course fields', () => {
+    const first = parsePlaylog(
+      corrupt((value) => {
+        value.play.course = { kind: 'expert' };
+      }),
+    );
+    expect(first.play.course).toEqual({ kind: 'expert' });
+    for (const [mutate, message] of [
+      [(value: any) => (value.play.course.kind = 'dan'), "play.course.kind: expected 'grade' | 'expert' | 'nonstop'"],
+      [(value: any) => (value.play.course.gaugeSet = '8k'), 'play.course.gaugeSet'],
+      [(value: any) => (value.play.course.judge = 'no-bad'), 'play.course.judge'],
+      [
+        (value: any) => (value.play.course.carryIn.combo = -1),
+        'play.course.carryIn.combo: expected a non-negative integer',
+      ],
+      [(value: any) => (value.play.course.carryIn.gauge = 'full'), 'play.course.carryIn.gauge'],
+    ] as const) {
+      expect(() => parsePlaylog(corrupt(mutate))).toThrow(message);
+    }
+  });
+
   test('reports the field path of structural problems', () => {
     expect(() =>
       parsePlaylog(
@@ -200,6 +243,13 @@ describe('playlog format', () => {
         }),
       ),
     ).toThrow('inputs: expected an array');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.inputs[0].inferred = true;
+        }),
+      ),
+    ).toThrow("inputs[0].inferred: expected true on an 'up'");
     expect(() =>
       parsePlaylog(
         corrupt((value) => {

@@ -3,7 +3,8 @@ import { normalizePath } from '@be-music/utils/core';
 import { extractDxaArchivesAsFlatFiles } from './dxa.ts';
 import { asLoadedBytes, readFilesIntoBytesMap, type Lr2SkinFileEntry } from './file-lookup.ts';
 import type { Lr2SkinInputFile } from './file-lookup.ts';
-import { loadLr2SkinFromSourceFiles, type Lr2PlayVariant, type Lr2Skin } from './skin.ts';
+import { loadLr2SkinFromSourceFiles, type LoadLr2SkinOptions, type Lr2PlayVariant, type Lr2Skin } from './skin.ts';
+import { readLr2SoundSet, resolveLr2SoundSetPath, type Lr2SoundSet, type Lr2SoundSetKey } from './sound-set.ts';
 
 export const LR2_PLAY_VARIANTS: readonly Lr2PlayVariant[] = ['7', '14', '10', '5', '9'];
 
@@ -51,6 +52,17 @@ export interface Lr2ThemeSkins {
    */
   decideSkin?: Lr2Skin;
   /**
+   * Course-result skin (`#INFORMATION` type 15, conventionally `LR2files/Theme/<name>/CourseResult/*.lr2skin`): the
+   * result of a whole course. Undefined when the theme has none; hosts then show the course on the result skin.
+   */
+  courseResultSkin?: Lr2Skin;
+  /**
+   * Parses one of the theme's skins again with extra parse-time ops (see {@link LoadLr2SkinOptions.parseOps}), from
+   * the files already read for the theme. LR2 reads a skin at each scene start, so a host re-parses the play skin for
+   * a course stage to take the `#IF` blocks gated on the course ops.
+   */
+  loadSkin: (options: LoadLr2SkinOptions) => Lr2Skin | undefined;
+  /**
    * Looping song-select screen BGM, conventionally `LR2files/Bgm/<theme>/select.wav`. Undefined when the theme bundle
    * didn't ship a matching file.
    */
@@ -77,6 +89,17 @@ export interface Lr2ThemeSkins {
    * {@link failBgm} are absent. Themes that ship just one result jingle populate this slot only.
    */
   resultBgm?: Lr2ThemeBgm;
+  /**
+   * Course-result audio when the course was cleared: the sound set's `#COURSECLEAR` (stock
+   * `LR2files/Sound/lr2/course_clear.wav`), else `course_clear` / `courseclear` under `Sound/lr2/`. Hosts fall back to
+   * {@link clearBgm} when missing, as LR2 does.
+   */
+  courseClearBgm?: Lr2ThemeBgm;
+  /**
+   * Course-result audio when the course was failed: `#COURSEFAIL` (stock `course_fail.wav`), else `course_fail` /
+   * `coursefail`, falling back to {@link failBgm}.
+   */
+  courseFailBgm?: Lr2ThemeBgm;
   /**
    * LR2 system sound effects from `LR2files/Sound/lr2/*.wav`. Each slot is independently optional — themes that don't
    * ship a particular effect just leave that field undefined, and the consuming view silences that cue.
@@ -161,11 +184,11 @@ export async function loadLr2ThemeSkinsFromFiles(
     // branch is the eager-loaded one that `asLoadedBytes` returns directly, so DXA-extracted bytes can go in as-is.
     (sharedFiles as Map<string, Lr2SkinFileEntry>).set(path, bytes);
   }
-  // Total = play variants (one per LR2_PLAY_VARIANTS entry) + select skin + result skin + decide skin + 5 theme BGMs
-  // (select / decide / clear / fail / result) + 6 system sounds (cursor-move + folder open/close + option
-  // open/close/change). Hard-coding it to the structural shape below keeps the count honest if anyone adds another
+  // Total = play variants (one per LR2_PLAY_VARIANTS entry) + select skin + result skin + decide skin + course-result
+  // skin + 7 theme BGMs (select / decide / clear / fail / result / course clear / course fail) + 6 system sounds
+  // (cursor-move + folder open/close + option open/close/change). Hard-coding it to the structural shape below keeps the count honest if anyone adds another
   // sub-task later (compile breaks when the awaited tuple disagrees with this constant).
-  const totalSubTasks = LR2_PLAY_VARIANTS.length + 14;
+  const totalSubTasks = LR2_PLAY_VARIANTS.length + 17;
   let completed = 0;
   onProgress?.({ phase: 'theme', current: 0, total: totalSubTasks });
   const track = <T>(label: string, task: Promise<T>): Promise<T> =>
@@ -174,6 +197,17 @@ export async function loadLr2ThemeSkinsFromFiles(
       onProgress?.({ phase: 'theme', current: completed, total: totalSubTasks, label });
       return value;
     });
+  // LR2 finds its system sounds through the sound set (`LR2files/Sound/lr2.lr2ss`), which names each file; the
+  // stems below are only the fallback for a drop that has no sound set or lacks the file it names.
+  const soundSet = readLr2SoundSet(sharedFiles, (path) => asLoadedBytes(sharedFiles.get(path)));
+  const pickSound = (key: Lr2SoundSetKey, stems: readonly string[]): Lr2ThemeAudioRef | undefined =>
+    pickFromSoundSet(sharedFiles, soundSet, key) ??
+    stems.reduce<Lr2ThemeAudioRef | undefined>(
+      (found, stem) => found ?? pickLr2SystemSoundFromMap(sharedFiles, stem),
+      undefined,
+    );
+  const pickBgm = (key: Lr2SoundSetKey, role: 'select' | 'decide'): Lr2ThemeAudioRef | undefined =>
+    pickFromSoundSet(sharedFiles, soundSet, key) ?? pickLr2ThemeBgmFromMap(sharedFiles, role);
   // Each task wraps a synchronous parse / pick in `Promise.resolve` so the existing progress-tracking + parallel-await
   // shape continues to work — no semantic change beyond the up-front batched read.
   const playSkinTasks = LR2_PLAY_VARIANTS.map((variant) =>
@@ -187,11 +221,14 @@ export async function loadLr2ThemeSkinsFromFiles(
     selectSkin,
     resultSkin,
     decideSkin,
+    courseResultSkin,
     selectBgm,
     decideBgm,
     clearBgm,
     failBgm,
     resultBgm,
+    courseClearBgm,
+    courseFailBgm,
     cursorMove,
     folderOpen,
     folderClose,
@@ -203,25 +240,29 @@ export async function loadLr2ThemeSkinsFromFiles(
     track('select', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'select' }))),
     track('result', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'result' }))),
     track('decide', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'decide' }))),
+    track('courseResult', Promise.resolve(loadLr2SkinFromSourceFiles(sharedFiles, { kind: 'courseResult' }))),
     // Theme audio (BGM + system sounds) goes through `materializeLr2ThemeAudio` so the lazy file branch from
     // `readFilesIntoBytesMap`'s `deferAudio: true` default is unwrapped here. The rest of the pack stays lazy — only
     // the theme's small handful of audio files (BGM + ~6 cues) is forced eager up front, since they need to be ready
     // the moment the user lands on the select scene.
-    track('bgm/select', materializeLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'select'))),
-    track('bgm/decide', materializeLr2ThemeAudio(pickLr2ThemeBgmFromMap(sharedFiles, 'decide'))),
+    track('bgm/select', materializeLr2ThemeAudio(pickBgm('SELECT', 'select'))),
+    track('bgm/decide', materializeLr2ThemeAudio(pickBgm('DECIDE', 'decide'))),
     // `clear` / `fail` / `result` jingles live alongside the LR2 system sound effects (scratch / mine / o-change …)
     // under `LR2files/Sound/<theme>/`, NOT in `LR2files/Bgm/`. The Bgm/ directory is reserved for the looping select /
     // decide tracks — picking from there would silently miss the result audio since LR2 default ships these stems only
-    // under Sound/lr2/.
-    track('sound/clear', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'clear'))),
-    track('sound/fail', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'fail'))),
+    // under Sound/lr2/. The sound set names each file (`#COURSECLEAR` → `course_clear.wav`); the stems are the
+    // fallback for a drop without one. `result` has no sound-set command.
+    track('sound/clear', materializeLr2ThemeAudio(pickSound('CLEAR', ['clear']))),
+    track('sound/fail', materializeLr2ThemeAudio(pickSound('FAIL', ['fail']))),
     track('sound/result', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'result'))),
-    track('sound/scratch', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'scratch'))),
-    track('sound/f-open', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-open'))),
-    track('sound/f-close', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'f-close'))),
-    track('sound/o-open', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-open'))),
-    track('sound/o-close', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-close'))),
-    track('sound/o-change', materializeLr2ThemeAudio(pickLr2SystemSoundFromMap(sharedFiles, 'o-change'))),
+    track('sound/courseclear', materializeLr2ThemeAudio(pickSound('COURSECLEAR', ['course_clear', 'courseclear']))),
+    track('sound/coursefail', materializeLr2ThemeAudio(pickSound('COURSEFAIL', ['course_fail', 'coursefail']))),
+    track('sound/scratch', materializeLr2ThemeAudio(pickSound('SCRATCH', ['scratch']))),
+    track('sound/f-open', materializeLr2ThemeAudio(pickSound('FOLDER_OPEN', ['f-open']))),
+    track('sound/f-close', materializeLr2ThemeAudio(pickSound('FOLDER_CLOSE', ['f-close']))),
+    track('sound/o-open', materializeLr2ThemeAudio(pickSound('PANEL_OPEN', ['o-open']))),
+    track('sound/o-close', materializeLr2ThemeAudio(pickSound('PANEL_CLOSE', ['o-close']))),
+    track('sound/o-change', materializeLr2ThemeAudio(pickSound('OPTION_CHANGE', ['o-change']))),
   ]);
 
   const playSkins: Lr2PlaySkinMap = {};
@@ -236,11 +277,15 @@ export async function loadLr2ThemeSkinsFromFiles(
     selectSkin,
     resultSkin,
     decideSkin,
+    courseResultSkin,
+    loadSkin: (skinOptions) => loadLr2SkinFromSourceFiles(sharedFiles, skinOptions),
     selectBgm,
     decideBgm,
     clearBgm,
     failBgm,
     resultBgm,
+    courseClearBgm,
+    courseFailBgm,
     systemSounds: {
       cursorMove,
       folderOpen,
@@ -381,6 +426,17 @@ function pickLr2ThemeBgmFromMap(
   return pickThemeAudioBytes(files, (path) => path.includes('bgm/') || path.includes('bgm\\'), role);
 }
 
+function pickFromSoundSet(
+  files: ReadonlyMap<string, Lr2SkinFileEntry>,
+  soundSet: Lr2SoundSet | undefined,
+  key: Lr2SoundSetKey,
+): Lr2ThemeAudioRef | undefined {
+  if (!soundSet) return undefined;
+  const path = resolveLr2SoundSetPath(files.keys(), soundSet, key);
+  const entry = path === undefined ? undefined : files.get(path);
+  return path === undefined || entry === undefined ? undefined : { path, entry };
+}
+
 function pickLr2SystemSoundFromMap(
   files: ReadonlyMap<string, Lr2SkinFileEntry>,
   stem: string,
@@ -406,19 +462,22 @@ export async function loadLr2SystemSound(
 }
 
 export function pickLr2PlaySkin(playSkins: Lr2PlaySkinMap, song: Lr2PlaySkinSong): Lr2Skin | undefined {
+  const variant = pickLr2PlaySkinVariant(playSkins, song);
+  return variant !== undefined ? playSkins[variant] : undefined;
+}
+
+/**
+ * The play-skin variant {@link pickLr2PlaySkin} plays a chart on, so a host can parse that skin again (for a course
+ * stage's parse-time ops, see {@link Lr2ThemeSkins.loadSkin}).
+ */
+export function pickLr2PlaySkinVariant(playSkins: Lr2PlaySkinMap, song: Lr2PlaySkinSong): Lr2PlayVariant | undefined {
   const target = resolveChartPlayVariant({
     chartPath: song.chartPath,
     events: song.chart.events,
     bms: song.chart.bms,
     bmson: song.chart.bmson,
   });
-  for (const variant of PLAY_SKIN_FALLBACKS[target]) {
-    const candidate = playSkins[variant];
-    if (candidate) {
-      return candidate;
-    }
-  }
-  return undefined;
+  return PLAY_SKIN_FALLBACKS[target].find((variant) => playSkins[variant] !== undefined);
 }
 
 export function summarizeLr2PlaySkins(playSkins: Lr2PlaySkinMap, separator = ','): string {

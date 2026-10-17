@@ -21,8 +21,8 @@
 
 import {
   asLoadedBytes,
+  findCaseInsensitivePath,
   loadAssetBytes,
-  lookupBytesCaseInsensitive,
   type BeatorajaSkinFileEntry,
 } from '@be-music/beatoraja-skin';
 import { masterOutput } from '../../runtime/master-volume.ts';
@@ -174,15 +174,7 @@ export class BeatorajaSkinAudioPlayer {
    */
   private resolvePath(path: string): string | undefined {
     if (typeof path !== 'string' || path.length === 0) return undefined;
-    const entry = lookupBytesCaseInsensitive(this.options.files, path);
-    if (entry === undefined) return undefined;
-    // Walk the map once to find the canonical key matching this entry. The map is small (a few
-    // hundred entries for a typical theme), and we only do this on the first play of each path.
-    // After that the buffer cache returns by canonical key directly.
-    for (const [key, value] of this.options.files) {
-      if (value === entry) return key;
-    }
-    return path;
+    return findCaseInsensitivePath(this.options.files, path);
   }
 
   /** Make sure we have a usable AudioContext + gain. Returns undefined when we can't. */

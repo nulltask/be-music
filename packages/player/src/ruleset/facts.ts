@@ -33,6 +33,19 @@ export interface RulesetJudgeRankFacts {
   sourceExRank?: number;
   /** Dynamic `#EXRANKxx` changes (channel `A0`) in chart order, in the same unit as `sourceExRank`. */
   timeline?: ReadonlyArray<{ timeUs: number; exRankValue: number }>;
+  /** A stitched LR2 NONSTOP chart's later stages taking over the judge rank with their `#RANK`, in time order. */
+  stageRanks?: ReadonlyArray<RulesetStageRank>;
+}
+
+/**
+ * A later NONSTOP stage's `#RANK` setting the judge windows from `timeUs` on: as a chart opening with it does
+ * (`'chart'`), or by LR2's NONSTOP rank table (`'lr2-nonstop'`, `resolveLr2NonstopRankWindowsMs`). Only the LR2 ruleset
+ * applies it, as with `#EXRANKxx`.
+ */
+export interface RulesetStageRank {
+  timeUs: number;
+  rank: number;
+  table: 'chart' | 'lr2-nonstop';
 }
 
 /**

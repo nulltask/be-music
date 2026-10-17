@@ -1,0 +1,365 @@
+import { expectFiniteNumber, expectRecord, PlaylogParseError } from './parse.ts';
+
+/**
+ * What the player saw and how fast the play ran, apart from what was judged: the hi-speed, the lane covers (SUDDEN+,
+ * HIDDEN+, LIFT) and the tempo, at the start and every change during the play. None of it changes a judgment (inputs
+ * and notes are in chart time), so a re-simulation ignores it; a replay or a ghost reads it to show the play as it
+ * looked, as far as its viewer asks ({@link PlaylogViewReplay}).
+ */
+
+/** One play side's lane cover, each part as a fraction (0 to 1) of the lane height; 0 = off. */
+export interface PlaylogLaneCover {
+  side: '1P' | '2P';
+  /** SUDDEN+: the cover over the top of the lanes. */
+  sudden: number;
+  /** HIDDEN+: the cover just above the judgement line. */
+  hidden: number;
+  /** LIFT: how far the judgement line is raised. */
+  lift: number;
+}
+
+/** The view settings in force, or the ones that changed: every field is optional in a change. */
+export interface PlaylogViewState {
+  /** The scroll speed multiplier the scene drew with (its own hi-speed scale, {@link hiSpeedScale}). */
+  hiSpeed?: number;
+  /**
+   * The scale {@link hiSpeed} is on, named by the scene family that drew it (`be-music` for the built-in and LR2
+   * scenes, `beatoraja`): the same hi-speed scrolls at another speed on another scale. Absent = the viewer's own.
+   */
+  hiSpeedScale?: string;
+  /** The hi-speed fix (`OFF`, `START`, `MAX`, `MAIN`, `MIN`, …) the scene kept the scroll with. */
+  hsFix?: string;
+  /**
+   * How long a note stays visible below SUDDEN+, in ms (the white number; × 0.6 is the green number), at the chart's main
+   * BPM and without `#SCROLL` / `#SPEED`, so the speed compares across scenes and hi-speed scales.
+   */
+  visibleMs?: number;
+  /** The lane covers per play side that has lanes. A change lists only the sides that changed. */
+  covers?: PlaylogLaneCover[];
+}
+
+/** A view change during the play, at a chart time (µs, the play log's clock). */
+export interface PlaylogViewChange extends PlaylogViewState {
+  timeUs: number;
+}
+
+/** A tempo change during the play (`PlayerOptions.speed`), at a chart time (µs). */
+export interface PlaylogTempoChange {
+  timeUs: number;
+  tempo: number;
+}
+
+/**
+ * Which recorded settings a replay or ghost reproduces; the rest stay the viewer's own. Hosts offer these as options.
+ * All on by default.
+ */
+export interface PlaylogViewReplay {
+  tempo: boolean;
+  hiSpeed: boolean;
+  /** SUDDEN+ and HIDDEN+. */
+  covers: boolean;
+  lift: boolean;
+}
+
+export const DEFAULT_PLAYLOG_VIEW_REPLAY: Readonly<PlaylogViewReplay> = {
+  tempo: true,
+  hiSpeed: true,
+  covers: true,
+  lift: true,
+};
+
+/**
+ * The view settings in force at `timeUs`: `initial` with every change at or before it applied in order (a cover change
+ * replaces that side's cover).
+ */
+export function resolvePlaylogViewAt(
+  initial: PlaylogViewState | undefined,
+  changes: readonly PlaylogViewChange[] | undefined,
+  timeUs: number,
+): PlaylogViewState {
+  const state: PlaylogViewState = cloneView(initial ?? {});
+  for (const change of changes ?? []) {
+    if (change.timeUs > timeUs) break;
+    const { timeUs: _timeUs, covers, ...rest } = change;
+    Object.assign(state, rest);
+    if (covers !== undefined) {
+      const merged = new Map((state.covers ?? []).map((cover) => [cover.side, cover]));
+      for (const cover of covers) merged.set(cover.side, { ...cover });
+      state.covers = [...merged.values()].sort((left, right) => left.side.localeCompare(right.side));
+    }
+  }
+  return state;
+}
+
+/** The tempo in force at `timeUs`: `initial` (1 when absent), then the last change at or before it. */
+export function resolvePlaylogTempoAt(
+  initial: number | undefined,
+  changes: readonly PlaylogTempoChange[] | undefined,
+  timeUs: number,
+): number {
+  let tempo = initial ?? 1;
+  for (const change of changes ?? []) {
+    if (change.timeUs > timeUs) break;
+    tempo = change.tempo;
+  }
+  return tempo;
+}
+
+/** Whether a play ran at any tempo other than 1, at its start or after a change. */
+export function playedAtAnotherTempo(play: { tempo?: number; tempoChanges?: readonly PlaylogTempoChange[] }): boolean {
+  return (play.tempo ?? 1) !== 1 || (play.tempoChanges ?? []).some((change) => change.tempo !== 1);
+}
+
+/**
+ * The view a replay or ghost shows at `timeUs`: the recorded view for what `replay` reproduces, the viewer's own
+ * (`own`) for the rest. The tempo is resolved apart ({@link resolvePlaylogTempoAt}).
+ */
+export function resolveReplayView(
+  recorded: PlaylogViewState,
+  own: PlaylogViewState,
+  replay: Readonly<PlaylogViewReplay>,
+): PlaylogViewState {
+  const view: PlaylogViewState = cloneView(own);
+  if (replay.hiSpeed) {
+    if (recorded.hiSpeed !== undefined) view.hiSpeed = recorded.hiSpeed;
+    // The recorded hi-speed is on the recorded scale; one recorded without a scale is taken to be on the viewer's.
+    if (recorded.hiSpeedScale !== undefined) view.hiSpeedScale = recorded.hiSpeedScale;
+    if (recorded.hsFix !== undefined) view.hsFix = recorded.hsFix;
+    if (recorded.visibleMs !== undefined) view.visibleMs = recorded.visibleMs;
+  }
+  if ((replay.covers || replay.lift) && recorded.covers !== undefined) {
+    const ownCovers = new Map((own.covers ?? []).map((cover) => [cover.side, cover]));
+    view.covers = recorded.covers.map((cover) => {
+      const mine = ownCovers.get(cover.side) ?? { side: cover.side, sudden: 0, hidden: 0, lift: 0 };
+      return {
+        side: cover.side,
+        sudden: replay.covers ? cover.sudden : mine.sudden,
+        hidden: replay.covers ? cover.hidden : mine.hidden,
+        lift: replay.lift ? cover.lift : mine.lift,
+      };
+    });
+  }
+  return view;
+}
+
+/**
+ * The hi-speed a scene on `scale` draws to show `view` (a {@link resolveReplayView} result): `view.hiSpeed` when it is
+ * on the same scale (or names none), else the hi-speed that shows `view.visibleMs`, which `fromVisibleMs` works out
+ * with the scene's own lane height and covers, else the recorded `view.hiSpeed` when nothing converts it. `undefined`
+ * when the view has no speed at all.
+ */
+export function resolveReplayHiSpeed(
+  view: PlaylogViewState,
+  scale: string,
+  fromVisibleMs: (visibleMs: number) => number | undefined,
+): number | undefined {
+  const sameScale = view.hiSpeedScale === undefined || view.hiSpeedScale === scale;
+  if (sameScale && view.hiSpeed !== undefined) return view.hiSpeed;
+  if (view.visibleMs !== undefined && view.visibleMs > 0) {
+    const converted = fromVisibleMs(view.visibleMs);
+    if (converted !== undefined && Number.isFinite(converted) && converted > 0) return converted;
+  }
+  return sameScale ? undefined : view.hiSpeed;
+}
+
+const COVER_EPSILON = 1e-6;
+
+function sameCover(left: PlaylogLaneCover, right: PlaylogLaneCover): boolean {
+  return (
+    Math.abs(left.sudden - right.sudden) < COVER_EPSILON &&
+    Math.abs(left.hidden - right.hidden) < COVER_EPSILON &&
+    Math.abs(left.lift - right.lift) < COVER_EPSILON
+  );
+}
+
+/**
+ * What changed from `previous` to `next`, as a {@link PlaylogViewChange} without its time: each scalar field whose value
+ * differs (a field `next` leaves out is not a change), and the full cover of each side whose cover differs. `undefined`
+ * when nothing did.
+ */
+export function diffPlaylogView(previous: PlaylogViewState, next: PlaylogViewState): PlaylogViewState | undefined {
+  const change: PlaylogViewState = {};
+  let changed = false;
+  if (next.hiSpeed !== undefined && next.hiSpeed !== previous.hiSpeed) {
+    change.hiSpeed = next.hiSpeed;
+    changed = true;
+  }
+  if (next.hiSpeedScale !== undefined && next.hiSpeedScale !== previous.hiSpeedScale) {
+    change.hiSpeedScale = next.hiSpeedScale;
+    changed = true;
+  }
+  if (next.hsFix !== undefined && next.hsFix !== previous.hsFix) {
+    change.hsFix = next.hsFix;
+    changed = true;
+  }
+  if (next.visibleMs !== undefined && next.visibleMs !== previous.visibleMs) {
+    change.visibleMs = next.visibleMs;
+    changed = true;
+  }
+  if (next.covers !== undefined) {
+    const before = new Map((previous.covers ?? []).map((cover) => [cover.side, cover]));
+    const covers = next.covers.filter((cover) => {
+      const old = before.get(cover.side);
+      return old === undefined || !sameCover(old, cover);
+    });
+    if (covers.length > 0) {
+      change.covers = covers.map((cover) => ({ ...cover }));
+      changed = true;
+    }
+  }
+  return changed ? change : undefined;
+}
+
+/**
+ * `view` at the precision a play log records it, so float noise (`0.09999999999999999` for a cover of 0.1 computed as
+ * `ratio × (1 - lift)`) neither lands in the log nor counts as a change: the hi-speed on the 1/1000 grid hosts step
+ * it on, the visible time to whole ms, and each cover part to 4 decimals (1/10000 of the lane height). Scenes round
+ * the view they record with this.
+ */
+export function roundPlaylogView(view: PlaylogViewState): PlaylogViewState {
+  const rounded: PlaylogViewState = { ...view };
+  if (view.hiSpeed !== undefined) rounded.hiSpeed = roundTo(view.hiSpeed, 1000);
+  if (view.visibleMs !== undefined) rounded.visibleMs = Math.round(view.visibleMs);
+  if (view.covers !== undefined) {
+    rounded.covers = view.covers.map((cover) => ({
+      side: cover.side,
+      sudden: roundTo(cover.sudden, 10_000),
+      hidden: roundTo(cover.hidden, 10_000),
+      lift: roundTo(cover.lift, 10_000),
+    }));
+  }
+  return rounded;
+}
+
+function roundTo(value: number, steps: number): number {
+  return Math.round(value * steps) / steps;
+}
+
+/** Folds a live view into the view changes a play log records: {@link createPlaylogViewCoalescer}. */
+export interface PlaylogViewCoalescer {
+  /**
+   * Takes the view in force at `nowMs` (any monotonic clock, e.g. the host's frame time) and returns the change to
+   * record now, if any: everything that changed since the last change it returned, at most one every `minIntervalMs`.
+   * A change held back is returned on a later call once the interval has passed, merged with what changed meanwhile.
+   */
+  observe(view: PlaylogViewState, nowMs: number): PlaylogViewState | undefined;
+  /**
+   * Returns what changed since the last change it returned, whatever the interval: called once as the play ends, so a
+   * change still held back is not lost.
+   */
+  flush(view: PlaylogViewState): PlaylogViewState | undefined;
+}
+
+/**
+ * Coalesces a scene's live view (sampled each frame) into the changes its play log records, so a wheel spin or a held
+ * key records a handful of changes instead of one per frame: `initial` is the view recorded at the start
+ * (`play.view`), and a change is returned at most every `minIntervalMs` (default 100 ms) — the first one at once.
+ */
+export function createPlaylogViewCoalescer(
+  initial: PlaylogViewState,
+  options: { minIntervalMs?: number } = {},
+): PlaylogViewCoalescer {
+  const minIntervalMs = options.minIntervalMs ?? 100;
+  let recorded = cloneView(initial);
+  let lastAtMs = -Infinity;
+  return {
+    observe: (view, nowMs) => {
+      if (nowMs - lastAtMs < minIntervalMs) return undefined;
+      const change = diffPlaylogView(recorded, view);
+      if (change === undefined) return undefined;
+      recorded = resolvePlaylogViewAt(recorded, [{ timeUs: 0, ...change }], 0);
+      lastAtMs = nowMs;
+      return change;
+    },
+    flush: (view) => {
+      const change = diffPlaylogView(recorded, view);
+      if (change === undefined) return undefined;
+      recorded = resolvePlaylogViewAt(recorded, [{ timeUs: 0, ...change }], 0);
+      return change;
+    },
+  };
+}
+
+function cloneView(view: PlaylogViewState): PlaylogViewState {
+  const copy: PlaylogViewState = { ...view };
+  if (view.covers !== undefined) copy.covers = view.covers.map((cover) => ({ ...cover }));
+  return copy;
+}
+
+const SIDES: ReadonlySet<string> = new Set(['1P', '2P']);
+
+function parseFraction(value: unknown, path: string): number {
+  const fraction = expectFiniteNumber(value, path);
+  if (fraction < 0 || fraction > 1) throw new PlaylogParseError(`${path}: expected a fraction from 0 to 1`);
+  return fraction;
+}
+
+/** Reads a recorded view state (`play.view`, or a change without its `timeUs`). */
+export function parsePlaylogViewState(raw: Record<string, unknown>, path: string): PlaylogViewState {
+  const view: PlaylogViewState = {};
+  if (raw.hiSpeed !== undefined) {
+    const hiSpeed = expectFiniteNumber(raw.hiSpeed, `${path}.hiSpeed`);
+    if (!(hiSpeed > 0)) throw new PlaylogParseError(`${path}.hiSpeed: expected a positive number`);
+    view.hiSpeed = hiSpeed;
+  }
+  if (raw.hiSpeedScale !== undefined) {
+    if (typeof raw.hiSpeedScale !== 'string') throw new PlaylogParseError(`${path}.hiSpeedScale: expected a string`);
+    view.hiSpeedScale = raw.hiSpeedScale;
+  }
+  if (raw.hsFix !== undefined) {
+    if (typeof raw.hsFix !== 'string') throw new PlaylogParseError(`${path}.hsFix: expected a string`);
+    view.hsFix = raw.hsFix;
+  }
+  if (raw.visibleMs !== undefined) {
+    const visibleMs = expectFiniteNumber(raw.visibleMs, `${path}.visibleMs`);
+    if (visibleMs < 0) throw new PlaylogParseError(`${path}.visibleMs: expected a non-negative number`);
+    view.visibleMs = visibleMs;
+  }
+  if (raw.covers !== undefined) {
+    if (!Array.isArray(raw.covers)) throw new PlaylogParseError(`${path}.covers: expected an array`);
+    view.covers = raw.covers.map((entry, index) => {
+      const coverPath = `${path}.covers[${index}]`;
+      const cover = expectRecord(entry, coverPath);
+      if (typeof cover.side !== 'string' || !SIDES.has(cover.side)) {
+        throw new PlaylogParseError(`${coverPath}.side: expected '1P' | '2P'`);
+      }
+      return {
+        side: cover.side as '1P' | '2P',
+        sudden: parseFraction(cover.sudden, `${coverPath}.sudden`),
+        hidden: parseFraction(cover.hidden, `${coverPath}.hidden`),
+        lift: parseFraction(cover.lift, `${coverPath}.lift`),
+      };
+    });
+  }
+  return view;
+}
+
+/** Reads `play.viewChanges`: changes in chart-time order. */
+export function parsePlaylogViewChanges(raw: unknown, path: string): PlaylogViewChange[] {
+  if (!Array.isArray(raw)) throw new PlaylogParseError(`${path}: expected an array`);
+  let last = -Infinity;
+  return raw.map((entry, index) => {
+    const changePath = `${path}[${index}]`;
+    const record = expectRecord(entry, changePath);
+    const timeUs = expectFiniteNumber(record.timeUs, `${changePath}.timeUs`);
+    if (timeUs < last) throw new PlaylogParseError(`${changePath}.timeUs: expected changes in time order`);
+    last = timeUs;
+    return { timeUs, ...parsePlaylogViewState(record, changePath) };
+  });
+}
+
+/** Reads `play.tempoChanges`: positive tempos in chart-time order. */
+export function parsePlaylogTempoChanges(raw: unknown, path: string): PlaylogTempoChange[] {
+  if (!Array.isArray(raw)) throw new PlaylogParseError(`${path}: expected an array`);
+  let last = -Infinity;
+  return raw.map((entry, index) => {
+    const changePath = `${path}[${index}]`;
+    const record = expectRecord(entry, changePath);
+    const timeUs = expectFiniteNumber(record.timeUs, `${changePath}.timeUs`);
+    if (timeUs < last) throw new PlaylogParseError(`${changePath}.timeUs: expected changes in time order`);
+    last = timeUs;
+    const tempo = expectFiniteNumber(record.tempo, `${changePath}.tempo`);
+    if (!(tempo > 0)) throw new PlaylogParseError(`${changePath}.tempo: expected a positive number`);
+    return { timeUs, tempo };
+  });
+}

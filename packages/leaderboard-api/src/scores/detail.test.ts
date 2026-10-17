@@ -1,7 +1,8 @@
+import type { PlaylogRulesetId } from '@be-music/player/ruleset';
 import { describe, expect, test } from 'vite-plus/test';
 import { toScoreResponse, type ScoreDetail } from './detail.ts';
 
-const result = (ruleset: 'lr2' | 'beatoraja' | 'iidx') => ({
+const result = (ruleset: PlaylogRulesetId) => ({
   scoreId: 's1',
   ruleset,
   rulesetRevision: `${ruleset}/0`,

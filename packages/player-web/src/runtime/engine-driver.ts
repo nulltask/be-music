@@ -1,4 +1,5 @@
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { WebAudioStageMixer } from './nonstop-audio.ts';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import {
   autoPlay as engineAutoPlay,
@@ -27,6 +28,12 @@ export interface EngineDriverAudioContext {
   decodedSamples: ReadonlyMap<string, AudioBuffer>;
   wavCmdVolumeMultipliers: ReadonlyMap<string, number>;
   bmsonSlicePlayback?: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback>;
+  /** A stitched NONSTOP chart's per-stage rates and fades (`createNonstopStageMixer`). */
+  stageMixer?: WebAudioStageMixer;
+  /** Every sample's playback rate (`WebAudioSessionContext.playbackRate`): the play tempo when its pitch moves. */
+  playbackRate?: number;
+  /** {@link playbackRate} is the play tempo and follows a live tempo change (`pitch` mode). */
+  playbackRateFollowsTempo?: boolean;
 }
 
 /**
@@ -39,7 +46,7 @@ export interface EngineDriverOptions {
   chart: BeMusicJson;
   /** Audio backend resources prepared by the host. The driver constructs a {@link createWebAudioSession} on top. */
   audio: EngineDriverAudioContext;
-  /** Engine play mode. Mirrors the existing `PixiGameplayView` `autoPlay` flag. */
+  /** Engine play mode. Mirrors the play session's `autoPlay` option. */
   mode: 'manual' | 'auto';
   /** Pixi-side rendering callbacks. The driver subscribes them to the engine's `uiSignals`. */
   ui: WebUiRuntimeCallbacks;
@@ -73,7 +80,7 @@ export type EngineDriverResult = PlayerSummary;
  * `PlayerSummary` when the chart ends (or rejects with `PlayerInterruptedError` when the player aborts).
  *
  * The driver is intentionally stateless — every per-chart cache (decoded samples, WAVCMD multipliers, BGA video
- * handles) lives on the host side. That matches how the existing `PixiGameplayView.prepare*` chain already builds
+ * handles) lives on the host side. That matches how the play session's `load` chain (`session/play/*`) already builds
  * those caches, so adopting the driver in Phase 4b is a drop-in replacement for the gameplay view's self-judge
  * loop rather than a state-ownership refactor.
  *
@@ -82,7 +89,8 @@ export type EngineDriverResult = PlayerSummary;
  *   early BAD window has already opened.
  * - Out-of-window presses do not play the next pending lane keysound before that note's judgment window opens.
  * - Free-Zone (`17` / `27`) channels stay excluded from score/gauge targets and keep their scratch aliases.
- * - LN suppress windows + 380 ms initial / 120 ms repeat hold-grace.
+ * - Key releases inferred for input that reports none (`play-key-inference.ts`): 380 ms after a long note's head,
+ *   120 ms after any other press or key repeat.
  * - LN early-release audio cut via `AudioSession.stopChannel`.
  * - Mine vs note delta-based priority (closest delta wins).
  * - Multi-channel input mapping for scratch / Free-Zone aliases.
@@ -115,6 +123,9 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
       decodedSamples: audio.decodedSamples,
       wavCmdVolumeMultipliers: audio.wavCmdVolumeMultipliers,
       bmsonSlicePlayback: audio.bmsonSlicePlayback,
+      ...(audio.stageMixer !== undefined ? { stageMixer: audio.stageMixer } : {}),
+      ...(audio.playbackRate !== undefined ? { playbackRate: audio.playbackRate } : {}),
+      ...(audio.playbackRateFollowsTempo === true ? { playbackRateFollowsTempo: true } : {}),
     });
   };
   const createInputRuntime = createWebInputRuntimeFactory({

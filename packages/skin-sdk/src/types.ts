@@ -1,9 +1,17 @@
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import type { ChartPlayVariant } from '@be-music/chart';
+import type { Judge, JudgeTiming, LaneCover, PlayOptionChoices, PlaySide } from '@be-music/scene-model';
 import type { BeMusicAudioFrame } from './audio.ts';
 import type { BeMusicPlayOptions } from './play-options.ts';
 import type { BeMusicResultData, GaugeHistorySample, ScoreHistorySample } from './result-data.ts';
 import type { BeMusicSkinSetting, BeMusicSkinSettingValues } from './settings.ts';
-import type { BeMusicSongImageKind, BeMusicSongRecord, BrowserBrowseEntry, BrowserSongEntry } from './song.ts';
+import type {
+  BeMusicCourseRecord,
+  BeMusicSongImageKind,
+  BeMusicSongRecord,
+  BrowserBrowseEntry,
+  BrowserCourseEntry,
+  BrowserSongEntry,
+} from './song.ts';
 
 /**
  * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
@@ -144,11 +152,11 @@ export interface BeMusicStage {
  */
 export type BeMusicEffectLevel = 'full' | 'reduced' | 'off';
 
-/** A judgement grade, best first. */
-export type BeMusicJudge = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
+/** A judgement grade, best first (`Judge` of `@be-music/scene-model`). */
+export type BeMusicJudge = Judge;
 
-/** A play side. `'2P'` only exists in double play. */
-export type BeMusicSide = '1P' | '2P';
+/** A play side. `'2P'` only exists in double play (`PlaySide` of `@be-music/scene-model`). */
+export type BeMusicSide = PlaySide;
 
 /** An image the host hands a skin (song images, BGA layers): anything `drawImage` / `texImage2D` accepts. */
 export type BeMusicImage = CanvasImageSource;
@@ -352,28 +360,12 @@ export interface BeMusicGameplayRuntime {
 
 /**
  * One timed judgement: when it happened and how far off the press was. `deltaMs` is positive when late (SLOW) and
- * negative when early (FAST). See {@link binJudgeTimings} for a histogram.
+ * negative when early (FAST). See {@link binJudgeTimings} for a histogram. `JudgeTiming` of `@be-music/scene-model`.
  */
-export interface BeMusicJudgeTiming {
-  /** Play-clock ms of the judgement. */
-  atMs: number;
-  /** Signed offset (ms): > 0 late, < 0 early. */
-  deltaMs: number;
-  judge: BeMusicJudge;
-  /** Lane channel of the judged note. */
-  channel?: string;
-}
+export type BeMusicJudgeTiming = JudgeTiming;
 
-/** One play side's lane covers, as fractions (0..1) of the lane height. */
-export interface BeMusicLaneCover {
-  side: BeMusicSide;
-  /** SUDDEN+: the cover over the top of the lanes. */
-  sudden: number;
-  /** HIDDEN+: the cover just above the judgement line. */
-  hidden: number;
-  /** LIFT: how far the judgement line is raised. */
-  lift: number;
-}
+/** One play side's lane covers, as fractions (0..1) of the lane height (`LaneCover` of `@be-music/scene-model`). */
+export type BeMusicLaneCover = LaneCover;
 
 /** One judge window: how early and how late (both positive ms) a press still earns the grade. */
 export interface BeMusicJudgeWindow {
@@ -604,10 +596,11 @@ export interface BeMusicSelectActions {
   toggleReadme(): void;
 }
 
-/** The values each play option can take, for options with a fixed set of choices (numeric ones are left out). */
-export type BeMusicPlayOptionChoices = {
-  readonly [K in keyof BeMusicPlayOptions]?: readonly BeMusicPlayOptions[K][];
-};
+/**
+ * The values each play option can take, for options with a fixed set of choices (numeric ones are left out):
+ * `PlayOptionChoices` of `@be-music/scene-model`.
+ */
+export type BeMusicPlayOptionChoices = PlayOptionChoices;
 
 /** Everything on the select screen this frame. */
 export interface BeMusicSelectFrame {
@@ -637,6 +630,11 @@ export interface BeMusicSelectFrame {
    */
   listScroll: number;
   focusedSong: BrowserSongEntry | undefined;
+  /**
+   * The course bar under the cursor (`undefined` on a song or folder bar, and from hosts that predate it). PLAY and
+   * AUTO start it; {@link describeCourseCard} gives the lines a card shows for it.
+   */
+  focusedCourse?: BrowserCourseEntry;
   /** Current folder label (or search label), `undefined` at the library root. */
   folderLabel: string | undefined;
   searchQuery: string;
@@ -660,6 +658,11 @@ export interface BeMusicSelectFrame {
   pointer: { x: number; y: number } | undefined;
   /** The player's best record on `song`, or `undefined` when the host keeps none (or it was never played). */
   songRecord(song: BrowserSongEntry): BeMusicSongRecord | undefined;
+  /**
+   * The player's best record on `course` (a course bar), or `undefined` when the host keeps none, the course was never
+   * played, or it is a random course or a NEW COURSE bar. Absent from hosts that predate it.
+   */
+  courseRecord?(course: BrowserCourseEntry): BeMusicCourseRecord | undefined;
   songImage: BeMusicSongImageLookup;
   /** The player's values for the skin's {@link BeMusicSkin.settings}. */
   settings: BeMusicSkinSettingValues;

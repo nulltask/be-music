@@ -1,5 +1,4 @@
-import { PLAY_MODE_LAYOUTS, findPlayModeLane, type PlayKeyTone } from '@be-music/chart';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import { PLAY_MODE_LAYOUTS, findPlayModeLane, type ChartPlayVariant, type PlayKeyTone } from '@be-music/chart';
 import {
   resolveSideKeySlot as resolveCoreSideKeySlot,
   resolveSideRelativeLaneIndex,

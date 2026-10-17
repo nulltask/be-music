@@ -36,6 +36,16 @@ describe('checkPlaylogEligibility', () => {
   test('rejects auto plays and ESC aborts', () => {
     expect(checkPlaylogEligibility(playlog({ mode: 'auto' }))).toEqual({ eligible: false, reason: 'auto-play' });
     expect(checkPlaylogEligibility(playlog({ aborted: true }))).toEqual({ eligible: false, reason: 'aborted' });
+    expect(checkPlaylogEligibility(playlog({ course: { kind: 'grade' } }))).toEqual({
+      eligible: false,
+      reason: 'course-stage',
+    });
+  });
+
+  test('rejects a play at another tempo, which is practice', () => {
+    expect(checkPlaylogEligibility(playlog({ tempo: 0.8 }))).toEqual({ eligible: false, reason: 'tempo' });
+    expect(checkPlaylogEligibility(playlog({ tempo: 1.5 }))).toEqual({ eligible: false, reason: 'tempo' });
+    expect(checkPlaylogEligibility(playlog({ tempo: 1 }))).toMatchObject({ eligible: true });
   });
 
   test('rejects a log without either fingerprint', () => {

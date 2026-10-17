@@ -1,0 +1,54 @@
+import { formatSeconds } from '../utils.ts';
+import { renderSummary, writeRuntimeEventLog } from './engine-trace.ts';
+import { PlayerInterruptedError, type PlayerSummary } from './engine-types.ts';
+import type { PlayControls } from './play-controls.ts';
+import type { PlayOutcome } from './play-loop.ts';
+import type { PlaySession } from './play-session.ts';
+import type { PlayJudge } from './play-strategy.ts';
+
+/**
+ * Ends a play the same way whatever judged it: an ESC returns the summary of an aborted play, a restart or Ctrl+C
+ * throws {@link PlayerInterruptedError}, anything else completes (or fails). The play log is finalized and handed to
+ * the host, the no-TUI trace records the end, and the summary is written out.
+ */
+export function finishPlay(
+  session: PlaySession,
+  judge: PlayJudge,
+  controls: PlayControls,
+  outcome: PlayOutcome,
+): PlayerSummary {
+  const { options, summary, totalSeconds, playlogRecorder, writeOutput } = session;
+  const { interruptedReason, endedOnFailure } = outcome;
+  // View changes the host sent as the play ended, after the loop's last drain, still belong to it.
+  controls.recordPendingViewChanges();
+  if (interruptedReason === 'ctrl-c' || interruptedReason === 'restart') {
+    throw new PlayerInterruptedError(interruptedReason);
+  }
+  const aborted = interruptedReason === 'escape';
+  const reason = aborted ? 'escape' : endedOnFailure ? 'failed' : 'complete';
+  if (!session.uiEnabled) {
+    writeRuntimeEventLog(writeOutput, 'playback-end', [
+      ['time', formatSeconds(totalSeconds)],
+      ['reason', reason],
+    ]);
+    session.stateLogger.logResult(totalSeconds, { reason, summary });
+  }
+  if (playlogRecorder) {
+    options.onPlaylogRecorded?.(
+      playlogRecorder.finalize({
+        summary,
+        maxCombo: session.score.scoreTracker.maxCombo,
+        ...(aborted
+          ? {
+              aborted: true,
+              // Where the judge had settled through, so a re-simulation stops there and a course counts the stage's
+              // time up to it.
+              abortedAtSeconds: judge.settledThroughSeconds(),
+            }
+          : {}),
+      }),
+    );
+  }
+  writeOutput(renderSummary(summary, session.ruleset.moneyScore));
+  return summary;
+}

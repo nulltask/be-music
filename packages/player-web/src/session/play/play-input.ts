@@ -1,0 +1,365 @@
+/**
+ * The input of a play on the built-in and LR2 play screens (`PlaySession`) that the scene handles itself rather
+ * than the engine's web input runtime: ESC and F5 (after the theme's fade-out), Space (pause), the hi-speed arrows,
+ * holding Backspace to quit, the auto-pause when the page loses focus, and touch lanes. Lane keys go straight to the
+ * engine through its input runtime.
+ *
+ * The functions read and write the scene's state through {@link PlayInputContext}; the play session passes itself.
+ */
+
+import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import type { Application } from 'pixi.js';
+import type { PixiSceneHost } from '../../scene/host.ts';
+import { resolveScaledViewport } from '../../scene/core/viewport.ts';
+import type { QuitHoldController } from '../../scene/quit-hold.ts';
+import {
+  canvasPointToDesign,
+  hitTestTouchLane,
+  isTouchPlayPointer,
+  resolveTouchLaneZones,
+  type TouchLaneChange,
+  type TouchLaneTracker,
+} from '../../scene/core/touch-lanes.ts';
+import { HISPEED_STEP } from '../../scene/gameplay-constants.ts';
+import { logger } from '../../logger.ts';
+import type { PlaySessionOptions } from './play-options.ts';
+import { resolvePlayCoverKey } from './play-cover-keys.ts';
+import type { PlayEngineContext } from './play-engine.ts';
+import { applyPlayEvent } from './play-state.ts';
+import { adjustHiSpeed } from './play-view-settings.ts';
+
+const log = logger('gameplay');
+
+/** The scene's members the input reads and writes: the play session's members of these names. */
+export interface PlayInputContext extends PlayEngineContext {
+  readonly options: PlayEngineContext['options'] & Readonly<Pick<PlaySessionOptions, 'coverKeys'>>;
+  readonly host: PixiSceneHost | undefined;
+  readonly app: Application;
+  readonly quitHold: QuitHoldController;
+  readonly touchLanes: TouchLaneTracker;
+  readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
+  previousCanvasTouchAction: string | undefined;
+  paused: boolean;
+  pauseTime: number;
+  pauseTotal: number;
+  autoPaused: boolean;
+  readonly autoPauseOnBlur: boolean;
+  lastHidden: boolean;
+  lastFocus: boolean;
+  visibilityPollHandle: number | undefined;
+  touchTokenByChannel: Map<string, string> | undefined;
+  readonly handleSharedEngineExitKey: (event: KeyboardEvent) => void;
+  readonly handleQuitHoldKeyUp: (event: KeyboardEvent) => void;
+  readonly cancelQuitHold: () => void;
+  readonly focus: () => void;
+  readonly handleTouchPointer: (event: PointerEvent) => void;
+  readonly handleTouchPointerUp: (event: PointerEvent) => void;
+  readonly handleVisibilityChange: () => void;
+  readonly handleWindowBlur: () => void;
+  readonly handleWindowFocus: () => void;
+  requestExit(): void;
+  requestRestart(): void;
+  pauseAllBgaVideos(): void;
+  resumeActiveBgaVideos(): void;
+}
+
+/** Wires the play's own input as the play goes on the stage (`PlaySession.attachInput`); {@link detachPlayInput} undoes it. */
+export function attachPlayInput(ctx: PlayInputContext, host: PixiSceneHost): void {
+  // ESC / F5 / Space / ArrowUp / ArrowDown stay on the view so the LR2 `#FADEOUT` exit animation runs to
+  // completion BEFORE the engine's interrupt flow disposes the audio session, and so HiSpeed adjustment
+  // affects the visual scroll speed (which the engine doesn't own). The WebInputRuntime's `shouldSkipKey`
+  // filter skips this list (`PLAY_SCENE_KEY_CODES` in `play-keys.ts`) so it doesn't also push duplicate `interrupt` /
+  // `toggle-pause` commands. Lane input goes through the WebInputRuntime's own `keydown` listener to the engine's
+  // input bus.
+  window.addEventListener('keydown', ctx.handleSharedEngineExitKey);
+  // Holding Backspace quits like Escape (`QuitHoldController`); the keyup / blur listeners end the hold.
+  window.addEventListener('keyup', ctx.handleQuitHoldKeyUp);
+  window.addEventListener('blur', ctx.cancelQuitHold);
+  host.app.canvas.addEventListener('pointerdown', ctx.focus);
+  // Touch play: fingers on the lanes press them. `touch-action: none` keeps the page from scrolling or zooming under
+  // the fingers while the play is up.
+  ctx.previousCanvasTouchAction = host.app.canvas.style.touchAction;
+  host.app.canvas.style.touchAction = 'none';
+  host.app.canvas.addEventListener('pointerdown', ctx.handleTouchPointer);
+  host.app.canvas.addEventListener('pointermove', ctx.handleTouchPointer);
+  host.app.canvas.addEventListener('pointerup', ctx.handleTouchPointerUp);
+  host.app.canvas.addEventListener('pointercancel', ctx.handleTouchPointerUp);
+  document.addEventListener('visibilitychange', ctx.handleVisibilityChange);
+  // `visibilitychange` covers tab switching but not always app switching (Cmd-Tab / Alt-Tab) — fall back to window
+  // blur/focus so the gameplay also pauses when the user moves to another OS app entirely. Use the capture phase so
+  // we still see the events even if PixiJS or another listener decides to stop propagation along the bubbling path.
+  window.addEventListener('blur', ctx.handleWindowBlur, true);
+  window.addEventListener('focus', ctx.handleWindowFocus, true);
+  window.addEventListener('pagehide', ctx.handleWindowBlur);
+  window.addEventListener('pageshow', ctx.handleWindowFocus);
+  // Polling safety net. Some embedded environments / OS-window managers suppress the `visibilitychange` and `blur`
+  // events entirely (notably when the dev-tools panel takes focus on the same window). A 250 ms poll on
+  // `document.hidden` and `document.hasFocus()` catches those cases without measurable cost.
+  ctx.lastHidden = document.hidden;
+  ctx.lastFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+  ctx.visibilityPollHandle = window.setInterval(() => {
+    const hiddenNow = document.hidden;
+    const focusNow = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+    if (hiddenNow !== ctx.lastHidden) {
+      ctx.lastHidden = hiddenNow;
+      log.info('poll detected hidden change', { hidden: hiddenNow });
+      if (hiddenNow) {
+        ctx.handleWindowBlur();
+      } else {
+        ctx.handleWindowFocus();
+      }
+    } else if (focusNow !== ctx.lastFocus) {
+      ctx.lastFocus = focusNow;
+      log.info('poll detected focus change', { focus: focusNow });
+      if (!focusNow) {
+        ctx.handleWindowBlur();
+      } else {
+        ctx.handleWindowFocus();
+      }
+    }
+  }, 250);
+  log.info('listeners attached', {
+    visibilityState: document.visibilityState,
+    hidden: document.hidden,
+    hasFocus: typeof document.hasFocus === 'function' ? document.hasFocus() : 'n/a',
+  });
+}
+
+/** Unwires what {@link attachPlayInput} wired, as the play leaves the stage (`PlaySession.detachInput`). */
+export function detachPlayInput(ctx: PlayInputContext): void {
+  // Detach window-level event listeners so a stray keypress doesn't hit a view that is off stage.
+  window.removeEventListener('keydown', ctx.handleSharedEngineExitKey);
+  window.removeEventListener('keyup', ctx.handleQuitHoldKeyUp);
+  window.removeEventListener('blur', ctx.cancelQuitHold);
+  ctx.quitHold.cancel();
+  if (ctx.host) {
+    ctx.host.app.canvas.removeEventListener('pointerdown', ctx.focus);
+    const canvas = ctx.host.app.canvas;
+    canvas.removeEventListener('pointerdown', ctx.handleTouchPointer);
+    canvas.removeEventListener('pointermove', ctx.handleTouchPointer);
+    canvas.removeEventListener('pointerup', ctx.handleTouchPointerUp);
+    canvas.removeEventListener('pointercancel', ctx.handleTouchPointerUp);
+    if (ctx.previousCanvasTouchAction !== undefined) canvas.style.touchAction = ctx.previousCanvasTouchAction;
+    ctx.touchLanes.upAll();
+  }
+  document.removeEventListener('visibilitychange', ctx.handleVisibilityChange);
+  window.removeEventListener('blur', ctx.handleWindowBlur, true);
+  window.removeEventListener('focus', ctx.handleWindowFocus, true);
+  window.removeEventListener('pagehide', ctx.handleWindowBlur);
+  window.removeEventListener('pageshow', ctx.handleWindowFocus);
+  if (ctx.visibilityPollHandle !== undefined) {
+    window.clearInterval(ctx.visibilityPollHandle);
+    ctx.visibilityPollHandle = undefined;
+  }
+}
+
+/**
+ * Auto-pause when the document tab / window goes to the background and auto-resume when it comes back to the
+ * foreground (matching the LR2 desktop client behavior). The user can still toggle manually with Space without
+ * conflicting with this listener — `togglePause` is a symmetric flip, and we only fire it when the visibility state
+ * actually changes.
+ */
+export function handleVisibilityChange(ctx: PlayInputContext): void {
+  log.info('visibilitychange', {
+    visibilityState: document.visibilityState,
+    hidden: document.hidden,
+    paused: ctx.paused,
+    autoPaused: ctx.autoPaused,
+    autoPauseOnBlur: ctx.autoPauseOnBlur,
+  });
+  // Auto-pause when the tab goes hidden (only if the host opted in). The auto-RESUME path stays unconditional — if we
+  // previously auto-paused, we must auto-resume regardless of the toggle's current value, otherwise turning the
+  // toggle off mid-blur would strand gameplay in a paused state with no obvious way out.
+  if (document.hidden) {
+    if (!ctx.paused && ctx.autoPauseOnBlur) {
+      togglePause(ctx);
+      ctx.autoPaused = true;
+    }
+  } else if (ctx.autoPaused && ctx.paused) {
+    togglePause(ctx);
+    ctx.autoPaused = false;
+  }
+}
+
+/**
+ * Window-level blur/focus fallback for the auto-pause behavior. Some platforms (notably macOS with Chrome) keep the
+ * document `visible` across Cmd-Tab app switches, so `visibilitychange` alone misses those cases. We treat `blur` /
+ * `focus` the same way as `visibilitychange`, gated on the same `autoPaused` flag so the two listeners cooperate.
+ */
+export function handleWindowBlur(ctx: PlayInputContext): void {
+  log.info('window blur', {
+    paused: ctx.paused,
+    autoPaused: ctx.autoPaused,
+    autoPauseOnBlur: ctx.autoPauseOnBlur,
+  });
+  // Same opt-in policy as `handleVisibilityChange` — only blur- pause when the host enabled it; auto-resume on focus
+  // stays unconditional so flipping the toggle mid-pause can't strand us in a paused state.
+  if (!ctx.paused && ctx.autoPauseOnBlur) {
+    togglePause(ctx);
+    ctx.autoPaused = true;
+  }
+}
+
+export function handleWindowFocus(ctx: PlayInputContext): void {
+  log.info('window focus', { paused: ctx.paused, autoPaused: ctx.autoPaused });
+  if (ctx.autoPaused && ctx.paused) {
+    togglePause(ctx);
+    ctx.autoPaused = false;
+  }
+}
+
+/**
+ * Captures ESC / F5 in shared-engine mode so the LR2 `#FADEOUT` exit animation runs to completion BEFORE the
+ * engine's `PlayerInterruptedError` flow disposes the audio session. Without this intercept, pushing
+ * `interrupt(escape)` through the WebInputRuntime would tear down the audio session synchronously inside
+ * `manualPlay`'s `finally` block, killing every in-flight `BufferSource` mid-fade — the user hears the chart
+ * audio cut to silence the moment ESC fires while the LR2 fadeout overlay is still painting.
+ *
+ * The handler kicks off `beginExitSequence` (which fades `audioBus.fadeOutAudibleTo(0)` over the LR2 fadeout
+ * duration). Once the fade callback resolves, we abort the engine's `AbortController` so the engine throws and
+ * unwinds normally — the audio session is already silent by then, so the in-flight-source `node.stop()` calls
+ * have nothing audible to interrupt.
+ */
+export function handleSharedEngineExitKey(ctx: PlayInputContext, event: KeyboardEvent): void {
+  // Backspace first: its auto-repeat must still be `preventDefault`ed, which the repeat filter below would skip.
+  if (ctx.quitHold.handleKeyDown(event)) return;
+  // A held cover key keeps moving its cover, so the cover keys come before the repeat filter.
+  if (ctx.options.coverKeys === true && handleCoverKey(ctx, event)) return;
+  if (event.repeat) return;
+  if (event.code === 'Escape') {
+    event.preventDefault();
+    ctx.requestExit();
+    return;
+  }
+  if (event.code === 'F5') {
+    event.preventDefault();
+    ctx.requestRestart();
+    return;
+  }
+  if (event.code === 'Space') {
+    event.preventDefault();
+    togglePause(ctx);
+    return;
+  }
+  // HiSpeed adjustment runs entirely on the view side — the engine has its own `high-speed` input command but
+  // the value it tracks is decoupled from the visual scroll speed (`PIXELS_PER_BEAT * this.hiSpeed`) the
+  // renderer applies. The WebInputRuntime's lane-input dispatch ignores arrow tokens, so the engine has no
+  // way to push HiSpeed changes back to the renderer; we handle them directly here.
+  if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
+    event.preventDefault();
+    if (adjustHiSpeed(ctx, event.code === 'ArrowUp' ? HISPEED_STEP : -HISPEED_STEP)) {
+      ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
+    }
+  }
+}
+
+/**
+ * A lane cover key (`resolvePlayCoverKey`) of a play that takes them: the play state's covers move (not while a course
+ * locks them), and the view hears which setting the key changed. Returns whether `event` was a cover key.
+ */
+function handleCoverKey(ctx: PlayInputContext, event: KeyboardEvent): boolean {
+  const key = resolvePlayCoverKey(event);
+  if (key === undefined) return false;
+  event.preventDefault();
+  if (ctx.playState.view.hiSpeed.locked) return true;
+  applyPlayEvent(ctx, key.command);
+  ctx.theme.moment({ kind: 'view-setting', setting: key.setting, at: ctx.playClock() });
+  return true;
+}
+
+/**
+ * A finger touching down on or moving over the canvas: presses the lane under it, or — when it slid out of the lane it
+ * held — releases that lane and presses the new one. Mouse pointers are left alone (a click only focuses the canvas).
+ */
+export function handleTouchPointer(ctx: PlayInputContext, event: PointerEvent): void {
+  if (!isTouchPlayPointer(event.pointerType)) return;
+  if (event.type === 'pointermove' && !ctx.touchLanes.isTracking(event.pointerId)) return;
+  const { width: designWidth, height: designHeight } = ctx.theme.stage();
+  const viewport = resolveScaledViewport(ctx.app.screen.width, ctx.app.screen.height, designWidth, designHeight);
+  const point = canvasPointToDesign(event.offsetX, event.offsetY, viewport);
+  const zones = resolveTouchLaneZones(
+    Array.from(ctx.laneX, ([channel, lane]) => ({ channel, ...lane })),
+    {
+      stageHeight: designHeight,
+    },
+  );
+  const channel = hitTestTouchLane(zones, point.x, point.y);
+  const change =
+    event.type === 'pointerdown'
+      ? ctx.touchLanes.down(event.pointerId, channel)
+      : ctx.touchLanes.move(event.pointerId, channel);
+  if (event.type === 'pointerdown') event.preventDefault();
+  pushTouchLaneChange(ctx, change, event.timeStamp);
+}
+
+export function handleTouchPointerUp(ctx: PlayInputContext, event: PointerEvent): void {
+  if (!isTouchPlayPointer(event.pointerType)) return;
+  pushTouchLaneChange(ctx, ctx.touchLanes.up(event.pointerId), event.timeStamp);
+}
+
+/** Lifts every finger, e.g. when the play pauses, so no lane stays held through the pause. */
+function releaseAllTouchLanes(ctx: PlayInputContext): void {
+  pushTouchLaneChange(ctx, ctx.touchLanes.upAll(), performance.now());
+}
+
+/**
+ * Forwards touch presses / releases to the engine exactly as the keyboard runtime forwards keys: a release as a
+ * `kitty-state` release, a press as one `lane-input` per lane (so two lanes tapped together judge two notes) plus a
+ * `kitty-state` press that keeps the lane held for long notes and the key beam. `timeStamp` is the event's
+ * `DOMHighResTimeStamp`, promoted to the engine's wall-clock domain the same way the keyboard path does.
+ */
+function pushTouchLaneChange(ctx: PlayInputContext, change: TouchLaneChange, timeStamp: number): void {
+  const signals = ctx.sharedEngineInputSignals;
+  if (!signals || (change.pressed.length === 0 && change.released.length === 0)) return;
+  const pressedAt = performance.timeOrigin + timeStamp;
+  const releaseTokens = resolveTouchTokens(ctx, change.released);
+  if (releaseTokens.length > 0) {
+    signals.pushCommand({ kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens, pressedAt });
+  }
+  const pressTokens = resolveTouchTokens(ctx, change.pressed);
+  if (pressTokens.length === 0) return;
+  for (const token of pressTokens) signals.pushCommand({ kind: 'lane-input', tokens: [token], pressedAt });
+  signals.pushCommand({ kind: 'kitty-state', pressTokens, repeatTokens: [], releaseTokens: [], pressedAt });
+}
+
+/** The input tokens pressing `channels`: each lane binding's first token, the one its key on the keyboard sends. */
+function resolveTouchTokens(ctx: PlayInputContext, channels: readonly string[]): string[] {
+  if (channels.length === 0) return [];
+  let tokens = ctx.touchTokenByChannel;
+  if (tokens === undefined) {
+    tokens = new Map();
+    for (const binding of ctx.preparedChart?.laneBindings ?? []) {
+      const token = binding.inputTokens[0];
+      if (token !== undefined && !tokens.has(binding.channel)) tokens.set(binding.channel, token.toLowerCase());
+    }
+    if (ctx.preparedChart !== undefined) ctx.touchTokenByChannel = tokens;
+  }
+  const resolved: string[] = [];
+  for (const channel of channels) {
+    const token = tokens.get(channel);
+    if (token !== undefined) resolved.push(token);
+  }
+  return resolved;
+}
+
+export function togglePause(ctx: PlayInputContext): void {
+  if (!ctx.paused) releaseAllTouchLanes(ctx);
+  if (ctx.paused) {
+    ctx.paused = false;
+    ctx.pauseTotal += performance.now() - ctx.pauseTime;
+    void ctx.audioContext?.resume();
+    ctx.resumeActiveBgaVideos();
+  } else {
+    ctx.paused = true;
+    ctx.pauseTime = performance.now();
+    void ctx.audioContext?.suspend();
+    ctx.pauseAllBgaVideos();
+  }
+  // In shared-engine mode the engine maintains its own playback clock + per-tick scheduling; without flipping
+  // its pause flag the engine would keep advancing chart-time while the view sits paused, then fast-forward a
+  // burst of judge events the moment the view resumes. Propagate the toggle so both sides are aligned. The
+  // engine's pause path also calls `audioSession.pause()` / `resume()` which our WebAudioSession maps onto
+  // `audioContext.suspend()` / `resume()` — those are idempotent when the context is already in the matching
+  // state, so the redundant call from the engine side after our own `audioContext.suspend()` above is a no-op.
+  ctx.sharedEngineInputSignals?.pushCommand({ kind: 'toggle-pause' });
+}

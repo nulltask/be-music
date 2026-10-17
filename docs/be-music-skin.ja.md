@@ -278,7 +278,8 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
   - `folderLabel`、`searchQuery`、`totalCharts`
   - `actions`: `play`、`autoPlay`、`activateSearch`、`setPlayOption(key, value)`、`cyclePlayOption(key, step?)`（step は 1 か -1、端で折り返し）、`toggleReadme()`（フォーカス中の曲の `.txt` を開閉）
   - `playOptions`（`BeMusicPlayOptions`: ハイスピード、ランダム、ゲージ、HIDDEN / SUDDEN、レーンカバー、BGA、リストのフィルタなど）と `playOptionChoices`（列挙型・オンオフのオプションが取りうる値）。選択肢にない値は無視されます。`hiSpeed` と `shutter` は任意の数値を受け付けて範囲内に丸められ、`cyclePlayOption` では変わりません。
-  - `songRecord(song)`: その譜面でのプレイヤーのベスト記録（`BeMusicSongRecord`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`）。ホストが記録を持たなければ `undefined`。`lamp` は `BeMusicClearLamp` で、悪い順に `NO_PLAY`、`FAILED`、`ASSIST_EASY`、`EASY`、`NORMAL`、`HARD`、`EX_HARD`、`FULL_COMBO`、`PERFECT`、`MAX`
+  - `songRecord(song)`: ホストが遊ぶ判定ルールセットでの、その譜面のプレイヤーのベスト記録（`BeMusicSongRecord`。`@be-music/player/records` の `BestRecord`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`）。ホストが記録を持たなければ `undefined`。`lamp` は `BeMusicClearLamp`（`@be-music/player/ruleset` の `ClearLamp`）で、悪い順に `NO_PLAY`、`FAILED`、`ASSIST_EASY`、`EASY`、`NORMAL`、`HARD`、`EX_HARD`、`FULL_COMBO`、`PERFECT`、`MAX`
+  - `courseRecord?(course)`: コースバーでのプレイヤーのベスト記録（`BeMusicCourseRecord`: `BeMusicSongRecord` に、ベストの値で取れる最高のトロフィー `trophy?` を加えたもの）。遊んだことのないコース、ランダムコース、NEW COURSE バーでは `undefined`。これより古いホストにはありません。`describeCourseCard(course, record)` は、コースカードの説明行にベストのランプとトロフィーを加えます
   - `pointer`: デザインピクセルでのポインタ位置。なければ `undefined`
   - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照
   - `revision`: 選曲の状態（カーソル、フォルダ、検索、リスト内容、プレイオプション、readme の開閉）が変わるたびに増えます。保持型のシーングラフは、これが変わったときだけ作り直せば済みます。
@@ -290,13 +291,13 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 
 `result.draw(surface, frame)` は `BeMusicResultFrame` を受け取ります。
 
-- `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、プレイログ。ホストが提供する場合は、`lamp`（クリアランプ: `FAILED`、クリアしたゲージ、`FULL_COMBO`、`PERFECT`、`MAX`）、`gaugeType`、`judgeRuleset`、`fast` / `slow`、`judgeTimings`（プレイ中のタイミング付き判定すべて）も入ります。
+- `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、プレイログ。ホストが提供する場合は、`lamp`（クリアランプ: `FAILED`、クリアしたゲージ、`FULL_COMBO`、`PERFECT`、`MAX`）、`gaugeType`、`judgeRuleset`、`fast` / `slow`、`judgeTimings`（プレイ中のタイミング付き判定すべて）、`courseResult`（EXPERT / GRADE コース全体の結果。ステージを合計したもの）も入ります。
 - `rankLabel`（IIDX の DJ LEVEL）、`ratePercent`。
 - `elapsedMs`: シーン開始からの経過。登場演出をスキップした後は `Infinity`。
 - `nowMs`、`effects`。
 - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
 
-`resolveResultLamp` と `resolveResultTrackRows` が、組み込みスキンの表示するクリアランプとトラック行を返します。`binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` でタイミングをヒストグラムにできます。
+`resolveResultVerdict`（`STAGE CLEAR` / `FAILED`、コースの結果なら `COURSE CLEAR` / `COURSE FAILED`）、`resolveResultLamp`、`resolveResultTrackRows` が、組み込みスキンの表示する見出し、クリアランプ（唯一のクリアランプの規則で、beatoraja のランプで決めたもの）、トラック行を返します。`binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` でタイミングをヒストグラムにできます。
 
 ### 決定画面
 
@@ -360,7 +361,7 @@ settings: [
 | 演出       | `trackMoments` / `createMomentState` + `updateMoments`（100 コンボごと、クリアライン、フルコンボ、コンボ切れ。カウントインは `runtime.chartMs` が負かどうかで判定）、`COMBO_MILESTONE`、`COMBO_BREAK_MIN`、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile`                                                                                                   |
 | ロード中   | `LOADING_WORD`、`loadingDots(nowMs)`、`LOADING_DOT_MS`                                                                                                                                                                                                                                                                                                                               |
 | サウンド   | `audioDrive`、`bandAt`、`bandLevel`、`AUDIO_BAND_COUNT`、`SILENT_AUDIO`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                                                                                                                                                                                 |
-| リザルト   | `resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                                                                                                                                                                                                                        |
+| リザルト   | `resolveResultVerdict`、`resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                                                                                                                                                                                                |
 | タイミング | `binJudgeTimings`。[判定タイミング](#判定タイミング)を参照                                                                                                                                                                                                                                                                                                                           |
 | 設定       | `resolveBeMusicSkinSettings`、`validateBeMusicSkinSettings`。[スキン設定](#スキン設定)を参照                                                                                                                                                                                                                                                                                         |
 | 曲情報     | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBpmRange`、`formatPlayVariantLabel`                                                                                                                                                                                                                                                         |
@@ -490,14 +491,14 @@ SDK は、フレームやヘルパーが使う型も export しています。�
 - **ホスト側:** ホストはスキンをレジストリに登録します。
 
   ```ts
-  import { BUILT_IN_BE_MUSIC_SKINS, DefaultPixiGameplayView } from '@be-music/player-web/scenes';
+  import { BUILT_IN_BE_MUSIC_SKINS, createPlayScene } from '@be-music/player-web/scenes';
   import { createBeMusicSkinRegistry } from '@be-music/player-web/skin';
   import mySkin from 'my-be-music-skin';
 
   const skins = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
   const problems = skins.add(mySkin); // 追加できれば []、拒否されたらその理由
   const skin = skins.resolve('my-skin'); // 未知の id なら最初のスキンにフォールバック
-  // デフォルトファミリーのビューに渡す: new DefaultPixiGameplayView({ …, beMusicSkin: skin })
+  // 組み込みのシーンにキットとして渡す: createPlayScene({ family: 'built-in', skin }, { … })
   ```
 
   - `add` はスキンを検査します。同じ id が登録済みなら置き換えるので、開発中の再読み込みに便利です。

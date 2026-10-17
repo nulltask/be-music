@@ -20,10 +20,25 @@
       "types": "./dist/playable-notes.d.ts",
       "default": "./dist/playable-notes.js"
     },
+    "./course": {
+      "source": "./src/course/index.ts",
+      "types": "./dist/course.d.ts",
+      "default": "./dist/course.js"
+    },
     "./playlog": {
       "source": "./src/playlog/index.ts",
       "types": "./dist/playlog.d.ts",
       "default": "./dist/playlog.js"
+    },
+    "./records": {
+      "source": "./src/records/index.ts",
+      "types": "./dist/records.d.ts",
+      "default": "./dist/records.js"
+    },
+    "./ruleset": {
+      "source": "./src/ruleset/vocabulary.ts",
+      "types": "./dist/ruleset.d.ts",
+      "default": "./dist/ruleset.js"
     },
     "./audio-sink": {
       "source": "./src/audio-sink.ts",
@@ -49,11 +64,6 @@
       "source": "./src/utils.ts",
       "types": "./dist/utils.d.ts",
       "default": "./dist/utils.js"
-    },
-    "./core/groove-gauge": {
-      "source": "./src/core/groove-gauge.ts",
-      "types": "./dist/core/groove-gauge.d.ts",
-      "default": "./dist/core/groove-gauge.js"
     },
     "./core/bga-timeline": {
       "source": "./src/core/bga-timeline.ts",
@@ -86,7 +96,7 @@
       "default": "./dist/core/lane-layout.js"
     },
     "./core/scoring": {
-      "source": "./src/core/scoring.ts",
+      "source": "./src/core/scoring-entry.ts",
       "types": "./dist/core/scoring.d.ts",
       "default": "./dist/core/scoring.js"
     },

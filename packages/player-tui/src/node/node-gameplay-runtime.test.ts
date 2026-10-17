@@ -21,6 +21,7 @@ const inputRuntimeState = vi.hoisted(() => ({
   runtime: undefined as NodeInputRuntime | undefined,
   start: vi.fn(),
   stop: vi.fn(),
+  negotiated: false,
 }));
 
 const uiRuntimeState = vi.hoisted(() => ({
@@ -56,6 +57,7 @@ vi.mock('node:worker_threads', async () => {
 });
 
 vi.mock('./node-input-runtime.ts', () => ({
+  hasNegotiatedStatefulKeyboardProtocol: vi.fn(() => inputRuntimeState.negotiated),
   createNodeInputRuntime: vi.fn((context) => {
     inputRuntimeState.context = context;
     inputRuntimeState.runtime = {
@@ -102,6 +104,7 @@ afterEach(() => {
   inputRuntimeState.runtime = undefined;
   inputRuntimeState.start.mockReset();
   inputRuntimeState.stop.mockReset();
+  inputRuntimeState.negotiated = false;
   uiRuntimeState.context = undefined;
   uiRuntimeState.runtime = undefined;
   uiRuntimeState.bridgePort = undefined;
@@ -125,6 +128,20 @@ describe('node gameplay runtime', () => {
 
     getLastWorker().emit('message', { kind: 'result', summary: createSummary() });
     await promise;
+  });
+
+  test('tells the gameplay worker whether the terminal negotiated key releases before the play', async () => {
+    const play = async (): Promise<unknown> => {
+      const promise = runNodeGameplayRuntime(createOptions());
+      const workerData = workerState.lastWorkerOptions?.workerData;
+      getLastWorker().emit('message', { kind: 'result', summary: createSummary() });
+      await promise;
+      return workerData;
+    };
+
+    expect(await play()).not.toHaveProperty('inputReportsKeyReleases');
+    inputRuntimeState.negotiated = true;
+    expect(await play()).toMatchObject({ inputReportsKeyReleases: true });
   });
 
   test('passes source resolution condition to the gameplay worker in source runs', async () => {

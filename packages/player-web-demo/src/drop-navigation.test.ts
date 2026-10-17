@@ -12,13 +12,13 @@ describe('navigationAfterDrop', () => {
 
   test('opens the one folder a drop added', () => {
     const songs = [...old, song('c', 'Gamma/Three'), song('d', 'Gamma/Four')];
-    expect(navigationAfterDrop(songs, before)).toEqual({ folderPath: ['Gamma'], selectedIndex: 0 });
+    expect(navigationAfterDrop(songs, before)).toEqual({ folderPath: ['Gamma'], cursors: [2, 0] });
   });
 
   test('shows the folder list, on the first added folder, when a drop added several', () => {
     const songs = [...old, song('c', 'Delta/Three'), song('d', 'Charlie/Four')];
     // Folders sort by label: Alpha, Beta, Charlie, Delta.
-    expect(navigationAfterDrop(songs, before)).toEqual({ folderPath: [], selectedIndex: 2 });
+    expect(navigationAfterDrop(songs, before)).toEqual({ folderPath: [], cursors: [2] });
   });
 
   test('leaves the screen alone when the drop added no songs', () => {
@@ -28,7 +28,7 @@ describe('navigationAfterDrop', () => {
   test('opens the folder of a first drop into an empty library', () => {
     expect(navigationAfterDrop([song('c', 'Pack/Song')], new Set())).toEqual({
       folderPath: ['Pack'],
-      selectedIndex: 0,
+      cursors: [0, 0],
     });
   });
 });

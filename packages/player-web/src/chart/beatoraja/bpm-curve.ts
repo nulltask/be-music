@@ -6,7 +6,7 @@
 // `y = 1` collapsed to a flat line when the song is constant-BPM).
 //
 // The transform here is purely chart-data-driven — no engine state, no playhead. Result is cached
-// once per chart by the caller (`scene/beatoraja/gameplay.ts`) and handed to the view via the
+// once per chart by the caller (`view/beatoraja/play-view.ts`) and handed to the skin view via the
 // `resolveBpmGraphPoints` resolver. Without this resolver the bpmgraph hides itself.
 
 import type { BeMusicJson } from '@be-music/json';

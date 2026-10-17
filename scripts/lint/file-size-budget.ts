@@ -19,21 +19,10 @@ export const FILE_SIZE_BUDGET_LINES = 1500;
  * TODO: split each of these into cohesive modules and drop it from the list (see docs/architecture.md).
  */
 export const FILE_SIZE_BUDGET_ALLOWLIST: readonly string[] = [
-  'packages/chart/src/index.ts',
-  'packages/lr2-skin/src/skin.ts',
-  'packages/parser/src/core/parser.ts',
   'packages/player-tui/src/bga.ts',
   'packages/player-tui/src/cli/runner.ts',
   'packages/player-tui/src/tui/tui.ts',
   'packages/player-web-demo/src/main.ts',
-  'packages/player-web/src/scene/beatoraja/select.ts',
-  'packages/player-web/src/scene/beatoraja/skin-view.ts',
-  'packages/player-web/src/scene/core/gameplay.ts',
-  'packages/player-web/src/scene/core/select.ts',
-  'packages/player-web/src/scene/lr2/gameplay.ts',
-  'packages/player-web/src/scene/lr2/select.ts',
-  'packages/player-web/src/skin/beatoraja/runtime-adapter.ts',
-  'packages/stringifier/src/index.ts',
 ];
 
 export interface SourceFileSize {

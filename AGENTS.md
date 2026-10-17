@@ -75,7 +75,8 @@
 
 # Layering and File-Size Rules
 
-- `@be-music/chart`, `@be-music/json`, `@be-music/parser` and `@be-music/player`'s `core/`, `playlog/` and `ruleset/` must stay runtime-neutral: no Node built-in imports and no DOM / Node-only globals. Put runtime-specific code behind an adapter (`PlayerOptions.createAudioSession` and friends, `packages/parser/src/node-file.ts`). `pnpm run check` enforces this through the Oxlint overrides in `vite.config.ts`.
+- `@be-music/chart`, `@be-music/json`, `@be-music/parser`, `@be-music/scene-model` and `@be-music/player`'s `core/`, `course/`, `playlog/`, `records/` and `ruleset/` must stay runtime-neutral: no Node built-in imports and no DOM / Node-only globals. Put runtime-specific code behind an adapter (`PlayerOptions.createAudioSession` and friends, `packages/parser/src/node-file.ts`). `pnpm run check` enforces this through the Oxlint overrides in `vite.config.ts`.
 - The judge core (`packages/player/src/core/judge-*.ts`, `auto-judge-core.ts`), `ruleset/` and `playlog/simulate.ts` must stay deterministic: take time and randomness as inputs, never read `Date` / `performance`, set timers or call `Math.random`.
 - Keep package source files at or under 1,500 lines. `pnpm run check` runs `scripts/lint/file-size-budget.ts` (also `pnpm run check:file-size`): a new file over the budget fails, files already over it are allowlisted there as a TODO and only warn, and a file you bring under the budget must be removed from the allowlist in the same change.
 - See `docs/architecture.md` for the engine's judge-core / driver split and the reasons behind these rules.
+- New and moved code follows the target architecture in `docs/architecture.md` ("Target architecture") and the decisions in `docs/adr/`. Record a new decision there when it is hard to reverse, surprising without context, and the result of a real trade-off.

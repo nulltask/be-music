@@ -5,6 +5,7 @@
   },
   "include": [
     "src/**/*.ts",
+    "e2e/**/*.ts",
     "../lr2-skin/src/**/*.ts",
     "../player-web/src/**/*.ts",
     "../beatoraja-skin/src/**/*.ts",

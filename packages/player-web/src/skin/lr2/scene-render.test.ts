@@ -38,6 +38,12 @@ describe('isDestinationVisible', () => {
     expect(isDestinationVisible(gated, new Set(), () => true)).toBe(false);
     expect(isDestinationVisible(gated, new Set([41, 55]), () => true)).toBe(false);
   });
+
+  test('reads op 999 as a custom option like 900-998: lit only when the skin’s option picks it', () => {
+    expect(isDestinationVisible(destination({ ops: [999] }), new Set([999]), () => true)).toBe(true);
+    expect(isDestinationVisible(destination({ ops: [999] }), new Set([900]), () => true)).toBe(false);
+    expect(isDestinationVisible(destination({ ops: [-999] }), new Set([999]), () => true)).toBe(false);
+  });
 });
 
 describe('clampFontSize', () => {

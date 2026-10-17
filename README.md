@@ -14,6 +14,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
 - `@be-music/player`: Shared playback engine, timing, judgment, scoring, gauge, BGA timeline, and UI/audio adapter contracts
 - `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-playlog` play-log re-simulator
+- `@be-music/scene-model`: Runtime-neutral scene models — library entries, browsing, play options, play state and results, course views, system sounds — shared by every skin family
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
 - `@be-music/skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
@@ -41,7 +42,7 @@ pnpm run check
 pnpm run test
 ```
 
-The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files.
+The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files. `pnpm run test:e2e` plays the course browser checklist in the web demo end to end with Playwright (a few minutes, so `pnpm run test` leaves it out); see [docs/course-checklist.md](docs/course-checklist.md#automated-run).
 
 ## Package Releases
 
@@ -71,6 +72,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [Terminal player implementation notes](./docs/player-tui.md)
 - [Browser player implementation notes](./docs/player-web.md)
 - [Play log (play history) specification](./docs/playlog.md)
+- [Courses and dan certification](./docs/course.md)
 - [Writing a be-music skin](./docs/be-music-skin.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [beatoraja skin implementation notes](./docs/beatoraja-skin.md)
@@ -114,7 +116,8 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - UI and input signal buses for lane flashes, POOR BGA commands, frame snapshots, pause, restart, and high-speed changes
 - Shared note extraction for playable notes, legacy long notes, `#LNOBJ`, FREE ZONE, mines, and invisible notes
 - Shared judgment windows, dynamic `#EXRANKxx` changes, score, groove gauge, scroll-distance, BGA timelines, and result summaries
-- Browser-safe subpath exports for reusable helpers such as `core/engine`, `core/bga-timeline`, `core/scroll-distance`, `core/groove-gauge`, `playable-notes`, and `playlog`
+- Browser-safe subpath exports for reusable helpers such as `core/engine`, `core/bga-timeline`, `core/scroll-distance`, `playable-notes`, `playlog`, `records`, and `ruleset`
+- `ruleset`: the vocabulary hosts, skins and the Leaderboard share: gauges, clear lamps, BP and the score (`ScoreSummary`, `computeScoreRate`, the DJ Ranks, LR2's money score). `core/scoring` is a deprecated alias of the score part
 
 ### terminal player (`@be-music/player-tui`)
 

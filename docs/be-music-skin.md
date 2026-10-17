@@ -278,7 +278,8 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
   - `folderLabel`, `searchQuery`, `totalCharts`
   - `actions`: `play`, `autoPlay`, `activateSearch`, `setPlayOption(key, value)`, `cyclePlayOption(key, step?)` (step 1 or -1, wrapping), and `toggleReadme()` (opens or closes the focused song's `.txt`)
   - `playOptions` (`BeMusicPlayOptions`: hi-speed, random, gauge, HIDDEN / SUDDEN, lane cover, BGA, list filters, …) and `playOptionChoices`, the values each enum or on / off option can take. Values outside the choices are ignored; `hiSpeed` and `shutter` take any number and are clamped to their range, and `cyclePlayOption` leaves them alone.
-  - `songRecord(song)`: the player's best record on a chart (`BeMusicSongRecord`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`), or `undefined` when the host keeps none. `lamp` is a `BeMusicClearLamp`, worst first: `NO_PLAY`, `FAILED`, `ASSIST_EASY`, `EASY`, `NORMAL`, `HARD`, `EX_HARD`, `FULL_COMBO`, `PERFECT`, `MAX`
+  - `songRecord(song)`: the player's best record on a chart under the judge ruleset the host plays on (`BeMusicSongRecord`, the `BestRecord` of `@be-music/player/records`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`), or `undefined` when the host keeps none. `lamp` is a `BeMusicClearLamp` (the `ClearLamp` of `@be-music/player/ruleset`), worst first: `NO_PLAY`, `FAILED`, `ASSIST_EASY`, `EASY`, `NORMAL`, `HARD`, `EX_HARD`, `FULL_COMBO`, `PERFECT`, `MAX`
+  - `courseRecord?(course)`: the player's best record on a course bar (`BeMusicCourseRecord`: a `BeMusicSongRecord` plus `trophy?`, the best trophy the bests earn), or `undefined` for a course never played, a random course or a NEW COURSE bar. Hosts that predate it leave it out. `describeCourseCard(course, record)` adds the best lamp and trophy to a course card's detail line
   - `pointer`: the pointer in design pixels, or `undefined`
   - `settings` and `songImage`: see [Skin settings](#skin-settings) and [Song images](#song-images)
   - `revision`, which increases whenever the select state changes (cursor, folder, search, list contents, play options, the readme opening or closing). A retained scene graph can be rebuilt only when it moves.
@@ -290,13 +291,13 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 
 `result.draw(surface, frame)` receives a `BeMusicResultFrame`:
 
-- `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the play log. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, and `judgeTimings` (every timed judgement of the play).
+- `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the play log. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, `judgeTimings` (every timed judgement of the play), and `courseResult` (the result of a whole EXPERT / GRADE course: the stages summed).
 - `rankLabel` (IIDX DJ level) and `ratePercent`.
 - `elapsedMs` since the scene mounted, or `Infinity` once the player skipped the entrance.
 - `nowMs` and `effects`.
 - `settings` and `songImage`: see [Skin settings](#skin-settings) and [Song images](#song-images).
 
-`resolveResultLamp` and `resolveResultTrackRows` give the clear lamp and track rows the built-in skins show. `binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
+`resolveResultVerdict` (`STAGE CLEAR` / `FAILED`, or `COURSE CLEAR` / `COURSE FAILED` for a course result), `resolveResultLamp` and `resolveResultTrackRows` give the headline, clear lamp (the one clear-lamp rule, on beatoraja's lamps) and track rows the built-in skins show. `binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
 
 ### Decide
 
@@ -360,7 +361,7 @@ settings: [
 | Moments       | `trackMoments` / `createMomentState` + `updateMoments` (every 100 combo, clear line, full combo, combo break; for the count-in, check whether `runtime.chartMs` is negative), `COMBO_MILESTONE`, `COMBO_BREAK_MIN`, `comboTier`, `momentProgress`, `impulse`, `punchScale`, `effectProfile`                                                                                  |
 | Loading       | `LOADING_WORD`, `loadingDots(nowMs)`, `LOADING_DOT_MS`                                                                                                                                                                                                                                                                                                                       |
 | Sound         | `audioDrive`, `bandAt`, `bandLevel`, `AUDIO_BAND_COUNT`, `SILENT_AUDIO`; see [Reacting to the music](#reacting-to-the-music)                                                                                                                                                                                                                                                 |
-| Result        | `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                                                                                                                                                                                                                                |
+| Result        | `resolveResultVerdict`, `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                                                                                                                                                                                                        |
 | Timing        | `binJudgeTimings`; see [Judgement timing](#judgement-timing)                                                                                                                                                                                                                                                                                                                 |
 | Settings      | `resolveBeMusicSkinSettings`, `validateBeMusicSkinSettings`; see [Skin settings](#skin-settings)                                                                                                                                                                                                                                                                             |
 | Song facts    | `resolveSongRowFacts`, `resolveSongStats`, `resolveSongTags`, `formatSongLength`, `formatBpmRange`, `formatPlayVariantLabel`                                                                                                                                                                                                                                                 |
@@ -490,14 +491,14 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 - **Hosts:** a host registers skins in a registry:
 
   ```ts
-  import { BUILT_IN_BE_MUSIC_SKINS, DefaultPixiGameplayView } from '@be-music/player-web/scenes';
+  import { BUILT_IN_BE_MUSIC_SKINS, createPlayScene } from '@be-music/player-web/scenes';
   import { createBeMusicSkinRegistry } from '@be-music/player-web/skin';
   import mySkin from 'my-be-music-skin';
 
   const skins = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
   const problems = skins.add(mySkin); // [] when added; otherwise why it was refused
   const skin = skins.resolve('my-skin'); // falls back to the first skin for unknown ids
-  // Pass it to the default-family views: new DefaultPixiGameplayView({ …, beMusicSkin: skin })
+  // Pass it to the built-in scenes in their kit: createPlayScene({ family: 'built-in', skin }, { … })
   ```
 
   - `add` validates the skin. A skin with an id that is already registered replaces the old one, which is handy while developing.

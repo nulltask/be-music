@@ -9,6 +9,8 @@ import {
   pickActiveBgaCue,
   pickActiveBgaKey,
   resolveBgaImageRect,
+  resolveNonstopBgaAlpha,
+  splitNonstopBgaTimeline,
   toBrowserBgaTimeline,
 } from './gameplay-bga.ts';
 
@@ -220,5 +222,59 @@ describe('resolveBgaImageRect', () => {
 
   it('falls back to the rect for an empty image', () => {
     expect(resolveBgaImageRect(0, 0, rect)).toEqual(rect);
+  });
+});
+
+describe('NONSTOP BGA', () => {
+  const stages = [
+    { windowStart: 0, windowEnd: 20, bmpKeys: ['01', '02'], bgaFadeOut: { start: 20, end: 23 } },
+    { windowStart: 20, windowEnd: Number.POSITIVE_INFINITY, bmpKeys: ['03'], bgaFadeIn: { start: 17, end: 20 } },
+  ];
+
+  it('splits the base, layer and POOR cues by the stage that owns each BMP key', () => {
+    const split = splitNonstopBgaTimeline(
+      {
+        base: [
+          { seconds: 1, bmpKey: '01' },
+          { seconds: 18, bmpKey: '03' },
+          { seconds: 19, bmpKey: '02' },
+        ],
+        layer: [
+          { seconds: 2, bmpKey: '02' },
+          { seconds: 25, bmpKey: undefined },
+        ],
+        poor: [
+          { seconds: 0, bmpKey: '01' },
+          { seconds: 17, bmpKey: '03' },
+          { seconds: 21, bmpKey: undefined },
+        ],
+      },
+      stages,
+    );
+    expect(split[0]).toEqual({
+      base: [
+        { seconds: 1, bmpKey: '01' },
+        { seconds: 19, bmpKey: '02' },
+      ],
+      layer: [{ seconds: 2, bmpKey: '02' }],
+      poor: [{ seconds: 0, bmpKey: '01' }],
+    });
+    expect(split[1]).toEqual({
+      base: [{ seconds: 18, bmpKey: '03' }],
+      layer: [{ seconds: 25, bmpKey: undefined }],
+      poor: [
+        { seconds: 17, bmpKey: '03' },
+        { seconds: 21, bmpKey: undefined },
+      ],
+    });
+  });
+
+  it('crossfades the stages over 3 s around the boundary', () => {
+    expect(resolveNonstopBgaAlpha(stages[0]!, 10)).toBe(1);
+    expect(resolveNonstopBgaAlpha(stages[0]!, 21.5)).toBeCloseTo(0.5);
+    expect(resolveNonstopBgaAlpha(stages[0]!, 24)).toBe(0);
+    expect(resolveNonstopBgaAlpha(stages[1]!, 16)).toBe(0);
+    expect(resolveNonstopBgaAlpha(stages[1]!, 18.5)).toBeCloseTo(0.5);
+    expect(resolveNonstopBgaAlpha(stages[1]!, 30)).toBe(1);
   });
 });

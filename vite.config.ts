@@ -9,6 +9,7 @@ const workspacePackages = [
   'stringifier',
   'audio-renderer',
   'player',
+  'scene-model',
   'player-tui',
   'lr2-skin',
   'beatoraja-skin',
@@ -18,26 +19,34 @@ const workspacePackages = [
 ] as const;
 
 /**
- * Layering (docs/architecture.md): the chart model, the IR, the parser and the engine's core / play-log / ruleset
- * code run unchanged in the browser and in Node, so they import no Node built-in and read no DOM or Node-only global.
- * Runtime services reach them through adapters (`PlayerOptions.createAudioSession`, `createUiRuntime`, the parser's
- * `node-file.ts`) instead.
+ * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code,
+ * the scene models and the LR2 and beatoraja state resolvers run unchanged in the browser and in Node, so they import no
+ * Node built-in and read no DOM or Node-only global. Runtime services reach them through adapters
+ * (`PlayerOptions.createAudioSession`, `createUiRuntime`, the parser's `node-file.ts`) instead.
  */
 const runtimeNeutralSources = [
+  'packages/beatoraja-skin/src/scene/**/*.ts',
   'packages/chart/src/**/*.ts',
   'packages/json/src/**/*.ts',
+  'packages/lr2-skin/src/state/**/*.ts',
   'packages/parser/src/**/*.ts',
   'packages/player/src/core/**/*.ts',
+  'packages/player/src/course/**/*.ts',
   'packages/player/src/playlog/**/*.ts',
+  'packages/player/src/records/**/*.ts',
   'packages/player/src/ruleset/**/*.ts',
+  'packages/scene-model/src/**/*.ts',
 ];
 /** Node / CLI entry points inside those trees: the runtime adapters the rule above points to. */
 const runtimeAdapterSources = ['packages/parser/src/cli.ts', 'packages/parser/src/node-file.ts'];
 /**
  * The deterministic judge (`judge-core*.ts`, `auto-judge-core.ts`, the ruleset rules and the play-log simulator): the
- * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number.
+ * same inputs must give the same judgments, so these files read no clock, set no timer and draw no random number. The
+ * LR2 and beatoraja state resolvers are held to the same rule: a scene's time comes in as an input.
  */
 const deterministicJudgeSources = [
+  'packages/beatoraja-skin/src/scene/**/*.ts',
+  'packages/lr2-skin/src/state/**/*.ts',
   'packages/player/src/core/judge-*.ts',
   'packages/player/src/core/auto-judge-core.ts',
   'packages/player/src/ruleset/**/*.ts',
@@ -65,7 +74,35 @@ const runtimeGlobals = [
   '__filename',
 ].map((name) => ({ name, message: 'Runtime-neutral code must not read DOM or Node globals; use a runtime adapter.' }));
 const clockGlobals = ['Date', 'performance', 'setTimeout', 'setInterval', 'setImmediate', 'queueMicrotask'].map(
-  (name) => ({ name, message: 'The judge core is deterministic: take time as an input instead of reading a clock.' }),
+  (name) => ({ name, message: 'Deterministic code takes time as an input instead of reading a clock.' }),
+);
+
+/**
+ * The web runtime's scene sessions and family views (docs/player-web.md, "Scene sessions and family views"; ADR 0001).
+ * A session holds a screen's behaviour and is tested in Node with a fake view, so it uses Pixi only for types: the
+ * view owns everything drawn. A view only draws frames and returns intents, so it reaches neither the engine nor its
+ * web runtimes, and plays no sound of its own.
+ */
+const sceneSessionSources = ['packages/player-web/src/session/**/*.ts'];
+const familyViewSources = ['packages/player-web/src/view/**/*.ts'];
+const sceneSessionPixiMessage = 'A scene session uses Pixi only for types; the family view draws.';
+const sceneSessionImports = {
+  paths: [{ name: 'pixi.js', allowTypeImports: true, message: sceneSessionPixiMessage }],
+  patterns: [{ group: ['pixi.js/*', '@pixi/*'], allowTypeImports: true, message: sceneSessionPixiMessage }],
+};
+const familyViewEngineMessage = 'A family view draws frames and returns intents; the scene session drives the engine.';
+const familyViewImports = {
+  paths: [{ name: '@be-music/player/core/engine', message: familyViewEngineMessage }],
+  patterns: [{ group: ['**/runtime/engine-driver*', '**/runtime/web-*-runtime*'], message: familyViewEngineMessage }],
+};
+const familyViewAudioMessage =
+  'A family view plays no sound itself; the scene session plays it through the audio service.';
+const familyViewGlobals = ['AudioContext', 'OfflineAudioContext'].map((name) => ({
+  name,
+  message: familyViewAudioMessage,
+}));
+const familyViewProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
+  ['AudioContext', 'OfflineAudioContext'].map((property) => ({ object, property, message: familyViewAudioMessage })),
 );
 
 const workspaceProjects = workspacePackages.map((name) => ({
@@ -127,7 +164,12 @@ export default defineConfig({
         extends: true as const,
         test: {
           name: 'benchmark-scripts',
-          include: ['scripts/bench/**/*.test.ts', 'scripts/lint/**/*.test.ts', 'scripts/release/**/*.test.ts'],
+          include: [
+            'scripts/bench/**/*.test.ts',
+            'scripts/course-checklist/**/*.test.ts',
+            'scripts/lint/**/*.test.ts',
+            'scripts/release/**/*.test.ts',
+          ],
         },
       },
     ],
@@ -228,6 +270,8 @@ export default defineConfig({
       'packages/*/src/__fixtures__/**',
       // Regression snapshots are compared byte-for-byte by `toMatchFileSnapshot`; reformatting them would fail the suite.
       'tests/regression/__expected__/**',
+      // So are the engine characterization snapshots.
+      'packages/player/src/core/characterization/__expected__/**',
       // Generated by Changesets on every release; reformatting them would churn each version bump.
       '**/CHANGELOG.md',
       // Generated by the Leaderboard's `build:css`; it is rewritten whole on every rebuild.
@@ -294,9 +338,23 @@ export default defineConfig({
             {
               object: 'Math',
               property: 'random',
-              message: 'The judge core is deterministic: take randomness as an input.',
+              message: 'Deterministic code takes randomness as an input.',
             },
           ],
+        },
+      },
+      {
+        files: sceneSessionSources,
+        rules: {
+          'no-restricted-imports': ['error', sceneSessionImports],
+        },
+      },
+      {
+        files: familyViewSources,
+        rules: {
+          'no-restricted-imports': ['error', familyViewImports],
+          'no-restricted-globals': ['error', ...familyViewGlobals],
+          'no-restricted-properties': ['error', ...familyViewProperties],
         },
       },
       {

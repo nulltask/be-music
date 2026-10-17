@@ -9,7 +9,7 @@ import {
 } from './pixi-utils.ts';
 
 /**
- * The hot render loops in `scene/lr2/gameplay.ts` / `scene/lr2/result.ts` / `scene/lr2/select.ts` originally cleared their dynamic
+ * The hot render loops in `view/lr2/play-elements.ts` / `view/lr2/result-view.ts` / `scene/lr2/select.ts` originally cleared their dynamic
  * layers with a bare `container.removeChildren()`, which only detaches children from the display tree — Pixi v8's
  * renderer-side state for each orphaned `Graphics` (its owned `GraphicsContext`) and `Text` (its glyph atlas slot)
  * survives the detach. After a few minutes of play that accumulated state freezes the page on the first scene

@@ -1,0 +1,868 @@
+// Note rendering layer for a beatoraja play skin.
+//
+// Drives a per-channel sprite stack from the engine's `frame.notes[]`. The skin's `note` block holds
+// per-lane image IDs (`note[]`, `lnstart[]`, `lnbody[]`, `lnend[]`, `mine[]`) — each is an
+// `image[].id` that points at a source-bitmap rect — and per-lane geometry (`note.dst[]`). The
+// renderer:
+//
+//   1. Resolves the active lane geometry against the runtime op set (`resolveBeatorajaNoteDstBlockIndex`).
+//   2. For each in-flight engine note, picks the matching per-lane image id, looks up the image[]
+//      entry, crops the source texture to the image's `(x, y, w, h)`, and paints it as a Pixi sprite.
+//   3. Long notes (with `endBeat`) compose three sprites — start cap, tiled body, end cap — using
+//      the `lnstart[]` / `lnbody[]` / `lnend[]` ids respectively.
+//   4. Falls back to a colored Graphics rectangle when an image id can't be resolved (skin omitted
+//      the per-lane sprite, image[] entry missing, or texture decode failed). Keeps something visible
+//      so a partial-asset theme still plays — better than silent blanks.
+
+import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js';
+import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
+import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
+import type {
+  BeatorajaImageElement,
+  BeatorajaImageId,
+  BeatorajaNoteRect,
+  BeatorajaNoteSection,
+} from '@be-music/beatoraja-skin';
+import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../../skin/beatoraja/render.ts';
+import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
+import type { TempoReversalPoint } from '@be-music/chart';
+import {
+  advanceDrawCursor,
+  GoneDrawObjects,
+  isDrawnAtTime,
+  isDrawnUntilJudged,
+  isPastDrawWindow,
+  resolveDrawBottom,
+  resolveDrawY,
+} from '../../../scene/core/note-draw-window.ts';
+import { resolveBeatorajaNoteDstBlockIndex } from './note-dst-block.ts';
+import { resolveBeatorajaScrollPlacement } from './scroll-placement.ts';
+import type { NoteDrawWindow } from '../../../scene/core/note-draw-window.ts';
+
+/** How far above a lane's top a note still draws: the lead-in band notes scroll in through. */
+const TAP_LEAD_IN_PX = 24;
+
+/**
+ * The last beat the note walk needs under LR2's drawing rules: LR2's window ends at the lane top, but a note still
+ * draws in the {@link TAP_LEAD_IN_PX} band above it, so the walk stops one pixel past that band — every later note is
+ * above it too. `Infinity` (no stop) under beatoraja's rules, which stop at their own window, or with no scroll speed.
+ */
+export function lr2LastWalkedBeat(window: Pick<NoteDrawWindow, 'rules' | 'lastBeat'>, pixelsPerBeat: number): number {
+  if (window.rules !== 'lr2' || !(pixelsPerBeat > 0)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return window.lastBeat + (TAP_LEAD_IN_PX + 1) / pixelsPerBeat;
+}
+
+/**
+ * Beats per standard 4/4 measure. Mirrors `getMeasureBeats(1.0) === 4` from
+ * `@be-music/chart`'s beat resolver, which the engine uses to convert a measure into the
+ * per-beat scroll math below. We pin the constant here (rather than importing the chart
+ * helper) because the lane renderer doesn't otherwise need to know about chart structure;
+ * the value is fixed by BMS spec.
+ */
+const BEATS_PER_STANDARD_MEASURE = 4;
+
+/**
+ * The beatoraja skin lane (index into the play skin's `note[]` / `lane[]` tables) a note on `channel` draws in, or
+ * `undefined` for a channel the variant has no lane for. IIDX: keys `0..N-1`, then the scratch, per side; POPN-9: the
+ * nine buttons. The keyboard modes have no scratch: each side is 26 lanes, the 24 keys (`0..23`) then the wheel up /
+ * down (`1P` / `1Q` → `24` / `25`), with the 2P side from `26` (its wheel on `50` / `51`) — the skin lanes beatoraja's
+ * `play24` / `play24d` skins author.
+ */
+export function resolveBeatorajaNoteLane(channel: string, variant: ChartPlayVariant): number | undefined {
+  const slot = resolveSideKeySlot(channel, variant);
+  if (slot < 0) return undefined;
+  if (variant === '24' || variant === '48') {
+    const baseLane = slot - 1;
+    const isPlayer2 = variant === '48' && channel.startsWith('2');
+    return isPlayer2 ? KEYBOARD_SKIN_SIDE_LANES + baseLane : baseLane;
+  }
+  if (variant === '9') return slot - 1;
+  const numKeys = variant === '5' || variant === '10' ? 5 : 7;
+  const baseLane = slot === 0 ? numKeys : slot - 1;
+  if (variant === '10' || variant === '14') {
+    const isPlayer2 = channel.startsWith('2');
+    const sideLanes = numKeys + 1;
+    return isPlayer2 ? sideLanes + baseLane : baseLane;
+  }
+  return baseLane;
+}
+
+/**
+ * Compute the per-beat scroll distance in skin-pixel space. Mirrors upstream
+ * `LaneRenderer.java:271-276`'s `rxhs = (hu - hl) * hispeed`:
+ *
+ *   - `(hu - hl)` is the lane's authored height (skin coords, libGDX Y-UP — equivalent to
+ *     the Pixi-flipped `laneBottomY - laneTopY` we pass in here).
+ *   - `rxhs` is the y-delta per UNIT MEASURE; one measure (= 4 beats) of music traverses
+ *     exactly one lane height when `hispeed === 1`.
+ *
+ * Re-derived per beat: `pixelsPerBeat = laneHeight / 4 * hispeed`. ModernChic authors a
+ * 841-px lane → 1 beat = 210 px at hispeed 1, matching upstream beatoraja's "4 beats
+ * visible on the lane" baseline. The previous fixed-72 constant scrolled ~2.9× slower
+ * than upstream on the same skin (and also slower than the LR2 path on tighter authored
+ * lanes), which the user reported as the beatoraja note scroll falling visibly slower
+ * than the LR2 path at the same hispeed.
+ *
+ * `laneHeight <= 0` falls back to `0` (no scroll), matching the upstream `nscroll > 0`
+ * guard. Callers are expected to pass `Math.max(0, judgementY - laneTopY)`; defensive
+ * `<= 0` handling here is just to keep the renderer from dividing by garbage if the
+ * caller forgets.
+ */
+export function beatorajaPixelsPerBeat(laneHeight: number, hispeed: number): number {
+  if (!Number.isFinite(laneHeight) || laneHeight <= 0) return 0;
+  if (!Number.isFinite(hispeed) || hispeed <= 0) return 0;
+  return (laneHeight / BEATS_PER_STANDARD_MEASURE) * hispeed;
+}
+
+/**
+ * Beat the display layers scroll from. Past an LR2 negative-BPM reversal (issue #134) the engine publishes a
+ * mirrored `displayBeat` — the chart visually scrolls backwards at |BPM| — while `currentBeat` stays on the
+ * true clock for judging / audio. Display consumers (note layer, marker layer) fall back to `currentBeat`
+ * when no reversal is armed.
+ */
+export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUiFramePayload, 'currentBeat' | 'displayBeat'>): number {
+  return frame.displayBeat ?? frame.currentBeat;
+}
+
+/**
+ * Where the notes scroll from on a frame: the engine frame's notes, chart time and beat (with the mirrored display beat
+ * past an LR2 negative-BPM reversal).
+ */
+export interface BeatorajaNoteClock {
+  readonly notes: readonly PlayerUiFrameNote[];
+  readonly currentSeconds: number;
+  readonly currentBeat: number;
+  readonly displayBeat?: number;
+}
+
+/** Fallback palette when the skin omits a per-lane sprite or texture decode fails. */
+const FALLBACK_COLOR_BY_KEY: Record<string, number> = {
+  white: 0xf5f5f5,
+  blue: 0x4ea8ff,
+  red: 0xff5050,
+};
+const SEVEN_KEY_PALETTE = ['red', 'white', 'blue', 'white', 'blue', 'white', 'blue', 'white'] as const;
+const POP_KEY_PALETTE = ['white', 'yellow', 'green', 'blue', 'red', 'blue', 'green', 'yellow', 'white'] as const;
+/**
+ * 24-key fallback tint, one chromatic octave wide. The Keyboardmania bank is a piano keyboard, so the pattern follows
+ * white / black keys (C C# D D# E F F# G G# A A# B) and repeats every 12 lanes.
+ */
+const KEYBOARD_KEY_PALETTE = [
+  'white',
+  'blue',
+  'white',
+  'blue',
+  'white',
+  'white',
+  'blue',
+  'white',
+  'blue',
+  'white',
+  'blue',
+  'white',
+] as const;
+/**
+ * Lane slots one side occupies in a `play24` / `play24d` skin's `note[]` table: 24 key columns, then the wheel up /
+ * down pair (`note-su` / `note-sd`, skin lanes 24 / 25 — 50 / 51 on the 2P side). The engine's `1P` / `1Q` (`2P` /
+ * `2Q`) wheel lanes resolve to slots 25 / 26, so they land on that pair, and the 2P bank starts after it.
+ */
+const KEYBOARD_SKIN_SIDE_LANES = 26;
+/** Key columns per side in a `play24` skin; the side's remaining lanes are the wheel. */
+const KEYBOARD_SKIN_SIDE_KEYS = 24;
+const PALETTE_COLOR: Record<string, number> = {
+  white: FALLBACK_COLOR_BY_KEY.white!,
+  blue: FALLBACK_COLOR_BY_KEY.blue!,
+  red: FALLBACK_COLOR_BY_KEY.red!,
+  yellow: 0xf2cf3a,
+  green: 0x59c863,
+};
+
+export interface BeatorajaNoteLayerOptions {
+  noteSection: BeatorajaNoteSection;
+  variant: ChartPlayVariant;
+  /**
+   * `image[]` map keyed by id (string OR number). The renderer resolves per-lane image ids
+   * (`note-w`, `lns-b`, etc.) through this to find the source rect to crop. Pass an empty Map to
+   * disable sprite rendering and force the fallback rectangle path.
+   */
+  images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>;
+  /** Texture cache the resolved image entries crop against. */
+  textures: BeatorajaTextureCache;
+  /**
+   * Skin canvas height in skin-pixel units. Used to flip the note section's libGDX Y-UP lane
+   * rects (origin at canvas bottom-left) into Pixi Y-DOWN screen rects, so the rest of the
+   * layer can treat lane rects as ordinary screen-space rectangles.
+   */
+  canvasHeight: number;
+  /** Optional override for the judgement-line Y. Defaults to the active lane rect's bottom edge. */
+  judgementY?: number;
+  /**
+   * The chart's `#SCROLL` / `#SPEED` distance integrator (`createBeatorajaScrollMapper`). When set, notes sit at their
+   * scrolled distance and draw by beatoraja's `LaneRenderer` window, as in the core gameplay view; when omitted they
+   * sit at their beat distance.
+   */
+  scrollMapper?: ScrollDistanceMapperLike;
+  /** Beats of the chart's lane timelines (`createBeatorajaLaneTimelines`), used with `scrollMapper`. */
+  timelineBeats?: ArrayLike<number>;
+  /** True when autoplay plays every lane: under LR2's rules a note then goes once its beat has passed, judged or not. */
+  autoplay?: boolean;
+  /** The chart's LR2 negative-BPM reversal, if any: past it the lane scrolls back without redrawing what went. */
+  reversal?: TempoReversalPoint;
+}
+
+interface CroppedSprite {
+  sprite: Sprite;
+  /** Width of the cell, used to scale the sprite to the lane width while preserving aspect ratio. */
+  cellW: number;
+  cellH: number;
+}
+
+export class BeatorajaNoteLayer {
+  readonly container: Container = new Container();
+  /**
+   * Two-tier layering so LN bodies always sit BEHIND head/tail caps and tap notes,
+   * regardless of pool-reuse order across frames.
+   *
+   * `paintLongNote` acquires three sprites in sequence (body → start cap → end cap) and
+   * the previous implementation added them all to a single root container, relying on
+   * Pixi's `addChild` order to determine Z. That order, however, is captured the FIRST
+   * time a slot is allocated and persists through reuse — so a frame that mounts a
+   * tap-note via `acquireSprite(0)` before any LN exists captures `spritePool[0]` at
+   * Z position 0. A later frame that drops the tap-note and uses pool index 0 for an LN
+   * START CAP draws the head behind every subsequently-mounted body sprite (which were
+   * added LATER and thus sit on top). User-reported symptom: the LN head sprite
+   * appeared BEHIND the body instead of in front of it.
+   *
+   * Splitting bodies and caps into their own containers fixes the Z order at the
+   * CONTAINER level, which doesn't depend on pool slot ordering. The body container
+   * is added first (= back); caps + tap-notes are added second (= front). Inside each
+   * tier the addChild order between pool slots still doesn't matter — every LN body
+   * draws behind every cap/tap regardless of which pool index landed where.
+   */
+  private readonly bodyLayer = new Container();
+  private readonly noteLayer = new Container();
+  private readonly noteSection: BeatorajaNoteSection;
+  private readonly variant: ChartPlayVariant;
+  private readonly images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>;
+  private readonly textures: BeatorajaTextureCache;
+  private readonly canvasHeight: number;
+  private readonly judgementYOverride?: number;
+  private readonly scrollMapper?: ScrollDistanceMapperLike;
+  private readonly timelineBeats?: ArrayLike<number>;
+  private readonly autoplay: boolean;
+  private readonly reversal?: TempoReversalPoint;
+  /** Notes gone under LR2's rules, so the mirrored scroll past a negative-BPM reversal does not redraw them. */
+  private readonly goneDrawObjects = new GoneDrawObjects();
+  /**
+   * LR2's `draw_count` for the frame's notes under LR2's drawing rules ({@link advanceDrawCursor}), kept between frames
+   * so a frame starts past the notes already gone. Rebuilt when the note array changes or the playhead moves back.
+   */
+  private drawCursor: { notes: readonly PlayerUiFrameNote[]; seconds: number; index: number } | undefined;
+  /** Pool of generic Graphics nodes for the fallback path. Reused across frames. */
+  private readonly graphicsPool: Graphics[] = [];
+  /** Pool of skin-sprite nodes (tap notes / mines / LN caps). One sprite per slot — texture swapped per use. */
+  private readonly spritePool: Sprite[] = [];
+  /** Pool of LN body tiling sprites. Separate because TilingSprite has its own size / position semantics. */
+  private readonly tilingPool: TilingSprite[] = [];
+  /** `note.dst[]` block `cachedRects` was flipped from (`-1` = none matched); `undefined` until the first resolve. */
+  private cachedBlockIndex: number | undefined;
+  private cachedRects: ReadonlyArray<BeatorajaNoteRect> = [];
+  /**
+   * Per-`(imageId)` cropped texture cache, populated lazily on first access. Each entry persists for
+   * the lifetime of the layer; same-skin notes always share the same cropped sub-texture.
+   */
+  private readonly croppedTextureCache = new Map<BeatorajaImageId, CroppedSprite | undefined>();
+  private firstFrameLogged = false;
+
+  constructor(options: BeatorajaNoteLayerOptions) {
+    this.noteSection = options.noteSection;
+    this.variant = options.variant;
+    this.images = options.images;
+    this.textures = options.textures;
+    this.canvasHeight = options.canvasHeight;
+    this.judgementYOverride = options.judgementY;
+    this.scrollMapper = options.scrollMapper;
+    this.timelineBeats = options.timelineBeats;
+    this.autoplay = options.autoplay === true;
+    this.reversal = options.reversal;
+    // bodyLayer first (= back), noteLayer second (= front). See field doc for rationale.
+    this.container.addChild(this.bodyLayer);
+    this.container.addChild(this.noteLayer);
+  }
+
+  update(
+    frame: BeatorajaNoteClock,
+    hiSpeed: number,
+    activeOps: ReadonlySet<number>,
+    /**
+     * Live "is the player currently holding the LN on this lane?" lookup. Returns the runtime
+     * adapter's `isLaneLnHeld(channel)` so the LN body sprite can flip between the held /
+     * unheld variants beatoraja's modern-mode skins author. When omitted the layer always
+     * paints the held variant — matches the legacy-mode skin behavior where `lnBodyHeld`
+     * resolves to the same sprite as `lnBodyUnheld`.
+     */
+    isLaneLnHeld?: (channel: string) => boolean,
+  ): void {
+    const rects = this.resolveLaneRects(activeOps);
+    if (rects.length === 0) {
+      this.releaseAll();
+      if (!this.firstFrameLogged && frame.notes.length > 0) {
+        this.firstFrameLogged = true;
+        // eslint-disable-next-line no-console
+        console.log(
+          '[beatoraja-notes] no lane rects matched activeOps',
+          JSON.stringify({
+            variant: this.variant,
+            dstBlocks: this.noteSection.dst.length,
+            activeOpsCount: activeOps.size,
+          }),
+        );
+      }
+      return;
+    }
+    const judgementY = this.resolveJudgementY(rects);
+    // Per upstream `LaneRenderer.java:271-276` the scroll distance is proportional to the
+    // lane's authored height: `rxhs = (hu - hl) * hispeed`, so 1 measure (= 4 beats) of
+    // music covers exactly 1 lane at hispeed=1. `laneTopY` is read from the same flipped
+    // Pixi rects `judgementY` was derived from, so the two stay in lock-step on layout
+    // changes (lift / `if`-gated alt blocks).
+    const laneTopY = this.resolveLaneTopY(rects);
+    const pixelsPerBeat = beatorajaPixelsPerBeat(judgementY - laneTopY, hiSpeed);
+    // With `#SCROLL` / `#SPEED` the lane distance follows the scroll rate and beatoraja's `LaneRenderer` window decides
+    // what draws: the walk stops past the lane top, a note whose time has come is gone, and a note a negative rate puts
+    // below the line while its time is ahead still draws, down to the stage bottom. Every other chart draws by LR2's
+    // rules: a note scrolls down to the line, stays on it until it is judged and its beat (a long note's end) has
+    // passed, and a note hit early keeps scrolling until its beat.
+    // The lane scrolls from the mirrored display beat past an LR2 negative-BPM reversal (see
+    // `beatorajaDisplayScrollBeat`); judging state (`note.judged`, LN held flags) stays engine-driven.
+    const { window: drawWindow, distance } = resolveBeatorajaScrollPlacement({
+      currentBeat: beatorajaDisplayScrollBeat(frame),
+      nowSeconds: frame.currentSeconds,
+      reversal: this.reversal,
+      mapper: this.scrollMapper,
+      laneBeats: pixelsPerBeat > 0 ? (judgementY - laneTopY) / pixelsPerBeat : 0,
+      timelineBeats: this.timelineBeats,
+      stageBottomY: this.canvasHeight,
+    });
+    const scrolling = drawWindow.rules === 'beatoraja';
+    const drawBottom = resolveDrawBottom(drawWindow, judgementY);
+    if (this.reversal !== undefined) this.goneDrawObjects.sync(frame.currentSeconds);
+    let usedG = 0;
+    let usedS = 0;
+    let usedT = 0;
+    if (!this.firstFrameLogged) {
+      this.firstFrameLogged = true;
+      // eslint-disable-next-line no-console
+      console.log(
+        '[beatoraja-notes] first frame',
+        JSON.stringify({
+          variant: this.variant,
+          rects: rects.length,
+          judgementY,
+          pixelsPerBeat,
+          notes: frame.notes.length,
+          spriteImages: this.images.size,
+        }),
+      );
+    }
+
+    const notes = frame.notes;
+    const firstIndex = this.advanceLr2DrawCursor(frame, drawWindow);
+    const lr2LastBeat = lr2LastWalkedBeat(drawWindow, pixelsPerBeat);
+    for (let noteIndex = firstIndex; noteIndex < notes.length; noteIndex += 1) {
+      const note = notes[noteIndex]!;
+      if (scrolling && isPastDrawWindow(drawWindow, note.beat)) break;
+      if (note.beat > lr2LastBeat) break;
+      const isLongNote = note.endBeat !== undefined && Number.isFinite(note.endBeat);
+      // A judged note is not dropped on the spot: beatoraja's `LaneRenderer` draws a note while its time is ahead, judged
+      // or not (and keeps a long note while its end is), and LR2 keeps one until it is judged and its beat has passed, so
+      // a note hit early keeps scrolling down to the line. The engine flags `note.judged` at the long-note head
+      // (`markScorableJudged`), so a long note in particular must not go then: the player sees the sustain glow /
+      // `lnactive` frame while holding the key.
+      if (
+        this.reversal === undefined
+          ? !isDrawnUntilJudged(drawWindow, note, this.autoplay)
+          : this.goneDrawObjects.isGone(drawWindow, note, this.autoplay)
+      ) {
+        continue;
+      }
+      const lane = resolveBeatorajaNoteLane(note.channel, this.variant);
+      if (lane === undefined) continue;
+      const rect = rects[lane];
+      if (rect === undefined) continue;
+
+      // LR2's rules hold a passed note on the judgement line.
+      const y = resolveDrawY(drawWindow, judgementY - distance(note.beat) * pixelsPerBeat, judgementY);
+
+      if (isLongNote) {
+        // beatoraja keeps a long note while its end is ahead (the frame carries no end time, so its beat stands in).
+        if (scrolling && note.endBeat! < drawWindow.currentBeat) continue;
+        const yEnd = resolveDrawY(drawWindow, judgementY - distance(note.endBeat!) * pixelsPerBeat, judgementY);
+        // Under beatoraja's rules a tail below the stage bottom has nothing left to draw (LR2's hold it on the line).
+        if (yEnd > drawBottom) continue;
+        // Cull when the entire LN has scrolled past the top of the lane. Both head AND
+        // tail must be off the top edge — if the tail is still on-screen but the head
+        // has just slipped past, we want to keep drawing the part that's still visible.
+        if (y < rect.y - TAP_LEAD_IN_PX && yEnd < rect.y - TAP_LEAD_IN_PX) continue;
+        // The head sits on the judgement line once it has passed: LR2 caps its position there, and under beatoraja's
+        // window a head whose time has passed sits on the line, and a long note whose tail does not sit above its head is
+        // skipped, as in `LaneRenderer`.
+        const headY = scrolling && note.seconds < drawWindow.nowSeconds ? judgementY : y;
+        if (scrolling && yEnd >= headY) continue;
+        const yStartClipped = Math.min(headY, drawBottom);
+        // "Held" = THIS specific LN is the one currently being judged on its lane.
+        // `isLaneLnHeld(channel)` is a channel-level flag (true while ANY LN on the lane is in
+        // its active judgement window), so a future, not-yet-judged LN on the same lane
+        // would also satisfy it.  Pair it with `note.judged` — engine flips this to `true`
+        // ONLY for the LN whose head has been judged (mirrors upstream's `state.processing`
+        // pointer in `JudgeManager`, which holds the specific `LongNote` pair currently
+        // resolving).  Result: only the judged LN gets the held / glow sprite; unrelated
+        // LNs further down the lane render their unheld variant. User-reported symptom:
+        // un-judged LNs on the same lane glowed alongside the currently-judged one.
+        const isThisNoteBeingJudged = note.judged;
+        const heldChannel = isLaneLnHeld !== undefined ? isLaneLnHeld(note.channel) : true;
+        const held = isThisNoteBeingJudged && heldChannel;
+        const r = this.paintLongNote(usedG, usedS, usedT, rect, lane, yEnd, yStartClipped, held, note.longNoteMode);
+        usedG = r.g;
+        usedS = r.s;
+        usedT = r.t;
+        continue;
+      }
+
+      // Tap notes draw from a small lead-in margin above the lane top down to the draw bottom: the judgement line (LR2's
+      // rules hold a passed note there), or under beatoraja's rules the stage bottom while the note's time is ahead.
+      if (y < rect.y - TAP_LEAD_IN_PX || y > drawBottom) continue;
+      if (scrolling && !isDrawnAtTime(drawWindow, note.seconds)) continue;
+      const r = this.paintTapNote(usedG, usedS, rect, lane, note, y);
+      usedG = r.g;
+      usedS = r.s;
+    }
+
+    this.shrinkPoolsTo(usedG, usedS, usedT);
+  }
+
+  /**
+   * Under LR2's drawing rules without a negative-BPM reversal, moves {@link drawCursor} past the notes gone by this
+   * frame and returns where the walk starts; 0 otherwise, as before.
+   */
+  private advanceLr2DrawCursor(frame: BeatorajaNoteClock, drawWindow: NoteDrawWindow): number {
+    if (drawWindow.rules !== 'lr2' || this.reversal !== undefined) {
+      this.drawCursor = undefined;
+      return 0;
+    }
+    let cursor = this.drawCursor;
+    if (!cursor || cursor.notes !== frame.notes || frame.currentSeconds < cursor.seconds) {
+      cursor = { notes: frame.notes, seconds: frame.currentSeconds, index: 0 };
+    }
+    cursor.index = advanceDrawCursor(
+      frame.notes,
+      cursor.index,
+      (note) => !isDrawnUntilJudged(drawWindow, note, this.autoplay),
+    );
+    cursor.seconds = frame.currentSeconds;
+    this.drawCursor = cursor;
+    return cursor.index;
+  }
+
+  dispose(): void {
+    if (!this.container.destroyed) {
+      this.container.destroy({ children: true, context: true });
+    }
+    this.graphicsPool.length = 0;
+    this.spritePool.length = 0;
+    this.tilingPool.length = 0;
+    this.croppedTextureCache.clear();
+  }
+
+  /**
+   * Bounds of the lane area for the current frame's active op set, surfaced for sibling layers
+   * (marker layer, key-bomb layer, etc.) that need to scroll-align with notes. Returns
+   * `undefined` when no lane block matched — the caller should fall back to skin-canvas defaults.
+   */
+  getLaneBounds(activeOps: ReadonlySet<number>): { topY: number; bottomY: number } | undefined {
+    const rects = this.resolveLaneRects(activeOps);
+    if (rects.length === 0) return undefined;
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = 0;
+    for (const rect of rects) {
+      if (rect.y < top) top = rect.y;
+      if (rect.y + rect.h > bottom) bottom = rect.y + rect.h;
+    }
+    if (!Number.isFinite(top)) return undefined;
+    return { topY: top, bottomY: this.judgementYOverride ?? bottom };
+  }
+
+  // ─── Internals ────────────────────────────────────────────────────────────────────────────────
+
+  private resolveLaneRects(activeOps: ReadonlySet<number>): ReadonlyArray<BeatorajaNoteRect> {
+    // The caller passes the same mutated-in-place `activeOps` Set every frame, so the cache is keyed on the block it
+    // selects: a lift / alternate-layout op toggling mid-play swaps the geometry, and every other frame reuses it.
+    const blockIndex = resolveBeatorajaNoteDstBlockIndex(this.noteSection, activeOps);
+    if (blockIndex === this.cachedBlockIndex) return this.cachedRects;
+    // beatoraja's `note.dst[]` rects are in libGDX Y-UP coordinates (origin at canvas bottom-
+    // left). Flip each rect once on resolve so the rest of the layer (judgement-Y, getLaneBounds,
+    // per-frame scroll math) can treat lane rects as ordinary Pixi Y-DOWN screen rects.
+    const raw = blockIndex < 0 ? [] : this.noteSection.dst[blockIndex]!.rects;
+    this.cachedRects = raw.map((rect) => flipRectToPixi(rect, this.canvasHeight));
+    this.cachedBlockIndex = blockIndex;
+    return this.cachedRects;
+  }
+
+  private resolveJudgementY(rects: ReadonlyArray<BeatorajaNoteRect>): number {
+    if (this.judgementYOverride !== undefined) return this.judgementYOverride;
+    let bottom = 0;
+    for (const rect of rects) bottom = Math.max(bottom, rect.y + rect.h);
+    return bottom;
+  }
+
+  /**
+   * Lane top edge in Pixi-Y coords across the active rect set. Mirrors upstream's
+   * `hu = lanes[0].region.y + lanes[0].region.height` (`LaneRenderer.java:274`) — the
+   * spawn line — but expressed in Pixi terms (smallest `rect.y` = topmost edge after the
+   * Y-flip). Used together with `resolveJudgementY` to derive the per-beat scroll distance
+   * via {@link beatorajaPixelsPerBeat} (= upstream's `rxhs / 4`).
+   */
+  private resolveLaneTopY(rects: ReadonlyArray<BeatorajaNoteRect>): number {
+    let top = Number.POSITIVE_INFINITY;
+    for (const rect of rects) top = Math.min(top, rect.y);
+    return Number.isFinite(top) ? top : 0;
+  }
+
+  /**
+   * Resolve a per-lane image id (`note-w`, `lns-b`, `lne-s`, `mine-w`, …) into a Pixi-ready sprite
+   * texture + cell dimensions, lazily caching the cropped result. Returns `undefined` when the skin
+   * doesn't declare a sprite for the slot or the image's source texture isn't bindable.
+   */
+  private resolveLaneSprite(imageId: BeatorajaImageId | undefined): CroppedSprite | undefined {
+    if (imageId === undefined || imageId === '') return undefined;
+    if (this.croppedTextureCache.has(imageId)) return this.croppedTextureCache.get(imageId);
+    const image = this.images.get(imageId);
+    if (image === undefined) {
+      this.croppedTextureCache.set(imageId, undefined);
+      return undefined;
+    }
+    const baseTexture = this.textures.get(image.src);
+    if (baseTexture === undefined) {
+      this.croppedTextureCache.set(imageId, undefined);
+      return undefined;
+    }
+    const cropped = createCroppedBeatorajaTexture(baseTexture, {
+      x: image.x,
+      y: image.y,
+      w: image.w,
+      h: image.h,
+    });
+    if (cropped === undefined) {
+      this.croppedTextureCache.set(imageId, undefined);
+      return undefined;
+    }
+    // Wrap in a singleton sprite to act as a "factory" — we re-use the texture across many sprite
+    // instances pulled from `spritePool`, so the cache only needs to keep the texture handle. We
+    // still allocate a placeholder Sprite for `cellW` / `cellH` bookkeeping.
+    const placeholder = new Sprite(cropped);
+    const result: CroppedSprite = { sprite: placeholder, cellW: image.w, cellH: image.h };
+    this.croppedTextureCache.set(imageId, result);
+    return result;
+  }
+
+  private paintTapNote(
+    usedG: number,
+    usedS: number,
+    rect: BeatorajaNoteRect,
+    lane: number,
+    note: PlayerUiFrameNote,
+    y: number,
+  ): { g: number; s: number } {
+    const imageId = note.mine ? this.noteSection.mine[lane] : this.noteSection.note[lane];
+    const cropped = this.resolveLaneSprite(imageId);
+    if (cropped !== undefined) {
+      const sprite = this.acquireSprite(usedS);
+      sprite.texture = cropped.sprite.texture;
+      // Width stretches to the lane rect; HEIGHT stays at the source `cellH` (no aspect
+      // scaling). Beatoraja's reference renderer paints notes at their authored cell
+      // height regardless of lane width — default skin's note images are 12 px tall but
+      // 21 / 27 / 46 px wide depending on key flavour, while lane widths are 40 / 50 / 70
+      // px. Scaling H by `lane.w / cellW` (the obvious "preserve aspect ratio" choice)
+      // produced 22-23 px tall notes — the user reported the notes were visibly taller
+      // than in upstream beatoraja. The pinned bottom edge stays at the judgement line via `y - drawH`.
+      const drawH = cropped.cellH;
+      // Apply the skin's `note.expansionrate` (default `[100, 100]` = no scaling). 9K's
+      // `play9.json` authors `[115, 112]` (1.15× wider, 1.12× taller) for chunkier popn-style
+      // notes. The expansion is applied around the rect's centre so notes stay aligned to the
+      // lane while bleeding evenly into the gaps.
+      const exX = this.noteSection.expansionRate.x / 100;
+      const exY = this.noteSection.expansionRate.y / 100;
+      const drawW = rect.w * exX;
+      const drawHExpanded = drawH * exY;
+      sprite.x = rect.x - (drawW - rect.w) / 2;
+      sprite.y = y - drawHExpanded;
+      sprite.width = drawW;
+      sprite.height = drawHExpanded;
+      sprite.tint = note.mine ? FALLBACK_COLOR_BY_KEY.red! : 0xffffff;
+      sprite.alpha = 1;
+      return { g: usedG, s: usedS + 1 };
+    }
+    // Fallback Graphics — the skin didn't ship a per-lane sprite for this slot or the cell-crop
+    // failed. Better than silent blanks.
+    const color = note.mine ? FALLBACK_COLOR_BY_KEY.red! : this.fallbackColorForLane(lane);
+    const g = this.acquireGraphics(usedG);
+    g.clear();
+    g.rect(rect.x, y - 6, rect.w, 12).fill({ color });
+    return { g: usedG + 1, s: usedS };
+  }
+
+  private paintLongNote(
+    usedG: number,
+    usedS: number,
+    usedT: number,
+    rect: BeatorajaNoteRect,
+    lane: number,
+    yEnd: number,
+    yStart: number,
+    /**
+     * `true` when the player is actively holding this LN's lane (the play bridge's
+     * `isLaneLnHeld` returned true for the note's channel). Drives held-vs-unheld body
+     * sprite switching:
+     *
+     *   - `lnBodyHeld`   → painted while the player is holding (matches beatoraja's
+     *     `lns[2]` slot). Modern-mode authoring uses this for the "active" variant.
+     *   - `lnBodyUnheld` → painted while the player is NOT holding (matches `lns[3]`).
+     *     Modern-mode "neutral" body shown before / after the press window.
+     *
+     * Legacy-mode skins resolve both slots to the same sprite, so the held flag has no
+     * visible effect there — preserves the prior behavior on the 3 reference skins.
+     */
+    held: boolean,
+    /**
+     * LN authoring mode (`1` = LN, `2` = CN, `3` = HCN). Drives top-cap presence per
+     * upstream `LaneRenderer.drawLongNote` (`LaneRenderer.java:671-697`):
+     *
+     *   - mode 2 (CN) / mode 3 (HCN): top cap uses `lnend[lane]` — upstream's
+     *     `longImage[0]` slot (= `lne-*` on `play5.json`, the LN's future-side cap).
+     *   - mode 1 (LN): upstream's LN branch (lines 691-697) deliberately skips
+     *     `longImage[0]`; LN body simply terminates at its top edge without an end cap.
+     *     The head's tap-note painting happens through the regular `note[]` path on
+     *     the engine side (the BMS LN's head ChannelNote is treated as a normal tap
+     *     for the purpose of head visualization).
+     *   - `undefined`: defensive default — treat like mode 2/3 so any host that hasn't
+     *     wired `longNoteMode` through the frame keeps the both-caps layout.
+     */
+    longNoteMode: 1 | 2 | 3 | undefined,
+  ): { g: number; s: number; t: number } {
+    // **upstream skin-spec convention** (`JsonPlaySkinObjectLoader.java:48-49` is the
+    // ground truth):
+    //
+    //     lns[0] = getNoteTexture(sk.note.lnend, p);    // longImage[0] = lnend
+    //     lns[1] = getNoteTexture(sk.note.lnstart, p);  // longImage[1] = lnstart
+    //
+    // And `LaneRenderer.drawLongNote` (Y-UP) does:
+    //
+    //     sprite.draw(longImage[0], x, y, width, scale);             // lnend at LN TOP
+    //     sprite.draw(longImage[1], x, y - height, width, scale);    // lnstart at LN BOTTOM
+    //
+    // Translated to Pixi Y-DOWN, where `yStart` is the judgement-line side (screen
+    // bottom = head time = LN bottom in Y-UP) and `yEnd` is the future side (screen
+    // top = tail time = LN top in Y-UP):
+    //
+    //   - **`yStart` (screen bottom, head time)** ← `lnstart[lane]` (always drawn)
+    //   - **`yEnd`   (screen top, tail time)**    ← `lnend[lane]` (CN/HCN only; LN
+    //                                                  mode skips this cap, matching
+    //                                                  upstream's `LaneRenderer.java:691-697`
+    //                                                  which omits `longImage[0]`)
+    //
+    // The skin-author naming aligns with the LN's TIME order:
+    //   - `lnstart` = LN's time-FIRST end (the side that hits the judgement line first)
+    //   - `lnend`   = LN's time-LAST end (the side the player releases last)
+    //
+    // Full `longImage[]` slot layout (`JsonPlaySkinObjectLoader.java:48-69`):
+    //
+    //     lns[0] = lnend / lns[1] = lnstart    // CN/LN caps
+    //     lns[2] / lns[3] = LN body (held / unheld)
+    //     lns[4] = hcnend / lns[5] = hcnstart  // HCN-specific caps
+    //     lns[6] / lns[7] = HCN body (held / unheld)
+    //     lns[8..9] = HCN gain/drain body
+    //
+    // And `LaneRenderer.drawLongNote` branches by mode:
+    //   - LN  (line 691-697): body + lnstart at LN bottom; NO top cap.
+    //   - CN  (line 684-690): body + lnend at LN top + lnstart at LN bottom.
+    //   - HCN (line 673-683): HCN body + hcnend at LN top + hcnstart at LN bottom.
+    //
+    // Pre-fix the renderer used `lnstart` / `lnend` / `lnBodyHeld` / `lnBodyUnheld` for
+    // ALL three modes including HCN, ignoring the dedicated `hcnstart` / `hcnend` /
+    // `hcnBody*` slots. ModernChic / GdbG / play9.json all author distinct `hcn*`
+    // sprites for HCN charts, so HCN LNs rendered with the wrong art. Routing mode 3
+    // to the `hcn*` field set restores the upstream-faithful visual.
+    const isHcn = longNoteMode === 3;
+    const bottomCapId = isHcn ? this.noteSection.hcnstart[lane] : this.noteSection.lnstart[lane];
+    const topCapId =
+      longNoteMode === 1 ? undefined : isHcn ? this.noteSection.hcnend[lane] : this.noteSection.lnend[lane];
+    const bottomCrop = this.resolveLaneSprite(bottomCapId);
+    const topCrop = topCapId !== undefined ? this.resolveLaneSprite(topCapId) : undefined;
+    // Pick the held / unheld body slot based on the live press state. HCN uses its
+    // dedicated `hcnBodyHeld` / `hcnBodyUnheld` (upstream `lns[6]` / `lns[7]`); LN/CN
+    // share the regular `lnBodyHeld` / `lnBodyUnheld` slots (`lns[2]` / `lns[3]`).
+    // Falls back to the OTHER slot when the chosen one is empty — legacy-mode skins
+    // populate only one half so we'd rather paint the wrong-mood body than nothing.
+    const heldBodyField = isHcn ? this.noteSection.hcnBodyHeld : this.noteSection.lnBodyHeld;
+    const unheldBodyField = isHcn ? this.noteSection.hcnBodyUnheld : this.noteSection.lnBodyUnheld;
+    const primaryBodyId = held ? heldBodyField[lane] : unheldBodyField[lane];
+    const fallbackBodyId = held ? unheldBodyField[lane] : heldBodyField[lane];
+    const bodyId = primaryBodyId !== undefined && primaryBodyId.length > 0 ? primaryBodyId : fallbackBodyId;
+    const bodyCrop = bodyId !== undefined ? this.resolveLaneSprite(bodyId) : undefined;
+    if (bottomCrop === undefined || bodyCrop === undefined) {
+      // Fall back to colored rectangles when the bottom cap or body sprite is missing.
+      // (Top cap is allowed to be missing — that's the legitimate LN-mode case where
+      // upstream itself doesn't draw a top cap.)
+      const color = this.fallbackColorForLane(lane);
+      const g = this.acquireGraphics(usedG);
+      g.clear();
+      g.rect(rect.x + 4, yEnd, rect.w - 8, yStart - yEnd).fill({ color, alpha: 0.6 });
+      g.rect(rect.x, yStart - 6, rect.w, 12).fill({ color });
+      g.rect(rect.x, yEnd - 6, rect.w, 12).fill({ color });
+      return { g: usedG + 1, s: usedS, t: usedT };
+    }
+    // Apply `note.expansionrate` to LN width and cap heights — same convention as tap notes.
+    const exX = this.noteSection.expansionRate.x / 100;
+    const exY = this.noteSection.expansionRate.y / 100;
+    const drawW = rect.w * exX;
+    const drawX = rect.x - (drawW - rect.w) / 2;
+    const bottomHExpanded = bottomCrop.cellH * exY;
+    const topHExpanded = topCrop !== undefined ? topCrop.cellH * exY : 0;
+
+    // Body — repeats the `lnbody` cell vertically across the LN's main span. Upstream body
+    // range (Y-UP, `LaneRenderer.java:687-688, 694-695`) is `[y - height + scale, y]`,
+    // i.e. tail-top to head-bottom — `scale` (one cap's worth) trimmed off the LN's bottom
+    // for the `lnstart` cap (= `longImage[1]`, the judgement-line side). The TOP cap
+    // (`lnend` = `longImage[0]`, CN/HCN only) is drawn ABOVE the body's top edge
+    // (Y-UP `+ scale`); body itself doesn't shrink to make room for it. Translated to
+    // Pixi Y-DOWN: body bottom = yStart - bottomHExpanded (lnstart cap's top); body top =
+    // yEnd unconditionally — the lnend cap then sits ABOVE the body at y = yEnd - topHExpanded.
+    const body = this.acquireTiling(usedT, bodyCrop.sprite.texture);
+    const bodyTopY = yEnd;
+    const bodyBottomY = yStart - bottomHExpanded;
+    body.x = drawX;
+    body.width = drawW;
+    body.y = bodyTopY;
+    body.height = Math.max(0, bodyBottomY - bodyTopY);
+    body.tilePosition.set(0, 0);
+    body.tileScale.set(drawW / Math.max(1, bodyCrop.cellW), 1);
+    body.alpha = 1;
+
+    // **Cap draw order mirrors upstream `LaneRenderer.drawLongNote`** (Y-UP, lines
+    // 673-697). Upstream's call sequence is `body → topCap (lnend/hcnend) → bottomCap
+    // (lnstart/hcnstart)`, putting the bottom cap (judgement-line side) at the FRONT of
+    // the Z stack. This matters when the LN's visible span is shorter than one cap's
+    // height — typical mid-judge clipping at the bottom edge — and the top/bottom caps
+    // overlap: upstream paints the bottom cap on top because the player's eye anchors on
+    // the judgement-line side. Pixi's `addChild` order encodes Z, and `acquireSprite`
+    // commits the order at first allocation, so we acquire `topCap` BEFORE `bottomCap`
+    // so future-side cap lands behind judgement-side cap.
+
+    // Top cap (`lnend` for CN, `hcnend` for HCN — `longImage[0]` / `[4]`). Pinned at
+    // `yEnd` with the cap overhanging UPWARD (Y-UP `+ scale`, Y-DOWN `y - topHExpanded`).
+    // LN mode skips this entirely — `LaneRenderer.java:691-697`'s LN branch deliberately
+    // omits `longImage[0]`, so the body's flat top edge serves as the LN's silhouette
+    // end.
+    let spritesUsed = 0;
+    if (topCrop !== undefined) {
+      const topCap = this.acquireSprite(usedS + spritesUsed);
+      topCap.texture = topCrop.sprite.texture;
+      topCap.x = drawX;
+      topCap.y = yEnd - topHExpanded;
+      topCap.width = drawW;
+      topCap.height = topHExpanded;
+      topCap.tint = 0xffffff;
+      topCap.alpha = 1;
+      spritesUsed += 1;
+    }
+
+    // Bottom cap (`lnstart` for LN/CN, `hcnstart` for HCN — `longImage[1]` / `[5]`).
+    // Pinned at `yStart` with the cap's bottom edge meeting the judgement line; top
+    // edge at `yStart - bottomHExpanded` borders the body's bottom. Always rendered.
+    const bottomCap = this.acquireSprite(usedS + spritesUsed);
+    bottomCap.texture = bottomCrop.sprite.texture;
+    bottomCap.x = drawX;
+    bottomCap.y = yStart - bottomHExpanded;
+    bottomCap.width = drawW;
+    bottomCap.height = bottomHExpanded;
+    bottomCap.tint = 0xffffff;
+    bottomCap.alpha = 1;
+    spritesUsed += 1;
+
+    return { g: usedG, s: usedS + spritesUsed, t: usedT + 1 };
+  }
+
+  private fallbackColorForLane(lane: number): number {
+    if (this.variant === '24' || this.variant === '48') {
+      const sideLane = lane % KEYBOARD_SKIN_SIDE_LANES;
+      // The wheel takes the scratch red, like the skins' own `note-su` / `note-sd` art.
+      if (sideLane >= KEYBOARD_SKIN_SIDE_KEYS) return PALETTE_COLOR.red!;
+      const key = KEYBOARD_KEY_PALETTE[sideLane % KEYBOARD_KEY_PALETTE.length] ?? 'white';
+      return PALETTE_COLOR[key] ?? PALETTE_COLOR.white!;
+    }
+    const palette = this.variant === '9' ? POP_KEY_PALETTE : SEVEN_KEY_PALETTE;
+    const sided = this.variant === '10' || this.variant === '14' ? lane % 8 : lane;
+    const key = palette[sided] ?? 'white';
+    return PALETTE_COLOR[key] ?? PALETTE_COLOR.white!;
+  }
+
+  private acquireGraphics(index: number): Graphics {
+    let g = this.graphicsPool[index];
+    if (g === undefined) {
+      g = new Graphics();
+      this.graphicsPool.push(g);
+      // Graphics nodes are used as note-shape fallbacks (e.g. LN body fill when a sprite
+      // is missing AND for tap notes). Mount to `noteLayer` so they share the front-tier
+      // with tap-note sprites; LN body tilings live behind on `bodyLayer`.
+      this.noteLayer.addChild(g);
+    } else {
+      g.visible = true;
+    }
+    return g;
+  }
+
+  private acquireSprite(index: number): Sprite {
+    let s = this.spritePool[index];
+    if (s === undefined) {
+      s = new Sprite();
+      this.spritePool.push(s);
+      // Tap notes, LN start caps, and LN end caps all share this pool — mount to the
+      // front-tier `noteLayer` so they sit on top of LN bodies.
+      this.noteLayer.addChild(s);
+    } else {
+      s.visible = true;
+    }
+    return s;
+  }
+
+  private acquireTiling(index: number, texture: Texture): TilingSprite {
+    let t = this.tilingPool[index];
+    if (t === undefined) {
+      t = new TilingSprite({ texture, width: 0, height: 0 });
+      this.tilingPool.push(t);
+      // LN body tilings live on the back-tier `bodyLayer`, so caps + tap notes (mounted to
+      // `noteLayer`) always render on top regardless of frame-to-frame pool-index churn.
+      this.bodyLayer.addChild(t);
+    } else {
+      t.visible = true;
+      t.texture = texture;
+    }
+    return t;
+  }
+
+  private shrinkPoolsTo(usedG: number, usedS: number, usedT: number): void {
+    for (let i = usedG; i < this.graphicsPool.length; i += 1) this.graphicsPool[i]!.visible = false;
+    for (let i = usedS; i < this.spritePool.length; i += 1) this.spritePool[i]!.visible = false;
+    for (let i = usedT; i < this.tilingPool.length; i += 1) this.tilingPool[i]!.visible = false;
+  }
+
+  private releaseAll(): void {
+    for (const g of this.graphicsPool) g.visible = false;
+    for (const s of this.spritePool) s.visible = false;
+    for (const t of this.tilingPool) t.visible = false;
+  }
+}

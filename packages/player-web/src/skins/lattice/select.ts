@@ -21,10 +21,14 @@ import {
   type BeMusicSelectLayout,
   type BrowserBrowseEntry,
   type BrowserSongEntry,
+  describeCourseCard,
   formatPlayVariantLabel,
   resolveSongRowFacts,
   stageProgress,
   selectListRows,
+  browseEntryBadge,
+  browseEntryCount,
+  browseEntryTitle,
 } from '@be-music/skin-sdk';
 import {
   addHitArea,
@@ -39,6 +43,8 @@ import {
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 76;
+/** The widest a folder or course row's count may run (`4 stages · 1 missing`); the title gets the rest. */
+const ROW_COUNT_MAX_W = 150;
 const ROW_LENGTH_W = 32;
 const ROW_NOTES_W = 76;
 const CURSOR_MS = 360;
@@ -247,8 +253,12 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     });
 
     // Focused chart.
-    const songTitle = song?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || '';
+    const course =
+      song === undefined && frame.focusedCourse !== undefined
+        ? describeCourseCard(frame.focusedCourse, frame.courseRecord?.(frame.focusedCourse))
+        : undefined;
+    const songTitle = song?.title ?? course?.title ?? 'No chart selected';
+    const songArtist = song?.artist || song?.subtitle || course?.detail || '';
     const position =
       entries.length > 0
         ? `No. ${String(Math.min(frame.selectedIndex + 1, entries.length)).padStart(3, '0')} / ${String(entries.length).padStart(3, '0')}`
@@ -436,7 +446,6 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     const y = listTop + visibleIndex * rowHeight;
     const active = entryIndex === frame.selectedIndex;
     const song = entry.kind === 'song' ? entry.song : undefined;
-    const folder = entry.kind === 'folder' ? entry.folder : undefined;
     const introT = stageProgress(
       frame.nowMs - frame.sceneStartedAt,
       100 + Math.max(0, visibleIndex) * INTRO_STAGGER_MS,
@@ -472,7 +481,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         alpha,
       },
     ).label = `fallback-index[idx=${entryIndex}]`;
-    const level = song?.playLevel !== undefined ? String(song.playLevel) : folder ? 'DIR' : '-';
+    const level = browseEntryBadge(entry);
     rows.rect(x + 30.5, midY - 7.5, 22, 15).stroke({ color: active ? LAT_WHITE : LAT_INK, width: 1, alpha });
     addSkinText(frame.layer, level, x + 41.5, midY, {
       ...display(level.length > 2 ? 8 : 10, ink, '600'),
@@ -484,9 +493,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     // On the right, the facts a player checks before picking — gimmick tags, note count, length and tempo range — in
     // fixed columns so they line up down the list. Folders show their size instead.
     const facts = song ? resolveSongRowFacts(song) : undefined;
-    const meta = facts
-      ? `${facts.bpm} BPM`
-      : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
+    const meta = facts ? `${facts.bpm} BPM` : (browseEntryCount(entry) ?? '');
     const metaNode = addSkinText(
       frame.layer,
       scrambleText(meta, rowScramble, tick, entryIndex + 500),
@@ -497,12 +504,13 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         anchorX: 1,
         anchorY: 0.5,
         alpha,
-        maxWidth: facts ? ROW_BPM_W : 70,
+        maxWidth: facts ? ROW_BPM_W : ROW_COUNT_MAX_W,
         marquee: active,
       },
     );
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
-    let factsLeft = listX + listWidth - 10 - (facts ? ROW_BPM_W : meta ? Math.min(70, metaNode.width) : 0) - 14;
+    let factsLeft =
+      listX + listWidth - 10 - (facts ? ROW_BPM_W : meta ? Math.min(ROW_COUNT_MAX_W, metaNode.width) : 0) - 14;
     if (facts) {
       const mute = active ? LAT_WHITE : LAT_GRAPHITE;
       addSkinText(frame.layer, scrambleText(facts.length, rowScramble, tick, entryIndex + 600), factsLeft, midY, {
@@ -549,7 +557,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     }
     const title = addSkinText(
       frame.layer,
-      scrambleText(song?.title ?? folder?.label ?? '', titleScramble, tick, entryIndex + 900),
+      scrambleText(browseEntryTitle(entry), titleScramble, tick, entryIndex + 900),
       x + 62,
       midY,
       {

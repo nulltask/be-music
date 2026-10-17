@@ -27,8 +27,8 @@ import {
   isImageResizeAlgorithm,
   type ImageResizeAlgorithm,
 } from '@be-music/player/image-resize-algorithm';
-import { JUDGE_WINDOW_RULESETS, type JudgeWindowRuleset } from '@be-music/player/core/judge-window';
-import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
+import { JUDGE_WINDOW_RULESETS } from '@be-music/player/core/judge-window';
+import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
 import { ensureSeaEmbeddedNodeModules } from '../node/sea-embedded-modules.ts';
 import {
@@ -144,9 +144,9 @@ interface CliArgs {
   highSpeed?: number;
   judgeWindowMs?: number;
   /** Compat ruleset the engine judges under (`PlayerOptions.judgeRuleset`). Defaults to LR2. */
-  judgeRuleset?: JudgeWindowRuleset;
+  judgeRuleset?: PlaylogRulesetId;
   /** Gauge pick, in LR2's names; each ruleset maps it onto its own line-up. Defaults to `GROOVE`. */
-  gauge?: GrooveGaugeType;
+  gauge?: GaugeType;
   debugActiveAudio: boolean;
   renderAudioPath?: string;
   audio: boolean;
@@ -1437,9 +1437,10 @@ export function parseArgs(rawArgs: string[]): CliArgs {
   return args;
 }
 
-const CLI_GAUGES: readonly GrooveGaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH'];
+/** The gauge types, in the order the CLI lists them. */
+const CLI_GAUGES: readonly GaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH'];
 
-function parseCliRuleset(rawValue: string): JudgeWindowRuleset {
+function parseCliRuleset(rawValue: string): PlaylogRulesetId {
   const value = rawValue.trim().toLowerCase();
   const match = JUDGE_WINDOW_RULESETS.find((ruleset) => ruleset === value);
   if (!match) {
@@ -1448,7 +1449,7 @@ function parseCliRuleset(rawValue: string): JudgeWindowRuleset {
   return match;
 }
 
-function parseCliGauge(rawValue: string): GrooveGaugeType {
+function parseCliGauge(rawValue: string): GaugeType {
   const value = rawValue.trim().toUpperCase();
   const match = CLI_GAUGES.find((gauge) => gauge === value);
   if (!match) {

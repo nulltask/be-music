@@ -1,3 +1,4 @@
+import { breakTrackedCombo } from './scoring.ts';
 import { findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
 import { findLaneSoundCandidate, lowerBoundBySeconds } from '../judging.ts';
 import type { TimedPlayableNote } from '../playable-notes.ts';
@@ -34,14 +35,9 @@ import {
   setCombo,
   toJudgeClock,
   toJudgeUs,
+  isJudgingClosed,
 } from './judge-core-score.ts';
-import {
-  type JudgeCoreEffectSink,
-  type JudgeCoreInput,
-  type JudgeCoreState,
-  LONG_NOTE_INITIAL_HOLD_GRACE_MS,
-  LONG_NOTE_REPEAT_HOLD_GRACE_MS,
-} from './judge-core-types.ts';
+import { type JudgeCoreEffectSink, type JudgeCoreInput, type JudgeCoreState } from './judge-core-types.ts';
 
 /**
  * Judge-core input handling: which note a press resolves against, multi-BAD, empty POOR and
@@ -214,18 +210,9 @@ function hasEmptyPoorReferenceNote(state: JudgeCoreState, channels: ReadonlySet<
   return false;
 }
 
-function isLongNoteRepeatSuppressedInput(
-  state: JudgeCoreState,
-  candidateChannels: ReadonlySet<string>,
-  nowSec: number,
-): boolean {
-  for (const channel of candidateChannels) {
-    const suppressUntil = state.longNoteSuppressUntilSeconds.get(channel);
-    if (suppressUntil !== undefined && nowSec < suppressUntil) {
-      return true;
-    }
-  }
-  return false;
+/** Whether a press on `channels` at chart second `nowSec` has a note in reach to judge. Reads the state only. */
+export function hasPressCandidate(state: JudgeCoreState, channels: ReadonlySet<string>, nowSec: number): boolean {
+  return selectPressCandidate(state, toJudgeClock(state.config, nowSec), channels) !== undefined;
 }
 
 export function handleLanePress(
@@ -245,7 +232,8 @@ export function handleLanePress(
     emit({ kind: 'ui', command: { kind: 'flash-lane', channel: mappedChannel } });
   }
 
-  let refreshedHold = false;
+  // A press on a lane whose long note is still unresolved is part of that long note: it judges no other note there.
+  let pressesLongNote = false;
   // Lanes whose long note was let go and is waiting out the ruleset's release margin: pressing again resumes the hold,
   // so the press judges nothing else on them (beatoraja's re-press, `releasetime` reset).
   const resumedChannels = new Set<string>();
@@ -253,11 +241,11 @@ export function handleLanePress(
     if (!state.activeLongNotes.has(channel)) {
       continue;
     }
-    if (state.keyStateInput && state.longHoldReleaseSeconds.delete(channel)) {
+    if (state.longHoldReleaseSeconds.delete(channel)) {
+      state.longNoteSettleMs.delete(channel);
       resumedChannels.add(channel);
     }
-    state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_REPEAT_HOLD_GRACE_MS);
-    refreshedHold = true;
+    pressesLongNote = true;
   }
 
   // Mines — record the press instant (when the mine crossing is settled later, the lane is asked whether it was down
@@ -278,11 +266,11 @@ export function handleLanePress(
   // selection, timing deltas, windows, the lane keysound and the empty-POOR reach all read `judgeSec`, while the
   // judgments, logs, gauge history and UI cues keep the true `nowSec`.
   const judgeSec = toJudgeClock(config, nowSec);
-  // With key-state input a lane whose long note is held is pressed again by another key bound to it: its current note
-  // is the long note, so the press never judges another note there; the ruleset says what it does instead.
-  const heldLongNoteChannels = state.keyStateInput
-    ? [...candidateChannels].filter((channel) => state.activeLongNotes.has(channel) && !resumedChannels.has(channel))
-    : [];
+  // A lane whose long note is held is pressed again by another key bound to it: its current note is the long note, so
+  // the press never judges another note there; the ruleset says what it does instead.
+  const heldLongNoteChannels = [...candidateChannels].filter(
+    (channel) => state.activeLongNotes.has(channel) && !resumedChannels.has(channel),
+  );
   for (const channel of heldLongNoteChannels) {
     applyPressDuringLongNote(state, channel, judgeSec, nowSec, emit);
   }
@@ -300,14 +288,8 @@ export function handleLanePress(
   const selected = selectPressCandidate(state, judgeSec, judgedChannels);
 
   if (!selected) {
-    if (refreshedHold) {
-      // Active LN re-tap inside the hold-grace window — input is part of the sustain, not a phantom press.
-      return;
-    }
-    if (!state.keyStateInput && isLongNoteRepeatSuppressedInput(state, judgedChannels, nowSec)) {
-      // LN repeat-suppress window — terminal key repeat without release events re-sends the key that played a long
-      // note, so a note-less press on its lane before the tail is not a phantom. With key-state input every press is a
-      // real press and is judged as LR2 and beatoraja judge it.
+    if (pressesLongNote) {
+      // The press is part of a long note's sustain, not a phantom press.
       return;
     }
     const fallback = findLaneSoundCandidate(
@@ -349,10 +331,6 @@ export function handleLanePress(
   const endSeconds = candidate.endSeconds;
   if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
     const longNoteMode = resolveRulesetLongNoteMode(ruleset.longNoteStyle, candidate);
-    const previousSuppressUntil = state.longNoteSuppressUntilSeconds.get(channel) ?? Number.NEGATIVE_INFINITY;
-    if (endSeconds > previousSuppressUntil) {
-      state.longNoteSuppressUntilSeconds.set(channel, endSeconds);
-    }
     emit({
       kind: 'long-note',
       seconds: nowSec,
@@ -382,7 +360,7 @@ export function handleLanePress(
       if (ruleset.headBadSkipsTail && (headJudge.kind === 'BAD' || headJudge.kind === 'POOR')) {
         // IIDX: a broken charge-note head cancels the tail; the note is finished with a single judgment.
         state.activeLongNotes.delete(channel);
-        state.longHoldUntilMs.delete(channel);
+        state.longNoteSettleMs.delete(channel);
         emit({ kind: 'ui', command: { kind: 'long-note-end', channel, outcome: 'dropped' } });
         emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
         collectMultiBad();
@@ -396,7 +374,7 @@ export function handleLanePress(
         headScored: true,
         audioStopped: false,
       });
-      state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
+      state.longNoteSettleMs.delete(channel);
       state.longHoldReleaseSeconds.delete(channel);
       collectMultiBad();
       return;
@@ -410,18 +388,18 @@ export function handleLanePress(
         headScored: false,
         audioStopped: false,
       });
-      state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
+      state.longNoteSettleMs.delete(channel);
       state.longHoldReleaseSeconds.delete(channel);
       collectMultiBad();
       return;
     }
     state.activeLongNotes.delete(channel);
-    state.longHoldUntilMs.delete(channel);
+    state.longNoteSettleMs.delete(channel);
     collectMultiBad();
     return;
   }
   state.activeLongNotes.delete(channel);
-  state.longHoldUntilMs.delete(channel);
+  state.longNoteSettleMs.delete(channel);
 
   applyResolvedManualJudge(
     state,
@@ -467,11 +445,14 @@ function applyPressDuringLongNote(
  */
 function chargeEmptyPoor(state: JudgeCoreState, nowSec: number, emit: JudgeCoreEffectSink): void {
   const { ruleset } = state.config;
+  if (isJudgingClosed(state)) {
+    return;
+  }
   state.summary.emptyPoor += 1;
   applyGaugeJudge(state, nowSec, 'EMPTY_POOR', emit, 'empty-poor');
   if (ruleset.comboBreaksOnEmptyPoor) {
     // The score tracker keeps the combo the max combo is measured on, so it breaks too.
-    state.scoreTracker.combo = 0;
+    breakTrackedCombo(state.scoreTracker);
     setCombo(state, nowSec, 0, 'judge', emit, 'POOR');
   }
   emit({ kind: 'record-empty-poor' });
@@ -501,9 +482,9 @@ export function handleLaneRelease(
       seconds: input.recordSec,
       tokens: input.tokens,
       channels: input.channels,
+      ...(input.inferred === true ? { inferred: true } : {}),
     });
   }
-  state.keyStateInput = true;
   // The release's own instant (a live driver drains it later than it happened; the play log records the instant).
   const releaseMs = input.nowMs - (input.nowSec - input.recordSec) * state.config.judgeMsPerChartSecond;
   let settleNow = false;
@@ -511,13 +492,15 @@ export function handleLaneRelease(
     recordLaneUp(laneHoldHistory(state, channel), input.tokens, releaseMs);
     setHcnGaining(state, channel, toJudgeUs(input.nowSec), emit);
     state.heldChannels.delete(channel);
-    emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
+    if (input.inferred !== true) {
+      emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
+    }
     if (state.activeLongNotes.has(channel)) {
       state.longHoldReleaseSeconds.set(channel, input.nowSec);
       const marginMs = resolveLongNoteReleaseMarginMs(state, channel, input.nowSec);
       // A release settles its long note at once, unless the ruleset lets a BAD-or-worse early release wait out a
       // margin in which the lane can be pressed again (beatoraja's `longnoteMargin`).
-      state.longHoldUntilMs.set(channel, marginMs > 0 ? input.nowMs + marginMs : Number.NEGATIVE_INFINITY);
+      state.longNoteSettleMs.set(channel, marginMs > 0 ? input.nowMs + marginMs : Number.NEGATIVE_INFINITY);
       settleNow ||= marginMs === 0;
     }
   }

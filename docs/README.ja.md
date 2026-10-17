@@ -5,6 +5,7 @@
 このディレクトリは、`be-music` リポジトリで使う仕様を Markdown でまとめたものです。
 
 - [アーキテクチャ: Source 層と Resolved 層](architecture.ja.md)
+- [設計判断の記録](adr/README.ja.md)
 - [BMS 実装仕様](bms-spec.ja.md)
 - [BMSON 実装仕様](bmson-spec.ja.md)
 - [BMS / bmson 互換性ノート（de jure と de facto）](format-compat.ja.md)
@@ -12,7 +13,10 @@
 - [Player 実装仕様](player-spec.ja.md)
 - [Terminal player 実装メモ](player-tui.ja.md)
 - [Browser player 実装メモ](player-web.ja.md)
+- [シーンモデル（`@be-music/scene-model`）](scene-model.ja.md)
 - [プレイログ（プレイ履歴）仕様](playlog.ja.md)
+- [コースと段位認定](course.ja.md)
+- [コースのブラウザ確認](course-checklist.ja.md)
 - [Be-Music Fingerprint 仕様](fingerprint-spec.ja.md)
 - [Leaderboard 設計](leaderboard.ja.md)
 - [LR2 skin 実装メモ](lr2-skin.ja.md)

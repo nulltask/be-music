@@ -14,6 +14,7 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
 - `@be-music/player`: 再生 engine、timing、判定、score、gauge、BGA timeline、UI/audio adapter 契約を共有する core package
 - `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびプレイログ再シミュレータ `bms-playlog`
+- `@be-music/scene-model`: ライブラリの項目・一覧・プレイオプション・プレイ状態と結果・コース・効果音など、スキンの種類によらず共有する実行環境非依存のシーンモデル
 - `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
 - `@be-music/skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
@@ -41,7 +42,7 @@ pnpm run check
 pnpm run test
 ```
 
-ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。
+ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。`pnpm run test:e2e` は Web デモでコースのブラウザ確認を Playwright で端から端まで実行します（数分かかるため `pnpm run test` には含めていません）。[docs/course-checklist.ja.md](docs/course-checklist.ja.md#自動実行) を参照してください。
 
 ## package ごとの release
 
@@ -71,6 +72,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
 - [プレイログ（プレイ履歴）仕様](docs/playlog.ja.md)
+- [コースと段位認定](docs/course.ja.md)
 - [be-music スキンの作り方](docs/be-music-skin.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)
@@ -114,7 +116,8 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
 - playable note、legacy long note、`#LNOBJ`、FREE ZONE、mine、invisible note の共通抽出
 - 判定幅、動的 `#EXRANKxx`、score、groove gauge、scroll distance、BGA timeline、result summary の共通意味論
-- `core/engine`、`core/bga-timeline`、`core/scroll-distance`、`core/groove-gauge`、`playable-notes`、`playlog` などの browser-safe subpath export
+- `core/engine`、`core/bga-timeline`、`core/scroll-distance`、`playable-notes`、`playlog`、`records`、`ruleset` などの browser-safe subpath export
+- `ruleset`: ホスト・スキン・リーダーボードが共有する語彙。ゲージ、クリアランプ、BP、スコア（`ScoreSummary`、`computeScoreRate`、DJ ランク、LR2 のマネースコア）。`core/scoring` はスコアの部分の非推奨の別名です
 
 ### terminal player (`@be-music/player-tui`)
 

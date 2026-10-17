@@ -1,5 +1,5 @@
 /**
- * Barrel for the `@be-music/player-web/skin` subpath. Re-exports skin parsing / loading / runtime adapters and the
+ * Barrel for the `@be-music/player-web/skin` subpath. Re-exports skin parsing / loading / render helpers and the
  * cross-family `SkinFamily` registry. Pixi-bound texture / font / rendering helpers under `skin/lr2/*` are mostly
  * package-internal (they back the scene classes); the only one re-exported here is `loadTextureFromBytes`, which the
  * demo needs to decode per-song STAGEFILE / BACKBMP / BANNER bitmaps without reaching into private modules.
@@ -11,13 +11,13 @@ export * from './registry.ts';
 export * from './lr2/family.ts';
 export { loadTextureFromBytes } from './lr2/textures.ts';
 
-// beatoraja family — theme loaders, runtime adapter, audio / fonts / textures / system sounds.
+// beatoraja family — theme loaders, audio / fonts / textures.
 export * from './beatoraja/audio.ts';
+export * from './beatoraja/chart-images.ts';
 export * from './beatoraja/family.ts';
 export * from './beatoraja/fonts.ts';
 export * from './beatoraja/render.ts';
-export * from './beatoraja/runtime-adapter.ts';
-export * from './beatoraja/system-sounds.ts';
+export * from './beatoraja/scene-kit.ts';
 export * from './beatoraja/textures.ts';
 export * from './beatoraja/theme.ts';
 

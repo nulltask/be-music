@@ -30,311 +30,42 @@
 //   - Preview audio (no beatoraja parallel to LR2's `playSelectBgm` yet)
 //   - Search / sort / random song picks
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
+//
+// The scene is made of parts that read and drive it through one context it builds (`createContext`): the song list's
+// rows (`select/rows.ts`), the search input (`select/search.ts`), the focused chart's images and graphs
+// (`select/chart-images.ts`) and what the skin reads of the screen (`select/skin-state.ts`). What the skin reads of a
+// chart bar is in `select/chart-facts.ts`, and the scene's options and snapshot types in `select/options.ts`.
 
-import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
-import type { ChartPlayVariant } from '@be-music/chart';
-import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSongListLayout } from '@be-music/beatoraja-skin';
+import { Container, FederatedPointerEvent, Graphics, Sprite, Text, type Ticker } from 'pixi.js';
+import type { BeatorajaSkin, BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
+import { parseBeatorajaSongList, TIMER_SCENE_START, TIMER_SONGBAR_CHANGE } from '@be-music/beatoraja-skin';
 import {
-  BEATORAJA_NUM,
-  BEATORAJA_OP,
-  BEATORAJA_SONGLIST_BAR_COUNT,
-  BEATORAJA_TEXT,
-  buildBaseOpSet,
-  parseBeatorajaSongList,
-  TIMER_SCENE_START,
-  TIMER_SONGBAR_CHANGE,
-} from '@be-music/beatoraja-skin';
+  beatorajaKeyModeIndex,
+  beatorajaLnModeIndex,
+  resolveBeatorajaSelectSliderValue,
+  type BeatorajaSystemSoundPaths,
+} from '@be-music/beatoraja-skin/scene';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
+import { safeResolveChartVariant } from './select/chart-facts.ts';
+import { BeatorajaSelectChartImages, type BeatorajaSelectChartImagesContext } from './select/chart-images.ts';
+import type { PixiBeatorajaSelectSceneOptions, PixiBeatorajaSelectSceneSnapshot } from './select/options.ts';
+import { BeatorajaSelectRows, type BeatorajaSelectRowsContext } from './select/rows.ts';
+import { BeatorajaSelectSearch, songMatchesQuery, type BeatorajaSelectSearchContext } from './select/search.ts';
+import { BeatorajaSelectSkinState, type BeatorajaSelectSkinStateContext } from './select/skin-state.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
-import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
-import { computeBeatorajaChartDensity, type ChartDensity } from '../../chart/beatoraja/density.ts';
-import { computeBeatorajaChartTotalSeconds } from '../../chart/beatoraja/duration.ts';
-import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
-import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import {
-  computeBeatorajaChartNoteDistribution,
-  type BeatorajaChartNoteDistribution,
-} from '../../chart/beatoraja/note-distribution.ts';
-import {
-  composeBeatorajaValueCells,
-  composeBeatorajaValueShift,
-  normalizeBeatorajaImages,
-  normalizeBeatorajaValues,
-  type BeatorajaImageElement,
-  type BeatorajaImageId,
-  type BeatorajaValueElement,
-} from '@be-music/beatoraja-skin';
-import { createCroppedBeatorajaTexture } from '../../skin/beatoraja/render.ts';
-import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from '../../collection/collection.ts';
-import { detectChartFeatures } from '../select-ops.ts';
+import { groupSongsByFolder, resolveSongSource } from '../../collection/collection.ts';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
-import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from '../../collection/types.ts';
+import type {
+  BrowserBrowseEntry,
+  BrowserCourseEntry,
+  BrowserFolderNode,
+  BrowserSongEntry,
+} from '../../collection/types.ts';
 import { masterOutput } from '../../runtime/master-volume.ts';
 
-export interface PixiBeatorajaSelectSceneOptions {
-  skin: BeatorajaSkin;
-  /**
-   * The host edits the search query in its own text field (with IME) and passes it in through
-   * {@link PixiBeatorajaSelectScene.setSearchQuery}: the scene then leaves `/` and typed keys to that field instead of
-   * running its own key-by-key search mode.
-   */
-  externalSearch?: boolean;
-  textures: BeatorajaTextureCache;
-  /** Optional skin TTF cache (`loadBeatorajaFonts`). Absent → platform sans-serif fallback. */
-  fonts?: BeatorajaFontCache;
-  /** Confirmed user picks for the skin's `property[]`. */
-  skinConfig?: BeatorajaSkinConfig;
-  /** Songs to choose from. Empty array → "no songs" placeholder. */
-  songs: ReadonlyArray<BrowserSongEntry>;
-  /** Initial highlighted index (within the song list at root). Defaults to 0. */
-  initialIndex?: number;
-  /**
-   * Called when the user confirms a song (`Enter` on a song row, or click an already-selected
-   * song). The optional `options.autoPlay` is `true` when the source was the skin's authored
-   * `button_autoplay` (act=16) — the host should route to gameplay in auto mode rather than
-   * the user's default. When omitted / false, the host follows whatever the user has selected
-   * in their global play settings.
-   */
-  onSongPicked: (song: BrowserSongEntry, options?: { autoPlay?: boolean }) => void;
-  /** Called when the user backs out of the root list (`Escape` at root). */
-  onExit?: () => void;
-  /**
-   * Called when the user clicks the skin's READTEXT button (act=17) — typically `readme` /
-   * `player-info` / `help` / `btn-text` etc. depending on the skin. The host is expected to
-   * find and display the chart's accompanying text file (`.txt` next to the chart, or
-   * `#TEXT`-resolved content). Omit to have the action fall through to a console log.
-   */
-  onReadtextRequest?: (song: BrowserSongEntry) => void;
-  /**
-   * Called when the scene mutates `skinConfig` in place — currently fires for `JUDGE_TIMING`
-   * (act=74) note-offset adjustments. The host should persist the new config (e.g. write it
-   * into its per-entry config cache) and refresh any external readouts (e.g. the bottom-right
-   * lil-gui's "Note offset" slider). Receives a fresh shallow clone so the callback never
-   * aliases the scene's mutator state.
-   */
-  onSkinConfigChange?: (config: BeatorajaSkinConfig) => void;
-  /** Optional audio backend for `main_state.audio_play / loop / stop` Lua calls. */
-  skinAudio?: BeatorajaSkinAudio;
-  /**
-   * Optional lookup that returns the focused song's clear-lamp op (one of
-   * `BEATORAJA_OP.CLEAR_LAMP_*`). When omitted, every song reports as `CLEAR_LAMP_NOPLAY`
-   * (= 100), which makes the song-list lamp icon always render the "no record" frame —
-   * audit 2.18.
-   *
-   * Hosts that track in-session play history (the demo does, keyed by `BrowserSongEntry.id`)
-   * supply the callback to light the lamp icon based on actual completed runs. The lookup is
-   * called on every frame for the focused entry only — caching at the host's discretion.
-   * Folder rows pass through unchanged (the lamp op is a song-bar concept).
-   */
-  resolveSongLampOp?: (song: BrowserSongEntry) => number | undefined;
-  /**
-   * Optional song collection — the same `BrowserSongCollection` the demo built `songs` from.
-   * Required only for the chart-preview engine: `ChartPreviewEngine.focus()` needs to resolve
-   * each song's `BrowserSongAssetSource` to load the `#PREVIEW` file (or fall back to in-place
-   * chart playback). When omitted, the preview engine stays inactive — the select scene runs
-   * silent on cursor moves, same as before this option existed.
-   */
-  collection?: import('../../collection/types.ts').BrowserSongCollection;
-  /**
-   * Optional system-sound paths for navigation cues. Each value is a bundle-relative path
-   * (e.g. `'sound/cursor.wav'`) that {@link skinAudio} resolves through its file map and
-   * decodes lazily. The scene fires the matching path on these events:
-   *
-   *   - `cursor` — every cursor advance (ArrowUp / ArrowDown / PageUp / PageDown / Home / End
-   *     / wheel / mouse-click on a non-focused row).
-   *   - `folderOpen` — drilling into a folder bar via Enter / click.
-   *   - `folderClose` — backing out via Escape / Backspace.
-   *   - `decide` — confirming a song bar (Enter / click on focused / autoplay button).
-   *   - `optionChange` — sort cycle (act=12) / keymode filter cycle (act=11).
-   *   - `cancel` — back-navigation when not in a folder (root-level ESC).
-   *
-   * Missing entries are silently skipped — themes that don't ship a particular cue just don't
-   * play it. Requires {@link skinAudio} to also be supplied; without an audio backend the
-   * paths are unreferenced and the scene runs silent on navigation.
-   *
-   * Hosts should discover the paths from the theme bundle (e.g. probe `sound/cursor.wav`,
-   * `sound/decide.wav` etc. against the bundle's file map) and pass whatever they found.
-   * Beatoraja itself reads these paths from its `config.json` keys (`sound_cursor`,
-   * `sound_select`, `sound_cancel`, `sound_folder`) — the same convention the demo follows.
-   */
-  systemSoundPaths?: BeatorajaSelectSystemSoundPaths;
-  /**
-   * Optional bundle-relative path to a looping select-scene BGM (typically `Bgm/select.wav`).
-   * When supplied, the scene starts the loop in {@link enter} and stops it in {@link exit} via
-   * the {@link skinAudio} backend. Routed through the same `BeatorajaSkinAudioPlayer` the Lua
-   * audio_loop / audio_play calls use so a single AudioContext serves both.
-   *
-   * Discovered by hosts via {@link discoverBeatorajaSelectBgmPath}; pass the result verbatim
-   * (or `undefined` for a silent select). Beatoraja's reference engine stores the path in
-   * `config.json` `bgm_select`; the web port uses convention-based probing instead.
-   *
-   * Volume is fixed at `0.7` — quieter than authored to leave headroom for chart preview
-   * playback (the preview engine doesn't currently duck the BGM, so a too-loud loop drowns
-   * out short preview clips). Future ducking would multiply this by an in-flight factor.
-   */
-  selectBgmPath?: string;
-  /**
-   * Optional snapshot from a previous mount — restores the user's prior cursor / folder /
-   * filter / sort / favorite state when re-entering the select scene (e.g. after returning
-   * from a play). Captured via {@link PixiBeatorajaSelectScene.captureSnapshot} on the
-   * outgoing scene before disposal; passed verbatim into the next mount's options. Takes
-   * precedence over {@link initialIndex} when both are set — snapshot already encodes the
-   * cursor's full position (including which folder the user was in), and `initialIndex`
-   * alone can't disambiguate between "song N of root" vs "song N of folder X".
-   *
-   * Folder identity is preserved by `label` (folder names are stable across mounts as long
-   * as the underlying `BrowserSongCollection` hasn't been reshuffled). When the new
-   * collection no longer contains a folder by that label (the user dropped a different
-   * library), the restore falls back to the root list with cursor 0 — a safe default that
-   * doesn't crash when stale state outlives its source.
-   */
-  restoreSnapshot?: PixiBeatorajaSelectSceneSnapshot;
-  /**
-   * Optional decoder for the focused song's chart-bitmap synthetic ids. The scene calls
-   * this on every focus change; the host returns a Promise resolving to whichever bitmaps
-   * the chart shipped (`#STAGEFILE` / `#BACKBMP` / `#BANNER`). Decoded textures cache
-   * inside the scene by `song.id` so subsequent re-focuses skip the IO.
-   *
-   * Without this, destinations referencing the synthetic ids `-100` / `-101` / `-102`
-   * stay hidden — default beatoraja's select.json paints `-102 BANNER` as the focused
-   * song's banner inside the chart-info panel, ModernChic uses `-100 STAGEFILE` as a
-   * frosted backdrop, etc.
-   */
-  decodeChartImages?: (song: BrowserSongEntry) => Promise<{ stageFile?: Texture; backBmp?: Texture; banner?: Texture }>;
-}
-
-/**
- * System-sound path mapping for navigation cues. See {@link PixiBeatorajaSelectSceneOptions.systemSoundPaths}
- * for which event each entry fires on. Paths are bundle-relative, resolved through the
- * theme's file map by {@link BeatorajaSkinAudio.play}.
- */
-export interface BeatorajaSelectSystemSoundPaths {
-  cursor?: string;
-  folderOpen?: string;
-  folderClose?: string;
-  decide?: string;
-  optionChange?: string;
-  cancel?: string;
-}
-
-/**
- * Serializable scene state captured at scene-exit for restoration on the next mount. The host
- * persists this opaquely (no field-by-field interpretation needed); the scene re-applies it on
- * the next constructor call. All references are by VALUE — ids and labels rather than object
- * pointers — so the snapshot survives `BrowserSongCollection` rebuilds (drop a new library and
- * the snapshot still applies as long as the same folder labels / song ids exist).
- */
-export interface PixiBeatorajaSelectSceneSnapshot {
-  /** Folder labels in nesting order. Empty = at root. */
-  folderPath: ReadonlyArray<string>;
-  /** Cursor index per stack depth. `[rootIdx]` at root, `[rootIdx, songIdxInFolder]` one deep. */
-  cursorStack: ReadonlyArray<number>;
-  /** Active keymode filter (act=11 MODE button cycle). 0 = ALL. */
-  keymodeFilter: number;
-  /** Active sort mode (act=12 SORT button cycle). 0 = DEFAULT. */
-  sortMode: number;
-  /**
-   * Global LN-mode override (act=308 LNMODE button cycle). `undefined` = use the chart's
-   * authored `#LNMODE`; `0..2` = user override (LN / CN / HCN).
-   */
-  lnModeOverride: 0 | 1 | 2 | undefined;
-  /** `BrowserSongEntry.id`s the user marked as song-level favorites. */
-  favoriteSongs: ReadonlyArray<string>;
-  /** `BrowserSongEntry.id`s the user marked as chart-level favorites. */
-  favoriteCharts: ReadonlyArray<string>;
-  /**
-   * Live search query. Survives PLAY → SELECT round-trips so the user lands back on the
-   * same filtered list. Empty string = no filter (the typical case when the user hasn't
-   * touched search). The active-input flag isn't persisted — coming back from gameplay
-   * always starts in non-input mode so the user can navigate immediately.
-   */
-  searchQuery: string;
-}
-
-/**
- * Fallback visible-row count when the skin doesn't author a `songlist` block. Odd so the
- * cursor sits on the centre. Real skins override this with the count of `songlist.liston`
- * entries (default beatoraja theme has 21, ModernChic 17, GdbG 11, …).
- */
-const FALLBACK_VISIBLE_ROW_COUNT = 13;
-
-/**
- * How long a `BUTTON_*` op stays active after a click fires (audit 2.1). 200ms is long
- * enough for the player to perceive the press-state highlight in skins that author short
- * "press feedback" tweens, short enough that subsequent clicks don't pile up if the user
- * mashes a button. Beatoraja itself gates press feedback on Java's input-frame state which
- * lasts a single frame; our 200ms window gives smooth animation under a 60fps tick.
- */
-const BUTTON_PRESS_WINDOW_MS = 200;
-
-/**
- * Beatoraja's `select.json` `value[]` block declares `{"id":"songs_count", … "ref":300}` for
- * the "X songs" footer that shows on a folder bar. The `300` doesn't appear in beatoraja's
- * standard `prop.lua` number table (the publicly-documented enum stops at the 100s); it's a
- * select-scene-specific extension code the renderer answers from the focused folder's child
- * count. We hardcode it here rather than promoting it to {@link BEATORAJA_NUM} because the
- * value source is scene-specific (the select scene's entries[] state, not the runtime adapter).
- */
-const SELECT_NUM_SONGS_IN_FOLDER = 300;
-
-/**
- * Imageset ref 11 — the focused chart's keymode index. Skin authors order their `images[]`
- * array to match beatoraja's MainState enum; default's `modeset` declaration in `select.json`
- * is `["allkeys","5keys","7keys","10keys","14keys","9keys","24keys","24keysDP"]`, indexes 0-7.
- */
-const SELECT_REF_KEYMODE_INDEX = 11;
-
-/**
- * Imageset ref 308 — the focused chart's `#LNMODE` (long-note variant: 0=LN, 1=CN, 2=HCN).
- * Default skin's `lnmodeset` imageset shows the matching label. Charts without an explicit
- * `#LNMODE` directive default to 0 (LN), matching beatoraja's pre-LNMODE fallback.
- */
-const SELECT_REF_LNMODE_INDEX = 308;
-
-/**
- * Imageset ref 12 — the active sort-mode index. Default skin's `sortset` imageset declares
- * `divy:8, len:8`; we map the slots to the 8 sort modes documented on `sortMode` field.
- */
-const SELECT_REF_SORT_MODE_INDEX = 12;
-
-/**
- * Imageset ref 370 — best clear lamp for the focused chart. Default skin's `state_clear`
- * imageset declares 11 sub-images for NOPLAY through MAX. We have no score DB so we always
- * return 0 (NOPLAY), matching the `CLEAR_LAMP_NOPLAY` op we fire on every song.
- */
-const SELECT_REF_BEST_CLEAR_LAMP_INDEX = 370;
-
-/**
- * Per-kind note-count refs (ModernChic's `bmsanalysis.lua` block):
- *
- *   - `350` TOTALNOTE_NORMAL — playable taps minus scratch / LN / BSS.
- *   - `351` TOTALNOTE_LN — long notes (excluding scratch LN).
- *   - `352` TOTALNOTE_SCRATCH — single-tap scratches.
- *   - `353` TOTALNOTE_BSS — back-spin scratches (long scratch).
- */
-const SELECT_NUM_TOTALNOTE_NORMAL = 350;
-const SELECT_NUM_TOTALNOTE_LN = 351;
-const SELECT_NUM_TOTALNOTE_SCRATCH = 352;
-const SELECT_NUM_TOTALNOTE_BSS = 353;
-
-/**
- * Note-density refs (ModernChic `info.lua`):
- *
- *   - `360` / `361` peak NPS — integer + first-decimal digits.
- *   - `362` / `363` end NPS (the chart's last 1-sec window).
- *   - `364` / `365` average NPS (`totalNotes / totalSeconds`).
- *
- * Skin authors render the readout as `{integer}.{decimal} NPS` by placing the integer cell
- * next to a literal "." next to the decimal cell.
- */
-const SELECT_NUM_DENSITY_PEAK = 360;
-const SELECT_NUM_DENSITY_PEAK_AFTERDOT = 361;
-const SELECT_NUM_DENSITY_END = 362;
-const SELECT_NUM_DENSITY_END_AFTERDOT = 363;
-const SELECT_NUM_DENSITY_AVERAGE = 364;
-const SELECT_NUM_DENSITY_AVERAGE_AFTERDOT = 365;
+export type { PixiBeatorajaSelectSceneOptions, PixiBeatorajaSelectSceneSnapshot } from './select/options.ts';
 
 /**
  * Per-frame tween rate for `scrollPosition` chasing `currentIndex`. Fraction of the remaining
@@ -345,18 +76,15 @@ const SELECT_NUM_DENSITY_AVERAGE_AFTERDOT = 365;
 const SCROLL_TWEEN_RATE = 0.25;
 const SCROLL_SNAP_THRESHOLD = 0.005;
 
-/**
- * The LNMODE button index (0 = LN, 1 = CN, 2 = HCN) for a chart's authored `#LNMODE`, which counts from 1 (1 = LN,
- * 2 = CN, 3 = HCN). Charts without the directive, or with a value outside 1..3, read as LN.
- */
-export function lnModeDirectiveToIndex(lnMode: number | undefined): 0 | 1 | 2 {
-  if (lnMode === 2) return 1;
-  if (lnMode === 3) return 2;
-  return 0;
-}
+/** What the scene's parts read and drive on it. */
+type BeatorajaSelectSceneContext = BeatorajaSelectRowsContext &
+  BeatorajaSelectSearchContext &
+  BeatorajaSelectChartImagesContext &
+  BeatorajaSelectSkinStateContext;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root: Container = new Container();
+  readonly identity = { kind: 'select', family: 'beatoraja' } as const;
   /** Full-canvas backdrop behind the skin container — see `PixiBeatorajaGameplayView` for rationale. */
   private readonly backdrop = new Graphics();
   private view: BeatorajaPlaySkinView;
@@ -374,126 +102,28 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * sat at hard-coded screen-space coordinates that ignored the skin's chrome.
    */
   private readonly listLayer = new Container();
-  /**
-   * Per-row bar background sprites — cropped from `skin.image[liston[i].id]`. Many beatoraja
-   * skins author the focused row with a different id (e.g. `list_on` while other rows use
-   * `list`), so the per-row texture choice doubles as the cursor highlight. `undefined`
-   * entries fill the array when the skin omits an `id` for that row OR the matching
-   * `image[]` entry is missing — labels still paint, just without a per-row backdrop.
-   *
-   * Mounted FIRST in the listLayer's z-order so labels / icons / level / feature labels
-   * paint on top.
-   */
-  private readonly rowBarSprites: (Sprite | undefined)[] = [];
-  /**
-   * Per-row pre-resolved imageset frame textures. When the row's authored id resolved
-   * through an `imageset[]`, this slot holds an array of textures (one per
-   * `imageset.images[i]`) keyed by frame index. The renderer swaps `rowBarSprites[i].texture`
-   * to the matching frame based on the focused entry's bar TYPE per upstream
-   * `BarRenderer.java:269`'s `si.draw(sprite, time, ba.value, ...)`:
-   *
-   *   - `SongBar` with chart  → frame 0 (`bar-song`)
-   *   - `SongBar` no chart    → frame 4 (`bar-nosong`)
-   *   - `FolderBar`           → frame 1 (`bar-folder`)
-   *   - `TableBar`/`HashBar`  → frame 2 (`bar-table`)
-   *   - `GradeBar`            → frame 3 (`bar-grade`)
-   *   - `CommandBar`/etc      → frame 5 (`bar-command`)
-   *   - `SearchWordBar`       → frame 6 (`bar-search`)
-   *
-   * Our app currently surfaces only `'song'` and `'folder'` entries (no command / search /
-   * grade bars on the web port), so the active branches are 0, 1, and 4 only — the rest of
-   * the array is kept ready for when those types land.
-   *
-   * `undefined` slot means the row's id wasn't an imageset (= legacy single-texture path);
-   * the per-frame paint leaves `rowBarSprites[i].texture` as the build-time default.
-   */
-  private readonly rowBarFrameTextures: (ReadonlyArray<Texture | undefined> | undefined)[] = [];
-  /**
-   * Per-row label texts. `undefined` slot when the upstream-fixed 60-slot grid (audit A-9
-   * — `BEATORAJA_SONGLIST_BAR_COUNT`) extends past the skin's authored `liston[]` count;
-   * those slots stay non-allocated since upstream's `barimageon[i]` is null there too.
-   */
-  private readonly rowLabels: (Text | undefined)[] = [];
-  /**
-   * Per-row chart-level digit overlay (Pixi `Text` fallback). Used ONLY when the skin's
-   * `songlist.level[].id` doesn't resolve to a `value[]` declaration — e.g. legacy skins
-   * that authored level as an `image[]` entry rather than a digit composer. Most modern
-   * skins (default beatoraja, GdbG, ModernChic) author it as `value[id="playlevel_bar"]`
-   * referencing `number.png`, so they take the sprite-digit path below and this field
-   * stays empty.
-   */
-  private readonly rowLevelLabels: (Text | undefined)[] = [];
-  /**
-   * Per-row chart-level digit sprites — one per `digit` slot, cropped from the strip
-   * texture referenced by the value declaration's `src` (typically `number.png` in
-   * beatoraja's default skin). Mirrors upstream `MusicSelector`'s rendering: the chart's
-   * `#PLAYLEVEL` value is composed via {@link composeBeatorajaValueCells} and each digit
-   * lands in a per-cell sprite sized to a fraction of the level sub-rect.
-   *
-   * `undefined` slot when the row's level path falls back to text rendering (above).
-   */
-  private readonly rowLevelDigitSprites: (Sprite[] | undefined)[] = [];
-  /**
-   * Resolved `value[]` declaration referenced by `songlist.level[].id`. Single skin-wide
-   * value so we cache it once per skin instead of looking up every row build. `undefined`
-   * when the skin omits a `value[]` for the level id (then every row falls back to the
-   * Text path above).
-   */
-  private levelValueElement: BeatorajaValueElement | undefined;
-  /** Source-strip texture for {@link levelValueElement} — used to crop per-digit cells. */
-  private levelStripTexture: Texture | undefined;
-  /**
-   * Per-row chart-feature label sprites — one Sprite per `(visible row × songlist.label[]
-   * entry)` combination. Each label is gated on a chart feature predicate (LN /
-   * random sequence / landmine / etc.); the renderer iterates the entries each frame and
-   * shows / hides the matching sprite per row. Mounted lazily via {@link buildRowVisuals}
-   * after the songlist parse settles.
-   *
-   * Layout: `rowFeatureLabels[rowIndex][labelIndex] = Sprite` so a single Sprite never
-   * needs to flip between different label ids at runtime — sizing / texture is fixed at
-   * mount time, only visibility / position toggles.
-   */
-  private readonly rowFeatureLabels: Sprite[][] = [];
-  /**
-   * Per-row click hit area. `undefined` for unauthored slots beyond `liston.length`
-   * (audit A-9) — no rect to size against and nothing visible to click.
-   */
-  private readonly rowHitAreas: (Sprite | undefined)[] = [];
-  /**
-   * Skin-authored `songlist` layout (rect-per-row + focused row index). Parsed from
-   * `skin.songlist` at construction. `undefined` when the skin omits the block — the layout
-   * code falls back to a screen-space hard-coded grid so unsupported themes still get
-   * something usable.
-   */
-  private songList: BeatorajaSongListLayout | undefined;
-  /**
-   * Whether the parsed songlist authors a different bar-image id for the focused row
-   * versus the rest (e.g. `list_on` on the cursor's row, `list` elsewhere). When true the
-   * texture swap visualises the cursor on its own and we suppress the warm-yellow label
-   * tint so we don't double up on the highlight cue.
-   *
-   * Recomputed in {@link applySongListGeometry} whenever the songlist is parsed (i.e.
-   * construction + `replaceSkin`). Stays `false` for skins authoring all rows with the
-   * same id (or no id at all) — those rely on the warm-yellow label fallback.
-   */
-  private hasFocusedBarVariant = false;
-  /**
-   * Per-song chart-image cache. Keyed by `BrowserSongEntry.id`; populated lazily by
-   * {@link refreshChartImagesForFocus} as the user moves the cursor. Re-focusing a
-   * previously-loaded song hits the cache and skips the IO. Sentinel `null` records a
-   * decode that resolved with no usable images so we don't retry every cursor move
-   * (e.g. chart with no `#STAGEFILE` / `#BACKBMP` / `#BANNER`).
-   */
-  private readonly chartImageCache = new Map<
-    string,
-    { stageFile?: Texture; backBmp?: Texture; banner?: Texture } | null
-  >();
-  /** Generation counter — bumps on every focus change so stale async resolves don't overwrite newer ones. */
-  private chartImageFocusGeneration = 0;
-  /** Cached visible row count — `songList?.rows.length` or the fallback constant. */
-  private visibleRowCount = FALLBACK_VISIBLE_ROW_COUNT;
-  /** Cached focused row index within `0..visibleRowCount-1`. */
-  private centreRowIndex = Math.floor(FALLBACK_VISIBLE_ROW_COUNT / 2);
+  /** This scene as the parts it is made of read and drive it (see {@link createContext}). */
+  private readonly context: BeatorajaSelectSceneContext = PixiBeatorajaSelectScene.createContext(this);
+  /** The song list: each row's bar, title, level digits, feature labels and hit sprite, drawn into `listLayer`. */
+  private readonly rows: BeatorajaSelectRows = new BeatorajaSelectRows(this.context);
+  /** The rows' titles, as the scene's tests reach them. */
+  private get rowLabels(): (Text | undefined)[] {
+    return this.rows.rowLabels;
+  }
+  /** The rows' hit sprites, as the scene's tests reach them. */
+  private get rowHitAreas(): (Sprite | undefined)[] {
+    return this.rows.rowHitAreas;
+  }
+  /** The search input mode and its prompt. */
+  private readonly search: BeatorajaSelectSearch = new BeatorajaSelectSearch(this.context);
+  /** The search prompt, as the scene's tests reach it. */
+  private get searchPromptText(): Text | undefined {
+    return this.search.searchPromptText;
+  }
+  /** The focused chart's images and graphs. */
+  private readonly chartImages: BeatorajaSelectChartImages = new BeatorajaSelectChartImages(this.context);
+  /** What the skin reads of the screen: the frame's select input, its texts and values, and the active ops. */
+  private readonly skinState: BeatorajaSelectSkinState = new BeatorajaSelectSkinState(this.context);
 
   private readonly options: PixiBeatorajaSelectSceneOptions;
   private host?: PixiSceneHost;
@@ -582,20 +212,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   /**
    * Live search query (case-insensitive substring match on title + artist + genre + sub
    * title). Empty string = no filter. Updated by the search input flow (see
-   * {@link searchActive} / handleKeyDown's `/` branch). Surfaced to the skin via
+   * {@link BeatorajaSelectSearch.searchActive} / handleKeyDown's `/` branch). Surfaced to the skin via
    * `BEATORAJA_TEXT.SEARCHWORD` so themes that author the search-display text node show
    * the live query while the user types.
    */
   private searchQuery = '';
-  /**
-   * `true` while the user is in search-input mode (after pressing `/`). In this mode
-   * keystrokes go to the search query instead of cursor navigation; Enter / Escape exit
-   * the mode (Enter keeps the filter, Escape clears + exits). Visual indicator: a small
-   * prompt at the top of the canvas (rendered as a transient Text node).
-   */
-  private searchActive = false;
-  /** Sprite holding the live search prompt — only mounted while `searchActive`. */
-  private searchPromptText: Text | undefined;
   private disposed = false;
   /**
    * Lazily-constructed chart-preview engine. Mirrors the LR2 `scene/lr2/select.ts` integration —
@@ -619,23 +240,23 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // the catch-all fallback regardless of the user's chosen layout. Routed through
       // `baseOps()` so a `replaceSkin` mid-session reuses the same cached set the per-frame
       // op-resolution path uses.
-      skinConfigOps: this.baseOps(),
+      skinConfigOps: this.skinState.baseOps(),
       // Text content tracks the highlighted song. The skin's title / artist / genre text destinations
       // therefore reflect the live cursor, matching beatoraja's own select-screen behavior.
-      resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
+      resolveTextContent: (refOp) => this.skinState.resolveSelectionText(refOp),
       // Numeric values from the focused song — total notes, BPM, level. Skins render
       // these via `value[]` elements with `ref = 74 (TOTALNOTES)`, `92 (MAINBPM)`,
       // `96 (PLAYLEVEL)`, etc. Without this, the chart-info panel sits on its idle
       // zeros even after the cursor moves to a different song.
-      resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
+      resolveNumberValue: (refOp) => this.skinState.resolveSelectionNumber(refOp),
       // Imageset / generic ref values. Drives `imageset[]` sub-image picks (e.g. `modeset`
       // ref 11 picks "5keys" / "7keys" / etc. from the skin's array based on the focused
       // chart's keymode) plus any other `ref`-driven selectors the skin authored.
-      resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
+      resolveRefValue: (refOp) => this.skinState.resolveSelectionRefValue(refOp),
       // Slider values — volume / lanecover / lift translate sliders. Without a value the
       // renderer hides the slider entirely; we report `1.0` (max position) for volume types
       // so ModernChic's volume sliders sit at full instead of vanishing.
-      resolveSliderValue: (type) => resolveSelectionSliderValue(type),
+      resolveSliderValue: (type) => resolveBeatorajaSelectSliderValue(type),
       // Skin-authored button clicks — `image[].act` codes (15=play, 16=autoplay, etc.). Routed
       // through `handleButtonAction` so the user can hit "AUTO PLAY" on the skin's chrome and
       // the scene starts the focused song in auto mode without round-tripping through a separate
@@ -647,16 +268,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // the FOCUSED song's bitmap when the chart shipped one. Default beatoraja's
       // select.json paints `-102` as the per-song banner; ModernChic uses `-100` as a
       // frosted backdrop on the chart-info panel.
-      chartImageProvider: (id) => this.resolveChartImageForFocus(id),
+      chartImageProvider: (id) => this.chartImages.resolveChartImageForFocus(id),
       // BPM segments + mainbpm reference for the focused chart's `bpmgraph` element.
       // The spec-faithful renderer path uses these to apply log-scaled, mainbpm-relative
       // y projection AND color-code segments by BPM identity (mainbpm = green, minbpm =
       // blue, maxbpm = red, others = yellow, stop = magenta).
-      resolveBpmGraphData: () => this.resolveBpmGraphDataForFocus(),
+      resolveBpmGraphData: () => this.chartImages.resolveBpmGraphDataForFocus(),
       // Per-second × per-category note distribution histogram for `judgegraph` type=0
       // (= the `notes-graph` element on the default skin). Mirrors upstream
       // `SkinNoteDistributionGraph.updateData()` with TYPE_NORMAL.
-      resolveNoteDistribution: () => this.resolveNoteDistributionForFocus(),
+      resolveNoteDistribution: () => this.chartImages.resolveNoteDistributionForFocus(),
     });
 
     this.root.addChild(this.backdrop);
@@ -670,12 +291,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // list (background, frame) paints behind the labels; chrome declared after (cursor highlight,
     // info panels, decorative overlays) paints on top. Skins that omit the anchor get the
     // top-of-stack fallback (legacy behavior).
-    this.listLayer.eventMode = 'static';
+    //
+    // `passive`, not `static`: Pixi hit-tests the children of an interactive container as interactive too, so the row
+    // label above a row's hit sprite would take a click on the title text and hand it to this (listener-less) layer.
+    // Passive leaves each child to its own mode: only the row hit sprites are hit.
+    this.listLayer.eventMode = 'passive';
     this.view.container.addChildAt(this.listLayer, this.view.songListLayerInsertIndex);
 
-    this.songList = parseBeatorajaSongList(options.skin);
-    this.applySongListGeometry();
-    this.buildRowVisuals(options.fonts);
+    this.rows.songList = parseBeatorajaSongList(options.skin);
+    this.rows.applySongListGeometry();
+    this.rows.buildRowVisuals(options.fonts);
 
     // Apply the snapshot BEFORE the first refreshEntries so its `keymodeFilter` / `sortMode`
     // shape the entry list immediately — applying after would briefly render the unfiltered
@@ -701,8 +326,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const filtered =
         this.keymodeFilter === 0
           ? options.songs
-          : options.songs.filter((song) => keymodeImagesetIndex(safeResolveChartVariant(song)) === this.keymodeFilter);
-      const rootFolders = groupSongsByFolder(filtered);
+          : options.songs.filter((song) => beatorajaKeyModeIndex(safeResolveChartVariant(song)) === this.keymodeFilter);
+      // The root lists the course folders after the song folders, as `refreshEntries` does, so a cursor left in a
+      // course folder (the select scene is mounted again after every course) comes back to its course bar.
+      const rootFolders = [...groupSongsByFolder(filtered), ...(options.courseFolders ?? [])];
       let currentFolders: ReadonlyArray<BrowserFolderNode> = rootFolders;
       for (const label of snapshot.folderPath) {
         const match = currentFolders.find((f) => f.label === label);
@@ -746,6 +373,53 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   }
 
   /**
+   * The scene as its parts read and drive it: getters over its state and arrow methods over its own, so the parts reach
+   * the members they need while those stay private to the scene.
+   */
+  private static createContext(scene: PixiBeatorajaSelectScene): BeatorajaSelectSceneContext {
+    return {
+      get view(): BeatorajaPlaySkinView {
+        return scene.view;
+      },
+      get options(): PixiBeatorajaSelectSceneOptions {
+        return scene.options;
+      },
+      get listLayer(): Container {
+        return scene.listLayer;
+      },
+      get entries(): ReadonlyArray<BrowserBrowseEntry> {
+        return scene.entries;
+      },
+      get scrollPosition(): number {
+        return scene.scrollPosition;
+      },
+      handleRowPointerTap: (rowOffset, event) => scene.handleRowPointerTap(rowOffset, event),
+      get searchQuery(): string {
+        return scene.searchQuery;
+      },
+      setSearchQuery: (query) => scene.setSearchQuery(query),
+      moveCursor: (delta) => scene.moveCursor(delta),
+      setCursor: (index) => scene.setCursor(index),
+      get disposed(): boolean {
+        return scene.disposed;
+      },
+      get currentIndex(): number {
+        return scene.currentIndex;
+      },
+      get keymodeFilter(): number {
+        return scene.keymodeFilter;
+      },
+      get sortMode(): number {
+        return scene.sortMode;
+      },
+      get lnModeOverride(): 0 | 1 | 2 | undefined {
+        return scene.lnModeOverride;
+      },
+      currentFolderLabel: () => scene.currentFolderLabel(),
+    };
+  }
+
+  /**
    * Snapshot the live scene state for restoration on the next mount. Hosts call this BEFORE
    * disposing the scene (e.g. on PLAY transition) and pass the result back as
    * `options.restoreSnapshot` when re-mounting on return. The snapshot is plain data — safe
@@ -758,7 +432,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   captureSnapshot(): PixiBeatorajaSelectSceneSnapshot {
     return {
       folderPath: this.folderStack.map((folder) => folder.label),
-      cursorStack: this.cursorStack.slice(0, this.folderStack.length + 1),
+      // The deepest entry is the live cursor: `cursorStack` keeps the parents' cursors only (its last slot is the `0`
+      // pushed on entering the folder and is not updated as the cursor moves).
+      cursorStack: [...this.cursorStack.slice(0, this.folderStack.length), this.currentIndex],
       keymodeFilter: this.keymodeFilter,
       sortMode: this.sortMode,
       lnModeOverride: this.lnModeOverride,
@@ -766,6 +442,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       favoriteCharts: Array.from(this.favoriteCharts),
       searchQuery: this.searchQuery,
     };
+  }
+
+  /** The bar under the cursor (a folder, song or course), or `undefined` when the list is empty. */
+  getFocusedEntry(): BrowserBrowseEntry | undefined {
+    return this.entries[this.currentIndex];
   }
 
   enter(host: PixiSceneHost): void {
@@ -821,8 +502,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       void this.previewAudioContext.close().catch(() => {});
       this.previewAudioContext = undefined;
     }
-    this.destroySearchPrompt();
-    this.destroyRowVisuals();
+    this.search.destroySearchPrompt();
+    this.rows.destroyRowVisuals();
     if (this.listLayer.parent) {
       this.listLayer.parent.removeChild(this.listLayer);
     }
@@ -859,9 +540,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     fonts?: BeatorajaFontCache;
   }): void {
     if (this.disposed) return;
-    this.destroySearchPrompt();
+    this.search.destroySearchPrompt();
     this.view.dispose();
-    this.cachedBaseOps = undefined;
+    this.skinState.cachedBaseOps = undefined;
 
     // Mirror upstream `MainState.setSkin` (`MainState.java:113-132`): swap in the new skin AND
     // its companion resource set so subsequent calls to `buildRowVisuals` /
@@ -892,17 +573,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // `cachedBaseOps` was nulled above — `getCachedBaseOps` rebuilds against the NEW
       // `skinConfig.option` map so layout-variant dst alts re-resolve to the user's
       // (possibly changed) option picks for the swapped skin.
-      skinConfigOps: this.baseOps(),
-      resolveTextContent: (refOp) => this.resolveSelectionText(refOp),
-      resolveNumberValue: (refOp) => this.resolveSelectionNumber(refOp),
-      resolveRefValue: (refOp) => this.resolveSelectionRefValue(refOp),
-      resolveSliderValue: (type) => resolveSelectionSliderValue(type),
+      skinConfigOps: this.skinState.baseOps(),
+      resolveTextContent: (refOp) => this.skinState.resolveSelectionText(refOp),
+      resolveNumberValue: (refOp) => this.skinState.resolveSelectionNumber(refOp),
+      resolveRefValue: (refOp) => this.skinState.resolveSelectionRefValue(refOp),
+      resolveSliderValue: (type) => resolveBeatorajaSelectSliderValue(type),
       onButtonAction: (act, mods) => this.handleButtonAction(act, mods),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
-      chartImageProvider: (id) => this.resolveChartImageForFocus(id),
-      resolveBpmGraphData: () => this.resolveBpmGraphDataForFocus(),
-      resolveNoteDistribution: () => this.resolveNoteDistributionForFocus(),
+      chartImageProvider: (id) => this.chartImages.resolveChartImageForFocus(id),
+      resolveBpmGraphData: () => this.chartImages.resolveBpmGraphDataForFocus(),
+      resolveNoteDistribution: () => this.chartImages.resolveNoteDistributionForFocus(),
     });
     // The old view's `container.destroy({children: false})` (inside `view.dispose()`) detaches
     // its children — listLayer was one of them, so it's now orphaned. Re-parent into the new
@@ -919,16 +600,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // new `visibleRowCount` and indexes past the still-old `rowLabels[]`, throwing "Cannot set
     // properties of undefined". `buildRowVisuals` tears down stale entries first so this is
     // safe to call repeatedly.
-    this.songList = parseBeatorajaSongList(opts.skin);
-    this.applySongListGeometry();
+    this.rows.songList = parseBeatorajaSongList(opts.skin);
+    this.rows.applySongListGeometry();
     // Invalidate per-skin caches keyed on the OLD skin's declarations. `buildRowVisuals`
     // re-resolves the level value entry / strip texture against the new skin via
     // `resolveLevelValueElement`.
-    this.featureLabelImages = undefined;
-    this.valueElementsById = undefined;
-    this.buildRowVisuals(opts.fonts);
-    this.refreshRowVisuals();
-    this.refreshSearchPrompt();
+    this.rows.featureLabelImages = undefined;
+    this.rows.valueElementsById = undefined;
+    this.rows.buildRowVisuals(opts.fonts);
+    this.rows.refreshRowVisuals();
+    this.search.refreshSearchPrompt();
 
     this.lastFitWidth = 0;
     this.lastFitHeight = 0;
@@ -964,7 +645,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const factor = 1 - Math.pow(1 - SCROLL_TWEEN_RATE, ticker.deltaTime);
       this.scrollPosition += delta * factor;
     }
-    this.refreshRowVisuals();
+    this.rows.refreshRowVisuals();
 
     const elapsed = performance.now() - this.startMs;
     // Pass through unfired timers as `undefined` so destinations gated on them stay hidden.
@@ -974,8 +655,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // `timer=0` (scene-start) path to use 0 elapsed already, so passing `undefined` for
     // anything else is the correct behaviour.
     const skinAudio = this.options.skinAudio;
+    this.skinState.frameInput = undefined;
+    this.skinState.frameInput = this.skinState.selectInput();
     this.view.update({
-      activeOps: this.computeActiveOps(),
+      activeOps: this.skinState.computeActiveOps(),
       // Consult the per-scene timer ladder. Returning `undefined` for unstamped timers keeps
       // those destinations hidden (matches the play-scene runtime adapter's behaviour and
       // upstream `getTimerStart` semantics — only fired timers produce a non-null start
@@ -988,147 +671,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       audioLoop: skinAudio === undefined ? undefined : (path, vol) => skinAudio.loop(path, vol),
       audioStop: skinAudio === undefined ? undefined : (path) => skinAudio.stop(path),
     });
-  }
-
-  /**
-   * Stable per-skin op set — `skin_config.option` picks plus any always-on flags. Cached because
-   * `buildBaseOpSet` walks the option map; recompute only when `replaceSkin` invalidates the
-   * cache. Live per-frame ops (focused-bar kind, chart keymode) are added on top in
-   * {@link computeActiveOps}.
-   */
-  private baseOps(): ReadonlySet<number> {
-    if (this.cachedBaseOps !== undefined) return this.cachedBaseOps;
-    this.cachedBaseOps = buildBaseOpSet(this.options.skinConfig?.option);
-    return this.cachedBaseOps;
-  }
-  private cachedBaseOps: ReadonlySet<number> | undefined;
-  /**
-   * Transient BUTTON-press tracker (audit 2.1). Maps each clicked `act` code to the
-   * `performance.now()` timestamp at which the press happened. `computeActiveOps` adds the
-   * code to the active op set while it's still within {@link BUTTON_PRESS_WINDOW_MS}, so
-   * skins gating press-state chrome on the matching op see the highlight in flight. Older
-   * entries get garbage-collected lazily during op resolution; the map stays bounded since
-   * the user can only click so many buttons per second.
-   */
-  private readonly buttonPressedAt = new Map<number, number>();
-
-  /**
-   * Per-frame active op set. Combines the stable base ops with bar-state ops derived from the
-   * cursor's focused entry:
-   *
-   *   - `FOLDERBAR (1)` — focused entry is a folder bar. Default skin gates its `songs_font` /
-   *     `songs_count` and the bar-history `lamp` / `rank` graphs on this op.
-   *   - `SONGBAR (2)` — focused entry is a song bar. Gates the BPM / playlevel / score / miss /
-   *     combo / clear / play readouts that make up most of the left-pane info panel.
-   *   - `PLAYABLEBAR (5)` — folder OR song. (Reserved; we don't have grade bars.)
-   *   - `KEYSONG_*` (160-164 / 1160-1161) — variant of the focused song's chart, lights up the
-   *     "7KEYS" / "5KEYS" / etc. label image.
-   *
-   * Without these the entire info pane stays hidden because its destinations are gated on
-   * `op:[2]` in the authored skin.
-   */
-  private computeActiveOps(): ReadonlySet<number> {
-    const base = this.baseOps();
-    // Fast path: no active entry → just the base set (includes `skin_config.option` picks).
-    const entry = this.entries[this.currentIndex];
-    if (entry === undefined) return base;
-
-    const ops = new Set(base);
-
-    // Scene-wide defaults — system state we've made available consistently from the moment the
-    // scene mounts. These are independent of the focused entry so they live outside the song /
-    // folder branches.
-    //
-    //   - `LOADED` (81): assets / library finished loading (we never enter this scene before
-    //     the chart bundle is decoded, so it's always true).
-    //   - `OFFLINE` (50): IR (online ranking) is unavailable. We have no IR integration today
-    //     so the OFFLINE branch always wins; chrome gated on ONLINE stays hidden.
-    //   - `REPLAY_OFF` (82): replay system is disabled. No replay capture / playback yet.
-    //   - `DISABLE_SAVE_SCORE` (60) / `NO_SAVE_CLEAR` (62): score DB is unavailable. Chrome
-    //     gated on the ENABLE_* / *_SAVE_CLEAR variants stays hidden until DB layer ships.
-    //   - `BGAON` (41): play-scene BGA enabled. The select scene's "BGA: ON / OFF" indicator
-    //     gates on this; we have no BGA-disable toggle, so it's permanently on.
-    //
-    // Without this batch the skin's chrome at the bottom of the screen (replay / IR badges,
-    // save-status indicators) sits on its idle / unknown state.
-    ops.add(BEATORAJA_OP.LOADED);
-    ops.add(BEATORAJA_OP.OFFLINE);
-    ops.add(BEATORAJA_OP.REPLAY_OFF);
-    ops.add(BEATORAJA_OP.DISABLE_SAVE_SCORE);
-    ops.add(BEATORAJA_OP.NO_SAVE_CLEAR);
-    ops.add(BEATORAJA_OP.BGA_ON);
-
-    if (entry.kind === 'folder') {
-      ops.add(BEATORAJA_OP.FOLDERBAR);
-    } else {
-      ops.add(BEATORAJA_OP.SONGBAR);
-      ops.add(BEATORAJA_OP.PLAYABLEBAR);
-      // Map chart variant → keysong op. `resolveChartPlayVariant` returns one of the 5/7/9/10/14
-      // strings the LR2 / beatoraja paths share; 24K / 24K-DP variants aren't surfaced today
-      // but the destination gates still resolve correctly when those values land.
-      const variant = safeResolveChartVariant(entry.song);
-      const keysongOp = keysongOpForVariant(variant);
-      if (keysongOp !== undefined) ops.add(keysongOp);
-
-      // Chart traits — gates per-feature chrome. Beatoraja's trait op codes match the LR2
-      // `dst_option` block 1:1 (HAS_LN=173, HAS_BGA=171, HAS_BPMCHANGE=177, HAS_RANDOMSEQUENCE=179),
-      // so reusing `detectChartFeatures` (originally written for the LR2 select scene) gives us
-      // matching semantics for free.
-      const features = detectChartFeatures(entry.song);
-      ops.add(features.longNote ? BEATORAJA_OP.HAS_LN : BEATORAJA_OP.NO_LN);
-      ops.add(features.bga ? BEATORAJA_OP.HAS_BGA : BEATORAJA_OP.NO_BGA);
-      ops.add(features.bpmChange ? BEATORAJA_OP.HAS_BPMCHANGE : BEATORAJA_OP.NO_BPMCHANGE);
-      ops.add(features.random ? BEATORAJA_OP.HAS_RANDOMSEQUENCE : BEATORAJA_OP.NO_RANDOMSEQUENCE);
-      // HAS_BPMSTOP (1177) — chart stops are channel `09`. Default skin's `bpmgraph` swaps a
-      // "with stop" variant on this op (see `op:[1177]` in `select.json`). No companion `NO_*`
-      // op is defined in beatoraja's prop.lua for stops — `1177` alone toggles the right chrome.
-      const hasStop = chartHasStop(entry.song);
-      if (hasStop) ops.add(BEATORAJA_OP.HAS_BPMSTOP);
-
-      // Asset presence — chrome that fades / hides depending on whether the chart shipped a
-      // banner / loading-screen / select-screen image. Sourced directly from `metadata.*`.
-      const meta = entry.song.chart.metadata;
-      ops.add(meta.stageFile ? BEATORAJA_OP.HAS_STAGEFILE : BEATORAJA_OP.NO_STAGEFILE);
-      ops.add(meta.banner ? BEATORAJA_OP.HAS_BANNER : BEATORAJA_OP.NO_BANNER);
-      ops.add(meta.backBmp ? BEATORAJA_OP.HAS_BACKBMP : BEATORAJA_OP.NO_BACKBMP);
-
-      // Difficulty op — `#DIFFICULTY 1..5` lights up BOTH the beatoraja-native LEVEL_* block
-      // (70-74) and the LR2-style DIFFICULTY_* block (150-155). Skins gate per-difficulty
-      // chrome on either flavour; firing both keeps GdbG_Skin (LR2-derived) and ModernChic
-      // (mixed) rendering correctly without a per-skin convention check.
-      for (const op of difficultyOps(meta.difficulty)) ops.add(op);
-
-      // Judge rank op — `#RANK 0..4` lights up JUDGE_VERYHARD / HARD / NORMAL / EASY /
-      // VERYEASY. ModernChic / GdbG both gate the per-rank judgment-window labels on these.
-      // Charts without `#RANK` default to NORMAL — matches beatoraja's behavior of treating
-      // "missing rank" as the standard window.
-      ops.add(judgeRankOp(meta.rank));
-
-      // Clear-lamp op for the focused song bar (audit 2.18). Beatoraja's per-bar
-      // `OPTION_SELECT_BAR_*_CLEARED` block (100..1104) is the same numeric pool as the
-      // play-scene `CLEAR_LAMP_*`. The host supplies a lookup keyed by `BrowserSongEntry.id`
-      // so completed runs in this session light the bar's lamp icon. When the host omits the
-      // callback (or hasn't tracked this song's id yet), fall through to NOPLAY so the
-      // "no record" frame still shows.
-      const lampOp = this.options.resolveSongLampOp?.(entry.song) ?? BEATORAJA_OP.CLEAR_LAMP_NOPLAY;
-      ops.add(lampOp);
-    }
-
-    // Transient BUTTON-press feedback (audit 2.1). Each `act` code clicked within the last
-    // `BUTTON_PRESS_WINDOW_MS` lights its matching op so destinations gating press-state
-    // chrome on `op = {act}` show their pressed visual. GC stale entries lazily — the map's
-    // size is bounded by user-click rate, which can never exceed ~10/sec.
-    if (this.buttonPressedAt.size > 0) {
-      const now = performance.now();
-      for (const [act, pressedAtMs] of this.buttonPressedAt) {
-        if (now - pressedAtMs >= BUTTON_PRESS_WINDOW_MS) {
-          this.buttonPressedAt.delete(act);
-          continue;
-        }
-        ops.add(act);
-      }
-    }
-    return ops;
+    this.skinState.frameInput = undefined;
   }
 
   /**
@@ -1144,7 +687,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const keymodeFiltered =
       filter === 0
         ? this.options.songs
-        : this.options.songs.filter((song) => keymodeImagesetIndex(safeResolveChartVariant(song)) === filter);
+        : this.options.songs.filter((song) => beatorajaKeyModeIndex(safeResolveChartVariant(song)) === filter);
     // Search query — case-insensitive substring match on title / artist / genre / subtitle.
     // Empty string short-circuits (no filter). Applied AFTER the keymode filter so a search
     // narrows whatever the user already filtered to via the MODE button.
@@ -1160,9 +703,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         const sorted = this.sortMode !== 0 ? sortSongsByMode(searchFiltered, this.sortMode) : searchFiltered;
         this.entries = sorted.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
       } else {
-        const folders = groupSongsByFolder(searchFiltered);
+        const folders = [...groupSongsByFolder(searchFiltered), ...(this.options.courseFolders ?? [])];
         this.entries = folders.map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
       }
+    } else if (this.folderStack[this.folderStack.length - 1]!.courses !== undefined) {
+      const courses = this.folderStack[this.folderStack.length - 1]!.courses!;
+      this.entries = courses.map((course): BrowserBrowseEntry => ({ kind: 'course', course }));
     } else {
       const top = this.folderStack[this.folderStack.length - 1]!;
       // When a filter is active, the folder's pre-stored `songs` may include charts the
@@ -1175,259 +721,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.currentIndex = clampIndex(initialIndex, this.entries.length);
     this.scrollPosition = this.currentIndex;
     this.markSongbarChangeTimer();
-    this.refreshRowVisuals();
+    this.rows.refreshRowVisuals();
     // Folder enter / leave / filter change reshuffles the entry list; re-arm preview against
     // the new focused song (or stop if the new focus is a folder bar).
     this.refreshChartPreview();
     // Search-prompt suffix carries a live "N matches" count — refresh whenever the entry
     // list changes so the user sees the new result count after folder enter / sort cycle /
     // keymode filter change while a search query is active.
-    this.refreshSearchPrompt();
-  }
-
-  private resolveSelectionText(refOp: number): string | undefined {
-    const song = this.focusedSong();
-    const skin = this.options.skin;
-    // Cursor's focused entry — used for TITLE / FULLTITLE folder-bar fallback. Mirrors
-    // upstream `StringPropertyFactory.java:76-97`'s special-case where the title text
-    // resolver returns `selector.getSelectedBar().getTitle()` (= the folder's own name)
-    // when the focused bar is a `DirectoryBar`, falling through to `song.getTitle()`
-    // otherwise. SUBTITLE / GENRE / ARTIST / SUBARTIST / FULLARTIST DON'T have this
-    // fallback per upstream — they just return `""` when no song is focused.
-    const focusedFolderEntry = this.entries[this.currentIndex];
-    const focusedFolderLabel = focusedFolderEntry?.kind === 'folder' ? focusedFolderEntry.folder.label : undefined;
-    switch (refOp) {
-      case BEATORAJA_TEXT.TITLE:
-        // Folder bar → folder label (upstream `StringPropertyFactory.java:77-78`).
-        // Song bar → song title. Empty when no entry focused (e.g. empty list).
-        return focusedFolderLabel ?? song?.title ?? '';
-      case BEATORAJA_TEXT.SUBTITLE:
-        // No folder fallback — upstream resolves to `""` on folder (no `DirectoryBar`
-        // branch in `StringPropertyFactory.java:85-88`).
-        return song?.subtitle ?? '';
-      case BEATORAJA_TEXT.FULLTITLE:
-        // Folder bar → folder label (matches upstream `StringPropertyFactory.java:90-91`'s
-        // DirectoryBar branch).
-        return focusedFolderLabel ?? joinNonEmpty(song?.title, song?.subtitle);
-      case BEATORAJA_TEXT.GENRE:
-        return song?.genre ?? '';
-      case BEATORAJA_TEXT.ARTIST:
-        return song?.artist ?? '';
-      case BEATORAJA_TEXT.SUBARTIST:
-        // BMS `#SUBARTIST` lands in `metadata.extras.SUBARTIST`; bmson's structured
-        // `info.subartists[]` joins with spaces. Both paths surface the same string here so
-        // the default skin's sub-artist line under the focused song's artist isn't blank.
-        return extractChartSubartist(song?.chart);
-      case BEATORAJA_TEXT.FULLARTIST:
-        return joinNonEmpty(song?.artist, extractChartSubartist(song?.chart));
-      case BEATORAJA_TEXT.SKIN_NAME:
-        return skin.name ?? '';
-      case BEATORAJA_TEXT.SKIN_AUTHOR:
-        return skin.author ?? '';
-      case BEATORAJA_TEXT.DIRECTORY:
-        return song?.directoryLabel ?? this.currentFolderLabel();
-      case BEATORAJA_TEXT.SEARCHWORD:
-        // Live search query — typed by the user via the `/` search input flow. Empty when
-        // the user hasn't started a search; otherwise the in-flight substring being matched
-        // against title / artist / genre / subtitle. Skin authors gate a "search prompt"
-        // text node on this so the user can see what they've typed.
-        return this.searchQuery;
-      // Difficulty-table refs — empty until table / dan-grade mode is wired.
-      case BEATORAJA_TEXT.TABLE_NAME:
-      case BEATORAJA_TEXT.TABLE_LEVEL:
-      case BEATORAJA_TEXT.TABLE_FULL:
-        return '';
-      default:
-        return undefined;
-    }
-  }
-
-  /**
-   * Numeric values for the focused song. Beatoraja's reference + GdbG_Skin select scenes both
-   * author `value[]` displays for the highlighted chart's note count, BPM, and difficulty
-   * level — without this resolver those `value[]` elements stay on their idle digits even as
-   * the cursor moves between songs.
-   *
-   * Best-record / play-count / IR refs (refs 71..89, 77..79) return `undefined` because we
-   * don't have a score DB yet; the matching number panels will render as blanks until that
-   * layer ships.
-   */
-  private resolveSelectionNumber(refOp: number): number | undefined {
-    // ref 300 = `folder_totalsongs` (number of songs in the focused folder). Mirrors
-    // upstream `IntegerPropertyFactory.FolderTotalClearCountProperty.get()` (= line
-    // 1416-1429): only returns a value when the selected bar is a `DirectoryBar`,
-    // otherwise returns `Integer.MIN_VALUE` (= "hide" — `SkinNumber.prepare(value=MIN_VALUE)`
-    // sets `draw=false`). We mirror the hide via `undefined` here; the value renderer
-    // then hides every digit sprite for this destination.
-    //
-    // Pre-fix this fell back to the parent folder's `.songs.length` when focused on a
-    // song bar — visible to the user as a stale "X songs" readout next to the
-    // chart-info panel even after they entered the folder. ModernChic
-    // (`musicdisplay.lua:80-89`) gates the FRAME image on `op = {FOLDERBAR}` but the
-    // underlying value declaration has no op gate, so it relied on upstream's
-    // MIN_VALUE return for hiding.
-    if (refOp === SELECT_NUM_SONGS_IN_FOLDER) {
-      const entry = this.entries[this.currentIndex];
-      return entry?.kind === 'folder' ? entry.folder.songs.length : undefined;
-    }
-
-    // Wall-clock readouts (`time_year/month/day/hour/minute/second`, refs 21-26). The default
-    // skin authors these as `value[]` with `ref:21..` for the corner clock display; ModernChic
-    // / GdbG also surface them somewhere in the chrome. They're independent of the focused
-    // song so they resolve BEFORE the `focusedSong()` early-return — without that, the clock
-    // freezes whenever the cursor is on a non-song row (folder, empty list, etc.).
-    switch (refOp) {
-      case BEATORAJA_NUM.TIME_YEAR:
-      case BEATORAJA_NUM.TIME_MONTH:
-      case BEATORAJA_NUM.TIME_DAY:
-      case BEATORAJA_NUM.TIME_HOUR:
-      case BEATORAJA_NUM.TIME_MINUTE:
-      case BEATORAJA_NUM.TIME_SECOND:
-        return resolveWallClockField(refOp);
-    }
-
-    const song = this.focusedSong();
-    if (song === undefined) return undefined;
-
-    // Chart TOTAL header (BMS `#TOTAL`, or bmson `info.total` — a percentage of the ruleset's
-    // default TOTAL, not an absolute value). Returned as the integer floor — beatoraja's value
-    // digits don't carry a fraction part for this readout. `undefined` when the chart didn't
-    // author a TOTAL header (rare; older BMS files may omit it). The effective TOTAL depends on
-    // the ruleset and the scorable-note count, so it is only shown once play starts (see the
-    // runtime adapter's 368 case).
-    if (refOp === BEATORAJA_NUM.BMS_TOTAL) {
-      const total = song.chart.metadata.total;
-      return typeof total === 'number' && Number.isFinite(total) ? Math.floor(total) : undefined;
-    }
-
-    // Per-kind note breakdown (ModernChic `bmsanalysis.lua`). Each ref returns one bucket of
-    // `computeBeatorajaNoteBreakdown`; the cache below ensures the events scan happens once
-    // per song.
-    switch (refOp) {
-      case SELECT_NUM_TOTALNOTE_NORMAL:
-        return resolveNoteBreakdown(song).normal;
-      case SELECT_NUM_TOTALNOTE_LN:
-        return resolveNoteBreakdown(song).ln;
-      case SELECT_NUM_TOTALNOTE_SCRATCH:
-        return resolveNoteBreakdown(song).scratch;
-      case SELECT_NUM_TOTALNOTE_BSS:
-        return resolveNoteBreakdown(song).bss;
-    }
-
-    // Note density readouts (ModernChic `info.lua`). Each readout splits a float NPS value
-    // into integer + first-decimal cells. Skin authors render "12.4 NPS" via three cells:
-    // integer + literal "." + first-decimal.
-    switch (refOp) {
-      case SELECT_NUM_DENSITY_PEAK:
-        return resolveDensity(song).peak.whole;
-      case SELECT_NUM_DENSITY_PEAK_AFTERDOT:
-        return resolveDensity(song).peak.afterDot;
-      case SELECT_NUM_DENSITY_END:
-        return resolveDensity(song).end.whole;
-      case SELECT_NUM_DENSITY_END_AFTERDOT:
-        return resolveDensity(song).end.afterDot;
-      case SELECT_NUM_DENSITY_AVERAGE:
-        return resolveDensity(song).average.whole;
-      case SELECT_NUM_DENSITY_AVERAGE_AFTERDOT:
-        return resolveDensity(song).average.afterDot;
-    }
-
-    switch (refOp) {
-      case BEATORAJA_NUM.TOTALNOTES:
-      case BEATORAJA_NUM.TOTALNOTES_LIVE:
-        return song.totalNotes;
-      case BEATORAJA_NUM.MAINBPM:
-      case BEATORAJA_NUM.NOWBPM:
-        return song.bpm !== undefined ? Math.round(song.bpm) : undefined;
-      // MAX / MIN BPM — walk the chart's BPM-change events and pick the extremes. Falls back to
-      // the chart's main BPM when the chart is constant-tempo (no `03`/`08` events). Cached per
-      // song to avoid re-scanning events every frame.
-      case BEATORAJA_NUM.MAXBPM:
-        return resolveBpmRange(song)?.max;
-      case BEATORAJA_NUM.MINBPM:
-        return resolveBpmRange(song)?.min;
-      case BEATORAJA_NUM.PLAYLEVEL:
-        return resolvePlayLevel(song.playLevel);
-      // JUDGETIMING (note offset in ms) — sourced from `skin_config.offset`. The default skin
-      // surfaces it as a small readout next to the option panel; user adjustments via the
-      // bottom-right "Note offset (ms)" slider should reflect live. Returns 0 when the config
-      // wasn't supplied or when offset is not a number (legacy `BeatorajaLuaSkinConfig` widened
-      // `offset` to a number-or-table union — only the number case is the offset readout).
-      case BEATORAJA_NUM.JUDGETIMING: {
-        const offset = this.options.skinConfig?.offset;
-        return typeof offset === 'number' && Number.isFinite(offset) ? offset : 0;
-      }
-      // Song length minutes / seconds (refs 1163 / 1164). Computed once per song from BPM
-      // segments + STOP events. Authors typically place these next to each other so the panel
-      // reads "M:SS" — the seconds value is `floor(totalSeconds) % 60`, NOT the fractional
-      // remainder, matching beatoraja's reference behavior.
-      case BEATORAJA_NUM.SONGLENGTH_MINUTE:
-        return Math.floor(resolveSongLengthSeconds(song) / 60);
-      case BEATORAJA_NUM.SONGLENGTH_SECOND:
-        return Math.floor(resolveSongLengthSeconds(song)) % 60;
-      // Live-play counters all report 0 in the select scene — no engine running. Skins that
-      // share a `value[]` element across select / play (rare) get sensible idle digits.
-      case BEATORAJA_NUM.POINT:
-      case BEATORAJA_NUM.SCORE2:
-      case BEATORAJA_NUM.SCORE_RATE:
-      case BEATORAJA_NUM.SCORE_RATE_AFTERDOT:
-      case BEATORAJA_NUM.COMBO:
-      case BEATORAJA_NUM.MAXCOMBO_LIVE:
-      case BEATORAJA_NUM.GROOVEGAUGE:
-      case BEATORAJA_NUM.PERFECT:
-      case BEATORAJA_NUM.GREAT:
-      case BEATORAJA_NUM.GOOD:
-      case BEATORAJA_NUM.BAD:
-      case BEATORAJA_NUM.POOR:
-        return 0;
-      default:
-        return undefined;
-    }
-  }
-
-  /**
-   * Generic `ref`-driven resolution for the imageset pipe (`{id="modeset", ref:11, images:[…]}`
-   * etc.). Returns the integer index that the imageset's `images[]` array should pick. Called by
-   * the view's `resolveRefValue` hook on every imageset paint.
-   *
-   * Skin authors order their `images[]` arrays to match beatoraja's MainState integer enums; the
-   * mapping below mirrors those enums:
-   *
-   *   - `ref:11` (`modeset`) — keymode index. 0 = ALL, 1 = 5K, 2 = 7K, 3 = 10K, 4 = 14K,
-   *     5 = 9K, 6 = 24K, 7 = 24K-DP. Matches default skin's `["allkeys","5keys","7keys",
-   *     "10keys","14keys","9keys","24keys","24keysDP"]` ordering.
-   *
-   * Unrecognised refs return 0 — the imageset renderer treats that as "first slot", which is the
-   * skin's authored "default / unknown" image and degrades gracefully for refs we haven't wired
-   * yet (option-* selectors, lnmodeset, sortset, etc.).
-   */
-  private resolveSelectionRefValue(refOp: number): number {
-    if (refOp === SELECT_REF_KEYMODE_INDEX) {
-      // Active keymode FILTER — drives the `modeset` imageset's "Showing 7K" badge etc. NOT
-      // the focused chart's own keymode (the per-chart mode lights up `KEYSONG_*` ops 160-164
-      // separately, gating the "5KEYS" / "7KEYS" label image elements).
-      return this.keymodeFilter;
-    }
-    if (refOp === SELECT_REF_SORT_MODE_INDEX) {
-      // Active sort mode — drives the `sortset` imageset's badge (default / title / artist /
-      // genre / playlevel / bpm / totalnotes / lastplay).
-      return this.sortMode;
-    }
-    if (refOp === SELECT_REF_LNMODE_INDEX) {
-      // 0 = LN, 1 = CN (charge note), 2 = HCN (hell charge note). User's LNMODE-button click
-      // override (act=308) wins; otherwise fall back to the focused chart's authored `#LNMODE`
-      // (LN for legacy BMS that did not author the directive).
-      if (this.lnModeOverride !== undefined) return this.lnModeOverride;
-      return lnModeDirectiveToIndex(this.focusedSong()?.chart.bms?.lnMode);
-    }
-    if (refOp === SELECT_REF_BEST_CLEAR_LAMP_INDEX) {
-      // Best clear lamp index — `state_clear` imageset's 11 slots map onto beatoraja's lamp
-      // ladder: 0=NOPLAY, 1=FAILED, 2=ASSIST_EASY, 3=LIGHT_ASSIST_EASY, 4=EASY, 5=NORMAL,
-      // 6=HARD, 7=EXHARD, 8=FULLCOMBO, 9=PERFECT, 10=MAX. We have no score DB so every chart
-      // reports as 0 (NOPLAY) — matches the `CLEAR_LAMP_NOPLAY` op we already fire.
-      return 0;
-    }
-    return 0;
+    this.search.refreshSearchPrompt();
   }
 
   /**
@@ -1488,7 +789,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       if (newIndex >= 0) {
         this.currentIndex = newIndex;
         this.scrollPosition = newIndex;
-        this.refreshRowVisuals();
+        this.rows.refreshRowVisuals();
       }
     }
   }
@@ -1524,7 +825,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         this.currentIndex = restored;
         this.scrollPosition = restored;
         this.markSongbarChangeTimer();
-        this.refreshRowVisuals();
+        this.rows.refreshRowVisuals();
       }
     }
   }
@@ -1535,7 +836,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * advances from "LN" → "CN" rather than reverting an unset state. Wraps at 0..2.
    */
   private cycleLnModeOverride(step: number): void {
-    const current = this.lnModeOverride ?? lnModeDirectiveToIndex(this.focusedSong()?.chart.bms?.lnMode);
+    const current = this.lnModeOverride ?? beatorajaLnModeIndex(this.focusedSong()?.chart.bms?.lnMode);
     const next = (((current + step) % 3) + 3) % 3;
     this.lnModeOverride = next as 0 | 1 | 2;
     // eslint-disable-next-line no-console
@@ -1568,9 +869,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // gates each entry on `BUTTON_PRESS_WINDOW_MS` so press-feedback chrome lights up for
     // the duration regardless of which action arm we end up taking (or whether we early-out
     // because the song / folder isn't pickable).
-    this.buttonPressedAt.set(act, performance.now());
+    this.skinState.buttonPressedAt.set(act, performance.now());
     const entry = this.entries[this.currentIndex];
-    const song = entry?.kind === 'song' ? entry.song : entry?.folder.songs[0];
+    const song = entry?.kind === 'song' ? entry.song : entry?.kind === 'folder' ? entry.folder.songs[0] : undefined;
+    // PLAY / AUTO PLAY on a course bar start the course (`MusicSelector` reads the course bar the same way).
+    if ((act === 15 || act === 16) && entry?.kind === 'course') {
+      this.pickCourse(entry.course, act === 16);
+      return;
+    }
     switch (act) {
       case 15: // PLAY (user's default mode)
         if (song !== undefined) {
@@ -1698,811 +1004,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
   // ─── Layout / visuals ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Recompute `visibleRowCount` + `centreRowIndex` from the parsed `songlist`. When the skin
-   * doesn't author one we fall back to the legacy hardcoded grid.
-   *
-   * Audit A-9 — when a skin authors `songlist`, iterate the upstream-fixed 60-slot grid
-   * (`BEATORAJA_SONGLIST_BAR_COUNT`, mirroring `BarRenderer.barlength`) instead of clamping
-   * to the authored `liston.length`. Slots beyond `rows.length` stay unauthored (no rect,
-   * no allocated visuals) — the renderer paints nothing there, matching upstream's
-   * `barimageon[i] = null` for those indices. Visible behavior is identical for typical
-   * skins (`liston.length = 21`, `centerBar = 10`) since the entry-to-slot mapping
-   * `entry = cursor + (i - centerBar)` plus the centred per-row visibility gating already
-   * skipped those slots; the change matters only when the skin authors `centerBar` ≥
-   * `liston.length` (where upstream legitimately renders the focused song to a null slot).
-   *
-   * Called on construction and `replaceSkin` — the songlist parse depends on the skin
-   * payload, so it has to re-run when the skin payload changes.
-   */
-  private applySongListGeometry(): void {
-    if (this.songList !== undefined) {
-      this.visibleRowCount = BEATORAJA_SONGLIST_BAR_COUNT;
-      this.centreRowIndex = this.songList.focusedRowIndex;
-      // Detect a per-row id variance (e.g. `list_on` for the focused row vs `list` for
-      // the rest). When true, the bar-texture swap is the skin-authored cursor highlight,
-      // and stacking our warm-yellow label tint on top would over-paint the cue. Reads
-      // from authored rows only — unauthored slots (i ≥ rows.length) don't affect the
-      // variant detection since they have no id at all.
-      const focusId = this.songList.rows[this.centreRowIndex]?.id;
-      const hasVariant =
-        focusId !== undefined && this.songList.rows.some((r, idx) => idx !== this.centreRowIndex && r.id !== focusId);
-      this.hasFocusedBarVariant = hasVariant;
-    } else {
-      this.visibleRowCount = FALLBACK_VISIBLE_ROW_COUNT;
-      this.centreRowIndex = Math.floor(FALLBACK_VISIBLE_ROW_COUNT / 2);
-      this.hasFocusedBarVariant = false;
-    }
-  }
-
-  /**
-   * Get the per-row rect for visible-row index `i` in skin-space (top-left origin Y-DOWN).
-   * Reads directly from `songList.rows[i]` (Y-flipped from libGDX Y-UP) when available;
-   * otherwise synthesises a fallback grid on the right half of the canvas.
-   *
-   * Audit A-9 — returns `undefined` when the skin authored a `songlist` but `i` is past
-   * the authored `liston.length` (e.g. `i = 25` with `liston.length = 21`). The renderer
-   * iterates the full 60-slot upstream grid; unauthored slots have no rect and skip
-   * drawing. Skins that omit `songlist` entirely take the synthesised fallback grid path
-   * for every `i` so the legacy behavior keeps working.
-   */
-  private rowRectAt(i: number): { x: number; y: number; w: number; h: number } | undefined {
-    const skinH = this.view.height;
-    if (this.songList !== undefined) {
-      const r = this.songList.rows[i];
-      if (r === undefined) return undefined;
-      return { x: r.x, y: skinH - r.y - r.h, w: r.w, h: r.h };
-    }
-    // Fallback: right half, evenly spaced. Keeps unsupported skins (no songlist block)
-    // usable. Always returns a rect — the fallback grid is uniform across the full
-    // visible-row count.
-    const skinW = this.view.width;
-    const fallbackRowH = 56 * (skinH / 720);
-    const focusedRowCentreY = skinH * 0.42;
-    const cx = skinW * 0.74;
-    const w = skinW * 0.4;
-    const yCentre = focusedRowCentreY + (i - this.centreRowIndex) * fallbackRowH;
-    return { x: cx - w / 2, y: yCentre - fallbackRowH / 2, w, h: fallbackRowH };
-  }
-
-  /**
-   * Pick an authored row rect for sample queries (label sizing, avg row step) that need
-   * SOME valid rect even when `centreRowIndex` lands on an unauthored slot (the upstream
-   * `centerBar ≥ liston.length` edge case). Returns the rect at index `0` of the authored
-   * rows, Y-flipped to skin-space — that's guaranteed to exist whenever `songList` is
-   * defined (parser drops empty `liston[]` arrays as "no songlist").
-   *
-   * Returns `undefined` only when no songlist was authored — call sites then take the
-   * synthesised-fallback grid path via {@link rowRectAt} on `centreRowIndex` (always
-   * defined under fallback).
-   */
-  private firstAuthoredRowRect(): { x: number; y: number; w: number; h: number } | undefined {
-    const rows = this.songList?.rows;
-    if (rows === undefined || rows.length === 0) return undefined;
-    const r = rows[0]!;
-    const skinH = this.view.height;
-    return { x: r.x, y: skinH - r.y - r.h, w: r.w, h: r.h };
-  }
-
-  /**
-   * Sample row rect for label-size / avg-step heuristics. Prefers `centreRowIndex`
-   * (matches the previous behavior for skins where centerBar < liston.length, which is
-   * every real skin in the wild) but falls back to the first authored row when centerBar
-   * lands on an unauthored slot — needed since {@link rowRectAt} now returns `undefined`
-   * for those.
-   */
-  private sampleRowRect(): { x: number; y: number; w: number; h: number } {
-    const atCentre = this.rowRectAt(this.centreRowIndex);
-    if (atCentre !== undefined) return atCentre;
-    const firstAuthored = this.firstAuthoredRowRect();
-    if (firstAuthored !== undefined) return firstAuthored;
-    // No songlist authored at all — fallback grid always returns a rect at index 0.
-    return this.rowRectAt(0)!;
-  }
-
-  private destroyRowVisuals(): void {
-    for (const t of this.rowLabels) t?.destroy();
-    for (const t of this.rowLevelLabels) t?.destroy();
-    for (const sprites of this.rowLevelDigitSprites) {
-      if (sprites === undefined) continue;
-      for (const s of sprites) s.destroy({ children: false, texture: false, textureSource: false });
-    }
-    for (const row of this.rowFeatureLabels) {
-      for (const sprite of row) sprite.destroy({ children: false, texture: false, textureSource: false });
-    }
-    for (const s of this.rowHitAreas) s?.destroy();
-    for (const s of this.rowBarSprites) s?.destroy({ children: false, texture: false, textureSource: false });
-    this.rowLabels.length = 0;
-    this.rowLevelLabels.length = 0;
-    this.rowLevelDigitSprites.length = 0;
-    this.rowFeatureLabels.length = 0;
-    this.rowHitAreas.length = 0;
-    this.rowBarSprites.length = 0;
-    // Pre-resolved imageset frame textures don't own any GPU lifetime (the underlying
-    // base texture is owned by the texture cache); just drop the references so the
-    // rebuild loop populates a fresh array indexed alongside `rowBarSprites`.
-    this.rowBarFrameTextures.length = 0;
-  }
-
-  private destroySearchPrompt(): void {
-    if (this.searchPromptText === undefined) return;
-    if (!this.searchPromptText.destroyed) {
-      this.searchPromptText.destroy();
-    }
-    this.searchPromptText = undefined;
-  }
-
-  private buildRowVisuals(fonts: BeatorajaFontCache | undefined): void {
-    const skinFamily = fonts?.values()[0]?.family;
-    const fontFamily = skinFamily !== undefined ? `'${skinFamily}', sans-serif` : 'sans-serif';
-    // Tear down old visuals when rebuilding (e.g. on `replaceSkin` against a skin whose
-    // songlist length differs from the previous one). Pixi children stay attached to
-    // listLayer; clearing the arrays lets the new loop allocate the right count.
-    this.destroyRowVisuals();
-    // Resolve the songlist's `level[].id` against the skin's `value[]` declarations
-    // FIRST. When it matches (e.g. default beatoraja's `playlevel_bar` value points at
-    // `number.png`), each row's level slot composes per-digit sprites cropped from the
-    // strip — same path beatoraja's `MusicSelector` uses. When it doesn't (legacy skin
-    // authoring level as `image[]` instead, or no `value[]` for that id), every row
-    // falls back to system-font Pixi `Text`.
-    this.levelValueElement = this.resolveLevelValueElement();
-    this.levelStripTexture =
-      this.levelValueElement !== undefined ? this.options.textures.get(this.levelValueElement.src) : undefined;
-    // Title font size. Two cases:
-    //
-    //  - Skin authored `songlist.text[]` (default beatoraja, GdbG, ModernChic) — use
-    //    `text[0].rect.h` as the title size, which matches upstream `SkinTextFont.draw`'s
-    //    `font.setScale(region.height / parameter.size)` behavior (the rendered glyph
-    //    height IS the dst rect's height; the text element's authored `size` only controls
-    //    the bitmap load resolution). For the default skin's 36 px bar with `dst:{h:24}`
-    //    this gives 24 px.
-    //
-    //  - Skin omitted the block — fall back to a row-height proportional size so
-    //    unsupported skins still get readable text. `0.45` mirrors what the bundled
-    //    fixtures of older skins were authoring before we adopted the spec-faithful path.
-    const sampleRect = this.sampleRowRect();
-    const songListText = this.songList?.text ?? [];
-    const proportionalLabelSize = Math.max(12, Math.floor(sampleRect.h * 0.45));
-    const labelSize =
-      songListText[0] !== undefined ? Math.max(8, Math.floor(songListText[0].rect.h)) : proportionalLabelSize;
-    for (let i = 0; i < this.visibleRowCount; i += 1) {
-      // Audit A-9 — when iterating the upstream-fixed 60-slot grid, slots beyond the
-      // skin's authored `liston[]` array stay un-allocated. Push `undefined` placeholders
-      // so the array indices keep aligning with slot indices (every consumer indexes by
-      // `i ∈ [0, visibleRowCount)` so the alignment matters), and the render loops below
-      // skip these slots via the `=== undefined` checks. Mirrors upstream's
-      // `barimageon[i] = null` / `barimageoff[i] = null` for indices past `liston.length`.
-      if (this.songList !== undefined && this.songList.rows[i] === undefined) {
-        this.rowBarSprites.push(undefined);
-        this.rowBarFrameTextures.push(undefined);
-        this.rowHitAreas.push(undefined);
-        this.rowLabels.push(undefined);
-        if (this.songList.level !== undefined) {
-          this.rowLevelDigitSprites.push(undefined);
-          this.rowLevelLabels.push(undefined);
-        }
-        this.rowFeatureLabels.push([]);
-        continue;
-      }
-      // Per-row bar background. Mounted FIRST so it sits behind hit area / icon / labels.
-      // Skins that author the focused row with a different `liston[i].id` (e.g. `list_on`
-      // for the cursor row, `list` for the rest) get their cursor highlight via the
-      // texture choice — no extra branching here. Skins that omit an id, or whose matching
-      // `image[]` entry is missing from the texture cache, get an `undefined` slot and the
-      // labels paint without a backdrop.
-      const rowMeta = this.songList?.rows[i];
-      const barId = rowMeta?.id;
-      const bar = barId !== undefined ? this.buildFeatureLabelSprite(barId) : undefined;
-      if (bar !== undefined) this.listLayer.addChild(bar);
-      this.rowBarSprites.push(bar);
-      // Pre-resolve every imageset sub-image's texture so the per-frame paint can swap to
-      // the matching one based on the entry's bar TYPE (song / folder / etc.). Mirrors
-      // upstream `BarRenderer.java:269`'s `si.draw(sprite, time, ba.value, ...)` where
-      // `ba.value` indexes into the multi-frame `SkinImage`. Empty when the row's authored
-      // id is just a plain `image[]` (= no imageset chain) — the legacy single-texture
-      // path stays the only path in that case.
-      this.rowBarFrameTextures.push(this.resolveBarFrameTextures(rowMeta?.imagesetImages));
-
-      // Hit area sprite — invisible but interactive. Sized to the row's text band on layout.
-      const hit = new Sprite({ texture: Texture.WHITE });
-      hit.alpha = 0;
-      hit.eventMode = 'static';
-      hit.cursor = 'pointer';
-      hit.on('pointertap', (event: FederatedPointerEvent) => this.handleRowPointerTap(i, event));
-      this.listLayer.addChild(hit);
-      this.rowHitAreas.push(hit);
-
-      // Bar text — beatoraja's `bartext` named element, dynamically resolved by the
-      // music selector to the song's title / folder name. Default skin authors a single
-      // entry; multi-entry skins are not yet supported (only the first text entry's
-      // dst rect drives the layout for now).
-      const label = new Text({
-        text: '',
-        style: { fontFamily, fontSize: labelSize, fill: 0xffffff, fontWeight: '600' },
-      });
-      label.anchor.set(0, 0.5);
-      this.listLayer.addChild(label);
-      this.rowLabels.push(label);
-
-      // Per-row chart-level overlay — only allocated when the songlist authored
-      // `level[]`. Two paths:
-      //
-      //  - **Sprite-digit** (preferred, matches beatoraja's reference). When the level's
-      //    `id` resolves to a `value[]` declaration (e.g. default skin's `playlevel_bar`
-      //    → `number.png`), allocate one sprite per `digit` slot. Per-frame composes the
-      //    chart's `#PLAYLEVEL` via `composeBeatorajaValueCells` and crops the matching
-      //    cell from the strip texture.
-      //  - **Text fallback**. When no matching `value[]` exists (legacy skin authoring as
-      //    `image[]` or omitting the value declaration), render a system-font Pixi `Text`
-      //    digit so the player still sees the number — just without the skin's bitmap font.
-      if (this.songList?.level !== undefined) {
-        const levelDef = this.songList.level;
-        if (this.levelValueElement !== undefined && this.levelStripTexture !== undefined) {
-          const valueElement = this.levelValueElement;
-          const digitCount = Math.max(1, Math.trunc(valueElement.digit));
-          const sprites: Sprite[] = [];
-          for (let d = 0; d < digitCount; d += 1) {
-            const sprite = new Sprite();
-            sprite.visible = false;
-            this.listLayer.addChild(sprite);
-            sprites.push(sprite);
-          }
-          this.rowLevelDigitSprites.push(sprites);
-          this.rowLevelLabels.push(undefined);
-        } else {
-          const level = new Text({
-            text: '',
-            style: {
-              fontFamily,
-              // Floor at 12 so unusually short level rects stay legible.
-              fontSize: Math.max(12, Math.floor(levelDef.h)),
-              fill: 0xffffff,
-              fontWeight: '700',
-              stroke: { color: 0x000000, width: 2 },
-            },
-          });
-          level.anchor.set(0.5, 0.5);
-          this.listLayer.addChild(level);
-          this.rowLevelLabels.push(level);
-          this.rowLevelDigitSprites.push(undefined);
-        }
-      }
-
-      // Per-row chart-feature label sprites (LN / random / mine / favorite / etc.). One
-      // Sprite per `(row × songlist.label[] entry)` — texture is fixed at mount time from
-      // the skin's `image[id]` lookup, only visibility / position toggles per frame as
-      // the cursor moves and the focused song's feature predicate changes.
-      const featureLabels = this.songList?.labels ?? [];
-      const rowSprites: Sprite[] = [];
-      for (const labelEntry of featureLabels) {
-        const sprite = this.buildFeatureLabelSprite(labelEntry.id);
-        if (sprite === undefined) continue;
-        sprite.visible = false;
-        this.listLayer.addChild(sprite);
-        rowSprites.push(sprite);
-      }
-      this.rowFeatureLabels.push(rowSprites);
-    }
-  }
-
-  /**
-   * Crop the skin's `image[id]` source rect into a fresh `Sprite`. Returns `undefined`
-   * when the skin doesn't author the matching image entry, the source texture isn't in
-   * the cache (deferred / failed decode), or the cropped texture comes back empty. The
-   * sprite is sized later per the row's label sub-rect.
-   */
-  /**
-   * Look up the `value[]` declaration the songlist's `level[].id` points at. Beatoraja's
-   * reference skin authors level as `value[id="playlevel_bar"]` referencing `number.png`
-   * — the digit composer template the renderer uses to crop per-cell glyphs from the
-   * strip. Returns `undefined` when the songlist either omits a level block, has no
-   * id captured on the level rect, or the id doesn't resolve to a value entry (legacy
-   * skins author the level frame as an `image[]` instead).
-   *
-   * Cached lazily into a per-skin Map; rebuilt on every `replaceSkin` since the lookup
-   * map binds to the new skin's `value[]` declarations.
-   */
-  private resolveLevelValueElement(): BeatorajaValueElement | undefined {
-    const levelId = this.songList?.level?.id;
-    if (typeof levelId !== 'string' && typeof levelId !== 'number') return undefined;
-    if (this.valueElementsById === undefined) {
-      this.valueElementsById = new Map();
-      for (const v of normalizeBeatorajaValues((this.options.skin as { value?: unknown }).value)) {
-        this.valueElementsById.set(v.id, v);
-      }
-    }
-    return this.valueElementsById.get(levelId);
-  }
-  private valueElementsById: Map<string | number, BeatorajaValueElement> | undefined;
-
-  /**
-   * Per-difficulty level value-element map. Built from the parsed
-   * {@link BeatorajaSongListLayout.levelEntries}: each entry's id (e.g. `level-beginner`)
-   * looks up the matching `value[]` declaration on the skin (`src = songbar.png`,
-   * `(x, y)` cropping a difficulty-specific colour row from the level sprite strip).
-   * Per-row rendering picks the entry by `chart.metadata.difficulty`:
-   *
-   *   - 0 (no `#DIFFICULTY` authored) → `level-unknown`
-   *   - 1..5 → `level-beginner / normal / hyper / another / insane`
-   *
-   * Mirrors upstream `JsonSelectSkinObjectLoader.java:148-158` which builds an array of
-   * SkinNumbers (`barlevel[i]`) and `BarRenderer.java` reads `barlevel[song.difficulty]`
-   * per row. Without this, every row painted from the SAME value declaration (= the first
-   * entry, typically the grey "unknown" row), so charts with an explicit `#DIFFICULTY`
-   * showed in the wrong colour.
-   */
-  private resolveLevelValueByDifficulty(): ReadonlyMap<number, BeatorajaValueElement> {
-    if (this.cachedLevelValueByDifficulty !== undefined) return this.cachedLevelValueByDifficulty;
-    const map = new Map<number, BeatorajaValueElement>();
-    const entries = this.songList?.levelEntries ?? [];
-    if (this.valueElementsById === undefined) {
-      this.valueElementsById = new Map();
-      for (const v of normalizeBeatorajaValues((this.options.skin as { value?: unknown }).value)) {
-        this.valueElementsById.set(v.id, v);
-      }
-    }
-    for (const entry of entries) {
-      const difficulty = parseLevelDifficultyIndex(entry.id);
-      if (difficulty === undefined) continue;
-      const value = this.valueElementsById.get(entry.id);
-      if (value === undefined) continue;
-      // First occurrence wins — matches upstream's loop break-on-match semantics.
-      if (!map.has(difficulty)) map.set(difficulty, value);
-    }
-    this.cachedLevelValueByDifficulty = map;
-    return map;
-  }
-  private cachedLevelValueByDifficulty: ReadonlyMap<number, BeatorajaValueElement> | undefined;
-
-  /**
-   * Pick the level value element for a song's difficulty. Falls back to the global
-   * `levelValueElement` (= first entry) when the chart's `#DIFFICULTY` doesn't have a
-   * matching `level-*` entry — covers community charts that author non-standard
-   * difficulty values plus skins that only ship a subset (e.g. unknown + normal).
-   */
-  private levelValueElementForDifficulty(difficulty: number | undefined): BeatorajaValueElement | undefined {
-    const byDiff = this.resolveLevelValueByDifficulty();
-    if (byDiff.size > 0) {
-      const safe = Number.isFinite(difficulty) && (difficulty as number) >= 0 ? Math.trunc(difficulty as number) : 0;
-      const matched = byDiff.get(safe);
-      if (matched !== undefined) return matched;
-      // Difficulty outside the map (e.g. `#DIFFICULTY 9` from a non-standard chart, or no
-      // matching authored row) — try `level-unknown` (= 0) then fall back to the first
-      // authored entry so the digits still render with SOME sprite row.
-      const unknown = byDiff.get(0);
-      if (unknown !== undefined) return unknown;
-      const first = byDiff.values().next().value;
-      if (first !== undefined) return first;
-    }
-    return this.levelValueElement;
-  }
-
-  private buildFeatureLabelSprite(imageId: string | number): Sprite | undefined {
-    if (this.featureLabelImages === undefined) {
-      this.featureLabelImages = new Map();
-      for (const image of normalizeBeatorajaImages(this.options.skin.image)) {
-        this.featureLabelImages.set(image.id, image);
-      }
-    }
-    const image = this.featureLabelImages.get(imageId);
-    if (image === undefined) return undefined;
-    const baseTexture = this.options.textures.get(image.src);
-    if (baseTexture === undefined) return undefined;
-    const cropped = createCroppedBeatorajaTexture(baseTexture, {
-      x: image.x,
-      y: image.y,
-      w: image.w,
-      h: image.h,
-    });
-    if (cropped === undefined) return undefined;
-    return new Sprite({ texture: cropped, alpha: 1 });
-  }
-
-  /**
-   * Pre-resolve every imageset sub-image's cropped texture so the per-frame paint can
-   * swap to the matching frame in O(1). Returns `undefined` when the row's authored id
-   * wasn't an imageset (= legacy single-image path — no swap needed). Slots within the
-   * array are `undefined` when an authored sub-image id failed to resolve in `image[]` /
-   * texture cache; the caller falls back to the legacy single-texture render in that case.
-   */
-  private resolveBarFrameTextures(
-    images: ReadonlyArray<BeatorajaImageId> | undefined,
-  ): ReadonlyArray<Texture | undefined> | undefined {
-    if (images === undefined || images.length === 0) return undefined;
-    if (this.featureLabelImages === undefined) {
-      this.featureLabelImages = new Map();
-      for (const image of normalizeBeatorajaImages(this.options.skin.image)) {
-        this.featureLabelImages.set(image.id, image);
-      }
-    }
-    const out: (Texture | undefined)[] = [];
-    for (const id of images) {
-      const image = this.featureLabelImages.get(id);
-      if (image === undefined) {
-        out.push(undefined);
-        continue;
-      }
-      const baseTexture = this.options.textures.get(image.src);
-      if (baseTexture === undefined) {
-        out.push(undefined);
-        continue;
-      }
-      const cropped = createCroppedBeatorajaTexture(baseTexture, {
-        x: image.x,
-        y: image.y,
-        w: image.w,
-        h: image.h,
-      });
-      out.push(cropped);
-    }
-    return out;
-  }
-  /** Lazy `image[].id → BeatorajaImageElement` map for feature-label texture lookups. */
-  private featureLabelImages: Map<string | number, BeatorajaImageElement> | undefined;
-
-  /**
-   * Repaint the row backdrops + labels for the current cursor / scroll state. Called on every
-   * tick (cheap — just text mutations + Graphics rect rebuild).
-   */
-  private refreshRowVisuals(): void {
-    const total = this.entries.length;
-    // The "centre" of the visible window in entry-coordinates. As `scrollPosition` tweens
-    // toward `currentIndex`, every row's index slides by the same amount. Indices that fall
-    // outside `[0, total)` are wrapped — the list is circular, so the row above the first
-    // entry shows the LAST entry and vice versa.
-    const centreEntry = this.scrollPosition;
-    for (let i = 0; i < this.visibleRowCount; i += 1) {
-      const rawEntryIndex = Math.round(centreEntry) + (i - this.centreRowIndex);
-      const wrappedIndex = total > 0 ? ((rawEntryIndex % total) + total) % total : -1;
-      const entry = total > 0 ? this.entries[wrappedIndex] : undefined;
-      const label = this.rowLabels[i];
-      const hit = this.rowHitAreas[i];
-      const bar = this.rowBarSprites[i];
-      // Audit A-9 — slot is unauthored in this skin's `liston[]` (i ≥ rows.length).
-      // No visuals were allocated; nothing to do this frame.
-      if (label === undefined || hit === undefined) continue;
-      if (entry === undefined) {
-        label.visible = false;
-        hit.visible = false;
-        // Hide the row bar background when no song / folder is mapped to this slot
-        // (small libraries that don't fill the whole visible window). Otherwise an empty
-        // row would still show its bar texture.
-        if (bar !== undefined) bar.visible = false;
-        continue;
-      }
-      const isSelected = i === this.centreRowIndex;
-      label.visible = true;
-      hit.visible = true;
-      if (bar !== undefined) {
-        bar.visible = true;
-        // Per-bar-type imageset frame swap. Mirrors upstream `BarRenderer.java:269`'s
-        // `si.draw(sprite, time, ba.value, ...)` where `ba.value` is the bar TYPE index
-        // resolved at `BarRenderer.java:150-166`. Our app currently surfaces only `'song'`
-        // and `'folder'` browse entries, mapping to frames 0 (`bar-song`) and 1
-        // (`bar-folder`). Future bar-type additions (table / grade / command / search)
-        // would extend the switch below; today they fall through to the default frame.
-        const frames = this.rowBarFrameTextures[i];
-        if (frames !== undefined) {
-          const frameIndex = entry.kind === 'folder' ? 1 : 0;
-          const frame = frames[frameIndex] ?? frames[0];
-          if (frame !== undefined) bar.texture = frame;
-        }
-      }
-      const levelLabel = this.rowLevelLabels[i];
-      const levelDigits = this.rowLevelDigitSprites[i];
-      if (entry.kind === 'folder') {
-        // Beatoraja's `BarRenderer.render` (`BarRenderer.java:298`) sets the bar's text from
-        // `Bar.getTitle()`. For folder rows the implementation is `FolderBar.getTitle()` →
-        // `folder.getTitle()` (`FolderBar.java:35-36`), which is the folder's own name
-        // without any subtitle merge.
-        label.text = entry.folder.label;
-        if (levelLabel !== undefined) levelLabel.visible = false;
-        if (levelDigits !== undefined) {
-          for (const sprite of levelDigits) sprite.visible = false;
-        }
-      } else {
-        const song = entry.song;
-        // `SongBar.getTitle()` (`SongBar.java:61-63`) returns `song.getFullTitle()`, which is
-        // `subtitle.length() > 0 ? title + " " + subtitle : title` (`SongData.java:285-290`).
-        // Authors who use `#SUBTITLE` to disambiguate difficulty (`Foo` + `[INSANE]`) rely on
-        // this concatenation — pre-fix the bar showed only the title, so charts that share
-        // a base title looked identical in the song list.
-        label.text = joinNonEmpty(song.title, song.subtitle);
-        const lvl = resolvePlayLevel(song.playLevel);
-        const showLevel = lvl !== undefined && lvl > 0;
-        // Per-difficulty value element pick. Upstream's `BarRenderer` reads
-        // `barlevel[song.difficulty]` per row so each chart paints its `#PLAYLEVEL` from the
-        // colour-coded sprite row matching its difficulty (`level-beginner`,
-        // `level-normal`, …). Falls back to `this.levelValueElement` (the first authored
-        // entry) when the chart's difficulty doesn't have a matching authored entry — keeps
-        // skins with a partial level set or non-standard `#DIFFICULTY` values still
-        // rendering some sprite digits.
-        const perDifficultyLevelValue = this.levelValueElementForDifficulty(song.chart.metadata.difficulty);
-        if (
-          levelDigits !== undefined &&
-          perDifficultyLevelValue !== undefined &&
-          this.levelStripTexture !== undefined
-        ) {
-          // Sprite-digit path. Compose the chart's `#PLAYLEVEL` into per-cell rects via
-          // upstream's value composer, then crop each cell from the strip texture and
-          // assign it to the matching slot sprite. Hidden cells leave the slot invisible
-          // (= leading-blank padding) so a 4-digit slot rendering "12" only paints two
-          // sprites on the right.
-          if (showLevel) {
-            const cells = composeBeatorajaValueCells(perDifficultyLevelValue, lvl);
-            for (let d = 0; d < levelDigits.length; d += 1) {
-              const sprite = levelDigits[d]!;
-              const cell = cells[d];
-              if (cell === undefined || cell.hidden) {
-                sprite.visible = false;
-                continue;
-              }
-              const cropped = createCroppedBeatorajaTexture(this.levelStripTexture, {
-                x: cell.x,
-                y: cell.y,
-                w: cell.w,
-                h: cell.h,
-              });
-              if (cropped === undefined) {
-                sprite.visible = false;
-                continue;
-              }
-              sprite.texture = cropped;
-              sprite.visible = true;
-            }
-          } else {
-            for (const sprite of levelDigits) sprite.visible = false;
-          }
-        } else if (levelLabel !== undefined) {
-          // Text fallback path.
-          if (showLevel) {
-            levelLabel.text = String(Math.trunc(lvl));
-            levelLabel.tint = levelTintForDifficulty(lvl);
-            levelLabel.visible = true;
-          } else {
-            levelLabel.visible = false;
-          }
-        }
-      }
-      label.alpha = isSelected ? 1 : 0.75;
-    }
-    this.layoutRows();
-  }
-
-  /**
-   * Position + size the row visuals using the skin's authored `songlist.liston` rects (or
-   * the synthesised fallback grid). Coordinates are skin-space — the listLayer is mounted
-   * inside `view.container` so the parent transform handles scaling / letterboxing.
-   *
-   * The fractional `scrollPosition` residual feeds into a per-row Y nudge so an in-flight
-   * tween shows a sub-row glide instead of jumping a whole row at the snap. The offset
-   * is applied along the AVERAGE row-height direction, which works for straight column
-   * layouts and degrades gracefully for arched / diagonal layouts (the rows still glide,
-   * just along a non-vertical axis).
-   */
-  private layoutRows(): void {
-    if (this.visibleRowCount === 0) return;
-
-    // Average row height (skin-space) to scale the fractional scroll. For straight layouts
-    // this is the per-row vertical step; for arched layouts it's a reasonable approximation
-    // of the typical step magnitude. Audit A-9 — `centreRowIndex` may now point at an
-    // unauthored slot (`centerBar ≥ liston.length` edge case), so use `sampleRowRect()`
-    // (falls back to the first authored row) for `atCentre`. `aboveCentre` falls back to
-    // the same sample when the slot above is also unauthored — degenerate layouts (single
-    // authored row) collapse `avgRowStep` to `atCentre.h`, matching the pre-A-9 fallback.
-    const atCentre = this.sampleRowRect();
-    const aboveCentre = this.rowRectAt(Math.max(0, this.centreRowIndex - 1)) ?? atCentre;
-    const avgRowStep = Math.abs(aboveCentre.y - atCentre.y) || atCentre.h;
-    const fractional = this.scrollPosition - Math.round(this.scrollPosition);
-    const fractionalNudge = -fractional * avgRowStep;
-
-    const total = this.entries.length;
-    const centreEntry = this.scrollPosition;
-    for (let i = 0; i < this.visibleRowCount; i += 1) {
-      const hit = this.rowHitAreas[i];
-      const label = this.rowLabels[i];
-      // Audit A-9 — skip unauthored 60-slot grid positions (visuals weren't allocated).
-      if (hit === undefined || label === undefined) continue;
-      if (!label.visible) continue;
-      const rect = this.rowRectAt(i);
-      // Defensive: rowRectAt returns undefined for unauthored slots, but the label/hit
-      // checks above already gate that path. Keep the guard so type inference stays happy.
-      if (rect === undefined) continue;
-      const rowCentreY = rect.y + rect.h / 2 + fractionalNudge;
-      // Resolve the entry for THIS row — needed for per-row feature-label predicates. The
-      // wrap math mirrors `refreshRowVisuals`'s; both functions iterate the same visible
-      // window so they need to agree on which entry maps to which slot.
-      const rawEntryIndex = Math.round(centreEntry) + (i - this.centreRowIndex);
-      const wrappedIndex = total > 0 ? ((rawEntryIndex % total) + total) % total : -1;
-      const entry = total > 0 ? this.entries[wrappedIndex] : undefined;
-
-      const isSelected = i === this.centreRowIndex;
-
-      // Per-row bar background — positioned + sized to the row's full rect (skin-space).
-      // The skin's authored `liston[i].dst[0]` rect IS the bar rect, so we just stamp the
-      // cropped texture into the same coordinates the labels / hit area use. Honours the
-      // fractional scroll nudge so an in-flight tween glides the bar with everything else.
-      const bar = this.rowBarSprites[i];
-      if (bar !== undefined) {
-        bar.x = rect.x;
-        bar.y = rect.y + fractionalNudge;
-        bar.width = rect.w;
-        bar.height = rect.h;
-      }
-
-      hit.x = rect.x;
-      hit.y = rect.y + fractionalNudge;
-      hit.width = rect.w;
-      hit.height = rect.h;
-      hit.hitArea = null;
-
-      // Title label x — pushed past whichever sub-rect extends further right within the
-      // bar. Two flavours for the level slot:
-      //
-      //  - Sprite-digit (`value[].digit` cells, default skin) — `dst.w` is PER-DIGIT slot
-      //    width, so the digit row's actual right edge is
-      //    `level.x + (slotWidth + space) * digit_count`. Using just `level.x + level.w`
-      //    here was the squashed-text bug's twin: the title text would overlap the
-      //    second / third digit of multi-digit levels (e.g. "10ight Parade" instead of
-      //    "10  Light Parade").
-      //  - Text fallback — single Text node sized to roughly `level.w`, so `level.x +
-      //    level.w` is the right edge.
-      //
-      // Negative-x `label[]` entries (e.g. default's `label-ln` at x=-20) sit OUTSIDE the
-      // bar and don't push the title.
-      const levelRectForOffset = this.songList?.level;
-      let levelRightEdge = 0;
-      if (levelRectForOffset !== undefined) {
-        if (this.levelValueElement !== undefined) {
-          const ve = this.levelValueElement;
-          const slotW = levelRectForOffset.w;
-          const space = Number.isFinite(ve.space) ? ve.space : 0;
-          const digits = Math.max(1, Math.trunc(ve.digit));
-          // `align=0` (right) extends right from `dst.x`; `align=1/2` shift the row LEFT,
-          // so the right edge is at most `dst.x + slotStep * digits` regardless. Using the
-          // upper bound keeps the title clearance conservative across alignments.
-          levelRightEdge = levelRectForOffset.x + slotW * digits + space * Math.max(0, digits - 1);
-        } else {
-          levelRightEdge = levelRectForOffset.x + levelRectForOffset.w;
-        }
-      }
-      let positiveLabelRight = 0;
-      for (const labelEntry of this.songList?.labels ?? []) {
-        const right = labelEntry.rect.x + labelEntry.rect.w;
-        if (right > positiveLabelRight) positiveLabelRight = right;
-      }
-      const subRectRightEdge = Math.max(levelRightEdge, positiveLabelRight);
-      const leftPad = Math.max(8, Math.floor(rect.h * 0.2));
-      // Title label position. Two flavours:
-      //
-      //  - Skin authored `songlist.text[]` — `text[0].rect.{x, y}` is the per-bar relative
-      //    position of the bartext sprite. ModernChic / GdbG-style skins place the title
-      //    inside a decorative frame that doesn't follow the level / label sub-rects, so we
-      //    HAVE to honor the authored rect or the title lands in the wrong place (often
-      //    completely outside the bar).
-      //  - Skin omitted `text[]` — fall back to "right of level / labels + leftPad" so a
-      //    skin that didn't author a bartext rect still gets a readable title.
-      const songListTextRect = this.songList?.text[0]?.rect;
-      const labelTextOffsetX =
-        songListTextRect !== undefined
-          ? rect.x + songListTextRect.x
-          : subRectRightEdge > 0
-            ? rect.x + subRectRightEdge + leftPad
-            : rect.x + leftPad;
-      // Y: skin-authored relative-y is in libGDX Y-UP (origin at bar's bottom-left). Convert
-      // to Pixi Y-DOWN (origin at bar's top-left) so the title's y-anchor (`0.5` baseline)
-      // lands where the author intended. For default skin's bartext at `{y:6, h:24}` inside
-      // a 36-tall bar, this puts the baseline at `36 - 6 - 24/2 = 18` from the top — exactly
-      // the bar's vertical centre, matching beatoraja's reference layout.
-      const labelTextOffsetY =
-        songListTextRect !== undefined
-          ? rect.y + (rect.h - songListTextRect.y - songListTextRect.h / 2) + fractionalNudge
-          : rowCentreY;
-      label.x = labelTextOffsetX;
-      label.y = labelTextOffsetY;
-      // Only paint the warm-yellow cursor tint when the skin doesn't already cue the
-      // focused row via a per-row bar-image swap (e.g. `list_on` vs `list`). Doubling up
-      // would over-paint the skin-authored highlight; leaving white-on-white otherwise
-      // keeps the title legible.
-      label.tint = isSelected && !this.hasFocusedBarVariant ? 0xffe066 : 0xffffff;
-
-      // Per-row level overlay — only when the songlist authored a `level` sub-rect AND we
-      // pre-allocated either a digit-sprite stack or a Text fallback for this row.
-      // Sub-rect is RELATIVE to the bar rect; we place each renderer at the corresponding
-      // position inside the level's dst region.
-      const levelLabel = this.rowLevelLabels[i];
-      const levelDigits = this.rowLevelDigitSprites[i];
-      const levelRect = this.songList?.level;
-      if (levelRect !== undefined) {
-        // Beatoraja authors `level.dst` rects in skin Y-UP coords (origin at bar's
-        // bottom-left). Our `rect` is already Pixi Y-DOWN with `rect.y` at the row's
-        // top. Skin Y-UP offset within the bar maps to Pixi:
-        //   pixiY = rect.y + (rect.h - level.y - level.h)
-        const subPixiY = rect.y + (rect.h - levelRect.y - levelRect.h) + fractionalNudge;
-        if (levelDigits !== undefined && this.levelValueElement !== undefined) {
-          // Digit sprites: per beatoraja's `value[]` convention, `dst.w` is the PER-DIGIT
-          // slot width (NOT the total strip width). The digit row extends rightward from
-          // `dst.x` for `slotWidth × digit` pixels (plus `space` gaps). Dividing
-          // `levelRect.w` by `digit count` would halve each slot — that's the squashed-
-          // text bug the standard skin-view value renderer documents at line 1922.
-          //
-          // `align` shifts the row left for `align=1` (left) / `align=2` (centre); align=0
-          // (right) leaves the row anchored at `dst.x`.
-          const valueElement = this.levelValueElement;
-          const slotWidth = levelRect.w;
-          const space = Number.isFinite(valueElement.space) ? valueElement.space : 0;
-          const slotStep = slotWidth + space;
-          // The row's width depends on the rendered value, so we look up the chart's
-          // playLevel here too and pass it to the shift composer. Folder rows skip this
-          // (no song.playLevel) — the shift collapses to 0 when value is 0 anyway.
-          const songForRow = entry?.kind === 'song' ? entry.song : undefined;
-          const lvlForShift = songForRow !== undefined ? (resolvePlayLevel(songForRow.playLevel) ?? 0) : 0;
-          const alignShift = composeBeatorajaValueShift(valueElement, lvlForShift, slotWidth);
-          for (let d = 0; d < levelDigits.length; d += 1) {
-            const sprite = levelDigits[d]!;
-            sprite.anchor.set(0, 0);
-            sprite.x = rect.x + levelRect.x + d * slotStep - alignShift;
-            sprite.y = subPixiY;
-            sprite.width = slotWidth;
-            sprite.height = levelRect.h;
-            sprite.alpha = isSelected ? 1 : 0.85;
-          }
-        } else if (levelLabel !== undefined) {
-          levelLabel.x = rect.x + levelRect.x + levelRect.w / 2;
-          levelLabel.y = subPixiY + levelRect.h / 2;
-          levelLabel.alpha = isSelected ? 1 : 0.85;
-        }
-      }
-
-      // Per-row feature label sprites — show / hide / position based on the focused
-      // entry's chart features. Each label's visibility predicate is gated on the chart
-      // feature its image-id implies (LN / random sequence / landmine).
-      const featureSprites = this.rowFeatureLabels[i] ?? [];
-      const labelEntries = this.songList?.labels ?? [];
-      for (let labelIdx = 0; labelIdx < featureSprites.length; labelIdx += 1) {
-        const sprite = featureSprites[labelIdx]!;
-        const labelEntry = labelEntries[labelIdx];
-        if (labelEntry === undefined) {
-          sprite.visible = false;
-          continue;
-        }
-        const visible = entry !== undefined && this.chartHasLabelFeature(entry, labelEntry.id);
-        sprite.visible = visible;
-        if (!visible) continue;
-        const labelRect = labelEntry.rect;
-        const subPixiY = rect.y + (rect.h - labelRect.y - labelRect.h) + fractionalNudge;
-        sprite.x = rect.x + labelRect.x;
-        sprite.y = subPixiY;
-        sprite.width = labelRect.w;
-        sprite.height = labelRect.h;
-        sprite.alpha = isSelected ? 1 : 0.85;
-      }
-    }
-  }
-
-  /**
-   * Predicate map for `songlist.label[]` entries. Each known label id corresponds to a
-   * chart feature; the sprite is shown when the focused entry's chart has that feature.
-   * Unknown ids return false (= hidden) so a skin authoring a custom label that we don't
-   * recognise stays out of view rather than showing on every row indiscriminately.
-   *
-   * Folder rows return false uniformly — the labels are per-chart, not per-folder.
-   */
-  private chartHasLabelFeature(entry: BrowserBrowseEntry, labelId: string | number): boolean {
-    if (entry.kind !== 'song') return false;
-    const features = detectChartFeatures(entry.song);
-    const id = String(labelId).toLowerCase();
-    if (id.includes('ln')) return features.longNote;
-    if (id.includes('random')) return features.random;
-    // `mine` / `landmine` covered by direct event-channel scan since `detectChartFeatures`
-    // doesn't expose it (it's not in the LR2 dst_option op gate set the LR2 helper was
-    // built against). BMS landmine channels are `D1..D9` (1P) and `E1..E9` (2P).
-    if (id.includes('mine') || id.includes('landmine')) {
-      return entry.song.chart.events.some((event) => /^[de][1-9a-z]$/iu.test(event.channel));
-    }
-    return false;
-  }
-
   /** Map a chart's `playLevel` to a tint colour band — visual hint at glance. */
 
   private fitToStage(): void {
@@ -2524,7 +1025,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     container.y = (height - this.view.height * scale) / 2;
 
     this.backdrop.clear().rect(0, 0, width, height).fill(0x000000);
-    this.layoutRows();
+    this.rows.layoutRows();
   }
 
   // ─── Pointer + keyboard input ────────────────────────────────────────────────────────────────
@@ -2539,7 +1040,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // showing a wrapped entry resolves to the right song. The cursor's smooth-scroll path is
     // chosen by direction-of-travel: if the visible row offset is forward (downward) we pull
     // `scrollPosition` to take the short forward path, and vice versa.
-    const rawIndex = Math.round(this.scrollPosition) + (rowOffset - this.centreRowIndex);
+    const rawIndex = Math.round(this.scrollPosition) + (rowOffset - this.rows.centreRowIndex);
     const next = ((rawIndex % total) + total) % total;
     if (next === this.currentIndex) {
       this.activateCurrentEntry();
@@ -2551,7 +1052,18 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     else if (rawIndex < 0) this.scrollPosition += total;
     this.currentIndex = next;
     this.markSongbarChangeTimer();
-    this.refreshRowVisuals();
+    this.rows.refreshRowVisuals();
+  }
+
+  /**
+   * Hands a course bar to the host. `MusicSelector` does not start a course with a missing stage ("Some of songs not
+   * found"): it plays the cancel cue, and the host is still told so it can say which stages are missing.
+   */
+  private pickCourse(course: BrowserCourseEntry, autoPlay = false): void {
+    const picked = this.options.onCoursePicked;
+    this.playSystemSound(picked !== undefined && course.playable ? 'decide' : 'cancel');
+    if (autoPlay) picked?.(course, { autoPlay: true });
+    else picked?.(course);
   }
 
   private activateCurrentEntry(): void {
@@ -2566,6 +1078,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       this.cursorStack.push(0);
       this.refreshEntries(0);
       this.playSystemSound('folderOpen');
+      return;
+    }
+    if (entry.kind === 'course') {
+      this.pickCourse(entry.course);
       return;
     }
     // eslint-disable-next-line no-console
@@ -2598,7 +1114,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * event. Volume is fixed at 1.0; tracking authored sound levels per-event would need
    * beatoraja's `config.json` `volume_*` knobs which we don't currently parse.
    */
-  private playSystemSound(name: keyof BeatorajaSelectSystemSoundPaths): void {
+  private playSystemSound(name: keyof BeatorajaSystemSoundPaths): void {
     const paths = this.options.systemSoundPaths;
     if (paths === undefined) return;
     const path = paths[name];
@@ -2673,7 +1189,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     }
     this.currentIndex = next;
     this.markSongbarChangeTimer();
-    this.refreshRowVisuals();
+    this.rows.refreshRowVisuals();
     this.refreshChartPreview();
     this.playSystemSound('cursor');
   }
@@ -2700,7 +1216,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (next === this.currentIndex) return;
     this.currentIndex = next;
     this.markSongbarChangeTimer();
-    this.refreshRowVisuals();
+    this.rows.refreshRowVisuals();
     this.refreshChartPreview();
     this.playSystemSound('cursor');
   }
@@ -2742,7 +1258,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Always trigger the chart-image fetch (banner / backbmp / stagefile) on focus change,
     // independent of preview-engine availability — destinations gated on the synthetic
     // image ids paint regardless of whether audio is wired.
-    this.refreshChartImagesForFocus(song);
+    this.chartImages.refreshChartImagesForFocus(song);
     if (engine === undefined) return;
     if (song === undefined || this.options.collection === undefined) {
       engine.focus(undefined);
@@ -2756,112 +1272,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     engine.focus({ song, source });
   }
 
-  /**
-   * Lazily decode the focused song's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps via
-   * the host's `decodeChartImages` callback. Caches by `song.id` so re-focusing a
-   * previously-loaded song hits the cache. Generation counter guards against stale async
-   * resolves overwriting newer ones (rapid cursor moves through a folder).
-   */
-  private refreshChartImagesForFocus(song: BrowserSongEntry | undefined): void {
-    if (song === undefined) return;
-    if (this.options.decodeChartImages === undefined) return;
-    if (this.chartImageCache.has(song.id)) return;
-    // Mark as in-flight so concurrent focus changes don't fire duplicate decodes.
-    this.chartImageCache.set(song.id, null);
-    const generation = ++this.chartImageFocusGeneration;
-    const decoder = this.options.decodeChartImages;
-    void decoder(song)
-      .then((images) => {
-        if (this.disposed) return;
-        // Stale resolve: the user has moved on to another song since this fetch fired.
-        // Still cache the result so a later refocus on this song uses it without re-IO,
-        // but skip the visible-state side effects.
-        this.chartImageCache.set(song.id, images);
-        // The next tick's render pass picks up the new texture via `chartImageProvider`.
-        // No explicit refresh call needed — `update()` reads from the cache every frame.
-        void generation;
-      })
-      .catch((error) => {
-        // Decode failed; leave the cache entry as `null` so we don't retry on every
-        // cursor settle. User-visible: the banner / stagefile / backbmp slot stays hidden.
-        // eslint-disable-next-line no-console
-        console.warn('[beatoraja-select] chart-image decode failed', { songId: song.id, error });
-        this.chartImageCache.set(song.id, null);
-      });
-  }
-
-  /**
-   * Per-frame resolver for the synthetic chart-bitmap ids. Returns the FOCUSED song's
-   * matching texture from the cache, or `undefined` (= destination hides) when the chart
-   * didn't ship that bitmap or the decode is still in flight / failed.
-   */
-  private resolveChartImageForFocus(syntheticId: number): Texture | undefined {
-    const entry = this.entries[this.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const cached = this.chartImageCache.get(entry.song.id);
-    if (cached === null || cached === undefined) return undefined;
-    if (syntheticId === -100) return cached.stageFile;
-    if (syntheticId === -101) return cached.backBmp;
-    if (syntheticId === -102) return cached.banner;
-    return undefined;
-  }
-
-  /**
-   * Lazy analysis cache for the focused chart. `computeBeatorajaChartNoteDistribution`
-   * walks the chart's events once and produces both the per-bucket histogram AND the BPM
-   * segment list — sharing the walk between the bpmgraph and notes-graph renderers. Cached
-   * per song-id so cursor moves through a folder don't redundantly re-analyse.
-   */
-  private analysisFor(song: BrowserSongEntry): BeatorajaChartNoteDistribution {
-    const cached = this.chartAnalysisCache.get(song.id);
-    if (cached !== undefined) return cached;
-    const result = computeBeatorajaChartNoteDistribution(song.chart);
-    this.chartAnalysisCache.set(song.id, result);
-    return result;
-  }
-  private readonly chartAnalysisCache = new Map<string, BeatorajaChartNoteDistribution>();
-
-  /**
-   * Per-frame resolver for the focused chart's BPM segment data (consumed by `bpmgraph`
-   * destinations under the spec-faithful renderer path).
-   */
-  private resolveBpmGraphDataForFocus():
-    | {
-        segments: ReadonlyArray<{ timeMs: number; bpm: number }>;
-        mainBpm: number;
-        minBpm: number;
-        maxBpm: number;
-        totalMs: number;
-      }
-    | undefined {
-    const entry = this.entries[this.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const analysis = this.analysisFor(entry.song);
-    if (analysis.bpmSegments.length === 0 || analysis.totalMs <= 0) return undefined;
-    return {
-      segments: analysis.bpmSegments,
-      mainBpm: analysis.mainBpm,
-      minBpm: analysis.minBpm,
-      maxBpm: analysis.maxBpm,
-      totalMs: analysis.totalMs,
-    };
-  }
-
-  /**
-   * Per-frame resolver for the focused chart's note-distribution histogram (judgegraph
-   * type=0 under the spec-faithful renderer path). Returns the per-second × per-category
-   * bucket data the renderer needs for the upstream `SkinNoteDistributionGraph` look.
-   */
-  private resolveNoteDistributionForFocus():
-    | { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number }
-    | undefined {
-    const entry = this.entries[this.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const analysis = this.analysisFor(entry.song);
-    if (analysis.buckets.length === 0) return undefined;
-    return { buckets: analysis.buckets, maxCount: analysis.maxCount, totalMs: analysis.totalMs };
-  }
-
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed) return;
     // Typing in the host's search field (or any text field) is not navigation.
@@ -2869,8 +1279,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Search-input mode swallows most keys — ArrowUp/Down still navigate within the
     // filtered list (so the user can type, then arrow-pick), but printable characters /
     // Backspace mutate the query and Enter / Escape exit the mode.
-    if (this.searchActive) {
-      this.handleSearchKey(event);
+    if (this.search.searchActive) {
+      this.search.handleSearchKey(event);
       return;
     }
     switch (event.key) {
@@ -2949,127 +1359,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (this.searchQuery === query) return;
     this.searchQuery = query;
     this.refreshEntries(0);
-    this.refreshSearchPrompt();
+    this.search.refreshSearchPrompt();
   }
 
   private setSearchActive(active: boolean): void {
-    if (this.searchActive === active) return;
-    this.searchActive = active;
-    this.refreshSearchPrompt();
-  }
-
-  /**
-   * Field-keystroke handler for search-input mode. ArrowUp/Down still navigate (so the user
-   * can type → arrow-pick); Enter commits the filter and exits search mode; Escape clears
-   * + exits; Backspace deletes the last char; printable single-character keys append.
-   */
-  private handleSearchKey(event: KeyboardEvent): void {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      this.setSearchActive(false);
-      return;
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.setSearchActive(false);
-      this.setSearchQuery('');
-      return;
-    }
-    if (event.key === 'Backspace') {
-      event.preventDefault();
-      this.setSearchQuery(this.searchQuery.slice(0, -1));
-      return;
-    }
-    // Navigation keys still work inside search mode — the user can type a query, then
-    // page through the filtered results without exiting input mode. Mirrors the same set
-    // the navigation-mode handler exposes so muscle memory carries.
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      this.moveCursor(-1);
-      return;
-    }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      this.moveCursor(1);
-      return;
-    }
-    if (event.key === 'PageUp') {
-      event.preventDefault();
-      this.moveCursor(-10);
-      return;
-    }
-    if (event.key === 'PageDown') {
-      event.preventDefault();
-      this.moveCursor(10);
-      return;
-    }
-    if (event.key === 'Home') {
-      event.preventDefault();
-      this.setCursor(0);
-      return;
-    }
-    if (event.key === 'End') {
-      event.preventDefault();
-      this.setCursor(this.entries.length - 1);
-      return;
-    }
-    // Printable single-character keys append to the query. Filter out chord modifiers
-    // (Ctrl/Alt/Meta + letter) — those are typically OS shortcuts the user doesn't want
-    // landing in the search query.
-    if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
-      event.preventDefault();
-      this.setSearchQuery(this.searchQuery + event.key);
-    }
-  }
-
-  /**
-   * Show / hide / update the transient search prompt overlay. Mounted on the listLayer (=
-   * inside the scaled skin container) so its position scales with the rest of the chrome.
-   * Visible only while {@link searchActive}; the searchword display the skin authors via
-   * `BEATORAJA_TEXT.SEARCHWORD` is the canonical surface, but the transient prompt gives
-   * the user clear feedback that they're in input mode even on skins that don't author the
-   * text node.
-   */
-  private refreshSearchPrompt(): void {
-    if (!this.searchActive && this.searchQuery.length === 0) {
-      if (this.searchPromptText !== undefined) {
-        this.searchPromptText.visible = false;
-      }
-      return;
-    }
-    if (this.searchPromptText === undefined) {
-      const text = new Text({
-        text: '',
-        style: {
-          fontFamily: 'sans-serif',
-          fontSize: 24,
-          fill: 0xffe066,
-          fontWeight: '700',
-          stroke: { color: 0x000000, width: 4 },
-        },
-      });
-      text.anchor.set(0.5, 0);
-      text.x = this.view.width / 2;
-      text.y = 8;
-      this.view.container.addChild(text);
-      this.searchPromptText = text;
-    }
-    const prompt = this.searchActive ? '/ ' : '🔍 ';
-    const display = this.searchQuery.length > 0 ? this.searchQuery : '(type to search)';
-    // Append "no matches" suffix when the query yields zero entries — gives the user clear
-    // feedback that they typed too narrowly. Otherwise show the result count for queries
-    // with hits ("3 matches"), which doubles as a hint that filtering is working.
-    let suffix = '';
-    if (this.searchQuery.length > 0) {
-      if (this.entries.length === 0) {
-        suffix = ' — no matches';
-      } else {
-        suffix = ` — ${this.entries.length} match${this.entries.length === 1 ? '' : 'es'}`;
-      }
-    }
-    this.searchPromptText.text = `${prompt}${display}${suffix}`;
-    this.searchPromptText.tint = this.searchQuery.length > 0 && this.entries.length === 0 ? 0xff8888 : 0xffe066;
-    this.searchPromptText.visible = true;
+    this.search.setSearchActive(active);
   }
 
   /**
@@ -3100,74 +1394,6 @@ function clampIndex(value: number, length: number): number {
   return truncated;
 }
 
-function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
-  return parts.filter((p): p is string => typeof p === 'string' && p.length > 0).join(' ');
-}
-
-/**
- * `BrowserSongEntry.playLevel` arrives as either a number (BMS `#PLAYLEVEL 12`) or a string
- * (some BMSON files / BMS variants store it as text). The skin's `value[]` resolver expects
- * a number, so we coerce — strings parse via `parseInt`; non-finite results return
- * `undefined` so the digit panel shows blanks rather than NaN garbage.
- */
-function resolvePlayLevel(level: number | string | undefined): number | undefined {
-  if (typeof level === 'number') return Number.isFinite(level) ? level : undefined;
-  if (typeof level === 'string' && level.length > 0) {
-    const parsed = Number.parseInt(level, 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
-/**
- * Case-insensitive substring match against a song's text-searchable fields. The query is
- * pre-lowercased by the caller so this hot-path doesn't re-allocate per song. Returns true
- * when ANY field contains the query — title / artist / genre / subtitle. Mirrors
- * beatoraja's reference search which treats fields uniformly.
- */
-function songMatchesQuery(song: BrowserSongEntry, lowerQuery: string): boolean {
-  const meta = song.chart.metadata;
-  const fields = [meta.title, meta.artist, meta.genre, meta.subtitle];
-  for (const field of fields) {
-    if (typeof field !== 'string' || field.length === 0) continue;
-    if (field.toLowerCase().includes(lowerQuery)) return true;
-  }
-  return false;
-}
-
-/**
- * Map a chart's `#PLAYLEVEL` to a tint colour band — beatoraja's reference theme uses
- * different per-difficulty colours on the songlist's level slot (white for beginner, blue
- * for normal, yellow for hyper, orange for another, red for insane). Without authored
- * sprites we approximate via tint on a single neutral text node. Boundaries chosen to
- * match the conventional BMS difficulty bands:
- *   1-4  white      — beginner
- *   5-8  cyan       — normal
- *   9-10 yellow     — hyper
- *   11   orange     — another
- *   12+  red        — insane
- */
-function levelTintForDifficulty(level: number): number {
-  if (level <= 4) return 0xffffff;
-  if (level <= 8) return 0x66ddff;
-  if (level <= 10) return 0xffe066;
-  if (level <= 11) return 0xffaa44;
-  return 0xff5555;
-}
-
-/**
- * `resolveChartPlayVariant` walks the chart's events / metadata to classify keys mode. On a
- * malformed entry it can throw; a per-frame op-set computation must never throw, so we wrap
- * with a try/catch and fall back to `undefined` (= no `KEYSONG_*` op set, "modeless" bar).
- */
-function safeResolveChartVariant(song: BrowserSongEntry): ChartPlayVariant | undefined {
-  try {
-    return resolveChartPlayVariant(song);
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Identity-equality on browse entries. Songs compare by reference (BrowserSongEntry objects
  * are stable across sort / filter rebuilds — array operations re-arrange but never re-allocate
@@ -3178,6 +1404,7 @@ function isSameEntry(a: BrowserBrowseEntry, b: BrowserBrowseEntry): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === 'song' && b.kind === 'song') return a.song === b.song;
   if (a.kind === 'folder' && b.kind === 'folder') return a.folder.label === b.folder.label;
+  if (a.kind === 'course' && b.kind === 'course') return a.course.id === b.course.id;
   return false;
 }
 
@@ -3248,277 +1475,6 @@ function openIrWebsite(_song: BrowserSongEntry | undefined): void {
   // eslint-disable-next-line no-console
   console.log('[beatoraja-select] opening IR website', JSON.stringify({ url }));
   window.open(url, '_blank', 'noopener,noreferrer');
-}
-
-/**
- * Resolve one wall-clock field — picks the right `Date` accessor for the given `BEATORAJA_NUM`
- * `TIME_*` ref. Reads `Date.now()` per call so the seconds tick live as the renderer re-samples
- * each frame. Months are 1-indexed (skin authors expect "1..12", not the JS `0..11`).
- */
-function resolveWallClockField(refOp: number): number | undefined {
-  const now = new Date();
-  switch (refOp) {
-    case BEATORAJA_NUM.TIME_YEAR:
-      return now.getFullYear();
-    case BEATORAJA_NUM.TIME_MONTH:
-      return now.getMonth() + 1;
-    case BEATORAJA_NUM.TIME_DAY:
-      return now.getDate();
-    case BEATORAJA_NUM.TIME_HOUR:
-      return now.getHours();
-    case BEATORAJA_NUM.TIME_MINUTE:
-      return now.getMinutes();
-    case BEATORAJA_NUM.TIME_SECOND:
-      return now.getSeconds();
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Cached chart duration in seconds for the focused song. The underlying computation walks the
- * full event list + bpm/stop tables; caching keyed by the `BrowserSongEntry` reference (= the
- * chart never changes once loaded) keeps per-frame resolves O(1).
- */
-function resolveSongLengthSeconds(song: BrowserSongEntry): number {
-  const cached = SONG_LENGTH_CACHE.get(song);
-  if (cached !== undefined) return cached;
-  const seconds = computeBeatorajaChartTotalSeconds(song.chart);
-  SONG_LENGTH_CACHE.set(song, seconds);
-  return seconds;
-}
-const SONG_LENGTH_CACHE = new WeakMap<BrowserSongEntry, number>();
-
-/**
- * Cached note breakdown for the focused song. Same caching pattern as the duration helper —
- * the events scan happens once per song, then per-frame resolves are O(1) lookups.
- */
-function resolveNoteBreakdown(song: BrowserSongEntry): NoteBreakdown {
-  const cached = NOTE_BREAKDOWN_CACHE.get(song);
-  if (cached !== undefined) return cached;
-  const breakdown = computeBeatorajaNoteBreakdown(song.chart);
-  NOTE_BREAKDOWN_CACHE.set(song, breakdown);
-  return breakdown;
-}
-const NOTE_BREAKDOWN_CACHE = new WeakMap<BrowserSongEntry, NoteBreakdown>();
-
-/** Cached note density (peak / end / avg NPS) for the focused song. */
-function resolveDensity(song: BrowserSongEntry): ChartDensity {
-  const cached = NOTE_DENSITY_CACHE.get(song);
-  if (cached !== undefined) return cached;
-  const density = computeBeatorajaChartDensity(song.chart);
-  NOTE_DENSITY_CACHE.set(song, density);
-  return density;
-}
-const NOTE_DENSITY_CACHE = new WeakMap<BrowserSongEntry, ChartDensity>();
-
-/**
- * Walk the chart's BPM-change events (channels `03` / `08`) and return the integer min / max
- * BPM. Includes the chart's `metadata.bpm` so a chart that doesn't change BPM still gets a
- * sensible (min === max === main) result. Returns `undefined` when neither metadata BPM nor
- * any change event yields a finite positive number (corrupt / empty chart).
- *
- * Cached per song via WeakMap — the events array is iterated once and reused across frames.
- */
-function resolveBpmRange(song: BrowserSongEntry): { min: number; max: number } | undefined {
-  const cached = BPM_RANGE_CACHE.get(song);
-  if (cached !== undefined) return cached === null ? undefined : cached;
-  let min = Number.POSITIVE_INFINITY;
-  let max = 0;
-  const considerBpm = (bpm: number): void => {
-    if (!Number.isFinite(bpm) || bpm <= 0) return;
-    if (bpm < min) min = bpm;
-    if (bpm > max) max = bpm;
-  };
-  considerBpm(song.chart.metadata.bpm);
-  const bpmTable = song.chart.resources?.bpm ?? {};
-  for (const event of song.chart.events ?? []) {
-    if (event.value === '00' || event.value === '') continue;
-    if (event.channel === '03') {
-      considerBpm(parseInt(event.value, 16));
-    } else if (event.channel === '08') {
-      const looked =
-        bpmTable[event.value] ?? bpmTable[event.value.toLowerCase()] ?? bpmTable[event.value.toUpperCase()];
-      if (typeof looked === 'number') considerBpm(looked);
-      else if (typeof looked === 'string') considerBpm(Number.parseFloat(looked));
-    }
-  }
-  if (!Number.isFinite(min) || max <= 0) {
-    BPM_RANGE_CACHE.set(song, null);
-    return undefined;
-  }
-  const result = { min: Math.round(min), max: Math.round(max) };
-  BPM_RANGE_CACHE.set(song, result);
-  return result;
-}
-const BPM_RANGE_CACHE = new WeakMap<BrowserSongEntry, { min: number; max: number } | null>();
-
-/**
- * `true` when the chart authored at least one stop event (channel `09` in BMS, scaled stop in
- * bmson). Used to fire `HAS_BPMSTOP` (1177). Iterates events linearly — at typical chart sizes
- * (a few thousand events) this is microseconds; the WeakMap-cached `detectChartFeatures` next to
- * it amortises any worst-case cost across the same select-scene tick.
- */
-function chartHasStop(song: BrowserSongEntry): boolean {
-  const cached = STOP_PRESENCE_CACHE.get(song);
-  if (cached !== undefined) return cached;
-  const has = (song.chart.events ?? []).some((event) => event.channel === '09');
-  STOP_PRESENCE_CACHE.set(song, has);
-  return has;
-}
-const STOP_PRESENCE_CACHE = new WeakMap<BrowserSongEntry, boolean>();
-
-/**
- * Keys-variant string → imageset index for `modeset` (ref 11). Mirrors beatoraja's MainState
- * keymode enum used by the default skin: 0 = ALL_KEYS, 1 = 5K, 2 = 7K, 3 = 10K, 4 = 14K, 5 = 9K,
- * 6 = 24K, 7 = 24K-DP. Unknown variants fall back to 0 (skins author this slot as "allkeys" / "any").
- */
-function keymodeImagesetIndex(variant: ChartPlayVariant | undefined): number {
-  switch (variant) {
-    case '5':
-      return 1;
-    case '7':
-      return 2;
-    case '10':
-      return 3;
-    case '14':
-      return 4;
-    case '9':
-      return 5;
-    case '24':
-      return 6;
-    case '48':
-      return 7;
-    default:
-      return 0;
-  }
-}
-
-/**
- * SkinProperty `MAIN.SLIDER` types relevant to the select scene. Beatoraja's master / key /
- * BGM volume sliders are 17 / 18 / 19. We return a max-position value (1.0 = far end of the
- * slider's authored range) so ModernChic's volume strip shows at "full" — there's no live
- * volume state in the player today, but rendering a slider at 0 (= sprite at home position)
- * looks broken.
- *
- * Lanecover / lift / hispeed sliders (types 4/5/6) aren't relevant on the select scene, but
- * skins occasionally author them anyway; returning `undefined` for those keeps the sprite
- * at its dst-rect home (effectively "off"), matching beatoraja's behavior.
- */
-function resolveSelectionSliderValue(type: number): number | undefined {
-  switch (type) {
-    case 17: // MASTER_VOLUME
-    case 18: // KEY_VOLUME
-    case 19: // BGM_VOLUME
-      return 1;
-    default:
-      return undefined;
-  }
-}
-
-/**
- * BMS `#RANK` value (0..4) → matching `BEATORAJA_OP.JUDGE_*` code. Falls back to JUDGE_NORMAL
- * (the standard 7K window) for unknown / missing values, matching beatoraja's own treatment of
- * legacy charts that don't author the header.
- */
-function judgeRankOp(rank: number | undefined): number {
-  switch (rank) {
-    case 0:
-      return BEATORAJA_OP.JUDGE_VERYHARD;
-    case 1:
-      return BEATORAJA_OP.JUDGE_HARD;
-    case 3:
-      return BEATORAJA_OP.JUDGE_EASY;
-    case 4:
-      return BEATORAJA_OP.JUDGE_VERYEASY;
-    case 2:
-    default:
-      return BEATORAJA_OP.JUDGE_NORMAL;
-  }
-}
-
-/**
- * BMS `#DIFFICULTY` value (0/missing..5) → matching beatoraja `LEVEL_*` op AND the LR2-style
- * `DIFFICULTY_*` op (skins use either flavour, so we fire both). Returns an array because the
- * "undefined / 0" case has only the LR2 alias (no LEVEL_UNDEFINED in the native block).
- */
-/**
- * Parse a `songlist.level[].id` string (e.g. `"level-beginner"`) into the matching
- * difficulty index used by `chart.metadata.difficulty`. Returns `undefined` when the id
- * doesn't match the upstream `level-*` convention so the caller can skip it.
- *
- * Mapping mirrors upstream `JsonSelectSkinObjectLoader.java`'s level loop where each
- * `level[i]` corresponds to one of the difficulty rows in beatoraja's level sprite strip:
- *
- *   level-unknown  → 0 (= no `#DIFFICULTY` authored)
- *   level-beginner → 1
- *   level-normal   → 2
- *   level-hyper    → 3
- *   level-another  → 4
- *   level-insane   → 5
- *
- * Numeric ids (rare, default theme) fall through unmatched — the renderer keeps the
- * legacy "first entry wins" fallback in that case.
- */
-function parseLevelDifficultyIndex(id: string | number): number | undefined {
-  if (typeof id !== 'string') return undefined;
-  switch (id) {
-    case 'level-unknown':
-      return 0;
-    case 'level-beginner':
-      return 1;
-    case 'level-normal':
-      return 2;
-    case 'level-hyper':
-      return 3;
-    case 'level-another':
-      return 4;
-    case 'level-insane':
-      return 5;
-    default:
-      return undefined;
-  }
-}
-
-function difficultyOps(difficulty: number | undefined): ReadonlyArray<number> {
-  switch (difficulty) {
-    case 1:
-      return [BEATORAJA_OP.LEVEL_BEGINNER, BEATORAJA_OP.DIFFICULTY_BEGINNER];
-    case 2:
-      return [BEATORAJA_OP.LEVEL_NORMAL, BEATORAJA_OP.DIFFICULTY_NORMAL];
-    case 3:
-      return [BEATORAJA_OP.LEVEL_HYPER, BEATORAJA_OP.DIFFICULTY_HYPER];
-    case 4:
-      return [BEATORAJA_OP.LEVEL_ANOTHER, BEATORAJA_OP.DIFFICULTY_ANOTHER];
-    case 5:
-      return [BEATORAJA_OP.LEVEL_INSANE, BEATORAJA_OP.DIFFICULTY_INSANE];
-    default:
-      // No native counterpart for "undefined" — only the LR2 op fires. Skins that gate on
-      // `op:[150]` get a fallback "?" / "unknown" badge.
-      return [BEATORAJA_OP.DIFFICULTY_UNDEFINED];
-  }
-}
-
-/** Keys-variant string → matching `BEATORAJA_OP.KEYSONG_*` code, or `undefined` for unknown. */
-function keysongOpForVariant(variant: ChartPlayVariant | undefined): number | undefined {
-  switch (variant) {
-    case '5':
-      return BEATORAJA_OP.KEYSONG_5K;
-    case '7':
-      return BEATORAJA_OP.KEYSONG_7K;
-    case '9':
-      return BEATORAJA_OP.KEYSONG_9K;
-    case '10':
-      return BEATORAJA_OP.KEYSONG_10K;
-    case '14':
-      return BEATORAJA_OP.KEYSONG_14K;
-    case '24':
-      return BEATORAJA_OP.KEYSONG_24K;
-    case '48':
-      return BEATORAJA_OP.KEYSONG_24K_DP;
-    default:
-      return undefined;
-  }
 }
 
 /** Whether a key event comes from a text field, where keys type rather than steer the list. */

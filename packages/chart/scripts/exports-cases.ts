@@ -279,6 +279,21 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.computeChartFingerprint(fixtures.sampleBmsJson, BENCH_FINGERPRINT_OPTIONS);
     },
   });
+  define('chart.canonicalizeJsonValue', {
+    run: () => {
+      chartApi.canonicalizeJsonValue({
+        v: 'bmcourse0',
+        kind: 'grade',
+        constraints: ['gauge_lr2', 'grade_mirror'],
+        stages: ['bmfp0:a', 'bmfp0:b', 'bmfp0:c', 'bmfp0:d'],
+      });
+    },
+  });
+  define('chart.sha256Hex', {
+    run: () => {
+      chartApi.sha256Hex('bmcourse0 bench text: grade gauge_lr2 grade_mirror bmfp0:0123456789abcdef');
+    },
+  });
   define('chart.computeFingerprintOfDocument', {
     run: (fixtures) => {
       chartApi.computeFingerprintOfDocument(getBenchFingerprintDocument(fixtures.sampleBmsJson));

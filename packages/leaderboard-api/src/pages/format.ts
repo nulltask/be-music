@@ -1,26 +1,37 @@
-import { ClearLamp } from '../scoring/lamp.ts';
-import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/playlog';
+import { clearLampRank, computeScoreRate, resolveIidxRankLabel } from '@be-music/player/ruleset';
 import { en, type Messages } from './i18n/en.ts';
 
-/** Display name and colour of each clear lamp, LR2 / beatoraja style. */
+/** Display name and colour of each clear lamp, LR2 / beatoraja style, by the rank the Leaderboard stores it as. */
 export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string; meaning: string }>> = {
-  [ClearLamp.FAILED]: { label: 'FAILED', color: '#7a1f2b', meaning: 'Did not clear.' },
-  [ClearLamp.ASSIST_EASY]: { label: 'ASSIST EASY', color: '#8a5cf6', meaning: 'Cleared on the ASSIST EASY gauge.' },
-  [ClearLamp.EASY]: { label: 'EASY CLEAR', color: '#3fb950', meaning: 'Cleared on the EASY gauge.' },
-  [ClearLamp.NORMAL]: { label: 'CLEAR', color: '#3b82f6', meaning: 'Cleared on the normal gauge (GROOVE / NORMAL).' },
-  [ClearLamp.HARD]: { label: 'HARD CLEAR', color: '#e5e7eb', meaning: 'Cleared on the HARD gauge.' },
-  [ClearLamp.EX_HARD]: {
+  [clearLampRank('FAILED')]: { label: 'FAILED', color: '#7a1f2b', meaning: 'Did not clear.' },
+  [clearLampRank('ASSIST_EASY')]: {
+    label: 'ASSIST EASY',
+    color: '#8a5cf6',
+    meaning: 'Cleared on the ASSIST EASY gauge.',
+  },
+  [clearLampRank('EASY')]: { label: 'EASY CLEAR', color: '#3fb950', meaning: 'Cleared on the EASY gauge.' },
+  [clearLampRank('NORMAL')]: {
+    label: 'CLEAR',
+    color: '#3b82f6',
+    meaning: 'Cleared on the normal gauge (GROOVE / NORMAL).',
+  },
+  [clearLampRank('HARD')]: { label: 'HARD CLEAR', color: '#e5e7eb', meaning: 'Cleared on the HARD gauge.' },
+  [clearLampRank('EX_HARD')]: {
     label: 'EX HARD CLEAR',
     color: '#f5c518',
     meaning: 'Cleared on the EX-HARD, DEATH or HAZARD gauge.',
   },
-  [ClearLamp.FULL_COMBO]: {
+  [clearLampRank('FULL_COMBO')]: {
     label: 'FULL COMBO',
     color: '#22d3ee',
     meaning: 'No BAD and no missed POOR (empty POORs do not count). The top lamp under LR2 and IIDX.',
   },
-  [ClearLamp.PERFECT]: { label: 'PERFECT', color: '#f472b6', meaning: 'A full combo without a GOOD (beatoraja).' },
-  [ClearLamp.MAX]: { label: 'MAX', color: '#ffffff', meaning: 'Every note a PGREAT (beatoraja).' },
+  [clearLampRank('PERFECT')]: {
+    label: 'PERFECT',
+    color: '#f472b6',
+    meaning: 'A full combo without a GOOD (beatoraja).',
+  },
+  [clearLampRank('MAX')]: { label: 'MAX', color: '#ffffff', meaning: 'Every note a PGREAT (beatoraja).' },
 };
 
 export function lampStyle(lamp: number): { label: string; color: string; meaning: string } {
@@ -177,7 +188,7 @@ export function formatDelta(delta: number): string {
 
 /** Whether a play's gauge is worth showing next to its lamp: only when it did not clear, where it tells how close. */
 export function showsGauge(clearLamp: number): boolean {
-  return clearLamp <= ClearLamp.FAILED;
+  return clearLamp <= clearLampRank('FAILED');
 }
 
 /** What a verification layer means (docs/leaderboard.md section 5.3), for its tooltip and the info panel. */

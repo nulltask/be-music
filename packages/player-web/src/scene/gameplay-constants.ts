@@ -1,13 +1,13 @@
 import { Color } from 'pixi.js';
 
 // Gameplay fallback palette. Family-specific chrome can override these in its own renderer.
-export const BG = new Color('#05070b');
-export const PANEL = new Color('#10141d');
-export const WHITE = new Color('#edf2f7');
-export const BLUE = new Color('#56b6f7');
-export const RED = new Color('#ff6b6b');
-export const YELLOW = new Color('#ffd166');
-export const MUTED = new Color('#98a5b3');
+export const BG: Color = new Color('#05070b');
+export const PANEL: Color = new Color('#10141d');
+export const WHITE: Color = new Color('#edf2f7');
+export const BLUE: Color = new Color('#56b6f7');
+export const RED: Color = new Color('#ff6b6b');
+export const YELLOW: Color = new Color('#ffd166');
+export const MUTED: Color = new Color('#98a5b3');
 
 export const PIXELS_PER_BEAT = 72;
 /**
@@ -32,21 +32,12 @@ export { HISPEED_MAX, HISPEED_MIN, HISPEED_STEP } from './hi-speed.ts';
 export const FALLBACK_INTRO_DELAY_MS = 3000;
 
 /**
- * Lanes each LR2 per-side timer bank covers: scratch (index 0) plus keys 1..9. Lanes past that — the 24-key keyboard
- * modes' columns 10..24 — have no LR2 timer slot, and stamping `base + laneIndex` for them would spill into the next
- * bank (e.g. bomb 50 + 24 = 74, which is the 1P LN-hold bank).
+ * Fallback lane-laser release fade duration in ms. Themes can author a per-lane span (the LR2 family derives it from the
+ * skin's key-on keyframes); this constant kicks in when a key-on slot has no themed span (a be-music skin, or a slot
+ * the skin doesn't author). 120 ms matches the LR2 default skin's typical key-on keyframe span and is a perceptually
+ * comfortable decay for auto-judge feedback.
  */
-export const LR2_LANE_TIMER_BANK_SIZE = 10;
-
-export const LR2_1P_KEYON_TIMER_BASE = 100;
-export const LR2_2P_KEYON_TIMER_BASE = 110;
-export const LR2_1P_BOMB_TIMER_BASE = 50;
-export const LR2_2P_BOMB_TIMER_BASE = 60;
-/**
- * LR2 long-note hold-effect timers: 70-79 for the 1P side, 80-89 for the 2P side.
- */
-export const LR2_1P_LN_HOLD_TIMER_BASE = 70;
-export const LR2_2P_LN_HOLD_TIMER_BASE = 80;
+export const KEY_ON_FADE_OUT_MS = 120;
 
 export { PLAYFIELD } from './gameplay-geometry.ts';
 /**

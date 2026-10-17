@@ -102,6 +102,35 @@
 - **プレイログ (playlog)**: 1 回のプレイの入力を記録したもの（`*.bmplay.json`）です。解決済み譜面、すべてのキーの押下と解放、プレイ設定を持ちます。`bms-playlog` は LR2、beatoraja、IIDX のルールセットでこれを再シミュレーションします。
 - **PlayerSummary**: 再生終了後の集計結果です。judge counts、FAST/SLOW、EX-SCORE、SCORE、gauge、clear state などを含みます。
 
+## コース・記録・表示
+
+- **コースの実行（course run）**: コースを 1 回遊ぶこと。ステージを順に遊ぶか、NONSTOP では結合した 1 本のプレイです。1 回分として順位付け・記録します。_避ける語_: course session、course play。
+- **ステージ（stage）**: コースの実行の中の 1 譜面。
+- **持ち越し（carry-in）**: ステージが始まるときのゲージ値・コースのコンボ・コースの最大コンボ。前のステージが残したものです。
+- **投げ（give up）**: コースの実行を ESC で抜けること。投げた実行は落ちた実行です。
+- **結合したプレイ（stitched play）**: NONSTOP のコースを遊ぶ 1 本の譜面。ステージをつなぎ方と配置に従って結合して作ります。
+- **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`iidx`。
+- **ゲージの種類（gauge type）**: プレイヤーが選ぶゲージ。LR2 の名前で `GROOVE`・`HARD`・`DEATH`・`EASY`（`GaugeType`）。判定ルールセットはそれぞれ自分のゲージで遊ばせ、そのゲージはゲージ ID（`NORMAL`・`HAZARD`・`CLASS` など）で呼びます。
+- **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
+- **BP**: ミスの数。BAD・POOR・空 POOR に、コースでは判定されなかったノートを加えたもの（`resolveMissCount`）。
+- **自己ベスト（best record）**: 1 つの判定ルールセットで、譜面またはコースについてプレイヤーが持つ最良のクリアランプ・EX-SCORE・最大コンボ・BP（`BestRecord`。`@be-music/player/records` の規則で保ちます）。
+- **表示設定（view settings）**: 判定とは別に、プレイヤーが見ていたもの。ハイスピード、ハイスピード固定、表示時間、各サイドの SUDDEN+・HIDDEN+・LIFT です。_避ける語_: display options。
+- **プレイテンポ（play tempo）**: 譜面に対してプレイがどれだけ速く進むか（`speed`）。テンポを変えたプレイは練習扱いです。
+
+## アーキテクチャ
+
+- **シーンモデル（scene model）**: スキンの種類によらない 1 画面の状態と規則。何を見せ、どう応えるか。[ADR 0002](./adr/0002-scene-model-package.ja.md) と [シーンモデル](./scene-model.ja.md) を参照。
+- **ライブラリ / ライブラリの項目（library / library entry）**: 選曲画面が一覧する対象。ルートでフォルダにまとめた譜面と、コースフォルダです（`Library`）。一覧の 1 本のバーは譜面・フォルダ・コースのいずれかです（`LibraryEntry`）。
+- **一覧の状態（browse state）**: プレイヤーがライブラリのどこにいて、一覧がどんな形か。開いているフォルダ、各階層のカーソル、検索、ソートとフィルター（一覧のオプション）、お気に入りです（`BrowseState`）。その保存形（`BrowseSnapshot`）がプレイの通るシーンをまたいで状態を保ちます。
+- **プレイ状態（play state）**: どのプレイ画面も読むプレイの状態で、エンジンのフレームと判定で進みます。進行中のゲージと EX スコアとそのグラフ、コンボ、判定タイミング、見え方の設定です（`PlayState`）。
+- **プレイ結果（play result）**: 単独のプレイ、コースのステージ、コース全体、NONSTOP のプレイの唯一の結果の形（`PlayResult`）。どれかは実行の種類が示します。
+- **効果音セット（system sound set）**: テーマの効果音とジングルをスロットごとに持つもの（カーソル、決定、フォルダ、オプションパネル、選曲の BGM、クリア / 失敗のジングルなど）。それぞれバイト列かテーマ内のパスに解決済みです（`SystemSoundSet`）。
+- **シーンセッション（scene session）**: 画面の振る舞いの唯一の実装で、すべてのスキンの種類が共有します。[ADR 0001](./adr/0001-skin-families-only-draw.ja.md) を参照。
+- **ファミリービュー（family view）**: 1 つのスキンの種類が、シーンモデルをどう描くか。プレイヤーの操作をインテントとして返します。
+- **インテント（intent）**: ビューへの操作が画面にとって何を意味するか。フォルダを開く、コースを始める、ゲージを切り替える、など。
+- **プレイループ / 判定の戦略（play loop / judge strategy）**: すべてのプレイが通る 1 つのエンジンのループと、そこに差し込む手動・AUTO・リプレイの判定。[ADR 0003](./adr/0003-one-play-loop.ja.md) を参照。
+- **シーンルーター（scene router）**: ホストで今の画面とすべての切り替えを受け持つ唯一の部品。[ADR 0006](./adr/0006-scene-router.ja.md) を参照。
+
 ## 関連文書
 
 - [仕様書トップ](./README.ja.md)

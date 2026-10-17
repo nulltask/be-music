@@ -1,7 +1,13 @@
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { createEmptyJson, type BeMusicEvent } from '../../../json/src/index.ts';
 import type { AudioBusHandle } from './audio-bus.ts';
-import { clampSampleDuration, clampSampleOffset, createWebAudioSession } from './web-audio-session.ts';
+import {
+  clampSampleDuration,
+  clampSampleOffset,
+  createWebAudioSession,
+  decodedSampleKey,
+  LIVE_TEMPO_RAMP_SECONDS,
+} from './web-audio-session.ts';
 
 /**
  * Stubs the Web Audio API surface that {@link createWebAudioSession} touches. The session never reaches
@@ -44,6 +50,12 @@ function createMocks(): {
     createBufferSource: vi.fn(() => {
       const node = {
         buffer: null as AudioBuffer | null,
+        playbackRate: {
+          value: 1,
+          cancelScheduledValues: vi.fn(),
+          setValueAtTime: vi.fn(),
+          linearRampToValueAtTime: vi.fn(),
+        },
         onended: null as null | (() => void),
         connect: vi.fn(),
         disconnect: vi.fn(),
@@ -139,6 +151,113 @@ describe('createWebAudioSession', () => {
     expect(trackedBufferSources).toHaveLength(2);
     expect(trackedBufferSources[0]!.connectedTo).toBe(keyMixer);
     expect(trackedBufferSources[1]!.connectedTo).toBe(bgmMixer);
+  });
+
+  test("plays a stitched NONSTOP stage's samples at its rate and its background through its fade", () => {
+    const { audioContext, audioBus, trackedBufferSources, keyMixer } = createMocks();
+    const stageFade = { connect: vi.fn() } as unknown as GainNode;
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer()],
+        ['bgm.wav', makeMockAudioBuffer()],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+      stageMixer: {
+        stageOf: (key) => (key === '03' || key === '01' ? 1 : undefined),
+        rate: () => 1.25,
+        bgmInput: () => stageFade,
+      },
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('01', '03'));
+    session.triggerEvent?.(mkEvent('01', '02'));
+    const [key, bgm, other] = trackedBufferSources;
+    // The player's keysound keeps the key bus but plays at the stage's rate.
+    expect(key!.connectedTo).toBe(keyMixer);
+    expect(key!.node.playbackRate.value).toBe(1.25);
+    expect(bgm!.connectedTo).toBe(stageFade);
+    expect(bgm!.node.playbackRate.value).toBe(1.25);
+    // A sample of no stage is left alone.
+    expect(other?.node.playbackRate.value ?? 1).toBe(1);
+  });
+
+  test('plays every sample at the play tempo, multiplied with a NONSTOP stage rate', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer()],
+        ['bgm.wav', makeMockAudioBuffer()],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+      playbackRate: 0.8,
+      stageMixer: {
+        stageOf: (key) => (key === '03' ? 1 : undefined),
+        rate: () => 1.25,
+        bgmInput: () => undefined,
+      },
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('01', '03'));
+    const [key, staged] = trackedBufferSources;
+    expect(key!.node.playbackRate.value).toBe(0.8);
+    expect(staged!.node.playbackRate.value).toBe(1);
+  });
+
+  test('a live tempo change sets the rate of later samples and glides the ones playing, in pitch mode', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer()],
+        ['bgm.wav', makeMockAudioBuffer()],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+      playbackRate: 0.8,
+      playbackRateFollowsTempo: true,
+      stageMixer: {
+        stageOf: (key) => (key === '03' ? 1 : undefined),
+        rate: () => 1.25,
+        bgmInput: () => undefined,
+      },
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('01', '03'));
+    (audioContext as { currentTime: number }).currentTime = 2;
+    session.setTempo?.(1.2);
+    const playing = trackedBufferSources[0]!.node.playbackRate;
+    // The playing BGM glides from its rate to the new tempo times its stage rate.
+    expect(playing.cancelScheduledValues).toHaveBeenCalledWith(2);
+    expect(playing.setValueAtTime).toHaveBeenCalledWith(1, 2);
+    expect(playing.linearRampToValueAtTime).toHaveBeenCalledWith(1.5, 2 + LIVE_TEMPO_RAMP_SECONDS);
+    session.triggerEvent?.(mkEvent('11', '01'));
+    expect(trackedBufferSources[1]!.node.playbackRate.value).toBe(1.2);
+  });
+
+  test('ignores a live tempo change unless the rate follows the tempo (keep pitch)', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer()]]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.start();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.setTempo?.(1.2);
+    expect(trackedBufferSources[0]!.node.playbackRate.linearRampToValueAtTime).not.toHaveBeenCalled();
+    session.triggerEvent?.(mkEvent('11', '01'));
+    expect(trackedBufferSources[1]!.node.playbackRate.value).toBe(1);
   });
 
   test('applies #WAVCMD per-slot gain via an intermediate GainNode', () => {
@@ -347,5 +466,13 @@ describe('clampSampleOffset / clampSampleDuration', () => {
     expect(clampSampleDuration(-1, 1, 0)).toBeUndefined();
     expect(clampSampleDuration(0.3, 1, 0.5)).toBeCloseTo(0.3, 6);
     expect(clampSampleDuration(2, 1, 0.5)).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe('decodedSampleKey', () => {
+  test('resolves dot segments, doubled and back slashes, and case', () => {
+    expect(decodedSampleKey('./Sound/Kick.WAV')).toBe('sound/kick.wav');
+    expect(decodedSampleKey('bms\\..\\common//Snare.ogg')).toBe('common/snare.ogg');
+    expect(decodedSampleKey('kick.wav')).toBe(decodedSampleKey('KICK.wav'));
   });
 });

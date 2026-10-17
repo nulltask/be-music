@@ -3,8 +3,75 @@ import { type AudioSession } from './engine-types.ts';
 /**
  * The playback clock and the wall-clock helpers the drivers wait and stamp inputs with.
  */
+
+/**
+ * Where the engine reads the time and waits: the drivers' clock without an audio clock, their sleeps and waits, the
+ * input wake-up's timeouts and the `pressedAt` correction all go through it. The host scheduler reads `performance` and
+ * uses the host's timers. A test can swap in a virtual clock with {@link setEngineScheduler} to run plays
+ * deterministically and faster than real time (`core/characterization/virtual-clock.ts`). Internal: no package entry
+ * point exports it.
+ */
+export interface EngineScheduler {
+  /** Monotonic milliseconds, the domain of `performance.now()`. */
+  now(): number;
+  /**
+   * Wall-clock milliseconds shared across threads (`performance.timeOrigin + performance.now()`), the domain of an input
+   * command's `pressedAt`.
+   */
+  wallClockNow(): number;
+  /** Calls `callback` after `ms` milliseconds, like `setTimeout`. Returns a function that cancels it. */
+  setTimeout(callback: () => void, ms: number): () => void;
+  /** Calls `callback` on the next turn of the event loop, like `setImmediate`. Returns a function that cancels it. */
+  setImmediate(callback: () => void): () => void;
+  /**
+   * Whether timers fire exactly when due. Host timers fire late by up to a few milliseconds, so a precise wait sleeps a
+   * little short and spins out the rest; a virtual clock's timers are exact, so its precise wait is a single timer.
+   */
+  readonly exactTimers: boolean;
+}
+
+const hostEngineScheduler: EngineScheduler = {
+  now: () => performance.now(),
+  wallClockNow: () => performance.timeOrigin + performance.now(),
+  setTimeout: (callback, ms) => {
+    const handle = setTimeout(callback, ms);
+    return () => clearTimeout(handle);
+  },
+  setImmediate: (callback) => {
+    const timers = globalThis as {
+      setImmediate?: (callback: () => void) => unknown;
+      clearImmediate?: (handle: unknown) => void;
+    };
+    if (typeof timers.setImmediate === 'function') {
+      const handle = timers.setImmediate(callback);
+      return () => timers.clearImmediate?.(handle);
+    }
+    const handle = setTimeout(callback, 0);
+    return () => clearTimeout(handle);
+  },
+  exactTimers: false,
+};
+
+let activeEngineScheduler: EngineScheduler = hostEngineScheduler;
+
+/** The scheduler the engine runs on now: the host's, unless a test swapped in its own. */
+export function getEngineScheduler(): EngineScheduler {
+  return activeEngineScheduler;
+}
+
+/**
+ * Test-only: makes the engine read the time and wait through `scheduler` (`undefined` restores the host's). The
+ * engine reads it on every call, so swap it only while no play is running.
+ */
+export function setEngineScheduler(scheduler: EngineScheduler | undefined): void {
+  activeEngineScheduler = scheduler ?? hostEngineScheduler;
+}
+
 // Resolves after `ms` milliseconds (`node:timers/promises.setTimeout` without the Node import).
-export const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+export const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    activeEngineScheduler.setTimeout(resolve, ms);
+  });
 
 export interface PlaybackClock {
   nowMs: () => number;
@@ -19,7 +86,7 @@ interface PlaybackClockSource {
   scheduledMs?: () => number;
 }
 
-export const TUI_FRAME_INTERVAL_MS = 1000 / 60;
+export const TUI_FRAME_INTERVAL_MS: number = 1000 / 60;
 
 export const PAUSE_POLL_INTERVAL_MS = 16;
 
@@ -27,7 +94,7 @@ export const REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS = 1e-6;
 
 function createPerformancePlaybackClockSource(): PlaybackClockSource {
   return {
-    nowMs: () => performance.now(),
+    nowMs: () => activeEngineScheduler.now(),
   };
 }
 
@@ -94,10 +161,6 @@ export function createPlaybackClock(source: PlaybackClockSource, startOffsetMs =
   };
 }
 
-export function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
-  return Math.max(0, (elapsedMs / 1000) * speed);
-}
-
 /**
  * Adjusts a drain-time playback timestamp backwards by the wall-clock delta between the OS-level press event and
  * now, so judging a queued lane-input resolves against the player's actual press timing rather than the engine's
@@ -124,7 +187,7 @@ export function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number
  */
 export function resolveJudgeNowMsFromPressedAt(drainNowMs: number, pressedAt: number | undefined): number {
   if (pressedAt === undefined) return drainNowMs;
-  const deltaMs = performance.timeOrigin + performance.now() - pressedAt;
+  const deltaMs = activeEngineScheduler.wallClockNow() - pressedAt;
   if (deltaMs < 0 || deltaMs > PRESSED_AT_MAX_DELTA_MS) return drainNowMs;
   return Math.max(0, drainNowMs - deltaMs);
 }
@@ -158,9 +221,13 @@ export async function waitPreciseOrInput(
   delayMs: number,
   wakeUp: { waitForInputOrTimeout: (timeoutMs: number) => Promise<'timeout' | 'input'> },
 ): Promise<'timeout' | 'input'> {
-  const target = performance.now() + Math.max(0, delayMs);
+  const scheduler = activeEngineScheduler;
+  if (scheduler.exactTimers) {
+    return wakeUp.waitForInputOrTimeout(Math.max(0, delayMs));
+  }
+  const target = scheduler.now() + Math.max(0, delayMs);
   while (true) {
-    const remaining = target - performance.now();
+    const remaining = target - scheduler.now();
     if (remaining <= 0) {
       return 'timeout';
     }

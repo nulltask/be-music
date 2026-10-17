@@ -172,13 +172,13 @@ When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitio
 
 - `lr2` ruleset — LR2's model (its own changelog): a mine explodes on either of two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too.
 - `beatoraja` ruleset — beatoraja's model (`JudgeManager` L244): a mine explodes only when **the lane's key is down at the moment the mine crosses the judge line**. A press shortly before (released before the crossing) or after does nothing.
-- "Held" is read off each lane's recorded presses and releases, so live play, replays and the simulators agree however late the mine is settled; a lane held by two keys stays held while either is down. An input at the very instant of a crossing counts before the crossing: a key pressed at that µs is down, one released at that µs is up. Only hosts that send no releases fall back to counting a press as held for 120 ms.
+- "Held" is read off each lane's recorded presses and releases, so live play, replays and the simulators agree however late the mine is settled; a lane held by two keys stays held while either is down. An input at the very instant of a crossing counts before the crossing: a key pressed at that µs is down, one released at that µs is up. For input that sends no releases the engine infers them before the judge sees the press, holding the lane for 120 ms after each press ([Input without key releases](./playlog.md#input-without-key-releases)).
 - `iidx` ruleset — IIDX has no mines, so LR2's model stands in until there is evidence otherwise. (losak's writeup claims the `GOOD` window, but LR2's changelog — the primary source — says the PGREAT range; see [`bms-spec.md`](./bms-spec.md).)
 - An explosion only drains the gauge and plays the `#WAV00` explosion sample — **no verdict, no combo break, no score change**. Regular note judgment runs independently of detonation (a mine never swallows the input aimed at a nearby note).
 - Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `mine_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
 - Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
-- kitty keyboard protocol input uses the real press/release state; release-less fallback input approximates "held" with the same short grace window the LN hold logic uses.
+- kitty keyboard protocol input uses the real press/release state; release-less input has its releases inferred first (`play-key-inference.ts`), so the judge always reads a press/release state.
 
 ### Invisible Note
 
@@ -493,6 +493,11 @@ EX-SCORE is IIDX compatible.
 - `beatoraja` and `iidx` report EX-SCORE, which is what they display. IIDX retired its own money score in
   BISTROVER.
 
+The score vocabulary is the ruleset's, exported from `@be-music/player/ruleset`: `ScoreSummary`, `JudgeKind`,
+`createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolveIidxRankIndexFromScore`, `resolveIidxRankLabel`,
+`IIDX_RANK_LABELS`), `resolveLr2MoneyScore` and `resolveDisplayedPoor`. `@be-music/player/core/scoring` is a
+deprecated alias of it, removed with the other `core/*` subpaths.
+
 ### Empty POOR
 
 An empty POOR (空POOR) is a press with no note in reach but one inside the ruleset's miss window. It costs gauge
@@ -519,6 +524,12 @@ split.
   rule (a threshold for the recovery gauges, "never bottomed out" for the survival gauges).
 - The selected gauge governs the run. It is not a colour: HARD really drains, and a HARD run that bottoms out
   reports `failedMidPlay` and can no longer clear.
+- A survival gauge that empties ends the play there, as in LR2 and beatoraja (`PlayerOptions.endOnFailure`, default
+  `true`): the judgment that emptied it is the last one counted, and the play stops. With `endOnFailure: false` the run
+  keeps judging to the end of the chart on a dead gauge. The play log records the flag, so re-simulations stop at the
+  same judgment; logs from before it existed keep judging to the end.
+- A course stage (`PlayerOptions.course`) runs on the ruleset's course gauge instead, starting from the value the
+  previous stage left. See [Courses and dan certification](./course.md#playing-a-course-stage).
 - The tables live in [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts)
   and are applied through `RulesetGauge`. The shared engine is the authority for final score and summary values;
   browser scenes mirror `summary.gauge`.
@@ -620,8 +631,9 @@ A release is settled at its own instant. The one exception is the ruleset's long
 (`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release
 that would score an early `BAD` or worse before the tail waits 200 ms (for an LN the timing is the head's when the head
 was further off than the release, so a late `BAD` head settles at once), and pressing the lane again inside it resumes the hold as
-if it had never been let go. LR2, IIDX and beatoraja's other modes have no margin. Only input without release events
-(a terminal without the kitty keyboard protocol) still treats a press as held for 120 ms after its last repeat.
+if it had never been let go. LR2, IIDX and beatoraja's other modes have no margin. For input without release events (a terminal without the kitty
+keyboard protocol) the engine infers the release: 120 ms after the key's last repeat, or 380 ms after the press that
+hit the long note's head when no repeat followed.
 
 A press on a lane whose long note is held (a second key bound to the lane, such as the turntable's other direction)
 never judges another note on that lane: the lane's current note is the long note. What it does instead is the
@@ -672,6 +684,13 @@ Only the notes on the scratch playable channel are automatically processed, and 
 
 `speed` is the speed at which in-game time progresses.
 Both `AUTO` and `MANUAL` are used to convert seconds on the musical score to real time.
+
+`speed` is the tempo at the start. A host can change it during the play with the `{ kind: 'tempo', tempo }` input command.
+The engine re-anchors its clock at the chart time it drains the command (`createTempoClock`), so chart time stays continuous and runs at the new tempo from then on.
+It records the change in the play log (`play.tempoChanges`), calls `AudioSession.setTempo` and reports the change through `onTempoChange`.
+Judgments and recorded inputs stay in chart time, so a re-simulation is unaffected.
+A replay follows its log's changes when the host passes them as `replayTempoChanges`.
+The built-in Node audio session renders its audio for the starting tempo and does not follow a change.
 
 ### `highSpeed`
 
