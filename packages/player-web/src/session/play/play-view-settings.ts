@@ -31,6 +31,7 @@ import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
 import { PIXELS_PER_BEAT } from '../../scene/gameplay-constants.ts';
 import { BE_MUSIC_HI_SPEED_SCALE, type PlaylogViewCursor } from '../../scene/playlog-view.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
+import type { PlayPlaylogViewScale, PlaySessionTheme } from './play-session-theme.ts';
 import { applyPlayEvent, type PlayStateContext } from './play-state.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
@@ -50,18 +51,21 @@ export interface PlayViewSettingsContext extends PlayStateContext {
   playlogViewCoalescer: PlaylogViewCoalescer | undefined;
   readonly replayViewCursor: PlaylogViewCursor | undefined;
   readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
+  readonly theme: PlaySessionTheme;
   currentSeconds(): number;
 }
 
 /**
  * The player's hi-speed keys: step the player's hi-speed by `delta` (the play state keeps it on the 1/1000 grid and in
  * range, and ignores it while a course locks the hi-speed); HS-FIX scales the drawn one, and the note scroll glides to
- * it. The host hears of the player's new hi-speed, to remember it for the next play.
+ * it. The host hears of the player's new hi-speed, to remember it for the next play. Returns whether it changed.
  */
-export function adjustHiSpeed(ctx: PlayViewSettingsContext, delta: number): void {
+export function adjustHiSpeed(ctx: PlayViewSettingsContext, delta: number): boolean {
   const previous = applyPlayEvent(ctx, { type: 'hi-speed-step', delta });
   const player = ctx.playState.view.hiSpeed.player;
-  if (player !== previous.view.hiSpeed.player) ctx.options.onHiSpeedChange?.(player);
+  if (player === previous.view.hiSpeed.player) return false;
+  ctx.options.onHiSpeedChange?.(player);
+  return true;
 }
 
 /** Follows a tempo change the engine made: the view's clock, the BGA videos, the NONSTOP fades and the host. */
@@ -96,17 +100,34 @@ export function resolveLaneCovers(ctx: PlayViewSettingsContext): readonly BeMusi
 }
 
 /**
+ * The scale the play log reads the view's hi-speed on: the view's own (`PlaySessionTheme.playlogView`, the beatoraja
+ * view's lane of four beats), else the built-in and LR2 scale over the lanes laid out last frame, at the chart's main
+ * BPM. `undefined` until the lanes are laid out.
+ */
+function resolvePlaylogScale(ctx: PlayViewSettingsContext): PlayPlaylogViewScale | undefined {
+  const own = ctx.theme.playlogView?.();
+  if (own !== undefined) return own;
+  if (ctx.laneX.size === 0) return undefined;
+  const mainBpm = ctx.chartBpmRange?.mainBpm;
+  return {
+    scale: BE_MUSIC_HI_SPEED_SCALE,
+    laneBeats: resolveLaneBeats(ctx),
+    ...(mainBpm !== undefined ? { mainBpm } : {}),
+  };
+}
+
+/**
  * What the player sees now in the play log's units (`resolvePlaylogView`): the drawn hi-speed on this scene's scale,
  * the HS-FIX, each side's covers, and the visible time at the main BPM without `#SCROLL` — the white number over the
  * lanes laid out last frame, the LIFT left out as beatoraja leaves it out — so another scale's replay can match it.
  * Rounded to the play log's precision, so cover fractions record without float noise.
  */
 function currentPlaylogView(ctx: PlayViewSettingsContext): PlaylogViewState {
-  const mainBpm = ctx.chartBpmRange?.mainBpm;
+  const scale = resolvePlaylogScale(ctx);
   return resolvePlaylogView(ctx.playState.view, {
-    scale: BE_MUSIC_HI_SPEED_SCALE,
-    laneBeats: resolveLaneBeats(ctx),
-    ...(mainBpm !== undefined ? { mainBpm } : {}),
+    scale: scale?.scale ?? BE_MUSIC_HI_SPEED_SCALE,
+    laneBeats: scale?.laneBeats ?? 0,
+    ...(scale?.mainBpm !== undefined ? { mainBpm: scale.mainBpm } : {}),
   });
 }
 
@@ -123,7 +144,7 @@ export function startPlaylogView(ctx: PlayViewSettingsContext): PlaylogViewState
  * {@link PlaySessionOptions.replayView} asks.
  */
 export function updatePlaylogView(ctx: PlayViewSettingsContext, seconds: number): void {
-  if (ctx.laneX.size === 0) return;
+  if (resolvePlaylogScale(ctx) === undefined) return;
   if (ctx.replayViewCursor !== undefined) {
     const recorded = ctx.replayViewCursor.next(Math.round(seconds * 1_000_000));
     if (recorded !== undefined) applyReplayView(ctx, recorded);
@@ -139,7 +160,7 @@ export function updatePlaylogView(ctx: PlayViewSettingsContext, seconds: number)
 export function flushPlaylogView(ctx: PlayViewSettingsContext): void {
   const signals = ctx.sharedEngineInputSignals;
   if (ctx.replayViewCursor !== undefined || ctx.playlogViewCoalescer === undefined || signals === undefined) return;
-  if (ctx.laneX.size === 0) return;
+  if (resolvePlaylogScale(ctx) === undefined) return;
   const change = ctx.playlogViewCoalescer.flush(currentPlaylogView(ctx));
   if (change !== undefined) signals.pushCommand({ kind: 'view', change });
 }
@@ -166,12 +187,13 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: PlaylogViewStat
   }
   if (!replay.hiSpeed) return;
   const sudden = view.covers?.[0]?.sudden ?? 0;
-  const mainBpm = ctx.chartBpmRange?.mainBpm;
-  const hiSpeed = resolveReplayHiSpeed(view, BE_MUSIC_HI_SPEED_SCALE, (visibleMs) =>
+  const scale = resolvePlaylogScale(ctx);
+  const mainBpm = scale?.mainBpm;
+  const hiSpeed = resolveReplayHiSpeed(view, scale?.scale ?? BE_MUSIC_HI_SPEED_SCALE, (visibleMs) =>
     mainBpm === undefined
       ? undefined
       : resolveHiSpeedForWhiteNumber({
-          laneBeats: resolveLaneBeats(ctx),
+          laneBeats: scale?.laneBeats ?? 0,
           sudden,
           bpm: mainBpm,
           whiteNumberMs: visibleMs,

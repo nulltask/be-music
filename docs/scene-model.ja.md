@@ -320,9 +320,9 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `resolveResultViewJingles`                                                       | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                              |
 
 標準と LR2 の選曲画面はこれらのモデル（`reduceBrowse`・`browseEntries`・`captureBrowse` / `restoreBrowse`・
-`browseSystemSound`）で一覧をたどります。標準と LR2 のプレイ画面は `PlayState` を一つ持ち、リザルトをそこから読みます
+`browseSystemSound`）で一覧をたどります。どのプレイ画面も `PlayState` を一つ持ち、リザルトをそこから読みます
 （`playResultFromPlayState`）。そのため上のプレイ状態の選択に従います。フルコンボの最大コンボはどのプレイでもノーツ数になり、
-リザルトは判定ごとの早い / 遅いの数を持ち、プレイログの表示時間は白数字（`resolvePlaylogView`）です。ほかのシーンはまだ
-自分の一覧とプレイの状態を持っています（beatoraja の選曲は自前の一覧のモデル、beatoraja のランタイムアダプターは記録とカバー）。
+リザルトは判定ごとの早い / 遅いの数を持ち、プレイログの表示時間は白数字（`resolvePlaylogView`）です。beatoraja の選曲は
+まだ自前の一覧のモデルを持っています。
 Web 実行層のシーンセッションがこれらのモデルへ移ります。スキンのパッケージはモデルを各スキンの
 語彙に写します。beatoraja の番号へは `@be-music/beatoraja-skin/scene` が写します（[beatoraja-skin.ja.md](./beatoraja-skin.ja.md#scene-mapping)）。

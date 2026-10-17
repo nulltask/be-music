@@ -1,7 +1,7 @@
-// Chart audio preparation shared by both gameplay families: the built-in / LR2 play session (`session/play/play-media.ts`) and the
-// beatoraja prep (`chart/beatoraja/prep.ts`). One place builds the play's AudioContext + bus, decodes the chart's `#WAV`
+// Chart audio preparation for the play session (`session/play/play-media.ts`), which every gameplay family plays
+// through. One place builds the play's AudioContext + bus, decodes the chart's `#WAV`
 // samples under the key the audio session looks them up by, stretches them for a keep-pitch tempo and folds the
-// `#WAVCMD` / `#EXWAV` volumes, so the two families cannot drift apart again.
+// `#WAVCMD` / `#EXWAV` volumes.
 
 import { runWithConcurrency } from '@be-music/utils/core';
 import {

@@ -25,7 +25,7 @@ import type {
   PlayerUiSignalBus,
 } from '@be-music/player/core/ui-signal-bus';
 import type { TimedPlayableNote } from '@be-music/player/playable-notes';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicPlaylog, PlaylogRecordingOptions, PlaylogViewState } from '@be-music/player/playlog';
 import {
   resolveDisplayedPoor,
   type GaugeType,
@@ -127,6 +127,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   sharedEngineInterrupt: 'escape' | 'restart' | undefined;
   sharedEngineChartSettled: boolean;
   sharedEngineClockAnchored: boolean;
+  engineFrame: Readonly<PlayerUiFramePayload> | undefined;
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
   playlog: BeMusicPlaylog | undefined;
@@ -290,8 +291,14 @@ function flashKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
   ctx.keyFlashTimeouts.add(timeout);
 }
 
-function publishJudge(ctx: PlayEngineContext, judge: JudgeKind, seconds: number, channel?: string): void {
+function publishJudge(
+  ctx: PlayEngineContext,
+  judge: JudgeKind,
+  seconds: number,
+  state: Readonly<Pick<PlayerJudgeComboSignalState, 'channel' | 'deltaMs' | 'combo'>>,
+): void {
   const until = seconds + 0.6;
+  const channel = state.channel;
   ctx.lastJudge = judge;
   ctx.lastJudgeUntil = until;
   ctx.lastJudgeAt = ctx.playClock();
@@ -302,7 +309,16 @@ function publishJudge(ctx: PlayEngineContext, judge: JudgeKind, seconds: number,
   // right half of the Pop'n nine-lane bank, not the second player).
   const isPlayer2 = ctx.chartPlayVariant !== '9' && typeof channel === 'string' && channel.startsWith('2');
   const side: '1P' | '2P' = isPlayer2 ? '2P' : '1P';
-  ctx.theme.moment({ kind: 'judge', side, at: ctx.playClock() });
+  // The judgment goes with the moment, so a view keeps each lane's and each plate's own (a beatoraja skin's).
+  ctx.theme.moment({
+    kind: 'judge',
+    side,
+    at: ctx.playClock(),
+    judge,
+    ...(channel !== undefined ? { channel } : {}),
+    ...(typeof state.deltaMs === 'number' && Number.isFinite(state.deltaMs) ? { deltaMs: state.deltaMs } : {}),
+    combo: state.combo,
+  });
   // Snapshot the verdict + combo for this side so DP rendering shows each lane group's *own* combo number — frozen at
   // the moment that side last hit a note — rather than mirroring the global running combo on both sides.
   // A course stage also snapshots the course combo, which an LR2 skin shows there during an expert or grade course.
@@ -374,6 +390,40 @@ function buildSharedEngineChart(ctx: PlayEngineContext): BeMusicJson {
   return ctx.resolvedChart ?? ctx.song!.chart;
 }
 
+/**
+ * What a recorded play's log says of its settings and chart, for every family: the gauge, the file hashes and the
+ * recorder the host gave, the lane options and DP FLIP it played with, the view at the start, and the chart path in
+ * `native` so a dropped log can be matched back to its song. The engine plays the chart the session resolved (and
+ * flipped); the song's chart is the source both fingerprints describe (`#RANDOM` unresolved, no lane option applied).
+ */
+export function resolvePlaylogRecording(
+  options: Pick<
+    PlaySessionOptions,
+    'gauge' | 'chartSha256' | 'chartMd5' | 'playlogRecorder' | 'random1P' | 'random2P' | 'dpFlip'
+  >,
+  song: Pick<BrowserSongEntry, 'chart' | 'chartPath'> | undefined,
+  view: PlaylogViewState,
+): PlaylogRecordingOptions {
+  return {
+    gauge: options.gauge,
+    ...(options.chartSha256 !== undefined ? { chartSha256: options.chartSha256 } : {}),
+    ...(options.chartMd5 !== undefined ? { chartMd5: options.chartMd5 } : {}),
+    ...(options.playlogRecorder !== undefined ? { recorder: options.playlogRecorder } : {}),
+    ...(song !== undefined ? { sourceChart: song.chart } : {}),
+    ...(options.random1P !== undefined || options.random2P !== undefined
+      ? {
+          randomLane: {
+            ...(options.random1P !== undefined ? { p1: options.random1P } : {}),
+            ...(options.random2P !== undefined ? { p2: options.random2P } : {}),
+          },
+        }
+      : {}),
+    ...(options.dpFlip !== undefined ? { dpFlip: options.dpFlip } : {}),
+    view,
+    ...(song?.chartPath !== undefined ? { native: { chartPath: song.chartPath } } : {}),
+  };
+}
+
 export function launchSharedEngine(ctx: PlayEngineContext): void {
   if (ctx.disposed || ctx.sharedEnginePromise) return;
   if (!ctx.song || !ctx.audioContext || !ctx.audioBus) return;
@@ -392,6 +442,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ctx.sharedEngineSignals = signals;
     },
   };
+  ctx.engineFrame = undefined;
   // A replay shows its recorded view along the playhead; a recorded play logs its own from the start.
   ctx.playlogViewCoalescer = undefined;
   ctx.replayViewCursor =
@@ -512,27 +563,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // Play-log recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
             // replay, then hands the assembled log here right before the play promise settles. The host reads it
             // back through `getResultData().playlog` for the result screen's auto-save.
-            recordPlaylog: {
-              gauge: ctx.options.gauge,
-              ...(ctx.options.chartSha256 !== undefined ? { chartSha256: ctx.options.chartSha256 } : {}),
-              ...(ctx.options.chartMd5 !== undefined ? { chartMd5: ctx.options.chartMd5 } : {}),
-              ...(ctx.options.playlogRecorder !== undefined ? { recorder: ctx.options.playlogRecorder } : {}),
-              // The engine plays the chart this view resolved; the song's chart is the source both fingerprints
-              // describe (`#RANDOM` unresolved, no lane option applied).
-              ...(ctx.song !== undefined ? { sourceChart: ctx.song.chart } : {}),
-              ...(ctx.options.random1P !== undefined || ctx.options.random2P !== undefined
-                ? {
-                    randomLane: {
-                      ...(ctx.options.random1P !== undefined ? { p1: ctx.options.random1P } : {}),
-                      ...(ctx.options.random2P !== undefined ? { p2: ctx.options.random2P } : {}),
-                    },
-                  }
-                : {}),
-              ...(ctx.options.dpFlip !== undefined ? { dpFlip: ctx.options.dpFlip } : {}),
-              // What the player sees at the start; the changes during the play go in as `view` commands.
-              view: startPlaylogView(ctx),
-              ...(ctx.song?.chartPath !== undefined ? { native: { chartPath: ctx.song.chartPath } } : {}),
-            },
+            // What the player sees at the start; the changes during the play go in as `view` commands.
+            recordPlaylog: resolvePlaylogRecording(ctx.options, ctx.song, startPlaylogView(ctx)),
             onPlaylogRecorded: (playlog) => {
               ctx.playlog = playlog;
               const waiters = ctx.playlogWaiters.splice(0);
@@ -605,6 +637,7 @@ export function drainSharedEngineSignals(ctx: PlayEngineContext): void {
  * skin's `#DST_GAUGE` chrome animates against the same value the engine considers authoritative.
  */
 function applyEngineFrame(ctx: PlayEngineContext, frame: Readonly<PlayerUiFramePayload>): void {
+  ctx.engineFrame = frame;
   // Re-anchor the view's chart-time clock to the engine's the very first time the engine publishes a frame.
   // The engine's `playbackClock` (and therefore the chart-time it stamps on every judge / sample / ui-signal
   // event) anchors at the moment the engine creates the clock — which lands a few ms to a few hundred ms
@@ -776,7 +809,7 @@ function applyEngineJudgeCombo(ctx: PlayEngineContext, state: Readonly<PlayerJud
   const seconds = ctx.currentSeconds();
   // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`: the play state keeps no timing for them.
   applyPlayEvent(ctx, { type: 'judge', judge: state, seconds, atMs: ctx.playClock() });
-  publishJudge(ctx, judgeKind, seconds, state.channel);
+  publishJudge(ctx, judgeKind, seconds, state);
   if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
     triggerBomb(ctx, state.channel, judgeKind);
   }

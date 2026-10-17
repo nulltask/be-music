@@ -128,6 +128,17 @@ export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUiFramePayload, 'cu
   return frame.displayBeat ?? frame.currentBeat;
 }
 
+/**
+ * Where the notes scroll from on a frame: the engine frame's notes, chart time and beat (with the mirrored display beat
+ * past an LR2 negative-BPM reversal).
+ */
+export interface BeatorajaNoteClock {
+  readonly notes: readonly PlayerUiFrameNote[];
+  readonly currentSeconds: number;
+  readonly currentBeat: number;
+  readonly displayBeat?: number;
+}
+
 /** Fallback palette when the skin omits a per-lane sprite or texture decode fails. */
 const FALLBACK_COLOR_BY_KEY: Record<string, number> = {
   white: 0xf5f5f5,
@@ -284,7 +295,7 @@ export class BeatorajaNoteLayer {
   }
 
   update(
-    frame: PlayerUiFramePayload,
+    frame: BeatorajaNoteClock,
     hiSpeed: number,
     activeOps: ReadonlySet<number>,
     /**
@@ -438,7 +449,7 @@ export class BeatorajaNoteLayer {
    * Under LR2's drawing rules without a negative-BPM reversal, moves {@link drawCursor} past the notes gone by this
    * frame and returns where the walk starts; 0 otherwise, as before.
    */
-  private advanceLr2DrawCursor(frame: PlayerUiFramePayload, drawWindow: NoteDrawWindow): number {
+  private advanceLr2DrawCursor(frame: BeatorajaNoteClock, drawWindow: NoteDrawWindow): number {
     if (drawWindow.rules !== 'lr2' || this.reversal !== undefined) {
       this.drawCursor = undefined;
       return 0;
@@ -613,7 +624,7 @@ export class BeatorajaNoteLayer {
     yEnd: number,
     yStart: number,
     /**
-     * `true` when the player is actively holding this LN's lane (the runtime adapter's
+     * `true` when the player is actively holding this LN's lane (the play bridge's
      * `isLaneLnHeld` returned true for the note's channel). Drives held-vs-unheld body
      * sprite switching:
      *

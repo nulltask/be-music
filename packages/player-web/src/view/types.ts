@@ -279,6 +279,8 @@ export type PlayViewEvent =
       readonly side: PlaySide;
       readonly channel?: string;
       readonly deltaMs?: number;
+      /** The running combo after the judgment. */
+      readonly combo?: number;
       readonly atMs: number;
     }
   | { readonly kind: 'full-combo'; readonly atMs: number }
@@ -297,7 +299,15 @@ export type PlayViewEvent =
     }
   | { readonly kind: 'long-note-end'; readonly channel: string; readonly outcome: 'complete' | 'dropped' }
   /** The POOR image shows (a miss at chart time `seconds`) or clears. */
-  | { readonly kind: 'poor-bga'; readonly shown: boolean; readonly seconds?: number };
+  | { readonly kind: 'poor-bga'; readonly shown: boolean; readonly seconds?: number }
+  /** The player's keys changed a view setting (the hi-speed, a lane cover): the frame's state has the new value. */
+  | { readonly kind: 'view-setting'; readonly setting: PlayViewSetting; readonly atMs: number };
+
+/**
+ * A view setting the player's keys change during a play: the hi-speed, SUDDEN+ (`sudden`), the LIFT, HIDDEN+'s height
+ * (`hidden`), or HIDDEN+ switched on or off (`hidden-toggle`).
+ */
+export type PlayViewSetting = 'hi-speed' | 'sudden' | 'lift' | 'hidden' | 'hidden-toggle';
 
 /**
  * What the play screen draws. What does not change during a play (the prepared chart, its measure lines and scroll

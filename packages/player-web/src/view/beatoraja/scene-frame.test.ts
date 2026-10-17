@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import {
   beatorajaSceneNowMs,
+  DEFAULT_BEATORAJA_FADEOUT_MS,
   resolveBeatorajaFadeOutMs,
   resolveBeatorajaSceneTimers,
   resolveBeatorajaSkinTimingMs,
@@ -73,8 +74,10 @@ describe('resolveBeatorajaSkinTimingMs', () => {
 describe('resolveBeatorajaFadeOutMs', () => {
   it("reads the skin's fadeout, else the reference themes' 500 ms", () => {
     expect(resolveBeatorajaFadeOutMs(200)).toBe(200);
+    expect(resolveBeatorajaFadeOutMs(800)).toBe(800);
     expect(resolveBeatorajaFadeOutMs(0)).toBe(0);
-    expect(resolveBeatorajaFadeOutMs(undefined)).toBe(500);
+    expect(resolveBeatorajaFadeOutMs(undefined)).toBe(DEFAULT_BEATORAJA_FADEOUT_MS);
+    expect(DEFAULT_BEATORAJA_FADEOUT_MS).toBe(500);
     expect(resolveBeatorajaFadeOutMs(-1)).toBe(500);
     expect(resolveBeatorajaFadeOutMs(Number.NaN)).toBe(500);
   });

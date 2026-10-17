@@ -30,7 +30,6 @@ import {
   resolveBeatorajaChartImage,
   type BeatorajaChartImages,
 } from '../../skin/beatoraja/chart-images.ts';
-import { DEFAULT_BEATORAJA_FADEOUT_MS } from '../../skin/beatoraja/scene-transition.ts';
 import type { SceneClock } from '../types.ts';
 
 export interface BeatorajaStageFitState {
@@ -120,7 +119,17 @@ export function resolveBeatorajaSkinTimingMs(
   return fallbackMs;
 }
 
-/** A beatoraja screen's fade-out: the skin's `fadeout`, else 500 ms, the reference themes' value. */
+/**
+ * Default fadeout window when the skin omits the field. A beatoraja screen leaves over upstream's `TIMER_FADEOUT` +
+ * `Skin.getFadeout()` pattern (`MusicDecide.render` / `MusicResult.render` / `BMSPlayer.render`'s STATE_FINISHED
+ * branch): a trigger starts timer 2, the skin's elements gated on it animate from then, and the screen hands over once
+ * `Skin.fadeout` ms have passed. Upstream's `Skin` declares `private int fadeout` with no initializer (Java's 0, an
+ * instant transition), but every reference skin (`select.json`, `decidemain.lua`, `resultmain.lua`) ships 500, so
+ * an unauthored skin or a hand-rolled test fixture falls back to that.
+ */
+export const DEFAULT_BEATORAJA_FADEOUT_MS = 500;
+
+/** A beatoraja screen's fade-out: the skin's `fadeout`, else {@link DEFAULT_BEATORAJA_FADEOUT_MS}. */
 export function resolveBeatorajaFadeOutMs(fadeout: number | undefined): number {
   if (typeof fadeout === 'number' && Number.isFinite(fadeout) && fadeout >= 0) return fadeout;
   return DEFAULT_BEATORAJA_FADEOUT_MS;

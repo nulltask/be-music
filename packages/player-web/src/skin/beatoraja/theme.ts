@@ -92,7 +92,7 @@ export function summarizeBeatorajaPlaySkins(playSkins: BeatorajaPlaySkinMap, sep
 /**
  * Play variants the renderer is willing to mount — every variant beatoraja themes author, including the 24-key
  * keyboard modes. Charts reach those through the extended `1A..1O` / `2A..2O` lane channels (`ChartPlayVariant`
- * `'24'` / `'48'`), and the runtime adapter addresses their lanes via the `1000`-block timer bases upstream's
+ * `'24'` / `'48'`), and the play bridge addresses their lanes via the `1000`-block timer bases upstream's
  * `play24main.lua` uses.
  *
  * If the dropped theme doesn't ship the variant a chart needs, {@link pickBeatorajaPlayableSkinVariant} chains

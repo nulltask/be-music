@@ -8,17 +8,34 @@ describe('playViewEventFromMoment', () => {
     }
   });
 
-  test('a judge moment carries the judgment reported with it, and is dropped without one', () => {
+  test('a judge moment carries its judgment, lane, timing and combo, and is dropped for a judgment of no kind', () => {
     expect(
-      playViewEventFromMoment({ kind: 'judge', side: '2P', at: 50 }, { judge: 'GREAT', channel: '21', deltaMs: -8 }),
-    ).toEqual({ kind: 'judge', judge: 'GREAT', side: '2P', channel: '21', deltaMs: -8, atMs: 50 });
-    expect(playViewEventFromMoment({ kind: 'judge', side: '1P', at: 50 }, { judge: 'POOR' })).toEqual({
+      playViewEventFromMoment({
+        kind: 'judge',
+        side: '2P',
+        at: 50,
+        judge: 'GREAT',
+        channel: '21',
+        deltaMs: -8,
+        combo: 3,
+      }),
+    ).toEqual({ kind: 'judge', judge: 'GREAT', side: '2P', channel: '21', deltaMs: -8, combo: 3, atMs: 50 });
+    expect(playViewEventFromMoment({ kind: 'judge', side: '1P', at: 50, judge: 'POOR', combo: 0 })).toEqual({
       kind: 'judge',
       judge: 'POOR',
       side: '1P',
+      combo: 0,
       atMs: 50,
     });
-    expect(playViewEventFromMoment({ kind: 'judge', side: '1P', at: 50 })).toBeUndefined();
+    expect(playViewEventFromMoment({ kind: 'judge', side: '1P', at: 50, judge: 'READY', combo: 0 })).toBeUndefined();
+  });
+
+  test('passes a view setting the keys changed on with its play-clock time', () => {
+    expect(playViewEventFromMoment({ kind: 'view-setting', setting: 'sudden', at: 30 })).toEqual({
+      kind: 'view-setting',
+      setting: 'sudden',
+      atMs: 30,
+    });
   });
 
   test('passes the full combo, gauge moves and bombs on with their play-clock time', () => {
