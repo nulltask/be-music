@@ -1,12 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { Library } from '../library/entries.ts';
 import { makeChart, makeCourse, makeCourseFolder } from '../test-support/library.ts';
-import {
-  browseSnapshotFromBeatorajaSelect,
-  browseSnapshotFromSelectNavigation,
-  captureBrowse,
-  restoreBrowse,
-} from './snapshot.ts';
+import { browseSnapshotFromSelectNavigation, captureBrowse, restoreBrowse } from './snapshot.ts';
 import {
   browseCursor,
   browseFolder,
@@ -174,52 +169,12 @@ describe('browseSnapshotFromSelectNavigation', () => {
   });
 });
 
-describe('browseSnapshotFromBeatorajaSelect', () => {
-  test('reads the MODE and SORT indices, the favourites and the search', () => {
-    const snapshot = browseSnapshotFromBeatorajaSelect({
-      folderPath: ['Dan'],
-      cursorStack: [2, 1],
-      keymodeFilter: 6,
-      sortMode: 4,
-      favoriteSongs: ['s'],
-      favoriteCharts: ['c'],
-      searchQuery: 'dan',
-    });
-    expect(snapshot).toEqual({
-      folderPath: ['Dan'],
-      cursors: [2, 1],
-      searchText: 'dan',
-      list: { keysFilter: 'KEYS_24', sort: 'LEVEL' },
-      favorites: { music: ['s'], charts: ['c'] },
-    });
-  });
-
-  test('restores the cursor on the course the beatoraja scene left it on', () => {
+describe('restoreBrowse over the cursors a select screen kept', () => {
+  test('restores the cursor on the course a select screen left it on, the root cursor on its folder bar', () => {
     const library = makeLibrary();
-    const snapshot = browseSnapshotFromBeatorajaSelect({
-      folderPath: ['Dan'],
-      cursorStack: [0, 2],
-      keymodeFilter: 0,
-      sortMode: 0,
-      favoriteSongs: [],
-      favoriteCharts: [],
-    });
-    const { state } = restoreBrowse(library, snapshot);
+    const { state } = restoreBrowse(library, { folderPath: ['Dan'], cursors: [0, 2] });
     expect(focusedCourse(library, state)?.id).toBe('third');
-    // Its root cursor (0) pointed at the wrong bar; the model puts it on the Dan folder bar.
+    // The root cursor saved (0) pointed at the wrong bar; the model puts it on the Dan folder bar.
     expect(state.cursors).toEqual([2, 2]);
-  });
-
-  test('falls back to no filter and no sort for an index out of range', () => {
-    const snapshot = browseSnapshotFromBeatorajaSelect({
-      folderPath: [],
-      cursorStack: [0],
-      keymodeFilter: 42,
-      sortMode: -1,
-      favoriteSongs: [],
-      favoriteCharts: [],
-    });
-    expect(snapshot.list).toEqual({ keysFilter: 'ALL', sort: 'OFF' });
-    expect(snapshot.searchText).toBe('');
   });
 });
