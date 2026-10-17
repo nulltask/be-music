@@ -1,6 +1,6 @@
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
-import { flipRectToPixi } from '../../skin/beatoraja/render.ts';
-import { DEFAULT_BEATORAJA_FADEOUT_MS } from '../../skin/beatoraja/scene-transition.ts';
+import { flipRectToPixi } from '../../../skin/beatoraja/render.ts';
+import { DEFAULT_BEATORAJA_FADEOUT_MS } from '../../../skin/beatoraja/scene-transition.ts';
 
 // Values the beatoraja play scene reads off its skin at construction: the lane's authored bottom, the judge combo digit
 // pitch, and the fade-out window.

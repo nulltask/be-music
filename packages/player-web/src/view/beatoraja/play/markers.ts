@@ -16,15 +16,15 @@ import {
   type BeatorajaImageElement,
   type BeatorajaImageId,
 } from '@be-music/beatoraja-skin';
-import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../skin/beatoraja/render.ts';
-import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
+import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../../skin/beatoraja/render.ts';
+import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
 import {
   isDrawnAtTime,
   isPastDrawWindow,
   resolveDrawBottom,
   resolveDrawY,
   type NoteDrawWindow,
-} from '../core/note-draw-window.ts';
+} from '../../../scene/core/note-draw-window.ts';
 
 /** Beat positions per marker kind. Caller computes these from the chart once per play. */
 export interface BeatorajaMarkerBeats {
@@ -105,7 +105,7 @@ export interface BeatorajaMarkerLayerOptions {
 
 // `BEATORAJA_MARKER_PIXELS_PER_BEAT` (a fixed 72) used to live here for parity with the
 // note layer's old constant. It was removed alongside the upstream-faithful scroll switch
-// in `scene/beatoraja/notes.ts` — the scroll distance per beat is now `laneHeight / 4 *
+// in `view/beatoraja/play/notes.ts` — the scroll distance per beat is now `laneHeight / 4 *
 // hispeed` per upstream `LaneRenderer.java:271-276`. The gameplay caller computes the
 // matching value via `beatorajaPixelsPerBeat()` and passes it through `update.args` so the
 // marker layer stays in lock-step with the note layer.

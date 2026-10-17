@@ -25,8 +25,8 @@ import type {
   BeatorajaNoteRect,
   BeatorajaNoteSection,
 } from '@be-music/beatoraja-skin';
-import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../skin/beatoraja/render.ts';
-import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
+import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../../skin/beatoraja/render.ts';
+import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
 import type { TempoReversalPoint } from '@be-music/chart';
 import {
   advanceDrawCursor,
@@ -36,10 +36,10 @@ import {
   isPastDrawWindow,
   resolveDrawBottom,
   resolveDrawY,
-} from '../core/note-draw-window.ts';
+} from '../../../scene/core/note-draw-window.ts';
 import { resolveBeatorajaNoteDstBlockIndex } from './note-dst-block.ts';
 import { resolveBeatorajaScrollPlacement } from './scroll-placement.ts';
-import type { NoteDrawWindow } from '../core/note-draw-window.ts';
+import type { NoteDrawWindow } from '../../../scene/core/note-draw-window.ts';
 
 /** How far above a lane's top a note still draws: the lead-in band notes scroll in through. */
 const TAP_LEAD_IN_PX = 24;
