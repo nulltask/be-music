@@ -119,6 +119,17 @@ export interface PlaySessionOptions {
    */
   laneCover?: boolean;
   /**
+   * Where the lane covers start: `'play-options'` (default) from {@link hiddenSudden1P} / {@link hiddenSudden2P},
+   * {@link shutter} and {@link laneCover}; `'none'` with every cover at 0 and off, as the beatoraja play screen starts
+   * until it takes the play options' covers.
+   */
+  coverStart?: 'play-options' | 'none';
+  /**
+   * The play takes the lane cover keys (`play-cover-keys.ts`): PageUp / PageDown move SUDDEN+, Home / End the LIFT, H
+   * switches HIDDEN+ and J / K move it. The beatoraja play screen's keys; off by default.
+   */
+  coverKeys?: boolean;
+  /**
    * 1P side auto-scratch flag — when true, the scratch lane (channel 16) auto-judges as PERFECT at every note's
    * scheduled time even when {@link autoPlay} is off. The player only has to play the keys.
    */

@@ -6,7 +6,7 @@
 
 import type { PlayerUiCommand } from '@be-music/player/core/ui-signal-bus';
 import type { Texture } from 'pixi.js';
-import type { PlayfieldStage, PlayViewTiming } from '../../view/types.ts';
+import type { PlayfieldStage, PlayViewSetting, PlayViewTiming } from '../../view/types.ts';
 
 /**
  * A moment of the play the session raises for its view: the scene stages, the exit phases, a judgment, the full combo,
@@ -19,11 +19,24 @@ export type PlayMoment =
   | { readonly kind: 'play-start'; readonly at: number }
   | { readonly kind: 'exit-fade-out'; readonly at: number }
   | { readonly kind: 'exit-close'; readonly at: number }
-  | { readonly kind: 'judge'; readonly side: '1P' | '2P'; readonly at: number }
+  | {
+      readonly kind: 'judge';
+      readonly side: '1P' | '2P';
+      readonly at: number;
+      /** The judgment, as the engine named it. */
+      readonly judge: string;
+      readonly channel?: string;
+      /** The signed offset (ms, > 0 late), when the judgment has a timing. */
+      readonly deltaMs?: number;
+      /** The running combo after the judgment. */
+      readonly combo: number;
+    }
   | { readonly kind: 'full-combo'; readonly at: number }
   | { readonly kind: 'gauge'; readonly previous: number; readonly next: number; readonly at: number }
   | { readonly kind: 'bomb'; readonly channel: string; readonly at: number }
-  | { readonly kind: 'lane-command'; readonly command: PlayerUiCommand };
+  | { readonly kind: 'lane-command'; readonly command: PlayerUiCommand }
+  /** The player's keys changed a view setting (the hi-speed, a lane cover). */
+  | { readonly kind: 'view-setting'; readonly setting: PlayViewSetting; readonly at: number };
 
 /**
  * What a play session asks of the view that draws it: the view's timing (the intro gates, the fade-out, the close), the
@@ -46,4 +59,17 @@ export interface PlaySessionTheme {
   prepareView?(): Promise<void>;
   /** Uploads `textures` to the GPU now, so the first frame that draws them does not stall. */
   uploadTextures?(textures: Iterable<Texture | undefined>): Promise<void>;
+  /**
+   * How the view's hi-speed reads in the play log (`PlaylogViewState`): its scale, the lane in beats at hi-speed 1, and
+   * the main BPM the visible time is taken at. Without it the play log reads the built-in and LR2 scale over the lanes
+   * the shared playfield laid out, at the chart's main BPM.
+   */
+  playlogView?(): PlayPlaylogViewScale | undefined;
+}
+
+/** How a view's hi-speed reads in the play log: its scale, the lane in beats at hi-speed 1, the main BPM. */
+export interface PlayPlaylogViewScale {
+  readonly scale: string;
+  readonly laneBeats: number;
+  readonly mainBpm?: number;
 }

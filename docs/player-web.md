@@ -9,9 +9,9 @@ Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as ti
 
 The browser player drives gameplay through `@be-music/player/core/engine`.
 The engine owns judgment, keysound trigger routing, long-note handling, mine detonation, score, gauge, and chart-finish
-semantics. The play session of the built-in and LR2 play screens starts one engine run at the skin's `PLAYSTART`
-gate, while the beatoraja gameplay scene mounts the engine behind `BeatorajaRuntimeAdapter`. Both paths mirror engine frame snapshots into scene state
-and translate engine UI commands into Pixi visual effects.
+semantics. The play session behind every play screen starts one engine run at the skin's `PLAYSTART` gate (on a
+beatoraja skin, 1.5 s after load-end). It mirrors the engine's frame snapshots into the play state and hands the
+engine's UI commands to the family view as the frame's moments, which the view turns into Pixi visual effects.
 
 The browser runtime uses these adapter modules:
 
@@ -87,9 +87,9 @@ flowchart LR
     J --> L[Play log<br/>play.tempo]
 ```
 
-A live change (`setTempo(tempo)` on the LR2 / default and the beatoraja gameplay views, `pitch` mode only) goes to the engine as a `{ kind: 'tempo' }` input command. The engine re-anchors its clock at the chart time it takes the command, so chart time stays continuous, and reports the change (`onTempoChange`) with that chart second. From there the view's clock, the samples started afterwards and the ones playing (their `playbackRate` glides to the new rate over 30 ms, `WebAudioSession.setTempo`; bmson slices keep their length in sample time, so they still end on their note), the BGA videos and a NONSTOP chart's stage fades run at the new tempo. The play log records the change in `play.tempoChanges`; a play that ran at another tempo at any point is practice. A replay follows the recorded changes in `pitch` mode when its Replay / ghost options reproduce the tempo (`resolveReplayTempo`).
+A live change (`setTempo(tempo)` on a play screen, `pitch` mode only) goes to the engine as a `{ kind: 'tempo' }` input command. The engine re-anchors its clock at the chart time it takes the command, so chart time stays continuous, and reports the change (`onTempoChange`) with that chart second. From there the view's clock, the samples started afterwards and the ones playing (their `playbackRate` glides to the new rate over 30 ms, `WebAudioSession.setTempo`; bmson slices keep their length in sample time, so they still end on their note), the BGA videos and a NONSTOP chart's stage fades run at the new tempo. The play log records the change in `play.tempoChanges`; a play that ran at another tempo at any point is practice. A replay follows the recorded changes in `pitch` mode when its Replay / ghost options reproduce the tempo (`resolveReplayTempo`).
 
-Everything runs `tempo` times as fast: the engine's clock (`PlayerOptions.speed`), the scheduled and triggered samples, the scroll and judge line, the BGA images and videos (`playbackRate`), the NONSTOP stage fades and the chart-time lead-out before the result. Skin animation timers stay on the wall clock. Judging stays in chart time, so a play's inputs and judgments do not depend on the tempo; the play log records it as `play.tempo` ([playlog.md](./playlog.md)) and a replay plays back at it. A play at another tempo is practice, as with beatoraja's frequency trainer: it is not sent to the Leaderboard (the status line says why; the server refuses it as `tempo`, see [leaderboard.md](./leaderboard.md)) and leaves the best records alone, while the play log is still auto-saved. A course can be played at another tempo too: every stage plays at it, and the run is then unranked and leaves the course record alone. The LR2, default and beatoraja gameplay scenes all support it: the LR2 / default scenes take `tempo`, `tempoPitchMode` and `tempoStretchAlgorithm`, and for the beatoraja scene `prepareBeatorajaGameplayChart` takes the same three and the host passes `tempo` as `engineOptions.speed`.
+Everything runs `tempo` times as fast: the engine's clock (`PlayerOptions.speed`), the scheduled and triggered samples, the scroll and judge line, the BGA images and videos (`playbackRate`), the NONSTOP stage fades and the chart-time lead-out before the result. Skin animation timers stay on the wall clock. Judging stays in chart time, so a play's inputs and judgments do not depend on the tempo; the play log records it as `play.tempo` ([playlog.md](./playlog.md)) and a replay plays back at it. A play at another tempo is practice, as with beatoraja's frequency trainer: it is not sent to the Leaderboard (the status line says why; the server refuses it as `tempo`, see [leaderboard.md](./leaderboard.md)) and leaves the best records alone, while the play log is still auto-saved. A course can be played at another tempo too: every stage plays at it, and the run is then unranked and leaves the course record alone. Every family's play screen supports it: `createPlayScene` takes `tempo`, `tempoPitchMode` and `tempoStretchAlgorithm` in its settings.
 
 ### Phones and tablets
 
@@ -158,10 +158,10 @@ Courses play through the same select → play → result scenes. See [Courses an
   - In an expert or grade course, numbers 104 / 105 (combo, max combo) and the combo next to the judgement (`#DST_NOWCOMBO`) count the whole course: the combo the previous stage left runs on until the first break (OpenLR2 L2019-L2034, L2516).
   - The gauge-type ops report the red gauge (43 / 45) for a course stage, as LR2 does for its course gauge.
   - The course result of an EXPERT or GRADE course shows on the theme's course-result skin (`#INFORMATION` type 15) when it has one, else on the result skin, and plays the sound set's `#COURSECLEAR` / `#COURSEFAIL` (stock `course_clear` / `course_fail`), falling back to `clear` / `fail`. A NONSTOP run shows on the result skin with `clear` / `fail`, as LR2 shows it.
-- **beatoraja skins** (`courseInfo` on the beatoraja gameplay and result scenes; beatoraja `BooleanPropertyFactory` / `StringPropertyFactory`):
+- **beatoraja skins** (the course view of the play and result screens; beatoraja `BooleanPropertyFactory` / `StringPropertyFactory`):
   - Select: a course bar lights `GRADEBAR` (3; a random course lights `OPTION_RANDOMCOURSEBAR` (1031) instead, as beatoraja's `RandomCourseBar` is no `GradeBar`), `PLAYABLEBAR` (5) when it can start, and one `OPTION_GRADEBAR_*` op per constraint (1002-1007, 1010-1017), and names its stages on strings 150-159, marking a stage the collection lacks `(no song) <title>`.
   - Play and the stage results light `MODE_COURSE` (290) and the stage op: 280-283 for stages 1-4 that are not the last, 289 for the last. Strings 150-159 name the running course's stages.
-  - `no_speed` locks the hi-speed, the lane cover, the lift and the HIDDEN cover, as beatoraja's `ControlInputProcessor` does: the arrow keys, PageUp / PageDown, Home / End, H / J / K, the wheel and the skin's cover buttons (acts 330-332) do nothing, and a change through the engine's Option + lane-key shortcut is set back. Nothing changes, so nothing is saved for the next play either.
+  - `no_speed` locks the hi-speed, the lane cover, the lift and the HIDDEN cover, as beatoraja's `ControlInputProcessor` does: the arrow keys, PageUp / PageDown, Home / End, H / J / K, the wheel and the skin's cover buttons (acts 330-332) do nothing. Nothing changes, so nothing is saved for the next play either.
   - The course result shows on the theme's `COURSE_RESULT` skin (type 15), else its result skin, with `MODE_COURSE` lit and the title strings (10 / 12) reading the course title. It plays `course_clear` / `course_fail`, falling back to `clear` / `fail`.
 
 - **NONSTOP:** the demo plays an LR2 NONSTOP course as one chart: starting one stitches its stages with the shared NONSTOP pipeline (`prepareNonstopCourse` in `@be-music/player/course`, which the Leaderboard rebuilds runs with: each stage's `#RANDOM` drawn and the course's long-note constraint applied; the demo's `prepareNonstopPlay` adds the asset plumbing), plays the stitched chart on the LR2 / default scenes (a beatoraja theme falls back to them), and shows the run's result from the stitched play's course log (`buildNonstopCoursePlaylog`), which is kept and auto-saved like other courses. As LR2 has no course-result step for NONSTOP (OpenLR2 `Main.cpp` M1406-M1412), the run shows on the result skin (not the course-result one) with the `clear` / `fail` jingles. F5 during the play and R on the result restitch and replay the course, as LR2 allows quick retry there (L2854). Debug Menu → Course → **NONSTOP placement** picks the intended placement (default) or LR2's exact one, and **Pitch** (shared with the [play tempo](#play-tempo)) picks how a FIT stage follows the previous stage's tempo: **Pitch follows tempo (LR2)** (default) plays its samples faster or slower, so the pitch moves with the tempo, while **Keep pitch** stretches them in time when they load and keeps their pitch. **Keep-pitch stretcher** picks how: **Signalsmith Stretch** (default; the MIT `signalsmith-stretch` WASM AudioWorklet, rendered offline once per rate with the samples laid end to end) or **WSOLA** (`timeStretchChannels`, built in and lighter). A browser that cannot run the former falls back to WSOLA. All of them apply from the next play. A NONSTOP course played at another tempo plays every stage at it, the FIT rates on top. In the scenes: a stitched NONSTOP chart plays from a composite asset source (`createNonstopAssets`): each stage's files are found the way that stage alone would find them (`#PATH_WAV`, codec and image fallbacks, LR2's parent folder) and named `s<stage>/<key>`, and the chart plays as `NONSTOP_CHART_PATH`. The gameplay scene's `nonstop` option (the stitch map) plays each stage's samples at its FIT rate and runs its background sound through a per-stage gain that fades at the seams on LR2's `volume²` curve; the player's keysounds are not faded. Pausing suspends the audio context, which holds the fades with it. On an LR2 skin the play is parsed once with the first stage's ops, as LR2 reads it; the stage ops (280-289) and title text 10 then move to a stage only when it follows a BLANK connection (`resolveLr2NonstopStage`), so after FADE or CUT the earlier stage stays shown, and title text 10 reads the course name until then. LR2's select texts 171-179 name the selected NONSTOP course's connections (`FADE`, `FADE+FIT`, `CUT`, `CUT+FIT`, `BLANK1`, `BLANK2`) and read `DISABLE` on any other bar; the connection buttons 240-248 step the connections of a course the player made. Its BGA keeps one base / layer / POOR stack per stage (cues split by the stage that owns each BMP key) and crossfades them linearly over 3 s around each seam; during a POOR each stage's own POOR image replaces that stage's base and layer, with no `#BMP00` fallback. LR2 instead draws one stage's three images each frame, picked at random by the crossfade weights (`LR2body.exe` 0x4350df), so the crossfade is its average. The beatoraja BGA renderer is not split yet. The BPM readouts (LR2 NOWBPM and the built-in HUD) show each stage's own BPM × its FIT rate (`map.tempo`), while the scroll stays at the stitched 150 BPM, and the engine gets `map.stageRanks` so each later stage is judged with its own `#RANK` (a replay uses the ones its log recorded).
@@ -247,7 +247,7 @@ flowchart LR
 
 Implemented beatoraja browser features include:
 
-- Select, decide, gameplay, and result scenes backed by `BeatorajaPlaySkinView`; the decide and result screens are family views made with `createDecideScene` and `createResultScene` ([The decide screen](#the-decide-screen), [The result screen](#the-result-screen))
+- Select, decide, gameplay, and result scenes backed by `BeatorajaPlaySkinView`; the decide, play and result screens are family views made with `createDecideScene`, `createPlayScene` and `createResultScene` ([The decide screen](#the-decide-screen), [The play screen](#the-play-screen), [The result screen](#the-result-screen))
 - Play variants `5`, `7`, `9`, `10`, and `14`; `24` and `24d` skins are discovered but not mounted for chart gameplay
 - Skin `property[]`, `filepath[]`, custom offsets, category groups, and mid-session `replaceSkin()` refreshes
 - Runtime `TIMER_*`, `OPTION_*`, `TEXT`, and `NUM` wiring for score, combo, judge, gauge, chart metadata, clear lamp, rank, and play options
@@ -294,7 +294,7 @@ stateDiagram-v2
   Disposed --> [*]
 ```
 
-What a scene shows is handed to it before it is shown: the options of `createDecideScene` for every decide screen, the options of `createResultScene` for every result screen, the options of `createPlayScene` for the built-in and LR2 play screens, the options of `createSelectScene` for the built-in and LR2 select screens, and the constructor options for the rest.
+What a scene shows is handed to it before it is shown: the options of `createDecideScene` for every decide screen, the options of `createResultScene` for every result screen, the options of `createPlayScene` for every play screen, the options of `createSelectScene` for the built-in and LR2 select screens, and the constructor options for the rest.
 
 - **The select scene is kept alive.** The built-in and LR2 select screens stay across a decide, play and result: their `exit()` stops the BGM and the chart preview and the drawing, and they keep their cursor, browse state and decoded BGM. Entering again restarts the scene timers, so the skin's entrance plays again, and the BGM; the preview starts again once the cursor is on another chart than the one it left on. The screen (`createSelectScene`) stops its sounds with `stopOwned` and detaches its input on exit. The beatoraja select scene is rebuilt from its snapshot instead.
 - **A play loads off stage.** `prepare()` parses the chart and decodes its audio without touching the stage or adding listeners, so the demo prepares the play behind a decide splash. When the splash is done, `setScene(play)` exits the decide scene and enters the play, then `start()` begins it; keys pressed during the splash reach only the splash. Without a splash the demo shows the play first, and a `prepare()` that runs while the play is showing draws the playfield in its loading state.
@@ -320,23 +320,21 @@ sequenceDiagram
 
 ### What the gameplay families share
 
-The built-in / LR2 play session and the beatoraja gameplay view render with their own skins, but everything that decides how a play sounds, looks and ends comes from one place, so the two cannot drift apart:
+Every play screen is the one play session drawn by its family's view ([The play screen](#the-play-screen)), so everything that decides how a play sounds, looks and ends comes from one place and the families cannot drift apart:
 
 ```mermaid
 flowchart TD
+  views["built-in · LR2 · beatoraja play views"]
+  session[Play session] -->|PlayFrame| views
   subgraph shared [Shared modules]
     audio[chart/play-audio.ts]
     bga[chart/play-bga.ts]
     ending[scene/play-ending.ts]
     lamp[resolveClearLamp]
   end
-  core[built-in / LR2 play session] --> audio
-  core --> bga
-  core --> ending
-  prep[prepareBeatorajaGameplayChart] --> audio
-  prep --> bga
-  bview[beatoraja gameplay view] --> ending
-  bview --> prep
+  session --> audio
+  session --> bga
+  session --> ending
   lamp --> results[Results and records]
 ```
 
@@ -347,7 +345,7 @@ flowchart TD
 
 ## Scene sessions and family views
 
-The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). Every family's decide and result screens and the built-in and LR2 select and play screens are on them ([The select screen](#the-select-screen), [The decide screen](#the-decide-screen), [The result screen](#the-result-screen), [The play screen](#the-play-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
+The scenes are moving to one shape ([ADR 0001](./adr/0001-skin-families-only-draw.md)). A **scene session** holds a screen's behaviour once, for every skin family. A **family view** draws it in the family's skin. The contracts below are in place, and the scenes adopt them one screen at a time (decide, result, select, then play). Every family's decide, play and result screens and the built-in and LR2 select screens are on them ([The select screen](#the-select-screen), [The decide screen](#the-decide-screen), [The result screen](#the-result-screen), [The play screen](#the-play-screen)); the other scenes are still the classes described under [Scene lifecycle](#scene-lifecycle).
 
 ```mermaid
 flowchart LR
@@ -372,7 +370,7 @@ flowchart LR
   - decide: continue or cancel;
   - play: a touch lane, the hi-speed, a cover, pause or quit;
   - result: continue or retry.
-- **`FamilyView`**: `attach(host, emit)`, `draw(frame)`, `detach()` and `dispose()`. A detached view keeps what it loaded. The decide, play and result views also give their skin's timing: the input delay, the auto advance and the fade-out (and whether Escape waits for input too, as on beatoraja), and for the play, LR2's load-end, play-start, fade-out and close offsets.
+- **`FamilyView`**: `attach(host, emit)`, `draw(frame)`, `detach()` and `dispose()`. A detached view keeps what it loaded. The decide, play and result views also give their skin's timing: the input delay, the auto advance and the fade-out (and whether Escape waits for input too, as on beatoraja), and for the play, the load-end, play-start, fade-out and close offsets (an LR2 skin's, or a beatoraja skin's 1.5 s lead-in and fade-out).
 - **`SessionScene`** is the `PixiScene` made of a session and a view:
   - `enter(host)` attaches the view, starts the session and draws a first frame.
   - The ticker asks the session for a frame and has the view draw it.
@@ -449,7 +447,7 @@ stateDiagram-v2
   ToSelect --> [*]: fade-out, cancel
 ```
 
-The web demo prepares the LR2 / built-in play behind the built-in and LR2 screens as before and shows it from `on.continue`; after the beatoraja screen it starts the play from `on.continue`, as before.
+The web demo prepares the play behind every decide screen and shows it from `on.continue`.
 
 #### The decide jingle
 
@@ -505,24 +503,25 @@ The web demo shows every result this way: a single play, a course stage, a cours
 
 ### The play screen
 
-`createPlayScene(kit, options)` (`@be-music/player-web/scenes`) makes the built-in and LR2 play screens: a play session (`session/play/play-session.ts`) drawn by the view of the kit's family, as a `SessionScene` to load, show with `setScene` and start. A built-in kit (`{ family: 'built-in', skin }`) is drawn by the built-in play view (`view/built-in/play-view.ts`), an LR2 kit (`{ family: 'lr2', skin, invisibleNoteSkin? }`, the chart's play skin and the theme's 9-keys skin for invisible notes) by the LR2 play view (`view/lr2/play-view.ts`). The beatoraja play screen is still `PixiBeatorajaGameplayView`.
+`createPlayScene(kit, options)` (`@be-music/player-web/scenes`) makes every family's play screen: a play session (`session/play/play-session.ts`) drawn by the view of the kit's family, as a `SessionScene` to load, show with `setScene` and start. A built-in kit (`{ family: 'built-in', skin }`) is drawn by the built-in play view (`view/built-in/play-view.ts`), an LR2 kit (`{ family: 'lr2', skin, invisibleNoteSkin? }`, the chart's play skin and the theme's 9-keys skin for invisible notes) by the LR2 play view (`view/lr2/play-view.ts`), and a beatoraja kit (`{ family: 'beatoraja', kit }`, the theme's play entry for the chart's variant) by the beatoraja play view (`view/beatoraja/play-view.ts`).
 
 ```mermaid
 flowchart LR
   subgraph scene["PlayScene (a SessionScene)"]
-    adapter[PlaySceneSession] -->|PlayFrame| view["BuiltInPlayView<br/>Lr2PlayView"]
+    adapter[PlaySceneSession] -->|PlayFrame| view["BuiltInPlayView<br/>Lr2PlayView<br/>BeatorajaPlayView"]
     view -->|PlayIntent| adapter
   end
   adapter --> session[PlaySession]
   session --> state[PlayState]
   session --> parts["chart · media · engine<br/>input · view settings · ending"]
-  view --> playfield[Shared playfield]
+  view --> playfield["Shared playfield<br/>(built-in, LR2)"]
+  view --> skinview["Skin view, note layer<br/>(beatoraja)"]
   playfield -->|PlayfieldSkin| view
   playfield -->|ctx.play| session
 ```
 
-- **Options.** `chart` and `source`; `settings`, everything a host set on the old scene classes but the skin and the callbacks (the play options it judges and scrolls with, the tempo, the audio mix, the BGA and the drawing options); `course` (the stage's rules and its course view); `replay` (a play log to play back); `preResolved` (the decide screen's `#RANDOM` draws); `audio` (the host's audio service); `playOptions` (as the select screen set them, for the frames); `host` (to build the layers while the play loads off stage); and `on: { finish(result, playlog), exit, restart, hiSpeed?, tempo? }`.
-- **Lifecycle.** `prepare(onProgress)` loads the chart, the view's own assets (an LR2 skin's images and fonts) and the samples, and starts the BGA loading in the background, without touching the stage. `setScene` shows the play, and `start()` runs the intro and then the chart. `dispose({ preserveAudioTail })` ends the scene, after the play finished, once its last samples have rung out. The scene also has `requestExit`, `requestTogglePause`, the tempo and hi-speed setters, `recording` (for the host's recorder), `progress()` (the result so far, which the demo's test hook reads), `waitForPlaylog`, `updateKit` (a built-in skin's settings; a scene keeps its family and skin) and the audio and drawing knobs.
+- **Options.** `chart` and `source`; `settings`, everything a host set on the old scene classes but the skin and the callbacks (the play options it judges and scrolls with, the tempo, the audio mix, the BGA and the drawing options); `course` (the stage's rules and its course view); `replay` (a play log to play back); `preResolved` (the decide screen's `#RANDOM` draws); `audio` (the host's audio service, which also plays a beatoraja skin's sounds); `playOptions` (as the select screen set them, for the frames); `host` (to build the layers while the play loads off stage); and `on: { finish(result, playlog), exit, restart, hiSpeed?, tempo? }`.
+- **Lifecycle.** `prepare(onProgress)` loads the chart, the view's own assets (an LR2 skin's images and fonts; a beatoraja play's note layout, layers and chart images) and the samples, and starts the BGA loading in the background, without touching the stage. `setScene` shows the play, and `start()` runs the intro and then the chart. `dispose({ preserveAudioTail })` ends the scene, after the play finished, once its last samples have rung out. The scene also has `requestExit`, `requestTogglePause`, the tempo and hi-speed setters, `recording` (for the host's recorder), `progress()` (the result so far, which the demo's test hook reads), `waitForPlaylog`, `resolved` (the chart as the play plays it, with its `#RANDOM` draws, for the result's graphs), `updateKit` (a built-in skin's settings, or a beatoraja entry's options or another entry's skin; a scene keeps its family) and the audio and drawing knobs.
 - **Session.** `PlaySession` holds the play's behaviour around one `PlayState`: the chart (`play-chart.ts`), the media (`play-media.ts`; it opens its own `interactive` context through the audio service's `openPlayGraph`, as the session's owner), the engine (`play-engine.ts`), the play's own input (`play-input.ts`), the view settings (`play-view-settings.ts`) and the ending (`play-ending.ts`). What it needs of the view comes through `PlaySessionTheme` (`play-session-theme.ts`): the intro and fade-out timing, the moments it animates against (`PlayMoment`), the key-beam fade by channel, the stage the touch lanes map onto, the view's own loading once the chart is prepared (`prepareView`) and the GPU upload of the BGA.
 - **Frame.** Every tick `PlaySceneSession` drains the engine's UI signals into the play state, records or replays the play log's view, and hands the view a `PlayFrame`: the play state and its stage, the chart time and beat, the notes and held lanes, the moments since the last frame (`playViewEventFromMoment`), the analysed mix, whether the play shows yet (`shown`), and the running play itself (`playfield`).
 - **Built-in view.** `BuiltInPlayView` draws the shared playfield over its layers (`PlayLayers`) and answers it through a `PlayfieldSkin`: the be-music skin's stage, the playfield's own lane layout, notes, measure lines and bombs (the skin draws them as data), the built-in BGA rect, the skin's bomb length and the default key-beam fade. The be-music chrome draws around the playfield (`renderBuiltInChrome`, its `PlayChrome`).
@@ -531,16 +530,22 @@ flowchart LR
   - its `PlayfieldSkin` gives the skin's `#DST_NOTE` lane rects, its note cells (the `#SRC_AUTO_*` dummy notes on an auto-scratch lane), its `#DST_LINE` measure lines, its `#DST_BGA` rects, and the bomb and key-beam spans of its timers; the skin owns the lanes, so it draws the lane backgrounds, key beams and bombs itself;
   - its `PlayChrome` draws the skin's elements (`view/lr2/play-elements.ts`), retires the full-combo timers once played out, draws the judgment as text when the skin has no judge images, and stops a bomb's timer when the playfield retires the bomb;
   - the session times the play from the skin's `#LOADSTART` + `#LOADEND` (READY), `#PLAYSTART`, `#FADEOUT` and `#CLOSE` (`resolveLr2PlayTiming`).
-- **Input.** The play's keys (ESC, F5, Space, the arrows, the Backspace hold) and touch lanes stay the play's own listeners on the window and the canvas; the scene listens for no keys.
-- **`#RANDOM`.** With `preResolved` the play plays the draws the decide screen showed. The web demo makes the decide screen first and preloads the play with its `resolved`, on the built-in and LR2 play screens; a course stage and a replay draw their own (a replay plays its log's).
+- **beatoraja view.** `BeatorajaPlayView` draws a beatoraja play skin through `BeatorajaPlaySkinView`, with its note, marker and BGA layers (`view/beatoraja/play/*`) put where the skin places them (`BeatorajaPlayStage`):
+  - `BeatorajaPlayBridge` (`view/beatoraja/play-bridge.ts`) turns each frame into the skin's render context: its ops, numbers, texts, gauge and graphs come from the [scene mapping](./beatoraja-skin.md#scene-mapping) over the frame's `PlayState` and the engine's latest frame, and the frame's moments start its timers (a judgment, a lane's flash and hold, load-end, the fade-out). It keeps the judge-state graph and ends the lane flashes itself;
+  - the notes scroll on beatoraja's scale over the chart's `#SCROLL` / `#SPEED` timelines, with the frame's drawn hi-speed and the play state's lane covers; the play log records the view on that scale (`PlaySessionTheme.playlogView`);
+  - the session times the play from load-end: READY, PLAY and STARTINPUT start then, the chart 1.5 s later (`resolveBeatorajaPlayTiming`), and a leaving play fades over the skin's `fadeout`;
+  - a beatoraja kit plays with RANDOM and HS-FIX off and the lane covers at 0 (`coverStart: 'none'`), and turns on the cover keys (`coverKeys`): PageUp / PageDown move SUDDEN+, Home / End the lift, H toggles HIDDEN+ and J / K move it (Shift for larger steps). The wheel and the skin's cover buttons (acts 330-332) send cover intents;
+  - the skin's `main_state.audio_*` calls play through the audio service's skin sounds, owned by the play.
+- **Input.** The play's keys (ESC, F5, Space, the arrows, the Backspace hold, a beatoraja play's cover keys) and touch lanes stay the play's own listeners on the window and the canvas; the scene listens for no keys.
+- **`#RANDOM`.** With `preResolved` the play plays the draws the decide screen showed. The web demo makes the decide screen first and preloads the play with its `resolved`, on every play screen; a course stage and a replay draw their own (a replay plays its log's).
 
-The web demo plays every built-in and LR2 play this way: a single play, AUTO, a replay, a course stage, a NONSTOP run, a quick retry and F5.
+The web demo plays every play this way, on every family: a single play, AUTO, a replay, a course stage, a NONSTOP run, a quick retry and F5.
 
 ### Where the play's parts live
 
 The play session and the play views share the play's parts. Each module takes the play (or the view) as an explicit context (`ctx`) and reads and writes its state through an interface of its own. The session's state is `PlaySessionState`; a view keeps its layers in `PlayLayers` and reads the running play through `PlayfieldRuntime`.
 
-The running play is one scene-model `PlayState` (`playState`): the gauge and EX score with their graphs, the combo, max combo and course combo, the timed judgments with their early / late counts, and the view (the hi-speed under HS-FIX and the lane covers). Every change to it goes through `applyPlayEvent` (`session/play/play-state.ts`), which reduces it with `reducePlayState` and glides the note scroll to a new drawn hi-speed: the engine's frames, judgments and empty POORs, its final summary, the player's hi-speed keys, the host's `setHiSpeed` and a replay's recorded view. The skins' runtime, the LR2 state resolver (`resolveLr2PlayState`) and the result (`playResultFromPlayState`) read it. The session keeps the engine's judgment counts as the readouts show them (`score`, with LR2's empty POORs in the POOR count) and the engine's gauge summary (`gaugeState`) beside it.
+The running play is one scene-model `PlayState` (`playState`): the gauge and EX score with their graphs, the combo, max combo and course combo, the timed judgments with their early / late counts, and the view (the hi-speed under HS-FIX and the lane covers). Every change to it goes through `applyPlayEvent` (`session/play/play-state.ts`), which reduces it with `reducePlayState` and glides the note scroll to a new drawn hi-speed: the engine's frames, judgments and empty POORs, its final summary, the player's hi-speed keys, the host's `setHiSpeed` and a replay's recorded view. The skins' runtime, the LR2 state resolver (`resolveLr2PlayState`), the beatoraja play bridge and the result (`playResultFromPlayState`) read it. The session keeps the engine's judgment counts as the readouts show them (`score`, with LR2's empty POORs in the POOR count) and the engine's gauge summary (`gaugeState`) beside it.
 
 - `session/play/`:
   - `play-session.ts`: `PlaySession`, the composition, the clocks, the pause, the recording and the teardown; `play-session-state.ts`: its state; `play-options.ts`: its options (`PlaySessionOptions`); `play-session-theme.ts`: what it asks of its view (`PlaySessionTheme`) and the moments it raises (`PlayMoment`);
@@ -548,7 +553,7 @@ The running play is one scene-model `PlayState` (`playState`): the gauge and EX 
   - `play-chart.ts`: `prepareSong`, the lane options (RANDOM, MIRROR, S-RANDOM, SCATTER, DP FLIP), a replay's arrangement and the decide screen's draws;
   - `play-media.ts`: the audio graph, the samples, the BGA textures and videos, and their teardown;
   - `play-engine.ts`: the shared engine's launch, its UI signals, the judgements and lane effects, and the start of the ending;
-  - `play-input.ts`: ESC, F5, Space and the arrows, the quit hold, the auto-pause and touch lanes;
+  - `play-input.ts`: ESC, F5, Space and the arrows, the quit hold, the auto-pause and touch lanes; `play-cover-keys.ts`: the cover keys of a beatoraja play (`coverKeys`);
   - `play-keys.ts`: `PLAY_SCENE_KEY_CODES`, the keys the play handles itself and the engine's web input runtime skips;
   - `play-state.ts`: `applyPlayEvent`, the one way the play state changes;
   - `play-view-settings.ts`: the hi-speed keys, the tempo the engine follows, the lane covers as drawn and the play log's view;
@@ -556,6 +561,7 @@ The running play is one scene-model `PlayState` (`playState`): the gauge and EX 
 - `view/shared/`: `playfield/*` (lanes, notes, long notes and the long-note tracker, mines, measure lines, bombs, covers, text; the running play as `ctx.play`, `PlayfieldRuntime`; the view's `PlayfieldSkin` and `PlayChrome`), `bga-renderer.ts`, `play-frame.ts` (the layer tree, its fit to the screen, the fades), `play-layers.ts` and `texture-upload.ts`.
 - `view/built-in/`: `play-view.ts` (the built-in play view and its `PlayfieldSkin`) and `play-chrome.ts` (the built-in lane geometry, BGA rect and be-music layout, and the chrome's runtime and pass).
 - `view/lr2/`: `play-view.ts` (the LR2 play view, its `PlayfieldSkin`, its loading and the frame's LR2 state), `play-elements.ts` (the skin's elements and the playfield's lane rects, note cells, measure lines and BGA rects), `play-timers.ts` (the skin's timers), `play-turntable.ts` (the scratch turntable) and `play-hud.ts` (the judge, combo and groove-gauge drawing and the skin's timer spans).
+- `view/beatoraja/`: `play-view.ts` (the beatoraja play view, its loading, its timing and the play log's view scale), `play-bridge.ts` (the frame as the skin's render context: ops, timers, numbers and graphs), `play-stage.ts` (the skin view with the note, marker and BGA layers) and `play/*` (the note, marker and BGA layers, the scroll placement, the note `dst` block and the skin's metrics).
 
 ## Note visibility
 
@@ -628,13 +634,13 @@ pnpm bench -- --packages player-web
   does not cut off the remaining gameplay audio tail.
 - The gameplay recorder writes WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
 - Every play except a replay records a play log (`*.bmplay.json` input replay — resolved chart, raw press/release stream, play settings; see [playlog.md](./playlog.md)). The demo auto-downloads it when the result scene mounts, controlled by the "Auto-save play history" checkbox in the Debug Menu's "Library & records" folder (OFF by default; latched at song start and disabled during a play). The `bms-playlog` CLI re-derives LR2 / beatoraja / IIDX results from the file, and dropping a play-log onto the page replays the recorded run when the matching song is loaded. A run given up with ESC replays up to where it was given up (`play.abortedAtUs`), as its re-simulations do.
-- Every gameplay scene also records what the player saw (`play.view`, `play.viewChanges`): the hi-speed on its scale, HS-FIX, the visible time at the main BPM and each side's SUDDEN+ / HIDDEN+ / LIFT, sending each change as a `{ kind: 'view' }` command, coalesced to at most one per 100 ms. A replay on the LR2 / default scenes shows that view along the playhead as far as the `replayView` option asks: the recorded hi-speed when it was played on the same scale (the LR2 / default scenes share one), else the hi-speed showing the recorded visible time, and the recorded covers. See [playlog.md](./playlog.md#what-the-player-saw) for the units and the rule.
+- Every gameplay scene also records what the player saw (`play.view`, `play.viewChanges`): the hi-speed on its scale, HS-FIX, the visible time at the main BPM and each side's SUDDEN+ / HIDDEN+ / LIFT, sending each change as a `{ kind: 'view' }` command, coalesced to at most one per 100 ms. A replay shows that view along the playhead as far as the `replayView` option asks: the recorded hi-speed when it was played on the same scale (the LR2 / default screens share one, and beatoraja skins have their own), else the hi-speed showing the recorded visible time, and the recorded covers. See [playlog.md](./playlog.md#what-the-player-saw) for the units and the rule.
 - With "Submit to Leaderboard" on (Debug Menu → Leaderboard, OFF by default, latched like the auto-save), a finished manual play is sent to the Leaderboard ([leaderboard.md](./leaderboard.md)) when the result scene mounts: the demo signs in anonymously the first time, rebuilds the play's fingerprint documents from the song's chart and checks them against the log before sending, resends with the chart document when the server asks for it, and shows the rank in the status line. The deployed Worker forwards `/api/*` and `/leaderboard/*` to the Leaderboard Worker through a Service Binding; `pnpm player:web` proxies them to a local one (`pnpm --filter @be-music/leaderboard-api run dev`, or `LEADERBOARD_DEV_ORIGIN`).
 - The account starts anonymous (the first submission signs in anonymously). "Create passkey (keep this account)" registers a passkey for it, which also lists its plays under its handle instead of behind the anonymous filter; "Sign in with passkey" brings the account to another browser and moves that browser's anonymous plays into it.
 
 ### Audio service
 
-`createAudioService()` (`@be-music/player-web/runtime`) is the one way the player plays sounds outside a play's chart ([ADR 0007](./adr/0007-one-system-audio-context.md)). The scene sessions play through it as they land, the built-in and LR2 select screens, the decide and result screens and the built-in play screen so far (a play opens its own graph through `openPlayGraph`); the other scenes still use contexts of their own. The web demo creates one service at start-up and hands it to every scene made on it, and sets a beatoraja theme's files on it (`setTheme({ files })`) for the skin sounds of the beatoraja decide and result screens.
+`createAudioService()` (`@be-music/player-web/runtime`) is the one way the player plays sounds outside a play's chart ([ADR 0007](./adr/0007-one-system-audio-context.md)). The scene sessions play through it as they land, the built-in and LR2 select screens, the decide and result screens and every play screen so far (a play opens its own graph through `openPlayGraph`); the other scenes still use contexts of their own. The web demo creates one service at start-up and hands it to every scene made on it, and sets a beatoraja theme's files on it (`setTheme({ files })`) for the skin sounds of the beatoraja decide, play and result screens.
 
 ```mermaid
 flowchart LR

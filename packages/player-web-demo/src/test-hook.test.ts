@@ -12,7 +12,6 @@ import {
   nameJingle,
   resultFromCourseLog,
   resultFromData,
-  resultFromSummary,
   TEST_HOOK_VERSION,
   TestHookRecorder,
   type TestHookLiveState,
@@ -101,9 +100,15 @@ describe('TestHookRecorder', () => {
     recorder.recordLoad();
     recorder.recordPlaylog(undefined);
     recorder.recordPlaylog(playlog);
-    recorder.recordResult(
-      resultFromSummary({ perfect: 1, great: 0, good: 0, bad: 0, poor: 0, exScore: 2 }, { run: 'single', title: 'A' }),
-    );
+    recorder.recordResult({
+      run: 'single',
+      family: 'beatoraja',
+      title: 'A',
+      cleared: false,
+      exScore: 2,
+      judged: { pgreat: 1, great: 0, good: 0, bad: 0, poor: 0 },
+      gauge: { value: 0 },
+    });
     const state = hook.state();
     expect(state).toMatchObject({ statusLog: ['Loading', '2 charts loaded'], loads: 1, playlogs: 1 });
     expect(state.results).toHaveLength(1);
@@ -179,21 +184,20 @@ describe('results', () => {
     });
   });
 
-  test('a result from a beatoraja summary', () => {
-    expect(
-      resultFromSummary(
-        {
-          perfect: 3,
-          great: 0,
-          good: 0,
-          bad: 0,
-          poor: 2,
-          exScore: 6,
-          gauge: { type: 'NORMAL', current: 40, cleared: false },
-        },
-        { run: 'single', title: 'Fixture B', lamp: 'FAILED', jingle: 'beatoraja:fail' },
-      ),
-    ).toEqual({
+  test('a result of a play on the beatoraja play screen, from the result it hands its result screen', () => {
+    const data = {
+      score: { total: 5, perfect: 3, great: 0, good: 0, bad: 0, poor: 2, emptyPoor: 0, exScore: 6, score: 6 },
+      maxCombo: 3,
+      gauge: 40,
+      cleared: false,
+      playSeconds: 4,
+      song: song('Fixture B'),
+      gaugeHistory: [],
+      scoreHistory: [],
+      lamp: 'FAILED',
+      gaugeType: 'NORMAL',
+    } satisfies PixiGameplayResultData;
+    expect(resultFromData(data, 'single', 'beatoraja', 'beatoraja:fail')).toEqual({
       run: 'single',
       family: 'beatoraja',
       title: 'Fixture B',
@@ -202,6 +206,7 @@ describe('results', () => {
       exScore: 6,
       judged: { pgreat: 3, great: 0, good: 0, bad: 0, poor: 2 },
       gauge: { type: 'NORMAL', value: 40 },
+      playSeconds: 4,
       jingle: 'beatoraja:fail',
     });
   });

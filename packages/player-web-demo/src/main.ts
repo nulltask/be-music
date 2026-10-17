@@ -10,13 +10,13 @@ import {
   createPlayScene,
   createResultScene,
   createSelectScene,
-  PixiBeatorajaGameplayView,
   PixiBeatorajaSelectScene,
   PixiSceneHost,
   HISPEED_MAX,
   HISPEED_MIN,
   HISPEED_STEP,
   snapHiSpeed,
+  type BeatorajaKit,
   type BuiltInKit,
   type DecideScene,
   type DecideSceneKit,
@@ -68,7 +68,6 @@ import {
   type BeatorajaThemeBundle,
   type SkinFamilyId,
 } from '@be-music/player-web/skin';
-import { prepareBeatorajaGameplayChart, type PreparedBeatorajaGameplayChart } from '@be-music/player-web/chart';
 import {
   beatorajaClearLampOp,
   discoverBeatorajaSelectBgmPath,
@@ -161,11 +160,9 @@ import {
 } from './song-records.ts';
 import {
   courseStageRecordPlayFromResult,
-  courseStageRecordPlayFromSummary,
   mergeBestRecord,
   mergeCourseStageRecord,
   recordPlayFromResult,
-  recordPlayFromSummary,
   type RecordPlay,
 } from '@be-music/player/records';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
@@ -175,7 +172,7 @@ import {
   setStoredSkinSetting,
   storeSkinSettings,
 } from './skin-settings.ts';
-import type { PlayerSummary, ResolvedPlayChart } from '@be-music/player/core/engine';
+import type { ResolvedPlayChart } from '@be-music/player/core/engine';
 import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingles.ts';
 import {
@@ -338,7 +335,6 @@ import {
   nameJingle,
   resultFromCourseLog,
   resultFromData,
-  resultFromSummary,
   judgedOf,
   TestHookRecorder,
   type TestHookLiveState,
@@ -499,6 +495,11 @@ interface DecideContinuation {
   cancel?: () => void;
 }
 
+/** The family a play's status line names: the beatoraja play's; the built-in and LR2 plays name none. */
+function playingFamily(view: PlayScene): { family?: 'beatoraja' } {
+  return view.identity.family === 'beatoraja' ? { family: 'beatoraja' } : {};
+}
+
 class PlayerWebDemoApp {
   private readonly collectionStore = new BrowserSongCollectionStore();
   /**
@@ -621,39 +622,21 @@ class PlayerWebDemoApp {
   } = {};
   /** The select screen (`createSelectScene`), drawn by the LR2 or the built-in family. */
   private selectView: SelectScene | undefined;
-  /** The built-in or LR2 play on the stage (`createPlayScene`). */
+  /** The play on the stage (`createPlayScene`), whichever family draws it. */
   private gameplayView: PlayScene | undefined;
   /**
-   * Beatoraja gameplay view. Active in place of `gameplayView` when the user toggles
-   * `useBeatorajaGameplay` and the loaded theme has a skin variant matching the chart shape. Held
-   * separately because the two views don't share an interface — the LR2 view manages its own audio
-   * decoding internally, while this one consumes a `PreparedBeatorajaGameplayChart` from the
-   * `prepareBeatorajaGameplayChart` helper.
+   * The beatoraja theme's play entry the play on the stage is drawn with, when it plays on a beatoraja theme: the Debug
+   * Menu's "Play 7K / Play 5K / …" skin pickers and the skin-options panel apply to it while that play is up.
    */
-  private beatorajaGameplayView: PixiBeatorajaGameplayView | undefined;
-  /**
-   * The variant the active gameplay view is mounted against. Held alongside
-   * {@link beatorajaGameplayView} so the Debug Menu's "Play 7K / Play 5K / …" dropdowns can
-   * resolve their type-code → live-apply call without reaching into the view internals. Cleared
-   * on dispose so a stale value can never cause the next dropdown change to no-op silently.
-   */
-  private currentBeatorajaPlayVariant: BeatorajaPlayableVariant | undefined;
-  /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
-  private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
-  /** The chart path {@link beatorajaGameplayPrep} was prepared for. */
-  private beatorajaGameplayPrepChartPath: string | undefined;
+  private activeBeatorajaPlay:
+    | { readonly entryPath: string; readonly header: BeatorajaSkinHeader; readonly variant: BeatorajaPlayableVariant }
+    | undefined;
   /**
    * The most recently resolved chart for a beatoraja run, paired with the song's `chartPath` so
    * subsequent stages can verify the cached chart still matches the song they're handling.
    *
-   * Lifecycle:
-   *   1. The decide scene resolves `#IF` / `#RANDOM` once at entry and stores the result here so
-   *      the bpmgraph (and the gameplay prep that follows) sees the SAME branches.
-   *   2. `playSongBeatoraja` hands it to the prep as `preResolved` — only when `chartPath` matches the
-   *      song being played. Mismatched paths fall back to a fresh resolve (= the user reached
-   *      gameplay without going through decide; rare but possible via debug paths).
-   *   3. `disposeBeatorajaGameplay` re-stamps it from `prep.chart` / `prep.randomDraws` so the result scene gets
-   *      the same chart for its bpmgraph.
+   * A play on the beatoraja play screen stamps it from the chart it played (`PlayScene.resolved`, the decide screen's
+   * draws when it went through one) as it finishes, so the result screen's bpmgraph plots the same branches.
    *
    * `resolved` holds the chart together with the `#RANDOM` / `#SWITCH` draws it was resolved with; both are plain
    * JSON, so retaining them is cheap.
@@ -1194,9 +1177,10 @@ class PlayerWebDemoApp {
    * views are created and torn down along many paths; a play being prepared behind a decide splash counts already.
    */
   private readonly syncGameplayShellState = (): void => {
-    const inGameplay = this.gameplayView !== undefined || this.beatorajaGameplayView !== undefined;
-    // The built-in / LR2 play views take touch input and expose pause / exit for the touch controls.
-    const touchPlay = this.gameplayView !== undefined;
+    const inGameplay = this.gameplayView !== undefined;
+    // The built-in / LR2 play views take touch input and expose pause / exit for the touch controls; a beatoraja skin
+    // draws its own lanes and takes no touch.
+    const touchPlay = this.gameplayView !== undefined && this.gameplayView.identity.family !== 'beatoraja';
     const paused = this.gameplayView?.isPaused() === true;
     // A skin drawing on its portrait stage needs no rotate prompt on a phone held upright.
     const portraitStage = this.sceneHost.getStageOrientation() === 'portrait';
@@ -1316,7 +1300,6 @@ class PlayerWebDemoApp {
       const apply = () => {
         const params = paramsFromTuning(tuning, DEFAULT_COMPRESSOR_PARAMS[compressor]);
         this.gameplayView?.setAudioCompressorParams(compressor, params);
-        this.beatorajaGameplayPrep?.audioBus.setCompressorParams(compressor, params);
         storeCompressorTunings(this.compressorTunings);
       };
       const controllers = [
@@ -1536,7 +1519,6 @@ class PlayerWebDemoApp {
           if (!this.liveTempoPlay) return;
           const tempo = tempoFromPercent(this.guiState.tempoPercent);
           this.gameplayView?.setTempo(tempo);
-          this.beatorajaGameplayView?.setTempo(tempo);
         }),
     );
     trackPlayOption(
@@ -1604,7 +1586,6 @@ class PlayerWebDemoApp {
       });
     const onVolumeChange = (channel: 'key' | 'bgm') => (value: number) => {
       this.gameplayView?.setAudioVolume(channel, value / 100);
-      this.beatorajaGameplayPrep?.audioBus.setBusVolume(channel, value / 100);
       rememberVolumes();
     };
     audio
@@ -1645,7 +1626,6 @@ class PlayerWebDemoApp {
       .name('Enabled')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressor(value);
-        this.beatorajaGameplayPrep?.audioBus.setMode(value ? this.compressorMode : 'off');
         this.refreshCompressorStageVisibility();
       });
     const stages = addFolder(compressor, DEBUG_MENU_FOLDERS.compressorStages);
@@ -1655,21 +1635,18 @@ class PlayerWebDemoApp {
       .name('Key')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('key', value);
-        this.beatorajaGameplayPrep?.audioBus.setStageEnabled('key', value);
       });
     stages
       .add(this.guiState, 'compressorBgm')
       .name('BGM')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('bgm', value);
-        this.beatorajaGameplayPrep?.audioBus.setStageEnabled('bgm', value);
       });
     stages
       .add(this.guiState, 'compressorMaster')
       .name('Master')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('master', value);
-        this.beatorajaGameplayPrep?.audioBus.setStageEnabled('master', value);
       });
     this.buildCompressorTuningGui(compressor);
   }
@@ -1964,9 +1941,8 @@ class PlayerWebDemoApp {
     // The built-in and LR2 select screens' browse position: their folders, sort, filters and search.
     const navigation = select instanceof PixiBeatorajaSelectScene ? undefined : select?.snapshot();
     const play = scene.kind === 'play' ? this.lastPlay : undefined;
-    // The engine's frame on the beatoraja scene; the play's running result on the LR2 / built-in ones.
-    const frame = this.beatorajaGameplayView?.getFrame();
-    const progress = this.beatorajaGameplayView !== undefined ? undefined : this.gameplayView?.progress();
+    // The play's running result, whichever family draws it.
+    const progress = this.gameplayView?.progress();
     const active = this.activeCourse;
     const draft = this.courseMaker.draft;
     return {
@@ -2007,13 +1983,11 @@ class PlayerWebDemoApp {
         title: play.song.title,
         autoPlay: play.overrides.autoPlay,
         replay: play.overrides.replay !== undefined,
-        tempo: this.beatorajaGameplayView?.getTempo() ?? this.gameplayView?.getTempo() ?? 1,
-        hiSpeed: this.beatorajaGameplayView === undefined ? this.gameplayView?.getHiSpeed() : undefined,
-        seconds: frame?.currentSeconds ?? progress?.playSeconds,
-        judged: frame ? judgedOf(frame.summary) : progress && judgedOf(progress.score),
-        gauge: frame
-          ? { type: frame.summary.gauge?.type, value: frame.summary.gauge?.current ?? 0 }
-          : progress && { type: progress.gaugeType, value: progress.gauge },
+        tempo: this.gameplayView?.getTempo() ?? 1,
+        hiSpeed: this.gameplayView?.getHiSpeed(),
+        seconds: progress?.playSeconds,
+        judged: progress && judgedOf(progress.score),
+        gauge: progress && { type: progress.gaugeType, value: progress.gauge },
         course: active && {
           name: active.course.definition.name,
           stage: active.run.stagesPlayed + 1,
@@ -2044,7 +2018,7 @@ class PlayerWebDemoApp {
    * back-to-back recordings don't overwrite each other in the user's downloads folder.
    *
    * Read by `toggleRecording` (in `./recording-controller.ts`) when assembling the download filename; mutated in
-   * `playSong` / `playSongBeatoraja` / `preloadGameplay` as each chart starts.
+   * `playSong` / `preloadGameplay` as each chart starts.
    */
   private recordingFilenameBase = 'gameplay';
 
@@ -2059,7 +2033,7 @@ class PlayerWebDemoApp {
     return {
       sceneHost: this.sceneHost,
       recordController: this.recordController,
-      getActiveGameplay: () => this.gameplayView?.recording ?? this.beatorajaGameplayView,
+      getActiveGameplay: () => this.gameplayView?.recording,
       getAutoRecordArmed: () => this.autoRecordArmed,
       setAutoRecordArmed: (value) => {
         this.autoRecordArmed = value;
@@ -2703,20 +2677,26 @@ class PlayerWebDemoApp {
     const histories = courseStageHistories(active);
     // A beatoraja theme shows the course result on its COURSE_RESULT skin (or its result skin).
     if (pickActiveFamilyForScene(this.familyDispatchState(), 'result') === 'beatoraja') {
-      const mounted = await this.showBeatorajaResult(
-        course.stages[0]!.song!,
-        buildCourseResultSummary(result),
-        result.maxCombo,
-        // beatoraja's course result draws every stage's graph joined, each stage as wide as its chart is long.
+      // The course run read as one play: beatoraja's course result sums the stages and draws every stage's graph
+      // joined, each stage as wide as its chart is long.
+      const runResult = playResultFromBeatoraja(
         {
-          ...joinCourseStageHistories(
-            histories,
-            run.stages.map((song) => createCourseSongRecord(song).length ?? 0),
-          ),
-          timingHistory: [],
+          summary: buildCourseResultSummary(result),
+          maxCombo: result.maxCombo,
+          history: {
+            ...joinCourseStageHistories(
+              histories,
+              run.stages.map((song) => createCourseSongRecord(song).length ?? 0),
+            ),
+            timingHistory: [],
+          },
         },
-        { info: courseInfo, result: { log: courseLog, native: result } },
+        { song: course.stages[0]!.song!, run: 'course', judgeRuleset: this.guiState.judgeRuleset, course: courseInfo },
       );
+      const mounted = await this.showBeatorajaResult(runResult, {
+        run: 'course',
+        course: { info: courseInfo, result: { log: courseLog, native: result } },
+      });
       if (mounted) {
         this.unlockPlaylogOptions();
         return;
@@ -3362,101 +3342,52 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Beatoraja gameplay flow. Mirrors the LR2 `playSong` lifecycle (mount + audio decode → run engine →
-   * route exit / completion to result / select), but routes audio through `runEngineDriver` and the
-   * scene through `PixiBeatorajaGameplayView` instead of the LR2 view's bespoke render pipeline.
+   * The beatoraja theme's play entry for `song`, loaded as a kit (`loadBeatorajaSceneKit`), with the entry the skin
+   * pickers and the skin-options panel apply to; `undefined`, with the status saying why, when the theme has no play
+   * skin for the chart or it fails to load.
    *
-   * The view assumes pre-decoded audio + BGA — those come from `prepareBeatorajaGameplayChart`. Each
-   * play awaits the prep promise before constructing the view; if the prep fails, we surface the
-   * status and bail back to song select rather than silently falling back to LR2 (the user explicitly
-   * opted into the beatoraja path).
+   * Two variants are in play: the skin's, which `play_*` entry to load (a theme without the chart's own falls back
+   * through `pickBeatorajaPlayableSkinVariant`'s chain, `9 → 7 → 14 → 5 → 10`), and the chart's, which the play session
+   * lays the lanes out for (`resolveChartPlayVariant`), so a 9 KEY chart keeps its POPN lanes on a 7 KEY skin.
    */
-  private async playSongBeatoraja(
-    song: BrowserSongEntry,
-    overrides: { autoPlay?: boolean; courseStage?: CourseStagePlay },
-  ): Promise<void> {
-    const courseStage = overrides.courseStage;
+  private async loadBeatorajaPlayKit(song: BrowserSongEntry): Promise<
+    | {
+        readonly kit: BeatorajaKit;
+        readonly entryPath: string;
+        readonly header: BeatorajaSkinHeader;
+        readonly variant: BeatorajaPlayableVariant;
+      }
+    | undefined
+  > {
     const bundle = this.beatorajaTheme;
-    if (!bundle) return;
-    // Chart-file hashes for the recorded play-log (matched back on a future play-log drop).
-    const chartHashes = await this.resolveChartHashes(song);
-    // **TWO distinct variants** flow into the gameplay scene:
-    //   - `skinVariant`: which `play_*` skin file to load. The theme may not ship every
-    //     variant (a popular 7-only theme lacks a `play_9` skin, etc.), so this falls back
-    //     through `pickBeatorajaPlayableSkinVariant`'s chain (`9 → 7 → 14 → 5 → 10`).
-    //   - `chartVariant`: what the chart ACTUALLY is. Drives the engine's lane mode
-    //     (channel → lane mapping), the runtime adapter's lane-timer resolution, and the
-    //     note layer's `channel → lane index` math. This MUST match what the chart's
-    //     channels declare; falling back to the skin's variant here would route a 9-key
-    //     chart's `f`/`v`/`g`/`b` inputs through the IIDX 7-key key bindings and the
-    //     engine's IIDX free-zone clamp would drop the corresponding `scorableNotes`.
-    //
-    // Pre-fix the gameplay view received `skinVariant` for everything, so a 9-key
-    // chart played on a 7-key skin had:
-    //   - 7-key adapter `chartPlayVariant` → lanes 6..9 of channels 16/17/18/19
-    //     misclassified as scratch / free-zone / 6key / 7key
-    //   - 7-key note-layer `variant` → channel 16 routed to lane 7 (the IIDX scratch
-    //     slot), channels 17 / 18 / 19 routed to lanes -1 / 5 / 6
-    //   - engine's `laneModeExtension`-only fallback never reached `9-key` because
-    //     `resolveLaneMode` only escalates to 9-key when the chart is `.pms` or
-    //     `#PLAYER=3` with channel `17` — and most 9-key BMEs that authored f/v/g/b
-    //     inputs satisfy neither
-    // User report: 9 KEY charts wouldn't accept input on lanes 6-9 (f,v,g,b keys
-    // unresponsive). c0da7b5 partially
-    // addressed this by forwarding the chart's filename to the engine for the
-    // extension-based heuristic, but skipped the variant separation here.
-    const skinVariant = resolveBeatorajaSkinVariant(this.beatorajaTheme, song);
-    if (skinVariant === undefined) return;
+    if (bundle === undefined) return undefined;
+    const variant = resolveBeatorajaSkinVariant(bundle, song);
     const chartVariant = pickBeatorajaPlayableVariant(chartShapeFor(song));
-    if (chartVariant === undefined) return;
-    if (skinVariant !== chartVariant) {
-      // Theme doesn't ship the chart's native skin variant (e.g. a 9-key chart on a
-      // 7-keys-only theme). We load the fallback skin chrome but keep the engine /
-      // adapter / note-layer pinned to the chart's variant so input + judging stay
-      // correct; the visible mismatch is the SKIN's lane count differing from the
-      // CHART's. Warn so the mismatch is visible in the console.
+    if (variant === undefined || chartVariant === undefined) {
+      this.setStatus(`Beatoraja gameplay unavailable: no play skin for ${song.title}`);
+      return undefined;
+    }
+    if (variant !== chartVariant) {
+      // The skin's lane count differs from the chart's; the play keeps the chart's lanes.
       gameplayLog.warn(
-        `beatoraja gameplay: theme has no '${chartVariant}' skin — falling back to '${skinVariant}' (lane chrome may not match chart key count)`,
+        `beatoraja gameplay: theme has no '${chartVariant}' skin — falling back to '${variant}' (lane chrome may not match chart key count)`,
       );
     }
-    // Alias retained to minimize churn in the rest of this function. Use `skinVariant` for
-    // skin lookups (`playSkinTypeForVariant`, the skin entry pick chain) and `chartVariant`
-    // for runtime-driving prop wiring (`variant` on the gameplay view).
-    const variant = skinVariant;
-
-    this.elements.shell.classList.add('playing');
-    await this.ensureHostMounted();
-    this.lastSelectNavigation = this.selectView?.snapshot();
-    await this.leaveScene(this.selectView);
-    this.disposeScene(this.decideView);
-    this.decideView = undefined;
-    this.disposeScene(this.gameplayView);
-    this.gameplayView = undefined;
-    this.disposeBeatorajaGameplay();
-    this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
-
-    // 1. Pick the actual skin entry for this variant, honoring any user override from the
-    // Debug Menu's skin-picker dropdown. Falls back to `pickBeatorajaPlaySkin`'s discovery result.
+    // The entry for the variant, as the Debug Menu's skin picker overrides it.
     const playTypeCode = playSkinTypeForVariant(variant);
     const playCandidates = bundle.theme.entries.filter((entry) => entry.header.type === playTypeCode);
-    const fallbackEntry = bundle.theme.playSkins[variant];
-    const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(playTypeCode, playCandidates, fallbackEntry);
+    const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
+      playTypeCode,
+      playCandidates,
+      bundle.theme.playSkins[variant],
+    );
     if (selectedEntry === undefined) {
       gameplayLog.warn(`beatoraja gameplay: no skin entry for variant '${variant}'`);
       this.setStatus(`Beatoraja gameplay unavailable: no '${variant}' skin`);
-      void this.showSelect();
-      return;
+      return undefined;
     }
-
-    // Two-pass evaluation — same contract as the select scene. Textures and fonts are reused when the entry's were
-    // decoded before.
-    // Gameplay skins don't crash without runtimeContext (the load-time `main_state.option`
-    // pattern is unique to ModernChic decide; play scenes use op gates on destinations,
-    // evaluated at render time with a fresh per-frame context). Skip the load-time
-    // injection here — its earlier addition was "for consistency" and downstream gameplay
-    // skins reacted unexpectedly to mid-load `main_state.option` returning chart-aware
-    // values where they previously got `false`. Decide / result still inject because
-    // ModernChic specifically pre-computes per-difficulty values during `main()`.
+    // Two-pass evaluation, as the select scene's; textures and fonts are reused when the entry's were decoded before. A
+    // play skin's `main()` gets no load-time `main_state`: play skins gate on ops at draw time.
     const load = await loadBeatorajaSceneKit({
       files: bundle.files,
       entryPath: selectedEntry.entryPath,
@@ -3478,276 +3409,45 @@ class PlayerWebDemoApp {
     if (!load.ok) {
       gameplayLog.warn(`beatoraja gameplay${load.stage === 'header' ? ' header' : ''}: ${load.message}`);
       this.setStatus(`Beatoraja gameplay unavailable: ${load.message}`);
-      void this.showSelect();
-      return;
+      return undefined;
     }
-    const { skin, textures, fonts, skinConfig: config } = load.kit;
-
-    // 3. Audio + BGA prep — owns the AudioContext for this play. The play tempo is read once, here, for the prep and the
-    // engine alike. A course stage plays with what its course allows (its lane-option constraint's FLIP, and an LR2
-    // GRADE course's resets: EASY gauge to GROOVE, auto scratch, FLIP and the tempo off).
-    const picked = {
-      random1P: this.guiState.random1P,
-      random2P: this.guiState.random2P,
-      dpFlip: this.guiState.dpFlip,
-      gauge: this.guiState.gauge,
-      hiddenSudden1P: 'OFF' as const,
-      hiddenSudden2P: 'OFF' as const,
-      autoScratch1P: this.guiState.autoScratch1P,
-      autoScratch2P: this.guiState.autoScratch2P,
-      tempo: tempoFromPercent(this.guiState.tempoPercent),
-    };
-    const played =
-      courseStage !== undefined && this.activeCourse !== undefined
-        ? this.activeCourse.run.playSettings(picked)
-        : picked;
-    const tempo = played.tempo;
-    const tempoPercent = tempo === 1 ? 0 : this.guiState.tempoPercent;
-    const source = resolveSongSource(this.collection, song);
-    if (!source) {
-      this.setStatus(`Beatoraja gameplay: no source for ${song.title}`);
-      void this.showSelect();
-      return;
-    }
-    let prep: PreparedBeatorajaGameplayChart;
-    try {
-      // Reuse the chart the decide scene resolved IFF it belongs to the song we're about to play, so decide and
-      // gameplay show and play the same `#RANDOM` branches. When the cached chart is for a different `chartPath`
-      // (= the player reached gameplay via a path that bypassed decide), the prep resolves the chart itself. A course
-      // stage always resolves its own: its chart carries the course's long-note constraint (`CourseRun.stages`).
-      const preResolved =
-        courseStage === undefined && this.lastBeatorajaChart?.chartPath === song.chartPath
-          ? this.lastBeatorajaChart.resolved
-          : undefined;
-      prep = await prepareBeatorajaGameplayChart({
-        song,
-        source,
-        audioCompressorMode: this.guiState.compressor === false ? 'off' : this.compressorMode,
-        audioBusOptions: {
-          initialVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
-          initialCompressorParams: this.resolveCompressorParamOverrides(),
-          // The Debug Menu's per-stage compressor toggles, as the LR2 / default play takes them.
-          initialStages: {
-            key: this.guiState.compressorKey,
-            bgm: this.guiState.compressorBgm,
-            master: this.guiState.compressorMaster,
-          },
-        },
-        ...(preResolved !== undefined ? { preResolved } : {}),
-        bgaTranscode: {
-          maxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
-          useWebCodecs: this.guiState.bgaUseWebCodecs,
-        },
-        tempo,
-        tempoPitchMode: this.guiState.tempoPitchMode,
-        tempoStretchAlgorithm: this.guiState.tempoStretchAlgorithm,
-      });
-    } catch (error) {
-      gameplayLog.warn('beatoraja prep failed', error);
-      this.setStatus(`Beatoraja prep failed: ${(error as Error).message}`);
-      void this.showSelect();
-      return;
-    }
-    this.beatorajaGameplayPrep = prep;
-    this.beatorajaGameplayPrepChartPath = song.chartPath;
-
-    // Decode the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps so play-scene destinations
-    // referencing the synthetic ids (-100 / -101 / -102) can paint them. ModernChic's lane
-    // cover uses the stagefile as a frosted backdrop; default skin's loading panel anchors
-    // on it during the intro chrome.
-    const chartImages = await this.loadBeatorajaChartImages(song);
-
-    // 4. Mount the gameplay view.
-    const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
-    this.lastPlay = { song, overrides: { autoPlay } };
-    // The same record rule as the LR2 / default play (`playRecordKey`).
-    const judgeRuleset = this.guiState.judgeRuleset;
-    this.activePlayRecordKey = playRecordKey(song, chartHashes?.sha256, {
-      autoPlay,
-      replay: false,
-      course: courseStage !== undefined,
-      tempo,
-      judgeRuleset,
-    });
-    this.activeStageRecordKey =
-      courseStage !== undefined
-        ? courseStageRecordKey(song, chartHashes?.sha256, { autoPlay, replay: false, tempo, judgeRuleset })
-        : undefined;
-    // Set while ESC gives a course up: the engine's settling (`onComplete` / `onError`) then leaves the exit to `onExit`.
-    let givingUp = false;
-    this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
-      skin,
-      textures,
-      fonts,
-      skinConfig: config,
-      // CHART variant drives the engine's lane mode + adapter's `chartPlayVariant` + note
-      // layer's channel → lane math. Skin lookups above used `skinVariant` (= the fallback
-      // chain pick) because the theme may not ship the chart's exact variant — but the
-      // runtime stays pinned to the CHART so f/v/g/b stay bound to channels 16/17/18/19
-      // on 9-key POPN charts even when the loaded skin chrome is a 7-key fallback.
-      variant: chartVariant,
-      chart: prep.chart,
-      // The unresolved chart the play log's fingerprints describe (`prep.chart` is resolved and may be DP-flipped).
-      sourceChart: song.chart,
-      audio: prep.audio,
-      skinAudio: this.beatorajaSkinAudio,
-      mode: autoPlay ? 'auto' : 'manual',
-      // DP flip — when the user enabled it via the Play options (Debug Menu / LR2 select panel, two-way synced
-      // into `guiState`) AND the chart is a DP variant (10 / 14 keys), the chart's lane channels mirror at
-      // construction. SP charts pass through unchanged because they have no 2P channels to swap with.
-      // A course stage plays with the FLIP its course allows.
-      dpFlip: played.dpFlip,
-      initialHiSpeed: this.guiState.hiSpeed,
-      onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
-      ...(courseStage !== undefined
-        ? { courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }
-        : {}),
-      // Judge-window ruleset + auto scratch + play-log extras ride the engine-options passthrough — the beatoraja
-      // scene forwards them onto the shared engine and merges `recordPlaylog` with its own fields.
-      engineOptions: {
-        // The draws `prep.chart` was resolved with: the engine plays that chart as is and names them in its summary.
-        randomDraws: prep.randomDraws,
-        // The play tempo the prep readied the audio and BGA for; the engine judges in chart time. In pitch mode the
-        // tempo slider changes it live (`setTempo`).
-        speed: tempo,
-        onTempoChange: (change) => this.followLiveTempo(change.tempo),
-        judgeRuleset: this.guiState.judgeRuleset,
-        autoScratch: played.autoScratch1P || played.autoScratch2P,
-        gauge: played.gauge,
-        ...(courseStage !== undefined ? { course: courseStage.course } : {}),
-        recordPlaylog: {
-          gauge: played.gauge,
-          ...(chartHashes !== undefined ? { chartSha256: chartHashes.sha256, chartMd5: chartHashes.md5 } : {}),
-          recorder: PLAYLOG_RECORDER,
-        },
-      },
-      bgaTextures: prep.bga.textures,
-      bgaVideoElements: prep.bga.videoElements,
-      bgaCues: prep.bga.cues,
-      chartImages,
-      // Directory label drives `BEATORAJA_TEXT.DIRECTORY = 1000` on the play scene. The browser
-      // song entry preserves the parent folder name through the dropped collection.
-      directoryLabel: song.directoryLabel,
-      // Chart filename — the gameplay view derives `laneModeExtension` from this for the engine,
-      // so PMS / BME / BMS lane-mode resolution doesn't depend on the BMS content heuristic
-      // (`#PLAYER 3` + channel 17). Without it a `#PLAYER 1` PMS chart routes to the IIDX 7-key
-      // bindings instead of POPN-9, which silently drops lane 6+ keys.
-      chartPath: song.chartPath,
-      onExit: () => {
-        // ESC gives a running course up: the run is kept as a failed one, with the stage given up recorded once the
-        // engine settles (its play log carries `play.aborted`).
-        const view = this.beatorajaGameplayView;
-        if (courseStage !== undefined && this.activeCourse !== undefined) {
-          const active = this.activeCourse;
-          givingUp = true;
-          const settled = Promise.race([
-            view?.awaitCompletion()?.catch(() => undefined),
-            new Promise((resolve) => setTimeout(resolve, 2000)),
-          ]);
-          void this.finishBeatorajaGameplayThen(async () => {
-            await settled;
-            this.testHook?.recordPlaylog(view?.getPlaylog());
-            active.run.giveUp(view?.getPlaylog());
-            this.activeCourse = active;
-            await this.showCourseResult();
-          });
-          return;
-        }
-        void this.finishBeatorajaGameplayThen(() => this.showSelect());
-      },
-      onComplete: (summary, maxCombo, history) => {
-        if (givingUp) return;
-        // Result skin (`type = 7`) when the bundle ships one — otherwise jump back to select.
-        // `finishBeatorajaGameplayThen` drops the gameplay scene first so the result scene gets a
-        // clean stage; the result scene mounts in the `then` branch. `history` carries the
-        // per-judge score / gauge polyline samples for the result skin's graph elements.
-        // The play-log is captured HERE (while the gameplay view is guaranteed alive) — the finish
-        // transition below disposes the scene before the result mounts.
-        const playlog = this.beatorajaGameplayView?.getPlaylog();
-        this.testHook?.recordPlaylog(playlog);
-        void this.finishBeatorajaGameplayThen(async () => {
-          // A course stage: its play log carries the course on, and leaving its result plays the next stage.
-          if (courseStage !== undefined && this.activeCourse !== undefined) {
-            const active = this.activeCourse;
-            const goesOn = active.run.recordStage(playlog, history) === 'next';
-            this.recordActiveCourseStage(
-              courseStageRecordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset),
-            );
-            // With stage results skipped (or an auto-played stage the course goes on after, as LR2 skips it), go
-            // straight on to the next stage (or the course result).
-            const mounted =
-              !skipsCourseStageResult({
-                skipStageResults: this.guiState.courseAutoAdvance,
-                autoPlay,
-                courseGoesOn: goesOn,
-              }) &&
-              (await this.showBeatorajaResult(song, summary, maxCombo, history, {
-                info: activeCourseInfo(active),
-              }));
-            if (!mounted) this.continueCourse();
-            this.unlockPlaylogOptions();
-            return;
-          }
-          this.recordActivePlay(recordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset));
-          const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
-          if (!mounted) await this.showSelect();
-          // Auto-save fires even when the theme ships no result skin — falling back to select
-          // shouldn't cost the user their replay file.
-          this.maybeAutoSavePlaylog(playlog);
-          this.leaderboard.maybeSubmit(playlog, song);
-          this.unlockPlaylogOptions();
-        });
-      },
-      onError: (error) => {
-        // `PlayerInterruptedError` lands here for the ESC path — it's the expected exit for "user
-        // pressed ESC mid-chart". Treat it as a clean exit.
-        gameplayLog.info('beatoraja engine ended', { error: (error as Error).message });
-        if (givingUp) return;
-        void this.finishBeatorajaGameplayThen(() => this.showSelect());
-      },
-    });
-    this.beatorajaGameplayView.root.zIndex = 0;
-    // Track the live variant so the Debug Menu's "Play *K" dropdowns know whether their
-    // type-code matches the active scene before triggering a live re-mount.
-    this.currentBeatorajaPlayVariant = variant;
-    await this.sceneHost.setScene(this.beatorajaGameplayView);
-    this.setPlayStatus(describePlayingStatus(song.title, { family: 'beatoraja', tempoPercent }));
-    this.lockPlaylogOptionsForPlay(allowsLiveTempo(this.guiState, { replay: false, tempo }));
-
-    // Consume the "user pressed Record on the select screen" flag. Same flow as the LR2
-    // gameplay path — `autoRecordArmed` is set when the user clicks the Record button
-    // before picking a song; the next gameplay mount kicks the recorder off automatically.
-    startArmedRecording(this.recordingDeps());
-
-    // Skin-options panel for the play skin's `property[]` / `filepath[]`. Live edits flow through
-    // `applyBeatorajaPlaySkinConfig` → `replaceSkin` so the chrome rebuilds without tearing down
-    // the engine driver. The audio session, chart playback, and scoring all keep running.
-    this.refreshBeatorajaSkinOptionsGui({
-      title: `Skin Config (Play ${variant}K)`,
+    return {
+      kit: { family: 'beatoraja', kit: load.kit },
       entryPath: selectedEntry.entryPath,
       header: load.header,
+      variant,
+    };
+  }
+
+  /**
+   * The skin-options panel for the beatoraja play on the stage: its skin's `property[]` / `filepath[]`. A change reloads
+   * the skin with the new options and hands it to the play (`applyBeatorajaPlaySkinConfig`), which carries on.
+   */
+  private refreshBeatorajaPlaySkinOptions(): void {
+    const active = this.activeBeatorajaPlay;
+    if (active === undefined || this.gameplayView?.identity.family !== 'beatoraja') return;
+    this.refreshBeatorajaSkinOptionsGui({
+      title: `Skin Config (Play ${active.variant}K)`,
+      entryPath: active.entryPath,
+      header: active.header,
       onApply: (nextConfig) => {
-        void this.applyBeatorajaPlaySkinConfig(selectedEntry.entryPath, variant, nextConfig);
+        void this.applyBeatorajaPlaySkinConfig(active.entryPath, nextConfig);
       },
     });
   }
 
   /**
-   * Apply a fresh skin-config to the active beatoraja gameplay scene WITHOUT restarting the chart.
-   * Re-loads the skin with the new options, rebuilds the per-entry texture cache, then calls
-   * `replaceSkin` on the live gameplay view. The runtime adapter's `setBaseOps` handles the option
-   * delta so per-side judge state / timer stamps / current frame all carry through unchanged.
+   * Applies new skin options (or another play entry the Debug Menu picked) to the beatoraja play on the stage without
+   * restarting the chart: the entry is loaded again with them (its textures decoded again, as an option can change
+   * `source[]`) and handed to the play (`PlayScene.updateKit`), which rebuilds its skin and keeps its state.
    */
-  private async applyBeatorajaPlaySkinConfig(
-    entryPath: string,
-    variant: BeatorajaPlayableVariant,
-    config: BeatorajaSkinConfig,
-  ): Promise<void> {
+  private async applyBeatorajaPlaySkinConfig(entryPath: string, config: BeatorajaSkinConfig): Promise<void> {
     const bundle = this.beatorajaTheme;
-    if (!bundle || !this.beatorajaGameplayView) return;
-    // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an
-    // alternate skin from the Debug Menu's skin-picker dropdown. The textures are decoded again: option changes can
-    // alter `source[]`.
+    const view = this.gameplayView;
+    const active = this.activeBeatorajaPlay;
+    if (bundle === undefined || view === undefined || view.identity.family !== 'beatoraja' || active === undefined) {
+      return;
+    }
     const load = await loadBeatorajaSceneKit({
       files: bundle.files,
       entryPath,
@@ -3755,18 +3455,10 @@ class PlayerWebDemoApp {
       skinConfig: config,
       reloadTextures: true,
     });
-    if (!load.ok) return;
-    const { skin, textures, fonts } = load.kit;
-    this.beatorajaGameplayView.replaceSkin({ skin, skinConfig: config, textures, fonts });
-
-    this.refreshBeatorajaSkinOptionsGui({
-      title: `Skin Config (Play ${variant}K)`,
-      entryPath,
-      header: load.header,
-      onApply: (nextConfig) => {
-        void this.applyBeatorajaPlaySkinConfig(entryPath, variant, nextConfig);
-      },
-    });
+    if (!load.ok || this.gameplayView !== view) return;
+    view.updateKit({ family: 'beatoraja', kit: { ...load.kit, skinConfig: config } });
+    this.activeBeatorajaPlay = { entryPath, header: load.header, variant: active.variant };
+    this.refreshBeatorajaPlaySkinOptions();
   }
 
   /**
@@ -3824,7 +3516,7 @@ class PlayerWebDemoApp {
 
     // Capture the OUTGOING scene's state before disposing so the snapshot is fresh — covers
     // the rare hot-swap case where `showBeatorajaSelect` runs while a scene is already up
-    // (e.g. theme reload). Normal PLAY → SELECT flow already captures via `playSongBeatoraja`
+    // (e.g. theme reload). Normal PLAY → SELECT flow already captures as the select starts a chart
     // / `showDecide`, but doing it here defensively ensures the snapshot is never stale.
     if (this.beatorajaSelectScene !== undefined) {
       this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
@@ -4060,22 +3752,49 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Mount the beatoraja result screen for `song` with `createResultScene`: the play's final `summary`, max combo and
-   * graphs (or, with `course.result`, a course run's) read as one `PlayResult` (`playResultFromBeatoraja`) on the theme's
-   * result skin (its course-result skin for a course run). Returns `true` when the screen actually mounted — `false`
-   * falls through to the no-result fast-path (no result skin in the bundle, or skin load failed).
+   * The result of a play on the beatoraja play screen, on the theme's result skin: a course stage is recorded on the run
+   * (its result shown unless the theme has no result skin, when the course goes straight on), a single play keeps its
+   * record, saves its play log and goes to the Leaderboard. Without a result skin a single play goes back to select.
+   */
+  private async showBeatorajaPlayResult(data: PixiGameplayResultData, courseStage: boolean): Promise<void> {
+    this.testHook?.recordPlaylog(data.playlog);
+    const active = this.activeCourse;
+    if (courseStage && active !== undefined) {
+      active.run.recordStage(data.playlog, data);
+      this.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
+      const mounted = await this.showBeatorajaResult(data, {
+        run: 'stage',
+        course: { info: activeCourseInfo(active) },
+      });
+      if (!mounted) this.continueCourse();
+      this.unlockPlaylogOptions();
+      return;
+    }
+    this.recordActivePlay(recordPlayFromResult(data));
+    const mounted = await this.showBeatorajaResult(data, { run: 'single' });
+    if (!mounted) await this.showSelect();
+    // Auto-save fires even when the theme ships no result skin, so going back to select costs no replay file.
+    this.maybeAutoSavePlaylog(data.playlog);
+    this.leaderboard.maybeSubmit(data.playlog, data.song);
+    this.unlockPlaylogOptions();
+  }
+
+  /**
+   * Mount the beatoraja result screen with `createResultScene`: `data`, a play's result (a single play or a course stage
+   * on the beatoraja play screen) or, with `options.course.result`, a course run's, on the theme's result skin (its
+   * course-result skin for a course run). Returns `true` when the screen actually mounted — `false` falls through to the
+   * no-result fast-path (no result skin in the bundle, or skin load failed). The play behind it goes once the screen
+   * shows, its last samples ringing out.
    */
   private async showBeatorajaResult(
-    song: BrowserSongEntry,
-    summary: PlayerSummary,
-    maxCombo: number,
-    history: {
-      scoreHistory: ReadonlyArray<{ progress: number; exScore: number }>;
-      gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
-      timingHistory: ReadonlyArray<{ deltaMs: number; kind: string }>;
+    data: PixiGameplayResultData,
+    options: {
+      run: PlayRunKind;
+      course?: { info: SceneCourseInfo; result?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult } };
     },
-    course?: { info: SceneCourseInfo; result?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult } },
   ): Promise<boolean> {
+    const song = data.song;
+    const course = options.course;
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return false;
     // The course result (`course.result`) shows on the theme's COURSE_RESULT skin, falling back to its result skin.
@@ -4115,22 +3834,14 @@ class PlayerWebDemoApp {
     this.disposeScene(this.resultView);
     this.resultView = undefined;
 
-    const run: PlayRunKind = courseResult ? 'course' : course !== undefined ? 'stage' : 'single';
+    const run = options.run;
     const presentation = resolveResultPresentation(run);
-    // The beatoraja play hands its result in its own shape until it produces a `PlayResult` itself (PL8). Its graphs
-    // run from the chart's start to its end, as the built-in and LR2 results' do.
-    const result = playResultFromBeatoraja(
-      { summary, maxCombo, history },
-      {
-        song,
-        run,
-        judgeRuleset: this.guiState.judgeRuleset,
-        ...(course !== undefined ? { course: course.info } : {}),
-      },
-    );
-    // The chart as the play played it, for any `bpmgraph[]` and note-kind graph of the result skin. The prep bundle is
-    // disposed at gameplay teardown, so the chart is kept in `lastBeatorajaChart`; it is only handed on when it is this
-    // song's, so a graph never plots another chart. A course run's result plots none.
+    // The skin shows the course of the result: the stage's course, or the course run.
+    const result: PixiGameplayResultData =
+      course !== undefined && data.course === undefined ? { ...data, course: course.info } : data;
+    // The chart as the play played it, for any `bpmgraph[]` and note-kind graph of the result skin. The play is disposed
+    // as the result shows, so the chart is kept in `lastBeatorajaChart`; it is only handed on when it is this song's, so a
+    // graph never plots another chart. A course run's result plots none.
     const playChart =
       !courseResult && this.lastBeatorajaChart?.chartPath === song.chartPath
         ? this.lastBeatorajaChart.resolved.chart
@@ -4179,19 +3890,17 @@ class PlayerWebDemoApp {
       },
     );
     await this.sceneHost.setScene(this.resultView);
+    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`).
+    this.disposeScene(this.gameplayView, (view) => view.dispose({ preserveAudioTail: true }));
+    this.gameplayView = undefined;
     this.setPlayStatus(
-      `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · ex=${summary.exScore} maxCombo=${maxCombo}`,
+      `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · ex=${result.score.exScore} maxCombo=${result.maxCombo}`,
     );
     const jingle = this.nameResultJingle(jingleBytes);
     this.testHook?.recordResult(
       course?.result !== undefined
         ? resultFromCourseLog(course.result.log, course.result.native, { family: 'beatoraja', jingle })
-        : resultFromSummary(summary, {
-            run: course !== undefined ? 'stage' : 'single',
-            title: song.title,
-            lamp: recordPlayFromSummary(summary, maxCombo, this.guiState.judgeRuleset).lamp,
-            ...(jingle !== undefined ? { jingle } : {}),
-          }),
+        : resultFromData(result, run, 'beatoraja', jingle),
     );
     return true;
   }
@@ -4347,12 +4056,13 @@ class PlayerWebDemoApp {
       void this.applyBeatorajaSelectSkinConfig(entryPath, config);
       return;
     }
+    const play = this.activeBeatorajaPlay;
     if (
-      this.beatorajaGameplayView !== undefined &&
-      this.currentBeatorajaPlayVariant !== undefined &&
-      playSkinTypeForVariant(this.currentBeatorajaPlayVariant) === typeCode
+      this.gameplayView?.identity.family === 'beatoraja' &&
+      play !== undefined &&
+      playSkinTypeForVariant(play.variant) === typeCode
     ) {
-      void this.applyBeatorajaPlaySkinConfig(entryPath, this.currentBeatorajaPlayVariant, config);
+      void this.applyBeatorajaPlaySkinConfig(entryPath, config);
     }
   }
 
@@ -4450,38 +4160,6 @@ class PlayerWebDemoApp {
     });
   }
 
-  /** Tear down the active beatoraja gameplay view + its prep bundle. Idempotent. */
-  private disposeBeatorajaGameplay(): void {
-    this.disposeScene(this.beatorajaGameplayView);
-    this.beatorajaGameplayView = undefined;
-    this.currentBeatorajaPlayVariant = undefined;
-    if (this.beatorajaGameplayPrep) {
-      // Refresh the cached chart with whatever the prep ended up using — this preserves the
-      // `chartPath ⇒ chart` association even on the rare path where the prep had to fall back to
-      // a fresh resolve (e.g. gameplay reached without going through decide). The audio / BGA
-      // resources owned by `prep` still get released by `dispose()`.
-      // Stamped with the path the prep was made for, never the previous cache's: a course stage of another chart must
-      // not leave its chart under that chart's path.
-      const chartPath = this.beatorajaGameplayPrepChartPath;
-      if (chartPath !== undefined) {
-        const { chart, randomDraws } = this.beatorajaGameplayPrep;
-        this.lastBeatorajaChart = { resolved: { chart, randomDraws }, chartPath };
-      }
-      void this.beatorajaGameplayPrep.dispose();
-      this.beatorajaGameplayPrep = undefined;
-      this.beatorajaGameplayPrepChartPath = undefined;
-    }
-  }
-
-  /** Sequence beatoraja-gameplay teardown → caller-supplied transition (mirrors `finishGameplayThen`). */
-  private async finishBeatorajaGameplayThen(then: () => void | Promise<void>): Promise<void> {
-    // As `finishGameplayThen`: an in-flight recording is saved before the scene (and its AudioContext) goes away.
-    await finalizeRecordingIfActive(this.recordingDeps());
-    await this.sceneHost.setScene(undefined);
-    this.disposeBeatorajaGameplay();
-    await then();
-  }
-
   private async showSelect(): Promise<void> {
     // Back from a play or a result: the status line describes the library again instead of the play just left.
     if (this.playStatusShown) this.setStatus(describeSongCollection(this.collection));
@@ -4499,7 +4177,6 @@ class PlayerWebDemoApp {
     await this.ensureHostMounted();
     this.disposeScene(this.gameplayView);
     this.gameplayView = undefined;
-    this.disposeBeatorajaGameplay();
     this.disposeScene(this.resultView);
     this.resultView = undefined;
     // Decide splash is cleared too — Escape from the splash should land back on the select scene rather than leave the
@@ -4770,10 +4447,9 @@ class PlayerWebDemoApp {
     // with the Decide animation, off stage (`prepare` attaches nothing until the play is shown). The Decide splash
     // typically runs ~3 s; chart asset decoding is mostly done by the time the splash auto-advances, so the hand-off to
     // gameplay becomes instant instead of dropping a frozen frame.
-    // A course starts its own play once the splash is done, so nothing is preloaded for it; nor for a play on the
-    // beatoraja scene, which prepares its own chart once the splash is done (`playSong`). The beatoraja splash starts
-    // its play once it is done, whichever family plays it, as before. The play is preloaded once the decide screen is
-    // made, so it plays the `#RANDOM` branches the screen drew (`DecideScene.resolved`).
+    // A course starts its own play once the splash is done, so nothing is preloaded for it. The play is preloaded once the
+    // decide screen is made, whichever family draws either, so it plays the `#RANDOM` branches the screen drew
+    // (`DecideScene.resolved`).
     let preloaded: Promise<void> | undefined;
     let advanced = false;
     const advance = (then: () => void): void => {
@@ -4817,13 +4493,8 @@ class PlayerWebDemoApp {
       on: { continue: callbacks.onContinue, cancel: callbacks.onCancel },
     });
     this.decideView = decide;
-    if (then === undefined && !playsOnBeatoraja && kit.family !== 'beatoraja') {
+    if (then === undefined) {
       preloaded = this.preloadGameplay(song, { ...overrides, preResolved: decide.resolved });
-    }
-    // The beatoraja play takes the `#RANDOM` branches the screen drew (`preResolved`), so the screen's BPM graph shows
-    // the branches the play plays. A course resolves each stage's chart itself when the stage starts.
-    if (kit.family === 'beatoraja' && then === undefined) {
-      this.lastBeatorajaChart = { resolved: decide.resolved, chartPath: song.chartPath };
     }
     await this.sceneHost.setScene(decide);
     if (kit.family === 'beatoraja') this.setStatus(`Decide (beatoraja): ${song.title}`);
@@ -4862,31 +4533,64 @@ class PlayerWebDemoApp {
     overrides: { autoPlay?: boolean; preResolved?: ResolvedPlayChart },
   ): Promise<void> {
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
-    // Same family check as `playSong` — picking `'default'` from the Debug Menu strips the LR2 skin even when one
-    // is loaded for this chart. Computing `gameplayFamily` here keeps the decide → gameplay preload path consistent
-    // with the no-decide fast-path.
-    const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
-    const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
+    // The same kit as `playSong` picks, so the decide → gameplay preload path stays consistent with the no-decide
+    // fast-path.
+    const kit = await this.resolvePlayKit(song, {});
+    if (kit === undefined) throw new Error(`no play skin for ${song.title}`);
     const chartHashes = await this.resolveChartHashes(song);
-    const view = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
+    const view = this.buildPlayScene(song, kit, { ...overrides, chartHashes });
     this.gameplayView = view;
     return view.prepare();
   }
 
   /**
-   * Makes the LR2-family (or default-family fallback) play scene for `song` with the current option snapshot
-   * (`createPlayScene`). The kit follows `playSkin`:
+   * The kit `song` plays with, for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain) gives it:
    *
-   * - **`Lr2Skin`** present → an LR2 kit with that skin (and the theme's 9-keys skin for invisible notes). LR2 chrome
-   *   paints from the skin.
-   * - **`undefined`** (no LR2 theme dropped, or the dropped theme has no skin for this chart's key mode) → the built-in
-   *   kit with the active be-music skin.
-   *
-   * Both share every other option, so `preloadGameplay` and `playSong` marshal them in one place.
+   * - **beatoraja** (`playsOnBeatoraja`: neither a replay nor a stitched NONSTOP chart) → the theme's play entry
+   *   (`loadBeatorajaPlayKit`); `undefined` when it cannot be loaded.
+   * - **LR2** with a play skin for the chart's key mode → an LR2 kit with that skin (parsed again with the course's ops
+   *   for a course stage or a NONSTOP run), and the theme's 9-keys skin, whose Pop'n green wide note at index 3 is drawn
+   *   over each invisible note when {@link DemoGuiState.showInvisibleNotes} is on.
+   * - otherwise → the built-in kit with the active be-music skin.
    */
-  private buildLr2GameplayView(
+  private async resolvePlayKit(
     song: BrowserSongEntry,
-    playSkin: Lr2Skin | undefined,
+    overrides: { replay?: BeMusicPlaylog; courseStage?: CourseStagePlay; nonstop?: NonstopPlay },
+  ): Promise<PlaySceneKit | undefined> {
+    if (this.playsOnBeatoraja(song, overrides)) {
+      const loaded = await this.loadBeatorajaPlayKit(song);
+      this.activeBeatorajaPlay =
+        loaded !== undefined
+          ? { entryPath: loaded.entryPath, header: loaded.header, variant: loaded.variant }
+          : undefined;
+      return loaded?.kit;
+    }
+    this.activeBeatorajaPlay = undefined;
+    // Picking `'default'` from the Debug Menu strips the LR2 skin even when one is loaded for this chart.
+    const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
+    const playSkin =
+      gameplayFamily !== 'lr2'
+        ? undefined
+        : overrides.courseStage !== undefined || overrides.nonstop !== undefined
+          ? this.courseLr2Skin(
+              pickLr2PlaySkin(this.playSkins, song),
+              overrides.courseStage?.courseInfo ?? resolveSceneCourseInfo(overrides.nonstop!.course, 0),
+              { kind: 'play', playVariant: pickLr2PlaySkinVariant(this.playSkins, song) },
+            )
+          : pickLr2PlaySkin(this.playSkins, song);
+    if (playSkin === undefined) return this.builtInKit;
+    const invisibleNoteSkin = this.playSkins['9'];
+    return { family: 'lr2', skin: playSkin, ...(invisibleNoteSkin !== undefined ? { invisibleNoteSkin } : {}) };
+  }
+
+  /**
+   * Makes the play scene for `song` with `kit` (`resolvePlayKit`: built-in, LR2 or beatoraja) and the current option
+   * snapshot (`createPlayScene`). Every family shares every other option, so `preloadGameplay` and `playSong` marshal
+   * them in one place.
+   */
+  private buildPlayScene(
+    song: BrowserSongEntry,
+    kit: PlaySceneKit,
     overrides: {
       autoPlay?: boolean;
       replay?: BeMusicPlaylog;
@@ -5064,6 +4768,13 @@ class PlayerWebDemoApp {
           });
           return;
         }
+        if (kit.family === 'beatoraja') {
+          // The beatoraja result plots the chart as the play played it.
+          const resolved = this.gameplayView?.resolved;
+          if (resolved !== undefined) this.lastBeatorajaChart = { resolved, chartPath: song.chartPath };
+          void this.finishGameplayThen(() => this.showBeatorajaPlayResult(result, courseStage !== undefined));
+          return;
+        }
         void this.finishGameplayThen(() => this.showResult(result));
       },
       onRestart: () => {
@@ -5095,20 +4806,12 @@ class PlayerWebDemoApp {
       courseInfo,
       ...settings
     } = sharedOptions;
-    const invisibleNoteSkin = this.playSkins['9'];
-    // No LR2 skin loaded for this chart: the active be-music skin draws the play (`builtInKit`). With one, the LR2 kit
-    // also carries the loaded 9-keys play variant: Pop'n's green wide note at index 3 is drawn over each invisible note
-    // when {@link DemoGuiState.showInvisibleNotes} is on (a flat green bar when the theme ships no `play_9.lr2skin`).
-    const kit: PlaySceneKit =
-      playSkin === undefined
-        ? this.builtInKit
-        : { family: 'lr2', skin: playSkin, ...(invisibleNoteSkin !== undefined ? { invisibleNoteSkin } : {}) };
     const source = resolveSongSource(this.collection, song);
     return createPlayScene(kit, {
       chart: song,
       ...(source !== undefined ? { source } : {}),
       settings:
-        playSkin === undefined
+        kit.family === 'built-in'
           ? { ...settings, layoutMode: resolvePlayLayoutMode(this.guiState.playLayout, deviceProfile) }
           : settings,
       ...(course !== undefined
@@ -5162,6 +4865,7 @@ class PlayerWebDemoApp {
     if (this.gameplayView !== view) return;
     this.setPlayStatus(
       describePlayingStatus(song.title, {
+        ...playingFamily(view),
         tempoPercent: this.guiState.tempoPercent,
         replay: this.lastPlay?.overrides.replay !== undefined,
       }),
@@ -5174,6 +4878,7 @@ class PlayerWebDemoApp {
     );
     view.start();
     startArmedRecording(this.recordingDeps());
+    this.refreshBeatorajaPlaySkinOptions();
   }
 
   /**
@@ -5202,15 +4907,6 @@ class PlayerWebDemoApp {
       nonstop?: NonstopPlay;
     } = {},
   ): Promise<void> {
-    // Family dispatch for the gameplay scene. The Debug Menu's "Skin family" pick funnels through here so a user
-    // override of `'lr2'` / `'default'` forces that family even when beatoraja is technically available, while
-    // `'auto'` keeps the legacy preference (beatoraja → LR2 → default). Replay playback always stays on the
-    // LR2/default path — that's where the play-log arrangement remap and `replayInputs` are wired.
-    const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
-    if (this.playsOnBeatoraja(song, overrides)) {
-      await this.playSongBeatoraja(song, overrides);
-      return;
-    }
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.snapshot();
@@ -5220,36 +4916,35 @@ class PlayerWebDemoApp {
     this.disposeScene(this.decideView);
     this.decideView = undefined;
     this.disposeScene(this.gameplayView);
-    this.disposeBeatorajaGameplay();
     // Refresh the recording filename base for the upcoming play — each session writes to a unique file in the user's
     // downloads folder rather than overwriting the previous one.
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
-    // Resolve the LR2 play skin only when the family pick actually says LR2 — overriding to `'default'` skips the
-    // skin even if one is loaded. `buildLr2GameplayView` then makes the play scene (`createPlayScene`) with the
-    // built-in kit when the skin is undefined and an LR2 kit otherwise; see `preloadGameplay` for the matching call
-    // shape (both feed the same helper so option marshalling stays in one place).
-    const playSkin =
-      gameplayFamily !== 'lr2'
-        ? undefined
-        : overrides.courseStage !== undefined || overrides.nonstop !== undefined
-          ? this.courseLr2Skin(
-              pickLr2PlaySkin(this.playSkins, song),
-              overrides.courseStage?.courseInfo ?? resolveSceneCourseInfo(overrides.nonstop!.course, 0),
-              { kind: 'play', playVariant: pickLr2PlaySkinVariant(this.playSkins, song) },
-            )
-          : pickLr2PlaySkin(this.playSkins, song);
+    // The kit for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain, beatoraja → LR2 →
+    // default) gives the chart; a replay and a NONSTOP run stay off beatoraja (`playsOnBeatoraja`). `preloadGameplay`
+    // asks the same.
+    const kit = await this.resolvePlayKit(song, overrides);
+    if (kit === undefined) {
+      void this.showSelect();
+      return;
+    }
     // Chart-file hash for the recorded play-log (skipped for replays — they record nothing — and for a stitched
     // NONSTOP chart, which has no file).
     const chartHashes =
       overrides.replay === undefined && overrides.nonstop === undefined
         ? await this.resolveChartHashes(song)
         : undefined;
-    const view = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
+    const view = this.buildPlayScene(song, kit, { ...overrides, chartHashes });
     this.gameplayView = view;
     // A replay plays at its recorded tempo, unless the Replay / ghost options keep the viewer's own.
     const tempoPercent =
       overrides.replay !== undefined ? tempoPercentFromTempo(view.getTempo()) : this.guiState.tempoPercent;
-    this.setPlayStatus(describePlayingStatus(song.title, { tempoPercent, replay: overrides.replay !== undefined }));
+    this.setPlayStatus(
+      describePlayingStatus(song.title, {
+        ...playingFamily(view),
+        tempoPercent,
+        replay: overrides.replay !== undefined,
+      }),
+    );
     this.lockPlaylogOptionsForPlay(
       allowsLiveTempo(this.guiState, { replay: overrides.replay !== undefined, tempo: view.getTempo() }),
     );
@@ -5302,10 +4997,10 @@ class PlayerWebDemoApp {
       this.activeCourse!.run.recordStage(data.playlog, data);
       this.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
     }
-    // Family dispatch for result. We currently only model the LR2 / default split here — the beatoraja result
-    // scene is constructed inside `playSongBeatoraja`'s onComplete handler, not via `showResult`, so this method
-    // never sees the `'beatoraja'` family. Pick the LR2 result skin only when the family pick says so; defaulting
-    // strips the slot even if the loaded theme has a result skin.
+    // Family dispatch for result. Only the LR2 / default split is modelled here — a play on the beatoraja play screen
+    // shows its result on the beatoraja skin (`showBeatorajaPlayResult`), and a NONSTOP run or a replay on a beatoraja
+    // theme falls back to the built-in result with the theme's jingles. Pick the LR2 result skin only when the family
+    // pick says so; defaulting strips the slot even if the loaded theme has a result skin.
     const resultFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'result');
     // A course's results show the course on the skin (LR2 ops 280-293, texts 150-170): a stage's result at its stage,
     // the course result on the course-result skin, each parsed again with the course ops.
@@ -5434,10 +5129,9 @@ class PlayerWebDemoApp {
   private followLiveTempo(tempo: number): void {
     const title = this.lastPlay?.song.title;
     if (title !== undefined) {
-      const family = this.beatorajaGameplayView !== undefined ? 'beatoraja' : undefined;
       this.setPlayStatus(
         describePlayingStatus(title, {
-          family,
+          ...(this.gameplayView !== undefined ? playingFamily(this.gameplayView) : {}),
           tempoPercent: tempoPercentFromTempo(tempo),
           replay: this.lastPlay?.overrides.replay !== undefined,
         }),
@@ -5473,7 +5167,6 @@ class PlayerWebDemoApp {
     if (source !== 'select') this.selectView?.setPlayOptions({ hiSpeed });
     if (source === 'menu') {
       this.gameplayView?.setHiSpeed(hiSpeed);
-      this.beatorajaGameplayView?.setHiSpeed(hiSpeed);
     }
   }
 

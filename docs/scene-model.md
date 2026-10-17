@@ -319,11 +319,10 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                           |
 
 The built-in and LR2 select screens browse with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
-`restoreBrowse`, `browseSystemSound`). The built-in and LR2 play screens keep one `PlayState` and read their result off
-it (`playResultFromPlayState`), so they follow the model's play-state choices above: a full combo's max combo is every
+`restoreBrowse`, `browseSystemSound`). Every play screen keeps one `PlayState` and reads its result off it
+(`playResultFromPlayState`), so every play follows the model's play-state choices above: a full combo's max combo is every
 note for any play, the result carries each judgment's early / late count, and the play log's visible time is the white
-number (`resolvePlaylogView`). The other scenes still keep their own browse and play state (the beatoraja select its own
-browse model, the beatoraja runtime adapter its histories and covers); the scene sessions of the web runtime move onto
-these models. The skin
+number (`resolvePlaylogView`). The beatoraja select still keeps its own browse model; the scene sessions of the web
+runtime move onto these models. The skin
 packages map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
 [beatoraja-skin.md](./beatoraja-skin.md#scene-mapping)).

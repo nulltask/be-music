@@ -40,7 +40,6 @@ export type { GaugeHistorySample, PixiGameplayResultData, ScoreHistorySample } f
 
 // beatoraja family — beatoraja Lua skin-driven scenes.
 export * from '../view/beatoraja/play/bga.ts';
-export * from './beatoraja/gameplay.ts';
 export * from '../view/beatoraja/play/markers.ts';
 export * from '../view/beatoraja/play/notes.ts';
 export * from './beatoraja/select.ts';

@@ -54,6 +54,7 @@ import {
   reducePlayState,
   resolveHsFixMultiplier,
   SHUTTER_DEFAULT,
+  type LaneCoverState,
   type PlayState,
 } from '@be-music/scene-model';
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
@@ -71,6 +72,7 @@ export interface PlayChartContext {
       | 'hiddenSudden2P'
       | 'shutter'
       | 'laneCover'
+      | 'coverStart'
       | 'replay'
       | 'dpFlip'
       | 'random1P'
@@ -181,8 +183,7 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   // instance means the parallel arrays are no longer parallel — they're the same array, the engine mutates
   // `judged` directly, and the renderer just reads it. There is no second extract that could disagree.
   // Resolve the chart's intended play variant up front so the lane-binding pass sees the host's
-  // classification (instead of falling back to the engine's content heuristic). Mirrors the beatoraja
-  // path's `composeBeatorajaEngineOptions` wiring in the beatoraja gameplay scene. Without this:
+  // classification (instead of falling back to the engine's content heuristic). Without this:
   //   - `.bme` POPN-9 charts (full `11..19` on `#PLAYER 1`) classify as `'7'` via the engine's heuristic
   //     and lose the POPN-9 `f/v/g/b` lane bindings on channels `16..19`.
   //   - `.bms` / `.bme` charts that author PMS-STD content (`11..15 + 22..25`, no scratch) classify as
@@ -402,15 +403,7 @@ function createChartPlayState(
     ...(course !== undefined ? { courseCarryIn: course.carryIn ?? { combo: 0, maxCombo: 0 } } : {}),
     view: {
       hiSpeed,
-      covers: laneCoversFromPlayOptions(
-        {
-          hiddenSudden1P: ctx.options.hiddenSudden1P ?? 'OFF',
-          hiddenSudden2P: ctx.options.hiddenSudden2P ?? 'OFF',
-          shutter: ctx.options.shutter ?? SHUTTER_DEFAULT,
-          laneCover: ctx.options.laneCover !== false,
-        },
-        resolveLaneSides(ctx.laneChannels),
-      ),
+      covers: resolveStartingCovers(ctx),
       hsFix,
     },
   });
@@ -419,6 +412,26 @@ function createChartPlayState(
     type: 'frame',
     frame: { totalSeconds: ctx.songDurationSeconds, summary: { exScore: 0, gauge: ctx.gaugeState } },
   });
+}
+
+/**
+ * Each side's lane covers as the play starts: from the play options (`laneCoversFromPlayOptions`), or every cover at 0
+ * and off for a play that starts without them (`coverStart: 'none'`, the beatoraja play screen's).
+ */
+function resolveStartingCovers(ctx: PlayChartContext): LaneCoverState[] {
+  const sides = resolveLaneSides(ctx.laneChannels);
+  if (ctx.options.coverStart === 'none') {
+    return sides.map((side) => ({ side, sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 }));
+  }
+  return laneCoversFromPlayOptions(
+    {
+      hiddenSudden1P: ctx.options.hiddenSudden1P ?? 'OFF',
+      hiddenSudden2P: ctx.options.hiddenSudden2P ?? 'OFF',
+      shutter: ctx.options.shutter ?? SHUTTER_DEFAULT,
+      laneCover: ctx.options.laneCover !== false,
+    },
+    sides,
+  );
 }
 
 function withMainBpm(mainBpm: number | undefined): { mainBpm?: number } {

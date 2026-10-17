@@ -55,8 +55,8 @@ describe('BeatorajaPlaySkinView', () => {
   it('clips the container to the authored canvas via an off-stage mask', () => {
     // Skin destinations authored outside `(0, 0, skin.w, skin.h)` (slide-in chrome from negative
     // coords, scroll-from-top notes, lane chrome extending past the playfield's authored bottom)
-    // must be CLIPPED to the canvas edge — matching LR2's `designClipMask` at
-    // `scene/lr2/gameplay.ts:469`. Without the mask, those elements bleed into the host's letterbox /
+    // must be CLIPPED to the canvas edge — matching the play frame's `designClipMask` in
+    // `view/shared/play-frame.ts`. Without the mask, those elements bleed into the host's letterbox /
     // pillarbox bars and read as "the skin is leaking outside its stage".
     const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
     // The mask is installed on the container and SEPARATELY tracked as a child. `renderableChildren`

@@ -12,7 +12,7 @@ import { createEmptyScore, type JudgeKind, type LongNoteStyle, type ScoreSummary
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerStateSignals } from '@be-music/player/state-signals';
-import type { PlayerGaugeSummary, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerGaugeSummary, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog, PlaylogViewCoalescer } from '@be-music/player/playlog';
@@ -258,6 +258,12 @@ export class PlaySessionState {
    * PLAYSTART anchor and notes pass the judgment line ahead of the engine's actual judge event.
    */
   sharedEngineClockAnchored = false;
+  /**
+   * The engine's latest UI frame (its chart time and beat, the chart's length, its summary and gauge), as drained into
+   * the play state; `undefined` before the engine's first frame. A view that draws the engine's own clock (the beatoraja
+   * play view) reads it.
+   */
+  engineFrame: Readonly<PlayerUiFramePayload> | undefined;
   decodedSamples: Map<string, AudioBuffer> = new Map<string, AudioBuffer>();
   /**
    * Per-`#WAVxx` slot volume multipliers from `#WAVCMD 01 xx vv` lines, expressed as 0..1 linear gain. Built once per
