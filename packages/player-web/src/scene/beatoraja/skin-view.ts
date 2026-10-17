@@ -113,8 +113,8 @@ export class BeatorajaPlaySkinView {
   readonly height: number;
   /**
    * Clip mask that bounds every descendant of `container` to the skin's authored canvas
-   * `(0, 0, width, height)`. Mirrors the LR2 path's `designClipMask` at
-   * `scene/lr2/gameplay.ts:469`: an off-stage skin destination (slide-ins authored from
+   * `(0, 0, width, height)`. Mirrors the play frame's `designClipMask` in
+   * `view/shared/play-frame.ts`: an off-stage skin destination (slide-ins authored from
    * negative coordinates, scroll-from-top effects, lane chrome that extends past the
    * skin's authored stage edge, etc.) gets clipped at the canvas edge instead of
    * bleeding into the host's letterbox / pillarbox bars.
