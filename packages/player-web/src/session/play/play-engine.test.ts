@@ -1,6 +1,7 @@
 import { createPlayerUiSignalBus, type PlayerUiCommand } from '@be-music/player/core/ui-signal-bus';
 import type { PlayerGaugeSummary, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { PlayerSummary } from '@be-music/player/core/engine';
+import { recordPlayFromResult } from '@be-music/player/records';
 import { createEmptyScore } from '@be-music/player/ruleset';
 import { createPlayerStateSignals } from '@be-music/player/state-signals';
 import { createHiSpeedState, createPlayState, type PlayState } from '@be-music/scene-model';
@@ -21,7 +22,9 @@ function createPlay(options: {
   total: number;
   autoPlay?: boolean;
   courseCarryIn?: { combo: number; maxCombo: number };
+  judgeRuleset?: 'lr2' | 'beatoraja';
 }) {
+  const judgeRuleset = options.judgeRuleset ?? 'lr2';
   const gauge = createPlaceholderGaugeState('GROOVE');
   const uiSignals = createPlayerUiSignalBus(frameAt(0, { gauge }));
   const stateSignals = createPlayerStateSignals(2);
@@ -73,8 +76,8 @@ function createPlay(options: {
     playClock: () => clock.ms,
     currentSeconds: () => clock.seconds,
     resolveSongDurationSeconds: () => CHART_SECONDS,
-    resolveEmptyPoorCountsInPoorDisplay: () => true,
-    resolveJudgeRuleset: () => 'lr2',
+    resolveEmptyPoorCountsInPoorDisplay: () => judgeRuleset === 'lr2',
+    resolveJudgeRuleset: () => judgeRuleset,
     resolveKeyOnTimerId: () => undefined,
   } as unknown as PlayEngineContext;
   /** One engine frame at chart time `seconds` (play clock `seconds × 1000`), with its judgments and commands. */
@@ -233,6 +236,22 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(result.judgeRuleset).toBe('lr2');
     expect(result.lamp).toBe('FAILED');
     expect(result.song).toBe(SONG);
+  });
+
+  test('under LR2 an empty POOR is in the POOR count, and in the BP once', () => {
+    const play = createPlay({ total: 4 });
+    play.step(1, { counts: { perfect: 1, bad: 1, poor: 1, emptyPoor: 2 } });
+    const result = getResultData(play.ctx)!;
+    expect(result.score).toMatchObject({ bad: 1, poor: 3, emptyPoor: 0 });
+    expect(recordPlayFromResult(result).missCount).toBe(4);
+  });
+
+  test('a ruleset with its own empty-POOR figure keeps it apart from the POOR count', () => {
+    const play = createPlay({ total: 4, judgeRuleset: 'beatoraja' });
+    play.step(1, { counts: { perfect: 1, bad: 1, poor: 1, emptyPoor: 2 } });
+    const result = getResultData(play.ctx)!;
+    expect(result.score).toMatchObject({ bad: 1, poor: 1, emptyPoor: 2 });
+    expect(recordPlayFromResult(result).missCount).toBe(4);
   });
 
   test("an AUTO play's full combo counts every note as its max combo", () => {
