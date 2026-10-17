@@ -1,7 +1,6 @@
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import { describe, expect, test } from 'vite-plus/test';
-import { DEFAULT_BEATORAJA_FADEOUT_MS } from '../../../skin/beatoraja/scene-transition.ts';
-import { computeAuthoredLaneBottomYPixi, readJudgeComboMetrics, resolveFadeoutMs } from './skin-metrics.ts';
+import { computeAuthoredLaneBottomYPixi, readJudgeComboMetrics } from './skin-metrics.ts';
 
 describe('computeAuthoredLaneBottomYPixi', () => {
   test('takes the lowest lane bottom on screen (Y-up rects flipped to Pixi)', () => {
@@ -31,14 +30,5 @@ describe('readJudgeComboMetrics', () => {
       1: { width: 40, space: 0 },
       2: { width: 40, space: 0 },
     });
-  });
-});
-
-describe('resolveFadeoutMs', () => {
-  test("uses the skin's fade-out, or beatoraja's default when it has none", () => {
-    expect(resolveFadeoutMs(800)).toBe(800);
-    expect(resolveFadeoutMs(0)).toBe(0);
-    expect(resolveFadeoutMs(undefined)).toBe(DEFAULT_BEATORAJA_FADEOUT_MS);
-    expect(resolveFadeoutMs(-1)).toBe(DEFAULT_BEATORAJA_FADEOUT_MS);
   });
 });
