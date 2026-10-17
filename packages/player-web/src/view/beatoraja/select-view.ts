@@ -155,7 +155,8 @@ export class BeatorajaSelectView implements SelectView {
    * the search prompt are built again for it; the place in the list, the chart images and the LNMODE choice stay.
    */
   public updateKit(kit: BeatorajaKit): void {
-    if (this.disposed) return;
+    // The entry as loaded before (the host hands it again on every return to the screen): nothing to build.
+    if (this.disposed || kit.kit === this.kit.kit) return;
     this.kit = kit;
     this.search.destroySearchPrompt();
     this.skinState.cachedBaseOps = undefined;

@@ -10,7 +10,6 @@ import {
   createPlayScene,
   createResultScene,
   createSelectScene,
-  PixiBeatorajaSelectScene,
   PixiSceneHost,
   HISPEED_MAX,
   HISPEED_MIN,
@@ -69,7 +68,6 @@ import {
   type SkinFamilyId,
 } from '@be-music/player-web/skin';
 import {
-  beatorajaClearLampOp,
   discoverBeatorajaSelectBgmPath,
   discoverBeatorajaSystemSoundPaths,
   type BeatorajaSystemSoundPaths,
@@ -79,7 +77,6 @@ import {
   checkBrowserCompat,
   computeChartFileHashes,
   describeSongCollection,
-  loadAssetBytes,
   materializeDroppedFiles,
   readDroppedFiles,
   resolveSongSource,
@@ -273,7 +270,6 @@ import {
   tempoFromPercent,
   tempoPercentFromTempo,
 } from './play-tempo-settings.ts';
-import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
 import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
@@ -578,15 +574,15 @@ class PlayerWebDemoApp {
   private beatorajaSkinAudio: BeatorajaSkinAudioPlayer | undefined;
   /**
    * System-sound paths discovered from the active theme bundle. Re-probed every theme load
-   * via {@link discoverBeatorajaSystemSoundPaths}; passed to {@link PixiBeatorajaSelectScene}
-   * so cursor / decide / folder / option events fire the matching cues. Stays empty (`{}`)
+   * via {@link discoverBeatorajaSystemSoundPaths}; the beatoraja select screen's sound set (`selectSoundSet`) plays
+   * them for its cursor / decide / folder / option cues. Stays empty (`{}`)
    * for stripped LR2 themes that don't ship a `sound/` subdirectory.
    */
   private beatorajaSystemSoundPaths: BeatorajaSystemSoundPaths = {};
   /**
    * Looping select-scene BGM path discovered from the active theme bundle. Re-probed on
-   * every theme load via {@link discoverBeatorajaSelectBgmPath}; passed to the select scene
-   * as `selectBgmPath` so the BGM starts on enter and stops on exit. `undefined` for themes
+   * every theme load via {@link discoverBeatorajaSelectBgmPath}; the beatoraja select screen's sound set plays it as its
+   * BGM, started on enter and stopped on exit. `undefined` for themes
    * that don't ship a select BGM (the scene runs silent in the background then, just chart
    * preview clips and navigation cues).
    */
@@ -642,8 +638,18 @@ class PlayerWebDemoApp {
    * JSON, so retaining them is cheap.
    */
   private lastBeatorajaChart: { resolved: ResolvedPlayChart; chartPath: string } | undefined;
-  /** Beatoraja-skinned song select scene. Active when a beatoraja theme with a select skin is loaded. */
-  private beatorajaSelectScene: PixiBeatorajaSelectScene | undefined;
+  /**
+   * The beatoraja theme's select entry as last loaded (`loadBeatorajaSelectKit`): the select screen takes it again on
+   * every return to it while the theme and the entry stay the same, rather than loading the skin again.
+   */
+  private beatorajaSelectKit:
+    | {
+        readonly bundle: BeatorajaThemeBundle;
+        readonly entryPath: string;
+        readonly kit: BeatorajaKit;
+        readonly header: BeatorajaSkinHeader;
+      }
+    | undefined;
   /**
    * The search field: typed into in place over the skin's search box (built-in and LR2 skins), or at the foot of the
    * screen where the skin has none (beatoraja). It filters whichever select scene is on screen.
@@ -652,11 +658,8 @@ class PlayerWebDemoApp {
     input: document.querySelector<HTMLInputElement>('#search')!,
     shell: document.querySelector<HTMLElement>('.shell')!,
     canvas: () => this.sceneHost?.app.canvas,
-    fieldRect: () => (this.beatorajaSelectScene === undefined ? this.selectView?.searchFieldRect() : undefined),
-    setQuery: (query) => {
-      if (this.beatorajaSelectScene !== undefined) this.beatorajaSelectScene.setSearchQuery(query);
-      else this.selectView?.setSearch(query);
-    },
+    fieldRect: () => this.selectView?.searchFieldRect(),
+    setQuery: (query) => this.selectView?.setSearch(query),
     setEditing: (editing) => this.selectView?.setSearchEditing(editing),
     touch: () => document.documentElement.classList.contains('touch-first'),
   });
@@ -695,22 +698,6 @@ class PlayerWebDemoApp {
    * the latest theme drop.
    */
   private readonly beatorajaSkinPickerControllers: Map<number, Controller> = new Map();
-  /**
-   * Last beatoraja-select highlighted index — survives scene tear-down so coming back from gameplay
-   * lands on the same song the user just played.
-   *
-   * Subsumed by {@link beatorajaSelectSnapshot} for richer restore (folder / sort / filter / favorites).
-   * Kept for backward compatibility with code paths that haven't been migrated to the snapshot yet.
-   */
-  private beatorajaSelectIndex = 0;
-  /**
-   * Last beatoraja-select scene state captured at scene-exit. Re-applied on the next mount so the
-   * user lands on the same folder, cursor, sort, filter, and favorites set they left — not just
-   * the focused song. Captured via `selectScene.captureSnapshot()` at every dispose site that
-   * represents a "coming back later" transition (PLAY entry, decide entry, theme reload). Cleared
-   * by `onExit` (ESC at root) since that's the user explicitly leaving the select altogether.
-   */
-  private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
   private resultView: ResultScene | undefined;
   /**
    * The chart and play mode of the most recent play start (LR2 / default and beatoraja alike), so the result screen's
@@ -1929,17 +1916,10 @@ class PlayerWebDemoApp {
     const current = this.sceneHost.getCurrentScene();
     const scene: TestHookLiveState['scene'] =
       current === undefined ? { kind: 'none' } : { kind: current.identity.kind, family: current.identity.family };
-    const select =
-      scene.kind !== 'select'
-        ? undefined
-        : current === this.beatorajaSelectScene
-          ? this.beatorajaSelectScene
-          : current === this.selectView
-            ? this.selectView
-            : undefined;
-    const entry = select instanceof PixiBeatorajaSelectScene ? select.getFocusedEntry() : select?.focused();
-    // The built-in and LR2 select screens' browse position: their folders, sort, filters and search.
-    const navigation = select instanceof PixiBeatorajaSelectScene ? undefined : select?.snapshot();
+    const select = scene.kind === 'select' && current === this.selectView ? this.selectView : undefined;
+    const entry = select?.focused();
+    // The select screen's browse position: its folders, sort, filters and search.
+    const navigation = select?.snapshot();
     const play = scene.kind === 'play' ? this.lastPlay : undefined;
     // The play's running result, whichever family draws it.
     const progress = this.gameplayView?.progress();
@@ -1956,11 +1936,7 @@ class PlayerWebDemoApp {
       cursor:
         scene.kind === 'select'
           ? {
-              folderPath: [
-                ...((select instanceof PixiBeatorajaSelectScene
-                  ? select.captureSnapshot().folderPath
-                  : navigation?.folderPath) ?? []),
-              ],
+              folderPath: [...(navigation?.folderPath ?? [])],
               bar:
                 entry &&
                 describeBar(
@@ -2434,10 +2410,6 @@ class PlayerWebDemoApp {
   /** Relists the course folders after the player's own courses changed, keeping the select screen where it was. */
   private async refreshMadeCourses(): Promise<void> {
     await this.refreshCourseFolders();
-    if (this.beatorajaSelectScene !== undefined) {
-      await this.showSelect();
-      return;
-    }
     const view = this.selectView;
     if (view === undefined) return;
     const navigation = view.snapshot();
@@ -2761,15 +2733,8 @@ class PlayerWebDemoApp {
     return rulesetRecords(this.songRecords, this.guiState.judgeRuleset);
   }
 
-  /**
-   * Redraws the select screen with the records of the current judge ruleset, after it changed: the LR2 and default
-   * selects redraw in place, a beatoraja select is mounted again where it was.
-   */
+  /** Redraws the select screen in place with the records of the current judge ruleset, after it changed. */
   private refreshSelectRecords(): void {
-    if (this.beatorajaSelectScene !== undefined) {
-      void this.showSelect();
-      return;
-    }
     this.selectView?.setLibrary(this.collection);
   }
 
@@ -3333,11 +3298,6 @@ class PlayerWebDemoApp {
     }
     this.disposeScene(this.selectView);
     this.selectView = undefined;
-    if (this.beatorajaSelectScene !== undefined) {
-      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
-    }
-    this.disposeScene(this.beatorajaSelectScene);
-    this.beatorajaSelectScene = undefined;
     void this.showSelect();
   }
 
@@ -3462,17 +3422,15 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Mount the beatoraja-skinned song select scene. Loads the theme's select skin (with a default
-   * `skin_config.option` fill from `buildDefaultSkinConfigOptions`), reuses cached textures / fonts
-   * when available, and hands the scene a callback that routes the chosen song through the existing
-   * `showDecide` / `playSong` flow.
+   * The beatoraja theme's select entry as a select kit, or `undefined` when there is none to show: no select skin in the
+   * theme, or one that failed to load (the status says why). The player's pick in the Debug Menu wins over the
+   * discovery's (`theme.selectSkin`). The entry is loaded with the player's options for it (`loadBeatorajaSceneKit`:
+   * the header pass seeds them the first time), or the kit last loaded is taken again while the theme and the entry stay
+   * the same.
    */
-  private async showBeatorajaSelect(): Promise<void> {
+  private async loadBeatorajaSelectKit(): Promise<BeatorajaKit | undefined> {
     const bundle = this.beatorajaTheme;
-    if (bundle === undefined) return;
-
-    // Pick the actual entry to mount — honor a user override from the Debug Menu's skin-picker dropdown
-    // when one was set, otherwise fall back to the discovery's "best" pick (`theme.selectSkin`).
+    if (bundle === undefined) return undefined;
     const selectCandidates = bundle.theme.entries.filter(
       (entry) => entry.header.type === BEATORAJA_SKIN_TYPE.MUSIC_SELECT,
     );
@@ -3484,15 +3442,12 @@ class PlayerWebDemoApp {
     if (selectedEntry === undefined) {
       gameplayLog.warn('beatoraja select: no select skin in theme');
       this.setStatus('Beatoraja select unavailable: no select skin');
-      return;
+      return undefined;
     }
-
-    // Two-pass evaluation — header pass picks up the skin's `property[]` schema, the second pass
-    // re-runs `main()` with the cached option picks (or defaults seeded from the header) so dynamic `source[]` /
-    // `destination[]` populate. The skin-options panel mutates the config as the user picks options.
-    // Texture + font cache — same per-entry memoization as the gameplay path. The select skin lives
-    // at a different `entryPath` than `play_*.luaskin` so the caches are naturally segregated. Its first decode
-    // resolves `source[]` without the config's `filepath[]` picks, as it always has; a skin-config change applies them.
+    const kept = this.beatorajaSelectKit;
+    if (kept !== undefined && kept.bundle === bundle && kept.entryPath === selectedEntry.entryPath) return kept.kit;
+    // Its first decode resolves `source[]` without the options' `filepath[]` picks, as it always has; a change of the
+    // options applies them.
     const load = await loadBeatorajaSceneKit({
       files: bundle.files,
       entryPath: selectedEntry.entryPath,
@@ -3510,167 +3465,24 @@ class PlayerWebDemoApp {
     if (!load.ok) {
       gameplayLog.warn(`beatoraja select: ${load.message}`);
       this.setStatus(`Beatoraja select unavailable: ${load.message}`);
-      return;
+      return undefined;
     }
-    const { skin, textures, fonts, skinConfig: config } = load.kit;
-
-    // Capture the OUTGOING scene's state before disposing so the snapshot is fresh — covers
-    // the rare hot-swap case where `showBeatorajaSelect` runs while a scene is already up
-    // (e.g. theme reload). Normal PLAY → SELECT flow already captures as the select starts a chart
-    // / `showDecide`, but doing it here defensively ensures the snapshot is never stale.
-    if (this.beatorajaSelectScene !== undefined) {
-      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
-    }
-    this.disposeScene(this.beatorajaSelectScene);
-    this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
-      skin,
-      textures,
-      fonts,
-      skinConfig: config,
-      skinAudio: this.beatorajaSkinAudio,
-      songs: this.collection.songs,
-      ...(this.collection.courseFolders !== undefined ? { courseFolders: this.collection.courseFolders } : {}),
-      onCoursePicked: (course: BrowserCourseEntry, options?: { autoPlay?: boolean }) =>
-        void this.startCourse(course, options),
-      // Pass the collection so the scene's `ChartPreviewEngine` can resolve each focused
-      // song's `BrowserSongAssetSource` and play `#PREVIEW` audio (or fall back to in-place
-      // chart playback) on cursor settle. Without this, the beatoraja select runs silent on
-      // cursor moves — same as the LR2 select did before the preview engine was added.
-      collection: this.collection,
-      // Theme-bundled navigation cues (cursor / decide / cancel / folder open-close /
-      // option-change). Routed through the same `BeatorajaSkinAudioPlayer` the Lua audio_play
-      // calls use — that way browsers cap a single AudioContext per scene rather than two.
-      systemSoundPaths: this.beatorajaSystemSoundPaths,
-      // Looping select-screen background music. Same audio backend as the navigation cues so
-      // a single AudioContext mixes them down. The scene starts the loop on enter and stops
-      // it on exit; transitioning into decide / play tears it down cleanly.
-      selectBgmPath: this.beatorajaSelectBgmPath,
-      // The bar's lamp comes from the persisted records every family writes (`lookupSongRecord`), lit through the
-      // same lamp rule the other families' selects show.
-      resolveSongLampOp: (song) => {
-        const record = this.lookupSongRecord(song);
-        return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
-      },
-      // A course bar's lamp comes from the course's record, kept under the course's key.
-      resolveCourseLampOp: (course) => {
-        const record = lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement);
-        return record !== undefined ? beatorajaClearLampOp(record.lamp) : undefined;
-      },
-      // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
-      // `-101 BACKBMP` / `-102 BANNER`). The scene calls this on every focus change and
-      // caches by song-id; default beatoraja's select.json paints `-102 BANNER` as the
-      // per-song banner inside the chart-info panel.
-      decodeChartImages: (song) => this.loadBeatorajaChartImages(song),
-      // Restore the last cursor so coming back from gameplay lands on the same song.
-      initialIndex: this.beatorajaSelectIndex,
-      // Restore richer scene state captured before the previous tear-down — folder /
-      // sort / filter / favorites / cursor stack. Takes precedence over `initialIndex` when
-      // both are set (snapshot encodes the full position; bare index can't disambiguate
-      // root vs. inside-folder). Cleared by `onExit` so a future fresh entry from the empty
-      // drop screen starts at root.
-      restoreSnapshot: this.beatorajaSelectSnapshot,
-      onSongPicked: (song, opts) => {
-        if (this.addSongToCourseBeingMade(song)) return;
-        // Cache the index using the picked song's identity — survives the scene tear-down.
-        this.beatorajaSelectIndex = this.collection.songs.indexOf(song);
-        // Same flow as the LR2 select view: route to decide → gameplay. The decide branch in
-        // `showDecide` already detects the beatoraja gameplay case and skips its splash.
-        // Forward the `autoPlay` override (set by the skin's AUTO PLAY button click → act=16);
-        // omitted otherwise so the user's global default applies.
-        void this.showDecide(song, { autoPlay: opts?.autoPlay });
-      },
-      onExit: () => {
-        // ESC from the beatoraja select returns to the empty drop screen. Clear the snapshot
-        // because the user explicitly left — coming back via a fresh drop or theme reload
-        // should start at root, not pick up wherever they were.
-        this.elements.shell.classList.add('empty');
-        void this.sceneHost.setScene(undefined);
-        this.beatorajaSelectScene?.dispose();
-        this.beatorajaSelectScene = undefined;
-        this.beatorajaSelectSnapshot = undefined;
-        this.beatorajaSkinOptionsGui?.clear();
-      },
-      onReadtextRequest: (song) => {
-        // Skin's READTEXT button (act=17 — "readme" / "btn-text" etc.). Find the chart's
-        // accompanying `.txt` next to its BMS file and show it in a transient browser dialog.
-        // No persistence / styling — just enough to surface chart-author notes.
-        void this.showBeatorajaReadtext(song);
-      },
-      onSkinConfigChange: (next) => {
-        // Skin mutated its own config (currently only the `JUDGE_TIMING` button — note offset
-        // ±1 ms per click). Persist back into the per-entry cache so the next mount /
-        // `replaceSkin` keeps the adjustment, and re-apply through `applyBeatorajaSelectSkinConfig`
-        // so the bottom-centre options panel re-renders with the new value.
-        this.beatorajaKitCaches.skinConfigs.set(selectedEntry.entryPath, next);
-        void this.applyBeatorajaSelectSkinConfig(selectedEntry.entryPath, next);
-      },
-    });
-    await this.sceneHost.setScene(this.beatorajaSelectScene);
-
-    // Build the bottom-centre skin-options panel for this select skin's `property[]` / `filepath[]`.
-    // User picks flow back through `onApply` → live `replaceSkin` on the active scene so chrome
-    // changes (Play Side, Score Graph On/Off, etc.) take effect on the very next Pixi frame
-    // without disposing / re-mounting the scene.
-    this.refreshBeatorajaSkinOptionsGui({
-      title: 'Skin Config (Select)',
-      entryPath: selectedEntry.entryPath,
-      header: load.header,
-      onApply: (nextConfig) => {
-        void this.applyBeatorajaSelectSkinConfig(selectedEntry.entryPath, nextConfig);
-      },
-    });
+    const kit: BeatorajaKit = { family: 'beatoraja', kit: load.kit };
+    this.beatorajaSelectKit = { bundle, entryPath: selectedEntry.entryPath, kit, header: load.header };
+    return kit;
   }
 
-  /**
-   * Find the focused song's accompanying README / notes text and surface it in a transient
-   * overlay. Searches the song's source for a `.txt` file in the same directory as the chart
-   * (BMS convention: `myhardchart.bms` ↔ `myhardchart.txt` / `readme.txt` / etc.). When more
-   * than one matches, picks alphabetically — chart-authors typically only ship one.
-   *
-   * The overlay is a lightweight `<dialog>` injected at runtime — no persistent UI, click
-   * outside or hit Escape to dismiss. Falls back to a `console.log` notice when no `.txt` is
-   * found so the user has a hint that the chart didn't ship readtext content.
-   */
-  private async showBeatorajaReadtext(song: BrowserSongEntry): Promise<void> {
-    const source = resolveSongSource(this.collection, song);
-    if (source === undefined) {
-      gameplayLog.info('beatoraja readtext: source not found', { songId: song.id });
-      return;
-    }
-    const chartDir = song.chartPath.includes('/') ? song.chartPath.slice(0, song.chartPath.lastIndexOf('/')) : '';
-    // Match `.txt` files inside the chart's folder (or root when the chart is at the top).
-    const textPaths: string[] = [];
-    for (const path of source.files.keys()) {
-      const lower = path.toLowerCase();
-      if (!lower.endsWith('.txt')) continue;
-      const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-      if (dir.toLowerCase() !== chartDir.toLowerCase()) continue;
-      textPaths.push(path);
-    }
-    textPaths.sort();
-    const textPath = textPaths[0];
-    if (textPath === undefined) {
-      gameplayLog.info('beatoraja readtext: no .txt found', { dir: chartDir });
-      return;
-    }
-    const entry = source.files.get(textPath);
-    if (entry === undefined) return;
-    const bytes = await loadAssetBytes(entry);
-    if (bytes === undefined) return;
-    // BMS-era authors typically ship Shift_JIS-encoded text. Try the BOM-aware UTF-8 first;
-    // fall back to a Shift_JIS decode when the result contains replacement characters.
-    let text = decodeText(bytes, 'utf-8');
-    if (text.includes('�')) {
-      try {
-        text = decodeText(bytes, 'shift_jis');
-      } catch {
-        // some browsers don't expose 'shift_jis' decoder; keep the UTF-8 best-effort.
-      }
-    }
-    showReadtextOverlay({
-      title: `${song.title}${song.artist ? ` — ${song.artist}` : ''}`,
-      filename: textPath.split('/').pop() ?? textPath,
-      body: text,
+  /** The bottom-centre skin-options panel for the beatoraja select entry shown: its `property[]` / `filepath[]`. */
+  private refreshBeatorajaSelectSkinOptions(): void {
+    const shown = this.beatorajaSelectKit;
+    if (shown === undefined) return;
+    this.refreshBeatorajaSkinOptionsGui({
+      title: 'Skin Config (Select)',
+      entryPath: shown.entryPath,
+      header: shown.header,
+      onApply: (nextConfig) => {
+        void this.applyBeatorajaSelectSkinConfig(shown.entryPath, nextConfig);
+      },
     });
   }
 
@@ -3684,17 +3496,15 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Apply a fresh skin-config to the active beatoraja select scene WITHOUT disposing / re-mounting.
-   * Re-runs the skin's Lua `main()` (or re-parses the JSON) with the new options, refreshes the
-   * texture cache (Lua skins emit different `source[]` lists per option set), then calls
-   * `replaceSkin` on the live scene.
+   * Applies the player's new options for a beatoraja select entry to the select screen shown, without making it again:
+   * the skin's Lua `main()` runs again (or its JSON is parsed again) with them, its textures are decoded again (other
+   * options can build another `source[]`), and the screen takes the kit (`updateKit`), keeping its place.
    */
   private async applyBeatorajaSelectSkinConfig(entryPath: string, config: BeatorajaSkinConfig): Promise<void> {
     const bundle = this.beatorajaTheme;
-    if (!bundle || !this.beatorajaSelectScene) return;
-    // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an
-    // alternate skin from the Debug Menu's skin-picker dropdown. Drop and re-decode the texture cache for this entry —
-    // option changes can alter `source[]`; a font cache miss (fonts may differ between skins) loads them fresh.
+    if (!bundle || this.selectView?.identity.family !== 'beatoraja') return;
+    // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an alternate skin from
+    // the Debug Menu's skin-picker dropdown. A font cache miss (fonts may differ between skins) loads them fresh.
     const load = await loadBeatorajaSceneKit({
       files: bundle.files,
       entryPath,
@@ -3702,20 +3512,14 @@ class PlayerWebDemoApp {
       skinConfig: config,
       reloadTextures: true,
     });
-    if (!load.ok) return;
-    const { skin, textures, fonts } = load.kit;
-    this.beatorajaSelectScene.replaceSkin({ skin, skinConfig: config, textures, fonts });
-
-    // Refresh the skin-options panel against the new entry's header so the property dropdowns
-    // reflect the new skin's `property[]` schema.
-    this.refreshBeatorajaSkinOptionsGui({
-      title: 'Skin Config (Select)',
-      entryPath,
-      header: load.header,
-      onApply: (nextConfig) => {
-        void this.applyBeatorajaSelectSkinConfig(entryPath, nextConfig);
-      },
-    });
+    if (!load.ok || this.beatorajaTheme !== bundle) return;
+    const kit: BeatorajaKit = { family: 'beatoraja', kit: load.kit };
+    this.beatorajaSelectKit = { bundle, entryPath, kit, header: load.header };
+    const select = this.selectView;
+    if (select?.identity.family !== 'beatoraja') return;
+    select.updateKit(kit);
+    // The panel follows the entry's header, so its property dropdowns show the new skin's `property[]` schema.
+    this.refreshBeatorajaSelectSkinOptions();
   }
 
   /**
@@ -4050,7 +3854,7 @@ class PlayerWebDemoApp {
     const matched = candidates.find((entry) => entry.entryPath === entryPath);
     if (matched === undefined) return;
     const config = this.beatorajaSkinConfig(entryPath, matched.header);
-    if (typeCode === BEATORAJA_SKIN_TYPE.MUSIC_SELECT && this.beatorajaSelectScene !== undefined) {
+    if (typeCode === BEATORAJA_SKIN_TYPE.MUSIC_SELECT && this.selectView?.identity.family === 'beatoraja') {
       void this.applyBeatorajaSelectSkinConfig(entryPath, config);
       return;
     }
@@ -4181,54 +3985,43 @@ class PlayerWebDemoApp {
     // splash drawing over it.
     this.disposeScene(this.decideView);
     this.decideView = undefined;
-    // Family dispatch. The Debug Menu's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default);
-    // when the user hasn't overridden, the auto branch matches the legacy behaviour. The select scene also
-    // gates on `songs.length > 0` for the beatoraja path because the beatoraja select scene's chrome assumes a
-    // non-empty library (it paints empty-state hints separately from the LR2 path).
+    // Family dispatch. The Debug Menu's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default). The
+    // beatoraja family draws the theme's select entry when the library has charts (an empty library shows the built-in
+    // screen's drop hint); the LR2 family draws the loaded LR2 select skin when it has a bar list; otherwise the built-in
+    // family draws the be-music skin.
     const activeFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'select');
-    if (activeFamily === 'beatoraja' && this.collection.songs.length > 0) {
-      // Take the LR2 / built-in select view off the stage if it was up (it stays alive) — only one select can own the
-      // scene host.
-      await this.leaveScene(this.selectView);
-      await this.showBeatorajaSelect();
-      return;
-    }
-    // Same teardown for the beatoraja select scene if we're falling back to LR2 (theme dropped, etc.).
-    // Capture before disposing so a future beatoraja-theme reload (e.g. user re-drops the same
-    // theme) restores the cursor / folder state. The snapshot is opaque data — harmless to retain
-    // even when the user has switched away.
-    if (this.beatorajaSelectScene !== undefined) {
-      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
-    }
-    this.disposeScene(this.beatorajaSelectScene);
-    this.beatorajaSelectScene = undefined;
-    // The active family for this select mount: the LR2 family draws the loaded LR2 select skin when it has a bar list;
-    // otherwise the built-in family draws the be-music skin. The beatoraja branch returned earlier.
+    const beatorajaKit =
+      activeFamily === 'beatoraja' && this.collection.songs.length > 0
+        ? await this.loadBeatorajaSelectKit()
+        : undefined;
     const lr2SelectSkin =
       activeFamily === 'lr2' && this.selectSkin !== undefined && this.selectSkin.barLayout.slots.length > 0
         ? this.selectSkin
         : undefined;
-    const kit: SelectSceneKit = lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtInKit;
+    const kit: SelectSceneKit =
+      beatorajaKit ?? (lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtInKit);
     let carriedPlayOptions: PixiPlayOptions | undefined;
     const current = this.selectView;
     if (current !== undefined && current.identity.family !== kit.family) {
-      // The family changed (an LR2 theme dropped while the built-in screen is up, or the other way round): only that
-      // family's view draws it, so the screen is made again below, carrying the cursor and the live play options across.
+      // The family changed (an LR2 or a beatoraja theme dropped while the built-in screen is up, or the other way
+      // round): only that family's view draws it, so the screen is made again below, carrying the cursor and the live
+      // play options across.
       this.lastSelectNavigation ??= current.snapshot();
       carriedPlayOptions = current.getPlayOptions();
       this.disposeScene(current);
       this.selectView = undefined;
     }
-    const sounds = this.selectSoundSet();
+    const sounds = this.selectSoundSet(kit.family);
     const kept = this.selectView;
     if (kept) {
       // The latest theme's skin and sounds go onto the scene BEFORE it shows again: off the stage it only takes them, and
       // its BGM starts as it enters. The other way round, the previous theme's BGM would start for a moment.
-      if (kit.family === 'lr2') kept.updateKit(kit);
+      if (kit.family !== 'built-in') kept.updateKit(kit);
       kept.setSounds(sounds);
       kept.setLibrary(this.collection);
       await this.sceneHost.setScene(kept);
       if (this.lastSelectNavigation) kept.restore(this.lastSelectNavigation);
+      if (kit.family === 'beatoraja') this.refreshBeatorajaSelectSkinOptions();
       return;
     }
     // Seed the screen's play options from the Debug Menu's "Play options" state (two-way sync: the screen's own edits
@@ -4284,10 +4077,28 @@ class PlayerWebDemoApp {
           if (action === 'name') this.courseMakerPanel?.focusName();
           else if (course !== undefined) this.courseMakerPanel?.confirmDelete(course.definition);
         },
+        // A beatoraja skin's JUDGE TIMING button: the options are kept for the entry and the skin loaded again with
+        // them, which also brings the skin-options panel's readout up to date.
+        skinConfigChange: (config) => {
+          const entryPath = this.beatorajaSelectKit?.entryPath;
+          if (entryPath === undefined) return;
+          this.beatorajaKitCaches.skinConfigs.set(entryPath, config);
+          void this.applyBeatorajaSelectSkinConfig(entryPath, config);
+        },
+        // Escape at the root of a beatoraja select screen leaves it for the drop screen, as beatoraja's leaves the
+        // player's select; coming back by a drop or a theme starts at the root.
+        exit: () => {
+          this.elements.shell.classList.add('empty');
+          this.disposeScene(this.selectView);
+          this.selectView = undefined;
+          this.lastSelectNavigation = undefined;
+          this.beatorajaSkinOptionsGui?.clear();
+        },
       },
     });
     this.selectView = scene;
     await this.sceneHost.setScene(scene);
+    if (kit.family === 'beatoraja') this.refreshBeatorajaSelectSkinOptions();
     this.scheduleFirstRunResolutionDetect();
   }
 
@@ -4308,10 +4119,17 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * The select screen's sounds as a `SystemSoundSet`: the LR2 theme's select BGM, decide jingle and cues (by bytes); none
-   * without a theme.
+   * The select screen's sounds as a `SystemSoundSet` for the family drawing it: a beatoraja theme's cues and select BGM
+   * (by path, read from the theme's files; its decide sound plays on its decide screen), or the LR2 theme's select BGM,
+   * decide jingle and cues (by bytes); none without a theme.
    */
-  private selectSoundSet(): SystemSoundSet {
+  private selectSoundSet(family: SelectSceneKit['family']): SystemSoundSet {
+    if (family === 'beatoraja') {
+      return systemSoundSetFromBeatoraja({
+        paths: this.beatorajaSystemSoundPaths,
+        ...(this.beatorajaSelectBgmPath !== undefined ? { selectBgmPath: this.beatorajaSelectBgmPath } : {}),
+      });
+    }
     const set: { -readonly [S in keyof SystemSoundSet]: SystemSoundSet[S] } = {};
     const add = (slot: keyof SystemSoundSet, bytes: Uint8Array | undefined): void => {
       if (bytes !== undefined) set[slot] = { bytes };
@@ -4429,15 +4247,6 @@ class PlayerWebDemoApp {
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.snapshot();
     await this.leaveScene(this.selectView);
-    if (kit.family === 'beatoraja') {
-      // Capture the beatoraja select scene's state before disposing it: back from the result, the player lands in the
-      // same folder / cursor / sort / filter / favorites state.
-      if (this.beatorajaSelectScene !== undefined) {
-        this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
-      }
-      this.disposeScene(this.beatorajaSelectScene);
-      this.beatorajaSelectScene = undefined;
-    }
     this.disposeScene(this.decideView);
     this.disposeScene(this.gameplayView);
     this.gameplayView = undefined;
