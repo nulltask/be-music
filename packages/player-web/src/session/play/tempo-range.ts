@@ -1,4 +1,4 @@
-import type { TempoPoint } from '@be-music/audio-renderer/triggers';
+import type { TempoPoint } from '@be-music/chart';
 
 /**
  * The lowest, highest, and main (longest-held) BPM of a play, from its tempo points: the built-in HUD shows them, and

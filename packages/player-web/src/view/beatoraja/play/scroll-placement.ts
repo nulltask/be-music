@@ -11,7 +11,7 @@ import {
   type TempoReversalPoint,
 } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
-import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
+import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/display';
 import {
   changesScrollRate,
   collectResolvedLaneTimelineBeats,

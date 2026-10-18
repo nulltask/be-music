@@ -12,7 +12,7 @@
  * what the screen showed.
  */
 
-import { resolvePlayChart, type ResolvedPlayChart } from '@be-music/player/core/engine';
+import { resolvePlayChart, type ResolvedPlayChart } from '@be-music/player';
 import {
   DEFAULT_PLAY_OPTIONS,
   type CourseView,

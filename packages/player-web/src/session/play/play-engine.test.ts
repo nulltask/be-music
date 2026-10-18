@@ -1,9 +1,13 @@
-import { createPlayerUiSignalBus, type PlayerUiCommand } from '@be-music/player/core/ui-signal-bus';
-import type { PlayerGaugeSummary, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
-import type { PlayerSummary } from '@be-music/player/core/engine';
+import {
+  createPlayerUiSignalBus,
+  type PlayerUiCommand,
+  type PlayerGaugeSummary,
+  type PlayerUiFramePayload,
+  createPlayerStateSignals,
+} from '@be-music/player/signals';
+import type { PlayerSummary } from '@be-music/player';
 import { courseStageRecordPlayFromResult, recordPlayFromResult } from '@be-music/player/records';
 import { createEmptyScore } from '@be-music/player/ruleset';
-import { createPlayerStateSignals } from '@be-music/player/state-signals';
 import { createHiSpeedState, createPlayState, HiSpeedTransition, type PlayState } from '@be-music/scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserSongEntry } from '../../collection/types.ts';

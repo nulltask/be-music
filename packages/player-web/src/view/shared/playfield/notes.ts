@@ -5,7 +5,7 @@
  */
 
 import { findFirstIndexAtOrAfter } from '@be-music/utils/core';
-import type { TimedLandmineNote } from '@be-music/player/playable-notes';
+import type { TimedLandmineNote } from '@be-music/player/display';
 import {
   advanceDrawCursor,
   isDrawnAtTime,
@@ -19,7 +19,7 @@ import {
   resolveReversedDrawClock,
 } from '../../../chart/note-draw-window.ts';
 import { PIXELS_PER_BEAT } from '../../../stage/design.ts';
-import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
+import { resolveLr2LaneIndex } from '@be-music/player/lanes';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { renderPhantomNote } from '../../../skins/phantom/playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';

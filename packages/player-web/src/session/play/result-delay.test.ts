@@ -1,6 +1,6 @@
-import type { TimingResolver, TimedSampleTrigger } from '@be-music/audio-renderer/triggers';
+import type { TimingResolver, TimedSampleTrigger } from '@be-music/chart';
 import { createEmptyJson, type BeMusicEvent } from '@be-music/json';
-import type { TimedPlayableNote } from '@be-music/player/playable-notes';
+import type { TimedPlayableNote } from '@be-music/player/display';
 import { describe, expect, it } from 'vite-plus/test';
 import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './result-delay.ts';
 

@@ -66,10 +66,9 @@ import {
   type BeatorajaScoreInput,
   type BeatorajaTimerChanges,
 } from '@be-music/beatoraja-skin/scene';
-import type { JudgeWindowsMs } from '@be-music/player/core/judge-window';
-import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
+import { type JudgeWindowsMs, resolveJudgeWindowsMs } from '@be-music/player/ruleset';
+import type { ChartPlayVariant } from '@be-music/chart';
+import { resolveSideKeySlot } from '@be-music/player/lanes';
 import {
   recentJudgeTimings,
   type CourseView,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { parseBms } from '@be-music/parser';
-import { preparePlaybackChart } from '@be-music/player/core/engine';
+import { preparePlaybackChart } from '@be-music/player';
 import { flipDpChannel as flipPreparedChannel } from '../../session/play/play-chart.ts';
 import { flipDpChannel, flipDpChart } from './dp-flip.ts';
 

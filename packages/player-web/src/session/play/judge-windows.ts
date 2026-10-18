@@ -1,4 +1,4 @@
-import type { JudgeWindowSetUs, RulesetWindowTables, WindowPairUs } from '@be-music/player/core/engine';
+import type { JudgeWindowSetUs, RulesetWindowTables, WindowPairUs } from '@be-music/player/ruleset';
 import type { BeMusicJudgeWindow, BeMusicJudgeWindowSet, BeMusicJudgeWindows } from '@be-music/skin-sdk';
 
 /**

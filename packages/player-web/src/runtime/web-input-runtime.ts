@@ -1,5 +1,5 @@
-import type { CreatePlayerInputRuntimeContext, PlayerInputRuntime } from '@be-music/player/core/engine';
-import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import type { CreatePlayerInputRuntimeContext, PlayerInputRuntime } from '@be-music/player';
+import type { PlayerInputSignalBus } from '@be-music/player/signals';
 import { logger } from '../logger.ts';
 
 const log = logger('web-input-runtime');

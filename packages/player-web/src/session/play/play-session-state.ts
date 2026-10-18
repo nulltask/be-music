@@ -6,15 +6,16 @@
  * (`PlayLayers`).
  */
 import type { Texture } from 'pixi.js';
-import type { TimedSampleTrigger, TimingResolver } from '@be-music/audio-renderer/triggers';
-import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player/core/engine';
+import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player';
 import { createEmptyScore, type JudgeKind, type LongNoteStyle, type ScoreSummary } from '@be-music/player/ruleset';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
-import type { PlayerStateSignals } from '@be-music/player/state-signals';
-import type { PlayerGaugeSummary, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
-import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import type { TimedPlayableNote } from '@be-music/player/playable-notes';
+import type {
+  PlayerInputSignalBus,
+  PlayerStateSignals,
+  PlayerGaugeSummary,
+  PlayerUiFramePayload,
+  PlayerUiSignalBus,
+} from '@be-music/player/signals';
+import type { ScrollDistanceMapperLike, TimedPlayableNote } from '@be-music/player/display';
 import type { BeMusicPlaylog, PlaylogViewCoalescer } from '@be-music/player/playlog';
 import {
   createPlayState,
@@ -43,7 +44,14 @@ import type { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
-import type { BmsSwitchingBga, RandomDraws, ResolvedChart } from '@be-music/chart';
+import type {
+  BmsSwitchingBga,
+  RandomDraws,
+  ResolvedChart,
+  TimedSampleTrigger,
+  TimingResolver,
+  ChartPlayVariant,
+} from '@be-music/chart';
 import type { BgaCue, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';

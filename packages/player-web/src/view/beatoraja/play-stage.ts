@@ -11,9 +11,8 @@ import {
   type BeatorajaImageElement,
   type BeatorajaImageId,
 } from '@be-music/beatoraja-skin';
-import type { TempoReversalPoint } from '@be-music/chart';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
+import type { TempoReversalPoint, ChartPlayVariant } from '@be-music/chart';
+import type { ScrollDistanceMapperLike } from '@be-music/player/display';
 import type { Container, Texture } from 'pixi.js';
 import type { BeatorajaSceneKit } from '../../skin/beatoraja/scene-kit.ts';
 import type { BgaCue } from '../../chart/bga-timeline.ts';

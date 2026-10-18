@@ -5,7 +5,7 @@
  */
 
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
-import type { PlayerUiCommand } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerUiCommand } from '@be-music/player/signals';
 import {
   createPlayState,
   reducePlayState,
@@ -1486,7 +1486,7 @@ describe('BeatorajaPlayBridge — resolveJudgeWindowsMs', () => {
   });
 
   it("resolves LR2 windows from the chart's judge rank", () => {
-    // RANK 2 (NORMAL): PG ±18, GR ±40, GD ±100, BAD ±200 ms (`@be-music/player/core/judge-window`).
+    // RANK 2 (NORMAL): PG ±18, GR ±40, GD ±100, BAD ±200 ms (`resolveJudgeWindowsMs` in `@be-music/player/ruleset`).
     const { bridge } = createHarness({
       chart: {
         metadata: { bpm: 120, title: 't', rank: 2 } as unknown as BeMusicJson['metadata'],

@@ -1,4 +1,4 @@
-import { createLaneBindings } from '@be-music/player/core/lane-layout';
+import { createLaneBindings } from '@be-music/player/lanes';
 import { createPlayState, reducePlayState, type LaneCoverState } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';

@@ -3,7 +3,7 @@
  * kit's family and returns the scene to show with `PixiSceneHost.setScene`.
  */
 
-import type { ResolvedPlayChart } from '@be-music/player/core/engine';
+import type { ResolvedPlayChart } from '@be-music/player';
 import type { CourseView, LibraryChart, PlayOptions, SystemSoundSet } from '@be-music/scene-model';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
