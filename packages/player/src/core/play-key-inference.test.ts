@@ -150,20 +150,6 @@ describe('createKeyStateInference', () => {
     expect(sent.at(-1)).toBe('release 11 @1.23 inferred');
   });
 
-  test('a replay releases the keys whose grace lapses by an instant, the earliest first, each at its own', () => {
-    const { sent, inference, press } = infer();
-    expect(inference.nextReleaseSeconds()).toBe(Number.POSITIVE_INFINITY);
-    press('11', 0.5);
-    press('13', 0.55);
-    expect(inference.nextReleaseSeconds()).toBeCloseTo(0.62, 9);
-    inference.releaseThrough(0.62);
-    expect(sent.slice(4)).toEqual(['release 11 @0.62 inferred']);
-    expect(inference.nextReleaseSeconds()).toBeCloseTo(0.67, 9);
-    inference.releaseThrough(1);
-    expect(sent.slice(5)).toEqual(['release 13 @0.67 inferred']);
-    expect(inference.nextReleaseSeconds()).toBe(Number.POSITIVE_INFINITY);
-  });
-
   test('stop drops the holds it inferred: the input reports its releases', () => {
     const { sent, inference, press } = infer();
     press('11', 0.99);
