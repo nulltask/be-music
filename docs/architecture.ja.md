@@ -329,7 +329,7 @@ Web のデモを 1 つのシーンルーター（[ADR 0006](./adr/0006-scene-rou
 | P5.2  | 設定のサービスと、`PlayOptions` 全体を持つプレイオプションのサービス                            | [#510](https://github.com/nulltask/be-music/pull/510) | 完了 |
 | P5.3  | Debug Menu を `ui/debug-menu/` へ                                                               | [#516](https://github.com/nulltask/be-music/pull/516) | 完了 |
 | P5.4  | ライブラリ・記録・コースメーカーのサービスと、ドロップの受け口                                  | [#514](https://github.com/nulltask/be-music/pull/514) | 完了 |
-| P5.5  | LR2・beatoraja・標準のテーマのサービスと、ファミリーの kit                                      | —                                                     | 予定 |
+| P5.5  | LR2・beatoraja・標準のテーマのサービスと、ファミリーの kit                                      | [#519](https://github.com/nulltask/be-music/pull/519) | 完了 |
 | P5.6  | コースのサービスと、コースと NONSTOP のルート                                                   | —                                                     | 予定 |
 | P5.7a | 選曲と決定のルート                                                                              | —                                                     | 予定 |
 | P5.7b | プレイ・リザルト・リプレイのルート                                                              | —                                                     | 予定 |
