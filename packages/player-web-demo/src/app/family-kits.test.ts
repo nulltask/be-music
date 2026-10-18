@@ -81,7 +81,6 @@ function fakes(
   };
   const beatoraja: Fakes['beatoraja'] = {
     beatorajaTheme: loaded.beatoraja,
-    activeBeatorajaPlay: undefined,
     loadBeatorajaPlayKit: vi.fn(async () => ({
       kit: BEATORAJA_KIT,
       entryPath: 'skin/play7.luaskin',
@@ -139,30 +138,28 @@ describe('FamilyKits.decideKitFor', () => {
 });
 
 describe('FamilyKits.resolvePlayKit', () => {
-  test("a chart the beatoraja theme can play plays on its play entry, kept as the play's entry", async () => {
+  test('a chart the beatoraja theme can play plays on its play entry, handed with the kit', async () => {
     const { kits, beatoraja } = fakes({ beatoraja: beatorajaTheme() });
     const song = chart();
     expect(kits.playsOnBeatoraja(song)).toBe(true);
-    expect(await kits.resolvePlayKit(song, {})).toBe(BEATORAJA_KIT);
-    expect(beatoraja.activeBeatorajaPlay).toEqual({
-      entryPath: 'skin/play7.luaskin',
-      header: { type: 0 },
-      variant: '7',
+    // The entry goes with the kit: the play puts it in force as it takes the stage, not here.
+    expect(await kits.resolvePlayKit(song, {})).toEqual({
+      kit: BEATORAJA_KIT,
+      beatorajaPlay: { entryPath: 'skin/play7.luaskin', header: { type: 0 }, variant: '7' },
     });
-    // An entry that fails to load leaves no play kit and no play entry.
+    // An entry that fails to load leaves no play kit.
     vi.mocked(beatoraja.loadBeatorajaPlayKit).mockResolvedValueOnce(undefined);
     expect(await kits.resolvePlayKit(song, {})).toBeUndefined();
-    expect(beatoraja.activeBeatorajaPlay).toBeUndefined();
   });
 
   test("an LR2 play skin for the chart's key mode, with the 9-keys skin for invisible notes", async () => {
     const play7 = skin('play7');
     const play9 = skin('play9');
     const { kits, beatoraja } = fakes({ playSkins: { '7': play7, '9': play9 } });
-    beatoraja.activeBeatorajaPlay = { entryPath: 'old', header: {} as never, variant: '7' };
     expect(kits.playsOnBeatoraja(chart())).toBe(false);
-    expect(await kits.resolvePlayKit(chart(), {})).toEqual({ family: 'lr2', skin: play7, invisibleNoteSkin: play9 });
-    expect(beatoraja.activeBeatorajaPlay).toBeUndefined();
+    expect(await kits.resolvePlayKit(chart(), {})).toEqual({
+      kit: { family: 'lr2', skin: play7, invisibleNoteSkin: play9 },
+    });
     expect(beatoraja.loadBeatorajaPlayKit).not.toHaveBeenCalled();
   });
 
@@ -172,8 +169,7 @@ describe('FamilyKits.resolvePlayKit', () => {
     const courseInfo = resolveCourseView(course(), 0);
     const courseStage = { courseInfo } as CourseStagePlay;
     expect(await kits.resolvePlayKit(chart(), { courseStage })).toEqual({
-      family: 'lr2',
-      skin: skin('play7 (course)'),
+      kit: { family: 'lr2', skin: skin('play7 (course)') },
     });
     expect(lr2.courseLr2Skin).toHaveBeenLastCalledWith(play7, courseInfo, { kind: 'play', playVariant: '7' });
 
@@ -187,14 +183,14 @@ describe('FamilyKits.resolvePlayKit', () => {
 
   test('the built-in kit with no LR2 skin loaded, or with Skin system on Built-in', async () => {
     const none = fakes();
-    expect(await none.kits.resolvePlayKit(chart(), {})).toBe(BUILT_IN_KIT);
+    expect(await none.kits.resolvePlayKit(chart(), {})).toEqual({ kit: BUILT_IN_KIT });
     // LR2 picked with none loaded falls to the built-in family, not to the beatoraja theme.
     const beatorajaOnly = fakes({ beatoraja: beatorajaTheme() });
     beatorajaOnly.guiState.skinFamilyOverride = 'lr2';
     expect(beatorajaOnly.kits.playsOnBeatoraja(chart())).toBe(false);
-    expect(await beatorajaOnly.kits.resolvePlayKit(chart(), {})).toBe(BUILT_IN_KIT);
+    expect(await beatorajaOnly.kits.resolvePlayKit(chart(), {})).toEqual({ kit: BUILT_IN_KIT });
     const lr2 = fakes({ playSkins: { '7': skin('play7') } });
     lr2.guiState.skinFamilyOverride = 'default';
-    expect(await lr2.kits.resolvePlayKit(chart(), {})).toBe(BUILT_IN_KIT);
+    expect(await lr2.kits.resolvePlayKit(chart(), {})).toEqual({ kit: BUILT_IN_KIT });
   });
 });

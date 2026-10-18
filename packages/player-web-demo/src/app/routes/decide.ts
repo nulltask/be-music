@@ -8,7 +8,7 @@ import { logger } from '@be-music/player-web';
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { AudioService } from '@be-music/player-web/audio';
 import { resolveSongSource, type ChartFileHashes } from '@be-music/player-web/collection';
-import { createDecideScene, type PlayScene, type PlaySceneKit, type SelectScene } from '@be-music/player-web/host';
+import { createDecideScene, type PlayScene, type SelectScene } from '@be-music/player-web/host';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import { systemSoundSetFromBeatoraja, type LibraryChart } from '@be-music/scene-model';
 import { sanitizeFilenameStem } from '../../demo-utils.ts';
@@ -22,7 +22,7 @@ import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { DemoGuiState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
 import type { BeatorajaSkinOptionsPanel } from '../../ui/beatoraja-skin-options.ts';
 import { settleDecidePreload, type DecidePreload } from '../decide-handoff.ts';
-import type { FamilyKits } from '../family-kits.ts';
+import type { FamilyKits, ResolvedPlayKit } from '../family-kits.ts';
 import type { SceneRouter, SceneRouteToken } from '../scene-router.ts';
 import type { SelectRoute } from './select.ts';
 
@@ -90,9 +90,11 @@ export interface DecideRouteDeps {
   /** Makes the play scene for a chart with the play options in force. */
   readonly buildPlayScene: (
     song: LibraryChart,
-    kit: PlaySceneKit,
+    kit: ResolvedPlayKit,
     overrides: { autoPlay?: boolean; preResolved?: ResolvedPlayChart; chartHashes?: ChartFileHashes },
   ) => PlayScene;
+  /** Puts in force what the play was made with, as it takes the stage (`PlayRoute.latchPlay`). */
+  readonly latchPlay: (view: PlayScene) => void;
 }
 
 /** A start's decide screen, and the play it hands the stage to. */
@@ -117,6 +119,7 @@ export class DecideRoute {
   private readonly showSelect: DecideRouteDeps['showSelect'];
   private readonly playSong: DecideRouteDeps['playSong'];
   private readonly buildPlayScene: DecideRouteDeps['buildPlayScene'];
+  private readonly latchPlay: DecideRouteDeps['latchPlay'];
 
   public constructor(deps: DecideRouteDeps) {
     this.router = deps.router;
@@ -139,6 +142,7 @@ export class DecideRoute {
     this.showSelect = deps.showSelect;
     this.playSong = deps.playSong;
     this.buildPlayScene = deps.buildPlayScene;
+    this.latchPlay = deps.latchPlay;
   }
 
   /** The select screen (`createSelectScene`), whichever family draws it, kept by the router across the other screens. */
@@ -280,6 +284,8 @@ export class DecideRoute {
     this.selectRoute.lastSelectNavigation = this.selectView?.snapshot();
     // The splash hands the stage over: it exits as the prepared play enters, then goes.
     if (!(await this.router.show(view, { role: 'play', token }))) return;
+    // Only now does the play put what it was made with in force: a splash backed out of leaves it all as it was.
+    this.latchPlay(view);
     this.setPlayStatus(
       describePlayingStatus(song.title, {
         ...playingFamily(view),

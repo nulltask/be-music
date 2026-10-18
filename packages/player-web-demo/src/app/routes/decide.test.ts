@@ -160,9 +160,9 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
       decideKitFor: vi.fn<DecideRouteDeps['familyKits']['decideKitFor']>(async () =>
         decideFamily !== undefined ? kitOf<DecideSceneKit>(decideFamily) : undefined,
       ),
-      resolvePlayKit: vi.fn<DecideRouteDeps['familyKits']['resolvePlayKit']>(async () =>
-        kitOf<PlaySceneKit>(playFamily),
-      ),
+      resolvePlayKit: vi.fn<DecideRouteDeps['familyKits']['resolvePlayKit']>(async () => ({
+        kit: kitOf<PlaySceneKit>(playFamily),
+      })),
     },
     beatoraja: {
       beatorajaThemeBgm: { decide: new Uint8Array([1, 2, 3]) } as DecideRouteDeps['beatoraja']['beatorajaThemeBgm'],
@@ -179,11 +179,12 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
     lockPlaylogOptionsForPlay: vi.fn<DecideRouteDeps['lockPlaylogOptionsForPlay']>(),
     showSelect: vi.fn<DecideRouteDeps['showSelect']>(async () => {}),
     playSong: vi.fn<DecideRouteDeps['playSong']>(async () => {}),
-    buildPlayScene: vi.fn<DecideRouteDeps['buildPlayScene']>((_song, kit) => {
+    buildPlayScene: vi.fn<DecideRouteDeps['buildPlayScene']>((_song, { kit }) => {
       const play = fakePlay(kit.family);
       plays.push(play);
       return play as unknown as PlayScene;
     }),
+    latchPlay: vi.fn<DecideRouteDeps['latchPlay']>(),
   };
   const route = new DecideRoute(deps);
   return { route, router, deps, select, decides, plays, stage, classes, onInterrupt, recording };
@@ -237,7 +238,7 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
     expect(h.deps.familyKits.resolvePlayKit).toHaveBeenCalledWith(song('a'), {});
     expect(h.deps.buildPlayScene).toHaveBeenCalledWith(
       song('a'),
-      { family: 'built-in' },
+      { kit: { family: 'built-in' } },
       {
         autoPlay: true,
         preResolved: RESOLVED,
@@ -271,6 +272,11 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
     expect(h.classes.has('playing')).toBe(true);
     expect(h.deps.selectRoute.lastSelectNavigation).toBe(AT_BAR);
     expect(h.deps.setPlayStatus).toHaveBeenCalledWith('Playing: a');
+    // The play puts what it was made with in force as it takes the stage, before its status line reads it.
+    expect(h.deps.latchPlay).toHaveBeenCalledExactlyOnceWith(play);
+    expect(h.deps.latchPlay.mock.invocationCallOrder[0]).toBeLessThan(
+      h.deps.setPlayStatus.mock.invocationCallOrder[0]!,
+    );
     // Pitch follows tempo at the slider's tempo: the tempo slider stays live during the play.
     expect(h.deps.lockPlaylogOptionsForPlay).toHaveBeenCalledWith(true);
     // A recording armed on the select screen starts with the play.
@@ -322,6 +328,8 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
     play.load.resolve();
     await Promise.resolve();
     expect(play.start).not.toHaveBeenCalled();
+    // The play loaded behind it never took the stage, so it put nothing in force.
+    expect(h.deps.latchPlay).not.toHaveBeenCalled();
   });
 
   test('a newer navigation drops the play prepared behind the screen, and the screen leads nowhere', async () => {
@@ -336,6 +344,7 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
     expect(play.start).not.toHaveBeenCalled();
     expect(h.stage).not.toContain(play);
     expect(h.deps.playSong).not.toHaveBeenCalled();
+    expect(h.deps.latchPlay).not.toHaveBeenCalled();
   });
 
   test('a play that failed to load is made again without the screen, with the screen’s draws', async () => {
