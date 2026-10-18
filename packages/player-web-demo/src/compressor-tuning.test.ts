@@ -1,4 +1,4 @@
-import { DEFAULT_COMPRESSOR_PARAMS, KEY_BUS_COMPRESSOR_PARAMS } from '@be-music/player-web/runtime';
+import { DEFAULT_COMPRESSOR_PARAMS, KEY_BUS_COMPRESSOR_PARAMS } from '@be-music/player-web/audio';
 import { describe, expect, it } from 'vite-plus/test';
 import {
   defaultCompressorTunings,

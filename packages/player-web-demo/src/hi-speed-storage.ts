@@ -1,4 +1,4 @@
-import { DEFAULT_HISPEED, snapHiSpeed } from '@be-music/player-web/scenes';
+import { DEFAULT_HISPEED, snapHiSpeed } from '@be-music/scene-model';
 
 /** `localStorage` key of the hi-speed the next play starts at (the last one picked in play, the panel or the menu). */
 export const HI_SPEED_STORAGE_KEY = 'be-music-demo.hi-speed';

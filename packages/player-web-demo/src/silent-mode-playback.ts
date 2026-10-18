@@ -4,7 +4,7 @@
 // browser's own `'auto'`. Offered on the start card and in the Debug Menu. Also the one-time hint pointing iPhone /
 // iPad users at the setting when sound starts with it off.
 
-import { applySilentModePlayback, type SystemAudioSessionHost } from '@be-music/player-web/runtime';
+import { applySilentModePlayback, type SystemAudioSessionHost } from '@be-music/player-web/audio';
 
 export const PLAY_IN_SILENT_MODE_STORAGE_KEY = 'be-music-demo.play-in-silent-mode';
 export const SILENT_MODE_HINT_SEEN_STORAGE_KEY = 'be-music-demo.silent-mode-hint-seen';

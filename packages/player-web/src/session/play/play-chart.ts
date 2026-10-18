@@ -37,7 +37,6 @@ import { createEmptyScore, type GaugeType, type JudgeKind, type ScoreSummary } f
 import { collectChartVolumeMultipliers } from '../../chart/play-audio.ts';
 import { resolvePoorBgaFallbackKey } from '../../chart/play-bga.ts';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
-import { resolveChartPlayVariant } from '../../collection/collection.ts';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import {
   splitNonstopBgaTimeline,
@@ -57,6 +56,7 @@ import {
   laneCoversFromPlayOptions,
   reducePlayState,
   resolveHsFixMultiplier,
+  resolveLibraryChartPlayVariant,
   SHUTTER_DEFAULT,
   type HiSpeedTransition,
   type LaneCoverState,
@@ -196,7 +196,7 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   // the result here gives the engine + adapter + renderer a single source of truth without each one
   // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
   // branch adds are not in `song.chart.events`, and missing them would lay out (and judge) a 7 KEY play as 5 KEY.
-  const hostPlayVariant = resolveChartPlayVariant(song, resolved);
+  const hostPlayVariant = resolveLibraryChartPlayVariant(song, resolved);
   const resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: hostPlayVariant,

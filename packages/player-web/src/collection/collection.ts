@@ -25,15 +25,6 @@ import { logger } from '../logger.ts';
 export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
 export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles } from './dropped-file.ts';
 
-export { basename, dirname, normalizePath } from '@be-music/utils/core';
-
-// The library model lives in `@be-music/scene-model`; these are its folder grouping and play-variant rule under the
-// names this module has always exported them by.
-export {
-  groupChartsByFolder as groupSongsByFolder,
-  resolveLibraryChartPlayVariant as resolveChartPlayVariant,
-} from '@be-music/scene-model';
-
 const log = logger('drop');
 const MAX_ZIP_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024;

@@ -31,6 +31,21 @@ browser runtime は次の adapter module を使います。
 - `@be-music/player-web-demo` は core package を drag-and-drop loading、LR2 / beatoraja theme loading、debug control、recording control へ接続する private Vite application です。
 - browser player は shared core と terminal player と同じ parser、chart、player helper を通して BMS/BME/BML/PMS と bmson の譜面を扱います。
 
+## 公開する入口
+
+`@be-music/player-web` は、ファイル構成ではなく設計した入口を公開します（[ADR 0005](./adr/0005-public-entry-points.ja.md)）。
+
+| 入口                   | 公開するもの                                                                                                                                                                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@be-music/player-web` | 下の入口すべての和集合と、`logger`、Pixi の `Rectangle`                                                                                                                                                                                                   |
+| `./host`               | ホスト API：`PixiSceneHost`、`PixiScene`、`SessionScene`、`createSelectScene`・`createDecideScene`・`createPlayScene`・`createResultScene` とそのキット・オプション・イベント、種類ごとのキットの型、ビューの契約の型                                     |
+| `./skin`               | スキンの種類と読み込み：`SkinFamily` のレジストリ、LR2 と beatoraja のテーマの読み込み、`loadBeatorajaSceneKit`、be-music スキンのレジストリ、組み込みのスキン（`BUILT_IN_BE_MUSIC_SKINS`、`phantomSkin`、`plainSkin`、`latticeSkin`、`synesthesiaSkin`） |
+| `./collection`         | ライブラリの読み込み：`BrowserSongCollectionStore`、ドロップしたファイル、コースとコースメーカー、譜面のハッシュ、ブラウザの互換性チェック                                                                                                                |
+| `./audio`              | オーディオサービス（`createAudioService`）、オーディオバスとコンプレッサーのパラメーター、マスター音量、システムの audio session、`ChartPreviewEngine`                                                                                                    |
+| `./recording`          | `GameplayRecorder`、録画の形式、`makeWebmSeekable`、`downloadBlob`、WebCodecs の helper                                                                                                                                                                   |
+
+scene が受け取って返すモデルは、それぞれのパッケージから読み込みます。プレイオプション、`PlayResult`、`CourseView`、ハイスピードの範囲、ライブラリの helper（`groupChartsByFolder`、`resolveLibraryChartPlayVariant`）は `@be-music/scene-model` から、be-music スキンの契約は `@be-music/skin-sdk` から、プレイログの形式は `@be-music/player/playlog` から読み込みます。それ以外はパッケージの内部です。
+
 ## demo の起動
 
 ```bash
@@ -150,7 +165,7 @@ flowchart LR
   - プレイ履歴の自動保存がオンなら、コースのプレイログ（`*.bmcourse.json`、[playlog.ja.md](./playlog.ja.md#コースのプレイログ) を参照）をダウンロードします。
   - 最高のランプ、EX スコア、最大コンボ、BP をコースと判定のルールセットごとに保存し（[ベスト記録](#ベスト記録)）、コースバーに表示します。LR2 スキンではバーのランプの op（100-105）を点け、`#SRC_BAR_LAMP` を描きます（曲のバーも譜面の記録からランプを描きます）。beatoraja スキンでは `CLEAR_LAMP_*` の op を点けます。be-music スキンのコースカードには、ベストのランプと、ベストの値で取れるトロフィー（beatoraja の `GradeBar` と同じく、最高の EX スコアと最少の BP から。クリアの有無は問いません）を出します。どこかのステージを AUTO で遊んだプレイ（AUTO で遊んだ NONSTOP のプレイも）は、単曲のオートプレイと同じく記録しません。
   - ステージの結果はコースの記録になり、リーダーボードには送りません。LR2 が EXPERT と GRADE のコースでするのと同じく（OpenLR2 L9043-L9192）、手で本来のテンポで遊んだステージは、その譜面のベストの EX スコア、最大コンボ、BP と FULL COMBO のランプ（PERFECT と MAX も）も更新します。クリアランプとプレイ回数は更新しません。NONSTOP は各ステージの譜面の記録を変えません。
-- **LR2 スキン**（`SceneCourseInfo` を `courseInfo` として LR2 の選曲・プレイ・結果のシーンに渡します）：
+- **LR2 スキン**（scene-model の `CourseView` を `courseInfo` として LR2 の選曲・プレイ・結果のシーンに渡します）：
   - op：選曲画面のコースバーは 3（コースバー）、全ステージがコレクションにあれば 5、290 とコースの種類の op（291 NONSTOP、292 EXPERT、293 GRADE）を点けます。さらにステージ 1〜5 について、譜面の `#DIFFICULTY` から `700 + 10 × i + 難易度` を点けます（op 700-745。LR2 はそこを 0 と読むので、欠けたステージやコース以外のバーでは `x0` の op が点きます）。コース中のプレイと結果では、さらにステージの op を点けます。最後ではない 1〜9 ステージ目は 280-288、最後のステージは 289 です。
   - LR2 はステージごとにスキンを読み込むので、コースのステージはこれらの op で解析し直したプレイスキンで遊びます（`Lr2ThemeSkins.loadSkin`）。ステージの結果とコースの結果も、それぞれのスキンを同じように解析し直します。
   - 数値 250-259 はステージのレベル、テキスト 150-154 はステージのタイトル、160-164 はそのサブタイトル、170 はコース名です。
@@ -397,7 +412,7 @@ flowchart LR
 
 ### 選曲画面
 
-`createSelectScene(kit, options)`（`@be-music/player-web/scenes`）は、どの種類の選曲画面も作ります。選曲画面のセッション（`session/select/select-session.ts`）を kit の種類のビューが描くもので、`setScene` で表示する `SessionScene` です。標準の kit（`{ family: 'built-in', skin }`）は標準の選曲画面のビュー（`view/built-in/select-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin }`。テーマの選曲画面のスキン）は LR2 の選曲画面のビュー（`view/lr2/select-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。`loadBeatorajaSceneKit` で読み込んだテーマの選曲画面のエントリ）は beatoraja の選曲画面のビュー（`view/beatoraja/select-view.ts`）が描きます。標準と LR2 のビューはポインターの入力（`view/shared/select-pointer.ts`）を共有し、どのビューも README のオーバーレイを描きます。
+`createSelectScene(kit, options)`（`@be-music/player-web/host`）は、どの種類の選曲画面も作ります。選曲画面のセッション（`session/select/select-session.ts`）を kit の種類のビューが描くもので、`setScene` で表示する `SessionScene` です。標準の kit（`{ family: 'built-in', skin }`）は標準の選曲画面のビュー（`view/built-in/select-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin }`。テーマの選曲画面のスキン）は LR2 の選曲画面のビュー（`view/lr2/select-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。`loadBeatorajaSceneKit` で読み込んだテーマの選曲画面のエントリ）は beatoraja の選曲画面のビュー（`view/beatoraja/select-view.ts`）が描きます。標準と LR2 のビューはポインターの入力（`view/shared/select-pointer.ts`）を共有し、どのビューも README のオーバーレイを描きます。
 
 ```mermaid
 flowchart LR
@@ -430,7 +445,7 @@ Web demo は、どの種類が描く場合も選曲画面の scene を 1 つ保�
 
 ### 決定画面
 
-`createDecideScene(kit, options)`（`@be-music/player-web/scenes`）は、どの種類の決定画面も作ります。決定画面のセッション（`session/decide/decide-session.ts`）を kit の種類のビューが描くもので、`setScene` で表示する `SessionScene` です。標準の kit（`{ family: 'built-in', skin }`）は標準の決定画面のビュー（`view/built-in/decide-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin }`。テーマの決定画面のスキン）は LR2 の決定画面のビュー（`view/lr2/decide-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。`loadBeatorajaSceneKit` で読み込んだテーマの決定画面のエントリ）は beatoraja の決定画面のビュー（`view/beatoraja/decide-view.ts`）が描きます。
+`createDecideScene(kit, options)`（`@be-music/player-web/host`）は、どの種類の決定画面も作ります。決定画面のセッション（`session/decide/decide-session.ts`）を kit の種類のビューが描くもので、`setScene` で表示する `SessionScene` です。標準の kit（`{ family: 'built-in', skin }`）は標準の決定画面のビュー（`view/built-in/decide-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin }`。テーマの決定画面のスキン）は LR2 の決定画面のビュー（`view/lr2/decide-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。`loadBeatorajaSceneKit` で読み込んだテーマの決定画面のエントリ）は beatoraja の決定画面のビュー（`view/beatoraja/decide-view.ts`）が描きます。
 
 - **オプション。** `chart`（これから遊ぶ譜面）、`course`（コースのステージなら、そのコース）、`playOptions`（スキンに見せるプレイオプション）、`source`（スキンの画像のための譜面のファイル）、`sounds`（テーマの `SystemSoundSet`）、`audio`（ホストのオーディオサービス）、`progress`（裏で準備しているプレイの読み込みの進み具合。ないときは、自動で進むまでの時間のうち過ぎた割合をフレームに入れます）、`on: { continue, cancel }` です。
 - **タイミング。** セッションは、ビューのスキンのタイミング（`DecideView.timing`）で画面を進めます。入力は入力までの待ちのあとに受け付けます。自動で進むまでの時間がたつと、画面はひとりでにプレイへ進みます。その時間がなければ、プレイヤーの操作を待ちます。画面を出るときはまずフェードアウトし、そのあと `on.continue`（プレイへ）か `on.cancel`（選曲画面へ戻る）を、enter ごとに 1 回だけ呼びます。be-music スキンの画面はすぐに入力を受け付け、`decide.durationMs`（既定は 2000 ms）のあとに進み、フェードアウトはありません。LR2 スキンの画面は `#STARTINPUT`（なければ 1500 ms）のあとに入力を受け付け、その 1200 ms 後に進み、`#FADEOUT` の間フェードアウトします。beatoraja スキンの画面は `input`（なければ 500 ms）のあとに入力を受け付け、`scene`（なければ 3000 ms。`scene = 0` ならプレイヤーの操作を待ちます）のあとに進み、`fadeout`（なければ 500 ms）の間フェードアウトします。
@@ -479,7 +494,7 @@ sequenceDiagram
 
 ### リザルト画面
 
-`createResultScene(kit, options)`（`@be-music/player-web/scenes`）は、どの種類のリザルト画面も作ります。リザルト画面のセッション（`session/result/result-session.ts`）を kit の種類のビューが描くもので、`setScene` で表示する `SessionScene` です。標準の kit（`{ family: 'built-in', skin }`）は標準のリザルト画面のビュー（`view/built-in/result-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin }`。テーマのリザルト画面のスキン、コース全体の結果ではコースリザルトのスキン）は LR2 のリザルト画面のビュー（`view/lr2/result-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。`loadBeatorajaSceneKit` で読み込んだテーマのリザルト画面のエントリ、コース全体の結果ではコースリザルトのエントリ）は beatoraja のリザルト画面のビュー（`view/beatoraja/result-view.ts`）が描きます。
+`createResultScene(kit, options)`（`@be-music/player-web/host`）は、どの種類のリザルト画面も作ります。リザルト画面のセッション（`session/result/result-session.ts`）を kit の種類のビューが描くもので、`setScene` で表示する `SessionScene` です。標準の kit（`{ family: 'built-in', skin }`）は標準のリザルト画面のビュー（`view/built-in/result-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin }`。テーマのリザルト画面のスキン、コース全体の結果ではコースリザルトのスキン）は LR2 のリザルト画面のビュー（`view/lr2/result-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。`loadBeatorajaSceneKit` で読み込んだテーマのリザルト画面のエントリ、コース全体の結果ではコースリザルトのエントリ）は beatoraja のリザルト画面のビュー（`view/beatoraja/result-view.ts`）が描きます。
 
 - **オプション。** `result`（`PlayResult`。LR2 と beatoraja のスキンは `result.course` のコースを表示します）、`run`（`result.run` がプレイの種類を表さないとき、たとえばコースのステージのときの種類）、`source`（スキンの画像のための譜面のファイル）、`playChart`（プレイが遊んだとおりの譜面。beatoraja のスキンの BPM グラフ、ノート種別、TOTAL の表示のため）、`sounds`（テーマの `SystemSoundSet`）、`audio`（ホストのオーディオサービス）、`on: { continue, retry? }` です。
 - **見せ方。** セッションは `resolveResultPresentation(run)` でプレイの見せ方を決めます。コース全体の結果ではコースのジングルを鳴らし、クイックリトライは単曲のプレイと NONSTOP のときだけです。
@@ -514,7 +529,7 @@ Web のデモは、リザルトをすべてこの画面で表示します。単�
 
 ### プレイ画面
 
-`createPlayScene(kit, options)`（`@be-music/player-web/scenes`）はどの種類のプレイ画面も作ります。プレイのセッション（`session/play/play-session.ts`）を kit の種類のビューが描く `SessionScene` で、読み込み、`setScene` で表示し、開始します。標準の kit（`{ family: 'built-in', skin }`）は組み込みのプレイビュー（`view/built-in/play-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin, invisibleNoteSkin? }`。譜面のプレイスキンと、見えないノート用のテーマの 9 鍵スキン）は LR2 のプレイビュー（`view/lr2/play-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。譜面の鍵盤数に合うテーマのプレイのエントリ）は beatoraja のプレイビュー（`view/beatoraja/play-view.ts`）が描きます。
+`createPlayScene(kit, options)`（`@be-music/player-web/host`）はどの種類のプレイ画面も作ります。プレイのセッション（`session/play/play-session.ts`）を kit の種類のビューが描く `SessionScene` で、読み込み、`setScene` で表示し、開始します。標準の kit（`{ family: 'built-in', skin }`）は組み込みのプレイビュー（`view/built-in/play-view.ts`）が、LR2 の kit（`{ family: 'lr2', skin, invisibleNoteSkin? }`。譜面のプレイスキンと、見えないノート用のテーマの 9 鍵スキン）は LR2 のプレイビュー（`view/lr2/play-view.ts`）が、beatoraja の kit（`{ family: 'beatoraja', kit }`。譜面の鍵盤数に合うテーマのプレイのエントリ）は beatoraja のプレイビュー（`view/beatoraja/play-view.ts`）が描きます。
 
 ```mermaid
 flowchart LR
@@ -578,7 +593,7 @@ Web のデモはどの種類のプレイもすべてこの方法で、その種�
 
 このパッケージのソースは層に分かれていて、`pnpm run check` が [`vite.config.ts`](../vite.config.ts) の Oxlint の上書き設定でそれを守ります。上から順に次のとおりです。
 
-- **ホスト API**：`host/` とパッケージの barrel（`index.ts`）。`create*Scene` の関数、種類ごとのキット、`PixiSceneHost`、`./scenes` の barrel です。
+- **ホスト API**：`host/` とパッケージの barrel（`index.ts`）。`create*Scene` の関数、種類ごとのキット、`PixiSceneHost`、`./host` の barrel です。
 - **シーンセッション**（`session/`）と**ファミリービュー**（`view/`）。セッションが画面のふるまいを持ち、ビューがそれを描きます。互いを知るのは型だけです。
 - **下の層**：ほかのすべてのディレクトリ。音と入力のランタイムとエンジンドライバー（`runtime/`）、譜面とメディアの準備（`chart/`、`media/`）、コレクション（`collection/`）、ブラウザの検査（`browser/`）、Pixi のステージの補助（`stage/`）、スキンの読み込み（`skin/`）、組み込みスキン（`skins/`）、録画（`recording/`）、ロガーです。
 
@@ -663,7 +678,7 @@ pnpm bench -- --packages player-web
 ## Audio, BGA, recording
 
 - chart preview と gameplay audio は WebAudio を使います。
-- `@be-music/player-web/runtime` は platform audio session 用の helper を export します（engine 内部の `WebAudioSession` とは別物です）。`supportsSystemAudioSession`、`getSystemAudioSession`、`applySystemAudioSessionType` は `navigator.audioSession.type` を feature detection して設定し、`applySilentModePlayback(on)` はオンで `'playback'`、オフで `'auto'` を設定します。例外は握りつぶし、API がない環境では何もしません。`AudioContext` の作成・resume より前と、音声を unlock する gesture の中で呼んでください。
+- `@be-music/player-web/audio` は platform audio session 用の helper を export します（engine 内部の `WebAudioSession` とは別物です）。`supportsSystemAudioSession`、`getSystemAudioSession`、`applySystemAudioSessionType` は `navigator.audioSession.type` を feature detection して設定し、`applySilentModePlayback(on)` はオンで `'playback'`、オフで `'auto'` を設定します。例外は握りつぶし、API がない環境では何もしません。`AudioContext` の作成・resume より前と、音声を unlock する gesture の中で呼んでください。
 - gameplay audio は既定の split topology で key、BGM、master compressor stage を分けます。
 - `?compressor=legacy` は比較用に旧 single-compressor 構成を維持します。
 - `?compressor=off` は demo で compressor construction を無効化します。
@@ -683,7 +698,7 @@ pnpm bench -- --packages player-web
 
 ### オーディオサービス
 
-`createAudioService()`（`@be-music/player-web/runtime`）は、プレイ中の譜面の音以外を鳴らす唯一の入口です（[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）。scene session はできるごとにこれで音を鳴らします。どの選曲画面、決定画面、プレイ画面、リザルト画面もこれで鳴らします（プレイは `openPlayGraph` で専用のグラフを開きます）。Web のデモは起動時にサービスを 1 つ作り、これで作るすべての scene に渡します。beatoraja のテーマを読み込むと、beatoraja の選曲画面のパスで指す効果音と選曲 BGM、beatoraja の選曲画面・決定画面・プレイ画面・リザルト画面のスキンの音のために、そのファイルを設定します（`setTheme({ files })`）。
+`createAudioService()`（`@be-music/player-web/audio`）は、プレイ中の譜面の音以外を鳴らす唯一の入口です（[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）。scene session はできるごとにこれで音を鳴らします。どの選曲画面、決定画面、プレイ画面、リザルト画面もこれで鳴らします（プレイは `openPlayGraph` で専用のグラフを開きます）。Web のデモは起動時にサービスを 1 つ作り、これで作るすべての scene に渡します。beatoraja のテーマを読み込むと、beatoraja の選曲画面のパスで指す効果音と選曲 BGM、beatoraja の選曲画面・決定画面・プレイ画面・リザルト画面のスキンの音のために、そのファイルを設定します（`setTheme({ files })`）。
 
 ```mermaid
 flowchart LR

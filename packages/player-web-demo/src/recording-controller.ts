@@ -1,11 +1,11 @@
-import type { PixiSceneHost } from '@be-music/player-web/scenes';
+import type { PixiSceneHost } from '@be-music/player-web/host';
 import { Rectangle, logger } from '@be-music/player-web';
 import {
   downloadBlob,
   makeWebmSeekable,
   recordingFileExtension,
   type RecordingFormat,
-} from '@be-music/player-web/runtime';
+} from '@be-music/player-web/recording';
 import type { Controller } from 'lil-gui';
 
 /** The Debug Menu button that records the play screen (gameplay) as a video. */

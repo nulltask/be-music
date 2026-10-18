@@ -2,7 +2,7 @@
 //
 // ModernChic is the heavy user: `Root/customsound.lua` calls `audio_play(skin_config.get_path(
 // "Root/sounds/click.ogg"))` from every panel toggle, song change and confirm. The audio service
-// plays them (`createAudioService().skinSounds`, from `@be-music/player-web/runtime`), reading the
+// plays them (`createAudioService().skinSounds`, from `@be-music/player-web/audio`), reading the
 // path from the theme's files.
 
 /**
