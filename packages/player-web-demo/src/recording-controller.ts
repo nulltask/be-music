@@ -29,8 +29,8 @@ export interface GameplayRecorder {
 /**
  * Dependencies the recording controller's free functions read from / write to. Modelled as explicit getters /
  * setters / callbacks (rather than `this` references) so the demo class can pass them in without having to drop its
- * private modifier on every backing field. Each call site builds one of these inline from the demo's `PlayerWebDemoApp`
- * fields — see `makeRecordingDeps` in `main.ts`.
+ * private modifier on every backing field. Each call site builds one of these from the demo's recording service — see
+ * `RecordingService.deps` in `services/recording.ts`.
  */
 export interface RecordingDeps {
   readonly sceneHost: PixiSceneHost;
