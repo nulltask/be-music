@@ -12,11 +12,14 @@ import {
 } from '@be-music/player-web/host';
 import type { CourseDefinition } from '@be-music/player/course';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
-import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/scene-model';
+import type { BrowseSnapshot, LibraryChart, LibraryCourse, PlayResult } from '@be-music/scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { nextCourseStagePlay, type CourseStagePlay } from '../../course-flow.ts';
 import type { DeviceProfile } from '../../device-profile.ts';
-import type { RecordingDeps } from '../../recording-controller.ts';
+import { storeHiSpeed } from '../../hi-speed-storage.ts';
+import type { PreparedNonstopPlay } from '../../nonstop-course.ts';
+import { describePlayingStatus } from '../../play-tempo-settings.ts';
+import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
 import type { BeatorajaPlayEntry } from '../../services/themes/beatoraja.ts';
@@ -25,6 +28,7 @@ import type { DemoScene, PlayerWebDemoElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { ResolvedPlayKit } from '../family-kits.ts';
 import { SceneRouter } from '../scene-router.ts';
+import type { NonstopPlay } from './nonstop.ts';
 import { PlayRoute, type LastPlay, type PlayRouteDeps } from './play.ts';
 
 vi.mock('@be-music/player-web/host', () => ({ createPlayScene: vi.fn() }));
@@ -49,11 +53,11 @@ function song(id: string): LibraryChart {
   };
 }
 
-/** A GRADE course of charts `a` and `b`. */
-function course(): LibraryCourse {
+/** A GRADE course of charts `a` and `b` (or a NONSTOP one). */
+function course(kind: CourseDefinition['kind'] = 'grade'): LibraryCourse {
   const definition: CourseDefinition = {
     name: 'Dan',
-    kind: 'grade',
+    kind,
     stages: [{ md5: '1'.repeat(32) }, { md5: '2'.repeat(32) }],
     constraints: ['grade'],
     trophies: [],
@@ -389,5 +393,290 @@ describe('PlayRoute: what a play puts in force, and when', () => {
       stageRecordKey: undefined,
       beatorajaPlay: undefined,
     });
+  });
+});
+
+/** A play's result as the engine hands it over. */
+function resultOf(chart: LibraryChart): PlayResult {
+  return {
+    song: chart,
+    score: { total: 10, perfect: 8, great: 2, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 18 },
+    maxCombo: 10,
+    gauge: 90,
+    cleared: true,
+    playSeconds: 30,
+    gaugeHistory: [],
+    scoreHistory: [],
+    playlog: { play: { mode: 'manual' } } as unknown as BeMusicPlaylog,
+  } as unknown as PlayResult;
+}
+
+/** A NONSTOP course stitched into one chart. */
+function nonstopPlay(): NonstopPlay {
+  const prepared = { song: song('nonstop'), stitched: { map: { stages: [] } } } as unknown as PreparedNonstopPlay;
+  return { course: course('nonstop'), prepared };
+}
+
+/** Plays `chart` with no decide screen and lets it load and start. */
+async function started(h: Harness, chart: LibraryChart, overrides = {}): Promise<FakePlay> {
+  const play = await playing(h, chart, overrides);
+  play.load.resolve();
+  await vi.waitFor(() => expect(play.start).toHaveBeenCalledOnce());
+  return play;
+}
+
+/** Every step queued on the router and the promises it awaits settle. */
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('PlayRoute.playSong: a chart played at once', () => {
+  test('the select screen goes off the stage, kept, and the play takes it, loads there and then starts', async () => {
+    const h = await harness();
+    const play = await playing(h, song('a'));
+    expect(h.classes.has('playing')).toBe(true);
+    expect(h.deps.selectRoute.lastSelectNavigation).toBe(AT_BAR);
+    expect(h.stage).toEqual([h.select, undefined, play]);
+    expect(h.router.select).toBe(h.select);
+    expect(h.select.dispose).not.toHaveBeenCalled();
+    // A play of its own starts a run of its own.
+    expect(h.onInterrupt).toHaveBeenCalledOnce();
+    expect(h.deps.setRecordingFilenameBase).toHaveBeenCalledWith('a');
+    expect(h.deps.familyKits.resolvePlayKit).toHaveBeenCalledWith(song('a'), {});
+    expect(h.deps.setPlayStatus).toHaveBeenCalledWith('Playing: a');
+    // Pitch follows tempo at the slider's tempo: the tempo slider stays live during the play.
+    expect(h.deps.lockPlaylogOptionsForPlay).toHaveBeenCalledWith(true);
+    expect(play.kit).toEqual({ family: 'built-in' });
+    expect(play.options).toMatchObject({
+      chart: song('a'),
+      audio: h.deps.audio,
+      host: h.deps.sceneHost,
+      playOptions: h.deps.playOptions.current,
+      settings: { chartSha256: HASHES.sha256, chartMd5: HASHES.md5, layoutMode: 'standard' },
+    });
+    expect(play.options).not.toHaveProperty('course');
+    expect(play.options).not.toHaveProperty('replay');
+
+    expect(play.start).not.toHaveBeenCalled();
+    play.load.resolve();
+    await vi.waitFor(() => expect(play.start).toHaveBeenCalledOnce());
+    // A recording armed on the select screen starts once the play has its audio.
+    expect(startArmedRecording).toHaveBeenLastCalledWith(h.recording);
+    expect(play.start.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(startArmedRecording).mock.invocationCallOrder.at(-1)!,
+    );
+  });
+
+  test('a replay plays at its recorded tempo and says so, and hashes no chart', async () => {
+    const h = await harness();
+    const play = await playing(h, song('a'), { autoPlay: true, replay: REPLAY });
+    expect(h.deps.records.resolveChartHashes).not.toHaveBeenCalled();
+    expect(h.deps.setPlayStatus).toHaveBeenCalledWith(describePlayingStatus('a', { tempoPercent: 20, replay: true }));
+    expect(h.deps.lockPlaylogOptionsForPlay).toHaveBeenCalledWith(false);
+    expect(play.options.replay).toBe(REPLAY);
+    expect(play.options.settings).not.toHaveProperty('chartSha256');
+  });
+
+  test('the LR2 and beatoraja plays take the settings without a touch layout', async () => {
+    for (const family of ['lr2', 'beatoraja'] as const) {
+      const h = await harness({ family });
+      const play = await playing(h, song('a'));
+      expect(play.options.settings).not.toHaveProperty('layoutMode');
+    }
+  });
+
+  test('a course stage carries its run on, with its course handed to the play', async () => {
+    const h = await harness();
+    const active = h.deps.courses.beginRun(course());
+    const courseStage = nextCourseStagePlay(active)!;
+    const play = await playing(h, song('a'), { courseStage });
+    expect(h.onInterrupt).not.toHaveBeenCalled();
+    expect(h.deps.familyKits.resolvePlayKit).toHaveBeenCalledWith(song('a'), { courseStage });
+    expect(play.options.course).toEqual({ stage: courseStage.course, view: courseStage.courseInfo });
+  });
+
+  test('a NONSTOP run carries its run on too, and its stitched chart has no file to hash', async () => {
+    const h = await harness();
+    const nonstop = nonstopPlay();
+    await playing(h, nonstop.prepared.song, { nonstop });
+    expect(h.onInterrupt).not.toHaveBeenCalled();
+    expect(h.deps.records.resolveChartHashes).not.toHaveBeenCalled();
+  });
+
+  test('a chart with no play kit goes back to the select screen', async () => {
+    const h = await harness();
+    h.deps.familyKits.resolvePlayKit.mockResolvedValueOnce(undefined);
+    await h.route.playSong(song('a'));
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+    expect(createPlayScene).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlayRoute: where a play leads', () => {
+  test('a finished play shows its result', async () => {
+    const h = await harness();
+    const play = await started(h, song('a'));
+    play.options.on.finish(resultOf(song('a')), undefined);
+    expect(h.deps.results.showResult).toHaveBeenCalledWith(resultOf(song('a')));
+    expect(h.deps.results.showBeatorajaPlayResult).not.toHaveBeenCalled();
+  });
+
+  test('a play on the beatoraja play screen shows its result there, with the chart as it played it kept', async () => {
+    const h = await harness({ family: 'beatoraja', beatorajaPlay: ENTRY_7 });
+    const play = await started(h, song('a'));
+    play.options.on.finish(resultOf(song('a')), undefined);
+    expect(h.deps.results.lastBeatorajaChart).toEqual({ resolved: play.resolved, chartPath: 'a.bms' });
+    expect(h.deps.results.showBeatorajaPlayResult).toHaveBeenCalledWith(resultOf(song('a')), false);
+    expect(h.deps.results.showResult).not.toHaveBeenCalled();
+  });
+
+  test('a NONSTOP run that ends shows the run’s result, with the stitched chart as it played it', async () => {
+    const h = await harness();
+    const nonstop = nonstopPlay();
+    const play = await started(h, nonstop.prepared.song, { nonstop });
+    const result = resultOf(nonstop.prepared.song);
+    play.options.on.finish(result, undefined);
+    expect(h.deps.nonstopRoute.showNonstopCourseResult).toHaveBeenCalledWith(
+      nonstop,
+      result.playlog,
+      result,
+      play.resolved,
+    );
+    expect(h.deps.results.showResult).not.toHaveBeenCalled();
+  });
+
+  test('a course stage whose result is skipped goes straight on, its last samples ringing out', async () => {
+    const h = await harness();
+    h.deps.guiState.courseAutoAdvance = true;
+    const active = h.deps.courses.beginRun(course());
+    const play = await started(h, song('a'), { courseStage: nextCourseStagePlay(active)! });
+    const result = resultOf(song('a'));
+    play.options.on.finish(result, undefined);
+    await vi.waitFor(() => expect(h.deps.courseRoute.continueCourse).toHaveBeenCalledOnce());
+    expect(h.deps.testHook.recordPlaylog).toHaveBeenCalledWith(result.playlog);
+    expect(h.deps.records.recordActiveCourseStage).toHaveBeenCalledOnce();
+    expect(h.stage.at(-1)).toBeUndefined();
+    expect(play.dispose).toHaveBeenCalledWith({ preserveAudioTail: true });
+    expect(h.deps.unlockPlaylogOptions).toHaveBeenCalledOnce();
+    // The course asked for its next stage: the run goes on.
+    expect(h.onInterrupt).not.toHaveBeenCalled();
+    expect(h.deps.results.showResult).not.toHaveBeenCalled();
+  });
+
+  test('a course stage whose result shows goes to the result screen', async () => {
+    const h = await harness();
+    const active = h.deps.courses.beginRun(course());
+    const play = await started(h, song('a'), { courseStage: nextCourseStagePlay(active)! });
+    play.options.on.finish(resultOf(song('a')), undefined);
+    expect(h.deps.results.showResult).toHaveBeenCalledOnce();
+    expect(h.deps.courseRoute.continueCourse).not.toHaveBeenCalled();
+  });
+
+  test('Escape leaves a single play for the select screen', async () => {
+    const h = await harness();
+    const play = await started(h, song('a'));
+    play.options.on.exit();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+  });
+
+  test('Escape gives a course up: the stage is recorded with its play log, and the course result shows', async () => {
+    const h = await harness();
+    const active = h.deps.courses.beginRun(course());
+    const play = await started(h, song('a'), { courseStage: nextCourseStagePlay(active)! });
+    const playlog = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicPlaylog;
+    play.waitForPlaylog.mockResolvedValueOnce(playlog);
+    play.options.on.exit();
+    await vi.waitFor(() => expect(h.deps.courseRoute.showCourseResult).toHaveBeenCalledOnce());
+    expect(h.deps.testHook.recordPlaylog).toHaveBeenCalledWith(playlog);
+    expect(h.deps.courses.active).toBe(active);
+    expect(h.deps.showSelect).not.toHaveBeenCalled();
+  });
+
+  test('Escape ends a NONSTOP run on its result', async () => {
+    const h = await harness();
+    const nonstop = nonstopPlay();
+    const play = await started(h, nonstop.prepared.song, { nonstop });
+    const playlog = { play: { mode: 'manual' } } as unknown as BeMusicPlaylog;
+    play.waitForPlaylog.mockResolvedValueOnce(playlog);
+    play.options.on.exit();
+    await vi.waitFor(() => expect(h.deps.nonstopRoute.showNonstopCourseResult).toHaveBeenCalledOnce());
+    expect(h.deps.nonstopRoute.showNonstopCourseResult).toHaveBeenCalledWith(
+      nonstop,
+      playlog,
+      undefined,
+      play.resolved,
+    );
+  });
+
+  test('F5 plays a single chart again as it was played: AUTO stays AUTO and a replay stays a replay', async () => {
+    const h = await harness();
+    const play = await started(h, song('a'), { autoPlay: true, replay: REPLAY });
+    const again = vi.spyOn(h.route, 'playSong');
+    play.options.on.restart();
+    expect(again).toHaveBeenCalledWith(song('a'), { autoPlay: true, replay: REPLAY });
+    await vi.waitFor(() => expect(h.plays).toHaveLength(2));
+    expect(h.plays[1]!.options.replay).toBe(REPLAY);
+    expect(h.plays[1]!.options.settings.autoPlay).toBe(true);
+  });
+
+  test('F5 in a course stage drops the run and goes back to the select screen', async () => {
+    const h = await harness();
+    const active = h.deps.courses.beginRun(course());
+    const play = await started(h, song('a'), { courseStage: nextCourseStagePlay(active)! });
+    play.options.on.restart();
+    expect(h.deps.courses.active).toBeUndefined();
+    expect(h.deps.showSelect).toHaveBeenCalledOnce();
+  });
+
+  test('F5 in a NONSTOP run stitches the course again', async () => {
+    const h = await harness();
+    const nonstop = nonstopPlay();
+    const play = await started(h, nonstop.prepared.song, { nonstop });
+    play.options.on.restart();
+    expect(h.deps.nonstopRoute.startNonstopCourse).toHaveBeenCalledWith(nonstop.course);
+  });
+});
+
+describe('PlayRoute: the hi-speed and the tempo', () => {
+  test('a hi-speed stepped in the play is remembered and mirrored onto the menu and the select screen', async () => {
+    const h = await harness();
+    const play = await started(h, song('a'));
+    play.options.on.hiSpeed?.(3.25);
+    expect(h.deps.guiState.hiSpeed).toBe(3.25);
+    expect(storeHiSpeed).toHaveBeenLastCalledWith(3.25);
+    expect(h.deps.debugMenu.refreshHiSpeed).toHaveBeenCalledOnce();
+    expect(h.deps.setPlayOptions).toHaveBeenCalledWith({ hiSpeed: 3.25 });
+    // The play took it already.
+    expect(play.setHiSpeed).not.toHaveBeenCalled();
+  });
+
+  test('one from the menu goes to the running play, one from the select screen to the menu only', async () => {
+    const h = await harness();
+    const play = await started(h, song('a'));
+    h.route.rememberHiSpeed(2.5, 'menu');
+    expect(play.setHiSpeed).toHaveBeenCalledWith(2.5);
+    expect(h.deps.debugMenu.refreshHiSpeed).not.toHaveBeenCalled();
+    expect(h.deps.setPlayOptions).toHaveBeenCalledWith({ hiSpeed: 2.5 });
+
+    h.route.rememberHiSpeed(4, 'select');
+    expect(h.deps.guiState.hiSpeed).toBe(4);
+    expect(h.deps.debugMenu.refreshHiSpeed).toHaveBeenCalledOnce();
+    expect(h.deps.setPlayOptions).toHaveBeenCalledOnce();
+    expect(play.setHiSpeed).toHaveBeenCalledOnce();
+
+    // Not a number: nothing is remembered.
+    h.route.rememberHiSpeed(Number.NaN, 'menu');
+    expect(h.deps.guiState.hiSpeed).toBe(4);
+  });
+
+  test('a tempo change shows on the status line, and a play at another tempo leaves the records alone', async () => {
+    const h = await harness();
+    const play = await started(h, song('a'));
+    expect(h.deps.records.activePlayRecordKey).toBeDefined();
+    play.options.on.tempo?.(1);
+    expect(h.deps.records.activePlayRecordKey).toBeDefined();
+    play.options.on.tempo?.(1.1);
+    expect(h.deps.setPlayStatus).toHaveBeenLastCalledWith(describePlayingStatus('a', { tempoPercent: 10 }));
+    expect(h.deps.records.activePlayRecordKey).toBeUndefined();
+    expect(h.deps.records.activeStageRecordKey).toBeUndefined();
+    await settle();
   });
 });
