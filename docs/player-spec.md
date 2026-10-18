@@ -696,7 +696,7 @@ The built-in Node audio session renders its audio for the starting tempo and doe
 
 `highSpeed` is a display parameter that primarily changes the visible range and scrolling density of the TUI.
 The judgment window itself cannot be changed.
-The runtime normalizes high-speed values through `@be-music/player/core/high-speed-control`.
+The runtime normalizes high-speed values with `resolveHighSpeedMultiplier` from `@be-music/player/signals`.
 Valid values range from `0.5` to `10.0` and snap to `0.5` increments.
 
 ### pause / restart / interrupt
