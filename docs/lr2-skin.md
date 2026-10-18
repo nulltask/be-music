@@ -7,14 +7,14 @@ The package parses Lunatic Rave 2 skin files into renderer-independent data stru
 
 ## Scope
 
-- `@be-music/lr2-skin` reads `.lr2skin` CSV files for select, decide, play, and result scenes.
+- `@be-music/lr2-skin` reads `.lr2skin` CSV files for select, decide, play, result and course-result scenes.
 - The package resolves theme assets from dropped folders or in-memory file maps, including case-insensitive paths, wildcard file references, TGA and DDS images, and DXA archives.
 - The package keeps skin timing, op conditions, source rectangles, destination keyframes, and scene-specific element groups in plain TypeScript objects.
 - The package does not create PixiJS objects, WebAudio nodes, or browser DOM UI.
 
 ## Scene model
 
-Skin kind is derived from the skin path and scene directory.
+Skin kind comes from the skin's `#INFORMATION` type, falling back to the skin path and scene directory when it declares none.
 Play skins are grouped by variant so the browser player can choose the layout that matches the chart:
 
 - `5`
@@ -25,14 +25,14 @@ Play skins are grouped by variant so the browser player can choose the layout th
 
 LR2 never shipped keyboard-mode play skins, so `24` / `48` KEY charts borrow a `7` / `14` play skin (`PLAY_SKIN_FALLBACKS` in `play-skin.ts`): the skin supplies the frame, gauge, and judge graphics, and the lanes fall back to the host's playfield.
 
-The parser keeps select, decide, play, and result data in one `Lr2Skin` shape.
+The parser keeps select, decide, play, result and course-result data in one `Lr2Skin` shape.
 Consumers read only the fields that make sense for their scene.
 
 ## Courses
 
 LR2 has a scene of its own for the result of a whole course: `#INFORMATION` type 15, conventionally under `CourseResult/`. `loadLr2ThemeSkinsFromFiles` loads it as `courseResultSkin`, along with the course-result jingles. A `result` lookup never picks it.
 
-LR2 finds its BGM and system sounds through the sound set, `LR2files/Sound/*.lr2ss`, which names each file: the stock `lr2.lr2ss` maps `#COURSECLEAR` / `#COURSEFAIL` to `Sound/lr2/course_clear.wav` / `course_fail.wav`. `loadLr2ThemeSkinsFromFiles` reads the dropped sound set (`lr2.lr2ss` first) for the select / decide BGM, the clear / fail / course jingles and the cursor, folder and option sounds, filling a `*` folder with its `#CUSTOMFILE` default and taking another audio extension when the named file is missing. Without a sound set, or for a file it does not name, it looks the stem up under `Sound/lr2/` (`course_clear` or `courseclear` for the course jingles).
+LR2 finds its BGM and system sounds through the sound set, `LR2files/Sound/*.lr2ss`, which names each file: the stock `lr2.lr2ss` maps `#COURSECLEAR` / `#COURSEFAIL` to `Sound/lr2/course_clear.wav` / `course_fail.wav`. `loadLr2ThemeSkinsFromFiles` reads the dropped sound set (`lr2.lr2ss` first) for the select / decide BGM, the clear / fail / course jingles and the cursor, folder and option sounds, filling a `*` folder with its `#CUSTOMFILE` default and taking another audio extension when the named file is missing. Without a sound set, or when it names no file (or the named file is not in the drop), it looks the stem up under `Sound/lr2/` (`course_clear` or `courseclear` for the course jingles), and the select / decide BGM under a `Bgm/` folder. The generic `result` jingle has no sound-set command and always comes from `Sound/lr2/`.
 
 LR2 reads a skin each time its scene starts, so an `#IF` block can test state that holds for the whole scene. In a course that means the course ops (OpenLR2 `LR2f.cpp` L5403-L5444):
 
@@ -45,7 +45,7 @@ LR2 reads a skin each time its scene starts, so an `#IF` block can test state th
 
 The theme is parsed once, with these ops off. `Lr2ThemeSkins.loadSkin({ kind, playVariant, parseOps })` parses one of its skins again from the files already read, with extra ops held true while `#IF` / `#ELSEIF` are evaluated (`LoadLr2SkinOptions.parseOps`). `pickLr2PlaySkinVariant` names the play-skin variant a chart plays on, so a host can parse that skin again for a course stage.
 
-The values a course skin reads (numbers 250-259, texts 150-170, the course combo on 104 / 105) are scene state: [`@be-music/lr2-skin/state`](#scene-state) resolves them from the course's `CourseView`, which `@be-music/player-web` supplies. See [Courses and dan certification](./player-web.md#courses-and-dan-certification).
+The values a course skin reads (numbers 250-259, texts 150-170, the course combo on 104 / 105) are scene state: [`@be-music/lr2-skin/state`](#scene-state) resolves them from the course's `CourseView`, which the host builds (`resolveCourseView`, `@be-music/scene-model`) and hands to `@be-music/player-web`'s scenes. See [Courses and dan certification](./player-web.md#courses-and-dan-certification).
 
 ## Id tables
 
@@ -78,13 +78,13 @@ The ids [#430](https://github.com/nulltask/be-music/issues/430) named with less 
 - The best record's rates (73, 85-89) are whole percents, truncated.
 - Texts 20-29 are the fields LR2's tag editor edits: 20-28 repeat 10-18 on every screen but the result, where LR2 reuses text 20 for the internet ranking's message. Texts 18 / 28 are the `#DIFFICULTY` number (0-5), which the ops 150-155 name. Text 29 is LR2's ex level, a level a player sets in its song database; LR2 sets texts 10-29 on the select screen and keeps them through decide, play and result.
 
-beatoraja keeps LR2's numbers for its LR2-compatible ids, so `@be-music/beatoraja-skin` takes those from these tables under its own names (`BEATORAJA_OP.FOLDERBAR` is `LR2_OP.FOLDER_BAR`, `TIMER_READY` is `LR2_TIMER.READY`) and numbers only beatoraja's own ids. A few LR2 ids mean something else to beatoraja, which its own table names: number 92 is the main BPM and op 400 the CONSTANT option, and beatoraja defines no numbers 38-41 or 93-94 and no texts 17-29. The parser's parse-time ops and `@be-music/player-web`'s LR2 scenes use the tables too.
+beatoraja keeps LR2's numbers for its LR2-compatible ids, so `@be-music/beatoraja-skin` takes those from these tables under its own names (`BEATORAJA_OP.FOLDERBAR` is `LR2_OP.FOLDER_BAR`, `TIMER_READY` is `LR2_TIMER.READY`) and numbers only beatoraja's own ids. A few LR2 ids mean something else to beatoraja, which its own table names: number 92 is the main BPM (`BEATORAJA_NUM.MAINBPM`) and op 400 the CONSTANT option (which its table leaves unnamed: nothing lights it), and beatoraja defines no numbers 38-41 or 93-94 and no texts 17-29. The parser's parse-time ops and `@be-music/player-web`'s LR2 family views (`view/lr2/`) use the tables too.
 
 Not named here: ops 900-999 (the skin's own `#CUSTOMOPTION`s), the `#SRC_BARGRAPH` types, and the small enums of the `#DST_*` fields (`blend`, `center`, `acc`), which `skin/lr2/render.ts` maps where it reads them.
 
 ## Scene state
 
-`@be-music/lr2-skin/state` maps the scene models of `@be-music/scene-model` ([Scene models](./scene-model.md)) to the [id tables](#id-tables): for each screen, which ops hold, which value each number and text draws, where each slider sits and which cell each button draws (an `Lr2SceneState`), and which timers a moment of the screen starts and stops (an `Lr2TimerUpdate`: each timer with the time it starts at, and the timers that stop). The skin family's view asks the state for the ids its skin draws; it keeps no LR2 vocabulary of its own.
+`@be-music/lr2-skin/state` maps the scene models of `@be-music/scene-model` ([Scene models](./scene-model.md)) to the [id tables](#id-tables): for each screen, which ops hold, which value each number and text draws and where each slider sits (an `Lr2SceneState`; the select screen's `Lr2SelectState` adds the cell each button draws), and which timers a moment of the select or play screen starts and stops (an `Lr2TimerUpdate`: each timer with the time it starts at, and the timers that stop). The skin family's view asks the state for the ids its skin draws; it keeps only the timer ids and the lane index it stamps, and works out the decide and result screens' few timers itself (`resolveLr2DecideTimers`, `resolveLr2ResultTimers` in `view/lr2/`).
 
 ```mermaid
 flowchart LR
@@ -101,7 +101,7 @@ flowchart LR
     results["resolveLr2ResultState"]
     timers["resolveLr2…Timers"]
   end
-  ids["Lr2SceneState<br/>ops · numbers · texts<br/>sliders · buttons"]
+  ids["Lr2SceneState<br/>ops · numbers · texts<br/>sliders"]
   starts["Lr2TimerUpdate<br/>timer → start time"]
 
   entry --> select
@@ -123,11 +123,11 @@ flowchart LR
 | `pickLr2BarBody`, `resolveLr2BarLevel`, `resolveLr2BarLamp` | A bar of the list, its chart, its record's lamp                                                                                                         | The bar body, level and lamp it draws                                         |
 | `resolveLr2DecideState`                                     | The chart about to be played, and its course                                                                                                            | Ops, texts, the course's numbers                                              |
 | `resolveLr2PlayState`                                       | The play's setup (`Lr2PlaySetup`: chart, lanes, features, options, gauge, course) and a frame (`Lr2PlayFrame`: a `PlayState` view, the score, the time) | Ops, numbers, texts, sliders, bar graphs                                      |
-| `resolveLr2PlayTimers`, `resolveLr2LaneTimer`               | A moment of the play (scene stages, a judgement, a full combo, the gauge, a lane), a lane                                                               | Timers 0-3, 40-49 and the lane banks 50-139                                   |
+| `resolveLr2PlayTimers`, `resolveLr2LaneTimer`               | A moment of the play (scene stages, a judgement, a full combo, the gauge, a lane), a lane                                                               | Timers 0, 2, 3, 40-42, 44, 46-49 and the lane banks 50-139                    |
 | `resolveLr2ResultState`                                     | A `PlayResult`, its course, the played skin's `#FLIPRESULT`, the skin's custom options                                                                  | Ops, numbers, texts, sliders, bar graphs                                      |
 | `resolveLr2CourseOps`, `resolveLr2CourseText`, …            | A `CourseView`, a course being made                                                                                                                     | The course ops, numbers and texts, the course maker's ops, texts and buttons  |
 
-The resolvers are pure and deterministic: they read no clock, no DOM and no renderer, draw no random number, and import only the scene models, the engine's rules, the chart model and the id tables. Time comes in as an input — the clock numbers through an `Lr2Clock`, a play's time through its frame, each timer's start through the moment's `at` — and `pnpm run check` holds `src/state/` to the runtime-neutral and clock-free lint rules. The LR2 family views of the web runtime call them (the decide, play and result screens'), and the LR2 select scene of `@be-music/player-web` calls them until its view replaces it.
+The resolvers are pure and deterministic: they read no clock, no DOM and no renderer, draw no random number, and import only the scene models, the engine's rules, the chart model, the id tables and the parsed skin's types. Time comes in as an input — the clock numbers through an `Lr2Clock`, a play's time through its frame, each timer's start through the moment's `at` — and `pnpm run check` holds `src/state/` to the runtime-neutral and clock-free lint rules. The LR2 family views of the web runtime (`view/lr2/`: the select, decide, play and result screens) call them.
 
 The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-web`) reads the play's ops, numbers, texts, sliders and bar graphs off each frame with `resolveLr2PlayState`: the frame's `PlayState`, the score, the time, the score readout, the BPM and the frame rate. It starts and stops the play's timers from each frame's moments with `resolveLr2PlayTimers`, and the view's own timer keeping retires the one-shot ones:
 
@@ -188,15 +188,15 @@ TGA images are decoded by `tga.ts` and DDS images by `dds.ts` (the browser playe
 
 ## Browser player usage
 
-`@be-music/player-web` consumes the parsed skin model in these scene modules:
+`@be-music/player-web` consumes the parsed skin model in these family views:
 
 - `view/lr2/select-view.ts` (with `select-bars.ts`)
 - `view/lr2/decide-view.ts`
-- `view/lr2/play-view.ts` (with `play-elements.ts`, `play-timers.ts` and `play-hud.ts`)
+- `view/lr2/play-view.ts` (with `play-elements.ts`, `play-timers.ts`, `play-turntable.ts` and `play-hud.ts`)
 - `view/lr2/result-view.ts`
 
 Shared rendering helpers in `skin/lr2/render.ts` and `skin/lr2/scene-render.ts` evaluate destination keyframes, op-gated visibility, source cells, sprite transforms, text, numbers, sliders, and bargraphs.
-The scenes light ops, start timers and resolve numbers, texts, buttons and sliders through the [scene-state resolvers](#scene-state).
+The views light ops, start timers and resolve numbers, texts, buttons and sliders through the [scene-state resolvers](#scene-state).
 The browser player binds runtime values such as song metadata, current judge, combo, gauge, score, BGA textures, play options, and result history onto the parsed skin elements.
 
 ## Compatibility boundary
@@ -220,4 +220,4 @@ Other LR2 skins may load, but small layout differences, missing animation detail
   - The pacemakers read 0: numbers 150 / 151, and 152 / 153 read the EX score. No best-record ghost or target reaches the play.
   - Text 29 reads an INSANE chart's play level where LR2 reads the ex level its database keeps.
   - The result screen's bar graphs and sliders read their own numbering instead of LR2's bar-graph types (1 progress, 2 loading, 10-15 the EX score, the best and the target). LR2's types compare the play with the best record and the target, which the result does not carry yet.
-  - Ops 400-402 follow the chart's key mode: there is no key-config screen whose page they could follow.
+  - On the result screen ops 400-402 follow the chart's key mode, and the other screens light none: there is no key-config screen whose page they could follow.
