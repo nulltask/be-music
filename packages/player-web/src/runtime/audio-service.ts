@@ -33,13 +33,13 @@ import {
 } from '@be-music/beatoraja-skin';
 import type { BeMusicJson } from '@be-music/json';
 import type { SystemSound, SystemSoundSet, SystemSoundSlot } from '@be-music/scene-model';
-import { createPlayAudioGraph, type PlayAudioGraph } from '../chart/play-audio.ts';
 import { ChartPreviewEngine, type ChartPreviewEngineOptions, type ChartPreviewTarget } from '../chart/preview.ts';
 import { logger } from '../logger.ts';
 import type { BeatorajaSkinAudio } from '../skin/beatoraja/audio.ts';
 import { AudioAnalyzer, SILENT_AUDIO, type AudioFeatures } from './audio-analysis.ts';
 import type { BuildAudioBusOptions, CompressorMode } from './audio-bus.ts';
 import { masterOutput } from './master-volume.ts';
+import { createPlayAudioGraph, type PlayAudioGraph } from './play-audio-graph.ts';
 
 const log = logger('audio-service');
 
