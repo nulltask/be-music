@@ -1,5 +1,5 @@
 import { PLAY_MODE_LAYOUTS } from '@be-music/chart';
-import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
+import { resolveLr2LaneIndex } from '@be-music/player/lanes';
 import { describe, expect, it, test } from 'vite-plus/test';
 import {
   IIDX_DP_SIDE_GAP,

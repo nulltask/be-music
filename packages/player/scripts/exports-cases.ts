@@ -1,13 +1,19 @@
 import { resolveChart } from '@be-music/chart';
 import { parseChart } from '@be-music/parser';
 import * as playerApi from '@be-music/player';
+import * as audioSinkApi from '@be-music/player/audio-sink';
 import * as courseApi from '@be-music/player/course';
+import * as displayApi from '@be-music/player/display';
 import * as judgingApi from '@be-music/player/judging';
+import * as lanesApi from '@be-music/player/lanes';
 import * as playlogApi from '@be-music/player/playlog';
 import * as recordsApi from '@be-music/player/records';
 import * as rulesetApi from '@be-music/player/ruleset';
+import * as signalsApi from '@be-music/player/signals';
 import type { PlayerOptions } from '@be-music/player';
+import type { WebAudioContextLike } from '@be-music/player/audio-sink';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { PlayerUiFramePayload } from '@be-music/player/signals';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_PLAYER_OPTIONS: PlayerOptions = {
@@ -1065,6 +1071,328 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.resolveIidxRankLabel(1650, 1000);
     },
   });
+  define('player.ruleset.resolveJudgeWindowsMs', {
+    run: (fixtures) => {
+      rulesetApi.resolveJudgeWindowsMs(fixtures.sampleBmsJson, 250);
+    },
+  });
+  define('player.ruleset.isPlaylogRulesetId', {
+    run: () => {
+      rulesetApi.isPlaylogRulesetId('beatoraja');
+      rulesetApi.isPlaylogRulesetId('popn');
+    },
+  });
+  registerSignalsCases(define);
+  registerLanesCases(define);
+  registerDisplayCases(define);
+  registerAudioSinkCases(define);
+}
+
+/** `@be-music/player/signals`: the buses and state signals a host's runtimes exchange with a play. */
+function registerSignalsCases(define: DefineBenchmarkCase): void {
+  define('player.signals.createPlayerInputSignalBus', {
+    run: () => {
+      const bus = signalsApi.createPlayerInputSignalBus();
+      bus.pushCommand({ kind: 'lane-input', tokens: ['KeyZ'] });
+      bus.pushCommand({ kind: 'high-speed', action: 'increase' });
+      bus.drainCommands();
+    },
+  });
+  define('player.signals.createPlayerUiSignalBus', {
+    run: () => {
+      const bus = signalsApi.createPlayerUiSignalBus(BENCH_UI_FRAME);
+      bus.publishFrame({ ...BENCH_UI_FRAME, currentBeat: 4, currentSeconds: 2 });
+      bus.pushCommand({ kind: 'flash-lane', channel: '11' });
+      bus.drainCommands();
+    },
+  });
+  define('player.signals.createPlayerStateSignals', {
+    run: () => {
+      const signals = signalsApi.createPlayerStateSignals(2);
+      signals.publishJudgeCombo('PERFECT', 1, '11', 0, 3);
+      signals.publishJudgeCombo('GREAT', 2, '12', 1, -8);
+      signals.drainPendingJudgeCombos();
+    },
+  });
+  define('player.signals.resolveHighSpeedControlActionFromLaneChannels', {
+    run: () => {
+      signalsApi.resolveHighSpeedControlActionFromLaneChannels(['12', '14']);
+    },
+  });
+  define('player.signals.resolveHighSpeedMultiplier', {
+    run: () => {
+      signalsApi.resolveHighSpeedMultiplier(3.25);
+    },
+  });
+  define('player.signals.applyHighSpeedControlAction', {
+    run: () => {
+      signalsApi.applyHighSpeedControlAction(2, 'increase');
+    },
+  });
+}
+
+/** `@be-music/player/lanes`: lane layout, key bindings and FREE ZONE input. */
+function registerLanesCases(define: DefineBenchmarkCase): void {
+  define('player.lanes.resolveKeyChannel', {
+    run: () => {
+      lanesApi.resolveKeyChannel({ code: 'KeyS' }, BENCH_7KEY_CHANNELS);
+    },
+  });
+  define('player.lanes.resolveSideKeySlot', {
+    run: () => {
+      lanesApi.resolveSideKeySlot('25', '14');
+    },
+  });
+  define('player.lanes.resolveLr2LaneIndex', {
+    run: () => {
+      lanesApi.resolveLr2LaneIndex('26', '14');
+    },
+  });
+  define('player.lanes.resolveSideRelativeLaneIndex', {
+    run: () => {
+      lanesApi.resolveSideRelativeLaneIndex('23', '14');
+    },
+  });
+  define('player.lanes.isScratch', {
+    run: () => {
+      lanesApi.isScratch('16');
+      lanesApi.isScratch('11');
+    },
+  });
+  define('player.lanes.resolveWheelLaneDirection', {
+    run: () => {
+      lanesApi.resolveWheelLaneDirection('1P', '24');
+    },
+  });
+  define('player.lanes.resolveLaneOptionChannels', {
+    run: () => {
+      lanesApi.resolveLaneOptionChannels('1P', '7');
+    },
+  });
+  define('player.lanes.isPlayableInputChannel', {
+    run: () => {
+      lanesApi.isPlayableInputChannel('17');
+      lanesApi.isPlayableInputChannel('01');
+    },
+  });
+  define('player.lanes.resolveLaneChannels', {
+    run: () => {
+      lanesApi.resolveLaneChannels(BENCH_LANE_NOTES, '7');
+    },
+  });
+  define('player.lanes.resolvePlayVariantLaneChannels', {
+    run: () => {
+      lanesApi.resolvePlayVariantLaneChannels(BENCH_LANE_NOTES, '7');
+    },
+  });
+  define('player.lanes.createLaneBindings', {
+    run: () => {
+      lanesApi.createLaneBindings(BENCH_7KEY_CHANNELS, { playVariant: '7', platform: 'linux' });
+    },
+  });
+  define('player.lanes.appendFreeZoneInputChannels', {
+    run: () => {
+      const channels = [...BENCH_7KEY_CHANNELS, '17'];
+      const bindings = lanesApi.createLaneBindings(BENCH_7KEY_CHANNELS, { playVariant: '7', platform: 'linux' });
+      lanesApi.appendFreeZoneInputChannels(lanesApi.createInputTokenToChannelsMap(bindings), bindings, channels);
+    },
+  });
+  define('player.lanes.resolveLaneDisplayMode', {
+    run: () => {
+      lanesApi.resolveLaneDisplayMode(BENCH_7KEY_CHANNELS, { playVariant: '7' });
+    },
+  });
+  define('player.lanes.createInputTokenToChannelsMap', {
+    run: () => {
+      lanesApi.createInputTokenToChannelsMap(BENCH_7KEY_BINDINGS);
+    },
+  });
+}
+
+/** `@be-music/player/display`: play notes, scrolling, the BGA cue and the chart facts a host shows. */
+function registerDisplayCases(define: DefineBenchmarkCase): void {
+  define('player.display.extractTimedNotes', {
+    run: (fixtures) => {
+      displayApi.extractTimedNotes(fixtures.sampleBmsJson, {
+        includeLandmine: true,
+        includeInvisible: true,
+        inferBmsLnTypeWhenMissing: true,
+      });
+    },
+  });
+  define('player.display.extractPlayableNotes', {
+    run: (fixtures) => {
+      displayApi.extractPlayableNotes(fixtures.sampleBmsJson, { inferBmsLnTypeWhenMissing: true });
+    },
+  });
+  define('player.display.extractLandmineNotes', {
+    run: (fixtures) => {
+      displayApi.extractLandmineNotes(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.extractInvisiblePlayableNotes', {
+    run: (fixtures) => {
+      displayApi.extractInvisiblePlayableNotes(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.toTimedPlayableNote', {
+    run: (fixtures) => {
+      resolveChart(fixtures.sampleBmsJson).notes.map(displayApi.toTimedPlayableNote);
+    },
+  });
+  define('player.display.toTimedInvisibleNote', {
+    run: (fixtures) => {
+      resolveChart(fixtures.sampleBmsJson).notes.map(displayApi.toTimedInvisibleNote);
+    },
+  });
+  define('player.display.toTimedLandmineNote', {
+    run: (fixtures) => {
+      resolveChart(fixtures.sampleBmsJson).notes.map(displayApi.toTimedLandmineNote);
+    },
+  });
+  define('player.display.ScrollDistanceMapper', {
+    run: () => {
+      const mapper = new displayApi.ScrollDistanceMapper(BENCH_SCROLL_TIMELINE, BENCH_SPEED_TIMELINE);
+      mapper.distanceBetween(1, 9);
+      mapper.maxBeatWithinDistance(1, 6);
+    },
+  });
+  define('player.display.createScrollDistanceMapper', {
+    run: () => {
+      const mapper = displayApi.createScrollDistanceMapper(BENCH_SCROLL_TIMELINE, BENCH_SPEED_TIMELINE);
+      mapper.firstBeatBeyondDistance(2, 6);
+      mapper.hasBidirectionalScrollWithinLookahead(2);
+    },
+  });
+  define('player.display.pickActiveBgaCue', {
+    run: () => {
+      displayApi.pickActiveBgaCue(BENCH_BGA_CUES, 37.3);
+    },
+  });
+  define('player.display.pickActiveBgaKey', {
+    run: () => {
+      displayApi.pickActiveBgaKey(BENCH_BGA_CUES, 37.3);
+    },
+  });
+  define('player.display.resolveDisplayedJudgeRankValue', {
+    run: (fixtures) => {
+      displayApi.resolveDisplayedJudgeRankValue(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.resolveDisplayedJudgeRankLabel', {
+    run: (fixtures) => {
+      displayApi.resolveDisplayedJudgeRankLabel(fixtures.sampleBmsonJson);
+    },
+  });
+  define('player.display.resolveDisplayedPlayLevelValue', {
+    run: (fixtures) => {
+      displayApi.resolveDisplayedPlayLevelValue(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.resolveDisplayedDifficultyValue', {
+    run: (fixtures) => {
+      displayApi.resolveDisplayedDifficultyValue(fixtures.sampleBmsJson);
+    },
+  });
+  define('player.display.formatSeconds', {
+    run: () => {
+      displayApi.formatSeconds(3725.37);
+    },
+  });
+  define('player.display.resolveAltModifierLabel', {
+    run: () => {
+      displayApi.resolveAltModifierLabel('darwin');
+      displayApi.resolveAltModifierLabel('linux');
+    },
+  });
+  define('player.display.isImageResizeAlgorithm', {
+    run: () => {
+      displayApi.isImageResizeAlgorithm('lanczos');
+      displayApi.isImageResizeAlgorithm('bicubic');
+    },
+  });
+}
+
+/** `@be-music/player/audio-sink`: the PCM sinks over Web Audio. */
+function registerAudioSinkCases(define: DefineBenchmarkCase): void {
+  define('player.audio-sink.createBrowserAudioSink', {
+    run: () => {
+      const sink = audioSinkApi.createBrowserAudioSink(createBenchAudioContext(), {
+        sampleRate: 44_100,
+        channels: 2,
+        samplesPerFrame: 512,
+        mode: 'manual',
+      });
+      sink.write(BENCH_PCM_CHUNK);
+      sink.getClockState();
+    },
+  });
+  define('player.audio-sink.createNodeAudioSink', {
+    // Opens the machine's audio output through node-web-audio-api.
+    run: async () => {
+      const sink = await audioSinkApi.createNodeAudioSink({
+        sampleRate: 44_100,
+        channels: 2,
+        samplesPerFrame: 512,
+        mode: 'manual',
+      });
+      sink?.destroy();
+    },
+    interactive: true,
+  });
+}
+
+const BENCH_UI_FRAME: PlayerUiFramePayload = {
+  currentBeat: 0,
+  currentSeconds: 0,
+  totalSeconds: 120,
+  summary: {
+    total: 64,
+    perfect: 0,
+    fast: 0,
+    slow: 0,
+    great: 0,
+    good: 0,
+    bad: 0,
+    poor: 0,
+    emptyPoor: 0,
+    exScore: 0,
+    score: 0,
+  },
+  notes: Array.from({ length: 32 }, (_, index) => ({
+    channel: `1${(index % 7) + 1}`,
+    beat: index * 0.5,
+    seconds: index * 0.25,
+    judged: false,
+  })),
+};
+const BENCH_7KEY_CHANNELS = ['16', '11', '12', '13', '14', '15', '18', '19'];
+const BENCH_7KEY_BINDINGS = lanesApi.createLaneBindings(BENCH_7KEY_CHANNELS, { playVariant: '7', platform: 'linux' });
+const BENCH_LANE_NOTES = Array.from({ length: 256 }, (_, index) => ({
+  channel: BENCH_7KEY_CHANNELS[index % BENCH_7KEY_CHANNELS.length]!,
+}));
+const BENCH_SCROLL_TIMELINE = [
+  { beat: 0, speed: 1 },
+  { beat: 8, speed: 0.5 },
+  { beat: 16, speed: -1 },
+  { beat: 24, speed: 1 },
+];
+const BENCH_SPEED_TIMELINE = [
+  { beat: 0, speed: 1 },
+  { beat: 12, speed: 2 },
+];
+const BENCH_BGA_CUES = Array.from({ length: 512 }, (_, index) => ({ seconds: index * 0.125, key: `${index}` }));
+const BENCH_PCM_CHUNK = new Uint8Array(new Int16Array(1024).buffer);
+
+function createBenchAudioContext(): WebAudioContextLike {
+  return {
+    currentTime: 0,
+    destination: {},
+    createBuffer: (_channels: number, length: number) => ({ getChannelData: () => new Float32Array(length) }),
+    createBufferSource: () => ({ buffer: null, connect: () => undefined, start: () => undefined }),
+    suspend: async () => undefined,
+    resume: async () => undefined,
+  };
 }
 
 const BENCH_PLAYLOG: BeMusicPlaylog = {

@@ -2,7 +2,7 @@ import { dirname } from 'node:path';
 import { isAbortError } from '@be-music/utils/core';
 import readline from 'node:readline';
 import { loadTerminalAnsiImage, type TerminalAnsiImage } from '../bga.ts';
-import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
+import type { ImageResizeAlgorithm } from '@be-music/player/display';
 import {
   buildKittyGraphicsDeleteImageSequence,
   buildKittyGraphicsRenderSequence,

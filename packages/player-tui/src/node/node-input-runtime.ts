@@ -4,8 +4,8 @@ import { beginStatefulKeyboardProtocolOptIn, resolveInputTokenEvent } from '../m
 import {
   resolveHighSpeedControlActionFromLaneChannels,
   type HighSpeedControlAction,
-} from '@be-music/player/core/high-speed-control';
-import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+  type PlayerInputSignalBus,
+} from '@be-music/player/signals';
 import { beginSharedRawInputCapture, type RawInputCapture } from '../raw-input-capture.ts';
 
 export interface NodeInputRuntimeOptions {

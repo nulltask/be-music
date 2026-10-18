@@ -1,4 +1,4 @@
-import type { ScrollTimelinePoint } from '@be-music/player/core/scroll-distance';
+import type { ScrollTimelinePoint } from '@be-music/chart';
 
 export interface MeasureTimelinePoint {
   measure: number;

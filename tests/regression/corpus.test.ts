@@ -7,7 +7,7 @@ import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import { parseChart, parseChartFile } from '@be-music/parser';
 import type { RandomDraws } from '@be-music/chart';
 import { resolvePlayChart } from '@be-music/player';
-import { extractTimedNotes } from '@be-music/player/playable-notes';
+import { extractTimedNotes } from '@be-music/player/display';
 import { simulatePlaylogRulesets, type PlaylogNote, type PlaylogRulesetResult } from '@be-music/player/playlog';
 import { stringifyBms, stringifyBmson } from '@be-music/stringifier';
 import { describe, expect, test } from 'vite-plus/test';

@@ -8,10 +8,11 @@ import {
   parseBmsDynamicVolumeGain,
   usesMonophonicWavPlayback,
   type ResolvedChart,
+  type TimedSampleTrigger,
 } from '@be-music/chart';
 import { floatToInt16, throwIfAborted } from '@be-music/utils/core';
 import { type BeMusicEvent, normalizeChannel, normalizeObjectKey, resolveBmsBase } from '@be-music/json';
-import { type RenderResult, type TimedSampleTrigger, renderSingleSample } from '@be-music/audio-renderer';
+import { type RenderResult, renderSingleSample } from '@be-music/audio-renderer';
 import { type TimedPlayableNote } from '../playable-notes.ts';
 import { resolveChartVolWavGain } from '../utils.ts';
 import { createNodeAudioSink, type AudioSink } from '../audio-sink.ts';

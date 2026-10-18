@@ -15,6 +15,21 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./signals": {
+      "source": "./src/signals.ts",
+      "types": "./dist/signals.d.ts",
+      "default": "./dist/signals.js"
+    },
+    "./lanes": {
+      "source": "./src/lanes.ts",
+      "types": "./dist/lanes.d.ts",
+      "default": "./dist/lanes.js"
+    },
+    "./display": {
+      "source": "./src/display.ts",
+      "types": "./dist/display.d.ts",
+      "default": "./dist/display.js"
+    },
     "./playable-notes": {
       "source": "./src/playable-notes.ts",
       "types": "./dist/playable-notes.d.ts",

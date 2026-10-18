@@ -7,14 +7,16 @@ import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
-} from '@be-music/player/utils';
-import type {
-  CreatePlayerInputRuntimeContext,
-  CreatePlayerUiRuntimeContext,
-  PlayerInputRuntime,
-} from '@be-music/player/core/engine';
-import { autoPlay, manualPlay, PlayerInterruptedError } from '@be-music/player/core/engine';
-import type { PlayerLoadProgress } from '@be-music/player/core/engine';
+} from '@be-music/player/display';
+import {
+  autoPlay,
+  manualPlay,
+  PlayerInterruptedError,
+  type CreatePlayerInputRuntimeContext,
+  type CreatePlayerUiRuntimeContext,
+  type PlayerInputRuntime,
+  type PlayerLoadProgress,
+} from '@be-music/player';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
 import { createUiFramePatchBuilder } from './ui-frame-patch.ts';
 import type {
