@@ -34,7 +34,7 @@ state](#behaviour-choices-1) list each one.
 
 The library is what a select screen browses: its charts (`LibraryChart`), the folder bars they are grouped in
 (`LibraryFolder`), the course folders and their courses (`LibraryCourse`, `LibraryCourseStage`), and one bar of the
-list (`LibraryEntry`). A `Library` is the charts plus the course folders; the browser player's song collection is one.
+list (`LibraryEntry`). A `Library` is the charts plus the course folders; the browser player's chart collection is one.
 
 - **Root folders.** `groupChartsByFolder` groups the charts by the first segment of their directory (their source label
   when they have none), folders in Japanese-aware label order, each folder's charts in their source order.
@@ -45,11 +45,12 @@ list (`LibraryEntry`). A `Library` is the charts plus the course folders; the br
 - **Entry key.** `libraryEntryKey` names a bar across library rebuilds: a chart by id, a folder by label, a course by id
   (the glossary's focus key).
 
-The entry types keep the field names the browser player has always used (`song`, `songs` and the `'song'` kind), so
-every consumer and every be-music skin reads them unchanged. `@be-music/skin-sdk` exports them under their earlier
-names: `BrowserSongEntry` is `LibraryChart`, `BrowserFolderNode` is `LibraryFolder`, `BrowserCourseEntry` is
-`LibraryCourse`, `BrowserCourseStage` is `LibraryCourseStage`, `BrowserBrowseEntry` is `LibraryEntry` and
-`BrowserSongSourceKind` is `ChartSourceKind`.
+The entries follow the glossary's chart wording: a chart bar is `{ kind: 'chart', chart }`, a folder lists its
+`charts`, a course stage names the local `chart` it resolved to, and a `Library` holds `charts`. They used to keep the
+browser player's `song`, `songs` and `'song'` names. `@be-music/skin-sdk` re-exports the types under these names; its
+`Browser*` aliases are removed (`BrowserSongEntry` was `LibraryChart`, `BrowserFolderNode` `LibraryFolder`,
+`BrowserCourseEntry` `LibraryCourse`, `BrowserCourseStage` `LibraryCourseStage`, `BrowserBrowseEntry` `LibraryEntry`
+and `BrowserSongSourceKind` `ChartSourceKind`).
 
 ## Browse
 
@@ -302,7 +303,7 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 
 | Helper                                                                              | Was in                                    | Now                                                                                 |
 | ----------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
-| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                    | `@be-music/skin-sdk`                      | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (aliased in skin-sdk)           |
+| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                    | `@be-music/skin-sdk`                      | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (the old names are removed)     |
 | `BeMusicPlayOptions` and its value types                                            | `@be-music/skin-sdk`                      | `PlayOptions`, … (aliased in skin-sdk)                                              |
 | `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                     | `@be-music/skin-sdk`                      | `PlayResult`, … (aliased in skin-sdk)                                               |
 | `BeMusicJudge`, `BeMusicSide`, `BeMusicJudgeTiming`, `BeMusicLaneCover`             | `@be-music/skin-sdk`                      | `Judge`, `PlaySide`, `JudgeTiming`, `LaneCover` (aliased in skin-sdk)               |

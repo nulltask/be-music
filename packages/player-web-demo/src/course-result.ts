@@ -1,5 +1,5 @@
 import { resolveCourseTrophy } from '@be-music/player/playlog';
-import type { BrowserCourseEntry } from '@be-music/player-web/collection';
+import type { LibraryCourse } from '@be-music/scene-model';
 import type { BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/skin-sdk';
 
 /*
@@ -34,7 +34,7 @@ export function skipsCourseStageResult(options: {
  * The key a course's best record is kept under: the course kind, its constraints and its stages' chart hashes in
  * order (SHA-256 when the course names one, else MD5), like beatoraja keys course scores on the stage hashes.
  */
-export function courseRecordKey(course: BrowserCourseEntry, placement: 'intended' | 'lr2' = 'intended'): string {
+export function courseRecordKey(course: LibraryCourse, placement: 'intended' | 'lr2' = 'intended'): string {
   const { definition } = course;
   const stages = definition.stages.map((stage) => stage.sha256 ?? stage.md5 ?? '').join(',');
   const key = `course:${definition.kind}:${[...definition.constraints].sort().join('+')}:${stages}`;
@@ -51,14 +51,14 @@ export function courseRecordKey(course: BrowserCourseEntry, placement: 'intended
  * and a NEW COURSE bar have no record. A NONSTOP course reads the record of the placement it would be played with.
  */
 export function lookupCourseRecord(
-  course: BrowserCourseEntry,
+  course: LibraryCourse,
   records: { get(key: string): BeMusicSongRecord | undefined },
   placement: 'intended' | 'lr2' = 'intended',
 ): BeMusicCourseRecord | undefined {
   if (course.random !== undefined || course.newCourse === true) return undefined;
   const record = records.get(courseRecordKey(course, placement));
   if (record === undefined) return undefined;
-  const noteCount = course.stages.reduce((sum, stage) => sum + (stage.song?.totalNotes ?? 0), 0);
+  const noteCount = course.stages.reduce((sum, stage) => sum + (stage.chart?.totalNotes ?? 0), 0);
   if (record.exScore === undefined || record.missCount === undefined || noteCount <= 0) return record;
   const trophy = resolveCourseTrophy(course.definition.trophies, {
     exScore: record.exScore,

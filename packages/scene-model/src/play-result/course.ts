@@ -71,7 +71,7 @@ export function playResultFromCourseRun(
   history: CourseStageHistory = EMPTY_COURSE_STAGE_HISTORY,
   options: { playSeconds?: number; stageHistories?: readonly CourseStageHistory[] } = {},
 ): PlayResult {
-  const first = course.stages[0]!.song!;
+  const first = course.stages[0]!.chart!;
   const lastStage = [...courseLog.stages].reverse().find((entry) => entry.played);
   const judgeRuleset = lastStage?.played === true ? (lastStage.playlog.play.judgeRuleset ?? 'lr2') : 'lr2';
   const score =

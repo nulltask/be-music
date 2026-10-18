@@ -48,7 +48,7 @@ when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `creat
 | `./audio`              | The audio service (`createAudioService`), the audio bus and its compressor parameters, the master volume, the system audio session, and `ChartPreviewEngine`                                                                                                               |
 | `./recording`          | `GameplayRecorder`, the recording formats, `makeWebmSeekable`, `downloadBlob` and the WebCodecs helpers                                                                                                                                                                    |
 
-The models the scenes take and hand back come from their own packages: the play options, `PlayResult`, `CourseView`, the hi-speed range and the library helpers (`groupChartsByFolder`, `resolveLibraryChartPlayVariant`) from `@be-music/scene-model`, the be-music skin contract from `@be-music/skin-sdk`, and the play-log format from `@be-music/player/playlog`. Everything else in the package is internal.
+The models the scenes take and hand back come from their own packages: the play options, `PlayResult`, `CourseView`, the hi-speed range, the library entries (`LibraryChart`, `LibraryFolder`, `LibraryCourse`, `LibraryEntry`, …) and their helpers (`groupChartsByFolder`, `resolveLibraryChartPlayVariant`) from `@be-music/scene-model`, the be-music skin contract from `@be-music/skin-sdk`, and the play-log format from `@be-music/player/playlog`. Everything else in the package is internal.
 
 ## Running the demo
 
@@ -144,7 +144,7 @@ Courses play through the same select → play → result scenes. See [Courses an
   - Known limitation: the browser fetches the table directly, so a table whose server does not send CORS headers (`Access-Control-Allow-Origin`) cannot be imported; many tables do not. The status line then says the site could not be fetched. A header JSON served from an origin that allows cross-origin reads (or from the demo's own origin) imports.
   - beatoraja's command-folder file (`folder/*.json`) adds its random courses: each folder with any becomes a course folder. A random course is listed with its stage titles (or filters), lights beatoraja's `OPTION_RANDOMCOURSEBAR` (1031), and draws its stages from the library when it is started (`drawBrowserRandomCourse`). A stage that matches no chart leaves the course unstarted with a status message.
 - **Select:**
-  - Each course file is a folder bar listed after the song folders. Inside it, every course is a course bar (`BrowserBrowseEntry` `kind: 'course'`).
+  - Each course file is a folder bar listed after the chart folders. Inside it, every course is a course bar (`LibraryEntry` `kind: 'course'`).
   - A course with a stage missing from the collection is listed but cannot be started.
   - On the LR2 and built-in selects the key-mode filter applies to course bars too, as LR2 lists courses by their key mode (OpenLR2 L18030-L18053): a course that names its key mode (`definition.keyMode`: LR2 `line`, a table's `mode`) is listed only under it, and one that names none stays listed.
   - Skins:

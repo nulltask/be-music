@@ -9,7 +9,7 @@ import {
   type RecordPlayKind,
 } from '@be-music/player/records';
 import { isClearLamp, type ClearLamp, type PlaylogRulesetId } from '@be-music/player/ruleset';
-import type { BrowserSongEntry } from '@be-music/player-web/collection';
+import type { LibraryChart } from '@be-music/scene-model';
 
 const STORAGE_KEY = 'be-music-demo.song-records';
 /**
@@ -51,7 +51,7 @@ export function rulesetRecords<T>(
  * the course keeps the record) and a play at another tempo (practice).
  */
 export function playRecordKey(
-  song: Pick<BrowserSongEntry, 'chartPath'>,
+  song: Pick<LibraryChart, 'chartPath'>,
   chartSha256: string | undefined,
   play: RecordedPlayKind & { course: boolean },
 ): string | undefined {
@@ -64,7 +64,7 @@ export function playRecordKey(
  * play at another tempo.
  */
 export function courseStageRecordKey(
-  song: Pick<BrowserSongEntry, 'chartPath'>,
+  song: Pick<LibraryChart, 'chartPath'>,
   chartSha256: string | undefined,
   play: RecordedPlayKind,
 ): string | undefined {
@@ -78,7 +78,7 @@ export function courseStageRecordKey(
  * when known (stable across sessions, machines, and file moves — the same hash the play-logs record), else its chart
  * path inside the dropped library.
  */
-export function songRecordKey(song: Pick<BrowserSongEntry, 'chartPath'>, chartSha256: string | undefined): string {
+export function songRecordKey(song: Pick<LibraryChart, 'chartPath'>, chartSha256: string | undefined): string {
   return chartSha256 !== undefined && chartSha256.length > 0 ? `sha256:${chartSha256}` : `path:${song.chartPath}`;
 }
 

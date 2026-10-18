@@ -104,7 +104,7 @@ function setup(
 function focused(frame: SelectFrame): string | undefined {
   const entry = frame.entries[frame.cursor];
   if (entry === undefined) return undefined;
-  return entry.kind === 'song' ? entry.song.id : entry.kind === 'folder' ? entry.folder.label : entry.course.id;
+  return entry.kind === 'chart' ? entry.chart.id : entry.kind === 'folder' ? entry.folder.label : entry.course.id;
 }
 
 afterEach(() => {

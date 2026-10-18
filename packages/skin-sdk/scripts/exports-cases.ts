@@ -19,7 +19,7 @@ const BENCH_SONG = {
   bpm: 150,
   totalNotes: 8,
   chart: BENCH_CHART,
-} satisfies skinSdkApi.BrowserSongEntry;
+} satisfies skinSdkApi.LibraryChart;
 const BENCH_STATS = skinSdkApi.resolveSongStats(BENCH_SONG);
 const BENCH_COURSE_ENTRY = {
   kind: 'course',
@@ -34,13 +34,13 @@ const BENCH_COURSE_ENTRY = {
       release: true,
       source: { format: 'beatoraja-json' },
     },
-    stages: [{ title: 'Bench', song: BENCH_SONG }, { title: 'Missing' }],
+    stages: [{ title: 'Bench', chart: BENCH_SONG }, { title: 'Missing' }],
     playable: false,
   },
-} satisfies skinSdkApi.BrowserBrowseEntry;
-const BENCH_BROWSE_ENTRIES: readonly skinSdkApi.BrowserBrowseEntry[] = [
-  { kind: 'song', song: BENCH_SONG },
-  { kind: 'folder', folder: { label: 'Bench', songs: [BENCH_SONG] } },
+} satisfies skinSdkApi.LibraryEntry;
+const BENCH_BROWSE_ENTRIES: readonly skinSdkApi.LibraryEntry[] = [
+  { kind: 'chart', chart: BENCH_SONG },
+  { kind: 'folder', folder: { label: 'Bench', charts: [BENCH_SONG] } },
   BENCH_COURSE_ENTRY,
 ];
 const BENCH_SCORE = {

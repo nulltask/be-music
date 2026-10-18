@@ -11,7 +11,7 @@ import {
   computeBeatorajaChartNoteDistribution,
   type BeatorajaChartNoteDistribution,
 } from '../../../chart/beatoraja/note-distribution.ts';
-import type { BrowserBrowseEntry, BrowserSongEntry } from '../../../collection/types.ts';
+import type { LibraryChart, LibraryEntry } from '@be-music/scene-model';
 import { logger } from '../../../logger.ts';
 import { destroyTextureAndRevokeBlobUrl } from '../../../media/textures.ts';
 import type { BeatorajaChartImages } from '../../../skin/beatoraja/chart-images.ts';
@@ -21,9 +21,9 @@ const log = logger('beatoraja-select');
 /** What the chart images read on the select view: its fields of these names. */
 export interface BeatorajaSelectChartImagesContext {
   /** Decodes a chart's own images; without it the synthetic image ids stay hidden. */
-  readonly decodeChartImages: ((song: BrowserSongEntry) => Promise<BeatorajaChartImages>) | undefined;
+  readonly decodeChartImages: ((song: LibraryChart) => Promise<BeatorajaChartImages>) | undefined;
   readonly disposed: boolean;
-  readonly entries: ReadonlyArray<BrowserBrowseEntry>;
+  readonly entries: ReadonlyArray<LibraryEntry>;
   /** The cursor: `entries[currentIndex]` is the focused bar. */
   readonly currentIndex: number;
 }
@@ -33,7 +33,7 @@ export class BeatorajaSelectChartImages {
   private readonly ctx: BeatorajaSelectChartImagesContext;
 
   /**
-   * Per-song chart-image cache. Keyed by `BrowserSongEntry.id`; populated lazily by
+   * Per-song chart-image cache. Keyed by `LibraryChart.id`; populated lazily by
    * {@link refreshChartImagesForFocus} as the user moves the cursor. Re-focusing a
    * previously-loaded song hits the cache and skips the IO. Sentinel `null` records a
    * decode in flight, or one that failed, so we don't retry every cursor move.
@@ -51,7 +51,7 @@ export class BeatorajaSelectChartImages {
    * after the cursor moved on are kept for when it comes back; those that land after the part is disposed are
    * destroyed.
    */
-  refreshChartImagesForFocus(song: BrowserSongEntry | undefined): void {
+  refreshChartImagesForFocus(song: LibraryChart | undefined): void {
     if (song === undefined) return;
     const decoder = this.ctx.decodeChartImages;
     if (decoder === undefined) return;
@@ -92,8 +92,8 @@ export class BeatorajaSelectChartImages {
    */
   resolveChartImageForFocus(syntheticId: number): Texture | undefined {
     const entry = this.ctx.entries[this.ctx.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const cached = this.chartImageCache.get(entry.song.id);
+    if (entry?.kind !== 'chart') return undefined;
+    const cached = this.chartImageCache.get(entry.chart.id);
     if (cached === null || cached === undefined) return undefined;
     if (syntheticId === -100) return cached.stageFile;
     if (syntheticId === -101) return cached.backBmp;
@@ -107,7 +107,7 @@ export class BeatorajaSelectChartImages {
    * segment list — sharing the walk between the bpmgraph and notes-graph renderers. Cached
    * per song-id so cursor moves through a folder don't redundantly re-analyse.
    */
-  private analysisFor(song: BrowserSongEntry): BeatorajaChartNoteDistribution {
+  private analysisFor(song: LibraryChart): BeatorajaChartNoteDistribution {
     const cached = this.chartAnalysisCache.get(song.id);
     if (cached !== undefined) return cached;
     const result = computeBeatorajaChartNoteDistribution(song.chart);
@@ -130,8 +130,8 @@ export class BeatorajaSelectChartImages {
       }
     | undefined {
     const entry = this.ctx.entries[this.ctx.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const analysis = this.analysisFor(entry.song);
+    if (entry?.kind !== 'chart') return undefined;
+    const analysis = this.analysisFor(entry.chart);
     if (analysis.bpmSegments.length === 0 || analysis.totalMs <= 0) return undefined;
     return {
       segments: analysis.bpmSegments,
@@ -151,8 +151,8 @@ export class BeatorajaSelectChartImages {
     | { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number }
     | undefined {
     const entry = this.ctx.entries[this.ctx.currentIndex];
-    if (entry?.kind !== 'song') return undefined;
-    const analysis = this.analysisFor(entry.song);
+    if (entry?.kind !== 'chart') return undefined;
+    const analysis = this.analysisFor(entry.chart);
     if (analysis.buckets.length === 0) return undefined;
     return { buckets: analysis.buckets, maxCount: analysis.maxCount, totalMs: analysis.totalMs };
   }

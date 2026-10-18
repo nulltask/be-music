@@ -8,9 +8,14 @@ import {
 import type { PlayerSummary } from '@be-music/player';
 import { courseStageRecordPlayFromResult, recordPlayFromResult } from '@be-music/player/records';
 import { createEmptyScore } from '@be-music/player/ruleset';
-import { createHiSpeedState, createPlayState, HiSpeedTransition, type PlayState } from '@be-music/scene-model';
+import {
+  createHiSpeedState,
+  createPlayState,
+  HiSpeedTransition,
+  type LibraryChart,
+  type PlayState,
+} from '@be-music/scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import type { BrowserSongEntry } from '../../collection/types.ts';
 import { LongNoteTracker } from './long-note-tracker.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import { applyFinalSummary, drainSharedEngineSignals, type PlayEngineContext } from './play-engine.ts';
@@ -18,7 +23,7 @@ import { getResultData } from './play-ending.ts';
 
 /** The chart's length the graphs are taken over, in seconds. */
 const CHART_SECONDS = 10;
-const SONG = { id: 'song', title: 'Song', chart: {} } as unknown as BrowserSongEntry;
+const SONG = { id: 'song', title: 'Song', chart: {} } as unknown as LibraryChart;
 
 /** A play of `total` notes as the engine side of a built-in / LR2 scene sees it: the scene's state and its buses. */
 function createPlay(options: {

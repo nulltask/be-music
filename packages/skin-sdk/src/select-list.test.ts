@@ -6,7 +6,7 @@ import {
   describeCourseCard,
   selectListRows,
 } from './select-list.ts';
-import type { BrowserCourseEntry, BrowserSongEntry } from './song.ts';
+import type { LibraryChart, LibraryCourse } from './song.ts';
 
 const entries = Array.from({ length: 20 }, (_, index) => index);
 
@@ -55,7 +55,7 @@ describe('selectListRows', () => {
 });
 
 describe('browse entry row text', () => {
-  const song = {
+  const chart = {
     id: 's',
     sourceId: 'd',
     sourceLabel: 'pack',
@@ -67,23 +67,23 @@ describe('browse entry row text', () => {
     playLevel: 12,
     totalNotes: 10,
     chart: {},
-  } as unknown as BrowserSongEntry;
+  } as unknown as LibraryChart;
   const course = {
     id: 'dan#0',
     definition: { name: 'Dan', kind: 'grade' },
-    stages: [{ title: 'Song', song }, { title: 'Gone' }],
+    stages: [{ title: 'Song', chart }, { title: 'Gone' }],
     playable: false,
-  } as unknown as BrowserCourseEntry;
+  } as unknown as LibraryCourse;
 
-  test('titles, counts and badges for songs, folders, course folders and courses', () => {
-    expect(browseEntryTitle({ kind: 'song', song })).toBe('Song');
-    expect(browseEntryCount({ kind: 'song', song })).toBeUndefined();
-    expect(browseEntryBadge({ kind: 'song', song })).toBe('12');
-    const folder = { label: 'pack', songs: [song] };
+  test('titles, counts and badges for charts, folders, course folders and courses', () => {
+    expect(browseEntryTitle({ kind: 'chart', chart })).toBe('Song');
+    expect(browseEntryCount({ kind: 'chart', chart })).toBeUndefined();
+    expect(browseEntryBadge({ kind: 'chart', chart })).toBe('12');
+    const folder = { label: 'pack', charts: [chart] };
     expect(browseEntryTitle({ kind: 'folder', folder })).toBe('pack');
     expect(browseEntryCount({ kind: 'folder', folder })).toBe('1 chart');
     expect(browseEntryBadge({ kind: 'folder', folder })).toBe('DIR');
-    expect(browseEntryCount({ kind: 'folder', folder: { label: 'dan', songs: [], courses: [course, course] } })).toBe(
+    expect(browseEntryCount({ kind: 'folder', folder: { label: 'dan', charts: [], courses: [course, course] } })).toBe(
       '2 courses',
     );
     expect(browseEntryTitle({ kind: 'course', course })).toBe('Dan');
@@ -97,9 +97,9 @@ describe('browse entry row text', () => {
       stages: [{ title: 'level = 12' }, { title: 'RANDOM' }],
       random: {},
       playable: true,
-    } as unknown as BrowserCourseEntry;
+    } as unknown as LibraryCourse;
     expect(browseEntryCount({ kind: 'course', course: random })).toBe('2 stages · random');
-    const newCourse = { ...course, stages: [], newCourse: true } as unknown as BrowserCourseEntry;
+    const newCourse = { ...course, stages: [], newCourse: true } as unknown as LibraryCourse;
     expect(browseEntryCount({ kind: 'course', course: newCourse })).toBe('make a course');
     expect(browseEntryBadge({ kind: 'course', course: newCourse })).toBe('NEW');
     expect(describeCourseCard(newCourse)).toEqual({ title: 'Dan', detail: 'make a course', stages: [] });
@@ -115,7 +115,7 @@ describe('browse entry row text', () => {
     );
     expect(describeCourseCard(course, { lamp: 'NO_PLAY' }).detail).toBe('DAN · 2 stages · 1 missing');
     expect(
-      browseEntryCount({ kind: 'folder', folder: { label: 'mine', songs: [], courses: [course, newCourse] } }),
+      browseEntryCount({ kind: 'folder', folder: { label: 'mine', charts: [], courses: [course, newCourse] } }),
     ).toBe('1 course');
   });
 });

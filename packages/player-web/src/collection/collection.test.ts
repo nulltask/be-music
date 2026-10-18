@@ -74,7 +74,7 @@ describe('loadSongCollectionFromFiles with deferred drop handles', () => {
     );
     const collection = await loadSongCollectionFromFiles([...charts].reverse().concat(deferred('Pack/S00/kick.wav')));
     expect(collection.errors).toEqual([]);
-    expect(collection.songs.map((song) => song.title)).toEqual(charts.map((_, index) => `Song ${index}`));
+    expect(collection.charts.map((song) => song.title)).toEqual(charts.map((_, index) => `Song ${index}`));
     expect(opened).not.toContain('Pack/S00/kick.wav');
   });
 });
@@ -105,7 +105,7 @@ describe('loadSongCollectionFromFiles note counts', () => {
     },
   ])('$name', async ({ path, text, expected }) => {
     const collection = await loadSongCollectionFromFiles([makeFile(path, text)]);
-    expect(collection.songs[0]!.totalNotes).toBe(expected);
+    expect(collection.charts[0]!.totalNotes).toBe(expected);
     expect(engineScorableNotes(path, text)).toBe(expected);
   });
 });
@@ -161,7 +161,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
     // The progress hook is optional; supplying no options must not throw. Acts as a safety net so existing callers (and
     // tests) that haven't migrated keep working.
     const collection = await loadSongCollectionFromFiles([makeFile('Song/main.bms', MINIMAL_BMS)]);
-    expect(collection.songs.length).toBe(1);
+    expect(collection.charts.length).toBe(1);
   });
 
   test('calls scheduler.yield with the scheduler receiver during large parse batches', async () => {
@@ -181,7 +181,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
 
     const collection = await loadSongCollectionFromFiles(files);
 
-    expect(collection.songs).toHaveLength(32);
+    expect(collection.charts).toHaveLength(32);
     expect(scheduler.yield).toHaveBeenCalledTimes(1);
   });
 
@@ -190,7 +190,7 @@ describe('loadSongCollectionFromFiles progress events', () => {
 
     expect(collection.sources).toHaveLength(1);
     expect(collection.sources[0]?.kind).toBe('zip');
-    expect(collection.songs.map((song) => song.chartPath)).toEqual(['Song/main.bms']);
+    expect(collection.charts.map((song) => song.chartPath)).toEqual(['Song/main.bms']);
   });
 
   test('rejects oversized zip archives before reading their bytes', async () => {
@@ -220,17 +220,17 @@ describe('BrowserSongCollectionStore', () => {
     const first = await store.appendFromFiles([makeFile('PackA/main.bms', MINIMAL_BMS)]);
     expect(first).toBe(store.collection);
     expect(first.sources).toHaveLength(1);
-    expect(first.songs).toHaveLength(1);
+    expect(first.charts).toHaveLength(1);
     expect(first.sources[0]?.id).toMatch(/^drop1-/u);
-    expect(first.songs[0]?.id).toMatch(/^drop1-/u);
-    expect(first.songs[0]?.sourceId).toBe(first.sources[0]?.id);
+    expect(first.charts[0]?.id).toMatch(/^drop1-/u);
+    expect(first.charts[0]?.sourceId).toBe(first.sources[0]?.id);
 
     const second = await store.appendFromFiles([makeFile('PackB/main.bms', MINIMAL_BMS)]);
     expect(second).toBe(store.collection);
     expect(second.sources).toHaveLength(2);
-    expect(second.songs).toHaveLength(2);
+    expect(second.charts).toHaveLength(2);
     expect(second.sources.map((source) => source.id)).toEqual(['drop1-files:0', 'drop2-files:0']);
-    expect(second.songs.map((song) => song.sourceId)).toEqual(['drop1-files:0', 'drop2-files:0']);
+    expect(second.charts.map((song) => song.sourceId)).toEqual(['drop1-files:0', 'drop2-files:0']);
   });
 
   test('loadFromFiles replaces the collection and resets the next append prefix', async () => {
@@ -240,11 +240,11 @@ describe('BrowserSongCollectionStore', () => {
     const replaced = await store.loadFromFiles([makeFile('PackB/main.bms', MINIMAL_BMS)]);
     expect(replaced).toBe(store.collection);
     expect(replaced.sources.map((source) => source.id)).toEqual(['files:0']);
-    expect(replaced.songs.map((song) => song.sourceId)).toEqual(['files:0']);
+    expect(replaced.charts.map((song) => song.sourceId)).toEqual(['files:0']);
 
     const appended = await store.appendFromFiles([makeFile('PackC/main.bms', MINIMAL_BMS)]);
     expect(appended.sources.map((source) => source.id)).toEqual(['files:0', 'drop1-files:0']);
-    expect(appended.songs.map((song) => song.sourceId)).toEqual(['files:0', 'drop1-files:0']);
+    expect(appended.charts.map((song) => song.sourceId)).toEqual(['files:0', 'drop1-files:0']);
   });
 
   test('loadFromDrop replaces the collection from DataTransfer files', async () => {
@@ -256,7 +256,7 @@ describe('BrowserSongCollectionStore', () => {
     } as unknown as DataTransfer);
     expect(loaded).toBe(store.collection);
     expect(loaded.sources.map((source) => source.id)).toEqual(['files:0']);
-    expect(loaded.songs.map((song) => song.sourceId)).toEqual(['files:0']);
+    expect(loaded.charts.map((song) => song.sourceId)).toEqual(['files:0']);
   });
 });
 

@@ -1,6 +1,6 @@
 import type { BeMusicJson } from '@be-music/json';
 import { resolveChart, resolveChartPlayVariant } from '@be-music/chart';
-import type { BrowserSongEntry } from './song.ts';
+import type { LibraryChart } from './song.ts';
 
 /**
  * What a player wants to know about a chart before starting it, beyond its title and level: how long it runs, the
@@ -26,7 +26,7 @@ export interface SongStats {
 const STATS = new WeakMap<BeMusicJson, SongStats>();
 
 /** {@link SongStats} for a song, computed once per chart (the select screen asks every frame). */
-export function resolveSongStats(song: Pick<BrowserSongEntry, 'chart' | 'bpm'>): SongStats {
+export function resolveSongStats(song: Pick<LibraryChart, 'chart' | 'bpm'>): SongStats {
   const cached = STATS.get(song.chart);
   if (cached) return cached;
   const stats = computeSongStats(song.chart, song.bpm);
@@ -128,7 +128,7 @@ export interface SongRowFacts {
   tags: string[];
 }
 
-export function resolveSongRowFacts(song: Pick<BrowserSongEntry, 'chart' | 'bpm' | 'totalNotes'>): SongRowFacts {
+export function resolveSongRowFacts(song: Pick<LibraryChart, 'chart' | 'bpm' | 'totalNotes'>): SongRowFacts {
   const stats = resolveSongStats(song);
   return {
     notes: String(Math.max(0, song.totalNotes)),
@@ -139,6 +139,6 @@ export function resolveSongRowFacts(song: Pick<BrowserSongEntry, 'chart' | 'bpm'
 }
 
 /** `'7K KEYS'`-style mode label for a song's play variant. */
-export function formatPlayVariantLabel(song: Pick<BrowserSongEntry, 'chartPath' | 'chart'>): string {
+export function formatPlayVariantLabel(song: Pick<LibraryChart, 'chartPath' | 'chart'>): string {
   return `${resolveChartPlayVariant({ chartPath: song.chartPath, events: song.chart.events, bms: song.chart.bms, bmson: song.chart.bmson })} KEYS`;
 }

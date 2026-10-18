@@ -1,7 +1,7 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
-import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
+import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
 import type { PlaylogRulesetId } from '@be-music/player/ruleset';
 import { describe, expect, test } from 'vite-plus/test';
 import {
@@ -21,7 +21,7 @@ import {
   startCourseRun,
 } from './course-flow.ts';
 
-function song(id: string): BrowserSongEntry {
+function song(id: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -39,9 +39,9 @@ function song(id: string): BrowserSongEntry {
   };
 }
 
-function course(overrides: Partial<BrowserCourseEntry> = {}): BrowserCourseEntry {
+function course(overrides: Partial<LibraryCourse> = {}): LibraryCourse {
   const definition = parseBeatorajaCourseData({ name: 'Dan', hash: [{ md5: '1'.repeat(32) }], constraint: [] })!;
-  return { id: 'dan#0', definition, stages: [{ title: 'a', song: song('a') }], playable: true, ...overrides };
+  return { id: 'dan#0', definition, stages: [{ title: 'a', chart: song('a') }], playable: true, ...overrides };
 }
 
 const RESULT: PlaylogCourseResult = {
@@ -83,7 +83,7 @@ describe('planCourseStart', () => {
   });
 
   test('a random course is drawn first; NONSTOP is stitched; others play stage by stage', () => {
-    const random = course({ random: {} as BrowserCourseEntry['random'] });
+    const random = course({ random: {} as LibraryCourse['random'] });
     expect(planCourseStart(random)).toEqual({ action: 'draw' });
     const base = course();
     expect(planCourseStart({ ...base, definition: { ...base.definition, kind: 'nonstop' } })).toEqual({
@@ -107,7 +107,7 @@ describe('courseDecideSong', () => {
 
 describe('failure messages', () => {
   test('say how many stages of an unplayable course are missing', () => {
-    const missingOne = course({ playable: false, stages: [{ title: 'a', song: song('a') }, { title: 'x' }] });
+    const missingOne = course({ playable: false, stages: [{ title: 'a', chart: song('a') }, { title: 'x' }] });
     expect(describeUnplayableCourse(missingOne)).toBe('Dan: 1 stage is not in the collection');
     expect(describeUnplayableCourse(course({ playable: false, stages: [{ title: 'x' }, { title: 'y' }] }))).toBe(
       'Dan: 2 stages are not in the collection',
@@ -203,7 +203,7 @@ describe('resolveResultRetry', () => {
 });
 
 describe('a running course', () => {
-  const three = (): BrowserCourseEntry => {
+  const three = (): LibraryCourse => {
     const definition = parseBeatorajaCourseData({
       name: 'Dan',
       hash: ['1', '2', '3'].map((digit) => ({ md5: digit.repeat(32) })),
@@ -212,7 +212,7 @@ describe('a running course', () => {
     return {
       id: 'dan#0',
       definition,
-      stages: ['a', 'b', 'c'].map((id) => ({ title: id, song: song(id) })),
+      stages: ['a', 'b', 'c'].map((id) => ({ title: id, chart: song(id) })),
       playable: true,
     };
   };

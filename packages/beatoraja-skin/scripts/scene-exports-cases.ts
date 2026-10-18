@@ -141,7 +141,7 @@ const BENCH_COURSE: LibraryCourse = {
     release: true,
     source: { format: 'beatoraja-json' },
   },
-  stages: [{ title: 'One', song: BENCH_SONG }, { title: 'Two' }],
+  stages: [{ title: 'One', chart: BENCH_SONG }, { title: 'Two' }],
   playable: false,
 };
 const BENCH_SELECT_FACTS: sceneApi.BeatorajaSelectChartFacts = {
@@ -157,7 +157,7 @@ const BENCH_SELECT_FACTS: sceneApi.BeatorajaSelectChartFacts = {
   lengthSeconds: 128,
   bpmRange: { min: 120, max: 200 },
 };
-const BENCH_SONG_BAR: LibraryEntry = { kind: 'song', song: BENCH_SONG };
+const BENCH_SONG_BAR: LibraryEntry = { kind: 'chart', chart: BENCH_SONG };
 const BENCH_SELECT: sceneApi.BeatorajaSelectInput = {
   focused: BENCH_SONG_BAR,
   chart: BENCH_SELECT_FACTS,

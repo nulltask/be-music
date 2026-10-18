@@ -1,8 +1,7 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseLr2CourseFile } from '@be-music/player/course';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
-import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
-import type { PlayResult } from '@be-music/scene-model';
+import type { LibraryChart, LibraryCourse, PlayResult } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   type BeMusicTestHook,
@@ -17,7 +16,7 @@ import {
   type TestHookLiveState,
 } from './test-hook.ts';
 
-function song(title: string): BrowserSongEntry {
+function song(title: string): LibraryChart {
   return {
     id: title,
     sourceId: 'drop1',
@@ -121,12 +120,12 @@ describe('TestHookRecorder', () => {
 });
 
 describe('describeBar', () => {
-  test('names a folder, a song with its lamp, and a course with its stages', () => {
-    expect(describeBar({ kind: 'folder', folder: { label: 'pack', songs: [] } })).toEqual({
+  test('names a folder, a chart bar (`song` in contract v1) with its lamp, and a course with its stages', () => {
+    expect(describeBar({ kind: 'folder', folder: { label: 'pack', charts: [] } })).toEqual({
       kind: 'folder',
       title: 'pack',
     });
-    expect(describeBar({ kind: 'song', song: song('Fixture A') }, { lamp: 'HARD' })).toEqual({
+    expect(describeBar({ kind: 'chart', chart: song('Fixture A') }, { lamp: 'HARD' })).toEqual({
       kind: 'song',
       title: 'Fixture A',
       lamp: 'HARD',
@@ -134,10 +133,10 @@ describe('describeBar', () => {
     const [definition] = parseLr2CourseFile(
       `<courselist><course><title>C</title><type>2</type><hash>${'0'.repeat(32)}${'1'.repeat(32)}${'2'.repeat(32)}</hash></course></courselist>`,
     );
-    const course: BrowserCourseEntry = {
+    const course: LibraryCourse = {
       id: 'courses:0',
       definition: definition!,
-      stages: [{ title: 'Fixture A', song: song('Fixture A') }, { title: 'NOT FOUND' }],
+      stages: [{ title: 'Fixture A', chart: song('Fixture A') }, { title: 'NOT FOUND' }],
       playable: false,
     };
     expect(describeBar({ kind: 'course', course }, { lamp: 'FAILED', trophy: 'bronzemedal' })).toEqual({

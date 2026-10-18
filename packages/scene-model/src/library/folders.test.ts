@@ -14,7 +14,7 @@ describe('groupChartsByFolder', () => {
     const folders = groupChartsByFolder(charts);
     expect(folders.map((folder) => folder.label)).toEqual(['Alpha', 'Zeta', 'あいう']);
     // A folder keeps its charts in their original order.
-    expect(folders[1]!.songs.map((chart) => chart.id)).toEqual(['a', 'c']);
+    expect(folders[1]!.charts.map((chart) => chart.id)).toEqual(['a', 'c']);
   });
 
   test('puts a chart without a directory under its source label', () => {
@@ -27,15 +27,15 @@ describe('groupChartsByFolder', () => {
 describe('libraryRootFolders', () => {
   test('lists the chart folders, then the course folders', () => {
     const courses = makeCourseFolder('MY COURSES', [makeCourse('dan')]);
-    const library = { songs: [makeChart('a', 'Pack/x')], courseFolders: [courses] };
+    const library = { charts: [makeChart('a', 'Pack/x')], courseFolders: [courses] };
     expect(libraryRootFolders(library).map((folder) => folder.label)).toEqual(['Pack', 'MY COURSES']);
   });
 
   test('groups a chart list once, and again when its course folders change', () => {
-    const songs = [makeChart('a', 'Pack/x')];
-    const first = libraryRootFolders({ songs });
-    expect(libraryRootFolders({ songs })).toBe(first);
-    const withCourses = libraryRootFolders({ songs, courseFolders: [makeCourseFolder('C', [])] });
+    const charts = [makeChart('a', 'Pack/x')];
+    const first = libraryRootFolders({ charts });
+    expect(libraryRootFolders({ charts })).toBe(first);
+    const withCourses = libraryRootFolders({ charts, courseFolders: [makeCourseFolder('C', [])] });
     expect(withCourses).not.toBe(first);
     expect(withCourses.map((folder) => folder.label)).toEqual(['Pack', 'C']);
   });
@@ -43,8 +43,8 @@ describe('libraryRootFolders', () => {
 
 describe('libraryEntryKey', () => {
   test('names a chart by id, a folder by label and a course by id', () => {
-    expect(libraryEntryKey({ kind: 'song', song: makeChart('x', 'P') })).toBe('chart:x');
-    expect(libraryEntryKey({ kind: 'folder', folder: { label: 'P', songs: [] } })).toBe('folder:P');
+    expect(libraryEntryKey({ kind: 'chart', chart: makeChart('x', 'P') })).toBe('chart:x');
+    expect(libraryEntryKey({ kind: 'folder', folder: { label: 'P', charts: [] } })).toBe('folder:P');
     expect(libraryEntryKey({ kind: 'course', course: makeCourse('dan#0') })).toBe('course:dan#0');
   });
 });

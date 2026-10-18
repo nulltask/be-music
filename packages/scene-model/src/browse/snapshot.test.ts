@@ -15,7 +15,7 @@ import {
 
 function makeLibrary(): Library {
   return {
-    songs: [
+    charts: [
       makeChart('one-a', 'one/x'),
       makeChart('two-a', 'two/x'),
       makeChart('two-b', 'two/x'),
@@ -74,7 +74,7 @@ describe('captureBrowse / restoreBrowse', () => {
       run(library, createBrowseState(), { type: 'jump', index: 2 }, { type: 'open' }, { type: 'move', delta: 1 }),
     );
     const after: Library = {
-      songs: [...library.songs, makeChart('stitched', 'one/x')],
+      charts: [...library.charts, makeChart('stitched', 'one/x')],
       courseFolders: [makeCourseFolder('Dan', [makeCourse('first'), makeCourse('second'), makeCourse('third')])],
     };
     const { state } = restoreBrowse(after, atStart);
@@ -91,7 +91,7 @@ describe('captureBrowse / restoreBrowse', () => {
       { type: 'move', delta: 1 },
     );
     const rebuilt: Library = {
-      songs: [makeChart('two-0', 'two/x'), ...library.songs],
+      charts: [makeChart('two-0', 'two/x'), ...library.charts],
       courseFolders: library.courseFolders,
     };
     const { state } = restoreBrowse(rebuilt, captureBrowse(library, onTwoB));
@@ -108,7 +108,7 @@ describe('captureBrowse / restoreBrowse', () => {
       { type: 'open' },
       { type: 'jump', index: 2 },
     );
-    const shrunk: Library = { songs: library.songs.slice(0, 2) };
+    const shrunk: Library = { charts: library.charts.slice(0, 2) };
     const { state } = restoreBrowse(shrunk, captureBrowse(library, onTwoC));
     expect(focusedChart(shrunk, state)?.id).toBe('two-a');
   });
@@ -119,7 +119,7 @@ describe('captureBrowse / restoreBrowse', () => {
       library,
       run(library, createBrowseState(), { type: 'move', delta: 1 }, { type: 'open' }, { type: 'move', delta: 2 }),
     );
-    const without: Library = { songs: [makeChart('one-a', 'one/x'), makeChart('three-a', 'three/x')] };
+    const without: Library = { charts: [makeChart('one-a', 'one/x'), makeChart('three-a', 'three/x')] };
     const { state, restoredDepth } = restoreBrowse(without, snapshot);
     expect(restoredDepth).toBe(0);
     expect(state.path).toEqual([]);

@@ -10,7 +10,7 @@
 
 import type { BeMusicSelectLayout } from '@be-music/skin-sdk';
 import type { Application } from 'pixi.js';
-import type { BrowserBrowseEntry } from '../../collection/types.ts';
+import type { LibraryEntry } from '@be-music/scene-model';
 import {
   FLING_START_VELOCITY,
   FLING_STOP_VELOCITY,
@@ -69,7 +69,7 @@ export interface SelectPointerContext {
   scrollReadText(delta: number): void;
   closeReadText(): void;
   resolveDesignSize(): SelectDesignSize;
-  currentEntries(): readonly BrowserBrowseEntry[];
+  currentEntries(): readonly LibraryEntry[];
   /** Moves the cursor bar by bar (`SelectSession.moveCursorBy`). */
   moveCursorBy(steps: number): void;
   /** Moves the cursor one bar, wrapping past either end (`SelectSession.stepCursor`). */

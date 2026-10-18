@@ -99,7 +99,7 @@ describe('resolveBeatorajaCourseText', () => {
 describe('beatorajaMissingCourseStages', () => {
   it('lists the stages the library lacks', () => {
     const missing = beatorajaMissingCourseStages({
-      stages: [{ title: 'a', song: {} }, { title: 'b' }, { title: 'c' }],
+      stages: [{ title: 'a', chart: {} }, { title: 'b' }, { title: 'c' }],
     } as unknown as LibraryCourse);
     expect([...missing]).toEqual([1, 2]);
   });

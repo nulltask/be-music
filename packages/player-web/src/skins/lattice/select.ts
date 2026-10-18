@@ -19,8 +19,8 @@ import {
   bandLevel,
   type BeMusicAudioFrame,
   type BeMusicSelectLayout,
-  type BrowserBrowseEntry,
-  type BrowserSongEntry,
+  type LibraryEntry,
+  type LibraryChart,
   describeCourseCard,
   formatPlayVariantLabel,
   resolveSongRowFacts,
@@ -125,7 +125,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
 
   public tick(
     nowMs: number,
-    focusedSong: BrowserSongEntry | undefined,
+    focusedSong: LibraryChart | undefined,
     _launchAt?: number,
     audio?: BeMusicAudioFrame,
   ): void {
@@ -437,7 +437,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
   private renderRow(
     frame: PixiSelectFrame,
     rows: Graphics,
-    entry: BrowserBrowseEntry,
+    entry: LibraryEntry,
     entryIndex: number,
     visibleIndex: number,
     listWidth: number,
@@ -445,7 +445,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
     const { listX, listTop, rowHeight } = LAYOUT;
     const y = listTop + visibleIndex * rowHeight;
     const active = entryIndex === frame.selectedIndex;
-    const song = entry.kind === 'song' ? entry.song : undefined;
+    const song = entry.kind === 'chart' ? entry.chart : undefined;
     const introT = stageProgress(
       frame.nowMs - frame.sceneStartedAt,
       100 + Math.max(0, visibleIndex) * INTRO_STAGGER_MS,

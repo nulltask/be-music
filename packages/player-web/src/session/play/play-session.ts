@@ -17,10 +17,10 @@ import { nonstopBpmAt } from '@be-music/player/course';
 import { resolveLr2LaneTimer } from '@be-music/lr2-skin/state';
 import { DEFAULT_PLAYLOG_VIEW_REPLAY, type BeMusicPlaylog } from '@be-music/player/playlog';
 import type { GaugeType } from '@be-music/player/ruleset';
-import { createHiSpeedState, createPlayState, type PlayResult } from '@be-music/scene-model';
+import { createHiSpeedState, createPlayState, type LibraryChart, type PlayResult } from '@be-music/scene-model';
 import type { BeMusicLongNote } from '@be-music/skin-sdk';
 import type { Application, Texture } from 'pixi.js';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
+import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import { logger } from '../../logger.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../../recording/recording-format.ts';
@@ -164,7 +164,7 @@ export class PlaySession extends PlaySessionState {
    * ffmpeg.wasm fallback for unsupported codecs can take tens of seconds, and the play should show its LOADING
    * animation meanwhile instead of freezing the decide screen).
    */
-  public async load(song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
+  public async load(song: LibraryChart, source?: BrowserSongAssetSource): Promise<void> {
     this.song = song;
     this.source = source;
     // Hidden until {@link start} fires, so a play shown before it begins draws nothing of it yet.
