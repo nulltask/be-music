@@ -87,6 +87,9 @@ const BUTTON_LANECOVER = 330;
 const BUTTON_LIFT = 331;
 const BUTTON_HIDDEN = 332;
 
+/** The beatoraja scale the play log reads the hi-speed on: a lane is four beats at hi-speed 1. */
+const BEATORAJA_PLAYLOG_VIEW: PlayPlaylogViewScale = { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4 };
+
 /**
  * The beatoraja play skin's timing: the play has loaded once it shows (READY and the play timers start then), the chart
  * starts {@link BEATORAJA_PLAY_LEAD_IN_MS} later, and the play ends over the skin's `fadeout` (500 ms without one).
@@ -424,14 +427,12 @@ export class BeatorajaPlayView implements PlayView {
     return uploadTextures((this.host ?? this.uploadHost)?.app.renderer, textures, isCancelled);
   }
 
-  /** The beatoraja scale the play log reads the hi-speed on: a lane of four beats, at the chart's main BPM. */
+  /**
+   * The beatoraja scale the play log reads the hi-speed on: a lane of four beats. The session takes the visible time at
+   * the play's main BPM, as on every family's play screen.
+   */
   public playlogView(): PlayPlaylogViewScale {
-    const mainBpm = this.prepared?.analysis.mainBpm;
-    return {
-      scale: BEATORAJA_HI_SPEED_SCALE,
-      laneBeats: 4,
-      ...(mainBpm !== undefined && mainBpm > 0 ? { mainBpm } : {}),
-    };
+    return BEATORAJA_PLAYLOG_VIEW;
   }
 
   /**

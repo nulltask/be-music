@@ -1043,17 +1043,16 @@ describe('BeatorajaPlayBridge — TIMER_ENDOFNOTE (143 / 144)', () => {
     events: Array<{ channel: string; measure: number; position?: readonly [number, number] }>,
     measureLength = 1,
   ): BeMusicJson {
-    return {
-      metadata: { title: '', subtitle: '', artist: '', subartists: [], genre: '', bpm: 120 },
-      resources: { wav: {}, bmp: {}, bpm: {}, stop: {}, exrank: {} },
-      measures: events.map((e) => ({ index: e.measure, length: measureLength })),
-      events: events.map((e) => ({
-        measure: e.measure,
-        channel: e.channel,
-        position: e.position ?? [0, 1],
-        value: '01',
-      })),
-    } as unknown as BeMusicJson;
+    const chart = createEmptyJson('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = events.map((e) => ({ index: e.measure, length: measureLength }));
+    chart.events = events.map((e) => ({
+      measure: e.measure,
+      channel: e.channel,
+      position: e.position ?? [0, 1],
+      value: '01',
+    }));
+    return chart;
   }
 
   it('stamps TIMER_ENDOFNOTE_1P (143) when currentBeat passes the 1P last-note beat', () => {
@@ -1233,18 +1232,17 @@ describe('BeatorajaPlayBridge — judgegraph type=1 (per-second judge state)', (
   function makeJudgeChart(
     events: ReadonlyArray<{ channel: string; pos?: [number, number]; measure?: number }>,
   ): BeMusicJson {
-    return {
-      metadata: { bpm: 120, title: 'judge-state', rank: 2 } as unknown as BeMusicJson['metadata'],
-      events: events.map((e) => ({
-        measure: e.measure ?? 0,
-        channel: e.channel,
-        position: (e.pos ?? [0, 1]) as unknown as BeMusicJson['events'][0]['position'],
-        value: '01',
-      })),
-      measures: [],
-      bms: { lnObjs: [] } as unknown as BeMusicJson['bms'],
-      resources: { bpm: {}, stop: {} } as unknown as BeMusicJson['resources'],
-    } as unknown as BeMusicJson;
+    const chart = createEmptyJson('bms');
+    chart.metadata.bpm = 120;
+    chart.metadata.title = 'judge-state';
+    chart.metadata.rank = 2;
+    chart.events = events.map((e) => ({
+      measure: e.measure ?? 0,
+      channel: e.channel,
+      position: e.pos ?? [0, 1],
+      value: '01',
+    }));
+    return chart;
   }
 
   it('returns undefined when no chart is loaded (decide / select scenes)', () => {
