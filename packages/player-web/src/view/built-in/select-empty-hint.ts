@@ -8,7 +8,7 @@
 
 import { Color, type Container, Text, TextStyle } from 'pixi.js';
 import type { BrowserSongCollection } from '../../collection/types.ts';
-import { CORE_TEXT_FONT } from '../../scene/core/fonts.ts';
+import { CORE_TEXT_FONT } from '../shared/fonts.ts';
 
 const TEXT = new Color('#f6f2e8');
 const MUTED = new Color('#a9a39a');

@@ -45,7 +45,7 @@ import { hasReadtextForSong } from '../../collection/readtext.ts';
 import { resolveChartBpmRange } from '../../chart/bpm-range.ts';
 import type { Lr2Kit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import { LR2_TEXT_FALLBACK_FONT } from '../../scene/lr2/fonts.ts';
+import { LR2_TEXT_FALLBACK_FONT } from '../shared/fonts.ts';
 import {
   designRectToCanvas,
   resolveDesignTextResolution,
@@ -55,7 +55,7 @@ import {
   type ScaledViewport,
 } from '../../stage/viewport.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
-import { PerfTracker } from '../../scene/perf.ts';
+import { PerfTracker } from '../shared/perf.ts';
 import { disposeChildren } from '../../stage/pixi-utils.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';

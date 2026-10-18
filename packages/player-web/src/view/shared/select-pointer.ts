@@ -21,7 +21,7 @@ import {
   stepTouchScroll,
   stepWheelScroll,
   type TouchSample,
-} from '../../scene/core/touch-scroll.ts';
+} from './touch-scroll.ts';
 import { resolveScaledViewport } from '../../stage/viewport.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 
