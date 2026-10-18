@@ -227,9 +227,9 @@ Rules that keep it cheap to change:
 | [P1](#p1-one-play-loop)         | One play loop with judge strategies                                                                                    | done        |
 | [P2](#p2-domain-rules)          | Domain rules into `@be-music/player`                                                                                   | done        |
 | [P3](#p3-scene-and-skin-models) | `@be-music/scene-model`; LR2 and beatoraja state mapping in the skin packages                                          | done        |
-| [P4](#p4-web-runtime)           | Web runtime: scene sessions, family views, one lifecycle, one audio service, one host API                              | closing out |
-| [P5](#p5-web-demo)              | Web demo split into services behind a scene router                                                                     | planned     |
-| [P6](#p6-ready-for-devel)       | Public entry points, documentation, an empty file-size allowlist, changesets, a full check on real skins; then `devel` | planned     |
+| [P4](#p4-web-runtime)           | Web runtime: scene sessions, family views, one lifecycle, one audio service, one host API                              | done        |
+| [P5](#p5-web-demo)              | Web demo split into services behind a scene router                                                                     | in progress |
+| [P6](#p6-ready-for-devel)       | Public entry points, documentation, an empty file-size allowlist, changesets, a full check on real skins; then `devel` | in progress |
 
 Each pull request keeps behaviour unless it says otherwise: a behaviour change (a fixed drift, a play-log or fingerprint change) goes in its own pull request with its specification, golden values and changeset. Every pull request passes `pnpm run check`, the full test suite and the engine snapshots, and one that touches the scenes, the course flow or the demo host also passes the end-to-end suite ([`pnpm run test:e2e`](./course-checklist.md#automated-run)); each phase ends with the browser checklist, automated and on real skins.
 
