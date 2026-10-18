@@ -19,8 +19,22 @@ import {
   createSolidAnsiFrame,
   convertImageToSourceFrame,
   resizeAnsiFrame,
-  resizeAnsiFrameWithAspectMode,
 } from './bga-frame.ts';
+import {
+  type TimedAnsiFrame,
+  type VideoFrameSource,
+  type FrameSource,
+  type FrameSelection,
+  resizeFrameSourceMap,
+  createStaticFrameSource,
+  resolveFrameSelection,
+  resizeFrameSource,
+  resizeFrameSourceCover,
+  resizeFrameSourceWithAspectMode,
+  selectFrameFromSource,
+  resolveTimelinePlaybackEndSeconds,
+  startStreamingFrameSourceMap,
+} from './bga-frame-source.ts';
 
 const MAX_NORMAL_BGA_COMPOSITE_LAYERS = 3;
 const DEFAULT_BGA_ASCII_WIDTH = 34;
@@ -28,30 +42,6 @@ const DEFAULT_BGA_ASCII_HEIGHT = 20;
 const KITTY_GRAPHICS_PIXEL_SCALE = 4;
 const ANSI_RESET = '\u001b[0m';
 const BGA_SOURCE_LOAD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
-
-interface TimedAnsiFrame {
-  seconds: number;
-  frame: AnsiFrame;
-}
-
-interface StaticFrameSource {
-  kind: 'static';
-  frame: AnsiFrame;
-}
-
-interface VideoFrameSource {
-  kind: 'video';
-  frames: TimedAnsiFrame[];
-  durationSeconds?: number;
-  ensureStreaming?: () => void;
-}
-
-type FrameSource = StaticFrameSource | VideoFrameSource;
-
-interface FrameSelection {
-  frame?: AnsiFrame;
-  index: number;
-}
 
 interface CompositeFrame {
   width: number;
@@ -810,48 +800,6 @@ function normalizeDisplaySize(width?: number, height?: number): { width: number;
   };
 }
 
-function resizeFrameSourceMap(
-  sourceMap: Map<string, FrameSource>,
-  width: number,
-  height: number,
-  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
-): Map<string, FrameSource> {
-  const map = new Map<string, FrameSource>();
-  const cache = new WeakMap<FrameSource, FrameSource>();
-  for (const [key, source] of sourceMap) {
-    let resized = cache.get(source);
-    if (!resized) {
-      resized = resizeFrameSource(source, width, height, resizeAlgorithm);
-      cache.set(source, resized);
-    }
-    map.set(key, resized);
-  }
-  return map;
-}
-
-function createStaticFrameSource(frame: AnsiFrame): FrameSource {
-  return {
-    kind: 'static',
-    frame,
-  };
-}
-
-function resolveFrameSelection(
-  sourceFramesByKey: ReadonlyMap<string, FrameSource>,
-  missingFrame: AnsiFrame,
-  key: string,
-  seconds: number,
-): FrameSelection {
-  if (!key) {
-    return {
-      frame: undefined,
-      index: -1,
-    };
-  }
-  const source = sourceFramesByKey.get(key) ?? createStaticFrameSource(missingFrame);
-  return selectFrameFromSource(source, seconds);
-}
-
 function buildTerminalKittyImage(
   source: FrameSource,
   cellWidth: number,
@@ -883,78 +831,6 @@ function buildTerminalKittyImage(
     cellWidth: Math.max(1, Math.floor(cellWidth)),
     cellHeight: Math.max(1, Math.floor(cellHeight)),
     rgb: filledFrame.rgb,
-  };
-}
-
-function resizeFrameSource(
-  source: FrameSource,
-  width: number,
-  height: number,
-  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
-): FrameSource {
-  return resizeFrameSourceWithAspectMode(
-    source,
-    width,
-    height,
-    TERMINAL_PIXEL_ASPECT_X,
-    TERMINAL_PIXEL_ASPECT_Y,
-    'contain',
-    resizeAlgorithm,
-  );
-}
-
-function resizeFrameSourceCover(
-  source: FrameSource,
-  width: number,
-  height: number,
-  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
-): FrameSource {
-  return resizeFrameSourceWithAspectMode(
-    source,
-    width,
-    height,
-    TERMINAL_PIXEL_ASPECT_X,
-    TERMINAL_PIXEL_ASPECT_Y,
-    'cover',
-    resizeAlgorithm,
-  );
-}
-
-function resizeFrameSourceWithAspectMode(
-  source: FrameSource,
-  width: number,
-  height: number,
-  aspectX: number,
-  aspectY: number,
-  mode: 'contain' | 'cover',
-  resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
-): FrameSource {
-  if (source.kind === 'static') {
-    return {
-      kind: 'static',
-      frame: resizeAnsiFrameWithAspectMode(source.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
-    };
-  }
-
-  const resizedFrames: TimedAnsiFrame[] = [];
-  return {
-    kind: 'video',
-    get durationSeconds() {
-      return source.durationSeconds;
-    },
-    ensureStreaming: () => {
-      source.ensureStreaming?.();
-    },
-    get frames() {
-      for (let index = resizedFrames.length; index < source.frames.length; index += 1) {
-        const entry = source.frames[index]!;
-        resizedFrames.push({
-          seconds: entry.seconds,
-          frame: resizeAnsiFrameWithAspectMode(entry.frame, width, height, aspectX, aspectY, mode, resizeAlgorithm),
-        });
-      }
-      return resizedFrames;
-    },
   };
 }
 
@@ -1004,48 +880,6 @@ function cropAnsiFrameToOpaqueBounds(source: AnsiFrame): AnsiFrame {
   }
 
   return cropped;
-}
-
-function selectFrameFromSource(source: FrameSource | undefined, seconds: number): FrameSelection {
-  if (!source) {
-    return {
-      frame: undefined,
-      index: -1,
-    };
-  }
-
-  if (source.kind === 'static') {
-    return {
-      frame: source.frame,
-      index: 0,
-    };
-  }
-
-  if (source.frames.length === 0) {
-    return {
-      frame: undefined,
-      index: -1,
-    };
-  }
-
-  let low = 0;
-  let high = source.frames.length - 1;
-  let answer = 0;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (source.frames[mid].seconds <= seconds) {
-      answer = mid;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-
-  const bounded = Math.max(0, Math.min(source.frames.length - 1, answer));
-  return {
-    frame: source.frames[bounded].frame,
-    index: bounded,
-  };
 }
 
 function mergeCompositeFrames(...sourceFrames: Array<AnsiFrame | undefined>): CompositeFrame | undefined {
@@ -1469,48 +1303,6 @@ function normalizeTerminalImageDisplaySize(width?: number, height?: number): { w
 
 async function resolveMediaPath(baseDir: string, mediaPath: string, signal?: AbortSignal): Promise<string | undefined> {
   return resolveFirstExistingPath(baseDir, createMediaPathCandidates(mediaPath), signal);
-}
-
-function resolveTimelinePlaybackEndSeconds(
-  timeline: ReadonlyArray<BgaCue>,
-  sourcesByKey: ReadonlyMap<string, FrameSource>,
-): number {
-  const lastCue = timeline.at(-1);
-  if (!lastCue) {
-    return 0;
-  }
-  if (!lastCue.key) {
-    return lastCue.seconds;
-  }
-  return lastCue.seconds + resolveFrameSourceDurationSeconds(sourcesByKey.get(lastCue.key));
-}
-
-function resolveFrameSourceDurationSeconds(source: FrameSource | undefined): number {
-  if (!source || source.kind === 'static') {
-    return 0;
-  }
-  const streamDuration = source.durationSeconds ?? 0;
-  const lastFrameSeconds = source.frames.at(-1)?.seconds ?? 0;
-  if (source.frames.length < 2) {
-    return Math.max(streamDuration, lastFrameSeconds);
-  }
-  const previousFrameSeconds = source.frames.at(-2)?.seconds ?? 0;
-  const estimatedTailSeconds = Math.max(0, lastFrameSeconds - previousFrameSeconds);
-  return Math.max(streamDuration, lastFrameSeconds + estimatedTailSeconds);
-}
-
-function startStreamingFrameSourceMap(sourceMap: ReadonlyMap<string, FrameSource>, seen: Set<FrameSource>): void {
-  for (const source of sourceMap.values()) {
-    startStreamingFrameSource(source, seen);
-  }
-}
-
-function startStreamingFrameSource(source: FrameSource | undefined, seen: Set<FrameSource>): void {
-  if (!source || source.kind === 'static' || seen.has(source)) {
-    return;
-  }
-  seen.add(source);
-  source.ensureStreaming?.();
 }
 
 function createMediaPathCandidates(mediaPath: string): string[] {
