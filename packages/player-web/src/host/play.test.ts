@@ -18,6 +18,7 @@ import { BeatorajaPlaySkinView } from '../scene/beatoraja/skin-view.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
 import { resolvePlaylogRecording } from '../session/play/play-engine.ts';
 import type { PlaySceneSession } from '../session/play/play-scene-session.ts';
+import { startPlaylogView } from '../session/play/play-view-settings.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaRenderContext } from '../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
@@ -50,6 +51,9 @@ const RANDOM_CHART = parseChart(
 
 /** A chart with one note on lane 1, then one on lane 2. */
 const TWO_LANE_CHART = parseChart(['#BPM 120', '#00111:01', '#00112:0001'].join('\n'), 'bms');
+
+/** A chart at 120 BPM that doubles to 240 BPM (`F0`) at measure 2. */
+const TEMPO_CHART = parseChart(['#BPM 120', '#00111:01', '#00203:F0', '#00211:01'].join('\n'), 'bms');
 
 const NO_KEYS: SessionKeyTarget = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const AUDIO = { stopOwned: vi.fn(), playJingle: vi.fn(async () => true) } as unknown as AudioService;
@@ -402,16 +406,28 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it('plays without HS-FIX, its covers off, taking the cover keys', async () => {
+  it('starts its covers off, taking the cover keys', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.1);
     const { scene, play } = createBeatoraja();
     await scene.prepare();
-    expect(play.options).toMatchObject({ hsFix: 'OFF', coverKeys: true });
-    expect(play.playState.view.hsFix).toBe('OFF');
-    expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 2 });
+    expect(play.options).toMatchObject({ coverKeys: true });
     expect(play.playState.view.covers).toEqual([
       { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 },
     ]);
+    scene.dispose();
+  });
+
+  it('scrolls under HS-FIX as every family does, and records it in the play log', async () => {
+    const { scene, play } = createBeatoraja({
+      chart: { ...CHART, chart: TEMPO_CHART } as BrowserSongEntry,
+      settings: { initialHiSpeed: 2, hsFix: 'MAXBPM' },
+    });
+    await scene.prepare();
+    // MAXBPM keeps the player's 2 at the chart's 120 BPM and draws it at its 240: half as fast.
+    expect(play.playState.view.hsFix).toBe('MAXBPM');
+    expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 1 });
+    expect(play.scrollHiSpeed.target).toBe(1);
+    expect(startPlaylogView(play)).toMatchObject({ hiSpeed: 1, hiSpeedScale: 'beatoraja', hsFix: 'MAXBPM' });
     scene.dispose();
   });
 
