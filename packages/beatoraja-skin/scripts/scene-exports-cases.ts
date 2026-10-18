@@ -129,7 +129,7 @@ const BENCH_SONG: LibraryChart = {
   totalNotes: 1200,
   chart: { metadata: { difficulty: 4 } } as unknown as LibraryChart['chart'],
 };
-const BENCH_DECIDE: sceneApi.BeatorajaDecideInput = { chart: BENCH_SONG, progress: 0.5 };
+const BENCH_DECIDE: sceneApi.BeatorajaDecideInput = { chart: BENCH_SONG, mainBpm: 180, progress: 0.5 };
 const BENCH_COURSE: LibraryCourse = {
   id: 'Dan#0',
   definition: {
@@ -156,6 +156,7 @@ const BENCH_SELECT_FACTS: sceneApi.BeatorajaSelectChartFacts = {
   density: { peak: { whole: 21, afterDot: 4 }, end: { whole: 9, afterDot: 0 }, average: { whole: 6, afterDot: 5 } },
   lengthSeconds: 128,
   bpmRange: { min: 120, max: 200 },
+  mainBpm: 180,
 };
 const BENCH_SONG_BAR: LibraryEntry = { kind: 'chart', chart: BENCH_SONG };
 const BENCH_SELECT: sceneApi.BeatorajaSelectInput = {
@@ -415,6 +416,7 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
   define('beatoraja-skin.scene.resolveBeatorajaDecideNumber', {
     run: () => {
       sceneApi.resolveBeatorajaDecideNumber(BEATORAJA_NUM.PLAYLEVEL, BENCH_DECIDE);
+      sceneApi.resolveBeatorajaDecideNumber(BEATORAJA_NUM.MAINBPM, BENCH_DECIDE);
       sceneApi.resolveBeatorajaDecideNumber(BEATORAJA_NUM.LOADING_PROGRESS, BENCH_DECIDE);
     },
   });
@@ -527,6 +529,7 @@ export function registerBeatorajaSkinSceneExportsCases(define: DefineBenchmarkCa
   define('beatoraja-skin.scene.resolveBeatorajaSelectNumber', {
     run: () => {
       sceneApi.resolveBeatorajaSelectNumber(BEATORAJA_NUM.DENSITY_PEAK, BENCH_SELECT);
+      sceneApi.resolveBeatorajaSelectNumber(BEATORAJA_NUM.MAINBPM, BENCH_SELECT);
     },
   });
   define('beatoraja-skin.scene.resolveBeatorajaSelectRefValue', {
