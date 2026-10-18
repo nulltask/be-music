@@ -326,7 +326,7 @@ The web demo split into services behind one scene router ([ADR 0006](./adr/0006-
 | ----- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------- |
 | P5.1a | The scene router module (`app/scene-router.ts`) with its unit tests, before `main.ts` uses it | [#492](https://github.com/nulltask/be-music/pull/492) | done    |
 | P5.1b | Every scene transition through the scene router                                               | [#502](https://github.com/nulltask/be-music/pull/502) | done    |
-| P5.2  | The settings service and a play-options service holding the full `PlayOptions`                | —                                                     | planned |
+| P5.2  | The settings service and a play-options service holding the full `PlayOptions`                | [#510](https://github.com/nulltask/be-music/pull/510) | done    |
 | P5.3  | The Debug Menu in `ui/debug-menu/`                                                            | —                                                     | planned |
 | P5.4  | The library, records and course-maker services, and the drop target                           | —                                                     | planned |
 | P5.5  | The LR2, beatoraja and built-in theme services, and the family kits                           | —                                                     | planned |

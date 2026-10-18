@@ -42,11 +42,7 @@ import {
 } from '@be-music/scene-model';
 import { resolveBeMusicSkinSettings, type BeMusicSkin, type BeMusicSongRecord } from '@be-music/skin-sdk';
 import {
-  BUILT_IN_BE_MUSIC_SKINS,
   latticeSkin,
-  plainSkin,
-  synesthesiaSkin,
-  createBeMusicSkinRegistry,
   createBeatorajaSceneKitCaches,
   createBeatorajaSkinLoadContext,
   findBeatorajaThemeBgm,
@@ -93,14 +89,11 @@ import {
 } from '@be-music/player-web/collection';
 import {
   createAudioService,
-  parseCompressorMode,
   DEFAULT_COMPRESSOR_PARAMS,
   setMasterVolume,
   supportsSystemAudioSession,
-  applySilentModePlayback,
   type AudioOwner,
   type AudioService,
-  type CompressorMode,
   type CompressorParams,
   type TunableCompressor,
 } from '@be-music/player-web/audio';
@@ -159,15 +152,11 @@ import {
   storeSkinSettings,
 } from './skin-settings.ts';
 import type { ResolvedPlayChart } from '@be-music/player';
-import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
+import { storeReplayView } from './replay-view-settings.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingles.ts';
 import {
   parsePlaylog,
   PLAYLOG_FILE_SUFFIX,
-  resolveCoursePlaylogFilename,
-  resolvePlaylogFilename,
-  serializeCoursePlaylog,
-  serializePlaylog,
   type BeMusicCoursePlaylog,
   type BeMusicPlaylog,
   type PlaylogCourseResult,
@@ -267,12 +256,11 @@ import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { navigationAfterDrop } from './drop-navigation.ts';
 import { InlineSearch } from './inline-search.ts';
-import { parseRecordingFormatKey, recordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
-import { readStoredHiSpeed, storeHiSpeed } from './hi-speed-storage.ts';
+import { parseRecordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
+import { storeHiSpeed } from './hi-speed-storage.ts';
 import {
   allowsLiveTempo,
   describePlayingStatus,
-  readStoredPlayTempoSettings,
   storePlayTempoSettings,
   TEMPO_PERCENT_MAX,
   TEMPO_PERCENT_MIN,
@@ -296,25 +284,11 @@ import {
 } from './fullscreen.ts';
 import {
   type PlayLayoutChoice,
-  type SkinEffectsLevel,
   readDeviceSignals,
   resolvePlayLayoutMode,
-  resolveDefaultSkinEffects,
   resolveDeviceProfile,
 } from './device-profile.ts';
-import {
-  SILENT_MODE_STRINGS,
-  installSilentModePlayback,
-  mountSilentModeHint,
-  mountStartSilentModeOption,
-  readPlayInSilentMode,
-  readSilentModeHintSeen,
-  resolveSilentModeLanguage,
-  shouldShowSilentModeHint,
-  storePlayInSilentMode,
-  storeSilentModeHintSeen,
-  type StartSilentModeOption,
-} from './silent-mode-playback.ts';
+import { SILENT_MODE_STRINGS, mountStartSilentModeOption, resolveSilentModeLanguage } from './silent-mode-playback.ts';
 import {
   RECORD_LABEL,
   captureScreenshot,
@@ -325,8 +299,6 @@ import {
 } from './recording-controller.ts';
 import {
   benchmarkRenderResolution,
-  DEFAULT_RENDER_RESOLUTION,
-  nearestRenderResolution,
   RenderResolutionBenchmarkCancelled,
   readStoredRenderResolution,
   renderResolutionLabel,
@@ -334,6 +306,24 @@ import {
   storeRenderResolution,
 } from './render-resolution.ts';
 import type { DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
+import {
+  createDemoGuiState,
+  resolveCompressorMode,
+  storeBuiltInSkinId,
+  storePlayLayout,
+  storeRecordingFormat,
+  storeSkinEffects,
+  storeVolumes,
+} from './services/settings.ts';
+import {
+  BE_MUSIC_SKINS,
+  EXTRA_BUILT_IN_SKINS_ENABLED,
+  loadSkinFonts,
+  waitForDefaultUiFonts,
+} from './services/built-in-skins.ts';
+import { SilentModeSetting } from './services/silent-mode.ts';
+import { copyPlayOptionsToGui, playOptionsFromGui, PlayOptionsService } from './services/play-options.ts';
+import { PlaylogAutoSave } from './services/playlog-auto-save.ts';
 import {
   describeBar,
   isTestHookEnabled,
@@ -352,147 +342,6 @@ if (!app) {
 }
 
 app.innerHTML = DEMO_APP_HTML;
-
-/**
- * Built-in be-music skins beyond Synesthesia and Plain are on hold while those two are polished: Phantom and Lattice,
- * and "Add skin" (a be-music skin module). The code stays; turning this on brings them back. LR2 themes and beatoraja
- * skins are not affected: they load from a drop, `?skin=` or the skin ZIP URL as before.
- */
-const EXTRA_BUILT_IN_SKINS_ENABLED = false;
-
-/** Built-in be-music skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
-const BE_MUSIC_SKINS = createBeMusicSkinRegistry(
-  EXTRA_BUILT_IN_SKINS_ENABLED ? BUILT_IN_BE_MUSIC_SKINS : [synesthesiaSkin, plainSkin],
-);
-const BUILT_IN_SKIN_STORAGE_KEY = 'be-music-demo.built-in-skin';
-// Lattice ships with the player but isn't loaded by default; bring it back when it was the last skin picked.
-if (EXTRA_BUILT_IN_SKINS_ENABLED && readStoredBuiltInSkinId() === latticeSkin.id) BE_MUSIC_SKINS.add(latticeSkin);
-
-/** Loads an added skin's faces in the background, so its first frame doesn't rasterize with a fallback font. */
-function loadSkinFonts(skin: BeMusicSkin): void {
-  if (!('fonts' in document)) return;
-  for (const font of skin.fontLoads) void document.fonts.load(font).catch(() => {});
-}
-
-function readStoredBuiltInSkinId(): string | undefined {
-  try {
-    return window.localStorage.getItem(BUILT_IN_SKIN_STORAGE_KEY) ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-const SKIN_EFFECTS_STORAGE_KEY = 'be-music-demo.skin-effects';
-
-/** Stored effect level, else `'reduced'` on a phone / tablet or when the OS asks for reduced motion, else `'full'`. */
-function readStoredSkinEffects(): SkinEffectsLevel {
-  let stored: string | null = null;
-  try {
-    stored = window.localStorage.getItem(SKIN_EFFECTS_STORAGE_KEY);
-  } catch {
-    // Storage blocked — fall back to the device default.
-  }
-  return resolveDefaultSkinEffects(stored, readDeviceSignals());
-}
-
-const PLAY_LAYOUT_STORAGE_KEY = 'be-music-demo.play-layout';
-
-/** Stored Debug Menu play-layout pick, `'auto'` when none. */
-const RECORDING_FORMAT_STORAGE_KEY = 'be-music-demo.recording-format';
-
-/** The remembered "Video format" (`mp4/avc`, `webm/vp9`, …); MP4 · H.264 when none is stored or it is unknown. */
-function readStoredRecordingFormat(): string {
-  try {
-    return recordingFormatKey(parseRecordingFormatKey(window.localStorage.getItem(RECORDING_FORMAT_STORAGE_KEY)));
-  } catch {
-    // Storage blocked — use the default.
-    return recordingFormatKey(parseRecordingFormatKey(null));
-  }
-}
-
-function storeRecordingFormat(key: string): void {
-  try {
-    window.localStorage.setItem(RECORDING_FORMAT_STORAGE_KEY, key);
-  } catch {
-    // Storage blocked — the choice lasts for this visit only.
-  }
-}
-
-function readStoredPlayLayout(): PlayLayoutChoice {
-  try {
-    const stored = window.localStorage.getItem(PLAY_LAYOUT_STORAGE_KEY);
-    if (stored === 'auto' || stored === 'standard' || stored === 'touch') return stored;
-  } catch {
-    // Storage blocked — use the default.
-  }
-  return 'auto';
-}
-
-function storeBuiltInSkinId(id: string): void {
-  try {
-    window.localStorage.setItem(BUILT_IN_SKIN_STORAGE_KEY, id);
-  } catch {
-    // Private windows / blocked storage: the pick still applies for this session.
-  }
-}
-
-const VOLUME_STORAGE_KEY = 'be-music-demo.volumes';
-
-interface StoredVolumes {
-  masterVolume: number;
-  keyVolume: number;
-  bgmVolume: number;
-}
-
-/** Master / keysound / BGM volumes in percent, as last set in the Debug Menu (all 100 when nothing is stored). */
-function readStoredVolumes(): StoredVolumes {
-  const fallback = { masterVolume: 100, keyVolume: 100, bgmVolume: 100 };
-  try {
-    const raw = window.localStorage.getItem(VOLUME_STORAGE_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Partial<Record<keyof StoredVolumes, unknown>>;
-    const percent = (value: unknown, otherwise: number) =>
-      typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : otherwise;
-    return {
-      masterVolume: percent(parsed.masterVolume, 100),
-      keyVolume: percent(parsed.keyVolume, 100),
-      bgmVolume: percent(parsed.bgmVolume, 100),
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-function storeVolumes(volumes: StoredVolumes): void {
-  try {
-    window.localStorage.setItem(VOLUME_STORAGE_KEY, JSON.stringify(volumes));
-  } catch {
-    // Private windows / blocked storage: the volumes still apply for this session.
-  }
-}
-
-const DEFAULT_UI_FONT_LOADS: readonly string[] = [
-  '400 22px "LINE Seed JP"',
-  '700 18px "LINE Seed JP"',
-  '900 32px "Azeret Mono"',
-  // Every registered skin's faces (the built-ins plus any added at startup, such as a remembered Lattice), so switching
-  // skins never rasterizes a first frame with a fallback font.
-  ...new Set(BE_MUSIC_SKINS.skins.flatMap((skin) => skin.fontLoads)),
-];
-
-async function waitForDefaultUiFonts(): Promise<void> {
-  if (!('fonts' in document)) return;
-  try {
-    await Promise.race([
-      Promise.all(DEFAULT_UI_FONT_LOADS.map((font) => document.fonts.load(font))),
-      new Promise<void>((resolve) => {
-        window.setTimeout(resolve, 1500);
-      }),
-    ]);
-  } catch {
-    // The stylesheet uses font-display=swap, so the app can still start with browser fallbacks if Google Fonts is blocked.
-  }
-}
 
 /** What a decide screen leads to instead of playing its song: a course's first stage, and what backing out undoes. */
 interface DecideContinuation {
@@ -806,6 +655,11 @@ class PlayerWebDemoApp {
    * a change (`refreshPlayOptionControllers`).
    */
   private readonly playOptionControllers: Controller[] = [];
+  /**
+   * The play options in force, the full set: fed by the select screen (`on.playOptions`) and the Debug Menu
+   * ({@link setPlayOptions}); every select screen starts from them, and a decide screen and a play take them.
+   */
+  private readonly playOptions: PlayOptionsService;
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link rememberHiSpeed}. */
   private hiSpeedController: Controller | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
@@ -835,11 +689,14 @@ class PlayerWebDemoApp {
    */
   private activeStageRecordKey: string | undefined;
   /**
-   * `guiState.autoSavePlaylog` as it was when the current play STARTED. The result-screen auto-save decision reads
-   * this latch, not the live checkbox, so the value in effect at song start governs the whole play (the checkbox is
-   * disabled during gameplay anyway — this latch is the enforcement for any path that slips through).
+   * Play-log auto-save, by `guiState.autoSavePlaylog` as it was when the current play STARTED: the result-screen
+   * auto-save of a play, and of a course after its last stage, reads this latch, not the live checkbox (the checkbox is
+   * disabled during gameplay anyway — the latch is the enforcement for any path that slips through).
    */
-  private activePlayAutoSavePlaylog = false;
+  private readonly playlogAutoSave = new PlaylogAutoSave({
+    download: downloadBlob,
+    warn: (message, error) => gameplayLog.warn(message, error),
+  });
   /**
    * Top-level "Skin family" dropdown. Rebuilt via {@link rebuildSkinFamilyPicker} on every theme load / wipe so its
    * option list reflects which families are actually selectable (LR2 only shows up once an `.lr2skin` has been
@@ -878,10 +735,8 @@ class PlayerWebDemoApp {
    * disarmAutoRecord} so the flag doesn't survive into a future session that shouldn't be auto-captured.
    */
   private autoRecordArmed = false;
-  /** The Debug Menu's "Play in silent mode" checkbox, when the browser offers the setting. */
-  private silentModeController: Controller | undefined;
-  /** The start card's "Play in silent mode" checkbox, when the browser offers the setting. */
-  private startSilentModeOption: StartSilentModeOption | undefined;
+  /** "Play in silent mode": the setting, its checkboxes and its hint. */
+  private readonly silentMode: SilentModeSetting;
   /** `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`). */
   private readonly testHook = isTestHookEnabled(window.location.href, import.meta.env.DEV)
     ? new TestHookRecorder()
@@ -889,138 +744,30 @@ class PlayerWebDemoApp {
   private readonly elements: PlayerWebDemoElements;
   public constructor(elements: PlayerWebDemoElements) {
     this.elements = elements;
-    this.guiState = {
-      autoPlay: false,
-      autoPauseOnBlur: false,
-      // Compressor stack ON by default — without it, multiple simultaneous `#WAV` samples sum past full scale and
-      // digital- clip at the destination. The `MIXER_HEADROOM_GAIN_LINEAR` attenuation in `audio-bus.ts` buys a little
-      // headroom but the master limiter is what reliably prevents audible clipping on dense charts. Power users wanting
-      // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
-      ...readStoredVolumes(),
-      playInSilentMode: readPlayInSilentMode(),
-      compressor: true,
-      compressorKey: true,
-      compressorBgm: true,
-      compressorMaster: true,
-      // BGA resize is OFF by default — original-resolution transcode is the safe choice for visual parity. Power users
-      // hitting long encode times on HD BGA can pick a pixel cap from the GUI dropdown without rebuilding. `0` means
-      // "preserve resolution"; any positive integer activates the resize path with that long-edge cap.
-      bgaResizeMaxEdgePx: 0,
-      // WebCodecs encode defaults ON when the browser exposes `VideoEncoder` — typically a 5-20× encode-side speedup
-      // over the single-threaded wasm libx264 fallback, and the runtime silently falls back to ffmpeg if the encoder
-      // rejects the configured codec parameters or any step throws. Browsers without `VideoEncoder` (Safari < 17, older
-      // Firefox) keep the toggle disabled in the GUI and the seed stays `false`.
-      bgaUseWebCodecs: typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis,
-      // Debug overlay for invisible / keysound notes — off by default. Power users investigating chart authoring (or
-      // diagnosing missing keysound triggers) flip it on; the regular gameplay surface stays clean otherwise.
-      showInvisibleNotes: false,
-      // LR2's and beatoraja's own behaviour: a judged note stays until its time, so one hit early keeps scrolling down
-      // to the judgement line. The dropdown offers `'HIDE'` (gone the moment it is judged) as a preference.
-      judgedNoteDisplay: 'KEEP_SCROLLING',
-      // Play-history auto-save defaults OFF, so plays don't pile up downloaded files. Users who want every play's
-      // play-log (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
-      // scene mounts.
-      autoSavePlaylog: false,
-      courseAutoAdvance: false,
-      nonstopPlacement: 'intended',
-      // The play tempo, its pitch handling and the keep-pitch stretcher, remembered from the last visit.
-      ...readStoredPlayTempoSettings(),
-      // What a replay reproduces of the recorded view, remembered from the last visit.
-      replayView: readStoredReplayView(),
-      // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
-      submitToLeaderboard: false,
-      // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
-      // select scene's PLAY OPTION panel where a counterpart exists; latched at song start and disabled during a
-      // play. The judge ruleset has no in-skin counterpart — the Debug Menu is its only surface.
-      judgeRuleset: 'lr2',
-      gauge: 'GROOVE',
-      random1P: 'OFF',
-      random2P: 'OFF',
-      dpFlip: false,
-      autoScratch1P: false,
-      autoScratch2P: false,
-      sort: 'OFF',
-      keysFilter: 'ALL',
-      difficultyFilter: 'ALL',
-      hiSpeed: readStoredHiSpeed(),
-      // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
-      // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
-      // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
-      skinFamilyOverride: 'auto',
-      builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
-      skinEffects: readStoredSkinEffects(),
-      renderResolution: nearestRenderResolution(
-        renderResolutionSteps(window.devicePixelRatio || 1),
-        readStoredRenderResolution() ?? DEFAULT_RENDER_RESOLUTION,
-      ),
-      playLayout: readStoredPlayLayout(),
-      status: 'Ready',
-      openFolder: () => this.elements.songInput.click(),
-      openFiles: () => this.elements.filesInput.click(),
-      recordingFormat: readStoredRecordingFormat(),
-      record: () => {
-        void toggleRecording(this.recordingDeps());
+    this.guiState = createDemoGuiState({
+      signals: readDeviceSignals(),
+      devicePixelRatio: window.devicePixelRatio || 1,
+      builtInSkinId: (stored) => BE_MUSIC_SKINS.resolve(stored).id,
+      actions: {
+        openFolder: () => this.elements.songInput.click(),
+        openFiles: () => this.elements.filesInput.click(),
+        record: () => {
+          void toggleRecording(this.recordingDeps());
+        },
+        screenshot: () => {
+          void captureScreenshot(this.recordingDeps());
+        },
       },
-      screenshot: () => {
-        void captureScreenshot(this.recordingDeps());
-      },
-    };
+    });
     // Every sound plays through the master volume; start from the remembered level.
     setMasterVolume(this.guiState.masterVolume / 100);
-    // Set the platform audio session before any scene creates an AudioContext, and again on the first gesture (which
-    // is when the scenes resume their contexts) — see `silent-mode-playback.ts`.
-    installSilentModePlayback({
-      enabled: () => this.guiState.playInSilentMode,
-      target: window,
-      visibility: document,
-      onFirstGesture: () => this.maybeShowSilentModeHint(),
-    });
-    // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
-    // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
-    // Unrecognized / missing flag → fall through to defaults: architecture `'split'`, GUI checkbox checked (compressor
-    // on, see the `compressor: true` seed above for the rationale).
-    //
-    // `?compressor=split|legacy` is an explicit opt-in to that architecture and keeps the checkbox checked.
-    // `?compressor=off` unchecks it for an unprocessed-signal A/B comparison.
-    const flag: CompressorMode | undefined = parseCompressorMode(
-      new URL(window.location.href).searchParams.get('compressor'),
-    );
-    if (flag === 'split' || flag === 'legacy') {
-      this.compressorMode = flag;
-      this.guiState.compressor = true;
-    } else if (flag === 'off') {
-      this.guiState.compressor = false;
-    }
-  }
-
-  /** Applies and remembers the "Play in silent mode" setting (Debug Menu checkbox or the hint's button). */
-  private setPlayInSilentMode(value: boolean): void {
-    this.guiState.playInSilentMode = value;
-    storePlayInSilentMode(value);
-    applySilentModePlayback(value);
-    this.silentModeController?.updateDisplay();
-    this.startSilentModeOption?.setChecked(value);
-    // Once the user has found the setting, the hint has nothing left to say.
-    storeSilentModeHintSeen();
-  }
-
-  /**
-   * The first time sound can start on an iPhone / iPad, point at the setting: the silent switch mutes web audio there
-   * and nothing on screen says why. Shown once per browser, only while the setting is off.
-   */
-  private maybeShowSilentModeHint(): void {
-    const show = shouldShowSilentModeHint({
-      supported: supportsSystemAudioSession(),
-      enabled: this.guiState.playInSilentMode,
-      seen: readSilentModeHintSeen(),
-      touchFirst: deviceProfile.touchFirst,
-    });
-    if (!show) return;
-    storeSilentModeHintSeen();
-    mountSilentModeHint({
-      strings: SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)],
-      onEnable: () => this.setPlayInSilentMode(true),
-    });
+    this.playOptions = new PlayOptionsService(playOptionsFromGui(this.guiState));
+    this.silentMode = new SilentModeSetting({ settings: this.guiState, touchFirst: deviceProfile.touchFirst });
+    this.silentMode.install();
+    // The `?compressor=split|legacy|off` URL flag, read once at boot.
+    const compressor = resolveCompressorMode(window.location.href);
+    this.compressorMode = compressor.mode;
+    this.guiState.compressor = compressor.enabled;
   }
 
   public start(): void {
@@ -1429,7 +1176,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'autoPlay')
         .name('Auto play')
         .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ autoPlay: value });
+          this.setPlayOptions({ autoPlay: value });
         }),
     );
     trackPlayOption(
@@ -1437,7 +1184,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH'])
         .name('Gauge')
         .onChange((value: DemoGuiState['gauge']) => {
-          this.selectView?.setPlayOptions({ gauge1P: value });
+          this.setPlayOptions({ gauge1P: value });
         }),
     );
     trackPlayOption(
@@ -1445,7 +1192,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
         .name('Random 1P')
         .onChange((value: DemoGuiState['random1P']) => {
-          this.selectView?.setPlayOptions({ random1P: value });
+          this.setPlayOptions({ random1P: value });
         }),
     );
     trackPlayOption(
@@ -1453,7 +1200,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'random2P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
         .name('Random 2P')
         .onChange((value: DemoGuiState['random2P']) => {
-          this.selectView?.setPlayOptions({ random2P: value });
+          this.setPlayOptions({ random2P: value });
         }),
     );
     trackPlayOption(
@@ -1461,7 +1208,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'dpFlip')
         .name('DP flip')
         .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ dpFlip: value });
+          this.setPlayOptions({ dpFlip: value });
         }),
     );
     trackPlayOption(
@@ -1469,7 +1216,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'autoScratch1P')
         .name('Auto scratch 1P')
         .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ autoScratch1P: value });
+          this.setPlayOptions({ autoScratch1P: value });
         }),
     );
     trackPlayOption(
@@ -1477,7 +1224,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'autoScratch2P')
         .name('Auto scratch 2P')
         .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ autoScratch2P: value });
+          this.setPlayOptions({ autoScratch2P: value });
         }),
     );
     // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
@@ -1487,7 +1234,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'sort', [...SORT_CYCLE])
         .name('Sort')
         .onChange((value: DemoGuiState['sort']) => {
-          this.selectView?.setPlayOptions({ sort: value });
+          this.setPlayOptions({ sort: value });
         }),
     );
     trackPlayOption(
@@ -1495,7 +1242,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'keysFilter', [...KEYS_FILTER_CYCLE])
         .name('Key filter')
         .onChange((value: DemoGuiState['keysFilter']) => {
-          this.selectView?.setPlayOptions({ keysFilter: value });
+          this.setPlayOptions({ keysFilter: value });
         }),
     );
     trackPlayOption(
@@ -1503,7 +1250,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'difficultyFilter', [...DIFFICULTY_FILTER_CYCLE])
         .name('Difficulty filter')
         .onChange((value: DemoGuiState['difficultyFilter']) => {
-          this.selectView?.setPlayOptions({ difficultyFilter: value });
+          this.setPlayOptions({ difficultyFilter: value });
         }),
     );
     // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
@@ -1627,10 +1374,10 @@ class PlayerWebDemoApp {
     // left out rather than shown disabled.
     if (supportsSystemAudioSession()) {
       const strings = SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)];
-      this.silentModeController = audio
+      this.silentMode.controller = audio
         .add(this.guiState, 'playInSilentMode')
         .name(strings.label)
-        .onChange((value: boolean) => this.setPlayInSilentMode(value));
+        .onChange((value: boolean) => this.silentMode.set(value));
       const note = document.createElement('div');
       note.className = 'gui-note';
       note.textContent = strings.note;
@@ -1638,11 +1385,11 @@ class PlayerWebDemoApp {
       // The same setting on the start card, so it can be chosen before the first sound.
       const startSection = document.querySelector<HTMLElement>('#start-silent-mode');
       if (startSection !== null) {
-        this.startSilentModeOption = mountStartSilentModeOption({
+        this.silentMode.startOption = mountStartSilentModeOption({
           section: startSection,
           strings,
           checked: this.guiState.playInSilentMode,
-          onChange: (value) => this.setPlayInSilentMode(value),
+          onChange: (value) => this.silentMode.set(value),
         });
       }
     }
@@ -1699,11 +1446,7 @@ class PlayerWebDemoApp {
       .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
       .name('Skin effects')
       .onChange((level: 'full' | 'reduced' | 'off') => {
-        try {
-          window.localStorage.setItem(SKIN_EFFECTS_STORAGE_KEY, level);
-        } catch {
-          // Private windows / blocked storage: the pick still applies for this session.
-        }
+        storeSkinEffects(level);
         this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
       });
     // Both make the select screen again, so they wait for the play to end.
@@ -1731,13 +1474,7 @@ class PlayerWebDemoApp {
     skin
       .add(this.guiState, 'playLayout', { Auto: 'auto', Desktop: 'standard', Touch: 'touch' })
       .name('Play layout')
-      .onChange((choice: PlayLayoutChoice) => {
-        try {
-          window.localStorage.setItem(PLAY_LAYOUT_STORAGE_KEY, choice);
-        } catch {
-          // Private windows / blocked storage: the pick still applies for this session.
-        }
-      });
+      .onChange((choice: PlayLayoutChoice) => storePlayLayout(choice));
     // Picks between LR2 / beatoraja's "a judged note stays until its time" and "a judged note goes the moment it is
     // judged". Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint — the
     // visibility check is a single per-frame branch with no backing state to rebuild.
@@ -2614,7 +2351,7 @@ class PlayerWebDemoApp {
         courseRecordKey(nonstop.course, nonstop.prepared.stitched.placement),
       ),
     );
-    this.maybeAutoSaveCoursePlaylog(courseLog);
+    this.playlogAutoSave.saveCourse(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
     this.leaderboard.maybeSubmitCourse(
       courseLog,
@@ -2712,7 +2449,7 @@ class PlayerWebDemoApp {
       return;
     }
     this.recordCourseResult(resolveCourseRecordUpdate(courseLog, result, courseRecordKey(course)));
-    this.maybeAutoSaveCoursePlaylog(courseLog);
+    this.playlogAutoSave.saveCourse(courseLog);
     // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
     this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
     const courseInfo = resolveCourseView(course);
@@ -3637,7 +3374,7 @@ class PlayerWebDemoApp {
     const mounted = await this.showBeatorajaResult(data, { run: 'single' });
     if (!mounted) await this.showSelect();
     // Auto-save fires even when the theme ships no result skin, so going back to select costs no replay file.
-    this.maybeAutoSavePlaylog(data.playlog);
+    this.playlogAutoSave.savePlay(data.playlog);
     this.leaderboard.maybeSubmit(data.playlog, data.song);
     this.unlockPlaylogOptions();
   }
@@ -4062,14 +3799,12 @@ class PlayerWebDemoApp {
         : undefined;
     const kit: SelectSceneKit =
       beatorajaKit ?? (lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtInKit);
-    let carriedPlayOptions: PlayOptions | undefined;
     const current = this.selectView;
     if (current !== undefined && current.identity.family !== kit.family) {
       // The family changed (an LR2 or a beatoraja theme dropped while the built-in screen is up, or the other way
-      // round): only that family's view draws it, so the screen is made again below, carrying the cursor and the live
-      // play options across.
+      // round): only that family's view draws it, so the screen is made again below, carrying the cursor across (the
+      // play options are the service's).
       this.lastSelectNavigation ??= current.snapshot();
-      carriedPlayOptions = current.getPlayOptions();
       await this.router.dropSelect();
     }
     const sounds = this.selectSoundSet(kit.family);
@@ -4087,22 +3822,9 @@ class PlayerWebDemoApp {
       if (kit.family === 'beatoraja') this.refreshBeatorajaSelectSkinOptions();
       return;
     }
-    // Seed the screen's play options from the Debug Menu's "Play options" state (two-way sync: the screen's own edits
-    // come back through `on.playOptions` below; lil-gui edits push through `setPlayOptions`).
-    const playOptions: Partial<PlayOptions> = {
-      ...carriedPlayOptions,
-      autoPlay: this.guiState.autoPlay,
-      gauge1P: this.guiState.gauge,
-      random1P: this.guiState.random1P,
-      random2P: this.guiState.random2P,
-      dpFlip: this.guiState.dpFlip,
-      autoScratch1P: this.guiState.autoScratch1P,
-      autoScratch2P: this.guiState.autoScratch2P,
-      sort: this.guiState.sort,
-      keysFilter: this.guiState.keysFilter,
-      difficultyFilter: this.guiState.difficultyFilter,
-      hiSpeed: this.guiState.hiSpeed,
-    };
+    // The screen starts from the play options in force (two-way sync: the screen's own edits come back through
+    // `on.playOptions` below; lil-gui edits push through `setPlayOptions`).
+    const playOptions = this.playOptions.current;
     // The select session plays through the audio service; its decide jingle plays out through the decide screen into
     // the play.
     const scene = createSelectScene(kit, {
@@ -4119,18 +3841,10 @@ class PlayerWebDemoApp {
       on: {
         start: (entry, { autoPlay }) => this.startFromSelect(entry, autoPlay),
         playOptions: (options) => {
-          // Mirror the screen's play option edits (an LR2 panel, a skin's buttons) back into the Debug Menu state so
-          // both surfaces always agree, then repaint the lil-gui controllers.
-          this.guiState.autoPlay = options.autoPlay;
-          this.guiState.gauge = options.gauge1P;
-          this.guiState.random1P = options.random1P;
-          this.guiState.random2P = options.random2P;
-          this.guiState.dpFlip = options.dpFlip;
-          this.guiState.autoScratch1P = options.autoScratch1P;
-          this.guiState.autoScratch2P = options.autoScratch2P;
-          this.guiState.sort = options.sort;
-          this.guiState.keysFilter = options.keysFilter;
-          this.guiState.difficultyFilter = options.difficultyFilter;
+          // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu
+          // state so both surfaces always agree, then repaint the lil-gui controllers.
+          this.playOptions.update(options);
+          copyPlayOptionsToGui(options, this.guiState);
           if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
           this.refreshPlayOptionControllers();
         },
@@ -4344,12 +4058,9 @@ class PlayerWebDemoApp {
           void this.showSelect();
         }),
     };
-    const playOptions = this.selectView?.getPlayOptions();
     const decide = createDecideScene(kit, {
       chart: song,
-      ...(playOptions !== undefined
-        ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
-        : {}),
+      playOptions: { ...this.playOptions.current, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay },
       source: resolveSongSource(this.collection, song),
       // The LR2 / built-in select screen plays the theme's decide jingle as the chart is picked, and lets it ring on
       // into the play, so those screens play none of their own. The beatoraja screen plays its theme's decide sound.
@@ -4466,7 +4177,7 @@ class PlayerWebDemoApp {
       preResolved?: ResolvedPlayChart;
     },
   ): PlayScene {
-    const playOptions = this.selectView?.getPlayOptions();
+    const playOptions = this.playOptions.current;
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
     const nonstop = overrides.nonstop;
@@ -4480,8 +4191,8 @@ class PlayerWebDemoApp {
       random2P: this.guiState.random2P,
       dpFlip: this.guiState.dpFlip,
       gauge: this.guiState.gauge,
-      hiddenSudden1P: playOptions?.hiddenSudden1P ?? ('OFF' as const),
-      hiddenSudden2P: playOptions?.hiddenSudden2P ?? ('OFF' as const),
+      hiddenSudden1P: playOptions.hiddenSudden1P,
+      hiddenSudden2P: playOptions.hiddenSudden2P,
       autoScratch1P: this.guiState.autoScratch1P,
       autoScratch2P: this.guiState.autoScratch2P,
       tempo:
@@ -4528,14 +4239,14 @@ class PlayerWebDemoApp {
       // remembered for the next play.
       initialHiSpeed: this.guiState.hiSpeed,
       onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
-      bga: playOptions?.bga,
-      bgaSize: playOptions?.bgaSize,
-      scoreGraph: playOptions?.scoreGraph,
-      hsFix: playOptions?.hsFix,
+      bga: playOptions.bga,
+      bgaSize: playOptions.bgaSize,
+      scoreGraph: playOptions.scoreGraph,
+      hsFix: playOptions.hsFix,
       hiddenSudden1P: lanes.hiddenSudden1P,
       hiddenSudden2P: lanes.hiddenSudden2P,
-      shutter: playOptions?.shutter,
-      laneCover: playOptions?.laneCover,
+      shutter: playOptions.shutter,
+      laneCover: playOptions.laneCover,
       // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge / judge ruleset govern
       // judging and the gauge readout, and the lane transforms stay off because the view re-applies the recorded
       // arrangement directly (see `PlaySceneOptions.replay`).
@@ -4692,7 +4403,7 @@ class PlayerWebDemoApp {
       ...(overrides.preResolved !== undefined ? { preResolved: overrides.preResolved } : {}),
       audio: this.audio,
       host: this.sceneHost,
-      ...(playOptions !== undefined ? { playOptions } : {}),
+      playOptions,
       on: {
         exit: onExit,
         finish: (result) => onChartFinished(result),
@@ -4945,7 +4656,7 @@ class PlayerWebDemoApp {
     this.recordActivePlay(recordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (presentation.quickRetry && mode.nonstop === undefined) {
-      this.maybeAutoSavePlaylog(data.playlog);
+      this.playlogAutoSave.savePlay(data.playlog);
       this.leaderboard.maybeSubmit(data.playlog, data.song);
     }
     this.unlockPlaylogOptions();
@@ -4958,7 +4669,7 @@ class PlayerWebDemoApp {
    * at select). The skin controls are disabled with them ({@link setSkinControlsLocked}).
    */
   private lockPlaylogOptionsForPlay(liveTempo = false): void {
-    this.activePlayAutoSavePlaylog = this.guiState.autoSavePlaylog;
+    this.playlogAutoSave.latch(this.guiState.autoSavePlaylog);
     this.playlogSaveController?.disable();
     this.leaderboard.lockForPlay();
     for (const controller of this.playOptionControllers) {
@@ -5025,45 +4736,25 @@ class PlayerWebDemoApp {
     this.guiState.hiSpeed = hiSpeed;
     storeHiSpeed(hiSpeed);
     if (source !== 'menu') this.hiSpeedController?.updateDisplay();
-    if (source !== 'select') this.selectView?.setPlayOptions({ hiSpeed });
+    if (source !== 'select') this.setPlayOptions({ hiSpeed });
     if (source === 'menu') {
       this.gameplayView?.setHiSpeed(hiSpeed);
     }
+  }
+
+  /**
+   * A play option set from the Debug Menu (or a hi-speed from the play): kept for every screen and play
+   * ({@link playOptions}), and pushed to the select screen, on the stage or off it.
+   */
+  private setPlayOptions(changes: Partial<PlayOptions>): void {
+    this.playOptions.update(changes);
+    this.selectView?.setPlayOptions(changes);
   }
 
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
   private refreshPlayOptionControllers(): void {
     for (const controller of this.playOptionControllers) {
       controller.updateDisplay();
-    }
-  }
-
-  /**
-   * Downloads the play-log (`*.bmplay.json` input replay) when the "Auto-save play history" toggle was on at song
-   * start (the latched value — the checkbox itself is disabled during a play). Called from both result paths
-   * (LR2/default `showResult`, beatoraja `onComplete`) the moment the result presentation is up. Failures are
-   * non-fatal — the result screen must never be blocked by a download hiccup.
-   */
-  /** Saves a course run's play log when play-log auto-save is on (`<course>-<timestamp>.bmcourse.json`). */
-  private maybeAutoSaveCoursePlaylog(courseLog: BeMusicCoursePlaylog): void {
-    if (!this.guiState.autoSavePlaylog) return;
-    try {
-      const blob = new Blob([serializeCoursePlaylog(courseLog)], { type: 'application/json' });
-      downloadBlob(blob, resolveCoursePlaylogFilename(courseLog));
-    } catch (error) {
-      gameplayLog.warn('course play-log auto-save failed', error);
-    }
-  }
-
-  private maybeAutoSavePlaylog(playlog: BeMusicPlaylog | undefined): void {
-    if (!this.activePlayAutoSavePlaylog || playlog === undefined) {
-      return;
-    }
-    try {
-      const blob = new Blob([serializePlaylog(playlog)], { type: 'application/json' });
-      downloadBlob(blob, resolvePlaylogFilename(playlog));
-    } catch (error) {
-      gameplayLog.warn('play-log auto-save failed', error);
     }
   }
 }
