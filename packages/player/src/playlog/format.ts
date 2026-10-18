@@ -1,6 +1,5 @@
-import type { RandomDraw } from '@be-music/chart';
+import type { LongNoteMode, RandomDraw } from '@be-music/chart';
 import { GAUGE_TYPES, isGaugeType, type GaugeType } from '../ruleset/gauge-type.ts';
-import type { LongNoteMode } from '../playable-notes.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
 import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
 import {

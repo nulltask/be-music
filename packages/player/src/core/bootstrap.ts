@@ -13,14 +13,8 @@ import {
   type GaugeJudgeIndex,
   type RulesetConfig,
 } from '../ruleset/index.ts';
-import { type PlayerUiSignalBus } from './ui-signal-bus.ts';
-import type {
-  CreatePlayerUiRuntimeContext,
-  PlayerGrooveGaugeSummary,
-  PlayerOptions,
-  PlayerSummary,
-  PlayerUiRuntime,
-} from './engine.ts';
+import { type PlayerGaugeSummary, type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import type { CreatePlayerUiRuntimeContext, PlayerOptions, PlayerSummary, PlayerUiRuntime } from './engine-types.ts';
 import {
   toTimedInvisibleNote,
   toTimedLandmineNote,
@@ -92,7 +86,7 @@ export function createInitialPlayerSummary(
   drainGaugeToZero: () => void;
 } {
   const gauge = new RulesetGauge(ruleset.gauge);
-  const gaugeSummary: PlayerGrooveGaugeSummary = {
+  const gaugeSummary: PlayerGaugeSummary = {
     current: gauge.value,
     max: ruleset.gauge.max,
     clearThreshold: ruleset.gauge.border,

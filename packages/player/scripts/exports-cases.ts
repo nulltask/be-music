@@ -4,7 +4,6 @@ import * as playerApi from '@be-music/player';
 import * as audioSinkApi from '@be-music/player/audio-sink';
 import * as courseApi from '@be-music/player/course';
 import * as displayApi from '@be-music/player/display';
-import * as judgingApi from '@be-music/player/judging';
 import * as lanesApi from '@be-music/player/lanes';
 import * as playlogApi from '@be-music/player/playlog';
 import * as recordsApi from '@be-music/player/records';
@@ -26,69 +25,9 @@ const BENCH_PLAYER_OPTIONS: PlayerOptions = {
 };
 
 export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
-  define('player.applyFastSlowForJudge', {
-    run: () => {
-      const summary = { fast: 0, slow: 0 };
-      playerApi.applyFastSlowForJudge(summary, 'GREAT', -8);
-    },
-  });
-  define('player.applyHighSpeedControlAction', {
-    run: () => {
-      playerApi.applyHighSpeedControlAction(2, 'increase');
-    },
-  });
-  define('player.resolveHighSpeedControlActionFromLaneChannels', {
-    run: () => {
-      playerApi.resolveHighSpeedControlActionFromLaneChannels(['11']);
-    },
-  });
-  define('player.resolveJudgeWindowsMs', {
-    run: (fixtures) => {
-      playerApi.resolveJudgeWindowsMs(fixtures.sampleBmsJson, 250);
-    },
-  });
   define('player.resolveChartRulesetFacts', {
     run: (fixtures) => {
       playerApi.resolveChartRulesetFacts(fixtures.sampleBmsJson);
-    },
-  });
-  define('player.extractPlayableNotes', {
-    run: (fixtures) => {
-      playerApi.extractPlayableNotes(fixtures.sampleBmsJson, { inferBmsLnTypeWhenMissing: true });
-    },
-  });
-  define('player.extractLandmineNotes', {
-    run: (fixtures) => {
-      playerApi.extractLandmineNotes(fixtures.sampleBmsJson);
-    },
-  });
-  define('player.extractInvisiblePlayableNotes', {
-    run: (fixtures) => {
-      playerApi.extractInvisiblePlayableNotes(fixtures.sampleBmsJson);
-    },
-  });
-  define('player.extractTimedNotes', {
-    run: (fixtures) => {
-      playerApi.extractTimedNotes(fixtures.sampleBmsJson, {
-        includeLandmine: true,
-        includeInvisible: true,
-        inferBmsLnTypeWhenMissing: true,
-      });
-    },
-  });
-  define('player.formatRandomPatternSummary', {
-    run: (fixtures) => {
-      playerApi.formatRandomPatternSummary(fixtures.randomPatterns);
-    },
-  });
-  define('player.shouldUseAutoMixBgmHeadroomControl', {
-    run: () => {
-      playerApi.shouldUseAutoMixBgmHeadroomControl({ limiter: false });
-    },
-  });
-  define('player.resolveBgmHeadroomGain', {
-    run: (fixtures) => {
-      playerApi.resolveBgmHeadroomGain(fixtures.playableRenderResult, fixtures.bgmRenderResult);
     },
   });
   define('player.createTempoClock', {
@@ -99,11 +38,6 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       clock.chartSecondsAt(2500);
       clock.clockMsAt(2.5);
       clock.initialTempoMsAt(2500);
-    },
-  });
-  define('player.resolveBmsControlFlowForPlayback', {
-    run: (fixtures) => {
-      playerApi.resolveBmsControlFlowForPlayback(fixtures.controlFlowJson, () => 0.42);
     },
   });
   define('player.resolvePlayChart', {
@@ -121,32 +55,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playlogApi.resolvePlayChart(fixtures.controlFlowJson, { random: () => 0.42 });
     },
   });
-  define('player.preparePlaybackChartData', {
-    run: (fixtures) => {
-      playerApi.preparePlaybackChartData(
-        fixtures.sampleBmsJson,
-        { showInvisibleNotes: true, laneModeExtension: '.bms' },
-        true /* inferBmsLnTypeWhenMissing */,
-        0 /* auxiliaryPlaybackEndSeconds */,
-      );
-    },
-  });
   define('player.preparePlaybackChart', {
     run: (fixtures) => {
       playerApi.preparePlaybackChart(
         resolveChart(fixtures.sampleBmsJson, { chartPath: '.bms', inferBmsLnTypeWhenMissing: true }),
         { laneModeExtension: '.bms' },
-      );
-    },
-  });
-  define('player.judging.findClosestCandidateInWindow', {
-    run: () => {
-      judgingApi.findClosestCandidateInWindow(
-        [
-          { channel: '11', seconds: 0.95, hit: false },
-          { channel: '11', seconds: 1.02, hit: false },
-        ],
-        { channel: '11', nowSec: 1, judgeWindowSec: 0.05, isConsumed: (note) => note.hit },
       );
     },
   });
@@ -1059,16 +972,6 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player.playlog.checkCoursePlaylogEligibility', {
     run: () => {
       playlogApi.checkCoursePlaylogEligibility(benchKeyedCourseLog);
-    },
-  });
-  define('player.playlog.computeScoreRate', {
-    run: () => {
-      playlogApi.computeScoreRate({ total: 1000, exScore: 1650 });
-    },
-  });
-  define('player.playlog.resolveIidxRankLabel', {
-    run: () => {
-      playlogApi.resolveIidxRankLabel(1650, 1000);
     },
   });
   define('player.ruleset.resolveJudgeWindowsMs', {

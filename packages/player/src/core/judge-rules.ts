@@ -1,3 +1,4 @@
+import type { LongNoteMode } from '@be-music/chart';
 import type { LongNoteStyle } from '../ruleset/definitions.ts';
 import { classifyRulesetJudge, RULESET_JUDGE_NONE } from '../ruleset/judge.ts';
 import type { JudgeWindowSetUs } from '../ruleset/definitions.ts';
@@ -9,7 +10,7 @@ import {
   type LnTimedJudge,
 } from '../ruleset/long-note.ts';
 import type { RulesetConfig } from '../ruleset/definitions.ts';
-import type { LongNoteMode, TimedPlayableNote } from '../playable-notes.ts';
+import type { TimedPlayableNote } from '../playable-notes.ts';
 import type { JudgeKind } from './scoring.ts';
 import type { PlayerUiLongNoteMode } from './ui-signal-bus.ts';
 
