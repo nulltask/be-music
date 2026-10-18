@@ -3,9 +3,10 @@
  * drawn by `BeatorajaPlaySkinView`, its canvas fitted into the window. It draws the decide session's frames through the
  * scene mapping (`resolveBeatorajaDecideOps` / `Number` / `GraphValue` of `@be-music/beatoraja-skin/scene`, and the
  * song texts) and beatoraja's scene timers, which it reads off each frame ({@link resolveBeatorajaSceneTimers}): the
- * chart's texts, level and BPM, its difficulty ops, the loading bar, the BPM and note-kind graphs of the chart as the
- * play will play it (`DecideFrame.playChart`) and the chart's own images. The session times the screen from the skin's
- * `scene`, `input` and `fadeout` ({@link resolveBeatorajaDecideTiming}). As on beatoraja, the screen takes keys only.
+ * chart's texts, level and BPM, its difficulty ops, the loading bar, the main BPM and the BPM and note-kind graphs of the
+ * chart as the play will play it (`DecideFrame.playChart`) and the chart's own images. The session times the screen
+ * from the skin's `scene`, `input` and `fadeout` ({@link resolveBeatorajaDecideTiming}). As on beatoraja, the screen
+ * takes keys only.
  */
 
 import { buildBaseOpSet, type BeatorajaSkin } from '@be-music/beatoraja-skin';
@@ -20,6 +21,7 @@ import type { LibraryChart } from '@be-music/scene-model';
 import type { Container } from 'pixi.js';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
+import { resolveShownChartMainBpm } from '../../chart/main-bpm.ts';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
@@ -65,12 +67,17 @@ export function resolveBeatorajaDecideTiming(
   };
 }
 
-/** The graphs a decide skin draws of the chart as the play will play it, worked out once per chart. */
+/**
+ * The graphs a decide skin draws of the chart as the play will play it, and its main BPM (number 92), worked out once
+ * per chart.
+ */
 interface ChartGraphs {
   readonly chart: BeMusicJson;
   readonly bpmCurve: readonly BpmCurvePoint[];
   /** The note-kind bars (`[normal, ln, scratch, bss]`) of the judge graph's type 0. */
   readonly noteKinds: readonly number[];
+  /** The BPM the most judged notes sit at (`resolveShownChartMainBpm`); absent without notes. */
+  readonly mainBpm: number | undefined;
 }
 
 export interface BeatorajaDecideViewOptions {
@@ -180,10 +187,15 @@ export class BeatorajaDecideView implements DecideView {
     if (host === undefined || this.disposed) return;
     this.stage.fitTo(host);
     this.frame = frame;
+    if (this.graphs?.chart !== frame.playChart) this.graphs = chartGraphsOf(frame.playChart, frame.chart.chartPath);
+    const mainBpm = this.graphs.mainBpm;
     // Without the host's progress or an auto advance, nothing is loading: the play is ready.
-    const input: BeatorajaDecideInput = { chart: frame.chart, progress: frame.progress ?? 1 };
+    const input: BeatorajaDecideInput = {
+      chart: frame.chart,
+      ...(mainBpm !== undefined ? { mainBpm } : {}),
+      progress: frame.progress ?? 1,
+    };
     this.input = input;
-    if (this.graphs?.chart !== frame.playChart) this.graphs = chartGraphsOf(frame.playChart);
     const timers = resolveBeatorajaSceneTimers(frame, 'input');
     const skinSounds = this.options.skinSounds;
     this.stage.view.update({
@@ -204,11 +216,12 @@ export class BeatorajaDecideView implements DecideView {
   }
 }
 
-function chartGraphsOf(chart: BeMusicJson): ChartGraphs {
+function chartGraphsOf(chart: BeMusicJson, chartPath: string): ChartGraphs {
   const kinds = computeBeatorajaNoteBreakdown(chart);
   return {
     chart,
     bpmCurve: computeBeatorajaBpmCurve(chart),
     noteKinds: [kinds.normal, kinds.ln, kinds.scratch, kinds.bss],
+    mainBpm: resolveShownChartMainBpm(chart, chartPath),
   };
 }

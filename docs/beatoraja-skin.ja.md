@@ -165,6 +165,8 @@ play は hi-speed、lane cover、白数字と緑数字（`resolveWhiteNumber`）
 result は timing の平均と標準偏差を加え、扱わない number はすべて 0 とします。
 select はフォーカス中の chart の情報を読み、play の live な number は 0 とします。
 decide は score の表を使いません。chart の `#PLAYLEVEL`、BPM の number には一覧の BPM、読み込みの進み具合（165）を読み、ほかの number はすべて 0 とします。
+select と decide のメイン BPM（92）は play が表示するもの、つまり最も多くの判定ノートが置かれた BPM（`@be-music/chart` の `resolveChartMainBpm`）で、呼び出し側が `mainBpm` として渡します。
+渡されなければヘッダーの BPM を読みます。
 
 ### Timer を data で返す
 
