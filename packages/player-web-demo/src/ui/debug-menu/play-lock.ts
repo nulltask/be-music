@@ -71,7 +71,7 @@ export class PlayLock {
   /**
    * Disables the Debug Menu's skin controls for a play, or enables them again: Skin system, Built-in skin, Skin
    * effects, the LR2 theme picker and the Add skin buttons all make the select screen again, which would end the play.
-   * A drop during a play still can; the router then ends the course run (`endCourseRun`).
+   * A drop during a play still can; the router then ends the course run (`CourseRunService.endRun`).
    */
   private setSkinControlsLocked(controls: PlayLockControls, locked: boolean): void {
     this.skinLocked = locked;
