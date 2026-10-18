@@ -131,7 +131,13 @@ describe('resolveBeatorajaResultOps', () => {
   it('lights the ranks, the verdict, the lamp and the judgment-exists ops', () => {
     expect(resolveBeatorajaResultOps(input())).toEqual([
       BEATORAJA_OP.P1_RANK_A,
+      // Every generic rank the EX score reaches, A down to F.
       BEATORAJA_OP.RANK_A,
+      BEATORAJA_OP.RANK_B,
+      BEATORAJA_OP.RANK_C,
+      BEATORAJA_OP.RANK_D,
+      BEATORAJA_OP.RANK_E,
+      BEATORAJA_OP.RANK_F,
       BEATORAJA_OP.RESULT_RANK_A_1P,
       BEATORAJA_OP.RESULT_CLEAR,
       BEATORAJA_OP.CLEAR_LAMP_HARD,

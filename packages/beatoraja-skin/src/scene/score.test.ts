@@ -3,6 +3,7 @@ import { BEATORAJA_NUM, BEATORAJA_OP } from '../runtime-ids.ts';
 import type { BeatorajaScoreInput } from './inputs.ts';
 import {
   beatorajaChartTotalReadout,
+  beatorajaGenericRankOps,
   beatorajaNotesJudged,
   beatorajaScoreRate,
   resolveBeatorajaPlayScoreOps,
@@ -153,6 +154,39 @@ describe('beatorajaScoreRate / beatorajaNotesJudged / beatorajaChartTotalReadout
   });
 });
 
+describe('beatorajaGenericRankOps', () => {
+  const GENERIC = [
+    BEATORAJA_OP.RANK_AAA,
+    BEATORAJA_OP.RANK_AA,
+    BEATORAJA_OP.RANK_A,
+    BEATORAJA_OP.RANK_B,
+    BEATORAJA_OP.RANK_C,
+    BEATORAJA_OP.RANK_D,
+    BEATORAJA_OP.RANK_E,
+    BEATORAJA_OP.RANK_F,
+  ];
+  /** The generic rank ops of an EX score over 9 notes (18 points: one point is 1.5 / 27). */
+  const ofNine = (exScore: number): number[] => beatorajaGenericRankOps({ exScore, total: 9 });
+
+  it("lights every rank the EX score reaches, as beatoraja's qualifyRank does: AAA lights all eight", () => {
+    expect(ofNine(18)).toEqual(GENERIC);
+    // 16 of 18 is exactly 24/27: AAA, and every rank below it.
+    expect(ofNine(16)).toEqual(GENERIC);
+    // 15 is AA: every rank but AAA.
+    expect(ofNine(15)).toEqual(GENERIC.slice(1));
+    // 12 is exactly 18/27: A down to F.
+    expect(ofNine(12)).toEqual(GENERIC.slice(2));
+    // 4 is exactly 6/27: E and F; 3 is F alone.
+    expect(ofNine(4)).toEqual([BEATORAJA_OP.RANK_E, BEATORAJA_OP.RANK_F]);
+    expect(ofNine(3)).toEqual([BEATORAJA_OP.RANK_F]);
+  });
+
+  it('lights F for any score on a chart with notes, and nothing on a chart without', () => {
+    expect(ofNine(0)).toEqual([BEATORAJA_OP.RANK_F]);
+    expect(beatorajaGenericRankOps({ exScore: 0, total: 0 })).toEqual([]);
+  });
+});
+
 describe('resolveBeatorajaPlayScoreOps', () => {
   const RANGE_OPS: readonly number[] = [
     BEATORAJA_OP.P1_BAND_0_9,
@@ -171,10 +205,17 @@ describe('resolveBeatorajaPlayScoreOps', () => {
 
   it('lights the rank and now-rank ops of the EX score with the judgment-exists ops', () => {
     const ops = resolveBeatorajaPlayScoreOps(SCORE, { current: 50, max: 100, clearThreshold: 80 });
-    // 70 % is rank A (6/9 ≈ 66.7 %).
+    // 70 % is rank A (6/9 ≈ 66.7 %): the 1P and now-rank ops name it, the generic ones light it and every rank below.
     expect(ops).toContain(BEATORAJA_OP.P1_RANK_A);
-    expect(ops).toContain(BEATORAJA_OP.RANK_A);
     expect(ops).toContain(BEATORAJA_OP.NOW_A_1P);
+    expect(ops.filter((op) => op >= BEATORAJA_OP.RANK_AAA && op <= BEATORAJA_OP.RANK_F)).toEqual([
+      BEATORAJA_OP.RANK_A,
+      BEATORAJA_OP.RANK_B,
+      BEATORAJA_OP.RANK_C,
+      BEATORAJA_OP.RANK_D,
+      BEATORAJA_OP.RANK_E,
+      BEATORAJA_OP.RANK_F,
+    ]);
     expect(ops).toEqual(
       expect.arrayContaining([
         BEATORAJA_OP.PERFECT_EXIST,
@@ -248,13 +289,13 @@ describe('resolveBeatorajaPlayScoreOps', () => {
     expect(judged(3)).toEqual([BEATORAJA_OP.P1_RANK_F, BEATORAJA_OP.NOW_F_1P]);
   });
 
-  it('lights no gauge op without a gauge, and no 1P rank without notes', () => {
+  it('lights no gauge op without a gauge, and no rank without notes', () => {
     expect(
       resolveBeatorajaPlayScoreOps(
         { total: 0, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 },
         undefined,
       ),
-    ).toEqual([BEATORAJA_OP.RANK_F]);
+    ).toEqual([]);
     expect(rangesLit(resolveBeatorajaPlayScoreOps(SCORE, { current: 0, max: 0 }))).toEqual([]);
   });
 });

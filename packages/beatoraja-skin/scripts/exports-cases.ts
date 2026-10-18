@@ -214,6 +214,11 @@ export function registerBeatorajaSkinExportsCases(define: DefineBenchmarkCase): 
       sceneApi.resolveBeatorajaScoreNumber(BEATORAJA_NUM.EARLY_GREAT, BENCH_PLAY_NUMBERS);
     },
   });
+  define('beatoraja-skin.scene.beatorajaGenericRankOps', {
+    run: () => {
+      sceneApi.beatorajaGenericRankOps(BENCH_SCORE);
+    },
+  });
   define('beatoraja-skin.scene.resolveBeatorajaPlayScoreOps', {
     run: () => {
       sceneApi.resolveBeatorajaPlayScoreOps(BENCH_SCORE, BENCH_GAUGE);

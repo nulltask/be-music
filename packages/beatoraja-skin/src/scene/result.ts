@@ -5,7 +5,6 @@ import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
   BEATORAJA_TEXT,
-  computeGenericRankOp,
   computeJudgeExistOps,
   computeRankOp,
   computeResultRankOp,
@@ -20,7 +19,7 @@ import {
   resolveBeatorajaGaugeState,
   resolveBeatorajaScorePolyline,
 } from './play-graphs.ts';
-import { resolveBeatorajaScoreNumber, type BeatorajaScoreNumberInput } from './score.ts';
+import { beatorajaGenericRankOps, resolveBeatorajaScoreNumber, type BeatorajaScoreNumberInput } from './score.ts';
 import {
   resolveBeatorajaSkinText,
   resolveBeatorajaSongText,
@@ -203,9 +202,10 @@ export function resolveBeatorajaResultNumber(id: number, input: BeatorajaResultI
 }
 
 /**
- * The ops a result skin lights for a run: the 1P, generic and result rank ops (`RESULT_RANK_ZERO_1P` for an EX score
- * of 0), `RESULT_CLEAR` or `RESULT_FAIL`, the clear lamp's op (`beatorajaClearLampOp`; NO PLAY without a lamp), the
- * judgment-exists ops and, for a course, its stage ops ({@link resolveBeatorajaCourseStageOps}).
+ * The ops a result skin lights for a run: the 1P and result rank ops (`RESULT_RANK_ZERO_1P` for an EX score of 0),
+ * every generic rank op the EX score reaches ({@link beatorajaGenericRankOps}), `RESULT_CLEAR` or `RESULT_FAIL`, the
+ * clear lamp's op (`beatorajaClearLampOp`; NO PLAY without a lamp), the judgment-exists ops and, for a course, its
+ * stage ops ({@link resolveBeatorajaCourseStageOps}).
  */
 export function resolveBeatorajaResultOps(input: BeatorajaResultInput): number[] {
   const { result } = input;
@@ -213,7 +213,7 @@ export function resolveBeatorajaResultOps(input: BeatorajaResultInput): number[]
   const maxExScore = score.total * 2;
   const ops = [
     computeRankOp(score.exScore, maxExScore, 1),
-    computeGenericRankOp(score.exScore, maxExScore),
+    ...beatorajaGenericRankOps(score),
     computeResultRankOp(score.exScore, maxExScore),
     result.cleared ? BEATORAJA_OP.RESULT_CLEAR : BEATORAJA_OP.RESULT_FAIL,
     beatorajaClearLampOp(result.lamp ?? 'NO_PLAY'),

@@ -1,5 +1,5 @@
 import { gaugePercent } from '@be-music/scene-model';
-import { BEATORAJA_NUM, BEATORAJA_OP, computeGenericRankOp, computeJudgeExistOps } from '../runtime-ids.ts';
+import { BEATORAJA_NUM, BEATORAJA_OP, computeJudgeExistOps } from '../runtime-ids.ts';
 import type { BeatorajaEarlyLate, BeatorajaGaugeInput, BeatorajaScoreInput } from './inputs.ts';
 
 /** What the score numbers a play skin and a result skin share read. */
@@ -199,6 +199,34 @@ function beatorajaPlayRankOp(score: BeatorajaScoreInput): number | undefined {
   return BEATORAJA_OP.P1_RANK_AAA + index;
 }
 
+/** The generic rank ops (220 AAA … 227 F), AAA first, in the order of {@link RANK_BORDERS_IN_27THS}. */
+const GENERIC_RANK_OPS = [
+  BEATORAJA_OP.RANK_AAA,
+  BEATORAJA_OP.RANK_AA,
+  BEATORAJA_OP.RANK_A,
+  BEATORAJA_OP.RANK_B,
+  BEATORAJA_OP.RANK_C,
+  BEATORAJA_OP.RANK_D,
+  BEATORAJA_OP.RANK_E,
+  BEATORAJA_OP.RANK_F,
+] as const;
+
+/**
+ * The generic rank ops (220 AAA … 227 F) a score lights: every rank its EX score reaches over the chart's notes, as
+ * beatoraja's `BooleanPropertyFactory` asks `ScoreDataProperty.qualifyRank` (`rate >= border / 27`, with
+ * `rate = exscore / (notes × 2)`), so an AAA lights all eight and any score on a chart with notes lights F. The rate is
+ * compared with each border exactly, in 27ths. None on a chart without notes. `computeGenericRankOp` names one rank,
+ * the highest of these.
+ */
+export function beatorajaGenericRankOps(score: Pick<BeatorajaScoreInput, 'exScore' | 'total'>): number[] {
+  if (score.total <= 0) return [];
+  const ops: number[] = [];
+  RANK_BORDERS_IN_27THS.forEach((border, index) => {
+    if (score.exScore * 27 >= border * score.total * 2) ops.push(GENERIC_RANK_OPS[index]!);
+  });
+  return ops;
+}
+
 /**
  * The "now" rank op (340-347, `NOW_*_1P`) for a 1P rank op (200-207): the same rank in the block beatoraja keeps for
  * the rank being played (both read `createNowRank`).
@@ -209,8 +237,8 @@ function nowRankOp(sideRank: number): number {
 
 /**
  * The ops a play's running score and gauge light on a play skin, as of the engine's latest frame: the 1P and "now"
- * rank ops over the notes judged so far ({@link beatorajaPlayRankOp}), the generic rank op of the EX score and its
- * judgment-exists ops (2241-2246); and with a gauge, its range op (230-240),
+ * rank ops over the notes judged so far ({@link beatorajaPlayRankOp}), the generic rank ops the EX score reaches
+ * ({@link beatorajaGenericRankOps}) and its judgment-exists ops (2241-2246); and with a gauge, its range op (230-240),
  * `P1_BAND_BORDER_OR_MORE` (1240) while the gauge would clear (beatoraja `Gauge.isQualified`: above 0 and at its border
  * or more), and `GAUGE_NOW_AT_MAX_1P` while it is full.
  */
@@ -218,11 +246,10 @@ export function resolveBeatorajaPlayScoreOps(
   score: BeatorajaScoreInput,
   gauge: Pick<BeatorajaGaugeInput, 'current' | 'max' | 'clearThreshold'> | undefined,
 ): number[] {
-  const maxExScore = score.total * 2;
   const sideRank = beatorajaPlayRankOp(score);
   const ops = [
     ...(sideRank !== undefined ? [sideRank, nowRankOp(sideRank)] : []),
-    computeGenericRankOp(score.exScore, maxExScore),
+    ...beatorajaGenericRankOps(score),
     ...computeJudgeExistOps(score),
   ];
   if (gauge !== undefined && gauge.max > 0) {
