@@ -106,7 +106,11 @@ play skin は variant ごと (`'7' / '5' / '9' / '10' / '14' / '24' / '24d'`) �
 複数 entry が同じ slot を cover する場合は、JSON entry、`skin/default/`、辞書順の順で優先します。
 個別 skin の error は `BeatorajaThemeDiscoveryWarning[]` に集約され、theme 全体の discovery を中断しません。
 
-`pickBeatorajaPlaySkin(playSkins, desired)` は chart の variant に対する fallback chain を解決します。
+`pickBeatorajaPlaySkinVariant(playSkins, desired)` は chart を再生する skin の variant を選びます。chart 自身の variant、なければ fallback の list を順にたどって theme にある最初の variant です。
+`pickBeatorajaPlaySkin` はその variant の entry を返し、web player も同じ list で選びます（`pickBeatorajaPlayableSkinVariant`）。
+beatoraja 本体はプレイモードをまたいで fallback しません。モードごとに設定した skin か、そのモードに組み込まれた既定の skin を読みます。
+モードをまたぐ唯一の流用は、LR2 の 7 KEY / 14 KEY skin を 5 KEY / 10 KEY にも出すことで、これに合わせて 5 KEY の list は 7 から、10 KEY の list は 14 から始まります。
+ほかの list は、IIDX と POPN の chart では IIDX と POPN の variant を鍵盤モードより先に、鍵盤モードの chart ではもう一方の鍵盤モードを先に試します。
 
 ## Scene mapping
 
