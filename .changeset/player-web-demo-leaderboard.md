@@ -1,0 +1,7 @@
+---
+'@be-music/player-web-demo': minor
+---
+
+Submit plays to the Leaderboard. With "Submit to Leaderboard" on (off by default; the start card's "Submit my plays to the Leaderboard" is the same setting), a finished manual play is sent when its result shows, signing in anonymously the first time, and its rank shows on the status line. Course runs are sent as one run when the course result shows, cleared, failed or given up with ESC, NONSTOP runs included: the course play log names each stage's chart, its `#RANDOM` draws and the charts of stages a failed run never reached, so the server can rank it on the same course. A course marked `release: false` (beatoraja's flag, also set on drawn random courses) is not sent, nor is a play or run at another tempo (the status line says why).
+
+The Debug Menu's Leaderboard folder and the start card show the account with passkey sign-in and sign-up, "Keep this account" for an anonymous one, and Sign out; Google and Discord are marked "Coming soon". Signing in turns submitting on. The account chip stays hidden, and the start card reads "Checking account…", until the account has been read, so a signed-in player no longer sees "Not signed in" flash. The deployed demo forwards `/api/*`, `/leaderboard` and `/leaderboard/*` to the Leaderboard Worker, and the dev server proxies them to a local one. The About notes say that best records stay in the browser and what a submission sends.
