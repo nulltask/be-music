@@ -10,6 +10,7 @@ import {
 } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlaySessionTheme } from './play-session-theme.ts';
+import type { PlayTempoRange } from './tempo-range.ts';
 import {
   resolveLaneCovers,
   resolveVisibleMs,
@@ -90,13 +91,12 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
     expect(resolveLaneCovers(ctx)).toEqual([{ side: '1P', sudden: 0.25, hidden: 0.1, lift: 0 }]);
   });
 
-  test("records on the view's own scale when the view has one, with no lanes laid out", () => {
-    const ctx = createView({
-      theme: { playlogView: () => ({ scale: 'beatoraja', laneBeats: 4, mainBpm: 150 }) },
-    });
+  test("records on the view's own scale when the view has one, at the play's main BPM, with no lanes laid out", () => {
+    const ctx = createView({ theme: { playlogView: () => ({ scale: 'beatoraja', laneBeats: 4 }) } });
     ctx.laneX.clear();
+    (ctx as { chartBpmRange: PlayTempoRange }).chartBpmRange = { minBpm: 120, maxBpm: 300, mainBpm: 150 };
     const view = startPlaylogView(ctx);
-    // 4 beats / 2 × (1 - 0.25) at 150 BPM.
+    // 4 beats / 2 × (1 - 0.25) at the main 150 BPM, the one HS-FIX reads on every family's play screen.
     expect(view).toEqual({
       hiSpeed: 2,
       hiSpeedScale: 'beatoraja',
@@ -113,7 +113,7 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
       visibleMs: 1000,
       covers: [{ side: '1P', sudden: 0.25, hidden: 0.18, lift: 0.1 }],
     };
-    const theme = { playlogView: () => ({ scale: 'beatoraja', laneBeats: 4, mainBpm: 120 }), drawsLift: () => true };
+    const theme = { playlogView: () => ({ scale: 'beatoraja', laneBeats: 4 }), drawsLift: () => true };
     const ctx = createView({ replay, theme });
     updatePlaylogView(ctx, 0);
     expect(ctx.playState.view.hiSpeed.drawn).toBe(1.6);

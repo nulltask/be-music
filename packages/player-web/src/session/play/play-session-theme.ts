@@ -60,9 +60,9 @@ export interface PlaySessionTheme {
   /** Uploads `textures` to the GPU now, so the first frame that draws them does not stall. */
   uploadTextures?(textures: Iterable<Texture | undefined>): Promise<void>;
   /**
-   * How the view's hi-speed reads in the play log (`PlaylogViewState`): its scale, the lane in beats at hi-speed 1, and
-   * the main BPM the visible time is taken at. Without it the play log reads the built-in and LR2 scale over the lanes
-   * the shared playfield laid out, at the chart's main BPM.
+   * How the view's hi-speed reads in the play log (`PlaylogViewState`): its scale and the lane in beats at hi-speed 1.
+   * Without it the play log reads the built-in and LR2 scale over the lanes the shared playfield laid out. Either way
+   * the visible time is taken at the play's main BPM, which the session works out for every family.
    */
   playlogView?(): PlayPlaylogViewScale | undefined;
   /**
@@ -72,9 +72,8 @@ export interface PlaySessionTheme {
   drawsLift?(): boolean;
 }
 
-/** How a view's hi-speed reads in the play log: its scale, the lane in beats at hi-speed 1, the main BPM. */
+/** How a view's hi-speed reads in the play log: its scale and the lane in beats at hi-speed 1. */
 export interface PlayPlaylogViewScale {
   readonly scale: string;
   readonly laneBeats: number;
-  readonly mainBpm?: number;
 }

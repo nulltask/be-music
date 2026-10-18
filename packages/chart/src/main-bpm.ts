@@ -7,11 +7,16 @@ export interface MainBpmChart {
 }
 
 /**
- * The chart's main BPM: the BPM the most judged notes sit at, beatoraja's `MAINBPM` (`LaneRenderer.init`: a note count
- * per timeline BPM, from `TimeLine.getTotalNotes`). A tap and a long-note head count once; a long-note tail counts too
- * when its mode judges it (CN / HCN). Unlike a time average it ignores the split-second BPM spikes of BPM × N + STOP
- * gimmicks. Ties go to the BPM reached first (beatoraja's pick among ties follows its `HashMap` order). `undefined`
- * for a chart without notes.
+ * The chart's main BPM: the BPM the most judged notes sit at. It is beatoraja's main BPM, which its play screen pegs
+ * HS-FIX `MAINBPM` to and takes the white and green numbers at the main BPM at (`LaneRenderer.init`: a count of
+ * `TimeLine.getTotalNotes()` per timeline BPM; its song database and BPM graph count the same way). A tap and a
+ * long-note head count once; a long-note tail counts too when its mode judges it (CN / HCN); mines and invisible notes
+ * do not count. A note on a BPM change counts at the new BPM. Unlike a time average or the BPM held longest, it is not
+ * moved by the split-second BPM spikes of BPM × N + STOP gimmicks or by stretches without notes. Ties go to the BPM
+ * reached first (beatoraja's pick among ties follows its `HashMap` order). `undefined` for a chart without notes.
+ *
+ * The browser player reads the main BPM only from here: HS-FIX `AVERAGE`, the play log's `visibleMs`, the HUD and the
+ * beatoraja skins' main-BPM numbers and BPM graph.
  */
 export function resolveChartMainBpm(chart: MainBpmChart): number | undefined {
   const counts = new Map<number, { count: number; firstBeat: number }>();

@@ -320,7 +320,10 @@ export interface BeMusicGameplayRuntime {
   visibleMs?: number;
   /** IIDX-style green number (`visibleMs × 0.6`): the note's on-screen time in frames at 60 Hz. */
   greenNumber?: number;
-  /** Lowest, highest, and main (longest-held) BPM of the chart. */
+  /**
+   * Lowest, highest, and main BPM of the chart. The main BPM is the BPM the most notes sit at (beatoraja's), the one
+   * HS-FIX `'AVERAGE'` pegs the hi-speed to and the play log's `visibleMs` is taken at.
+   */
   minBpm?: number;
   maxBpm?: number;
   mainBpm?: number;
