@@ -303,10 +303,10 @@ export class PlaySessionState {
   /** `#BGAxx` sub-region slot → its authored `dx dy` on the 256x256 BGA canvas. */
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }> = new Map<string, { x: number; y: number }>();
   /**
-   * bmson per-event slice playback map. For bmson charts the audio-renderer's `createBmsonSamplePlaybackMap`
+   * bmson per-event slice playback map. For bmson charts `@be-music/chart`'s `createBmsonSamplePlaybackMap`
    * precomputes which portion of each `sound_channels[]` WAV a given note is supposed to play — `offsetSeconds` is the
    * seek-into-file position, `durationSeconds` (when set) caps how long the slice should run. Built once per chart in
-   * `prepareSong`; `playSample` looks each note's event up here and calls `node.start(when, offset, duration)`
+   * `prepareSong`; the `WebAudioSession` looks each note's event up here and calls `node.start(when, offset, duration)`
    * accordingly so the sliced-WAV authoring intent is preserved.
    *
    * Stays `undefined` for non-bmson charts (they have no slicing semantics — each note plays its entire WAV from t=0).
@@ -432,8 +432,8 @@ export class PlaySessionState {
   gaugeState: PlayerGaugeSummary = createPlaceholderGaugeState();
   /**
    * FAST / SLOW counts. Incremented on every GREAT or GOOD judgement — PERFECT is "on time" so it doesn't count,
-   * BAD/POOR break combo and aren't tracked here. Mirrors `applyFastSlowForJudge` in `packages/player`'s engine. Reset
-   * per play in `prepareSong`.
+   * BAD/POOR break combo and aren't tracked here. Mirrors `applyFastSlow` in `packages/player`'s judge core
+   * (`core/judge-core-score.ts`). Reset per play in `prepareSong`.
    */
   fastCount = 0;
   slowCount = 0;
@@ -483,8 +483,8 @@ export class PlaySessionState {
   /**
    * BMP-resource → decoded `Texture` cache for the **layer** track (`#BMP` channels 07 and 0A). Decoded separately from
    * {@link bgaTextures} with a chroma-key that turns pure-black pixels transparent — mirrors the BMS BGA "layer"
-   * convention used by `packages/player/src/bga.ts` so the foreground composites cleanly over the base track. Even when
-   * the same BMP id appears on both tracks we keep two textures because `chroma-key` is destructive.
+   * convention used by `packages/player-tui/src/bga-frame.ts` so the foreground composites cleanly over the base track.
+   * Even when the same BMP id appears on both tracks we keep two textures because `chroma-key` is destructive.
    */
   bgaLayerTextures: Map<string, Texture> = new Map<string, Texture>();
   /**

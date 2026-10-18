@@ -316,9 +316,9 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
     .sort((left, right) => left.seconds - right.seconds);
   // bmson 1.0.0 slicing — for bmson charts, each `sound_channels[]` entry is a single audio file that gets sliced at
   // every distinct pulse where any of its notes fire, and each note plays its assigned slice (`audio_offset` ..
-  // `audio_offset + slice_duration`) instead of the whole WAV from t=0. The audio-renderer already computes the
-  // per-event slice playback table; we wire it up here so the playable- note path (`playSample`) can look up the
-  // offset / duration by event identity at trigger time. BMS / json charts skip the build (the map stays undefined)
+  // `audio_offset + slice_duration`) instead of the whole WAV from t=0. `@be-music/chart` computes the per-event
+  // slice playback table; we wire it up here so the `WebAudioSession` can look up the offset / duration by event
+  // identity at trigger time. BMS / json charts skip the build (the map stays undefined)
   // since they have no slicing semantics — every note plays its WAV from the start.
   ctx.bmsonSlicePlayback =
     resolved.sourceFormat === 'bmson'
