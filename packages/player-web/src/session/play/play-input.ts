@@ -8,6 +8,7 @@
  */
 
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import { HISPEED_STEP } from '@be-music/scene-model';
 import type { Application } from 'pixi.js';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { resolveScaledViewport } from '../../stage/viewport.ts';
@@ -20,7 +21,6 @@ import {
   type TouchLaneChange,
   type TouchLaneTracker,
 } from './touch-lanes.ts';
-import { HISPEED_STEP } from '../../scene/gameplay-constants.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';

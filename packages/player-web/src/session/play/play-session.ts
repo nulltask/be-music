@@ -39,12 +39,7 @@ import {
 } from '../../runtime/play-tempo.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
-import {
-  DESIGN_HEIGHT,
-  DESIGN_WIDTH,
-  FALLBACK_INTRO_DELAY_MS,
-  KEY_ON_FADE_OUT_MS,
-} from '../../scene/gameplay-constants.ts';
+import { DESIGN_HEIGHT, DESIGN_WIDTH, FALLBACK_INTRO_DELAY_MS, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import { resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { LiveTempo } from './live-tempo.ts';

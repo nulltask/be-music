@@ -65,7 +65,7 @@ export const SYNESTHESIA_PLAYFIELD = {
 /**
  * The scroll speed the excerpt shows: Synesthesia at HIGH SPEED 2.0, the play's default (`hiSpeed = 2.0`), at which
  * the shared playfield (packages/player-web/src/view/shared/playfield/notes.ts) moves notes `PIXELS_PER_BEAT * hiSpeed`
- * design pixels a beat (`PIXELS_PER_BEAT = 72`, packages/player-web/src/scene/gameplay-constants.ts:12).
+ * design pixels a beat (`PIXELS_PER_BEAT = 72`, packages/player-web/src/stage/design.ts:3).
  */
 export const EXCERPT_PIXELS_PER_BEAT = 72 * 2;
 
