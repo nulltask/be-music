@@ -36,10 +36,14 @@ describe('resolvePlaylogRecording', () => {
     expect(resolvePlaylogRecording({}, undefined, VIEW)).toEqual({ gauge: undefined, view: VIEW });
   });
 
-  test('records the lane options a beatoraja play runs with', () => {
+  test('records the lane options a play runs with, the beatoraja play included', () => {
     const recording = resolvePlaylogRecording({ random1P: 'OFF', random2P: 'OFF' }, undefined, VIEW);
     expect(recording.randomLane).toEqual({ p1: 'OFF', p2: 'OFF' });
     expect(resolvePlaylogRecording({ random1P: 'MIRROR' }, undefined, VIEW).randomLane).toEqual({ p1: 'MIRROR' });
+    expect(resolvePlaylogRecording({ random1P: 'S-RANDOM', random2P: 'SCATTER' }, undefined, VIEW).randomLane).toEqual({
+      p1: 'S-RANDOM',
+      p2: 'SCATTER',
+    });
   });
 });
 
