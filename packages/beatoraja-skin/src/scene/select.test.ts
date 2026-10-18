@@ -62,14 +62,14 @@ const COURSE: LibraryCourse = {
     release: true,
     source: { format: 'beatoraja-json' },
   },
-  stages: [{ title: 'One', song: SONG }, { title: 'Two' }],
+  stages: [{ title: 'One', chart: SONG }, { title: 'Two' }],
   playable: false,
 };
 
 function input(focused: LibraryEntry | undefined, overrides: Partial<BeatorajaSelectInput> = {}): BeatorajaSelectInput {
   return {
     focused,
-    ...(focused?.kind === 'song' ? { chart: FACTS } : {}),
+    ...(focused?.kind === 'chart' ? { chart: FACTS } : {}),
     folderLabel: 'Pack',
     searchText: 'son',
     list: { keysFilter: 'KEYS_14', sort: 'BPM' },
@@ -79,8 +79,8 @@ function input(focused: LibraryEntry | undefined, overrides: Partial<BeatorajaSe
   };
 }
 
-const SONG_BAR: LibraryEntry = { kind: 'song', song: SONG };
-const FOLDER_BAR: LibraryEntry = { kind: 'folder', folder: { label: 'Folder', songs: [SONG, SONG] } };
+const SONG_BAR: LibraryEntry = { kind: 'chart', chart: SONG };
+const FOLDER_BAR: LibraryEntry = { kind: 'folder', folder: { label: 'Folder', charts: [SONG, SONG] } };
 const COURSE_BAR: LibraryEntry = { kind: 'course', course: COURSE };
 
 describe('button orders', () => {
@@ -234,7 +234,7 @@ describe('resolveBeatorajaSelectNumber', () => {
     expect(resolveBeatorajaSelectNumber(BEATORAJA_NUM.TOTALNOTES, input(FOLDER_BAR))).toBeUndefined();
     expect(resolveBeatorajaSelectNumber(BEATORAJA_NUM.PLAYLEVEL, input(COURSE_BAR))).toBeUndefined();
     // A chart without facts or a readable level hides those numbers.
-    const bare = input({ kind: 'song', song: { ...SONG, playLevel: 'x', bpm: undefined } }, { chart: undefined });
+    const bare = input({ kind: 'chart', chart: { ...SONG, playLevel: 'x', bpm: undefined } }, { chart: undefined });
     expect(resolveBeatorajaSelectNumber(BEATORAJA_NUM.PLAYLEVEL, bare)).toBeUndefined();
     expect(resolveBeatorajaSelectNumber(BEATORAJA_NUM.MAINBPM, bare)).toBeUndefined();
     expect(resolveBeatorajaSelectNumber(BEATORAJA_NUM.BMS_TOTAL, bare)).toBeUndefined();

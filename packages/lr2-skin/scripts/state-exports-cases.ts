@@ -42,7 +42,7 @@ const BENCH_CHART: LibraryChart = {
   totalNotes: 500,
   chart: createEmptyJson(),
 };
-const BENCH_ENTRY: LibraryEntry = { kind: 'song', song: BENCH_CHART };
+const BENCH_ENTRY: LibraryEntry = { kind: 'chart', chart: BENCH_CHART };
 const BENCH_BAR_BODIES = [
   { kind: 'song', source: { imagePath: 'song.png' } },
   { kind: 'folder', source: { imagePath: 'folder.png' } },
