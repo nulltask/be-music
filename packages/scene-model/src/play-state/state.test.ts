@@ -204,8 +204,11 @@ describe('reducePlayState', () => {
     });
     expect(reducePlayState(state, { type: 'hi-speed-step', delta: 0.5 })).toBe(state);
     expect(reducePlayState(state, { type: 'cover-adjust', part: 'sudden', delta: 0.1 })).toBe(state);
-    // A replay's recorded covers still apply.
+    // A replay's recorded covers and hi-speed still apply.
     const replayed = reducePlayState(state, { type: 'cover-set', covers: [{ side: '1P', sudden: 0.5 }] });
     expect(replayed.view.covers[0]!.sudden).toBe(0.5);
+    const replayedSpeed = reducePlayState(replayed, { type: 'hi-speed-drawn', value: 3 });
+    expect(replayedSpeed.view.hiSpeed).toMatchObject({ player: 3, drawn: 3, locked: true });
+    expect(replayedSpeed.view.covers).toBe(replayed.view.covers);
   });
 });
