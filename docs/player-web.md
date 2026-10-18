@@ -291,7 +291,7 @@ The LR2 and beatoraja paths each provide the same high-level scene set; the defa
 Every scene, built-in, LR2 and beatoraja alike, implements `PixiScene`, and a host changes scenes only with `setScene`:
 
 - `root` is the container the host puts on the stage while the scene shows. A scene builds its scene graph under it and never adds itself to the stage.
-- `identity` is `{ kind, family }`: the screen (`select`, `decide`, `play` or `result`) and the skin family drawing it (`built-in`, `lr2` or `beatoraja`). `getCurrentScene()?.identity` says what is showing; the demo's test hook reports it.
+- `identity` is `{ kind, family }`: the screen (`select`, `decide`, `play` or `result`) and the skin family drawing it (`built-in`, `lr2` or `beatoraja`). `getCurrentScene()?.identity` says what is showing; the demo's test hook reports the identity of the scene its scene router shows.
 - `enter(host)` runs each time the scene becomes the active one, before the host puts `root` on the stage. The first entry builds the scene graph and wires input and ticker work; a later one resumes what `exit()` paused and starts the screen's entrance again.
 - `exit()` runs when another scene takes over or the stage is cleared, before the host takes `root` off it. The scene's ticker work, input and its own screen sound (BGM, preview, jingle) stop; it can be entered again.
 - `dispose()` releases everything. The scene's owner calls it: `setScene` only exits the scene it replaces.
@@ -314,25 +314,31 @@ stateDiagram-v2
 
 What a scene shows is handed to it before it is shown: the options of `createDecideScene` for every decide screen, the options of `createResultScene` for every result screen, the options of `createPlayScene` for every play screen, and the options of `createSelectScene` for every select screen.
 
-- **The select scene is kept alive.** Every family's select screen stays across a decide, play and result: their `exit()` stops the BGM and the chart preview and the drawing, and they keep their cursor, browse state and decoded BGM. Entering again restarts the scene timers, so the skin's entrance plays again, and the BGM; the preview starts again once the cursor is on another chart than the one it left on. The screen (`createSelectScene`) stops its sounds with `stopOwned` and detaches its input on exit.
-- **A play loads off stage.** `prepare()` parses the chart and decodes its audio without touching the stage or adding listeners, so the demo prepares the play behind a decide splash. When the splash is done, `setScene(play)` exits the decide scene and enters the play, then `start()` begins it; keys pressed during the splash reach only the splash. Without a splash the demo shows the play first, and a `prepare()` that runs while the play is showing draws the playfield in its loading state.
-- **A play's sound outlives its screen.** The gameplay scene's `exit()` stops its drawing and input but not its sound, so the result shows while the last notes ring out; the demo then disposes the play with `preserveAudioTail`.
-- **Decide and result scenes are one-shot.** Entered again, they restart their timeline; the demo disposes them once they are gone.
+In the web demo the scenes' owner is its scene router (`app/scene-router.ts`, [ADR 0006](./adr/0006-scene-router.md)); `main.ts` never calls `setScene` or `dispose` itself. Every transition finalizes a video recording in progress, then calls `setScene(next)`, so the scene showing exits as the next enters and the stage never shows an empty frame, and then disposes the scene that left. Transitions run one at a time. A transition belongs to a navigation, and a scene made for a navigation that a newer one replaced (the select screen back while a result was still loading) is disposed instead of shown. While files load (a drop, a file pick, a URL), the select screen goes off the stage when it is showing, leaving no scene up, and comes back once they are read.
+
+- **The select scene is kept alive.** Every family's select screen stays across a decide, play and result: their `exit()` stops the BGM and the chart preview and the drawing, and they keep their cursor, browse state and decoded BGM. Entering again restarts the scene timers, so the skin's entrance plays again, and the BGM; the preview starts again once the cursor is on another chart than the one it left on. The screen (`createSelectScene`) stops its sounds with `stopOwned` and detaches its input on exit. The demo's router holds it as its select scene and never disposes it on a transition; picking another LR2 theme or skin family, a theme of another family taking over, or Escape at the root of a beatoraja select screen drops it (`dropSelect`), and the next select screen is made afresh.
+- **A play loads off stage.** `prepare()` parses the chart and decodes its audio without touching the stage or adding listeners, so the demo prepares the play behind a decide splash (the router's `prepare`). When the splash is done, `setScene(play)` exits the decide scene and enters the play prepared behind it, then `start()` begins it; keys pressed during the splash reach only the splash. The splash, the play and its preload share one navigation, so a splash left with Escape drops the play prepared behind it, and a preload that fails makes the play again with the splash's `#RANDOM` draws (`preResolved`). Without a splash the demo takes the select screen off the stage while it makes the play, shows the play first, and a `prepare()` that runs while the play is showing draws the playfield in its loading state.
+- **A play's sound outlives its screen.** The gameplay scene's `exit()` stops its drawing and input but not its sound, so the result shows while the last notes ring out; the router then disposes the play with `preserveAudioTail`. A course stage whose result is skipped leaves the stage the same way, and the next stage shows with no screen in between.
+- **Decide and result scenes are one-shot.** Entered again, they restart their timeline; the router disposes them once another scene has taken the stage. A result screen that leads to the next stage or a retry leaves the stage first, so it takes no keys while the next play loads.
 
 ```mermaid
 sequenceDiagram
   participant Demo
+  participant Router as Scene router
   participant Host as PixiSceneHost
   participant Decide
   participant Play
-  Demo->>Play: prepare (off stage)
-  Demo->>Host: setScene(Decide)
+  Demo->>Router: prepare(Play)
+  Router->>Play: prepare (off stage)
+  Demo->>Router: show(Decide)
+  Router->>Host: setScene(Decide)
   Host->>Decide: enter
   Decide-->>Demo: onContinue
-  Demo->>Host: setScene(Play)
+  Demo->>Router: show(Play)
+  Router->>Host: setScene(Play)
   Host->>Decide: exit
   Host->>Play: enter
-  Demo->>Decide: dispose
+  Router->>Decide: dispose
   Demo->>Play: start
 ```
 

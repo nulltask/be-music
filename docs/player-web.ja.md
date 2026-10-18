@@ -282,7 +282,7 @@ LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。d
 標準・LR2・beatoraja のどの scene も `PixiScene` を実装し、host は `setScene` だけで scene を切り替えます。
 
 - `root` は、scene の表示中に host が stage に載せる container です。scene はその下に scene graph を組み、自分で stage に載ることはありません。
-- `identity` は `{ kind, family }` で、画面（`select`、`decide`、`play`、`result`）と、描く skin family（`built-in`、`lr2`、`beatoraja`）を表します。表示中の scene は `getCurrentScene()?.identity` でわかり、demo の test hook もこれを報告します。
+- `identity` は `{ kind, family }` で、画面（`select`、`decide`、`play`、`result`）と、描く skin family（`built-in`、`lr2`、`beatoraja`）を表します。表示中の scene は `getCurrentScene()?.identity` でわかり、demo の test hook はシーンルーターが表示している scene の `identity` を報告します。
 - `enter(host)` は scene が active になるたびに、host が `root` を stage に載せる前に呼ばれます。最初の entry で scene graph を組み、input と ticker の処理をつなぎます。2 回目以降は `exit()` で止めたものを再開し、画面の入場演出をもう一度始めます。
 - `exit()` は別の scene に替わるときや stage を空にするときに、host が `root` を stage から外す前に呼ばれます。ticker の処理、input、画面自身の音（BGM、preview、jingle）が止まります。scene はもう一度 enter できます。
 - `dispose()` はすべてを解放します。呼ぶのは scene の持ち主で、`setScene` は置き換える scene を exit するだけです。
@@ -305,25 +305,31 @@ stateDiagram-v2
 
 scene が表示する内容は表示の前に渡します。decide 画面はどれも `createDecideScene` の option、result 画面はどれも `createResultScene` の option、プレイ画面はどれも `createPlayScene` の option、select 画面はどれも `createSelectScene` の option です。
 
-- **select scene は生かしておきます。** どの種類の select 画面も decide、プレイ、result のあいだも残ります。`exit()` で BGM と chart preview と描画を止めますが、cursor、一覧の状態、decode 済みの BGM は保ちます。もう一度 enter すると scene timer を始め直して skin の入場演出を再び流し、BGM を再開します。preview は、離れたときと別の譜面にカーソルが乗ってから始め直します。select 画面（`createSelectScene`）は exit で音を `stopOwned` で止め、input を外します。
-- **プレイは stage の外で読み込みます。** `prepare()` は stage にも listener にも触れずに譜面を parse して音声を decode するので、demo は decide 画面の裏でプレイを準備します。decide 画面が終わると `setScene(play)` で decide scene を exit してプレイを enter し、`start()` で始めます。decide 画面のあいだに押した key は decide 画面にだけ届きます。decide 画面がないときは demo が先にプレイを表示し、表示中に走る `prepare()` は読み込み中の playfield を描きます。
-- **プレイの音は画面より長く残ります。** gameplay scene の `exit()` は描画と input を止めますが音は止めないので、最後の音が鳴っているあいだに result を表示できます。demo はそのあとプレイを `preserveAudioTail` で dispose します。
-- **decide と result の scene は使い捨てです。** もう一度 enter すると timeline を最初から始めます。demo は画面が替わると dispose します。
+Web の demo では、scene の持ち主はシーンルーター（`app/scene-router.ts`、[ADR 0006](./adr/0006-scene-router.ja.md)）で、`main.ts` は自分で `setScene` も `dispose` も呼びません。切り替えのたびに、録画中なら確定し、`setScene(next)` で表示中の scene を exit すると同時に次を enter させ（stage が空のフレームはありません）、そのあと退いた scene を dispose します。切り替えは 1 つずつ処理します。切り替えはそれぞれ 1 回の移動に属し、より新しい移動に置き換えられた移動のために作った scene（result の読み込み中に select 画面へ戻ったときの result など）は、表示せずに dispose します。ファイルを読み込むあいだ（ドロップ、ファイルの選択、URL）は、select 画面が表示中ならそれを stage から外して何も表示せず、読み終えたら戻します。
+
+- **select scene は生かしておきます。** どの種類の select 画面も decide、プレイ、result のあいだも残ります。`exit()` で BGM と chart preview と描画を止めますが、cursor、一覧の状態、decode 済みの BGM は保ちます。もう一度 enter すると scene timer を始め直して skin の入場演出を再び流し、BGM を再開します。preview は、離れたときと別の譜面にカーソルが乗ってから始め直します。select 画面（`createSelectScene`）は exit で音を `stopOwned` で止め、input を外します。demo のルーターはこれを select scene として持ち、切り替えでは dispose しません。別の LR2 テーマや skin family を選んだとき、別の family のテーマに替わったとき、beatoraja の select 画面のルートで Escape を押したときに手放し（`dropSelect`）、次の select 画面を作り直します。
+- **プレイは stage の外で読み込みます。** `prepare()` は stage にも listener にも触れずに譜面を parse して音声を decode するので、demo は decide 画面の裏でプレイを準備します（ルーターの `prepare`）。decide 画面が終わると `setScene(play)` で decide scene を exit して、その裏で準備したプレイを enter し、`start()` で始めます。decide 画面のあいだに押した key は decide 画面にだけ届きます。decide 画面、プレイ、その読み込みは 1 回の移動を共有するので、Escape で decide 画面を離れると裏で準備したプレイも手放し、読み込みに失敗したときは decide 画面の `#RANDOM` の抽選（`preResolved`）でプレイを作り直します。decide 画面がないときは、demo はプレイを作るあいだ select 画面を stage から外し、先にプレイを表示します。表示中に走る `prepare()` は読み込み中の playfield を描きます。
+- **プレイの音は画面より長く残ります。** gameplay scene の `exit()` は描画と input を止めますが音は止めないので、最後の音が鳴っているあいだに result を表示できます。ルーターはそのあとプレイを `preserveAudioTail` で dispose します。ステージごとの result を飛ばすコースのステージも同じように stage を離れ、あいだに画面を挟まずに次のステージを表示します。
+- **decide と result の scene は使い捨てです。** もう一度 enter すると timeline を最初から始めます。ルーターは別の scene が stage に載ると dispose します。次のステージやリトライへ進む result 画面は先に stage を離れるので、次のプレイの読み込み中に key を受けません。
 
 ```mermaid
 sequenceDiagram
   participant Demo
+  participant Router as シーンルーター
   participant Host as PixiSceneHost
   participant Decide
   participant Play
-  Demo->>Play: prepare（stage の外）
-  Demo->>Host: setScene(Decide)
+  Demo->>Router: prepare(Play)
+  Router->>Play: prepare（stage の外）
+  Demo->>Router: show(Decide)
+  Router->>Host: setScene(Decide)
   Host->>Decide: enter
   Decide-->>Demo: onContinue
-  Demo->>Host: setScene(Play)
+  Demo->>Router: show(Play)
+  Router->>Host: setScene(Play)
   Host->>Decide: exit
   Host->>Play: enter
-  Demo->>Decide: dispose
+  Router->>Decide: dispose
   Demo->>Play: start
 ```
 
