@@ -218,7 +218,7 @@ flowchart TD
 - **シーンモデル**（`@be-music/scene-model`）。スキンの種類によらず、各画面が何を見せ、どう振る舞うか。ライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`）、一覧の状態とその保存形（`BrowseState`、`BrowseSnapshot`）、プレイオプション、プレイ状態（`PlayState`）、プレイ結果（`PlayResult`）、コースの表示用モデル（`CourseView`）、効果音セットです（[ADR 0002](./adr/0002-scene-model-package.ja.md)、[シーンモデル](./scene-model.ja.md)）。
 - **スキンモデル**（`skin-sdk`、`lr2-skin`、`beatoraja-skin`）。それぞれのスキンを解析し、シーンモデルをそのスキンの語彙に写します。be-music スキンの契約（`@be-music/skin-sdk`）、LR2 互換の op・数値・テキスト・タイマーの番号表 1 つ（`@be-music/lr2-skin/ids`）と LR2 の状態を求める関数（`@be-music/lr2-skin/state`）、beatoraja の状態の計算（`@be-music/beatoraja-skin/scene`）です。
 - **Web 実行層**（`@be-music/player-web`）。シーンセッション（`session/`）が各画面の振る舞いを、どのスキンの種類にも共通に 1 つだけ持ちます。譜面の準備、RANDOM / FLIP、音と BGA、エンジンの設定、入力、終わり方です。ファミリービュー（`view/`）はセッションのフレームを描いてインテントを返すだけです（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。ホスト向けの API（`./host`）は、どの画面もファミリーキットから `createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作り、`PixiSceneHost` が表示する 1 つの画面のライフサイクル（`PixiScene`）を持つ `SessionScene` にします。プレイの譜面の音以外はすべて 1 つの音のサービス（`./audio`、[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）を通ります。[ブラウザプレイヤー — シーンセッションとファミリービュー](./player-web.ja.md#シーンセッションとファミリービュー)を参照してください。
-- **ホスト**。Web のデモは、`main.ts` がつなぐサービス（`services/`）とルート（`app/routes/`）の集まりで、画面の切り替えはすべて 1 つのシーンルーター（`app/scene-router.ts`）が受け持ちます（[ADR 0006](./adr/0006-scene-router.ja.md)）。プレイ・リザルト・リプレイのルートと残りのサービスは、まだ `main.ts` から移す途中です（P5）。ターミナルプレイヤーはエンジンと入口の `./signals`、`./lanes`、`./display` で遊び、Leaderboard は規則（`./course`、`./playlog`、`./ruleset`）で記録を確かめて順位を付けます。
+- **ホスト**。Web のデモは、`main.ts` がつなぐサービス（`services/`）とルート（`app/routes/`）の集まりで、画面の切り替えはすべて 1 つのシーンルーター（`app/scene-router.ts`）が受け持ちます（[ADR 0006](./adr/0006-scene-router.ja.md)）。ルートは選曲、決定、プレイ、リザルト、リプレイ、コース、NONSTOP です。プレイログ・録画・ステータスのサービスとテスト用のフックの状態は、まだ `main.ts` から移す途中です（P5.8–P5.10）。ターミナルプレイヤーはエンジンと入口の `./signals`、`./lanes`、`./display` で遊び、Leaderboard は規則（`./course`、`./playlog`、`./ruleset`）で記録を確かめて順位を付けます。
 
 変更しやすさを保つための規則：
 
@@ -227,7 +227,7 @@ flowchart TD
 - 部品を組み合わせる。基底クラスのフックで違いを吸収しない。
 - 規則・エンジン・モデルは実行環境に依存せず、Pixi・DOM・Node なしでテストできる。
 - パッケージは、ファイル構成ではなく設計した入口を公開する（[ADR 0005](./adr/0005-public-entry-points.ja.md)）。
-- 1,500 行を超えるソースファイルを置かない。[許可リスト](#層の規則とサイズの上限)に残るのは Web のデモの `main.ts` だけで、P5.10 で外します。
+- 1,500 行を超えるソースファイルを置かない。[許可リスト](#層の規則とサイズの上限)は空です。
 
 ### 移行
 
@@ -382,4 +382,4 @@ Web のデモを 1 つのシーンルーター（[ADR 0006](./adr/0006-scene-rou
 - **実行環境に依存しないコード**：`@be-music/chart`、`@be-music/json`、`@be-music/parser`、`@be-music/scene-model`、`@be-music/lr2-skin` の `state/`、`@be-music/beatoraja-skin` の `scene/` と、`@be-music/player` の `core/`、`course/`、`playlog/`、`records/`、`ruleset/` と、入口の `signals`、`lanes`、`display` およびそれらが集めるモジュールは、ブラウザでも Node でもそのまま動きます。そこでは Oxlint の `no-restricted-imports` と `no-restricted-globals`（[`vite.config.ts`](../vite.config.ts) で設定）が、Node の組み込みモジュールの import（`node:*` と接頭辞なしの名前）と、DOM や Node だけのグローバル（`window`、`document`、`process`、`Buffer` など）を拒否します。実行環境のサービスはアダプタを通して渡します。`PlayerOptions.createAudioSession` / `createUiRuntime` / `createInputRuntime`、Node の音声出力を読み込むオプショナルモジュールのローダー、parser の [`node-file.ts`](../packages/parser/src/node-file.ts)（`parseChartFile`）です。`node-file.ts` と parser の CLI、テストはこの規則の対象外です。
 - **決定的な判定**：`core/judge-*.ts`、`core/auto-judge-core.ts`、`ruleset/`、`playlog/simulate.ts` では、さらに `Date` と `performance` の読み取り、タイマーの設定、`Math.random` の呼び出しを禁止します。時刻と乱数は入力として受け取ります。LR2 と beatoraja の状態を求める関数（`@be-music/lr2-skin` の `state/`、`@be-music/beatoraja-skin` の `scene/`）にも同じ規則を課します。画面の時刻は入力として受け取ります。
 - **web ランタイムの層**：`@be-music/player-web` では、同じ Oxlint の規則が層を分けたまま保ちます（[層の分け方](./player-web.ja.md#層の分け方)）。下の層（`host/`、`session/`、`view/` 以外のすべてのディレクトリ）は、ホスト、セッション、ビューを型であっても import しません。セッションとビューが互いとホストに触れるのは型だけで、セッションは Pixi も型だけ、ビューはエンジンを型であっても import しません。エンジンを値として import するのはセッションと `runtime/engine-driver.ts` だけで、`AudioContext` や `OfflineAudioContext` を作るのは音の層の `runtime/` だけです。後の 2 つの規則は web demo にも課します。
-- **ファイルサイズの上限**：[`scripts/lint/file-size-budget.ts`](../scripts/lint/file-size-budget.ts) は、パッケージのソースファイル（テスト、型宣言、フィクスチャを除く）が 1,500 行を超えると失敗します。上限を入れた時点で既に大きかったファイルは許可リストにあり、警告だけを出します。許可リストのファイルが上限を下回ったら、リストから外す必要があります。単独では `pnpm run check:file-size` で実行できます。
+- **ファイルサイズの上限**：[`scripts/lint/file-size-budget.ts`](../scripts/lint/file-size-budget.ts) は、パッケージのソースファイル（テスト、型宣言、フィクスチャを除く）が 1,500 行を超えると失敗します。上限を入れた時点で既に大きかったファイルは許可リストに入れて警告だけを出し、分けるたびに外してきました。いまリストは空です。許可リストのファイルが上限を下回ったら、リストから外す必要があります。単独では `pnpm run check:file-size` で実行できます。
