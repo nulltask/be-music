@@ -10,7 +10,7 @@ import type { BeMusicLaneFrame } from '../../../skin/be-music/types.ts';
 import { renderPhantomLanes } from '../../../skins/phantom/playfield.ts';
 import { resolveLaneGeometry } from '../../built-in/play-chrome.ts';
 import type { PlayfieldContext } from './context.ts';
-import { hasKeyBeam, resolveKeyBeamAlpha } from './key-beam.ts';
+import { resolveKeyBeamAlpha } from './key-beam.ts';
 
 export function renderLanes(ctx: PlayfieldContext, width: number, height: number): void {
   ctx.laneLayer.clear();
@@ -79,7 +79,7 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
   }
 }
 
+/** How bright `channel`'s key beam is: every lane's, whatever the play variant. */
 function resolveFallbackLaneLaserAlpha(ctx: PlayfieldContext, channel: string): number {
-  if (!hasKeyBeam(channel, ctx.play.chartPlayVariant)) return 0;
   return resolveKeyBeamAlpha(ctx.play, channel, ctx.playfieldSkin.keyOnFadeMs(channel), ctx.play.playClock());
 }
