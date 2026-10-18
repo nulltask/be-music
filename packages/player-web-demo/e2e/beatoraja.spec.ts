@@ -20,8 +20,9 @@ courseFlowTests({
     );
   },
   startAuto: (demo) => demo.clickSkin(AUTO_BUTTON.x, AUTO_BUTTON.y, SELECT_SKIN.width, SELECT_SKIN.height),
-  // beatoraja has no NONSTOP course: the stitched play falls back to the built-in scenes, with the skin's jingles.
-  nonstop: { play: 'built-in', result: 'built-in' },
+  // beatoraja has no NONSTOP course of its own: the stitched play and its result show on the theme's play and result
+  // skins, with the theme's clear / fail jingles.
+  nonstop: { play: 'beatoraja', result: 'beatoraja' },
   jingles: { courseClear: 'beatoraja:courseClear', courseFail: 'beatoraja:courseFail', clear: 'beatoraja:clear' },
   playTime: false,
 });

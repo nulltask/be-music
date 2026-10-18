@@ -9,6 +9,8 @@ import {
 import { createEmptyJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { parseChart } from '@be-music/parser';
+import { autoPlay } from '@be-music/player/core/engine';
+import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import { createPlayerUiSignalBus, type PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
@@ -594,6 +596,39 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.exit();
     expect(audio.stopOwned).toHaveBeenCalledWith(owner);
     expect(audio.stopOwned).not.toHaveBeenCalledWith(play);
+    scene.dispose();
+  });
+
+  it('replays a play log with its own skin: the recorded arrangement and gauge', async () => {
+    // A log of the two-lane chart as played on MIRROR: lane 1's note on lane 2 and lane 2's on lane 1.
+    let recorded: BeMusicPlaylog | undefined;
+    await autoPlay(TWO_LANE_CHART, {
+      speed: 64,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      gauge: 'HARD',
+      recordPlaylog: { gauge: 'HARD', randomLane: { p1: 'MIRROR' } },
+      onPlaylogRecorded: (playlog) => {
+        recorded = playlog;
+      },
+    });
+    const playlog: BeMusicPlaylog = {
+      ...recorded!,
+      chart: {
+        ...recorded!.chart,
+        notes: recorded!.chart.notes.map((note) => ({ ...note, channel: note.channel === '11' ? '12' : '11' })),
+      },
+    };
+    const { scene, play } = createBeatoraja({
+      chart: { ...CHART, chart: TWO_LANE_CHART } as BrowserSongEntry,
+      settings: { initialHiSpeed: 2 },
+      replay: playlog,
+    });
+    await scene.prepare();
+    expect(scene.identity).toEqual({ kind: 'play', family: 'beatoraja' });
+    expect(play.notes.map((note) => note.channel)).toEqual(['12', '11']);
+    expect(play.resolveSelectedGauge()).toBe('HARD');
     scene.dispose();
   });
 

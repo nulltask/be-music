@@ -35,7 +35,6 @@ import {
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
-  playResultFromBeatoraja,
   resolveResultJingle,
   resolveResultJingles,
   SORT_CYCLE,
@@ -180,7 +179,6 @@ import {
 } from '@be-music/player/playlog';
 import {
   buildCourseResultData,
-  buildCourseResultSummary,
   courseRecordKey,
   joinCourseStageHistories,
   resolveResultPresentation,
@@ -2247,8 +2245,8 @@ class PlayerWebDemoApp {
     }
     this.setPlayStatus(`Replaying: ${song.title}`);
     try {
-      // Replay always drives the LR2/default gameplay path — the shared engine owns the playback either way, so
-      // the recorded run reproduces regardless of which skin family recorded it.
+      // A replay plays on the gameplay family's own play screen, whichever family recorded it: the play session
+      // re-applies the recorded arrangement and the engine replays the inputs the same way on every family.
       await this.playSong(song, { autoPlay: playlog.play.mode === 'auto', replay: playlog });
     } catch (error) {
       gameplayLog.warn('play-log replay failed', error);
@@ -2542,11 +2540,16 @@ class PlayerWebDemoApp {
     await play();
   }
 
-  /** The course result of a NONSTOP run: its course log built from the stitched play, kept and shown as one run. */
+  /**
+   * The course result of a NONSTOP run: its course log built from the stitched play, kept and shown as one run, on a
+   * beatoraja theme's result skin when the result family is beatoraja (with `resolved`, the stitched chart as played,
+   * for its graphs), else on the LR2 or built-in result.
+   */
   private async showNonstopCourseResult(
     nonstop: NonstopPlay,
     playlog: BeMusicPlaylog | undefined,
     fallback?: PixiGameplayResultData,
+    resolved?: ResolvedPlayChart,
   ): Promise<void> {
     this.testHook?.recordPlaylog(playlog);
     if (playlog === undefined) {
@@ -2577,12 +2580,22 @@ class PlayerWebDemoApp {
     );
     // As LR2 shows a NONSTOP run: on the result skin with the clear / fail jingles (no course-result step), and R
     // stitches and plays the course again.
-    await this.showResult(buildCourseResultData(nonstop.course, native, courseLog, fallback), {
-      nonstop: {
-        info: resolveSceneCourseInfo(nonstop.course),
-        retry: () => void this.startNonstopCourse(nonstop.course),
-      },
-    });
+    const result = buildCourseResultData(nonstop.course, native, courseLog, fallback);
+    const info = resolveSceneCourseInfo(nonstop.course);
+    const retry = (): void => void this.startNonstopCourse(nonstop.course);
+    if (pickActiveFamilyForScene(this.familyDispatchState(), 'result') === 'beatoraja') {
+      const mounted = await this.showBeatorajaResult(result, {
+        run: 'nonstop',
+        course: { info },
+        nonstopRetry: retry,
+        ...(resolved !== undefined ? { playChart: resolved.chart } : {}),
+      });
+      if (mounted) {
+        this.unlockPlaylogOptions();
+        return;
+      }
+    }
+    await this.showResult(result, { nonstop: { info, retry } });
   }
 
   /** Plays the running course's next stage, or shows the course result when it is over. */
@@ -2649,22 +2662,16 @@ class PlayerWebDemoApp {
     const histories = courseStageHistories(active);
     // A beatoraja theme shows the course result on its COURSE_RESULT skin (or its result skin).
     if (pickActiveFamilyForScene(this.familyDispatchState(), 'result') === 'beatoraja') {
-      // The course run read as one play: beatoraja's course result sums the stages and draws every stage's graph
-      // joined, each stage as wide as its chart is long.
-      const runResult = playResultFromBeatoraja(
-        {
-          summary: buildCourseResultSummary(result),
-          maxCombo: result.maxCombo,
-          history: {
-            ...joinCourseStageHistories(
-              histories,
-              run.stages.map((song) => createCourseSongRecord(song).length ?? 0),
-            ),
-            timingHistory: [],
-          },
-        },
-        { song: course.stages[0]!.song!, run: 'course', judgeRuleset: this.guiState.judgeRuleset, course: courseInfo },
+      // The course run read as one play, as on the other families: beatoraja's course result sums the stages and draws
+      // every stage's graph joined, each stage as wide as its chart is long.
+      const joined = joinCourseStageHistories(
+        histories,
+        run.stages.map((song) => createCourseSongRecord(song).length ?? 0),
       );
+      const runResult = buildCourseResultData(course, result, courseLog, joined, {
+        playSeconds: run.playSeconds,
+        stageHistories: histories,
+      });
       const mounted = await this.showBeatorajaResult(runResult, {
         run: 'course',
         course: { info: courseInfo, result: { log: courseLog, native: result } },
@@ -3581,17 +3588,21 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Mount the beatoraja result screen with `createResultScene`: `data`, a play's result (a single play or a course stage
-   * on the beatoraja play screen) or, with `options.course.result`, a course run's, on the theme's result skin (its
-   * course-result skin for a course run). Returns `true` when the screen actually mounted — `false` falls through to the
-   * no-result fast-path (no result skin in the bundle, or skin load failed). The play behind it goes once the screen
-   * shows, its last samples ringing out.
+   * Mount the beatoraja result screen with `createResultScene`: `data`, a play's result (a single play, a replay or a
+   * course stage on the beatoraja play screen), a NONSTOP run's (`run: 'nonstop'`, R stitching it again through
+   * `options.nonstopRetry`) or, with `options.course.result`, a course run's, on the theme's result skin (its
+   * course-result skin for a course run). `options.playChart` is the chart its graphs plot when it is not the last
+   * beatoraja play's (`lastBeatorajaChart`): a NONSTOP run's stitched chart. Returns `true` when the screen actually
+   * mounted — `false` falls through to the no-result fast-path (no result skin in the bundle, or skin load failed). The
+   * play behind it goes once the screen shows, its last samples ringing out.
    */
   private async showBeatorajaResult(
     data: PixiGameplayResultData,
     options: {
       run: PlayRunKind;
       course?: { info: SceneCourseInfo; result?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult } };
+      nonstopRetry?: () => void;
+      playChart?: ResolvedPlayChart['chart'];
     },
   ): Promise<boolean> {
     const song = data.song;
@@ -3644,14 +3655,16 @@ class PlayerWebDemoApp {
     // as the result shows, so the chart is kept in `lastBeatorajaChart`; it is only handed on when it is this song's, so a
     // graph never plots another chart. A course run's result plots none.
     const playChart =
-      !courseResult && this.lastBeatorajaChart?.chartPath === song.chartPath
+      options.playChart ??
+      (!courseResult && this.lastBeatorajaChart?.chartPath === song.chartPath
         ? this.lastBeatorajaChart.resolved.chart
-        : undefined;
+        : undefined);
     // R on the result plays the same chart again — only offered when the recorded play start is this chart's, and
-    // never in a course (beatoraja disables quick retry there).
+    // never in a course (beatoraja disables quick retry there); a NONSTOP run is stitched and played again.
     const lastPlay = this.lastPlay;
     const retryTarget = resolveResultRetry({
       quickRetry: presentation.quickRetry,
+      ...(options.nonstopRetry !== undefined ? { nonstopRetry: options.nonstopRetry } : {}),
       songId: song.id,
       ...(lastPlay !== undefined ? { lastPlay: { songId: lastPlay.song.id, play: lastPlay } } : {}),
     });
@@ -3671,13 +3684,15 @@ class PlayerWebDemoApp {
       void this.showSelect();
     };
     const onRetry =
-      retryTarget?.kind === 'replay'
-        ? (): void => {
+      retryTarget === undefined
+        ? undefined
+        : (): void => {
+            // Straight back into the chart: `playSong` tears down gameplay / decide but not the result screen.
             this.disposeScene(this.resultView);
             this.resultView = undefined;
-            void this.playSong(retryTarget.play.song, retryTarget.play.overrides);
-          }
-        : undefined;
+            if (retryTarget.kind === 'nonstop') retryTarget.retry();
+            else void this.playSong(retryTarget.play.song, retryTarget.play.overrides);
+          };
     this.resultView = createResultScene(
       { family: 'beatoraja', kit: load.kit },
       {
@@ -4235,7 +4250,7 @@ class PlayerWebDemoApp {
     // playing in LR2 mode and have a beatoraja-only decide skin, or vice versa. The decide splash is a one-shot
     // overlay so each scene transition consults the family helper afresh.
     const decideFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'decide', song);
-    const playsOnBeatoraja = this.playsOnBeatoraja(song, {});
+    const playsOnBeatoraja = this.playsOnBeatoraja(song);
     const kit = await this.decideKitFor(decideFamily, song, playsOnBeatoraja);
     if (kit === undefined) {
       // No decide splash: a be-music skin without one, an LR2-only setup that didn't ship a decide skin, or a beatoraja
@@ -4352,7 +4367,7 @@ class PlayerWebDemoApp {
   /**
    * The kit `song` plays with, for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain) gives it:
    *
-   * - **beatoraja** (`playsOnBeatoraja`: neither a replay nor a stitched NONSTOP chart) → the theme's play entry
+   * - **beatoraja** (`playsOnBeatoraja`, a replay and a stitched NONSTOP chart included) → the theme's play entry
    *   (`loadBeatorajaPlayKit`); `undefined` when it cannot be loaded.
    * - **LR2** with a play skin for the chart's key mode → an LR2 kit with that skin (parsed again with the course's ops
    *   for a course stage or a NONSTOP run), and the theme's 9-keys skin, whose Pop'n green wide note at index 3 is drawn
@@ -4361,9 +4376,9 @@ class PlayerWebDemoApp {
    */
   private async resolvePlayKit(
     song: BrowserSongEntry,
-    overrides: { replay?: BeMusicPlaylog; courseStage?: CourseStagePlay; nonstop?: NonstopPlay },
+    overrides: { courseStage?: CourseStagePlay; nonstop?: NonstopPlay },
   ): Promise<PlaySceneKit | undefined> {
-    if (this.playsOnBeatoraja(song, overrides)) {
+    if (this.playsOnBeatoraja(song)) {
       const loaded = await this.loadBeatorajaPlayKit(song);
       this.activeBeatorajaPlay =
         loaded !== undefined
@@ -4540,8 +4555,10 @@ class PlayerWebDemoApp {
           return;
         }
         if (exit === 'nonstop-result') {
+          // The stitched chart as the play played it, for a beatoraja result skin's graphs.
+          const resolved = view?.resolved;
           void this.finishGameplayThen(async () => {
-            await this.showNonstopCourseResult(nonstop!, await view?.waitForPlaylog());
+            await this.showNonstopCourseResult(nonstop!, await view?.waitForPlaylog(), undefined, resolved);
           });
           return;
         }
@@ -4549,7 +4566,8 @@ class PlayerWebDemoApp {
       },
       onChartFinished: (result: PixiGameplayResultData) => {
         if (nonstop !== undefined) {
-          void this.finishGameplayThen(() => this.showNonstopCourseResult(nonstop, result.playlog, result));
+          const resolved = this.gameplayView?.resolved;
+          void this.finishGameplayThen(() => this.showNonstopCourseResult(nonstop, result.playlog, result, resolved));
           return;
         }
         // A course stage with stage results skipped (or an auto-played one the course goes on after, as LR2 skips it)
@@ -4688,20 +4706,13 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Whether a play of `song` runs on the beatoraja gameplay scene: the gameplay family says so, and the play is neither
-   * a replay nor a stitched NONSTOP chart (those play on the LR2 / default scenes, which carry the play-log arrangement
-   * remap and the per-stage audio and BGA). Every path into gameplay — `playSong`, and the decide splash deciding what
-   * to preload — asks this one question.
+   * Whether a play of `song` runs on the beatoraja play screen: the gameplay family says so, whatever the play is (a
+   * replay and a stitched NONSTOP chart included: the play session carries the play-log arrangement and the per-stage
+   * audio for every family). Every path into gameplay — `playSong`, and the decide splash deciding what to preload — asks
+   * this one question.
    */
-  private playsOnBeatoraja(
-    song: BrowserSongEntry,
-    overrides: { replay?: BeMusicPlaylog; nonstop?: NonstopPlay },
-  ): boolean {
-    return (
-      pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) === 'beatoraja' &&
-      overrides.replay === undefined &&
-      overrides.nonstop === undefined
-    );
+  private playsOnBeatoraja(song: BrowserSongEntry): boolean {
+    return pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) === 'beatoraja';
   }
 
   private async playSong(
@@ -4726,8 +4737,8 @@ class PlayerWebDemoApp {
     // downloads folder rather than overwriting the previous one.
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
     // The kit for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain, beatoraja → LR2 →
-    // default) gives the chart; a replay and a NONSTOP run stay off beatoraja (`playsOnBeatoraja`). `preloadGameplay`
-    // asks the same.
+    // default) gives the chart, a replay and a NONSTOP run included (`playsOnBeatoraja`). `preloadGameplay` asks the
+    // same.
     const kit = await this.resolvePlayKit(song, overrides);
     if (kit === undefined) {
       void this.showSelect();
@@ -4804,9 +4815,10 @@ class PlayerWebDemoApp {
       this.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
     }
     // Family dispatch for result. Only the LR2 / default split is modelled here — a play on the beatoraja play screen
-    // shows its result on the beatoraja skin (`showBeatorajaPlayResult`), and a NONSTOP run or a replay on a beatoraja
-    // theme falls back to the built-in result with the theme's jingles. Pick the LR2 result skin only when the family
-    // pick says so; defaulting strips the slot even if the loaded theme has a result skin.
+    // shows its result on the beatoraja skin (`showBeatorajaPlayResult`), a NONSTOP run on a beatoraja theme too
+    // (`showNonstopCourseResult`), and one whose theme has no result skin falls back to the built-in result with the
+    // theme's jingles. Pick the LR2 result skin only when the family pick says so; defaulting strips the slot even if
+    // the loaded theme has a result skin.
     const resultFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'result');
     // A course's results show the course on the skin (LR2 ops 280-293, texts 150-170): a stage's result at its stage,
     // the course result on the course-result skin, each parsed again with the course ops.
@@ -4839,7 +4851,8 @@ class PlayerWebDemoApp {
         : retryTarget?.kind === 'replay'
           ? () => void this.playSong(retryTarget.play.song, retryTarget.play.overrides)
           : undefined;
-    // The active theme's jingles: a beatoraja theme's when its result falls back to this view (a NONSTOP course).
+    // The active theme's jingles: a beatoraja theme's when its result falls back to this view (a NONSTOP course on a
+    // theme without a result skin).
     const themeJingles = {
       lr2: {
         clear: this.clearBgmBytes,
