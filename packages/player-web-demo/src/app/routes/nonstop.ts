@@ -21,7 +21,7 @@ import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import { prepareNonstopPlay, type PreparedNonstopPlay } from '../../nonstop-course.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
-import type { PlaylogAutoSave } from '../../services/playlog-auto-save.ts';
+import type { PlaylogAutoSave } from '../../services/playlogs.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
 import type { DemoGuiState } from '../../types.ts';

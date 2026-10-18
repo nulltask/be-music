@@ -25,7 +25,7 @@ import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from '../../result-jingles.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
-import type { PlaylogAutoSave } from '../../services/playlog-auto-save.ts';
+import type { PlaylogAutoSave } from '../../services/playlogs.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
