@@ -77,7 +77,7 @@ export default defineBeMusicSkin({
 
 ## Using a framework
 
-Create the framework's renderer on the surface's canvas in `setup`, and release it in `teardown`. The player calls `setup` once per surface, before the first draw, and waits for a returned promise. Each screen gets its own surface: one for gameplay, one per select screen, and one per result screen.
+Create the framework's renderer on the surface's canvas in `setup`, and release it in `teardown`. The player calls `setup` once per surface, before the first draw, and waits for a returned promise. Each screen gets its own surface: one for gameplay, one per select screen, one per decide screen, and one per result screen.
 
 ```ts
 import { WebGLRenderer, Container } from 'pixi.js';
@@ -88,8 +88,15 @@ const renderers = new WeakMap<HTMLCanvasElement, WebGLRenderer>();
 export default defineBeMusicSkin({
   // …metadata…
   context: 'webgl2',
-  // Masks need a stencil buffer; the canvas sits over the BGA, so it keeps alpha.
-  contextAttributes: { alpha: true, premultipliedAlpha: true, stencil: true, preserveDrawingBuffer: true },
+  // Masks need a stencil buffer; the canvas sits over the BGA, so it keeps alpha. The player uploads the canvas in
+  // the frame it is drawn, so the drawing buffer need not be preserved.
+  contextAttributes: {
+    alpha: true,
+    premultipliedAlpha: true,
+    antialias: true,
+    stencil: true,
+    preserveDrawingBuffer: false,
+  },
   async setup(surface) {
     const renderer = new WebGLRenderer();
     await renderer.init({
@@ -133,7 +140,7 @@ The built-in Pixi skins do exactly this through `skins/pixi-kit/define-pixi-skin
 
 ## Skin metadata
 
-Every skin declares these fields. `defineBeMusicSkin` checks them and throws when they are malformed, so a broken skin fails where it is defined.
+Every skin declares these fields. `defineBeMusicSkin` checks the rules it can test (the API version, the id, label, version, author and URLs, the context, each screen's `draw`, `decide` and `settings`) and throws when one is broken, so a broken skin fails where it is defined.
 
 | Field                                    | Required | Rule                                                                                                                                  |
 | ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -277,7 +284,7 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
   - Each of `entries` is a `LibraryEntry` (`@be-music/scene-model`'s, re-exported by the SDK with `LibraryChart`, `LibraryFolder`, `LibraryCourse`, `LibraryCourseStage` and `ChartSourceKind`): `{ kind: 'folder', folder }` (a chart folder lists `folder.charts`, a course folder `folder.courses`), `{ kind: 'chart', chart }`, or `{ kind: 'course', course }` (each of `course.stages` names the local `chart` it resolved to, if any). `browseEntryTitle`, `browseEntryCount` and `browseEntryBadge` give a row's text, and `describeCourseCard` a focused course's card.
   - Moving from an earlier SDK: a chart bar's kind was `'song'` and is `'chart'`; read `entry.chart` for `entry.song`, `folder.charts` for `folder.songs` and `stage.chart` for `stage.song`. The `Browser*` type aliases are gone: `BrowserSongEntry` is `LibraryChart`, `BrowserFolderNode` `LibraryFolder`, `BrowserCourseEntry` `LibraryCourse`, `BrowserCourseStage` `LibraryCourseStage`, `BrowserBrowseEntry` `LibraryEntry` and `BrowserSongSourceKind` `ChartSourceKind`.
   - `listScroll`: how far the list is pulled toward later entries, in design pixels, under one row. It is non-zero while a finger drags the list, while the list glides after a swipe, or mid-trackpad-scroll, and 0 at rest and at the list's ends. Lay the rows out with `selectListRows(frame, rowHeight)` and the list follows the finger: it gives each row's fractional `slot` (top at `listTop + slot * rowHeight`) and an `alpha` that fades rows sliding past the window's edge. A skin that ignores it scrolls one row at a time.
-  - `folderLabel`, `searchQuery`, `totalCharts`
+  - `folderLabel`, `searchQuery`, `searchEditing` (the player is typing in the host's text field over the search box: draw the box but not its text), `totalCharts`
   - `actions`: `play`, `autoPlay`, `activateSearch`, `setPlayOption(key, value)`, `cyclePlayOption(key, step?)` (step 1 or -1, wrapping), and `toggleReadme()` (opens or closes the focused song's `.txt`)
   - `playOptions` (`BeMusicPlayOptions`: hi-speed, random, gauge, HIDDEN / SUDDEN, lane cover, BGA, list filters, …) and `playOptionChoices`, the values each enum or on / off option can take. Values outside the choices are ignored; `hiSpeed` and `shutter` take any number and are clamped to their range, and `cyclePlayOption` leaves them alone.
   - `songRecord(song)`: the player's best record on a chart under the judge ruleset the host plays on (`BeMusicSongRecord`, the `BestRecord` of `@be-music/player/records`: `{ lamp, exScore?, maxCombo?, missCount?, playCount? }`), or `undefined` when the host keeps none. `lamp` is a `BeMusicClearLamp` (the `ClearLamp` of `@be-music/player/ruleset`), worst first: `NO_PLAY`, `FAILED`, `ASSIST_EASY`, `EASY`, `NORMAL`, `HARD`, `EX_HARD`, `FULL_COMBO`, `PERFECT`, `MAX`
@@ -293,13 +300,13 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 
 `result.draw(surface, frame)` receives a `BeMusicResultFrame`:
 
-- `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the play log. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, `judgeTimings` (every timed judgement of the play), and `courseResult` (the result of a whole EXPERT / GRADE course: the stages summed).
+- `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the play log. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, `judgeTimings` (every timed judgement of the play), `run` (`'single'`, `'stage'` for a course stage, `'course'` for a whole EXPERT / GRADE course with the stages summed, or `'nonstop'`), `course` (the course a stage or run belongs to) and `courseRun` (a course run's stages played and trophy).
 - `rankLabel` (IIDX DJ level) and `ratePercent`.
 - `elapsedMs` since the scene mounted, or `Infinity` once the player skipped the entrance.
 - `nowMs` and `effects`.
 - `settings` and `songImage`: see [Skin settings](#skin-settings) and [Song images](#song-images).
 
-`resolveResultVerdict` (`STAGE CLEAR` / `FAILED`, or `COURSE CLEAR` / `COURSE FAILED` for a course result), `resolveResultLamp` and `resolveResultTrackRows` give the headline, clear lamp (the one clear-lamp rule, on beatoraja's lamps) and track rows the built-in skins show. `binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
+`resolveResultVerdict` (`STAGE CLEAR` / `FAILED`, or `COURSE CLEAR` / `COURSE FAILED` for a course run), `resolveResultLamp` and `resolveResultTrackRows` give the headline, clear lamp (the one clear-lamp rule, on beatoraja's lamps) and track rows the built-in skins show. `binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
 
 ### Decide
 
@@ -342,7 +349,7 @@ settings: [
 - **Validation:** `validateBeMusicSkin` checks the schema. Ids must be unique, labels must not be empty, and every `default` must be one of the options or lie in its range. Choice option values must be unique, a number's `step` must be positive, and its `unit` must be one of the three above.
 - **Values:** every frame carries `settings`, the player's values keyed by id. Hosts persist the values per skin and resolve them with `resolveBeMusicSkinSettings(skin, stored)`, which falls back to the default for anything missing, stale, or mistyped, clamps numbers into their range, and drops ids the skin no longer declares. You can rely on every declared id being present with the right type.
 - **Live changes:** the player may change a value while a screen is showing; the next frame carries it, and on select `revision` moves too. Read `frame.settings` every frame (or key anything you derive from it on `revision`) rather than caching it from the first frame.
-- **In the be-music player:** hosts pass the stored values to the scenes with the `beMusicSkinSettings` option and update them with `setBeMusicSkinSettings`. The demo builds a "Skin settings" folder in its Debug Menu from the schema (a dropdown per `choice`, a slider per `number` with the unit in its name, a checkbox per `toggle`), hides it for a skin that declares none, and saves the values per skin id in the browser.
+- **In the be-music player:** hosts pass the stored values in the built-in kit (`{ family: 'built-in', skin, settings }`) and hand a showing scene a new kit with `scene.updateKit(kit)` when they change. The demo builds a "Skin settings" folder in its Debug Menu from the schema (a dropdown per `choice`, a slider per `number` with the unit in its name, a checkbox per `toggle`), hides it for a skin that declares none, and saves the values per skin id in the browser.
 
 ## Song images
 
@@ -361,7 +368,9 @@ settings: [
 | Layout        | `resolveGameplayLayout`, `resolveLaneRuns`, `resolveMilestoneArea` (landscape stages only: it assumes a 480 px tall stage), `MILESTONE_MIN_WIDTH`, `PLAYFIELD`, `resolveGameplayLaneGeometry`, `resolveTouchLaneLayout`, `supportsTouchLayout`, `TOUCH_PLAYFIELD`, `resolvePortraitLaneLayout`, `supportsPortraitLayout`, `PORTRAIT_PLAYFIELD`, `resolveBeMusicSelectLayout` |
 | Judgements    | `judgeDisplayWord` (a PERFECT prints as GREAT), `isFlashingGreat`, `flashingGreatColor`, `FLASHING_GREAT_STEP_MS`                                                                                                                                                                                                                                                            |
 | Moments       | `trackMoments` / `createMomentState` + `updateMoments` (every 100 combo, clear line, full combo, combo break; for the count-in, check whether `runtime.chartMs` is negative), `COMBO_MILESTONE`, `COMBO_BREAK_MIN`, `comboTier`, `momentProgress`, `impulse`, `punchScale`, `effectProfile`                                                                                  |
+| Hold effects  | `holdSparks`, `holdSeed` (the sparks of a held long note)                                                                                                                                                                                                                                                                                                                    |
 | Loading       | `LOADING_WORD`, `loadingDots(nowMs)`, `LOADING_DOT_MS`                                                                                                                                                                                                                                                                                                                       |
+| Select list   | `selectListRows`, `browseEntryTitle`, `browseEntryCount`, `browseEntryBadge`, `describeCourseCard`                                                                                                                                                                                                                                                                           |
 | Sound         | `audioDrive`, `bandAt`, `bandLevel`, `AUDIO_BAND_COUNT`, `SILENT_AUDIO`; see [Reacting to the music](#reacting-to-the-music)                                                                                                                                                                                                                                                 |
 | Result        | `resolveResultVerdict`, `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                                                                                                                                                                                                        |
 | Timing        | `binJudgeTimings`; see [Judgement timing](#judgement-timing)                                                                                                                                                                                                                                                                                                                 |
@@ -385,7 +394,7 @@ Gameplay and select receive `audio` (`BeMusicAudioFrame`), a live analysis sampl
 
 The bands and the bass / mid / high energies are placed within the range they covered over the last few seconds. As a result, they swing between hits even in a loud, compressed mix instead of resting at the top.
 
-Pass the frame through `audioDrive(audio, effects)` before using it. It scales every value by the effects level (half at `'reduced'`, silent at `'off'`), so your reactions respect the player's comfort setting automatically. `bandLevel(drive.bands, index, count)` resamples the bands to your bar count, ready for a spectrum.
+Pass the frame through `audioDrive(audio, effects)` before using it. It scales the levels, energies, bands and onset by the effects level (half at `'reduced'`, silent at `'off'`; `db` and `onsetAtMs` pass through), so your reactions respect the player's comfort setting automatically. `bandLevel(drive.bands, index, count)` resamples the bands to your bar count, ready for a spectrum.
 
 Make reactions large enough to read: a pulse of a few percent is invisible at 60 fps. The built-in skins scale shapes by roughly 0.8 to 1.6 with the bass.
 
@@ -483,7 +492,7 @@ A skin shares each frame with the player's judging, audio scheduling, and BGA de
 
 ## Fonts
 
-List every face you draw with in `fontLoads`. The host loads them with `document.fonts.load` before mounting, so the first frame does not rasterize with a fallback face. Make sure the host can obtain the face itself, either from a font service or bundled with your skin.
+List every face you draw with in `fontLoads`. The host loads them with `document.fonts.load` (the web demo waits for its registered skins' faces at start-up and loads an added skin's in the background), so the first frame does not rasterize with a fallback face. Make sure the host can obtain the face itself, either from a font service or bundled with your skin.
 
 ## Packaging and loading
 
@@ -500,7 +509,7 @@ List every face you draw with in `fontLoads`. The host loads them with `document
   const skins = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
   const problems = skins.add(mySkin); // [] when added; otherwise why it was refused
   const skin = skins.resolve('my-skin'); // falls back to the first skin for unknown ids
-  // Pass it to the built-in scenes in their kit: createPlayScene({ family: 'built-in', skin }, { … })
+  // Pass it to the built-in scenes in their kit: createPlayScene({ family: 'built-in', skin, settings }, { … })
   ```
 
   - `add` validates the skin. A skin with an id that is already registered replaces the old one, which is handy while developing.
@@ -508,7 +517,7 @@ List every face you draw with in `fontLoads`. The host loads them with `document
   - Skins that fail validation, for example because of an unsupported `apiVersion`, are left out instead of breaking the host.
 
 - **Built-in skins:** `BUILT_IN_BE_MUSIC_SKINS` contains Synesthesia (the default), Phantom, and Plain. Lattice ships as `latticeSkin` for hosts to add.
-- **Demo:** the demo's Debug Menu can add a skin from a module URL (_Skin & display_ → _Add skin_ → _Skin module URL_). A skin runs with the page's full access, so the demo asks for confirmation first. Only load skins you trust.
+- **Demo:** the demo's Debug Menu can add a skin from a module URL (_Skin & display_ → _Add skin_ → _Skin module URL_). A skin runs with the page's full access, so the demo asks for confirmation first. Only load skins you trust. The demo currently hides _Add skin_, with Phantom and Lattice, while `EXTRA_BUILT_IN_SKINS_ENABLED` is off (`services/built-in-skins.ts`).
 
 ## Versioning
 

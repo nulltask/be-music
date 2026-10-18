@@ -21,7 +21,7 @@ be-music プレイヤーの各画面が何を表示し、どう振る舞うか�
 - **一覧（ブラウズ）**: 選曲画面のフォルダスタック・カーソル・検索・ソート・フィルター・お気に入りを一つのイミュータブルな
   状態（`BrowseState`）にまとめたもの。コマンド（`reduceBrowse`）で変わり、画面の効果音やアニメーションのために何が
   起きたかを返します。そこから導かれる一覧（`browseEntries`）とスナップショット（`captureBrowse` /
-  `restoreBrowse`）、現在の選曲シーンが保持するスナップショットからのアダプターも含みます。
+  `restoreBrowse`）も含みます。どの選曲画面もプレイをまたいでこのスナップショットを保ちます。
 - **プレイオプション**: プレイ前にプレイヤーが選ぶもの（`PlayOptions`）、既定値、各オプションの選択肢、型のない入力
   から設定された値の検証（`resolvePlayOptionValue`・`resolvePlayOptions`）、巡回（`cyclePlayOptionValue`）、
   ハイスピードの範囲（`snapHiSpeed`・`stepPlayerHiSpeed`・`HiSpeedTransition`）。
@@ -30,7 +30,7 @@ be-music プレイヤーの各画面が何を表示し、どう振る舞うか�
   進む一つのイミュータブルな状態にまとめたもの（`PlayState`・`reducePlayState`）と、プレイログの単位での見え方
   （`resolvePlaylogView`）。
 - **プレイ結果**: 単独のプレイ、コースのステージ、コース全体、NONSTOP のプレイの唯一の結果の形（`PlayResult`）。
-  プレイ状態、beatoraja のシーンの終了時の値、コースの実行から読みます。
+  プレイ状態（`playResultFromPlayState`）かコースの実行（`playResultFromCourseRun`）から読みます。
 - **コースの表示用モデル**: 画面が見せるコース（`CourseView`・`resolveCourseView`）とコース全体のコンボ。
 - **効果音セット**: テーマの効果音とジングルをスロットごとに持つもの（`SystemSoundSet`）。LR2 テーマや beatoraja
   テーマから作り、結果で鳴らすジングルと一覧のコマンドで鳴らす効果音を選びます。

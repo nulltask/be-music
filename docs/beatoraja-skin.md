@@ -58,14 +58,14 @@ without hard-coding integer literals.
 
 ## Lua sandbox
 
-`evaluateBeatorajaLuaSkin()` runs the entry script under a hand-built sandbox built on Fengari. Only the standard
-libraries actually used by the reference theme (`base`, `table`, `string`, `math`) are exposed; `package`, `io`,
-`os`, `debug`, and `coroutine` are left out. `loadfile`, `load`, `loadstring`, and `collectgarbage` are nilled out, and
+`evaluateBeatorajaLuaSkin()` runs the entry script under a hand-built sandbox built on Fengari. The standard
+libraries the reference theme uses (`base`, `table`, `string`, `math`) are exposed, and `utf8` is left open too;
+`package`, `io`, `os`, `debug`, and `coroutine` are taken out. `loadfile`, `load`, `loadstring`, and `collectgarbage` are nilled out, and
 `dofile` is replaced by a version that only resolves files inside the theme bundle (for example
 `dofile(skin_config.get_path("Play/lua/sp/info.lua"))`), so a malicious skin can't reach beyond its own theme files.
 
 `require()` is reimplemented on top of a registry of preloaded module sources. The host registers every `.lua`
-neighboring the entry script (and one level up — beatoraja themes occasionally split helpers into a parent
+in the entry script's directory and its sub-directories (and one level up — beatoraja themes occasionally split helpers into a parent
 `play_parts.lua`). Modules are cached so a `require()` call always returns the same table on subsequent invocations.
 beatoraja's `timer_util` / `event_util` helper modules are built in and can be required without shipping them.
 
@@ -80,7 +80,8 @@ else
 end
 ```
 
-Pass `skinConfig: undefined` for the first phase and a populated `BeatorajaSkinConfig` for the second.
+Pass `skinConfig: undefined` for the first phase and a populated `BeatorajaLuaSkinConfig` for the second
+(`loadBeatorajaSkin()` takes a `BeatorajaSkinConfig` and passes it on).
 
 ## Conditional groups
 
@@ -105,8 +106,9 @@ renderer can sample the current frame without reinterpreting the source JSON or 
 are normalized, and lookup is case-insensitive — beatoraja themes shipped from Windows often differ in casing from
 the strings authored in skin files.
 
-`expandBeatorajaWildcard()` expands `*` patterns used in `source[]` / `filepath[]`. The user's `filepath[]`
-selection (when present) overrides the wildcard; otherwise the first sorted match is picked deterministically.
+`expandBeatorajaWildcard()` expands `*` patterns used in `source[]` / `filepath[]` into their sorted matches.
+`bundleBeatorajaSources()` applies the user's `filepath[]` selection (`filepathOverrides`) when present; otherwise the
+first sorted match is picked deterministically.
 
 ## Theme discovery
 
@@ -165,20 +167,21 @@ the early / late counts per timing list), so a frame that asks again gets the sa
 subpath to the runtime-neutral and deterministic lint rules, and a test checks that it loads neither the Lua VM nor the
 skin parser.
 
-| Screen | Reads                                                                         | Resolvers                                                                                                                                                                                                                                                                                                                                             |
-| ------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Play   | The play state, the engine's latest frame, the chart's facts, the clock       | `resolveBeatorajaPlayNumber` (the number table), `resolveBeatorajaPlayText`, `resolveBeatorajaPlayStartOps` / `ScoreOps` / `CoverOps`, `resolveBeatorajaJudgeEffect`, `resolveBeatorajaLaneTimers`, `resolveBeatorajaFrameTimers`, `resolveBeatorajaGaugeState`, the graph, slider, judge-graph and judge-state resolvers, `writeBeatorajaPlayOffset` |
-| Result | A `PlayResult`, the final gauge, the chart's `#TOTAL` and note kinds          | `resolveBeatorajaResultNumber`, `resolveBeatorajaResultOps`, `resolveBeatorajaResultText`, the result gauge and graph resolvers                                                                                                                                                                                                                       |
-| Select | The focused `LibraryEntry` and its chart's facts, the list options, the clock | `resolveBeatorajaSelectBarOps`, `resolveBeatorajaSelectNumber`, `resolveBeatorajaSelectText`, `resolveBeatorajaSelectRefValue`, `resolveBeatorajaSelectSliderValue`                                                                                                                                                                                   |
-| Decide | The `LibraryChart` about to be played, the play's loading progress            | `resolveBeatorajaDecideOps`, `resolveBeatorajaDecideNumber`, `resolveBeatorajaDecideGraphValue`                                                                                                                                                                                                                                                       |
-| Course | A `LibraryCourse` (a bar) or a `CourseView` (a running course)                | `resolveBeatorajaCourseBarOps`, `resolveBeatorajaCourseStageOps`, `resolveBeatorajaCourseText`                                                                                                                                                                                                                                                        |
-| Sounds | The theme's file map                                                          | `discoverBeatorajaSystemSoundPaths`, `discoverBeatorajaSelectBgmPath`, `pickBeatorajaThemeBgmPaths`                                                                                                                                                                                                                                                   |
+| Screen | Reads                                                                         | Resolvers                                                                                                                                                                                                                                                                                                                                                                               |
+| ------ | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Play   | The play state, the engine's latest frame, the chart's facts, the clock       | `resolveBeatorajaPlayNumber` (the number table), `resolveBeatorajaPlayText`, `resolveBeatorajaPlayStartOps`, `resolveBeatorajaPlayScoreOps`, `resolveBeatorajaCoverOps`, `resolveBeatorajaJudgeEffect`, `resolveBeatorajaLaneTimers`, `resolveBeatorajaFrameTimers`, `resolveBeatorajaGaugeState`, the graph, slider, judge-graph and judge-state resolvers, `writeBeatorajaPlayOffset` |
+| Result | A `PlayResult`, the final gauge, the chart's `#TOTAL` and note kinds          | `resolveBeatorajaResultNumber`, `resolveBeatorajaResultOps`, `resolveBeatorajaResultText`, the result gauge and graph resolvers                                                                                                                                                                                                                                                         |
+| Select | The focused `LibraryEntry` and its chart's facts, the list options, the clock | `resolveBeatorajaSelectBarOps`, `resolveBeatorajaSelectNumber`, `resolveBeatorajaSelectText`, `resolveBeatorajaSelectRefValue`, `resolveBeatorajaSelectSliderValue`                                                                                                                                                                                                                     |
+| Decide | The `LibraryChart` about to be played, the play's loading progress            | `resolveBeatorajaDecideOps`, `resolveBeatorajaDecideNumber`, `resolveBeatorajaDecideGraphValue`                                                                                                                                                                                                                                                                                         |
+| Course | A `LibraryCourse` (a bar) or a `CourseView` (a running course)                | `resolveBeatorajaCourseBarOps`, `resolveBeatorajaCourseStageOps`, `resolveBeatorajaCourseText`                                                                                                                                                                                                                                                                                          |
+| Sounds | The theme's file map                                                          | `discoverBeatorajaSystemSoundPaths`, `discoverBeatorajaSelectBgmPath`, `pickBeatorajaThemeBgmPaths`                                                                                                                                                                                                                                                                                     |
 
-The number tables share one score table (`resolveBeatorajaScoreNumber`): the score and its rates, the combo, the
-judgment counts and their early / late split, the gauge and the chart TOTAL. The play adds the hi-speed, the lane
-covers, the white and green numbers (`resolveWhiteNumber`), the BPM at the playhead, time and the clock; the result adds
-the timing mean and deviation and reads every number it does not cover as 0; the select screen reads the focused
-chart's facts and 0 for the play's live numbers. The decide screen does not use the score table: it reads the chart's
+The play and result number tables share one score table (`resolveBeatorajaScoreNumber`): the score and its rates, the
+combo, the judgment counts and their early / late split, the gauge and the chart TOTAL. The play adds the hi-speed, the
+lane covers, the white and green numbers (`resolveWhiteNumber`), the BPM at the playhead, time and the clock; the result
+adds the timing mean and deviation and reads every number it does not cover as 0. The select screen does not use the
+score table: it reads the focused chart's facts, 0 for the play's main live numbers (the score, EX score, rate, combos,
+gauge and judgment counts), and nothing for the rest. The decide screen does not use the score table: it reads the chart's
 `#PLAYLEVEL`, its listed BPM on the BPM numbers and the loading progress (165), and 0 for every other number. On the
 select and decide screens the main BPM (92) is the one the play shows, the BPM the most judged notes sit at
 (`resolveChartMainBpm` in `@be-music/chart`), which the caller passes in (`mainBpm`); without it they read the header
@@ -216,7 +219,8 @@ sequenceDiagram
 - The rates are beatoraja's `ScoreDataProperty`: 102 / 103 the EX score over the notes judged so far during a play (100 %
   before the first), 115 / 116 over every note; a result reads both over every note. Each is truncated to hundredths.
 - The engine has no MISS judgment (beatoraja's empty POOR): number 420 reads the POOR count; its early / late rows
-  (421 / 422) read 0 during a play and POOR's on a result.
+  (421 / 422) read the `MISS` early / late entry, else POOR's; the play bridge passes an empty `MISS` entry, so they
+  read 0 during a play.
 - A result reads its max combo as the combo (104) too, and 75 as 0 (LR2's best-record max combo); the play reads the
   max combo on 75.
 - During a play, the 1P rank ops (200-207) and their "now" copies (340-347) rank the EX score over the notes judged so
@@ -228,12 +232,12 @@ sequenceDiagram
 - A few LR2 ids mean something else to beatoraja (`IntegerPropertyFactory`, `BooleanPropertyFactory`,
   `StringPropertyFactory`): number 92 is the main BPM (LR2's internet-ranking place), op 400 the CONSTANT option (LR2's
   key-config page), and beatoraja defines no numbers 38-41 or 93-94, no texts 17-29 and no op 34, so they read nothing
-  (#430).
+  (0 on the result and decide screens) (#430).
 
 ### Known gaps
 
 - The best record and the target do not reach the mapping yet: numbers 150-158 (the pacemaker scores, the differences
-  from them, the rates over them and `DIFF_NEXTRANK`, the distance to the next rank on 27ths), the best record's
+  from them, the rates over them and beatoraja's `NUMBER_DIFF_NEXTRANK`, the distance to the next rank on 27ths), the best record's
   numbers (71-89) and the best and target rank ops read 0 or nothing.
 - Op 400 (CONSTANT) is never lit: be-music has no CONSTANT option.
 
@@ -242,12 +246,12 @@ sequenceDiagram
 `@be-music/player-web` ships `loadBeatorajaThemeFromFiles()` to wrap dropped browser `File[]` objects into a
 `BeatorajaThemeBundle`. Hosts then load each scene's skin entry with player-web's `loadBeatorajaSceneKit()`
 ([player-web.md](./player-web.md#beatoraja-skin-and-theme-support)), which calls `loadBeatorajaSkin()` from this
-package twice (a header pass, then the skin with the player's options), `bundleBeatorajaSources()` for `source[]`,
+package twice (a header pass, then the skin with the player's options; once when the host already holds the options), `bundleBeatorajaSources()` for `source[]`,
 `loadBeatorajaTexturesFromBundle()` for Pixi textures and `loadBeatorajaFonts()` for CSS or bitmap fonts, and keeps
 them per entry. The state lives in parallel with LR2 theme state, so the demo can hold both theme formats at once.
 
 The browser renderer uses `BeatorajaPlaySkinView` as the shared view for select, decide, gameplay, and result
-skins. The scenes read `TEXT`, `NUM`, `OPTION`, timers, gauges and graphs from the [scene mapping](#scene-mapping) and
+skins. The family views read `TEXT`, `NUM`, `OPTION`, timers, gauges and graphs from the [scene mapping](#scene-mapping) and
 provide the runtime-specific parts themselves: chart images, note layers, BGA layers, audio and the result histories.
 The select, decide, play and result screens are player-web's beatoraja family views, made with `createSelectScene`,
 `createDecideScene`, `createPlayScene` and `createResultScene` ([player-web.md](./player-web.md#the-select-screen)): they
