@@ -333,7 +333,7 @@ Web のデモを 1 つのシーンルーター（[ADR 0006](./adr/0006-scene-rou
 | P5.6  | コースのサービスと、コースと NONSTOP のルート                                                   | [#522](https://github.com/nulltask/be-music/pull/522) | 完了 |
 | P5.7a | 選曲と決定のルート                                                                              | [#525](https://github.com/nulltask/be-music/pull/525) | 完了 |
 | P5.7b | プレイ・リザルト・リプレイのルート                                                              | [#529](https://github.com/nulltask/be-music/pull/529) | 完了 |
-| P5.8  | プレイログ・録画・ステータスのサービス                                                          | —                                                     | 予定 |
+| P5.8  | プレイログ・録画・ステータスのサービス                                                          | [#530](https://github.com/nulltask/be-music/pull/530) | 完了 |
 | P5.9  | テスト用のフックの状態をサービスに。契約の v1 は変えない                                        | —                                                     | 予定 |
 | P5.10 | `main.ts` を起動処理だけにし、ファイルサイズの許可リストから外す                                | —                                                     | 予定 |
 | P5.F1 | NONSTOP の配置を変えたら、選曲画面を描き直す                                                    | [#517](https://github.com/nulltask/be-music/pull/517) | 完了 |
