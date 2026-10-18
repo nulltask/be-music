@@ -1,7 +1,7 @@
 /**
  * The engine side of a play on the built-in and LR2 play screens (`PlaySession`): launches the shared engine
  * (`runEngineDriver`) on the prepared chart, drains its UI signals each frame into the score, gauge, judgement, combo
- * and lane-effect state the scene draws (key-on timers, bombs, POOR BGA, long-note holds), and starts the ending once
+ * and lane-effect state the scene draws (key beams, bombs, POOR BGA, long-note holds), and starts the ending once
  * the chart settles. ESC / F5 / a teardown interrupt the engine here.
  *
  * The functions read and write the scene's state through {@link PlayEngineContext}; the play session passes itself.
@@ -153,18 +153,17 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   readonly lanePressedAt: Map<string, number>;
   readonly laneReleasedAt: Map<string, number>;
   readonly pressedChannels: Set<string>;
-  readonly timerStartedAt: Map<number, number>;
-  readonly keyOnFadeOutStart: Map<number, number>;
+  readonly keyBeamStartedAt: Map<string, number>;
+  readonly keyBeamFadeStartedAt: Map<string, number>;
   readonly keyFlashTimeouts: Set<number>;
   readonly bombStartedAt: Map<string, number>;
   readonly bombJudge: Map<string, BeMusicJudge>;
   resolveSelectedGauge(): GaugeType;
-  resolveKeyOnTimerId(channel: string): number | undefined;
   getResultData(): PlayResult | undefined;
 }
 
 /**
- * "Fully on" hold time before {@link flashKeyOnTimer} hands the lane laser to the release-fade path.
+ * "Fully on" hold time before {@link flashKeyBeam} hands the lane laser to the release-fade path.
  * Without this hold the sprite would only stay at peak alpha for the first frame (≈16 ms at 60 fps) before the fade
  * tween kicked in, which made auto-judged short-note flashes look like a single-frame blink. ~60 ms is enough to
  * register visually as a deliberate "tap" without lingering through the next note.
@@ -189,50 +188,48 @@ export function interruptSharedEngine(ctx: PlayEngineContext, reason: 'escape' |
   signals.pushCommand({ kind: 'interrupt', reason });
 }
 
-function startKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
-  ctx.lanePressedAt.set(channel, ctx.playClock());
-  const timerId = ctx.resolveKeyOnTimerId(channel);
-  if (timerId === undefined) {
-    return;
-  }
-  ctx.timerStartedAt.set(timerId, ctx.playClock());
+/**
+ * Turns `channel`'s key beam on (`keyBeamStartedAt`, by channel; a view maps the channel onto its own timers, the LR2
+ * view onto LR2's key-on bank).
+ */
+function startKeyBeam(ctx: PlayEngineContext, channel: string): void {
+  const now = ctx.playClock();
+  ctx.lanePressedAt.set(channel, now);
+  ctx.keyBeamStartedAt.set(channel, now);
   // A fresh press cancels any in-flight release fade on the same lane; the laser is fully on again from this instant.
-  ctx.keyOnFadeOutStart.delete(timerId);
+  ctx.keyBeamFadeStartedAt.delete(channel);
 }
 
 /**
- * Smoothly extinguishes the lane laser when a key (or auto LN head) releases: the LR2 key-on timer (100..117) stays
- * in its currently-active state for the view's key-beam fade (`PlaySessionTheme.keyOnFadeMs`) while a render-time alpha taper drives the visible
- * amplitude down to 0, then the timer entry itself is deleted. Anchored on `playClock` so the fade pauses cleanly
- * with the rest of the scene.
+ * Smoothly extinguishes the lane laser when a key (or auto LN head) releases: the lane's key beam stays on for the
+ * view's key-beam fade (`PlaySessionTheme.keyOnFadeMs`) while a render-time alpha taper drives the visible amplitude
+ * down to 0, then its entry is deleted. Anchored on `playClock` so the fade pauses cleanly with the rest of the scene.
  *
- * The taper is what makes manual key-ups, auto-judged short notes (via {@link flashKeyOnTimer}), and auto-LN releases
+ * The taper is what makes manual key-ups, auto-judged short notes (via {@link flashKeyBeam}), and auto-LN releases
  * all decay at the same speed without restarting the key-on keyframe (which would blink the LR2 default skin's lane
  * laser back to its fade-in origin before the decay).
  */
-function releaseKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
+function releaseKeyBeam(ctx: PlayEngineContext, channel: string): void {
   ctx.laneReleasedAt.set(channel, ctx.playClock());
-  const timerId = ctx.resolveKeyOnTimerId(channel);
-  if (timerId === undefined) return;
   // Stamp the fade origin unconditionally — the render-side cleanup uses it as the authoritative clock for the
-  // 1 → 0 alpha taper, and the previous early-return on a missing `timerStartedAt` left the LN-end path stuck at
-  // full brightness whenever the deferred startKeyOnTimer / releaseKeyOnTimer interleaving had already retired
-  // the slot (a racy setTimeout cleanup from a previous press could have wiped `timerStartedAt` between the LN's
-  // startKeyOnTimer and this release). The `timerStartedAt.has` gate now controls only the deferred cleanup
-  // below — the fade start is committed regardless so the render side (lane beam / theme key-on sprites) can taper
-  // any still-visible laser through to alpha=0.
-  ctx.keyOnFadeOutStart.set(timerId, ctx.playClock());
-  if (!ctx.timerStartedAt.has(timerId)) return;
+  // 1 → 0 alpha taper, and an early return on a missing `keyBeamStartedAt` entry would leave the LN-end path stuck at
+  // full brightness whenever the deferred startKeyBeam / releaseKeyBeam interleaving had already retired the beam (a
+  // racy setTimeout cleanup from a previous press could have wiped it between the LN's startKeyBeam and this
+  // release). The `keyBeamStartedAt.has` gate controls only the deferred cleanup below — the fade start is committed
+  // regardless so the render side (lane beam / skin key-on sprites) can taper any still-visible laser through to
+  // alpha=0.
+  ctx.keyBeamFadeStartedAt.set(channel, ctx.playClock());
+  if (!ctx.keyBeamStartedAt.has(channel)) return;
   const fadeMs = ctx.theme.keyOnFadeMs(channel);
   const timeout = window.setTimeout(() => {
     ctx.keyFlashTimeouts.delete(timeout);
     if (ctx.disposed) return;
-    // If the player (or autoplay) re-pressed the same lane during the fade window, leave the timer running and
-    // skip the delete — the new press has its own lifecycle.
+    // If the player (or autoplay) re-pressed the same lane during the fade window, leave the beam on and skip the
+    // delete — the new press has its own lifecycle.
     if (!ctx.pressedChannels.has(channel)) {
-      ctx.timerStartedAt.delete(timerId);
+      ctx.keyBeamStartedAt.delete(channel);
     }
-    ctx.keyOnFadeOutStart.delete(timerId);
+    ctx.keyBeamFadeStartedAt.delete(channel);
   }, fadeMs);
   ctx.keyFlashTimeouts.add(timeout);
 }
@@ -254,24 +251,23 @@ function triggerBomb(ctx: PlayEngineContext, channel: string, judge?: BeMusicJud
  * lane sounds (`scheduleAutoSamples`) still handle non-input channels separately.
  *
  * Long notes are NOT judged on the head; instead the head time marks the LN as actively held (sample + bomb +
- * sustained key-on timer for the visual lane laser) and the actual scoreboard / gauge / combo commit is deferred to
+ * sustained key beam for the visual lane laser) and the actual scoreboard / gauge / combo commit is deferred to
  * {@link autoFinalizeLongNotes} when chart-time crosses `endSeconds`. This mirrors what real LR2 does (and what
  * `@be-music/player`'s engine does via `pendingAutoLongNotes`): one judgement event per LN, fired at the tail timing
  * so the combo pulse aligns with the LN visually completing rather than at its start.
  */
 /**
- * Brief key-on flash. We start the per-lane LR2 key-on timer (100..107 / 110..117) and schedule it to clear after a
- * short interval so the laser fades like a real keystroke. Used by autoplay (no real keyboard event) so the player
- * still sees the lane / key visuals react.
- */
-/**
- * Auto-judged short notes simulate a "press + release" in one tick: the lane laser lights up immediately (timer set
- * to `playClock()` so the LR2 key-on keyframe begins) and stays at peak alpha for {@link KEY_ON_FLASH_HOLD_MS} before
+ * Brief key-on flash. We turn the lane's key beam on and schedule it to clear after a short interval so the laser
+ * fades like a real keystroke. Used by autoplay (no real keyboard event) so the player still sees the lane / key
+ * visuals react.
+ *
+ * Auto-judged short notes simulate a "press + release" in one tick: the lane laser lights up immediately (stamped at
+ * `playClock()`, so the LR2 key-on keyframe begins) and stays at peak alpha for {@link KEY_ON_FLASH_HOLD_MS} before
  * handing off to the release-fade path. Without that brief hold the sprite would taper from full to invisible across
  * the first 1–2 render frames and the press would read as a single-frame blink rather than a deliberate flash.
  */
-function flashKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
-  startKeyOnTimer(ctx, channel);
+function flashKeyBeam(ctx: PlayEngineContext, channel: string): void {
+  startKeyBeam(ctx, channel);
   const timeout = window.setTimeout(() => {
     ctx.keyFlashTimeouts.delete(timeout);
     if (ctx.disposed) return;
@@ -280,7 +276,7 @@ function flashKeyOnTimer(ctx: PlayEngineContext, channel: string): void {
     if (ctx.pressedChannels.has(channel)) {
       return;
     }
-    releaseKeyOnTimer(ctx, channel);
+    releaseKeyBeam(ctx, channel);
   }, KEY_ON_FLASH_HOLD_MS);
   ctx.keyFlashTimeouts.add(timeout);
 }
@@ -719,8 +715,8 @@ export function applyFinalSummary(ctx: PlayEngineContext, summary: Readonly<Play
 
 /**
  * Maps an engine UI command to the matching view-side visual effect. The visual-effect helpers
- * (`flashKeyOnTimer`, `startKeyOnTimer`, `releaseKeyOnTimer`, `triggerBomb`) are kept in shared-engine mode because
- * they own the per-lane timer book-keeping the lane beams animate against — only the judge / sample-trigger code
+ * (`flashKeyBeam`, `startKeyBeam`, `releaseKeyBeam`, `triggerBomb`) are kept in shared-engine mode because
+ * they own the per-lane book-keeping the lane beams animate against — only the judge / sample-trigger code
  * paths above were removed. Every command is then forwarded to the theme as a `lane-command` event (the LR2 family
  * drives its LN-hold timers and turntable from it).
  */
@@ -728,21 +724,21 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUiCommand): v
   switch (command.kind) {
     case 'flash-lane':
       noteImpulse(ctx, command.channel);
-      flashKeyOnTimer(ctx, command.channel);
+      flashKeyBeam(ctx, command.channel);
       break;
     case 'press-lane':
       noteImpulse(ctx, command.channel);
       ctx.pressedChannels.add(command.channel);
-      startKeyOnTimer(ctx, command.channel);
+      startKeyBeam(ctx, command.channel);
       break;
     case 'release-lane':
       ctx.pressedChannels.delete(command.channel);
-      releaseKeyOnTimer(ctx, command.channel);
+      releaseKeyBeam(ctx, command.channel);
       break;
     case 'hold-lane-until-beat':
       // Mark the lane as held for the LN's duration. Without this, a `flash-lane` command that arrives in
       // the same tick (typical for the LN HEAD: autoplay emits BOTH `flash-lane` and `hold-lane-until-beat`
-      // on every LN start) schedules a `flashKeyOnTimer` setTimeout that calls `releaseKeyOnTimer` after
+      // on every LN start) schedules a `flashKeyBeam` setTimeout that calls `releaseKeyBeam` after
       // `KEY_ON_FLASH_HOLD_MS` because `pressedChannels.has(channel)` is `false`, and the lane laser fades
       // out ~150 ms into the LN even though the LN body is still scrolling. Adding the channel to
       // `pressedChannels` here makes the auto-release skip path fire the same way it does for a real key
@@ -750,7 +746,7 @@ function applyEngineCommand(ctx: PlayEngineContext, command: PlayerUiCommand): v
       // `drainPendingAutoLongNotes` / `drainPendingAutoScratchLongNotes` at the LN tail) deletes the
       // channel and lets the lane laser fade out at the tail timing.
       ctx.pressedChannels.add(command.channel);
-      startKeyOnTimer(ctx, command.channel);
+      startKeyBeam(ctx, command.channel);
       // The engine's hold-until-beat command implicitly says "the LN is firing now"; bomb-flash on the head
       // mirrors the legacy autoJudge behavior so the lane still blinks a positive-feedback explosion at LN
       // start in autoplay.
