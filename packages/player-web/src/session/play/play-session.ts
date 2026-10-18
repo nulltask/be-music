@@ -6,8 +6,8 @@
  * result. Each part takes the session as its context.
  *
  * The session draws nothing. What it needs of the view that draws it — the timing of its intro and fade-out, the scene
- * moments it animates against, the key-beam fade, the stage the touch lanes map onto, the view's own loading and the GPU
- * upload of the BGA — comes through {@link PlaySessionTheme}. `createPlayScene` (`host/play.ts`) pairs a session with the
+ * moments it animates against, the key-beam fade, the view's own loading and the GPU upload of the BGA — comes through
+ * {@link PlaySessionTheme}; the view's touch lanes come back as `lane` intents. `createPlayScene` (`host/play.ts`) pairs a session with the
  * play view of the kit's family (built-in or LR2) and reads a `PlayFrame` off it every tick.
  */
 
@@ -38,7 +38,7 @@ import {
 } from '../../runtime/play-tempo.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
-import { DESIGN_HEIGHT, DESIGN_WIDTH, FALLBACK_INTRO_DELAY_MS, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
+import { FALLBACK_INTRO_DELAY_MS, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { LiveTempo } from './live-tempo.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
@@ -53,8 +53,6 @@ import {
   attachPlayInput,
   detachPlayInput,
   handleSharedEngineExitKey,
-  handleTouchPointer,
-  handleTouchPointerUp,
   handleVisibilityChange,
   handleWindowBlur,
   handleWindowFocus,
@@ -70,12 +68,11 @@ const log = logger('gameplay');
 
 const NO_TIMING: PlayViewTiming = { loadEndOffsetMs: 0, playStartOffsetMs: 0, fadeOutMs: 0, closeMs: 0 };
 
-/** The theme of a session without a view: skinless timing, no moments heard, the default beam fade, LR2's stage. */
+/** The theme of a session without a view: skinless timing, no moments heard, the default beam fade. */
 const NO_THEME: PlaySessionTheme = {
   timing: () => NO_TIMING,
   moment: () => {},
   keyOnFadeMs: () => KEY_ON_FADE_OUT_MS,
-  stage: () => ({ width: DESIGN_WIDTH, height: DESIGN_HEIGHT }),
 };
 
 /** The play session. See the module comment. */
@@ -189,8 +186,9 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * The play goes on the stage: wires its keys (ESC / F5 / Space / arrows, the Backspace hold), touch lanes, canvas
-   * focus and the auto-pause on losing focus. The play itself starts with {@link start}.
+   * The play goes on the stage: wires its keys (ESC / F5 / Space / arrows, the Backspace hold), canvas focus and the
+   * auto-pause on losing focus (the touch lanes are the view's, sent as `lane` intents). The play itself starts with
+   * {@link start}.
    */
   public attachInput(host: PixiSceneHost): void {
     if (this.disposed || this.entered) return;
@@ -702,10 +700,6 @@ export class PlaySession extends PlaySessionState {
   public setHiSpeed(value: number): void {
     applyPlayEvent(this, { type: 'hi-speed-set', value });
   }
-
-  readonly handleTouchPointer = (event: PointerEvent): void => handleTouchPointer(this, event);
-
-  readonly handleTouchPointerUp = (event: PointerEvent): void => handleTouchPointerUp(this, event);
 
   /**
    * Pause-aware monotonic clock used by every "time since X" animation of the play (LR2 timer keyframes,

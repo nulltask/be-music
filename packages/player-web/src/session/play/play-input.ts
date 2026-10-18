@@ -1,26 +1,16 @@
 /**
  * The input of a play on the built-in and LR2 play screens (`PlaySession`) that the scene handles itself rather
  * than the engine's web input runtime: ESC and F5 (after the theme's fade-out), Space (pause), the hi-speed arrows,
- * holding Backspace to quit, the auto-pause when the page loses focus, and touch lanes. Lane keys go straight to the
- * engine through its input runtime.
+ * holding Backspace to quit, the auto-pause when the page loses focus, and the touch lanes the view sends as `lane`
+ * intents (its fingers on the canvas). Lane keys go straight to the engine through its input runtime.
  *
  * The functions read and write the scene's state through {@link PlayInputContext}; the play session passes itself.
  */
 
 import type { PlayerInputSignalBus } from '@be-music/player/signals';
 import { HISPEED_STEP } from '@be-music/scene-model';
-import type { Application } from 'pixi.js';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
-import { resolveScaledViewport } from '../../stage/viewport.ts';
 import type { QuitHoldController } from './quit-hold.ts';
-import {
-  canvasPointToDesign,
-  hitTestTouchLane,
-  isTouchPlayPointer,
-  resolveTouchLaneZones,
-  type TouchLaneChange,
-  type TouchLaneTracker,
-} from './touch-lanes.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
@@ -34,11 +24,12 @@ const log = logger('gameplay');
 export interface PlayInputContext extends PlayEngineContext {
   readonly options: PlayEngineContext['options'] & Readonly<Pick<PlaySessionOptions, 'coverKeys'>>;
   readonly host: PixiSceneHost | undefined;
-  readonly app: Application;
   readonly quitHold: QuitHoldController;
-  readonly touchLanes: TouchLaneTracker;
   readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
-  previousCanvasTouchAction: string | undefined;
+  /** The lanes the view's touch fingers hold (`lane` intents), in the order they went down. */
+  readonly touchLanesHeld: Set<string>;
+  /** How many times the play has lifted every finger off the touch lanes (a pause); the view forgets them then. */
+  touchLiftCount: number;
   paused: boolean;
   pauseTime: number;
   pauseTotal: number;
@@ -52,8 +43,6 @@ export interface PlayInputContext extends PlayEngineContext {
   readonly handleQuitHoldKeyUp: (event: KeyboardEvent) => void;
   readonly cancelQuitHold: () => void;
   readonly focus: () => void;
-  readonly handleTouchPointer: (event: PointerEvent) => void;
-  readonly handleTouchPointerUp: (event: PointerEvent) => void;
   readonly handleVisibilityChange: () => void;
   readonly handleWindowBlur: () => void;
   readonly handleWindowFocus: () => void;
@@ -75,15 +64,8 @@ export function attachPlayInput(ctx: PlayInputContext, host: PixiSceneHost): voi
   // Holding Backspace quits like Escape (`QuitHoldController`); the keyup / blur listeners end the hold.
   window.addEventListener('keyup', ctx.handleQuitHoldKeyUp);
   window.addEventListener('blur', ctx.cancelQuitHold);
+  // Touch play is the view's: it follows the fingers on the canvas and sends `lane` intents (`handleTouchLaneIntent`).
   host.app.canvas.addEventListener('pointerdown', ctx.focus);
-  // Touch play: fingers on the lanes press them. `touch-action: none` keeps the page from scrolling or zooming under
-  // the fingers while the play is up.
-  ctx.previousCanvasTouchAction = host.app.canvas.style.touchAction;
-  host.app.canvas.style.touchAction = 'none';
-  host.app.canvas.addEventListener('pointerdown', ctx.handleTouchPointer);
-  host.app.canvas.addEventListener('pointermove', ctx.handleTouchPointer);
-  host.app.canvas.addEventListener('pointerup', ctx.handleTouchPointerUp);
-  host.app.canvas.addEventListener('pointercancel', ctx.handleTouchPointerUp);
   document.addEventListener('visibilitychange', ctx.handleVisibilityChange);
   // `visibilitychange` covers tab switching but not always app switching (Cmd-Tab / Alt-Tab) — fall back to window
   // blur/focus so the gameplay also pauses when the user moves to another OS app entirely. Use the capture phase so
@@ -134,13 +116,8 @@ export function detachPlayInput(ctx: PlayInputContext): void {
   ctx.quitHold.cancel();
   if (ctx.host) {
     ctx.host.app.canvas.removeEventListener('pointerdown', ctx.focus);
-    const canvas = ctx.host.app.canvas;
-    canvas.removeEventListener('pointerdown', ctx.handleTouchPointer);
-    canvas.removeEventListener('pointermove', ctx.handleTouchPointer);
-    canvas.removeEventListener('pointerup', ctx.handleTouchPointerUp);
-    canvas.removeEventListener('pointercancel', ctx.handleTouchPointerUp);
-    if (ctx.previousCanvasTouchAction !== undefined) canvas.style.touchAction = ctx.previousCanvasTouchAction;
-    ctx.touchLanes.upAll();
+    // The view forgets its fingers as it detaches; the lanes they held are dropped with them, as the play leaves.
+    ctx.touchLanesHeld.clear();
   }
   document.removeEventListener('visibilitychange', ctx.handleVisibilityChange);
   window.removeEventListener('blur', ctx.handleWindowBlur, true);
@@ -269,38 +246,30 @@ function handleCoverKey(ctx: PlayInputContext, event: KeyboardEvent): boolean {
 }
 
 /**
- * A finger touching down on or moving over the canvas: presses the lane under it, or — when it slid out of the lane it
- * held — releases that lane and presses the new one. Mouse pointers are left alone (a click only focuses the canvas).
+ * A touch lane the view's fingers pressed (`pressed`) or let go, at `atMs` on the host clock (the pointer event's
+ * `timeStamp`): the view's `lane` intent. A lane goes down with its first finger and up with its last, so a press of a
+ * lane already held, or a release of one not held (its fingers were lifted as the play paused), changes nothing.
  */
-export function handleTouchPointer(ctx: PlayInputContext, event: PointerEvent): void {
-  if (!isTouchPlayPointer(event.pointerType)) return;
-  if (event.type === 'pointermove' && !ctx.touchLanes.isTracking(event.pointerId)) return;
-  const { width: designWidth, height: designHeight } = ctx.theme.stage();
-  const viewport = resolveScaledViewport(ctx.app.screen.width, ctx.app.screen.height, designWidth, designHeight);
-  const point = canvasPointToDesign(event.offsetX, event.offsetY, viewport);
-  const zones = resolveTouchLaneZones(
-    Array.from(ctx.laneX, ([channel, lane]) => ({ channel, ...lane })),
-    {
-      stageHeight: designHeight,
-    },
-  );
-  const channel = hitTestTouchLane(zones, point.x, point.y);
-  const change =
-    event.type === 'pointerdown'
-      ? ctx.touchLanes.down(event.pointerId, channel)
-      : ctx.touchLanes.move(event.pointerId, channel);
-  if (event.type === 'pointerdown') event.preventDefault();
-  pushTouchLaneChange(ctx, change, event.timeStamp);
+export function handleTouchLaneIntent(ctx: PlayInputContext, channel: string, pressed: boolean, atMs: number): void {
+  if (pressed) {
+    if (ctx.touchLanesHeld.has(channel)) return;
+    ctx.touchLanesHeld.add(channel);
+    pushTouchLaneChange(ctx, { pressed: [channel], released: [] }, atMs);
+    return;
+  }
+  if (!ctx.touchLanesHeld.delete(channel)) return;
+  pushTouchLaneChange(ctx, { pressed: [], released: [channel] }, atMs);
 }
 
-export function handleTouchPointerUp(ctx: PlayInputContext, event: PointerEvent): void {
-  if (!isTouchPlayPointer(event.pointerType)) return;
-  pushTouchLaneChange(ctx, ctx.touchLanes.up(event.pointerId), event.timeStamp);
-}
-
-/** Lifts every finger, e.g. when the play pauses, so no lane stays held through the pause. */
-function releaseAllTouchLanes(ctx: PlayInputContext): void {
-  pushTouchLaneChange(ctx, ctx.touchLanes.upAll(), performance.now());
+/**
+ * Lifts every finger, e.g. when the play pauses, so no lane stays held through the pause. The view forgets the fingers
+ * as it sees the lift count move, so they press nothing until they touch down again.
+ */
+export function releaseAllTouchLanes(ctx: PlayInputContext): void {
+  const released = [...ctx.touchLanesHeld];
+  ctx.touchLanesHeld.clear();
+  ctx.touchLiftCount += 1;
+  pushTouchLaneChange(ctx, { pressed: [], released }, performance.now());
 }
 
 /**
@@ -309,7 +278,11 @@ function releaseAllTouchLanes(ctx: PlayInputContext): void {
  * `kitty-state` press that keeps the lane held for long notes and the key beam. `timeStamp` is the event's
  * `DOMHighResTimeStamp`, promoted to the engine's wall-clock domain the same way the keyboard path does.
  */
-function pushTouchLaneChange(ctx: PlayInputContext, change: TouchLaneChange, timeStamp: number): void {
+function pushTouchLaneChange(
+  ctx: PlayInputContext,
+  change: { readonly pressed: readonly string[]; readonly released: readonly string[] },
+  timeStamp: number,
+): void {
   const signals = ctx.sharedEngineInputSignals;
   if (!signals || (change.pressed.length === 0 && change.released.length === 0)) return;
   const pressedAt = performance.timeOrigin + timeStamp;

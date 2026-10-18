@@ -1,8 +1,13 @@
 /**
- * Touch play for the gameplay scenes: which lane a touch point lands in, and how fingers pressing, holding, sliding and
- * lifting turn into lane presses and releases. Kept free of DOM and Pixi so the rules can be tested on their own; the
- * gameplay scene feeds it design-pixel coordinates and forwards the resulting presses to the engine.
+ * Touch play for the play views: which lane a touch point lands in, how fingers pressing, holding, sliding and lifting
+ * turn into lane presses and releases, and the `lane` intents ({@link PlayIntent}) a pointer event makes
+ * ({@link TouchLaneFingers}). Kept free of DOM and Pixi so the rules can be tested on their own; a play view feeds it
+ * its pointer events (`touch-lane-input.ts`) and sends the intents to the session, which presses the lanes through the
+ * engine's input.
  */
+
+import type { PlayIntent, PlayfieldStage } from '../types.ts';
+import { resolveScaledViewport } from '../../stage/viewport.ts';
 
 /** A lane column as the gameplay layout places it, in design pixels (`bottom` is the judgement line). */
 export interface TouchLaneRect {
@@ -174,4 +179,92 @@ export function canvasPointToDesign(
   viewport: { readonly x: number; readonly y: number; readonly scale: number },
 ): { x: number; y: number } {
   return { x: (canvasX - viewport.x) / viewport.scale, y: (canvasY - viewport.y) / viewport.scale };
+}
+
+/** A touch lane's `lane` intent: a lane went down or up. */
+export type TouchLaneIntent = Extract<PlayIntent, { readonly type: 'lane' }>;
+
+/** A pointer event as the touch lanes read it (`PointerEvent`'s members of these names). */
+export interface TouchLanePointer {
+  /** `pointerdown`, `pointermove`, `pointerup` or `pointercancel`. */
+  readonly type: string;
+  readonly pointerId: number;
+  readonly pointerType: string;
+  /** Where on the canvas, in CSS pixels. */
+  readonly offsetX: number;
+  readonly offsetY: number;
+  /** When, on the host clock (`performance.now()`). */
+  readonly timeStamp: number;
+}
+
+/** Where the touch lanes are: the design stage, the canvas it is fitted into (CSS pixels) and the lanes on the stage. */
+export interface TouchLaneLayout {
+  readonly stage: PlayfieldStage;
+  readonly screen: { readonly width: number; readonly height: number };
+  readonly lanes: Iterable<TouchLaneRect>;
+}
+
+/** What a pointer event did: the `lane` intents it makes, and whether the browser's default for it should be stopped. */
+export interface TouchLanePointerResult {
+  readonly intents: readonly TouchLaneIntent[];
+  /** A finger touching down: stopped, so the browser makes no mouse events or gestures of it. */
+  readonly preventDefault: boolean;
+}
+
+const NO_POINTER_RESULT: TouchLanePointerResult = { intents: [], preventDefault: false };
+
+/**
+ * The fingers on a play's touch lanes: turns each pointer event into the `lane` intents it makes. A finger touching
+ * down or moving presses the lane under it, or — when it slid out of the lane it held — releases that lane and presses
+ * the new one; lifting it releases its lane. Mouse pointers are left alone (a click only focuses the canvas).
+ *
+ * The play lifts every finger itself when it pauses (it releases the lanes they held), counting each time
+ * (`liftCount`): the fingers down before the latest lift are forgotten, so they press nothing until they touch down
+ * again.
+ */
+export class TouchLaneFingers {
+  private readonly tracker = new TouchLaneTracker();
+  private lifts: number | undefined;
+
+  /**
+   * The intents `pointer` makes. `layout` is asked only for a finger touching down or moving; `liftCount` is how many
+   * times the play has lifted every finger so far.
+   */
+  public handle(pointer: TouchLanePointer, layout: () => TouchLaneLayout, liftCount: number): TouchLanePointerResult {
+    if (!isTouchPlayPointer(pointer.pointerType)) return NO_POINTER_RESULT;
+    if (this.lifts !== liftCount) {
+      this.tracker.upAll();
+      this.lifts = liftCount;
+    }
+    if (pointer.type === 'pointerup' || pointer.type === 'pointercancel') {
+      return {
+        intents: touchLaneIntents(this.tracker.up(pointer.pointerId), pointer.timeStamp),
+        preventDefault: false,
+      };
+    }
+    const down = pointer.type === 'pointerdown';
+    if (!down && (pointer.type !== 'pointermove' || !this.tracker.isTracking(pointer.pointerId))) {
+      return NO_POINTER_RESULT;
+    }
+    const { stage, screen, lanes } = layout();
+    const viewport = resolveScaledViewport(screen.width, screen.height, stage.width, stage.height);
+    const point = canvasPointToDesign(pointer.offsetX, pointer.offsetY, viewport);
+    const channel = hitTestTouchLane(resolveTouchLaneZones(lanes, { stageHeight: stage.height }), point.x, point.y);
+    const change = down ? this.tracker.down(pointer.pointerId, channel) : this.tracker.move(pointer.pointerId, channel);
+    return { intents: touchLaneIntents(change, pointer.timeStamp), preventDefault: down };
+  }
+
+  /** Forgets every finger, pressing nothing and releasing nothing (the view is leaving the stage). */
+  public reset(): void {
+    this.tracker.upAll();
+    this.lifts = undefined;
+  }
+}
+
+/** The `lane` intents of `change` at `atMs`: its releases first, then its presses. */
+export function touchLaneIntents(change: TouchLaneChange, atMs: number): TouchLaneIntent[] {
+  const intents: TouchLaneIntent[] = [];
+  for (const channel of change.released) intents.push({ type: 'lane', channel, pressed: false, atMs });
+  for (const channel of change.pressed) intents.push({ type: 'lane', channel, pressed: true, atMs });
+  return intents;
 }

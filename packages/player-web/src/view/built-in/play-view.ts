@@ -2,7 +2,8 @@
  * The built-in family's play screen: a be-music skin's chrome around the shared playfield (`view/shared/playfield`),
  * letterboxed into the window. It draws the play session's frames; its skin answers the shared playfield through a
  * {@link PlayfieldSkin} (a be-music skin draws the lanes, notes and bombs as data on its own canvas, so the playfield's
- * own layout and drawing apply). The session times the play and handles its input.
+ * own layout and drawing apply). The session times the play and handles its keys; the view follows the fingers on the
+ * touch lanes and sends them as `lane` intents.
  */
 
 import { resolveStageOrientation, type GameplayLayoutMode } from '@be-music/skin-sdk';
@@ -21,6 +22,7 @@ import { build, render, type PlayFrameContext } from '../shared/play-frame.ts';
 import { PlayLayers } from '../shared/play-layers.ts';
 import type { PlayChrome, PlayfieldRuntime } from '../shared/playfield/context.ts';
 import { uploadTextures } from '../shared/texture-upload.ts';
+import { playfieldTouchLanes, TouchLaneInput } from '../shared/touch-lane-input.ts';
 import type { IntentSink, PlayFrame, PlayIntent, PlayView, PlayViewTiming, PlayfieldSkin } from '../types.ts';
 import {
   collectBgaTargets,
@@ -68,6 +70,8 @@ export class BuiltInPlayView
   public readonly playfieldSkin: PlayfieldSkin;
   /** The be-music skin's chrome around the shared playfield. */
   public readonly chrome: PlayChrome;
+  /** The fingers on the lanes, sent to the session as `lane` intents while attached. */
+  private readonly touchLanes: TouchLaneInput = new TouchLaneInput(playfieldTouchLanes(this));
   private kit: BuiltInKit;
 
   public constructor(kit: BuiltInKit, play: PlayfieldRuntime, options: BuiltInPlayViewOptions = {}) {
@@ -142,8 +146,9 @@ export class BuiltInPlayView
     build(this, host);
   }
 
-  public attach(host: PixiSceneHost, _emit: IntentSink<PlayIntent>): void {
+  public attach(host: PixiSceneHost, emit: IntentSink<PlayIntent>): void {
     build(this, host);
+    this.touchLanes.attach(host, emit);
   }
 
   public draw(frame: PlayFrame): void {
@@ -155,7 +160,9 @@ export class BuiltInPlayView
     this.skinBindingInstance?.flush();
   }
 
-  public detach(): void {}
+  public detach(): void {
+    this.touchLanes.detach();
+  }
 
   /** Uploads `textures` to the GPU through the host's renderer (the BGA the play loads), when the view has a host. */
   public uploadTextures(textures: Iterable<Texture | undefined>, isCancelled: () => boolean): Promise<void> {

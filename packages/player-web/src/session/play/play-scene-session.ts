@@ -1,8 +1,8 @@
 /**
  * The play session as a scene session (`SceneSession`, `session/session-scene.ts`): what `createPlayScene` hands its
  * `SessionScene` so the scene's ticker reads a {@link PlayFrame} off the play every frame and the view's intents reach
- * it. The play's own input stays the play's (`play-input.ts` listens on the window and the canvas), so keys reach the
- * play directly rather than through the scene.
+ * it. The play's own keys stay the play's (`play-input.ts` listens on the window), so they reach the play directly
+ * rather than through the scene; the view's touch lanes reach it as `lane` intents.
  */
 
 import type { CourseView, LibraryChart, PlayOptions } from '@be-music/scene-model';
@@ -12,6 +12,7 @@ import type { PlayDisposeOptions } from './play-options.ts';
 import type { PlayFrame, PlayIntent, PlayStage, PlayViewEvent } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
 import { drainSharedEngineSignals } from './play-engine.ts';
+import { handleTouchLaneIntent } from './play-input.ts';
 import type { PlaySession } from './play-session.ts';
 import { applyPlayEvent } from './play-state.ts';
 import type { PlayMoment } from './play-session-theme.ts';
@@ -100,7 +101,8 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
         play.requestRestart();
         return;
       case 'lane':
-        // Touch lanes are the play's own pointer input (`play-input.ts`) until a view hit-tests them itself.
+        // A touch lane the view's fingers pressed or let go: the engine takes it as the keyboard's lane keys.
+        handleTouchLaneIntent(play, intent.channel, intent.pressed, intent.atMs);
         return;
     }
   }
