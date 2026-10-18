@@ -94,20 +94,3 @@ export function restoreBrowse(library: Library, snapshot: BrowseSnapshot): Brows
   }
   return { state, restoredDepth };
 }
-
-/** The browse position the built-in and LR2 select scenes keep across a play (`PixiSongSelectNavigation`). */
-export interface SelectSceneNavigation {
-  readonly folderPath: readonly string[];
-  readonly selectedIndex: number;
-}
-
-/**
- * A built-in / LR2 select scene's navigation as a browse snapshot. It keeps no parent cursors (a restore finds them by
- * label) and no list options: those scenes keep the sort and filters in the play options.
- */
-export function browseSnapshotFromSelectNavigation(navigation: SelectSceneNavigation): BrowseSnapshot {
-  return {
-    folderPath: [...navigation.folderPath],
-    cursors: [...navigation.folderPath.map(() => 0), navigation.selectedIndex],
-  };
-}
