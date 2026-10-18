@@ -336,7 +336,7 @@ Web のデモを 1 つのシーンルーター（[ADR 0006](./adr/0006-scene-rou
 | P5.8  | プレイログ・録画・ステータスのサービス                                                          | —                                                     | 予定 |
 | P5.9  | テスト用のフックの状態をサービスに。契約の v1 は変えない                                        | —                                                     | 予定 |
 | P5.10 | `main.ts` を起動処理だけにし、ファイルサイズの許可リストから外す                                | —                                                     | 予定 |
-| P5.F1 | NONSTOP の配置を変えたら、選曲画面を描き直す                                                    | —                                                     | 予定 |
+| P5.F1 | NONSTOP の配置を変えたら、選曲画面を描き直す                                                    | [#517](https://github.com/nulltask/be-music/pull/517) | 完了 |
 | P5.F2 | F5 は AUTO のプレイを AUTO で、リプレイをリプレイでやり直す                                     | [#490](https://github.com/nulltask/be-music/pull/490) | 完了 |
 | P5.F3 | プレイ中に画面が切り替わったら、コースの実行を終え、録画を締めくくる                            | [#507](https://github.com/nulltask/be-music/pull/507) | 完了 |
 
