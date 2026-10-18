@@ -424,6 +424,7 @@ class PlayerWebDemoApp {
       showSelect: () => this.showSelect(),
       playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
       buildPlayScene: (song, kit, overrides) => this.playRoute.buildPlayScene(song, kit, overrides),
+      latchPlay: (view) => this.playRoute.latchPlay(view),
     });
     this.resultRoute = new ResultRoute({
       router: this.router,
@@ -453,6 +454,7 @@ class PlayerWebDemoApp {
       library: this.library,
       records: this.records,
       familyKits: this.familyKits,
+      beatoraja: this.beatoraja,
       courses: this.courses,
       courseRoute: this.courseRoute,
       nonstopRoute: this.nonstopRoute,

@@ -233,8 +233,8 @@ describe('BeatorajaThemeService kits', () => {
     await service.loadBeatorajaPlayKit(chart());
     select.current = { identity: { family: 'beatoraja' }, updateKit: vi.fn() } as unknown as SelectScene;
     await service.applyBeatorajaSelectSkinConfig(SELECT.entryPath, {} as BeatorajaSkinConfig);
-    service.activeBeatorajaPlay = { entryPath: PLAY_7.entryPath, header: PLAY_7.header, variant: '7' };
     play.current = { identity: { family: 'beatoraja' }, updateKit: vi.fn() } as unknown as PlayScene;
+    service.activeBeatorajaPlay = { entryPath: PLAY_7.entryPath, header: PLAY_7.header, variant: '7' };
     await service.applyBeatorajaPlaySkinConfig(PLAY_7.entryPath, {} as BeatorajaSkinConfig);
     await drop(service, FULL());
     await service.loadBeatorajaSelectKit();
@@ -343,10 +343,10 @@ describe('BeatorajaThemeService skin options', () => {
   test('new options for the play entry go to the play on the stage, and are dropped once it is gone', async () => {
     const { service, options, play } = harness();
     await drop(service, FULL());
-    service.activeBeatorajaPlay = { entryPath: PLAY_7.entryPath, header: PLAY_7.header, variant: '7' };
     const config = { offset: 5 } as unknown as BeatorajaSkinConfig;
     const updateKit = vi.fn();
     play.current = { identity: { family: 'beatoraja' }, updateKit } as unknown as PlayScene;
+    service.activeBeatorajaPlay = { entryPath: PLAY_7.entryPath, header: PLAY_7.header, variant: '7' };
     await service.applyBeatorajaPlaySkinConfig(PLAY_7_B.entryPath, config);
     expect(updateKit).toHaveBeenCalledWith({
       family: 'beatoraja',
@@ -367,6 +367,33 @@ describe('BeatorajaThemeService skin options', () => {
     await service.applyBeatorajaPlaySkinConfig(PLAY_7.entryPath, config);
     expect(updateKit).toHaveBeenCalledOnce();
     expect(options.refreshBeatorajaPlaySkinOptions).toHaveBeenCalledOnce();
+  });
+
+  test('the play entry belongs to the play it was set for: another play held, or none, has none', async () => {
+    const { service, play } = harness();
+    await drop(service, FULL());
+    const updateKit = vi.fn();
+    const started = { identity: { family: 'beatoraja' }, updateKit } as unknown as PlayScene;
+    play.current = started;
+    const entry = { entryPath: PLAY_7.entryPath, header: PLAY_7.header, variant: '7' as const };
+    service.activeBeatorajaPlay = entry;
+    expect(service.activeBeatorajaPlay).toEqual(entry);
+
+    // The next play loads behind a decide screen: the entry of the play before is not its entry.
+    const next = { identity: { family: 'beatoraja' }, updateKit: vi.fn() } as unknown as PlayScene;
+    play.current = next;
+    expect(service.activeBeatorajaPlay).toBeUndefined();
+    await service.applyBeatorajaPlaySkinConfig(PLAY_7_B.entryPath, {} as BeatorajaSkinConfig);
+    expect(loadKit).not.toHaveBeenCalled();
+    play.current = undefined;
+    expect(service.activeBeatorajaPlay).toBeUndefined();
+
+    // Set as the next play takes the stage, it is that play's; a play on another family sets none.
+    play.current = next;
+    service.activeBeatorajaPlay = entry;
+    expect(service.activeBeatorajaPlay).toEqual(entry);
+    service.activeBeatorajaPlay = undefined;
+    expect(service.activeBeatorajaPlay).toBeUndefined();
   });
 
   test("an entry's options are kept by entry path, seeded from its header", async () => {
