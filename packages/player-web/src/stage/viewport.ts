@@ -79,3 +79,19 @@ export function setDesignPixelRatio(value: number): void {
 export function getDesignPixelRatio(): number {
   return designPixelRatio;
 }
+
+/**
+ * Resolution (canvas pixels per design pixel) for a `width` × `height` design canvas drawn dot by dot at
+ * `designPixelRatio` device pixels per design pixel: the width's device pixels, rounded, over the width — lowered so
+ * the long side, whichever it is, stays within `maxEdge` pixels (a portrait stage is taller than it is wide).
+ */
+export function resolveCanvasPixelRatio(
+  width: number,
+  height: number,
+  designPixelRatio: number,
+  maxEdge: number,
+): number {
+  const ratio = Math.max(1, Math.round(width * designPixelRatio)) / width;
+  const longSide = Math.max(width, height);
+  return longSide * ratio > maxEdge ? maxEdge / longSide : ratio;
+}
