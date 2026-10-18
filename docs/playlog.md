@@ -110,9 +110,9 @@ In the browser player:
   the **Auto-save play history** checkbox in the Debug Menu's **Library & records** folder (OFF by default). Play-log options are latched at song start
   and cannot change mid-play — the controls are disabled while a song is playing, and the values in effect when
   the song started govern that play.
-- The Debug Menu's **Play options** folder covers the recorded play settings: auto play, judge windows
-  (LR2 / beatoraja / IIDX), gauge, Random 1P/2P, DP flip, and auto scratch. Where the LR2 select scene's
-  PLAY OPTION panel has a counterpart, the two surfaces two-way sync. Its **Replay / ghost** subfolder picks what a
+- The Debug Menu's **Play options** folder covers the recorded play settings: auto play, gauge, Random 1P/2P, DP
+  flip, and auto scratch; the judge windows (LR2 / beatoraja / IIDX) are in its **Developer** folder. Where the LR2
+  select screen's PLAY OPTION panel has a counterpart, the two surfaces two-way sync. Its **Replay / ghost** subfolder picks what a
   replay reproduces of the recorded view ([What the player saw](#what-the-player-saw)).
 
 ### Input without key releases
@@ -189,12 +189,12 @@ input is ignored (ESC / pause / hi-speed keep working), and no new play-log is r
 log stores the resolved note arrangement, the chart prepare re-applies the recorded channels onto the freshly
 loaded chart (`applyPlaylogArrangement`) instead of re-rolling RANDOM / MIRROR — so shuffled plays replay exactly.
 The chart's `#RANDOM` / `#SWITCH` lines are resolved with the log's `play.randomDraws`, so a replay plays the
-recorded branches: the browser's core gameplay scene resolves with them itself (`resolvePlayChart(chart,
+recorded branches: the browser's play session (`session/play/play-chart.ts`) resolves with them itself (`resolvePlayChart(chart,
 { randomDraws })`), and a host that lets the engine resolve the source chart passes them as
 `PlayerOptions.randomDraws` next to `replayInputs`. Draws that were not drawn for the loaded chart, and a log without
 them whose new draw rolls differently from the recorded run, cannot be re-aligned: the replay fails with a status
-message instead of playing a mismatched chart. Replay always runs on the LR2 / default gameplay path regardless of
-which skin family recorded the log.
+message instead of playing a mismatched chart. A replay plays on the gameplay family's own play screen, whichever
+skin family recorded the log.
 
 A replay of an ESC-aborted log stops where the play was aborted, as the re-simulations do: the host passes
 `play.abortedAtUs` as `PlayerOptions.replayAbortedAtUs`, and the engine judges up to that chart time and ends the replay
@@ -224,7 +224,7 @@ The beatoraja scene's HIDDEN cover is a ratio of the lane above the lift, so it 
 
 Scenes record the view at a fixed precision (`roundPlaylogView`): `hiSpeed` on a 1/1000 grid, `visibleMs` in whole ms and each cover part to 4 decimals, so float noise (`0.09999999999999999` for a cover of 0.1) neither lands in the log nor counts as a change.
 
-**Recording.** Every gameplay scene (built-in, LR2, beatoraja) passes the view at the start as `recordPlaylog.view` and samples the view every frame. `createPlaylogViewCoalescer` turns the samples into changes: only the fields that changed (`diffPlaylogView`, the full cover of a side whose cover changed), at most one every 100 ms, so a wheel spin or a held key records a few changes, not one per frame. The scene sends each change as a `{ kind: 'view', change }` input command, and the engine stamps it with the chart time it drains the command at. On the built-in and LR2 scenes the hi-speed changes during a play (the arrow keys, a host's `setHiSpeed`); the covers are fixed per play, and the first change carries `visibleMs` once the lanes are laid out. On the beatoraja scene the hi-speed, lane cover, lift and HIDDEN cover all change (the arrow keys, PageUp / PageDown, the wheel, Home / End, H / J / K where no lane of the chart takes them, and the skin's cover buttons 330-332), from the play options' covers at the start.
+**Recording.** Every play screen (built-in, LR2, beatoraja) passes the view at the start as `recordPlaylog.view` and samples the view every frame. `createPlaylogViewCoalescer` turns the samples into changes: only the fields that changed (`diffPlaylogView`, the full cover of a side whose cover changed), at most one every 100 ms, so a wheel spin or a held key records a few changes, not one per frame. The scene sends each change as a `{ kind: 'view', change }` input command, and the engine stamps it with the chart time it drains the command at. On the built-in and LR2 scenes the hi-speed changes during a play (the arrow keys, a host's `setHiSpeed`); the covers are fixed per play, and the first change carries `visibleMs` once the lanes are laid out. On the beatoraja scene the hi-speed, lane cover, lift and HIDDEN cover all change (the arrow keys, PageUp / PageDown, the wheel, Home / End, H / J / K where no lane of the chart takes them, and the skin's cover buttons 330-332), from the play options' covers at the start.
 
 **Replay.** A replay shows the recorded view along the playhead: `resolvePlaylogViewAt` at the playhead's chart time, then `resolveReplayView` against the viewer's own settings with the viewer's `PlaylogViewReplay` (`tempo`, `hiSpeed`, `covers` for SUDDEN+ / HIDDEN+, `lift`; all on by default). What a toggle leaves off stays the viewer's own. The hi-speed follows `resolveReplayHiSpeed`:
 
@@ -270,8 +270,7 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
   consensus; the empty-POOR window and CN release windows are unmeasured and use beatoraja's values as stand-ins,
   and the HCN gauge tick uses a fixed 200 ms interval instead of IIDX's measured 16th-note interval. Expect
   close — not bit-exact — reproduction.
-- beatoraja niceties not modeled: PMS's one-empty-POOR-per-note rule, the PMS 200 ms charge-release margin, and
-  per-mode gauge tables other than SEVENKEYS (the 7K gauge constants are used for every mode).
+- beatoraja niceties not modeled: PMS's one-empty-POOR-per-note rule and per-mode gauge tables other than SEVENKEYS (the 7K gauge constants are used for every mode).
 - Because the playlog stores the resolved chart, `#RANDOM` and lane-shuffle differences between players never
   affect re-simulation.
 - A play from input without key releases records the releases the engine inferred ([Input without key

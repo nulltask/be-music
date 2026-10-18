@@ -13,7 +13,7 @@ The CLI runner parses chart files, manages directory selection, renders loading/
 Gameplay itself runs in a worker thread that calls `autoPlay()` or `manualPlay()` from `@be-music/player`.
 The UI worker imports only `@be-music/player/signals` and `@be-music/player/display`, so it does not load the play loop or the audio renderer.
 
-The main thread owns terminal input and coordinates two worker-side surfaces:
+The main thread owns terminal input and coordinates two worker-side surfaces and its own input runtime:
 
 - `node-gameplay-worker.ts` runs the shared engine and forwards load progress, logs, frame patches, input requests, and final `PlayerSummary` values.
 - `node-ui-worker.ts` owns the terminal renderer and receives compact frame patches, UI commands, pause state, high-speed changes, and judge/combo state.

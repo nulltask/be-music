@@ -15,8 +15,8 @@ flowchart TD
   player["@be-music/player<br/>engine bootstrap (preparePlaybackChart), ruleset facts, play log"]
   renderer["@be-music/audio-renderer<br/>renderJson"]
   tui["@be-music/player-tui<br/>chart list, preview signature, BGA, UI worker"]
-  web["@be-music/player-web<br/>gameplay scene, beatoraja prep, audio preview, song collection"]
-  skin["@be-music/skin-sdk<br/>song facts"]
+  web["@be-music/player-web<br/>play session, playfield, chart preview, beatoraja chart graphs, courses"]
+  skin["@be-music/skin-sdk<br/>chart stats (resolveSongStats)"]
 
   files -->|"@be-music/parser<br/>parseChart, parseBms, parseBmson"| source
   source -->|"drawRandomOutcomes(chart, random) → RandomDraws (@be-music/chart)<br/>resolveBmsControlFlowWithDraws(chart, draws) (@be-music/parser)<br/>hosts: resolvePlayChart(chart) → { chart, randomDraws } (@be-music/player)"| flat
@@ -174,41 +174,51 @@ Play-log fields with no matching option: `play.mode` (the judge strategy), `play
 
 ## Target architecture
 
-The packages are being reshaped on `feat/course-definitions` before it goes to `devel` (phases below). New code follows this target; the [architecture decisions](./adr/README.md) record why.
+The packages were reshaped on `feat/course-definitions` before it goes to `devel`; the [migration](#migration) below keeps the record of each step. This section describes the shape they have now, which new and moved code follows. Only the web demo's split into routes and services (P5) is still under way. The [architecture decisions](./adr/README.md) record why.
 
 ```mermaid
 flowchart TD
   subgraph data["Data"]
-    d["json · chart · parser · stringifier · utils"]
+    d["json · chart · parser<br/>stringifier · audio-renderer · utils"]
   end
   subgraph domain["Rules and engine — @be-music/player"]
-    rules["ruleset · playlog · course · records"]
+    rules["ruleset · playlog<br/>course · records"]
     engine["engine: one play loop<br/>manual · auto · replay"]
   end
   subgraph models["Models"]
     scene["@be-music/scene-model"]
-    skins["skin-sdk · lr2-skin · beatoraja-skin"]
+    skins["skin-sdk · lr2-skin<br/>beatoraja-skin"]
   end
   subgraph web["Web runtime — @be-music/player-web"]
     sessions["scene sessions"]
     views["family views"]
+    hostApi["host API"]
   end
-  hosts["hosts: player-web-demo · player-tui · leaderboard-api"]
+  subgraph hosts["Hosts"]
+    demo["player-web-demo"]
+    tui["player-tui"]
+    lb["leaderboard-api"]
+  end
 
   d --> rules --> engine
   rules --> scene --> skins
   engine --> sessions
-  scene --> sessions --> views
+  scene --> sessions
   skins --> views
-  sessions --> hosts
-  rules --> hosts
+  sessions --> hostApi
+  views --> hostApi
+  hostApi --> demo
+  engine --> tui
+  rules --> lb
 ```
 
-- **Rules and engine** (`@be-music/player`). One vocabulary for gauges, clear lamps and BP; course runs, the NONSTOP pipeline, course stage rules and best-record merging ([ADR 0004](./adr/0004-domain-rules-in-player.md)); one play loop with manual, auto and replay judge strategies ([ADR 0003](./adr/0003-one-play-loop.md)).
-- **Scene models** (`@be-music/scene-model`, new). What every screen shows and how it behaves, independent of the skin family: library entries, browse state and its snapshot, play options, play state, play result, course view models, system sound sets ([ADR 0002](./adr/0002-scene-model-package.md)).
-- **Skin models** (`skin-sdk`, `lr2-skin`, `beatoraja-skin`). Parse a skin and map scene models to its vocabulary: one table of LR2-compatible op / number / text / timer ids, and the beatoraja state resolution that used to live in the web layer.
-- **Web runtime** (`@be-music/player-web`). Scene sessions own each screen's behaviour once (chart preparation, RANDOM / FLIP, audio and BGA, engine options, input, endings); family views only draw and return intents; one scene lifecycle, one audio service, one host API ([ADR 0001](./adr/0001-skin-families-only-draw.md)).
-- **Hosts.** The web demo is a set of services wired by `main.ts`, with one scene router owning every transition ([ADR 0006](./adr/0006-scene-router.md)).
+An arrow points from a layer to a layer built on it.
+
+- **Rules and engine** (`@be-music/player`). One vocabulary for gauges, clear lamps, BP and the score (`./ruleset`); course runs, the NONSTOP pipeline and the course stage rules (`./course`); best-record merging per judge ruleset (`./records`); the play-log format and its simulator (`./playlog`) ([ADR 0004](./adr/0004-domain-rules-in-player.md)). The package root is the engine: one play loop with manual, auto and replay judge strategies ([ADR 0003](./adr/0003-one-play-loop.md)). What a host's runtimes exchange with a play, the lanes and what a host shows are the `./signals`, `./lanes` and `./display` entries ([Player spec — Entry points](./player-spec.md#entry-points)).
+- **Scene models** (`@be-music/scene-model`). What every screen shows and how it behaves, independent of the skin family: the library entries (`LibraryChart`, `LibraryFolder`, `LibraryCourse`), the browse state and its snapshot (`BrowseState`, `BrowseSnapshot`), the play options, the play state (`PlayState`), the play result (`PlayResult`), the course view (`CourseView`) and the system sound sets ([ADR 0002](./adr/0002-scene-model-package.md), [Scene models](./scene-model.md)).
+- **Skin models** (`skin-sdk`, `lr2-skin`, `beatoraja-skin`). Each parses its skins and maps the scene models to their vocabulary: the be-music skin contract (`@be-music/skin-sdk`), one table of LR2-compatible op / number / text / timer ids (`@be-music/lr2-skin/ids`) with the LR2 state resolvers (`@be-music/lr2-skin/state`), and the beatoraja state resolution (`@be-music/beatoraja-skin/scene`).
+- **Web runtime** (`@be-music/player-web`). A scene session (`session/`) owns each screen's behaviour once, for every skin family: chart preparation, RANDOM / FLIP, audio and BGA, engine options, input, endings. A family view (`view/`) only draws the session's frames and returns intents ([ADR 0001](./adr/0001-skin-families-only-draw.md)). The host API (`./host`) makes every screen with `createSelectScene`, `createDecideScene`, `createPlayScene` or `createResultScene` from a family kit, as a `SessionScene` with the one scene lifecycle (`PixiScene`) that `PixiSceneHost` shows. Every sound outside a play's chart goes through one audio service (`./audio`, [ADR 0007](./adr/0007-one-system-audio-context.md)). See [Browser player — Scene sessions and family views](./player-web.md#scene-sessions-and-family-views).
+- **Hosts.** The web demo is a set of services (`services/`) and routes (`app/routes/`: select, decide, play, result, replay, course and NONSTOP) that `main.ts` wires together, with one scene router (`app/scene-router.ts`) owning every transition ([ADR 0006](./adr/0006-scene-router.md)); the play-log, recording and status services and the test hook's state are still to move out of `main.ts` (P5.8–P5.10). The terminal player plays through the engine and its `./signals`, `./lanes` and `./display` entries, and the Leaderboard checks and ranks runs with the rules (`./course`, `./playlog`, `./ruleset`).
 
 Rules that keep it cheap to change:
 
@@ -217,7 +227,7 @@ Rules that keep it cheap to change:
 - Compose parts; do not absorb differences with base-class hooks.
 - Rules, engine and models stay runtime-neutral and run in tests without Pixi, the DOM or Node.
 - Packages export designed entry points, not their file layout ([ADR 0005](./adr/0005-public-entry-points.md)).
-- No source file over 1,500 lines: the allowlist below ends empty.
+- No source file over 1,500 lines: the [allowlist](#layering-and-size-guards) is empty.
 
 ### Migration
 
@@ -360,7 +370,7 @@ Public entry points ([ADR 0005](./adr/0005-public-entry-points.md)), documentati
 | EP5           | skin-sdk's `Browser*` library types become scene-model's `Library*` names (done in Z2)                                                                                                                | [#500](https://github.com/nulltask/be-music/pull/500) | done    |
 | EP6           | The player's file-named subpaths retired (`core/*` with `core/scoring`, `utils`, `judging`, …), and audio-renderer's `./triggers`                                                                     | [#501](https://github.com/nulltask/be-music/pull/501) | done    |
 | EP7           | Optional: bench cases for every entry (beatoraja-skin's root, utils' Node-only subpaths)                                                                                                              | [#498](https://github.com/nulltask/be-music/pull/498) | done    |
-| Docs          | The documentation and the glossary in the target vocabulary                                                                                                                                           | —                                                     | planned |
+| Docs          | The documentation and the glossary in the target vocabulary                                                                                                                                           | [#531](https://github.com/nulltask/be-music/pull/531) | done    |
 | Changesets    | The changesets folded together per package and change                                                                                                                                                 | —                                                     | planned |
 | Real skins    | The browser checklist by hand on real skins (the stock LR2 theme, ModernChic)                                                                                                                         | —                                                     | planned |
 | `devel`       | `feat/course-definitions` merged into `devel`                                                                                                                                                         | —                                                     | planned |
@@ -369,7 +379,7 @@ Public entry points ([ADR 0005](./adr/0005-public-entry-points.md)), documentati
 
 `pnpm run check` enforces these structural rules besides format, lint and types.
 
-- **Runtime-neutral code.** `@be-music/chart`, `@be-music/json`, `@be-music/parser`, `@be-music/scene-model`, `@be-music/lr2-skin`'s `state/` and `@be-music/player`'s `core/`, `course/`, `playlog/`, `records/` and `ruleset/`, with its `signals`, `lanes` and `display` entries and the modules they gather, run unchanged in the browser and in Node. Oxlint's `no-restricted-imports` and `no-restricted-globals` (configured in [`vite.config.ts`](../vite.config.ts)) reject Node built-in imports (`node:*` and bare names) and DOM / Node-only globals (`window`, `document`, `process`, `Buffer`, …) there. Runtime services come in through adapters instead: `PlayerOptions.createAudioSession` / `createUiRuntime` / `createInputRuntime`, the optional-module loader for the Node audio sink, and the parser's [`node-file.ts`](../packages/parser/src/node-file.ts) (`parseChartFile`), which with the parser CLI is exempt. Tests are exempt too.
-- **Deterministic judge.** `core/judge-*.ts`, `core/auto-judge-core.ts`, `ruleset/` and `playlog/simulate.ts` additionally may not read `Date` or `performance`, set timers, or call `Math.random`: time and randomness are inputs. The LR2 state resolvers (`@be-music/lr2-skin`'s `state/`) are held to the same rule.
-- **Web runtime layers.** In `@be-music/player-web`, the same Oxlint rules keep the layers apart ([Layering](./player-web.md#layering)): no lower layer (every directory but `host/`, `session/` and `view/`) imports the host, a session or a view, not even a type; a session and a view reach each other and the host only for types; only a session and `runtime/engine-driver.ts` import the engine as values; and only the audio layer, `runtime/`, creates an `AudioContext` or `OfflineAudioContext`. The last two rules cover the web demo too.
-- **File-size budget.** [`scripts/lint/file-size-budget.ts`](../scripts/lint/file-size-budget.ts) fails when a package source file (tests, declarations and fixtures excluded) grows past 1,500 lines. Files that were already larger are on its allowlist and only produce warnings; an allowlisted file that drops under the budget must be taken off the list. Run it alone with `pnpm run check:file-size`.
+- **Runtime-neutral code.** `@be-music/chart`, `@be-music/json`, `@be-music/parser`, `@be-music/scene-model`, `@be-music/lr2-skin`'s `state/`, `@be-music/beatoraja-skin`'s `scene/` and `@be-music/player`'s `core/`, `course/`, `playlog/`, `records/` and `ruleset/`, with its `signals`, `lanes` and `display` entries and the modules they gather, run unchanged in the browser and in Node. Oxlint's `no-restricted-imports` and `no-restricted-globals` (configured in [`vite.config.ts`](../vite.config.ts)) reject Node built-in imports (`node:*` and bare names) and DOM / Node-only globals (`window`, `document`, `process`, `Buffer`, …) there. Runtime services come in through adapters instead: `PlayerOptions.createAudioSession` / `createUiRuntime` / `createInputRuntime`, the optional-module loader for the Node audio sink, and the parser's [`node-file.ts`](../packages/parser/src/node-file.ts) (`parseChartFile`), which with the parser CLI is exempt. Tests are exempt too.
+- **Deterministic judge.** `core/judge-*.ts`, `core/auto-judge-core.ts`, `ruleset/` and `playlog/simulate.ts` additionally may not read `Date` or `performance`, set timers, or call `Math.random`: time and randomness are inputs. The LR2 and beatoraja state resolvers (`@be-music/lr2-skin`'s `state/`, `@be-music/beatoraja-skin`'s `scene/`) are held to the same rule: a scene's time comes in as an input.
+- **Web runtime layers.** In `@be-music/player-web`, the same Oxlint rules keep the layers apart ([Layering](./player-web.md#layering)): no lower layer (every directory but `host/`, `session/` and `view/`) imports the host, a session or a view, not even a type; a session and a view reach each other and the host only for types, a session uses Pixi only for types, and a view imports nothing of the engine, not even a type; only a session and `runtime/engine-driver.ts` import the engine as values; and only the audio layer, `runtime/`, creates an `AudioContext` or `OfflineAudioContext`. The last two rules cover the web demo too.
+- **File-size budget.** [`scripts/lint/file-size-budget.ts`](../scripts/lint/file-size-budget.ts) fails when a package source file (tests, declarations and fixtures excluded) grows past 1,500 lines. Files that were already larger went on its allowlist, which only warns, and came off it as they were split; the list is empty now, and an allowlisted file that drops under the budget must be taken off it. Run it alone with `pnpm run check:file-size`.
