@@ -1,8 +1,10 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseLr2CourseFile } from '@be-music/player/course';
+import type { SelectScene } from '@be-music/player-web/host';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import type { LibraryChart, LibraryCourse, PlayResult } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
+import { liveTestHookState, type LiveTestHookDeps } from './services/test-hook.ts';
 import {
   type BeMusicTestHook,
   describeBar,
@@ -116,6 +118,47 @@ describe('TestHookRecorder', () => {
     state.results.pop();
     state.statusLog.pop();
     expect(hook.state()).toMatchObject({ statusLog: ['Loading', '2 charts loaded'], results: [expect.anything()] });
+  });
+});
+
+describe('contract v1', () => {
+  test("state() answers v1's fields, the live ones read from the app's scenes and services", () => {
+    const select = {
+      identity: { kind: 'select', family: 'built-in' },
+      focused: () => ({ kind: 'chart', chart: song('Fixture A') }),
+      snapshot: () => ({ folderPath: ['pack'], cursors: [0, 0], list: { sort: 'TITLE' } }),
+    } as unknown as SelectScene;
+    const deps: LiveTestHookDeps = {
+      router: { current: select, select, play: undefined },
+      elements: { loadingOverlay: { classList: { contains: () => false } } } as unknown as LiveTestHookDeps['elements'],
+      guiState: { status: '1 chart loaded', nonstopPlacement: 'intended' },
+      library: { collection: { sources: [], charts: [song('Fixture A')], errors: [] } },
+      records: { lookupSongRecord: () => ({ lamp: 'HARD' }), songRecords: new Map() },
+      courses: { active: undefined },
+      courseMaker: { maker: { draft: undefined } },
+      lastPlay: () => undefined,
+    };
+    const recorder = new TestHookRecorder();
+    const target: { __beMusicTest?: BeMusicTestHook } = {};
+    recorder.install(target, () => liveTestHookState(deps));
+    recorder.recordLoad();
+    recorder.recordStatus('1 chart loaded');
+    expect(target.__beMusicTest!.state()).toEqual({
+      version: 1,
+      scene: { kind: 'select', family: 'built-in' },
+      status: '1 chart loaded',
+      statusLog: ['1 chart loaded'],
+      loading: false,
+      loads: 1,
+      library: { songs: 1, courseFolders: [] },
+      cursor: {
+        folderPath: ['pack'],
+        bar: { kind: 'song', title: 'Fixture A', lamp: 'HARD' },
+        list: { sort: 'TITLE', keysFilter: 'ALL', difficultyFilter: 'ALL', search: '' },
+      },
+      results: [],
+      playlogs: 0,
+    });
   });
 });
 
