@@ -97,7 +97,10 @@ export interface DebugMenuDeps {
   setPlayOptions(changes: Partial<PlayOptions>): void;
   /** Remembers a hi-speed set on the menu's slider, and hands it to the running play. */
   rememberHiSpeed(value: number, source: 'menu'): void;
-  /** Shows the select screen the records of the judge ruleset just picked. */
+  /**
+   * Has the select screen draw its records again, as they read now: those of the judge ruleset or the NONSTOP placement
+   * just picked.
+   */
   refreshSelectRecords(): void;
   /** Switches the scenes to another skin system (or the same one with other effects), making the select screen again. */
   handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void;
