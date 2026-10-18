@@ -5,6 +5,11 @@ import { beatorajaDifficultyOps } from './select.ts';
 /** What the decide screen's skin reads: the chart about to be played, and how far the play behind it has loaded. */
 export interface BeatorajaDecideInput {
   readonly chart: Pick<LibraryChart, 'playLevel' | 'bpm' | 'chart'>;
+  /**
+   * The BPM the most judged notes of the chart as the play will play it sit at (beatoraja's MAINBPM,
+   * `resolveChartMainBpm` of `@be-music/chart`, the rule the play reads); the listed BPM when 0 or absent.
+   */
+  readonly mainBpm?: number;
   /** How far the play behind the screen has loaded, 0..1. */
   readonly progress: number;
 }
@@ -33,15 +38,17 @@ function playLevelNumber(level: number | string | undefined): number {
 }
 
 /**
- * The decide screen's number (`value[].ref`): the chart's `#PLAYLEVEL` (96), its BPM as the library lists it on the BPM
- * numbers (90-92 and 160), rounded, and the loading progress in whole percent (165). Every other id reads 0: there is
- * no score, combo or record before the play, and a skin's stat readouts still show.
+ * The decide screen's number (`value[].ref`): the chart's `#PLAYLEVEL` (96), its main BPM (92,
+ * {@link BeatorajaDecideInput.mainBpm}) and its BPM as the library lists it on the other BPM numbers (90, 91 and 160),
+ * rounded, and the loading progress in whole percent (165). Every other id reads 0: there is no score, combo or record
+ * before the play, and a skin's stat readouts still show.
  */
 export function resolveBeatorajaDecideNumber(id: number, input: BeatorajaDecideInput): number {
   switch (id) {
     case BEATORAJA_NUM.PLAYLEVEL:
       return playLevelNumber(input.chart.playLevel);
     case BEATORAJA_NUM.MAINBPM:
+      return Math.round(input.mainBpm !== undefined && input.mainBpm > 0 ? input.mainBpm : (input.chart.bpm ?? 0));
     case BEATORAJA_NUM.MAXBPM:
     case BEATORAJA_NUM.MINBPM:
     case BEATORAJA_NUM.NOWBPM:

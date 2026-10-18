@@ -179,7 +179,10 @@ judgment counts and their early / late split, the gauge and the chart TOTAL. The
 covers, the white and green numbers (`resolveWhiteNumber`), the BPM at the playhead, time and the clock; the result adds
 the timing mean and deviation and reads every number it does not cover as 0; the select screen reads the focused
 chart's facts and 0 for the play's live numbers. The decide screen does not use the score table: it reads the chart's
-`#PLAYLEVEL`, its listed BPM on the BPM numbers and the loading progress (165), and 0 for every other number.
+`#PLAYLEVEL`, its listed BPM on the BPM numbers and the loading progress (165), and 0 for every other number. On the
+select and decide screens the main BPM (92) is the one the play shows, the BPM the most judged notes sit at
+(`resolveChartMainBpm` in `@be-music/chart`), which the caller passes in (`mainBpm`); without it they read the header
+BPM.
 
 ### Timers as data
 
