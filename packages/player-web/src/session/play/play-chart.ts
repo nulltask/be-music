@@ -10,7 +10,6 @@
 import {
   parseBmsSwBga,
   resolveChart,
-  resolveChartMainBpm,
   resolveChartReferenceBpm,
   type BmsSwitchingBga,
   type RandomDraws,
@@ -344,7 +343,12 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
   // per PG/GR.
   ctx.gaugeState = createPlaceholderGaugeState(ctx.resolveSelectedGauge(), resolveCourseStartGaugeInput(ctx));
-  ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm), resolvedPlay);
+  // The one BPM range of the play: HS-FIX, the HUD and the play log's visible time all take the main BPM from it.
+  ctx.chartBpmRange = resolvePlayTempoRange(
+    resolvedPlay,
+    resolved.metadata.bpm > 0 ? resolved.metadata.bpm : ctx.song?.bpm,
+  );
+  ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm));
   // Chart setup, before the notes are on screen — no glide.
   ctx.scrollHiSpeed.jump(ctx.playState.view.hiSpeed.drawn);
   ctx.fastCount = 0;
@@ -355,11 +359,6 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   ctx.playMoments = {};
   ctx.lanePressedAt.clear();
   ctx.laneReleasedAt.clear();
-  ctx.chartBpmRange = resolvePlayTempoRange(
-    resolver.tempoPoints,
-    ctx.songDurationSeconds,
-    resolved.metadata.bpm > 0 ? resolved.metadata.bpm : ctx.song?.bpm,
-  );
   ctx.autoScratchChannels = resolveAutoScratchEnabled(ctx)
     ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
     : new Set();
@@ -384,21 +383,22 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
  *
  * HS-FIX keeps the player's hi-speed at the chart's reference BPM (`#BASEBPM`, else the start BPM:
  * `resolveChartReferenceBpm` prefers `#BASEBPM` so a chart whose `#BPM` is its peak or average still calibrates at the
- * speed the author intended) and rescales it at the chart's MAXBPM, MINBPM or main BPM (`resolveHsFixMultiplier`).
+ * speed the author intended) and rescales it at the chart's MAXBPM, MINBPM or main BPM (`resolveHsFixMultiplier`), the
+ * main BPM being the play's (`chartBpmRange`), which the play log's visible time reads too.
  */
 function createChartPlayState(
   ctx: PlayChartContext,
   resolver: TimingResolver,
   referenceBpm: number | undefined,
-  resolvedPlay: ResolvedChart,
 ): PlayState {
   const hsFix = ctx.options.hsFix ?? 'OFF';
+  const mainBpm = ctx.chartBpmRange?.mainBpm;
   const hiSpeed = createHiSpeedState({
     hiSpeed: ctx.playState.view.hiSpeed.player,
     multiplier: resolveHsFixMultiplier(hsFix, {
       ...(referenceBpm !== undefined ? { referenceBpm } : {}),
       bpms: resolver.tempoPoints.map((point) => point.bpm),
-      ...withMainBpm(resolveChartMainBpm(resolvedPlay)),
+      ...(mainBpm !== undefined ? { mainBpm } : {}),
     }),
     locked: ctx.options.hiSpeedLocked === true,
   });
@@ -438,10 +438,6 @@ function resolveStartingCovers(ctx: PlayChartContext): LaneCoverState[] {
     },
     sides,
   );
-}
-
-function withMainBpm(mainBpm: number | undefined): { mainBpm?: number } {
-  return mainBpm !== undefined ? { mainBpm } : {};
 }
 
 /** The course stage the play runs (a replay's recorded one wins), with its ruleset, for the placeholder gauge. */

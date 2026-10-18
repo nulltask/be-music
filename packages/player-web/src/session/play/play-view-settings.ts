@@ -100,21 +100,24 @@ export function resolveLaneCovers(ctx: PlayViewSettingsContext): readonly BeMusi
   return cache.drawn;
 }
 
+/** The scale the play log reads the view's hi-speed on, and the main BPM it takes the visible time at. */
+interface PlaylogScale extends PlayPlaylogViewScale {
+  readonly mainBpm?: number;
+}
+
 /**
  * The scale the play log reads the view's hi-speed on: the view's own (`PlaySessionTheme.playlogView`, the beatoraja
- * view's lane of four beats), else the built-in and LR2 scale over the lanes laid out last frame, at the chart's main
- * BPM. `undefined` until the lanes are laid out.
+ * view's lane of four beats), else the built-in and LR2 scale over the lanes laid out last frame. Every family takes
+ * the visible time at the play's main BPM (`chartBpmRange`, the one HS-FIX reads). `undefined` until the lanes are
+ * laid out.
  */
-function resolvePlaylogScale(ctx: PlayViewSettingsContext): PlayPlaylogViewScale | undefined {
-  const own = ctx.theme.playlogView?.();
-  if (own !== undefined) return own;
-  if (ctx.laneX.size === 0) return undefined;
+function resolvePlaylogScale(ctx: PlayViewSettingsContext): PlaylogScale | undefined {
+  const scale =
+    ctx.theme.playlogView?.() ??
+    (ctx.laneX.size === 0 ? undefined : { scale: BE_MUSIC_HI_SPEED_SCALE, laneBeats: resolveLaneBeats(ctx) });
+  if (scale === undefined) return undefined;
   const mainBpm = ctx.chartBpmRange?.mainBpm;
-  return {
-    scale: BE_MUSIC_HI_SPEED_SCALE,
-    laneBeats: resolveLaneBeats(ctx),
-    ...(mainBpm !== undefined ? { mainBpm } : {}),
-  };
+  return mainBpm !== undefined ? { ...scale, mainBpm } : scale;
 }
 
 /**

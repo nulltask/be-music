@@ -258,7 +258,7 @@ export default defineBeMusicSkin({
 - **プレイ状態:** `rulesetLabel`（有効な互換ルールセット: `lr2` / `beatoraja` / `iidx`）、`autoplay`、`hasBga`、`loading`（音声デコードや BGA 変換の間は NOW LOADING を表示）、`progressRatio`、`chartMs`、`beatPhase`、`nowMs`
 - **イベント時刻:** `judgeAtMs`、`impulseAtMs`、`impulseKind`（直近の判定とキー入力。パンチやインパルスの演出用）
 - **快適性とサウンド:** `effects`、`audio`
-- **譜面:** `song`（プレイ中の `LibraryChart`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBpm`、`maxBpm`、`mainBpm`、`playVariant`（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）、`laneCount`、`laneChannels`（表示順のレーンチャンネル）
+- **譜面:** `song`（プレイ中の `LibraryChart`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBpm`、`maxBpm`、`mainBpm`（最も多くのノートが置かれた BPM。HS-FIX `AVERAGE` とプレイログが使う値）、`playVariant`（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）、`laneCount`、`laneChannels`（表示順のレーンチャンネル）
 - **タイミング:** `lastJudgeDeltaMs` と `judgeTimings`（タイミング付きの直近 64 判定、古い順）。[判定タイミング](#判定タイミング)を参照。`judgeWindows` はルールセットの判定幅をノーツの種類（`note`、`scratch`、`longNoteEnd`）ごとに ms で表します。プレイ開始時に `#RANK` から決まり、途中の `#EXRANK` の変更は反映されません。
 - **レーンカバー:** `laneCovers`（サイドごとの `sudden`、`hidden`、`lift`。レーンの高さに対する割合）、`visibleMs`（現在の BPM・ハイスピード・`#SCROLL` × `#SPEED` でノーツが画面に見えている時間。beatoraja と同じく、逆向きのスクロール中や停止中は 0）、`greenNumber`（`visibleMs × 0.6`）
 - **曲の時計:** `songLengthMs` と `songElapsedMs`。オーディオの時計で、曲の開始とともに 0 から進み、ポーズ中は止まります。残り時間は `songLengthMs - songElapsedMs` です。`chartMs` は譜面の最初の拍から測り、カウントイン中は負になる点が異なります。
