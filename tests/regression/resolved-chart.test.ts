@@ -6,7 +6,7 @@ import { resolveChart, resolveChartPlayVariant, type ResolvedChart, type Resolve
 import type { BeMusicJson } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';
 import { resolvePlayChart } from '@be-music/player';
-import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
+import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/display';
 import { describe, expect, test } from 'vite-plus/test';
 
 /**

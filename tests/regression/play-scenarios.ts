@@ -1,6 +1,7 @@
 import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
-import { manualPlay, type PlayerGrooveGaugeSummary, type PlayerSummary } from '@be-music/player';
+import { manualPlay, type PlayerSummary } from '@be-music/player';
+import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import type {
   BeMusicPlaylog,
   PlaylogInputEvent,
@@ -149,7 +150,7 @@ export function summarizeEngineReplay({ summary, playlog }: EngineReplay): Recor
 
 export const round6 = (value: number): number => Math.round(value * 1_000_000) / 1_000_000;
 
-function roundGauge(gauge: PlayerGrooveGaugeSummary): PlayerGrooveGaugeSummary {
+function roundGauge(gauge: PlayerGaugeSummary): PlayerGaugeSummary {
   return {
     ...gauge,
     current: round6(gauge.current),
