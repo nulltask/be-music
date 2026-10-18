@@ -170,6 +170,8 @@ interface FamilyPlayView {
   prepareView?(): Promise<void>;
   /** The scale the view's hi-speed reads on in the play log, when it has its own (the session theme's `playlogView`). */
   playlogView?(): PlayPlaylogViewScale | undefined;
+  /** The view draws the LIFT (the session theme's `drawsLift`). */
+  readonly drawsLift?: boolean;
   uploadTextures(textures: Iterable<Texture | undefined>, isCancelled: () => boolean): Promise<void>;
   setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void;
   setShowInvisibleNotes(enabled: boolean): void;
@@ -203,6 +205,7 @@ function createPlayView(
       prepareOn: (host) => view.prepareOn(host),
       prepareView: () => view.prepare(),
       playlogView: () => view.playlogView(),
+      drawsLift: true,
       uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
       // A beatoraja skin draws its own notes: neither drawing option applies.
       setJudgedNoteDisplay: () => {},
@@ -425,6 +428,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     prepareView: () => family?.prepareView?.() ?? Promise.resolve(),
     uploadTextures: (textures) => family?.uploadTextures(textures, () => play.disposed) ?? Promise.resolve(),
     playlogView: () => family?.playlogView?.(),
+    drawsLift: () => family?.drawsLift === true,
   };
   const play = new PlaySession(
     {

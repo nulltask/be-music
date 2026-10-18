@@ -166,22 +166,25 @@ export function flushPlaylogView(ctx: PlayViewSettingsContext): void {
 }
 
 /**
- * Shows a replay's recorded view over the viewer's own: the covers as recorded (the scene draws no LIFT, so SUDDEN+ and
- * HIDDEN+), and the hi-speed as recorded on this scale, or matching the recorded visible time when it was played on
- * another (`resolveReplayHiSpeed`).
+ * Shows a replay's recorded view over the viewer's own: the covers as recorded (SUDDEN+ and HIDDEN+, and the LIFT on a
+ * view that draws one, `PlaySessionTheme.drawsLift`), and the hi-speed as recorded on this scale, or matching the
+ * recorded visible time when it was played on another (`resolveReplayHiSpeed`).
  */
 function applyReplayView(ctx: PlayViewSettingsContext, recorded: PlaylogViewState): void {
   const replay = ctx.options.replayView ?? DEFAULT_PLAYLOG_VIEW_REPLAY;
   const view = resolveReplayView(recorded, currentPlaylogView(ctx), replay);
-  if (replay.covers && view.covers !== undefined) {
+  const drawsLift = ctx.theme.drawsLift?.() === true;
+  if ((replay.covers || (drawsLift && replay.lift)) && view.covers !== undefined) {
     applyPlayEvent(ctx, {
       type: 'cover-set',
-      covers: view.covers.map(({ side, sudden, hidden }) => ({
+      covers: view.covers.map(({ side, sudden, hidden, lift }) => ({
         side,
         sudden,
         suddenOn: sudden > 0,
-        hidden,
+        // The log's HIDDEN+ is a fraction of the whole lane; the play state's is of the part above the LIFT.
+        hidden: drawsLift ? resolveHiddenAboveLift(hidden, lift) : hidden,
         hiddenOn: hidden > 0,
+        ...(drawsLift ? { lift } : {}),
       })),
     });
   }
@@ -200,6 +203,11 @@ function applyReplayView(ctx: PlayViewSettingsContext, recorded: PlaylogViewStat
         }),
   );
   if (hiSpeed !== undefined) applyPlayEvent(ctx, { type: 'hi-speed-drawn', value: hiSpeed });
+}
+
+/** A HIDDEN+ cover of `hidden` of the whole lane as a fraction of the part above `lift` (none over a full LIFT). */
+function resolveHiddenAboveLift(hidden: number, lift: number): number {
+  return lift < 1 ? Math.min(1, hidden / (1 - lift)) : 0;
 }
 
 /**

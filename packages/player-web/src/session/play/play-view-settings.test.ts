@@ -1,4 +1,4 @@
-import type { PlaylogViewState } from '@be-music/player/playlog';
+import type { PlaylogViewReplay, PlaylogViewState } from '@be-music/player/playlog';
 import {
   createHiSpeedState,
   createPlayState,
@@ -22,14 +22,14 @@ import {
 const LANE = { x: 0, w: 40, top: 0, bottom: 576 };
 
 function createView(
-  options: { replay?: PlaylogViewState; theme?: Partial<PlaySessionTheme> } = {},
+  options: { replay?: PlaylogViewState; theme?: Partial<PlaySessionTheme>; replayView?: PlaylogViewReplay } = {},
 ): PlayViewSettingsContext {
   const covers = laneCoversFromPlayOptions(
     { hiddenSudden1P: 'SUDDEN', hiddenSudden2P: 'OFF', shutter: 0.25, laneCover: true },
     ['1P'],
   );
   return {
-    options: {},
+    options: options.replayView !== undefined ? { replayView: options.replayView } : {},
     playState: createPlayState({ view: { hiSpeed: createHiSpeedState({ hiSpeed: 2 }), covers, hsFix: 'OFF' } }),
     scrollHiSpeed: new HiSpeedTransition(2),
     laneX: new Map([['11', LANE]]),
@@ -104,6 +104,30 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
       covers: [{ side: '1P', sudden: 0.25, hidden: 0, lift: 0 }],
       visibleMs: 600,
     });
+  });
+
+  test('a replay on a view that draws the LIFT shows the recorded LIFT, HIDDEN+ as drawn over it', () => {
+    const replay: PlaylogViewState = {
+      hiSpeed: 1.6,
+      hiSpeedScale: 'beatoraja',
+      visibleMs: 1000,
+      covers: [{ side: '1P', sudden: 0.25, hidden: 0.18, lift: 0.1 }],
+    };
+    const theme = { playlogView: () => ({ scale: 'beatoraja', laneBeats: 4, mainBpm: 120 }), drawsLift: () => true };
+    const ctx = createView({ replay, theme });
+    updatePlaylogView(ctx, 0);
+    expect(ctx.playState.view.hiSpeed.drawn).toBe(1.6);
+    // The play state's HIDDEN+ is of the lane above the LIFT (0.18 / 0.9), so it draws the recorded 0.18 of the lane.
+    expect(ctx.playState.view.covers[0]).toMatchObject({ lift: 0.1, hiddenOn: true });
+    expect(ctx.playState.view.covers[0]!.hidden).toBeCloseTo(0.2, 10);
+    const [drawn] = resolveLaneCovers(ctx);
+    expect(drawn).toMatchObject({ side: '1P', sudden: 0.25, lift: 0.1 });
+    expect(drawn!.hidden).toBeCloseTo(0.18, 10);
+
+    // With the LIFT toggle off, the viewer keeps their own LIFT (none) and HIDDEN+ as recorded of the lane.
+    const own = createView({ replay, theme, replayView: { tempo: true, hiSpeed: true, covers: true, lift: false } });
+    updatePlaylogView(own, 0);
+    expect(resolveLaneCovers(own)[0]).toMatchObject({ sudden: 0.25, hidden: 0.18, lift: 0 });
   });
 
   test('a replay on the same scale takes the recorded hi-speed as drawn', () => {

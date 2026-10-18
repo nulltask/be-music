@@ -146,7 +146,7 @@ describe('play-log #RANDOM draws on the web paths', () => {
 
     test(`beatoraja play: records the draws ${drawn.join(', ')} of the chart it played`, async () => {
       // The decide screen resolves once and the play takes its draws (`preResolved`); the session composes the
-      // play-log fields of a beatoraja play as of any other, with its kit's lane options off.
+      // play-log fields of a beatoraja play as of any other (here with the lane options off).
       const resolved = resolvePlayChart(SOURCE, { random: sequence(...values) });
       const playlog = await recordPlaylog(resolved.chart, {
         laneModeExtension: '.pms',
