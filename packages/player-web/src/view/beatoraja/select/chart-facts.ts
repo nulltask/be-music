@@ -7,21 +7,21 @@
 import type { ChartPlayVariant } from '@be-music/chart';
 import type { BeatorajaChartTraits, BeatorajaSelectChartFacts } from '@be-music/beatoraja-skin/scene';
 import { resolveLr2ChartFeatures } from '@be-music/lr2-skin/state';
+import { resolveLibraryChartPlayVariant } from '@be-music/scene-model';
 import { computeBeatorajaChartDensity, type ChartDensity } from '../../../chart/beatoraja/density.ts';
 import { computeBeatorajaChartTotalSeconds } from '../../../chart/beatoraja/duration.ts';
 import { extractChartSubartist } from '../../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from '../../../chart/beatoraja/note-counts.ts';
-import { resolveChartPlayVariant } from '../../../collection/collection.ts';
 import type { BrowserSongEntry } from '../../../collection/types.ts';
 
 /**
- * `resolveChartPlayVariant` walks the chart's events / metadata to classify keys mode. On a
+ * `resolveLibraryChartPlayVariant` walks the chart's events / metadata to classify keys mode. On a
  * malformed entry it can throw; a per-frame op-set computation must never throw, so we wrap
  * with a try/catch and fall back to `undefined` (= no `KEYSONG_*` op set, "modeless" bar).
  */
 export function safeResolveChartVariant(song: BrowserSongEntry): ChartPlayVariant | undefined {
   try {
-    return resolveChartPlayVariant(song);
+    return resolveLibraryChartPlayVariant(song);
   } catch {
     return undefined;
   }

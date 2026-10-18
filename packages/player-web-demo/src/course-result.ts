@@ -1,6 +1,6 @@
 import { resolveCourseTrophy } from '@be-music/player/playlog';
 import type { BrowserCourseEntry } from '@be-music/player-web/collection';
-import type { BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/player-web/skin';
+import type { BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/skin-sdk';
 
 /*
  * How the demo shows a course run's results: when a stage's result is skipped, and the records kept per course. The

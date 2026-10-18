@@ -5,7 +5,7 @@ import {
   type PlaylogCourseResult,
 } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
-import { resolveSceneCourseInfo, type SceneCourseInfo } from '@be-music/player-web/scenes';
+import { resolveCourseView, type CourseView } from '@be-music/scene-model';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPlayFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player/records';
@@ -44,7 +44,7 @@ export interface ActiveCourse {
 
 /** A stage of a running course as the demo plays it: the run's plan, with the course as the skins show it there. */
 export interface CourseStagePlay extends CourseRunStagePlan<BrowserSongEntry> {
-  courseInfo: SceneCourseInfo;
+  courseInfo: CourseView;
 }
 
 /** Starts a run of a course whose stages are all in the collection (`CourseRun` refuses one with a stage missing). */
@@ -61,13 +61,13 @@ export function startCourseRun(course: BrowserCourseEntry): ActiveCourse {
 /** The next stage of a running course, with the course as the skins show it there; `undefined` once the run is over. */
 export function nextCourseStagePlay(active: ActiveCourse): CourseStagePlay | undefined {
   const plan = active.run.nextStage();
-  return plan === undefined ? undefined : { ...plan, courseInfo: resolveSceneCourseInfo(active.course, plan.index) };
+  return plan === undefined ? undefined : { ...plan, courseInfo: resolveCourseView(active.course, plan.index) };
 }
 
 /** The course as the skins show it at the stage last played (none before the first one). */
-export function activeCourseInfo(active: ActiveCourse): SceneCourseInfo {
+export function activeCourseInfo(active: ActiveCourse): CourseView {
   const played = active.run.stagesPlayed;
-  return resolveSceneCourseInfo(active.course, played > 0 ? played - 1 : undefined);
+  return resolveCourseView(active.course, played > 0 ? played - 1 : undefined);
 }
 
 /** The graphs of every stage played, in order: a stage given up, or played without graphs, has empty ones. */

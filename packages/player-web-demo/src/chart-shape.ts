@@ -4,14 +4,15 @@ import {
   type BeatorajaPlayableVariant,
   type BeatorajaThemeBundle,
 } from '@be-music/player-web/skin';
-import { resolveChartPlayVariant, type BrowserSongEntry } from '@be-music/player-web/collection';
+import type { BrowserSongEntry } from '@be-music/player-web/collection';
+import { resolveLibraryChartPlayVariant } from '@be-music/scene-model';
 
 /**
  * Maps a song's parsed chart variant onto the `{ keys, isDouble, isPms }` shape `pickBeatorajaPlayableVariant`
  * expects. Pure derivation — no state, no side effects.
  */
 export function chartShapeFor(song: BrowserSongEntry): { keys: number; isDouble: boolean; isPms: boolean } {
-  const variant = resolveChartPlayVariant(song);
+  const variant = resolveLibraryChartPlayVariant(song);
   // `'48'` is the DP form of the 24-key keyboard mode, so it reports 24 keys per side plus `isDouble` — the same
   // per-side convention the IIDX `'14'` / `'10'` variants use.
   const keys =

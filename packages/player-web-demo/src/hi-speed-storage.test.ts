@@ -1,4 +1,4 @@
-import { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN } from '@be-music/player-web/scenes';
+import { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { HI_SPEED_STORAGE_KEY, parseStoredHiSpeed, readStoredHiSpeed, storeHiSpeed } from './hi-speed-storage.ts';
 

@@ -10,11 +10,12 @@ import type { BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
 import {
   checkCoursePlaylogEligibility,
+  checkPlaylogEligibility,
   resolveCourseStageChartFingerprints,
   type BeMusicCoursePlaylog,
+  type BeMusicPlaylog,
   type PlaylogRulesetId,
 } from '@be-music/player/playlog';
-import { checkPlaylogEligibility, type BeMusicPlaylog } from '@be-music/player-web/runtime';
 
 /** What the Leaderboard API needs for one play (docs/leaderboard.md section 5.1). */
 export interface LeaderboardSubmission {

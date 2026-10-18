@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { computeChartFingerprint, computePlayFingerprint, drawRandomOutcomes } from '@be-music/chart';
 import { parseBms, resolveBmsControlFlowWithDraws } from '@be-music/parser';
-import type { BeMusicCoursePlaylog } from '@be-music/player/playlog';
-import type { BeMusicPlaylog } from '@be-music/player-web/runtime';
+import type { BeMusicCoursePlaylog, BeMusicPlaylog } from '@be-music/player/playlog';
 import {
   courseStageChartFingerprint,
   describeCourseLeaderboardResult,

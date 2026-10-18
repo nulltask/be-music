@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vite-plus/test';
-import type { PixiSceneHost } from '@be-music/player-web/scenes';
+import type { PixiSceneHost } from '@be-music/player-web/host';
 import {
   finalizeRecordingIfActive,
   startArmedRecording,
@@ -7,7 +7,7 @@ import {
   type RecordingDeps,
 } from './recording-controller.ts';
 
-vi.mock('@be-music/player-web/runtime', () => ({
+vi.mock('@be-music/player-web/recording', () => ({
   downloadBlob: vi.fn(),
   makeWebmSeekable: vi.fn(async (blob: Blob) => blob),
   recordingFileExtension: () => 'webm',
