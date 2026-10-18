@@ -1,5 +1,6 @@
 import type { Texture } from 'pixi.js';
 import type { BeatorajaSkin, BeatorajaSkinFontId } from '@be-music/beatoraja-skin';
+import type { BeMusicJudgeWindowSet } from '@be-music/skin-sdk';
 import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
 
 export interface BeatorajaPlaySkinViewOptions {
@@ -177,17 +178,17 @@ export interface BeatorajaPlaySkinViewOptions {
       }
     | undefined;
   /**
-   * Resolve the chart's judge windows in ms — `{pgreat, great, good, bad}`. Drives the
-   * `timingvisualizer[]` band-background colours per upstream `SkinTimingVisualizer.prepare`
-   * (`getJudgeArea(resource)` at `SkinTimingVisualizer.java:88`): the renderer paints
-   * stacked stripes radiating outward from the visualizer's centre, one stripe per band,
-   * each stripe's half-width = the matching ms window.
+   * Resolve the judge windows the play is judged by: its judge ruleset's key-lane windows, each judgment's early and
+   * late reach in ms. Drives the `timingvisualizer[]` band background per upstream `SkinTimingVisualizer.prepare`
+   * (`getJudgeArea(resource)` at `SkinTimingVisualizer.java:88`): the renderer paints stacked stripes outward from the
+   * visualizer's centre, one per judgment (`resolveTimingVisualizerBands`). Returning `undefined` (the engine has
+   * not reported its windows yet) paints no bands.
    *
    * When omitted (decide / select scenes, headless tests), the renderer falls through to
    * IIDX-NORMAL defaults (`{16.67, 33.33, 116.67, 250}`) so the bands still render
    * approximately correct.
    */
-  resolveTimingJudgeWindowsMs?: () => { pgreat: number; great: number; good: number; bad: number } | undefined;
+  resolveTimingJudgeWindows?: () => BeMusicJudgeWindowSet | undefined;
   /**
    * Resolve the FULL run's timing samples for the `timingdistributiongraph[]` element. Same
    * shape as {@link resolveTimingSamples} but returns every judgement, not just the live ring.

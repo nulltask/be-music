@@ -1477,29 +1477,26 @@ describe('BeatorajaPlayBridge — resolveNumberValue BPM', () => {
   });
 });
 
-describe('BeatorajaPlayBridge — resolveJudgeWindowsMs', () => {
-  it('returns undefined when no chart is loaded', () => {
-    const { bridge } = createHarness();
-    expect(bridge.resolveJudgeWindowsMs()).toBeUndefined();
-  });
+describe('BeatorajaPlayBridge — timing visualizer windows', () => {
+  /** beatoraja's 7 KEY NORMAL windows (ms): BAD reaches 220 early and 280 late, unlike LR2's ±200. */
+  const window = (earlyMs: number, lateMs: number) => ({ earlyMs, lateMs });
+  const BEATORAJA_7K_NORMAL = {
+    perfect: window(20, 20),
+    great: window(60, 60),
+    good: window(150, 150),
+    bad: window(220, 280),
+  };
+  const SCRATCH = { perfect: window(30, 30), great: window(70, 70), good: window(160, 160), bad: window(230, 290) };
 
-  it("resolves LR2 windows from the chart's judge rank", () => {
-    // RANK 2 (NORMAL): PG ±18, GR ±40, GD ±100, BAD ±200 ms (`resolveJudgeWindowsMs` in `@be-music/player/ruleset`).
-    const { bridge } = createHarness({
-      chart: {
-        metadata: { bpm: 120, title: 't', rank: 2 } as unknown as BeMusicJson['metadata'],
-        events: [],
-        measures: [],
-        bms: {} as unknown as BeMusicJson['bms'],
-        resources: { bpm: {}, stop: {} } as unknown as BeMusicJson['resources'],
-      } as unknown as BeMusicJson,
-    });
-    const windows = bridge.resolveJudgeWindowsMs();
-    expect(windows).toBeDefined();
-    expect(windows!.pgreat).toBeCloseTo(18, 1);
-    expect(windows!.great).toBeCloseTo(40, 1);
-    expect(windows!.good).toBeCloseTo(100, 1);
-    expect(windows!.bad).toBeCloseTo(200, 1);
+  it("shows the play's own key-lane windows, which the frames carry, and none before the engine reports them", () => {
+    const { bridge } = createHarness({ chart: createEmptyJson('bms') });
+    expect(bridge.resolveTimingJudgeWindows()).toBeUndefined();
+    const judgeWindows = { note: BEATORAJA_7K_NORMAL, scratch: SCRATCH, longNoteEnd: BEATORAJA_7K_NORMAL };
+    bridge.update({ nowMs: 0, state: createPlayState(), events: [], judgeWindows });
+    expect(bridge.resolveTimingJudgeWindows()).toEqual(BEATORAJA_7K_NORMAL);
+    // A play started again has none until its engine reports them.
+    bridge.update({ nowMs: 16, state: createPlayState(), events: [] });
+    expect(bridge.resolveTimingJudgeWindows()).toBeUndefined();
   });
 });
 
