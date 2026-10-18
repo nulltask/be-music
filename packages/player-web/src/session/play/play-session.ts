@@ -17,7 +17,7 @@ import { nonstopBpmAt } from '@be-music/player/course';
 import { resolveLr2LaneTimer } from '@be-music/lr2-skin/state';
 import { DEFAULT_PLAYLOG_VIEW_REPLAY, type BeMusicPlaylog } from '@be-music/player/playlog';
 import type { GaugeType } from '@be-music/player/ruleset';
-import { createHiSpeedState, createPlayState } from '@be-music/scene-model';
+import { createHiSpeedState, createPlayState, type PlayResult } from '@be-music/scene-model';
 import type { BeMusicLongNote } from '@be-music/skin-sdk';
 import type { Application, Texture } from 'pixi.js';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
@@ -40,12 +40,11 @@ import {
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, FALLBACK_INTRO_DELAY_MS, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
-import { resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
+import { resolveSideRelativeLaneIndex } from '@be-music/player/core/lane-layout';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { LiveTempo } from './live-tempo.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
 import { QuitHoldController } from './quit-hold.ts';
-import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayViewTiming } from '../../view/types.ts';
@@ -784,10 +783,10 @@ export class PlaySession extends PlaySessionState {
   }
 
   /**
-   * The play as a result so far ({@link PixiGameplayResultData}): read off the play state, a plain object a result
+   * The play as a result so far ({@link PlayResult}): read off the play state, a plain object a result
    * screen that outlives the play can keep. `undefined` before a chart is prepared.
    */
-  public getResultData(): PixiGameplayResultData | undefined {
+  public getResultData(): PlayResult | undefined {
     return getResultData(this);
   }
 

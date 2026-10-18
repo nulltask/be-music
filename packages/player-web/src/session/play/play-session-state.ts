@@ -16,7 +16,15 @@ import type { PlayerGaugeSummary, PlayerUiFramePayload, PlayerUiSignalBus } from
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog, PlaylogViewCoalescer } from '@be-music/player/playlog';
-import { createPlayState, type LaneCover, type LaneCoverState, type PlayState } from '@be-music/scene-model';
+import {
+  createPlayState,
+  DEFAULT_HISPEED,
+  HiSpeedTransition,
+  type LaneCover,
+  type LaneCoverState,
+  type PlaylogViewCursor,
+  type PlayState,
+} from '@be-music/scene-model';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import type {
   AudioBusChannel,
@@ -30,14 +38,12 @@ import type { ChartBpmRange } from './tempo-range.ts';
 import { LongNoteTracker } from './long-note-tracker.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
-import type { PlaylogViewCursor } from '../../scene/playlog-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { BmsSwitchingBga, RandomDraws, ResolvedChart } from '@be-music/chart';
-import { DEFAULT_HISPEED, HiSpeedTransition } from '../../scene/hi-speed.ts';
 import type { BgaCue, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';

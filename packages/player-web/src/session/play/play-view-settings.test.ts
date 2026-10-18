@@ -2,13 +2,13 @@ import type { PlaylogViewReplay, PlaylogViewState } from '@be-music/player/playl
 import {
   createHiSpeedState,
   createPlayState,
+  HiSpeedTransition,
   laneCoversFromPlayOptions,
   PlaylogViewCursor,
   reducePlayState,
   resolveWhiteNumber,
 } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
-import { HiSpeedTransition } from '../../scene/hi-speed.ts';
 import type { PlaySessionTheme } from './play-session-theme.ts';
 import {
   resolveLaneCovers,

@@ -13,7 +13,7 @@ import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-dist
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
 import type { TimedLandmineNote, TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { JudgeKind, ScoreSummary } from '@be-music/player/ruleset';
-import type { PlayState } from '@be-music/scene-model';
+import type { HiSpeedTransition, PlayState } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind, BeMusicLongNote } from '@be-music/skin-sdk';
 import type { Graphics, Text, Texture } from 'pixi.js';
 import type { BrowserSongEntry } from '../../../collection/types.ts';
@@ -23,7 +23,6 @@ import type { ChartBpmRange } from '../../../session/play/tempo-range.ts';
 import type { PlaySessionOptions } from '../../../session/play/play-options.ts';
 import type { LongNoteTracker } from '../../../session/play/long-note-tracker.ts';
 import type { GoneDrawObjects } from '../../../chart/note-draw-window.ts';
-import type { HiSpeedTransition } from '../../../scene/hi-speed.ts';
 import type { ChildPool } from '../../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../../skin/be-music/binding.ts';
 import type { BeMusicJudge, BeMusicLaneCover } from '../../../skin/be-music/types.ts';

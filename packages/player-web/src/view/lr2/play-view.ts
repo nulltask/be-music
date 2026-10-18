@@ -30,7 +30,7 @@ import type { Lr2PlayKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
-import { resolveLr2LaneIndex } from '../../scene/gameplay-lanes.ts';
+import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
