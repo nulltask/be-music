@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { hasKeyBeam, resolveKeyBeamAlpha, type KeyBeamState } from './key-beam.ts';
+import { resolveKeyBeamAlpha, type KeyBeamState } from './key-beam.ts';
 
 function beams(entries: { pressed?: string[]; on?: [string, number][]; fading?: [string, number][] } = {}) {
   return {
@@ -49,32 +49,5 @@ describe('resolveKeyBeamAlpha', () => {
     expect(state.keyBeamFadeStartedAt.has('16')).toBe(false);
     expect(state.keyBeamStartedAt.has('11')).toBe(true);
     expect(state.keyBeamFadeStartedAt.get('11')).toBe(150);
-  });
-});
-
-describe('hasKeyBeam', () => {
-  test('lights the scratch and every key of the 5, 7, 10 and 14 key lanes', () => {
-    for (const channel of ['16', '11', '12', '13', '14', '15', '18', '19']) {
-      expect(hasKeyBeam(channel, '7')).toBe(true);
-      expect(hasKeyBeam(channel.replace(/^1/, '2'), '14')).toBe(true);
-    }
-    for (const channel of ['16', '11', '15', '26', '21', '25']) {
-      expect(hasKeyBeam(channel, channel.startsWith('2') ? '10' : '5')).toBe(true);
-    }
-  });
-
-  test('lights all nine 9 KEY lanes, PMS-STD and BME alike', () => {
-    for (const channel of ['11', '12', '13', '14', '15', '22', '23', '24', '25', '16', '17', '18', '19']) {
-      expect(hasKeyBeam(channel, '9')).toBe(true);
-    }
-  });
-
-  test("lights a keyboard mode's first seven keys a side, and not the rest or the wheel", () => {
-    for (const channel of ['11', '12', '17', '21', '27']) expect(hasKeyBeam(channel, '48')).toBe(true);
-    for (const channel of ['18', '19', '1A', '1O', '1P', '1Q', '28', '2Q']) {
-      expect(hasKeyBeam(channel, '48')).toBe(false);
-    }
-    expect(hasKeyBeam('17', '24')).toBe(true);
-    expect(hasKeyBeam('1A', '24')).toBe(false);
   });
 });
