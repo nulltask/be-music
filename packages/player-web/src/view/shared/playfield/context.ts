@@ -98,8 +98,13 @@ export interface PlayfieldRuntime {
   readonly lanePressedAt: Map<string, number>;
   readonly laneReleasedAt: Map<string, number>;
   readonly pressedChannels: Set<string>;
-  readonly timerStartedAt: Map<number, number>;
-  readonly keyOnFadeOutStart: Map<number, number>;
+  /**
+   * The key beams by channel: when each came on, and when each began fading out after its key went up. The view
+   * retires a beam whose fade has played out; a family maps the channels onto its own timers (the LR2 view onto LR2's
+   * key-on bank).
+   */
+  readonly keyBeamStartedAt: Map<string, number>;
+  readonly keyBeamFadeStartedAt: Map<string, number>;
   readonly bombStartedAt: Map<string, number>;
   readonly bombJudge: Map<string, BeMusicJudge>;
   readonly hasBga: boolean;
@@ -128,7 +133,6 @@ export interface PlayfieldRuntime {
   displayBpm(seconds: number): number | undefined;
   isIntroPlaying(): boolean;
   isAutoplayedChannel(channel: string): boolean;
-  resolveKeyOnTimerId(channel: string): number | undefined;
   resolveLaneCovers(): readonly BeMusicLaneCover[];
   resolveLongNoteMode(note: RuntimeNote): BeMusicLongNote['mode'];
   resolveSongDurationSeconds(): number;

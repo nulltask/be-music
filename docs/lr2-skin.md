@@ -142,7 +142,7 @@ The LR2 play view (`view/lr2/play-view.ts` in `@be-music/player-web`) reads the 
 | A bomb on a lane               | the lane's bomb timer (50-69), until the playfield retires the bomb      |
 | A long note held on a lane     | the lane's hold timer (70-89), faded out over its span after the release |
 
-The key-on bank (100-119) is the play session's: it keeps every family's key beams by LR2's key-on ids (`resolveLr2LaneTimer('key-on', …)`), and the LR2 view reads them as they are. The lane index and the timer ids stay in the LR2 view; the shared playfield asks it by channel.
+The key-on bank (100-119) shows the play session's key beams. The session keeps them by channel, for every family (`keyBeamStartedAt`, `keyBeamFadeStartedAt`), and the LR2 view maps each lit channel onto its key-on timer (`resolveLr2LaneTimer('key-on', …)`). The lane index and the timer ids stay in the LR2 view; the session and the shared playfield go by channel.
 
 ## Parsed directives
 

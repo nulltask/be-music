@@ -10,6 +10,7 @@ import type { BeMusicLaneFrame } from '../../../skin/be-music/types.ts';
 import { renderPhantomLanes } from '../../../skins/phantom/playfield.ts';
 import { resolveLaneGeometry } from '../../built-in/play-chrome.ts';
 import type { PlayfieldContext } from './context.ts';
+import { hasKeyBeam, resolveKeyBeamAlpha } from './key-beam.ts';
 
 export function renderLanes(ctx: PlayfieldContext, width: number, height: number): void {
   ctx.laneLayer.clear();
@@ -79,26 +80,6 @@ export function renderLanes(ctx: PlayfieldContext, width: number, height: number
 }
 
 function resolveFallbackLaneLaserAlpha(ctx: PlayfieldContext, channel: string): number {
-  const timerId = ctx.play.resolveKeyOnTimerId(channel);
-  if (timerId === undefined) {
-    return 0;
-  }
-  if (ctx.play.pressedChannels.has(channel)) {
-    return 1;
-  }
-  if (!ctx.play.timerStartedAt.has(timerId)) {
-    return 0;
-  }
-  const fadeStart = ctx.play.keyOnFadeOutStart.get(timerId);
-  if (fadeStart === undefined) {
-    return 1;
-  }
-  const fadeMs = ctx.playfieldSkin.keyOnFadeMs(channel);
-  const elapsed = Math.max(0, ctx.play.playClock() - fadeStart);
-  if (elapsed >= fadeMs) {
-    ctx.play.keyOnFadeOutStart.delete(timerId);
-    ctx.play.timerStartedAt.delete(timerId);
-    return 0;
-  }
-  return Math.max(0, 1 - elapsed / fadeMs);
+  if (!hasKeyBeam(channel, ctx.play.chartPlayVariant)) return 0;
+  return resolveKeyBeamAlpha(ctx.play, channel, ctx.playfieldSkin.keyOnFadeMs(channel), ctx.play.playClock());
 }

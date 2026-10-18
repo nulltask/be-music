@@ -14,7 +14,6 @@
 import { mirrorBeatAtTempoReversal } from '@be-music/chart';
 import { createTempoClock, type TempoClock } from '@be-music/player';
 import { nonstopBpmAt } from '@be-music/player/course';
-import { resolveLr2LaneTimer } from '@be-music/lr2-skin/state';
 import { DEFAULT_PLAYLOG_VIEW_REPLAY, type BeMusicPlaylog } from '@be-music/player/playlog';
 import type { GaugeType } from '@be-music/player/ruleset';
 import { createHiSpeedState, createPlayState, type LibraryChart, type PlayResult } from '@be-music/scene-model';
@@ -40,7 +39,6 @@ import {
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, FALLBACK_INTRO_DELAY_MS, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
-import { resolveSideRelativeLaneIndex } from '@be-music/player/lanes';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { LiveTempo } from './live-tempo.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
@@ -539,10 +537,10 @@ export class PlaySession extends PlaySessionState {
     this.longNotes.clear();
     this.longNoteStyle = undefined;
     this.judgeWindows = undefined;
-    this.timerStartedAt.clear();
+    this.keyBeamStartedAt.clear();
     this.bombStartedAt.clear();
     this.bombJudge.clear();
-    this.keyOnFadeOutStart.clear();
+    this.keyBeamFadeStartedAt.clear();
     this.wavCmdVolumeMultipliers.clear();
     this.switchingBgas.clear();
     this.bgaSubRegionOrigins.clear();
@@ -703,18 +701,6 @@ export class PlaySession extends PlaySessionState {
    */
   public setHiSpeed(value: number): void {
     applyPlayEvent(this, { type: 'hi-speed-set', value });
-  }
-
-  /**
-   * The LR2 key-on timer of `channel`'s lane (`resolveLr2LaneTimer`): 100 + lane on 1P, 110 + lane on 2P, keys 1-7 (1-9
-   * for 9 KEY, whose lanes all run through the 1P bank).
-   */
-  resolveKeyOnTimerId(channel: string): number | undefined {
-    return resolveLr2LaneTimer('key-on', {
-      channel,
-      laneIndex: resolveSideRelativeLaneIndex(channel, this.chartPlayVariant),
-      playVariant: this.chartPlayVariant,
-    });
   }
 
   readonly handleTouchPointer = (event: PointerEvent): void => handleTouchPointer(this, event);

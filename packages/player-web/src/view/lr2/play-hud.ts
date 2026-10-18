@@ -255,8 +255,8 @@ export function computeKeyOnFadeDurationsMs(skin: Lr2Skin): Map<number, number> 
 
 /**
  * Walks the skin's elements and returns the longest keyframe `time` (in ms) attached to each LR2 bomb timer (50..69 —
- * 1P 50..59 / 2P 60..69, per the LR2 default 7-keys layout). `cleanupBombTimers` uses the value to retire the
- * corresponding `bombStartedAt` / `timerStartedAt` entries once the skin's authored explosion animation has finished,
+ * 1P 50..59 / 2P 60..69, per the LR2 default 7-keys layout). The playfield uses the value to retire the lane's
+ * `bombStartedAt` entry and its bomb timer once the skin's authored explosion animation has finished,
  * instead of pinning every chart to a hard-coded "LR2 default 150 ms" cycle.
  */
 export function computeBombDurationsMs(skin: Lr2Skin): Map<number, number> {

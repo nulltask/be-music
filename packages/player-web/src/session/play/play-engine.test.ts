@@ -31,6 +31,7 @@ function createPlay(options: {
   autoPlay?: boolean;
   courseCarryIn?: { combo: number; maxCombo: number };
   judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  chartPlayVariant?: string;
 }) {
   const judgeRuleset = options.judgeRuleset ?? 'lr2';
   const gauge = createPlaceholderGaugeState('GROOVE');
@@ -38,6 +39,8 @@ function createPlay(options: {
   const stateSignals = createPlayerStateSignals(2);
   const clock = { seconds: 0, ms: 0 };
   const events: string[] = [];
+  /** The channels the play asked the view's key-beam fade of. */
+  const fadeAsked: string[] = [];
   const ctx = {
     options: { autoPlay: options.autoPlay === true },
     song: SONG,
@@ -67,19 +70,22 @@ function createPlay(options: {
     lastImpulseKind: undefined,
     lastPoorAt: 0,
     judgeSideState: { '1P': { judge: '', until: 0, combo: 0 }, '2P': { judge: '', until: 0, combo: 0 } },
-    chartPlayVariant: '7',
+    chartPlayVariant: options.chartPlayVariant ?? '7',
     longNotes: new LongNoteTracker(),
     lanePressedAt: new Map<string, number>(),
     laneReleasedAt: new Map<string, number>(),
     pressedChannels: new Set<string>(),
-    timerStartedAt: new Map<number, number>(),
-    keyOnFadeOutStart: new Map<number, number>(),
+    keyBeamStartedAt: new Map<string, number>(),
+    keyBeamFadeStartedAt: new Map<string, number>(),
     keyFlashTimeouts: new Set<number>(),
     bombStartedAt: new Map<string, number>(),
     bombJudge: new Map<string, string>(),
     theme: {
       moment: (event: { kind: string }) => events.push(event.kind),
-      keyOnFadeMs: () => 120,
+      keyOnFadeMs: (channel: string) => {
+        fadeAsked.push(channel);
+        return 120;
+      },
     },
     playClock: () => clock.ms,
     currentSeconds: () => clock.seconds,
@@ -87,7 +93,6 @@ function createPlay(options: {
     // As `PlaySession` decides it: only LR2 shows the empty POORs inside its POOR counter.
     resolveEmptyPoorCountsInPoorDisplay: () => judgeRuleset === 'lr2',
     resolveJudgeRuleset: () => judgeRuleset,
-    resolveKeyOnTimerId: () => undefined,
   } as unknown as PlayEngineContext;
   /** One engine frame at chart time `seconds` (play clock `seconds × 1000`), with its judgments and commands. */
   const step = (
@@ -111,7 +116,7 @@ function createPlay(options: {
     }
     drainSharedEngineSignals(ctx);
   };
-  return { ctx, step, events, state: (): PlayState => ctx.playState };
+  return { ctx, step, events, fadeAsked, clock, state: (): PlayState => ctx.playState };
 }
 
 function frameAt(
@@ -316,5 +321,82 @@ describe('the BP a play records from its result', () => {
     expect(result.score.emptyPoor).toBe(3);
     expect(recordPlayFromResult(result).missCount).toBe(6);
     expect(courseStageRecordPlayFromResult(result).missCount).toBe(6);
+  });
+});
+
+describe('the key beams of a play, by channel', () => {
+  test("a press turns its lane's beam on, and a release fades it over the view's fade before it goes", () => {
+    const play = createPlay({ total: 4 });
+    play.step(1, {}, [], [{ kind: 'press-lane', channel: '16' }]);
+    expect(play.ctx.keyBeamStartedAt.get('16')).toBe(1000);
+    expect(play.ctx.keyBeamFadeStartedAt.has('16')).toBe(false);
+    play.step(1.5, {}, [], [{ kind: 'release-lane', channel: '16' }]);
+    expect(play.ctx.keyBeamFadeStartedAt.get('16')).toBe(1500);
+    expect(play.ctx.keyBeamStartedAt.get('16')).toBe(1000);
+    expect(play.fadeAsked).toEqual(['16']);
+    vi.advanceTimersByTime(119);
+    expect(play.ctx.keyBeamStartedAt.has('16')).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(play.ctx.keyBeamStartedAt.has('16')).toBe(false);
+    expect(play.ctx.keyBeamFadeStartedAt.has('16')).toBe(false);
+  });
+
+  test('a press during the fade turns the beam fully on again and keeps it through the cleanup', () => {
+    const play = createPlay({ total: 4 });
+    play.step(1, {}, [], [{ kind: 'press-lane', channel: '11' }]);
+    play.step(1.05, {}, [], [{ kind: 'release-lane', channel: '11' }]);
+    play.step(1.1, {}, [], [{ kind: 'press-lane', channel: '11' }]);
+    expect(play.ctx.keyBeamStartedAt.get('11')).toBe(1100);
+    expect(play.ctx.keyBeamFadeStartedAt.has('11')).toBe(false);
+    vi.advanceTimersByTime(120);
+    expect(play.ctx.keyBeamStartedAt.get('11')).toBe(1100);
+  });
+
+  test('an autoplayed note flashes its beam, holding it fully on for 60 ms before it fades', () => {
+    const play = createPlay({ total: 4 });
+    play.step(2, {}, [], [{ kind: 'flash-lane', channel: '13' }]);
+    expect(play.ctx.keyBeamStartedAt.get('13')).toBe(2000);
+    vi.advanceTimersByTime(59);
+    expect(play.ctx.keyBeamFadeStartedAt.has('13')).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(play.ctx.keyBeamFadeStartedAt.has('13')).toBe(true);
+    vi.advanceTimersByTime(120);
+    expect(play.ctx.keyBeamStartedAt.has('13')).toBe(false);
+  });
+
+  test("a long note's hold keeps its beam on past the flash until its release", () => {
+    const play = createPlay({ total: 4 });
+    play.step(
+      3,
+      {},
+      [],
+      [
+        { kind: 'flash-lane', channel: '22' },
+        { kind: 'hold-lane-until-beat', channel: '22', beat: 12 },
+      ],
+    );
+    vi.advanceTimersByTime(500);
+    expect(play.ctx.keyBeamStartedAt.get('22')).toBe(3000);
+    expect(play.ctx.keyBeamFadeStartedAt.has('22')).toBe(false);
+    play.step(4, {}, [], [{ kind: 'release-lane', channel: '22' }]);
+    expect(play.ctx.keyBeamFadeStartedAt.get('22')).toBe(4000);
+  });
+
+  test('keeps each lane apart, whatever the play mode, with no LR2 timer of its own', () => {
+    // A 24-key play's keys past the seventh have no LR2 key-on timer; the play keeps their beams all the same.
+    const play = createPlay({ total: 4, chartPlayVariant: '24' });
+    play.step(
+      1,
+      {},
+      [],
+      [
+        { kind: 'press-lane', channel: '11' },
+        { kind: 'press-lane', channel: '1A' },
+        { kind: 'press-lane', channel: '1P' },
+      ],
+    );
+    expect([...play.ctx.keyBeamStartedAt.keys()]).toEqual(['11', '1A', '1P']);
+    play.step(1.2, {}, [], [{ kind: 'release-lane', channel: '1A' }]);
+    expect([...play.ctx.keyBeamFadeStartedAt.keys()]).toEqual(['1A']);
   });
 });
