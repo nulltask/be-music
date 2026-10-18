@@ -219,6 +219,9 @@ sequenceDiagram
 - During a play, the 1P rank ops (200-207) and their "now" copies (340-347) rank the EX score over the notes judged so
   far, which is 100 % before the first note, so a play starts on AAA, as beatoraja's `createNowRank` reads
   `ScoreDataProperty.nowrate`; a chart without notes lights none (#430).
+- The generic rank ops (220-227) light every rank the EX score reaches over the chart's notes (`beatorajaGenericRankOps`),
+  as beatoraja's `BooleanPropertyFactory` asks `ScoreDataProperty.qualifyRank` (`rate >= border / 27`): an AAA lights
+  all eight, any score lights F, and a chart without notes lights none. `computeGenericRankOp` names the highest one.
 - A few LR2 ids mean something else to beatoraja (`IntegerPropertyFactory`, `BooleanPropertyFactory`,
   `StringPropertyFactory`): number 92 is the main BPM (LR2's internet-ranking place), op 400 the CONSTANT option (LR2's
   key-config page), and beatoraja defines no numbers 38-41 or 93-94, no texts 17-29 and no op 34, so they read nothing
@@ -229,8 +232,6 @@ sequenceDiagram
 - The best record and the target do not reach the mapping yet: numbers 150-158 (the pacemaker scores, the differences
   from them, the rates over them and `DIFF_NEXTRANK`, the distance to the next rank on 27ths), the best record's
   numbers (71-89) and the best and target rank ops read 0 or nothing.
-- The generic rank ops (220-227) light one rank, the EX score's; beatoraja's `qualifyRank` lights every rank the EX
-  score reaches (AAA lights all eight). `computeGenericRankOp` returns one op, so lighting them all needs a new entry.
 - Op 400 (CONSTANT) is never lit: be-music has no CONSTANT option.
 
 ## Browser player wiring
