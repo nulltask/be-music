@@ -499,26 +499,8 @@ export interface PlayfieldBgaTarget {
  * line and bomb images, and the effect lengths. The playfield walks the notes and lays them out; the skin only answers
  * where and with what. A method that returns `undefined` leaves that part to the playfield's built-in drawing.
  *
- * It replaced the theme hooks the subclasses of the removed `CoreGameplayView` overrode, as follows:
- *
- * | `CoreGameplayView` hook | Replaced by |
- * | --- | --- |
- * | `stageSize` | {@link stage} |
- * | `themeOwnsPlayfield` | {@link ownsLanes} |
- * | `resolveThemeLaneRect(channel, w, h)` | {@link laneRect} |
- * | `resolveThemeNoteCell(kind, laneIndex)` | {@link noteCell}, by channel: the LR2 lane index stays in the LR2 view |
- * | `renderThemeMeasureLines(frame)` | {@link measureLines}: the playfield places them at every measure |
- * | `collectBgaTargets(out)` | {@link bgaTargets} |
- * | `renderBombEffects()` | {@link bombCell} |
- * | `resolveBombDurationMs(channel)` | {@link bombDurationMs} |
- * | `resolveKeyOnFadeMs(timerId)` | {@link keyOnFadeMs}, by channel: the LR2 timer id stays in the LR2 view |
- * | `themeTiming` | {@link PlayView.timing} |
- * | `onThemeEvent(event)` | {@link PlayFrame.events}, read in {@link FamilyView.draw} |
- * | `updateThemeState()` | the start of {@link FamilyView.draw} |
- * | `renderThemeLayer(w, h)`, `renderThemeText(seconds)` | {@link FamilyView.draw}: the view draws its chrome around the playfield |
- * | `attachThemeLayers()` | {@link FamilyView.attach} |
- * | `prepareTheme()` | loading the `PlayKit` before the scene is made; per-play state resets in {@link FamilyView.attach} |
- * | `disposeTheme()` | {@link FamilyView.dispose} |
+ * It replaced the theme hooks the old gameplay view's subclasses overrode; `docs/player-web.md` ("Scene sessions and
+ * family views") lists which member took over each one.
  */
 export interface PlayfieldSkin {
   /** The design canvas: LR2's 640x480, a be-music skin's stage, a beatoraja skin's size. */
