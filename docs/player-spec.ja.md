@@ -21,6 +21,24 @@ core engine の既定は `lr2` 互換ルールセットと、その `GROOVE` gau
 どちらもオプションで、`PlayerOptions.judgeRuleset` がルールセットを、`PlayerOptions.gauge` がゲージを選びます。
 `bms-player` では `--ruleset` / `--gauge` で指定できます。
 
+## 公開する入口
+
+`@be-music/player` は、ファイル構成ではなく設計した入口を公開します（[ADR 0005](./adr/0005-public-entry-points.ja.md)）。
+
+| 入口               | 公開するもの                                                                                                                                                                                                                                                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@be-music/player` | エンジン：`manualPlay`、`autoPlay`、`PlayerOptions` と 5 つの分類の型、`PlayerSummary`、読み込みの進捗、`PlayerInterruptedError`、ランタイムの契約（`AudioSession`、`PlayerInputRuntime`、`PlayerUiRuntime` とその `Create*Context` の型）、`resolvePlayChart`、`preparePlaybackChart`、`resolveChartRulesetFacts`、`createTempoClock`             |
+| `./signals`        | ホストの入力と UI のランタイムが演奏中のプレイとやり取りするもの：入力のバスとそのコマンド、UI のバスとそのフレーム・コマンド・`PlayerGaugeSummary`、状態のシグナル、ハイスピードの範囲と操作                                                                                                                                                      |
+| `./lanes`          | プレイモードのレーン：レイアウトとスロット、スクラッチとホイールのレーン、キーの割り当て、FREE ZONE の入力、レーンオプションが入れ替えるレーン                                                                                                                                                                                                     |
+| `./display`        | ホストが表示するもの：時刻を付けたプレイのノート（`extract*`、`toTimed*`）、`ScrollDistanceMapper`、画面の BGA の cue（`pickActiveBgaCue`、`pickActiveBgaKey`、`DEFAULT_POOR_BGA_DISPLAY_SECONDS`）、選曲画面が表示する譜面の情報（`resolveDisplayed*`）、`formatSeconds`、`resolveAltModifierLabel`、TUI のノートの高さ、BGA の縮小のアルゴリズム |
+| `./ruleset`        | ホスト・スキン・リーダーボードが共有する語彙：判定ルールセットの id（`PLAYLOG_RULESET_IDS`）、判定幅、ゲージ、クリアランプ、BP、スコア                                                                                                                                                                                                             |
+| `./playlog`        | プレイログの形式、その記録・シミュレーター・対象の判定、コースと NONSTOP のログ                                                                                                                                                                                                                                                                    |
+| `./records`        | 判定ルールセットごとのベスト記録と、その記録の規則                                                                                                                                                                                                                                                                                                 |
+| `./course`         | コースの定義：LR2 の `.lr2crs`、beatoraja のコース、難易度表のコース、コースメーカー、NONSTOP の通しプレイ                                                                                                                                                                                                                                         |
+| `./audio-sink`     | Node（`node-web-audio-api`）と Web Audio のコンテキストの音声シンク                                                                                                                                                                                                                                                                                |
+
+譜面の層の名前は `@be-music/chart` から読み込みます。`ChartPlayVariant`、`LongNoteMode`、タイムラインとその点、`BgaCue` と BGA のタイムラインを作る関数、タイミングの解決、サンプルのトリガーです。それ以外はパッケージの内部です。
+
 ## BMS 対応範囲
 
 この節では、[`bms-spec.md`](./bms-spec.ja.md) の一次参照に現れる BMS コマンドとチャンネルを、現在の `player` 実装に対して分類します。
@@ -479,8 +497,7 @@ EX-SCORE は IIDX 互換です。
 
 スコアの語彙はルールセットのもので、`@be-music/player/ruleset` が公開します。`ScoreSummary`、`JudgeKind`、
 `createEmptyScore`、`computeScoreRate`、DJ ランク（`resolveIidxRankIndexFromScore`、`resolveIidxRankLabel`、
-`IIDX_RANK_LABELS`）、`resolveLr2MoneyScore`、`resolveDisplayedPoor` です。`@be-music/player/core/scoring` は
-その非推奨の別名で、ほかの `core/*` subpath とともに削除します。
+`IIDX_RANK_LABELS`）、`resolveLr2MoneyScore`、`resolveDisplayedPoor` です。
 
 ### 空 POOR
 
