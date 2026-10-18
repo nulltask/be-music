@@ -210,11 +210,6 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelApi.restoreBrowse(BENCH_LIBRARY, BENCH_SNAPSHOT);
     },
   });
-  define('scene-model.browseSnapshotFromSelectNavigation', {
-    run: () => {
-      sceneModelApi.browseSnapshotFromSelectNavigation({ folderPath: ['Pack1'], selectedIndex: 3 });
-    },
-  });
 
   // Play options
   define('scene-model.clampHiSpeed', {
