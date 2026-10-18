@@ -25,7 +25,7 @@ export function buildTempoFolder(this: DebugMenu, folder: GUI): void {
       .name('Tempo (%)')
       .onChange(() => {
         rememberTempo();
-        if (!this.liveTempoPlay) return;
+        if (!this.playLock.liveTempoPlay) return;
         const tempo = tempoFromPercent(this.guiState.tempoPercent);
         this.gameplayView?.setTempo(tempo);
       }),

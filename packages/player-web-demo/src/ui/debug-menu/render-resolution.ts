@@ -19,6 +19,44 @@ export const AUTO_DETECT_RESOLUTION_LABEL = 'Auto-detect resolution';
 /** How long the select screen settles (song images, fonts, first BGM) before the first-run resolution benchmark. */
 const FIRST_RUN_RESOLUTION_DELAY_MS = 2000;
 
+/** What the benchmark asks of the select screen it measures. */
+export interface MeasuredSelectScreen {
+  /** Whether it is on the stage (between its enter and exit). */
+  readonly entered: boolean;
+}
+
+/**
+ * Whether this visit benchmarks the render resolution on its own: only before the player has picked one (by hand or by
+ * an earlier benchmark, `stored`), not when `?resolution=` in `search` pins it, and not where there's nothing to choose
+ * (a 1× display).
+ */
+export function wantsFirstRunResolutionDetect(visit: {
+  readonly stored: number | undefined;
+  readonly search: string;
+  readonly devicePixelRatio: number;
+}): boolean {
+  if (visit.stored !== undefined) return false;
+  if (new URLSearchParams(visit.search).has('resolution')) return false;
+  return renderResolutionSteps(visit.devicePixelRatio || 1).length >= 2;
+}
+
+/** Whether `measured` is still the select screen showing: the select screen now, and on the stage. */
+export function isStillShowing(measured: unknown, select: MeasuredSelectScreen | undefined): boolean {
+  return select !== undefined && select === measured && select.entered;
+}
+
+/**
+ * Whether a benchmark run stops: when the page is hidden (a hidden page's frames are throttled), and, for a run that
+ * measures a select screen (`whileShowing`), once that screen is no longer the one showing.
+ */
+export function isResolutionDetectCancelled(state: {
+  readonly visible: boolean;
+  readonly whileShowing?: unknown;
+  readonly select: MeasuredSelectScreen | undefined;
+}): boolean {
+  return !state.visible || (state.whileShowing !== undefined && !isStillShowing(state.whileShowing, state.select));
+}
+
 /**
  * Before the player has picked a render resolution (by hand or by an earlier benchmark), benchmarks the select screen
  * once, after it settles, to pick one for this device. Skipped where there's nothing to choose (a 1× display) and
@@ -27,13 +65,16 @@ const FIRST_RUN_RESOLUTION_DELAY_MS = 2000;
 export function scheduleFirstRunResolutionDetect(this: DebugMenu): void {
   if (this.firstRunResolutionScheduled) return;
   this.firstRunResolutionScheduled = true;
-  if (readStoredRenderResolution() !== undefined) return;
-  if (new URLSearchParams(window.location.search).has('resolution')) return;
-  if (renderResolutionSteps(window.devicePixelRatio || 1).length < 2) return;
+  const visit = {
+    stored: readStoredRenderResolution(),
+    search: window.location.search,
+    devicePixelRatio: window.devicePixelRatio,
+  };
+  if (!wantsFirstRunResolutionDetect(visit)) return;
   const selectView = this.selectView;
   window.setTimeout(() => {
     // Gone on to a play already: measuring gameplay that just started would mislead, so wait for the next visit.
-    if (this.selectView !== selectView || selectView?.entered !== true || readStoredRenderResolution() !== undefined) {
+    if (!isStillShowing(selectView, this.selectView) || readStoredRenderResolution() !== undefined) {
       return;
     }
     void this.detectRenderResolution({ whileShowing: selectView });
@@ -59,9 +100,11 @@ export async function detectRenderResolution(this: DebugMenu, options: { whileSh
       nextFrame: () => new Promise((resolve) => requestAnimationFrame(resolve)),
       onStep: (value) => control?.name(`Measuring ${renderResolutionLabel(value)}…`),
       cancelled: () =>
-        document.visibilityState !== 'visible' ||
-        (options.whileShowing !== undefined &&
-          (this.selectView !== options.whileShowing || this.selectView?.entered !== true)),
+        isResolutionDetectCancelled({
+          visible: document.visibilityState === 'visible',
+          whileShowing: options.whileShowing,
+          select: this.selectView,
+        }),
     });
     this.guiState.renderResolution = result.chosen;
     storeRenderResolution(result.chosen);

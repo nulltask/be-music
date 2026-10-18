@@ -260,7 +260,7 @@ export function rebuildLr2ThemePicker(this: DebugMenu): void {
       void this.deps.applyLr2ThemeByName(value);
     });
   // A theme dropped during a play brings the picker in disabled, as the other skin controls are then.
-  this.lr2ThemeController.enable(!this.skinControlsLocked);
+  this.lr2ThemeController.enable(!this.playLock.skinControlsLocked);
   // lil-gui appends; move the row up next to the beatoraja pickers so the theme pickers read as one group.
   const beatorajaFolder = this.beatorajaSkinPickerFolder?.domElement;
   if (beatorajaFolder?.parentElement === folder.$children) {
