@@ -1,6 +1,6 @@
 import type { SkinFamilyId } from '@be-music/player-web/skin';
 import type { BeatorajaThemeBundle } from '@be-music/player-web/skin';
-import type { BrowserSongEntry } from '@be-music/player-web/collection';
+import type { LibraryChart } from '@be-music/scene-model';
 import { pickLr2PlaySkin, type Lr2PlaySkinMap, type Lr2Skin } from '@be-music/lr2-skin';
 import type { SkinFamilyOverride, SkinFamilySceneKind } from './types.ts';
 import { canPlaySongBeatoraja } from './chart-shape.ts';
@@ -30,7 +30,7 @@ export interface FamilyDispatchState {
 export function availableFamiliesForScene(
   state: FamilyDispatchState,
   scene: SkinFamilySceneKind,
-  song?: BrowserSongEntry,
+  song?: LibraryChart,
 ): Set<SkinFamilyId> {
   const available = new Set<SkinFamilyId>(['default']);
   // Beatoraja availability per scene. The play scene additionally needs a chart so we can check whether the
@@ -72,7 +72,7 @@ export function availableFamiliesForScene(
 export function pickActiveFamilyForScene(
   state: FamilyDispatchState,
   scene: SkinFamilySceneKind,
-  song?: BrowserSongEntry,
+  song?: LibraryChart,
 ): SkinFamilyId {
   const available = availableFamiliesForScene(state, scene, song);
   const override = state.skinFamilyOverride;

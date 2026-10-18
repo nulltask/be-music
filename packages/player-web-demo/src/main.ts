@@ -34,6 +34,8 @@ import {
   systemSoundSetFromBeatoraja,
   type BrowseSnapshot,
   type CourseView,
+  type LibraryChart,
+  type LibraryCourse,
   type PlayOptions,
   type PlayResult,
   type PlayRunKind,
@@ -85,10 +87,8 @@ import {
   resolveCourseMakerFolders,
   CourseMaker,
   createCourseSongRecord,
-  type BrowserCourseEntry,
   type BrowserDroppedFile,
   type BrowserSongCollection,
-  type BrowserSongEntry,
   type ChartFileHashes,
   type CourseDefinitionGroup,
 } from '@be-music/player-web/collection';
@@ -224,7 +224,7 @@ import { loadMadeCourses, saveMadeCourses } from './course-maker-store.ts';
 
 /** A NONSTOP course being played as its stitched chart. */
 interface NonstopPlay {
-  course: BrowserCourseEntry;
+  course: LibraryCourse;
   prepared: PreparedNonstopPlay;
 }
 import demoPackageJson from '../package.json' with { type: 'json' };
@@ -516,7 +516,7 @@ class PlayerWebDemoApp {
    * `PixiSceneHost` instead of constructing a separate Pixi `Application` per view.
    */
   private readonly sceneHost = new PixiSceneHost();
-  private collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
+  private collection: BrowserSongCollection = { sources: [], charts: [], errors: [] };
   /**
    * Course files dropped so far (`.lr2crs`, beatoraja `course/*.json`) and courses imported from difficulty-table URLs,
    * resolved into `collection.courseFolders`.
@@ -699,7 +699,7 @@ class PlayerWebDemoApp {
    * in even when the toggle changes on the result screen; the remaining play options are read from the GUI state as
    * on any play start.
    */
-  private lastPlay: { song: BrowserSongEntry; overrides: { autoPlay: boolean; replay?: BeMusicPlaylog } } | undefined;
+  private lastPlay: { song: LibraryChart; overrides: { autoPlay: boolean; replay?: BeMusicPlaylog } } | undefined;
   private decideView: DecideScene | undefined;
   /**
    * The player's audio service (ADR 0007): one system AudioContext for the sounds of the screens built on it, the
@@ -987,7 +987,7 @@ class PlayerWebDemoApp {
     this.courseMakerPanel = new CourseMakerPanel(this.courseMaker, { onStatus: (text) => this.setStatus(text) });
     void loadMadeCourses().then(async (made) => {
       this.courseMaker.restore(made);
-      if (made.courses.length > 0 && this.collection.songs.length > 0) await this.refreshMadeCourses();
+      if (made.courses.length > 0 && this.collection.charts.length > 0) await this.refreshMadeCourses();
     });
     // Keep the initial mount's promise so URL auto-load (below) can wait for the Pixi host to finish initializing
     // before it drives its own `showSelect` — two concurrent first-mounts race and read the renderer before it exists.
@@ -1924,7 +1924,7 @@ class PlayerWebDemoApp {
       status: this.guiState.status,
       loading: this.elements.loadingOverlay.classList.contains('visible'),
       library: {
-        songs: this.collection.songs.length,
+        songs: this.collection.charts.length,
         courseFolders: (this.collection.courseFolders ?? []).map((folder) => folder.label),
       },
       cursor:
@@ -1935,8 +1935,8 @@ class PlayerWebDemoApp {
                 entry &&
                 describeBar(
                   entry,
-                  entry.kind === 'song'
-                    ? this.lookupSongRecord(entry.song)
+                  entry.kind === 'chart'
+                    ? this.lookupSongRecord(entry.chart)
                     : entry.kind === 'course'
                       ? lookupCourseRecord(entry.course, this.songRecords, this.guiState.nonstopPlacement)
                       : undefined,
@@ -2114,7 +2114,7 @@ class PlayerWebDemoApp {
       } · songs=${songFiles.length}`,
     );
     // The songs already listed, so the select screen can open on what this drop added.
-    const previousSongIds = new Set(this.collection.songs.map((song) => song.id));
+    const previousSongIds = new Set(this.collection.charts.map((song) => song.id));
     const tasks: Array<Promise<unknown>> = [];
     if (carriesLr2Theme) {
       tasks.push(this.loadTheme(themeFiles));
@@ -2135,7 +2135,7 @@ class PlayerWebDemoApp {
       ? summarizeBeatorajaPlaySkins(this.beatorajaTheme.theme.playSkins) || 'none'
       : 'none';
     dropLog.info(
-      `loaded · songs=${this.collection.songs.length} · errors=${
+      `loaded · songs=${this.collection.charts.length} · errors=${
         this.collection.errors.length
       } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}${
         this.beatorajaTheme ? ` · beatoraja-skins=${beatorajaSummary}` : ''
@@ -2147,14 +2147,14 @@ class PlayerWebDemoApp {
     // Status panel stays terse on purpose — only show "loaded" when there's something to celebrate, and skip the
     // per-key-mode skin enumeration since the user can see the active skin in-canvas. "0 charts loaded" is suppressed
     // so a theme-only drop doesn't read like an error.
-    if (this.collection.songs.length > 0) {
+    if (this.collection.charts.length > 0) {
       this.setStatus(describeSongCollection(this.collection));
     } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
       this.setStatus('Theme loaded');
     }
     await this.refreshCourseFolders();
     // Open what was dropped: its folder, or the folder list when the drop carried several.
-    const dropped = navigationAfterDrop(this.collection.songs, previousSongIds);
+    const dropped = navigationAfterDrop(this.collection.charts, previousSongIds);
     if (dropped !== undefined) this.lastSelectNavigation = dropped;
     await this.showSelect();
     // A skin the player asked for through the Debug Menu ("drop a skin") is switched to once the drop brings it.
@@ -2210,7 +2210,7 @@ class PlayerWebDemoApp {
     if (archives.length > 0) {
       await this.loadSongs(archives);
       await this.showSelect();
-      if (this.collection.songs.length > 0) {
+      if (this.collection.charts.length > 0) {
         this.setStatus(describeSongCollection(this.collection));
       }
     }
@@ -2255,11 +2255,11 @@ class PlayerWebDemoApp {
    * Finds the loaded song a play-log belongs to. Chart-file SHA-256 first (`chart.sha256`), then the recorded
    * `chartPath`, then a title + artist heuristic for logs recorded before either rode along.
    */
-  private async findSongForPlaylog(playlog: BeMusicPlaylog): Promise<BrowserSongEntry | undefined> {
+  private async findSongForPlaylog(playlog: BeMusicPlaylog): Promise<LibraryChart | undefined> {
     // Content hash first — stable across sessions, machines, and file moves.
     const sha256 = playlog.chart.sha256?.toLowerCase();
     if (sha256 !== undefined && sha256.length > 0) {
-      for (const entry of this.collection.songs) {
+      for (const entry of this.collection.charts) {
         if ((await this.resolveChartSha256(entry)) === sha256) {
           return entry;
         }
@@ -2267,7 +2267,7 @@ class PlayerWebDemoApp {
     }
     const nativeChartPath = playlog.play.native?.chartPath;
     if (typeof nativeChartPath === 'string' && nativeChartPath.length > 0) {
-      const exact = this.collection.songs.find((entry) => entry.chartPath === nativeChartPath);
+      const exact = this.collection.charts.find((entry) => entry.chartPath === nativeChartPath);
       if (exact) {
         return exact;
       }
@@ -2276,7 +2276,7 @@ class PlayerWebDemoApp {
     if (title === undefined || title.length === 0) {
       return undefined;
     }
-    return this.collection.songs.find(
+    return this.collection.charts.find(
       (entry) => entry.title === title && (playlog.chart.artist === undefined || entry.artist === playlog.chart.artist),
     );
   }
@@ -2366,7 +2366,7 @@ class PlayerWebDemoApp {
    */
   private async refreshCourseFolders(): Promise<void> {
     const hashed = await Promise.all(
-      this.collection.songs.map(async (song) => ({ song, ...(await this.resolveChartHashes(song)) })),
+      this.collection.charts.map(async (song) => ({ song, ...(await this.resolveChartHashes(song)) })),
     );
     this.collection = {
       ...this.collection,
@@ -2415,7 +2415,7 @@ class PlayerWebDemoApp {
    * While a course is being made, deciding a song adds it to the course instead of playing it, as LR2 does; deciding one
    * more once it holds five saves the course. Returns whether the song was taken.
    */
-  private addSongToCourseBeingMade(song: BrowserSongEntry): boolean {
+  private addSongToCourseBeingMade(song: LibraryChart): boolean {
     const draft = this.courseMaker.draft;
     if (draft === undefined) return false;
     if (draft.stages.length >= LR2_COURSE_MAKER_MAX_STAGES) {
@@ -2443,7 +2443,7 @@ class PlayerWebDemoApp {
    * Starts a course from its first stage. A beatoraja random course first draws its stages from the library (each
    * stage filter against the songs and their chart hashes); a stage that finds no chart leaves it unstarted.
    */
-  private async startCourse(entry: BrowserCourseEntry, options: { autoPlay?: boolean } = {}): Promise<void> {
+  private async startCourse(entry: LibraryCourse, options: { autoPlay?: boolean } = {}): Promise<void> {
     // AUTO on a course bar plays every stage itself; PLAY follows the Debug Menu's auto play.
     this.courseAutoPlay = options.autoPlay;
     const plan = planCourseStart(entry);
@@ -2461,7 +2461,7 @@ class PlayerWebDemoApp {
     let course = entry;
     if (plan.action === 'draw') {
       const candidates = await Promise.all(
-        this.collection.songs.map(async (song) => ({ song, ...(await this.resolveChartHashes(song)) })),
+        this.collection.charts.map(async (song) => ({ song, ...(await this.resolveChartHashes(song)) })),
       );
       const drawn = drawBrowserRandomCourse(entry, candidates, Math.random);
       if (!drawn.ok) {
@@ -2477,7 +2477,7 @@ class PlayerWebDemoApp {
     const active = startCourseRun(course);
     this.activeCourse = active;
     // LR2 shows the decide screen once, before the first stage (a stage after it starts from the previous result).
-    const first = course.stages[0]?.song;
+    const first = course.stages[0]?.chart;
     if (first === undefined) {
       await this.playNextCourseStage();
       return;
@@ -2499,12 +2499,12 @@ class PlayerWebDemoApp {
    * pipeline) played from their own files, as LR2 plays a NONSTOP course in one go. Quick retry stitches and plays it
    * again.
    */
-  private async startNonstopCourse(course: BrowserCourseEntry, options: { decide?: boolean } = {}): Promise<void> {
+  private async startNonstopCourse(course: LibraryCourse, options: { decide?: boolean } = {}): Promise<void> {
     const hashes = new Map<string, ChartFileHashes>();
     for (const stage of course.stages) {
-      if (stage.song === undefined) continue;
-      const found = await this.resolveChartHashes(stage.song);
-      if (found !== undefined) hashes.set(stage.song.id, found);
+      if (stage.chart === undefined) continue;
+      const found = await this.resolveChartHashes(stage.chart);
+      if (found !== undefined) hashes.set(stage.chart.id, found);
     }
     const prepared = prepareNonstopPlay(course, {
       sourceOf: (song) => resolveSongSource(this.collection, song),
@@ -2572,7 +2572,7 @@ class PlayerWebDemoApp {
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
     this.leaderboard.maybeSubmitCourse(
       courseLog,
-      nonstop.course.stages.flatMap((stage) => (stage.song !== undefined ? [stage.song] : [])),
+      nonstop.course.stages.flatMap((stage) => (stage.chart !== undefined ? [stage.chart] : [])),
     );
     // As LR2 shows a NONSTOP run: on the result skin with the clear / fail jingles (no course-result step), and R
     // stitches and plays the course again.
@@ -2690,7 +2690,7 @@ class PlayerWebDemoApp {
    * recording (`chart.sha256` / `chart.md5`) and dropped-log matching, and chart files are small enough that hashing
    * the whole library on a dropped log stays cheap.
    */
-  private async resolveChartHashes(song: BrowserSongEntry): Promise<ChartFileHashes | undefined> {
+  private async resolveChartHashes(song: LibraryChart): Promise<ChartFileHashes | undefined> {
     const cached = this.chartHashCache.get(song.id);
     if (cached !== undefined) {
       return cached ?? undefined;
@@ -2711,7 +2711,7 @@ class PlayerWebDemoApp {
   }
 
   /** The SHA-256 half of {@link resolveChartHashes}. */
-  private async resolveChartSha256(song: BrowserSongEntry): Promise<string | undefined> {
+  private async resolveChartSha256(song: LibraryChart): Promise<string | undefined> {
     return (await this.resolveChartHashes(song))?.sha256;
   }
 
@@ -2720,7 +2720,7 @@ class PlayerWebDemoApp {
    * once the chart has been hashed: the first lookup starts hashing it and answers from the path key meanwhile (where a
    * chart that could not be hashed keeps its record), so a skin sees the record a frame or two later.
    */
-  private lookupSongRecord(song: BrowserSongEntry): BeMusicSongRecord | undefined {
+  private lookupSongRecord(song: LibraryChart): BeMusicSongRecord | undefined {
     if (this.songRecords.size === 0) {
       return undefined;
     }
@@ -2802,7 +2802,7 @@ class PlayerWebDemoApp {
         if (this.courseGroups.length > 0) await this.refreshCourseFolders();
         await this.showSelect();
       }
-      if (this.collection.songs.length > 0) {
+      if (this.collection.charts.length > 0) {
         this.setStatus(describeSongCollection(this.collection));
       }
     } catch (error) {
@@ -2825,7 +2825,7 @@ class PlayerWebDemoApp {
     });
     // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
     // text is set by `handleDrop` once both theme + songs land, so a mid-flight transient is plenty.
-    if (this.collection.songs.length > 0) {
+    if (this.collection.charts.length > 0) {
       this.setStatus(describeSongCollection(this.collection));
     }
   }
@@ -3309,7 +3309,7 @@ class PlayerWebDemoApp {
    * lays the lanes out for (`resolveLibraryChartPlayVariant`), so a 9 KEY chart keeps its POPN lanes on a 7 KEY
    * skin.
    */
-  private async loadBeatorajaPlayKit(song: BrowserSongEntry): Promise<
+  private async loadBeatorajaPlayKit(song: LibraryChart): Promise<
     | {
         readonly kit: BeatorajaKit;
         readonly entryPath: string;
@@ -3489,7 +3489,7 @@ class PlayerWebDemoApp {
    * synthetic-id destinations (`-100` / `-101` / `-102`). Each is best-effort: a missing or malformed bitmap is left
    * out and the matching destinations stay hidden.
    */
-  private loadBeatorajaChartImages(song: BrowserSongEntry): Promise<BeatorajaChartImages> {
+  private loadBeatorajaChartImages(song: LibraryChart): Promise<BeatorajaChartImages> {
     return loadBeatorajaChartImages(song, resolveSongSource(this.collection, song));
   }
 
@@ -3525,7 +3525,7 @@ class PlayerWebDemoApp {
    * beatoraja theme, no decide skin in it, or one that failed to load. The player's pick in the Debug Menu wins over the
    * discovery's (`theme.decideSkin`, not `decideCandidates[0]`, which is only the first in the file walk).
    */
-  private async loadBeatorajaDecideKit(song: BrowserSongEntry): Promise<DecideSceneKit | undefined> {
+  private async loadBeatorajaDecideKit(song: LibraryChart): Promise<DecideSceneKit | undefined> {
     const bundle = this.beatorajaTheme;
     if (bundle === undefined) return undefined;
     const decideCandidates = bundle.theme.entries.filter((entry) => entry.header.type === BEATORAJA_SKIN_TYPE.DECIDE);
@@ -3896,7 +3896,7 @@ class PlayerWebDemoApp {
    * ModernChic's decide.lua crashes its whole `main()` without the difficulty ops, and its `Root/customsound.lua` calls
    * the audio accessors from every panel toggle.
    */
-  private buildBeatorajaSkinLoadContext(song: BrowserSongEntry, skinConfig: BeatorajaSkinConfig) {
+  private buildBeatorajaSkinLoadContext(song: LibraryChart, skinConfig: BeatorajaSkinConfig) {
     return createBeatorajaSkinLoadContext({
       difficulty: song.chart.metadata.difficulty,
       skinConfig,
@@ -3982,7 +3982,7 @@ class PlayerWebDemoApp {
     // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
     // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
     // canvas.
-    this.elements.shell.classList.toggle('empty', this.collection.songs.length === 0);
+    this.elements.shell.classList.toggle('empty', this.collection.charts.length === 0);
     await this.ensureHostMounted();
     this.disposeScene(this.gameplayView);
     this.gameplayView = undefined;
@@ -3998,7 +3998,7 @@ class PlayerWebDemoApp {
     // family draws the be-music skin.
     const activeFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'select');
     const beatorajaKit =
-      activeFamily === 'beatoraja' && this.collection.songs.length > 0
+      activeFamily === 'beatoraja' && this.collection.charts.length > 0
         ? await this.loadBeatorajaSelectKit()
         : undefined;
     const lr2SelectSkin =
@@ -4115,10 +4115,10 @@ class PlayerWebDemoApp {
    * the decide jingle only then.
    */
   private startFromSelect(entry: SelectStartEntry, autoPlay: boolean): boolean {
-    if (entry.kind === 'song') {
-      if (this.addSongToCourseBeingMade(entry.song)) return false;
+    if (entry.kind === 'chart') {
+      if (this.addSongToCourseBeingMade(entry.chart)) return false;
       // The skin's AUTOPLAY forces auto play for this play only; the Debug Menu's checkbox keeps its state.
-      void this.showDecide(entry.song, autoPlay ? { autoPlay: true } : {});
+      void this.showDecide(entry.chart, autoPlay ? { autoPlay: true } : {});
       return true;
     }
     void this.startCourse(entry.course, autoPlay ? { autoPlay: true } : {});
@@ -4234,7 +4234,7 @@ class PlayerWebDemoApp {
    * itself.
    */
   private async showDecide(
-    song: BrowserSongEntry,
+    song: LibraryChart,
     overrides: { autoPlay?: boolean } = {},
     then?: DecideContinuation,
   ): Promise<void> {
@@ -4321,7 +4321,7 @@ class PlayerWebDemoApp {
    */
   private async decideKitFor(
     family: SkinFamilyId,
-    song: BrowserSongEntry,
+    song: LibraryChart,
     playsOnBeatoraja: boolean,
   ): Promise<DecideSceneKit | undefined> {
     switch (family) {
@@ -4343,7 +4343,7 @@ class PlayerWebDemoApp {
    * whether we're going through Decide or the no-decide fast-path. `playSong` shares this construction shape.
    */
   private async preloadGameplay(
-    song: BrowserSongEntry,
+    song: LibraryChart,
     overrides: { autoPlay?: boolean; preResolved?: ResolvedPlayChart },
   ): Promise<void> {
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
@@ -4368,7 +4368,7 @@ class PlayerWebDemoApp {
    * - otherwise → the built-in kit with the active be-music skin.
    */
   private async resolvePlayKit(
-    song: BrowserSongEntry,
+    song: LibraryChart,
     overrides: { courseStage?: CourseStagePlay; nonstop?: NonstopPlay },
   ): Promise<PlaySceneKit | undefined> {
     if (this.playsOnBeatoraja(song)) {
@@ -4403,7 +4403,7 @@ class PlayerWebDemoApp {
    * them in one place.
    */
   private buildPlayScene(
-    song: BrowserSongEntry,
+    song: LibraryChart,
     kit: PlaySceneKit,
     overrides: {
       autoPlay?: boolean;
@@ -4656,7 +4656,7 @@ class PlayerWebDemoApp {
    * screen until prepare resolves — visually a brief hold rather than the previous frozen-frame freeze.
    */
   private async startGameplayAfterDecide(
-    song: BrowserSongEntry,
+    song: LibraryChart,
     preloaded: Promise<void>,
     overrides: { autoPlay?: boolean },
   ): Promise<void> {
@@ -4705,12 +4705,12 @@ class PlayerWebDemoApp {
    * audio for every family). Every path into gameplay — `playSong`, and the decide splash deciding what to preload — asks
    * this one question.
    */
-  private playsOnBeatoraja(song: BrowserSongEntry): boolean {
+  private playsOnBeatoraja(song: LibraryChart): boolean {
     return pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) === 'beatoraja';
   }
 
   private async playSong(
-    song: BrowserSongEntry,
+    song: LibraryChart,
     overrides: {
       autoPlay?: boolean;
       replay?: BeMusicPlaylog;

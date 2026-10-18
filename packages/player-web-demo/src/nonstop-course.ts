@@ -1,16 +1,11 @@
 import { prepareNonstopCourse, type NonstopPrepareFailure, type PreparedNonstopCourse } from '@be-music/player/course';
-import {
-  createNonstopAssets,
-  NONSTOP_CHART_PATH,
-  type BrowserCourseEntry,
-  type BrowserSongAssetSource,
-  type BrowserSongEntry,
-} from '@be-music/player-web/collection';
+import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
+import { createNonstopAssets, NONSTOP_CHART_PATH, type BrowserSongAssetSource } from '@be-music/player-web/collection';
 
 /** A NONSTOP course stitched for the demo to play as one chart. */
 export interface PreparedNonstopPlay {
   /** The stitched chart as a song entry the gameplay scenes play (title: the course name). */
-  song: BrowserSongEntry;
+  song: LibraryChart;
   /** Where the stitched chart's assets load from (each stage's files, named per stage). */
   source: BrowserSongAssetSource;
   /** The course as stitched (`prepareNonstopCourse`): its map, stage charts and draws, for the play and its course log. */
@@ -28,19 +23,19 @@ export type NonstopPlayFailure = 'missing-stage' | NonstopPrepareFailure;
  * `hashesOf` gives each stage's file hashes, which its cut-out play log records.
  */
 export function prepareNonstopPlay(
-  course: BrowserCourseEntry,
+  course: LibraryCourse,
   options: {
-    sourceOf: (song: BrowserSongEntry) => BrowserSongAssetSource | undefined;
-    hashesOf?: (song: BrowserSongEntry) => { sha256?: string; md5?: string } | undefined;
+    sourceOf: (song: LibraryChart) => BrowserSongAssetSource | undefined;
+    hashesOf?: (song: LibraryChart) => { sha256?: string; md5?: string } | undefined;
     placement?: 'intended' | 'lr2';
     random?: () => number;
   },
 ): { ok: true; prepared: PreparedNonstopPlay } | { ok: false; reason: NonstopPlayFailure; stage?: number } {
-  const songs = course.stages.map((stage) => stage.song);
+  const songs = course.stages.map((stage) => stage.chart);
   const sources = songs.map((song) => (song !== undefined ? options.sourceOf(song) : undefined));
   const missing = songs.findIndex((song, index) => song === undefined || sources[index] === undefined);
   if (missing >= 0) return { ok: false, reason: 'missing-stage', stage: missing };
-  const stages = songs as BrowserSongEntry[];
+  const stages = songs as LibraryChart[];
   let assets: ReturnType<typeof createNonstopAssets> | undefined;
   const stitched = prepareNonstopCourse(
     stages.map((song) => {
@@ -76,7 +71,7 @@ export function prepareNonstopPlay(
   }
   // The pipeline hands the stage charts to `assetPath` before it stitches them, so the assets are there.
   const { source } = assets!;
-  const song: BrowserSongEntry = {
+  const song: LibraryChart = {
     ...stages[0]!,
     id: `nonstop:${course.id}`,
     sourceId: source.id,

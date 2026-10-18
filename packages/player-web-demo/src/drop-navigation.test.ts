@@ -1,9 +1,9 @@
-import type { BrowserSongEntry } from '@be-music/player-web/collection';
+import type { LibraryChart } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { navigationAfterDrop } from './drop-navigation.ts';
 
-function song(id: string, directoryLabel: string): BrowserSongEntry {
-  return { id, directoryLabel, sourceLabel: 'source' } as BrowserSongEntry;
+function song(id: string, directoryLabel: string): LibraryChart {
+  return { id, directoryLabel, sourceLabel: 'source' } as LibraryChart;
 }
 
 describe('navigationAfterDrop', () => {
