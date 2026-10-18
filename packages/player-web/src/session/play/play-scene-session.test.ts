@@ -1,4 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
+import type { PlayerInputCommand } from '@be-music/player/signals';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { PlaySceneSession, resolvePlayStage } from './play-scene-session.ts';
@@ -92,6 +93,71 @@ describe('PlaySceneSession', () => {
         metaKey: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("the view's touch lanes, as lane intents", () => {
+  /** A play whose engine input records the commands pushed, with the 7-key lanes bound to their keys. */
+  function createTouchPlay() {
+    const { play, session } = createSceneSession();
+    const commands: PlayerInputCommand[] = [];
+    play.sharedEngineInputSignals = { pushCommand: (command: PlayerInputCommand) => commands.push(command) } as never;
+    play.preparedChart = {
+      laneBindings: [
+        { channel: '16', inputTokens: ['Shift-Left', 'q'] },
+        { channel: '11', inputTokens: ['Z'] },
+        { channel: '12', inputTokens: ['S'] },
+      ],
+    } as never;
+    return { play, session, commands };
+  }
+  const at = (atMs: number) => performance.timeOrigin + atMs;
+
+  test('a press goes to the engine as the lane key does: one lane input, then the key held', () => {
+    const { play, session, commands } = createTouchPlay();
+    session.dispatch({ type: 'lane', channel: '11', pressed: true, atMs: 120 });
+    expect(commands).toEqual([
+      { kind: 'lane-input', tokens: ['z'], pressedAt: at(120) },
+      { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [], pressedAt: at(120) },
+    ]);
+    expect([...play.touchLanesHeld]).toEqual(['11']);
+  });
+
+  test("a release lets the lane's key go, with the binding's first key", () => {
+    const { play, session, commands } = createTouchPlay();
+    session.dispatch({ type: 'lane', channel: '16', pressed: true, atMs: 10 });
+    commands.length = 0;
+    session.dispatch({ type: 'lane', channel: '16', pressed: false, atMs: 30 });
+    expect(commands).toEqual([
+      { kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens: ['shift-left'], pressedAt: at(30) },
+    ]);
+    expect(play.touchLanesHeld.size).toBe(0);
+  });
+
+  test('a lane already held, a release of one not held, and a lane with no key change nothing', () => {
+    const { session, commands } = createTouchPlay();
+    session.dispatch({ type: 'lane', channel: '11', pressed: true, atMs: 10 });
+    commands.length = 0;
+    session.dispatch({ type: 'lane', channel: '11', pressed: true, atMs: 20 });
+    session.dispatch({ type: 'lane', channel: '12', pressed: false, atMs: 20 });
+    session.dispatch({ type: 'lane', channel: '19', pressed: true, atMs: 20 });
+    expect(commands).toEqual([]);
+  });
+
+  test('pausing lets every held lane go before the engine pauses, and counts the lift for the view', () => {
+    const { play, session, commands } = createTouchPlay();
+    session.dispatch({ type: 'lane', channel: '12', pressed: true, atMs: 10 });
+    session.dispatch({ type: 'lane', channel: '11', pressed: true, atMs: 11 });
+    commands.length = 0;
+    const before = play.touchLiftCount;
+    session.dispatch({ type: 'pause' });
+    expect(commands.map((command) => command.kind)).toEqual(['kitty-state', 'toggle-pause']);
+    expect(commands[0]).toMatchObject({ pressTokens: [], releaseTokens: ['s', 'z'] });
+    expect(play.touchLanesHeld.size).toBe(0);
+    expect(play.touchLiftCount).toBe(before + 1);
+    // Resuming lifts nothing more.
+    session.dispatch({ type: 'pause' });
+    expect(play.touchLiftCount).toBe(before + 1);
   });
 });
 

@@ -168,7 +168,7 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
 /** A family's play view, and what the scene and the play session ask of it. */
 interface FamilyPlayView {
   readonly view: PlayView;
-  /** How the view's skin answers the shared playfield: its stage (for the touch lanes) and its key-beam fade. */
+  /** How the view's skin answers the shared playfield: its key-beam fade. */
   readonly playfieldSkin: PlayfieldSkin;
   /** Builds the view's layers on `host` ahead of its first frame, so what the play loads can upload to the GPU. */
   prepareOn(host: PixiSceneHost): void;
@@ -430,7 +430,6 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     timing: () => family!.view.timing,
     moment: (moment) => sceneSession?.queueEvent(moment),
     keyOnFadeMs: (channel) => family!.playfieldSkin.keyOnFadeMs(channel),
-    stage: () => family!.playfieldSkin.stage,
     prepareView: () => family?.prepareView?.() ?? Promise.resolve(),
     uploadTextures: (textures) => family?.uploadTextures(textures, () => play.disposed) ?? Promise.resolve(),
     playlogView: () => family?.playlogView?.(),
