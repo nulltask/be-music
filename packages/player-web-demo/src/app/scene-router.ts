@@ -82,11 +82,12 @@ export interface SceneRouterOptions<S> {
 }
 
 /**
- * Owns the scene on stage, the kept select scene and the play (`S` is any scene, `P` a play scene). Transitions run one
- * at a time, and only those of the newest navigation: `begin` starts one and hands out its token, and a `show` or
- * `leave` without a token starts one of its own. Read `current`, `select` and `play` for what the router holds.
+ * Owns the scene on stage, the kept select scene and the play (`S` is any scene, `P` a play scene and `Sel` a select
+ * scene). Transitions run one at a time, and only those of the newest navigation: `begin` starts one and hands out its
+ * token, and a `show` or `leave` without a token starts one of its own. Read `current`, `select` and `play` for what
+ * the router holds.
  */
-export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene> {
+export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, Sel extends S = S> {
   private readonly host: SceneRouterHost<S>;
   private readonly recorder: SceneRouterRecorder;
   private readonly onError: (error: unknown, step: 'finalize' | 'dispose') => void;
@@ -94,7 +95,7 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene> {
   private queue: Promise<unknown> = Promise.resolve();
   private generation = 0;
   private currentScene: S | undefined;
-  private selectScene: S | undefined;
+  private selectScene: Sel | undefined;
   private playScene: P | undefined;
   /** Scenes the router never disposes on its own. */
   private readonly kept = new WeakSet<S>();
@@ -119,7 +120,7 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene> {
   }
 
   /** The kept select scene, on stage or off it. */
-  public get select(): S | undefined {
+  public get select(): Sel | undefined {
     return this.selectScene;
   }
 
@@ -147,7 +148,8 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene> {
    * `scene` was already disposed.
    */
   public show(scene: P, options: SceneShowOptions<P> & { readonly role: 'play' }): Promise<boolean>;
-  public show(scene: S, options: SceneShowOptions<P> & { readonly role: Exclude<SceneRole, 'play'> }): Promise<boolean>;
+  public show(scene: Sel, options: SceneShowOptions<P> & { readonly role: 'select' }): Promise<boolean>;
+  public show(scene: S, options: SceneShowOptions<P> & { readonly role: 'decide' | 'result' }): Promise<boolean>;
   public show(scene: S, options: SceneShowOptions<P>): Promise<boolean> {
     const token = options.token ?? this.begin();
     return this.enqueue(async () => {
@@ -168,7 +170,8 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene> {
       if (options.role === 'play') this.plays.add(scene);
       await this.host.setScene(scene);
       this.currentScene = scene;
-      if (options.role === 'select' && keep) this.selectScene = scene;
+      // The overloads take only a select scene as `role: 'select'`.
+      if (options.role === 'select' && keep) this.selectScene = scene as Sel;
       if (previous !== undefined && previous !== scene && !this.kept.has(previous)) {
         this.release(previous, options.playDispose);
       }
