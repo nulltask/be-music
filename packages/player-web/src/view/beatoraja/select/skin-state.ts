@@ -19,7 +19,7 @@ import {
 } from '@be-music/beatoraja-skin/scene';
 import type { BrowseListOptions } from '@be-music/scene-model';
 import type { BrowserBrowseEntry } from '../../../collection/types.ts';
-import type { BeatorajaSceneKit } from '../../../host/family-kit.ts';
+import type { BeatorajaSceneKit } from '../../../skin/beatoraja/scene-kit.ts';
 import { selectChartFacts } from './chart-facts.ts';
 
 /**

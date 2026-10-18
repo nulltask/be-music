@@ -24,16 +24,28 @@ import {
   loadBeatorajaSkin,
   normalizeBeatorajaFonts,
   type BeatorajaLuaRuntimeContext,
+  type BeatorajaSkin,
   type BeatorajaSkinConfig,
   type BeatorajaSkinFileEntry,
   type BeatorajaSkinHeader,
   type BeatorajaSourceBundle,
 } from '@be-music/beatoraja-skin';
 import { beatorajaDifficultyOps } from '@be-music/beatoraja-skin/scene';
-import type { BeatorajaSceneKit } from '../../host/family-kit.ts';
 import type { BeatorajaSkinAudio } from './audio.ts';
 import { loadBeatorajaFonts, type BeatorajaFontCache } from './fonts.ts';
 import { loadBeatorajaTexturesFromBundle, type BeatorajaTextureCache } from './textures.ts';
+
+/** One entry of a beatoraja theme, loaded for a scene. */
+export interface BeatorajaSceneKit {
+  /** The parsed skin of the entry (`header.type` matching the scene). */
+  readonly skin: BeatorajaSkin;
+  readonly textures: BeatorajaTextureCache;
+  readonly fonts?: BeatorajaFontCache;
+  /** The player's picks for the skin's options (`property[]`). */
+  readonly skinConfig?: BeatorajaSkinConfig;
+  /** The theme's files: the Lua `main_state.audio_*` sounds and the theme's path-only system sounds are read from them. */
+  readonly files: ReadonlyMap<string, BeatorajaSkinFileEntry>;
+}
 
 /** What a host keeps between scene kit loads, each keyed by the entry's path (`BeatorajaSkinEntry.entryPath`). */
 export interface BeatorajaSceneKitCaches {

@@ -17,7 +17,20 @@ export * from './beatoraja/chart-images.ts';
 export * from './beatoraja/family.ts';
 export * from './beatoraja/fonts.ts';
 export * from './beatoraja/render.ts';
-export * from './beatoraja/scene-kit.ts';
+// The scene kit loader; `BeatorajaSceneKit` itself is a family kit type, exported from `./scenes`.
+export {
+  createBeatorajaSceneKitCaches,
+  createBeatorajaSkinLoadContext,
+  defaultBeatorajaSkinConfig,
+  loadBeatorajaSceneKit,
+  releaseBeatorajaSceneKitAssets,
+  resolveBeatorajaSkinConfig,
+  type BeatorajaSceneKitCaches,
+  type BeatorajaSkinLoadContextOptions,
+  type LoadBeatorajaSceneKitOptions,
+  type LoadBeatorajaSceneKitResult,
+  type LoadedBeatorajaSceneKit,
+} from './beatoraja/scene-kit.ts';
 export * from './beatoraja/textures.ts';
 export * from './beatoraja/theme.ts';
 
