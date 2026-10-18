@@ -6,11 +6,10 @@ import type { BrowseSnapshot, PlayOptions } from '@be-music/scene-model';
 import type { SkinFamilyId } from '@be-music/player-web/skin';
 import { checkBrowserCompat } from '@be-music/player-web/collection';
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-web/audio';
-import { downloadBlob, type RecordingFormat } from '@be-music/player-web/recording';
+import { downloadBlob } from '@be-music/player-web/recording';
 import { logger } from '@be-music/player-web';
 import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from './ui/beatoraja-skin-options.ts';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
-import type { PlaylogRecorderInfo } from '@be-music/player/playlog';
 import { lookupCourseRecord } from './course-result.ts';
 import type { ActiveCourse } from './course-flow.ts';
 import { SceneRouter } from './app/scene-router.ts';
@@ -22,23 +21,13 @@ import { DecideRoute } from './app/routes/decide.ts';
 import { PlayRoute } from './app/routes/play.ts';
 import { ResultRoute } from './app/routes/result.ts';
 import { ReplayRoute } from './app/routes/replay.ts';
-import demoPackageJson from '../package.json' with { type: 'json' };
 
 const gameplayLog = logger('gameplay');
 const fullscreenLog = logger('fullscreen');
-
-/** This app as the recorder of its play-logs (`recorder` in `*.bmplay.json`); the engine adds its own version. */
-const PLAYLOG_RECORDER: Omit<PlaylogRecorderInfo, 'engine'> = {
-  name: 'be-music-web',
-  version: demoPackageJson.version,
-  ...(__BE_MUSIC_BUILD__.length > 0 ? { build: __BE_MUSIC_BUILD__ } : {}),
-  platform: 'web',
-};
 import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { InlineSearch } from './inline-search.ts';
-import { parseRecordingFormatKey } from './recording-format-choice.ts';
 import { DebugMenu, type DebugMenuDeps } from './ui/debug-menu/index.ts';
 import { promptSkinDrop } from './ui/skin-drop-prompt.ts';
 import {
@@ -51,18 +40,15 @@ import {
   toggleFullscreen,
 } from './fullscreen.ts';
 import { readDeviceSignals, resolveDeviceProfile } from './device-profile.ts';
-import {
-  captureScreenshot,
-  finalizeRecordingIfActive,
-  toggleRecording,
-  type RecordingDeps,
-} from './recording-controller.ts';
+import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from './recording-controller.ts';
 import type { DemoGuiState, DemoScene, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
 import { createDemoGuiState, resolveCompressorMode, storeBuiltInSkinId } from './services/settings.ts';
 import { BE_MUSIC_SKINS, waitForDefaultUiFonts } from './services/built-in-skins.ts';
 import { SilentModeSetting } from './services/silent-mode.ts';
 import { playOptionsFromGui, PlayOptionsService } from './services/play-options.ts';
-import { PlaylogAutoSave } from './services/playlog-auto-save.ts';
+import { PLAYLOG_RECORDER, PlaylogAutoSave } from './services/playlogs.ts';
+import { RecordingService } from './services/recording.ts';
+import { StatusLine } from './services/status.ts';
 import { CourseMakerService } from './services/course-maker.ts';
 import { LibraryService } from './services/library.ts';
 import { RecordsService } from './services/records.ts';
@@ -117,7 +103,7 @@ class PlayerWebDemoApp {
         await this.sceneHost.setScene(scene);
       },
     },
-    recorder: { finalize: () => finalizeRecordingIfActive(this.recordingDeps()) },
+    recorder: { finalize: () => finalizeRecordingIfActive(this.recording.deps()) },
     // A navigation the scenes did not ask for (a drop, a skin or theme change, files or a play log loaded) ends the
     // course run, so the next single play is not taken for its next stage.
     onInterrupt: () => {
@@ -146,7 +132,7 @@ class PlayerWebDemoApp {
     collection: () => this.library.collection,
     refreshMadeCourses: () => this.library.refreshMadeCourses(),
     selectView: () => this.selectView,
-    setStatus: (text) => this.setStatus(text),
+    setStatus: (text) => this.status.set(text),
   });
   /** The select screen (`createSelectScene`), whichever family draws it, kept by the router across the other screens. */
   private get selectView(): SelectScene | undefined {
@@ -191,8 +177,8 @@ class PlayerWebDemoApp {
   private set lastSelectNavigation(navigation: BrowseSnapshot | undefined) {
     this.selectRoute.lastSelectNavigation = navigation;
   }
-  /** Whether the status line describes a play or result, which a return to the select screen replaces. */
-  private playStatusShown = false;
+  /** The status line: the Debug Menu's Status row, and whether it describes a play or result. */
+  private readonly status: StatusLine;
   /** The skin system the "Drop a skin" prompt asked for, until a drop answers it or it is cancelled. */
   private pendingSkinSystem: 'lr2' | 'beatoraja' | undefined;
   /**
@@ -212,7 +198,7 @@ class PlayerWebDemoApp {
   private readonly leaderboard = new LeaderboardPanel({
     // Read on use: `guiState` is initialized after this field.
     settings: () => this.guiState,
-    setStatus: (text) => this.setStatus(text),
+    setStatus: (text) => this.status.set(text),
     warn: (message, error) => gameplayLog.warn(message, error),
     recorder: PLAYLOG_RECORDER,
   });
@@ -235,16 +221,8 @@ class PlayerWebDemoApp {
     download: downloadBlob,
     warn: (message, error) => gameplayLog.warn(message, error),
   });
-  /**
-   * `true` after the user clicks Record on the song-select screen but before they actually pick a song. Consumed (and
-   * cleared) by `playSong` immediately after the gameplay view mounts, kicking off `startRecording()` so the very first
-   * frame of the chart is captured.
-   *
-   * A second click on Record before picking a song flips this back to `false` ("disarm"), and any non-pick path that
-   * leaves the select view (e.g. dropping a new folder mid- armed) is responsible for clearing it via {@link
-   * disarmAutoRecord} so the flag doesn't survive into a future session that shouldn't be auto-captured.
-   */
-  private autoRecordArmed = false;
+  /** The Capture folder's video recording and screenshots: the record armed, the next file name, the format. */
+  private readonly recording: RecordingService;
   /** "Play in silent mode": the setting, its checkboxes and its hint. */
   private readonly silentMode: SilentModeSetting;
   /** The Debug Menu (`ui/debug-menu/`), made once the settings and services it works with are. */
@@ -266,12 +244,24 @@ class PlayerWebDemoApp {
         openFolder: () => this.elements.songInput.click(),
         openFiles: () => this.elements.filesInput.click(),
         record: () => {
-          void toggleRecording(this.recordingDeps());
+          void toggleRecording(this.recording.deps());
         },
         screenshot: () => {
-          void captureScreenshot(this.recordingDeps());
+          void captureScreenshot(this.recording.deps());
         },
       },
+    });
+    this.status = new StatusLine({
+      settings: this.guiState,
+      refresh: () => this.debugMenu.refreshStatus(),
+      record: (text) => this.testHook?.recordStatus(text),
+    });
+    this.recording = new RecordingService({
+      sceneHost: this.sceneHost,
+      recordController: () => this.debugMenu.recordController,
+      activeGameplay: () => this.gameplayView?.recording,
+      settings: this.guiState,
+      setStatus: (text) => this.status.set(text),
     });
     // Every sound plays through the master volume; start from the remembered level.
     setMasterVolume(this.guiState.masterVolume / 100);
@@ -284,14 +274,14 @@ class PlayerWebDemoApp {
     this.guiState.compressor = compressor.enabled;
     this.lr2 = new Lr2ThemeService({
       elements,
-      setStatus: (text) => this.setStatus(text),
+      setStatus: (text) => this.status.set(text),
       rebuildSkinFamilyPicker: () => this.debugMenu.rebuildSkinFamilyPicker(),
       rebuildLr2ThemePicker: () => this.debugMenu.rebuildLr2ThemePicker(),
     });
     this.beatoraja = new BeatorajaThemeService({
       elements,
       audio: this.audio,
-      setStatus: (text) => this.setStatus(text),
+      setStatus: (text) => this.status.set(text),
       selectView: () => this.selectView,
       gameplayView: () => this.gameplayView,
       rebuildBeatorajaSkinPickers: () => this.debugMenu.rebuildBeatorajaSkinPickers(),
@@ -301,7 +291,7 @@ class PlayerWebDemoApp {
     });
     this.builtIn = new BuiltInThemeService({
       guiState: this.guiState,
-      setStatus: (text) => this.setStatus(text),
+      setStatus: (text) => this.status.set(text),
       handleBuiltInSkinChange: (id) => this.handleBuiltInSkinChange(id),
     });
     this.familyKits = new FamilyKits({
@@ -316,7 +306,7 @@ class PlayerWebDemoApp {
       courseMaker: this.courseMaker.maker,
       selectView: () => this.selectView,
       showing: () => this.router.current?.identity.kind,
-      setStatus: (text) => this.setStatus(text),
+      setStatus: (text) => this.status.set(text),
       showSelect: () => this.showSelect(),
       leaveSelect: () => this.leaveSelect(),
       browseTo: (navigation) => {
@@ -348,7 +338,7 @@ class PlayerWebDemoApp {
       familyKits: this.familyKits,
       playlogRecorder: PLAYLOG_RECORDER,
       testHook: this.testHook,
-      setStatus: (text) => this.setStatus(text),
+      setStatus: (text) => this.status.set(text),
       showSelect: () => this.showSelect(),
       showDecide: (song, overrides, then) => this.decideRoute.showDecide(song, overrides, then),
       playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
@@ -366,7 +356,7 @@ class PlayerWebDemoApp {
       familyKits: this.familyKits,
       playlogRecorder: PLAYLOG_RECORDER,
       selectNavigation: () => this.selectView?.snapshot() ?? this.lastSelectNavigation,
-      setStatus: (text) => this.setStatus(text),
+      setStatus: (text) => this.status.set(text),
       startNonstopCourse: (course, options) => this.nonstopRoute.startNonstopCourse(course, options),
       showSelect: () => this.showSelect(),
       showDecide: (song, overrides, then) => this.decideRoute.showDecide(song, overrides, then),
@@ -395,8 +385,8 @@ class PlayerWebDemoApp {
       search: this.search,
       debugMenu: this.debugMenu,
       beatorajaSkinOptions: this.beatorajaSkinOptions,
-      playStatusShown: () => this.playStatusShown,
-      setStatus: (text) => this.setStatus(text),
+      playStatusShown: () => this.status.playShown,
+      setStatus: (text) => this.status.set(text),
       unlockPlaylogOptions: () => this.unlockPlaylogOptions(),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       showDecide: (song, overrides) => this.decideRoute.showDecide(song, overrides),
@@ -414,12 +404,10 @@ class PlayerWebDemoApp {
       audio: this.audio,
       beatorajaSkinOptions: this.beatorajaSkinOptions,
       lastPlay: () => this.playRoute.lastPlay,
-      recordingDeps: () => this.recordingDeps(),
-      setRecordingFilenameBase: (base) => {
-        this.recordingFilenameBase = base;
-      },
-      setStatus: (text) => this.setStatus(text),
-      setPlayStatus: (text) => this.setPlayStatus(text),
+      recordingDeps: () => this.recording.deps(),
+      setRecordingFilenameBase: (base) => this.recording.setFilenameBase(base),
+      setStatus: (text) => this.status.set(text),
+      setPlayStatus: (text) => this.status.setPlay(text),
       lockPlaylogOptionsForPlay: (liveTempo) => this.lockPlaylogOptionsForPlay(liveTempo),
       showSelect: () => this.showSelect(),
       playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
@@ -442,7 +430,7 @@ class PlayerWebDemoApp {
       testHook: this.testHook,
       lastPlay: () => this.playRoute.lastPlay,
       nameResultJingle: (bytes) => this.nameResultJingle(bytes),
-      setPlayStatus: (text) => this.setPlayStatus(text),
+      setPlayStatus: (text) => this.status.setPlay(text),
       showSelect: () => this.showSelect(),
       playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
       unlockPlaylogOptions: () => this.unlockPlaylogOptions(),
@@ -468,11 +456,9 @@ class PlayerWebDemoApp {
       sceneHost: this.sceneHost,
       playlogRecorder: PLAYLOG_RECORDER,
       testHook: this.testHook,
-      recordingDeps: () => this.recordingDeps(),
-      setRecordingFilenameBase: (base) => {
-        this.recordingFilenameBase = base;
-      },
-      setPlayStatus: (text) => this.setPlayStatus(text),
+      recordingDeps: () => this.recording.deps(),
+      setRecordingFilenameBase: (base) => this.recording.setFilenameBase(base),
+      setPlayStatus: (text) => this.status.setPlay(text),
       lockPlaylogOptionsForPlay: (liveTempo) => this.lockPlaylogOptionsForPlay(liveTempo),
       unlockPlaylogOptions: () => this.unlockPlaylogOptions(),
       showSelect: () => this.showSelect(),
@@ -481,8 +467,8 @@ class PlayerWebDemoApp {
     this.replayRoute = new ReplayRoute({
       library: this.library,
       records: this.records,
-      setStatus: (text) => this.setStatus(text),
-      setPlayStatus: (text) => this.setPlayStatus(text),
+      setStatus: (text) => this.status.set(text),
+      setPlayStatus: (text) => this.status.setPlay(text),
       playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
       showSelect: () => this.showSelect(),
     });
@@ -512,7 +498,7 @@ class PlayerWebDemoApp {
       beMusicSkin: () => this.builtIn.beMusicSkin,
       activeBeatorajaPlay: () => this.beatoraja.activeBeatorajaPlay,
       beatorajaSkinConfig: (entryPath, header) => this.beatoraja.beatorajaSkinConfig(entryPath, header),
-      setStatus: (text) => this.setStatus(text),
+      setStatus: (text) => this.status.set(text),
       setPlayOptions: (changes) => this.setPlayOptions(changes),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       refreshSelectRecords: () => this.refreshSelectRecords(),
@@ -708,23 +694,6 @@ class PlayerWebDemoApp {
     );
   }
 
-  /**
-   * Single chokepoint for status-text updates. Writes the new value into `guiState` and refreshes the lil-gui
-   * controller so the read-only row repaints with the new text.
-   */
-  private setStatus(text: string): void {
-    this.guiState.status = text;
-    this.playStatusShown = false;
-    this.debugMenu.refreshStatus();
-    this.testHook?.recordStatus(text);
-  }
-
-  /** Shows a status about the play or result on screen, which the select screen replaces when it comes back. */
-  private setPlayStatus(text: string): void {
-    this.setStatus(text);
-    this.playStatusShown = true;
-  }
-
   /** What `window.__beMusicTest` reports now (`test-hook.ts`), read from the scenes up and the state kept here. */
   private testHookState(): TestHookLiveState {
     // The scene showing names itself; none shows between screens.
@@ -797,38 +766,6 @@ class PlayerWebDemoApp {
     });
   }
 
-  /**
-   * Filename base for the next saved recording. Derived from the currently-playing song's title (sanitized for
-   * filesystem safety) or `gameplay-<timestamp>` when no song info is available. Updated on every `playSong` so
-   * back-to-back recordings don't overwrite each other in the user's downloads folder.
-   *
-   * Read by `toggleRecording` (in `./recording-controller.ts`) when assembling the download filename; mutated in
-   * `playSong` / `preloadGameplay` as each chart starts.
-   */
-  private recordingFilenameBase = 'gameplay';
-
-  /**
-   * Bundle the demo's recording-related fields into the `RecordingDeps` shape that
-   * `./recording-controller.ts` consumes. Built as a getter-based bundle (rather than a structural copy of `this`) so
-   * `RecordingDeps` can stay an interface of getter / setter functions — TypeScript otherwise refuses to satisfy a
-   * structural `RecordingHost` from a class whose backing fields are `private`. Cheap to allocate per call; called at
-   * most a handful of times per session (record toggle / screenshot / chart-end recording finalize).
-   */
-  private recordingDeps(): RecordingDeps {
-    return {
-      sceneHost: this.sceneHost,
-      recordController: this.debugMenu.recordController,
-      getActiveGameplay: () => this.gameplayView?.recording,
-      getAutoRecordArmed: () => this.autoRecordArmed,
-      setAutoRecordArmed: (value) => {
-        this.autoRecordArmed = value;
-      },
-      getRecordingFilenameBase: () => this.recordingFilenameBase,
-      getRecordingFormat: () => this.recordingFormat,
-      setStatus: (text) => this.setStatus(text),
-    };
-  }
-
   /** Switches to the skin the player asked for through the Debug Menu ("drop a skin") once a drop brings it. */
   private answerSkinDropPrompt(themeFamilies: ReadonlySet<SkinFamilyId>): void {
     const asked = this.pendingSkinSystem;
@@ -854,11 +791,6 @@ class PlayerWebDemoApp {
     await this.router.dropSelect();
     await this.lr2.mountLr2Theme(theme.files, theme.name);
     await this.showSelect();
-  }
-
-  /** The container and codec the Debug Menu's "Video format" asks recordings to be written in. */
-  private get recordingFormat(): RecordingFormat {
-    return parseRecordingFormatKey(this.guiState.recordingFormat);
   }
 
   /**

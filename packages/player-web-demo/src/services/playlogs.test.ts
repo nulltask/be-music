@@ -1,6 +1,6 @@
 import type { BeMusicCoursePlaylog, BeMusicPlaylog } from '@be-music/player/playlog';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { PlaylogAutoSave } from './playlog-auto-save.ts';
+import { PlaylogAutoSave } from './playlogs.ts';
 
 const CREATED_AT = '2026-10-19T03:00:00.000Z';
 

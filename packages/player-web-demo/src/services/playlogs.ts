@@ -1,5 +1,5 @@
-// "Auto-save play history": a play's play log (`*.bmplay.json`, an input replay), or a course's
-// (`*.bmcourse.json`), downloaded the moment its result shows.
+// The demo's play logs: the app named as their recorder, and "Auto-save play history": a play's play log
+// (`*.bmplay.json`, an input replay), or a course's (`*.bmcourse.json`), downloaded the moment its result shows.
 
 import {
   resolveCoursePlaylogFilename,
@@ -8,7 +8,17 @@ import {
   serializePlaylog,
   type BeMusicCoursePlaylog,
   type BeMusicPlaylog,
+  type PlaylogRecorderInfo,
 } from '@be-music/player/playlog';
+import demoPackageJson from '../../package.json' with { type: 'json' };
+
+/** This app as the recorder of its play-logs (`recorder` in `*.bmplay.json`); the engine adds its own version. */
+export const PLAYLOG_RECORDER: Omit<PlaylogRecorderInfo, 'engine'> = {
+  name: 'be-music-web',
+  version: demoPackageJson.version,
+  ...(__BE_MUSIC_BUILD__.length > 0 ? { build: __BE_MUSIC_BUILD__ } : {}),
+  platform: 'web',
+};
 
 export interface PlaylogAutoSaveOptions {
   /** Saves `blob` under `filename` (`downloadBlob`). */
