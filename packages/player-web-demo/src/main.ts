@@ -10,8 +10,6 @@ import { downloadBlob } from '@be-music/player-web/recording';
 import { logger } from '@be-music/player-web';
 import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from './ui/beatoraja-skin-options.ts';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
-import { lookupCourseRecord } from './course-result.ts';
-import type { ActiveCourse } from './course-flow.ts';
 import { SceneRouter } from './app/scene-router.ts';
 import { DropTarget } from './app/drop-target.ts';
 import { CourseRoute } from './app/routes/course.ts';
@@ -57,14 +55,8 @@ import { BeatorajaThemeService } from './services/themes/beatoraja.ts';
 import { BuiltInThemeService } from './services/themes/built-in.ts';
 import { Lr2ThemeService } from './services/themes/lr2.ts';
 import { FamilyKits } from './app/family-kits.ts';
-import {
-  describeBar,
-  isTestHookEnabled,
-  nameJingle,
-  judgedOf,
-  TestHookRecorder,
-  type TestHookLiveState,
-} from './test-hook.ts';
+import { isTestHookEnabled, TestHookRecorder } from './test-hook.ts';
+import { liveTestHookState, nameResultJingle, type LiveTestHookDeps } from './services/test-hook.ts';
 import './styles.css';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -118,10 +110,6 @@ class PlayerWebDemoApp {
   private readonly dropTarget: DropTarget;
   /** The course run in progress: the EXPERT / GRADE course between its stages, its AUTO and where it started from. */
   private readonly courses = new CourseRunService();
-  /** The EXPERT / GRADE course being played, between its stages (the course run service's). */
-  private get activeCourse(): ActiveCourse | undefined {
-    return this.courses.active;
-  }
   /** A course from its course bar to its course result (`app/routes/course.ts`). */
   private readonly courseRoute: CourseRoute;
   /** A NONSTOP course from its start, or a restitch, to its result (`app/routes/nonstop.ts`). */
@@ -429,7 +417,7 @@ class PlayerWebDemoApp {
       audio: this.audio,
       testHook: this.testHook,
       lastPlay: () => this.playRoute.lastPlay,
-      nameResultJingle: (bytes) => this.nameResultJingle(bytes),
+      nameResultJingle: (bytes) => nameResultJingle(bytes, { lr2: this.lr2, beatoraja: this.beatoraja }),
       setPlayStatus: (text) => this.status.setPlay(text),
       showSelect: () => this.showSelect(),
       playSong: (song, overrides) => this.playRoute.playSong(song, overrides),
@@ -537,8 +525,25 @@ class PlayerWebDemoApp {
     };
   }
 
+  /** What the test hook reads at each `state()` call: the scenes the router holds, and the services' state. */
+  private testHookDeps(): LiveTestHookDeps {
+    return {
+      router: this.router,
+      elements: this.elements,
+      guiState: this.guiState,
+      library: this.library,
+      records: this.records,
+      courses: this.courses,
+      courseMaker: this.courseMaker,
+      lastPlay: () => this.playRoute.lastPlay,
+    };
+  }
+
   public start(): void {
-    this.testHook?.install(window, () => this.testHookState());
+    if (this.testHook !== undefined) {
+      const testHookDeps = this.testHookDeps();
+      this.testHook.install(window, () => liveTestHookState(testHookDeps));
+    }
     this.debugMenu.buildGui();
     this.courseMaker.start();
     // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
@@ -692,78 +697,6 @@ class PlayerWebDemoApp {
       },
       true,
     );
-  }
-
-  /** What `window.__beMusicTest` reports now (`test-hook.ts`), read from the scenes up and the state kept here. */
-  private testHookState(): TestHookLiveState {
-    // The scene showing names itself; none shows between screens.
-    const current = this.router.current;
-    const scene: TestHookLiveState['scene'] =
-      current === undefined ? { kind: 'none' } : { kind: current.identity.kind, family: current.identity.family };
-    const select = scene.kind === 'select' && current === this.selectView ? this.selectView : undefined;
-    const entry = select?.focused();
-    // The select screen's browse position: its folders, sort, filters and search.
-    const navigation = select?.snapshot();
-    const play = scene.kind === 'play' ? this.playRoute.lastPlay : undefined;
-    // The play's running result, whichever family draws it.
-    const progress = this.gameplayView?.progress();
-    const active = this.activeCourse;
-    const draft = this.courseMaker.maker.draft;
-    return {
-      scene,
-      status: this.guiState.status,
-      loading: this.elements.loadingOverlay.classList.contains('visible'),
-      library: {
-        songs: this.library.collection.charts.length,
-        courseFolders: (this.library.collection.courseFolders ?? []).map((folder) => folder.label),
-      },
-      cursor:
-        scene.kind === 'select'
-          ? {
-              folderPath: [...(navigation?.folderPath ?? [])],
-              bar:
-                entry &&
-                describeBar(
-                  entry,
-                  entry.kind === 'chart'
-                    ? this.records.lookupSongRecord(entry.chart)
-                    : entry.kind === 'course'
-                      ? lookupCourseRecord(entry.course, this.records.songRecords, this.guiState.nonstopPlacement)
-                      : undefined,
-                ),
-              list: navigation && {
-                sort: navigation.list?.sort ?? 'OFF',
-                keysFilter: navigation.list?.keysFilter ?? 'ALL',
-                difficultyFilter: navigation.list?.difficultyFilter ?? 'ALL',
-                search: navigation.searchText ?? '',
-              },
-            }
-          : undefined,
-      play: play && {
-        title: play.song.title,
-        autoPlay: play.overrides.autoPlay,
-        replay: play.overrides.replay !== undefined,
-        tempo: this.gameplayView?.getTempo() ?? 1,
-        hiSpeed: this.gameplayView?.getHiSpeed(),
-        seconds: progress?.playSeconds,
-        judged: progress && judgedOf(progress.score),
-        gauge: progress && { type: progress.gaugeType, value: progress.gauge },
-        course: active && {
-          name: active.course.definition.name,
-          stage: active.run.stagesPlayed + 1,
-          stageCount: active.run.stageCount,
-        },
-      },
-      courseDraft: draft && { kind: draft.kind, stages: draft.stages.map((stage) => stage.title ?? stage.md5) },
-    };
-  }
-
-  /** Which theme slot a result jingle came from (`lr2:courseClear`, `beatoraja:fail`, ...), for the test hook. */
-  private nameResultJingle(bytes: Uint8Array | undefined): string | undefined {
-    return nameJingle(bytes, {
-      lr2: this.lr2.resultJingles(),
-      beatoraja: { ...this.beatoraja.beatorajaThemeBgm },
-    });
   }
 
   /** Switches to the skin the player asked for through the Debug Menu ("drop a skin") once a drop brings it. */
