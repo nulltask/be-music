@@ -17,7 +17,7 @@ import {
   setDesignTextResolution,
 } from '../../stage/viewport.ts';
 import { BG } from '../../scene/gameplay-constants.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { PerfTracker } from '../../scene/perf.ts';
 import { renderBga, type BgaRendererContext } from './bga-renderer.ts';
 import { renderBombs } from './playfield/bombs.ts';

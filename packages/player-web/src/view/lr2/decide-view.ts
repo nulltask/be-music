@@ -19,7 +19,7 @@ import { Color, Container, Graphics, Sprite, type Texture } from 'pixi.js';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { Lr2Kit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { disposeChildren } from '../../stage/pixi-utils.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';

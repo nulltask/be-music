@@ -54,7 +54,7 @@ import {
   setDesignTextResolution,
   type ScaledViewport,
 } from '../../stage/viewport.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { PerfTracker } from '../../scene/perf.ts';
 import { disposeChildren } from '../../stage/pixi-utils.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';

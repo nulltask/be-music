@@ -13,7 +13,7 @@ import type { RecordingFormat } from '../recording/recording-format.ts';
 import type { AudioBusChannel, CompressorParams, CompressorStage, TunableCompressor } from '../runtime/audio-bus.ts';
 import type { AudioOwner, AudioService } from '../runtime/audio-service.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from '../session/play/play-options.ts';
-import type { PixiSceneHost } from '../scene/host.ts';
+import type { PixiSceneHost } from './scene-host.ts';
 import { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import { PlaySession } from '../session/play/play-session.ts';
 import type { PlayPlaylogViewScale, PlaySessionTheme } from '../session/play/play-session-theme.ts';

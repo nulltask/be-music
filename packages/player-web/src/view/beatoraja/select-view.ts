@@ -38,7 +38,7 @@ import type { BrowserBrowseEntry, BrowserSongCollection, BrowserSongEntry } from
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import { BeatorajaPlaySkinView } from '../../scene/beatoraja/skin-view.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { loadBeatorajaChartImages, type BeatorajaChartImages } from '../../skin/beatoraja/chart-images.ts';
 import { SelectReadTextOverlay } from '../built-in/select-readtext.ts';

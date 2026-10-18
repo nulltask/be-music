@@ -10,7 +10,7 @@ import { resolveGameplayLaneGeometry } from '@be-music/skin-sdk';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { CORE_TEXT_FONT } from '../../scene/core/fonts.ts';
 import { GoneDrawObjects } from '../../scene/core/note-draw-window.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { PerfTracker } from '../../scene/perf.ts';
 import { ChildPool } from '../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';

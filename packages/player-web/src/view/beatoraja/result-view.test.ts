@@ -11,7 +11,7 @@ import { resolveResultPresentation, type PlayResult } from '@be-music/scene-mode
 import type { Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { BeatorajaPlaySkinView } from '../../scene/beatoraja/skin-view.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { ResultFrame } from '../types.ts';

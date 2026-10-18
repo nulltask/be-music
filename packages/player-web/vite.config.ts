@@ -9,8 +9,8 @@ export default defineConfig({
       // that import from `@be-music/player-web` directly. New code should prefer the per-area subpaths below.
       index: 'src/index.ts',
       // Per-area subpath entries — surfaced through `package.json#exports`. Each barrel's set of exports is documented
-      // in the corresponding `src/<area>/index.ts` header.
-      scenes: 'src/scene/index.ts',
+      // in the corresponding `src/<area>/index.ts` header; `./scenes` is the host layer's barrel.
+      scenes: 'src/host/index.ts',
       skin: 'src/skin/index.ts',
       chart: 'src/chart/index.ts',
       collection: 'src/collection/index.ts',

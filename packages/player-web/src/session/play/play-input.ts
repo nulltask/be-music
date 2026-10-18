@@ -9,7 +9,7 @@
 
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { Application } from 'pixi.js';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { resolveScaledViewport } from '../../stage/viewport.ts';
 import type { QuitHoldController } from '../../scene/quit-hold.ts';
 import {

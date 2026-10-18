@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { BrowserSongEntry } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { BeatorajaPlaySkinView } from '../scene/beatoraja/skin-view.ts';
-import type { PixiSceneHost } from '../scene/host.ts';
+import type { PixiSceneHost } from './scene-host.ts';
 import { drainSharedEngineSignals, resolvePlaylogRecording } from '../session/play/play-engine.ts';
 import type { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import { startPlaylogView } from '../session/play/play-view-settings.ts';

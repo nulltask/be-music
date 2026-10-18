@@ -13,7 +13,7 @@
 
 import type { Container } from 'pixi.js';
 import type { SceneIdentity, SceneKind } from '../host/family-kit.ts';
-import type { PixiScene, PixiSceneHost } from '../scene/host.ts';
+import type { PixiScene, PixiSceneHost } from '../host/scene-host.ts';
 import type { FamilyView, IntentSink } from '../view/types.ts';
 
 /** A key going down or up, as plain data so a session reads it without the DOM. */

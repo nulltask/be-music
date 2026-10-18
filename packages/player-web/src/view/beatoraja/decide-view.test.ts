@@ -4,7 +4,7 @@ import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { BeatorajaPlaySkinView } from '../../scene/beatoraja/skin-view.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { DecideFrame } from '../types.ts';

@@ -31,7 +31,7 @@ import { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.t
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import type { PlaylogViewCursor } from '../../scene/playlog-view.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { PlayAudioHandle } from '../../runtime/audio-service.ts';

@@ -46,7 +46,7 @@ import {
   KEY_ON_FADE_OUT_MS,
 } from '../../scene/gameplay-constants.ts';
 import { resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { LiveTempo } from '../../scene/live-tempo.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
 import { QuitHoldController } from '../../scene/quit-hold.ts';

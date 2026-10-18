@@ -18,7 +18,7 @@ import type { Container, Texture } from 'pixi.js';
 import type { BeatorajaSceneKit } from '../../host/family-kit.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
 import { BeatorajaPlaySkinView, type BeatorajaPlaySkinViewOptions } from '../../scene/beatoraja/skin-view.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import { BeatorajaBgaLayer } from './play/bga.ts';
 import { BeatorajaMarkerLayer, type BeatorajaMarkerBeats } from './play/markers.ts';
