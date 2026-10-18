@@ -314,14 +314,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
     interactive: true,
   });
-  define('player-web.BeatorajaSkinAudioPlayer', {
-    run: () => {
-      const player = new playerWebCoreApi.BeatorajaSkinAudioPlayer({ files: BENCH_BEATORAJA_FILES });
-      player.play('sound/missing.wav', 1);
-      player.stop('sound/missing.wav');
-      player.dispose();
-    },
-  });
   define('player-web.blendCodeToPixi', {
     run: () => {
       playerWebCoreApi.blendCodeToPixi(3);

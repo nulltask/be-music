@@ -44,7 +44,6 @@ import {
   type SystemSoundSet,
 } from '@be-music/scene-model';
 import {
-  BeatorajaSkinAudioPlayer,
   createBeMusicSkinRegistry,
   resolveBeMusicSkinSettings,
   type BeMusicSkin,
@@ -107,6 +106,7 @@ import {
   setMasterVolume,
   supportsSystemAudioSession,
   applySilentModePlayback,
+  type AudioOwner,
   type AudioService,
   type BeMusicPlaylog,
   type PlaylogRecorderInfo,
@@ -563,13 +563,11 @@ class PlayerWebDemoApp {
    */
   private beatorajaThemeBgm: BeatorajaThemeBgm = {};
   /**
-   * Audio player driving `main_state.audio_play / loop / stop` from Lua. One per theme bundle —
-   * the path → AudioBuffer cache is keyed against the bundle's file map, so a fresh theme drop
-   * disposes the old player and creates a new one. Without this wired in, the Lua API surface
-   * exists but every call returns false (silent), so ModernChic's panel SE were dead even though
-   * the eval no longer crashed.
+   * Owns the skin sounds a beatoraja decide / result skin starts while its `main()` runs at load time
+   * (`main_state.audio_*`, e.g. ModernChic's `Root/customsound.lua`). They play through the audio service, which reads
+   * them from the theme's files; a new theme stops them with `stopOwned`.
    */
-  private beatorajaSkinAudio: BeatorajaSkinAudioPlayer | undefined;
+  private readonly themeOwner: AudioOwner = {};
   /**
    * System-sound paths discovered from the active theme bundle. Re-probed every theme load
    * via {@link discoverBeatorajaSystemSoundPaths}; the beatoraja select screen's sound set (`selectSoundSet`) plays
@@ -3006,10 +3004,8 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Load a beatoraja theme drop in parallel with the LR2 path. We currently parse the bundle and stash it on the
-   * host for inspection; PixiJS rendering for beatoraja skins is implemented in a follow-up patch. The beatoraja
-   * loader is independent of `loadTheme` — both states coexist so the user can drop both formats and switch between
-   * them later.
+   * Load a beatoraja theme drop in parallel with the LR2 path. The beatoraja loader is independent of `loadTheme` —
+   * both states coexist so the user can drop both formats and switch between them later.
    */
   private async loadBeatorajaTheme(files: File[]): Promise<void> {
     this.setStatus('Loading beatoraja theme...');
@@ -3023,11 +3019,8 @@ class PlayerWebDemoApp {
       // underlying Pixi textures stay allocated until page reload, but they're unreachable from
       // the renderer once the new theme replaces `beatorajaTheme`.
       releaseBeatorajaSceneKitAssets(this.beatorajaKitCaches);
-      // Tear down the previous theme's audio player — its file-map cache references bytes from
-      // the old bundle that we're about to replace. A fresh player gets created below tied to
-      // the new bundle.
-      this.beatorajaSkinAudio?.dispose();
-      this.beatorajaSkinAudio = new BeatorajaSkinAudioPlayer({ files: bundle.files });
+      // Stop the skin sounds the previous theme's skins started at load time (a loop would otherwise keep playing).
+      this.audio.stopOwned(this.themeOwner);
       // Probe the bundle for navigation system sounds (cursor / decide / cancel / folder /
       // option). The discovery walks well-known filenames inside the theme's `sound/` subdir
       // (and an LR2-compatible `LR2files/Sound/lr2/*.wav` fallback) — slots without a match
@@ -3040,8 +3033,8 @@ class PlayerWebDemoApp {
       // scene runs silent in the background then).
       this.beatorajaSelectBgmPath = discoverBeatorajaSelectBgmPath(bundle.files);
       this.beatorajaTheme = bundle;
-      // The skin sounds of the scenes made with `create*Scene` (`main_state.audio_*` of the decide skin) play through
-      // the audio service, which reads them from the theme's files.
+      // The skin sounds (`main_state.audio_*`) play through the audio service, which reads them from the theme's files:
+      // those of the scenes made with `create*Scene` and those a skin starts at load time.
       this.audio.setTheme({ files: bundle.files });
       // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
       // resolve against the new entries. Without this `pickBeatorajaSkinEntryWithOverride`'s
@@ -3899,7 +3892,8 @@ class PlayerWebDemoApp {
 
   /**
    * The `main_state` a decide / result skin sees while its `main()` runs: the chart's difficulty ops and the skin
-   * config's ops, with `main_state.audio_*` wired to the theme-bundle audio player (`createBeatorajaSkinLoadContext`).
+   * config's ops, with `main_state.audio_*` wired to the audio service's skin sounds, owned by the theme
+   * (`createBeatorajaSkinLoadContext`).
    * ModernChic's decide.lua crashes its whole `main()` without the difficulty ops, and its `Root/customsound.lua` calls
    * the audio accessors from every panel toggle.
    */
@@ -3907,7 +3901,7 @@ class PlayerWebDemoApp {
     return createBeatorajaSkinLoadContext({
       difficulty: song.chart.metadata.difficulty,
       skinConfig,
-      skinAudio: this.beatorajaSkinAudio,
+      skinAudio: this.audio.skinSounds.owned(this.themeOwner),
     });
   }
 
