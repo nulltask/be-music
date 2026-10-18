@@ -1,7 +1,7 @@
 /**
  * What the beatoraja select view's skin reads of a chart bar beyond its library entry (`BeatorajaSelectView`): the
- * chart's key mode, traits, note kinds, densities, length and BPM range, worked out once per chart and kept in weak maps
- * keyed by the library entry.
+ * chart's key mode, traits, note kinds, densities, length, BPM range and main BPM, worked out once per chart and kept in
+ * weak maps keyed by the library entry.
  */
 
 import type { ChartPlayVariant } from '@be-music/chart';
@@ -12,6 +12,7 @@ import { computeBeatorajaChartDensity, type ChartDensity } from '../../../chart/
 import { computeBeatorajaChartTotalSeconds } from '../../../chart/beatoraja/duration.ts';
 import { extractChartSubartist } from '../../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from '../../../chart/beatoraja/note-counts.ts';
+import { resolveShownChartMainBpm } from '../../../chart/main-bpm.ts';
 
 /**
  * `resolveLibraryChartPlayVariant` walks the chart's events / metadata to classify keys mode. On a
@@ -106,7 +107,8 @@ const BPM_RANGE_CACHE = new WeakMap<LibraryChart, { min: number; max: number } |
 
 /**
  * What the skin reads of a chart bar beyond its library entry (`BeatorajaSelectChartFacts`), kept per chart. The facts
- * that walk the chart (traits, note kinds, densities, length, BPM range) are read the first time a skin asks for them.
+ * that walk the chart (traits, note kinds, densities, length, BPM range, main BPM) are read the first time a skin asks
+ * for them.
  */
 export function selectChartFacts(song: LibraryChart): BeatorajaSelectChartFacts {
   let facts = SELECT_CHART_FACTS.get(song);
@@ -150,6 +152,9 @@ export function selectChartFacts(song: LibraryChart): BeatorajaSelectChartFacts 
       },
       get bpmRange(): { min: number; max: number } | undefined {
         return resolveBpmRange(song);
+      },
+      get mainBpm(): number | undefined {
+        return resolveShownChartMainBpm(song.chart, song.chartPath);
       },
     };
     SELECT_CHART_FACTS.set(song, facts);
