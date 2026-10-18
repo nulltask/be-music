@@ -221,6 +221,7 @@ import {
 import { CourseMakerPanel } from './course-maker-panel.ts';
 import { loadMadeCourses, saveMadeCourses } from './course-maker-store.ts';
 import { SceneRouter, type PlayDispose, type SceneRouteToken } from './app/scene-router.ts';
+import { settleDecidePreload, type DecidePreload } from './app/decide-handoff.ts';
 
 /** A NONSTOP course being played as its stitched chart. */
 interface NonstopPlay {
@@ -238,6 +239,12 @@ const AUTO_DETECT_RESOLUTION_LABEL = 'Auto-detect resolution';
 
 /** Every screen the demo shows, each made by its `create*Scene`. */
 type DemoScene = SelectScene | DecideScene | PlayScene | ResultScene;
+
+/** What a play loading behind a decide screen is made with: the start's AUTO, and the chart as the screen drew it. */
+interface DecidePlayOverrides {
+  readonly autoPlay?: boolean;
+  readonly preResolved: ResolvedPlayChart;
+}
 
 /** Ends a play whose result shows: it exited as the result entered, and its last samples ring out. */
 const disposeKeepingAudioTail: PlayDispose<PlayScene> = (play) => play.dispose({ preserveAudioTail: true });
@@ -4273,7 +4280,7 @@ class PlayerWebDemoApp {
     // A course starts its own play once the splash is done, so nothing is preloaded for it. The play is preloaded once the
     // decide screen is made, whichever family draws either, so it plays the `#RANDOM` branches the screen drew
     // (`DecideScene.resolved`).
-    let preloaded: Promise<void> | undefined;
+    let preload: DecidePreload<PlayScene, DecidePlayOverrides> | undefined;
     let advanced = false;
     const advance = (then: () => void): void => {
       // Idempotent — the auto-advance timer, key input, and pointer click can all race; whichever lands first wins and
@@ -4286,11 +4293,11 @@ class PlayerWebDemoApp {
       onContinue: () =>
         advance(() => {
           // A course's play takes the stage from the splash as it starts.
-          if (preloaded === undefined) {
+          if (preload === undefined) {
             void start();
             return;
           }
-          void this.startGameplayAfterDecide(song, preloaded, overrides, token);
+          void this.startGameplayAfterDecide(song, preload, token);
         }),
       onCancel: () =>
         advance(() => {
@@ -4313,7 +4320,8 @@ class PlayerWebDemoApp {
       on: { continue: callbacks.onContinue, cancel: callbacks.onCancel },
     });
     if (then === undefined) {
-      preloaded = this.preloadGameplay(song, { ...overrides, preResolved: decide.resolved }, token);
+      const options = { ...overrides, preResolved: decide.resolved };
+      preload = { options, play: this.preloadGameplay(song, options, token) };
     }
     const shown = await this.router.show(decide, { role: 'decide', token });
     if (shown && kit.family === 'beatoraja') this.setStatus(`Decide (beatoraja): ${song.title}`);
@@ -4341,8 +4349,9 @@ class PlayerWebDemoApp {
 
   /**
    * Makes the play scene (`createPlayScene`) with the current play-options snapshot and has the router load it off
-   * stage (`prepare`) for the navigation `token`. The returned promise resolves once chart audio is decoded — the host
-   * awaits it inside the Decide `onContinue` handler before showing the play.
+   * stage (`prepare`) for the navigation `token`. The returned promise resolves to that play once chart audio is decoded
+   * (`undefined` when a newer navigation replaced it) — the host awaits it inside the Decide `onContinue` handler and
+   * shows that play.
    *
    * Wired up here (rather than inline in `showDecide`) because the same option-marshalling + callback wiring is needed
    * whether we're going through Decide or the no-decide fast-path. `playSong` shares this construction shape.
@@ -4351,7 +4360,7 @@ class PlayerWebDemoApp {
     song: LibraryChart,
     overrides: { autoPlay?: boolean; preResolved?: ResolvedPlayChart },
     token: SceneRouteToken,
-  ): Promise<void> {
+  ): Promise<PlayScene | undefined> {
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
     // The same kit as `playSong` picks, so the decide → gameplay preload path stays consistent with the no-decide
     // fast-path.
@@ -4359,7 +4368,7 @@ class PlayerWebDemoApp {
     if (kit === undefined) throw new Error(`no play skin for ${song.title}`);
     const chartHashes = await this.resolveChartHashes(song);
     const view = this.buildPlayScene(song, kit, { ...overrides, chartHashes });
-    await this.router.prepare(view, { token });
+    return (await this.router.prepare(view, { token })) ? view : undefined;
   }
 
   /**
@@ -4657,26 +4666,25 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Tears the Decide splash down and hands the stage over to the (already-prepared) gameplay scene. Awaits the preload
-   * promise: when the user dismisses Decide before chart audio has finished decoding, the splash's last frame stays on
-   * screen until prepare resolves — visually a brief hold rather than the previous frozen-frame freeze.
+   * Tears the Decide splash down and hands the stage over to the play prepared behind it (`preload`), that play and no
+   * other. Awaits the preload: when the user dismisses Decide before chart audio has finished decoding, the splash's
+   * last frame stays on screen until prepare resolves — visually a brief hold rather than the previous frozen-frame
+   * freeze. A preload that failed makes the play again without one, with the splash's draws (`preResolved`).
    */
   private async startGameplayAfterDecide(
     song: LibraryChart,
-    preloaded: Promise<void>,
-    overrides: { autoPlay?: boolean },
+    preload: DecidePreload<PlayScene, DecidePlayOverrides>,
     token: SceneRouteToken,
   ): Promise<void> {
-    try {
-      await preloaded;
-    } catch (error) {
+    const handOff = await settleDecidePreload(preload, () => this.router.isCurrent(token));
+    if (handOff.kind === 'stale') return;
+    if (handOff.kind === 'reload') {
       // The play that failed to load is gone already; the splash goes as the play made again takes the stage.
-      gameplayLog.warn('preload failed; falling back to no-decide path', error);
-      await this.playSong(song, overrides);
+      gameplayLog.warn('preload failed; falling back to no-decide path', handOff.error);
+      await this.playSong(song, handOff.options);
       return;
     }
-    const view = this.gameplayView;
-    if (!view) return;
+    const view = handOff.play;
     this.elements.shell.classList.add('playing');
     this.lastSelectNavigation = this.selectView?.snapshot();
     // The splash hands the stage over: it exits as the prepared play enters, then goes.
@@ -4716,6 +4724,8 @@ class PlayerWebDemoApp {
       replay?: BeMusicPlaylog;
       courseStage?: CourseStagePlay;
       nonstop?: NonstopPlay;
+      /** The chart as a decide screen drew it, for a play made again after its preload failed. */
+      preResolved?: ResolvedPlayChart;
     } = {},
   ): Promise<void> {
     this.elements.shell.classList.add('playing');
