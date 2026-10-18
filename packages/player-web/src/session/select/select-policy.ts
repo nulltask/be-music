@@ -9,6 +9,9 @@
  *   beatoraja shows the root.
  * - **The sort and the filters.** LR2 keeps them in the play options (its option panel), so a browse position restored
  *   after a play keeps the ones in force; beatoraja's MODE and SORT buttons are part of the browse position.
+ * - **The keys.** LR2's key map, or beatoraja's (`select-keys.ts`).
+ * - **The cursor cue on a folder.** LR2's list slides as a folder opens or closes, and its scratch cue plays with every
+ *   slide, the folder's cue with it; beatoraja plays the folder's cue alone.
  */
 
 import {
@@ -22,6 +25,7 @@ import {
   type Library,
 } from '@be-music/scene-model';
 import type { SceneFamily } from '../../host/family-kit.ts';
+import type { SelectKeyMap } from './select-keys.ts';
 
 /** How a skin family's select screen treats what the browse model leaves open. See the module comment. */
 export interface SelectPolicy {
@@ -37,15 +41,31 @@ export interface SelectPolicy {
    * keeps, or the browse position itself (beatoraja's MODE and SORT buttons), which a restore brings back.
    */
   readonly listOptions: 'play-options' | 'browse';
+  /** The key map the screen reads its keys by (`select-keys.ts`). */
+  readonly keys: SelectKeyMap;
+  /** Whether opening or closing a folder plays the cursor cue as well as the folder's. */
+  readonly folderCursorCue: boolean;
 }
 
-const LR2_SELECT_POLICY: SelectPolicy = { atRoot: 'stay', openSingleFolder: true, listOptions: 'play-options' };
+const LR2_SELECT_POLICY: SelectPolicy = {
+  atRoot: 'stay',
+  openSingleFolder: true,
+  listOptions: 'play-options',
+  keys: 'lr2',
+  folderCursorCue: true,
+};
 
 /** Each skin family's select policy: the built-in screens follow LR2. */
 export const SELECT_POLICIES: Readonly<Record<SceneFamily, SelectPolicy>> = {
   'built-in': LR2_SELECT_POLICY,
   lr2: LR2_SELECT_POLICY,
-  beatoraja: { atRoot: 'exit', openSingleFolder: false, listOptions: 'browse' },
+  beatoraja: {
+    atRoot: 'exit',
+    openSingleFolder: false,
+    listOptions: 'browse',
+    keys: 'beatoraja',
+    folderCursorCue: false,
+  },
 };
 
 /**

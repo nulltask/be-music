@@ -215,19 +215,6 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelApi.browseSnapshotFromSelectNavigation({ folderPath: ['Pack1'], selectedIndex: 3 });
     },
   });
-  define('scene-model.browseSnapshotFromBeatorajaSelect', {
-    run: () => {
-      sceneModelApi.browseSnapshotFromBeatorajaSelect({
-        folderPath: ['Dan'],
-        cursorStack: [8, 0],
-        keymodeFilter: 2,
-        sortMode: 4,
-        favoriteSongs: [],
-        favoriteCharts: ['chart-0'],
-        searchQuery: '',
-      });
-    },
-  });
 
   // Play options
   define('scene-model.clampHiSpeed', {

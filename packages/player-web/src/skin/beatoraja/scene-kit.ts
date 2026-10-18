@@ -145,11 +145,6 @@ export interface LoadBeatorajaSceneKitOptions {
   readonly runtimeContext?: (skinConfig: BeatorajaSkinConfig) => BeatorajaLuaRuntimeContext;
   /** Decode the textures again even when they are kept: other options can build another `source[]`. */
   readonly reloadTextures?: boolean;
-  /**
-   * Whether the options' `filepath[]` picks (`skinConfig.file`) choose the files of the `source[]` wildcards they name;
-   * `true` without one. With `false` each wildcard takes the first file it matches.
-   */
-  readonly applyFilepathPicks?: boolean;
   /** Called with the resolved `source[]` when the textures are decoded, for the host's log. */
   readonly onSources?: (sources: BeatorajaSourceBundle) => void;
   /** Called when the fonts are registered, with how many the skin declares, for the host's log. */
@@ -205,7 +200,9 @@ export async function loadBeatorajaSceneKit(
       entryPath,
       sources: (skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
       filepathSchema: skin.filepath,
-      ...(options.applyFilepathPicks === false ? {} : { filepathOverrides: skinConfig.file }),
+      // The options' `filepath[]` picks choose the files of the wildcards they name: on the first load, the header's
+      // default file of each.
+      filepathOverrides: skinConfig.file,
     });
     options.onSources?.(sources);
     textures = await loadBeatorajaTexturesFromBundle(sources);

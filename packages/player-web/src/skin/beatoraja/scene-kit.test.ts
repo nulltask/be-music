@@ -211,17 +211,26 @@ describe('loadBeatorajaSceneKit', () => {
     expect(onFonts.mock.calls[0]?.[1]).toBe(0);
   });
 
-  it("lets a wildcard take its first match when the options' file picks are not applied", async () => {
+  it("takes the header's default file for a wildcard on the first load, and the player's pick after", async () => {
     quietDecodes();
+    const caches = createBeatorajaSceneKitCaches();
     const onSources = vi.fn();
+    // The first load of a select entry: `parts/*.png` matches `a.png` first, but the header's default is `b`.
+    const first = await loadBeatorajaSceneKit({ files: FILES, entryPath: 'skin/select.json', caches, onSources });
+    if (!first.ok) throw new Error(first.message);
+    expect(first.kit.skinConfig.file).toEqual({ Parts: 'skin/parts/b.png' });
+    expect(onSources.mock.calls[0]?.[0].assets.map((asset: { path: string }) => asset.path)).toEqual([
+      'skin/parts/b.png',
+    ]);
     await loadBeatorajaSceneKit({
       files: FILES,
       entryPath: 'skin/select.json',
-      caches: createBeatorajaSceneKitCaches(),
-      applyFilepathPicks: false,
+      caches,
+      skinConfig: { ...first.kit.skinConfig, file: { Parts: 'skin/parts/a.png' } },
+      reloadTextures: true,
       onSources,
     });
-    expect(onSources.mock.calls[0]?.[0].assets.map((asset: { path: string }) => asset.path)).toEqual([
+    expect(onSources.mock.calls[1]?.[0].assets.map((asset: { path: string }) => asset.path)).toEqual([
       'skin/parts/a.png',
     ]);
   });

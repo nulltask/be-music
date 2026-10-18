@@ -148,6 +148,19 @@ describe('folders', () => {
     expect(transition.event).toEqual({ kind: 'at-root' });
   });
 
+  test('backs out onto the folder bar wherever a sort changed while the folder was open moved it', () => {
+    // Without a sort the root lists the chart folders, then the course folders; a sort orders every folder by label.
+    const shuffled: Library = {
+      songs: [makeChart('z1', 'Zeta/x'), makeChart('b1', 'Beta/x')],
+      courseFolders: [makeCourseFolder('Dan', [makeCourse('first')])],
+    };
+    const inZeta = run(shuffled, createBrowseState(), { type: 'jump', index: 1 }, { type: 'open' });
+    expect(browseFolder(inZeta)?.label).toBe('Zeta');
+    const closed = run(shuffled, inZeta, { type: 'list', options: { sort: 'TITLE' } }, { type: 'close' });
+    expect(labels(browseEntries(shuffled, closed))).toEqual(['Beta', 'Dan', 'Zeta']);
+    expect(browseCursor(closed)).toBe(2);
+  });
+
   test('clamps the parent cursor when the parent list shrank while the folder was open', () => {
     // Open Dan (the third root bar), then search: back at the root the search lists the matching charts only.
     const inDan = run(library, createBrowseState(), { type: 'jump', index: 2 }, { type: 'open' });

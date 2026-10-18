@@ -1,10 +1,10 @@
 /**
- * The beatoraja select scene's song list (`PixiBeatorajaSelectScene`): the rows the skin's `songlist` lays out (or a
- * fallback grid), each a bar image, a title, the chart's level digits and its feature labels, plus an invisible hit
- * sprite, drawn into the scene's list layer inside the skin's container. Every tick it maps the visible slots onto the
- * entries around the animated cursor and lays them out.
+ * The beatoraja select view's song list (`BeatorajaSelectView`): the rows the skin's `songlist` lays out (or a fallback
+ * grid), each a bar image, a title, the chart's level digits and its feature labels, plus an invisible hit sprite,
+ * drawn into the view's list layer inside the skin's container. Every frame it maps the visible slots onto the entries
+ * around the animated cursor and lays them out.
  *
- * The rows read the scene's state and call back into it through {@link BeatorajaSelectRowsContext}; the select scene
+ * The rows read the view's state and call back into it through {@link BeatorajaSelectRowsContext}; the select view
  * passes it.
  */
 
@@ -25,8 +25,8 @@ import { type Container, type FederatedPointerEvent, Sprite, Text, Texture } fro
 import type { BrowserBrowseEntry } from '../../../collection/types.ts';
 import type { BeatorajaFontCache } from '../../../skin/beatoraja/fonts.ts';
 import { createCroppedBeatorajaTexture } from '../../../skin/beatoraja/render.ts';
-import type { PixiBeatorajaSelectSceneOptions } from './options.ts';
-import type { BeatorajaPlaySkinView } from '../skin-view.ts';
+import type { BeatorajaSceneKit } from '../../../host/family-kit.ts';
+import type { BeatorajaPlaySkinView } from '../../../scene/beatoraja/skin-view.ts';
 
 /**
  * Fallback visible-row count when the skin doesn't author a `songlist` block. Odd so the
@@ -35,11 +35,12 @@ import type { BeatorajaPlaySkinView } from '../skin-view.ts';
  */
 const FALLBACK_VISIBLE_ROW_COUNT = 13;
 
-/** What the song list reads and calls on the select scene: its fields and methods of these names. */
+/** What the song list reads and calls on the select view: its fields and methods of these names. */
 export interface BeatorajaSelectRowsContext {
   /** The skin's view: the rows are laid out on its canvas. */
   readonly view: Pick<BeatorajaPlaySkinView, 'width' | 'height'>;
-  readonly options: Pick<PixiBeatorajaSelectSceneOptions, 'skin' | 'textures'>;
+  /** The skin and its textures. */
+  readonly options: Pick<BeatorajaSceneKit, 'skin' | 'textures'>;
   /** The layer the rows are drawn into, inside the skin's container at its `songlist` anchor. */
   readonly listLayer: Container;
   readonly entries: ReadonlyArray<BrowserBrowseEntry>;
@@ -597,6 +598,13 @@ export class BeatorajaSelectRows {
   }
   /** Lazy `image[].id → BeatorajaImageElement` map for feature-label texture lookups. */
   featureLabelImages: Map<string | number, BeatorajaImageElement> | undefined;
+
+  /** Forgets what was read off the skin, before the rows are built for another one. */
+  forgetSkin(): void {
+    this.featureLabelImages = undefined;
+    this.valueElementsById = undefined;
+    this.cachedLevelValueByDifficulty = undefined;
+  }
 
   /**
    * Repaint the row backdrops + labels for the current cursor / scroll state. Called on every
