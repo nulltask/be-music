@@ -200,7 +200,7 @@ export function resolveBeatorajaSelectBarOps(input: BeatorajaSelectInput): numbe
     case 'course':
       ops.push(...resolveBeatorajaCourseBarOps(entry.course, input.lampOp));
       break;
-    case 'song': {
+    case 'chart': {
       ops.push(BEATORAJA_OP.SONGBAR, BEATORAJA_OP.PLAYABLEBAR);
       const chart = input.chart;
       const keysong = beatorajaKeysongOp(chart?.playVariant);
@@ -241,7 +241,7 @@ export function resolveBeatorajaSelectText(id: number, input: BeatorajaSelectInp
     const courseText = resolveBeatorajaCourseText(id, view, { missingStages: missing });
     if (courseText !== undefined) return courseText;
   }
-  const song = entry?.kind === 'song' ? entry.song : undefined;
+  const song = entry?.kind === 'chart' ? entry.chart : undefined;
   const folderLabel = entry?.kind === 'folder' ? entry.folder.label : undefined;
   switch (id) {
     case BEATORAJA_TEXT.TITLE:
@@ -286,7 +286,7 @@ export function resolveBeatorajaSelectNumber(id: number, input: BeatorajaSelectI
   const entry = input.focused;
   switch (id) {
     case BEATORAJA_NUM.FOLDER_TOTALSONGS:
-      return entry?.kind === 'folder' ? entry.folder.songs.length : undefined;
+      return entry?.kind === 'folder' ? entry.folder.charts.length : undefined;
     case BEATORAJA_NUM.TIME_YEAR:
       return input.wallClock?.year;
     case BEATORAJA_NUM.TIME_MONTH:
@@ -300,8 +300,8 @@ export function resolveBeatorajaSelectNumber(id: number, input: BeatorajaSelectI
     case BEATORAJA_NUM.TIME_SECOND:
       return input.wallClock?.second;
   }
-  if (entry?.kind !== 'song') return undefined;
-  const song = entry.song;
+  if (entry?.kind !== 'chart') return undefined;
+  const song = entry.chart;
   const chart = input.chart;
   switch (id) {
     case BEATORAJA_NUM.BMS_TOTAL:
@@ -374,7 +374,7 @@ export function resolveBeatorajaSelectRefValue(ref: number, input: BeatorajaSele
     case BEATORAJA_BUTTON.SORT:
       return beatorajaSortIndex(input.list.sort);
     case BEATORAJA_BUTTON.LNMODE:
-      return input.lnMode ?? beatorajaLnModeIndex(input.focused?.kind === 'song' ? input.chart?.lnMode : undefined);
+      return input.lnMode ?? beatorajaLnModeIndex(input.focused?.kind === 'chart' ? input.chart?.lnMode : undefined);
     case BEATORAJA_NUM.CLEAR:
       return 0;
     default:

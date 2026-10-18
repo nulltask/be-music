@@ -14,7 +14,7 @@ import { makeChart, makeChartWith, makeCourse } from './test-support.ts';
 const CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
 
 function song(...args: Parameters<typeof makeChartWith>): LibraryEntry {
-  return { kind: 'song', song: makeChartWith(...args) };
+  return { kind: 'chart', chart: makeChartWith(...args) };
 }
 
 describe('resolveLr2SelectState ops', () => {
@@ -69,7 +69,7 @@ describe('resolveLr2SelectState ops', () => {
   });
 
   it('lights a course bar’s ops: the course and its kind, its lamp and its stages’ difficulties', () => {
-    const course = makeCourse({ stages: [{ title: 'a', song: makeChartWith({ difficulty: 4 }) }] });
+    const course = makeCourse({ stages: [{ title: 'a', chart: makeChartWith({ difficulty: 4 }) }] });
     const { ops } = resolveLr2SelectState({
       focused: { kind: 'course', course },
       options: DEFAULT_PLAY_OPTIONS,
@@ -139,7 +139,7 @@ describe('resolveLr2SelectState ops', () => {
   });
 
   it('lights op 1 on a folder bar, and only there', () => {
-    const folder: LibraryEntry = { kind: 'folder', folder: { label: 'Folder', songs: [] } };
+    const folder: LibraryEntry = { kind: 'folder', folder: { label: 'Folder', charts: [] } };
     const onFolder = resolveLr2SelectState({ focused: folder, options: DEFAULT_PLAY_OPTIONS }).ops;
     expect(onFolder.has(LR2_OP.FOLDER_BAR)).toBe(true);
     expect(onFolder.has(LR2_OP.SONG_BAR)).toBe(false);
@@ -182,7 +182,10 @@ describe('resolveLr2SelectState numbers', () => {
 
   it('reads the focused chart: its notes, BPM range, level under its difficulty and start BPM', () => {
     const state = resolveLr2SelectState({
-      focused: { kind: 'song', song: makeChartWith({ difficulty: 2 }, { totalNotes: 500, playLevel: '7', bpm: 150 }) },
+      focused: {
+        kind: 'chart',
+        chart: makeChartWith({ difficulty: 2 }, { totalNotes: 500, playLevel: '7', bpm: 150 }),
+      },
       options: DEFAULT_PLAY_OPTIONS,
       bpmRange: { min: 74.6, max: 300.4 },
     });
@@ -198,7 +201,7 @@ describe('resolveLr2SelectState numbers', () => {
   });
 
   it('reads a course bar’s stage levels', () => {
-    const course = makeCourse({ stages: [{ title: 'a', song: makeChart({ playLevel: 12 }) }] });
+    const course = makeCourse({ stages: [{ title: 'a', chart: makeChart({ playLevel: 12 }) }] });
     const state = resolveLr2SelectState({ focused: { kind: 'course', course }, options: DEFAULT_PLAY_OPTIONS });
     expect(state.number(LR2_NUM.COURSE_STAGE1_LEVEL)).toBe(12);
   });
@@ -383,7 +386,7 @@ describe('pickLr2BarBody', () => {
   });
 
   it('keeps the folder bodies and draws a body for an empty slot', () => {
-    const courseFolder: LibraryEntry = { kind: 'folder', folder: { label: 'f', songs: [], courses: [] } };
+    const courseFolder: LibraryEntry = { kind: 'folder', folder: { label: 'f', charts: [], courses: [] } };
     expect(pickLr2BarBody(all, courseFolder)?.kind).toBe('courseFolder');
     expect(pickLr2BarBody(bodies('song', 'folder'), courseFolder)?.kind).toBe('folder');
     expect(pickLr2BarBody(all, undefined)?.kind).toBe('song');
