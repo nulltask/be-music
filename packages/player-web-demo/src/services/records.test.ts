@@ -127,6 +127,34 @@ describe('RecordsService record lookups', () => {
   });
 });
 
+describe('RecordsService record peeks', () => {
+  test('answers from what is hashed already and hashes nothing: by path until the chart is hashed, then by hash', async () => {
+    const ruleset: { current: PlaylogRulesetId } = { current: 'lr2' };
+    const service = records(library({ 'a.bms': 'abc' }), ruleset);
+    service.songRecords.set('lr2:path:a.bms', { lamp: 'EASY' });
+    service.songRecords.set(`lr2:sha256:${ABC_SHA256}`, { lamp: 'HARD' });
+    service.songRecords.set(`beatoraja:sha256:${ABC_SHA256}`, { lamp: 'EX_HARD' });
+    const song = chart('a');
+    expect(service.peekSongRecord(song)?.lamp).toBe('EASY');
+    expect(service.peekSongRecord(song)?.lamp).toBe('EASY');
+    expect(hashChart).not.toHaveBeenCalled();
+    await service.resolveChartHashes(song);
+    expect(service.peekSongRecord(song)?.lamp).toBe('HARD');
+    ruleset.current = 'beatoraja';
+    expect(service.peekSongRecord(song)?.lamp).toBe('EX_HARD');
+    expect(hashChart).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps answering by path for a chart that could not be hashed', async () => {
+    const service = records(library({}));
+    service.songRecords.set('lr2:path:missing.bms', { lamp: 'NORMAL' });
+    const song = chart('missing');
+    await service.resolveChartHashes(song);
+    expect(service.peekSongRecord(song)?.lamp).toBe('NORMAL');
+    expect(hashChart).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('RecordsService record latches', () => {
   test('records a play under the key latched at its start, once, and keeps the records for the next visit', () => {
     const stored = stubStorage();

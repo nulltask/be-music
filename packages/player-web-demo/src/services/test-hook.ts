@@ -1,7 +1,8 @@
 // The test hook's live half: what `window.__beMusicTest.state()` reads from the app at each call (the scene the router
 // shows, the select screen's cursor, the play on the stage, the library, the course run and the course being made),
 // and the theme slot a result's jingle came from. `test-hook.ts` keeps the contract and records what the host hands
-// it (results, play logs, loads). Every read here is synchronous: `state()` answers at once.
+// it (results, play logs, loads). Every read here is synchronous and starts nothing: `state()` answers at once, from
+// what the app holds already, and leaves the app as it found it.
 
 import type { PlayScene, SelectScene } from '@be-music/player-web/host';
 import type { LibraryChart, LibraryEntry } from '@be-music/scene-model';
@@ -38,8 +39,8 @@ export interface LiveTestHookDeps {
   readonly guiState: Pick<DemoGuiState, 'status' | 'nonstopPlacement'>;
   /** The library: its charts and course folders. */
   readonly library: Pick<LibraryService, 'collection'>;
-  /** The best records of the current judge ruleset, which the select screen shows. */
-  readonly records: Pick<RecordsService, 'lookupSongRecord' | 'currentRulesetRecords'>;
+  /** The best records of the current judge ruleset, which the select screen shows, read without hashing a chart. */
+  readonly records: Pick<RecordsService, 'peekSongRecord' | 'currentRulesetRecords'>;
   /** The course run in progress. */
   readonly courses: Pick<CourseRunService, 'active'>;
   /** The course being made. */
@@ -112,7 +113,8 @@ export function liveTestHookState(deps: LiveTestHookDeps): TestHookLiveState {
  * ruleset it was played on, `resolveCourseRecordUpdate`), so a course is looked up in the current ruleset's records.
  */
 function barRecord(entry: LibraryEntry, deps: LiveTestHookDeps): BeMusicSongRecord | undefined {
-  if (entry.kind === 'chart') return deps.records.lookupSongRecord(entry.chart);
+  // A chart's record is keyed by its hash once known; a read hashes nothing (the select screen does as it shows the bar).
+  if (entry.kind === 'chart') return deps.records.peekSongRecord(entry.chart);
   if (entry.kind === 'course') {
     return lookupCourseRecord(entry.course, deps.records.currentRulesetRecords(), deps.guiState.nonstopPlacement);
   }

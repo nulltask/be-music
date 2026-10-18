@@ -92,10 +92,22 @@ export class RecordsService {
     if (this.songRecords.size === 0) {
       return undefined;
     }
-    const hashes = this.chartHashCache.get(song.id);
-    if (hashes === undefined) {
+    if (!this.chartHashCache.has(song.id)) {
       void this.resolveChartHashes(song);
     }
+    return this.peekSongRecord(song);
+  }
+
+  /**
+   * A chart's best record as far as its hash is known already, without hashing it: by its hash once the chart has been
+   * hashed (by {@link lookupSongRecord} or {@link resolveChartHashes}), by its path before. For readers that must start
+   * nothing, such as the test hook.
+   */
+  public peekSongRecord(song: LibraryChart): BeMusicSongRecord | undefined {
+    if (this.songRecords.size === 0) {
+      return undefined;
+    }
+    const hashes = this.chartHashCache.get(song.id);
     return this.songRecords.get(rulesetRecordKey(this.judgeRuleset(), songRecordKey(song, hashes?.sha256)));
   }
 

@@ -18,6 +18,9 @@ vi.mock('@be-music/player-web/collection', async (importOriginal) => {
 
 const hashChart = vi.mocked(computeChartFileHashes);
 
+// The SHA-256 of the bytes `abc`.
+const ABC_SHA256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+
 function song(id: string): LibraryChart {
   return {
     id,
@@ -150,6 +153,24 @@ describe('liveTestHookState', () => {
         list: { sort: 'TITLE', keysFilter: 'KEYS_7', difficultyFilter: 'ALL', search: 'a' },
       },
     });
+  });
+
+  test("reads a chart bar's record without hashing the chart: by its path until the select screen has hashed it", async () => {
+    const h = harness();
+    h.records.songRecords.set('lr2:path:a.bms', { lamp: 'EASY' });
+    h.records.songRecords.set(`lr2:sha256:${ABC_SHA256}`, { lamp: 'HARD' });
+    const chart = h.deps.library.collection.charts[0]!;
+    const select = selectScene({ kind: 'chart', chart });
+    h.router.current = select;
+    h.router.select = select;
+    expect(liveTestHookState(h.deps).cursor?.bar?.lamp).toBe('EASY');
+    expect(liveTestHookState(h.deps).cursor?.bar?.lamp).toBe('EASY');
+    expect(hashChart).not.toHaveBeenCalled();
+    // The select screen looks the bar's record up, which hashes the chart; the hook then reads the record by its hash.
+    h.records.lookupSongRecord(chart);
+    await h.records.resolveChartHashes(chart);
+    expect(liveTestHookState(h.deps).cursor?.bar?.lamp).toBe('HARD');
+    expect(hashChart).toHaveBeenCalledTimes(1);
   });
 
   test('reports a folder bar, and the default list shape for a screen that keeps none', () => {

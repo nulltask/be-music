@@ -133,7 +133,7 @@ describe('contract v1', () => {
       elements: { loadingOverlay: { classList: { contains: () => false } } } as unknown as LiveTestHookDeps['elements'],
       guiState: { status: '1 chart loaded', nonstopPlacement: 'intended' },
       library: { collection: { sources: [], charts: [song('Fixture A')], errors: [] } },
-      records: { lookupSongRecord: () => ({ lamp: 'HARD' }), currentRulesetRecords: () => new Map() },
+      records: { peekSongRecord: () => ({ lamp: 'HARD' }), currentRulesetRecords: () => new Map() },
       courses: { active: undefined },
       courseMaker: { maker: { draft: undefined } },
       lastPlay: () => undefined,
