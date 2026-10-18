@@ -576,6 +576,27 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
+  it("stops the skin's sounds (its loops) as the scene leaves, leaving the play's own audio to ring out", async () => {
+    const skinSounds = { play: vi.fn(() => true), loop: vi.fn(() => true), stop: vi.fn(() => true) };
+    const audio = {
+      stopOwned: vi.fn(),
+      playJingle: vi.fn(async () => true),
+      skinSounds: { owned: vi.fn(() => skinSounds) },
+    } as unknown as AudioService & { skinSounds: { owned: ReturnType<typeof vi.fn> } };
+    const fake = createFakeHost();
+    const { scene, play } = createBeatoraja({ host: fake.host, audio });
+    const owner = (scene as unknown as { playSession: PlaySceneSession }).playSession;
+    expect(audio.skinSounds.owned).toHaveBeenCalledWith(owner);
+    expect(audio.skinSounds.owned).not.toHaveBeenCalledWith(play);
+    await scene.prepare();
+    await scene.enter(fake.host);
+    expect(audio.stopOwned).not.toHaveBeenCalled();
+    scene.exit();
+    expect(audio.stopOwned).toHaveBeenCalledWith(owner);
+    expect(audio.stopOwned).not.toHaveBeenCalledWith(play);
+    scene.dispose();
+  });
+
   it('takes a kit of its own family (the skin options changed mid-play), and ignores another family', async () => {
     const { scene } = createBeatoraja();
     await scene.prepare();

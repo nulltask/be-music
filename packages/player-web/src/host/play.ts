@@ -11,7 +11,7 @@ import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/typ
 import type { GameplayRecorderResult } from '../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../recording/recording-format.ts';
 import type { AudioBusChannel, CompressorParams, CompressorStage, TunableCompressor } from '../runtime/audio-bus.ts';
-import type { AudioService } from '../runtime/audio-service.ts';
+import type { AudioOwner, AudioService } from '../runtime/audio-service.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from '../session/play/play-options.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
 import { PlaySceneSession } from '../session/play/play-scene-session.ts';
@@ -176,11 +176,15 @@ interface FamilyPlayView {
   updateKit(kit: PlaySceneKit): void;
 }
 
-/** The play view of `kit`'s family, drawing `play`. */
+/**
+ * The play view of `kit`'s family, drawing `play`. A beatoraja skin's Lua sounds play through the audio service as
+ * `soundOwner`'s, so they stop as the scene leaves the stage.
+ */
 function createPlayView(
   kit: PlaySceneKit,
   play: PlaySession,
   options: Pick<PlaySceneOptions, 'settings' | 'course' | 'source' | 'audio'>,
+  soundOwner: AudioOwner,
 ): FamilyPlayView {
   const { settings, course, source } = options;
   if (kit.family === 'beatoraja') {
@@ -189,8 +193,9 @@ function createPlayView(
       ...(settings.dpFlip !== undefined ? { dpFlip: settings.dpFlip } : {}),
       ...(course?.view !== undefined ? { course: course.view } : {}),
       ...(source !== undefined ? { source } : {}),
-      // The skin's Lua sounds play through the audio service, owned by the play.
-      skinSounds: options.audio.skinSounds.owned(play),
+      // The skin's Lua sounds play through the audio service, owned by the scene's session (not the play, which owns its
+      // audio graph: a play that ended keeps ringing out after the scene leaves).
+      skinSounds: options.audio.skinSounds.owned(soundOwner),
     });
     return {
       view,
@@ -439,12 +444,13 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     },
     theme,
   );
-  family = createPlayView(kit, play, options);
   sceneSession = new PlaySceneSession(play, {
     chart: options.chart,
     ...(course?.view !== undefined ? { course: course.view } : {}),
     playOptions: options.playOptions ?? DEFAULT_PLAY_OPTIONS,
+    audio: options.audio,
   });
+  family = createPlayView(kit, play, options, sceneSession);
   return new FamilyPlayScene(
     sceneSession,
     family,
