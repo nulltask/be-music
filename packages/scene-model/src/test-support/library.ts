@@ -59,5 +59,5 @@ export function makeCourse(id: string, overrides: Partial<LibraryCourse> = {}, k
 
 /** A course folder for tests. */
 export function makeCourseFolder(label: string, courses: readonly LibraryCourse[]): LibraryFolder {
-  return { label, songs: [], courses };
+  return { label, charts: [], courses };
 }

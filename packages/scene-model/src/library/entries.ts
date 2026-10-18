@@ -2,9 +2,9 @@ import type { BeMusicJson } from '@be-music/json';
 import type { CourseDefinition, RandomCourseDefinition } from '@be-music/player/course';
 
 /*
- * The library a select screen browses: its charts, the folders they are grouped in and the courses. The entries keep
- * the field names the browser player has always used (`song`, `songs` and the `'song'` entry kind) so every consumer
- * and every be-music skin reads them unchanged; the type names follow the glossary (a list entry is a chart).
+ * The library a select screen browses: its charts, the folders they are grouped in and the courses. Types and fields
+ * follow the glossary: a list entry is a chart, so a chart bar is `{ kind: 'chart', chart }`, a folder lists its
+ * `charts` and a course stage names its `chart`.
  */
 
 /** Where a chart of the library came from: a dropped directory, a zip, or loose files. */
@@ -32,12 +32,12 @@ export interface LibraryChart {
 
 /**
  * One folder bar of the library. A chart folder (`groupChartsByFolder`) is labelled with the top-level directory of its
- * charts inside their source (falling back to the source label) and lists them in `songs`; a course folder (a course
+ * charts inside their source (falling back to the source label) and lists them in `charts`; a course folder (a course
  * file, or one group of a difficulty table's courses) lists courses instead.
  */
 export interface LibraryFolder {
   label: string;
-  songs: readonly LibraryChart[];
+  charts: readonly LibraryChart[];
   /** A course folder lists courses instead of charts. */
   courses?: readonly LibraryCourse[];
 }
@@ -46,7 +46,7 @@ export interface LibraryFolder {
 export interface LibraryCourseStage {
   /** The chart's title, or the course file's title for a stage that is not in the library. */
   title: string;
-  song?: LibraryChart;
+  chart?: LibraryChart;
 }
 
 /**
@@ -54,7 +54,7 @@ export interface LibraryCourseStage {
  * A course with a missing stage is listed but cannot be started.
  *
  * A beatoraja random course carries `random`: its stages are drawn from the library when it is started, so
- * `definition` has the course's name, kind and constraints but no stages yet, and each of `stages` has no `song` and
+ * `definition` has the course's name, kind and constraints but no stages yet, and each of `stages` has no `chart` and
  * shows the stage's title (or its filter, or `RANDOM`).
  */
 export interface LibraryCourse {
@@ -81,15 +81,15 @@ export interface LibraryCourse {
  */
 export type LibraryEntry =
   | { kind: 'folder'; folder: LibraryFolder }
-  | { kind: 'song'; song: LibraryChart }
+  | { kind: 'chart'; chart: LibraryChart }
   | { kind: 'course'; course: LibraryCourse };
 
 /**
  * What a select screen browses: the library's charts, grouped into chart folders at the root, and its course folders,
- * listed after them. The browser player's song collection is one.
+ * listed after them. The browser player's chart collection is one.
  */
 export interface Library {
-  readonly songs: readonly LibraryChart[];
+  readonly charts: readonly LibraryChart[];
   readonly courseFolders?: readonly LibraryFolder[];
 }
 
@@ -101,8 +101,8 @@ export function libraryEntryKey(entry: LibraryEntry): string {
   switch (entry.kind) {
     case 'folder':
       return `folder:${entry.folder.label}`;
-    case 'song':
-      return `chart:${entry.song.id}`;
+    case 'chart':
+      return `chart:${entry.chart.id}`;
     case 'course':
       return `course:${entry.course.id}`;
   }

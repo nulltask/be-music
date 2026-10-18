@@ -3,10 +3,10 @@ import type { LibraryChart, LibraryEntry } from '../library/entries.ts';
 import { makeChart, makeCourse } from '../test-support/library.ts';
 import { sortLibraryEntries } from './sort.ts';
 
-const charts = (...list: LibraryChart[]): LibraryEntry[] => list.map((song) => ({ kind: 'song', song }));
+const charts = (...list: LibraryChart[]): LibraryEntry[] => list.map((chart) => ({ kind: 'chart', chart }));
 const ids = (entries: readonly LibraryEntry[]): string[] =>
   entries.map((entry) =>
-    entry.kind === 'song' ? entry.song.id : entry.kind === 'folder' ? entry.folder.label : entry.course.id,
+    entry.kind === 'chart' ? entry.chart.id : entry.kind === 'folder' ? entry.folder.label : entry.course.id,
   );
 
 describe('sortLibraryEntries', () => {
@@ -53,8 +53,8 @@ describe('sortLibraryEntries', () => {
 
   test('sorts folder bars by label under any order but OFF, and keeps course bars in their order', () => {
     const folders: LibraryEntry[] = [
-      { kind: 'folder', folder: { label: 'zeta', songs: [] } },
-      { kind: 'folder', folder: { label: 'Alpha', songs: [] } },
+      { kind: 'folder', folder: { label: 'zeta', charts: [] } },
+      { kind: 'folder', folder: { label: 'Alpha', charts: [] } },
     ];
     expect(ids(sortLibraryEntries(folders, 'LEVEL'))).toEqual(['Alpha', 'zeta']);
     expect(ids(sortLibraryEntries(folders, 'OFF'))).toEqual(['zeta', 'Alpha']);

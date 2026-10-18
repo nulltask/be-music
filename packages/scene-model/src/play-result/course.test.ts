@@ -27,7 +27,7 @@ function course(kind?: 'nonstop'): LibraryCourse {
   return {
     id: 'dan#0',
     definition: kind === undefined ? definition : { ...definition, kind },
-    stages: ['a', 'b', 'c'].map((id) => ({ title: id, song: chart(id) })),
+    stages: ['a', 'b', 'c'].map((id) => ({ title: id, chart: chart(id) })),
     playable: true,
   };
 }

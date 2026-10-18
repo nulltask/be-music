@@ -71,10 +71,10 @@ export function entryMatchesListFilters(
   switch (entry.kind) {
     case 'folder':
       return true;
-    case 'song':
+    case 'chart':
       return (
-        chartMatchesDifficultyFilter(entry.song, options.difficultyFilter) &&
-        chartMatchesKeysFilter(entry.song, options.keysFilter)
+        chartMatchesDifficultyFilter(entry.chart, options.difficultyFilter) &&
+        chartMatchesKeysFilter(entry.chart, options.keysFilter)
       );
     case 'course':
       return courseMatchesKeysFilter(entry.course, options.keysFilter);

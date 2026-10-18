@@ -62,14 +62,14 @@ describe('entryMatchesListFilters', () => {
   const filters = { keysFilter: 'KEYS_5', difficultyFilter: 'HYPER' } as const;
 
   test('keeps every folder bar, as LR2 lists every folder whatever the filters', () => {
-    expect(entryMatchesListFilters({ kind: 'folder', folder: { label: 'P', songs: [] } }, filters)).toBe(true);
+    expect(entryMatchesListFilters({ kind: 'folder', folder: { label: 'P', charts: [] } }, filters)).toBe(true);
   });
 
   test('filters a chart by both filters and a course by its key mode', () => {
     const fiveKeysHyper = makeChartWith('a', 'P', { channels: ['11'], difficulty: 3 });
     const fiveKeysNormal = makeChartWith('b', 'P', { channels: ['11'], difficulty: 2 });
-    expect(entryMatchesListFilters({ kind: 'song', song: fiveKeysHyper }, filters)).toBe(true);
-    expect(entryMatchesListFilters({ kind: 'song', song: fiveKeysNormal }, filters)).toBe(false);
+    expect(entryMatchesListFilters({ kind: 'chart', chart: fiveKeysHyper }, filters)).toBe(true);
+    expect(entryMatchesListFilters({ kind: 'chart', chart: fiveKeysNormal }, filters)).toBe(false);
     expect(entryMatchesListFilters({ kind: 'course', course: makeCourse('c', {}, 7) }, filters)).toBe(false);
     expect(entryMatchesListFilters({ kind: 'course', course: makeCourse('c', {}, 5) }, filters)).toBe(true);
   });
