@@ -124,8 +124,7 @@ list options and the favourites. `restoreBrowse` takes it back over the library 
 This covers the course-folder restore fixes: the root lists the course folders after the chart folders, so a cursor
 left in a course folder comes back; the cursor kept is the live one at every depth; and a course bar is found by its
 key after a course run, even when a NONSTOP run replaced the library. Every select screen keeps a `BrowseSnapshot`
-across a play; `browseSnapshotFromSelectNavigation` converts the `{ folderPath, selectedIndex }` the built-in and LR2
-screens kept before.
+across a play.
 
 ### Behaviour choices
 
