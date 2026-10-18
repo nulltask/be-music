@@ -326,6 +326,7 @@ import {
   waitForDefaultUiFonts,
 } from './services/built-in-skins.ts';
 import { SilentModeSetting } from './services/silent-mode.ts';
+import { copyPlayOptionsToGui, playOptionsFromGui, PlayOptionsService } from './services/play-options.ts';
 import {
   describeBar,
   isTestHookEnabled,
@@ -657,6 +658,11 @@ class PlayerWebDemoApp {
    * a change (`refreshPlayOptionControllers`).
    */
   private readonly playOptionControllers: Controller[] = [];
+  /**
+   * The play options in force, the full set: fed by the select screen (`on.playOptions`) and the Debug Menu
+   * ({@link setPlayOptions}); every select screen starts from them, and a decide screen and a play take them.
+   */
+  private readonly playOptions: PlayOptionsService;
   /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link rememberHiSpeed}. */
   private hiSpeedController: Controller | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
@@ -755,6 +761,7 @@ class PlayerWebDemoApp {
     });
     // Every sound plays through the master volume; start from the remembered level.
     setMasterVolume(this.guiState.masterVolume / 100);
+    this.playOptions = new PlayOptionsService(playOptionsFromGui(this.guiState));
     this.silentMode = new SilentModeSetting({ settings: this.guiState, touchFirst: deviceProfile.touchFirst });
     this.silentMode.install();
     // The `?compressor=split|legacy|off` URL flag, read once at boot.
@@ -1169,7 +1176,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'autoPlay')
         .name('Auto play')
         .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ autoPlay: value });
+          this.setPlayOptions({ autoPlay: value });
         }),
     );
     trackPlayOption(
@@ -1177,7 +1184,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH'])
         .name('Gauge')
         .onChange((value: DemoGuiState['gauge']) => {
-          this.selectView?.setPlayOptions({ gauge1P: value });
+          this.setPlayOptions({ gauge1P: value });
         }),
     );
     trackPlayOption(
@@ -1185,7 +1192,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
         .name('Random 1P')
         .onChange((value: DemoGuiState['random1P']) => {
-          this.selectView?.setPlayOptions({ random1P: value });
+          this.setPlayOptions({ random1P: value });
         }),
     );
     trackPlayOption(
@@ -1193,7 +1200,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'random2P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
         .name('Random 2P')
         .onChange((value: DemoGuiState['random2P']) => {
-          this.selectView?.setPlayOptions({ random2P: value });
+          this.setPlayOptions({ random2P: value });
         }),
     );
     trackPlayOption(
@@ -1201,7 +1208,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'dpFlip')
         .name('DP flip')
         .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ dpFlip: value });
+          this.setPlayOptions({ dpFlip: value });
         }),
     );
     trackPlayOption(
@@ -1209,7 +1216,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'autoScratch1P')
         .name('Auto scratch 1P')
         .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ autoScratch1P: value });
+          this.setPlayOptions({ autoScratch1P: value });
         }),
     );
     trackPlayOption(
@@ -1217,7 +1224,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'autoScratch2P')
         .name('Auto scratch 2P')
         .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ autoScratch2P: value });
+          this.setPlayOptions({ autoScratch2P: value });
         }),
     );
     // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
@@ -1227,7 +1234,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'sort', [...SORT_CYCLE])
         .name('Sort')
         .onChange((value: DemoGuiState['sort']) => {
-          this.selectView?.setPlayOptions({ sort: value });
+          this.setPlayOptions({ sort: value });
         }),
     );
     trackPlayOption(
@@ -1235,7 +1242,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'keysFilter', [...KEYS_FILTER_CYCLE])
         .name('Key filter')
         .onChange((value: DemoGuiState['keysFilter']) => {
-          this.selectView?.setPlayOptions({ keysFilter: value });
+          this.setPlayOptions({ keysFilter: value });
         }),
     );
     trackPlayOption(
@@ -1243,7 +1250,7 @@ class PlayerWebDemoApp {
         .add(this.guiState, 'difficultyFilter', [...DIFFICULTY_FILTER_CYCLE])
         .name('Difficulty filter')
         .onChange((value: DemoGuiState['difficultyFilter']) => {
-          this.selectView?.setPlayOptions({ difficultyFilter: value });
+          this.setPlayOptions({ difficultyFilter: value });
         }),
     );
     // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
@@ -3792,14 +3799,12 @@ class PlayerWebDemoApp {
         : undefined;
     const kit: SelectSceneKit =
       beatorajaKit ?? (lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtInKit);
-    let carriedPlayOptions: PlayOptions | undefined;
     const current = this.selectView;
     if (current !== undefined && current.identity.family !== kit.family) {
       // The family changed (an LR2 or a beatoraja theme dropped while the built-in screen is up, or the other way
-      // round): only that family's view draws it, so the screen is made again below, carrying the cursor and the live
-      // play options across.
+      // round): only that family's view draws it, so the screen is made again below, carrying the cursor across (the
+      // play options are the service's).
       this.lastSelectNavigation ??= current.snapshot();
-      carriedPlayOptions = current.getPlayOptions();
       await this.router.dropSelect();
     }
     const sounds = this.selectSoundSet(kit.family);
@@ -3817,22 +3822,9 @@ class PlayerWebDemoApp {
       if (kit.family === 'beatoraja') this.refreshBeatorajaSelectSkinOptions();
       return;
     }
-    // Seed the screen's play options from the Debug Menu's "Play options" state (two-way sync: the screen's own edits
-    // come back through `on.playOptions` below; lil-gui edits push through `setPlayOptions`).
-    const playOptions: Partial<PlayOptions> = {
-      ...carriedPlayOptions,
-      autoPlay: this.guiState.autoPlay,
-      gauge1P: this.guiState.gauge,
-      random1P: this.guiState.random1P,
-      random2P: this.guiState.random2P,
-      dpFlip: this.guiState.dpFlip,
-      autoScratch1P: this.guiState.autoScratch1P,
-      autoScratch2P: this.guiState.autoScratch2P,
-      sort: this.guiState.sort,
-      keysFilter: this.guiState.keysFilter,
-      difficultyFilter: this.guiState.difficultyFilter,
-      hiSpeed: this.guiState.hiSpeed,
-    };
+    // The screen starts from the play options in force (two-way sync: the screen's own edits come back through
+    // `on.playOptions` below; lil-gui edits push through `setPlayOptions`).
+    const playOptions = this.playOptions.current;
     // The select session plays through the audio service; its decide jingle plays out through the decide screen into
     // the play.
     const scene = createSelectScene(kit, {
@@ -3849,18 +3841,10 @@ class PlayerWebDemoApp {
       on: {
         start: (entry, { autoPlay }) => this.startFromSelect(entry, autoPlay),
         playOptions: (options) => {
-          // Mirror the screen's play option edits (an LR2 panel, a skin's buttons) back into the Debug Menu state so
-          // both surfaces always agree, then repaint the lil-gui controllers.
-          this.guiState.autoPlay = options.autoPlay;
-          this.guiState.gauge = options.gauge1P;
-          this.guiState.random1P = options.random1P;
-          this.guiState.random2P = options.random2P;
-          this.guiState.dpFlip = options.dpFlip;
-          this.guiState.autoScratch1P = options.autoScratch1P;
-          this.guiState.autoScratch2P = options.autoScratch2P;
-          this.guiState.sort = options.sort;
-          this.guiState.keysFilter = options.keysFilter;
-          this.guiState.difficultyFilter = options.difficultyFilter;
+          // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu
+          // state so both surfaces always agree, then repaint the lil-gui controllers.
+          this.playOptions.update(options);
+          copyPlayOptionsToGui(options, this.guiState);
           if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
           this.refreshPlayOptionControllers();
         },
@@ -4074,12 +4058,9 @@ class PlayerWebDemoApp {
           void this.showSelect();
         }),
     };
-    const playOptions = this.selectView?.getPlayOptions();
     const decide = createDecideScene(kit, {
       chart: song,
-      ...(playOptions !== undefined
-        ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
-        : {}),
+      playOptions: { ...this.playOptions.current, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay },
       source: resolveSongSource(this.collection, song),
       // The LR2 / built-in select screen plays the theme's decide jingle as the chart is picked, and lets it ring on
       // into the play, so those screens play none of their own. The beatoraja screen plays its theme's decide sound.
@@ -4196,7 +4177,7 @@ class PlayerWebDemoApp {
       preResolved?: ResolvedPlayChart;
     },
   ): PlayScene {
-    const playOptions = this.selectView?.getPlayOptions();
+    const playOptions = this.playOptions.current;
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
     const nonstop = overrides.nonstop;
@@ -4210,8 +4191,8 @@ class PlayerWebDemoApp {
       random2P: this.guiState.random2P,
       dpFlip: this.guiState.dpFlip,
       gauge: this.guiState.gauge,
-      hiddenSudden1P: playOptions?.hiddenSudden1P ?? ('OFF' as const),
-      hiddenSudden2P: playOptions?.hiddenSudden2P ?? ('OFF' as const),
+      hiddenSudden1P: playOptions.hiddenSudden1P,
+      hiddenSudden2P: playOptions.hiddenSudden2P,
       autoScratch1P: this.guiState.autoScratch1P,
       autoScratch2P: this.guiState.autoScratch2P,
       tempo:
@@ -4258,14 +4239,14 @@ class PlayerWebDemoApp {
       // remembered for the next play.
       initialHiSpeed: this.guiState.hiSpeed,
       onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
-      bga: playOptions?.bga,
-      bgaSize: playOptions?.bgaSize,
-      scoreGraph: playOptions?.scoreGraph,
-      hsFix: playOptions?.hsFix,
+      bga: playOptions.bga,
+      bgaSize: playOptions.bgaSize,
+      scoreGraph: playOptions.scoreGraph,
+      hsFix: playOptions.hsFix,
       hiddenSudden1P: lanes.hiddenSudden1P,
       hiddenSudden2P: lanes.hiddenSudden2P,
-      shutter: playOptions?.shutter,
-      laneCover: playOptions?.laneCover,
+      shutter: playOptions.shutter,
+      laneCover: playOptions.laneCover,
       // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge / judge ruleset govern
       // judging and the gauge readout, and the lane transforms stay off because the view re-applies the recorded
       // arrangement directly (see `PlaySceneOptions.replay`).
@@ -4422,7 +4403,7 @@ class PlayerWebDemoApp {
       ...(overrides.preResolved !== undefined ? { preResolved: overrides.preResolved } : {}),
       audio: this.audio,
       host: this.sceneHost,
-      ...(playOptions !== undefined ? { playOptions } : {}),
+      playOptions,
       on: {
         exit: onExit,
         finish: (result) => onChartFinished(result),
@@ -4755,10 +4736,19 @@ class PlayerWebDemoApp {
     this.guiState.hiSpeed = hiSpeed;
     storeHiSpeed(hiSpeed);
     if (source !== 'menu') this.hiSpeedController?.updateDisplay();
-    if (source !== 'select') this.selectView?.setPlayOptions({ hiSpeed });
+    if (source !== 'select') this.setPlayOptions({ hiSpeed });
     if (source === 'menu') {
       this.gameplayView?.setHiSpeed(hiSpeed);
     }
+  }
+
+  /**
+   * A play option set from the Debug Menu (or a hi-speed from the play): kept for every screen and play
+   * ({@link playOptions}), and pushed to the select screen, on the stage or off it.
+   */
+  private setPlayOptions(changes: Partial<PlayOptions>): void {
+    this.playOptions.update(changes);
+    this.selectView?.setPlayOptions(changes);
   }
 
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
