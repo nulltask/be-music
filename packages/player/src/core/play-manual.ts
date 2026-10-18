@@ -128,6 +128,17 @@ function createManualJudge(session: PlaySession): PlayJudge {
     step,
     uiEnabled ? undefined : (seconds, tokens) => traceInput(seconds, 'inferred-release', tokens),
   );
+  // The instant (playback-clock ms) the last press or release was stamped at. Each lane command is stamped as it is
+  // drained: the playback clock read then, moved back by the age of its `pressedAt` on the wall clock. The playback
+  // clock follows the audio clock, which moves a render quantum at a time (Web Audio's `currentTime`), while the wall
+  // clock moves smoothly, so a command drained just after another can read older than it even though it happened later:
+  // a short tap's release came out a few hundred µs before its press. Commands are drained in the order they happened,
+  // so none is stamped before the one drained ahead of it.
+  let lastStampMs = Number.NEGATIVE_INFINITY;
+  const stampMs = (drainNowMs: number, pressedAt: number | undefined): number => {
+    lastStampMs = Math.max(lastStampMs, resolveJudgeNowMsFromPressedAt(drainNowMs, pressedAt));
+    return lastStampMs;
+  };
 
   return {
     ...judgeCoreJudge(session, judgeCore),
@@ -167,7 +178,7 @@ function createManualJudge(session: PlaySession): PlayJudge {
             nowSec: tempoClock.chartSecondsAt(releaseNowMs),
             nowMs: tempoClock.initialTempoMsAt(releaseNowMs),
             // The play log records the release at the key event's own instant, like a press.
-            recordSec: tempoClock.chartSecondsAt(resolveJudgeNowMsFromPressedAt(releaseNowMs, command.pressedAt)),
+            recordSec: tempoClock.chartSecondsAt(stampMs(releaseNowMs, command.pressedAt)),
           });
         }
         return;
@@ -177,8 +188,8 @@ function createManualJudge(session: PlaySession): PlayJudge {
       }
       // The runtime adapter (web / node) stamps the OS-level key event as `pressedAt`; moving the playback clock back by
       // the wall-clock delta judges the press at the player's true timing instead of the engine's drain time (see
-      // `resolveJudgeNowMsFromPressedAt` for the bounds).
-      const pressedAtMs = resolveJudgeNowMsFromPressedAt(clock.nowMs(), command.pressedAt);
+      // `resolveJudgeNowMsFromPressedAt` for the bounds), and no earlier than the command drained before it.
+      const pressedAtMs = stampMs(clock.nowMs(), command.pressedAt);
       const nowSec = tempoClock.chartSecondsAt(pressedAtMs);
       if (!uiEnabled) {
         traceInput(nowSec, 'lane-input', command.tokens);
