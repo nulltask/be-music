@@ -319,18 +319,21 @@ flowchart TD
   views["標準 · LR2 · beatoraja のプレイビュー"]
   session[プレイのセッション] -->|PlayFrame| views
   subgraph shared [共有モジュール]
+    playgraph[runtime/play-audio-graph.ts]
     audio[chart/play-audio.ts]
     bga[chart/play-bga.ts]
     ending[session/play/play-ending.ts]
     lamp[resolveClearLamp]
   end
+  session --> playgraph
   session --> audio
   session --> bga
   session --> ending
   lamp --> results[リザルトと記録]
 ```
 
-- `chart/play-audio.ts` は、プレイの AudioContext と bus を作り（`#VOLWAV` を含む）、`#WAV` のサンプルを audio session が引くキーでデコードし、ピッチを保つテンポのときは伸縮し、`#WAVCMD` / `#EXWAV` の音量をまとめます。
+- `runtime/play-audio-graph.ts` は、プレイの AudioContext と bus を作ります（`#VOLWAV` を含む）。オーディオサービスがこれをプレイのために開きます（[オーディオサービス](#オーディオサービス)）。
+- `chart/play-audio.ts` は、`#WAV` のサンプルを audio session が引くキーでそこへデコードし、ピッチを保つテンポのときは伸縮し、`#WAVCMD` / `#EXWAV` の音量をまとめます。
 - `chart/play-bga.ts` は、プレイに要る BGA リソース（`#BMPxx`、bmson の `bga.header`、`#BGAxx` の切り出し元、LR2 view では暗黙の `#BMP00` POOR 画像）を選び、静止画は共通のテクスチャローダーで、動画は動画ローダーでデコードし、BMS の layer の黒を抜き、切り出し領域のビューを作ります。
 - `session/play/play-ending.ts` は、プレイの終わりの時間を決めます。最後のノートのあと譜面時刻で約 2 小節の余韻を置き、テーマや skin のフェードアウトに入ります。ゲージが尽きて途中で終わったプレイは余韻を置かず、音と画面を 1.5 秒以上かけてフェードアウトします。画面のフェードは各ビューが `playEndingFadeAlpha`（`view/shared/play-frame.ts`）で行います。
 - `resolveClearLamp`（`@be-music/player/ruleset`）がクリアランプの唯一の規則です。どのリザルトもこれでプレイのランプを決めます。LR2 / 既定のリザルト（LR2 のリザルトのランプの op 101-105 も、LR2 のランプで）、`beatorajaClearLampOp` を通した beatoraja のリザルトと選曲です。demo はどの family のプレイもこれで記録し、リーダーボードもこれで順位付けします。判定のルールセットのランプに合わせ、LR2 と IIDX ではフルコンボが最上位（PERFECT・MAX なし）、LR2 では DEATH でのクリアを NORMAL にします。
@@ -390,10 +393,7 @@ flowchart LR
 
   LR2 のレーン番号と LR2 のタイマー番号は LR2 のビューの中にとどめ、プレイフィールドはチャンネルで尋ねます。
 
-- **層の分け方。** `pnpm run check` は新しいツリーを lint します（[`vite.config.ts`](../vite.config.ts) の Oxlint の上書き設定）。
-  - `session/**` は Pixi を型にしか使いません。そのためセッションは、偽のビューを相手に Node のテストで動きます。
-  - `view/**` は `@be-music/player/core/engine`、`runtime/engine-driver`、`runtime/web-*-runtime` のどれも import しません。
-  - `view/**` は `AudioContext` も `OfflineAudioContext` も使いません。
+- **層の分け方。** `pnpm run check` は、セッション、ビュー、その下の層を互いに分けたまま保ちます（[層の分け方](#層の分け方)）。
 
 ### 選曲画面
 
@@ -573,6 +573,40 @@ Web のデモはどの種類のプレイもすべてこの方法で、その種�
 - `view/built-in/`：`play-view.ts`（組み込みのプレイビューとその `PlayfieldSkin`）、`play-chrome.ts`（組み込みのレーンの配置、BGA の矩形、be-music のレイアウトと、クロームのランタイムと描画）
 - `view/lr2/`：`play-view.ts`（LR2 のプレイビュー、その `PlayfieldSkin`、読み込み、フレームの LR2 の状態）、`play-elements.ts`（スキンの要素と、プレイフィールドに渡すレーンの矩形・ノートのセル・小節線・BGA の矩形）、`play-timers.ts`（スキンのタイマー）、`play-turntable.ts`（スクラッチのターンテーブル）、`play-hud.ts`（判定・コンボ・グルーヴゲージの描画とスキンのタイマーの長さ）
 - `view/beatoraja/`：`play-view.ts`（beatoraja のプレイビュー、その読み込み、時間、プレイログの見え方のスケール）、`play-bridge.ts`（スキンの描画コンテキストとしてのフレーム。op、タイマー、数字、グラフ）、`play-stage.ts`（ノート、印、BGA のレイヤーを差し込んだスキンのビュー）、`play/*`（ノート、印、BGA のレイヤー、スクロールの配置、ノートの `dst` のブロック、スキンの寸法）
+
+### 層の分け方
+
+このパッケージのソースは層に分かれていて、`pnpm run check` が [`vite.config.ts`](../vite.config.ts) の Oxlint の上書き設定でそれを守ります。上から順に次のとおりです。
+
+- **ホスト API**：`host/` とパッケージの barrel（`index.ts`）。`create*Scene` の関数、種類ごとのキット、`PixiSceneHost`、`./scenes` の barrel です。
+- **シーンセッション**（`session/`）と**ファミリービュー**（`view/`）。セッションが画面のふるまいを持ち、ビューがそれを描きます。互いを知るのは型だけです。
+- **下の層**：ほかのすべてのディレクトリ。音と入力のランタイムとエンジンドライバー（`runtime/`）、譜面とメディアの準備（`chart/`、`media/`）、コレクション（`collection/`）、ブラウザの検査（`browser/`）、Pixi のステージの補助（`stage/`）、スキンの読み込み（`skin/`）、組み込みスキン（`skins/`）、録画（`recording/`）、ロガーです。
+
+```mermaid
+flowchart TD
+  host["ホスト API<br/>host/ · index.ts"]
+  subgraph scenes [シーン]
+    session["シーンセッション<br/>session/"]
+    view["ファミリービュー<br/>view/"]
+  end
+  lower["下の層<br/>runtime/ · chart/<br/>stage/ · skin/ · …"]
+  host --> session
+  host --> view
+  session -. 型 .-> view
+  view -. 型 .-> session
+  session --> lower
+  view --> lower
+```
+
+矢印は import を、点線は型だけの import を表します。規則は次のとおりです。
+
+- **下の層はシーンを知りません。** `host/`、`session/`、`view/` のモジュールを、型であっても import しません。パッケージのファイルはどれも初めは下の層に入るので、新しいディレクトリも設定で別の層に入れるまでは下の層です。
+- **セッションがビューとホストに触れるのは型だけです。** Pixi も型にしか使いません。そのためセッションは、偽のビューを相手に Node のテストで動きます。
+- **ビューがセッションとホストに触れるのは型だけです。** エンジン（`@be-music/player/core/engine`、またはそれを再 export するパッケージのルート）も、`runtime/engine-driver` と `runtime/web-*-runtime` のモジュールも import しません。
+- **エンジンを動かすのはセッションだけです。** `session/` のほかにエンジンを値として import するのは `runtime/engine-driver.ts` だけで、ほかのファイルは web demo も含めて型だけを import します。
+- **オーディオコンテキストを作るのは音の層だけです。** `runtime/` が、システムのコンテキスト（`audio-service.ts`）、プレイごとのグラフ（`play-audio-graph.ts`）、ピッチを保つ伸縮のオフラインのコンテキスト（`time-stretch-signalsmith.ts`）を作ります。ほかはすべて、web demo も含めてオーディオサービスを通して鳴らし、`AudioContext` は型としてだけ使います。
+
+テストは対象外です。組み込みスキンには、さらに厳しい独自の境界もあります。`skins/boundary.test.ts` は、スキンが import してよいものをスキン SDK、描画のフレームワーク、自分のファイルに限ります。
 
 ## ノートの表示範囲
 

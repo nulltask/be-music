@@ -11,7 +11,7 @@ import type { TimedSampleTrigger } from '@be-music/audio-renderer/triggers';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { Texture } from 'pixi.js';
-import { createPlayAudioGraph, loadPlaySamples } from '../../chart/play-audio.ts';
+import { loadPlaySamples } from '../../chart/play-audio.ts';
 import { loadPlayBga } from '../../chart/play-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
@@ -24,6 +24,7 @@ import type {
 } from '../../runtime/audio-bus.ts';
 import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
+import { createPlayAudioGraph } from '../../runtime/play-audio-graph.ts';
 import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { BgaCue } from '../../chart/bga-timeline.ts';
@@ -92,9 +93,9 @@ export async function prepareAudio(ctx: PlayMediaContext): Promise<void> {
   const initialMode: CompressorMode = ctx.options.audioCompressor === false ? 'off' : ctx.audioCompressorMode;
   // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
   const chart = ctx.resolvedChart ?? ctx.song.chart;
-  // The AudioContext, the bus and `#VOLWAV` are built, and the samples decoded, as the beatoraja prep does
-  // (`chart/play-audio.ts`). With the host's audio service the play opens them through it (`openPlayGraph`, ADR 0007),
-  // which taps the bus for the analyser and owns the context's teardown.
+  // The AudioContext, the bus and `#VOLWAV` are built by the audio layer (`runtime/play-audio-graph.ts`), and the
+  // samples decoded into them (`chart/play-audio.ts`). With the host's audio service the play opens them through it
+  // (`openPlayGraph`, ADR 0007), which taps the bus for the analyser and owns the context's teardown.
   const busOptions = {
     initialStages: ctx.options.audioCompressorStages,
     initialVolumes: ctx.audioVolumes,

@@ -327,18 +327,21 @@ flowchart TD
   views["built-in · LR2 · beatoraja play views"]
   session[Play session] -->|PlayFrame| views
   subgraph shared [Shared modules]
+    playgraph[runtime/play-audio-graph.ts]
     audio[chart/play-audio.ts]
     bga[chart/play-bga.ts]
     ending[session/play/play-ending.ts]
     lamp[resolveClearLamp]
   end
+  session --> playgraph
   session --> audio
   session --> bga
   session --> ending
   lamp --> results[Results and records]
 ```
 
-- `chart/play-audio.ts` builds the play's AudioContext and bus (with `#VOLWAV`), decodes the `#WAV` samples under the key the audio session looks them up by, stretches them for a keep-pitch tempo, and folds the `#WAVCMD` / `#EXWAV` volumes.
+- `runtime/play-audio-graph.ts` builds the play's AudioContext and bus (with `#VOLWAV`); the audio service opens it for the play ([Audio service](#audio-service)).
+- `chart/play-audio.ts` decodes the `#WAV` samples into it under the key the audio session looks them up by, stretches them for a keep-pitch tempo, and folds the `#WAVCMD` / `#EXWAV` volumes.
 - `chart/play-bga.ts` picks the BGA resources a play needs (`#BMPxx`, bmson `bga.header`, the sources of `#BGAxx` sub-regions, the implicit `#BMP00` POOR image for the LR2 view), decodes stills through the shared texture loader and videos through the video loader, keys the BMS layer track's black out, and cuts the sub-region views.
 - `session/play/play-ending.ts` times the end of a play: a lead-out of about two measures after the last note, in chart time, then the theme or skin fade-out; a play cut short by its gauge emptying skips the lead-out and fades its sound and picture for at least 1.5 s. The views fade the picture with `playEndingFadeAlpha` (`view/shared/play-frame.ts`).
 - `resolveClearLamp` (`@be-music/player/ruleset`) is the one clear-lamp rule. Every result lamps a play with it: the LR2 / default result (and the LR2 result's lamp ops 101-105, on LR2's lamps), and the beatoraja result and select through `beatorajaClearLampOp`; the demo records every family's plays with it, and the Leaderboard ranks them with it. It keeps the lamp to the judge ruleset's own set: under LR2 and IIDX a full combo is the top lamp (no PERFECT or MAX), and under LR2 a DEATH clear is NORMAL.
@@ -398,10 +401,7 @@ flowchart LR
 
   The LR2 lane index and LR2 timer ids stay inside the LR2 view: the playfield asks by channel.
 
-- **Layering.** `pnpm run check` lints the new trees (Oxlint overrides in [`vite.config.ts`](../vite.config.ts)):
-  - `session/**` imports Pixi only for types, so a session runs in Node tests against a fake view;
-  - `view/**` imports neither `@be-music/player/core/engine` nor `runtime/engine-driver` and the `runtime/web-*-runtime` modules;
-  - `view/**` does not use `AudioContext` or `OfflineAudioContext`.
+- **Layering.** `pnpm run check` keeps the sessions, the views and the layers under them apart ([Layering](#layering)).
 
 ### The select screen
 
@@ -574,6 +574,40 @@ The running play is one scene-model `PlayState` (`playState`): the gauge and EX 
 - `view/built-in/`: `play-view.ts` (the built-in play view and its `PlayfieldSkin`) and `play-chrome.ts` (the built-in lane geometry, BGA rect and be-music layout, and the chrome's runtime and pass).
 - `view/lr2/`: `play-view.ts` (the LR2 play view, its `PlayfieldSkin`, its loading and the frame's LR2 state), `play-elements.ts` (the skin's elements and the playfield's lane rects, note cells, measure lines and BGA rects), `play-timers.ts` (the skin's timers), `play-turntable.ts` (the scratch turntable) and `play-hud.ts` (the judge, combo and groove-gauge drawing and the skin's timer spans).
 - `view/beatoraja/`: `play-view.ts` (the beatoraja play view, its loading, its timing and the play log's view scale), `play-bridge.ts` (the frame as the skin's render context: ops, timers, numbers and graphs), `play-stage.ts` (the skin view with the note, marker and BGA layers) and `play/*` (the note, marker and BGA layers, the scroll placement, the note `dst` block and the skin's metrics).
+
+### Layering
+
+The package's source sits in layers, and `pnpm run check` holds them with Oxlint overrides in [`vite.config.ts`](../vite.config.ts). From the top:
+
+- **The host API**: `host/` and the package barrel (`index.ts`). The `create*Scene` functions, the family kits, `PixiSceneHost` and the `./scenes` barrel.
+- **Scene sessions** (`session/`) and **family views** (`view/`): a session holds a screen's behaviour and a view draws it, and each knows the other only by its types.
+- **The lower layers**: every other directory. The audio and input runtimes and the engine driver (`runtime/`), chart and media preparation (`chart/`, `media/`), the collection (`collection/`), the browser checks (`browser/`), the Pixi stage helpers (`stage/`), the skin loaders (`skin/`), the built-in skins (`skins/`), the recorder (`recording/`) and the logger.
+
+```mermaid
+flowchart TD
+  host["Host API<br/>host/ · index.ts"]
+  subgraph scenes [Scenes]
+    session["Scene sessions<br/>session/"]
+    view["Family views<br/>view/"]
+  end
+  lower["Lower layers<br/>runtime/ · chart/<br/>stage/ · skin/ · …"]
+  host --> session
+  host --> view
+  session -. types .-> view
+  view -. types .-> session
+  session --> lower
+  view --> lower
+```
+
+An arrow is an import; a dotted one is for types only. The rules:
+
+- **A lower layer knows no scene.** It imports no `host/`, `session/` or `view/` module, not even a type. Every file of the package starts out in a lower layer, so a new directory is one until the config says otherwise.
+- **A session reaches its view and the host only for types**, and Pixi only for types too, so a session runs in Node tests against a fake view.
+- **A view reaches its session and the host only for types**, and neither the engine (`@be-music/player/core/engine`, or the package root, which re-exports it) nor `runtime/engine-driver` and the `runtime/web-*-runtime` modules.
+- **Only a session runs the engine.** Besides `session/`, only `runtime/engine-driver.ts` imports the engine as values; every other file imports only its types, in the web demo too.
+- **Only the audio layer creates an audio context.** `runtime/` creates the system context (`audio-service.ts`), each play's graph (`play-audio-graph.ts`) and the offline context of the keep-pitch stretch (`time-stretch-signalsmith.ts`). Everything else, the web demo included, plays through the audio service and names `AudioContext` only as a type.
+
+Tests are exempt. The built-in skins also keep their own, stricter boundary: `skins/boundary.test.ts` lets a skin import only the skin SDK, its rendering framework and its own files.
 
 ## Note visibility
 
