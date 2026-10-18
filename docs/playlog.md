@@ -88,6 +88,12 @@ the host-declared settings the engine cannot know (selected gauge, lane-shuffle 
 `native` extras, and the source chart the fingerprints are computed from). The `#RANDOM` / `#SWITCH` draws come from
 `PlayerOptions.randomDraws`, which the engine needs anyway.
 
+The engine stamps each press and release as it drains it: the playback clock read then, moved back by the age of the
+event's `pressedAt` on the wall clock, and never earlier than the input it drained before. The playback clock follows
+the audio clock, which moves a render quantum at a time, while the wall clock moves smoothly, so an input drained just
+after another could otherwise read older than it. Inputs reach the engine in the order they happened, so the floor only
+takes out that jitter: a short tap no longer records its release before its press.
+
 Every log also carries a top-level **`recorder`** that identifies the software that recorded it:
 `{ name, version, build, engine, platform }`. The host declares the application fields through
 `recordPlaylog.recorder` (the browser player sends `name: 'be-music-web'`, the demo's package version, the short
@@ -272,6 +278,10 @@ long note's head and tail as two judgment notes (`result.noteCount` reports each
   releases](#input-without-key-releases)), so it replays and re-simulates as it was judged. Logs recorded before
   that have only `down` inputs for it: a replay and the re-simulations hold every key from its press on and take
   every repeat as a new press, and can judge such a log differently from how it was played.
+- Logs recorded before the engine stamped each input no earlier than the one before it can hold a short tap (a touch
+  tap, typically) whose release is a few hundred µs before its press. A replay and the re-simulations read the release
+  first and hold the lane down from the press to its next release, so a mine on the lane meanwhile goes off and a long
+  note tapped that way is held on.
 
 ## Course play logs
 
