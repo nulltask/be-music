@@ -7,7 +7,8 @@ import {
 } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
+import type { BrowserSongAssetSource } from '../collection/types.ts';
 
 /**
  * Sample-amplitude threshold below which we treat audio as silent for the leading-silence trim. Mirrors
@@ -41,7 +42,7 @@ export const DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS = 30;
 export const CHART_PREVIEW_STOP_FADE_OUT_SECONDS: number = 0.25;
 
 export interface ChartPreviewTarget {
-  song: BrowserSongEntry;
+  song: LibraryChart;
   source: BrowserSongAssetSource;
 }
 

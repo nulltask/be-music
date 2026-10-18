@@ -31,10 +31,10 @@ import {
   beatorajaSortIndex,
   resolveBeatorajaSelectSliderValue,
 } from '@be-music/beatoraja-skin/scene';
-import type { BrowseListOptions, LibraryEntry } from '@be-music/scene-model';
+import type { BrowseListOptions, LibraryChart, LibraryEntry } from '@be-music/scene-model';
 import { Container } from 'pixi.js';
 import { resolveSongSource } from '../../collection/collection.ts';
-import type { BrowserBrowseEntry, BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
+import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
@@ -82,13 +82,13 @@ export interface BeatorajaSelectViewOptions {
    * Decodes a chart's own images for the skin's synthetic slots; `loadBeatorajaChartImages` over the library's files
    * by default.
    */
-  readonly loadChartImages?: (song: BrowserSongEntry, library: BrowserSongCollection) => Promise<BeatorajaChartImages>;
+  readonly loadChartImages?: (song: LibraryChart, library: BrowserSongCollection) => Promise<BeatorajaChartImages>;
 }
 
 /** The bar's own object (its chart, folder or course), which stays the same across the lists that show it. */
 function barTarget(entry: LibraryEntry | undefined): object | undefined {
   if (entry === undefined) return undefined;
-  return entry.kind === 'song' ? entry.song : entry.kind === 'folder' ? entry.folder : entry.course;
+  return entry.kind === 'chart' ? entry.chart : entry.kind === 'folder' ? entry.folder : entry.course;
 }
 
 /** The beatoraja select view. See the module comment. */
@@ -221,7 +221,7 @@ export class BeatorajaSelectView implements SelectView {
     this.skinState.frameInput = undefined;
     this.skinState.frameInput = this.skinState.selectInput();
     const focused = frame.entries[frame.cursor];
-    this.chartImages.refreshChartImagesForFocus(focused?.kind === 'song' ? focused.song : undefined);
+    this.chartImages.refreshChartImagesForFocus(focused?.kind === 'chart' ? focused.chart : undefined);
     this.rows.refreshRowVisuals();
     this.search.refreshSearchPrompt();
     if (this.readText.open && view.container.children.at(-1) !== this.readText.layer) {
@@ -423,7 +423,7 @@ export class BeatorajaSelectView implements SelectView {
     const focused = this.frame?.entries[this.frame.cursor];
     const current =
       this.lnModeOverride ??
-      beatorajaLnModeIndex(focused?.kind === 'song' ? focused.song.chart.bms?.lnMode : undefined);
+      beatorajaLnModeIndex(focused?.kind === 'chart' ? focused.chart.chart.bms?.lnMode : undefined);
     this.lnModeOverride = ((((current + step) % 3) + 3) % 3) as 0 | 1 | 2;
   }
 
@@ -448,7 +448,7 @@ export class BeatorajaSelectView implements SelectView {
   }
 
   /** Decodes a chart's own images, over the files of the library drawn. */
-  private decodeChartImages(song: BrowserSongEntry): Promise<BeatorajaChartImages> {
+  private decodeChartImages(song: LibraryChart): Promise<BeatorajaChartImages> {
     const library = this.frame?.library;
     if (library === undefined) return Promise.resolve({});
     const load = this.options.loadChartImages;
@@ -470,7 +470,7 @@ export class BeatorajaSelectView implements SelectView {
       get listLayer(): Container {
         return view.listLayer;
       },
-      get entries(): ReadonlyArray<BrowserBrowseEntry> {
+      get entries(): ReadonlyArray<LibraryEntry> {
         return view.frame?.entries ?? [];
       },
       get currentIndex(): number {
@@ -494,8 +494,8 @@ export class BeatorajaSelectView implements SelectView {
         const records = view.frame?.records;
         if (records === undefined) return undefined;
         const record =
-          entry.kind === 'song'
-            ? records.chart(entry.song)
+          entry.kind === 'chart'
+            ? records.chart(entry.chart)
             : entry.kind === 'course'
               ? records.course(entry.course)
               : undefined;
@@ -503,7 +503,7 @@ export class BeatorajaSelectView implements SelectView {
       },
       nowMs: () => view.frame?.clock.nowMs ?? 0,
       get decodeChartImages() {
-        return (song: BrowserSongEntry) => view.decodeChartImages(song);
+        return (song: LibraryChart) => view.decodeChartImages(song);
       },
       get disposed(): boolean {
         return view.disposed;

@@ -11,8 +11,13 @@ import type { PlayerSummary } from '@be-music/player/core/engine';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import type { ScoreSummary } from '@be-music/player/ruleset';
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
-import { gaugePercent, playResultFromPlayState, type PlayResult, type PlayState } from '@be-music/scene-model';
-import type { BrowserSongEntry } from '../../collection/types.ts';
+import {
+  gaugePercent,
+  playResultFromPlayState,
+  type LibraryChart,
+  type PlayResult,
+  type PlayState,
+} from '@be-music/scene-model';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import { chartToElapsedSeconds } from '../../runtime/play-tempo.ts';
 import type { PlaySessionTheme } from './play-session-theme.ts';
@@ -89,7 +94,7 @@ export interface PlayEndingContext {
   exitFadeOutHandle: number | undefined;
   exitCloseHandle: number | undefined;
   readonly audioBus: AudioBusHandle | undefined;
-  readonly song: BrowserSongEntry | undefined;
+  readonly song: LibraryChart | undefined;
   readonly score: ScoreSummary;
   /** The engine's gauge as of its last frame: its clear border and the TOTAL it runs on. */
   readonly gaugeState: PlayerGaugeSummary;

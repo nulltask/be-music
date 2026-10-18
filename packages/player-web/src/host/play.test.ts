@@ -15,7 +15,6 @@ import { createPlayerUiSignalBus, type PlayerUiFramePayload } from '@be-music/pl
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
-import type { BrowserSongEntry } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { BeatorajaPlaySkinView } from '../view/beatoraja/skin-view.ts';
 import type { PixiSceneHost } from './scene-host.ts';
@@ -69,7 +68,7 @@ function create(overrides: Partial<PlaySceneOptions> = {}) {
   const scene = createPlayScene(
     { family: 'built-in', skin: phantomSkin },
     {
-      chart: { ...CHART, chart: RANDOM_CHART } as BrowserSongEntry,
+      chart: { ...CHART, chart: RANDOM_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2.5 },
       audio: AUDIO,
       on,
@@ -301,7 +300,7 @@ describe('createPlayScene with an LR2 kit', () => {
     const scene = createPlayScene(
       { family: 'lr2', skin: lr2PlaySkin(timing) },
       {
-        chart: { ...CHART, chart: RANDOM_CHART } as BrowserSongEntry,
+        chart: { ...CHART, chart: RANDOM_CHART } as LibraryChart,
         settings: { initialHiSpeed: 2 },
         audio: AUDIO,
         on,
@@ -378,7 +377,7 @@ describe('createPlayScene with a beatoraja kit', () => {
   function createBeatoraja(overrides: Partial<PlaySceneOptions> = {}) {
     const on = { finish: vi.fn(), exit: vi.fn(), restart: vi.fn(), hiSpeed: vi.fn() };
     const scene = createPlayScene(beatorajaKit(), {
-      chart: { ...CHART, chart: RANDOM_CHART } as BrowserSongEntry,
+      chart: { ...CHART, chart: RANDOM_CHART } as LibraryChart,
       settings: {
         initialHiSpeed: 2,
         random1P: 'MIRROR',
@@ -426,7 +425,7 @@ describe('createPlayScene with a beatoraja kit', () => {
 
   it('scrolls under HS-FIX as every family does, and records it in the play log', async () => {
     const { scene, play } = createBeatoraja({
-      chart: { ...CHART, chart: TEMPO_CHART } as BrowserSongEntry,
+      chart: { ...CHART, chart: TEMPO_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2, hsFix: 'MAXBPM' },
     });
     await scene.prepare();
@@ -468,7 +467,7 @@ describe('createPlayScene with a beatoraja kit', () => {
 
   it("plays the host's lane options, as every family does, and records them in the play log", async () => {
     const { scene, play } = createBeatoraja({
-      chart: { ...CHART, chart: TWO_LANE_CHART } as BrowserSongEntry,
+      chart: { ...CHART, chart: TWO_LANE_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2, random1P: 'MIRROR', random2P: 'OFF' },
     });
     await scene.prepare();
@@ -547,7 +546,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     const fake = createFakeHost();
     const { scene, play } = createBeatoraja({
       host: fake.host,
-      chart: { ...CHART, chart: DP_CHART } as BrowserSongEntry,
+      chart: { ...CHART, chart: DP_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2 },
     });
     await scene.prepare();
@@ -621,7 +620,7 @@ describe('createPlayScene with a beatoraja kit', () => {
       },
     };
     const { scene, play } = createBeatoraja({
-      chart: { ...CHART, chart: TWO_LANE_CHART } as BrowserSongEntry,
+      chart: { ...CHART, chart: TWO_LANE_CHART } as LibraryChart,
       settings: { initialHiSpeed: 2 },
       replay: playlog,
     });

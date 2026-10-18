@@ -52,8 +52,8 @@ import {
   audioDrive,
   type BeMusicAudioFrame,
   type BeMusicSelectLayout,
-  type BrowserBrowseEntry,
-  type BrowserSongEntry,
+  type LibraryEntry,
+  type LibraryChart,
   describeCourseCard,
   formatPlayVariantLabel,
   resolveSongStats,
@@ -156,7 +156,7 @@ function labelStyle(fill: number = SYN_DIM): SkinTextOptions {
  */
 function drawJudgeRank(
   addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
-  song: BrowserSongEntry | undefined,
+  song: LibraryChart | undefined,
   left: number,
   centerY: number,
 ): void {
@@ -313,7 +313,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
   public tick(
     nowMs: number,
-    focusedSong: BrowserSongEntry | undefined,
+    focusedSong: LibraryChart | undefined,
     launchAt?: number,
     audio?: BeMusicAudioFrame,
   ): void {
@@ -994,7 +994,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
    */
   private renderPortraitRow(
     frame: PixiSelectFrame,
-    entry: BrowserBrowseEntry,
+    entry: LibraryEntry,
     entryIndex: number,
     visibleIndex: number,
     listWidth: number,
@@ -1003,7 +1003,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const y = listTop + visibleIndex * rowHeight;
     const rowH = rowHeight - 4;
     const active = entryIndex === frame.selectedIndex;
-    const song = entry.kind === 'song' ? entry.song : undefined;
+    const song = entry.kind === 'chart' ? entry.chart : undefined;
     const accent = hsvToHex(sceneHue(frame.nowMs / 1000), 0.6, 1);
     const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;
     const intro =
@@ -1095,7 +1095,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
   private renderRow(
     frame: PixiSelectFrame,
-    entry: BrowserBrowseEntry,
+    entry: LibraryEntry,
     entryIndex: number,
     visibleIndex: number,
     listWidth: number,
@@ -1103,7 +1103,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const { listX, listTop, rowHeight } = LAYOUT;
     const y = listTop + visibleIndex * rowHeight;
     const active = entryIndex === frame.selectedIndex;
-    const song = entry.kind === 'song' ? entry.song : undefined;
+    const song = entry.kind === 'chart' ? entry.chart : undefined;
     const hue = sceneHue(frame.nowMs / 1000);
     const accent = hsvToHex(hue, 0.6, 1);
     const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;

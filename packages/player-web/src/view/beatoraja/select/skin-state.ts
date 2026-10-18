@@ -17,8 +17,7 @@ import {
   resolveBeatorajaSelectText,
   type BeatorajaSelectInput,
 } from '@be-music/beatoraja-skin/scene';
-import type { BrowseListOptions } from '@be-music/scene-model';
-import type { BrowserBrowseEntry } from '../../../collection/types.ts';
+import type { BrowseListOptions, LibraryEntry } from '@be-music/scene-model';
 import type { BeatorajaSceneKit } from '../../../skin/beatoraja/scene-kit.ts';
 import { selectChartFacts } from './chart-facts.ts';
 
@@ -35,7 +34,7 @@ const BUTTON_PRESS_WINDOW_MS = 200;
 export interface BeatorajaSelectSkinStateContext {
   /** The skin and the player's options for it. */
   readonly options: Pick<BeatorajaSceneKit, 'skin' | 'skinConfig'>;
-  readonly entries: ReadonlyArray<BrowserBrowseEntry>;
+  readonly entries: ReadonlyArray<LibraryEntry>;
   /** The cursor: `entries[currentIndex]` is the focused bar. */
   readonly currentIndex: number;
   /** The search as typed. */
@@ -46,7 +45,7 @@ export interface BeatorajaSelectSkinStateContext {
   readonly lnModeOverride: 0 | 1 | 2 | undefined;
   currentFolderLabel(): string;
   /** The best clear lamp of a chart or course bar, as its op (`beatorajaClearLampOp`); `undefined` for none. */
-  lampOpOf(entry: BrowserBrowseEntry): number | undefined;
+  lampOpOf(entry: LibraryEntry): number | undefined;
   /** The clock a button press is timed on, in ms. */
   nowMs(): number;
 }
@@ -132,7 +131,7 @@ export class BeatorajaSelectSkinState {
           : this.ctx.lampOpOf(entry);
     return {
       focused: entry,
-      ...(entry?.kind === 'song' ? { chart: selectChartFacts(entry.song) } : {}),
+      ...(entry?.kind === 'chart' ? { chart: selectChartFacts(entry.chart) } : {}),
       folderLabel: this.ctx.currentFolderLabel(),
       searchText: this.ctx.searchQuery,
       list: { keysFilter: this.ctx.list.keysFilter, sort: this.ctx.list.sort },

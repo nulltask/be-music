@@ -37,7 +37,6 @@ import { createEmptyScore, type GaugeType, type JudgeKind, type ScoreSummary } f
 import { collectChartVolumeMultipliers } from '../../chart/play-audio.ts';
 import { resolvePoorBgaFallbackKey } from '../../chart/play-bga.ts';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
-import type { BrowserSongEntry } from '../../collection/types.ts';
 import {
   splitNonstopBgaTimeline,
   toBrowserBgaTimeline,
@@ -60,6 +59,7 @@ import {
   SHUTTER_DEFAULT,
   type HiSpeedTransition,
   type LaneCoverState,
+  type LibraryChart,
   type PlayState,
 } from '@be-music/scene-model';
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
@@ -88,7 +88,7 @@ export interface PlayChartContext {
       | 'autoScratch2P'
     >
   >;
-  song: BrowserSongEntry | undefined;
+  song: LibraryChart | undefined;
   resolvedChart: BeMusicJson | undefined;
   resolvedPlayChart: ResolvedChart | undefined;
   randomDraws: RandomDraws | undefined;
@@ -145,7 +145,7 @@ export interface PlayChartContext {
   resolveSelectedGauge(): GaugeType;
 }
 
-export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void {
+export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
   // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
   // with the draws its log recorded, so it plays the recorded branches.

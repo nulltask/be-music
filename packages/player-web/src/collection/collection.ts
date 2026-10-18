@@ -1,14 +1,12 @@
 import { unzipSync } from 'fflate';
 import { countScoredNotes } from '@be-music/chart';
 import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
-import { seedLibraryChartPlayVariant } from '@be-music/scene-model';
+import { seedLibraryChartPlayVariant, type ChartSourceKind, type LibraryChart } from '@be-music/scene-model';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
   BrowserSongAssetEntry,
   BrowserSongAssetSource,
   BrowserSongCollection,
-  BrowserSongEntry,
-  BrowserSongSourceKind,
   LoadProgressCallback,
 } from './types.ts';
 import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
@@ -41,7 +39,7 @@ export interface LoadProgressOptions {
 }
 
 export class BrowserSongCollectionStore {
-  public collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
+  public collection: BrowserSongCollection = { sources: [], charts: [], errors: [] };
   /**
    * Monotonic counter that prefixes every appended drop's source ids so subsequent drops don't collide with the
    * previous one's `files:0` / `bundle:0` ids. The counter is incremented every time a drop produces at least one new
@@ -76,7 +74,7 @@ export class BrowserSongCollectionStore {
     options: LoadProgressOptions = {},
   ): Promise<BrowserSongCollection> {
     const incoming = await loadSongCollectionFromFiles(files, options);
-    if (incoming.sources.length === 0 && incoming.songs.length === 0 && incoming.errors.length === 0) {
+    if (incoming.sources.length === 0 && incoming.charts.length === 0 && incoming.errors.length === 0) {
       return this.collection;
     }
     this.dropSeq += 1;
@@ -85,10 +83,10 @@ export class BrowserSongCollectionStore {
       ...source,
       id: prefix + source.id,
     }));
-    const remappedSongs: BrowserSongEntry[] = incoming.songs.map((song) => ({
-      ...song,
-      sourceId: prefix + song.sourceId,
-      id: prefix + song.id,
+    const remappedCharts: LibraryChart[] = incoming.charts.map((chart) => ({
+      ...chart,
+      sourceId: prefix + chart.sourceId,
+      id: prefix + chart.id,
     }));
     const remappedErrors = incoming.errors.map((error) => ({
       ...error,
@@ -96,7 +94,7 @@ export class BrowserSongCollectionStore {
     }));
     this.collection = {
       sources: [...this.collection.sources, ...remappedSources],
-      songs: [...this.collection.songs, ...remappedSongs],
+      charts: [...this.collection.charts, ...remappedCharts],
       errors: [...this.collection.errors, ...remappedErrors],
     };
     return this.collection;
@@ -415,7 +413,7 @@ export async function loadSongCollectionFromFiles(
     });
   }
 
-  const songs: BrowserSongEntry[] = [];
+  const charts: LibraryChart[] = [];
   const eventStrings = new PackedEventStrings();
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
@@ -468,7 +466,7 @@ export async function loadSongCollectionFromFiles(
         const chart = parseChart(path, chartBytes);
         // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
         const scored = countScoredNotes(chart, { chartPath: path, inferBmsLnTypeWhenMissing: true });
-        const song: BrowserSongEntry = {
+        const libraryChart: LibraryChart = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
           sourceLabel: source.label,
@@ -487,12 +485,12 @@ export async function loadSongCollectionFromFiles(
           totalNotes: scored.notes,
           chart,
         };
-        songs.push(song);
+        charts.push(libraryChart);
         // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
         // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
         // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
         // worked it out (`resolveChartPlayVariant` over the same chart and path).
-        seedLibraryChartPlayVariant(song, scored.playVariant);
+        seedLibraryChartPlayVariant(libraryChart, scored.playVariant);
         compactCollectionChart(chart, eventStrings);
       } catch (error) {
         errors.push({
@@ -513,7 +511,7 @@ export async function loadSongCollectionFromFiles(
     onProgress?.({ phase: 'parsing', current: chartCount, total: chartCount });
   }
 
-  return { sources, songs, errors };
+  return { sources, charts, errors };
 }
 
 /**
@@ -532,7 +530,7 @@ function yieldToEventLoop(): Promise<void> {
 }
 
 export function describeSongCollection(collection: BrowserSongCollection): string {
-  return `${collection.songs.length} charts loaded${
+  return `${collection.charts.length} charts loaded${
     collection.errors.length > 0 ? `, ${collection.errors.length} errors` : ''
   }`;
 }
@@ -591,7 +589,7 @@ function parseChart(path: string, bytes: Uint8Array) {
  */
 const JAPANESE_COLLATOR = new Intl.Collator('ja');
 
-function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): BrowserSongSourceKind {
+function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): ChartSourceKind {
   for (const path of files.keys()) {
     if (path.includes('/')) return 'directory';
   }
@@ -600,7 +598,7 @@ function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): Bro
 
 export function resolveSongSource(
   collection: BrowserSongCollection,
-  song: BrowserSongEntry,
+  song: LibraryChart,
 ): BrowserSongAssetSource | undefined {
   return collection.sources.find((source) => source.id === song.sourceId);
 }

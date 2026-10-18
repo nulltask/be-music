@@ -83,7 +83,7 @@ function createSession(
     on: {
       start: (entry, { autoPlay }) => {
         started.push({
-          entry: entry.kind === 'song' ? entry.song.title : entry.course.definition.name,
+          entry: entry.kind === 'chart' ? entry.chart.title : entry.course.definition.name,
           autoPlay,
         });
       },
@@ -121,13 +121,13 @@ function keyEvent(code: string, key: string, timeStamp: number): SessionKeyEvent
 function focusedTitle(frame: SelectFrame): string | undefined {
   const entry = frame.entries[frame.cursor];
   if (entry === undefined) return undefined;
-  if (entry.kind === 'song') return entry.song.title;
+  if (entry.kind === 'chart') return entry.chart.title;
   return entry.kind === 'folder' ? entry.folder.label : entry.course.definition.name;
 }
 
 function titles(frame: SelectFrame): string[] {
   return frame.entries.map((entry) =>
-    entry.kind === 'song' ? entry.song.title : entry.kind === 'folder' ? entry.folder.label : entry.course.id,
+    entry.kind === 'chart' ? entry.chart.title : entry.kind === 'folder' ? entry.folder.label : entry.course.id,
   );
 }
 

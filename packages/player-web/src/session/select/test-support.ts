@@ -5,19 +5,15 @@
 
 import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import type { CourseDefinition } from '@be-music/player/course';
-import type {
-  BrowserCourseEntry,
-  BrowserFolderNode,
-  BrowserSongCollection,
-  BrowserSongEntry,
-} from '../../collection/types.ts';
+import type { LibraryChart, LibraryCourse, LibraryFolder } from '@be-music/scene-model';
+import type { BrowserSongCollection } from '../../collection/types.ts';
 
 /** A chart titled `id` in the folder `directory`, with one object on each of `channels` (a 7-key chart by default). */
 export function makeChart(
   id: string,
   directory: string,
   options: { channels?: readonly string[]; difficulty?: number; modeHint?: string; playLevel?: number } = {},
-): BrowserSongEntry {
+): LibraryChart {
   const chart: BeMusicJson = createEmptyJson();
   chart.events = (options.channels ?? ['11', '18']).map((channel, index): BeMusicEvent => ({
     measure: 1,
@@ -43,7 +39,7 @@ export function makeChart(
 }
 
 /** A playable grade course named `id`. */
-export function makeCourse(id: string, overrides: Partial<BrowserCourseEntry> = {}): BrowserCourseEntry {
+export function makeCourse(id: string, overrides: Partial<LibraryCourse> = {}): LibraryCourse {
   const definition: CourseDefinition = {
     name: id,
     kind: 'grade',
@@ -57,23 +53,23 @@ export function makeCourse(id: string, overrides: Partial<BrowserCourseEntry> = 
 }
 
 /**
- * A collection of `songs` with the course folders given, its charts in one source (`test`) holding `files` (path to
+ * A collection of `charts` with the course folders given, its charts in one source (`test`) holding `files` (path to
  * bytes).
  */
 export function makeCollection(
-  songs: readonly BrowserSongEntry[],
-  courseFolders: readonly BrowserFolderNode[] = [],
+  charts: readonly LibraryChart[],
+  courseFolders: readonly LibraryFolder[] = [],
   files: Readonly<Record<string, Uint8Array>> = {},
 ): BrowserSongCollection {
   return {
     sources: [{ id: 'test', kind: 'directory', label: 'test', files: new Map(Object.entries(files)) }],
-    songs: [...songs],
+    charts: [...charts],
     errors: [],
     ...(courseFolders.length > 0 ? { courseFolders: [...courseFolders] } : {}),
   };
 }
 
 /** A course folder listing `courses`. */
-export function makeCourseFolder(label: string, courses: readonly BrowserCourseEntry[]): BrowserFolderNode {
-  return { label, songs: [], courses: [...courses] };
+export function makeCourseFolder(label: string, courses: readonly LibraryCourse[]): LibraryFolder {
+  return { label, charts: [], courses: [...courses] };
 }

@@ -84,7 +84,7 @@ describe('createSelectScene', () => {
     scene.setPlayOptions({ sort: 'LEVEL' });
     expect(scene.getPlayOptions().sort).toBe('LEVEL');
     scene.restore({ folderPath: ['one'], cursors: [0, 0] });
-    expect(scene.focused()).toMatchObject({ song: { id: 'a' } });
+    expect(scene.focused()).toMatchObject({ chart: { id: 'a' } });
     expect(scene.searchFieldRect()).toBeUndefined();
     scene.updateKit({ family: 'lr2' } as unknown as BuiltInKit);
     scene.dispose();
