@@ -1,596 +1,801 @@
-import * as sceneApi from '@be-music/beatoraja-skin/scene';
-import { BEATORAJA_NUM, BEATORAJA_TEXT, OFFSET_HIDDEN_COVER } from '@be-music/beatoraja-skin';
-import type { LibraryChart, LibraryCourse, LibraryEntry, LaneCoverState } from '@be-music/scene-model';
+import { readFileSync } from 'node:fs';
+import * as skinApi from '@be-music/beatoraja-skin';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
+import { registerBeatorajaSkinSceneExportsCases } from './scene-exports-cases.ts';
 
-// The cases measure `@be-music/beatoraja-skin/scene`, the scene mapping a skin view asks every frame; the parser and
-// theme loader the package's main entry exports are not measured.
+// The cases measure the main entry: the skin parser, the element normalizers a skin view runs once per skin load, the
+// per-frame element helpers (animation frames, digit cells, destinations, offsets, gauge nodes) and the theme loader.
+// They run on the beatoraja default theme the unit tests use (`src/__fixtures__`), mounted as a theme folder with a
+// placeholder byte string per image and font it names. `scene-exports-cases.ts` measures `/scene`.
 
-const BENCH_COVER: LaneCoverState = {
-  side: '1P',
-  sudden: 0.25,
-  suddenOn: true,
-  hidden: 0.2,
-  hiddenOn: true,
-  lift: 0.1,
+type SkinRecord = Readonly<Record<string, unknown>>;
+
+const FIXTURE_DIR = new URL('../src/__fixtures__/', import.meta.url);
+const THEME_DIR = 'skin/default';
+const PLAY5_PATH = `${THEME_DIR}/play5.json`;
+const DECIDE_DIR = `${THEME_DIR}/decide`;
+const DECIDE_PATH = `${DECIDE_DIR}/decide.luaskin`;
+// Every image and font `play5.json` and the decide skin name, one file per wildcard directory.
+const THEME_ASSET_PATHS = [
+  'system.png',
+  'playbg.png',
+  'gauge.png',
+  'judge.png',
+  'number.png',
+  'close.png',
+  'scoregraph.png',
+  'bomb.png',
+  'ready.png',
+  'judgedetail.png',
+  'VL-Gothic-Regular.ttf',
+  'play/background/default.png',
+  'play/laser/default.png',
+  'play/notes/default.png',
+  'play/lanecover/default.png',
+];
+const PNG_SIGNATURE = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+// Lua closures as a skin authors them: a draw condition, a number and a text property, and the custom events and
+// timers a skin view evaluates every frame.
+const BENCH_LUA_SOURCE = [
+  'local main_state = require("main_state")',
+  'return {',
+  '  draw = function() return main_state.gauge() >= 80 end,',
+  '  value = function() return main_state.number(71) * 2 end,',
+  '  text = function() return main_state.text(12) end,',
+  '  customEvents = {',
+  '    { id = 1000, condition = function() return main_state.gauge() >= 80 end, action = function() end, minInterval = 100 },',
+  '    { id = 1001, condition = 920, action = function() end },',
+  '  },',
+  '  customTimers = { { id = 10000, timer = function() return main_state.time() end } },',
+  '}',
+].join('\n');
+const BENCH_LUA_CONTEXT: skinApi.BeatorajaLuaRuntimeContext = {
+  option: (id) => id === 920,
+  number: (id) => (id === 71 ? 650 : 0),
+  text: () => 'Bench',
+  gauge: () => 82,
+  time: () => 64_500_000,
 };
-const BENCH_SCORE: sceneApi.BeatorajaScoreInput = {
-  total: 1200,
-  perfect: 900,
-  great: 200,
-  good: 50,
-  bad: 20,
-  poor: 30,
-  exScore: 2000,
-  score: 180_000,
-  fast: 120,
-  slow: 130,
-};
-const BENCH_GAUGE: sceneApi.BeatorajaGaugeInput = {
-  current: 82,
+
+const BENCH_FLOAT_VALUE_INPUT = [
+  {
+    id: 'accuracy',
+    src: 5,
+    x: 0,
+    y: 0,
+    w: 264,
+    h: 24,
+    divx: 11,
+    digit: 4,
+    iketa: 3,
+    fketa: 2,
+    gain: 0.01,
+    isSignvisible: true,
+    zeropadding: 1,
+    align: 2,
+    ref: 102,
+  },
+];
+const BENCH_GAUGE_GRAPH_INPUT = [{ id: 'gaugegraph', color: ['ff8888', '442222', 'ff00ff', '440044'] }];
+const BENCH_TIMING_VISUALIZER_INPUT = [
+  { id: 'timing', width: 301, judgeWidthMillis: 150, lineWidth: 1, drawDecay: 1, pgColor: '00ffff' },
+];
+const BENCH_TIMING_DISTRIBUTION_INPUT = [
+  { id: 'timing-distribution', width: 301, lineWidth: 1, drawAverage: 1, drawDev: 1, graphColor: 'ffffff' },
+];
+const BENCH_PM_CHARA_INPUT = [
+  { id: 'dstPMchara1P', src: 'srcPMchara1P', color: 1, type: 0, side: 1 },
+  { id: 'dstPMchara2P', src: 'srcPMchara2P', color: 1, type: 0, side: 2 },
+  { id: 'dstPMchara1PBG', src: 'srcPMchara1P', color: 1, type: 1 },
+];
+const BENCH_CUSTOM_OFFSET_INPUT = [
+  { name: 'Judge position', id: 40, x: true, y: true },
+  { name: 'Lane cover', id: 41, y: true, a: 1 },
+  { name: 'Score graph', id: 42, x: true, w: true, h: true },
+];
+const BENCH_OFFSETS = new Map<number, skinApi.BeatorajaSkinOffsetValue>([
+  [skinApi.OFFSET_ALL, { x: 4, y: -2, w: 0, h: 0, r: 0, a: 0 }],
+  [skinApi.OFFSET_LIFT, { x: 0, y: 72, w: 0, h: 0, r: 0, a: 0 }],
+  [skinApi.OFFSET_JUDGE_1P, { x: 0, y: 12, w: 8, h: 4, r: 0, a: -64 }],
+]);
+const BENCH_OFFSET_IDS = [skinApi.OFFSET_ALL, skinApi.OFFSET_LIFT, skinApi.OFFSET_JUDGE_1P];
+const resolveBenchOffset = (id: number): skinApi.BeatorajaSkinOffsetValue | undefined => BENCH_OFFSETS.get(id);
+const BENCH_GAUGE_STATE: skinApi.BeatorajaGaugeState = {
+  value: 82,
   max: 100,
-  clearThreshold: 80,
-  effectiveTotal: 300,
-  type: 'GROOVE',
+  border: 80,
+  mode: skinApi.BEATORAJA_GAUGE_MODE.NORMAL,
 };
-const BENCH_BPM_SEGMENTS: readonly sceneApi.BeatorajaBpmSegment[] = Array.from({ length: 64 }, (_, index) => ({
-  timeMs: index * 2000,
-  bpm: index % 9 === 8 ? 0 : 120 + (index % 5) * 20,
-}));
-const BENCH_CHART_FACTS: sceneApi.BeatorajaPlayChartFacts = {
-  bpm: 150,
-  mainBpm: 150,
-  minBpm: 120,
-  maxBpm: 200,
-  bpmSegments: BENCH_BPM_SEGMENTS,
-  playLevel: 12,
+const BENCH_ASSET_ENTRY = PNG_SIGNATURE;
+const BENCH_LUA_ERROR: skinApi.BeatorajaLuaEvaluationError = {
+  message: 'decidemain.lua:42: attempt to index a nil value',
 };
-const BENCH_TIMINGS = Array.from({ length: 1200 }, (_, index) => ({
-  deltaMs: ((index * 37) % 61) - 30,
-  judge: index % 7 === 0 ? 'GREAT' : 'PERFECT',
-}));
-const BENCH_PLAY_NUMBERS: sceneApi.BeatorajaPlayNumberInput = {
-  score: BENCH_SCORE,
-  gauge: BENCH_GAUGE,
-  combo: 321,
-  maxCombo: 654,
-  earlyLate: { PERFECT: { early: 400, late: 500 }, GREAT: { early: 90, late: 110 } },
-  chartTotal: 300,
-  hiSpeed: 2.5,
-  cover: BENCH_COVER,
-  chart: BENCH_CHART_FACTS,
-  clock: { currentSeconds: 64.5, totalSeconds: 128 },
-  lastJudgeDeltaMs: -7.5,
-  plateCombos: [321, 0, 0],
-  wallClock: { year: 2026, month: 10, day: 16, hour: 12, minute: 34, second: 56 },
-  operatingMs: 3_725_000,
-  fps: 120,
-};
-const BENCH_BREAKDOWN: sceneApi.BeatorajaNoteBreakdown = { normal: 900, ln: 150, scratch: 120, bss: 30 };
-const BENCH_SCORE_HISTORY = Array.from({ length: 1200 }, (_, index) => ({
-  progress: index / 1200,
-  exScore: Math.round((index * 2000) / 1200),
-}));
-const BENCH_GAUGE_HISTORY = Array.from({ length: 1200 }, (_, index) => ({
-  progress: index / 1200,
-  value: 20 + ((index * 3) % 80),
-}));
-const BENCH_DISTRIBUTION = {
-  buckets: Array.from({ length: 128 }, (_, index) => [1, 2, 3, 1, 4, 8 + (index % 5), 0]),
-  totalMs: 128_000,
-};
-const BENCH_JUDGE_STATE_GRAPH = sceneApi.createBeatorajaJudgeStateGraph(BENCH_DISTRIBUTION)!;
-const BENCH_PLACEMENT = sceneApi.resolveBeatorajaLanePlacement('13', '7', 3);
-const BENCH_OFFSET_INPUT: sceneApi.BeatorajaPlayOffsetInput = {
-  cover: BENCH_COVER,
-  laneHeight: 580,
-  maxCombo: 654,
-  comboDigits: { 1: { width: 40, space: 0 }, 2: { width: 40, space: 0 } },
-};
-const BENCH_OFFSET = { x: 0, y: 0, a: 0 };
-const BENCH_COURSE_VIEW = {
-  kind: 'grade' as const,
-  title: 'Bench Dan',
-  stages: [{ title: 'One' }, { title: 'Two' }, { title: 'Three' }, { title: 'Four' }],
-  stageIndex: 2,
-};
-const BENCH_RESULT: sceneApi.BeatorajaResultInput = {
-  result: {
-    score: BENCH_SCORE,
-    fast: 120,
-    slow: 130,
-    maxCombo: 654,
-    cleared: true,
-    lamp: 'NORMAL',
-    gaugeHistory: BENCH_GAUGE_HISTORY,
-    scoreHistory: BENCH_SCORE_HISTORY,
-    judgeTimings: BENCH_TIMINGS,
-    course: BENCH_COURSE_VIEW,
-  },
-  gauge: BENCH_GAUGE,
-  chartTotal: 300,
-  breakdown: BENCH_BREAKDOWN,
-  song: { title: 'Bench', subtitle: '[ANOTHER]', artist: 'be-music', genre: 'BENCH' },
-  skin: { name: 'Bench Skin', author: 'be-music' },
-};
-const BENCH_SONG: LibraryChart = {
-  id: 'bench',
-  sourceId: 'source',
-  sourceLabel: 'Bench',
-  sourceKind: 'directory',
-  chartPath: 'Pack/bench.bms',
-  directoryLabel: 'Pack',
-  fileLabel: 'bench.bms',
-  title: 'Bench',
-  subtitle: '[ANOTHER]',
-  artist: 'be-music',
-  playLevel: 12,
-  bpm: 150,
-  totalNotes: 1200,
-  chart: { metadata: { difficulty: 4 } } as unknown as LibraryChart['chart'],
-};
-const BENCH_DECIDE: sceneApi.BeatorajaDecideInput = { chart: BENCH_SONG, progress: 0.5 };
-const BENCH_COURSE: LibraryCourse = {
-  id: 'Dan#0',
-  definition: {
-    name: 'Bench Dan',
-    kind: 'grade',
-    stages: [],
-    constraints: ['grade_mirror', 'gauge_lr2', 'no_speed'],
-    trophies: [],
-    release: true,
-    source: { format: 'beatoraja-json' },
-  },
-  stages: [{ title: 'One', song: BENCH_SONG }, { title: 'Two' }],
-  playable: false,
-};
-const BENCH_SELECT_FACTS: sceneApi.BeatorajaSelectChartFacts = {
-  playVariant: '7',
-  traits: { longNote: true, bga: true, bpmChange: true, random: false, stop: true, stageFile: true, banner: false },
-  difficulty: 4,
-  judgeRank: 2,
-  total: 300,
-  lnMode: 2,
-  subartist: 'obj: bench',
-  noteBreakdown: BENCH_BREAKDOWN,
-  density: { peak: { whole: 21, afterDot: 4 }, end: { whole: 9, afterDot: 0 }, average: { whole: 6, afterDot: 5 } },
-  lengthSeconds: 128,
-  bpmRange: { min: 120, max: 200 },
-};
-const BENCH_SONG_BAR: LibraryEntry = { kind: 'song', song: BENCH_SONG };
-const BENCH_SELECT: sceneApi.BeatorajaSelectInput = {
-  focused: BENCH_SONG_BAR,
-  chart: BENCH_SELECT_FACTS,
-  folderLabel: 'Pack',
-  searchText: 'bench',
-  list: { keysFilter: 'KEYS_7', sort: 'LEVEL' },
-  skin: { name: 'Bench Skin', author: 'be-music' },
-  judgeTiming: -10,
-  wallClock: { year: 2026, month: 10, day: 16, hour: 12, minute: 34, second: 56 },
-};
-const BENCH_COURSE_SELECT: sceneApi.BeatorajaSelectInput = {
-  ...BENCH_SELECT,
-  focused: { kind: 'course', course: BENCH_COURSE },
-};
-const BENCH_FILES = new Map<string, Uint8Array>(
-  [
-    'Theme/sound/Cursor.wav',
-    'sound/decide.ogg',
-    'sound/back.wav',
-    'sound/f-open.wav',
-    'Bgm/select.ogg',
-    'Theme/Sound/clear.wav',
-    'Theme/Sound/fail.wav',
-    'Theme/Sound/course_clear.wav',
-    ...Array.from({ length: 200 }, (_, index) => `Theme/parts/image${index}.png`),
-  ].map((path) => [path, new Uint8Array(0)]),
-);
-const BENCH_DATE = new Date(2026, 9, 16, 12, 34, 56);
+
+interface RootFixtures {
+  play5Text: string;
+  play5Bytes: Uint8Array;
+  play5: SkinRecord;
+  play5Header: skinApi.BeatorajaSkinHeader;
+  select: SkinRecord;
+  files: Map<string, skinApi.BeatorajaSkinFileEntry>;
+  inputFiles: skinApi.BeatorajaSkinInputFile[];
+  decideEntry: Uint8Array;
+  decideModules: skinApi.BeatorajaLuaModuleSource[];
+  playSkins: skinApi.BeatorajaPlaySkinMap;
+  play5Entry: skinApi.BeatorajaSkinEntry;
+  defaultOptions: Record<string, number>;
+  defaultFiles: Record<string, string>;
+  activeOps: Set<number>;
+  image: skinApi.BeatorajaImageElement;
+  values: skinApi.BeatorajaValueElement[];
+  value: skinApi.BeatorajaValueElement;
+  floatValue: skinApi.BeatorajaFloatValueElement;
+  judges: skinApi.BeatorajaJudgeElement[];
+  gauge: skinApi.BeatorajaGaugeElement;
+  note: skinApi.BeatorajaNoteSection;
+  destination: skinApi.BeatorajaDestinationGroup;
+  luaTable: SkinRecord;
+  luaDraw: skinApi.BeatorajaLuaFunctionValue;
+  luaValue: skinApi.BeatorajaLuaFunctionValue;
+  luaText: skinApi.BeatorajaLuaFunctionValue;
+  customEvents: skinApi.BeatorajaCustomEvent[];
+  customEventState: skinApi.BeatorajaCustomEventState[];
+  customTimers: skinApi.BeatorajaCustomTimer[];
+  customTimerState: number[];
+}
+
+let rootFixtures: RootFixtures | undefined;
+
+/** Built on first use, so a run that skips this package does not read or parse the theme. */
+function fixtures(): RootFixtures {
+  rootFixtures ??= createRootFixtures();
+  return rootFixtures;
+}
+
+function createRootFixtures(): RootFixtures {
+  const play5Bytes = readFixture('play5.json');
+  const play5Text = new TextDecoder().decode(play5Bytes);
+  const selectBytes = readFixture('select.json');
+  const decideEntry = readFixture('lua-skin/decide.luaskin');
+  const themeBytes: Array<[string, Uint8Array]> = [
+    [PLAY5_PATH, play5Bytes],
+    [`${THEME_DIR}/select.json`, selectBytes],
+    [DECIDE_PATH, decideEntry],
+    [`${DECIDE_DIR}/decidemain.lua`, readFixture('lua-skin/decidemain.lua')],
+    ...THEME_ASSET_PATHS.map((path): [string, Uint8Array] => [`${THEME_DIR}/${path}`, PNG_SIGNATURE]),
+  ];
+  const files = new Map<string, skinApi.BeatorajaSkinFileEntry>(themeBytes);
+  const inputFiles = themeBytes.map(([path, bytes]) => ({
+    name: path.slice(path.lastIndexOf('/') + 1),
+    webkitRelativePath: path,
+    arrayBuffer: async () => bytes.buffer as ArrayBuffer,
+  }));
+  const play5 = skinApi.parseBeatorajaSkinJson(play5Text) as unknown as SkinRecord;
+  const play5Header = skinApi.parseBeatorajaSkinJsonHeader(play5Text);
+  const select = skinApi.parseBeatorajaSkinJson(selectBytes) as unknown as SkinRecord;
+  const defaultOptions = skinApi.buildDefaultSkinConfigOptions(play5Header);
+  const { theme } = quietly(() => skinApi.discoverBeatorajaTheme(files));
+  const play5Entry = theme.playSkins['5'];
+  if (play5Entry === undefined) throw new Error('Benchmark fixture: play5.json is not discovered as a play skin.');
+
+  const images = skinApi.normalizeBeatorajaImages(play5.image);
+  const values = skinApi.normalizeBeatorajaValues(play5.value);
+  const gauge = skinApi.normalizeBeatorajaGauge(play5.gauge);
+  const destinations = skinApi.normalizeBeatorajaDestinations(select.destination);
+  const lua = quietly(() =>
+    skinApi.evaluateBeatorajaLuaSkin({
+      entry: new TextEncoder().encode(BENCH_LUA_SOURCE),
+      modules: [],
+      skinConfig: {},
+    }),
+  );
+  if (!lua.ok) throw new Error(`Benchmark fixture: ${lua.error.message}`);
+  const luaTable = lua.value as SkinRecord;
+  const { draw, value, text } = luaTable;
+  if (
+    !skinApi.isBeatorajaLuaFunctionValue(draw) ||
+    !skinApi.isBeatorajaLuaFunctionValue(value) ||
+    !skinApi.isBeatorajaLuaFunctionValue(text)
+  ) {
+    throw new Error('Benchmark fixture: the Lua table lost its functions.');
+  }
+
+  return {
+    play5Text,
+    play5Bytes,
+    play5,
+    play5Header,
+    select,
+    files,
+    inputFiles,
+    decideEntry,
+    decideModules: skinApi.collectBeatorajaLuaModules(files, DECIDE_DIR),
+    playSkins: theme.playSkins,
+    play5Entry,
+    defaultOptions,
+    defaultFiles: skinApi.buildDefaultSkinConfigFiles(play5Header, files, PLAY5_PATH),
+    activeOps: skinApi.buildBaseOpSet(defaultOptions),
+    // A lane bomb: ten frames over 160 ms.
+    image: pick(
+      images.find((image) => image.divx * image.divy > 1 && image.cycle > 0),
+      'an animated image',
+    ),
+    values,
+    // The combo digits beside the PERFECT judge: two frames cycling every 100 ms.
+    value: pick(
+      values.find((entry) => entry.cycle > 0),
+      'an animated value',
+    ),
+    floatValue: pick(skinApi.normalizeBeatorajaFloatValues(BENCH_FLOAT_VALUE_INPUT)[0], 'a float value'),
+    judges: skinApi.normalizeBeatorajaJudges(play5.judge),
+    gauge: pick(gauge, 'a gauge'),
+    note: skinApi.normalizeBeatorajaNote(play5.note),
+    // A select-screen destination with keyframes, looping from 300 ms.
+    destination: pick(
+      destinations.find((group) => group.dst.length > 1 && group.loop > 0),
+      'an animated destination',
+    ),
+    luaTable,
+    luaDraw: draw,
+    luaValue: value,
+    luaText: text,
+    customEvents: skinApi.normalizeBeatorajaCustomEvents(luaTable.customEvents),
+    customEventState: [],
+    customTimers: skinApi.normalizeBeatorajaCustomTimers(luaTable.customTimers),
+    customTimerState: [],
+  };
+}
+
+function readFixture(name: string): Uint8Array {
+  return new Uint8Array(readFileSync(new URL(name, FIXTURE_DIR)));
+}
+
+function pick<T>(value: T | undefined, what: string): T {
+  if (value === undefined) throw new Error(`Benchmark fixture: the default theme has no ${what}.`);
+  return value;
+}
+
+/**
+ * The Lua evaluator logs every `require()` with `console.log`. Muting it keeps the case on the evaluation, not on
+ * terminal output, and keeps the bench log readable.
+ */
+function quietly<T>(run: () => T): T {
+  const log = console.log;
+  console.log = () => {};
+  try {
+    return run();
+  } finally {
+    console.log = log;
+  }
+}
 
 export function registerBeatorajaSkinExportsCases(define: DefineBenchmarkCase): void {
-  // Inputs and the score numbers
-  define('beatoraja-skin.scene.beatorajaWallClockOf', {
+  registerBeatorajaSkinSceneExportsCases(define);
+
+  // Theme files
+  define('beatoraja-skin.findCaseInsensitivePath', {
     run: () => {
-      sceneApi.beatorajaWallClockOf(BENCH_DATE);
+      skinApi.findCaseInsensitivePath(fixtures().files, 'Skin/Default/Play/Notes/DEFAULT.PNG');
     },
   });
-  define('beatoraja-skin.scene.beatorajaScoreRate', {
+  define('beatoraja-skin.lookupBytesCaseInsensitive', {
     run: () => {
-      sceneApi.beatorajaScoreRate(BENCH_SCORE.exScore, 1200);
+      skinApi.lookupBytesCaseInsensitive(fixtures().files, 'SKIN/DEFAULT/SYSTEM.PNG');
     },
   });
-  define('beatoraja-skin.scene.beatorajaNotesJudged', {
-    run: () => {
-      sceneApi.beatorajaNotesJudged(BENCH_SCORE);
+  define('beatoraja-skin.loadAssetBytes', {
+    run: async () => {
+      await skinApi.loadAssetBytes(BENCH_ASSET_ENTRY);
     },
   });
-  define('beatoraja-skin.scene.beatorajaChartTotalReadout', {
+  define('beatoraja-skin.asLoadedBytes', {
     run: () => {
-      sceneApi.beatorajaChartTotalReadout(BENCH_GAUGE, 300);
+      skinApi.asLoadedBytes(BENCH_ASSET_ENTRY);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaScoreNumber', {
-    run: () => {
-      sceneApi.resolveBeatorajaScoreNumber(BEATORAJA_NUM.EARLY_GREAT, BENCH_PLAY_NUMBERS);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaGenericRankOps', {
-    run: () => {
-      sceneApi.beatorajaGenericRankOps(BENCH_SCORE);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaPlayScoreOps', {
-    run: () => {
-      sceneApi.resolveBeatorajaPlayScoreOps(BENCH_SCORE, BENCH_GAUGE);
+  define('beatoraja-skin.readFilesIntoBytesMap', {
+    ioBound: true,
+    run: async () => {
+      await skinApi.readFilesIntoBytesMap(fixtures().inputFiles, { deferAudio: true });
     },
   });
 
-  // Texts
-  define('beatoraja-skin.scene.joinBeatorajaText', {
+  // Skin types and header
+  define('beatoraja-skin.playVariantForSkinType', {
     run: () => {
-      sceneApi.joinBeatorajaText('Bench', '[ANOTHER]');
+      skinApi.playVariantForSkinType(skinApi.BEATORAJA_SKIN_TYPE.PLAY_14KEYS);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaSongText', {
+  define('beatoraja-skin.sceneForSkinType', {
     run: () => {
-      sceneApi.resolveBeatorajaSongText(BEATORAJA_TEXT.FULLTITLE, BENCH_RESULT.song);
+      skinApi.sceneForSkinType(skinApi.BEATORAJA_SKIN_TYPE.RESULT);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaSkinText', {
+  define('beatoraja-skin.normalizeBeatorajaSkinCustomOffsets', {
     run: () => {
-      sceneApi.resolveBeatorajaSkinText(BEATORAJA_TEXT.SKIN_NAME, BENCH_RESULT.skin);
+      skinApi.normalizeBeatorajaSkinCustomOffsets(BENCH_CUSTOM_OFFSET_INPUT);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaPlayText', {
+  define('beatoraja-skin.defaultOpForBeatorajaSkinProperty', {
     run: () => {
-      sceneApi.resolveBeatorajaPlayText(BEATORAJA_TEXT.TITLE, { song: BENCH_RESULT.song, course: BENCH_COURSE_VIEW });
+      const property = fixtures().play5Header.property?.[3];
+      if (property) skinApi.defaultOpForBeatorajaSkinProperty(property);
     },
   });
-
-  // Play numbers and ops
-  define('beatoraja-skin.scene.beatorajaBpmAt', {
+  define('beatoraja-skin.buildDefaultSkinConfigOptions', {
     run: () => {
-      sceneApi.beatorajaBpmAt(BENCH_BPM_SEGMENTS, 77_000, 150);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaPlayNumber', {
-    run: () => {
-      sceneApi.resolveBeatorajaPlayNumber(BEATORAJA_NUM.NOWBPM, BENCH_PLAY_NUMBERS);
-      sceneApi.resolveBeatorajaPlayNumber(BEATORAJA_NUM.DURATION_GREEN, BENCH_PLAY_NUMBERS);
-      sceneApi.resolveBeatorajaPlayNumber(BEATORAJA_NUM.PERFECT, BENCH_PLAY_NUMBERS);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaChartTraitOps', {
-    run: () => {
-      sceneApi.resolveBeatorajaChartTraitOps(BENCH_SELECT_FACTS.traits);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaKeysongOp', {
-    run: () => {
-      sceneApi.beatorajaKeysongOp('14');
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaPlayStartOps', {
-    run: () => {
-      sceneApi.resolveBeatorajaPlayStartOps({ playVariant: '7', autoPlay: false, traits: BENCH_SELECT_FACTS.traits });
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaCoverOps', {
-    run: () => {
-      sceneApi.resolveBeatorajaCoverOps(BENCH_COVER, true);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaFastSlowOp', {
-    run: () => {
-      sceneApi.beatorajaFastSlowOp(2, -4);
+      skinApi.buildDefaultSkinConfigOptions(fixtures().play5Header);
     },
   });
 
-  // Play timers
-  define('beatoraja-skin.scene.resolveBeatorajaLanePlacement', {
+  // Lua
+  define('beatoraja-skin.describeBeatorajaLuaError', {
     run: () => {
-      sceneApi.resolveBeatorajaLanePlacement('24', '9', 8);
+      skinApi.describeBeatorajaLuaError(BENCH_LUA_ERROR);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaLaneTimers', {
+  define('beatoraja-skin.isBeatorajaLuaFunctionValue', {
     run: () => {
-      sceneApi.resolveBeatorajaLaneTimers('release', BENCH_PLACEMENT);
+      const { luaTable } = fixtures();
+      skinApi.isBeatorajaLuaFunctionValue(luaTable.draw);
+      skinApi.isBeatorajaLuaFunctionValue(luaTable.customEvents);
     },
   });
-  define('beatoraja-skin.scene.isBeatorajaComboJudge', {
+  define('beatoraja-skin.evaluateBeatorajaLuaBoolean', {
     run: () => {
-      sceneApi.isBeatorajaComboJudge('GOOD');
+      skinApi.evaluateBeatorajaLuaBoolean(fixtures().luaDraw, BENCH_LUA_CONTEXT);
     },
   });
-  define('beatoraja-skin.scene.isBeatorajaCleanHit', {
+  define('beatoraja-skin.evaluateBeatorajaLuaNumber', {
     run: () => {
-      sceneApi.isBeatorajaCleanHit('GREAT');
+      skinApi.evaluateBeatorajaLuaNumber(fixtures().luaValue, BENCH_LUA_CONTEXT);
     },
   });
-  define('beatoraja-skin.scene.beatorajaJudgeIndex', {
+  define('beatoraja-skin.evaluateBeatorajaLuaString', {
     run: () => {
-      sceneApi.beatorajaJudgeIndex('POOR');
+      skinApi.evaluateBeatorajaLuaString(fixtures().luaText, BENCH_LUA_CONTEXT);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaJudgeEffect', {
+  define('beatoraja-skin.evaluateBeatorajaLuaSkin', {
     run: () => {
-      sceneApi.resolveBeatorajaJudgeEffect({ judge: 'PERFECT', combo: 321, deltaMs: -3 }, BENCH_PLACEMENT, 1200);
+      // The header pass of the default decide skin, as theme discovery runs it.
+      const { decideEntry, decideModules } = fixtures();
+      quietly(() =>
+        skinApi.evaluateBeatorajaLuaSkin({ entry: decideEntry, entryName: 'decide.luaskin', modules: decideModules }),
+      );
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaFrameTimers', {
+
+  // Skin loading
+  define('beatoraja-skin.detectBeatorajaSkinFormat', {
     run: () => {
-      sceneApi.resolveBeatorajaFrameTimers({
-        beat: 128.2,
-        previousBeat: 127.9,
-        gauge: BENCH_GAUGE,
-        previousGauge: 81,
-        lastNoteBeats: { 1: 300 },
+      skinApi.detectBeatorajaSkinFormat(DECIDE_PATH);
+      skinApi.detectBeatorajaSkinFormat(PLAY5_PATH);
+    },
+  });
+  define('beatoraja-skin.collectBeatorajaLuaModules', {
+    run: () => {
+      skinApi.collectBeatorajaLuaModules(fixtures().files, DECIDE_DIR);
+    },
+  });
+  define('beatoraja-skin.extractBeatorajaSkinHeader', {
+    run: () => {
+      skinApi.extractBeatorajaSkinHeader(fixtures().play5);
+    },
+  });
+  define('beatoraja-skin.loadBeatorajaSkin', {
+    run: () => {
+      // The main pass of the default decide skin, with the user's options.
+      const { files } = fixtures();
+      quietly(() => skinApi.loadBeatorajaSkin({ entryPath: DECIDE_PATH, files, skinConfig: { option: {} } }));
+    },
+  });
+
+  // JSON
+  define('beatoraja-skin.parseBeatorajaSkinJson', {
+    run: () => {
+      skinApi.parseBeatorajaSkinJson(fixtures().play5Bytes);
+    },
+  });
+  define('beatoraja-skin.parseBeatorajaSkinJsonHeader', {
+    run: () => {
+      skinApi.parseBeatorajaSkinJsonHeader(fixtures().play5Text);
+    },
+  });
+  define('beatoraja-skin.relaxBeatorajaJson', {
+    run: () => {
+      skinApi.relaxBeatorajaJson(fixtures().play5Text);
+    },
+  });
+
+  // Elements: shared
+  define('beatoraja-skin.flattenBeatorajaElements', {
+    run: () => {
+      skinApi.flattenBeatorajaElements(fixtures().play5.image);
+    },
+  });
+  define('beatoraja-skin.isElementVisible', {
+    run: () => {
+      skinApi.isElementVisible([920, -901, 905], fixtures().activeOps);
+    },
+  });
+  define('beatoraja-skin.buildBaseOpSet', {
+    run: () => {
+      skinApi.buildBaseOpSet(fixtures().defaultOptions);
+    },
+  });
+
+  // Elements: images, values and float values
+  define('beatoraja-skin.normalizeBeatorajaImages', {
+    run: () => {
+      skinApi.normalizeBeatorajaImages(fixtures().play5.image);
+    },
+  });
+  define('beatoraja-skin.imageFrameAt', {
+    run: () => {
+      skinApi.imageFrameAt(fixtures().image, 64_537);
+    },
+  });
+  define('beatoraja-skin.imageFrameRect', {
+    run: () => {
+      skinApi.imageFrameRect(fixtures().image, 7);
+    },
+  });
+  define('beatoraja-skin.imageRefFrame', {
+    run: () => {
+      skinApi.imageRefFrame(fixtures().image, 4);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaValues', {
+    run: () => {
+      skinApi.normalizeBeatorajaValues(fixtures().play5.value);
+    },
+  });
+  define('beatoraja-skin.composeBeatorajaValueCells', {
+    run: () => {
+      const { value } = fixtures();
+      skinApi.composeBeatorajaValueCells(value, 1234, skinApi.valueFrameAt(value, 64_537));
+    },
+  });
+  define('beatoraja-skin.composeBeatorajaValueShift', {
+    run: () => {
+      skinApi.composeBeatorajaValueShift(fixtures().value, 46, 40);
+    },
+  });
+  define('beatoraja-skin.valueFrameAt', {
+    run: () => {
+      skinApi.valueFrameAt(fixtures().value, 64_537);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaFloatValues', {
+    run: () => {
+      skinApi.normalizeBeatorajaFloatValues(BENCH_FLOAT_VALUE_INPUT);
+    },
+  });
+  define('beatoraja-skin.composeBeatorajaFloatValueCells', {
+    run: () => {
+      skinApi.composeBeatorajaFloatValueCells(fixtures().floatValue, 9876);
+    },
+  });
+  define('beatoraja-skin.composeBeatorajaFloatValueShift', {
+    run: () => {
+      skinApi.composeBeatorajaFloatValueShift(fixtures().floatValue, 9876, 24);
+    },
+  });
+  define('beatoraja-skin.floatValueFrameAt', {
+    run: () => {
+      skinApi.floatValueFrameAt(fixtures().floatValue, 64_537);
+    },
+  });
+  define('beatoraja-skin.beatorajaFloatValueSlotCount', {
+    run: () => {
+      skinApi.beatorajaFloatValueSlotCount(fixtures().floatValue);
+    },
+  });
+
+  // Elements: custom events and timers
+  define('beatoraja-skin.normalizeBeatorajaCustomEvents', {
+    run: () => {
+      skinApi.normalizeBeatorajaCustomEvents(fixtures().luaTable.customEvents);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaCustomTimers', {
+    run: () => {
+      skinApi.normalizeBeatorajaCustomTimers(fixtures().luaTable.customTimers);
+    },
+  });
+  define('beatoraja-skin.evaluateBeatorajaCustomEvents', {
+    run: () => {
+      // A steady frame: the state carries over, so the conditions are evaluated but nothing fires.
+      const { customEvents, customEventState } = fixtures();
+      skinApi.evaluateBeatorajaCustomEvents(customEvents, customEventState, BENCH_LUA_CONTEXT, 64_500);
+    },
+  });
+  define('beatoraja-skin.evaluateBeatorajaCustomTimers', {
+    run: () => {
+      const { customTimers, customTimerState } = fixtures();
+      skinApi.evaluateBeatorajaCustomTimers(customTimers, customTimerState, BENCH_LUA_CONTEXT, () => {});
+    },
+  });
+
+  // Elements: destinations and offsets
+  define('beatoraja-skin.normalizeBeatorajaDestinations', {
+    run: () => {
+      const { select, activeOps } = fixtures();
+      skinApi.normalizeBeatorajaDestinations(select.destination, activeOps);
+    },
+  });
+  define('beatoraja-skin.sampleBeatorajaDestination', {
+    run: () => {
+      skinApi.sampleBeatorajaDestination(fixtures().destination, 150);
+    },
+  });
+  define('beatoraja-skin.combineBeatorajaOffsets', {
+    run: () => {
+      skinApi.combineBeatorajaOffsets(BENCH_OFFSET_IDS, resolveBenchOffset);
+    },
+  });
+  define('beatoraja-skin.applyBeatorajaOffsetAlpha', {
+    run: () => {
+      skinApi.applyBeatorajaOffsetAlpha(0.8, BENCH_OFFSET_IDS, resolveBenchOffset);
+    },
+  });
+  define('beatoraja-skin.centerToAnchor', {
+    run: () => {
+      skinApi.centerToAnchor(5);
+    },
+  });
+
+  // Elements: texts and graphs
+  define('beatoraja-skin.normalizeBeatorajaTexts', {
+    run: () => {
+      skinApi.normalizeBeatorajaTexts(fixtures().select.text);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaFonts', {
+    run: () => {
+      skinApi.normalizeBeatorajaFonts(fixtures().play5.font);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaGraphs', {
+    run: () => {
+      skinApi.normalizeBeatorajaGraphs(fixtures().play5.graph);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaBpmGraphs', {
+    run: () => {
+      skinApi.normalizeBeatorajaBpmGraphs(fixtures().select.bpmgraph);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaJudgeGraphs', {
+    run: () => {
+      skinApi.normalizeBeatorajaJudgeGraphs(fixtures().select.judgegraph);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaGaugeGraphs', {
+    run: () => {
+      skinApi.normalizeBeatorajaGaugeGraphs(BENCH_GAUGE_GRAPH_INPUT);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaTimingVisualizers', {
+    run: () => {
+      skinApi.normalizeBeatorajaTimingVisualizers(BENCH_TIMING_VISUALIZER_INPUT);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaTimingDistributionGraphs', {
+    run: () => {
+      skinApi.normalizeBeatorajaTimingDistributionGraphs(BENCH_TIMING_DISTRIBUTION_INPUT);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaSliders', {
+    run: () => {
+      skinApi.normalizeBeatorajaSliders(fixtures().play5.slider);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaImagesets', {
+    run: () => {
+      skinApi.normalizeBeatorajaImagesets(fixtures().play5.imageset);
+    },
+  });
+
+  // Elements: gauge, judge, notes, song list and characters
+  define('beatoraja-skin.beatorajaGaugeModeFromString', {
+    run: () => {
+      skinApi.beatorajaGaugeModeFromString('EX-HARD');
+    },
+  });
+  define('beatoraja-skin.computeBeatorajaGaugeAnimation', {
+    run: () => {
+      skinApi.computeBeatorajaGaugeAnimation(fixtures().gauge, 64_537);
+    },
+  });
+  define('beatoraja-skin.gaugeExBase', {
+    run: () => {
+      skinApi.gaugeExBase(skinApi.BEATORAJA_GAUGE_MODE.EXCLASS);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaGauge', {
+    run: () => {
+      skinApi.normalizeBeatorajaGauge(fixtures().play5.gauge);
+    },
+  });
+  define('beatoraja-skin.pickBeatorajaGaugeNode', {
+    run: () => {
+      skinApi.pickBeatorajaGaugeNode(fixtures().gauge, 39, BENCH_GAUGE_STATE, 2);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaJudges', {
+    run: () => {
+      skinApi.normalizeBeatorajaJudges(fixtures().play5.judge);
+    },
+  });
+  define('beatoraja-skin.expandBeatorajaJudgeDestinations', {
+    run: () => {
+      // The lookup gains a cloned combo value per plate, so each call starts from the skin's own values.
+      const { judges, values } = fixtures();
+      skinApi.expandBeatorajaJudgeDestinations(judges, new Map(values.map((entry) => [entry.id, entry])));
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaNote', {
+    run: () => {
+      skinApi.normalizeBeatorajaNote(fixtures().play5.note);
+    },
+  });
+  define('beatoraja-skin.pickBeatorajaNoteRects', {
+    run: () => {
+      const { note, activeOps } = fixtures();
+      skinApi.pickBeatorajaNoteRects(note, activeOps);
+    },
+  });
+  define('beatoraja-skin.parseBeatorajaSongList', {
+    run: () => {
+      skinApi.parseBeatorajaSongList(fixtures().select as unknown as skinApi.BeatorajaSkin);
+    },
+  });
+  define('beatoraja-skin.normalizeBeatorajaPmCharas', {
+    run: () => {
+      skinApi.normalizeBeatorajaPmCharas(BENCH_PM_CHARA_INPUT);
+    },
+  });
+
+  // Paths and sources
+  define('beatoraja-skin.resolveBeatorajaPath', {
+    run: () => {
+      skinApi.resolveBeatorajaPath(fixtures().files, DECIDE_PATH, '../system.png');
+    },
+  });
+  define('beatoraja-skin.expandBeatorajaWildcard', {
+    run: () => {
+      skinApi.expandBeatorajaWildcard(fixtures().files, PLAY5_PATH, 'play/notes/*.png');
+    },
+  });
+  define('beatoraja-skin.buildDefaultSkinConfigFiles', {
+    run: () => {
+      const { play5Header, files } = fixtures();
+      skinApi.buildDefaultSkinConfigFiles(play5Header, files, PLAY5_PATH);
+    },
+  });
+  define('beatoraja-skin.resolveSourcePath', {
+    run: () => {
+      const { play5Header, files, defaultFiles } = fixtures();
+      skinApi.resolveSourcePath(files, PLAY5_PATH, 'play/lanecover/*.png', defaultFiles, play5Header.filepath);
+    },
+  });
+  define('beatoraja-skin.describeMissingWildcardDirectory', {
+    run: () => {
+      skinApi.describeMissingWildcardDirectory(fixtures().files, PLAY5_PATH, 'play/bomb/*.png');
+    },
+  });
+  define('beatoraja-skin.bundleBeatorajaSources', {
+    run: () => {
+      const { files, play5, play5Header, defaultFiles } = fixtures();
+      skinApi.bundleBeatorajaSources({
+        files,
+        entryPath: PLAY5_PATH,
+        sources: play5.source as SkinRecord[],
+        filepathSchema: play5Header.filepath,
+        filepathOverrides: defaultFiles,
       });
     },
   });
-
-  // Play gauge, graphs and offsets
-  define('beatoraja-skin.scene.resolveBeatorajaGaugeState', {
+  define('beatoraja-skin.listBeatorajaSourcePaths', {
     run: () => {
-      sceneApi.resolveBeatorajaGaugeState(BENCH_GAUGE);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaGaugePercent', {
-    run: () => {
-      sceneApi.beatorajaGaugePercent(BENCH_GAUGE);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaPlayGraphValue', {
-    run: () => {
-      sceneApi.resolveBeatorajaPlayGraphValue(2, BENCH_PLAY_NUMBERS);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaPlaySliderValue', {
-    run: () => {
-      sceneApi.resolveBeatorajaPlaySliderValue(6, BENCH_PLAY_NUMBERS);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaScorePolyline', {
-    run: () => {
-      sceneApi.resolveBeatorajaScorePolyline(BENCH_SCORE_HISTORY, 1200);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaGaugePolyline', {
-    run: () => {
-      sceneApi.resolveBeatorajaGaugePolyline(BENCH_GAUGE_HISTORY);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaNoteBreakdownBars', {
-    run: () => {
-      sceneApi.beatorajaNoteBreakdownBars(BENCH_BREAKDOWN);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaJudgeCountBars', {
-    run: () => {
-      sceneApi.beatorajaJudgeCountBars(BENCH_SCORE);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaTimingHistogram', {
-    run: () => {
-      sceneApi.beatorajaTimingHistogram(BENCH_TIMINGS.slice(0, 50));
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaPlayJudgeGraph', {
-    run: () => {
-      sceneApi.resolveBeatorajaPlayJudgeGraph(1, { breakdown: BENCH_BREAKDOWN, score: BENCH_SCORE, recentTimings: [] });
-    },
-  });
-  define('beatoraja-skin.scene.createBeatorajaJudgeStateGraph', {
-    run: () => {
-      sceneApi.createBeatorajaJudgeStateGraph(BENCH_DISTRIBUTION);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaJudgeStateSlot', {
-    run: () => {
-      sceneApi.beatorajaJudgeStateSlot('BAD');
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaJudgeStateMove', {
-    run: () => {
-      sceneApi.resolveBeatorajaJudgeStateMove(BENCH_JUDGE_STATE_GRAPH, 'GREAT', 64_250);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaLaneJudgeRef', {
-    run: () => {
-      sceneApi.beatorajaLaneJudgeRef(513);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaLaneJudgeImage', {
-    run: () => {
-      sceneApi.beatorajaLaneJudgeImage(1, 120);
-    },
-  });
-  define('beatoraja-skin.scene.writeBeatorajaPlayOffset', {
-    run: () => {
-      sceneApi.writeBeatorajaPlayOffset(OFFSET_HIDDEN_COVER, BENCH_OFFSET_INPUT, BENCH_OFFSET);
+      const { files, play5, play5Header, defaultFiles } = fixtures();
+      skinApi.listBeatorajaSourcePaths(
+        files,
+        PLAY5_PATH,
+        play5.source as SkinRecord[],
+        play5Header.filepath,
+        defaultFiles,
+      );
     },
   });
 
-  // Decide
-  define('beatoraja-skin.scene.resolveBeatorajaDecideNumber', {
+  // Theme
+  define('beatoraja-skin.discoverBeatorajaTheme', {
     run: () => {
-      sceneApi.resolveBeatorajaDecideNumber(BEATORAJA_NUM.PLAYLEVEL, BENCH_DECIDE);
-      sceneApi.resolveBeatorajaDecideNumber(BEATORAJA_NUM.LOADING_PROGRESS, BENCH_DECIDE);
+      const { files } = fixtures();
+      quietly(() => skinApi.discoverBeatorajaTheme(files));
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaDecideOps', {
+  define('beatoraja-skin.pickBeatorajaPlaySkin', {
     run: () => {
-      sceneApi.resolveBeatorajaDecideOps(BENCH_DECIDE);
+      // No 7-key skin in the theme: falls back to the 5-key one.
+      skinApi.pickBeatorajaPlaySkin(fixtures().playSkins, '7');
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaDecideGraphValue', {
+  define('beatoraja-skin.loadBeatorajaPlaySkin', {
     run: () => {
-      sceneApi.resolveBeatorajaDecideGraphValue(102, BENCH_DECIDE);
-    },
-  });
-
-  // Result
-  define('beatoraja-skin.scene.beatorajaEarlyLateFromTimings', {
-    run: () => {
-      sceneApi.beatorajaEarlyLateFromTimings(BENCH_TIMINGS.slice(0, 200));
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaTimingStats', {
-    run: () => {
-      sceneApi.beatorajaTimingStats(BENCH_TIMINGS.slice(0, 200));
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaResultNumber', {
-    run: () => {
-      sceneApi.resolveBeatorajaResultNumber(BEATORAJA_NUM.STDDEV_TIMING, BENCH_RESULT);
-      sceneApi.resolveBeatorajaResultNumber(BEATORAJA_NUM.LATE_GREAT, BENCH_RESULT);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaResultOps', {
-    run: () => {
-      sceneApi.resolveBeatorajaResultOps(BENCH_RESULT);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaResultText', {
-    run: () => {
-      sceneApi.resolveBeatorajaResultText(BEATORAJA_TEXT.FULLTITLE, BENCH_RESULT);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaResultGaugeState', {
-    run: () => {
-      sceneApi.resolveBeatorajaResultGaugeState(BENCH_RESULT);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaResultGaugePercent', {
-    run: () => {
-      sceneApi.resolveBeatorajaResultGaugePercent(BENCH_RESULT);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaResultGraphValue', {
-    run: () => {
-      sceneApi.resolveBeatorajaResultGraphValue(7, BENCH_RESULT);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaResultPolyline', {
-    run: () => {
-      sceneApi.resolveBeatorajaResultPolyline(107, BENCH_RESULT);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaResultJudgeGraph', {
-    run: () => {
-      sceneApi.resolveBeatorajaResultJudgeGraph(2, BENCH_RESULT);
+      const { files, play5Entry, defaultOptions } = fixtures();
+      skinApi.loadBeatorajaPlaySkin(files, play5Entry, { option: defaultOptions });
     },
   });
 
-  // Select
-  define('beatoraja-skin.scene.beatorajaKeysFilterIndex', {
+  // Runtime ids
+  define('beatoraja-skin.bombTimerId', {
     run: () => {
-      sceneApi.beatorajaKeysFilterIndex('KEYS_48');
+      skinApi.bombTimerId(1, 3);
     },
   });
-  define('beatoraja-skin.scene.beatorajaSortIndex', {
+  define('beatoraja-skin.lnHoldTimerId', {
     run: () => {
-      sceneApi.beatorajaSortIndex('NOTES');
+      skinApi.lnHoldTimerId(2, 7);
     },
   });
-  define('beatoraja-skin.scene.beatorajaKeyModeIndex', {
+  define('beatoraja-skin.keyOnTimerId', {
     run: () => {
-      sceneApi.beatorajaKeyModeIndex('9');
+      skinApi.keyOnTimerId(1, 0);
     },
   });
-  define('beatoraja-skin.scene.beatorajaLnModeIndex', {
+  define('beatoraja-skin.keyOffTimerId', {
     run: () => {
-      sceneApi.beatorajaLnModeIndex(3);
+      skinApi.keyOffTimerId(3, 9);
     },
   });
-  define('beatoraja-skin.scene.beatorajaDifficultyOps', {
+  define('beatoraja-skin.judgeTimerId', {
     run: () => {
-      sceneApi.beatorajaDifficultyOps(4);
+      skinApi.judgeTimerId(2);
     },
   });
-  define('beatoraja-skin.scene.beatorajaJudgeRankOp', {
+  define('beatoraja-skin.comboTimerId', {
     run: () => {
-      sceneApi.beatorajaJudgeRankOp(1);
+      skinApi.comboTimerId(1);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaSelectBarOps', {
+  define('beatoraja-skin.endOfNoteTimerId', {
     run: () => {
-      sceneApi.resolveBeatorajaSelectBarOps(BENCH_SELECT);
+      skinApi.endOfNoteTimerId(2);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaSelectText', {
+  define('beatoraja-skin.computeRankOp', {
     run: () => {
-      sceneApi.resolveBeatorajaSelectText(BEATORAJA_TEXT.FULLARTIST, BENCH_SELECT);
-      sceneApi.resolveBeatorajaSelectText(BEATORAJA_TEXT.COURSE1_TITLE + 1, BENCH_COURSE_SELECT);
+      skinApi.computeRankOp(1650, 2400, 1);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaSelectNumber', {
+  define('beatoraja-skin.computeGenericRankOp', {
     run: () => {
-      sceneApi.resolveBeatorajaSelectNumber(BEATORAJA_NUM.DENSITY_PEAK, BENCH_SELECT);
+      skinApi.computeGenericRankOp(1650, 2400);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaSelectRefValue', {
+  define('beatoraja-skin.computeResultRankOp', {
     run: () => {
-      sceneApi.resolveBeatorajaSelectRefValue(308, BENCH_SELECT);
+      skinApi.computeResultRankOp(1650, 2400);
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaSelectSliderValue', {
+  define('beatoraja-skin.computeJudgeExistOps', {
     run: () => {
-      sceneApi.resolveBeatorajaSelectSliderValue(18);
+      skinApi.computeJudgeExistOps({ perfect: 900, great: 200, good: 50, bad: 0, poor: 30 });
     },
   });
-
-  // Course and clear lamp
-  define('beatoraja-skin.scene.resolveBeatorajaCourseConstraintOps', {
+  define('beatoraja-skin.judgeOpForKind', {
     run: () => {
-      sceneApi.resolveBeatorajaCourseConstraintOps(BENCH_COURSE.definition.constraints);
+      skinApi.judgeOpForKind(1, 'great');
     },
   });
-  define('beatoraja-skin.scene.resolveBeatorajaCourseBarOps', {
+  define('beatoraja-skin.isPerfectJudge', {
     run: () => {
-      sceneApi.resolveBeatorajaCourseBarOps(BENCH_COURSE, 106);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaCourseStageOps', {
-    run: () => {
-      sceneApi.resolveBeatorajaCourseStageOps(BENCH_COURSE_VIEW);
-    },
-  });
-  define('beatoraja-skin.scene.withBeatorajaCourseStageOps', {
-    run: () => {
-      sceneApi.withBeatorajaCourseStageOps(new Set([900, 901]), BENCH_COURSE_VIEW);
-    },
-  });
-  define('beatoraja-skin.scene.resolveBeatorajaCourseText', {
-    run: () => {
-      sceneApi.resolveBeatorajaCourseText(152, BENCH_COURSE_VIEW);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaMissingCourseStages', {
-    run: () => {
-      sceneApi.beatorajaMissingCourseStages(BENCH_COURSE);
-    },
-  });
-  define('beatoraja-skin.scene.beatorajaClearLampOp', {
-    run: () => {
-      sceneApi.beatorajaClearLampOp('EX_HARD');
-    },
-  });
-
-  // System sounds
-  define('beatoraja-skin.scene.discoverBeatorajaSystemSoundPaths', {
-    run: () => {
-      sceneApi.discoverBeatorajaSystemSoundPaths(BENCH_FILES);
-    },
-  });
-  define('beatoraja-skin.scene.discoverBeatorajaSelectBgmPath', {
-    run: () => {
-      sceneApi.discoverBeatorajaSelectBgmPath(BENCH_FILES);
-    },
-  });
-  define('beatoraja-skin.scene.pickBeatorajaThemeBgmPaths', {
-    run: () => {
-      sceneApi.pickBeatorajaThemeBgmPaths(BENCH_FILES.keys());
+      skinApi.isPerfectJudge('PERFECT');
     },
   });
 }
