@@ -1,7 +1,7 @@
 import { createPlayerUiSignalBus, type PlayerUiCommand } from '@be-music/player/core/ui-signal-bus';
 import type { PlayerGaugeSummary, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { PlayerSummary } from '@be-music/player/core/engine';
-import { recordPlayFromResult } from '@be-music/player/records';
+import { courseStageRecordPlayFromResult, recordPlayFromResult } from '@be-music/player/records';
 import { createEmptyScore } from '@be-music/player/ruleset';
 import { createPlayerStateSignals } from '@be-music/player/state-signals';
 import { createHiSpeedState, createPlayState, type PlayState } from '@be-music/scene-model';
@@ -22,7 +22,7 @@ function createPlay(options: {
   total: number;
   autoPlay?: boolean;
   courseCarryIn?: { combo: number; maxCombo: number };
-  judgeRuleset?: 'lr2' | 'beatoraja';
+  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
 }) {
   const judgeRuleset = options.judgeRuleset ?? 'lr2';
   const gauge = createPlaceholderGaugeState('GROOVE');
@@ -76,6 +76,7 @@ function createPlay(options: {
     playClock: () => clock.ms,
     currentSeconds: () => clock.seconds,
     resolveSongDurationSeconds: () => CHART_SECONDS,
+    // As `PlaySession` decides it: only LR2 shows the empty POORs inside its POOR counter.
     resolveEmptyPoorCountsInPoorDisplay: () => judgeRuleset === 'lr2',
     resolveJudgeRuleset: () => judgeRuleset,
     resolveKeyOnTimerId: () => undefined,
@@ -238,11 +239,12 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     expect(result.song).toBe(SONG);
   });
 
-  test('under LR2 an empty POOR is in the POOR count, and in the BP once', () => {
+  test('under LR2 an empty POOR is in the POOR count, the POOR judgments alone beside it, and in the BP once', () => {
     const play = createPlay({ total: 4 });
     play.step(1, { counts: { perfect: 1, bad: 1, poor: 1, emptyPoor: 2 } });
     const result = getResultData(play.ctx)!;
-    expect(result.score).toMatchObject({ bad: 1, poor: 3, emptyPoor: 0 });
+    expect(result.score).toMatchObject({ bad: 1, poor: 3, emptyPoor: 2 });
+    expect(result.judgedPoor).toBe(1);
     expect(recordPlayFromResult(result).missCount).toBe(4);
   });
 
@@ -251,6 +253,7 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     play.step(1, { counts: { perfect: 1, bad: 1, poor: 1, emptyPoor: 2 } });
     const result = getResultData(play.ctx)!;
     expect(result.score).toMatchObject({ bad: 1, poor: 1, emptyPoor: 2 });
+    expect(result.judgedPoor).toBeUndefined();
     expect(recordPlayFromResult(result).missCount).toBe(4);
   });
 
@@ -285,5 +288,25 @@ describe('the play state of a built-in / LR2 play, fed from the engine', () => {
     play.step(4, {}, [{ judge: 'PERFECT', combo: 1 }]);
     applyFinalSummary(play.ctx, summary({ perfect: 3, poor: 1, exScore: 6 }, 30));
     expect(play.state().maxCombo).toBe(2);
+  });
+});
+
+describe('the BP a play records from its result', () => {
+  // 3 PERFECT, 1 BAD and 2 POOR over the 6 notes, and 3 empty POORs: BAD + POOR + empty POOR is 6 under every ruleset.
+  const counts = { total: 6, perfect: 3, bad: 1, poor: 2, emptyPoor: 3, exScore: 6 };
+
+  test.each([
+    { judgeRuleset: 'lr2', displayedPoor: 5 },
+    { judgeRuleset: 'beatoraja', displayedPoor: 2 },
+    { judgeRuleset: 'iidx', displayedPoor: 2 },
+  ] as const)('counts each empty POOR once under $judgeRuleset', ({ judgeRuleset, displayedPoor }) => {
+    const play = createPlay({ total: 6, judgeRuleset });
+    applyFinalSummary(play.ctx, summary(counts, 30));
+    const result = getResultData(play.ctx)!;
+    // The result shows the POOR as the ruleset does: LR2 folds the empty POORs in.
+    expect(result.score.poor).toBe(displayedPoor);
+    expect(result.score.emptyPoor).toBe(3);
+    expect(recordPlayFromResult(result).missCount).toBe(6);
+    expect(courseStageRecordPlayFromResult(result).missCount).toBe(6);
   });
 });
