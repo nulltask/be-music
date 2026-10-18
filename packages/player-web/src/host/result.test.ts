@@ -366,11 +366,10 @@ describe('createResultScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it("leaves on the first Enter once the skin's input has passed, after its fade-out, and takes no click", async () => {
+  it("leaves on the first Enter once the skin's input has passed, after its fade-out", async () => {
     const { scene, on, clock, press } = create();
     const fake = createDrawingHost();
     await scene.enter(fake.host);
-    expect(fake.pointer.size).toBe(0);
     press('Enter', 1299);
     press('Escape', 1299);
     clock.now = 1299;
@@ -385,6 +384,34 @@ describe('createResultScene with a beatoraja kit', () => {
     fake.tick();
     expect(on.continue).toHaveBeenCalledTimes(1);
     scene.dispose();
+  });
+
+  it("leaves on a tap once the skin's input has passed, as on Enter, and takes no mouse click", async () => {
+    const { scene, on, clock } = create();
+    const fake = createDrawingHost();
+    const press = (pointerType: string) => {
+      for (const listener of Array.from(fake.pointer))
+        (listener as (event: { pointerType: string }) => void)({ pointerType });
+    };
+    await scene.enter(fake.host);
+    clock.now = 1299;
+    fake.tick();
+    press('touch');
+    clock.now = 1300;
+    fake.tick();
+    press('mouse');
+    clock.now = 1600;
+    fake.tick();
+    expect(on.continue).not.toHaveBeenCalled();
+    press('touch');
+    clock.now = 1799;
+    fake.tick();
+    expect(on.continue).not.toHaveBeenCalled();
+    clock.now = 1800;
+    fake.tick();
+    expect(on.continue).toHaveBeenCalledTimes(1);
+    scene.dispose();
+    expect(fake.pointer.size).toBe(0);
   });
 
   it('retries on R once input is open, on a single play only', async () => {

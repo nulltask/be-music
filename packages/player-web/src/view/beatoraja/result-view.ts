@@ -6,7 +6,8 @@
  * course. The chart's note kinds, BPM graph and `#TOTAL` come from the chart as the play played it
  * (`ResultFrame.playChart`), the chart's own images from its files; beatoraja's scene timers are read off each frame.
  * The session times the screen from the skin's `input` and `fadeout` ({@link resolveBeatorajaResultTiming}). As on
- * beatoraja, the screen takes keys only.
+ * beatoraja, the screen takes keys and no mouse clicks; a tap (a touch or a pen) presses on as Enter does, so a device
+ * with no keyboard can leave it ({@link resolveBeatorajaResultPointerIntent}).
  */
 
 import { buildBaseOpSet, type BeatorajaSkin } from '@be-music/beatoraja-skin';
@@ -34,7 +35,7 @@ import { logger } from '../../logger.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
-import type { ResultFrame, ResultView, ResultViewTiming } from '../types.ts';
+import type { IntentSink, ResultFrame, ResultIntent, ResultView, ResultViewTiming } from '../types.ts';
 import {
   BeatorajaSkinStage,
   BeatorajaViewChartImages,
@@ -62,6 +63,15 @@ export function resolveBeatorajaResultTiming(skin: Pick<BeatorajaSkin, 'input' |
     escapeWaitsForInput: true,
     skipsResultSteps: true,
   };
+}
+
+/**
+ * What a pointer pressed on a beatoraja result screen asks for: a tap (a touch or a pen) presses on, as Enter does (the
+ * session waits for input to open), so a phone or a tablet can leave the screen; a mouse click asks for nothing, as
+ * beatoraja's `MusicResult.input` reads keys only.
+ */
+export function resolveBeatorajaResultPointerIntent(pointerType: string): ResultIntent | undefined {
+  return pointerType === 'touch' || pointerType === 'pen' ? { type: 'continue' } : undefined;
 }
 
 /** What the result skin reads of one result, worked out once per result ({@link readBeatorajaResult}). */
@@ -98,6 +108,7 @@ export class BeatorajaResultView implements ResultView {
   private baseOps: ReadonlySet<number> | undefined;
   private activeOps: ReadonlySet<number> | undefined;
   private host: PixiSceneHost | undefined;
+  private emit: IntentSink<ResultIntent> | undefined;
   private disposed = false;
 
   public constructor(kit: BeatorajaKit, options: BeatorajaResultViewOptions = {}) {
@@ -150,17 +161,22 @@ export class BeatorajaResultView implements ResultView {
 
   /**
    * Gets ready to draw on `host`, once the chart's images have loaded (on the first attach), so the first frame shows
-   * them. A beatoraja result screen takes no clicks.
+   * them, then listens for taps on the canvas. A beatoraja result screen takes no mouse clicks.
    */
-  public async attach(host: PixiSceneHost): Promise<void> {
+  public async attach(host: PixiSceneHost, emit: IntentSink<ResultIntent>): Promise<void> {
     if (this.disposed) return;
     await this.chartImages.load();
     if (this.disposed) return;
+    this.detach();
     this.host = host;
+    this.emit = emit;
+    host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
   }
 
   public detach(): void {
+    this.host?.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
     this.host = undefined;
+    this.emit = undefined;
   }
 
   public dispose(): void {
@@ -195,6 +211,12 @@ export class BeatorajaResultView implements ResultView {
       audioStop: skinSounds === undefined ? undefined : (path) => skinSounds.stop(path),
     });
   }
+
+  /** A tap presses on (the session waits for input to open); a mouse click does nothing. */
+  private readonly handlePointerDown = (event: PointerEvent): void => {
+    const intent = resolveBeatorajaResultPointerIntent(event.pointerType);
+    if (intent !== undefined) this.emit?.(intent);
+  };
 
   /** Reads the result being drawn through `resolve`; `undefined` before the first frame. */
   private read<T>(resolve: (input: BeatorajaResultInput) => T): T | undefined {

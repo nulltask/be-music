@@ -167,6 +167,24 @@ describe('ResultSession', () => {
     expect(on.continue).toHaveBeenCalledTimes(1);
   });
 
+  it("takes a beatoraja skin's tap as Enter: held back until input opens, then it leaves after the fade", () => {
+    const { session, on } = createSession({
+      timing: { inputDelayMs: 500, fadeOutMs: 500, escapeWaitsForInput: true, skipsResultSteps: true },
+    });
+    session.enter(0);
+    session.frame(499);
+    session.dispatch({ type: 'continue' });
+    expect(session.frame(499)).not.toHaveProperty('leaving');
+    session.frame(520);
+    session.dispatch({ type: 'continue' });
+    expect(session.frame(520)).toMatchObject({ leaving: { to: 'continue', atMs: 520 } });
+    session.dispatch({ type: 'continue' });
+    session.frame(1019);
+    expect(on.continue).not.toHaveBeenCalled();
+    session.frame(1020);
+    expect(on.continue).toHaveBeenCalledTimes(1);
+  });
+
   it('carries the chart as the play played it, for the chart graphs', () => {
     const playChart = createEmptyJson('bms');
     const { session } = createSession({ playChart });
