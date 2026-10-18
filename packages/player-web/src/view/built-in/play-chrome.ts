@@ -24,7 +24,8 @@ import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { PlayfieldRuntime } from '../shared/playfield/context.ts';
 import type { BeMusicGameplayLayout, BeMusicStage } from '../../skin/be-music/types.ts';
 import type { PlayfieldBgaTarget, PlayfieldStage } from '../types.ts';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH } from '../../scene/gameplay-constants.ts';
+import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
+import { BGA } from '../shared/play-constants.ts';
 
 /** Default-family BGA rect: the fixed {@link BGA} square, drawn opaque and untinted. */
 const DEFAULT_BGA_TARGET: PlayfieldBgaTarget = createDefaultBgaTarget(BGA);

@@ -434,8 +434,8 @@ export class PlaySessionState {
    */
   readonly scrollHiSpeed: HiSpeedTransition = new HiSpeedTransition(DEFAULT_HISPEED);
   /**
-   * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering from
-   * `gameplay-constants.ts`. The core scene drives the key-on bank (100–119) for the lane beams; theme families stamp
+   * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering
+   * (`LR2_TIMER`). The play session drives the key-on bank (100–119) for the lane beams; theme families stamp
    * their own timers (bombs, FC, judge, scene stages, …) into the same map. Removed when the timer "stops" (e.g. key
    * release for key-on).
    */

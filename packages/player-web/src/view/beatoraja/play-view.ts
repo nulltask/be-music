@@ -42,7 +42,7 @@ import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { BgaCue } from '../../chart/bga-timeline.ts';
-import { DESIGN_HEIGHT, DESIGN_WIDTH, KEY_ON_FADE_OUT_MS } from '../../scene/gameplay-constants.ts';
+import { DESIGN_HEIGHT, DESIGN_WIDTH, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import type { HiSpeedTransition } from '../../scene/hi-speed.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { playEndingFadeAlpha } from '../../scene/play-ending.ts';

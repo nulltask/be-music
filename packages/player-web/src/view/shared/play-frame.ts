@@ -16,7 +16,7 @@ import {
   setDesignPixelRatio,
   setDesignTextResolution,
 } from '../../stage/viewport.ts';
-import { BG } from '../../scene/gameplay-constants.ts';
+import { BG } from './play-constants.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { PerfTracker } from './perf.ts';
 import { renderBga, type BgaRendererContext } from './bga-renderer.ts';

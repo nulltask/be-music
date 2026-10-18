@@ -18,7 +18,7 @@ import {
   resolveNoteDrawWindow,
   resolveReversedDrawClock,
 } from '../../../chart/note-draw-window.ts';
-import { PIXELS_PER_BEAT } from '../../../scene/gameplay-constants.ts';
+import { PIXELS_PER_BEAT } from '../../../stage/design.ts';
 import { resolveLr2LaneIndex } from '../../../scene/gameplay-lanes.ts';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { renderPhantomNote } from '../../../skins/phantom/playfield.ts';
