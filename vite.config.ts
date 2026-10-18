@@ -78,31 +78,72 @@ const clockGlobals = ['Date', 'performance', 'setTimeout', 'setInterval', 'setIm
 );
 
 /**
- * The web runtime's scene sessions and family views (docs/player-web.md, "Scene sessions and family views"; ADR 0001).
- * A session holds a screen's behaviour and is tested in Node with a fake view, so it uses Pixi only for types: the
- * view owns everything drawn. A view only draws frames and returns intents, so it reaches neither the engine nor its
- * web runtimes, and plays no sound of its own.
+ * The web runtime's layers (docs/player-web.md, "Layering"; ADR 0001). From the top: the host API (`host/` and the
+ * package barrel), the scene sessions (`session/`) and the family views (`view/`). Every other directory is a lower
+ * layer: the audio and input runtimes, chart and media preparation, the collection, the Pixi stage helpers, the skin
+ * loaders, the built-in skins and the recorder. Every file starts out as a lower layer, so a new directory is one too.
+ *
+ * - A lower layer knows no scene: it imports no host, session or view module, not even a type.
+ * - A session holds a screen's behaviour and is tested in Node with a fake view, so it uses Pixi only for types: the
+ *   view owns everything drawn. It reaches its view and the host only for types.
+ * - A view only draws frames and returns intents, so it reaches neither the engine nor its web runtimes, and its session
+ *   and the host only for types.
+ * - Only a session and the engine driver run the engine; every other file imports its types only.
+ * - Only the audio layer (`runtime/`) creates an audio context; the rest of the runtime and the web demo play through
+ *   the audio service.
+ *
+ * Oxlint does not merge the options of two overrides that set the same rule: the last one wins. So each file group
+ * below gets one complete `no-restricted-imports` object, and a group comes after the wider one it narrows.
  */
+const playerWebSources = ['packages/player-web/src/**/*.ts'];
+const engineDriverSources = ['packages/player-web/src/runtime/engine-driver.ts'];
+const webAudioLayerSources = ['packages/player-web/src/runtime/**/*.ts'];
 const sceneSessionSources = ['packages/player-web/src/session/**/*.ts'];
 const familyViewSources = ['packages/player-web/src/view/**/*.ts'];
+const webHostSources = ['packages/player-web/src/host/**/*.ts', 'packages/player-web/src/index.ts'];
+const webDemoSources = ['packages/player-web-demo/src/**/*.ts'];
+/** Import specifiers that reach the named directories of `player-web/src`. */
+const webLayerGroup = (...dirs: string[]): string[] => dirs.flatMap((dir) => [`**/${dir}`, `**/${dir}/**`]);
+const lowerLayerMessage =
+  'A lower layer of the web runtime knows no scene: it imports no host, session or view module.';
+const lowerLayerPatterns = [{ group: webLayerGroup('host', 'session', 'view'), message: lowerLayerMessage }];
+/** `@be-music/player` is the engine too: its root re-exports `core/engine`. */
+const engineModules = ['@be-music/player', '@be-music/player/core/engine'];
+const engineMessage = 'Only a scene session (and runtime/engine-driver.ts) runs the engine; import its types only.';
+const engineTypeImports = {
+  paths: engineModules.map((name) => ({ name, allowTypeImports: true, message: engineMessage })),
+};
+const lowerLayerImports = { ...engineTypeImports, patterns: lowerLayerPatterns };
+const engineDriverImports = { patterns: lowerLayerPatterns };
 const sceneSessionPixiMessage = 'A scene session uses Pixi only for types; the family view draws.';
 const sceneSessionImports = {
   paths: [{ name: 'pixi.js', allowTypeImports: true, message: sceneSessionPixiMessage }],
-  patterns: [{ group: ['pixi.js/*', '@pixi/*'], allowTypeImports: true, message: sceneSessionPixiMessage }],
+  patterns: [
+    { group: ['pixi.js/*', '@pixi/*'], allowTypeImports: true, message: sceneSessionPixiMessage },
+    {
+      group: webLayerGroup('view', 'host'),
+      allowTypeImports: true,
+      message: 'A scene session reaches its family view and the host only for types.',
+    },
+  ],
 };
 const familyViewEngineMessage = 'A family view draws frames and returns intents; the scene session drives the engine.';
 const familyViewImports = {
-  paths: [{ name: '@be-music/player/core/engine', message: familyViewEngineMessage }],
-  patterns: [{ group: ['**/runtime/engine-driver*', '**/runtime/web-*-runtime*'], message: familyViewEngineMessage }],
+  paths: engineModules.map((name) => ({ name, message: familyViewEngineMessage })),
+  patterns: [
+    { group: ['**/runtime/engine-driver*', '**/runtime/web-*-runtime*'], message: familyViewEngineMessage },
+    {
+      group: webLayerGroup('session', 'host'),
+      allowTypeImports: true,
+      message: 'A family view reaches its scene session and the host only for types.',
+    },
+  ],
 };
-const familyViewAudioMessage =
-  'A family view plays no sound itself; the scene session plays it through the audio service.';
-const familyViewGlobals = ['AudioContext', 'OfflineAudioContext'].map((name) => ({
-  name,
-  message: familyViewAudioMessage,
-}));
-const familyViewProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
-  ['AudioContext', 'OfflineAudioContext'].map((property) => ({ object, property, message: familyViewAudioMessage })),
+const audioContextNames = ['AudioContext', 'OfflineAudioContext', 'webkitAudioContext', 'webkitOfflineAudioContext'];
+const webAudioMessage = 'Only the audio layer (runtime/) creates an audio context; play through the audio service.';
+const webAudioGlobals = audioContextNames.map((name) => ({ name, message: webAudioMessage }));
+const webAudioProperties = ['globalThis', 'window', 'self'].flatMap((object) =>
+  audioContextNames.map((property) => ({ object, property, message: webAudioMessage })),
 );
 
 const workspaceProjects = workspacePackages.map((name) => ({
@@ -344,6 +385,28 @@ export default defineConfig({
         },
       },
       {
+        // Every web runtime file starts out as a lower layer; the groups below narrow it.
+        files: playerWebSources,
+        rules: {
+          'no-restricted-imports': ['error', lowerLayerImports],
+          'no-restricted-globals': ['error', ...webAudioGlobals],
+          'no-restricted-properties': ['error', ...webAudioProperties],
+        },
+      },
+      {
+        files: engineDriverSources,
+        rules: {
+          'no-restricted-imports': ['error', engineDriverImports],
+        },
+      },
+      {
+        files: webAudioLayerSources,
+        rules: {
+          'no-restricted-globals': 'off',
+          'no-restricted-properties': 'off',
+        },
+      },
+      {
         files: sceneSessionSources,
         rules: {
           'no-restricted-imports': ['error', sceneSessionImports],
@@ -353,8 +416,20 @@ export default defineConfig({
         files: familyViewSources,
         rules: {
           'no-restricted-imports': ['error', familyViewImports],
-          'no-restricted-globals': ['error', ...familyViewGlobals],
-          'no-restricted-properties': ['error', ...familyViewProperties],
+        },
+      },
+      {
+        files: webHostSources,
+        rules: {
+          'no-restricted-imports': ['error', engineTypeImports],
+        },
+      },
+      {
+        files: webDemoSources,
+        rules: {
+          'no-restricted-imports': ['error', engineTypeImports],
+          'no-restricted-globals': ['error', ...webAudioGlobals],
+          'no-restricted-properties': ['error', ...webAudioProperties],
         },
       },
       {
