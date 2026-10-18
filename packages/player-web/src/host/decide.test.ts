@@ -371,9 +371,10 @@ describe('resolveBeatorajaDecideTiming', () => {
     });
   });
 
-  it('waits for the player when the skin sets scene to 0', () => {
-    expect(resolveBeatorajaDecideTiming({ scene: 0 })).not.toHaveProperty('autoAdvanceMs');
-    expect(resolveBeatorajaDecideTiming({ scene: -1 }).autoAdvanceMs).toBe(3000);
+  it('moves on at once when the skin sets scene to 0 or less, as upstream fades out once nowtime > scene', () => {
+    expect(resolveBeatorajaDecideTiming({ scene: 0 }).autoAdvanceMs).toBe(0);
+    expect(resolveBeatorajaDecideTiming({ scene: -1 }).autoAdvanceMs).toBe(0);
+    expect(resolveBeatorajaDecideTiming({ scene: Number.NaN }).autoAdvanceMs).toBe(3000);
   });
 });
 
@@ -438,8 +439,27 @@ describe('createDecideScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
+  it('leaves for the play at once on a scene of 0, before input opens, and Escape cannot call it back', async () => {
+    const { scene, on, clock, press } = create({ scene: 0, input: 300, fadeout: 500 });
+    const fake = createFakeHost();
+    await scene.enter(fake.host);
+    fake.tick();
+    // The fade-out runs from the entry; Escape, once input would be open, no longer backs out.
+    clock.now = 1300;
+    press('Escape', 1300);
+    fake.tick();
+    clock.now = 1499;
+    fake.tick();
+    expect(on.continue).not.toHaveBeenCalled();
+    clock.now = 1500;
+    fake.tick();
+    expect(on.continue).toHaveBeenCalledTimes(1);
+    expect(on.cancel).not.toHaveBeenCalled();
+    scene.dispose();
+  });
+
   it("takes neither Enter nor Escape before the skin's input, then backs out on Escape", async () => {
-    const { scene, on, clock, press } = create({ scene: 0, input: 300, fadeout: 0 });
+    const { scene, on, clock, press } = create({ scene: 60_000, input: 300, fadeout: 0 });
     const fake = createFakeHost();
     await scene.enter(fake.host);
     press('Escape', 1299);
@@ -456,7 +476,7 @@ describe('createDecideScene with a beatoraja kit', () => {
   });
 
   it('takes no click, as beatoraja does not', async () => {
-    const { scene, on, clock } = create({ scene: 0, input: 0, fadeout: 0 });
+    const { scene, on, clock } = create({ scene: 60_000, input: 0, fadeout: 0 });
     const fake = createFakeHost();
     await scene.enter(fake.host);
     clock.now = 2000;
