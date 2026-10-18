@@ -29,6 +29,7 @@ import type { ChartPlayVariant } from '@be-music/chart';
 import type { PlayerGaugeSummary, PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/signals';
 import type { ScoreSummary } from '@be-music/player/ruleset';
 import type { CourseView, HiSpeedTransition, LibraryChart, PlayState } from '@be-music/scene-model';
+import type { BeMusicJudgeWindows } from '@be-music/skin-sdk';
 import { BEATORAJA_HI_SPEED_SCALE } from '@be-music/scene-model';
 import { Container, Text, type Texture } from 'pixi.js';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
@@ -137,6 +138,11 @@ export interface BeatorajaPlayRuntime {
   readonly exitFadeStartedAt: number | undefined;
   readonly exitFadeOutMs: number;
   readonly playMoments: { readonly failedAtMs?: number };
+  /**
+   * The windows the engine judges the play by (its judge ruleset's, after the debug override), once it has started;
+   * the timing visualizer's bands show the key lanes' ones.
+   */
+  readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly disposed: boolean;
   playClock(): number;
   resolveSongDurationSeconds(): number;
@@ -324,7 +330,7 @@ export class BeatorajaPlayView implements PlayView {
             ? undefined
             : { buckets: analysis.buckets, maxCount: analysis.maxCount, totalMs: analysis.totalMs },
         resolveTimingSamples: () => bridge.resolveTimingSamples(),
-        resolveTimingJudgeWindowsMs: () => bridge.resolveJudgeWindowsMs(),
+        resolveTimingJudgeWindows: () => bridge.resolveTimingJudgeWindows(),
         // The playhead on `bpmgraph` / `notes-graph`, from the engine's frame; hidden before its first.
         resolveCurrentTimeMs: () => {
           const seconds = this.play.engineFrame?.currentSeconds;
@@ -388,6 +394,7 @@ export class BeatorajaPlayView implements PlayView {
       hostNowMs: frame.clock.nowMs,
       state: frame.state,
       ...withEngine(this.engineInput()),
+      ...(play.judgeWindows !== undefined ? { judgeWindows: play.judgeWindows } : {}),
       events: frame.events,
     });
     // The notes stand at the chart's start from READY until the engine's first frame, as the engine's lead-in held them.
