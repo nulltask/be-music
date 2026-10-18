@@ -4,9 +4,9 @@ import {
   createInputTokenToChannelsMap,
   createLaneBindings,
   resolveLaneDisplayMode,
-} from '@be-music/player/core/lane-layout';
+} from '@be-music/player/lanes';
 export { appendFreeZoneInputChannels, createInputTokenToChannelsMap, createLaneBindings, resolveLaneDisplayMode };
-export type { LaneBinding, LaneModeOptions } from '@be-music/player/core/lane-layout';
+export type { LaneBinding, LaneModeOptions } from '@be-music/player/lanes';
 
 interface KittyKeyboardEvent {
   keyCode: number;

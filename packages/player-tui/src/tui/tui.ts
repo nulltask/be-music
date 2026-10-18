@@ -3,14 +3,15 @@ import type { BeMusicPlayLevel } from '@be-music/json';
 import { clamp } from '@be-music/utils/core';
 import type { BgaKittyImage } from '../bga.ts';
 import type { PlayerSummary } from '@be-music/player';
-import { formatSeconds, resolveAltModifierLabel } from '@be-music/player/utils';
-import type { PlayerStateSignals } from '@be-music/player/state-signals';
 import {
+  DEFAULT_TUI_NOTE_HEIGHT,
+  formatSeconds,
+  resolveAltModifierLabel,
   ScrollDistanceMapper,
-  type ScrollTimelinePoint,
-  type SpeedTimelinePoint,
-} from '@be-music/player/core/scroll-distance';
-import { DEFAULT_TUI_NOTE_HEIGHT, type TuiNoteHeight } from '@be-music/player/core/ui-options';
+  type TuiNoteHeight,
+} from '@be-music/player/display';
+import type { PlayerStateSignals } from '@be-music/player/signals';
+import type { ScrollTimelinePoint, SpeedTimelinePoint } from '@be-music/chart';
 import { buildKittyGraphicsDeleteImageSequence, buildKittyGraphicsRenderSequence } from './kitty-graphics.ts';
 import { normalizeHighSpeed, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './high-speed.ts';
 import {

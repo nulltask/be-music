@@ -21,7 +21,7 @@ import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
-} from '@be-music/player/utils';
+} from '@be-music/player/display';
 import { beginSharedRawInputCapture } from '../raw-input-capture.ts';
 import {
   applyPersistedPlayerConfigToArgs,

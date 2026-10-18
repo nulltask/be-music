@@ -1,4 +1,4 @@
-import { DEFAULT_HIGH_SPEED, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from '@be-music/player/core/high-speed-control';
+import { DEFAULT_HIGH_SPEED, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from '@be-music/player/signals';
 import { clamp } from '@be-music/utils/core';
 
 const IIDX_MEASURE_BEATS = 4;

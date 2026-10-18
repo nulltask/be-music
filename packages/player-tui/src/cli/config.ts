@@ -7,7 +7,7 @@ import {
   MAX_HIGH_SPEED,
   MIN_HIGH_SPEED,
   resolveHighSpeedMultiplier,
-} from '@be-music/player/core/high-speed-control';
+} from '@be-music/player/signals';
 
 export { DEFAULT_HIGH_SPEED, HIGH_SPEED_STEP, MAX_HIGH_SPEED, MIN_HIGH_SPEED };
 

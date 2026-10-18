@@ -3,7 +3,7 @@ import { extname } from 'node:path';
 import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { resolveFirstExistingPath } from '@be-music/utils/path';
 import { decodeVideoFramesStream, decodeVideoFramesToSourceFramesInWorker } from './bga-video.ts';
-import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
+import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player/display';
 import { decodeImageBuffer } from './bga-image.ts';
 import {
   type FrameMode,

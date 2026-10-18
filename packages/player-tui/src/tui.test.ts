@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import { formatMeasureSignature, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './tui.ts';
 import { PlayerTui } from './tui.ts';
-import { createPlayerStateSignals } from '@be-music/player/state-signals';
+import { createPlayerStateSignals } from '@be-music/player/signals';
 import { estimateBgaAnsiDisplaySize, resolveLaneWidths } from './tui/layout.ts';
 
 const STDOUT_IS_TTY_DESCRIPTOR = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');

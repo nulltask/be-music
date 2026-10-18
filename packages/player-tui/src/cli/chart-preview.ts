@@ -1,4 +1,4 @@
-import { isPlayLaneSoundChannel, resolveChart } from '@be-music/chart';
+import { isPlayLaneSoundChannel, resolveChart, volWavToLinearGain } from '@be-music/chart';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { isAbortError, throwIfAborted } from '@be-music/utils/core';
@@ -8,7 +8,6 @@ import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { type RenderResult, renderJson } from '@be-music/audio-renderer';
 import { createNodeAudioSink } from '@be-music/player/audio-sink';
-import { resolveChartVolWavGain } from '@be-music/player/utils';
 
 interface PreviewPlaybackHandle {
   stop: () => void;
@@ -316,7 +315,7 @@ async function renderChartPreview(
   const chart = await parseChartFile(filePath, { signal });
   throwIfAborted(signal);
   const resolved = resolveBmsControlFlow(chart, { random: () => 0 });
-  const chartWavGain = resolveChartVolWavGain(resolved);
+  const chartWavGain = volWavToLinearGain(resolved.bms.volWav);
   const gains = resolvePreviewAudioGains(options);
   const previewPath = resolved.bms.preview;
   if (typeof previewPath === 'string' && previewPath.trim().length > 0) {

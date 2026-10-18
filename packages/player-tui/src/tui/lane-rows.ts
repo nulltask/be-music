@@ -1,6 +1,6 @@
 import { PLAY_MODE_LAYOUTS } from '@be-music/chart';
 import { clamp } from '@be-music/utils/core';
-import { DEFAULT_TUI_NOTE_HEIGHT, type TuiNoteHeight } from '@be-music/player/core/ui-options';
+import { DEFAULT_TUI_NOTE_HEIGHT, type TuiNoteHeight } from '@be-music/player/display';
 import { findStackableRowIndex } from './lane-stacking.ts';
 import {
   calculateLaneBlockVisibleWidth,

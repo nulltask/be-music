@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { formatJudgeComboDisplay, PlayerTui } from './tui.ts';
-import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
+import type { TuiNoteHeight } from '@be-music/player/display';
 
 function stripAnsi(value: string): string {
   // eslint-disable-next-line no-control-regex
