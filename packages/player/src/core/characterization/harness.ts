@@ -26,10 +26,13 @@ export type CharacterizationDriver = 'manual' | 'auto';
 
 /** One scripted input, `atMs` after the play started. Lanes are chart channels (`'11'`, `'16'`, ...). */
 export type ScriptStep =
-  /** Keys go down, as the web input runtime sends them: a `lane-input` and a `kitty-state` press. */
-  | { atMs: number; down: readonly string[] }
-  /** Keys come up: a `kitty-state` release. */
-  | { atMs: number; up: readonly string[] }
+  /**
+   * Keys go down, as the web input runtime sends them: a `lane-input` and a `kitty-state` press. `pressedAtMs` stamps
+   * both with the wall-clock time the key really went down, as the web runtime stamps an event's `timeStamp`.
+   */
+  | { atMs: number; down: readonly string[]; pressedAtMs?: number }
+  /** Keys come up: a `kitty-state` release, stamped with `pressedAtMs` (the instant they came up) when given. */
+  | { atMs: number; up: readonly string[]; pressedAtMs?: number }
   /**
    * A `lane-input` alone, as a terminal without key release events sends it. `pressedAtMs` stamps the command with the
    * wall-clock time the key really went down (the engine judges it there, within 50 ms).
@@ -58,6 +61,11 @@ export interface TestAudioSessionOptions {
   writeAheadMs?: number;
   /** Whether the session reports a clock (`getClockState`); without one the engine runs on the scheduler's clock. */
   clock?: boolean;
+  /**
+   * The audible clock moves in steps of this many ms, as Web Audio's `currentTime` moves a render quantum at a time,
+   * while the wall clock (`pressedAt`) moves smoothly. Without it the audible clock moves smoothly too.
+   */
+  quantumMs?: number;
 }
 
 export interface CharacterizationPlay {
@@ -158,7 +166,9 @@ function createTestAudioSession(
   let pausedMs = 0;
   const outputMs = (): number => {
     if (startedAtMs === undefined) return 0;
-    return Math.max(0, (pausedAtMs ?? time.now()) - startedAtMs - pausedMs);
+    const elapsedMs = Math.max(0, (pausedAtMs ?? time.now()) - startedAtMs - pausedMs);
+    const quantumMs = options.quantumMs;
+    return quantumMs === undefined || !(quantumMs > 0) ? elapsedMs : Math.floor(elapsedMs / quantumMs) * quantumMs;
   };
   const entry = (text: string): void => record(`${formatMs(time.now())} ${text}`);
   return {
@@ -213,10 +223,11 @@ function scriptCommands(
 ): PlayerInputCommand[] {
   // Each lane is its own key: its own commands, in the order the keys are listed.
   if ('command' in step) return [step.command];
+  const stamp = step.pressedAtMs === undefined ? {} : { pressedAt: wallClockAt(step.pressedAtMs) };
   if ('down' in step) {
     return laneTokens(context, step.down).flatMap((token): PlayerInputCommand[] => [
-      { kind: 'lane-input', tokens: [token] },
-      { kind: 'kitty-state', pressTokens: [token], repeatTokens: [], releaseTokens: [] },
+      { kind: 'lane-input', tokens: [token], ...stamp },
+      { kind: 'kitty-state', pressTokens: [token], repeatTokens: [], releaseTokens: [], ...stamp },
     ]);
   }
   if ('up' in step) {
@@ -225,14 +236,14 @@ function scriptCommands(
       pressTokens: [],
       repeatTokens: [],
       releaseTokens: [token],
+      ...stamp,
     }));
   }
-  const pressedAt = step.pressedAtMs === undefined ? undefined : wallClockAt(step.pressedAtMs);
-  return laneTokens(context, step.press).map((token): PlayerInputCommand =>
-    pressedAt === undefined
-      ? { kind: 'lane-input', tokens: [token] }
-      : { kind: 'lane-input', tokens: [token], pressedAt },
-  );
+  return laneTokens(context, step.press).map((token): PlayerInputCommand => ({
+    kind: 'lane-input',
+    tokens: [token],
+    ...stamp,
+  }));
 }
 
 /** Runs one play and collects what it showed. */
