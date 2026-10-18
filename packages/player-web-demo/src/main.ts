@@ -36,7 +36,6 @@ import {
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
-  playResultFromBeatoraja,
   resolveResultJingle,
   resolveResultJingles,
   SORT_CYCLE,
@@ -183,7 +182,6 @@ import {
 } from '@be-music/player/playlog';
 import {
   buildCourseResultData,
-  buildCourseResultSummary,
   courseRecordKey,
   joinCourseStageHistories,
   resolveResultPresentation,
@@ -2692,22 +2690,16 @@ class PlayerWebDemoApp {
     const histories = courseStageHistories(active);
     // A beatoraja theme shows the course result on its COURSE_RESULT skin (or its result skin).
     if (pickActiveFamilyForScene(this.familyDispatchState(), 'result') === 'beatoraja') {
-      // The course run read as one play: beatoraja's course result sums the stages and draws every stage's graph
-      // joined, each stage as wide as its chart is long.
-      const runResult = playResultFromBeatoraja(
-        {
-          summary: buildCourseResultSummary(result),
-          maxCombo: result.maxCombo,
-          history: {
-            ...joinCourseStageHistories(
-              histories,
-              run.stages.map((song) => createCourseSongRecord(song).length ?? 0),
-            ),
-            timingHistory: [],
-          },
-        },
-        { song: course.stages[0]!.song!, run: 'course', judgeRuleset: this.guiState.judgeRuleset, course: courseInfo },
+      // The course run read as one play, as on the other families: beatoraja's course result sums the stages and draws
+      // every stage's graph joined, each stage as wide as its chart is long.
+      const joined = joinCourseStageHistories(
+        histories,
+        run.stages.map((song) => createCourseSongRecord(song).length ?? 0),
       );
+      const runResult = buildCourseResultData(course, result, courseLog, joined, {
+        playSeconds: run.playSeconds,
+        stageHistories: histories,
+      });
       const mounted = await this.showBeatorajaResult(runResult, {
         run: 'course',
         course: { info: courseInfo, result: { log: courseLog, native: result } },

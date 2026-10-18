@@ -1,12 +1,11 @@
-import type { PlayerSummary } from '@be-music/player/core/engine';
-import { resolveCourseTrophy, type PlaylogCourseResult } from '@be-music/player/playlog';
+import { resolveCourseTrophy } from '@be-music/player/playlog';
 import type { BrowserCourseEntry } from '@be-music/player-web/collection';
 import type { BeMusicCourseRecord, BeMusicSongRecord } from '@be-music/player-web/skin';
 
 /*
- * How the demo shows a course run's results: when a stage's result is skipped, the records kept per course, and the
- * course result as a beatoraja result skin reads it. The run itself is `CourseRun` (`@be-music/player/course`); its
- * result payload, the stage graphs and how a result is presented are the play result model of `@be-music/scene-model`.
+ * How the demo shows a course run's results: when a stage's result is skipped, and the records kept per course. The
+ * run itself is `CourseRun` (`@be-music/player/course`); its result payload (on every family's result screen), the
+ * stage graphs and how a result is presented are the play result model of `@be-music/scene-model`.
  */
 
 export {
@@ -67,36 +66,4 @@ export function lookupCourseRecord(
     noteCount,
   });
   return trophy !== undefined ? { ...record, trophy } : record;
-}
-
-/**
- * The course result as a beatoraja result skin reads one run (`PlayerSummary`): the course's summed judgments, its
- * EX score (beatoraja's score) and the gauge the course ended on. beatoraja keeps the course score the same way
- * (`CourseResult` sums the stage scores).
- */
-export function buildCourseResultSummary(result: PlaylogCourseResult): PlayerSummary {
-  return {
-    total: result.noteCount,
-    perfect: result.judge.pgreat,
-    great: result.judge.great,
-    good: result.judge.good,
-    bad: result.judge.bad,
-    poor: result.judge.poor,
-    emptyPoor: result.judge.emptyPoor,
-    fast: result.fast,
-    slow: result.slow,
-    exScore: result.exScore,
-    score: result.exScore,
-    gauge: {
-      type: result.gauge.type,
-      current: result.gauge.final,
-      max: 100,
-      initial: 100,
-      clearThreshold: 0,
-      effectiveTotal: 0,
-      cleared: result.gauge.cleared,
-      survival: true,
-    },
-    course: { combo: 0, maxCombo: result.maxCombo },
-  };
 }
