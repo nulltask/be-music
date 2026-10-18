@@ -6,16 +6,16 @@
  * Private scene helpers (`perf`, `pixi-utils`, gameplay sub-modules) stay internal to the package — they
  * compose the scene classes' implementations and aren't part of the public contract.
  */
-export * from './host.ts';
+export * from './scene-host.ts';
 
 // Hi-speed range shared by every family's select and gameplay scenes (and hosts that remember the player's pick).
-export { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from './hi-speed.ts';
+export { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from '../scene/hi-speed.ts';
 
 // The course a scene shows (select bar under the cursor, running course stage, course result).
-export * from './course-info.ts';
+export * from '../scene/course-info.ts';
 
 // Default family — built-in chrome when neither LR2 nor beatoraja themes are loaded.
-export * from './default/index.ts';
+export * from '../scene/default/index.ts';
 
 // LR2 family — Lunatic Rave 2 skin-driven scenes.
 // The LR2 select skin's default search box (the select screen is `createSelectScene`'s, below).
@@ -36,17 +36,17 @@ export type {
 } from '@be-music/scene-model';
 
 // What a finished play hands its result screen (the play scene's `progress()` and `on.finish`).
-export type { GaugeHistorySample, PixiGameplayResultData, ScoreHistorySample } from './core/result-data.ts';
+export type { GaugeHistorySample, PixiGameplayResultData, ScoreHistorySample } from '../scene/core/result-data.ts';
 
 // beatoraja family — beatoraja Lua skin-driven scenes.
 export * from '../view/beatoraja/play/bga.ts';
 export * from '../view/beatoraja/play/markers.ts';
 export * from '../view/beatoraja/play/notes.ts';
-export * from './beatoraja/skin-view.ts';
+export * from '../scene/beatoraja/skin-view.ts';
 
 // Scene sessions and family views (ADR 0001): the kit a host hands each skin family, the frames and intents between a
 // session and its view, and the scene that pairs them.
-export type * from '../host/family-kit.ts';
+export type * from './family-kit.ts';
 export type * from '../view/types.ts';
 export {
   SessionScene,
@@ -57,9 +57,9 @@ export {
 } from '../session/session-scene.ts';
 
 // The host API: each screen as a scene, made of its session and the view of the kit's family.
-export { createDecideScene, type DecideScene, type DecideSceneKit, type DecideSceneOptions } from '../host/decide.ts';
+export { createDecideScene, type DecideScene, type DecideSceneKit, type DecideSceneOptions } from './decide.ts';
 export type { DecideSessionEvents } from '../session/decide/decide-session.ts';
-export { createResultScene, type ResultScene, type ResultSceneKit, type ResultSceneOptions } from '../host/result.ts';
+export { createResultScene, type ResultScene, type ResultSceneKit, type ResultSceneOptions } from './result.ts';
 export type { ResultSessionEvents } from '../session/result/result-session.ts';
 export {
   createPlayScene,
@@ -70,12 +70,12 @@ export {
   type PlaySceneOptions,
   type PlaySceneRecording,
   type PlaySceneSettings,
-} from '../host/play.ts';
+} from './play.ts';
 export {
   createSelectScene,
   type SelectScene,
   type SelectSceneEvents,
   type SelectSceneKit,
   type SelectSceneOptions,
-} from '../host/select.ts';
+} from './select.ts';
 export type { SelectCourseMaker, SelectSessionEvents, SelectStartEntry } from '../session/select/select-session.ts';

@@ -18,7 +18,7 @@ import {
   setDesignTextResolution,
   type ScaledViewport,
 } from '../../stage/viewport.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { PerfTracker } from '../../scene/perf.ts';
 import { SelectPointer, type SelectDesignSize, type SelectPointerContext } from '../shared/select-pointer.ts';
 import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';

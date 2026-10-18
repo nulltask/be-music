@@ -30,7 +30,7 @@ import type {
 import type { Container, Sprite, Texture } from 'pixi.js';
 import type { BrowserSongCollection } from '../collection/types.ts';
 import type { SceneFamily } from '../host/family-kit.ts';
-import type { PixiSceneHost } from '../scene/host.ts';
+import type { PixiSceneHost } from '../host/scene-host.ts';
 import type { PlayfieldRuntime } from './shared/playfield/context.ts';
 
 /** Where an intent goes: the session the view belongs to. */
