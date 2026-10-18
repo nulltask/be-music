@@ -44,9 +44,9 @@ import { logger } from '../../logger.ts';
 import type { BgaCue } from '../../chart/bga-timeline.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
-import { playEndingFadeAlpha } from '../../scene/play-ending.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { PlayPlaylogViewScale } from '../../session/play/play-session-theme.ts';
+import { playEndingFadeAlpha } from '../shared/play-frame.ts';
 import { uploadTextures } from '../shared/texture-upload.ts';
 import type {
   IntentSink,
