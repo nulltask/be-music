@@ -9,7 +9,7 @@
 import { normalizeSearchQuery } from '@be-music/scene-model';
 import { Text } from 'pixi.js';
 import type { BrowserBrowseEntry } from '../../../collection/types.ts';
-import type { BeatorajaPlaySkinView } from '../../../scene/beatoraja/skin-view.ts';
+import type { BeatorajaPlaySkinView } from '../skin-view.ts';
 
 /** What the search prompt reads on the select view: its fields of these names. */
 export interface BeatorajaSelectSearchContext {

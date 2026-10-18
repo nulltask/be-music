@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { SILENT_AUDIO } from '../../runtime/audio-analysis.ts';
-import { BeatorajaPlaySkinView } from '../../scene/beatoraja/skin-view.ts';
+import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { SELECT_POLICIES } from '../../session/select/select-policy.ts';
 import { SelectSession, type SelectAudio } from '../../session/select/select-session.ts';
