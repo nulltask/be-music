@@ -188,7 +188,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
 });
 
 describe('resolvePlaySceneOptions: a replay', () => {
-  test('plays the recorded setup: no lane transforms, the log’s auto scratch and gauge, and no judge of its own', () => {
+  test('plays the recorded setup: no lane transforms, the log’s auto scratch and gauge, no judge of its own', () => {
     const { settings } = resolvePlaySceneOptions(input({ replay: replayLog() }));
     expect(settings).toMatchObject({
       random1P: 'OFF',
@@ -250,7 +250,7 @@ describe('resolvePlaySceneOptions: a course', () => {
     expect(settings).toMatchObject({ random1P: 'RANDOM', random2P: 'MIRROR', dpFlip: true });
   });
 
-  test('a NONSTOP run is limited by its course too, and plays as the course’s one stage with its stitched map', () => {
+  test('a NONSTOP run is limited by its course too, and plays as its one stage with its stitched map', () => {
     const nonstopCourse = course('nonstop', ['grade_mirror']);
     const map = { stages: [] };
     const nonstop = { course: nonstopCourse, prepared: { stitched: { map } } } as unknown as NonstopPlay;

@@ -7,7 +7,7 @@ import { pickLr2PlaySkin, pickLr2PlaySkinVariant } from '@be-music/lr2-skin';
 import { resolveCourseView, type LibraryChart, type LibraryCourse, type SystemSoundSet } from '@be-music/scene-model';
 import type { CourseStagePlay } from '../course-flow.ts';
 import { pickActiveFamilyForScene, type FamilyDispatchState } from '../family-dispatch.ts';
-import type { BeatorajaThemeService } from '../services/themes/beatoraja.ts';
+import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../services/themes/built-in.ts';
 import type { Lr2ThemeService } from '../services/themes/lr2.ts';
 import type { DemoGuiState } from '../types.ts';
@@ -18,15 +18,22 @@ export interface FamilyKitsOptions {
     Lr2ThemeService,
     'playSkins' | 'selectSkin' | 'decideSkin' | 'resultSkin' | 'courseLr2Skin' | 'selectSoundSet'
   >;
-  /** The beatoraja theme: its entries loaded as kits, the play entry in use, and its select sounds. */
+  /** The beatoraja theme: its entries loaded as kits, and its select sounds. */
   readonly beatoraja: Pick<
     BeatorajaThemeService,
-    'beatorajaTheme' | 'activeBeatorajaPlay' | 'loadBeatorajaPlayKit' | 'loadBeatorajaDecideKit' | 'selectSoundSet'
+    'beatorajaTheme' | 'loadBeatorajaPlayKit' | 'loadBeatorajaDecideKit' | 'selectSoundSet'
   >;
   /** The be-music skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'beMusicSkin' | 'builtInKit'>;
   /** The Debug Menu's "Skin system" pick (`skinFamilyOverride`). */
   readonly guiState: Pick<DemoGuiState, 'skinFamilyOverride'>;
+}
+
+/** The kit a play is drawn with, and on a beatoraja theme the play entry it was loaded from. */
+export interface ResolvedPlayKit {
+  readonly kit: PlaySceneKit;
+  /** The beatoraja theme's play entry, which the play puts in force as it takes the stage (`activeBeatorajaPlay`). */
+  readonly beatorajaPlay?: BeatorajaPlayEntry;
 }
 
 /** The family each screen is drawn by, and its kit, from the theme services and the "Skin system" pick. */
@@ -92,25 +99,27 @@ export class FamilyKits {
    * The kit `song` plays with, for the gameplay family the Debug Menu's "Skin family" pick (or the auto chain) gives it:
    *
    * - **beatoraja** (`playsOnBeatoraja`, a replay and a stitched NONSTOP chart included) → the theme's play entry
-   *   (`loadBeatorajaPlayKit`); `undefined` when it cannot be loaded.
+   *   (`loadBeatorajaPlayKit`), with the entry; `undefined` when it cannot be loaded.
    * - **LR2** with a play skin for the chart's key mode → an LR2 kit with that skin (parsed again with the course's ops
    *   for a course stage or a NONSTOP run), and the theme's 9-keys skin, whose Pop'n green wide note at index 3 is drawn
    *   over each invisible note when {@link DemoGuiState.showInvisibleNotes} is on.
    * - otherwise → the built-in kit with the active be-music skin.
+   *
+   * Nothing is put in force here: the play may load behind a decide screen that is backed out of.
    */
   public async resolvePlayKit(
     song: LibraryChart,
     overrides: { courseStage?: CourseStagePlay; nonstop?: { readonly course: LibraryCourse } },
-  ): Promise<PlaySceneKit | undefined> {
+  ): Promise<ResolvedPlayKit | undefined> {
     if (this.playsOnBeatoraja(song)) {
       const loaded = await this.beatoraja.loadBeatorajaPlayKit(song);
-      this.beatoraja.activeBeatorajaPlay =
-        loaded !== undefined
-          ? { entryPath: loaded.entryPath, header: loaded.header, variant: loaded.variant }
-          : undefined;
-      return loaded?.kit;
+      return loaded !== undefined
+        ? {
+            kit: loaded.kit,
+            beatorajaPlay: { entryPath: loaded.entryPath, header: loaded.header, variant: loaded.variant },
+          }
+        : undefined;
     }
-    this.beatoraja.activeBeatorajaPlay = undefined;
     // Picking `'default'` from the Debug Menu strips the LR2 skin even when one is loaded for this chart.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
     const playSkin =
@@ -123,9 +132,11 @@ export class FamilyKits {
               { kind: 'play', playVariant: pickLr2PlaySkinVariant(this.lr2.playSkins, song) },
             )
           : pickLr2PlaySkin(this.lr2.playSkins, song);
-    if (playSkin === undefined) return this.builtIn.builtInKit;
+    if (playSkin === undefined) return { kit: this.builtIn.builtInKit };
     const invisibleNoteSkin = this.lr2.playSkins['9'];
-    return { family: 'lr2', skin: playSkin, ...(invisibleNoteSkin !== undefined ? { invisibleNoteSkin } : {}) };
+    return {
+      kit: { family: 'lr2', skin: playSkin, ...(invisibleNoteSkin !== undefined ? { invisibleNoteSkin } : {}) },
+    };
   }
 
   /**
