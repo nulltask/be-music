@@ -1,0 +1,11 @@
+---
+'@be-music/player': patch
+---
+
+Fix replays and re-simulations judging a play differently from how it was played:
+
+- `manualPlay` replays resolved long-note holds, tails, misses and mines at wall-clock tick time, so the order judgments reached the clamped gauge (and, at high `speed`, the judgments themselves) depended on where the ticks landed, and a release queued after the last note could be dropped from the re-recorded log. A replay now steps from one instant to the next (each recorded input and each timed judgment) and drains every queued input before finishing, so the same chart and `replayInputs` give the same summary, gauge and re-recorded log on every run and at every `speed`.
+- Timed judgments at nearby instants settled in different orders: the engine swept misses with one cursor across all lanes (missing a key note late behind a scratch note with a longer window) and settled AUTO SCRATCH notes, tails and mine crossings in fixed groups per step, while the simulator settled LN tails after every other judgment in a span. Both now settle every timed judgment at its own whole microsecond, misses at each note's deadline, and one instant tails first, then AUTO SCRATCH, then misses, then mines, each in channel order. The end of a play settles what is still pending the same way, instead of charging it in one batch.
+- A press exactly on a judge window's edge could take the next worse judgment, or miss its note for an empty POOR: the engine compared float seconds, which can fall a hair outside the edge, and now compares whole microseconds, as the simulator does, both against the windows and when looking for a press's candidate notes.
+- A short tap could record its release before its press: the engine stamps each input by the playback clock, which follows the audio clock a render quantum at a time, so a release drained just after its press could read a few hundred µs older, and a replay or the simulators then held the lane down after the tap, setting off its mines. The engine now stamps each input no earlier than the one it drained before.
+- The LR2 rule that a long-note head has no late BAD follows the long-note mode the ruleset plays rather than the chart's `#LNMODE`, so a `#LNMODE 2` / `3` note played as a plain LN under LR2 skips the late BAD exactly as the simulator does.

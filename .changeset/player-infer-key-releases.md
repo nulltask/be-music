@@ -1,5 +1,0 @@
----
-'@be-music/player': patch
----
-
-A play from input without key releases (a terminal without the kitty keyboard protocol) replayed and re-simulated differently from how it was played: its log had only presses, so a replay held every key forever and took every key repeat as a new press. The engine now infers when each key came up — a hold grace after each press (380 ms after a long note's head, 120 ms otherwise), extended by the key's repeats — judges the release at that instant and records it (an `up` marked `inferred`), so the live play, its replay and the simulators agree. Judging changes a little for such input: a lapsed hold is judged at the instant it lapsed instead of at the next frame, by the ruleset's release rules (beatoraja's release margin included); a charge note let go after its tail is judged by that release instead of as a POOR; the repeats of a held long note press nothing else; a mine sees a lane down for as long as its key is held. With key-state input, the very first key of a play no longer loses a Hell Charge note's gain until the next key event.

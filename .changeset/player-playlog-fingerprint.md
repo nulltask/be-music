@@ -1,6 +1,0 @@
----
-'@be-music/player': minor
----
-
-Play logs now record Be-Music Fingerprints (`bmfp0:…`), so logs can be matched to a chart by what is played even after keysound / BGA / metadata edits or a BMS ↔ bmson conversion, where `chart.sha256` no longer matches. The optional `chart.chartFingerprint` covers every `#RANDOM` / `#SWITCH` branch, so every play of a chart shares it, and `chart.playFingerprint` covers the branches the play rolled. `createPlaylogRecorder` computes both from the source chart — the new `recordPlaylog.sourceChart`, for hosts that resolve `#RANDOM` or rewrite lanes on the chart themselves, else the chart the engine was given — with the engine's `laneModeExtension` as the lane-mode input, so lane options such as MIRROR or a DP flip never change them, and omits a field it cannot compute.
-Play logs also record the play's `#RANDOM` / `#SWITCH` outcomes as the optional `play.randomDraws` (the `PlayerOptions.randomDraws` the engine played with), so a verifier with the chart file can rebuild the chart that was played with `resolveBmsControlFlowWithDraws` and recompute the fingerprint, and a replay passes them back as `PlayerOptions.randomDraws` to play the recorded branches. `parsePlaylog` validates and keeps these fields while still accepting logs without them.
