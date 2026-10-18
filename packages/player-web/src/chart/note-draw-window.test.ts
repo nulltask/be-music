@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { createScrollDistanceMapper } from '@be-music/player/core/scroll-distance';
+import { createScrollDistanceMapper } from '@be-music/player/display';
 import {
   advanceDrawCursor,
   changesScrollRate,

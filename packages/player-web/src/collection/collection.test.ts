@@ -10,7 +10,7 @@ import {
 } from './collection.ts';
 import { resolveChart } from '@be-music/chart';
 import { parseChart } from '@be-music/parser';
-import { preparePlaybackChart } from '@be-music/player/core/engine';
+import { preparePlaybackChart } from '@be-music/player';
 import { DeferredDroppedFile } from './dropped-file.ts';
 import type { BrowserSongAssetEntry, BrowserSongAssetSource, LoadProgress } from './types.ts';
 

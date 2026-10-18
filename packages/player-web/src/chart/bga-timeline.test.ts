@@ -1,4 +1,4 @@
-import type { TimingResolver } from '@be-music/audio-renderer/triggers';
+import type { TimingResolver } from '@be-music/chart';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import {

@@ -1,5 +1,5 @@
 import type { ResolvedChart, ScrollTimelinePoint, SpeedTimelinePoint, TempoReversalPoint } from '@be-music/chart';
-import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
+import type { ScrollDistanceMapperLike } from '@be-music/player/display';
 
 /**
  * Whose note-visibility rules the gameplay view follows this play. Drawing is not part of a judge ruleset, so the

@@ -1,6 +1,6 @@
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import type { ChartPlayVariant } from '@be-music/chart';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import { KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import {

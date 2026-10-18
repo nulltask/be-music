@@ -4,7 +4,7 @@
  * fade times the key-on state the session keeps, and the view's stage is where the touch lanes are.
  */
 
-import type { PlayerUiCommand } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerUiCommand } from '@be-music/player/signals';
 import type { Texture } from 'pixi.js';
 import type { PlayfieldStage, PlayViewSetting, PlayViewTiming } from '../../view/types.ts';
 

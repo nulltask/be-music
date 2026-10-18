@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import type { PlayerInputCommand } from '@be-music/player/core/input-signal-bus';
+import type { PlayerInputCommand } from '@be-music/player/signals';
 import { LiveTempo } from './live-tempo.ts';
 
 describe('LiveTempo', () => {

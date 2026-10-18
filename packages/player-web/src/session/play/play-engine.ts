@@ -7,24 +7,25 @@
  * The functions read and write the scene's state through {@link PlayEngineContext}; the play session passes itself.
  */
 
-import type { TimingResolver } from '@be-music/audio-renderer/triggers';
-import type { RandomDraws } from '@be-music/chart';
+import type { RandomDraws, TimingResolver, ChartPlayVariant } from '@be-music/chart';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import {
   PlayerInterruptedError,
   type PlayerRulesetInfo,
   type PlayerSummary,
   type PreparedPlaybackChartData,
-} from '@be-music/player/core/engine';
-import { resolveLr2LaneIndex, type ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+} from '@be-music/player';
+import { resolveLr2LaneIndex } from '@be-music/player/lanes';
 import type {
+  PlayerInputSignalBus,
   PlayerGaugeSummary,
   PlayerUiCommand,
   PlayerUiFramePayload,
   PlayerUiSignalBus,
-} from '@be-music/player/core/ui-signal-bus';
-import type { TimedPlayableNote } from '@be-music/player/playable-notes';
+  PlayerJudgeComboSignalState,
+  PlayerStateSignals,
+} from '@be-music/player/signals';
+import type { TimedPlayableNote } from '@be-music/player/display';
 import type { BeMusicPlaylog, PlaylogRecordingOptions, PlaylogViewState } from '@be-music/player/playlog';
 import {
   resolveDisplayedPoor,
@@ -33,7 +34,6 @@ import {
   type LongNoteStyle,
   type ScoreSummary,
 } from '@be-music/player/ruleset';
-import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import { playEventFromUiCommand, PlaylogViewCursor, type PlayResult } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import type { BrowserSongEntry } from '../../collection/types.ts';

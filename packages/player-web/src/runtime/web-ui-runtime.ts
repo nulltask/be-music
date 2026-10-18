@@ -1,6 +1,11 @@
-import type { CreatePlayerUiRuntimeContext, PlayerUiRuntime } from '@be-music/player/core/engine';
-import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
-import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
+import type { CreatePlayerUiRuntimeContext, PlayerUiRuntime } from '@be-music/player';
+import type {
+  PlayerJudgeComboSignalState,
+  PlayerStateSignals,
+  PlayerUiCommand,
+  PlayerUiFramePayload,
+  PlayerUiSignalBus,
+} from '@be-music/player/signals';
 import { logger } from '../logger.ts';
 
 const log = logger('web-ui-runtime');

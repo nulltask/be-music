@@ -15,10 +15,9 @@
 //      so a partial-asset theme still plays — better than silent blanks.
 
 import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
-import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
-import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
+import { resolveSideKeySlot } from '@be-music/player/lanes';
+import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/signals';
+import type { ScrollDistanceMapperLike } from '@be-music/player/display';
 import type {
   BeatorajaImageElement,
   BeatorajaImageId,
@@ -27,7 +26,7 @@ import type {
 } from '@be-music/beatoraja-skin';
 import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../../skin/beatoraja/textures.ts';
-import type { TempoReversalPoint } from '@be-music/chart';
+import type { TempoReversalPoint, ChartPlayVariant } from '@be-music/chart';
 import {
   advanceDrawCursor,
   GoneDrawObjects,

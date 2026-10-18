@@ -1,5 +1,5 @@
 import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
-import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import { resolveCourseStageStartGauge, type PlaylogCourseStage } from '@be-music/player/playlog';
 
 /**

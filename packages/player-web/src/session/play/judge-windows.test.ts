@@ -1,4 +1,4 @@
-import type { JudgeWindowSetUs, RulesetWindowTables } from '@be-music/player/core/engine';
+import type { JudgeWindowSetUs, RulesetWindowTables } from '@be-music/player/ruleset';
 import { describe, expect, it } from 'vite-plus/test';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
 

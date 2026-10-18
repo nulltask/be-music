@@ -3,7 +3,7 @@
  * live ones with the skin's cells, or by default through the be-music skin (or Phantom's).
  */
 
-import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
+import { resolveLr2LaneIndex } from '@be-music/player/lanes';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import type { BeMusicBomb } from '../../../skin/be-music/types.ts';
 import { renderPhantomBombs } from '../../../skins/phantom/playfield.ts';

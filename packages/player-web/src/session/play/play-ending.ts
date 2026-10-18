@@ -6,11 +6,11 @@
  * session passes itself.
  */
 
-import type { TimingResolver } from '@be-music/audio-renderer/triggers';
-import type { PlayerSummary } from '@be-music/player/core/engine';
+import type { TimingResolver } from '@be-music/chart';
+import type { PlayerSummary } from '@be-music/player';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import type { ScoreSummary } from '@be-music/player/ruleset';
-import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import { gaugePercent, playResultFromPlayState, type PlayResult, type PlayState } from '@be-music/scene-model';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';

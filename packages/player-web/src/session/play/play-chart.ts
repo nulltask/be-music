@@ -8,11 +8,6 @@
  */
 
 import {
-  createBmsonSamplePlaybackMap,
-  type TimedSampleTrigger,
-  type TimingResolver,
-} from '@be-music/audio-renderer/triggers';
-import {
   parseBmsSwBga,
   resolveChart,
   resolveChartMainBpm,
@@ -20,19 +15,26 @@ import {
   type BmsSwitchingBga,
   type RandomDraws,
   type ResolvedChart,
+  createBmsonSamplePlaybackMap,
+  type TimedSampleTrigger,
+  type TimingResolver,
+  type ChartPlayVariant,
+  createBeatAtSecondsResolverFromTimingResolver,
 } from '@be-music/chart';
 import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
-import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player/core/engine';
+import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player';
 import {
-  type ChartPlayVariant,
   isPlayableInputChannel,
   resolveLaneOptionChannels,
   resolvePlayVariantLaneChannels,
-} from '@be-music/player/core/lane-layout';
-import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import { createBeatAtSecondsResolverFromTimingResolver } from '@be-music/player/core/timeline';
-import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
-import type { TimedLandmineNote, TimedPlayableNote } from '@be-music/player/playable-notes';
+} from '@be-music/player/lanes';
+import {
+  createScrollDistanceMapper,
+  type ScrollDistanceMapperLike,
+  type TimedLandmineNote,
+  type TimedPlayableNote,
+} from '@be-music/player/display';
+import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import { createEmptyScore, type GaugeType, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
 import { collectChartVolumeMultipliers } from '../../chart/play-audio.ts';
 import { resolvePoorBgaFallbackKey } from '../../chart/play-bga.ts';

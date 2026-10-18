@@ -1,6 +1,6 @@
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { WebAudioStageMixer } from './nonstop-audio.ts';
-import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import type { PlayerInputSignalBus } from '@be-music/player/signals';
 import {
   autoPlay as engineAutoPlay,
   manualPlay as engineManualPlay,
@@ -8,7 +8,7 @@ import {
   type CreateAudioSessionContext,
   type PlayerOptions,
   type PlayerSummary,
-} from '@be-music/player/core/engine';
+} from '@be-music/player';
 import { logger } from '../logger.ts';
 import { type AudioBusHandle } from './audio-bus.ts';
 import { createWebAudioSession, type WebAudioSessionSlicePlayback } from './web-audio-session.ts';

@@ -4,8 +4,8 @@
  * playfield and frame passes (`view/shared/*`) take a view with these members as their context.
  */
 import { Container, Graphics, Text, TextStyle, type Texture } from 'pixi.js';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import type { TimedLandmineNote } from '@be-music/player/playable-notes';
+import type { ChartPlayVariant } from '@be-music/chart';
+import type { TimedLandmineNote } from '@be-music/player/display';
 import { resolveGameplayLaneGeometry } from '@be-music/skin-sdk';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
