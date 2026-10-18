@@ -1,4 +1,4 @@
-import type { PixiScene, PixiSceneHost, PlayScene } from '@be-music/player-web/host';
+import type { PixiScene, PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-web/host';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { SceneRouter, type RoutedPlayScene, type RoutedScene, type SceneRouterHost } from './scene-router.ts';
 
@@ -488,6 +488,23 @@ describe('SceneRouter over player-web', () => {
       void router.show(select, { role: 'select' });
       void router.show(play, { role: 'play', playDispose: (gone) => gone.dispose({ preserveAudioTail: true }) });
       return router;
+    };
+    expect(typeof route).toBe('function');
+  });
+
+  test('holds the select scene as the select scene type it is given', () => {
+    // Type-level: with `SelectScene` as its select type, the router takes only a select scene as `role: 'select'` and
+    // hands the kept one back as a `SelectScene`.
+    const route = (host: PixiSceneHost, select: SelectScene, other: PixiScene): SelectScene | undefined => {
+      const router = new SceneRouter<PixiScene, PlayScene, SelectScene>({
+        host,
+        recorder: { finalize: async () => undefined },
+      });
+      void router.show(select, { role: 'select' });
+      // @ts-expect-error -- a scene that is not a select scene is not shown as the select screen.
+      void router.show(other, { role: 'select' });
+      void router.show(other, { role: 'result' });
+      return router.select;
     };
     expect(typeof route).toBe('function');
   });
