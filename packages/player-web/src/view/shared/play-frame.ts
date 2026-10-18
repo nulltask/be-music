@@ -18,7 +18,7 @@ import {
 } from '../../stage/viewport.ts';
 import { BG } from '../../scene/gameplay-constants.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
-import type { PerfTracker } from '../../scene/perf.ts';
+import type { PerfTracker } from './perf.ts';
 import { renderBga, type BgaRendererContext } from './bga-renderer.ts';
 import { renderBombs } from './playfield/bombs.ts';
 import type { PlayfieldContext } from './playfield/context.ts';
