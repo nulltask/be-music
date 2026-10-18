@@ -82,16 +82,20 @@ class FakeHost implements SceneRouterHost<FakeScene> {
   }
 }
 
-function setup(options: { onError?: (error: unknown, step: string) => void } = {}) {
+function setup(
+  options: { onError?: (error: unknown, step: string) => void; onInterrupt?: (log: string[]) => void } = {},
+) {
   const log: string[] = [];
   const host = new FakeHost(log);
   const finalize = vi.fn(async (): Promise<void> => {
     log.push('finalize');
   });
+  const { onInterrupt } = options;
   const router = new SceneRouter<FakeScene, FakePlay>({
     host,
     recorder: { finalize },
     ...(options.onError !== undefined ? { onError: options.onError } : {}),
+    ...(onInterrupt !== undefined ? { onInterrupt: () => onInterrupt(log) } : {}),
   });
   return {
     log,
@@ -449,6 +453,81 @@ describe('SceneRouter.dropSelect', () => {
     log.length = 0;
     await expect(router.show(select, { role: 'select' })).resolves.toBe(false);
     expect(log).toEqual([]);
+  });
+});
+
+describe('SceneRouter interrupts', () => {
+  const logInterrupt = (log: string[]): void => {
+    log.push('interrupt');
+  };
+
+  test('a navigation the scenes did not ask for interrupts the run as it begins, before any transition runs', async () => {
+    const { router, log, host, scene, play } = setup({ onInterrupt: logInterrupt });
+    const select = scene('select');
+    const gameplay = play('play');
+    await router.show(select, { role: 'select' });
+    await router.show(gameplay, { role: 'play' });
+    log.length = 0;
+
+    // A drop or a skin change during the play: the run ends while the play still shows.
+    const shown = router.show(select, { role: 'select' });
+    expect(log).toEqual(['interrupt']);
+    expect(host.current).toBe(gameplay);
+    await expect(shown).resolves.toBe(true);
+    expect(log).toEqual(['interrupt', 'finalize', 'setScene:select', 'exit:play', 'enter:select', 'dispose:play']);
+  });
+
+  test("the run's own navigations carry it on: its decide, play, result, next stage and retry", async () => {
+    const onInterrupt = vi.fn();
+    const { router, scene, play } = setup({ onInterrupt });
+    await router.show(scene('select'), { role: 'select' });
+    onInterrupt.mockClear();
+
+    const decide = router.begin({ continuesRun: true });
+    await router.leave({ token: decide });
+    await router.show(scene('decide'), { role: 'decide', token: decide });
+    const stage = play('stage 1');
+    await router.prepare(stage, { token: decide });
+    await router.show(stage, { role: 'play', token: decide });
+    await router.show(scene('result'), { role: 'result', playDispose: withTail, continuesRun: true });
+    await router.leave({ continuesRun: true });
+    const next = router.begin({ continuesRun: true });
+    await router.show(play('stage 2'), { role: 'play', token: next });
+    await router.leave({ playDispose: withTail, continuesRun: true });
+    expect(onInterrupt).not.toHaveBeenCalled();
+  });
+
+  test('begin, and a show or leave with no token, interrupt; a token, prepare and dropSelect begin nothing', async () => {
+    const onInterrupt = vi.fn();
+    const { router, scene, play } = setup({ onInterrupt });
+    const token = router.begin();
+    expect(onInterrupt).toHaveBeenCalledTimes(1);
+    await router.show(scene('select'), { role: 'select', token });
+    const gameplay = play('play');
+    await router.prepare(gameplay, { token });
+    await router.show(gameplay, { role: 'play', token });
+    await router.leave({ token });
+    await router.dropSelect();
+    expect(onInterrupt).toHaveBeenCalledTimes(1);
+
+    await router.show(scene('result'), { role: 'result' });
+    expect(onInterrupt).toHaveBeenCalledTimes(2);
+    await router.leave();
+    expect(onInterrupt).toHaveBeenCalledTimes(3);
+  });
+
+  test('an onInterrupt that throws goes to onError, and the navigation goes on', async () => {
+    const onError = vi.fn();
+    const { router, host, scene } = setup({
+      onError,
+      onInterrupt: () => {
+        throw new Error('course gone');
+      },
+    });
+    const select = scene('select');
+    await expect(router.show(select, { role: 'select' })).resolves.toBe(true);
+    expect(host.current).toBe(select);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'course gone' }), 'interrupt');
   });
 });
 
