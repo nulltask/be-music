@@ -662,6 +662,8 @@ beatoraja のプレイスキンは表示の選択であって ruleset ではな�
 
 `AVERAGE` は以前は時間の加重平均でした。BPM × N + STOP のギミックで値が大きく偏り（145 BPM の譜面で約 810、ノートが 5.6 倍遅く流れる）、さらに最後の区間だけ STOP を含む時計で測っていました。メイン BPM は beatoraja が使う値です。同数のときは先に現れる BPM を選びます（beatoraja はハッシュマップの順序で選ぶ）。ノートの大半をギミック用の BPM に置いた譜面（"the life" は 717 ノートを 16,000,160 に置く）では、beatoraja でも be-music でもその BPM がメイン BPM になるので、HS-FIX `OFF` で遊んでください。
 
+どの種類のプレイ画面も、メイン BPM が要るところではこの 1 つの値を使います。プレイログの表示時間（[playlog.ja.md](./playlog.ja.md#プレイヤーが見ていたもの)）、組み込みの HUD の `mainBpm`、beatoraja スキンのメイン BPM（数値 92）とそれでの白数字・緑数字、BPM グラフです。
+
 ## Renderer と performance control
 
 - PixiJS は既定で WebGPU preference を使い、browser が初期化できない場合は PixiJS 側で fallback します。
