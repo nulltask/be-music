@@ -53,10 +53,10 @@ import {
   setDesignPixelRatio,
   setDesignTextResolution,
   type ScaledViewport,
-} from '../../scene/core/viewport.ts';
+} from '../../stage/viewport.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { PerfTracker } from '../../scene/perf.ts';
-import { disposeChildren } from '../../scene/pixi-utils.ts';
+import { disposeChildren } from '../../stage/pixi-utils.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';

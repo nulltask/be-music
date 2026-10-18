@@ -32,7 +32,7 @@ import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../scene/gameplay-constants.ts';
 import { resolveLr2LaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
-import { releaseTexturesOnHost } from '../../scene/pixi-utils.ts';
+import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { loadSkinAssetTexture, loadTextureFromBytes } from '../../skin/lr2/textures.ts';
 import { build, render, type PlayFrameContext } from '../shared/play-frame.ts';

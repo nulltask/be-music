@@ -20,7 +20,7 @@ import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { Lr2Kit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
-import { disposeChildren } from '../../scene/pixi-utils.ts';
+import { disposeChildren } from '../../stage/pixi-utils.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { evaluateElementDestination, makeLr2StaticImageSprite } from '../../skin/lr2/render.ts';

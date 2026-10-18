@@ -25,7 +25,7 @@ import type { CourseView } from '@be-music/scene-model';
 import { Container, TextStyle, type Texture } from 'pixi.js';
 import { BLUE, PLAYFIELD } from '../../scene/gameplay-constants.ts';
 import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from '../../scene/lr2/fonts.ts';
-import type { ChildPool } from '../../scene/pixi-utils.ts';
+import type { ChildPool } from '../../stage/pixi-utils.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import {
   applyDestinationToSprite,

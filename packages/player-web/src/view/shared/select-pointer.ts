@@ -22,7 +22,7 @@ import {
   stepWheelScroll,
   type TouchSample,
 } from '../../scene/core/touch-scroll.ts';
-import { resolveScaledViewport } from '../../scene/core/viewport.ts';
+import { resolveScaledViewport } from '../../stage/viewport.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 
 /** A skin's design canvas, in design pixels. */

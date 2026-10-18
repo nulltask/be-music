@@ -24,7 +24,7 @@ import type { PlaySessionOptions } from '../../../session/play/play-options.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
 import type { GoneDrawObjects } from '../../../scene/core/note-draw-window.ts';
 import type { HiSpeedTransition } from '../../../scene/hi-speed.ts';
-import type { ChildPool } from '../../../scene/pixi-utils.ts';
+import type { ChildPool } from '../../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../../skin/be-music/binding.ts';
 import type { BeMusicJudge, BeMusicLaneCover } from '../../../skin/be-music/types.ts';
 import type { LaneGeometryContext } from '../../built-in/play-chrome.ts';

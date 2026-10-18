@@ -1,6 +1,6 @@
 import type { Container } from 'pixi.js';
 import type { BeMusicGameplayRuntime, BeMusicJudgeState } from '../skin/be-music/types.ts';
-import type { ChildPool } from './pixi-utils.ts';
+import type { ChildPool } from '../stage/pixi-utils.ts';
 
 /** One side's recent judgement state for skinless chrome renderers (the be-music skin type). */
 export type SkinlessGameplayJudgeState = BeMusicJudgeState;

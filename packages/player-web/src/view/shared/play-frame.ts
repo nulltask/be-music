@@ -15,7 +15,7 @@ import {
   resolveScaledViewport,
   setDesignPixelRatio,
   setDesignTextResolution,
-} from '../../scene/core/viewport.ts';
+} from '../../stage/viewport.ts';
 import { BG } from '../../scene/gameplay-constants.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import type { PerfTracker } from '../../scene/perf.ts';

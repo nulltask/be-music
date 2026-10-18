@@ -12,7 +12,7 @@ import { CORE_TEXT_FONT } from '../../scene/core/fonts.ts';
 import { GoneDrawObjects } from '../../scene/core/note-draw-window.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { PerfTracker } from '../../scene/perf.ts';
-import { ChildPool } from '../../scene/pixi-utils.ts';
+import { ChildPool } from '../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { SongImageCache } from '../../skin/be-music/song-images.ts';
 import type { BeMusicGameplayLayout, BeMusicStage } from '../../skin/be-music/types.ts';

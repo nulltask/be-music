@@ -48,7 +48,7 @@ import {
 import { resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { PixiSceneHost } from '../../scene/host.ts';
 import { LiveTempo } from '../../scene/live-tempo.ts';
-import { releaseTexturesOnHost } from '../../scene/pixi-utils.ts';
+import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
 import { QuitHoldController } from '../../scene/quit-hold.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';

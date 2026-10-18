@@ -19,7 +19,7 @@ import type {
   SkinlessGameplayChromeRuntime,
   SkinlessGameplayJudgeState,
 } from '../../scene/gameplay-chrome.ts';
-import type { ChildPool } from '../../scene/pixi-utils.ts';
+import type { ChildPool } from '../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { PlayfieldRuntime } from '../shared/playfield/context.ts';
 import type { BeMusicGameplayLayout, BeMusicStage } from '../../skin/be-music/types.ts';

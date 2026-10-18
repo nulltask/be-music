@@ -14,7 +14,7 @@ import {
   resolveScaledViewport,
   setDesignPixelRatio,
   setDesignTextResolution,
-} from '../../scene/core/viewport.ts';
+} from '../../stage/viewport.ts';
 import {
   BeMusicDecideBinding,
   resolveBeMusicDecideDurationMs,
