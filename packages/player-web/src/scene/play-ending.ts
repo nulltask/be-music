@@ -1,7 +1,7 @@
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
 import type { PlayerSummary } from '@be-music/player/core/engine';
 import { chartToElapsedSeconds } from '../runtime/play-tempo.ts';
-import { resolvePostChartResultDelayMs } from './core/gameplay-result-delay.ts';
+import { resolvePostChartResultDelayMs } from '../session/play/result-delay.ts';
 
 /**
  * How a play ends, shared by both gameplay families (the LR2 / built-in view and the beatoraja view), so the two time

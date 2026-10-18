@@ -11,7 +11,7 @@ import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bu
 import type { Application } from 'pixi.js';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { resolveScaledViewport } from '../../stage/viewport.ts';
-import type { QuitHoldController } from '../../scene/quit-hold.ts';
+import type { QuitHoldController } from './quit-hold.ts';
 import {
   canvasPointToDesign,
   hitTestTouchLane,
@@ -19,7 +19,7 @@ import {
   resolveTouchLaneZones,
   type TouchLaneChange,
   type TouchLaneTracker,
-} from '../../scene/core/touch-lanes.ts';
+} from './touch-lanes.ts';
 import { HISPEED_STEP } from '../../scene/gameplay-constants.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from './play-options.ts';

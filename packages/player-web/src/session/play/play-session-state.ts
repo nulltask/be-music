@@ -26,9 +26,9 @@ import type {
   TunableCompressor,
 } from '../../runtime/audio-bus.ts';
 import type { GameplayRecorder } from '../../recording/gameplay-recorder.ts';
-import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
-import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
+import type { ChartBpmRange } from './tempo-range.ts';
+import { LongNoteTracker } from './long-note-tracker.ts';
+import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import type { PlaylogViewCursor } from '../../scene/playlog-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
@@ -41,7 +41,7 @@ import { DEFAULT_HISPEED, HiSpeedTransition } from '../../scene/hi-speed.ts';
 import type { BgaCue, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
-import { TouchLaneTracker } from '../../scene/core/touch-lanes.ts';
+import { TouchLaneTracker } from './touch-lanes.ts';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 

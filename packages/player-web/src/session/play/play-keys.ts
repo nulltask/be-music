@@ -3,7 +3,7 @@
  * (`play-input.ts`) so the engine side (`play-engine.ts`) can hand the runtime its filter without importing the input.
  */
 
-import { QUIT_HOLD_KEY_CODE } from '../../scene/quit-hold.ts';
+import { QUIT_HOLD_KEY_CODE } from './quit-hold.ts';
 
 /**
  * The keys the play scene handles itself (`handleSharedEngineExitKey` and the quit hold in `play-input.ts`): ESC, F5, Space,

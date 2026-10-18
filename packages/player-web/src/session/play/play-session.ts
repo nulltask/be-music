@@ -38,7 +38,7 @@ import {
   type ReplayTempo,
 } from '../../runtime/play-tempo.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
-import { resolveBeMusicLongNoteMode } from '../../view/shared/playfield/long-note-tracker.ts';
+import { resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import {
   DESIGN_HEIGHT,
   DESIGN_WIDTH,
@@ -47,9 +47,9 @@ import {
 } from '../../scene/gameplay-constants.ts';
 import { resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
-import { LiveTempo } from '../../scene/live-tempo.ts';
+import { LiveTempo } from './live-tempo.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
-import { QuitHoldController } from '../../scene/quit-hold.ts';
+import { QuitHoldController } from './quit-hold.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { RuntimeNote } from '../../view/shared/playfield/context.ts';
