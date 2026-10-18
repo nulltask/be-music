@@ -428,8 +428,8 @@ export type ResultIntent = { readonly type: 'continue' } | { readonly type: 'ret
 /** When the result screen takes input and how it leaves, as its skin authors it. */
 export interface ResultViewTiming extends SceneViewTiming {
   /**
-   * A press on (Enter, Space, a click) leaves at once, as the beatoraja result screen does; without it the first press
-   * skips the graphs, the next shows the record update and the one after leaves, as LR2's result does.
+   * A press on (Enter, Space, the view's `continue`) leaves at once, as the beatoraja result screen does; without it the
+   * first press skips the graphs, the next shows the record update and the one after leaves, as LR2's result does.
    */
   readonly skipsResultSteps?: boolean;
 }
