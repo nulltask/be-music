@@ -6,6 +6,7 @@ import type { PlaylogRulesetId } from '@be-music/player/ruleset';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse, LibraryEntry, PlayResult } from '@be-music/scene-model';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { ActiveCourse } from '../course-flow.ts';
+import { courseRecordKey } from '../course-result.ts';
 import type { DemoScene, PlayerWebDemoElements } from '../types.ts';
 import { RecordsService } from './records.ts';
 import { liveTestHookState, nameResultJingle, type LiveTestHookDeps } from './test-hook.ts';
@@ -161,6 +162,30 @@ describe('liveTestHookState', () => {
       bar: { kind: 'folder', title: 'courses' },
       list: { sort: 'OFF', keysFilter: 'ALL', difficultyFilter: 'ALL', search: '' },
     });
+  });
+
+  test("reports a course bar's best lamp and trophy, kept under the current judge ruleset", () => {
+    const h = harness();
+    const course = dan();
+    const select = selectScene({ kind: 'course', course }, { folderPath: ['courses'] });
+    h.router.current = select;
+    h.router.select = select;
+    // A run is kept under the ruleset it was played on (`resolveCourseRecordUpdate`): 52 / 60 EX, no BP, a gold medal.
+    h.records.songRecords.set(`lr2:${courseRecordKey(course)}`, { lamp: 'FAILED', exScore: 52, missCount: 0 });
+    h.records.songRecords.set(`beatoraja:${courseRecordKey(course)}`, { lamp: 'HARD', exScore: 40, missCount: 3 });
+    expect(liveTestHookState(h.deps).cursor?.bar).toMatchObject({
+      kind: 'course',
+      title: 'Dan',
+      lamp: 'FAILED',
+      trophy: 'goldmedal',
+    });
+    // Judge windows picks the ruleset whose records the select screen shows, and the hook reports the same.
+    h.ruleset.current = 'beatoraja';
+    expect(liveTestHookState(h.deps).cursor?.bar).toMatchObject({ lamp: 'HARD', trophy: 'bronzemedal' });
+    h.ruleset.current = 'iidx';
+    const bar = liveTestHookState(h.deps).cursor?.bar;
+    expect(bar?.lamp).toBeUndefined();
+    expect(bar?.trophy).toBeUndefined();
   });
 
   test('reports no cursor while the select scene is kept off the stage', () => {

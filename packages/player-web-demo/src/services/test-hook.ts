@@ -38,8 +38,8 @@ export interface LiveTestHookDeps {
   readonly guiState: Pick<DemoGuiState, 'status' | 'nonstopPlacement'>;
   /** The library: its charts and course folders. */
   readonly library: Pick<LibraryService, 'collection'>;
-  /** The best records kept for the chart and course bars. */
-  readonly records: Pick<RecordsService, 'lookupSongRecord' | 'songRecords'>;
+  /** The best records of the current judge ruleset, which the select screen shows. */
+  readonly records: Pick<RecordsService, 'lookupSongRecord' | 'currentRulesetRecords'>;
   /** The course run in progress. */
   readonly courses: Pick<CourseRunService, 'active'>;
   /** The course being made. */
@@ -106,11 +106,15 @@ export function liveTestHookState(deps: LiveTestHookDeps): TestHookLiveState {
   };
 }
 
-/** The best record kept for a select-screen bar: a chart's or a course's (with the trophy its bests earn). */
+/**
+ * The best record kept for a select-screen bar, as the select screen shows it: a chart's or a course's (with the trophy
+ * its bests earn), of the current judge ruleset. Records are stored under ruleset-prefixed keys (a course run's under the
+ * ruleset it was played on, `resolveCourseRecordUpdate`), so a course is looked up in the current ruleset's records.
+ */
 function barRecord(entry: LibraryEntry, deps: LiveTestHookDeps): BeMusicSongRecord | undefined {
   if (entry.kind === 'chart') return deps.records.lookupSongRecord(entry.chart);
   if (entry.kind === 'course') {
-    return lookupCourseRecord(entry.course, deps.records.songRecords, deps.guiState.nonstopPlacement);
+    return lookupCourseRecord(entry.course, deps.records.currentRulesetRecords(), deps.guiState.nonstopPlacement);
   }
   return undefined;
 }
