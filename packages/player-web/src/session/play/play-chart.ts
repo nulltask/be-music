@@ -45,7 +45,7 @@ import {
   type BgaCue,
   type NonstopStageBgaTimeline,
 } from '../../chart/bga-timeline.ts';
-import { resolveChartBpmRange, type ChartBpmRange } from './tempo-range.ts';
+import { resolvePlayTempoRange, type PlayTempoRange } from './tempo-range.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../chart/note-draw-window.ts';
@@ -115,7 +115,7 @@ export interface PlayChartContext {
   playState: PlayState;
   readonly scrollHiSpeed: HiSpeedTransition;
   readonly longNotes: LongNoteTracker;
-  chartBpmRange: ChartBpmRange | undefined;
+  chartBpmRange: PlayTempoRange | undefined;
   autoScratchChannels: ReadonlySet<string>;
   playMoments: {
     failedAtMs?: number;
@@ -353,7 +353,7 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   ctx.playMoments = {};
   ctx.lanePressedAt.clear();
   ctx.laneReleasedAt.clear();
-  ctx.chartBpmRange = resolveChartBpmRange(
+  ctx.chartBpmRange = resolvePlayTempoRange(
     resolver.tempoPoints,
     ctx.songDurationSeconds,
     resolved.metadata.bpm > 0 ? resolved.metadata.bpm : ctx.song?.bpm,

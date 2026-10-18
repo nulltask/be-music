@@ -19,7 +19,7 @@ import type { Graphics, Text, Texture } from 'pixi.js';
 import type { BrowserSongEntry } from '../../../collection/types.ts';
 import type { AudioAnalyzer, AudioFeatures } from '../../../runtime/audio-analysis.ts';
 import type { BgaCue, NonstopStageBgaTimeline } from '../../../chart/bga-timeline.ts';
-import type { ChartBpmRange } from '../../../session/play/tempo-range.ts';
+import type { PlayTempoRange } from '../../../session/play/tempo-range.ts';
 import type { PlaySessionOptions } from '../../../session/play/play-options.ts';
 import type { LongNoteTracker } from '../../../session/play/long-note-tracker.ts';
 import type { GoneDrawObjects } from '../../../chart/note-draw-window.ts';
@@ -89,7 +89,7 @@ export interface PlayfieldRuntime {
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly lastImpulseAt: number | undefined;
   readonly lastImpulseKind: BeMusicLaneKind | undefined;
-  readonly chartBpmRange: ChartBpmRange | undefined;
+  readonly chartBpmRange: PlayTempoRange | undefined;
   readonly playMoments: {
     failedAtMs?: number;
     allNotesDoneAtMs?: number;

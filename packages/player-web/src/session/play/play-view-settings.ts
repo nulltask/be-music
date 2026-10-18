@@ -29,7 +29,7 @@ import {
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { setVideoPlaybackTempo } from '../../runtime/play-tempo.ts';
 import type { PlaySessionOptions } from './play-options.ts';
-import type { ChartBpmRange } from './tempo-range.ts';
+import type { PlayTempoRange } from './tempo-range.ts';
 import { PIXELS_PER_BEAT } from '../../stage/design.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { PlayPlaylogViewScale, PlaySessionTheme } from './play-session-theme.ts';
@@ -47,7 +47,7 @@ export interface PlayViewSettingsContext extends PlayStateContext {
   readonly nonstopMixer: NonstopStageMixer | undefined;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }>;
   readonly laneX: Map<string, PlayfieldLaneRect>;
-  readonly chartBpmRange: ChartBpmRange | undefined;
+  readonly chartBpmRange: PlayTempoRange | undefined;
   drawnLaneCovers: { covers: readonly LaneCoverState[]; drawn: LaneCover[] } | undefined;
   playlogViewCoalescer: PlaylogViewCoalescer | undefined;
   readonly replayViewCursor: PlaylogViewCursor | undefined;
