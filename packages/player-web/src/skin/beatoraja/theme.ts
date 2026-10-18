@@ -4,7 +4,13 @@
 // up beatoraja themes through a parallel surface. The parser pipeline lives in `@be-music/beatoraja-skin`; this file
 // only wires the dropped-File array up to that pipeline and doesn't open any PixiJS resources.
 
-import { asLoadedBytes, discoverBeatorajaTheme, loadAssetBytes, readFilesIntoBytesMap } from '@be-music/beatoraja-skin';
+import {
+  asLoadedBytes,
+  discoverBeatorajaTheme,
+  loadAssetBytes,
+  pickBeatorajaPlaySkinVariant,
+  readFilesIntoBytesMap,
+} from '@be-music/beatoraja-skin';
 import { pickBeatorajaThemeBgmPaths } from '@be-music/beatoraja-skin/scene';
 import type {
   BeatorajaPlaySkinMap,
@@ -124,25 +130,6 @@ export function pickBeatorajaPlayableVariant(chart: {
 }
 
 /**
- * Per-variant fallback chain limited to {@link BEATORAJA_PLAYABLE_VARIANTS}. When the user's theme doesn't
- * ship the desired variant (very common — many themes only author the 7-keys variant and let smaller charts
- * re-use it), this picks the closest playable substitute. Mirrors {@link pickBeatorajaPlaySkin}'s fallback
- * ordering. The keyboard modes prefer each other before falling back to the IIDX chains, because a 24-lane chart
- * mounted on a 7-key skin renders its extra lanes through the host's fallback playfield.
- *
- * Returns `undefined` when the theme has no playable variant at all.
- */
-const PLAYABLE_FALLBACKS: Record<BeatorajaPlayableVariant, ReadonlyArray<BeatorajaPlayableVariant>> = {
-  '7': ['7', '14', '5', '10', '9', '24', '24d'],
-  '5': ['5', '7', '14', '10', '9', '24', '24d'],
-  '14': ['14', '7', '10', '5', '9', '24d', '24'],
-  '10': ['10', '14', '7', '5', '9', '24d', '24'],
-  '9': ['9', '7', '14', '5', '10', '24', '24d'],
-  '24': ['24', '24d', '9', '7', '14', '5', '10'],
-  '24d': ['24d', '24', '9', '14', '7', '10', '5'],
-};
-
-/**
  * Beatoraja play-skin variant → `ChartPlayVariant` (the engine / lane-layout vocabulary). The two spellings differ
  * only for the keyboard DP mode: beatoraja names its skin `'24d'` (24 keys, double), while the chart classifier
  * reports the total lane count as `'48'`.
@@ -151,14 +138,17 @@ export function chartPlayVariantForBeatorajaVariant(variant: BeatorajaPlayableVa
   return variant === '24d' ? '48' : variant;
 }
 
+/**
+ * The variant whose skin plays a `desired` chart: `desired` when the theme ships it, otherwise the closest substitute
+ * down the fallback list of `pickBeatorajaPlaySkinVariant` (`@be-music/beatoraja-skin`), which this calls. Many themes
+ * ship only the 7-keys variant and let the other charts re-use it. Returns `undefined` when the theme has no play skin
+ * at all.
+ */
 export function pickBeatorajaPlayableSkinVariant(
   playSkins: BeatorajaPlaySkinMap,
   desired: BeatorajaPlayableVariant,
 ): BeatorajaPlayableVariant | undefined {
-  for (const v of PLAYABLE_FALLBACKS[desired]) {
-    if (playSkins[v] !== undefined) return v;
-  }
-  return undefined;
+  return pickBeatorajaPlaySkinVariant(playSkins, desired);
 }
 
 export type {
