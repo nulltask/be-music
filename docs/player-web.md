@@ -664,6 +664,8 @@ The play option's HS-FIX modes keep LR2's buttons and follow beatoraja's fixed h
 
 `AVERAGE` was a time-weighted average: BPM × N + STOP gimmicks skew it (about 810 on a 145 BPM chart, so notes crawled 5.6 times too slow), and it measured the last segment on a clock that counted STOPs while the others did not. The main BPM is what beatoraja uses. Ties go to the BPM reached first, where beatoraja's pick among ties follows its hash-map order. A chart whose notes mostly sit at a gimmick BPM ("the life" puts 717 of its notes at 16,000,160) gets that BPM as its main BPM in beatoraja and in be-music alike; play such charts with HS-FIX `OFF`.
 
+Every family's play screen reads this one main BPM wherever it needs one: the play log's visible time ([playlog.md](./playlog.md#what-the-player-saw)), the built-in HUD's `mainBpm`, and the beatoraja skins' main BPM (number 92), their white and green numbers at it and their BPM graph.
+
 ## Renderer and performance controls
 
 - PixiJS defaults to a WebGPU preference and falls back through PixiJS when the browser cannot initialize it.
