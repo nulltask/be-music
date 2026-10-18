@@ -322,23 +322,23 @@ One scene lifecycle, scene sessions, family views (built-in, then LR2, then beat
 
 The web demo split into services behind one scene router ([ADR 0006](./adr/0006-scene-router.md)), on the new host API, keeping the end-to-end test hook (`window.__beMusicTest`). The F steps are behaviour fixes, each in a pull request of its own.
 
-| Step  | Scope                                                                                         | PR  | Status  |
-| ----- | --------------------------------------------------------------------------------------------- | --- | ------- |
-| P5.1a | The scene router module (`app/scene-router.ts`) with its unit tests, before `main.ts` uses it | —   | done    |
-| P5.1b | Every scene transition through the scene router                                               | —   | planned |
-| P5.2  | The settings service and a play-options service holding the full `PlayOptions`                | —   | planned |
-| P5.3  | The Debug Menu in `ui/debug-menu/`                                                            | —   | planned |
-| P5.4  | The library, records and course-maker services, and the drop target                           | —   | planned |
-| P5.5  | The LR2, beatoraja and built-in theme services, and the family kits                           | —   | planned |
-| P5.6  | The course service, and the course and NONSTOP routes                                         | —   | planned |
-| P5.7a | The select and decide routes                                                                  | —   | planned |
-| P5.7b | The play, result and replay routes                                                            | —   | planned |
-| P5.8  | The play-log, video recording and status services                                             | —   | planned |
-| P5.9  | The test hook's state as a service; contract v1 unchanged                                     | —   | planned |
-| P5.10 | `main.ts` down to the bootstrap, and off the file-size allowlist                              | —   | planned |
-| P5.F1 | A NONSTOP placement change redraws the select screen                                          | —   | planned |
-| P5.F2 | F5 restarts an AUTO play as AUTO and a replay as a replay                                     | —   | done    |
-| P5.F3 | A transition during a play ends the course run and finalizes its video recording              | —   | planned |
+| Step  | Scope                                                                                         | PR                                                    | Status  |
+| ----- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------- |
+| P5.1a | The scene router module (`app/scene-router.ts`) with its unit tests, before `main.ts` uses it | [#492](https://github.com/nulltask/be-music/pull/492) | done    |
+| P5.1b | Every scene transition through the scene router                                               | —                                                     | planned |
+| P5.2  | The settings service and a play-options service holding the full `PlayOptions`                | —                                                     | planned |
+| P5.3  | The Debug Menu in `ui/debug-menu/`                                                            | —                                                     | planned |
+| P5.4  | The library, records and course-maker services, and the drop target                           | —                                                     | planned |
+| P5.5  | The LR2, beatoraja and built-in theme services, and the family kits                           | —                                                     | planned |
+| P5.6  | The course service, and the course and NONSTOP routes                                         | —                                                     | planned |
+| P5.7a | The select and decide routes                                                                  | —                                                     | planned |
+| P5.7b | The play, result and replay routes                                                            | —                                                     | planned |
+| P5.8  | The play-log, video recording and status services                                             | —                                                     | planned |
+| P5.9  | The test hook's state as a service; contract v1 unchanged                                     | —                                                     | planned |
+| P5.10 | `main.ts` down to the bootstrap, and off the file-size allowlist                              | —                                                     | planned |
+| P5.F1 | A NONSTOP placement change redraws the select screen                                          | —                                                     | planned |
+| P5.F2 | F5 restarts an AUTO play as AUTO and a replay as a replay                                     | [#490](https://github.com/nulltask/be-music/pull/490) | done    |
+| P5.F3 | A transition during a play ends the course run and finalizes its video recording              | —                                                     | planned |
 
 #### P6: ready for devel
 
