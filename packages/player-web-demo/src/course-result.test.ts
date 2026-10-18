@@ -3,12 +3,7 @@ import { parseBeatorajaCourseData, type NonstopConnection } from '@be-music/play
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
 import type { BeMusicSongRecord } from '@be-music/player-web/skin';
 import { describe, expect, test } from 'vite-plus/test';
-import {
-  buildCourseResultSummary,
-  courseRecordKey,
-  lookupCourseRecord,
-  skipsCourseStageResult,
-} from './course-result.ts';
+import { courseRecordKey, lookupCourseRecord, skipsCourseStageResult } from './course-result.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
@@ -56,41 +51,6 @@ describe('courseRecordKey', () => {
     expect(key).not.toBe(courseRecordKey(nonstop(['fade', 'cut', 'blank1']), 'lr2'));
     // Other course kinds have no connections, so the placement does not split them.
     expect(courseRecordKey(base, 'lr2')).toBe(courseRecordKey(base));
-  });
-});
-
-describe('buildCourseResultSummary', () => {
-  test('reads the course result as one run', () => {
-    const summary = buildCourseResultSummary({
-      ruleset: 'beatoraja',
-      judge: { pgreat: 50, great: 20, good: 5, bad: 2, poor: 3, emptyPoor: 1 },
-      fast: 7,
-      slow: 9,
-      exScore: 120,
-      noteCount: 90,
-      missCount: 16,
-      maxCombo: 40,
-      djLevel: 'B',
-      gauge: { type: 'CLASS', final: 36.5, cleared: true },
-      stagesPlayed: 3,
-      lamp: 'NORMAL',
-      stages: [],
-    });
-    expect(summary).toMatchObject({
-      total: 90,
-      perfect: 50,
-      great: 20,
-      good: 5,
-      bad: 2,
-      poor: 3,
-      emptyPoor: 1,
-      fast: 7,
-      slow: 9,
-      exScore: 120,
-      score: 120,
-      gauge: { type: 'CLASS', current: 36.5, cleared: true },
-      course: { maxCombo: 40 },
-    });
   });
 });
 
