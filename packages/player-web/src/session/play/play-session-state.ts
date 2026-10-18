@@ -34,7 +34,7 @@ import type {
   TunableCompressor,
 } from '../../runtime/audio-bus.ts';
 import type { GameplayRecorder } from '../../recording/gameplay-recorder.ts';
-import type { ChartBpmRange } from './tempo-range.ts';
+import type { PlayTempoRange } from './tempo-range.ts';
 import { LongNoteTracker } from './long-note-tracker.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
@@ -333,7 +333,7 @@ export class PlaySessionState {
   longNoteStyle: LongNoteStyle | undefined;
   judgeWindows: BeMusicJudgeWindows | undefined;
   /** The chart's BPM range, worked out once per {@link prepareSong}. */
-  chartBpmRange: ChartBpmRange | undefined;
+  chartBpmRange: PlayTempoRange | undefined;
   /**
    * Scratch lanes the engine plays itself under auto-scratch (empty when it is off), resolved per {@link prepareSong}.
    * See {@link isAutoplayedChannel}.
