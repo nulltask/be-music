@@ -80,16 +80,18 @@ export class BeatorajaTimingGraphRenderer {
    *
    *   1. **Background** — paints the play's judge windows as stacked colour bands radiating
    *      outward from the centre line ({@link resolveTimingVisualizerBands}). PG band sits
-   *      innermost, then GR / GD / BD / PR. Each band reaches the matching window's early
-   *      and late ms mapped through `judgeWidthRate = width / (judgeWidthMillis * 2 + 1)`.
-   *      Defaults to IIDX-NORMAL windows when no host resolver is wired (decide / select
-   *      scenes / headless tests); no bands while a wired resolver has no windows yet.
+   *      innermost, then GR / GD / BD / PR. Each band reaches the matching window's late ms
+   *      to the left and its early ms to the right, mapped through `judgeWidthRate = width /
+   *      (judgeWidthMillis * 2 + 1)`. Defaults to IIDX-NORMAL windows when no host resolver is
+   *      wired (decide / select scenes / headless tests); no bands while a wired resolver has
+   *      no windows yet.
    *   2. **Tick marks** — semi-transparent black lines every 10 ms, painted on top of the
    *      bands as a fine-grain ruler.
    *   3. **Sample lines** — recent-judge offsets from {@link resolveTimingSamples}. Each
-   *      sample is one vertical line at the matching x; with `drawDecay = 1` (the
-   *      reference theme default) the line height tapers from full at the newest sample
-   *      to zero at the oldest, vertically centred in the region.
+   *      sample is one vertical line at the matching x ({@link resolveTimingVisualizerSampleX}:
+   *      early judgments right of the centre, late ones left, as beatoraja draws them); with
+   *      `drawDecay = 1` (the reference theme default) the line height tapers from full at the
+   *      newest sample to zero at the oldest, vertically centred in the region.
    *
    * Renders the bands AND tick marks even when no samples have arrived yet — upstream
    * generates the background on chart load (per BMSModel-change), independent of judge
@@ -202,12 +204,7 @@ export class BeatorajaTimingGraphRenderer {
         const sample = samples[i]!;
         const ageRatio = (i + 1) / samples.length; // 1 = newest, 0 ≈ oldest
         const alpha = ageRatio;
-        // Clamp to ±halfWidthMs in ms space (mirrors upstream `if (-center <= recent[j] &&
-        // recent[j] <= center)` gate in SkinTimingVisualizer.java:142). Beyond that, the
-        // sample is OFF-SCREEN; we just clamp to the edge so it stays visible at the rim.
-        const clampedDeltaMs = Math.max(-halfWidthMs, Math.min(halfWidthMs, sample.deltaMs));
-        // `x` is the LEFT edge of the line rect (matches upstream's draw-x convention).
-        const x = centerLineLeft + clampedDeltaMs * judgeWidthRate;
+        const x = resolveTimingVisualizerSampleX(sample.deltaMs, { centerLineLeft, judgeWidthRate, halfWidthMs });
         let y: number;
         let height: number;
         if (drawDecay) {
@@ -234,9 +231,11 @@ export class BeatorajaTimingGraphRenderer {
 
   /**
    * Update a timingdistribution entry. Bins every judgement's signed delta into a per-ms
-   * histogram across the destination box (one bar per ms bucket; bar height ∝ count). Each bar
-   * is colored by the most-recent judgement kind that landed at that bucket — a rough but
-   * informative cue. Optional average-line and stddev-band overlays draw on top.
+   * histogram across the destination box (one bar per ms bucket; bar height ∝ count), early
+   * judgments right of the centre and late ones left as beatoraja bins them
+   * ({@link resolveTimingDistributionBin}). Each bar is colored by the most-recent judgement
+   * kind that landed at that bucket — a rough but informative cue. Optional average-line and
+   * stddev-band overlays draw on top, on the same side.
    *
    * Hidden when:
    *   - The destination's standard `props` say so
@@ -271,12 +270,14 @@ export class BeatorajaTimingGraphRenderer {
       let sum = 0;
       let sumSq = 0;
       for (const s of samples) {
-        const idx = Math.round(s.deltaMs) + halfWidthMs;
-        if (idx < 0 || idx >= binCount) continue;
+        const idx = resolveTimingDistributionBin(s.deltaMs, halfWidthMs);
+        if (idx === undefined) continue;
         counts[idx]! += 1;
         lastKindByBin[idx] = s.kind;
-        sum += s.deltaMs;
-        sumSq += s.deltaMs * s.deltaMs;
+        // In beatoraja's sign (> 0 early), so the average and deviation land on the bars' side.
+        const offsetMs = beatorajaTimingOffsetMs(s.deltaMs);
+        sum += offsetMs;
+        sumSq += offsetMs * offsetMs;
       }
       // Bar dimensions. `lineWidth` from the skin (or fallback to 1px / bin) governs bar
       // thickness; the renderer never draws bars wider than `props.width / binCount` so the
@@ -371,11 +372,54 @@ export interface TimingVisualizerBandLayout {
 }
 
 /**
+ * A judgment's timing offset in beatoraja's sign: note time minus press time, so > 0 is early (`JudgeManager`'s
+ * `dmtime = judgenote.getMicroTime() - pmtime`, which `updateMicro` stores as `recentJudges` and the note's play time),
+ * where be-music's `deltaMs` is > 0 late. beatoraja's timing visualizer and timing distribution graph both draw offset
+ * `x` at `centre + x` (`SkinTimingVisualizer.java:145`, `SkinTimingDistributionGraph.java:129`), so early judgments
+ * sit right of the centre and late ones left.
+ */
+export function beatorajaTimingOffsetMs(deltaMs: number): number {
+  // `0 - x` rather than `-x`: a dead-on judgment stays `0`, not `-0`.
+  return 0 - deltaMs;
+}
+
+/** Where a `timingvisualizer[]` draws its sample lines: the centre line's left edge (px), its scale and its edge (ms). */
+export interface TimingVisualizerSampleLayout {
+  readonly centerLineLeft: number;
+  readonly judgeWidthRate: number;
+  readonly halfWidthMs: number;
+}
+
+/**
+ * The left edge (px from the visualizer's left) of a `timingvisualizer[]` sample line for a judgment `deltaMs` off
+ * (> 0 late): early judgments right of the centre, late ones left, as upstream `SkinTimingVisualizer.draw` places
+ * `recent[j]` (`SkinTimingVisualizer.java:145`). Upstream skips a sample beyond `±halfWidthMs`; this clamps it to the
+ * edge so it stays visible at the rim.
+ */
+export function resolveTimingVisualizerSampleX(deltaMs: number, layout: TimingVisualizerSampleLayout): number {
+  const { centerLineLeft, judgeWidthRate, halfWidthMs } = layout;
+  const offsetMs = Math.max(-halfWidthMs, Math.min(halfWidthMs, beatorajaTimingOffsetMs(deltaMs)));
+  return centerLineLeft + offsetMs * judgeWidthRate;
+}
+
+/**
+ * The `timingdistributiongraph[]` histogram bin (one per ms, `halfWidthMs` either side of the centre bin) of a judgment
+ * `deltaMs` off (> 0 late): early judgments right of the centre, late ones left, as upstream bins a note's play time
+ * (`AbstractResult.TimingDistribution.add`, drawn at `c + i` in `SkinTimingDistributionGraph.java:129`); `undefined`
+ * beyond the edge.
+ */
+export function resolveTimingDistributionBin(deltaMs: number, halfWidthMs: number): number | undefined {
+  const index = Math.round(beatorajaTimingOffsetMs(deltaMs)) + halfWidthMs;
+  return index >= 0 && index <= halfWidthMs * 2 ? index : undefined;
+}
+
+/**
  * The background bands of a `timingvisualizer[]` (upstream `SkinTimingVisualizer.prepare`, the `beforex1 / beforex2`
- * walk): PERFECT innermost, then GREAT, GOOD and BAD, each reaching its window's early ms to the left of the centre
- * and its late ms to the right (where a late judgment's sample line is drawn), less what the windows inside it already
- * cover; then POOR out to `halfWidthMs`, the visualizer's edge (none with `transparentPr`). Every reach clamps to the
- * visualizer's width (`centerX` either side).
+ * walk at `SkinTimingVisualizer.java:95-113`): PERFECT innermost, then GREAT, GOOD and BAD, each reaching its window's
+ * late ms to the left of the centre and its early ms to the right (where the judgments' sample lines land, see
+ * {@link resolveTimingVisualizerSampleX}), less what the windows inside it already cover; then POOR out to
+ * `halfWidthMs`, the visualizer's edge (none with `transparentPr`). Every reach clamps to the visualizer's width
+ * (`centerX` either side).
  */
 export function resolveTimingVisualizerBands(
   windows: TimingVisualizerWindows,
@@ -397,8 +441,9 @@ export function resolveTimingVisualizerBands(
   let leftEdge = centerX;
   let rightEdge = centerX;
   for (const reach of reaches) {
-    const newLeft = centerX - Math.min(centerX, Math.max(0, reach.earlyMs) * judgeWidthRate);
-    const newRight = centerX + Math.min(centerX, Math.max(0, reach.lateMs) * judgeWidthRate);
+    // Upstream's `judgeArea` is in beatoraja's sign (> 0 early): its lower bound, the late reach, goes left.
+    const newLeft = centerX - Math.min(centerX, Math.max(0, reach.lateMs) * judgeWidthRate);
+    const newRight = centerX + Math.min(centerX, Math.max(0, reach.earlyMs) * judgeWidthRate);
     if (newLeft < leftEdge) {
       bands.push({ x: newLeft, width: leftEdge - newLeft, color: reach.color });
       leftEdge = newLeft;
