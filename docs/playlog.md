@@ -139,10 +139,10 @@ reach the live play's result (`driver-drift.test.ts` checks long notes in every 
 under each ruleset). The judge itself takes key-state input only: a lane is down from its press to its release.
 
 A log written before the engine inferred releases holds every press of such a play, key repeats included, and no
-release at all. A replay recognises such a log (no release at all, and a lane pressed again with no release in
-between) and sends its presses through the same inference, with the graces on chart time, and records the releases it
-infers. The simulators read such a log as it is, each key down from its press on, so for such a log they can disagree
-with its replay; a log recorded now carries its releases, and the live play, its replay and the simulators agree.
+release at all. A replay reads such a log as it is, as the simulators do: each key stays down from its press to the end
+of the play, and every key repeat is a press of its own. The replay and the simulators agree on such a log, but can
+judge it differently from how it was played ([Fidelity notes](#fidelity-notes)); a log recorded now carries its
+releases, and the live play, its replay and the simulators agree.
 
 ## Compat rulesets
 
