@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { Library } from '../library/entries.ts';
 import { makeChart, makeCourse, makeCourseFolder } from '../test-support/library.ts';
-import { browseSnapshotFromSelectNavigation, captureBrowse, restoreBrowse } from './snapshot.ts';
+import { captureBrowse, restoreBrowse } from './snapshot.ts';
 import {
   browseCursor,
   browseFolder,
@@ -142,33 +142,6 @@ describe('captureBrowse / restoreBrowse', () => {
   });
 });
 
-describe('browseSnapshotFromSelectNavigation', () => {
-  test("restores the built-in / LR2 scene's cursor, and finds the parent cursor the scene lost", () => {
-    const library = makeLibrary();
-    const { state, restoredDepth } = restoreBrowse(
-      library,
-      browseSnapshotFromSelectNavigation({ folderPath: ['two'], selectedIndex: 1 }),
-    );
-    expect(restoredDepth).toBe(1);
-    expect(focusedChart(library, state)?.id).toBe('two-b');
-    // The scene restored its parent cursor as 0 and backed out onto the first folder bar; the model finds the folder's.
-    expect(browseCursor(run(library, state, { type: 'close' }))).toBe(1);
-  });
-
-  test('clamps the cursor to the restored list and reports a folder path that matched nothing', () => {
-    const library = makeLibrary();
-    expect(
-      browseCursor(
-        restoreBrowse(library, browseSnapshotFromSelectNavigation({ folderPath: ['Dan'], selectedIndex: 9 })).state,
-      ),
-    ).toBe(2);
-    expect(
-      restoreBrowse(library, browseSnapshotFromSelectNavigation({ folderPath: ['gone'], selectedIndex: 0 }))
-        .restoredDepth,
-    ).toBe(0);
-  });
-});
-
 describe('restoreBrowse over the cursors a select screen kept', () => {
   test('restores the cursor on the course a select screen left it on, the root cursor on its folder bar', () => {
     const library = makeLibrary();
@@ -176,5 +149,20 @@ describe('restoreBrowse over the cursors a select screen kept', () => {
     expect(focusedCourse(library, state)?.id).toBe('third');
     // The root cursor saved (0) pointed at the wrong bar; the model puts it on the Dan folder bar.
     expect(state.cursors).toEqual([2, 2]);
+  });
+
+  test('finds a parent cursor the snapshot did not keep', () => {
+    const library = makeLibrary();
+    const { state, restoredDepth } = restoreBrowse(library, { folderPath: ['two'], cursors: [0, 1] });
+    expect(restoredDepth).toBe(1);
+    expect(focusedChart(library, state)?.id).toBe('two-b');
+    // The saved parent cursor (0) is on the first folder bar; the model backs out onto the folder's.
+    expect(browseCursor(run(library, state, { type: 'close' }))).toBe(1);
+  });
+
+  test('clamps the cursor to the restored list and reports a folder path that matched nothing', () => {
+    const library = makeLibrary();
+    expect(browseCursor(restoreBrowse(library, { folderPath: ['Dan'], cursors: [0, 9] }).state)).toBe(2);
+    expect(restoreBrowse(library, { folderPath: ['gone'], cursors: [0, 0] }).restoredDepth).toBe(0);
   });
 });
