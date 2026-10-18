@@ -2,7 +2,7 @@ import type { TimingResolver, TimedSampleTrigger } from '@be-music/audio-rendere
 import { createEmptyJson, type BeMusicEvent } from '@be-music/json';
 import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import { describe, expect, it } from 'vite-plus/test';
-import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
+import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './result-delay.ts';
 
 const resolver = {
   beatToSeconds: (beat) => beat * 0.5,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { resolveChartBpmRange } from './gameplay-bpm-range.ts';
+import { resolveChartBpmRange } from './tempo-range.ts';
 
 describe('resolveChartBpmRange', () => {
   it('reports a constant tempo as its own range', () => {

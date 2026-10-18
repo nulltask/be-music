@@ -1,1 +1,1 @@
-export * from '../core/gameplay-result-delay.ts';
+export * from '../../session/play/result-delay.ts';

@@ -27,7 +27,7 @@ import {
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { setVideoPlaybackTempo } from '../../runtime/play-tempo.ts';
 import type { PlaySessionOptions } from './play-options.ts';
-import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
+import type { ChartBpmRange } from './tempo-range.ts';
 import { PIXELS_PER_BEAT } from '../../scene/gameplay-constants.ts';
 import { BE_MUSIC_HI_SPEED_SCALE, type PlaylogViewCursor } from '../../scene/playlog-view.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
