@@ -3,7 +3,7 @@
  * family and returns the scene to load with `prepare`, show with `PixiSceneHost.setScene` and begin with `start`.
  */
 
-import type { ResolvedPlayChart } from '@be-music/player/core/engine';
+import type { ResolvedPlayChart } from '@be-music/player';
 import type { BeMusicPlaylog, PlaylogCourseStage } from '@be-music/player/playlog';
 import { DEFAULT_PLAY_OPTIONS, type CourseView, type PlayOptions, type PlayResult } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';

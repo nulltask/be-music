@@ -379,9 +379,9 @@ export function judgeColorFor(kind: string): number {
 
 /**
  * IIDX-NORMAL judge window fallback for the `timingvisualizer[]` background bands when no
- * host resolver is wired (decide / select scenes / headless tests). Values from
- * `@be-music/player/core/judge-window` constants — keep in sync with the engine's actual
- * IIDX_*_WINDOW_MS constants.
+ * host resolver is wired (decide / select scenes / headless tests). Values from the judge
+ * window constants behind `@be-music/player/ruleset`'s `resolveJudgeWindowsMs` — keep in sync
+ * with the engine's actual IIDX_*_WINDOW_MS constants.
  */
 const IIDX_NORMAL_JUDGE_WINDOWS_MS = {
   pgreat: 16.67,

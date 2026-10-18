@@ -13,7 +13,7 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
-import type { AudioSession } from '@be-music/player/core/engine';
+import type { AudioSession } from '@be-music/player';
 import { normalizePath } from '@be-music/utils/core';
 import { type AudioBusHandle } from './audio-bus.ts';
 

@@ -1,7 +1,7 @@
 import { computeChartFingerprint, computePlayFingerprint, drawRandomOutcomes } from '@be-music/chart';
 import { createEmptyJson } from '@be-music/json';
 import { parseChart, resolveBmsControlFlowWithDraws } from '@be-music/parser';
-import { autoPlay, resolvePlayChart, type PlayerOptions } from '@be-music/player/core/engine';
+import { autoPlay, resolvePlayChart, type PlayerOptions } from '@be-music/player';
 import type { BeMusicPlaylog, PlaylogViewState } from '@be-music/player/playlog';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolvePlaylogRecording } from './play-engine.ts';

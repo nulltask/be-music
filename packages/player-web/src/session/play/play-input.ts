@@ -7,7 +7,7 @@
  * The functions read and write the scene's state through {@link PlayInputContext}; the play session passes itself.
  */
 
-import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import type { PlayerInputSignalBus } from '@be-music/player/signals';
 import { HISPEED_STEP } from '@be-music/scene-model';
 import type { Application } from 'pixi.js';
 import type { PixiSceneHost } from '../../host/scene-host.ts';

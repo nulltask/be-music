@@ -1,7 +1,6 @@
-import type { TimingResolver } from '@be-music/audio-renderer/triggers';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
-import { parseBmsBga, type BgaTimelines } from '@be-music/chart';
-import { buildBgaTimelines, pickActiveBgaCue as pickActiveCoreBgaCue } from '@be-music/player/core/bga-timeline';
+import { parseBmsBga, type BgaTimelines, type TimingResolver, buildBgaTimelines } from '@be-music/chart';
+import { pickActiveBgaCue as pickActiveCoreBgaCue } from '@be-music/player/display';
 
 export interface BgaCue {
   seconds: number;

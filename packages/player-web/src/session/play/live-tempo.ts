@@ -1,4 +1,4 @@
-import type { PlayerInputCommand } from '@be-music/player/core/input-signal-bus';
+import type { PlayerInputCommand } from '@be-music/player/signals';
 import { clampPlayTempo } from '../../runtime/play-tempo.ts';
 
 type TempoCommandSink = { pushCommand: (command: PlayerInputCommand) => void };

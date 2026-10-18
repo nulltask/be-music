@@ -159,7 +159,7 @@ import {
   setStoredSkinSetting,
   storeSkinSettings,
 } from './skin-settings.ts';
-import type { ResolvedPlayChart } from '@be-music/player/core/engine';
+import type { ResolvedPlayChart } from '@be-music/player';
 import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingles.ts';
 import {

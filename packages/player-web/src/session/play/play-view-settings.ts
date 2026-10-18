@@ -6,8 +6,8 @@
  * The functions read and write the scene's state through {@link PlayViewSettingsContext}; the play session passes itself.
  */
 
-import type { PlayerTempoChange, TempoClock } from '@be-music/player/core/engine';
-import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import type { PlayerTempoChange, TempoClock } from '@be-music/player';
+import type { PlayerInputSignalBus } from '@be-music/player/signals';
 import {
   createPlaylogViewCoalescer,
   DEFAULT_PLAYLOG_VIEW_REPLAY,

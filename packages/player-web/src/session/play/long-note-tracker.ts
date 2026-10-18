@@ -1,5 +1,5 @@
 import type { LongNoteStyle } from '@be-music/player/ruleset';
-import type { PlayerUiLongNoteMode, PlayerUiLongNoteOutcome } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerUiLongNoteMode, PlayerUiLongNoteOutcome } from '@be-music/player/signals';
 import type { BeMusicLongNoteMode, BeMusicLongNoteState } from '@be-music/skin-sdk';
 
 /**

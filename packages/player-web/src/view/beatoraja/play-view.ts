@@ -25,8 +25,8 @@ import {
 } from '@be-music/beatoraja-skin';
 import { withBeatorajaCourseStageOps } from '@be-music/beatoraja-skin/scene';
 import type { BeMusicJson } from '@be-music/json';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import type { PlayerGaugeSummary, PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+import type { ChartPlayVariant } from '@be-music/chart';
+import type { PlayerGaugeSummary, PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/signals';
 import type { ScoreSummary } from '@be-music/player/ruleset';
 import type { CourseView, HiSpeedTransition, PlayState } from '@be-music/scene-model';
 import { BEATORAJA_HI_SPEED_SCALE } from '@be-music/scene-model';

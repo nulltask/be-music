@@ -7,7 +7,7 @@
  * passes itself.
  */
 
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import type { ChartPlayVariant } from '@be-music/chart';
 import { resolveIidxRankLabel } from '@be-music/player/ruleset';
 import { resolveGameplayLaneGeometry, resolveGameplayLayout, type GameplayLayoutMode } from '@be-music/skin-sdk';
 import { recentJudgeTimings, resolveGreenNumber } from '@be-music/scene-model';

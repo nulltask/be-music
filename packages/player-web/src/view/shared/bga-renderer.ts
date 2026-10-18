@@ -7,7 +7,7 @@
  */
 
 import { pickSwitchingBgaFrame, resolveBmsBmpArgb } from '@be-music/chart';
-import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-timeline';
+import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/display';
 import { Texture } from 'pixi.js';
 import {
   buildSkinBgaFrame,
