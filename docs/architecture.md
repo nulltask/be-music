@@ -337,7 +337,7 @@ The web demo split into services behind one scene router ([ADR 0006](./adr/0006-
 | P5.9  | The test hook's state as a service; contract v1 unchanged                                     | —   | planned |
 | P5.10 | `main.ts` down to the bootstrap, and off the file-size allowlist                              | —   | planned |
 | P5.F1 | A NONSTOP placement change redraws the select screen                                          | —   | planned |
-| P5.F2 | F5 restarts an AUTO play as AUTO and a replay as a replay                                     | —   | planned |
+| P5.F2 | F5 restarts an AUTO play as AUTO and a replay as a replay                                     | —   | done    |
 | P5.F3 | A transition during a play ends the course run and finalizes its video recording              | —   | planned |
 
 #### P6: ready for devel

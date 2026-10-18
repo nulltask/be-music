@@ -150,6 +150,18 @@ export function resolveGameplayRestart(play: CoursePlayKind): 'restitch' | 'aban
 }
 
 /**
+ * The overrides a single chart plays again with (F5): the play's own AUTO and replay, not the Debug Menu's. Without
+ * them an AUTO play started from a skin's AUTO button would start again as a manual play, and a replay as a live play
+ * that keeps a record.
+ */
+export function playAgainOverrides<L>(play: { autoPlay: boolean; replay?: L | undefined }): {
+  autoPlay: boolean;
+  replay?: L;
+} {
+  return { autoPlay: play.autoPlay, ...(play.replay !== undefined ? { replay: play.replay } : {}) };
+}
+
+/**
  * What R on the result does: a NONSTOP run is stitched and played again; a single chart plays again when the last
  * play started is this chart's; a course stage or a course result offers no retry, as LR2 and beatoraja disable quick
  * retry there.
