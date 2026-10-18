@@ -545,6 +545,9 @@ class PlayerWebDemoApp {
       },
     },
     recorder: { finalize: () => finalizeRecordingIfActive(this.recordingDeps()) },
+    // A navigation the scenes did not ask for (a drop, a skin or theme change, files or a play log loaded) ends the
+    // course run, so the next single play is not taken for its next stage.
+    onInterrupt: () => this.endCourseRun(),
   });
   private collection: BrowserSongCollection = { sources: [], charts: [], errors: [] };
   /**
@@ -853,6 +856,14 @@ class PlayerWebDemoApp {
    */
   private lr2ThemeController: Controller | undefined;
   /**
+   * The Debug Menu's other skin controls that make the select screen again: Built-in skin, Skin effects and the Add
+   * skin buttons. They, {@link skinFamilyController} and {@link lr2ThemeController} are disabled during a play
+   * ({@link setSkinControlsLocked}), since going back to the select screen would end it.
+   */
+  private readonly skinControllers: Controller[] = [];
+  /** Whether a play runs, so the skin controls are disabled ({@link setSkinControlsLocked}). */
+  private skinControlsLocked = false;
+  /**
    * Disabled string controller used as the read-only status row inside the lil-gui panel. We hold a reference so {@link
    * setStatus} can call `updateDisplay()` directly rather than relying on lil-gui's `.listen()` polling.
    */
@@ -1159,10 +1170,11 @@ class PlayerWebDemoApp {
   /**
    * Takes the screen showing off the stage and disposes it (a result screen), then runs `next` (the next stage, a
    * retry) unless a newer navigation has begun meanwhile. `next` may take a while to show anything, and a live screen
-   * would keep taking its keys and clicks meanwhile, starting it over.
+   * would keep taking its keys and clicks meanwhile, starting it over. The result screen asks for it, so it carries
+   * the run on.
    */
   private async leaveThen(next: () => unknown): Promise<void> {
-    if (await this.router.leave()) next();
+    if (await this.router.leave({ continuesRun: true })) next();
   }
 
   /** Last state {@link syncGameplayShellState} applied, so the per-frame check only touches the DOM on a change. */
@@ -1683,7 +1695,7 @@ class PlayerWebDemoApp {
       });
     // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
     BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
-    skin
+    const skinEffects = skin
       .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
       .name('Skin effects')
       .onChange((level: 'full' | 'reduced' | 'off') => {
@@ -1694,6 +1706,8 @@ class PlayerWebDemoApp {
         }
         this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
       });
+    // Both make the select screen again, so they wait for the play to end.
+    this.skinControllers.push(skinPicker, skinEffects);
     // Canvas pixels per CSS pixel, 1× up to the display's ratio. Lower trades sharpness for fill-rate (tablets drop
     // under 30 fps at 2×); applies from the next frame. `?resolution=` in the URL overrides it until a pick here.
     const resolutionSteps = renderResolutionSteps(window.devicePixelRatio || 1);
@@ -1757,9 +1771,10 @@ class PlayerWebDemoApp {
       addLattice: () => this.addBeMusicSkin(latticeSkin),
       addFromUrl: () => void this.addBeMusicSkinFromUrl(skinSource.url),
     };
-    addSkins.add(skinSource, 'addLattice').name('Add Lattice');
+    // Adding a skin switches to it, which makes the select screen again: the buttons wait for the play to end.
+    this.skinControllers.push(addSkins.add(skinSource, 'addLattice').name('Add Lattice'));
     addSkins.add(skinSource, 'url').name('Skin module URL');
-    addSkins.add(skinSource, 'addFromUrl').name('Add from URL');
+    this.skinControllers.push(addSkins.add(skinSource, 'addFromUrl').name('Add from URL'));
   }
 
   /**
@@ -2651,6 +2666,21 @@ class PlayerWebDemoApp {
   }
 
   /**
+   * Ends the course run (EXPERT, GRADE or NONSTOP) when a navigation the scenes did not ask for takes over (the router's
+   * `onInterrupt`: a drop, a skin or theme change, files or a play log loaded): the run is dropped unrecorded, so the
+   * next single play is not taken for its next stage, and the select screen comes back where the course was started,
+   * unless that navigation has put it somewhere already (a drop opens what it brought). Outside a run it does nothing.
+   */
+  private endCourseRun(): void {
+    this.activeCourse = undefined;
+    this.courseAutoPlay = undefined;
+    if (this.courseReturnNavigation !== undefined) {
+      this.lastSelectNavigation ??= this.courseReturnNavigation;
+      this.courseReturnNavigation = undefined;
+    }
+  }
+
+  /**
    * An LR2 skin for a course scene: the theme's skin parsed again with the course ops (290 + kind, 280-289 for a stage),
    * so its `#IF` blocks gated on them are taken as LR2 would. Falls back to the skin as mounted.
    */
@@ -3024,6 +3054,8 @@ class PlayerWebDemoApp {
         // hypothetical future code path that observes the picker change has a single chokepoint to subscribe to.
         void this.applyLr2ThemeByName(value);
       });
+    // A theme dropped during a play brings the picker in disabled, as the other skin controls are then.
+    this.lr2ThemeController.enable(!this.skinControlsLocked);
     // lil-gui appends; move the row up next to the beatoraja pickers so the theme pickers read as one group.
     const beatorajaFolder = this.beatorajaSkinPickerFolder?.domElement;
     if (beatorajaFolder?.parentElement === folder.$children) {
@@ -3725,8 +3757,13 @@ class PlayerWebDemoApp {
         on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
       },
     );
-    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`).
-    const shown = await this.router.show(resultScene, { role: 'result', playDispose: disposeKeepingAudioTail });
+    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`). The play
+    // or the course asked for its result, so it carries the run on.
+    const shown = await this.router.show(resultScene, {
+      role: 'result',
+      playDispose: disposeKeepingAudioTail,
+      continuesRun: true,
+    });
     if (!shown) return true;
     this.setPlayStatus(
       `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · ex=${result.score.exScore} maxCombo=${result.maxCombo}`,
@@ -4268,8 +4305,9 @@ class PlayerWebDemoApp {
       await start();
       return;
     }
-    // One navigation from here into the play: the play loading behind the splash, the splash and the play share it.
-    const token = this.router.begin();
+    // One navigation from here into the play: the play loading behind the splash, the splash and the play share it. A
+    // course's splash (`then`) carries its run on; a chart's starts a run of its own.
+    const token = this.router.begin({ continuesRun: then !== undefined });
     this.lastSelectNavigation = this.selectView?.snapshot();
     // The select screen goes off the stage (kept), and any decide splash or play left over goes.
     if (!(await this.router.leave({ token }))) return;
@@ -4594,7 +4632,7 @@ class PlayerWebDemoApp {
             this.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
-            if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail }))) return;
+            if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail, continuesRun: true }))) return;
             this.unlockPlaylogOptions();
             this.continueCourse();
           })();
@@ -4729,7 +4767,11 @@ class PlayerWebDemoApp {
     } = {},
   ): Promise<void> {
     this.elements.shell.classList.add('playing');
-    const token = this.router.begin();
+    // A course stage or a NONSTOP run carries its course on; any other play (a replay dropped meanwhile included) starts
+    // a run of its own.
+    const token = this.router.begin({
+      continuesRun: overrides.courseStage !== undefined || overrides.nonstop !== undefined,
+    });
     this.lastSelectNavigation = this.selectView?.snapshot();
     // The select screen goes off the stage (kept) while the play is made. A decide splash goes before the play shows —
     // a live one would keep taking its keys and clicks — and so does a play being restarted (F5).
@@ -4875,8 +4917,13 @@ class PlayerWebDemoApp {
       audio: this.audio,
       on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
     });
-    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`).
-    const shown = await this.router.show(resultScene, { role: 'result', playDispose: disposeKeepingAudioTail });
+    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`). The play
+    // or the course asked for its result, so it carries the run on.
+    const shown = await this.router.show(resultScene, {
+      role: 'result',
+      playDispose: disposeKeepingAudioTail,
+      continuesRun: true,
+    });
     // A newer navigation that took the stage first keeps its own status; the play is still kept, saved and ranked.
     if (shown) this.setPlayStatus(`Result: ${data.song.title}`);
     if (this.testHook !== undefined) {
@@ -4908,7 +4955,7 @@ class PlayerWebDemoApp {
    * Latches the playlog-related GUI options for the play that is about to start and disables their controllers.
    * Playlog options are per-play: the value in effect at song start governs the whole play, and mid-song changes
    * are rejected by keeping the controls disabled until {@link unlockPlaylogOptions} runs (result mounted or back
-   * at select).
+   * at select). The skin controls are disabled with them ({@link setSkinControlsLocked}).
    */
   private lockPlaylogOptionsForPlay(liveTempo = false): void {
     this.activePlayAutoSavePlaylog = this.guiState.autoSavePlaylog;
@@ -4917,6 +4964,7 @@ class PlayerWebDemoApp {
     for (const controller of this.playOptionControllers) {
       controller.disable();
     }
+    this.setSkinControlsLocked(true);
     // The tempo slider changes this play's tempo live (`allowsLiveTempo`).
     this.liveTempoPlay = liveTempo;
     if (liveTempo) this.tempoController?.enable();
@@ -4943,13 +4991,26 @@ class PlayerWebDemoApp {
     }
   }
 
-  /** Re-enables the playlog option controllers once no play is in flight. */
+  /** Re-enables the playlog option controllers, and the skin controls, once no play is in flight. */
   private unlockPlaylogOptions(): void {
     this.liveTempoPlay = false;
     this.playlogSaveController?.enable();
     this.leaderboard.unlock();
     for (const controller of this.playOptionControllers) {
       controller.enable();
+    }
+    this.setSkinControlsLocked(false);
+  }
+
+  /**
+   * Disables the Debug Menu's skin controls for a play, or enables them again: Skin system, Built-in skin, Skin
+   * effects, the LR2 theme picker and the Add skin buttons all make the select screen again, which would end the play.
+   * A drop during a play still can; the router then ends the course run ({@link endCourseRun}).
+   */
+  private setSkinControlsLocked(locked: boolean): void {
+    this.skinControlsLocked = locked;
+    for (const controller of [this.skinFamilyController, this.lr2ThemeController, ...this.skinControllers]) {
+      controller?.enable(!locked);
     }
   }
 
