@@ -18,7 +18,7 @@ export const FILE_SIZE_BUDGET_LINES = 1500;
  *
  * TODO: split each of these into cohesive modules and drop it from the list (see docs/architecture.md).
  */
-export const FILE_SIZE_BUDGET_ALLOWLIST: readonly string[] = ['packages/player-web-demo/src/main.ts'];
+export const FILE_SIZE_BUDGET_ALLOWLIST: readonly string[] = [];
 
 export interface SourceFileSize {
   /** Repository-relative path with `/` separators. */
