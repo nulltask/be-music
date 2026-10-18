@@ -2,19 +2,13 @@
 // `./recording`) so the dependency surface of this demo is explicit at the file top. The main `@be-music/player-web`
 // entry is reserved for symbols that don't belong to any single entry (`logger`, `Rectangle`).
 import {
-  createDecideScene,
   createPlayScene,
   createResultScene,
-  createSelectScene,
   PixiSceneHost,
-  type DecideScene,
   type PlayScene,
   type PlaySceneKit,
-  type ResultScene,
   type ResultSceneKit,
   type SelectScene,
-  type SelectSceneKit,
-  type SelectStartEntry,
 } from '@be-music/player-web/host';
 import {
   resolveCourseView,
@@ -32,7 +26,6 @@ import {
 import type { SkinFamilyId } from '@be-music/player-web/skin';
 import {
   checkBrowserCompat,
-  describeSongCollection,
   resolveSongSource,
   type BrowserDroppedFile,
   type ChartFileHashes,
@@ -64,25 +57,17 @@ import {
   type CourseStagePlay,
 } from './course-flow.ts';
 import { resolveCourseStagePlaySettings, resolveCourseStageSettings } from '@be-music/player/course';
-import { SceneRouter, type PlayDispose, type SceneRouteToken } from './app/scene-router.ts';
+import { SceneRouter, type PlayDispose } from './app/scene-router.ts';
 import { DropTarget } from './app/drop-target.ts';
-import { settleDecidePreload, type DecidePreload } from './app/decide-handoff.ts';
 import { CourseRoute } from './app/routes/course.ts';
 import { NonstopRoute, type NonstopPlay } from './app/routes/nonstop.ts';
+import { SelectRoute } from './app/routes/select.ts';
+import { DecideRoute, playingFamily } from './app/routes/decide.ts';
 import demoPackageJson from '../package.json' with { type: 'json' };
 
 const dropLog = logger('drop');
 const gameplayLog = logger('gameplay');
 const fullscreenLog = logger('fullscreen');
-
-/** Every screen the demo shows, each made by its `create*Scene`. */
-type DemoScene = SelectScene | DecideScene | PlayScene | ResultScene;
-
-/** What a play loading behind a decide screen is made with: the start's AUTO, and the chart as the screen drew it. */
-interface DecidePlayOverrides {
-  readonly autoPlay?: boolean;
-  readonly preResolved: ResolvedPlayChart;
-}
 
 /** Ends a play whose result shows: it exited as the result entered, and its last samples ring out. */
 const disposeKeepingAudioTail: PlayDispose<PlayScene> = (play) => play.dispose({ preserveAudioTail: true });
@@ -127,11 +112,11 @@ import {
   toggleRecording,
   type RecordingDeps,
 } from './recording-controller.ts';
-import type { DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
+import type { DemoGuiState, DemoScene, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
 import { createDemoGuiState, resolveCompressorMode, storeBuiltInSkinId } from './services/settings.ts';
 import { BE_MUSIC_SKINS, waitForDefaultUiFonts } from './services/built-in-skins.ts';
 import { SilentModeSetting } from './services/silent-mode.ts';
-import { copyPlayOptionsToGui, playOptionsFromGui, PlayOptionsService } from './services/play-options.ts';
+import { playOptionsFromGui, PlayOptionsService } from './services/play-options.ts';
 import { PlaylogAutoSave } from './services/playlog-auto-save.ts';
 import { CourseMakerService } from './services/course-maker.ts';
 import { LibraryService } from './services/library.ts';
@@ -159,17 +144,6 @@ if (!app) {
 }
 
 app.innerHTML = DEMO_APP_HTML;
-
-/** What a decide screen leads to instead of playing its song: a course's first stage, and what backing out undoes. */
-interface DecideContinuation {
-  start: () => Promise<void>;
-  cancel?: () => void;
-}
-
-/** The family a play's status line names: the beatoraja play's; the built-in and LR2 plays name none. */
-function playingFamily(view: PlayScene): { family?: 'beatoraja' } {
-  return view.identity.family === 'beatoraja' ? { family: 'beatoraja' } : {};
-}
 
 class PlayerWebDemoApp {
   /** The LR2 theme: every theme the drops brought, the one mounted, and its skins, BGM and system sounds. */
@@ -275,11 +249,17 @@ class PlayerWebDemoApp {
    * built-in decide and result screens so far. The other screens still play on contexts of their own.
    */
   private readonly audio: AudioService = createAudioService();
-  /**
-   * Last-known cursor / folder state of the select view, captured before gameplay so returning to song select restores
-   * the user's position.
-   */
-  private lastSelectNavigation: BrowseSnapshot | undefined;
+  /** The select screen, from its first showing to every return, and the starts made on it (`app/routes/select.ts`). */
+  private readonly selectRoute: SelectRoute;
+  /** A start's decide screen, and the play it hands the stage to (`app/routes/decide.ts`). */
+  private readonly decideRoute: DecideRoute;
+  /** Where the select screen was, for its next showing to come back to (the select route's). */
+  private get lastSelectNavigation(): BrowseSnapshot | undefined {
+    return this.selectRoute.lastSelectNavigation;
+  }
+  private set lastSelectNavigation(navigation: BrowseSnapshot | undefined) {
+    this.selectRoute.lastSelectNavigation = navigation;
+  }
   /** Whether the status line describes a play or result, which a return to the select screen replaces. */
   private playStatusShown = false;
   /** The skin system the "Drop a skin" prompt asked for, until a drop answers it or it is cancelled. */
@@ -439,7 +419,7 @@ class PlayerWebDemoApp {
       testHook: this.testHook,
       setStatus: (text) => this.setStatus(text),
       showSelect: () => this.showSelect(),
-      showDecide: (song, overrides, then) => this.showDecide(song, overrides, then),
+      showDecide: (song, overrides, then) => this.decideRoute.showDecide(song, overrides, then),
       playSong: (song, overrides) => this.playSong(song, overrides),
       showResult: (data, mode) => this.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.showBeatorajaResult(data, options),
@@ -458,7 +438,7 @@ class PlayerWebDemoApp {
       setStatus: (text) => this.setStatus(text),
       startNonstopCourse: (course, options) => this.nonstopRoute.startNonstopCourse(course, options),
       showSelect: () => this.showSelect(),
-      showDecide: (song, overrides, then) => this.showDecide(song, overrides, then),
+      showDecide: (song, overrides, then) => this.decideRoute.showDecide(song, overrides, then),
       playSong: (song, overrides) => this.playSong(song, overrides),
       showResult: (data, mode) => this.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.showBeatorajaResult(data, options),
@@ -466,6 +446,54 @@ class PlayerWebDemoApp {
     });
     this.debugMenu = new DebugMenu(this.debugMenuDeps());
     this.beatorajaSkinOptions = new BeatorajaSkinOptionsPanel(this.beatorajaSkinOptionsDeps());
+    this.selectRoute = new SelectRoute({
+      router: this.router,
+      elements,
+      library: this.library,
+      records: this.records,
+      courses: this.courses,
+      courseRoute: this.courseRoute,
+      courseMaker: this.courseMaker,
+      familyKits: this.familyKits,
+      lr2: this.lr2,
+      beatoraja: this.beatoraja,
+      builtIn: this.builtIn,
+      playOptions: this.playOptions,
+      guiState: this.guiState,
+      audio: this.audio,
+      search: this.search,
+      debugMenu: this.debugMenu,
+      beatorajaSkinOptions: this.beatorajaSkinOptions,
+      playStatusShown: () => this.playStatusShown,
+      setStatus: (text) => this.setStatus(text),
+      unlockPlaylogOptions: () => this.unlockPlaylogOptions(),
+      rememberHiSpeed: (value, source) => this.rememberHiSpeed(value, source),
+      showDecide: (song, overrides) => this.decideRoute.showDecide(song, overrides),
+    });
+    this.decideRoute = new DecideRoute({
+      router: this.router,
+      selectRoute: this.selectRoute,
+      elements,
+      library: this.library,
+      records: this.records,
+      familyKits: this.familyKits,
+      beatoraja: this.beatoraja,
+      playOptions: this.playOptions,
+      guiState: this.guiState,
+      audio: this.audio,
+      beatorajaSkinOptions: this.beatorajaSkinOptions,
+      lastPlay: () => this.lastPlay,
+      recordingDeps: () => this.recordingDeps(),
+      setRecordingFilenameBase: (base) => {
+        this.recordingFilenameBase = base;
+      },
+      setStatus: (text) => this.setStatus(text),
+      setPlayStatus: (text) => this.setPlayStatus(text),
+      lockPlaylogOptionsForPlay: (liveTempo) => this.lockPlaylogOptionsForPlay(liveTempo),
+      showSelect: () => this.showSelect(),
+      playSong: (song, overrides) => this.playSong(song, overrides),
+      buildPlayScene: (song, kit, overrides) => this.buildPlayScene(song, kit, overrides),
+    });
   }
 
   /** What the Debug Menu reaches of the app: the settings and services, readers of the app's state, and its actions. */
@@ -1082,236 +1110,9 @@ class PlayerWebDemoApp {
     return true;
   }
 
-  private async showSelect(): Promise<void> {
-    // Back from a play or a result: the status line describes the library again instead of the play just left.
-    if (this.playStatusShown) this.setStatus(describeSongCollection(this.library.collection));
-    // Back from a course: the cursor returns to the course bar it was started from.
-    const courseReturn = this.courses.takeReturnNavigation();
-    if (courseReturn !== undefined) this.lastSelectNavigation = courseReturn;
-    this.elements.shell.classList.remove('playing');
-    this.unlockPlaylogOptions();
-    // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
-    // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
-    // canvas.
-    this.elements.shell.classList.toggle('empty', this.library.collection.charts.length === 0);
-    // Family dispatch. The Debug Menu's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default). The
-    // beatoraja family draws the theme's select entry when the library has charts (an empty library shows the built-in
-    // screen's drop hint); the LR2 family draws the loaded LR2 select skin when it has a bar list; otherwise the built-in
-    // family draws the be-music skin.
-    const activeFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'select');
-    const beatorajaKit =
-      activeFamily === 'beatoraja' && this.library.collection.charts.length > 0
-        ? await this.beatoraja.loadBeatorajaSelectKit()
-        : undefined;
-    const lr2SelectSkin =
-      activeFamily === 'lr2' && this.lr2.selectSkin !== undefined && this.lr2.selectSkin.barLayout.slots.length > 0
-        ? this.lr2.selectSkin
-        : undefined;
-    const kit: SelectSceneKit =
-      beatorajaKit ?? (lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtIn.builtInKit);
-    const current = this.selectView;
-    if (current !== undefined && current.identity.family !== kit.family) {
-      // The family changed (an LR2 or a beatoraja theme dropped while the built-in screen is up, or the other way
-      // round): only that family's view draws it, so the screen is made again below, carrying the cursor across (the
-      // play options are the service's).
-      this.lastSelectNavigation ??= current.snapshot();
-      await this.router.dropSelect();
-    }
-    const sounds = this.familyKits.selectSoundSet(kit.family);
-    // Whatever shows (a play, a result, a decide splash, Escape from it included) exits as the select screen enters and
-    // then goes, and so does a play loading behind a decide splash; the router keeps the select scene.
-    const kept = this.selectView;
-    if (kept) {
-      // The latest theme's skin and sounds go onto the scene BEFORE it shows again: off the stage it only takes them, and
-      // its BGM starts as it enters. The other way round, the previous theme's BGM would start for a moment.
-      if (kit.family !== 'built-in') kept.updateKit(kit);
-      kept.setSounds(sounds);
-      kept.setLibrary(this.library.collection);
-      if (!(await this.router.show(kept, { role: 'select' }))) return;
-      if (this.lastSelectNavigation) kept.restore(this.lastSelectNavigation);
-      if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
-      return;
-    }
-    // The screen starts from the play options in force (two-way sync: the screen's own edits come back through
-    // `on.playOptions` below; lil-gui edits push through `setPlayOptions`).
-    const playOptions = this.playOptions.current;
-    // The select session plays through the audio service; its decide jingle plays out through the decide screen into
-    // the play.
-    const scene = createSelectScene(kit, {
-      library: this.library.collection,
-      ...(this.lastSelectNavigation !== undefined ? { browse: this.lastSelectNavigation } : {}),
-      playOptions,
-      records: {
-        chart: (song) => this.records.lookupSongRecord(song),
-        course: (course) =>
-          lookupCourseRecord(course, this.records.currentRulesetRecords(), this.guiState.nonstopPlacement),
-      },
-      sounds,
-      audio: this.audio,
-      courseMaker: this.courseMaker.maker,
-      on: {
-        start: (entry, { autoPlay }) => this.startFromSelect(entry, autoPlay),
-        playOptions: (options) => {
-          // Keep the screen's play option edits (an LR2 panel, a skin's buttons) and mirror them into the Debug Menu
-          // state so both surfaces always agree, then repaint the lil-gui controllers.
-          this.playOptions.update(options);
-          copyPlayOptionsToGui(options, this.guiState);
-          if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
-          this.debugMenu.refreshPlayOptionControllers();
-        },
-        search: () => this.search.openFromPointer(),
-        // An LR2 skin's course name (text 170) and delete button (233): the panel names the course or confirms first.
-        courseMaker: (action, course) => {
-          if (action === 'name') this.courseMaker.panel?.focusName();
-          else if (course !== undefined) this.courseMaker.panel?.confirmDelete(course.definition);
-        },
-        // A beatoraja skin's JUDGE TIMING button: the options are kept for the entry and the skin loaded again with
-        // them, which also brings the skin-options panel's readout up to date.
-        skinConfigChange: (config) => {
-          const entryPath = this.beatoraja.beatorajaSelectKit?.entryPath;
-          if (entryPath === undefined) return;
-          this.beatoraja.beatorajaKitCaches.skinConfigs.set(entryPath, config);
-          void this.beatoraja.applyBeatorajaSelectSkinConfig(entryPath, config);
-        },
-        // Escape at the root of a beatoraja select screen leaves it for the drop screen, as beatoraja's leaves the
-        // player's select; coming back by a drop or a theme starts at the root.
-        exit: () => {
-          this.elements.shell.classList.add('empty');
-          void this.router.dropSelect();
-          this.lastSelectNavigation = undefined;
-          this.beatorajaSkinOptions.clear();
-        },
-      },
-    });
-    if (!(await this.router.show(scene, { role: 'select' }))) return;
-    if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
-    this.debugMenu.scheduleFirstRunResolutionDetect();
-  }
-
-  /**
-   * A chart or a course started on the select screen. While a course is being made, a chart joins it instead of playing
-   * (as LR2 does); a course starts its run, or says why it cannot. Returns whether a play starts, so the screen plays
-   * the decide jingle only then.
-   */
-  private startFromSelect(entry: SelectStartEntry, autoPlay: boolean): boolean {
-    if (entry.kind === 'chart') {
-      if (this.courseMaker.addSongToCourseBeingMade(entry.chart)) return false;
-      // The skin's AUTOPLAY forces auto play for this play only; the Debug Menu's checkbox keeps its state.
-      void this.showDecide(entry.chart, autoPlay ? { autoPlay: true } : {});
-      return true;
-    }
-    void this.courseRoute.startCourse(entry.course, autoPlay ? { autoPlay: true } : {});
-    return entry.course.playable;
-  }
-
-  /**
-   * Mounts the decide-screen splash and routes the user into gameplay when it dismisses (auto-advance OR Enter / Space
-   * / Escape input). Without a decide skin, falls straight through to `playSong` so themes that don't ship a Decide
-   * directory still play the chart immediately. Every family's splash is `createDecideScene`'s: on the beatoraja family
-   * the theme's decide entry, on the LR2 family the theme's decide skin, on the default family the be-music skin's own
-   * decide screen, shown only when the skin declares one.
-   *
-   * The select screen's decide jingle, started as the chart was picked, plays on through the splash, which visually
-   * masks the chart-load + gameplay-mount window that comes next. The beatoraja splash plays its theme's decide sound
-   * itself.
-   */
-  private async showDecide(
-    song: LibraryChart,
-    overrides: { autoPlay?: boolean } = {},
-    then?: DecideContinuation,
-  ): Promise<void> {
-    const start = then?.start ?? (() => this.playSong(song, overrides));
-    // Family dispatch for the decide splash. Note this is decoupled from the gameplay family pick: a user can be
-    // playing in LR2 mode and have a beatoraja-only decide skin, or vice versa. The decide splash is a one-shot
-    // overlay so each scene transition consults the family helper afresh.
-    const decideFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'decide', song);
-    const playsOnBeatoraja = this.familyKits.playsOnBeatoraja(song);
-    const kit = await this.familyKits.decideKitFor(decideFamily, song, playsOnBeatoraja);
-    if (kit === undefined) {
-      // No decide splash: a be-music skin without one, an LR2-only setup that didn't ship a decide skin, or a beatoraja
-      // theme without a decide skin (or one that failed to load). The select screen's decide jingle still plays.
-      await start();
-      return;
-    }
-    // One navigation from here into the play: the play loading behind the splash, the splash and the play share it. A
-    // course's splash (`then`) carries its run on; a chart's starts a run of its own.
-    const token = this.router.begin({ continuesRun: then !== undefined });
-    this.lastSelectNavigation = this.selectView?.snapshot();
-    // The select screen goes off the stage (kept), and any decide splash or play left over goes.
-    if (!(await this.router.leave({ token }))) return;
-    // Build the gameplay view eagerly and kick off its heavy load (chart parse, audio decode, BGA preload) IN PARALLEL
-    // with the Decide animation, off stage (`prepare` attaches nothing until the play is shown). The Decide splash
-    // typically runs ~3 s; chart asset decoding is mostly done by the time the splash auto-advances, so the hand-off to
-    // gameplay becomes instant instead of dropping a frozen frame.
-    // A course starts its own play once the splash is done, so nothing is preloaded for it. The play is preloaded once the
-    // decide screen is made, whichever family draws either, so it plays the `#RANDOM` branches the screen drew
-    // (`DecideScene.resolved`).
-    let preload: DecidePreload<PlayScene, DecidePlayOverrides> | undefined;
-    let advanced = false;
-    const advance = (then: () => void): void => {
-      // Idempotent — the auto-advance timer, key input, and pointer click can all race; whichever lands first wins and
-      // re-entries no-op.
-      if (advanced) return;
-      advanced = true;
-      then();
-    };
-    const callbacks = {
-      onContinue: () =>
-        advance(() => {
-          // A course's play takes the stage from the splash as it starts.
-          if (preload === undefined) {
-            void start();
-            return;
-          }
-          void this.startGameplayAfterDecide(song, preload, token);
-        }),
-      onCancel: () =>
-        advance(() => {
-          // User backed out of the splash: the select screen comes back, and the play prepared behind the splash goes.
-          then?.cancel?.();
-          void this.showSelect();
-        }),
-    };
-    const decide = createDecideScene(kit, {
-      chart: song,
-      playOptions: { ...this.playOptions.current, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay },
-      source: resolveSongSource(this.library.collection, song),
-      // The LR2 / built-in select screen plays the theme's decide jingle as the chart is picked, and lets it ring on
-      // into the play, so those screens play none of their own. The beatoraja screen plays its theme's decide sound.
-      sounds: kit.family === 'beatoraja' ? systemSoundSetFromBeatoraja({ bgm: this.beatoraja.beatorajaThemeBgm }) : {},
-      audio: this.audio,
-      on: { continue: callbacks.onContinue, cancel: callbacks.onCancel },
-    });
-    if (then === undefined) {
-      const options = { ...overrides, preResolved: decide.resolved };
-      preload = { options, play: this.preloadGameplay(song, options, token) };
-    }
-    const shown = await this.router.show(decide, { role: 'decide', token });
-    if (shown && kit.family === 'beatoraja') this.setStatus(`Decide (beatoraja): ${song.title}`);
-  }
-
-  /**
-   * Makes the play scene (`createPlayScene`) with the current play-options snapshot and has the router load it off
-   * stage (`prepare`) for the navigation `token`. The returned promise resolves to that play once chart audio is decoded
-   * (`undefined` when a newer navigation replaced it) — the host awaits it inside the Decide `onContinue` handler and
-   * shows that play.
-   *
-   * Wired up here (rather than inline in `showDecide`) because the same option-marshalling + callback wiring is needed
-   * whether we're going through Decide or the no-decide fast-path. `playSong` shares this construction shape.
-   */
-  private async preloadGameplay(
-    song: LibraryChart,
-    overrides: { autoPlay?: boolean; preResolved?: ResolvedPlayChart },
-    token: SceneRouteToken,
-  ): Promise<PlayScene | undefined> {
-    this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
-    // The same kit as `playSong` picks, so the decide → gameplay preload path stays consistent with the no-decide
-    // fast-path.
-    const kit = await this.familyKits.resolvePlayKit(song, {});
-    if (kit === undefined) throw new Error(`no play skin for ${song.title}`);
-    const chartHashes = await this.records.resolveChartHashes(song);
-    const view = this.buildPlayScene(song, kit, { ...overrides, chartHashes });
-    return (await this.router.prepare(view, { token })) ? view : undefined;
+  /** Shows the select screen (`SelectRoute.showSelect`): at start-up, and on every way back to it. */
+  private showSelect(): Promise<void> {
+    return this.selectRoute.showSelect();
   }
 
   /**
@@ -1570,48 +1371,6 @@ class PlayerWebDemoApp {
         tempo: onTempoChange,
       },
     });
-  }
-
-  /**
-   * Tears the Decide splash down and hands the stage over to the play prepared behind it (`preload`), that play and no
-   * other. Awaits the preload: when the user dismisses Decide before chart audio has finished decoding, the splash's
-   * last frame stays on screen until prepare resolves — visually a brief hold rather than the previous frozen-frame
-   * freeze. A preload that failed makes the play again without one, with the splash's draws (`preResolved`).
-   */
-  private async startGameplayAfterDecide(
-    song: LibraryChart,
-    preload: DecidePreload<PlayScene, DecidePlayOverrides>,
-    token: SceneRouteToken,
-  ): Promise<void> {
-    const handOff = await settleDecidePreload(preload, () => this.router.isCurrent(token));
-    if (handOff.kind === 'stale') return;
-    if (handOff.kind === 'reload') {
-      // The play that failed to load is gone already; the splash goes as the play made again takes the stage.
-      gameplayLog.warn('preload failed; falling back to no-decide path', handOff.error);
-      await this.playSong(song, handOff.options);
-      return;
-    }
-    const view = handOff.play;
-    this.elements.shell.classList.add('playing');
-    this.lastSelectNavigation = this.selectView?.snapshot();
-    // The splash hands the stage over: it exits as the prepared play enters, then goes.
-    if (!(await this.router.show(view, { role: 'play', token }))) return;
-    this.setPlayStatus(
-      describePlayingStatus(song.title, {
-        ...playingFamily(view),
-        tempoPercent: this.guiState.tempoPercent,
-        replay: this.lastPlay?.overrides.replay !== undefined,
-      }),
-    );
-    this.lockPlaylogOptionsForPlay(
-      allowsLiveTempo(this.guiState, {
-        replay: this.lastPlay?.overrides.replay !== undefined,
-        tempo: view.getTempo(),
-      }),
-    );
-    view.start();
-    startArmedRecording(this.recordingDeps());
-    this.beatorajaSkinOptions.refreshBeatorajaPlaySkinOptions();
   }
 
   private async playSong(
