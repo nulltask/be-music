@@ -267,7 +267,7 @@ import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { navigationAfterDrop } from './drop-navigation.ts';
 import { InlineSearch } from './inline-search.ts';
-import { parseRecordingFormatKey, recordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
+import { parseRecordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
 import { readStoredHiSpeed, storeHiSpeed } from './hi-speed-storage.ts';
 import {
   allowsLiveTempo,
@@ -296,10 +296,8 @@ import {
 } from './fullscreen.ts';
 import {
   type PlayLayoutChoice,
-  type SkinEffectsLevel,
   readDeviceSignals,
   resolvePlayLayoutMode,
-  resolveDefaultSkinEffects,
   resolveDeviceProfile,
 } from './device-profile.ts';
 import {
@@ -335,6 +333,18 @@ import {
 } from './render-resolution.ts';
 import type { DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
 import {
+  readStoredBuiltInSkinId,
+  readStoredPlayLayout,
+  readStoredRecordingFormat,
+  readStoredSkinEffects,
+  readStoredVolumes,
+  storeBuiltInSkinId,
+  storePlayLayout,
+  storeRecordingFormat,
+  storeSkinEffects,
+  storeVolumes,
+} from './services/settings.ts';
+import {
   describeBar,
   isTestHookEnabled,
   nameJingle,
@@ -364,7 +374,6 @@ const EXTRA_BUILT_IN_SKINS_ENABLED = false;
 const BE_MUSIC_SKINS = createBeMusicSkinRegistry(
   EXTRA_BUILT_IN_SKINS_ENABLED ? BUILT_IN_BE_MUSIC_SKINS : [synesthesiaSkin, plainSkin],
 );
-const BUILT_IN_SKIN_STORAGE_KEY = 'be-music-demo.built-in-skin';
 // Lattice ships with the player but isn't loaded by default; bring it back when it was the last skin picked.
 if (EXTRA_BUILT_IN_SKINS_ENABLED && readStoredBuiltInSkinId() === latticeSkin.id) BE_MUSIC_SKINS.add(latticeSkin);
 
@@ -372,103 +381,6 @@ if (EXTRA_BUILT_IN_SKINS_ENABLED && readStoredBuiltInSkinId() === latticeSkin.id
 function loadSkinFonts(skin: BeMusicSkin): void {
   if (!('fonts' in document)) return;
   for (const font of skin.fontLoads) void document.fonts.load(font).catch(() => {});
-}
-
-function readStoredBuiltInSkinId(): string | undefined {
-  try {
-    return window.localStorage.getItem(BUILT_IN_SKIN_STORAGE_KEY) ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-const SKIN_EFFECTS_STORAGE_KEY = 'be-music-demo.skin-effects';
-
-/** Stored effect level, else `'reduced'` on a phone / tablet or when the OS asks for reduced motion, else `'full'`. */
-function readStoredSkinEffects(): SkinEffectsLevel {
-  let stored: string | null = null;
-  try {
-    stored = window.localStorage.getItem(SKIN_EFFECTS_STORAGE_KEY);
-  } catch {
-    // Storage blocked — fall back to the device default.
-  }
-  return resolveDefaultSkinEffects(stored, readDeviceSignals());
-}
-
-const PLAY_LAYOUT_STORAGE_KEY = 'be-music-demo.play-layout';
-
-/** Stored Debug Menu play-layout pick, `'auto'` when none. */
-const RECORDING_FORMAT_STORAGE_KEY = 'be-music-demo.recording-format';
-
-/** The remembered "Video format" (`mp4/avc`, `webm/vp9`, …); MP4 · H.264 when none is stored or it is unknown. */
-function readStoredRecordingFormat(): string {
-  try {
-    return recordingFormatKey(parseRecordingFormatKey(window.localStorage.getItem(RECORDING_FORMAT_STORAGE_KEY)));
-  } catch {
-    // Storage blocked — use the default.
-    return recordingFormatKey(parseRecordingFormatKey(null));
-  }
-}
-
-function storeRecordingFormat(key: string): void {
-  try {
-    window.localStorage.setItem(RECORDING_FORMAT_STORAGE_KEY, key);
-  } catch {
-    // Storage blocked — the choice lasts for this visit only.
-  }
-}
-
-function readStoredPlayLayout(): PlayLayoutChoice {
-  try {
-    const stored = window.localStorage.getItem(PLAY_LAYOUT_STORAGE_KEY);
-    if (stored === 'auto' || stored === 'standard' || stored === 'touch') return stored;
-  } catch {
-    // Storage blocked — use the default.
-  }
-  return 'auto';
-}
-
-function storeBuiltInSkinId(id: string): void {
-  try {
-    window.localStorage.setItem(BUILT_IN_SKIN_STORAGE_KEY, id);
-  } catch {
-    // Private windows / blocked storage: the pick still applies for this session.
-  }
-}
-
-const VOLUME_STORAGE_KEY = 'be-music-demo.volumes';
-
-interface StoredVolumes {
-  masterVolume: number;
-  keyVolume: number;
-  bgmVolume: number;
-}
-
-/** Master / keysound / BGM volumes in percent, as last set in the Debug Menu (all 100 when nothing is stored). */
-function readStoredVolumes(): StoredVolumes {
-  const fallback = { masterVolume: 100, keyVolume: 100, bgmVolume: 100 };
-  try {
-    const raw = window.localStorage.getItem(VOLUME_STORAGE_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Partial<Record<keyof StoredVolumes, unknown>>;
-    const percent = (value: unknown, otherwise: number) =>
-      typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : otherwise;
-    return {
-      masterVolume: percent(parsed.masterVolume, 100),
-      keyVolume: percent(parsed.keyVolume, 100),
-      bgmVolume: percent(parsed.bgmVolume, 100),
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-function storeVolumes(volumes: StoredVolumes): void {
-  try {
-    window.localStorage.setItem(VOLUME_STORAGE_KEY, JSON.stringify(volumes));
-  } catch {
-    // Private windows / blocked storage: the volumes still apply for this session.
-  }
 }
 
 const DEFAULT_UI_FONT_LOADS: readonly string[] = [
@@ -1699,11 +1611,7 @@ class PlayerWebDemoApp {
       .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
       .name('Skin effects')
       .onChange((level: 'full' | 'reduced' | 'off') => {
-        try {
-          window.localStorage.setItem(SKIN_EFFECTS_STORAGE_KEY, level);
-        } catch {
-          // Private windows / blocked storage: the pick still applies for this session.
-        }
+        storeSkinEffects(level);
         this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
       });
     // Both make the select screen again, so they wait for the play to end.
@@ -1731,13 +1639,7 @@ class PlayerWebDemoApp {
     skin
       .add(this.guiState, 'playLayout', { Auto: 'auto', Desktop: 'standard', Touch: 'touch' })
       .name('Play layout')
-      .onChange((choice: PlayLayoutChoice) => {
-        try {
-          window.localStorage.setItem(PLAY_LAYOUT_STORAGE_KEY, choice);
-        } catch {
-          // Private windows / blocked storage: the pick still applies for this session.
-        }
-      });
+      .onChange((choice: PlayLayoutChoice) => storePlayLayout(choice));
     // Picks between LR2 / beatoraja's "a judged note stays until its time" and "a judged note goes the moment it is
     // judged". Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint — the
     // visibility check is a single per-frame branch with no backing state to rebuild.
