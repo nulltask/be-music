@@ -224,8 +224,9 @@ flowchart LR
 - **Hi-speed** (`HiSpeedState`). The player's hi-speed, on their own scale, and the drawn one the notes scroll with: the
   player's times the chart's HS-FIX multiplier (`resolveHsFixMultiplier`: MAXBPM, MINBPM and AVERAGE keep that BPM at
   the player's hi-speed, CONSTANT scrolls as AVERAGE for now). The player's keys step the player's value; a drawn value
-  from a replay's recorded view (`hi-speed-drawn`) is taken as it is. A course's `no_speed` locks the player's changes
-  and the replay's; the host's setting still applies.
+  from a replay's recorded view (`hi-speed-drawn`) is taken as it is. A course's `no_speed` locks the player's changes;
+  the host's setting and a replay's recorded hi-speed still apply, as a replay's recorded covers do. beatoraja's
+  `no_speed` holds the hi-speed and the covers together (`LaneRenderer`), so a replay shows both as they were played.
 - **Lane covers** (`LaneCoverState` per side). SUDDEN+, HIDDEN+ and LIFT, each with a height kept while it is off. A
   play starts with the select screen's options (`laneCoversFromPlayOptions`: the HIDDEN / SUDDEN mode per side, the one
   lane cover height and the LANE COVER switch); during the play a cover is raised (coming on), lowered (going off at
@@ -250,7 +251,7 @@ flowchart LR
 | Timed judgments              | PERFECT … POOR, with time and lane; the latest 64 | Any kind, offset and kind only; the latest 50                   | PERFECT … POOR, with time and lane; the latest 64 by default      |
 | Early / late per judgment    | None                                              | Counted                                                         | Counted (beatoraja; LR2 has none)                                 |
 | HS-FIX                       | Applied                                           | Not applied                                                     | Applied (beatoraja's fixed hi-speed modes; LR2 has none)          |
-| Hi-speed lock (`no_speed`)   | Keys ignored, host taken                          | Keys ignored, engine change reverted, host taken                | Player and replay changes ignored, host taken                     |
+| Hi-speed lock (`no_speed`)   | Keys ignored, replay and host taken               | Keys ignored, engine change reverted, host taken                | Locked for the player; a replay's or the host's setting applies   |
 | Covers at the start          | From the play options                             | Off                                                             | From the play options (LR2)                                       |
 | Covers during the play       | Fixed                                             | Lane cover, LIFT and HIDDEN keys, wheel and buttons; every side | beatoraja's adjustments (LR2 has none), on one side or every side |
 | HIDDEN+ lowered to nothing   | —                                                 | Keys keep it on, the button turns it off                        | Off                                                               |
