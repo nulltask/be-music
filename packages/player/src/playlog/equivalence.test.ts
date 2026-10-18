@@ -307,6 +307,59 @@ describe('engine / simulator equivalence', () => {
     }
   });
 
+  // A terminal play logged before the engine inferred releases: every press, key repeats included, and no release. A
+  // replay reads it as it is, as the simulator does: each key is down from its first press to the end of the play.
+  test.each(RULESETS)('%s: a log without releases replays as it is and agrees on both sides', async (ruleset) => {
+    const inputs = [
+      down(0, 1_000_000, '11'),
+      down(1, 1_250_000, '12'),
+      down(2, 1_300_000, '12'),
+      down(3, 1_500_000, '11'),
+      down(4, 1_500_000, '12'),
+      down(5, 1_540_000, '11'),
+      down(6, 1_580_000, '11'),
+      down(7, 2_200_000, '13'),
+    ];
+    for (const lnMode of [1, 2, 3] as const) {
+      // A long note on 11 whose key repeats, two notes on 12 with a repeat between them, and a mine crossing 13.
+      const json = chart([
+        { measure: 1, channel: '11', position: [0, 1], value: '01' },
+        { measure: 1, channel: '12', position: [1, 4], value: '01' },
+        { measure: 1, channel: '12', position: [1, 2], value: '01' },
+        { measure: 2, channel: '11', position: [0, 1], value: 'AA' },
+        { measure: 2, channel: '13', position: [1, 5], value: '01' },
+        { measure: 2, channel: 'D3', position: [1, 2], value: '0A' },
+        { measure: 4, channel: '19', position: [0, 1], value: '01' },
+      ]);
+      json.bms.lnObjs = ['AA'];
+      json.bms.lnMode = lnMode;
+      const name = `#LNMODE ${lnMode}`;
+
+      const { summary, playlog } = await replay(json, inputs, ruleset);
+      const simulated = simulatePlaylog(playlog, { ruleset });
+
+      // The replay infers no release: it re-records the presses it was given.
+      expect(
+        playlog.inputs.map(({ timeUs, action, channels }) => ({ timeUs, action, channels })),
+        name,
+      ).toEqual(inputs.map(({ timeUs, action, channels }) => ({ timeUs, action, channels })));
+      expect(
+        [summary.perfect, summary.great, summary.good, summary.bad, summary.poor, summary.emptyPoor],
+        name,
+      ).toEqual([
+        simulated.judge.pgreat,
+        simulated.judge.great,
+        simulated.judge.good,
+        simulated.judge.bad,
+        simulated.judge.poor,
+        simulated.judge.emptyPoor,
+      ]);
+      expect(summary.exScore, name).toBe(simulated.exScore);
+      expect(playlog.results?.native?.maxCombo, name).toBe(simulated.maxCombo);
+      expect(summary.gauge?.current, name).toBeCloseTo(simulated.gauge.final, 2);
+    }
+  });
+
   // Channel 16 is a key, not a scratch, in the BME-type 9 KEY layout and the keyboard modes: AUTO SCRATCH must leave
   // it to the player on both sides.
   test.each(RULESETS)('%s: AUTO SCRATCH leaves channel 16 alone where it is a key', async (ruleset) => {
