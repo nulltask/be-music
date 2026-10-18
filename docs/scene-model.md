@@ -313,10 +313,10 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | `resolveSelectNavigation`                                                        | `player-web` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse` |
 | `DEFAULT_PLAY_OPTIONS`, the option cycles                                        | `player-web` core select                  | Same names (`DEFAULT_PLAY_OPTIONS` re-exported)                              |
 | `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                         | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue`                             |
-| The hi-speed range and steps                                                     | `player-web` `scene/hi-speed.ts`          | Same names (re-exported)                                                     |
-| `SceneCourseInfo`, `resolveSceneCourseInfo`                                      | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (re-exported under the old names)          |
+| The hi-speed range and steps                                                     | `player-web` `scene/hi-speed.ts`          | Same names (`player-web/scenes` re-exports them)                             |
+| `SceneCourseInfo`, `resolveSceneCourseInfo`                                      | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (`player-web/scenes` keeps the old names)  |
 | `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                    | `player-web` `scene/core/course-combo.ts` | Same names, with `reduceCourseCombo`                                         |
-| `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                               | `player-web` `scene/playlog-view.ts`      | Same names (re-exported), over `resolvePlaylogView`                          |
+| `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                               | `player-web` `scene/playlog-view.ts`      | Same names, over `resolvePlaylogView` (the re-export is removed)             |
 | `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation` | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)               |
 | `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                           |
 

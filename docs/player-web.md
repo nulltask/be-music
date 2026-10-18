@@ -217,10 +217,10 @@ audio bus and the input) and the shared playfield and BGA renderer with the LR2 
 its chrome. The LR2 play view does not import the be-music renderer, and LR2 skin rendering remains tied to parsed
 `.lr2skin` data.
 
-Default gameplay chrome uses the shared lane geometry helpers in `scene/gameplay-lanes.ts`. Scratch lanes are wider
-than key lanes, 2P scratch lanes render on the right side, and DP layouts preserve the single-side lane width instead
-of shrinking every lane to fit both sides into the original SP footprint. The default family uses LINE Seed JP for
-general text and Azeret Mono for judgment and combo readouts.
+Default gameplay chrome uses the lane geometry helpers of `@be-music/skin-sdk` (`lane-geometry.ts`). Scratch lanes are
+wider than key lanes, 2P scratch lanes render on the right side, and DP layouts preserve the single-side lane width
+instead of shrinking every lane to fit both sides into the original SP footprint. The default family uses LINE Seed JP
+for general text and Azeret Mono for judgment and combo readouts.
 
 ## beatoraja skin and theme support
 
@@ -260,7 +260,7 @@ The default beatoraja skin is the primary compatibility target. Community themes
 
 ## Scene lifecycle
 
-The browser player uses one `PixiSceneHost` for the whole session.
+The browser player uses one `PixiSceneHost` (`host/scene-host.ts`) for the whole session.
 The host owns a single PixiJS `Application`, shows one scene at a time, serializes scene transitions, and destroys the renderer only when the host is disposed.
 
 The LR2 and beatoraja paths each provide the same high-level scene set; the default family shows a decide screen only when its be-music skin declares one:
@@ -329,7 +329,7 @@ flowchart TD
   subgraph shared [Shared modules]
     audio[chart/play-audio.ts]
     bga[chart/play-bga.ts]
-    ending[scene/play-ending.ts]
+    ending[session/play/play-ending.ts]
     lamp[resolveClearLamp]
   end
   session --> audio
@@ -340,7 +340,7 @@ flowchart TD
 
 - `chart/play-audio.ts` builds the play's AudioContext and bus (with `#VOLWAV`), decodes the `#WAV` samples under the key the audio session looks them up by, stretches them for a keep-pitch tempo, and folds the `#WAVCMD` / `#EXWAV` volumes.
 - `chart/play-bga.ts` picks the BGA resources a play needs (`#BMPxx`, bmson `bga.header`, the sources of `#BGAxx` sub-regions, the implicit `#BMP00` POOR image for the LR2 view), decodes stills through the shared texture loader and videos through the video loader, keys the BMS layer track's black out, and cuts the sub-region views.
-- `scene/play-ending.ts` times the end of a play: a lead-out of about two measures after the last note, in chart time, then the theme or skin fade-out; a play cut short by its gauge emptying skips the lead-out and fades its sound and picture for at least 1.5 s.
+- `session/play/play-ending.ts` times the end of a play: a lead-out of about two measures after the last note, in chart time, then the theme or skin fade-out; a play cut short by its gauge emptying skips the lead-out and fades its sound and picture for at least 1.5 s. The views fade the picture with `playEndingFadeAlpha` (`view/shared/play-frame.ts`).
 - `resolveClearLamp` (`@be-music/player/ruleset`) is the one clear-lamp rule. Every result lamps a play with it: the LR2 / default result (and the LR2 result's lamp ops 101-105, on LR2's lamps), and the beatoraja result and select through `beatorajaClearLampOp`; the demo records every family's plays with it, and the Leaderboard ranks them with it. It keeps the lamp to the judge ruleset's own set: under LR2 and IIDX a full combo is the top lamp (no PERFECT or MAX), and under LR2 a DEATH clear is NORMAL.
 
 ## Scene sessions and family views
