@@ -161,7 +161,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
  *
  * Exported for testability — the runtime calls it internally per event.
  */
-export function keyboardEventToTokens(event: KeyboardEvent): string[] {
+export function keyboardEventToTokens(event: Pick<KeyboardEvent, 'code'>): string[] {
   const code = event.code;
   // Fast path: KeyA..KeyZ → 'a'..'z'.
   if (code.length === 4 && code.startsWith('Key')) {

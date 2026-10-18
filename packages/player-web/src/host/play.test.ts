@@ -9,6 +9,7 @@ import {
 import { createEmptyJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { parseChart } from '@be-music/parser';
+import { createPlayerUiSignalBus, type PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
@@ -16,8 +17,9 @@ import type { BrowserSongEntry } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { BeatorajaPlaySkinView } from '../scene/beatoraja/skin-view.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
-import { resolvePlaylogRecording } from '../session/play/play-engine.ts';
+import { drainSharedEngineSignals, resolvePlaylogRecording } from '../session/play/play-engine.ts';
 import type { PlaySceneSession } from '../session/play/play-scene-session.ts';
+import { startPlaylogView } from '../session/play/play-view-settings.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaRenderContext } from '../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
@@ -50,6 +52,12 @@ const RANDOM_CHART = parseChart(
 
 /** A chart with one note on lane 1, then one on lane 2. */
 const TWO_LANE_CHART = parseChart(['#BPM 120', '#00111:01', '#00112:0001'].join('\n'), 'bms');
+
+/** A 14-key DP chart: notes on keys 1 and 6 of each side (a 10-key DP chart has no 2P key 6, and K is no lane). */
+const DP_CHART = parseChart(['#BPM 120', '#00111:01', '#00118:01', '#00121:01', '#00128:01'].join('\n'), 'bms');
+
+/** A chart at 120 BPM that doubles to 240 BPM (`F0`) at measure 2. */
+const TEMPO_CHART = parseChart(['#BPM 120', '#00111:01', '#00203:F0', '#00211:01'].join('\n'), 'bms');
 
 const NO_KEYS: SessionKeyTarget = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const AUDIO = { stopOwned: vi.fn(), playJingle: vi.fn(async () => true) } as unknown as AudioService;
@@ -402,16 +410,57 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it('plays without HS-FIX, its covers off, taking the cover keys', async () => {
+  it('starts its covers from the play options, as every family does, taking the cover keys', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.1);
     const { scene, play } = createBeatoraja();
     await scene.prepare();
-    expect(play.options).toMatchObject({ hsFix: 'OFF', coverKeys: true });
-    expect(play.playState.view.hsFix).toBe('OFF');
-    expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 2 });
+    expect(play.options).toMatchObject({ coverKeys: true });
+    // SUDDEN at the shutter's 0.3, the lane cover shown; HIDDEN+ keeps the height, off; no LIFT.
     expect(play.playState.view.covers).toEqual([
-      { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 },
+      { side: '1P', sudden: 0.3, suddenOn: true, hidden: 0.3, hiddenOn: false, lift: 0 },
     ]);
+    scene.dispose();
+  });
+
+  it('scrolls under HS-FIX as every family does, and records it in the play log', async () => {
+    const { scene, play } = createBeatoraja({
+      chart: { ...CHART, chart: TEMPO_CHART } as BrowserSongEntry,
+      settings: { initialHiSpeed: 2, hsFix: 'MAXBPM' },
+    });
+    await scene.prepare();
+    // MAXBPM keeps the player's 2 at the chart's 120 BPM and draws it at its 240: half as fast.
+    expect(play.playState.view.hsFix).toBe('MAXBPM');
+    expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 1 });
+    expect(play.scrollHiSpeed.target).toBe(1);
+    expect(startPlaylogView(play)).toMatchObject({ hiSpeed: 1, hiSpeedScale: 'beatoraja', hsFix: 'MAXBPM' });
+    scene.dispose();
+  });
+
+  it("samples a beatoraja play's graphs as every family's: the start, each empty POOR, and the end", async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    const { scene, play } = createBeatoraja();
+    await scene.prepare();
+    // The #RANDOM draw of 1 leaves one note, at 2 s: the graphs run over the chart's 2 s from LR2's starting 20 %.
+    expect(play.resolveSongDurationSeconds()).toBe(2);
+    const frame = (seconds: number, gauge: number): PlayerUiFramePayload => ({
+      currentBeat: seconds * 2,
+      currentSeconds: seconds,
+      totalSeconds: 2,
+      notes: [],
+      summary: { ...play.score, fast: 0, slow: 0, emptyPoor: 1, gauge: { ...play.gaugeState, current: gauge } },
+    });
+    const uiSignals = createPlayerUiSignalBus(frame(0.5, 18));
+    play.sharedEngineSignals = { uiSignals };
+    // An empty POOR at 0.5 s takes the gauge to 18 % with no judgment.
+    uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: 0.5 });
+    drainSharedEngineSignals(play);
+    const result = scene.progress()!;
+    expect(result.gaugeHistory[0]).toEqual({ progress: 0, value: 20 });
+    expect(result.gaugeHistory).toContainEqual({ progress: 0.25, value: 18 });
+    // The result's graphs end at the playhead with the gauge it reached.
+    expect(result.gaugeHistory).toHaveLength(3);
+    expect(result.gaugeHistory.at(-1)).toMatchObject({ value: 18 });
+    expect(result.scoreHistory[0]).toEqual({ progress: 0, exScore: 0 });
     scene.dispose();
   });
 
@@ -468,23 +517,51 @@ describe('createPlayScene with a beatoraja kit', () => {
     fake.fire('keydown', keydown('End'));
     fake.fire('keydown', keydown('h'));
     fake.fire('wheel', { deltaY: 1, shiftKey: true, preventDefault: vi.fn() });
+    // From the play options' SUDDEN 0.3: PageDown and the Shift wheel lower SUDDEN+ by 0.01 and 0.025, End raises the
+    // LIFT, and H switches HIDDEN+ on at its kept height.
     expect(play.playState.view.covers[0]).toEqual({
       side: '1P',
-      sudden: 0.035,
+      sudden: 0.335,
       suddenOn: true,
-      hidden: 0.25,
+      hidden: 0.3,
       hiddenOn: true,
       lift: 0.01,
     });
     scene.dispose();
 
-    const locked = createBeatoraja({ host: fake.host, settings: { hiSpeedLocked: true } });
+    const locked = createBeatoraja({
+      host: fake.host,
+      settings: { hiSpeedLocked: true, hiddenSudden1P: 'SUDDEN', shutter: 0.3 },
+    });
     await locked.scene.prepare();
     await locked.scene.enter(fake.host);
     fake.fire('keydown', keydown('PageDown'));
     fake.fire('wheel', { deltaY: 1, shiftKey: false, preventDefault: vi.fn() });
-    expect(locked.play.playState.view.covers[0]).toMatchObject({ sudden: 0, suddenOn: false });
+    expect(locked.play.playState.view.covers[0]).toMatchObject({ sudden: 0.3, suddenOn: true });
     locked.scene.dispose();
+  });
+
+  it("leaves H / J / K to a DP chart's 2P lanes, the other cover keys still moving the covers", async () => {
+    const fake = createFakeHost();
+    const { scene, play } = createBeatoraja({
+      host: fake.host,
+      chart: { ...CHART, chart: DP_CHART } as BrowserSongEntry,
+      settings: { initialHiSpeed: 2 },
+    });
+    await scene.prepare();
+    await scene.enter(fake.host);
+    const before = play.playState.view.covers;
+    for (const [key, code] of [
+      ['h', 'KeyH'],
+      ['j', 'KeyJ'],
+      ['k', 'KeyK'],
+    ]) {
+      fake.fire('keydown', { ...keydown(key!), code });
+    }
+    expect(play.playState.view.covers).toBe(before);
+    fake.fire('keydown', keydown('PageDown'));
+    expect(play.playState.view.covers[0]).toMatchObject({ suddenOn: true });
+    scene.dispose();
   });
 
   it('leaves the cover keys to a play that takes them (not the built-in or LR2 play)', async () => {
@@ -496,6 +573,27 @@ describe('createPlayScene with a beatoraja kit', () => {
     const before = play.playState.view.covers;
     fake.fire('keydown', keydown('PageDown'));
     expect(play.playState.view.covers).toBe(before);
+    scene.dispose();
+  });
+
+  it("stops the skin's sounds (its loops) as the scene leaves, leaving the play's own audio to ring out", async () => {
+    const skinSounds = { play: vi.fn(() => true), loop: vi.fn(() => true), stop: vi.fn(() => true) };
+    const audio = {
+      stopOwned: vi.fn(),
+      playJingle: vi.fn(async () => true),
+      skinSounds: { owned: vi.fn(() => skinSounds) },
+    } as unknown as AudioService & { skinSounds: { owned: ReturnType<typeof vi.fn> } };
+    const fake = createFakeHost();
+    const { scene, play } = createBeatoraja({ host: fake.host, audio });
+    const owner = (scene as unknown as { playSession: PlaySceneSession }).playSession;
+    expect(audio.skinSounds.owned).toHaveBeenCalledWith(owner);
+    expect(audio.skinSounds.owned).not.toHaveBeenCalledWith(play);
+    await scene.prepare();
+    await scene.enter(fake.host);
+    expect(audio.stopOwned).not.toHaveBeenCalled();
+    scene.exit();
+    expect(audio.stopOwned).toHaveBeenCalledWith(owner);
+    expect(audio.stopOwned).not.toHaveBeenCalledWith(play);
     scene.dispose();
   });
 
