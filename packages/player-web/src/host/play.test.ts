@@ -9,6 +9,7 @@ import {
 import { createEmptyJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { parseChart } from '@be-music/parser';
+import { createPlayerUiSignalBus, type PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
@@ -16,7 +17,7 @@ import type { BrowserSongEntry } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { BeatorajaPlaySkinView } from '../scene/beatoraja/skin-view.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
-import { resolvePlaylogRecording } from '../session/play/play-engine.ts';
+import { drainSharedEngineSignals, resolvePlaylogRecording } from '../session/play/play-engine.ts';
 import type { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import { startPlaylogView } from '../session/play/play-view-settings.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
@@ -429,6 +430,34 @@ describe('createPlayScene with a beatoraja kit', () => {
     expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 1 });
     expect(play.scrollHiSpeed.target).toBe(1);
     expect(startPlaylogView(play)).toMatchObject({ hiSpeed: 1, hiSpeedScale: 'beatoraja', hsFix: 'MAXBPM' });
+    scene.dispose();
+  });
+
+  it("samples a beatoraja play's graphs as every family's: the start, each empty POOR, and the end", async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    const { scene, play } = createBeatoraja();
+    await scene.prepare();
+    // The #RANDOM draw of 1 leaves one note, at 2 s: the graphs run over the chart's 2 s from LR2's starting 20 %.
+    expect(play.resolveSongDurationSeconds()).toBe(2);
+    const frame = (seconds: number, gauge: number): PlayerUiFramePayload => ({
+      currentBeat: seconds * 2,
+      currentSeconds: seconds,
+      totalSeconds: 2,
+      notes: [],
+      summary: { ...play.score, fast: 0, slow: 0, emptyPoor: 1, gauge: { ...play.gaugeState, current: gauge } },
+    });
+    const uiSignals = createPlayerUiSignalBus(frame(0.5, 18));
+    play.sharedEngineSignals = { uiSignals };
+    // An empty POOR at 0.5 s takes the gauge to 18 % with no judgment.
+    uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: 0.5 });
+    drainSharedEngineSignals(play);
+    const result = scene.progress()!;
+    expect(result.gaugeHistory[0]).toEqual({ progress: 0, value: 20 });
+    expect(result.gaugeHistory).toContainEqual({ progress: 0.25, value: 18 });
+    // The result's graphs end at the playhead with the gauge it reached.
+    expect(result.gaugeHistory).toHaveLength(3);
+    expect(result.gaugeHistory.at(-1)).toMatchObject({ value: 18 });
+    expect(result.scoreHistory[0]).toEqual({ progress: 0, exScore: 0 });
     scene.dispose();
   });
 
