@@ -557,7 +557,7 @@ describe('BeatorajaPlaySkinView', () => {
     // Pixi's `style.fontSize` doesn't have well-defined semantics for negative values
     // (BMFont layout would compute a NEGATIVE scale and render the text 180° flipped — user
     // report: gdbg's DECIDE title and artist rendered upside-down). We strip the sign on
-    // both sides (`Math.abs(parsed.fontSize)` in `beatoraja-fonts.ts` and `Math.abs(element.size)`
+    // both sides (`Math.abs(parsed.fontSize)` in `skin/beatoraja/fonts.ts` and `Math.abs(element.size)`
     // here) so the resulting Pixi scale stays positive.
     //
     // For TTF (this test) the per-frame scale is `region.height / |size|`. With size=-24 and

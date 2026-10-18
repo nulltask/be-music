@@ -922,9 +922,9 @@ export interface LoadTextureOptions {
   /** Skin-declared `#TRANSCOLOR` chroma key (rare on BGA assets, common on UI sprites). */
   transparentColor?: { r: number; g: number; b: number };
   /**
-   * Treat pure-black pixels as transparent. Mirrors the BMS BGA "layer" convention (`packages/player/src/bga.ts`'s
-   * `isOpaquePixel` for `mode === 'layer'`): the foreground BGA layer is composited over the base with `(0, 0, 0)`
-   * acting as a chroma-key. Only enabled for layer-track decodes — base / POOR retain their black pixels because
+   * Treat pure-black pixels as transparent. Mirrors the BMS BGA "layer" convention
+   * (`packages/player-tui/src/bga-frame.ts`'s `isOpaquePixel` for `mode === 'layer'`): the foreground BGA layer is
+   * composited over the base with `(0, 0, 0)` acting as a chroma-key. Only enabled for layer-track decodes — base / POOR retain their black pixels because
    * they're the bottommost BGA layer (nothing visible behind them).
    */
   keyOutBlack?: boolean;
