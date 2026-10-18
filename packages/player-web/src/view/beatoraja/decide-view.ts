@@ -43,7 +43,9 @@ const log = logger('decide');
 
 /**
  * How long a beatoraja decide screen shows before it moves on by itself, for a skin without `scene`: the 3000 ms of
- * `decidemain.lua` (beatoraja's `MusicDecide` moves on once `Skin.scene` has passed).
+ * `decidemain.lua` (beatoraja's `MusicDecide` moves on once `Skin.scene` has passed). Upstream's `JsonSkin.Skin.scene`
+ * has no initializer (Java's 0, which moves on at once), but the reference skin authors one, so an unauthored skin falls
+ * back to it, as the fade-out does (`DEFAULT_BEATORAJA_FADEOUT_MS`).
  */
 export const BEATORAJA_DECIDE_DEFAULT_SCENE_MS = 3000;
 
@@ -52,16 +54,19 @@ export const BEATORAJA_DECIDE_DEFAULT_INPUT_MS = 500;
 
 /**
  * The decide skin's timing: input opens after its `input` (500 ms without one) and holds back Escape until then, as
- * beatoraja's `MusicDecide` does; the screen moves on by itself after its `scene` (3000 ms without one; `scene = 0`
- * waits for the player) and fades out over its `fadeout` (500 ms without one).
+ * beatoraja's `MusicDecide` does; the screen moves on by itself after its `scene` (3000 ms without one) and fades out
+ * over its `fadeout` (500 ms without one).
+ *
+ * A `scene` of 0 (or less) moves on at once, before input opens, as upstream's does: `MusicDecide.render` starts the
+ * fade-out once `nowtime > getSkin().getScene()` (`src/bms/player/beatoraja/decide/MusicDecide.java`, lines 46-50, at
+ * exch-bms2/beatoraja c2ed5db1), and `input()` takes no key once the fade-out has started.
  */
 export function resolveBeatorajaDecideTiming(
   skin: Pick<BeatorajaSkin, 'scene' | 'input' | 'fadeout'>,
 ): SceneViewTiming {
-  const autoAdvanceMs = resolveBeatorajaSkinTimingMs(skin.scene, BEATORAJA_DECIDE_DEFAULT_SCENE_MS, { min: 0 });
   return {
     inputDelayMs: Math.max(0, resolveBeatorajaSkinTimingMs(skin.input, BEATORAJA_DECIDE_DEFAULT_INPUT_MS)),
-    ...(autoAdvanceMs > 0 ? { autoAdvanceMs } : {}),
+    autoAdvanceMs: Math.max(0, resolveBeatorajaSkinTimingMs(skin.scene, BEATORAJA_DECIDE_DEFAULT_SCENE_MS)),
     fadeOutMs: resolveBeatorajaFadeOutMs(skin.fadeout),
     escapeWaitsForInput: true,
   };
