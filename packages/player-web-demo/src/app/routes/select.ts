@@ -83,8 +83,9 @@ export interface SelectRouteDeps {
 /** The select screen, from its first showing to every return, and the starts made on it. */
 export class SelectRoute {
   /**
-   * Last-known cursor / folder state of the select view, captured before gameplay so returning to song select restores
-   * the user's position.
+   * Where the next showing of the select screen puts the cursor: where it was when a play or a decide screen started, the
+   * course bar a course was started from, or what a drop brought. Taken once the screen shows; from then on the screen's
+   * own cursor is the place, so a screen made again later for another family opens where the player has browsed since.
    */
   public lastSelectNavigation: BrowseSnapshot | undefined;
   private readonly router: SelectRouteDeps['router'];
@@ -171,13 +172,11 @@ export class SelectRoute {
         : undefined;
     const kit: SelectSceneKit =
       beatorajaKit ?? (lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtIn.builtInKit);
-    const current = this.selectView;
-    if (current !== undefined && current.identity.family !== kit.family) {
+    if (this.selectView !== undefined && this.selectView.identity.family !== kit.family) {
       // The family changed (an LR2 or a beatoraja theme dropped while the built-in screen is up, or the other way
       // round): only that family's view draws it, so the screen is made again below, carrying the cursor across (the
       // play options are the service's).
-      this.lastSelectNavigation ??= current.snapshot();
-      await this.router.dropSelect();
+      await this.dropSelect();
     }
     const sounds = this.familyKits.selectSoundSet(kit.family);
     // Whatever shows (a play, a result, a decide splash, Escape from it included) exits as the select screen enters and
@@ -190,7 +189,9 @@ export class SelectRoute {
       kept.setSounds(sounds);
       kept.setLibrary(this.library.collection);
       if (!(await this.router.show(kept, { role: 'select' }))) return;
-      if (this.lastSelectNavigation) kept.restore(this.lastSelectNavigation);
+      const navigation = this.lastSelectNavigation;
+      this.lastSelectNavigation = undefined;
+      if (navigation) kept.restore(navigation);
       if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
       return;
     }
@@ -246,8 +247,18 @@ export class SelectRoute {
       },
     });
     if (!(await this.router.show(scene, { role: 'select' }))) return;
+    this.lastSelectNavigation = undefined;
     if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
     this.debugMenu.scheduleFirstRunResolutionDetect();
+  }
+
+  /**
+   * Drops the select screen so that the next {@link showSelect} makes it again (another family draws it, or another LR2
+   * theme was picked), keeping its cursor for that screen unless a drop or a course has put it somewhere already.
+   */
+  public async dropSelect(): Promise<void> {
+    if (this.selectView !== undefined) this.lastSelectNavigation ??= this.selectView.snapshot();
+    await this.router.dropSelect();
   }
 
   /**
