@@ -99,9 +99,8 @@ export interface WebAudioSessionContext {
  * Extension of the engine's {@link AudioSession} contract that exposes the web-only "schedule a sample at a precise
  * audio-context time" affordance. Web Audio's `BufferSource.start(when)` lets us pre-schedule BGM cues sample-
  * accurately up to ~0.5s ahead, which is dramatically tighter than the per-frame `triggerEvent` cadence the engine
- * uses on the TUI side. Hosts that drive their own per-frame BGM look-ahead (the existing `scene/lr2/gameplay`
- * `scheduleAutoSamples` path) call {@link scheduleEvent} instead of `triggerEvent` so the buffer is queued at the
- * right audio-context timestamp rather than firing immediately.
+ * uses on the TUI side. Hosts that drive their own per-frame BGM look-ahead call {@link scheduleEvent} instead of
+ * `triggerEvent` so the buffer is queued at the right audio-context timestamp rather than firing immediately.
  */
 export interface WebAudioSession extends AudioSession {
   /**

@@ -14,17 +14,34 @@ import { recentJudgeTimings, resolveGreenNumber } from '@be-music/scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import type { Container } from 'pixi.js';
-import type {
-  SkinlessGameplayChromeRenderer,
-  SkinlessGameplayChromeRuntime,
-  SkinlessGameplayJudgeState,
-} from '../../scene/gameplay-chrome.ts';
-import type { ChildPool } from '../../scene/pixi-utils.ts';
+import type { ChildPool } from '../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { PlayfieldRuntime } from '../shared/playfield/context.ts';
-import type { BeMusicGameplayLayout, BeMusicStage } from '../../skin/be-music/types.ts';
+import type {
+  BeMusicGameplayLayout,
+  BeMusicGameplayRuntime,
+  BeMusicJudgeState,
+  BeMusicStage,
+} from '../../skin/be-music/types.ts';
 import type { PlayfieldBgaTarget, PlayfieldStage } from '../types.ts';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH } from '../../scene/gameplay-constants.ts';
+import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
+import { BGA } from '../shared/play-constants.ts';
+
+/** One side's recent judgement state for skinless chrome renderers (the be-music skin type). */
+export type SkinlessGameplayJudgeState = BeMusicJudgeState;
+
+/** Live gameplay values a skinless chrome renderer can paint (the be-music skin type). */
+export type SkinlessGameplayChromeRuntime = BeMusicGameplayRuntime;
+
+export interface SkinlessGameplayChromeRenderContext {
+  layer: Container;
+  overlayLayer: Container;
+  layerPool: ChildPool;
+  overlayLayerPool: ChildPool;
+  runtime: SkinlessGameplayChromeRuntime;
+}
+
+export type SkinlessGameplayChromeRenderer = (context: SkinlessGameplayChromeRenderContext) => void;
 
 /** Default-family BGA rect: the fixed {@link BGA} square, drawn opaque and untinted. */
 const DEFAULT_BGA_TARGET: PlayfieldBgaTarget = createDefaultBgaTarget(BGA);

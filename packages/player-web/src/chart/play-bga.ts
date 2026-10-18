@@ -10,7 +10,7 @@ import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/
 import { loadAssetBytes, resolveChartBgaAsset } from '../collection/collection.ts';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
 import { loadTextureFromBytes, loadVideoTextureFromBytes, type VideoTranscodeOptions } from '../media/textures.ts';
-import { collectBgaTextureLoadKeys, isVideoExtension, type BgaCue } from '../scene/core/gameplay-bga.ts';
+import { collectBgaTextureLoadKeys, isVideoExtension, type BgaCue } from './bga-timeline.ts';
 import { logger } from '../logger.ts';
 
 const log = logger('play-bga');

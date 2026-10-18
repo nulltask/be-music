@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { Container } from 'pixi.js';
 import type { SceneFamily } from '../host/family-kit.ts';
-import type { PixiSceneHost } from '../scene/host.ts';
+import type { PixiSceneHost } from '../host/scene-host.ts';
 import type { FamilyView, IntentSink } from '../view/types.ts';
 import {
   SessionScene,

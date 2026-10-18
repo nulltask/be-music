@@ -24,7 +24,7 @@ export interface PlayerWebDemoElements {
   /**
    * Floating DOM `<input>` overlay positioned near the LR2 default skin's search-text rect. Focus is given to it when
    * the user clicks the skin's `#SRC_TEXT,st=30,edit=1` region or hits the `/` shortcut; typing into it filters the
-   * song list via `PixiSongSelectView.setSearchQuery`.
+   * song list via the select scene's `setSearch`.
    */
   searchInput: HTMLInputElement;
   /**

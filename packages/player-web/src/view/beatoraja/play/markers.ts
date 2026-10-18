@@ -24,19 +24,8 @@ import {
   resolveDrawBottom,
   resolveDrawY,
   type NoteDrawWindow,
-} from '../../../scene/core/note-draw-window.ts';
-
-/** Beat positions per marker kind. Caller computes these from the chart once per play. */
-export interface BeatorajaMarkerBeats {
-  /** Section-line beats — one per measure boundary. */
-  group: ReadonlyArray<number>;
-  /** BPM-change event beats. */
-  bpm: ReadonlyArray<number>;
-  /** STOP event beats. */
-  stop: ReadonlyArray<number>;
-  /** Time-tick beats — typically every 1 / 4 / 8 measures depending on the skin's authored style. */
-  time: ReadonlyArray<number>;
-}
+} from '../../../chart/note-draw-window.ts';
+import type { BeatorajaMarkerBeats } from '../../../chart/beatoraja/markers.ts';
 
 interface MarkerKindData {
   /** Image element resolved from the destination's id. */

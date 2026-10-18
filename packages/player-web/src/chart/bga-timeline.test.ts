@@ -12,7 +12,7 @@ import {
   resolveNonstopBgaAlpha,
   splitNonstopBgaTimeline,
   toBrowserBgaTimeline,
-} from './gameplay-bga.ts';
+} from './bga-timeline.ts';
 
 const resolver = {
   eventToSeconds: (event) => event.measure * 10 + event.position[0] / event.position[1],

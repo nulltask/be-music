@@ -2,7 +2,7 @@ import type { Lr2Skin } from '@be-music/lr2-skin';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
-import { KEY_ON_FADE_OUT_MS } from '../../scene/gameplay-constants.ts';
+import { KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import {
   LR2_BOMB_FALLBACK_MS,
   LR2_GAUGE_RISE_FALLBACK_MS,

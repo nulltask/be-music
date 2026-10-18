@@ -4,8 +4,7 @@
  * {@link applyPlayEvent}, which reduces it with `reducePlayState` and glides the note scroll to a new drawn hi-speed.
  */
 
-import { reducePlayState, type PlayEvent, type PlayState } from '@be-music/scene-model';
-import type { HiSpeedTransition } from '../../scene/hi-speed.ts';
+import { reducePlayState, type HiSpeedTransition, type PlayEvent, type PlayState } from '@be-music/scene-model';
 
 /** The play's state and the scroll that follows its hi-speed: the play session's members of these names. */
 export interface PlayStateContext {

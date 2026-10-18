@@ -16,7 +16,7 @@ import {
   type PlayerSummary,
   type PreparedPlaybackChartData,
 } from '@be-music/player/core/engine';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import { resolveLr2LaneIndex, type ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type {
   PlayerGaugeSummary,
@@ -34,8 +34,7 @@ import {
   type ScoreSummary,
 } from '@be-music/player/ruleset';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
-import { playEventFromUiCommand } from '@be-music/scene-model';
-import { resolveLr2LaneIndex } from '../../scene/gameplay-lanes.ts';
+import { playEventFromUiCommand, PlaylogViewCursor, type PlayResult } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
@@ -44,16 +43,13 @@ import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { supportsLiveTempoChange, type ReplayTempo } from '../../runtime/play-tempo.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import type { PlaySessionOptions } from './play-options.ts';
-import { toBeMusicJudgeWindows } from '../../scene/core/judge-windows.ts';
-import type { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
-import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
-import type { LiveTempo } from '../../scene/live-tempo.ts';
-import { resolvePlayEnding } from '../../scene/play-ending.ts';
-import { PlaylogViewCursor } from '../../scene/playlog-view.ts';
+import { toBeMusicJudgeWindows } from './judge-windows.ts';
+import type { LongNoteTracker } from './long-note-tracker.ts';
+import type { LiveTempo } from './live-tempo.ts';
 import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
-import { beginExitSequence, type PlayEndingContext } from './play-ending.ts';
+import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './play-ending.ts';
 import { applyPlayEvent } from './play-state.ts';
 import { shouldSkipPlayKey } from './play-keys.ts';
 import { samplePlaybackRate } from './play-media.ts';
@@ -166,7 +162,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
   resolveSelectedGauge(): GaugeType;
   resolveEmptyPoorCountsInPoorDisplay(): boolean;
   resolveKeyOnTimerId(channel: string): number | undefined;
-  getResultData(): PixiGameplayResultData | undefined;
+  getResultData(): PlayResult | undefined;
 }
 
 /**
@@ -820,7 +816,7 @@ function applyEngineJudgeCombo(ctx: PlayEngineContext, state: Readonly<PlayerJud
 
 /**
  * Fires when the engine driver's `manualPlay` / `autoPlay` promise resolves cleanly (= chart played to its end
- * without an interrupt). The host's `onChartFinished` callback receives a `PixiGameplayResultData` snapshot and
+ * without an interrupt). The host's `onChartFinished` callback receives a `PlayResult` snapshot and
  * the LR2 `#FADEOUT` → `#CLOSE` exit timeline runs before the result-screen transition. The engine's resolution
  * is the authoritative end-of-chart signal — the view's `currentSeconds` clock lags slightly behind the engine's
  * own bookkeeping, so we don't gate on it.
@@ -837,7 +833,7 @@ function handleSharedEngineChartFinished(
   if (ctx.disposed || ctx.chartEnded) return;
   ctx.chartEnded = true;
   ctx.playMoments.outroAtMs ??= ctx.playClock();
-  // The end-of-play policy both gameplay families share (`scene/play-ending.ts`): a lead-out after the last note, or —
+  // The end-of-play policy both gameplay families share (`resolvePlayEnding`): a lead-out after the last note, or —
   // for a play cut short by its gauge emptying — no lead-out and a sound + picture fade-out before the result.
   const ending = resolvePlayEnding({
     summary: finalSummary,

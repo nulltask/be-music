@@ -25,9 +25,9 @@ import {
   resolveScaledViewport,
   setDesignPixelRatio,
   setDesignTextResolution,
-} from '../../scene/core/viewport.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
-import { disposeChildren } from '../../scene/pixi-utils.ts';
+} from '../../stage/viewport.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
+import { disposeChildren } from '../../stage/pixi-utils.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import {

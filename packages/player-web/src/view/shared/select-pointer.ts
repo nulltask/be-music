@@ -21,8 +21,8 @@ import {
   stepTouchScroll,
   stepWheelScroll,
   type TouchSample,
-} from '../../scene/core/touch-scroll.ts';
-import { resolveScaledViewport } from '../../scene/core/viewport.ts';
+} from './touch-scroll.ts';
+import { resolveScaledViewport } from '../../stage/viewport.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 
 /** A skin's design canvas, in design pixels. */

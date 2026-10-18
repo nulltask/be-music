@@ -8,13 +8,13 @@ import { Color, Container, Graphics } from 'pixi.js';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import {
   resolveDesignTextResolution,
   resolveScaledViewport,
   setDesignPixelRatio,
   setDesignTextResolution,
-} from '../../scene/core/viewport.ts';
+} from '../../stage/viewport.ts';
 import {
   BeMusicDecideBinding,
   resolveBeMusicDecideDurationMs,

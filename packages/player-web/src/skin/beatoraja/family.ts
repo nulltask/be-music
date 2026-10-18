@@ -8,9 +8,8 @@ import type { SkinFamily } from '../family.ts';
  * theme).
  *
  * Theme parsing is driven by `loadBeatorajaThemeFromFiles` in `skin/beatoraja/theme.ts`, which produces a
- * `BeatorajaThemeBundle`. The select and play scenes live under `scene/beatoraja/` and are constructed directly by the
- * host; the decide and result screens are `createDecideScene` and `createResultScene` with a beatoraja kit
- * (`loadBeatorajaSceneKit`).
+ * `BeatorajaThemeBundle`. The select, decide, play and result screens are `createSelectScene`, `createDecideScene`,
+ * `createPlayScene` and `createResultScene` with a beatoraja kit (`loadBeatorajaSceneKit`).
  */
 export const beatorajaSkinFamily: SkinFamily = {
   id: 'beatoraja',

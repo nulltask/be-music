@@ -312,10 +312,10 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 | `resolveSelectNavigation`                                                        | `player-web` のコアの選曲                    | 削除。選曲セッションは `BrowseSnapshot` を `restoreBrowse` で戻す        |
 | `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                       | `player-web` のコアの選曲                    | 同じ名前（`DEFAULT_PLAY_OPTIONS` は再 export）                           |
 | `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                         | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`                         |
-| ハイスピードの範囲と刻み                                                         | `player-web` の `scene/hi-speed.ts`          | 同じ名前（再 export）                                                    |
-| `SceneCourseInfo`・`resolveSceneCourseInfo`                                      | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名で再 export）                     |
+| ハイスピードの範囲と刻み                                                         | `player-web` の `scene/hi-speed.ts`          | 同じ名前（`player-web/scenes` が再 export）                              |
+| `SceneCourseInfo`・`resolveSceneCourseInfo`                                      | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（`player-web/scenes` が旧名で公開）    |
 | `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                    | `player-web` の `scene/core/course-combo.ts` | 同じ名前。`reduceCourseCombo` を追加                                     |
-| `PlaylogViewCursor`・`resolveBeatorajaPlaylogView`                               | `player-web` の `scene/playlog-view.ts`      | 同じ名前（再 export）。`resolvePlaylogView` の上に実装                   |
+| `PlaylogViewCursor`・`resolveBeatorajaPlaylogView`                               | `player-web` の `scene/playlog-view.ts`      | 同じ名前（再 export は削除）。`resolvePlaylogView` の上に実装            |
 | `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation` | `player-web-demo` の `course-result.ts`      | `playResultFromCourseRun` など（旧名で再 export）                        |
 | `resolveResultViewJingles`                                                       | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                              |
 

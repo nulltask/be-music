@@ -5,4 +5,4 @@
  * contract.
  */
 export * from './preview.ts';
-export * from './beatoraja/markers.ts';
+export { computeBeatorajaChartMarkers } from './beatoraja/markers.ts';

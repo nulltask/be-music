@@ -23,7 +23,12 @@ import {
 } from '@be-music/chart';
 import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player/core/engine';
-import { type ChartPlayVariant, resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
+import {
+  type ChartPlayVariant,
+  isPlayableInputChannel,
+  resolveLaneOptionChannels,
+  resolvePlayVariantLaneChannels,
+} from '@be-music/player/core/lane-layout';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { createBeatAtSecondsResolverFromTimingResolver } from '@be-music/player/core/timeline';
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
@@ -39,13 +44,12 @@ import {
   toBrowserBgaTimeline,
   type BgaCue,
   type NonstopStageBgaTimeline,
-} from '../../scene/core/gameplay-bga.ts';
-import { resolveChartBpmRange, type ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
+} from '../../chart/bga-timeline.ts';
+import { resolvePlayTempoRange, type PlayTempoRange } from './tempo-range.ts';
 import type { PlaySessionOptions } from './play-options.ts';
-import type { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
-import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../scene/core/note-draw-window.ts';
-import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
-import { isPlayableInputChannel, resolvePlayVariantLaneChannels } from '../../scene/gameplay-lanes.ts';
+import type { LongNoteTracker } from './long-note-tracker.ts';
+import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../chart/note-draw-window.ts';
+import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import {
   createHiSpeedState,
   createPlayState,
@@ -54,11 +58,11 @@ import {
   reducePlayState,
   resolveHsFixMultiplier,
   SHUTTER_DEFAULT,
+  type HiSpeedTransition,
   type LaneCoverState,
   type PlayState,
 } from '@be-music/scene-model';
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
-import type { HiSpeedTransition } from '../../scene/hi-speed.ts';
 
 /** The play state {@link prepareSong} resets and fills for a new chart: the play session's fields of these names. */
 export interface PlayChartContext {
@@ -111,7 +115,7 @@ export interface PlayChartContext {
   playState: PlayState;
   readonly scrollHiSpeed: HiSpeedTransition;
   readonly longNotes: LongNoteTracker;
-  chartBpmRange: ChartBpmRange | undefined;
+  chartBpmRange: PlayTempoRange | undefined;
   autoScratchChannels: ReadonlySet<string>;
   playMoments: {
     failedAtMs?: number;
@@ -349,7 +353,7 @@ export function prepareSong(ctx: PlayChartContext, song: BrowserSongEntry): void
   ctx.playMoments = {};
   ctx.lanePressedAt.clear();
   ctx.laneReleasedAt.clear();
-  ctx.chartBpmRange = resolveChartBpmRange(
+  ctx.chartBpmRange = resolvePlayTempoRange(
     resolver.tempoPoints,
     ctx.songDurationSeconds,
     resolved.metadata.bpm > 0 ? resolved.metadata.bpm : ctx.song?.bpm,

@@ -13,18 +13,17 @@ import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-dist
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
 import type { TimedLandmineNote, TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { JudgeKind, ScoreSummary } from '@be-music/player/ruleset';
-import type { PlayState } from '@be-music/scene-model';
+import type { HiSpeedTransition, PlayState } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind, BeMusicLongNote } from '@be-music/skin-sdk';
 import type { Graphics, Text, Texture } from 'pixi.js';
 import type { BrowserSongEntry } from '../../../collection/types.ts';
 import type { AudioAnalyzer, AudioFeatures } from '../../../runtime/audio-analysis.ts';
-import type { BgaCue, NonstopStageBgaTimeline } from '../../../scene/core/gameplay-bga.ts';
-import type { ChartBpmRange } from '../../../scene/core/gameplay-bpm-range.ts';
+import type { BgaCue, NonstopStageBgaTimeline } from '../../../chart/bga-timeline.ts';
+import type { PlayTempoRange } from '../../../session/play/tempo-range.ts';
 import type { PlaySessionOptions } from '../../../session/play/play-options.ts';
-import type { LongNoteTracker } from './long-note-tracker.ts';
-import type { GoneDrawObjects } from '../../../scene/core/note-draw-window.ts';
-import type { HiSpeedTransition } from '../../../scene/hi-speed.ts';
-import type { ChildPool } from '../../../scene/pixi-utils.ts';
+import type { LongNoteTracker } from '../../../session/play/long-note-tracker.ts';
+import type { GoneDrawObjects } from '../../../chart/note-draw-window.ts';
+import type { ChildPool } from '../../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../../skin/be-music/binding.ts';
 import type { BeMusicJudge, BeMusicLaneCover } from '../../../skin/be-music/types.ts';
 import type { LaneGeometryContext } from '../../built-in/play-chrome.ts';
@@ -90,7 +89,7 @@ export interface PlayfieldRuntime {
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly lastImpulseAt: number | undefined;
   readonly lastImpulseKind: BeMusicLaneKind | undefined;
-  readonly chartBpmRange: ChartBpmRange | undefined;
+  readonly chartBpmRange: PlayTempoRange | undefined;
   readonly playMoments: {
     failedAtMs?: number;
     allNotesDoneAtMs?: number;

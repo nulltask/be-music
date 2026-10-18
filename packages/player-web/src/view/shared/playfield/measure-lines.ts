@@ -10,7 +10,7 @@ import {
   resolveDrawBottom,
   resolveDrawY,
   type NoteDrawWindow,
-} from '../../../scene/core/note-draw-window.ts';
+} from '../../../chart/note-draw-window.ts';
 import type { PlayfieldContext } from './context.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 

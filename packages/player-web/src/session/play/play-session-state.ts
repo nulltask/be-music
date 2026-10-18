@@ -16,7 +16,15 @@ import type { PlayerGaugeSummary, PlayerUiFramePayload, PlayerUiSignalBus } from
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import type { TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog, PlaylogViewCoalescer } from '@be-music/player/playlog';
-import { createPlayState, type LaneCover, type LaneCoverState, type PlayState } from '@be-music/scene-model';
+import {
+  createPlayState,
+  DEFAULT_HISPEED,
+  HiSpeedTransition,
+  type LaneCover,
+  type LaneCoverState,
+  type PlaylogViewCursor,
+  type PlayState,
+} from '@be-music/scene-model';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import type {
   AudioBusChannel,
@@ -26,22 +34,20 @@ import type {
   TunableCompressor,
 } from '../../runtime/audio-bus.ts';
 import type { GameplayRecorder } from '../../recording/gameplay-recorder.ts';
-import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
-import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
+import type { PlayTempoRange } from './tempo-range.ts';
+import { LongNoteTracker } from './long-note-tracker.ts';
+import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
-import type { PlaylogViewCursor } from '../../scene/playlog-view.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import type { WebAudioSession } from '../../runtime/web-audio-session.ts';
 import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { BmsSwitchingBga, RandomDraws, ResolvedChart } from '@be-music/chart';
-import { DEFAULT_HISPEED, HiSpeedTransition } from '../../scene/hi-speed.ts';
-import type { BgaCue, NonstopStageBgaTimeline } from '../../scene/core/gameplay-bga.ts';
+import type { BgaCue, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
-import { TouchLaneTracker } from '../../scene/core/touch-lanes.ts';
+import { TouchLaneTracker } from './touch-lanes.ts';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
@@ -327,7 +333,7 @@ export class PlaySessionState {
   longNoteStyle: LongNoteStyle | undefined;
   judgeWindows: BeMusicJudgeWindows | undefined;
   /** The chart's BPM range, worked out once per {@link prepareSong}. */
-  chartBpmRange: ChartBpmRange | undefined;
+  chartBpmRange: PlayTempoRange | undefined;
   /**
    * Scratch lanes the engine plays itself under auto-scratch (empty when it is off), resolved per {@link prepareSong}.
    * See {@link isAutoplayedChannel}.
@@ -434,8 +440,8 @@ export class PlaySessionState {
    */
   readonly scrollHiSpeed: HiSpeedTransition = new HiSpeedTransition(DEFAULT_HISPEED);
   /**
-   * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering from
-   * `gameplay-constants.ts`. The core scene drives the key-on bank (100–119) for the lane beams; theme families stamp
+   * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering
+   * (`LR2_TIMER`). The play session drives the key-on bank (100–119) for the lane beams; theme families stamp
    * their own timers (bombs, FC, judge, scene stages, …) into the same map. Removed when the timer "stops" (e.g. key
    * release for key-on).
    */

@@ -25,8 +25,8 @@ import { type Container, type FederatedPointerEvent, Sprite, Text, Texture } fro
 import type { BrowserBrowseEntry } from '../../../collection/types.ts';
 import type { BeatorajaFontCache } from '../../../skin/beatoraja/fonts.ts';
 import { createCroppedBeatorajaTexture } from '../../../skin/beatoraja/render.ts';
-import type { BeatorajaSceneKit } from '../../../host/family-kit.ts';
-import type { BeatorajaPlaySkinView } from '../../../scene/beatoraja/skin-view.ts';
+import type { BeatorajaSceneKit } from '../../../skin/beatoraja/scene-kit.ts';
+import type { BeatorajaPlaySkinView } from '../skin-view.ts';
 
 /**
  * Fallback visible-row count when the skin doesn't author a `songlist` block. Odd so the
