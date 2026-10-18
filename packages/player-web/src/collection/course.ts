@@ -14,8 +14,8 @@ import {
   type RandomCourseDefinition,
   type RandomCourseDrawFailure,
 } from '@be-music/player/course';
+import { resolveLibraryChartPlayVariant } from '@be-music/scene-model';
 import { resolveChartBpmRange } from '../chart/bpm-range.ts';
-import { resolveChartPlayVariant } from './collection.ts';
 import type { BrowserCourseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
 
 /** A course file's courses, under the label its folder bar shows. */
@@ -195,7 +195,7 @@ export function createCourseSongRecord(
     let value: number | undefined;
     Object.defineProperty(record, key, { enumerable: true, get: () => (value ??= read()) });
   };
-  lazy('mode', () => MODE_IDS[resolveChartPlayVariant(song)]);
+  lazy('mode', () => MODE_IDS[resolveLibraryChartPlayVariant(song)]);
   lazy('minbpm', () => Math.trunc(resolveChartBpmRange(chart).min));
   lazy('maxbpm', () => Math.trunc(resolveChartBpmRange(chart).max));
   lazy('length', () => {

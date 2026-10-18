@@ -8,8 +8,8 @@ import {
   type Lr2BitmapFont,
   type Lr2SkinFileEntry,
 } from '@be-music/lr2-skin';
+import { normalizePath } from '@be-music/utils/core';
 import type { Lr2LoadedFont } from './bitmap-text.ts';
-import { normalizePath } from '../../collection/collection.ts';
 import { attachBlobUrlToTexture } from '../../media/textures.ts';
 import { logger } from '../../logger.ts';
 

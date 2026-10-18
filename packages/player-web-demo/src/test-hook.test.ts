@@ -2,7 +2,7 @@ import { createEmptyJson } from '@be-music/json';
 import { parseLr2CourseFile } from '@be-music/player/course';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
-import type { PixiGameplayResultData } from '@be-music/player-web/scenes';
+import type { PlayResult } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   type BeMusicTestHook,
@@ -169,7 +169,7 @@ describe('results', () => {
       scoreHistory: [],
       lamp: 'NORMAL',
       gaugeType: 'GROOVE',
-    } satisfies PixiGameplayResultData;
+    } satisfies PlayResult;
     expect(resultFromData(data, 'stage', 'lr2', 'lr2:clear')).toEqual({
       run: 'stage',
       family: 'lr2',
@@ -196,7 +196,7 @@ describe('results', () => {
       scoreHistory: [],
       lamp: 'FAILED',
       gaugeType: 'NORMAL',
-    } satisfies PixiGameplayResultData;
+    } satisfies PlayResult;
     expect(resultFromData(data, 'single', 'beatoraja', 'beatoraja:fail')).toEqual({
       run: 'single',
       family: 'beatoraja',

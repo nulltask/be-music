@@ -1,7 +1,7 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseBeatorajaCourseData, type NonstopConnection } from '@be-music/player/course';
 import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
-import type { BeMusicSongRecord } from '@be-music/player-web/skin';
+import type { BeMusicSongRecord } from '@be-music/skin-sdk';
 import { describe, expect, test } from 'vite-plus/test';
 import { courseRecordKey, lookupCourseRecord, skipsCourseStageResult } from './course-result.ts';
 

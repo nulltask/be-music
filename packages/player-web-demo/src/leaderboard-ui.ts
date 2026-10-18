@@ -1,4 +1,4 @@
-import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player-web/runtime';
+import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player/playlog';
 import type { BrowserSongEntry } from '@be-music/player-web/collection';
 import type GUI from 'lil-gui';
 import type { Controller } from 'lil-gui';

@@ -1,4 +1,4 @@
-import type { PixiScene, PixiSceneHost, PlayScene } from '@be-music/player-web/scenes';
+import type { PixiScene, PixiSceneHost, PlayScene } from '@be-music/player-web/host';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { SceneRouter, type RoutedPlayScene, type RoutedScene, type SceneRouterHost } from './scene-router.ts';
 

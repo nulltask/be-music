@@ -1,26 +1,16 @@
-// Imports are split across `@be-music/player-web`'s per-area subpaths so the dependency surface of this demo is
-// explicit at the file top. The main `@be-music/player-web` entry is reserved for symbols that don't belong to any
-// single area (`logger`, `Rectangle`).
+// Imports are split across `@be-music/player-web`'s entries (`./host`, `./skin`, `./collection`, `./audio`,
+// `./recording`) so the dependency surface of this demo is explicit at the file top. The main `@be-music/player-web`
+// entry is reserved for symbols that don't belong to any single entry (`logger`, `Rectangle`).
 import {
-  BUILT_IN_BE_MUSIC_SKINS,
-  latticeSkin,
-  plainSkin,
-  synesthesiaSkin,
   createDecideScene,
   createPlayScene,
   createResultScene,
   createSelectScene,
   PixiSceneHost,
-  HISPEED_MAX,
-  HISPEED_MIN,
-  HISPEED_STEP,
-  snapHiSpeed,
   type BeatorajaKit,
   type BuiltInKit,
   type DecideScene,
   type DecideSceneKit,
-  type PixiGameplayResultData,
-  type PixiPlayOptions,
   type PlayScene,
   type PlaySceneKit,
   type ResultScene,
@@ -29,25 +19,33 @@ import {
   type SelectScene,
   type SelectSceneKit,
   type SelectStartEntry,
-  resolveSceneCourseInfo,
-  type SceneCourseInfo,
-} from '@be-music/player-web/scenes';
+} from '@be-music/player-web/host';
 import {
   DIFFICULTY_FILTER_CYCLE,
+  HISPEED_MAX,
+  HISPEED_MIN,
+  HISPEED_STEP,
   KEYS_FILTER_CYCLE,
+  resolveCourseView,
   resolveResultJingle,
   resolveResultJingles,
+  snapHiSpeed,
   SORT_CYCLE,
   systemSoundSetFromBeatoraja,
   type BrowseSnapshot,
+  type CourseView,
+  type PlayOptions,
+  type PlayResult,
   type PlayRunKind,
   type SystemSoundSet,
 } from '@be-music/scene-model';
+import { resolveBeMusicSkinSettings, type BeMusicSkin, type BeMusicSongRecord } from '@be-music/skin-sdk';
 import {
+  BUILT_IN_BE_MUSIC_SKINS,
+  latticeSkin,
+  plainSkin,
+  synesthesiaSkin,
   createBeMusicSkinRegistry,
-  resolveBeMusicSkinSettings,
-  type BeMusicSkin,
-  type BeMusicSongRecord,
   createBeatorajaSceneKitCaches,
   createBeatorajaSkinLoadContext,
   findBeatorajaThemeBgm,
@@ -96,25 +94,18 @@ import {
 } from '@be-music/player-web/collection';
 import {
   createAudioService,
-  downloadBlob,
   parseCompressorMode,
-  parsePlaylog,
-  resolvePlaylogFilename,
-  serializePlaylog,
-  PLAYLOG_FILE_SUFFIX,
   DEFAULT_COMPRESSOR_PARAMS,
   setMasterVolume,
   supportsSystemAudioSession,
   applySilentModePlayback,
   type AudioOwner,
   type AudioService,
-  type BeMusicPlaylog,
-  type PlaylogRecorderInfo,
   type CompressorMode,
   type CompressorParams,
   type TunableCompressor,
-  type RecordingFormat,
-} from '@be-music/player-web/runtime';
+} from '@be-music/player-web/audio';
+import { downloadBlob, type RecordingFormat } from '@be-music/player-web/recording';
 import {
   TUNABLE_COMPRESSORS,
   defaultCompressorTunings,
@@ -172,10 +163,16 @@ import type { ResolvedPlayChart } from '@be-music/player/core/engine';
 import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingles.ts';
 import {
+  parsePlaylog,
+  PLAYLOG_FILE_SUFFIX,
   resolveCoursePlaylogFilename,
+  resolvePlaylogFilename,
   serializeCoursePlaylog,
+  serializePlaylog,
   type BeMusicCoursePlaylog,
+  type BeMusicPlaylog,
   type PlaylogCourseResult,
+  type PlaylogRecorderInfo,
 } from '@be-music/player/playlog';
 import {
   buildCourseResultData,
@@ -2547,7 +2544,7 @@ class PlayerWebDemoApp {
   private async showNonstopCourseResult(
     nonstop: NonstopPlay,
     playlog: BeMusicPlaylog | undefined,
-    fallback?: PixiGameplayResultData,
+    fallback?: PlayResult,
     resolved?: ResolvedPlayChart,
   ): Promise<void> {
     this.testHook?.recordPlaylog(playlog);
@@ -2580,7 +2577,7 @@ class PlayerWebDemoApp {
     // As LR2 shows a NONSTOP run: on the result skin with the clear / fail jingles (no course-result step), and R
     // stitches and plays the course again.
     const result = buildCourseResultData(nonstop.course, native, courseLog, fallback);
-    const info = resolveSceneCourseInfo(nonstop.course);
+    const info = resolveCourseView(nonstop.course);
     const retry = (): void => void this.startNonstopCourse(nonstop.course);
     if (pickActiveFamilyForScene(this.familyDispatchState(), 'result') === 'beatoraja') {
       const mounted = await this.showBeatorajaResult(result, {
@@ -2628,7 +2625,7 @@ class PlayerWebDemoApp {
    */
   private courseLr2Skin(
     mounted: Lr2Skin | undefined,
-    courseInfo: SceneCourseInfo,
+    courseInfo: CourseView,
     options: Omit<Parameters<Lr2ThemeSkins['loadSkin']>[0], 'parseOps'>,
   ): Lr2Skin | undefined {
     if (mounted === undefined || this.loadLr2ThemeSkin === undefined) return mounted;
@@ -2657,7 +2654,7 @@ class PlayerWebDemoApp {
     this.maybeAutoSaveCoursePlaylog(courseLog);
     // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
     this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
-    const courseInfo = resolveSceneCourseInfo(course);
+    const courseInfo = resolveCourseView(course);
     const histories = courseStageHistories(active);
     // A beatoraja theme shows the course result on its COURSE_RESULT skin (or its result skin).
     if (pickActiveFamilyForScene(this.familyDispatchState(), 'result') === 'beatoraja') {
@@ -3309,7 +3306,8 @@ class PlayerWebDemoApp {
    *
    * Two variants are in play: the skin's, which `play_*` entry to load (a theme without the chart's own falls back
    * through `pickBeatorajaPlayableSkinVariant`'s chain, `9 → 7 → 14 → 5 → 10`), and the chart's, which the play session
-   * lays the lanes out for (`resolveChartPlayVariant`), so a 9 KEY chart keeps its POPN lanes on a 7 KEY skin.
+   * lays the lanes out for (`resolveLibraryChartPlayVariant`), so a 9 KEY chart keeps its POPN lanes on a 7 KEY
+   * skin.
    */
   private async loadBeatorajaPlayKit(song: BrowserSongEntry): Promise<
     | {
@@ -3558,7 +3556,7 @@ class PlayerWebDemoApp {
    * (its result shown unless the theme has no result skin, when the course goes straight on), a single play keeps its
    * record, saves its play log and goes to the Leaderboard. Without a result skin a single play goes back to select.
    */
-  private async showBeatorajaPlayResult(data: PixiGameplayResultData, courseStage: boolean): Promise<void> {
+  private async showBeatorajaPlayResult(data: PlayResult, courseStage: boolean): Promise<void> {
     this.testHook?.recordPlaylog(data.playlog);
     const active = this.activeCourse;
     if (courseStage && active !== undefined) {
@@ -3591,10 +3589,10 @@ class PlayerWebDemoApp {
    * play behind it goes once the screen shows, its last samples ringing out.
    */
   private async showBeatorajaResult(
-    data: PixiGameplayResultData,
+    data: PlayResult,
     options: {
       run: PlayRunKind;
-      course?: { info: SceneCourseInfo; result?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult } };
+      course?: { info: CourseView; result?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult } };
       nonstopRetry?: () => void;
       playChart?: ResolvedPlayChart['chart'];
     },
@@ -3643,7 +3641,7 @@ class PlayerWebDemoApp {
     const run = options.run;
     const presentation = resolveResultPresentation(run);
     // The skin shows the course of the result: the stage's course, or the course run.
-    const result: PixiGameplayResultData =
+    const result: PlayResult =
       course !== undefined && data.course === undefined ? { ...data, course: course.info } : data;
     // The chart as the play played it, for any `bpmgraph[]` and note-kind graph of the result skin. The play is disposed
     // as the result shows, so the chart is kept in `lastBeatorajaChart`; it is only handed on when it is this song's, so a
@@ -4009,7 +4007,7 @@ class PlayerWebDemoApp {
         : undefined;
     const kit: SelectSceneKit =
       beatorajaKit ?? (lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtInKit);
-    let carriedPlayOptions: PixiPlayOptions | undefined;
+    let carriedPlayOptions: PlayOptions | undefined;
     const current = this.selectView;
     if (current !== undefined && current.identity.family !== kit.family) {
       // The family changed (an LR2 or a beatoraja theme dropped while the built-in screen is up, or the other way
@@ -4035,7 +4033,7 @@ class PlayerWebDemoApp {
     }
     // Seed the screen's play options from the Debug Menu's "Play options" state (two-way sync: the screen's own edits
     // come back through `on.playOptions` below; lil-gui edits push through `setPlayOptions`).
-    const playOptions: Partial<PixiPlayOptions> = {
+    const playOptions: Partial<PlayOptions> = {
       ...carriedPlayOptions,
       autoPlay: this.guiState.autoPlay,
       gauge1P: this.guiState.gauge,
@@ -4390,7 +4388,7 @@ class PlayerWebDemoApp {
         : overrides.courseStage !== undefined || overrides.nonstop !== undefined
           ? this.courseLr2Skin(
               pickLr2PlaySkin(this.playSkins, song),
-              overrides.courseStage?.courseInfo ?? resolveSceneCourseInfo(overrides.nonstop!.course, 0),
+              overrides.courseStage?.courseInfo ?? resolveCourseView(overrides.nonstop!.course, 0),
               { kind: 'play', playVariant: pickLr2PlaySkinVariant(this.playSkins, song) },
             )
           : pickLr2PlaySkin(this.playSkins, song);
@@ -4501,7 +4499,7 @@ class PlayerWebDemoApp {
       ...(nonstop !== undefined
         ? {
             course: resolveCourseStageSettings(nonstop.course.definition),
-            courseInfo: resolveSceneCourseInfo(nonstop.course, 0),
+            courseInfo: resolveCourseView(nonstop.course, 0),
             nonstop: nonstop.prepared.stitched.map,
           }
         : {}),
@@ -4559,7 +4557,7 @@ class PlayerWebDemoApp {
         }
         void this.finishGameplayThen(() => this.showSelect());
       },
-      onChartFinished: (result: PixiGameplayResultData) => {
+      onChartFinished: (result: PlayResult) => {
         if (nonstop !== undefined) {
           const resolved = this.gameplayView?.resolved;
           void this.finishGameplayThen(() => this.showNonstopCourseResult(nonstop, result.playlog, result, resolved));
@@ -4791,12 +4789,12 @@ class PlayerWebDemoApp {
    * LR2 theme's course-result skin when it has one).
    */
   private async showResult(
-    data: PixiGameplayResultData,
+    data: PlayResult,
     mode: {
-      course?: SceneCourseInfo;
+      course?: CourseView;
       /** The course result's play log and native result (what the test hook reports of it). */
       courseLog?: { log: BeMusicCoursePlaylog; native: PlaylogCourseResult };
-      nonstop?: { info: SceneCourseInfo; retry: () => void };
+      nonstop?: { info: CourseView; retry: () => void };
     } = {},
   ): Promise<void> {
     await this.ensureHostMounted();

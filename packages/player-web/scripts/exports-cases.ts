@@ -11,6 +11,7 @@ import type {
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData } from '@be-music/player/course';
+import type { PlayResult } from '@be-music/scene-model';
 import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
@@ -104,7 +105,7 @@ const BENCH_DROPPED_ENTRY = {
 };
 const BENCH_SOURCE = makeBenchSource();
 const BENCH_SONG = makeBenchSong();
-const BENCH_PLAY_RESULT: playerWebCoreApi.PixiGameplayResultData = {
+const BENCH_PLAY_RESULT: PlayResult = {
   score: { total: 1, perfect: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 2, score: 2 },
   maxCombo: 1,
   gauge: 100,
@@ -114,9 +115,6 @@ const BENCH_PLAY_RESULT: playerWebCoreApi.PixiGameplayResultData = {
   gaugeHistory: [],
   scoreHistory: [],
 };
-const BENCH_PLAYLOG = makeBenchPlaylog();
-const BENCH_PLAYLOG_JSON = JSON.stringify(BENCH_PLAYLOG);
-const BENCH_PMS_SONG = makeBenchPmsSong();
 const BENCH_COLLECTION = {
   sources: [BENCH_SOURCE],
   songs: [BENCH_SONG],
@@ -131,8 +129,6 @@ const BENCH_COURSE_DEFINITION = parseBeatorajaCourseData({
 const BENCH_COURSE_GROUPS = [{ label: 'Bench', courses: [BENCH_COURSE_DEFINITION] }];
 const BENCH_HASHED_SONGS = [{ song: BENCH_SONG, md5: BENCH_SONG_MD5 }];
 const BENCH_COURSE_LOOKUP = playerWebCoreApi.createSongHashLookup(BENCH_HASHED_SONGS);
-const BENCH_COURSE_ENTRY = playerWebCoreApi.resolveCourseFolders(BENCH_COURSE_GROUPS, BENCH_COURSE_LOOKUP)[0]!
-  .courses![0]!;
 const BENCH_RANDOM_COURSE = parseBeatorajaRandomCourseData({
   name: 'Bench Random',
   stage: [{ sql: 'level >= 0' }],
@@ -220,11 +216,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.asLoadedBytes(BENCH_BYTES);
     },
   });
-  define('player-web.basename', {
-    run: () => {
-      playerWebCoreApi.basename('Songs/Bench/main.bms');
-    },
-  });
   define('player-web.buildAudioBus', {
     run: () => {
       const bus = playerWebCoreApi.buildAudioBus(createFakeAudioContext(), 'split');
@@ -232,87 +223,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       bus.setMode('legacy');
       bus.dispose();
     },
-  });
-  define('player-web.BeatorajaBgaLayer', {
-    run: () => {
-      const layer = new playerWebCoreApi.BeatorajaBgaLayer({
-        skin: makeBenchBeatorajaSkin(),
-        textures: new Map(),
-        cues: { base: [], layer: [], poor: [] },
-      });
-      layer.dispose();
-    },
-  });
-  define('player-web.BeatorajaMarkerLayer', {
-    run: () => {
-      const layer = new playerWebCoreApi.BeatorajaMarkerLayer({
-        group: [],
-        bpm: [],
-        stop: [],
-        time: [],
-        images: new Map(),
-        textures: makeEmptyBeatorajaTextureCache(),
-        canvasHeight: 720,
-      });
-      layer.dispose();
-    },
-  });
-  define('player-web.BeatorajaNoteLayer', {
-    run: () => {
-      const layer = new playerWebCoreApi.BeatorajaNoteLayer({
-        noteSection: makeBenchBeatorajaNoteSection(),
-        variant: '7',
-        images: new Map(),
-        textures: makeEmptyBeatorajaTextureCache(),
-        canvasHeight: 720,
-      });
-      layer.dispose();
-    },
-  });
-  define('player-web.resolveBeatorajaNoteLane', {
-    run: () => {
-      playerWebCoreApi.resolveBeatorajaNoteLane('1Q', '24');
-      playerWebCoreApi.resolveBeatorajaNoteLane('2P', '48');
-      playerWebCoreApi.resolveBeatorajaNoteLane('16', '7');
-    },
-  });
-  define('player-web.beatorajaPixelsPerBeat', {
-    run: () => {
-      playerWebCoreApi.beatorajaPixelsPerBeat(580, 2.5);
-    },
-  });
-  define('player-web.snapHiSpeed', {
-    run: () => {
-      playerWebCoreApi.snapHiSpeed(1.3000000000000003);
-      playerWebCoreApi.snapHiSpeed(42);
-    },
-  });
-  define('player-web.lr2LastWalkedBeat', {
-    run: () => {
-      playerWebCoreApi.lr2LastWalkedBeat({ rules: 'lr2', lastBeat: 32 }, 145);
-      playerWebCoreApi.lr2LastWalkedBeat({ rules: 'beatoraja', lastBeat: 32 }, 145);
-    },
-  });
-  define('player-web.beatorajaDisplayScrollBeat', {
-    run: () => {
-      playerWebCoreApi.beatorajaDisplayScrollBeat({ currentBeat: 24, displayBeat: 8 });
-      playerWebCoreApi.beatorajaDisplayScrollBeat({ currentBeat: 24 });
-    },
-  });
-  define('player-web.BeatorajaPlaySkinView', {
-    run: () => {
-      const view = new playerWebCoreApi.BeatorajaPlaySkinView({
-        skin: makeBenchBeatorajaSkin(),
-        textures: makeEmptyBeatorajaTextureCache(),
-      });
-      view.update({
-        activeOps: new Set(),
-        getTimerStart: () => 0,
-        nowMs: 0,
-      });
-      view.dispose();
-    },
-    interactive: true,
   });
   define('player-web.blendCodeToPixi', {
     run: () => {
@@ -338,19 +248,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.checkBrowserCompat', {
     run: () => {
       playerWebCoreApi.checkBrowserCompat();
-    },
-  });
-  define('player-web.collectChartPreviewTriggers', {
-    run: (fixtures) => {
-      playerWebCoreApi.collectChartPreviewTriggers(fixtures.sampleBmsJson, 3);
-    },
-  });
-  define('player-web.computeBeatorajaChartMarkers', {
-    run: (fixtures) => {
-      playerWebCoreApi.computeBeatorajaChartMarkers(fixtures.sampleBmsJson, {
-        timeIntervalSec: 1,
-        totalSeconds: 5,
-      });
     },
   });
   define('player-web.computeChartFileSha256', {
@@ -495,33 +392,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       registry.resolve('missing');
     },
   });
-  define('player-web.resolveBeMusicLaneKind', {
-    run: () => {
-      playerWebCoreApi.resolveBeMusicLaneKind('16', 0, '7');
-      playerWebCoreApi.resolveBeMusicLaneKind('12', 2, '7');
-      playerWebCoreApi.resolveBeMusicLaneKind('1D', -1, '24');
-    },
-  });
-  define('player-web.resolveBeMusicSkinSettings', {
-    run: () => {
-      playerWebCoreApi.resolveBeMusicSkinSettings(
-        {
-          settings: [
-            {
-              kind: 'choice',
-              id: 'theme',
-              label: 'Theme',
-              options: [{ value: 'dark', label: 'Dark' }],
-              default: 'dark',
-            },
-            { kind: 'number', id: 'offset', label: 'Offset', min: -50, max: 50, step: 1, default: 0, unit: 'px' },
-            { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
-          ],
-        },
-        { theme: 'light', offset: 80, glow: false, stale: 1 },
-      );
-    },
-  });
   define('player-web.resolveSelectListWindow', {
     run: () => {
       playerWebCoreApi.resolveSelectListWindow(playerWebCoreApi.phantomSkin.select.layout, 480, 50, 100);
@@ -552,21 +422,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.describeSongCollection(BENCH_COLLECTION);
     },
   });
-  define('player-web.dirname', {
-    run: () => {
-      playerWebCoreApi.dirname('Songs/Bench/main.bms');
-    },
-  });
   define('player-web.downloadBlob', {
     run: () => {
       playerWebCoreApi.downloadBlob(new Blob([BENCH_BYTES]), 'bench.webm');
     },
     interactive: true,
-  });
-  define('player-web.findFirstAudibleOffsetSeconds', {
-    run: () => {
-      playerWebCoreApi.findFirstAudibleOffsetSeconds(makeAudioBufferLike());
-    },
   });
   define('player-web.GameplayRecorder', {
     run: () => {
@@ -630,11 +490,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.drawBrowserRandomCourse(BENCH_RANDOM_ENTRY, BENCH_HASHED_SONGS, () => 0);
     },
   });
-  define('player-web.resolveSceneCourseInfo', {
-    run: () => {
-      playerWebCoreApi.resolveSceneCourseInfo(BENCH_COURSE_ENTRY, 0);
-    },
-  });
   define('player-web.resolveCourseEntry', {
     run: () => {
       playerWebCoreApi.resolveCourseEntry('Bench#0', BENCH_COURSE_DEFINITION, BENCH_COURSE_LOOKUP);
@@ -667,11 +522,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.flipRectToPixi({ x: 10, y: 20, w: 100, h: 50 }, 720);
     },
   });
-  define('player-web.groupSongsByFolder', {
-    run: () => {
-      playerWebCoreApi.groupSongsByFolder([BENCH_SONG]);
-    },
-  });
   define('player-web.isBeatorajaLuaSkinFilePath', {
     run: () => {
       playerWebCoreApi.isBeatorajaLuaSkinFilePath('skin/bench/play7.luaskin');
@@ -685,12 +535,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.isChartFilePath', {
     run: () => {
       playerWebCoreApi.isChartFilePath('Songs/Bench/main.bms');
-    },
-  });
-  define('player-web.isInsideLr2DefaultSearchBox', {
-    run: () => {
-      playerWebCoreApi.isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 561 });
-      playerWebCoreApi.isInsideLr2DefaultSearchBox({ width: 640, height: 480, x: 460, y: 561 });
     },
   });
   define('player-web.isLr2SkinFilePath', {
@@ -828,16 +672,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       ]);
     },
   });
-  define('player-web.matchesSearchQuery', {
-    run: () => {
-      playerWebCoreApi.matchesSearchQuery({ kind: 'song', song: BENCH_SONG }, 'bench');
-    },
-  });
-  define('player-web.normalizePath', {
-    run: () => {
-      playerWebCoreApi.normalizePath(String.raw`Songs\\Bench/../Bench/main.bms`);
-    },
-  });
   define('player-web.parseCompressorMode', {
     run: () => {
       playerWebCoreApi.parseCompressorMode('split');
@@ -854,26 +688,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
         threshold: -12,
         attack: 0.02,
       });
-    },
-  });
-  define('player-web.parsePlaylog', {
-    run: () => {
-      playerWebCoreApi.parsePlaylog(BENCH_PLAYLOG_JSON);
-    },
-  });
-  define('player-web.resolvePlaylogFilename', {
-    run: () => {
-      playerWebCoreApi.resolvePlaylogFilename(BENCH_PLAYLOG);
-    },
-  });
-  define('player-web.checkPlaylogEligibility', {
-    run: () => {
-      playerWebCoreApi.checkPlaylogEligibility(BENCH_PLAYLOG);
-    },
-  });
-  define('player-web.serializePlaylog', {
-    run: () => {
-      playerWebCoreApi.serializePlaylog(BENCH_PLAYLOG);
     },
   });
   define('player-web.shouldCaptureFrame', {
@@ -1041,17 +855,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveChartImageAsset(BENCH_SOURCE, BENCH_SONG.chartPath, 'banner.bmp');
     },
   });
-  define('player-web.resolveChartPlayVariant', {
-    run: () => {
-      playerWebCoreApi.resolveChartPlayVariant(BENCH_SONG);
-      playerWebCoreApi.resolveChartPlayVariant(BENCH_PMS_SONG);
-    },
-  });
-  define('player-web.resolveChartPreviewPath', {
-    run: (fixtures) => {
-      playerWebCoreApi.resolveChartPreviewPath(fixtures.sampleBmsJson);
-    },
-  });
   define('player-web.resolveDropFilePath', {
     run: () => {
       playerWebCoreApi.resolveDropFilePath(BENCH_BMS_FILE);
@@ -1066,46 +869,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     run: () => {
       playerWebCoreApi.resolveRenderResolution(2, '?resolution=1.5');
     },
-  });
-  // Both `renderDefaultGameplayFrame` (canonical, added in 94d425e) and its backwards-compatibility alias
-  // `renderFallbackLr2Frame` ultimately construct Pixi v8 `Text` objects whose layout measurement reaches for
-  // `document.createElement('canvas')`. The bench harness runs under raw Node so `document` is undefined and
-  // the call throws. Mark both cases `interactive: true` so they're skipped in non-interactive bench runs (the
-  // coverage checker still sees a case for each export). Restore once the harness gets a DOM-equipped Pixi
-  // shim.
-  define('player-web.renderFallbackLr2Frame', {
-    run: () => {
-      const layer = new Container();
-      playerWebCoreApi.renderFallbackLr2Frame(layer, {
-        songTitle: 'Bench Song',
-        bpm: 130,
-        hiSpeed: 2.5,
-        score: 75_000,
-        exScore: 150,
-        exScoreMax: 200,
-        combo: 90,
-        rank: 'AA',
-      });
-      layer.destroy({ children: true, context: true });
-    },
-    interactive: true,
-  });
-  define('player-web.renderDefaultGameplayFrame', {
-    run: () => {
-      const layer = new Container();
-      playerWebCoreApi.renderDefaultGameplayFrame(layer, {
-        songTitle: 'Bench Song',
-        bpm: 130,
-        hiSpeed: 2.5,
-        score: 75_000,
-        exScore: 150,
-        exScoreMax: 200,
-        combo: 90,
-        rank: 'AA',
-      });
-      layer.destroy({ children: true, context: true });
-    },
-    interactive: true,
   });
   define('player-web.Rectangle', {
     run: () => {
@@ -1145,11 +908,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.summarizeBeatorajaPlaySkins', {
     run: () => {
       playerWebCoreApi.summarizeBeatorajaPlaySkins(BENCH_BEATORAJA_PLAY_SKINS);
-    },
-  });
-  define('player-web.wrappedCursorDelta', {
-    run: () => {
-      playerWebCoreApi.wrappedCursorDelta(-9, 10);
     },
   });
 }
@@ -1201,61 +959,6 @@ function makeBenchSong(): playerWebCoreApi.BrowserSongEntry {
   };
 }
 
-function makeBenchPlaylog(): playerWebCoreApi.BeMusicPlaylog {
-  return {
-    format: 'be-music-playlog',
-    version: 0,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    clock: { unit: 'us', origin: 'chart-zero' },
-    chart: {
-      title: 'Bench Song',
-      sourceFormat: 'bms',
-      laneMode: '7keys',
-      total: 300,
-      lnMode: 1,
-      judgeRank: { percent: 75, sourceRank: 2 },
-      noteCount: 32,
-      notes: Array.from({ length: 32 }, (_, index) => ({
-        id: index,
-        channel: `1${(index % 7) + 1}`,
-        type: 'normal' as const,
-        timeUs: 250_000 * (index + 1),
-      })),
-    },
-    inputs: Array.from({ length: 64 }, (_, index) => ({
-      seq: index,
-      timeUs: 125_000 * (index + 1),
-      action: index % 2 === 0 ? ('down' as const) : ('up' as const),
-      channels: [`1${((index >> 1) % 7) + 1}`],
-    })),
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
-  };
-}
-
-function makeBenchPmsSong(): playerWebCoreApi.BrowserSongEntry {
-  const chart: BeMusicJson = createEmptyJson('bms');
-  chart.metadata.title = 'Bench PMS Song';
-  chart.bms.player = 3;
-  chart.events = [
-    { measure: 0, position: [0, 1], channel: '11', value: '01' },
-    { measure: 0, position: [0, 1], channel: '17', value: '01' },
-    { measure: 0, position: [0, 1], channel: '19', value: '01' },
-  ];
-  chart.resources.wav = { '01': 'kick.wav' };
-  return {
-    id: 'files:bench:Songs/Bench/main.pms',
-    sourceId: 'files:bench',
-    sourceLabel: 'Bench',
-    sourceKind: 'directory',
-    chartPath: 'Songs/Bench/main.pms',
-    directoryLabel: 'Songs/Bench',
-    fileLabel: 'main.pms',
-    title: 'Bench PMS Song',
-    totalNotes: 3,
-    chart,
-  };
-}
-
 function makeBenchBeatorajaSkin(): BeatorajaSkin {
   return {
     type: 0,
@@ -1264,15 +967,6 @@ function makeBenchBeatorajaSkin(): BeatorajaSkin {
     h: 720,
     destination: [],
   };
-}
-
-function makeBenchBeatorajaNoteSection(): ConstructorParameters<
-  typeof playerWebCoreApi.BeatorajaNoteLayer
->[0]['noteSection'] {
-  return {
-    id: 'notes',
-    dst: [],
-  } as unknown as ConstructorParameters<typeof playerWebCoreApi.BeatorajaNoteLayer>[0]['noteSection'];
 }
 
 function makeEmptyBeatorajaTextureCache(): playerWebCoreApi.BeatorajaTextureCache {
