@@ -331,7 +331,7 @@ The web demo split into services behind one scene router ([ADR 0006](./adr/0006-
 | P5.4  | The library, records and course-maker services, and the drop target                           | [#514](https://github.com/nulltask/be-music/pull/514) | done    |
 | P5.5  | The LR2, beatoraja and built-in theme services, and the family kits                           | [#519](https://github.com/nulltask/be-music/pull/519) | done    |
 | P5.6  | The course service, and the course and NONSTOP routes                                         | [#522](https://github.com/nulltask/be-music/pull/522) | done    |
-| P5.7a | The select and decide routes                                                                  | —                                                     | planned |
+| P5.7a | The select and decide routes                                                                  | [#525](https://github.com/nulltask/be-music/pull/525) | done    |
 | P5.7b | The play, result and replay routes                                                            | —                                                     | planned |
 | P5.8  | The play-log, video recording and status services                                             | —                                                     | planned |
 | P5.9  | The test hook's state as a service; contract v1 unchanged                                     | —                                                     | planned |
