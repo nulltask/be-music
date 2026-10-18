@@ -14,8 +14,13 @@ import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
-import type { ResultFrame } from '../types.ts';
-import { BeatorajaResultView, readBeatorajaResult } from './result-view.ts';
+import type { ResultFrame, ResultIntent } from '../types.ts';
+import {
+  BeatorajaResultView,
+  readBeatorajaResult,
+  resolveBeatorajaResultPointerIntent,
+  resolveBeatorajaResultTiming,
+} from './result-view.ts';
 
 const RESULT: PlayResult = {
   score: { total: 10, perfect: 10, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 20, score: 20 },
@@ -46,7 +51,18 @@ const RESULT: PlayResult = {
   judgeTimings: [{ atMs: 0, deltaMs: -12, judge: 'PERFECT' }],
 };
 
-const HOST = { app: { screen: { width: 1280, height: 720 } } } as unknown as PixiSceneHost;
+/** A host whose canvas is a plain event target, so a test can press on it. */
+function createHost() {
+  const canvas = new EventTarget();
+  const host = { app: { canvas, screen: { width: 1280, height: 720 } } } as unknown as PixiSceneHost;
+  return { host, canvas };
+}
+
+const HOST = createHost().host;
+
+function pointerDown(pointerType: string): Event {
+  return Object.assign(new Event('pointerdown'), { pointerType });
+}
 
 function createView() {
   const skin: BeatorajaSkin = { type: 7, w: 1280, h: 720, image: [], destination: [] };
@@ -77,7 +93,7 @@ describe('BeatorajaResultView', () => {
   it("draws the run's ops, the gauge with its border and beatoraja's timers on the screen's own clock", async () => {
     const update = vi.spyOn(BeatorajaPlaySkinView.prototype, 'update').mockImplementation(() => undefined);
     const view = createView();
-    await view.attach(HOST);
+    await view.attach(HOST, () => {});
     view.draw(frame());
     const context = update.mock.calls[0]![0] as BeatorajaRenderContext;
     expect(context.nowMs).toBe(250);
@@ -91,6 +107,46 @@ describe('BeatorajaResultView', () => {
     expect(leaving.activeOps).toBe(context.activeOps);
     expect(leaving.getTimerStart(TIMER_FADEOUT)).toBe(600);
     view.dispose();
+  });
+
+  it('presses on at a tap on the canvas, while attached; a mouse click asks for nothing', async () => {
+    const { host, canvas } = createHost();
+    const intents: ResultIntent[] = [];
+    const view = createView();
+    await view.attach(host, (intent) => intents.push(intent));
+    canvas.dispatchEvent(pointerDown('mouse'));
+    expect(intents).toEqual([]);
+    canvas.dispatchEvent(pointerDown('touch'));
+    canvas.dispatchEvent(pointerDown('pen'));
+    expect(intents).toEqual([{ type: 'continue' }, { type: 'continue' }]);
+    view.detach();
+    canvas.dispatchEvent(pointerDown('touch'));
+    expect(intents).toHaveLength(2);
+    // Attached again, it listens once, not twice.
+    await view.attach(host, (intent) => intents.push(intent));
+    await view.attach(host, (intent) => intents.push(intent));
+    canvas.dispatchEvent(pointerDown('touch'));
+    expect(intents).toHaveLength(3);
+    view.dispose();
+    canvas.dispatchEvent(pointerDown('touch'));
+    expect(intents).toHaveLength(3);
+  });
+
+  it('takes a beatoraja skin timing: no steps to press through, every key held back until input', () => {
+    expect(resolveBeatorajaResultTiming({})).toMatchObject({
+      inputDelayMs: 500,
+      escapeWaitsForInput: true,
+      skipsResultSteps: true,
+    });
+  });
+});
+
+describe('resolveBeatorajaResultPointerIntent', () => {
+  it('presses on at a touch or a pen, as Enter does, and not at a mouse', () => {
+    expect(resolveBeatorajaResultPointerIntent('touch')).toEqual({ type: 'continue' });
+    expect(resolveBeatorajaResultPointerIntent('pen')).toEqual({ type: 'continue' });
+    expect(resolveBeatorajaResultPointerIntent('mouse')).toBeUndefined();
+    expect(resolveBeatorajaResultPointerIntent('')).toBeUndefined();
   });
 });
 
