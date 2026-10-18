@@ -97,20 +97,20 @@ export type EngineDriverResult = PlayerSummary;
  *
  * Test-coverage trail for the dynamic-judge / sample-routing features the migration depends on:
  * - **EXRANK dynamic judge windows** — engine end-to-end at
- *   `packages/player/src/index.test.ts:'player: updates manual judge windows from dynamic EXRANK events'`.
- *   Frame summary propagation through `WebUiRuntime` is covered by
- *   `packages/player-web/src/web-ui-runtime.test.ts:'drainWebUiSignals routes the current frame snapshot ...'`.
+ *   `packages/player/src/player-long-notes-and-windows.test.ts:'player: updates manual judge windows from dynamic
+ *   EXRANK events'`. Frame summary propagation through `createWebUiRuntime` is covered by
+ *   `packages/player-web/src/runtime/web-ui-runtime.test.ts:'drainWebUiSignals routes the current frame snapshot ...'`.
  * - **#WAVCMD per-slot gain** — covered by
- *   `packages/player-web/src/web-audio-session.test.ts:'applies #WAVCMD per-slot gain via an intermediate GainNode'`,
- *   which verifies the BufferSource → GainNode → mixer routing instead of BufferSource → mixer.
+ *   `packages/player-web/src/runtime/web-audio-session.test.ts:'applies #WAVCMD per-slot gain via an intermediate
+ *   GainNode'`, which verifies the BufferSource → GainNode → mixer routing instead of BufferSource → mixer.
  * - **bmson c=true continuation** — covered by
- *   `packages/player-web/src/web-audio-session.test.ts:'honours bmson c=true continuation by suppressing
+ *   `packages/player-web/src/runtime/web-audio-session.test.ts:'honours bmson c=true continuation by suppressing
  *   retriggers of an in-flight slot'`. The engine's lane fallback path still flows through
  *   `WebAudioSession.triggerEvent` (which checks `activeBySlot`).
  * - **#STP measure stops** — handled at the timing-resolver / timeline level inside `@be-music/chart`; the
  *   engine consumes chart-time seconds that already account for stops, so it doesn't have a separate code
- *   path. Covered by `packages/player/src/core/timeline.test.ts:'SCROLL/BPM/STOP: keeps zero and negative
- *   scroll with LR2-style stop compensation'`.
+ *   path. Covered by `packages/chart/src/timelines.test.ts:'SCROLL/BPM/STOP: keeps zero and negative scroll with
+ *   LR2-style stop compensation'`.
  */
 export async function runEngineDriver(options: EngineDriverOptions): Promise<EngineDriverResult> {
   const { chart, audio, mode, ui, inputTarget, shouldSkipKey, onInputSignalsReady, engineOptions } = options;

@@ -92,7 +92,7 @@ export class BeatorajaTextRenderer {
     // — Pixi's `style.fontSize` doesn't have well-defined semantics for negative values
     // (BMFont layout would compute a NEGATIVE scale and render the text 180° flipped), so we
     // can't pass the sign through. Pairing this with the `Math.abs(parsed.fontSize)` we apply
-    // when registering the BitmapFont (see `beatoraja-fonts.ts`) reproduces upstream's
+    // when registering the BitmapFont (see `skin/beatoraja/fonts.ts`) reproduces upstream's
     // "rendered height = |text.size|" identity exactly.
     const firstFrame = group.dst[0];
     const rectH = firstFrame !== undefined && firstFrame.h > 0 ? firstFrame.h : 0;

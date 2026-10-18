@@ -190,7 +190,7 @@ TGA images are decoded by `tga.ts` and DDS images by `dds.ts` (the browser playe
 
 `@be-music/player-web` consumes the parsed skin model in these scene modules:
 
-- `view/lr2/select-view.ts`
+- `view/lr2/select-view.ts` (with `select-bars.ts`)
 - `view/lr2/decide-view.ts`
 - `view/lr2/play-view.ts` (with `play-elements.ts`, `play-timers.ts` and `play-hud.ts`)
 - `view/lr2/result-view.ts`
