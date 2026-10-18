@@ -1,8 +1,12 @@
+import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music/player-web/host';
 import type { SkinFamilyId } from '@be-music/player-web/skin';
 import type { PlaylogViewReplay } from '@be-music/player/playlog';
 import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '@be-music/scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
+
+/** Every screen the demo shows, each made by its `create*Scene`. */
+export type DemoScene = SelectScene | DecideScene | PlayScene | ResultScene;
 
 /**
  * DOM handles passed into the `PlayerWebDemoApp` constructor. The lookups happen once at boot in `main.ts`; the app
