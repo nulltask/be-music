@@ -155,8 +155,8 @@ export interface BeatorajaPlaySkinViewOptions {
    * Resolve recent judgement timing samples for the `timingvisualizer[]` element. Returns the
    * adapter's circular timing buffer in oldest-first order — each entry has the signed delta
    * (positive = late, negative = early) and the judge kind (`PERFECT` / `GREAT` / ...). The
-   * renderer plots a sample per entry, fades older entries by index, and color-codes them by
-   * kind. Empty array hides the visualizer.
+   * renderer plots a sample per entry, early ones right of the centre and late ones left as
+   * beatoraja draws them, and fades older entries by index. Empty array hides the visualizer.
    */
   resolveTimingSamples?: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   /**
@@ -192,8 +192,8 @@ export interface BeatorajaPlaySkinViewOptions {
   /**
    * Resolve the FULL run's timing samples for the `timingdistributiongraph[]` element. Same
    * shape as {@link resolveTimingSamples} but returns every judgement, not just the live ring.
-   * The renderer bins these into a per-ms histogram and overlays optional average / std-dev
-   * guides. Used by the result scene; the play scene typically returns `undefined` (the
+   * The renderer bins these into a per-ms histogram (early right of the centre, late left) and
+   * overlays optional average / std-dev guides. Used by the result scene; the play scene typically returns `undefined` (the
    * histogram is meant for post-game review).
    */
   resolveTimingDistribution?: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
