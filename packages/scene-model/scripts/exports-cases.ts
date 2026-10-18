@@ -410,19 +410,6 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       });
     },
   });
-  define('scene-model.playResultFromBeatoraja', {
-    run: () => {
-      sceneModelApi.playResultFromBeatoraja(BENCH_BEATORAJA_COMPLETION, {
-        song: BENCH_CHARTS[0]!,
-        judgeRuleset: 'beatoraja',
-      });
-    },
-  });
-  define('scene-model.beatorajaCompletionFromPlayResult', {
-    run: () => {
-      sceneModelApi.beatorajaCompletionFromPlayResult(BENCH_RESULT);
-    },
-  });
   define('scene-model.joinCourseStageHistories', {
     run: () => {
       sceneModelApi.joinCourseStageHistories([BENCH_STAGE_HISTORY, BENCH_STAGE_HISTORY], [120, 90, 100]);
@@ -542,21 +529,6 @@ const BENCH_SCORE = {
   exScore: 333,
   score: 333,
 };
-const BENCH_BEATORAJA_COMPLETION: sceneModelApi.BeatorajaPlayCompletion = {
-  summary: {
-    ...BENCH_SCORE,
-    fast: 30,
-    slow: 37,
-    gauge: { current: 80, max: 100, initial: 20, cleared: true, type: 'NORMAL' },
-  },
-  maxCombo: 200,
-  history: {
-    scoreHistory: BENCH_PLAYED.scoreHistory,
-    gaugeHistory: BENCH_PLAYED.gaugeHistory,
-    timingHistory: BENCH_PLAYED.judgeTimings.map((timing) => ({ deltaMs: timing.deltaMs, kind: timing.judge })),
-  },
-};
-const BENCH_RESULT = sceneModelApi.playResultFromBeatoraja(BENCH_BEATORAJA_COMPLETION, { song: BENCH_CHARTS[0]! });
 const BENCH_STAGE_HISTORY: sceneModelApi.CourseStageHistory = {
   gaugeHistory: BENCH_PLAYED.gaugeHistory,
   scoreHistory: BENCH_PLAYED.scoreHistory,

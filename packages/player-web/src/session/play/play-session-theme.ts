@@ -65,6 +65,11 @@ export interface PlaySessionTheme {
    * the shared playfield laid out, at the chart's main BPM.
    */
   playlogView?(): PlayPlaylogViewScale | undefined;
+  /**
+   * Whether the view draws the LIFT (the beatoraja play skin raises its judgement line): a replay then shows the
+   * recorded one. Without it the view draws none, and a replay leaves the play state's LIFT alone.
+   */
+  drawsLift?(): boolean;
 }
 
 /** How a view's hi-speed reads in the play log: its scale, the lane in beats at hi-speed 1, the main BPM. */

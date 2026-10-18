@@ -16,7 +16,7 @@ export interface FamilyCase {
   open(demo: Demo): Promise<void>;
   /** Starts the course under the select screen's cursor with AUTO, as the family offers it. */
   startAuto(demo: Demo): Promise<void>;
-  /** The families of a NONSTOP run's play and result (beatoraja plays it on the built-in scene). */
+  /** The families of a NONSTOP run's play and result (each family's own: the stitched play is one play). */
   nonstop: { play: TestHookFamily; result: TestHookFamily };
   /** The jingle each result plays (`test-hook.ts` names them), when the family's skin has a sound set. */
   jingles?: { courseClear: string; courseFail: string; clear: string };
