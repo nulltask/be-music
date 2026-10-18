@@ -40,15 +40,15 @@ const BENCH_COURSE: sceneModelApi.LibraryCourse = {
     keyMode: 7,
     source: { format: 'beatoraja-json' },
   },
-  stages: [{ title: 'Title 1', song: BENCH_CHARTS[1] }],
+  stages: [{ title: 'Title 1', chart: BENCH_CHARTS[1] }],
   playable: true,
 };
 const BENCH_LIBRARY: sceneModelApi.Library = {
-  songs: BENCH_CHARTS,
-  courseFolders: [{ label: 'Dan', songs: [], courses: [BENCH_COURSE] }],
+  charts: BENCH_CHARTS,
+  courseFolders: [{ label: 'Dan', charts: [], courses: [BENCH_COURSE] }],
 };
-const BENCH_CHART_ENTRY: sceneModelApi.LibraryEntry = { kind: 'song', song: BENCH_CHARTS[3]! };
-const BENCH_ENTRIES: readonly sceneModelApi.LibraryEntry[] = BENCH_CHARTS.map((song) => ({ kind: 'song', song }));
+const BENCH_CHART_ENTRY: sceneModelApi.LibraryEntry = { kind: 'chart', chart: BENCH_CHARTS[3]! };
+const BENCH_ENTRIES: readonly sceneModelApi.LibraryEntry[] = BENCH_CHARTS.map((chart) => ({ kind: 'chart', chart }));
 const BENCH_ROOT = sceneModelApi.createBrowseState();
 const BENCH_IN_FOLDER = sceneModelApi.reduceBrowse(BENCH_LIBRARY, BENCH_ROOT, { type: 'open' }).state;
 const BENCH_SNAPSHOT = sceneModelApi.captureBrowse(BENCH_LIBRARY, BENCH_IN_FOLDER);

@@ -35,7 +35,7 @@ export function resolveCourseView(course: LibraryCourse, stageIndex?: number): C
     kind: course.definition.kind,
     title: course.definition.name,
     stages: course.stages.map((stage): CourseStageView => {
-      const chart = stage.song;
+      const chart = stage.chart;
       const level = typeof chart?.playLevel === 'string' ? Number.parseInt(chart.playLevel, 10) : chart?.playLevel;
       const difficulty = chart?.chart.metadata.difficulty;
       return {

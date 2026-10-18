@@ -258,7 +258,7 @@ export function browseSystemSound(command: BrowseCommand, event: BrowseEvent): S
  */
 export function startSystemSound(entry: LibraryEntry): SystemSoundSlot | undefined {
   switch (entry.kind) {
-    case 'song':
+    case 'chart':
       return 'decide';
     case 'course':
       return entry.course.playable || entry.course.newCourse === true ? 'decide' : 'cancel';

@@ -24,7 +24,7 @@ export function groupChartsByFolder(charts: readonly LibraryChart[]): LibraryFol
     buckets.set(label, bucket);
   }
   return [...buckets.entries()]
-    .map(([label, entries]): LibraryFolder => ({ label, songs: entries }))
+    .map(([label, entries]): LibraryFolder => ({ label, charts: entries }))
     .sort((left, right) => JAPANESE_COLLATOR.compare(left.label, right.label));
 }
 
@@ -51,9 +51,9 @@ const ROOT_FOLDERS = new WeakMap<readonly LibraryChart[], RootFoldersMemo>();
  * Kept per chart list, so a select screen that reads it every frame groups the charts once per library.
  */
 export function libraryRootFolders(library: Library): readonly LibraryFolder[] {
-  const memo = ROOT_FOLDERS.get(library.songs);
+  const memo = ROOT_FOLDERS.get(library.charts);
   if (memo !== undefined && memo.courseFolders === library.courseFolders) return memo.folders;
-  const folders = [...groupChartsByFolder(library.songs), ...(library.courseFolders ?? [])];
-  ROOT_FOLDERS.set(library.songs, { courseFolders: library.courseFolders, folders });
+  const folders = [...groupChartsByFolder(library.charts), ...(library.courseFolders ?? [])];
+  ROOT_FOLDERS.set(library.charts, { courseFolders: library.courseFolders, folders });
   return folders;
 }
