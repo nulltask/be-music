@@ -9,11 +9,12 @@ import {
 } from './pixi-utils.ts';
 
 /**
- * The hot render loops in `view/lr2/play-elements.ts` / `view/lr2/result-view.ts` / `scene/lr2/select.ts` originally cleared their dynamic
- * layers with a bare `container.removeChildren()`, which only detaches children from the display tree — Pixi v8's
- * renderer-side state for each orphaned `Graphics` (its owned `GraphicsContext`) and `Text` (its glyph atlas slot)
- * survives the detach. After a few minutes of play that accumulated state freezes the page on the first scene
- * transition. `disposeChildren` is the destroy-on-remove helper that fixes that. The tests below pin the contract:
+ * The hot render loops in `view/lr2/play-elements.ts` / `view/lr2/result-view.ts` / `view/lr2/select-view.ts`
+ * originally cleared their dynamic layers with a bare `container.removeChildren()`, which only detaches children from
+ * the display tree — Pixi v8's renderer-side state for each orphaned `Graphics` (its owned `GraphicsContext`) and
+ * `Text` (its glyph atlas slot) survives the detach. After a few minutes of play that accumulated state freezes the
+ * page on the first scene transition. `disposeChildren` is the destroy-on-remove helper that fixes that. The tests
+ * below pin the contract:
  *
  * 1. The container ends up empty.
  * 2. Each removed child reports `destroyed === true` (Pixi sets this flag inside `destroy()`, so a missed teardown

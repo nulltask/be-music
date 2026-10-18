@@ -7,7 +7,7 @@ export const BEATORAJA_VIEW_DIAGNOSTICS = false;
 /**
  * Apply the destination's `filter` field to the underlying texture source. `1` requests bilinear
  * filtering (smooth scaling); anything else is a no-op (sources default to `'nearest'` at decode
- * time, set by `decodeAsset` in `beatoraja-textures.ts`). Filter is set on the source rather
+ * time, set by `decodeAsset` in `skin/beatoraja/textures.ts`). Filter is set on the source rather
  * than the sprite — Pixi v8 exposes scale mode at the source level — so every sprite sharing
  * the source picks up the change. In practice skin authors apply `filter=1` to atlases where
  * every cell wants the same treatment, so the source-level scope is the right granularity.
