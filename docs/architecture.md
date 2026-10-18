@@ -324,7 +324,7 @@ The web demo split into services behind one scene router ([ADR 0006](./adr/0006-
 
 | Step  | Scope                                                                                         | PR  | Status  |
 | ----- | --------------------------------------------------------------------------------------------- | --- | ------- |
-| P5.1a | The scene router module (`app/scene-router.ts`) with its unit tests, before `main.ts` uses it | —   | planned |
+| P5.1a | The scene router module (`app/scene-router.ts`) with its unit tests, before `main.ts` uses it | —   | done    |
 | P5.1b | Every scene transition through the scene router                                               | —   | planned |
 | P5.2  | The settings service and a play-options service holding the full `PlayOptions`                | —   | planned |
 | P5.3  | The Debug Menu in `ui/debug-menu/`                                                            | —   | planned |
