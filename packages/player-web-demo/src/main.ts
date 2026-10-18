@@ -20,16 +20,10 @@ import {
   type SelectStartEntry,
 } from '@be-music/player-web/host';
 import {
-  DIFFICULTY_FILTER_CYCLE,
-  HISPEED_MAX,
-  HISPEED_MIN,
-  HISPEED_STEP,
-  KEYS_FILTER_CYCLE,
   resolveCourseView,
   resolveResultJingle,
   resolveResultJingles,
   snapHiSpeed,
-  SORT_CYCLE,
   systemSoundSetFromBeatoraja,
   type BrowseSnapshot,
   type CourseView,
@@ -40,9 +34,8 @@ import {
   type PlayRunKind,
   type SystemSoundSet,
 } from '@be-music/scene-model';
-import { resolveBeMusicSkinSettings, type BeMusicSkin } from '@be-music/skin-sdk';
+import type { BeMusicSkin } from '@be-music/skin-sdk';
 import {
-  latticeSkin,
   createBeatorajaSceneKitCaches,
   createBeatorajaSkinLoadContext,
   findBeatorajaThemeBgm,
@@ -73,25 +66,8 @@ import {
   type BrowserDroppedFile,
   type ChartFileHashes,
 } from '@be-music/player-web/collection';
-import {
-  createAudioService,
-  DEFAULT_COMPRESSOR_PARAMS,
-  setMasterVolume,
-  supportsSystemAudioSession,
-  type AudioOwner,
-  type AudioService,
-  type CompressorParams,
-  type TunableCompressor,
-} from '@be-music/player-web/audio';
+import { createAudioService, setMasterVolume, type AudioOwner, type AudioService } from '@be-music/player-web/audio';
 import { downloadBlob, type RecordingFormat } from '@be-music/player-web/recording';
-import {
-  TUNABLE_COMPRESSORS,
-  defaultCompressorTunings,
-  paramsFromTuning,
-  readStoredCompressorTunings,
-  storeCompressorTunings,
-  type CompressorTuning,
-} from './compressor-tuning.ts';
 import { logger } from '@be-music/player-web';
 import {
   discoverLr2Themes,
@@ -112,18 +88,12 @@ import {
   type BeatorajaSkinEntry,
   type BeatorajaSkinHeader,
 } from '@be-music/beatoraja-skin';
-import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
-import { courseStageRecordKey, playRecordKey, storeSongRecords } from './song-records.ts';
+import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from './ui/beatoraja-skin-options.ts';
+import { courseStageRecordKey, playRecordKey } from './song-records.ts';
 import { courseStageRecordPlayFromResult, recordPlayFromResult } from '@be-music/player/records';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
-import {
-  describeSkinSettingControllers,
-  readStoredSkinSettings,
-  setStoredSkinSetting,
-  storeSkinSettings,
-} from './skin-settings.ts';
+import { readStoredSkinSettings } from './skin-settings.ts';
 import type { ResolvedPlayChart } from '@be-music/player';
-import { storeReplayView } from './replay-view-settings.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingles.ts';
 import {
   parsePlaylog,
@@ -158,7 +128,6 @@ import {
   type ActiveCourse,
   type CourseStagePlay,
 } from './course-flow.ts';
-import { normalizeCourseTableUrl } from './course-table-import.ts';
 import { prepareNonstopPlay, type PreparedNonstopPlay } from './nonstop-course.ts';
 import {
   buildNonstopCoursePlaylog,
@@ -178,10 +147,7 @@ import demoPackageJson from '../package.json' with { type: 'json' };
 
 const dropLog = logger('drop');
 const gameplayLog = logger('gameplay');
-const resolutionLog = logger('render-resolution');
 const fullscreenLog = logger('fullscreen');
-
-const AUTO_DETECT_RESOLUTION_LABEL = 'Auto-detect resolution';
 
 /** Every screen the demo shows, each made by its `create*Scene`. */
 type DemoScene = SelectScene | DecideScene | PlayScene | ResultScene;
@@ -195,9 +161,6 @@ interface DecidePlayOverrides {
 /** Ends a play whose result shows: it exited as the result entered, and its last samples ring out. */
 const disposeKeepingAudioTail: PlayDispose<PlayScene> = (play) => play.dispose({ preserveAudioTail: true });
 
-/** How long the select screen settles (song images, fonts, first BGM) before the first-run resolution benchmark. */
-const FIRST_RUN_RESOLUTION_DELAY_MS = 2000;
-
 /** This app as the recorder of its play-logs (`recorder` in `*.bmplay.json`); the engine adds its own version. */
 const PLAYLOG_RECORDER: Omit<PlaylogRecorderInfo, 'engine'> = {
   name: 'be-music-web',
@@ -205,30 +168,24 @@ const PLAYLOG_RECORDER: Omit<PlaylogRecorderInfo, 'engine'> = {
   ...(__BE_MUSIC_BUILD__.length > 0 ? { build: __BE_MUSIC_BUILD__ } : {}),
   platform: 'web',
 };
-// lil-gui auto-injects its stylesheet at construction time (see `injectStyles` option, default `true`), so we don't
-// import its CSS explicitly — its package.json doesn't expose the file via `exports` anyway.
-import GUI, { type Controller } from 'lil-gui';
 import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { InlineSearch } from './inline-search.ts';
-import { parseRecordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
+import { parseRecordingFormatKey } from './recording-format-choice.ts';
 import { storeHiSpeed } from './hi-speed-storage.ts';
 import {
   allowsLiveTempo,
   describePlayingStatus,
-  storePlayTempoSettings,
-  TEMPO_PERCENT_MAX,
-  TEMPO_PERCENT_MIN,
   tempoFromPercent,
   tempoPercentFromTempo,
 } from './play-tempo-settings.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
-import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
+import { pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
 import { applyLoadProgress } from './loading-overlay.ts';
-import { parseUrlMediaParams } from './url-load.ts';
-import { DEBUG_MENU_FOLDERS, clearDemoSettings, rememberFolderOpenStates, type DebugMenuFolder } from './debug-menu.ts';
+import { DebugMenu, type DebugMenuDeps } from './ui/debug-menu/index.ts';
+import { promptSkinDrop } from './ui/skin-drop-prompt.ts';
 import {
   enterTouchFullscreen,
   exitFullscreen,
@@ -238,45 +195,17 @@ import {
   shouldCaptureFullscreenEscape,
   toggleFullscreen,
 } from './fullscreen.ts';
+import { readDeviceSignals, resolvePlayLayoutMode, resolveDeviceProfile } from './device-profile.ts';
 import {
-  type PlayLayoutChoice,
-  readDeviceSignals,
-  resolvePlayLayoutMode,
-  resolveDeviceProfile,
-} from './device-profile.ts';
-import { SILENT_MODE_STRINGS, mountStartSilentModeOption, resolveSilentModeLanguage } from './silent-mode-playback.ts';
-import {
-  RECORD_LABEL,
   captureScreenshot,
   finalizeRecordingIfActive,
   startArmedRecording,
   toggleRecording,
   type RecordingDeps,
 } from './recording-controller.ts';
-import {
-  benchmarkRenderResolution,
-  RenderResolutionBenchmarkCancelled,
-  readStoredRenderResolution,
-  renderResolutionLabel,
-  renderResolutionSteps,
-  storeRenderResolution,
-} from './render-resolution.ts';
 import type { DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
-import {
-  createDemoGuiState,
-  resolveCompressorMode,
-  storeBuiltInSkinId,
-  storePlayLayout,
-  storeRecordingFormat,
-  storeSkinEffects,
-  storeVolumes,
-} from './services/settings.ts';
-import {
-  BE_MUSIC_SKINS,
-  EXTRA_BUILT_IN_SKINS_ENABLED,
-  loadSkinFonts,
-  waitForDefaultUiFonts,
-} from './services/built-in-skins.ts';
+import { createDemoGuiState, resolveCompressorMode, storeBuiltInSkinId } from './services/settings.ts';
+import { BE_MUSIC_SKINS, loadSkinFonts, waitForDefaultUiFonts } from './services/built-in-skins.ts';
 import { SilentModeSetting } from './services/silent-mode.ts';
 import { copyPlayOptionsToGui, playOptionsFromGui, PlayOptionsService } from './services/play-options.ts';
 import { PlaylogAutoSave } from './services/playlog-auto-save.ts';
@@ -502,12 +431,6 @@ class PlayerWebDemoApp {
     touch: () => document.documentElement.classList.contains('touch-first'),
   });
   /**
-   * Bottom-right lil-gui panel exposing the active beatoraja skin's `property[]` / `filepath[]` /
-   * note-offset for live editing. Lazily constructed once `start()` mounts the host (the panel is
-   * absolute-positioned inside the demo shell so the shell needs to exist first).
-   */
-  private beatorajaSkinOptionsGui: BeatorajaSkinOptionsGui | undefined;
-  /**
    * What each beatoraja skin entry is loaded with (`loadBeatorajaSceneKit`), keyed by its entry path:
    * - `textures`: never destroyed in this session — disposing beatoraja textures and re-decoding the same bytes
    *   crashes PixiJS v8's bind-group cache (see `textures.ts`). A new theme only forgets them.
@@ -524,18 +447,6 @@ class PlayerWebDemoApp {
    * each scene (`MUSIC_SELECT = 5`, `PLAY_7KEYS = 0`, etc.) tracks its own override.
    */
   private readonly beatorajaSkinOverridesByType = new Map<number, string>();
-  /**
-   * Debug-menu folder hosting one dropdown per skin scene type (Play 5K / 7K / 9K / 10K / 14K /
-   * 24K / 24Kdp / Music Select / Decide / Result / etc.). Empty until a beatoraja theme is
-   * dropped — `rebuildBeatorajaSkinPickers` (re-)populates it from `beatorajaTheme.entries`.
-   */
-  private beatorajaSkinPickerFolder: GUI | undefined;
-  /**
-   * Active controllers inside {@link beatorajaSkinPickerFolder}, keyed by scene type. Cleared
-   * and rebuilt on each `rebuildBeatorajaSkinPickers` call so dropdown options stay in sync with
-   * the latest theme drop.
-   */
-  private readonly beatorajaSkinPickerControllers: Map<number, Controller> = new Map();
   /**
    * The chart and play mode of the most recent play start (LR2 / default and beatoraja alike), so the result screen's
    * R key can start the same chart again. `autoPlay` is resolved at play start so a retry keeps the mode the play ran
@@ -560,8 +471,6 @@ class PlayerWebDemoApp {
   private courseReturnNavigation: BrowseSnapshot | undefined;
   /** Whether the status line describes a play or result, which a return to the select screen replaces. */
   private playStatusShown = false;
-  /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
-  private activeSkinSystem: SkinFamilyOverride = 'auto';
   /** The skin system the "Drop a skin" prompt asked for, until a drop answers it or it is cancelled. */
   private pendingSkinSystem: 'lr2' | 'beatoraja' | undefined;
   /**
@@ -577,28 +486,6 @@ class PlayerWebDemoApp {
    * + `controller.updateDisplay()`.
    */
   private readonly guiState: DemoGuiState;
-  /** The Debug Menu's "Render resolution" dropdown and "Auto-detect resolution" button. */
-  private resolutionPicker: Controller | undefined;
-  private autoDetectResolutionControl: Controller | undefined;
-  /** Whether a render resolution benchmark is running. */
-  private detectingResolution = false;
-  /** Whether this visit already scheduled the first-run benchmark. */
-  private firstRunResolutionScheduled = false;
-  /**
-   * lil-gui handles for controllers we need to address by name after construction — toggling the per-stage folder
-   * visibility, renaming the record button, and reflecting URL- flag-driven compressor changes back into the GUI.
-   */
-  private gui: GUI | undefined;
-  private compressorStageFolder: GUI | undefined;
-  /** Compressor tuning in slider units, restored from the last visit; seeds every gameplay mount. */
-  private readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
-  private recordController: Controller | undefined;
-  /**
-   * "Auto-save play history" checkbox controller. Held so the play-start path can `disable()` it for the duration
-   * of a play — the playlog options are latched when a song starts and cannot change mid-song — and the result /
-   * select paths can `enable()` it again.
-   */
-  private playlogSaveController: Controller | undefined;
   /** The Leaderboard's Debug Menu folder, account chip and play submission. */
   private readonly leaderboard = new LeaderboardPanel({
     // Read on use: `guiState` is initialized after this field.
@@ -608,22 +495,10 @@ class PlayerWebDemoApp {
     recorder: PLAYLOG_RECORDER,
   });
   /**
-   * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
-   * together while a song is playing (`lockPlaylogOptionsForPlay`) and refreshed when the LR2 select panel pushes
-   * a change (`refreshPlayOptionControllers`).
-   */
-  private readonly playOptionControllers: Controller[] = [];
-  /**
    * The play options in force, the full set: fed by the select screen (`on.playOptions`) and the Debug Menu
    * ({@link setPlayOptions}); every select screen starts from them, and a decide screen and a play take them.
    */
   private readonly playOptions: PlayOptionsService;
-  /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link rememberHiSpeed}. */
-  private hiSpeedController: Controller | undefined;
-  /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
-  private tempoController: Controller | undefined;
-  /** Whether the running play takes the tempo slider live (`allowsLiveTempo` at its start). */
-  private liveTempoPlay = false;
   /** The best records and the chart-file hashes they are keyed by, and the record keys of the play in flight. */
   private readonly records = new RecordsService({
     collection: () => this.library.collection,
@@ -631,10 +506,6 @@ class PlayerWebDemoApp {
   });
   /** Each be-music skin's `settings` values by skin id, persisted in `localStorage` and handed to its scenes. */
   private readonly skinSettings = readStoredSkinSettings();
-  /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
-  private skinSettingsFolder: GUI | undefined;
-  /** The Debug Menu's "Skin & display" folder, which hosts the LR2 theme picker once a drop discovers themes. */
-  private skinFolder: GUI | undefined;
   /**
    * Play-log auto-save, by `guiState.autoSavePlaylog` as it was when the current play STARTED: the result-screen
    * auto-save of a play, and of a course after its last stage, reads this latch, not the live checkbox (the checkbox is
@@ -644,34 +515,6 @@ class PlayerWebDemoApp {
     download: downloadBlob,
     warn: (message, error) => gameplayLog.warn(message, error),
   });
-  /**
-   * Top-level "Skin family" dropdown. Rebuilt via {@link rebuildSkinFamilyPicker} on every theme load / wipe so its
-   * option list reflects which families are actually selectable (LR2 only shows up once an `.lr2skin` has been
-   * dropped; beatoraja only after a `.luaskin` / `skin/*.json` drop; Auto + Default always present). Holding the
-   * controller reference lets `rebuildSkinFamilyPicker` swap the options in-place via lil-gui's
-   * `Controller#options` API without disturbing the insertion order of subsequent controllers.
-   */
-  private skinFamilyController: Controller | undefined;
-  /**
-   * "LR2 theme" picker. Visible only when {@link availableLr2Themes} has 2+ entries; rebuilt on each theme drop so
-   * its option list tracks what was just loaded. The lil-gui option-controller pattern (`Controller#options(...)`)
-   * preserves the previously-attached `onChange` listener across rebuilds — see {@link rebuildSkinFamilyPicker}
-   * for the same idiom.
-   */
-  private lr2ThemeController: Controller | undefined;
-  /**
-   * The Debug Menu's other skin controls that make the select screen again: Built-in skin, Skin effects and the Add
-   * skin buttons. They, {@link skinFamilyController} and {@link lr2ThemeController} are disabled during a play
-   * ({@link setSkinControlsLocked}), since going back to the select screen would end it.
-   */
-  private readonly skinControllers: Controller[] = [];
-  /** Whether a play runs, so the skin controls are disabled ({@link setSkinControlsLocked}). */
-  private skinControlsLocked = false;
-  /**
-   * Disabled string controller used as the read-only status row inside the lil-gui panel. We hold a reference so {@link
-   * setStatus} can call `updateDisplay()` directly rather than relying on lil-gui's `.listen()` polling.
-   */
-  private statusController: Controller | undefined;
   /**
    * `true` after the user clicks Record on the song-select screen but before they actually pick a song. Consumed (and
    * cleared) by `playSong` immediately after the gameplay view mounts, kicking off `startRecording()` so the very first
@@ -684,6 +527,10 @@ class PlayerWebDemoApp {
   private autoRecordArmed = false;
   /** "Play in silent mode": the setting, its checkboxes and its hint. */
   private readonly silentMode: SilentModeSetting;
+  /** The Debug Menu (`ui/debug-menu/`), made once the settings and services it works with are. */
+  private readonly debugMenu: DebugMenu;
+  /** The skin-options panel for the beatoraja screen showing (`ui/beatoraja-skin-options.ts`). */
+  private readonly beatorajaSkinOptions: BeatorajaSkinOptionsPanel;
   /** `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`). */
   private readonly testHook = isTestHookEnabled(window.location.href, import.meta.env.DEV)
     ? new TestHookRecorder()
@@ -743,11 +590,71 @@ class PlayerWebDemoApp {
       loadPickedFiles: (files) => this.library.loadPickedFiles(files),
       recordLoad: () => this.testHook?.recordLoad(),
     });
+    this.debugMenu = new DebugMenu(this.debugMenuDeps());
+    this.beatorajaSkinOptions = new BeatorajaSkinOptionsPanel(this.beatorajaSkinOptionsDeps());
+  }
+
+  /** What the Debug Menu reaches of the app: the settings and services, readers of the app's state, and its actions. */
+  private debugMenuDeps(): DebugMenuDeps {
+    return {
+      settings: this.guiState,
+      sceneHost: this.sceneHost,
+      silentMode: this.silentMode,
+      leaderboard: this.leaderboard,
+      library: this.library,
+      records: this.records,
+      courseMaker: this.courseMaker,
+      skinSettings: this.skinSettings,
+      beatorajaSkinOverridesByType: this.beatorajaSkinOverridesByType,
+      compressorMode: this.compressorMode,
+      shell: this.elements.shell,
+      gameplayView: () => this.gameplayView,
+      selectView: () => this.selectView,
+      stageMounted: () => this.stageMount !== undefined,
+      familyDispatchState: () => this.familyDispatchState(),
+      beatorajaTheme: () => this.beatorajaTheme,
+      availableLr2Themes: () => this.availableLr2Themes,
+      activeLr2ThemeName: () => this.activeLr2ThemeName,
+      beMusicSkin: () => this.beMusicSkin,
+      activeBeatorajaPlay: () => this.activeBeatorajaPlay,
+      beatorajaSkinConfig: (entryPath, header) => this.beatorajaSkinConfig(entryPath, header),
+      setStatus: (text) => this.setStatus(text),
+      setPlayOptions: (changes) => this.setPlayOptions(changes),
+      rememberHiSpeed: (value, source) => this.rememberHiSpeed(value, source),
+      refreshSelectRecords: () => this.refreshSelectRecords(),
+      handleSkinFamilyOverrideChange: (value) => this.handleSkinFamilyOverrideChange(value),
+      handleBuiltInSkinChange: (id) => this.handleBuiltInSkinChange(id),
+      addBeMusicSkin: (skin) => this.addBeMusicSkin(skin),
+      addBeMusicSkinFromUrl: (url) => this.addBeMusicSkinFromUrl(url),
+      applyBeMusicSkinSettings: () => this.applyBeMusicSkinSettings(),
+      applyLr2ThemeByName: (name) => this.applyLr2ThemeByName(name),
+      promptSkinDrop: (family) =>
+        promptSkinDrop(family, (pending) => {
+          this.pendingSkinSystem = pending;
+        }),
+      applyBeatorajaSelectSkinConfig: (entryPath, config) => this.applyBeatorajaSelectSkinConfig(entryPath, config),
+      applyBeatorajaPlaySkinConfig: (entryPath, config) => this.applyBeatorajaPlaySkinConfig(entryPath, config),
+    };
+  }
+
+  /** What the beatoraja skin-options panel reaches of the app: the screens showing, their entries' options, applying. */
+  private beatorajaSkinOptionsDeps(): BeatorajaSkinOptionsPanelDeps {
+    return {
+      container: this.elements.shell,
+      beatorajaKitCaches: this.beatorajaKitCaches,
+      gameplayView: () => this.gameplayView,
+      activeBeatorajaPlay: () => this.activeBeatorajaPlay,
+      beatorajaSelectKit: () => this.beatorajaSelectKit,
+      beatorajaSkinConfig: (entryPath, header) => this.beatorajaSkinConfig(entryPath, header),
+      collectBeatorajaFileCandidates: (entryPath, header) => this.collectBeatorajaFileCandidates(entryPath, header),
+      applyBeatorajaPlaySkinConfig: (entryPath, config) => this.applyBeatorajaPlaySkinConfig(entryPath, config),
+      applyBeatorajaSelectSkinConfig: (entryPath, config) => this.applyBeatorajaSelectSkinConfig(entryPath, config),
+    };
   }
 
   public start(): void {
     this.testHook?.install(window, () => this.testHookState());
-    this.buildGui();
+    this.debugMenu.buildGui();
     this.courseMaker.start();
     // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
     // `showSelect` only once the first select screen is up.
@@ -913,657 +820,13 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Hide the per-stage `Key` / `BGM` / `Master` folder when it doesn't apply to the current state:
-   *
-   * - Compressor checkbox unchecked → bus is in `'off'` mode, every stage is bypassed already.
-   * - `?compressor=legacy` → the legacy architecture has just one compressor; per-stage toggles don't map onto it.
-   *
-   * lil-gui's `show(false)` collapses the folder out of the panel entirely, matching the previous `display: none`
-   * behavior.
-   */
-  /** Bus `CompressorParams` for every compressor, from the Debug Menu's tuning. */
-  private resolveCompressorParamOverrides(): Record<TunableCompressor, CompressorParams> {
-    return Object.fromEntries(
-      TUNABLE_COMPRESSORS.map((compressor) => [
-        compressor,
-        paramsFromTuning(this.compressorTunings[compressor], DEFAULT_COMPRESSOR_PARAMS[compressor]),
-      ]),
-    ) as Record<TunableCompressor, CompressorParams>;
-  }
-
-  private refreshCompressorStageVisibility(): void {
-    const visible = this.guiState.compressor && this.compressorMode === 'split';
-    this.compressorStageFolder?.show(visible);
-  }
-
-  /**
-   * One folder per compressor (key / BGM / master in split mode; the single legacy compressor only when the
-   * `?compressor=legacy` architecture is active) with threshold, knee, ratio, attack, and release sliders and a reset.
-   * Changes retune a running chart live and are remembered for the next visit.
-   */
-  private buildCompressorTuningGui(parent: GUI): void {
-    const labels: Record<TunableCompressor, string> = {
-      key: 'Key compressor',
-      bgm: 'BGM compressor',
-      master: 'Master compressor',
-      legacy: 'Legacy compressor',
-    };
-    const compressors = TUNABLE_COMPRESSORS.filter((compressor) =>
-      this.compressorMode === 'legacy' ? compressor === 'legacy' : compressor !== 'legacy',
-    );
-    for (const compressor of compressors) {
-      const tuning = this.compressorTunings[compressor];
-      const folder = parent.addFolder(labels[compressor]).close();
-      const apply = () => {
-        const params = paramsFromTuning(tuning, DEFAULT_COMPRESSOR_PARAMS[compressor]);
-        this.gameplayView?.setAudioCompressorParams(compressor, params);
-        storeCompressorTunings(this.compressorTunings);
-      };
-      const controllers = [
-        folder.add(tuning, 'thresholdDb', -60, 0, 0.5).name('Threshold (dB)'),
-        folder.add(tuning, 'kneeDb', 0, 40, 0.5).name('Knee (dB)'),
-        folder.add(tuning, 'ratio', 1, 20, 0.1).name('Ratio (x:1)'),
-        folder.add(tuning, 'attackMs', 0, 200, 0.5).name('Attack (ms)'),
-        folder.add(tuning, 'releaseMs', 0, 1000, 5).name('Release (ms)'),
-      ];
-      for (const controller of controllers) controller.onChange(apply);
-      folder
-        .add(
-          {
-            reset: () => {
-              Object.assign(tuning, defaultCompressorTunings()[compressor]);
-              for (const controller of controllers) controller.updateDisplay();
-              apply();
-            },
-          },
-          'reset',
-        )
-        .name('Reset to default');
-    }
-  }
-
-  /**
-   * Builds the floating lil-gui control panel and wires every controller to the gameplay / scene state. Centralizing
-   * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
-   * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
-   * per-stage folder on compressor mode change) without re-querying the DOM.
-   *
-   * Layout (folder titles and default open states live in `debug-menu.ts`): the everyday controls sit at the top level
-   * — status, loading, skin pick, capture — followed by the Play options and Audio folders (open by default), then the
-   * skin detail, library, and developer folders (closed by default). Every folder remembers whether it was left open.
-   */
-  private buildGui(): void {
-    // Start the panel itself collapsed so it doesn't cover the select-screen / gameplay canvas the moment a user lands
-    // on the demo.
-    const gui = new GUI({ title: 'Debug Menu', width: 280 });
-    gui.close();
-    this.gui = gui;
-    const addFolder = (parent: GUI, folder: DebugMenuFolder): GUI => parent.addFolder(folder.title).open(folder.open);
-    // Status row pinned to the top of the panel — first thing the user sees, so a glance at the GUI is enough to tell
-    // whether a load is in flight, what's currently playing, or where a saved recording landed. Disabled so the field
-    // reads as a passive read-out instead of an editable input. Updates are pushed explicitly via `setStatus`; cheaper
-    // than lil-gui's `.listen()` polling and the only writer is this class anyway.
-    this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
-    this.statusController.domElement.classList.add('status-row');
-    gui.add(this.guiState, 'openFolder').name('Open folder');
-    gui.add(this.guiState, 'openFiles').name('Open files (ZIP / play log)');
-    // Folders in the order a session uses them: how to play (options, tempo, courses), how it looks and sounds, the
-    // library, capturing a play, the Leaderboard, then the developer settings.
-    const playOptions = addFolder(gui, DEBUG_MENU_FOLDERS.playOptions);
-    this.buildPlayOptionsFolder(playOptions);
-    this.buildReplayViewFolder(addFolder(playOptions, DEBUG_MENU_FOLDERS.replayView));
-    this.buildTempoFolder(addFolder(gui, DEBUG_MENU_FOLDERS.tempo));
-    this.buildCourseFolder(addFolder(gui, DEBUG_MENU_FOLDERS.course));
-    this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
-    this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
-    this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
-    this.buildCaptureFolder(addFolder(gui, DEBUG_MENU_FOLDERS.capture));
-    this.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
-    this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
-    this.refreshCompressorStageVisibility();
-    rememberFolderOpenStates(gui);
-  }
-
-  /** Capture: recording the play screen as a video in the chosen format, and screenshots. */
-  private buildCaptureFolder(capture: GUI): void {
-    this.recordController = capture.add(this.guiState, 'record').name(RECORD_LABEL);
-    // The container and codec of the video: MP4 · H.264 unless the player picks another, remembered across visits.
-    capture
-      .add(this.guiState, 'recordingFormat', recordingFormatOptions())
-      .name('Video format')
-      .onChange((key: string) => storeRecordingFormat(key));
-    // Screenshot button — captures the Pixi stage at its native size (= the renderer's current screen dimensions;
-    // matches what the user sees in the canvas, downloaded as PNG). See `captureScreenshot` for the extract pipeline.
-    capture.add(this.guiState, 'screenshot').name('📸 Screenshot');
-  }
-
-  /**
-   * Play options — the playMode / chartOptions / assists / judge / gauge settings that get recorded into the play-log.
-   * Two-way synced with the LR2 select scene's PLAY OPTION panel where a counterpart exists (the panel pushes user
-   * edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). All of them are latched
-   * at song start and DISABLED during a play — mid-song changes never apply.
-   */
-  /**
-   * Options read when a play starts, which are disabled while one runs (`lockPlaylogOptionsForPlay`); returns the
-   * controller.
-   */
-  private trackPlayOption(controller: Controller): Controller {
-    this.playOptionControllers.push(controller);
-    return controller;
-  }
-
-  /** How the player plays: auto play, hi-speed, gauge, lane options and assists. */
-  private buildPlayOptionsFolder(folder: GUI): void {
-    const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'autoPlay')
-        .name('Auto play')
-        .onChange((value: boolean) => {
-          this.setPlayOptions({ autoPlay: value });
-        }),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH'])
-        .name('Gauge')
-        .onChange((value: DemoGuiState['gauge']) => {
-          this.setPlayOptions({ gauge1P: value });
-        }),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
-        .name('Random 1P')
-        .onChange((value: DemoGuiState['random1P']) => {
-          this.setPlayOptions({ random1P: value });
-        }),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'random2P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
-        .name('Random 2P')
-        .onChange((value: DemoGuiState['random2P']) => {
-          this.setPlayOptions({ random2P: value });
-        }),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'dpFlip')
-        .name('DP flip')
-        .onChange((value: boolean) => {
-          this.setPlayOptions({ dpFlip: value });
-        }),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'autoScratch1P')
-        .name('Auto scratch 1P')
-        .onChange((value: boolean) => {
-          this.setPlayOptions({ autoScratch1P: value });
-        }),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'autoScratch2P')
-        .name('Auto scratch 2P')
-        .onChange((value: boolean) => {
-          this.setPlayOptions({ autoScratch2P: value });
-        }),
-    );
-    // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
-    // the bar under the cursor.
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'sort', [...SORT_CYCLE])
-        .name('Sort')
-        .onChange((value: DemoGuiState['sort']) => {
-          this.setPlayOptions({ sort: value });
-        }),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'keysFilter', [...KEYS_FILTER_CYCLE])
-        .name('Key filter')
-        .onChange((value: DemoGuiState['keysFilter']) => {
-          this.setPlayOptions({ keysFilter: value });
-        }),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'difficultyFilter', [...DIFFICULTY_FILTER_CYCLE])
-        .name('Difficulty filter')
-        .onChange((value: DemoGuiState['difficultyFilter']) => {
-          this.setPlayOptions({ difficultyFilter: value });
-        }),
-    );
-    // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
-    // visual only, so it stays enabled during a play and applies to it live.
-    this.hiSpeedController = folder
-      .add(this.guiState, 'hiSpeed', HISPEED_MIN, HISPEED_MAX, HISPEED_STEP)
-      .name('Hi-speed')
-      .onChange((value: number) => this.rememberHiSpeed(value, 'menu'));
-  }
-
-  /**
-   * The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
-   */
-  /**
-   * Replay / ghost: which of what a play log recorded the player seeing a replay shows (the tempo, the hi-speed,
-   * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own. Read when a play starts, so disabled during one.
-   */
-  private buildReplayViewFolder(folder: GUI): void {
-    const remember = () => storeReplayView(this.guiState.replayView);
-    const labels = { tempo: 'Tempo', hiSpeed: 'Hi-speed', covers: 'SUDDEN+ / HIDDEN+', lift: 'LIFT' } as const;
-    for (const key of ['tempo', 'hiSpeed', 'covers', 'lift'] as const) {
-      this.trackPlayOption(folder.add(this.guiState.replayView, key).name(labels[key]).onChange(remember));
-    }
-  }
-
-  private buildTempoFolder(folder: GUI): void {
-    const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
-    // The play tempo (-50 % .. +50 %) and how a tempo change sounds, for the song tempo and NONSTOP FIT stages alike.
-    // Read when a play starts, so they are disabled during one; a play at another tempo is practice (not ranked, no
-    // records).
-    // With the pitch following the tempo, the slider stays enabled during a play and changes its tempo live.
-    const rememberTempo = () => storePlayTempoSettings(this.guiState);
-    this.tempoController = trackPlayOption(
-      folder
-        .add(this.guiState, 'tempoPercent', TEMPO_PERCENT_MIN, TEMPO_PERCENT_MAX, 1)
-        .name('Tempo (%)')
-        .onChange(() => {
-          rememberTempo();
-          if (!this.liveTempoPlay) return;
-          const tempo = tempoFromPercent(this.guiState.tempoPercent);
-          this.gameplayView?.setTempo(tempo);
-        }),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'tempoPitchMode', { 'Pitch follows tempo (LR2)': 'pitch', 'Keep pitch': 'keep-pitch' })
-        .name('Pitch')
-        .onChange(rememberTempo),
-    );
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'tempoStretchAlgorithm', { 'Signalsmith Stretch': 'signalsmith', WSOLA: 'wsola' })
-        .name('Keep-pitch stretcher')
-        .onChange(rememberTempo),
-    );
-  }
-
-  /**
-   * Courses: whether stage results show, the player's own courses, the NONSTOP placement, and importing a difficulty
-   * table's courses from its URL (remembered and imported again on load).
-   */
-  private buildCourseFolder(folder: GUI): void {
-    const trackPlayOption = (controller: Controller): Controller => this.trackPlayOption(controller);
-    folder
-      .add(this.guiState, 'courseAutoAdvance')
-      .name('Skip stage results')
-      .onChange((value: boolean) => {
-        this.guiState.courseAutoAdvance = value;
-      });
-    folder.add({ open: () => this.courseMaker.panel?.openManager() }, 'open').name('My courses…');
-    trackPlayOption(
-      folder
-        .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
-        .name('NONSTOP placement')
-        .onChange((value: DemoGuiState['nonstopPlacement']) => {
-          this.guiState.nonstopPlacement = value;
-        }),
-    );
-    // Courses from a difficulty table's page (or header JSON) URL; the URL is remembered and imported again on load.
-    const courseTable = {
-      url: '',
-      import: () => {
-        const url = normalizeCourseTableUrl(courseTable.url);
-        if (url === undefined) {
-          this.setStatus('Enter a difficulty-table URL first');
-          return;
-        }
-        void this.library.importCourseTables([url], true);
-      },
-    };
-    folder.add(courseTable, 'url').name('Table URL');
-    folder.add(courseTable, 'import').name('Import table courses');
-  }
-
-  /**
-   * Volumes (master over every sound, then the keysound / BGM balance; all three apply live and are remembered for the
-   * next visit), then the compressor: the master switch, the split-mode stage toggles, and every compressor's
-   * parameters.
-   */
-  private buildAudioFolder(audio: GUI, addFolder: (parent: GUI, folder: DebugMenuFolder) => GUI): void {
-    const rememberVolumes = () =>
-      storeVolumes({
-        masterVolume: this.guiState.masterVolume,
-        keyVolume: this.guiState.keyVolume,
-        bgmVolume: this.guiState.bgmVolume,
-      });
-    const onVolumeChange = (channel: 'key' | 'bgm') => (value: number) => {
-      this.gameplayView?.setAudioVolume(channel, value / 100);
-      rememberVolumes();
-    };
-    audio
-      .add(this.guiState, 'masterVolume', 0, 100, 1)
-      .name('Master (%)')
-      .onChange((value: number) => {
-        setMasterVolume(value / 100);
-        rememberVolumes();
-      });
-    audio.add(this.guiState, 'keyVolume', 0, 100, 1).name('Key sound (%)').onChange(onVolumeChange('key'));
-    audio.add(this.guiState, 'bgmVolume', 0, 100, 1).name('BGM (%)').onChange(onVolumeChange('bgm'));
-    // Safari / iOS only (`navigator.audioSession`): elsewhere web audio has no silent switch to get past, so the row is
-    // left out rather than shown disabled.
-    if (supportsSystemAudioSession()) {
-      const strings = SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)];
-      this.silentMode.controller = audio
-        .add(this.guiState, 'playInSilentMode')
-        .name(strings.label)
-        .onChange((value: boolean) => this.silentMode.set(value));
-      const note = document.createElement('div');
-      note.className = 'gui-note';
-      note.textContent = strings.note;
-      audio.$children.append(note);
-      // The same setting on the start card, so it can be chosen before the first sound.
-      const startSection = document.querySelector<HTMLElement>('#start-silent-mode');
-      if (startSection !== null) {
-        this.silentMode.startOption = mountStartSilentModeOption({
-          section: startSection,
-          strings,
-          checked: this.guiState.playInSilentMode,
-          onChange: (value) => this.silentMode.set(value),
-        });
-      }
-    }
-    const compressor = addFolder(audio, DEBUG_MENU_FOLDERS.compressor);
-    compressor
-      .add(this.guiState, 'compressor')
-      .name('Enabled')
-      .onChange((value: boolean) => {
-        this.gameplayView?.setAudioCompressor(value);
-        this.refreshCompressorStageVisibility();
-      });
-    const stages = addFolder(compressor, DEBUG_MENU_FOLDERS.compressorStages);
-    this.compressorStageFolder = stages;
-    stages
-      .add(this.guiState, 'compressorKey')
-      .name('Key')
-      .onChange((value: boolean) => {
-        this.gameplayView?.setAudioCompressorStageEnabled('key', value);
-      });
-    stages
-      .add(this.guiState, 'compressorBgm')
-      .name('BGM')
-      .onChange((value: boolean) => {
-        this.gameplayView?.setAudioCompressorStageEnabled('bgm', value);
-      });
-    stages
-      .add(this.guiState, 'compressorMaster')
-      .name('Master')
-      .onChange((value: boolean) => {
-        this.gameplayView?.setAudioCompressorStageEnabled('master', value);
-      });
-    this.buildCompressorTuningGui(compressor);
-  }
-
-  /** How the skins look and lay out, the loaded themes' pickers, the be-music skin's settings, and adding skins. */
-  private buildSkinFolder(skin: GUI, addFolder: (parent: GUI, folder: DebugMenuFolder) => GUI): void {
-    this.skinFolder = skin;
-    // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
-    // loaded. First-time build seeds with `Auto` + `Default` only; `rebuildSkinFamilyPicker` swaps the option list
-    // in place once a theme drop adds LR2 / beatoraja to the pool.
-    this.rebuildSkinFamilyPicker();
-    // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
-    // scene. Persisted so a reload keeps the pick.
-    const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
-    const skinPicker = skin
-      .add(this.guiState, 'builtInSkin', skinOptions())
-      .name('Built-in skin')
-      .onChange((id: string) => {
-        this.handleBuiltInSkinChange(id);
-      });
-    // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
-    BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
-    const skinEffects = skin
-      .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
-      .name('Skin effects')
-      .onChange((level: 'full' | 'reduced' | 'off') => {
-        storeSkinEffects(level);
-        this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
-      });
-    // Both make the select screen again, so they wait for the play to end.
-    this.skinControllers.push(skinPicker, skinEffects);
-    // Canvas pixels per CSS pixel, 1× up to the display's ratio. Lower trades sharpness for fill-rate (tablets drop
-    // under 30 fps at 2×); applies from the next frame. `?resolution=` in the URL overrides it until a pick here.
-    const resolutionSteps = renderResolutionSteps(window.devicePixelRatio || 1);
-    this.resolutionPicker = skin
-      .add(
-        this.guiState,
-        'renderResolution',
-        Object.fromEntries(resolutionSteps.map((value) => [renderResolutionLabel(value), value])),
-      )
-      .name('Render resolution')
-      .onChange((value: number) => {
-        storeRenderResolution(value);
-        this.sceneHost.setResolution(value);
-      });
-    // Measures the frame rate at each resolution on whatever screen is showing and keeps the highest that holds it.
-    this.autoDetectResolutionControl = skin
-      .add({ detect: () => void this.detectRenderResolution() }, 'detect')
-      .name(AUTO_DETECT_RESOLUTION_LABEL);
-    if (resolutionSteps.length < 2) this.autoDetectResolutionControl.hide();
-    // Auto picks the touch layout on phones / tablets; applies from the next play.
-    skin
-      .add(this.guiState, 'playLayout', { Auto: 'auto', Desktop: 'standard', Touch: 'touch' })
-      .name('Play layout')
-      .onChange((choice: PlayLayoutChoice) => storePlayLayout(choice));
-    // Picks between LR2 / beatoraja's "a judged note stays until its time" and "a judged note goes the moment it is
-    // judged". Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint — the
-    // visibility check is a single per-frame branch with no backing state to rebuild.
-    skin
-      .add(this.guiState, 'judgedNoteDisplay', {
-        'Keep until its time (LR2)': 'KEEP_SCROLLING',
-        'Hide on judge': 'HIDE',
-      })
-      .name('Judged notes')
-      .onChange((value: 'KEEP_SCROLLING' | 'HIDE') => {
-        this.guiState.judgedNoteDisplay = value;
-        this.gameplayView?.setJudgedNoteDisplay(value);
-      });
-    // The same toggle as double-clicking the playfield, for pointers where a double click is awkward.
-    skin.add({ fullscreen: () => void toggleFullscreen(this.elements.shell) }, 'fullscreen').name('Toggle fullscreen');
-    // "LR2 theme" (see `rebuildLr2ThemePicker`) slots in here, above the beatoraja pickers, once a drop carries themes.
-    // Per-scene beatoraja skin picker, hidden until a beatoraja theme is dropped — `rebuildBeatorajaSkinPickers()`
-    // re-populates it on each load. Selecting a non-default entry for a scene records it on
-    // `beatorajaSkinOverridesByType`; the next mount picks it up via `pickBeatorajaSkinEntryWithOverride`.
-    this.beatorajaSkinPickerFolder = addFolder(skin, DEBUG_MENU_FOLDERS.beatorajaSkins).hide();
-    // The active be-music skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
-    this.skinSettingsFolder = addFolder(skin, DEBUG_MENU_FOLDERS.skinSettings);
-    this.rebuildSkinSettingsFolder();
-    // LR2 theme picker — added once a drop discovers a theme (see `rebuildLr2ThemePicker`).
-    this.rebuildLr2ThemePicker();
-    // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
-    if (!EXTRA_BUILT_IN_SKINS_ENABLED) return;
-    const addSkins = addFolder(skin, DEBUG_MENU_FOLDERS.addSkin);
-    const skinSource = {
-      url: '',
-      addLattice: () => this.addBeMusicSkin(latticeSkin),
-      addFromUrl: () => void this.addBeMusicSkinFromUrl(skinSource.url),
-    };
-    // Adding a skin switches to it, which makes the select screen again: the buttons wait for the play to end.
-    this.skinControllers.push(addSkins.add(skinSource, 'addLattice').name('Add Lattice'));
-    addSkins.add(skinSource, 'url').name('Skin module URL');
-    this.skinControllers.push(addSkins.add(skinSource, 'addFromUrl').name('Add from URL'));
-  }
-
-  /**
-   * Loading from URLs (the same path as the `?music=` / `?skin=` parameters), the play-history and best-record stores,
-   * and the BGA transcode settings that apply while charts load.
-   */
-  private buildLibraryFolder(library: GUI, addFolder: (parent: GUI, folder: DebugMenuFolder) => GUI): void {
-    const urlParams = parseUrlMediaParams(window.location.href);
-    const urls = {
-      music: urlParams.musicUrl ?? '',
-      skin: urlParams.skinUrl ?? '',
-      load: () => {
-        const musicUrl = urls.music.trim() || undefined;
-        const skinUrl = urls.skin.trim() || undefined;
-        if (!musicUrl && !skinUrl) {
-          this.setStatus('Enter a music or skin ZIP URL first');
-          return;
-        }
-        void this.library.loadFromUrl({ musicUrl, skinUrl });
-      },
-    };
-    library.add(urls, 'music').name('Music ZIP URL');
-    library.add(urls, 'skin').name('Skin ZIP URL');
-    library.add(urls, 'load').name('Load from URLs');
-    // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
-    // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
-    // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
-    // The value is LATCHED at song start (`lockPlaylogOptionsForPlay`) and the controller is disabled while a song
-    // is playing — playlog options cannot change mid-play.
-    this.playlogSaveController = library
-      .add(this.guiState, 'autoSavePlaylog')
-      .name('Auto-save play history')
-      .onChange((value: boolean) => {
-        this.guiState.autoSavePlaylog = value;
-      });
-    library
-      .add(
-        {
-          clear: () => {
-            if (this.records.songRecords.size === 0) {
-              this.setStatus('No best records to clear');
-              return;
-            }
-            if (
-              !window.confirm(
-                `Clear ${this.records.songRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
-              )
-            ) {
-              return;
-            }
-            this.records.songRecords.clear();
-            storeSongRecords(this.records.songRecords);
-            this.setStatus('Best records cleared');
-          },
-        },
-        'clear',
-      )
-      .name('Clear best records');
-    // BGA video transcode controls. Both settings are seeded into the next play scene's settings (see
-    // `preloadGameplay` / `playSong` for the wiring), so changing them mid-session takes effect on the next chart mount
-    // — no need to rebuild gameplay if the user is between songs. We don't push live into the running gameplay because
-    // BGA assets are loaded once at chart- prepare time and the codec / resize decisions are encoded into the cached
-    // video bytes.
-    //
-    // Both controls are dropdowns rather than free-form fields: the meaningful options cluster around standard video
-    // heights (SD / 720p / 1080p / 4K) and a discrete codec pick. `0` in the resize dropdown is the magic "Off" value —
-    // the consumer treats anything `≤ 0` as "preserve resolution". Earlier iterations split resize into a checkbox +
-    // size pair, but users would change the size without realizing they also had to flip the checkbox — the resize was
-    // silently a no-op. Folding both into one control with an explicit `Off` row removes that footgun.
-    const transcode = addFolder(library, DEBUG_MENU_FOLDERS.bgaTranscode);
-    // WebCodecs `VideoEncoder` is a browser feature; gate the checkbox on its existence so the user can't toggle a
-    // state the runtime can't honor. On unsupported browsers (Safari < 17, older Firefox builds) the controller is
-    // disabled and the seed value stays at `false`.
-    const webCodecsSupported = typeof window !== 'undefined' && 'VideoEncoder' in window;
-    const webCodecsController = transcode
-      .add(this.guiState, 'bgaUseWebCodecs')
-      .name(webCodecsSupported ? 'Use WebCodecs encoder' : 'Use WebCodecs encoder (unsupported)')
-      .onChange((value: boolean) => {
-        this.guiState.bgaUseWebCodecs = value;
-      });
-    if (!webCodecsSupported) {
-      webCodecsController.disable();
-    }
-    transcode
-      .add(this.guiState, 'bgaResizeMaxEdgePx', {
-        'Off (preserve resolution)': 0,
-        '256 px (BMS spec)': 256,
-        '360 px (≈ SD)': 360,
-        '480 px (SD)': 480,
-        '512 px': 512,
-        '720 px (HD)': 720,
-        '1080 px (FHD)': 1080,
-        '1440 px (QHD)': 1440,
-        '2160 px (4K)': 2160,
-      })
-      .name('Resize')
-      .onChange((value: number) => {
-        this.guiState.bgaResizeMaxEdgePx = value;
-      });
-  }
-
-  /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
-  private buildDeveloperFolder(developer: GUI): void {
-    // Judge-window ruleset — no in-skin counterpart; the Debug Menu is its only surface. Window widths only (note
-    // selection / empty POOR / LN mechanics / gauge stay LR2-aligned — see docs/playlog.md).
-    this.trackPlayOption(
-      developer
-        .add(this.guiState, 'judgeRuleset', { LR2: 'lr2', beatoraja: 'beatoraja', IIDX: 'iidx' })
-        .name('Judge windows')
-        // Each ruleset keeps its own best records: the select screen switches to the new ruleset's.
-        .onChange(() => this.refreshSelectRecords()),
-    );
-
-    developer
-      .add(this.guiState, 'autoPauseOnBlur')
-      .name('Auto pause on blur')
-      .onChange((value: boolean) => {
-        this.guiState.autoPauseOnBlur = value;
-        // Push live so a chart already in flight starts honoring the new policy on its next visibility / blur event,
-        // without forcing the user to restart the song.
-        this.gameplayView?.setAutoPauseOnBlur(value);
-      });
-    // Chart-authoring debug overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars
-    // in their playable lane. Live-toggleable — the gameplay view always extracts the invisible-note array and preloads
-    // the green sprite, so flipping this flag flips the per-frame render branch on the very next paint.
-    developer
-      .add(this.guiState, 'showInvisibleNotes')
-      .name('Show invisible notes')
-      .onChange((value: boolean) => {
-        this.guiState.showInvisibleNotes = value;
-        this.gameplayView?.setShowInvisibleNotes(value);
-      });
-    // Renderer frame rate, sampled twice a second while the folder is on screen (no work while it's closed).
-    const stats = { fps: '—' };
-    const fpsController = developer.add(stats, 'fps').name('FPS').disable();
-    window.setInterval(() => {
-      if (this.stageMount === undefined || developer._closed || this.gui?._closed) return;
-      stats.fps = this.sceneHost.app.ticker.FPS.toFixed(0);
-      fpsController.updateDisplay();
-    }, 500);
-    developer
-      .add(
-        {
-          reset: () => {
-            if (
-              !window.confirm(
-                'Reset every Debug Menu setting (volumes, skins, skin settings, compressor tuning, folders) to its default and reload? Best records are kept.',
-              )
-            ) {
-              return;
-            }
-            clearDemoSettings();
-            window.location.reload();
-          },
-        },
-        'reset',
-      )
-      .name('Reset settings and reload');
-  }
-
-  /**
    * Single chokepoint for status-text updates. Writes the new value into `guiState` and refreshes the lil-gui
    * controller so the read-only row repaints with the new text.
    */
   private setStatus(text: string): void {
     this.guiState.status = text;
     this.playStatusShown = false;
-    this.statusController?.updateDisplay();
+    this.debugMenu.refreshStatus();
     this.testHook?.recordStatus(text);
   }
 
@@ -1671,7 +934,7 @@ class PlayerWebDemoApp {
   private recordingDeps(): RecordingDeps {
     return {
       sceneHost: this.sceneHost,
-      recordController: this.recordController,
+      recordController: this.debugMenu.recordController,
       getActiveGameplay: () => this.gameplayView?.recording,
       getAutoRecordArmed: () => this.autoRecordArmed,
       setAutoRecordArmed: (value) => {
@@ -1681,38 +944,6 @@ class PlayerWebDemoApp {
       getRecordingFormat: () => this.recordingFormat,
       setStatus: (text) => this.setStatus(text),
     };
-  }
-
-  /**
-   * Asks for a drop of a skin of `family`, picked in the Debug Menu with none loaded: a drop-card-like prompt that any
-   * drop closes. The skin it brings is then used without the "Use this skin?" question.
-   */
-  private promptSkinDrop(family: 'lr2' | 'beatoraja'): void {
-    const dialog = document.querySelector<HTMLDialogElement>('#skin-drop');
-    if (dialog === null) return;
-    this.pendingSkinSystem = family;
-    const title = dialog.querySelector('h2');
-    const hint = dialog.querySelector('[data-skin-drop-hint]');
-    if (title !== null) title.textContent = family === 'lr2' ? 'Drop an LR2 skin' : 'Drop a beatoraja skin';
-    if (hint !== null) {
-      hint.innerHTML =
-        family === 'lr2'
-          ? 'Drop the folder that holds your LR2 theme (<code>LR2files/Theme/…</code>, with its <code>.lr2skin</code> files).'
-          : 'Drop the folder that holds your beatoraja skin (its <code>.luaskin</code> or <code>.json</code> skin files).';
-    }
-    // Cancel or Escape withdraws the request; a drop closes the prompt but keeps it, for the drop to answer.
-    const withdraw = () => {
-      this.pendingSkinSystem = undefined;
-    };
-    dialog.oncancel = withdraw;
-    const cancel = dialog.querySelector<HTMLButtonElement>('[data-skin-drop-cancel]');
-    if (cancel !== null) {
-      cancel.onclick = () => {
-        withdraw();
-        dialog.close();
-      };
-    }
-    if (!dialog.open) dialog.showModal();
   }
 
   /** Switches to the skin the player asked for through the Debug Menu ("drop a skin") once a drop brings it. */
@@ -2154,8 +1385,8 @@ class PlayerWebDemoApp {
     // everything lands.
     // Refresh the Debug Menu's "Skin family" dropdown so the LR2 entry becomes selectable now that the theme has
     // contributed at least one LR2 skin asset. Also rebuild the LR2 theme picker so it reflects the new options.
-    this.rebuildSkinFamilyPicker();
-    this.rebuildLr2ThemePicker();
+    this.debugMenu.rebuildSkinFamilyPicker();
+    this.debugMenu.rebuildLr2ThemePicker();
   }
 
   /**
@@ -2171,58 +1402,6 @@ class PlayerWebDemoApp {
     await this.router.dropSelect();
     await this.mountLr2Theme(theme.files, theme.name);
     await this.showSelect();
-  }
-
-  /**
-   * Builds (or rebuilds in place) the Debug Menu's "LR2 theme" dropdown. Visible whenever at least one theme has
-   * been discovered from the dropped tree — a single-theme drop still gets the picker (with one option) so the
-   * user can SEE which theme is active, and subsequent drops that add more themes flip it into a real switcher
-   * without the picker disappearing and reappearing.
-   *
-   * Implementation detail: lil-gui's `OptionController#options(values)` updates the option list in-place on an
-   * existing option controller (returns the same instance, preserves the attached `onChange` listener). Same
-   * pattern the skin-family picker uses — keeps the controller's position in the panel stable across rebuilds.
-   */
-  private rebuildLr2ThemePicker(): void {
-    const folder = this.skinFolder;
-    if (folder === undefined) return;
-    const themes = this.availableLr2Themes;
-    if (themes.length === 0) {
-      // No discovered theme (drop didn't carry an `LR2files/Theme/<name>/` shape, OR LR2 isn't loaded at all).
-      // Tear the controller down so the panel doesn't show a stale picker with options that no longer resolve.
-      this.lr2ThemeController?.destroy();
-      this.lr2ThemeController = undefined;
-      return;
-    }
-    // `themes` is already alphabetised by `discoverLr2Themes`. Use the theme name as both the dropdown label and
-    // the bound value — the picker proxy stores the name and `applyLr2ThemeByName` resolves it back to the files.
-    const options: Record<string, string> = {};
-    for (const theme of themes) {
-      options[theme.name] = theme.name;
-    }
-    if (this.lr2ThemeController !== undefined) {
-      this.lr2ThemeController.options(options).updateDisplay();
-      return;
-    }
-    const proxy = { lr2Theme: this.activeLr2ThemeName ?? themes[0]!.name };
-    this.lr2ThemeController = folder
-      .add(proxy, 'lr2Theme', options)
-      .name('LR2 theme')
-      .onChange((value: string) => {
-        // Hosting the proxy on a literal lets us re-read the picked name without leaking a separate `guiState`
-        // field — the theme name is fully redundant with `activeLr2ThemeName`, which `mountLr2Theme` writes.
-        // No-op when the user "picks" the already-active theme — `applyLr2ThemeByName` early-returns inside
-        // `mountLr2Theme` since the same files re-mount to the same slots, but we still call through so a
-        // hypothetical future code path that observes the picker change has a single chokepoint to subscribe to.
-        void this.applyLr2ThemeByName(value);
-      });
-    // A theme dropped during a play brings the picker in disabled, as the other skin controls are then.
-    this.lr2ThemeController.enable(!this.skinControlsLocked);
-    // lil-gui appends; move the row up next to the beatoraja pickers so the theme pickers read as one group.
-    const beatorajaFolder = this.beatorajaSkinPickerFolder?.domElement;
-    if (beatorajaFolder?.parentElement === folder.$children) {
-      folder.$children.insertBefore(this.lr2ThemeController.domElement, beatorajaFolder);
-    }
   }
 
   /**
@@ -2264,9 +1443,9 @@ class PlayerWebDemoApp {
       // stale labels until the user opened a scene that hit that fallback. Clearing eagerly keeps
       // the GUI honest.
       this.beatorajaSkinOverridesByType.clear();
-      this.rebuildBeatorajaSkinPickers();
+      this.debugMenu.rebuildBeatorajaSkinPickers();
       // The beatoraja entry just became selectable in the top-level "Skin family" dropdown.
-      this.rebuildSkinFamilyPicker();
+      this.debugMenu.rebuildSkinFamilyPicker();
       // Scan the dropped bundle for decide / clear / fail / result BGM. Heuristic by basename —
       // see `findBeatorajaThemeBgm` for the rules. Awaited because some entries are read lazily;
       // the load is small (<1 MiB) and serialized so it doesn't add visible latency.
@@ -2310,69 +1489,6 @@ class PlayerWebDemoApp {
       playSkins: this.playSkins,
       skinFamilyOverride: this.guiState.skinFamilyOverride,
     };
-  }
-
-  /**
-   * Rebuilds (or first-builds) the Debug Menu's "Skin family" dropdown. Called once during `buildGui` and again
-   * after every theme load / wipe so the available options track the loaded asset state. When the user's
-   * previously-selected override becomes unavailable, silently resets to `'auto'` before swapping options in so
-   * the dropdown never displays a value that wouldn't actually be honoured.
-   *
-   * Implementation detail: lil-gui's `Controller#options(values)` destroys the underlying controller and
-   * recreates it in place — same approach the beatoraja per-scene skin picker uses, see
-   * `rebuildBeatorajaSkinPickers`. The replacement preserves insertion order, so the dropdown stays where
-   * `buildGui` parked it (right after the `Open files` button).
-   */
-  private rebuildSkinFamilyPicker(): void {
-    const gui = this.gui;
-    if (gui === undefined) return;
-    const lr2Available = hasAnyLr2Skin(this.familyDispatchState());
-    const beatorajaAvailable = this.beatorajaTheme !== undefined;
-    // Snap back to 'auto' BEFORE rebuilding options so the freshly-built controller initialises to a valid value.
-    // Without this guard a user-picked LR2 / beatoraja override that became unavailable mid-session would render
-    // as a phantom dropdown value the runtime silently ignored.
-    const override = this.guiState.skinFamilyOverride;
-    if ((override === 'lr2' && !lr2Available) || (override === 'beatoraja' && !beatorajaAvailable)) {
-      this.guiState.skinFamilyOverride = 'auto';
-    }
-    // The three skin systems are always listed; one without a loaded skin says so, and picking it asks for a drop.
-    const options: Record<string, SkinFamilyOverride> = { 'Auto (prefer loaded theme)': 'auto' };
-    options['Built-in'] = 'default';
-    options[lr2Available ? 'LR2' : 'LR2 (drop a skin)'] = 'lr2';
-    options[beatorajaAvailable ? 'beatoraja' : 'beatoraja (drop a skin)'] = 'beatoraja';
-    if (this.skinFamilyController !== undefined) {
-      // `OptionController#options(values)` updates the option list **in place** on an existing option controller
-      // (see lil-gui v0.21.0 source: the subclass override mutates `_values` / `_names` + replaces the `<option>`
-      // DOM nodes, returning `this`). The previously-attached `onChange` listener stays bound to the same
-      // controller instance — re-attaching here would stack a second handler and fire `handleSkinFamilyOverrideChange`
-      // twice per user pick. `updateDisplay()` is enough to snap the visible label to whatever value
-      // `rebuildSkinFamilyPicker` just settled on (e.g. the silent revert to `'auto'` when the prior pick became
-      // unavailable).
-      this.skinFamilyController.options(options).updateDisplay();
-      return;
-    }
-    // First-time build (called from `buildGui` before any theme has been loaded).
-    this.skinFamilyController = (this.skinFolder ?? gui)
-      .add(this.guiState, 'skinFamilyOverride', options)
-      .name('Skin system')
-      .onChange((value: SkinFamilyOverride) => {
-        const loaded =
-          value === 'lr2'
-            ? hasAnyLr2Skin(this.familyDispatchState())
-            : value === 'beatoraja'
-              ? this.beatorajaTheme !== undefined
-              : true;
-        if (!loaded) {
-          // Nothing of that system is loaded: stay on the current one and ask for a drop of its skin.
-          this.promptSkinDrop(value === 'lr2' ? 'lr2' : 'beatoraja');
-          // Restored without `setValue`, which would run this handler again and rebuild the select screen for nothing.
-          this.guiState.skinFamilyOverride = this.activeSkinSystem;
-          this.skinFamilyController?.updateDisplay();
-          return;
-        }
-        this.activeSkinSystem = value;
-        this.handleSkinFamilyOverrideChange(value);
-      });
   }
 
   /**
@@ -2441,7 +1557,7 @@ class PlayerWebDemoApp {
   private handleBuiltInSkinChange(id: string): void {
     this.guiState.builtInSkin = BE_MUSIC_SKINS.resolve(id).id;
     storeBuiltInSkinId(this.guiState.builtInSkin);
-    this.rebuildSkinSettingsFolder();
+    this.debugMenu.rebuildSkinSettingsFolder();
     this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
   }
 
@@ -2461,49 +1577,6 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Refills the "Skin settings" folder from the active be-music skin's `settings` schema — a dropdown per choice, a
-   * slider per number, a checkbox per toggle — seeded with the stored values, and hides it when the skin declares none.
-   * Every change is stored under the skin's id and reaches the scenes on screen at once.
-   */
-  private rebuildSkinSettingsFolder(): void {
-    const folder = this.skinSettingsFolder;
-    if (!folder) return;
-    // `controllersRecursive` returns a copy, so destroying (which splices `folder.controllers`) is safe mid-loop.
-    for (const controller of folder.controllersRecursive()) controller.destroy();
-    const skin = this.beMusicSkin;
-    const controllers = describeSkinSettingControllers(skin.settings);
-    folder.show(controllers.length > 0);
-    if (controllers.length === 0) return;
-    const values: Record<string, unknown> = { ...resolveBeMusicSkinSettings(skin, this.skinSettings.get(skin.id)) };
-    for (const controller of controllers) {
-      const added =
-        controller.kind === 'dropdown'
-          ? folder.add(values, controller.id, controller.options)
-          : controller.kind === 'slider'
-            ? folder.add(values, controller.id, controller.min, controller.max, controller.step)
-            : folder.add(values, controller.id);
-      added.name(controller.name).onChange((value: string | number | boolean) => {
-        setStoredSkinSetting(this.skinSettings, skin.id, controller.id, value);
-        storeSkinSettings(this.skinSettings);
-        this.applyBeMusicSkinSettings();
-      });
-    }
-    folder
-      .add(
-        {
-          reset: () => {
-            this.skinSettings.delete(skin.id);
-            storeSkinSettings(this.skinSettings);
-            this.applyBeMusicSkinSettings();
-            this.rebuildSkinSettingsFolder();
-          },
-        },
-        'reset',
-      )
-      .name('Reset to defaults');
-  }
-
-  /**
    * Hands the active be-music skin's settings to the scenes on screen (and to the select scene and a play loading off
    * it), which draw with them from their next frame.
    */
@@ -2515,8 +1588,7 @@ class PlayerWebDemoApp {
 
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
     this.guiState.skinFamilyOverride = value;
-    this.activeSkinSystem = value;
-    this.skinFamilyController?.updateDisplay();
+    this.debugMenu.showSkinSystem(value);
     if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
       this.lastSelectNavigation = this.selectView.snapshot();
     }
@@ -2604,23 +1676,6 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * The skin-options panel for the beatoraja play on the stage: its skin's `property[]` / `filepath[]`. A change reloads
-   * the skin with the new options and hands it to the play (`applyBeatorajaPlaySkinConfig`), which carries on.
-   */
-  private refreshBeatorajaPlaySkinOptions(): void {
-    const active = this.activeBeatorajaPlay;
-    if (active === undefined || this.gameplayView?.identity.family !== 'beatoraja') return;
-    this.refreshBeatorajaSkinOptionsGui({
-      title: `Skin Config (Play ${active.variant}K)`,
-      entryPath: active.entryPath,
-      header: active.header,
-      onApply: (nextConfig) => {
-        void this.applyBeatorajaPlaySkinConfig(active.entryPath, nextConfig);
-      },
-    });
-  }
-
-  /**
    * Applies new skin options (or another play entry the Debug Menu picked) to the beatoraja play on the stage without
    * restarting the chart: the entry is loaded again with them (its textures decoded again, as an option can change
    * `source[]`) and handed to the play (`PlayScene.updateKit`), which rebuilds its skin and keeps its state.
@@ -2642,7 +1697,7 @@ class PlayerWebDemoApp {
     if (!load.ok || this.gameplayView !== view) return;
     view.updateKit({ family: 'beatoraja', kit: { ...load.kit, skinConfig: config } });
     this.activeBeatorajaPlay = { entryPath, header: load.header, variant: active.variant };
-    this.refreshBeatorajaPlaySkinOptions();
+    this.beatorajaSkinOptions.refreshBeatorajaPlaySkinOptions();
   }
 
   /**
@@ -2695,20 +1750,6 @@ class PlayerWebDemoApp {
     return kit;
   }
 
-  /** The bottom-centre skin-options panel for the beatoraja select entry shown: its `property[]` / `filepath[]`. */
-  private refreshBeatorajaSelectSkinOptions(): void {
-    const shown = this.beatorajaSelectKit;
-    if (shown === undefined) return;
-    this.refreshBeatorajaSkinOptionsGui({
-      title: 'Skin Config (Select)',
-      entryPath: shown.entryPath,
-      header: shown.header,
-      onApply: (nextConfig) => {
-        void this.applyBeatorajaSelectSkinConfig(shown.entryPath, nextConfig);
-      },
-    });
-  }
-
   /**
    * Decode the chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps to Pixi textures for the beatoraja scenes'
    * synthetic-id destinations (`-100` / `-101` / `-102`). Each is best-effort: a missing or malformed bitmap is left
@@ -2742,7 +1783,7 @@ class PlayerWebDemoApp {
     if (select?.identity.family !== 'beatoraja') return;
     select.updateKit(kit);
     // The panel follows the entry's header, so its property dropdowns show the new skin's `property[]` schema.
-    this.refreshBeatorajaSelectSkinOptions();
+    this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
   }
 
   /**
@@ -2958,7 +1999,7 @@ class PlayerWebDemoApp {
     // `setValue` writes to the underlying proxy AND repaints the option list to highlight the
     // matching entry; without this the dropdown would still show the previous selection until
     // the next `rebuildBeatorajaSkinPickers` call (= next theme drop).
-    const controller = this.beatorajaSkinPickerControllers.get(typeCode);
+    const controller = this.debugMenu.beatorajaSkinPickerControllers.get(typeCode);
     if (controller !== undefined) {
       const fallbackPath = this.beatorajaTheme?.theme.entries.find((e) => e.header.type === typeCode)?.entryPath;
       controller.setValue(entryPath ?? fallbackPath ?? '');
@@ -2983,121 +2024,6 @@ class PlayerWebDemoApp {
       this.beatorajaSkinOverridesByType.delete(typeCode);
     }
     return fallback;
-  }
-
-  /**
-   * Repopulate the "Beatoraja skins" debug-menu folder with one dropdown per scene type that the
-   * loaded theme actually ships an entry for. Called from `loadBeatorajaTheme` after each drop,
-   * so the dropdowns always reflect the live `beatorajaTheme.entries` list.
-   *
-   * Each dropdown:
-   *   - shows the scene's "best" entry (from theme discovery) as the default — selecting a
-   *     different option sets `beatorajaSkinOverridesByType` and the next scene mount uses it
-   *     via {@link pickBeatorajaSkinEntryWithOverride}.
-   *   - labels options by `${header.name} (${entryPath})` so the user can disambiguate same-
-   *     named skins from different folders.
-   *   - is omitted entirely for scene types the loaded theme doesn't ship at all (so the panel
-   *     stays compact). Single-entry types still get a dropdown so the user can see at a glance
-   *     which file is mounted.
-   */
-  private rebuildBeatorajaSkinPickers(): void {
-    const folder = this.beatorajaSkinPickerFolder;
-    if (folder === undefined) return;
-    // Tear down previous controllers so dropdown options match the current theme bundle. lil-gui
-    // doesn't support live-updating an `add(target, prop, options)` controller's option list, so
-    // recreating each time is the safe path.
-    for (const controller of this.beatorajaSkinPickerControllers.values()) {
-      controller.destroy();
-    }
-    this.beatorajaSkinPickerControllers.clear();
-    const theme = this.beatorajaTheme?.theme;
-    // Shown only while a beatoraja theme is loaded; an empty folder header would just be noise.
-    folder.show(theme !== undefined);
-    if (theme === undefined) return;
-    // Order matters here — the folder lays controllers out in insertion order, so we keep the
-    // play-variant types together (clustered by key count), then chrome scenes (select / decide
-    // / result / etc.) below them.
-    const sceneTypes: ReadonlyArray<{ typeCode: number; label: string; best?: BeatorajaSkinEntry }> = [
-      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_5KEYS, label: 'Play 5K', best: theme.playSkins['5'] },
-      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_7KEYS, label: 'Play 7K', best: theme.playSkins['7'] },
-      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_9KEYS, label: 'Play 9K', best: theme.playSkins['9'] },
-      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_10KEYS, label: 'Play 10K', best: theme.playSkins['10'] },
-      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_14KEYS, label: 'Play 14K', best: theme.playSkins['14'] },
-      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_24KEYS, label: 'Play 24K', best: theme.playSkins['24'] },
-      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_24KEYS_DOUBLE, label: 'Play 24K DP', best: theme.playSkins['24d'] },
-      { typeCode: BEATORAJA_SKIN_TYPE.MUSIC_SELECT, label: 'Music Select', best: theme.selectSkin },
-      { typeCode: BEATORAJA_SKIN_TYPE.DECIDE, label: 'Decide', best: theme.decideSkin },
-      { typeCode: BEATORAJA_SKIN_TYPE.RESULT, label: 'Result', best: theme.resultSkin },
-      { typeCode: BEATORAJA_SKIN_TYPE.COURSE_RESULT, label: 'Course Result', best: theme.courseResultSkin },
-    ];
-    for (const scene of sceneTypes) {
-      const candidates = theme.entries.filter((entry) => entry.header.type === scene.typeCode);
-      if (candidates.length === 0) continue;
-      // Build a label → entryPath map. lil-gui shows the keys in the dropdown and writes the
-      // matching value to the proxy. Using entryPath as the value lets us look up the entry on
-      // change without keeping a separate index.
-      const options: Record<string, string> = {};
-      for (const entry of candidates) {
-        const name = entry.header.name?.length ? entry.header.name : '(unnamed)';
-        const label = `${name} (${entry.entryPath})`;
-        options[label] = entry.entryPath;
-      }
-      // The proxy holds the currently-selected entryPath. Default to the discovery's best pick
-      // so the dropdown reflects what would actually mount if no override is set.
-      const proxy = { entryPath: scene.best?.entryPath ?? candidates[0]!.entryPath };
-      const controller = folder
-        .add(proxy, 'entryPath', options)
-        .name(`${scene.label} (${candidates.length})`)
-        .onChange((nextEntryPath: string) => {
-          if (scene.best !== undefined && nextEntryPath === scene.best.entryPath) {
-            // Picking the discovery default = "no override" — drop any prior override so future
-            // theme rotations pick up the new "best" automatically.
-            this.beatorajaSkinOverridesByType.delete(scene.typeCode);
-          } else {
-            this.beatorajaSkinOverridesByType.set(scene.typeCode, nextEntryPath);
-          }
-          // Live-apply: if the user's pick matches the currently-mounted scene type, re-mount it
-          // immediately against the new entry. Without this the Debug Menu only takes effect on
-          // the NEXT scene transition, which felt broken to the user (drop a theme, pick a skin,
-          // nothing visible until you ESC and re-enter the scene).
-          this.applyBeatorajaSkinSwitchIfActive(scene.typeCode, nextEntryPath, candidates);
-        });
-      this.beatorajaSkinPickerControllers.set(scene.typeCode, controller);
-    }
-  }
-
-  /**
-   * If the active scene's type-code matches `typeCode`, re-mount it against `entryPath`. Invoked
-   * by the Debug Menu's skin-picker dropdown (the canonical surface for switching skins —
-   * the bottom-centre `BeatorajaSkinOptionsGui` only exposes the picked skin's authored
-   * `property[]` / `filepath[]` schema, not the picker itself). No-op when no matching scene is
-   * active (e.g., user picks a Decide skin while the Select scene is on screen — the override
-   * still gets recorded by the caller for the next mount, but nothing visible changes now).
-   *
-   * `candidates` carries the dropdown's source list so we can recover the entry's `header` for
-   * config-defaults seeding without re-loading the skin to read it back. The header is also
-   * needed by `applyBeatoraja*SkinConfig` indirectly via the cached config map.
-   */
-  private applyBeatorajaSkinSwitchIfActive(
-    typeCode: number,
-    entryPath: string,
-    candidates: ReadonlyArray<BeatorajaSkinEntry>,
-  ): void {
-    const matched = candidates.find((entry) => entry.entryPath === entryPath);
-    if (matched === undefined) return;
-    const config = this.beatorajaSkinConfig(entryPath, matched.header);
-    if (typeCode === BEATORAJA_SKIN_TYPE.MUSIC_SELECT && this.selectView?.identity.family === 'beatoraja') {
-      void this.applyBeatorajaSelectSkinConfig(entryPath, config);
-      return;
-    }
-    const play = this.activeBeatorajaPlay;
-    if (
-      this.gameplayView?.identity.family === 'beatoraja' &&
-      play !== undefined &&
-      playSkinTypeForVariant(play.variant) === typeCode
-    ) {
-      void this.applyBeatorajaPlaySkinConfig(entryPath, config);
-    }
   }
 
   /**
@@ -3150,51 +2076,6 @@ class PlayerWebDemoApp {
     return map;
   }
 
-  /**
-   * Lazily instantiate the skin-options panel. Deferred from the constructor because the demo shell
-   * (the parent the panel attaches to) doesn't exist until `app.innerHTML` materializes.
-   */
-  private ensureBeatorajaSkinOptionsGui(): BeatorajaSkinOptionsGui {
-    if (this.beatorajaSkinOptionsGui === undefined) {
-      this.beatorajaSkinOptionsGui = new BeatorajaSkinOptionsGui({ container: this.elements.shell });
-    }
-    return this.beatorajaSkinOptionsGui;
-  }
-
-  /**
-   * Update the bottom-centre skin-options panel for a freshly-mounted beatoraja scene. Subsequent
-   * user changes flow back through `onChange` → cache update → scene re-mount.
-   *
-   * Skin selection itself is handled by the Debug Menu, not this panel — the demo's
-   * `setBeatorajaSkinOverride` + `applyBeatorajaPlaySkinConfig` cascade is invoked from there.
-   */
-  private refreshBeatorajaSkinOptionsGui(args: {
-    title: string;
-    entryPath: string;
-    header: BeatorajaSkinHeader;
-    onApply: (updatedConfig: BeatorajaSkinConfig) => void;
-  }): void {
-    const config = this.beatorajaSkinConfig(args.entryPath, args.header);
-    const candidates = this.collectBeatorajaFileCandidates(args.entryPath, args.header);
-    const gui = this.ensureBeatorajaSkinOptionsGui();
-    gui.setSkin({
-      title: args.title,
-      // Forward the entry's stable path so `setSkin` can short-circuit when the same skin entry
-      // is being reapplied (the round-trip after every controller tweak). Without this the GUI
-      // tears down and rebuilds on every value change, snapping the panel back to its
-      // initial collapsed state mid-edit.
-      entryPath: args.entryPath,
-      header: args.header,
-      config,
-      fileCandidates: candidates,
-      onChange: (next) => {
-        // Persist and notify the caller so it can re-mount the active scene with the new config.
-        this.beatorajaKitCaches.skinConfigs.set(args.entryPath, next);
-        args.onApply(next);
-      },
-    });
-  }
-
   private async showSelect(): Promise<void> {
     // Back from a play or a result: the status line describes the library again instead of the play just left.
     if (this.playStatusShown) this.setStatus(describeSongCollection(this.library.collection));
@@ -3244,7 +2125,7 @@ class PlayerWebDemoApp {
       kept.setLibrary(this.library.collection);
       if (!(await this.router.show(kept, { role: 'select' }))) return;
       if (this.lastSelectNavigation) kept.restore(this.lastSelectNavigation);
-      if (kit.family === 'beatoraja') this.refreshBeatorajaSelectSkinOptions();
+      if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
       return;
     }
     // The screen starts from the play options in force (two-way sync: the screen's own edits come back through
@@ -3272,7 +2153,7 @@ class PlayerWebDemoApp {
           this.playOptions.update(options);
           copyPlayOptionsToGui(options, this.guiState);
           if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
-          this.refreshPlayOptionControllers();
+          this.debugMenu.refreshPlayOptionControllers();
         },
         search: () => this.search.openFromPointer(),
         // An LR2 skin's course name (text 170) and delete button (233): the panel names the course or confirms first.
@@ -3294,13 +2175,13 @@ class PlayerWebDemoApp {
           this.elements.shell.classList.add('empty');
           void this.router.dropSelect();
           this.lastSelectNavigation = undefined;
-          this.beatorajaSkinOptionsGui?.clear();
+          this.beatorajaSkinOptions.clear();
         },
       },
     });
     if (!(await this.router.show(scene, { role: 'select' }))) return;
-    if (kit.family === 'beatoraja') this.refreshBeatorajaSelectSkinOptions();
-    this.scheduleFirstRunResolutionDetect();
+    if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
+    this.debugMenu.scheduleFirstRunResolutionDetect();
   }
 
   /**
@@ -3344,76 +2225,6 @@ class PlayerWebDemoApp {
     add('optionClose', this.systemSoundBundle.optionClose);
     add('optionChange', this.systemSoundBundle.optionChange);
     return set;
-  }
-
-  /**
-   * Before the player has picked a render resolution (by hand or by an earlier benchmark), benchmarks the select screen
-   * once, after it settles, to pick one for this device. Skipped where there's nothing to choose (a 1× display) and
-   * when `?resolution=` pins it.
-   */
-  private scheduleFirstRunResolutionDetect(): void {
-    if (this.firstRunResolutionScheduled) return;
-    this.firstRunResolutionScheduled = true;
-    if (readStoredRenderResolution() !== undefined) return;
-    if (new URLSearchParams(window.location.search).has('resolution')) return;
-    if (renderResolutionSteps(window.devicePixelRatio || 1).length < 2) return;
-    const selectView = this.selectView;
-    window.setTimeout(() => {
-      // Gone on to a play already: measuring gameplay that just started would mislead, so wait for the next visit.
-      if (
-        this.selectView !== selectView ||
-        selectView?.entered !== true ||
-        readStoredRenderResolution() !== undefined
-      ) {
-        return;
-      }
-      void this.detectRenderResolution({ whileShowing: selectView });
-    }, FIRST_RUN_RESOLUTION_DELAY_MS);
-  }
-
-  /**
-   * Measures the frame rate at each resolution on the screen being shown and keeps (and stores) the highest that holds
-   * it. With `whileShowing`, the run is dropped — nothing stored, the previous resolution back — once that view is no
-   * longer the select screen; any run is dropped when the page is hidden, since a hidden page's frames are throttled.
-   */
-  private async detectRenderResolution(options: { whileShowing?: unknown } = {}): Promise<void> {
-    const steps = renderResolutionSteps(window.devicePixelRatio || 1);
-    if (this.detectingResolution || steps.length < 2) return;
-    this.detectingResolution = true;
-    const control = this.autoDetectResolutionControl;
-    control?.disable();
-    this.resolutionPicker?.disable();
-    try {
-      const result = await benchmarkRenderResolution({
-        steps,
-        apply: (value) => this.sceneHost.setResolution(value),
-        nextFrame: () => new Promise((resolve) => requestAnimationFrame(resolve)),
-        onStep: (value) => control?.name(`Measuring ${renderResolutionLabel(value)}…`),
-        cancelled: () =>
-          document.visibilityState !== 'visible' ||
-          (options.whileShowing !== undefined &&
-            (this.selectView !== options.whileShowing || this.selectView?.entered !== true)),
-      });
-      this.guiState.renderResolution = result.chosen;
-      storeRenderResolution(result.chosen);
-      this.resolutionPicker?.updateDisplay();
-      resolutionLog.info('picked', {
-        chosen: result.chosen,
-        baselineMs: result.baseline,
-        results: result.results.map(
-          ({ resolution, times }) => `${resolution}×: p50 ${times.p50.toFixed(1)} ms, p90 ${times.p90.toFixed(1)} ms`,
-        ),
-      });
-      control?.name(`${AUTO_DETECT_RESOLUTION_LABEL} (picked ${renderResolutionLabel(result.chosen)})`);
-    } catch (error) {
-      if (!(error instanceof RenderResolutionBenchmarkCancelled)) resolutionLog.warn('auto-detect failed', error);
-      this.sceneHost.setResolution(this.guiState.renderResolution);
-      control?.name(AUTO_DETECT_RESOLUTION_LABEL);
-    } finally {
-      this.detectingResolution = false;
-      control?.enable();
-      this.resolutionPicker?.enable();
-    }
   }
 
   /**
@@ -3708,7 +2519,7 @@ class PlayerWebDemoApp {
       // What the replay shows of the recorded view (the Debug Menu's "Replay / ghost" toggles, latched at song start).
       replayView: { ...this.guiState.replayView },
       audioVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
-      audioCompressorParams: this.resolveCompressorParamOverrides(),
+      audioCompressorParams: this.debugMenu.resolveCompressorParamOverrides(),
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {
@@ -3879,7 +2690,7 @@ class PlayerWebDemoApp {
     );
     view.start();
     startArmedRecording(this.recordingDeps());
-    this.refreshBeatorajaPlaySkinOptions();
+    this.beatorajaSkinOptions.refreshBeatorajaPlaySkinOptions();
   }
 
   /**
@@ -4092,19 +2903,12 @@ class PlayerWebDemoApp {
    * Latches the playlog-related GUI options for the play that is about to start and disables their controllers.
    * Playlog options are per-play: the value in effect at song start governs the whole play, and mid-song changes
    * are rejected by keeping the controls disabled until {@link unlockPlaylogOptions} runs (result mounted or back
-   * at select). The skin controls are disabled with them ({@link setSkinControlsLocked}).
+   * at select). The Debug Menu disables its skin controls with them (`DebugMenu.lockForPlay`).
    */
   private lockPlaylogOptionsForPlay(liveTempo = false): void {
     this.playlogAutoSave.latch(this.guiState.autoSavePlaylog);
-    this.playlogSaveController?.disable();
     this.leaderboard.lockForPlay();
-    for (const controller of this.playOptionControllers) {
-      controller.disable();
-    }
-    this.setSkinControlsLocked(true);
-    // The tempo slider changes this play's tempo live (`allowsLiveTempo`).
-    this.liveTempoPlay = liveTempo;
-    if (liveTempo) this.tempoController?.enable();
+    this.debugMenu.lockForPlay(liveTempo);
   }
 
   /**
@@ -4130,25 +2934,8 @@ class PlayerWebDemoApp {
 
   /** Re-enables the playlog option controllers, and the skin controls, once no play is in flight. */
   private unlockPlaylogOptions(): void {
-    this.liveTempoPlay = false;
-    this.playlogSaveController?.enable();
     this.leaderboard.unlock();
-    for (const controller of this.playOptionControllers) {
-      controller.enable();
-    }
-    this.setSkinControlsLocked(false);
-  }
-
-  /**
-   * Disables the Debug Menu's skin controls for a play, or enables them again: Skin system, Built-in skin, Skin
-   * effects, the LR2 theme picker and the Add skin buttons all make the select screen again, which would end the play.
-   * A drop during a play still can; the router then ends the course run ({@link endCourseRun}).
-   */
-  private setSkinControlsLocked(locked: boolean): void {
-    this.skinControlsLocked = locked;
-    for (const controller of [this.skinFamilyController, this.lr2ThemeController, ...this.skinControllers]) {
-      controller?.enable(!locked);
-    }
+    this.debugMenu.unlockAfterPlay();
   }
 
   /**
@@ -4161,7 +2948,7 @@ class PlayerWebDemoApp {
     if (hiSpeed === undefined) return;
     this.guiState.hiSpeed = hiSpeed;
     storeHiSpeed(hiSpeed);
-    if (source !== 'menu') this.hiSpeedController?.updateDisplay();
+    if (source !== 'menu') this.debugMenu.refreshHiSpeed();
     if (source !== 'select') this.setPlayOptions({ hiSpeed });
     if (source === 'menu') {
       this.gameplayView?.setHiSpeed(hiSpeed);
@@ -4175,13 +2962,6 @@ class PlayerWebDemoApp {
   private setPlayOptions(changes: Partial<PlayOptions>): void {
     this.playOptions.update(changes);
     this.selectView?.setPlayOptions(changes);
-  }
-
-  /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
-  private refreshPlayOptionControllers(): void {
-    for (const controller of this.playOptionControllers) {
-      controller.updateDisplay();
-    }
   }
 }
 
