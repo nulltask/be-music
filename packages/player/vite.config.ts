@@ -6,6 +6,9 @@ export default defineConfig({
     packageDir: import.meta.dirname,
     entries: {
       index: 'src/index.ts',
+      signals: 'src/signals.ts',
+      lanes: 'src/lanes.ts',
+      display: 'src/display.ts',
       'audio-sink': 'src/audio-sink.ts',
       'image-resize-algorithm': 'src/image-resize-algorithm.ts',
       course: 'src/course/index.ts',
