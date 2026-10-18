@@ -56,7 +56,6 @@ import type {
 import type { BgaCue, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
-import { TouchLaneTracker } from './touch-lanes.ts';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
@@ -259,12 +258,15 @@ export class PlaySessionState {
   sharedEngineInterrupt: 'escape' | 'restart' | undefined;
   /** True once the shared engine settled the chart (every note judged) and holds the play open for the outro. */
   sharedEngineChartSettled = false;
-  /** Which lane each finger on the canvas holds (touch play). */
-  readonly touchLanes: TouchLaneTracker = new TouchLaneTracker();
+  /** The lanes the view's touch fingers hold (touch play, the view's `lane` intents), in the order they went down. */
+  readonly touchLanesHeld: Set<string> = new Set<string>();
+  /**
+   * How many times the play has lifted every finger off the touch lanes (each pause): the view forgets the fingers
+   * down before the latest lift, so they press nothing until they touch down again.
+   */
+  touchLiftCount = 0;
   /** Input token a touch on each lane channel presses, from the chart's lane bindings (built on the first touch). */
   touchTokenByChannel: Map<string, string> | undefined;
-  /** The canvas `touch-action` before this scene set it to `none`, restored on dispose. */
-  previousCanvasTouchAction: string | undefined;
   /**
    * Latch flipped on the first non-zero `frame.currentSeconds` from the engine. The view's
    * `audioContextStartTime` is re-anchored at that moment so the renderer's chart-time matches what the engine
