@@ -571,6 +571,8 @@ flowchart LR
   - beatoraja の kit も、ほかの種類と同じくホストのレーンオプション（RANDOM、MIRROR、S-RANDOM、SCATTER、DP FLIP）、[HS-FIX](#hs-fix)、開始時のレーンカバー（HIDDEN / SUDDEN、レーンカバーの高さと表示。リフトはなし）で遊び、プレイログの `play.randomLane` と `play.view` に記録します。カバーのキーを有効にします（`coverKeys`）。PageUp / PageDown で SUDDEN+、Home / End でリフトを動かし、H で HIDDEN+ を切り替え、J / K で動かします（Shift で大きく動きます）。譜面のレーンが使うキーはレーンを押します（14 鍵の DP 譜面では H / J / K は 2P のレーンです）。ホイールとスキンのカバーのボタン（act 330-332）はカバーのインテントを送ります。
   - スキンの `main_state.audio_*` は、オーディオサービスのスキンの音として、scene の `PlaySceneSession` を所有者にして鳴らします。scene がステージを離れると、ループも含めて止めます。プレイの音のグラフは別の所有者のままなので、終わったプレイの音は最後まで鳴ります。
 - **入力。** プレイのキー（ESC、F5、Space、矢印キー、Backspace の長押し、beatoraja のプレイのカバーのキー）とタッチのレーンは、window と canvas にあるプレイ自身のリスナーのままです。シーンはキーを聞きません。
+  - ハイスピードはどのファミリーでも ArrowUp / ArrowDown で変わり、ホストも設定できます（`setHiSpeed`）。
+  - TUI の Alt / Option + レーンのショートカットは、Web ではどのファミリーにもありません。Web の入力ランタイム（`createWebInputRuntime`）がエンジンに送るのはレーンのキー、ESC、F5、Space だけで、`high-speed` コマンドは送りません。ブラウザでは Alt とレーンのキーの組み合わせがブラウザのショートカットであることが多くあります（Windows の Alt + D や Alt + F）。LR2 と beatoraja は START + レーンのキーでハイスピードを変えますが、Web のプレイには START のキーがありません。
 - **`#RANDOM`。** `preResolved` があると、決定画面が見せた抽選のとおりにプレイします。Web のデモは先に決定画面を作り、その `resolved` を渡してプレイを先読みします（どのプレイ画面も）。コースのステージとリプレイは自分で引きます（リプレイはログのとおりです）。
 
 Web のデモはどの種類のプレイもすべてこの方法で、その種類自身のプレイ画面で表示します。単曲、AUTO、リプレイ、コースのステージ、NONSTOP、クイックリトライ、F5 で、beatoraja のテーマでも同じです（ADR 0001）。
