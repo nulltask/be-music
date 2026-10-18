@@ -4,6 +4,7 @@ import {
   READTEXT_LINE_SCROLL,
   READTEXT_PAGE_SCROLL,
   resolveSelectKeyAction,
+  SELECT_PAGE_BARS,
   type SelectKeyState,
 } from './select-keys.ts';
 
@@ -79,5 +80,44 @@ describe('resolveSelectKeyAction', () => {
     expect(resolveSelectKeyAction(down('Escape'), open)).toEqual({ type: 'swallow' });
     // Space still toggles the play-options panel, as it always did.
     expect(resolveSelectKeyAction(down('Space', ' '), open)).toEqual({ type: 'panel', panel: 1 });
+  });
+});
+
+describe('resolveSelectKeyAction on the beatoraja key map', () => {
+  const resolve = (event: SessionKeyEvent, state: SelectKeyState = LIST) =>
+    resolveSelectKeyAction(event, state, 'beatoraja');
+
+  it('moves a bar or a page, jumps to either end and picks a random bar', () => {
+    expect(resolve(down('ArrowDown'))).toEqual({ type: 'step', direction: 1 });
+    expect(resolve(down('ArrowUp'))).toEqual({ type: 'step', direction: -1 });
+    expect(resolve(down('PageDown'))).toEqual({
+      type: 'browse',
+      command: { type: 'move', delta: SELECT_PAGE_BARS },
+    });
+    expect(resolve(down('PageUp'))).toEqual({ type: 'browse', command: { type: 'move', delta: -SELECT_PAGE_BARS } });
+    expect(resolve(down('Home'))).toEqual({ type: 'browse', command: { type: 'jump', index: 0 } });
+    expect(resolve(down('End'))).toEqual({
+      type: 'browse',
+      command: { type: 'jump', index: Number.MAX_SAFE_INTEGER },
+    });
+    expect(resolve(down('KeyR', 'r'))).toEqual({ type: 'random' });
+    expect(resolve(down('KeyR', 'R'))).toEqual({ type: 'random' });
+    expect(resolve({ ...down('KeyR', 'r'), ctrlKey: true })).toBeUndefined();
+  });
+
+  it('takes the bar on Enter, backs out on Escape, and backs out of a folder only on Backspace', () => {
+    expect(resolve(down('Enter'))).toEqual({ type: 'activate' });
+    expect(resolve(down('Escape'))).toEqual({ type: 'back' });
+    expect(resolve(down('Backspace'))).toEqual({ type: 'back', inFolder: true });
+    expect(resolve(down('ArrowLeft'))).toBeUndefined();
+  });
+
+  it('has no option panel, and gives the README overlay the keyboard while it is open', () => {
+    expect(resolve(down('Space', ' '))).toBeUndefined();
+    expect(resolve(down('KeyZ', 'z'), { panel: 1, readTextOpen: false })).toBeUndefined();
+    const open: SelectKeyState = { panel: undefined, readTextOpen: true };
+    expect(resolve(down('Enter'), open)).toEqual({ type: 'readtext-close' });
+    expect(resolve(down('PageDown'), open)).toEqual({ type: 'readtext-scroll', delta: READTEXT_PAGE_SCROLL });
+    expect(resolve(down('KeyR', 'r'), open)).toEqual({ type: 'swallow' });
   });
 });

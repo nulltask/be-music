@@ -96,16 +96,16 @@ can read it every frame.
 
 ### Commands
 
-| Command    | What it does                                                                                          | Event                            |
-| ---------- | ----------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `move`     | Moves the cursor by a number of bars, wrapping past either end                                        | `cursor` with the step asked for |
-| `jump`     | Puts the cursor on a bar, clamped (Home / End, a click)                                               | `cursor` with the shortest step  |
-| `random`   | Puts the cursor on a random bar other than the focused one; the random draw is an input               | `cursor`                         |
-| `open`     | Opens the focused folder bar at its first bar                                                         | `folder-opened`                  |
-| `close`    | Backs out onto the folder bar the folder was opened from; at the root there is nothing to back out of | `folder-closed`, or `at-root`    |
-| `search`   | Sets the search text; the cursor goes to the top when the query changes                               | `list-changed`                   |
-| `list`     | Changes the sort or a filter; the cursor stays on the focused bar while it is still listed            | `list-changed`                   |
-| `favorite` | Marks or unmarks the focused chart in beatoraja's song or chart favourites                            | `favorite`                       |
+| Command    | What it does                                                                                                            | Event                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `move`     | Moves the cursor by a number of bars, wrapping past either end                                                          | `cursor` with the step asked for |
+| `jump`     | Puts the cursor on a bar, clamped (Home / End, a click)                                                                 | `cursor` with the shortest step  |
+| `random`   | Puts the cursor on a random bar other than the focused one; the random draw is an input                                 | `cursor`                         |
+| `open`     | Opens the focused folder bar at its first bar                                                                           | `folder-opened`                  |
+| `close`    | Backs out onto the bar of the folder it leaves, wherever the list moved it; at the root there is nothing to back out of | `folder-closed`, or `at-root`    |
+| `search`   | Sets the search text; the cursor goes to the top when the query changes                                                 | `list-changed`                   |
+| `list`     | Changes the sort or a filter; the cursor stays on the focused bar while it is still listed                              | `list-changed`                   |
+| `favorite` | Marks or unmarks the focused chart in beatoraja's song or chart favourites                                              | `favorite`                       |
 
 A command that changes nothing returns the same state and the `none` event. `wrappedCursorDelta` maps a jump to the
 shortest step around the list, keeping the key's direction on lists of two or three bars.
@@ -123,11 +123,14 @@ list options and the favourites. `restoreBrowse` takes it back over the library 
 
 This covers the course-folder restore fixes: the root lists the course folders after the chart folders, so a cursor
 left in a course folder comes back; the cursor kept is the live one at every depth; and a course bar is found by its
-key after a course run, even when a NONSTOP run replaced the library. The built-in and LR2 select screens keep a
-`BrowseSnapshot` across a play; `browseSnapshotFromSelectNavigation` converts the `{ folderPath, selectedIndex }` they
-kept before, and `browseSnapshotFromBeatorajaSelect` reads the beatoraja select scene's snapshot.
+key after a course run, even when a NONSTOP run replaced the library. Every select screen keeps a `BrowseSnapshot`
+across a play; `browseSnapshotFromSelectNavigation` converts the `{ folderPath, selectedIndex }` the built-in and LR2
+screens kept before.
 
 ### Behaviour choices
+
+The built-in / LR2 and beatoraja columns are how the select scenes behaved before they moved onto the model; every
+family's select screen follows the model now.
 
 | Behaviour                            | Built-in / LR2 select                                                 | beatoraja select                                                         | The model                                                                                |
 | ------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
@@ -155,13 +158,15 @@ kept before, and `browseSnapshotFromBeatorajaSelect` reads the beatoraja select 
 | A new library with one chart folder  | Opens it                                                              | Root                                                                     | Left to the session                                                                      |
 
 beatoraja's LN mode override (the LNMODE button) is not part of browsing; nothing plays it yet, so it is not in the
-models.
+models: the beatoraja select view keeps it.
 
 A select session of the web runtime makes the choices the model leaves to it with its family's select policy
 (`session/select/select-policy.ts` in `@be-music/player-web`). On the built-in and LR2 screens a back-out at the root
 does nothing, a library of one chart folder opens it when there is no position to restore, a restore goes as far as
 the path matches, and the sort and the filters are the play options', which a restore keeps. The beatoraja policy
-leaves the screen at the root with the cancel cue and keeps its MODE and SORT in the browse position.
+leaves the screen at the root with the cancel cue, opens a library at its root, keeps its MODE and SORT in the browse
+position (a restore brings them back), reads beatoraja's keys (page keys, Home / End, R for a random bar) and plays a
+folder's cue without the cursor cue.
 
 ## Play options
 
@@ -318,11 +323,11 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation` | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)               |
 | `resolveResultViewJingles`                                                       | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                           |
 
-The built-in and LR2 select screens browse with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
+Every family's select screen browses with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
 `restoreBrowse`, `browseSystemSound`). Every play screen keeps one `PlayState` and reads its result off it
 (`playResultFromPlayState`), so every play follows the model's play-state choices above: a full combo's max combo is every
 note for any play, the result carries each judgment's early / late count, and the play log's visible time is the white
-number (`resolvePlaylogView`). The beatoraja select still keeps its own browse model; the scene sessions of the web
-runtime move onto these models. The skin
+number (`resolvePlaylogView`). Every screen of the web runtime is a scene session on these
+models. The skin
 packages map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
 [beatoraja-skin.md](./beatoraja-skin.md#scene-mapping)).

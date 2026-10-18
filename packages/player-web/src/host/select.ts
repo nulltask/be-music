@@ -3,6 +3,7 @@
  * kit's family and returns the scene to show with `PixiSceneHost.setScene`.
  */
 
+import type { BeatorajaSkinConfig } from '@be-music/beatoraja-skin';
 import type { BrowseSnapshot, LibraryEntry, PlayOptions, SystemSoundSet } from '@be-music/scene-model';
 import type { BrowserSongCollection } from '../collection/types.ts';
 import { logger } from '../logger.ts';
@@ -10,18 +11,28 @@ import type { AudioService } from '../runtime/audio-service.ts';
 import { SELECT_POLICIES } from '../session/select/select-policy.ts';
 import { SelectSession, type SelectCourseMaker, type SelectSessionEvents } from '../session/select/select-session.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
+import { BeatorajaSelectView } from '../view/beatoraja/select-view.ts';
 import { BuiltInSelectView } from '../view/built-in/select-view.ts';
 import { Lr2SelectView } from '../view/lr2/select-view.ts';
 import type { SelectFrame, SelectIntent, SelectRecords, SelectView } from '../view/types.ts';
-import type { BuiltInKit, Lr2Kit } from './family-kit.ts';
+import type { SelectKit } from './family-kit.ts';
 
 const log = logger('select');
 
 /**
- * The kits the select scene takes: a be-music skin, or an LR2 select skin (the theme's, with its bar list). The
- * beatoraja select screen is still `PixiBeatorajaSelectScene`.
+ * The kits the select scene takes: a be-music skin, an LR2 select skin (the theme's, with its bar list), or a beatoraja
+ * theme's select entry, loaded with `loadBeatorajaSceneKit`.
  */
-export type SelectSceneKit = BuiltInKit | Lr2Kit;
+export type SelectSceneKit = SelectKit;
+
+/** What the select screen tells the host: what its session reports, and what a beatoraja skin changes of itself. */
+export interface SelectSceneEvents extends SelectSessionEvents {
+  /**
+   * A beatoraja skin's JUDGE TIMING button changed the skin's options (their `offset`): keep them for the next load of
+   * the entry. The screen draws with them already.
+   */
+  skinConfigChange?(config: BeatorajaSkinConfig): void;
+}
 
 export interface SelectSceneOptions extends SessionSceneOptions {
   /** The library to browse, with its charts' files (the preview's samples, the images, the text files). */
@@ -44,7 +55,7 @@ export interface SelectSceneOptions extends SessionSceneOptions {
    */
   readonly courseMaker?: SelectCourseMaker;
   /** What the screen tells the host: a chart or a course started, the play options changed, and the rest. */
-  readonly on: SelectSessionEvents;
+  readonly on: SelectSceneEvents;
 }
 
 /** The select screen as a scene. */
@@ -75,8 +86,9 @@ export interface SelectScene extends SessionScene<SelectFrame, SelectIntent> {
   /** Takes the theme's new sounds; a BGM playing changes to the new one. */
   setSounds(sounds: SystemSoundSet): void;
   /**
-   * Takes a new kit of the scene's family: the player's new settings for a be-music skin (the scene keeps its skin), or
-   * another LR2 select skin (a theme dropped). The next frame draws with it. A kit of another family is ignored.
+   * Takes a new kit of the scene's family: the player's new settings for a be-music skin (the scene keeps its skin),
+   * another LR2 select skin (a theme dropped), or a beatoraja select entry loaded again (the player's options for it,
+   * or another entry). The next frame draws with it. A kit of another family is ignored.
    */
   updateKit(kit: SelectSceneKit): void;
 }
@@ -87,17 +99,39 @@ interface FamilySelectView {
   updateKit(kit: SelectSceneKit): void;
 }
 
-/** The select view of `kit`'s family. */
-function createSelectView(kit: SelectSceneKit): FamilySelectView {
-  if (kit.family === 'lr2') {
-    const view = new Lr2SelectView(kit);
-    return { view, updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')) };
+/**
+ * The select view of `kit`'s family. A beatoraja skin's Lua sounds play through the audio service as the session's, so
+ * they stop as the screen leaves.
+ */
+function createSelectView(
+  kit: SelectSceneKit,
+  session: SelectSession,
+  options: Pick<SelectSceneOptions, 'audio' | 'on'>,
+): FamilySelectView {
+  switch (kit.family) {
+    case 'lr2': {
+      const view = new Lr2SelectView(kit);
+      return { view, updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')) };
+    }
+    case 'beatoraja': {
+      const { on } = options;
+      const view = new BeatorajaSelectView(kit, {
+        skinSounds: options.audio.skinSounds.owned(session),
+        ...(on.skinConfigChange !== undefined ? { onSkinConfigChange: (config) => on.skinConfigChange?.(config) } : {}),
+      });
+      return {
+        view,
+        updateKit: (next) => (next.family === 'beatoraja' ? view.updateKit(next) : ignoreKit(next, 'beatoraja')),
+      };
+    }
+    case 'built-in': {
+      const view = new BuiltInSelectView(kit);
+      return {
+        view,
+        updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
+      };
+    }
   }
-  const view = new BuiltInSelectView(kit);
-  return {
-    view,
-    updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
-  };
 }
 
 function ignoreKit(kit: SelectSceneKit, family: SelectSceneKit['family']): void {
@@ -172,8 +206,8 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
  * are kept). Dispose it once it is gone.
  */
 export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptions): SelectScene {
-  const familyView = createSelectView(kit);
-  const { view } = familyView;
+  // The session asks the view for its skin's launch outro, and a beatoraja view's skin sounds belong to the session.
+  let familyView: FamilySelectView | undefined;
   const session = new SelectSession({
     library: options.library,
     ...(options.browse !== undefined ? { browse: options.browse } : {}),
@@ -183,10 +217,11 @@ export function createSelectScene(kit: SelectSceneKit, options: SelectSceneOptio
     audio: options.audio,
     ...(options.courseMaker !== undefined ? { courseMaker: options.courseMaker } : {}),
     policy: SELECT_POLICIES[kit.family],
-    launchOutroMs: () => view.launchOutroMs,
+    launchOutroMs: () => familyView?.view.launchOutroMs ?? 0,
     ...(options.now !== undefined ? { now: options.now } : {}),
     on: options.on,
   });
+  familyView = createSelectView(kit, session, options);
   return new FamilySelectScene(session, familyView, {
     ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
