@@ -12,6 +12,7 @@ import {
   describeRandomCourseDrawFailure,
   describeUnplayableCourse,
   planCourseStart,
+  playAgainOverrides,
   resolveCourseRecordUpdate,
   resolveGameplayExit,
   resolveGameplayRestart,
@@ -165,6 +166,17 @@ describe('gameplay exits', () => {
     expect(resolveGameplayRestart({ courseStage: false, nonstop: true })).toBe('restitch');
     expect(resolveGameplayRestart({ courseStage: true, nonstop: false })).toBe('abandon-course');
     expect(resolveGameplayRestart({ courseStage: false, nonstop: false })).toBe('replay');
+  });
+
+  test('F5 plays a single chart again as it was played: AUTO stays AUTO and a replay stays a replay', () => {
+    const replay = { play: { mode: 'auto' } };
+    expect(playAgainOverrides({ autoPlay: true })).toEqual({ autoPlay: true });
+    expect(playAgainOverrides({ autoPlay: true, replay })).toEqual({ autoPlay: true, replay });
+    expect(playAgainOverrides({ autoPlay: false, replay })).toEqual({ autoPlay: false, replay });
+    // A live play stays live: no `replay` key at all, so the restarted play records again.
+    const manual = playAgainOverrides({ autoPlay: false, replay: undefined });
+    expect(manual).toEqual({ autoPlay: false });
+    expect('replay' in manual).toBe(false);
   });
 });
 

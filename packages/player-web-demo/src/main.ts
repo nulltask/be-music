@@ -193,6 +193,7 @@ import {
   describeRandomCourseDrawFailure,
   describeUnplayableCourse,
   planCourseStart,
+  playAgainOverrides,
   resolveCourseRecordUpdate,
   resolveGameplayExit,
   resolveGameplayRestart,
@@ -4616,7 +4617,8 @@ class PlayerWebDemoApp {
           void this.finishGameplayThen(() => this.showSelect());
           return;
         }
-        void this.finishGameplayThen(() => this.playSong(song));
+        // A single chart plays again as it was played: AUTO stays AUTO, a replay stays a replay (`playAgainOverrides`).
+        void this.finishGameplayThen(() => this.playSong(song, playAgainOverrides({ autoPlay, replay })));
       },
     };
     const {
