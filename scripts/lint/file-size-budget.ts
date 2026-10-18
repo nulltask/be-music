@@ -19,7 +19,6 @@ export const FILE_SIZE_BUDGET_LINES = 1500;
  * TODO: split each of these into cohesive modules and drop it from the list (see docs/architecture.md).
  */
 export const FILE_SIZE_BUDGET_ALLOWLIST: readonly string[] = [
-  'packages/player-tui/src/bga.ts',
   'packages/player-tui/src/cli/runner.ts',
   'packages/player-tui/src/tui/tui.ts',
   'packages/player-web-demo/src/main.ts',
