@@ -260,13 +260,10 @@ the course a stage or a run belongs to (`course`, a course view). `@be-music/ski
 `BeMusicResultData`.
 
 - `playResultFromPlayState` reads a play's result off its final play state.
-- `playResultFromBeatoraja` reads the beatoraja gameplay scene's `onComplete(summary, maxCombo, history)`; its graphs
-  get the start and end samples the other scenes take, and its timing samples, which have no time, read `atMs` 0.
-  `beatorajaCompletionFromPlayResult` goes back to that shape for a beatoraja result skin.
 - `playResultFromCourseRun` reads a course run (`PlaylogCourseResult`) as one play: the summed score, LR2's money score
   over the course's notes under LR2, the course under its first stage's chart, the stages reached and the trophy
-  (`courseRun`). Its graphs are the last stage's, as LR2 draws a course result; `courseRun.stageHistories` keeps every
-  stage's for beatoraja's joined graph (`joinCourseStageHistories`).
+  (`courseRun`). Its graphs are the history it is given: the last stage's, as LR2 draws a course result, or every
+  stage's joined (`joinCourseStageHistories`), as beatoraja draws one; `courseRun.stageHistories` keeps every stage's.
 - `resolveResultPresentation` says how a run is shown, as LR2 does: a course run on the course-result skin with the
   course jingles and no quick retry; a NONSTOP run as a single play.
 

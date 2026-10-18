@@ -261,13 +261,11 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 （`course`、コースの表示用モデル）を持ちます。`@be-music/skin-sdk` はこれを `BeMusicResultData` として export します。
 
 - `playResultFromPlayState` はプレイの結果を最後のプレイ状態から読みます。
-- `playResultFromBeatoraja` は beatoraja のプレイ画面の `onComplete(summary, maxCombo, history)` を読みます。グラフに
-  他の画面と同じ始まりと終わりの点を足し、時刻のないタイミングの記録は `atMs` を 0 とします。
-  `beatorajaCompletionFromPlayResult` は beatoraja の結果スキン向けにその形へ戻します。
 - `playResultFromCourseRun` はコースの実行（`PlaylogCourseResult`）を 1 回のプレイとして読みます。合計したスコア、
   LR2 ではコースのノーツに対する LR2 の点数、最初のステージの譜面の下のコース名、到達したステージ数とトロフィー
-  （`courseRun`）です。グラフは LR2 のコースの結果と同じく最後のステージのもので、`courseRun.stageHistories` に
-  beatoraja のつないだグラフ（`joinCourseStageHistories`）用の全ステージのグラフを残します。
+  （`courseRun`）です。グラフは渡された記録で、LR2 のコースの結果と同じく最後のステージのもの、または beatoraja と
+  同じく全ステージをつないだもの（`joinCourseStageHistories`）です。`courseRun.stageHistories` に全ステージのグラフを
+  残します。
 - `resolveResultPresentation` は結果の見せ方を LR2 と同じく決めます。コース全体はコース結果のスキンでコース用の
   ジングル、クイックリトライなし。NONSTOP は単独のプレイとして見せます。
 
