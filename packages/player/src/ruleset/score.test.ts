@@ -1,6 +1,4 @@
 import { describe, expect, test } from 'vite-plus/test';
-import * as scoringEntry from '../core/scoring-entry.ts';
-import * as ruleset from './vocabulary.ts';
 import {
   computeScoreRate,
   createEmptyScore,
@@ -56,15 +54,5 @@ describe('the score vocabulary', () => {
 
     expect(resolveDisplayedPoor(score, true)).toBe(5); // LR2's counter shows the sum
     expect(resolveDisplayedPoor(score, false)).toBe(3);
-  });
-
-  test('the deprecated core/scoring entry hands out the same functions', () => {
-    expect(scoringEntry.computeScoreRate).toBe(ruleset.computeScoreRate);
-    expect(scoringEntry.createEmptyScore).toBe(ruleset.createEmptyScore);
-    expect(scoringEntry.resolveDisplayedPoor).toBe(ruleset.resolveDisplayedPoor);
-    expect(scoringEntry.resolveIidxRankIndexFromScore).toBe(ruleset.resolveIidxRankIndexFromScore);
-    expect(scoringEntry.resolveIidxRankLabel).toBe(ruleset.resolveIidxRankLabel);
-    expect(scoringEntry.resolveLr2MoneyScore).toBe(ruleset.resolveLr2MoneyScore);
-    expect(scoringEntry.IIDX_RANK_LABELS).toBe(ruleset.IIDX_RANK_LABELS);
   });
 });

@@ -1,14 +1,9 @@
-import { resolveChart, volWavToLinearGain, type ResolvedChart } from '@be-music/chart';
+import { resolveChart, type ResolvedChart } from '@be-music/chart';
 import type { BeMusicJson, BeMusicPlayLevel } from '@be-music/json';
 
 const BMS_DEFAULT_DISPLAY_RANK = 2;
 const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
 const BMSON_DEFAULT_DISPLAY_JUDGE_RANK = 100;
-
-/** The chart-wide `#VOLWAV` gain; see {@link volWavToLinearGain} for the accepted range. */
-export function resolveChartVolWavGain(chart: BeMusicJson): number {
-  return volWavToLinearGain(chart.bms.volWav);
-}
 
 /**
  * The judge rank a song screen shows: bmson `judge_rank` (100 when the chart has none), or BMS `#DEFEXRANK` when it is

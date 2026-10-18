@@ -2,7 +2,6 @@ import * as playerApi from '@be-music/player';
 import * as audioSinkApi from '@be-music/player/audio-sink';
 import * as courseApi from '@be-music/player/course';
 import * as displayApi from '@be-music/player/display';
-import * as judgingApi from '@be-music/player/judging';
 import * as lanesApi from '@be-music/player/lanes';
 import * as playlogApi from '@be-music/player/playlog';
 import * as recordsApi from '@be-music/player/records';
@@ -26,7 +25,6 @@ export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
     ...prefixed('course', courseApi),
     ...prefixed('records', recordsApi),
     ...prefixed('ruleset', rulesetApi),
-    'judging.findClosestCandidateInWindow': judgingApi.findClosestCandidateInWindow,
     ...prefixed('playlog', playlogApi),
   },
   registerCases: registerPlayerExportsCases,

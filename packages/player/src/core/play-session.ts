@@ -1,4 +1,8 @@
-import { isPlayLaneSoundChannel, type ResolvedChart } from '@be-music/chart';
+import {
+  createBeatAtSecondsResolverFromTimingResolver,
+  isPlayLaneSoundChannel,
+  type ResolvedChart,
+} from '@be-music/chart';
 import { throwIfAborted } from '@be-music/utils/core';
 import { type BeMusicJson, resolveBmsBase } from '@be-music/json';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
@@ -16,7 +20,6 @@ import {
 import type { JudgeCoreEffectSink, JudgeCoreScore } from './judge-core.ts';
 import { createPlaylogRecorder, type PlaylogRecorder } from '../playlog/recorder.ts';
 import { courseStageCarryCombo, courseStageRulesetOptions } from '../playlog/rulesets.ts';
-import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
 import { createInitialPlayerSummary, preparePlaybackChart, type PreparedPlaybackChartData } from './bootstrap.ts';
 import {
   appendShadowedNoteTriggers,

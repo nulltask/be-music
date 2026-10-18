@@ -1,7 +1,7 @@
-import { resolveChart, resolveChartLongNoteMode, type ResolvedChart } from '@be-music/chart';
+import { resolveChart, resolveChartLongNoteMode, type LongNoteMode, type ResolvedChart } from '@be-music/chart';
 import { type BeMusicJson } from '@be-music/json';
 import { resolveJudgeRankPercent } from '../core/judge-window.ts';
-import type { LongNoteMode, TimedPlayableNote } from '../playable-notes.ts';
+import type { TimedPlayableNote } from '../playable-notes.ts';
 import { createEmptyRulesetNoteCounts, type RulesetChartFacts } from './facts.ts';
 
 /**

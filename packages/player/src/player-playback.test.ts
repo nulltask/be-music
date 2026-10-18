@@ -11,14 +11,13 @@ import {
   autoPlay,
   type PlayerLoadProgress,
   type PlayerRulesetInfo,
-  extractPlayableNotes,
   manualPlay,
-  formatRandomPatternSummary,
   PlayerInterruptedError,
-  resolveBmsControlFlowForPlayback,
   resolvePlayChart,
   type PlayerSummary,
 } from './index.ts';
+import { formatRandomPatternSummary, resolveBmsControlFlowForPlayback } from './core/engine-preparation.ts';
+import { extractPlayableNotes } from './display.ts';
 import type { PlayerUiCommand } from './core/ui-signal-bus.ts';
 import { simulatePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
 import {

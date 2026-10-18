@@ -1,8 +1,8 @@
-import { type RandomDraws } from '@be-music/chart';
+import { type ChartPlayVariant, type RandomDraws } from '@be-music/chart';
 import type { LogEntry } from '@be-music/utils/log';
 import { type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { type PlayerStateSignals } from '../state-signals.ts';
-import { type ChartPlayVariant, type LaneBinding } from './lane-layout.ts';
+import { type LaneBinding } from './lane-layout.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import { type TuiNoteHeight } from './ui-options.ts';
 import { type AudioSinkClockState } from '../audio-sink.ts';
@@ -379,13 +379,10 @@ export interface PlayerSummary {
   emptyPoor: number;
   exScore: number;
   score: number;
-  gauge?: PlayerGrooveGaugeSummary;
+  gauge?: PlayerGaugeSummary;
   /** For a course stage: the course-wide combo running now and the course-wide max combo (carried across stages). */
   course?: { combo: number; maxCombo: number };
 }
-
-/** @see {@link PlayerGaugeSummary} — the canonical declaration lives beside the UI frame payload. */
-export type PlayerGrooveGaugeSummary = PlayerGaugeSummary;
 
 export interface PlayerLoadProgress {
   ratio: number;
