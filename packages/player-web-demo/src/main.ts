@@ -39,14 +39,12 @@ import {
   createBeatorajaSceneKitCaches,
   createBeatorajaSkinLoadContext,
   findBeatorajaThemeBgm,
-  loadBeatorajaChartImages,
   loadBeatorajaSceneKit,
   loadBeatorajaThemeFromFiles,
   pickBeatorajaPlayableVariant,
   releaseBeatorajaSceneKitAssets,
   resolveBeatorajaSkinConfig,
   summarizeBeatorajaPlaySkins,
-  type BeatorajaChartImages,
   type BeatorajaPlayableVariant,
   type BeatorajaThemeBgm,
   type BeatorajaThemeBundle,
@@ -1751,15 +1749,6 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Decode the chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps to Pixi textures for the beatoraja scenes'
-   * synthetic-id destinations (`-100` / `-101` / `-102`). Each is best-effort: a missing or malformed bitmap is left
-   * out and the matching destinations stay hidden.
-   */
-  private loadBeatorajaChartImages(song: LibraryChart): Promise<BeatorajaChartImages> {
-    return loadBeatorajaChartImages(song, resolveSongSource(this.library.collection, song));
-  }
-
-  /**
    * Applies the player's new options for a beatoraja select entry to the select screen shown, without making it again:
    * the skin's Lua `main()` runs again (or its JSON is parsed again) with them, its textures are decoded again (other
    * options can build another `source[]`), and the screen takes the kit (`updateKit`), keeping its place.
@@ -1978,32 +1967,6 @@ class PlayerWebDemoApp {
         : resultFromData(result, run, 'beatoraja', jingle),
     );
     return true;
-  }
-
-  /**
-   * Record an in-scene skin override and sync the Debug Menu dropdown's displayed value so the
-   * two surfaces stay consistent. Called from the in-scene `BeatorajaSkinOptionsGui` callbacks
-   * (the popup the user opens with the skin's authored "options" button); the Debug Menu's own
-   * dropdown writes the override directly because its `onChange` is the source.
-   *
-   * Pass `entryPath = undefined` to clear the override (= fall back to the theme's discovery
-   * default). The picker dropdown also resets to the default option in that case.
-   */
-  private setBeatorajaSkinOverride(typeCode: number, entryPath: string | undefined): void {
-    if (entryPath === undefined) {
-      this.beatorajaSkinOverridesByType.delete(typeCode);
-    } else {
-      this.beatorajaSkinOverridesByType.set(typeCode, entryPath);
-    }
-    // Mirror the change onto the Debug Menu dropdown when one exists for this type. lil-gui's
-    // `setValue` writes to the underlying proxy AND repaints the option list to highlight the
-    // matching entry; without this the dropdown would still show the previous selection until
-    // the next `rebuildBeatorajaSkinPickers` call (= next theme drop).
-    const controller = this.debugMenu.beatorajaSkinPickerControllers.get(typeCode);
-    if (controller !== undefined) {
-      const fallbackPath = this.beatorajaTheme?.theme.entries.find((e) => e.header.type === typeCode)?.entryPath;
-      controller.setValue(entryPath ?? fallbackPath ?? '');
-    }
   }
 
   /**
