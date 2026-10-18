@@ -8,9 +8,9 @@ import type {
   BeMusicCourseRecord,
   BeMusicSongImageKind,
   BeMusicSongRecord,
-  BrowserBrowseEntry,
-  BrowserCourseEntry,
-  BrowserSongEntry,
+  LibraryChart,
+  LibraryCourse,
+  LibraryEntry,
 } from './song.ts';
 
 /**
@@ -298,7 +298,7 @@ export interface BeMusicGameplayRuntime {
    * The chart being played — level, difficulty, `#RANK`, `#TOTAL` and the rest of its header via
    * `song.chart.metadata`, plus the same images {@link BeMusicGameplayFrame.songImage} resolves.
    */
-  song?: BrowserSongEntry;
+  song?: LibraryChart;
   /**
    * Signed timing offset (ms) of the most recent timed judgement: positive when the press was late (SLOW), negative
    * when early (FAST), 0 dead on. Only judgements with a timing carry one — autoplay hits, mine BADs and missed notes
@@ -515,7 +515,7 @@ export interface BeMusicBgaFrame {
  * `undefined` when the song has no such image or the host doesn't provide images. Look the image up on every draw rather
  * than keeping it: hosts cache a bounded number and may close the least recently used one.
  */
-export type BeMusicSongImageLookup = (song: BrowserSongEntry, kind: BeMusicSongImageKind) => ImageBitmap | undefined;
+export type BeMusicSongImageLookup = (song: LibraryChart, kind: BeMusicSongImageKind) => ImageBitmap | undefined;
 
 /** Everything on the gameplay screen this frame. */
 export interface BeMusicGameplayFrame {
@@ -616,7 +616,7 @@ export interface BeMusicSelectFrame {
   sceneStartedAt: number;
   /** `performance.now()` of the last cursor move — drives focus transitions. */
   cursorChangedAt: number;
-  entries: readonly BrowserBrowseEntry[];
+  entries: readonly LibraryEntry[];
   selectedIndex: number;
   /** First entry index drawn in the list window, and how many rows fit (see `resolveSelectListWindow`). */
   firstVisibleIndex: number;
@@ -629,12 +629,12 @@ export interface BeMusicSelectFrame {
    * a skin that ignores it scrolls a row at a time.
    */
   listScroll: number;
-  focusedSong: BrowserSongEntry | undefined;
+  focusedSong: LibraryChart | undefined;
   /**
-   * The course bar under the cursor (`undefined` on a song or folder bar, and from hosts that predate it). PLAY and
+   * The course bar under the cursor (`undefined` on a chart or folder bar, and from hosts that predate it). PLAY and
    * AUTO start it; {@link describeCourseCard} gives the lines a card shows for it.
    */
-  focusedCourse?: BrowserCourseEntry;
+  focusedCourse?: LibraryCourse;
   /** Current folder label (or search label), `undefined` at the library root. */
   folderLabel: string | undefined;
   searchQuery: string;
@@ -657,12 +657,12 @@ export interface BeMusicSelectFrame {
   /** The pointer in design pixels, or `undefined` when it is outside the screen (or there is none). */
   pointer: { x: number; y: number } | undefined;
   /** The player's best record on `song`, or `undefined` when the host keeps none (or it was never played). */
-  songRecord(song: BrowserSongEntry): BeMusicSongRecord | undefined;
+  songRecord(song: LibraryChart): BeMusicSongRecord | undefined;
   /**
    * The player's best record on `course` (a course bar), or `undefined` when the host keeps none, the course was never
    * played, or it is a random course or a NEW COURSE bar. Absent from hosts that predate it.
    */
-  courseRecord?(course: BrowserCourseEntry): BeMusicCourseRecord | undefined;
+  courseRecord?(course: LibraryCourse): BeMusicCourseRecord | undefined;
   songImage: BeMusicSongImageLookup;
   /** The player's values for the skin's {@link BeMusicSkin.settings}. */
   settings: BeMusicSkinSettingValues;
@@ -719,7 +719,7 @@ export interface BeMusicDecideFrame {
   /** Milliseconds since the screen mounted. */
   elapsedMs: number;
   /** The chart about to be played. */
-  song: BrowserSongEntry;
+  song: LibraryChart;
   /** The options the play will run with. */
   playOptions: Readonly<BeMusicPlayOptions>;
   songImage: BeMusicSongImageLookup;

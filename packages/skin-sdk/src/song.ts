@@ -1,6 +1,14 @@
 import type { BestRecord } from '@be-music/player/records';
 import type { ClearLamp } from '@be-music/player/ruleset';
-import type {
+
+/**
+ * The library a select screen browses, as `@be-music/scene-model` defines it: a chart (`LibraryChart`, with where it
+ * came from as `ChartSourceKind`), a folder bar (`LibraryFolder`: a chart folder's `charts`, or a course folder's
+ * `courses`), a course and its stages (`LibraryCourse`, `LibraryCourseStage`, each stage naming the local `chart` it
+ * resolved to), and one bar of the select list (`LibraryEntry`: `{ kind: 'folder', folder }`,
+ * `{ kind: 'chart', chart }` or `{ kind: 'course', course }`).
+ */
+export type {
   ChartSourceKind,
   LibraryChart,
   LibraryCourse,
@@ -8,33 +16,6 @@ import type {
   LibraryEntry,
   LibraryFolder,
 } from '@be-music/scene-model';
-
-/** Where a chart came from: a dropped directory, a zip, or loose files (`ChartSourceKind` of `@be-music/scene-model`). */
-export type BrowserSongSourceKind = ChartSourceKind;
-
-/** One chart in the library: its metadata and the parsed chart (`LibraryChart` of `@be-music/scene-model`). */
-export type BrowserSongEntry = LibraryChart;
-
-/**
- * One folder bar: a chart folder (`groupChartsByFolder`) or a course folder (`LibraryFolder` of
- * `@be-music/scene-model`).
- */
-export type BrowserFolderNode = LibraryFolder;
-
-/** One stage of a course in the library: the local chart it resolved to, if any (`LibraryCourseStage`). */
-export type BrowserCourseStage = LibraryCourseStage;
-
-/**
- * A course in the library: its definition with each stage matched to a local chart (`LibraryCourse` of
- * `@be-music/scene-model`). A course with a missing stage is listed but cannot be started.
- */
-export type BrowserCourseEntry = LibraryCourse;
-
-/**
- * One bar of the select list: folder bars at the root, chart bars inside a chart folder, course bars inside a course
- * folder (`LibraryEntry` of `@be-music/scene-model`).
- */
-export type BrowserBrowseEntry = LibraryEntry;
 
 /** A song image a host can hand a skin: the chart's `#STAGEFILE`, `#BANNER`, or `#BACKBMP`. */
 export type BeMusicSongImageKind = 'stageFile' | 'banner' | 'backBmp';
