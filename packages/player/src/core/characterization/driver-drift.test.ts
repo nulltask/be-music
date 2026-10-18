@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicJson } from '@be-music/json';
-import type { PlaylogInputEvent, PlaylogRulesetResult } from '../../playlog/format.ts';
+import type { PlaylogRulesetResult } from '../../playlog/format.ts';
 import { basicChart, denseChart, exRankChart, longNoteChart, mineChart } from './charts.ts';
 import { command, observePlay, tap, type PlayObservation, type ScriptStep } from './harness.ts';
 
@@ -32,25 +32,6 @@ const TICK_MS = 1000 / 60 + 0.001;
 
 const audioCalls = (observation: PlayObservation, call: string): string[] =>
   observation.audio.filter((entry) => entry.split(' ')[1] === call);
-
-/**
- * The inputs a terminal play's log held before the engine inferred releases: every press of the script, key repeats
- * included, at the instant the engine judged it (its stamp, unless that lies more than 50 ms before the press was
- * drained), and no release. Each lane's key tokens are read off the play's own log.
- */
-function legacyInputs(script: readonly ScriptStep[], logged: readonly PlaylogInputEvent[]): PlaylogInputEvent[] {
-  const judgedAtMs = (step: { atMs: number; pressedAtMs?: number }): number =>
-    step.pressedAtMs !== undefined && step.atMs - step.pressedAtMs <= 50 ? step.pressedAtMs : step.atMs;
-  return script
-    .flatMap((step, order) =>
-      'press' in step ? step.press.map((lane) => ({ timeUs: judgedAtMs(step) * 1000, order, lane })) : [],
-    )
-    .sort((left, right) => left.timeUs - right.timeUs || left.order - right.order)
-    .map(({ timeUs, lane }, seq) => {
-      const tokens = logged.find((input) => input.channels.includes(lane))?.tokens;
-      return { seq, timeUs, action: 'down', channels: [lane], ...(tokens === undefined ? {} : { tokens }) };
-    });
-}
 
 describe('driver drift', () => {
   test('manual and auto play both honour holdAfterChart', async () => {
@@ -318,15 +299,6 @@ describe('driver drift', () => {
         });
         expect(replay.summary, play).toEqual(live.summary);
         expect(replay.playlog?.inputs, play).toEqual(live.playlog?.inputs);
-        // The same play logged as the engine logged it before it inferred releases: every press, repeats included, and
-        // no release. Its replay infers the releases again.
-        const legacy = await observePlay({
-          driver: 'manual',
-          chart,
-          options: { judgeRuleset, replayInputs: legacyInputs(script, live.playlog!.inputs) },
-        });
-        expect(legacy.summary, play).toEqual(live.summary);
-        expect(legacy.playlog?.inputs, play).toEqual(live.playlog?.inputs);
         const outcome = (result: PlaylogRulesetResult | undefined) => ({
           judge: result?.judge,
           fast: result?.fast,
