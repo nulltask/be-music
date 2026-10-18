@@ -3,17 +3,13 @@ import { availableParallelism } from 'node:os';
 import { extname } from 'node:path';
 import { isAbortError, runWithConcurrency, throwIfAborted } from '@be-music/utils/core';
 import { resolveFirstExistingPath } from '@be-music/utils/path';
-// Worker-spawn helpers live behind the dedicated `/workerize` sub-path so the package root stays browser-safe
-// (the implementation file statically imports `node:sea`).
 import { invokeWorkerizedFunction, workerize } from '@be-music/utils/workerize';
 import type { BeMusicJson } from '@be-music/json';
 import { resolveChart } from '@be-music/chart';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS, pickActiveBgaCue, type BgaCue } from '@be-music/player/core/bga-timeline';
-import { decode as decodeBmpFast } from 'fast-bmp';
-import { decode as decodePngFast } from 'fast-png';
-import jpeg from 'jpeg-js';
 import { decodeVideoFramesStream, decodeVideoFramesToSourceFramesInWorker } from './bga-video.ts';
 import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
+import { type ImageFormat, type DecodedImage, decodeImageBuffer } from './bga-image.ts';
 
 const MAX_NORMAL_BGA_COMPOSITE_LAYERS = 3;
 const DEFAULT_BGA_ASCII_WIDTH = 34;
@@ -29,7 +25,6 @@ const BGA_SOURCE_LOAD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism
 const lanczosAxisContributionCache = new Map<string, LanczosAxisContribution[]>();
 const resizedAnsiFrameCache = new WeakMap<AnsiFrame, Map<string, AnsiFrame>>();
 
-type ImageFormat = 'bmp' | 'png' | 'jpeg' | 'video';
 /**
  * Composition mode for a BGA frame.
  *
@@ -41,13 +36,6 @@ type ImageFormat = 'bmp' | 'png' | 'jpeg' | 'video';
  *   ships with a real alpha channel (or pre-multiplied composite intent).
  */
 type FrameMode = 'base' | 'layer' | 'bmson-layer';
-
-interface DecodedImage {
-  width: number;
-  height: number;
-  data: Uint8Array;
-  format: ImageFormat;
-}
 
 interface AnsiFrame {
   width: number;
@@ -1671,237 +1659,6 @@ function createMediaPathCandidates(mediaPath: string): string[] {
   return candidates;
 }
 
-function decodeImageBuffer(buffer: Buffer, pathHint: string): DecodedImage {
-  if (isPngBuffer(buffer)) {
-    return decodePng(buffer);
-  }
-  if (isJpegBuffer(buffer)) {
-    return decodeJpeg(buffer);
-  }
-  if (isBmpBuffer(buffer)) {
-    return decodeBmp(buffer);
-  }
-
-  const extension = extname(pathHint).toLowerCase();
-  if (extension === '.png') {
-    return decodePng(buffer);
-  }
-  if (extension === '.jpg' || extension === '.jpeg') {
-    return decodeJpeg(buffer);
-  }
-  if (extension === '.bmp') {
-    return decodeBmp(buffer);
-  }
-
-  try {
-    return decodePng(buffer);
-  } catch {
-    try {
-      return decodeJpeg(buffer);
-    } catch {
-      return decodeBmp(buffer);
-    }
-  }
-}
-
-function decodePng(buffer: Buffer): DecodedImage {
-  const decoded = decodePngFast(buffer);
-  return {
-    width: decoded.width,
-    height: decoded.height,
-    data: convertToRgba8(decoded.data, decoded.width, decoded.height, decoded.channels, decoded.depth),
-    format: 'png',
-  };
-}
-
-function decodeJpeg(buffer: Buffer): DecodedImage {
-  const decoded = jpeg.decode(buffer, {
-    useTArray: true,
-    formatAsRGBA: true,
-  });
-  return {
-    width: decoded.width,
-    height: decoded.height,
-    data: decoded.data,
-    format: 'jpeg',
-  };
-}
-
-function decodeBmp(buffer: Buffer): DecodedImage {
-  const bitsPerPixel = readBmpBitsPerPixel(buffer);
-  if (bitsPerPixel <= 8) {
-    return decodeIndexedBmp(buffer, bitsPerPixel);
-  }
-
-  const decoded = decodeBmpFast(buffer);
-  const channels = decoded.channels > 0 ? decoded.channels : 4;
-  const depth = Math.max(1, Math.floor(decoded.bitsPerPixel / channels));
-  const rgba = convertToRgba8(toSampleArray(decoded.data), decoded.width, decoded.height, channels, depth);
-  return {
-    width: decoded.width,
-    height: decoded.height,
-    data: rgba,
-    format: 'bmp',
-  };
-}
-
-function readBmpBitsPerPixel(buffer: Buffer): number {
-  if (buffer.length < 30) {
-    throw new Error('invalid bmp header');
-  }
-  const dibHeaderSize = buffer.readUInt32LE(14);
-  if (dibHeaderSize === 12) {
-    if (buffer.length < 26) {
-      throw new Error('invalid bmp core header');
-    }
-    return buffer.readUInt16LE(24);
-  }
-  return buffer.readUInt16LE(28);
-}
-
-function decodeIndexedBmp(buffer: Buffer, bitsPerPixel: number): DecodedImage {
-  if (bitsPerPixel !== 1 && bitsPerPixel !== 4 && bitsPerPixel !== 8) {
-    throw new Error(`unsupported indexed bmp bit depth: ${bitsPerPixel}`);
-  }
-
-  const pixelDataOffset = buffer.readUInt32LE(10);
-  const dibHeaderSize = buffer.readUInt32LE(14);
-  const width = dibHeaderSize === 12 ? buffer.readUInt16LE(18) : buffer.readInt32LE(18);
-  const rawHeight = dibHeaderSize === 12 ? buffer.readUInt16LE(20) : buffer.readInt32LE(22);
-  const height = Math.abs(rawHeight);
-  const topDown = dibHeaderSize === 12 ? false : rawHeight < 0;
-  if (width <= 0 || height <= 0) {
-    throw new Error('invalid bmp dimensions');
-  }
-
-  const colorsUsed = dibHeaderSize >= 40 ? buffer.readUInt32LE(46) : 0;
-  const paletteEntryCount = colorsUsed > 0 ? colorsUsed : 1 << bitsPerPixel;
-  const paletteOffset = 14 + dibHeaderSize;
-  const paletteEntrySize = dibHeaderSize === 12 ? 3 : 4;
-  const palette: Array<[r: number, g: number, b: number, a: number]> = [];
-  for (let index = 0; index < paletteEntryCount; index += 1) {
-    const offset = paletteOffset + index * paletteEntrySize;
-    if (offset + paletteEntrySize - 1 >= buffer.length) {
-      break;
-    }
-    const b = buffer[offset] ?? 0;
-    const g = buffer[offset + 1] ?? 0;
-    const r = buffer[offset + 2] ?? 0;
-    const a = paletteEntrySize >= 4 ? (buffer[offset + 3] ?? 255) : 255;
-    palette.push([r, g, b, a]);
-  }
-  if (palette.length === 0) {
-    throw new Error('bmp palette not found');
-  }
-
-  const rowStride = Math.floor((bitsPerPixel * width + 31) / 32) * 4;
-  const rgba = new Uint8Array(width * height * 4);
-  for (let y = 0; y < height; y += 1) {
-    const sourceY = topDown ? y : height - 1 - y;
-    const rowOffset = pixelDataOffset + sourceY * rowStride;
-    for (let x = 0; x < width; x += 1) {
-      const paletteIndex = readIndexedBmpPaletteIndex(buffer, rowOffset, x, bitsPerPixel);
-      const color = palette[paletteIndex] ?? [0, 0, 0, 255];
-      const targetOffset = (y * width + x) * 4;
-      rgba[targetOffset] = color[0];
-      rgba[targetOffset + 1] = color[1];
-      rgba[targetOffset + 2] = color[2];
-      rgba[targetOffset + 3] = color[3];
-    }
-  }
-
-  return {
-    width,
-    height,
-    data: rgba,
-    format: 'bmp',
-  };
-}
-
-function readIndexedBmpPaletteIndex(buffer: Buffer, rowOffset: number, x: number, bitsPerPixel: number): number {
-  if (bitsPerPixel === 8) {
-    return buffer[rowOffset + x] ?? 0;
-  }
-
-  const byteOffset = rowOffset + Math.floor((x * bitsPerPixel) / 8);
-  const byte = buffer[byteOffset] ?? 0;
-  if (bitsPerPixel === 4) {
-    return x % 2 === 0 ? (byte >> 4) & 0x0f : byte & 0x0f;
-  }
-
-  // bitsPerPixel === 1
-  const bit = 7 - (x % 8);
-  return (byte >> bit) & 0x01;
-}
-
-function toSampleArray(data: unknown): ArrayLike<number> {
-  if (ArrayBuffer.isView(data)) {
-    if ('length' in data) {
-      return data as unknown as ArrayLike<number>;
-    }
-    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-  }
-  if (typeof data === 'object' && data && 'byteLength' in data) {
-    return new Uint8Array(data as ArrayBufferLike);
-  }
-  if (typeof data === 'object' && data && 'length' in data) {
-    return data as ArrayLike<number>;
-  }
-  return new Uint8Array(0);
-}
-
-function convertToRgba8(
-  data: ArrayLike<number>,
-  width: number,
-  height: number,
-  channels: number,
-  depth: number,
-): Uint8Array {
-  const safeWidth = Math.max(0, Math.floor(width));
-  const safeHeight = Math.max(0, Math.floor(height));
-  const safeChannels = Math.max(1, Math.floor(channels));
-  const safeDepth = Math.max(1, Math.floor(depth));
-  const sampleMax = Math.max(1, safeDepth >= 16 ? 65535 : 2 ** safeDepth - 1);
-  const pixelCount = safeWidth * safeHeight;
-  const rgba = new Uint8Array(pixelCount * 4);
-  for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1) {
-    const sourceOffset = pixelIndex * safeChannels;
-    const targetOffset = pixelIndex * 4;
-
-    if (safeChannels === 1) {
-      const gray = toByte(data[sourceOffset] ?? 0, sampleMax);
-      rgba[targetOffset] = gray;
-      rgba[targetOffset + 1] = gray;
-      rgba[targetOffset + 2] = gray;
-      rgba[targetOffset + 3] = 255;
-      continue;
-    }
-
-    if (safeChannels === 2) {
-      const gray = toByte(data[sourceOffset] ?? 0, sampleMax);
-      rgba[targetOffset] = gray;
-      rgba[targetOffset + 1] = gray;
-      rgba[targetOffset + 2] = gray;
-      rgba[targetOffset + 3] = toByte(data[sourceOffset + 1] ?? sampleMax, sampleMax);
-      continue;
-    }
-
-    rgba[targetOffset] = toByte(data[sourceOffset] ?? 0, sampleMax);
-    rgba[targetOffset + 1] = toByte(data[sourceOffset + 1] ?? 0, sampleMax);
-    rgba[targetOffset + 2] = toByte(data[sourceOffset + 2] ?? 0, sampleMax);
-    rgba[targetOffset + 3] = safeChannels >= 4 ? toByte(data[sourceOffset + 3] ?? sampleMax, sampleMax) : 255;
-  }
-  return rgba;
-}
-
-function toByte(sample: number, sampleMax: number): number {
-  const normalized = Number.isFinite(sample) ? Math.max(0, Math.min(sampleMax, sample)) : 0;
-  if (sampleMax === 255) {
-    return normalized;
-  }
-  return Math.round((normalized * 255) / sampleMax);
-}
-
 function createMissingSourceFrame(mode: FrameMode): AnsiFrame {
   const specMaskFill = mode === 'base' ? 1 : 0;
   return createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, specMaskFill);
@@ -2524,26 +2281,4 @@ function fitSizeCoveringAspect(
   }
 
   return { width, height };
-}
-
-function isPngBuffer(buffer: Buffer): boolean {
-  return (
-    buffer.length >= 8 &&
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47 &&
-    buffer[4] === 0x0d &&
-    buffer[5] === 0x0a &&
-    buffer[6] === 0x1a &&
-    buffer[7] === 0x0a
-  );
-}
-
-function isJpegBuffer(buffer: Buffer): boolean {
-  return buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xd8;
-}
-
-function isBmpBuffer(buffer: Buffer): boolean {
-  return buffer.length >= 2 && buffer[0] === 0x42 && buffer[1] === 0x4d;
 }
