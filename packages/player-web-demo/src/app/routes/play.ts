@@ -14,16 +14,9 @@ import {
   type PlaySceneKit,
   type SelectScene,
 } from '@be-music/player-web/host';
-import { resolveCourseStagePlaySettings, resolveCourseStageSettings } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player/playlog';
 import { courseStageRecordPlayFromResult } from '@be-music/player/records';
-import {
-  resolveCourseView,
-  snapHiSpeed,
-  type LibraryChart,
-  type PlayOptions,
-  type PlayResult,
-} from '@be-music/scene-model';
+import { snapHiSpeed, type LibraryChart, type PlayOptions, type PlayResult } from '@be-music/scene-model';
 import {
   playAgainOverrides,
   resolveGameplayExit,
@@ -35,12 +28,7 @@ import { skipsCourseStageResult } from '../../course-result.ts';
 import { sanitizeFilenameStem } from '../../demo-utils.ts';
 import { resolvePlayLayoutMode, type DeviceProfile } from '../../device-profile.ts';
 import { storeHiSpeed } from '../../hi-speed-storage.ts';
-import {
-  allowsLiveTempo,
-  describePlayingStatus,
-  tempoFromPercent,
-  tempoPercentFromTempo,
-} from '../../play-tempo-settings.ts';
+import { allowsLiveTempo, describePlayingStatus, tempoPercentFromTempo } from '../../play-tempo-settings.ts';
 import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
@@ -51,6 +39,7 @@ import type { TestHookRecorder } from '../../test-hook.ts';
 import type { DemoGuiState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { FamilyKits } from '../family-kits.ts';
+import { resolvePlaySceneOptions, type PlaySceneGuiState } from '../play-scene-options.ts';
 import type { SceneRouter } from '../scene-router.ts';
 import type { CourseRoute } from './course.ts';
 import { playingFamily } from './decide.ts';
@@ -94,35 +83,7 @@ export interface PlayRouteDeps {
   /** The play options in force: the covers, HS-FIX, BGA and score graph the play is made with. */
   readonly playOptions: Pick<PlayOptionsService, 'current'>;
   /** The Debug Menu's state: the lane, gauge, tempo, audio and debug options the play is made with. */
-  readonly guiState: Pick<
-    DemoGuiState,
-    | 'autoPlay'
-    | 'random1P'
-    | 'random2P'
-    | 'dpFlip'
-    | 'gauge'
-    | 'autoScratch1P'
-    | 'autoScratch2P'
-    | 'replayView'
-    | 'tempoPercent'
-    | 'tempoPitchMode'
-    | 'tempoStretchAlgorithm'
-    | 'judgeRuleset'
-    | 'autoPauseOnBlur'
-    | 'hiSpeed'
-    | 'keyVolume'
-    | 'bgmVolume'
-    | 'compressor'
-    | 'compressorKey'
-    | 'compressorBgm'
-    | 'compressorMaster'
-    | 'bgaResizeMaxEdgePx'
-    | 'bgaUseWebCodecs'
-    | 'showInvisibleNotes'
-    | 'judgedNoteDisplay'
-    | 'courseAutoAdvance'
-    | 'playLayout'
-  >;
+  readonly guiState: PlaySceneGuiState & Pick<DemoGuiState, 'courseAutoAdvance' | 'playLayout'>;
   /** The Debug Menu: the compressor's tuned parameters, and the hi-speed slider. */
   readonly debugMenu: DebugMenu;
   /** The compressor architecture every play mounts with (`?compressor=`). */
@@ -252,32 +213,22 @@ export class PlayRoute {
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
     const nonstop = overrides.nonstop;
-    const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
+    // The Debug Menu's picks and the play options in force, with a course's lane limits, a replay's recorded setup and
+    // the tempo chosen (`play-scene-options.ts`).
+    const { autoPlay, tempo, settings, course } = resolvePlaySceneOptions({
+      guiState: this.guiState,
+      playOptions,
+      autoPlay: overrides.autoPlay,
+      replay,
+      chartHashes: overrides.chartHashes,
+      courseStage,
+      activeCourse: this.activeCourse,
+      nonstop,
+      audioCompressorParams: this.debugMenu.resolveCompressorParamOverrides(),
+      audioCompressorMode: this.compressorMode,
+      playlogRecorder: this.playlogRecorder,
+    });
     this.lastPlay = { song, overrides: { autoPlay, ...(replay !== undefined ? { replay } : {}) } };
-    // A course limits the lane options (both sides and DP FLIP) to what its constraint allows (`grade` none,
-    // `grade_mirror` MIRROR, ...), a NONSTOP course's stitched play included, and an LR2 GRADE course also turns off
-    // what LR2 turns off when one starts (EASY gauge, HIDDEN / SUDDEN, auto scratch, FLIP, the tempo).
-    const picked = {
-      random1P: this.guiState.random1P,
-      random2P: this.guiState.random2P,
-      dpFlip: this.guiState.dpFlip,
-      gauge: this.guiState.gauge,
-      hiddenSudden1P: playOptions.hiddenSudden1P,
-      hiddenSudden2P: playOptions.hiddenSudden2P,
-      autoScratch1P: this.guiState.autoScratch1P,
-      autoScratch2P: this.guiState.autoScratch2P,
-      tempo:
-        replay !== undefined && this.guiState.replayView.tempo
-          ? (replay.play.tempo ?? 1)
-          : tempoFromPercent(this.guiState.tempoPercent),
-    };
-    const lanes =
-      this.activeCourse !== undefined && courseStage !== undefined
-        ? this.activeCourse.run.playSettings(picked)
-        : nonstop !== undefined
-          ? resolveCourseStagePlaySettings(nonstop.course.definition, picked)
-          : picked;
-    const tempo = lanes.tempo;
     // Only a play the player actually played counts towards the chart's best record; a course stage counts for the
     // course instead.
     // A play at another tempo is practice: it is not ranked, and leaves the records alone too.
@@ -300,71 +251,11 @@ export class PlayRoute {
             judgeRuleset,
           })
         : undefined;
-    const sharedOptions = {
-      // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
-      // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
-      // is the surface that exists on every family (default / beatoraja selects have no LR2 PLAY OPTION panel).
-      autoPlay,
-      autoPauseOnBlur: this.guiState.autoPauseOnBlur,
-      // The remembered hi-speed (two-way synced with the LR2 select panel's HS); in-play changes come back to be
-      // remembered for the next play.
-      initialHiSpeed: this.guiState.hiSpeed,
+    const callbacks = {
+      // In-play hi-speed changes come back to be remembered for the next play.
       onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
-      bga: playOptions.bga,
-      bgaSize: playOptions.bgaSize,
-      scoreGraph: playOptions.scoreGraph,
-      hsFix: playOptions.hsFix,
-      hiddenSudden1P: lanes.hiddenSudden1P,
-      hiddenSudden2P: lanes.hiddenSudden2P,
-      shutter: playOptions.shutter,
-      laneCover: playOptions.laneCover,
-      // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge / judge ruleset govern
-      // judging and the gauge readout, and the lane transforms stay off because the view re-applies the recorded
-      // arrangement directly (see `PlaySceneOptions.replay`).
-      autoScratch1P: replay !== undefined ? replay.play.autoScratch : lanes.autoScratch1P,
-      autoScratch2P: replay !== undefined ? false : lanes.autoScratch2P,
-      dpFlip: replay !== undefined ? false : lanes.dpFlip,
-      random1P: replay !== undefined ? ('OFF' as const) : lanes.random1P,
-      random2P: replay !== undefined ? ('OFF' as const) : lanes.random2P,
-      gauge: replay !== undefined ? replay.play.gauge : lanes.gauge,
-      ...(courseStage !== undefined
-        ? { course: courseStage.course, courseInfo: courseStage.courseInfo, hiSpeedLocked: courseStage.hiSpeedLocked }
-        : {}),
-      ...(nonstop !== undefined
-        ? {
-            course: resolveCourseStageSettings(nonstop.course.definition),
-            courseInfo: resolveCourseView(nonstop.course, 0),
-            nonstop: nonstop.prepared.stitched.map,
-          }
-        : {}),
-      // A replay plays at the tempo its log recorded (the scene reads it from `replay`); the pitch setting applies to
-      // the song tempo and NONSTOP FIT stages alike.
-      tempo,
-      tempoPitchMode: this.guiState.tempoPitchMode,
-      tempoStretchAlgorithm: this.guiState.tempoStretchAlgorithm,
       // A tempo change during the play (the tempo slider in pitch mode, or a replay following its log).
       onTempoChange: (changed: number) => this.followLiveTempo(changed),
-      ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
-      ...(overrides.chartHashes !== undefined
-        ? { chartSha256: overrides.chartHashes.sha256, chartMd5: overrides.chartHashes.md5 }
-        : {}),
-      playlogRecorder: this.playlogRecorder,
-      replay,
-      // What the replay shows of the recorded view (the Debug Menu's "Replay / ghost" toggles, latched at song start).
-      replayView: { ...this.guiState.replayView },
-      audioVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
-      audioCompressorParams: this.debugMenu.resolveCompressorParamOverrides(),
-      audioCompressor: this.guiState.compressor,
-      audioCompressorMode: this.compressorMode,
-      audioCompressorStages: {
-        key: this.guiState.compressorKey,
-        bgm: this.guiState.compressorBgm,
-        master: this.guiState.compressorMaster,
-      },
-      bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
-      bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
-      showInvisibleNotes: this.guiState.showInvisibleNotes,
-      judgedNoteDisplay: this.guiState.judgedNoteDisplay,
       onExit: () => {
         // ESC gives a running course up: the run is kept as a failed one (as LR2 records it), with the stage given up
         // recorded once the engine hands its play log over.
@@ -452,17 +343,7 @@ export class PlayRoute {
         void this.playSong(song, playAgainOverrides({ autoPlay, replay }));
       },
     };
-    const {
-      onExit,
-      onChartFinished,
-      onRestart,
-      onHiSpeedChange,
-      onTempoChange,
-      replay: replayLog,
-      course,
-      courseInfo,
-      ...settings
-    } = sharedOptions;
+    const { onExit, onChartFinished, onRestart, onHiSpeedChange, onTempoChange } = callbacks;
     const source = resolveSongSource(this.library.collection, song);
     return createPlayScene(kit, {
       chart: song,
@@ -471,10 +352,8 @@ export class PlayRoute {
         kit.family === 'built-in'
           ? { ...settings, layoutMode: resolvePlayLayoutMode(this.guiState.playLayout, this.deviceProfile) }
           : settings,
-      ...(course !== undefined
-        ? { course: { stage: course, ...(courseInfo !== undefined ? { view: courseInfo } : {}) } }
-        : {}),
-      ...(replayLog !== undefined ? { replay: replayLog } : {}),
+      ...(course !== undefined ? { course } : {}),
+      ...(replay !== undefined ? { replay } : {}),
       ...(overrides.preResolved !== undefined ? { preResolved: overrides.preResolved } : {}),
       audio: this.audio,
       host: this.sceneHost,
