@@ -31,7 +31,7 @@ import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import { BeatorajaPlaySkinView } from '../../scene/beatoraja/skin-view.ts';
+import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { ResultFrame, ResultView, ResultViewTiming } from '../types.ts';

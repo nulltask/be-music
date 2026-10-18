@@ -42,7 +42,7 @@ export type { GaugeHistorySample, PixiGameplayResultData, ScoreHistorySample } f
 export * from '../view/beatoraja/play/bga.ts';
 export * from '../view/beatoraja/play/markers.ts';
 export * from '../view/beatoraja/play/notes.ts';
-export * from '../scene/beatoraja/skin-view.ts';
+export * from '../view/beatoraja/skin-view.ts';
 
 // Scene sessions and family views (ADR 0001): the kit a host hands each skin family, the frames and intents between a
 // session and its view, and the scene that pairs them.
