@@ -5,6 +5,10 @@
 //
 // The select scene is kept alive across a decide, play and result (`docs/player-web.md`, "Scene lifecycle"); a play
 // can load off stage behind a decide screen (`prepare`); and a play's sound can outlive its screen (`playDispose`).
+//
+// A run is the screens the scenes lead through on their own: a decide screen, a play and its result, and a course's
+// every stage. A navigation the scenes asked for carries their run on (`continuesRun`); any other one (a drop, a skin
+// or theme change, files or a play log loaded) interrupts it, and the host ends it (`onInterrupt`).
 
 /** What the router asks of a scene: it disposes the scenes it owns. */
 export interface RoutedScene {
@@ -41,7 +45,20 @@ export type SceneRouteToken = number;
 /** How a transition ends the play leaving the stage with it; the default is `play.dispose()`. */
 export type PlayDispose<P> = (play: P) => void;
 
-export interface SceneShowOptions<P> {
+/** What a router step reports to `onError`: a recording's finalize, a scene's dispose or the host's `onInterrupt`. */
+export type SceneRouterErrorStep = 'finalize' | 'dispose' | 'interrupt';
+
+export interface SceneNavigationOptions {
+  /**
+   * The scenes asked for this navigation, and it carries their run on: a play's result, a result's next stage or retry,
+   * a course's decide screen and stages. Without it the navigation interrupts the run
+   * ({@link SceneRouterOptions.onInterrupt}). Read only by a call that begins the navigation (`begin`, or a `show` or
+   * `leave` with no `token`).
+   */
+  readonly continuesRun?: boolean;
+}
+
+export interface SceneShowOptions<P> extends SceneNavigationOptions {
   readonly role: SceneRole;
   /**
    * Keep the scene alive after another one takes over: the router exits it but never disposes it. The default is `true`
@@ -58,7 +75,7 @@ export interface SceneShowOptions<P> {
   readonly token?: SceneRouteToken;
 }
 
-export interface SceneLeaveOptions<P> {
+export interface SceneLeaveOptions<P> extends SceneNavigationOptions {
   /** How the play leaving the stage is ended. */
   readonly playDispose?: PlayDispose<P>;
   /** The navigation the leave belongs to; without one it begins a navigation of its own. */
@@ -75,22 +92,29 @@ export interface SceneRouterOptions<S> {
   readonly host: SceneRouterHost<S>;
   readonly recorder: SceneRouterRecorder;
   /**
-   * A recording that failed to finalize or a scene that threw on dispose; the transition goes on. Without it the error
-   * is rethrown on its own, as an uncaught error.
+   * A navigation begins that does not carry the run on ({@link SceneNavigationOptions.continuesRun}): the host ends
+   * what the run was part of (a course's stages), so that it does not reach into the next play. Called as the
+   * navigation begins, before any of its transitions runs; the scene showing then is still the run's.
    */
-  readonly onError?: (error: unknown, step: 'finalize' | 'dispose') => void;
+  readonly onInterrupt?: () => void;
+  /**
+   * A recording that failed to finalize, a scene that threw on dispose or an `onInterrupt` that threw; the navigation
+   * goes on. Without it the error is rethrown on its own, as an uncaught error.
+   */
+  readonly onError?: (error: unknown, step: SceneRouterErrorStep) => void;
 }
 
 /**
  * Owns the scene on stage, the kept select scene and the play (`S` is any scene, `P` a play scene and `Sel` a select
  * scene). Transitions run one at a time, and only those of the newest navigation: `begin` starts one and hands out its
- * token, and a `show` or `leave` without a token starts one of its own. Read `current`, `select` and `play` for what
- * the router holds.
+ * token, and a `show` or `leave` without a token starts one of its own. A navigation that does not carry the run on
+ * interrupts it as it begins (`onInterrupt`). Read `current`, `select` and `play` for what the router holds.
  */
 export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, Sel extends S = S> {
   private readonly host: SceneRouterHost<S>;
   private readonly recorder: SceneRouterRecorder;
-  private readonly onError: (error: unknown, step: 'finalize' | 'dispose') => void;
+  private readonly onInterrupt: (() => void) | undefined;
+  private readonly onError: (error: unknown, step: SceneRouterErrorStep) => void;
   /** The last transition in line; each one starts once it has settled. */
   private queue: Promise<unknown> = Promise.resolve();
   private generation = 0;
@@ -106,6 +130,7 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
   public constructor(options: SceneRouterOptions<S>) {
     this.host = options.host;
     this.recorder = options.recorder;
+    this.onInterrupt = options.onInterrupt;
     this.onError =
       options.onError ??
       ((error) =>
@@ -129,9 +154,13 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
     return this.playScene;
   }
 
-  /** Begins a navigation: every token handed out before is stale from now on. */
-  public begin(): SceneRouteToken {
+  /**
+   * Begins a navigation: every token handed out before is stale from now on. Unless it carries the run on
+   * (`options.continuesRun`), it interrupts the run (`onInterrupt`).
+   */
+  public begin(options: SceneNavigationOptions = {}): SceneRouteToken {
     this.generation += 1;
+    if (options.continuesRun !== true) this.interrupt();
     return this.generation;
   }
 
@@ -144,14 +173,14 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
    * Shows `scene` as `role`, after the transitions already in line: the recording in progress is finalized, `scene`
    * takes the stage from the scene showing (which exits as it enters), and the scene that went is disposed, unless it
    * is kept. A play loading off stage survives only a decide screen. Resolves `false`, with `scene` disposed unless it
-   * is kept, when a newer navigation has begun by its turn (it begins one itself without `options.token`), or when
-   * `scene` was already disposed.
+   * is kept, when a newer navigation has begun by its turn (it begins one itself without `options.token`, interrupting
+   * the run unless `options.continuesRun`), or when `scene` was already disposed.
    */
   public show(scene: P, options: SceneShowOptions<P> & { readonly role: 'play' }): Promise<boolean>;
   public show(scene: Sel, options: SceneShowOptions<P> & { readonly role: 'select' }): Promise<boolean>;
   public show(scene: S, options: SceneShowOptions<P> & { readonly role: 'decide' | 'result' }): Promise<boolean>;
   public show(scene: S, options: SceneShowOptions<P>): Promise<boolean> {
-    const token = options.token ?? this.begin();
+    const token = options.token ?? this.begin(options);
     return this.enqueue(async () => {
       if (!this.isCurrent(token) || this.disposed.has(scene)) {
         this.discard(scene);
@@ -187,10 +216,10 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
    * Takes the scene showing off the stage, after the transitions already in line, and leaves the stage empty (files
    * loading, a play being built): the recording in progress is finalized, a kept scene stays for later and any other
    * is disposed, and so is a play loading off stage. Resolves `false` when a newer navigation has begun by its turn
-   * (it begins one itself without `options.token`).
+   * (it begins one itself without `options.token`, interrupting the run unless `options.continuesRun`).
    */
   public leave(options: SceneLeaveOptions<P> = {}): Promise<boolean> {
-    const token = options.token ?? this.begin();
+    const token = options.token ?? this.begin(options);
     return this.enqueue(async () => {
       if (!this.isCurrent(token)) return false;
       await this.finalizeRecording();
@@ -256,6 +285,16 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
     const run = this.queue.then(step);
     this.queue = run.catch(() => undefined);
     return run;
+  }
+
+  /** Tells the host the run is interrupted (`onInterrupt`); an error goes to `onError` and the navigation goes on. */
+  private interrupt(): void {
+    if (this.onInterrupt === undefined) return;
+    try {
+      this.onInterrupt();
+    } catch (error) {
+      this.onError(error, 'interrupt');
+    }
   }
 
   private async finalizeRecording(): Promise<void> {
