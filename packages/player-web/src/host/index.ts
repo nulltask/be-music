@@ -66,6 +66,7 @@ export type PixiGameplayResultData = PlayResult;
 
 // beatoraja family — beatoraja Lua skin-driven scenes.
 export * from '../view/beatoraja/play/bga.ts';
+export type { BeatorajaMarkerBeats } from '../chart/beatoraja/markers.ts';
 export * from '../view/beatoraja/play/markers.ts';
 export * from '../view/beatoraja/play/notes.ts';
 export * from '../view/beatoraja/skin-view.ts';
