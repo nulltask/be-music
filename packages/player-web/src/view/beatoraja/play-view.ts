@@ -28,7 +28,7 @@ import type { BeMusicJson } from '@be-music/json';
 import type { ChartPlayVariant } from '@be-music/chart';
 import type { PlayerGaugeSummary, PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/signals';
 import type { ScoreSummary } from '@be-music/player/ruleset';
-import type { CourseView, HiSpeedTransition, PlayState } from '@be-music/scene-model';
+import type { CourseView, HiSpeedTransition, LibraryChart, PlayState } from '@be-music/scene-model';
 import { BEATORAJA_HI_SPEED_SCALE } from '@be-music/scene-model';
 import { Container, Text, type Texture } from 'pixi.js';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
@@ -38,7 +38,7 @@ import {
   computeBeatorajaChartNoteDistribution,
   type BeatorajaChartNoteDistribution,
 } from '../../chart/beatoraja/note-distribution.ts';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
+import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { BgaCue } from '../../chart/bga-timeline.ts';
@@ -113,7 +113,7 @@ function resolveSkinConfigOps(
 
 /** What the beatoraja play view reads of the running play: the play session's members of these names. */
 export interface BeatorajaPlayRuntime {
-  readonly song: BrowserSongEntry | undefined;
+  readonly song: LibraryChart | undefined;
   /** The chart as the play plays it (its `#RANDOM` branches drawn), before DP FLIP. */
   readonly resolvedChart: BeMusicJson | undefined;
   readonly resolvedPlayChart: { readonly reversal?: BeatorajaPlayChartLayout['reversal'] } | undefined;

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import type { LibraryChart, LibraryCourse } from '../library/entries.ts';
 import { resolveCourseView } from './course-view.ts';
 
-function song(title: string, extra: Partial<LibraryChart> = {}): LibraryChart {
+function chart(title: string, extra: Partial<LibraryChart> = {}): LibraryChart {
   return { id: title, title, chart: createEmptyJson('bms'), ...extra } as LibraryChart;
 }
 
@@ -22,9 +22,9 @@ describe('resolveCourseView', () => {
       id: 'dan#0',
       definition,
       stages: [
-        { title: 'A', song: song('A', { subtitle: '[SPA]', playLevel: 12 }) },
-        { title: 'B', song: song('B', { playLevel: '★3' }) },
-        { title: 'C', song: song('C', { playLevel: '7' }) },
+        { title: 'A', chart: chart('A', { subtitle: '[SPA]', playLevel: 12 }) },
+        { title: 'B', chart: chart('B', { playLevel: '★3' }) },
+        { title: 'C', chart: chart('C', { playLevel: '7' }) },
       ],
       playable: true,
     };
@@ -37,12 +37,12 @@ describe('resolveCourseView', () => {
   });
 
   it('carries each stage chart’s difficulty', () => {
-    const hyper = song('H');
+    const hyper = chart('H');
     hyper.chart.metadata.difficulty = 3;
     const course: LibraryCourse = {
       id: 'dan#0',
       definition,
-      stages: [{ title: 'H', song: hyper }],
+      stages: [{ title: 'H', chart: hyper }],
       playable: true,
     };
     expect(resolveCourseView(course).stages).toEqual([{ title: 'H', difficulty: 3 }]);

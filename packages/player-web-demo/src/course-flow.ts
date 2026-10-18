@@ -4,8 +4,7 @@ import {
   type BeMusicCoursePlaylog,
   type PlaylogCourseResult,
 } from '@be-music/player/playlog';
-import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
-import { resolveCourseView, type CourseView } from '@be-music/scene-model';
+import { resolveCourseView, type CourseView, type LibraryChart, type LibraryCourse } from '@be-music/scene-model';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPlayFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player/records';
@@ -19,7 +18,7 @@ import { rulesetRecordKey } from './song-records.ts';
 /** What picking a course bar starts. */
 export type CourseStartPlan =
   /** A NEW COURSE bar: start making a course of its folder's kind. */
-  | { action: 'make'; kind: BrowserCourseEntry['definition']['kind'] }
+  | { action: 'make'; kind: LibraryCourse['definition']['kind'] }
   /** A course with a stage missing from the collection: nothing starts. */
   | { action: 'unplayable' }
   /** A random course: draw its stages first, then plan the drawn course. */
@@ -29,7 +28,7 @@ export type CourseStartPlan =
   /** Any other course: play its stages one by one. */
   | { action: 'stages' };
 
-export function planCourseStart(entry: BrowserCourseEntry): CourseStartPlan {
+export function planCourseStart(entry: LibraryCourse): CourseStartPlan {
   if (entry.newCourse === true) return { action: 'make', kind: entry.definition.kind };
   if (!entry.playable) return { action: 'unplayable' };
   if (entry.random !== undefined) return { action: 'draw' };
@@ -38,22 +37,22 @@ export function planCourseStart(entry: BrowserCourseEntry): CourseStartPlan {
 
 /** An EXPERT / GRADE course being played: the course bar it started from and its run. */
 export interface ActiveCourse {
-  course: BrowserCourseEntry;
-  run: CourseRun<BrowserSongEntry, CourseStageHistory>;
+  course: LibraryCourse;
+  run: CourseRun<LibraryChart, CourseStageHistory>;
 }
 
 /** A stage of a running course as the demo plays it: the run's plan, with the course as the skins show it there. */
-export interface CourseStagePlay extends CourseRunStagePlan<BrowserSongEntry> {
+export interface CourseStagePlay extends CourseRunStagePlan<LibraryChart> {
   courseInfo: CourseView;
 }
 
 /** Starts a run of a course whose stages are all in the collection (`CourseRun` refuses one with a stage missing). */
-export function startCourseRun(course: BrowserCourseEntry): ActiveCourse {
+export function startCourseRun(course: LibraryCourse): ActiveCourse {
   return {
     course,
     run: new CourseRun(
       course.definition,
-      course.stages.map((stage) => stage.song),
+      course.stages.map((stage) => stage.chart),
     ),
   };
 }
@@ -79,14 +78,14 @@ export function courseStageHistories(active: ActiveCourse): CourseStageHistory[]
  * The song the decide screen shows before a course's first stage. It names the selected bar, the course, as LR2's
  * splash does; the first stage's chart supplies the rest, without the stage's own subtitle, artist and genre.
  */
-export function courseDecideSong(course: BrowserCourseEntry, first: BrowserSongEntry): BrowserSongEntry {
+export function courseDecideSong(course: LibraryCourse, first: LibraryChart): LibraryChart {
   const { subtitle: _subtitle, artist: _artist, genre: _genre, ...stage } = first;
   return { ...stage, title: course.definition.name };
 }
 
 /** The status line for a course that cannot start because some of its stages are not in the collection. */
-export function describeUnplayableCourse(course: BrowserCourseEntry): string {
-  const missing = course.stages.filter((stage) => stage.song === undefined).length;
+export function describeUnplayableCourse(course: LibraryCourse): string {
+  const missing = course.stages.filter((stage) => stage.chart === undefined).length;
   const count = missing === 1 ? '1 stage is' : `${missing} stages are`;
   return `${course.definition.name}: ${count} not in the collection`;
 }

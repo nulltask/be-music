@@ -8,7 +8,7 @@ import type { BrowseSort } from './list-options.ts';
 const TEXT_COLLATOR = new Intl.Collator(undefined, { sensitivity: 'base' });
 
 /** Folders sort before charts, charts before courses (a list never mixes them today; this keeps the order sensible). */
-const KIND_RANK: Readonly<Record<LibraryEntry['kind'], number>> = { folder: 0, song: 1, course: 2 };
+const KIND_RANK: Readonly<Record<LibraryEntry['kind'], number>> = { folder: 0, chart: 1, course: 2 };
 
 /**
  * The bars in `sort` order ({@link BrowseSort}), as a new array. Folders sort by label under every order but `OFF` and
@@ -27,7 +27,7 @@ export function sortLibraryEntries(entries: readonly LibraryEntry[], sort: Brows
 function compareEntries(a: LibraryEntry, b: LibraryEntry, sort: BrowseSort): number {
   if (a.kind !== b.kind) return KIND_RANK[a.kind] - KIND_RANK[b.kind];
   if (a.kind === 'folder' && b.kind === 'folder') return TEXT_COLLATOR.compare(a.folder.label, b.folder.label);
-  if (a.kind === 'song' && b.kind === 'song') return compareCharts(a.song, b.song, sort);
+  if (a.kind === 'chart' && b.kind === 'chart') return compareCharts(a.chart, b.chart, sort);
   return 0;
 }
 

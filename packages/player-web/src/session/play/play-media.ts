@@ -13,7 +13,8 @@ import type { TimedPlayableNote } from '@be-music/player/display';
 import type { Texture } from 'pixi.js';
 import { loadPlaySamples } from '../../chart/play-audio.ts';
 import { loadPlayBga } from '../../chart/play-bga.ts';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
+import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import type {
   AudioBusChannel,
@@ -47,7 +48,7 @@ export interface PlayMediaContext {
       | 'audio'
     >
   >;
-  readonly song: BrowserSongEntry | undefined;
+  readonly song: LibraryChart | undefined;
   readonly source: BrowserSongAssetSource | undefined;
   readonly resolvedChart: BeMusicJson | undefined;
   readonly disposed: boolean;

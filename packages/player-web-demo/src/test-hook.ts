@@ -7,8 +7,7 @@
 // what it means here, and bump `version` when one changes.
 
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
-import type { BrowserBrowseEntry } from '@be-music/player-web/collection';
-import type { PlayResult } from '@be-music/scene-model';
+import type { LibraryEntry, PlayResult } from '@be-music/scene-model';
 
 /** The contract's revision. */
 export const TEST_HOOK_VERSION = 1;
@@ -28,7 +27,10 @@ export interface TestHookJudged {
   poor: number;
 }
 
-/** A bar on the select screen. */
+/**
+ * A bar on the select screen. A chart bar is `'song'`: contract v1 keeps the name the library entries had, although
+ * `@be-music/scene-model` now calls the kind `'chart'`.
+ */
 export interface TestHookBar {
   kind: 'folder' | 'song' | 'course';
   /** The folder label, the chart title or the course name. */
@@ -137,7 +139,7 @@ export interface TestHookState {
   loading: boolean;
   /** Drops (and file picks) finished so far. */
   loads: number;
-  /** Charts listed and the course folders. */
+  /** Charts listed (`songs`, contract v1's name) and the course folders. */
   library: { songs: number; courseFolders: string[] };
   cursor?: TestHookCursor;
   play?: TestHookPlay;
@@ -232,13 +234,14 @@ export function judgedOf(score: {
 }
 
 /** A select-screen bar, with the best record kept for it (`record`). */
-export function describeBar(entry: BrowserBrowseEntry, record?: { lamp?: string; trophy?: string }): TestHookBar {
+export function describeBar(entry: LibraryEntry, record?: { lamp?: string; trophy?: string }): TestHookBar {
   const kept = {
     ...(record?.lamp !== undefined ? { lamp: record.lamp } : {}),
     ...(record?.trophy !== undefined ? { trophy: record.trophy } : {}),
   };
   if (entry.kind === 'folder') return { kind: 'folder', title: entry.folder.label };
-  if (entry.kind === 'song') return { kind: 'song', title: entry.song.title, ...kept };
+  // Contract v1 names a chart bar `'song'`.
+  if (entry.kind === 'chart') return { kind: 'song', title: entry.chart.title, ...kept };
   const { course } = entry;
   return {
     kind: 'course',
@@ -246,7 +249,8 @@ export function describeBar(entry: BrowserBrowseEntry, record?: { lamp?: string;
     course: {
       kind: course.definition.kind,
       stages: course.stages.map((stage) => stage.title),
-      missingStages: course.random !== undefined ? 0 : course.stages.filter((stage) => stage.song === undefined).length,
+      missingStages:
+        course.random !== undefined ? 0 : course.stages.filter((stage) => stage.chart === undefined).length,
       playable: course.playable,
       newCourse: course.newCourse === true,
     },

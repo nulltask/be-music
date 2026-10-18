@@ -46,7 +46,7 @@ engine（`@be-music/player`）は `node:path` / `node:timers/promises` 依存を
 | `./audio`              | オーディオサービス（`createAudioService`）、オーディオバスとコンプレッサーのパラメーター、マスター音量、システムの audio session、`ChartPreviewEngine`                                                                                                    |
 | `./recording`          | `GameplayRecorder`、録画の形式、`makeWebmSeekable`、`downloadBlob`、WebCodecs の helper                                                                                                                                                                   |
 
-scene が受け取って返すモデルは、それぞれのパッケージから読み込みます。プレイオプション、`PlayResult`、`CourseView`、ハイスピードの範囲、ライブラリの helper（`groupChartsByFolder`、`resolveLibraryChartPlayVariant`）は `@be-music/scene-model` から、be-music スキンの契約は `@be-music/skin-sdk` から、プレイログの形式は `@be-music/player/playlog` から読み込みます。それ以外はパッケージの内部です。
+scene が受け取って返すモデルは、それぞれのパッケージから読み込みます。プレイオプション、`PlayResult`、`CourseView`、ハイスピードの範囲、ライブラリの項目（`LibraryChart`、`LibraryFolder`、`LibraryCourse`、`LibraryEntry` など）とその helper（`groupChartsByFolder`、`resolveLibraryChartPlayVariant`）は `@be-music/scene-model` から、be-music スキンの契約は `@be-music/skin-sdk` から、プレイログの形式は `@be-music/player/playlog` から読み込みます。それ以外はパッケージの内部です。
 
 ## demo の起動
 
@@ -142,7 +142,7 @@ flowchart LR
   - 既知の制限：ブラウザが表を直接取得するため、CORS ヘッダー（`Access-Control-Allow-Origin`）を返さないサーバーの表は取り込めません。そうした表は少なくありません。その場合、ステータス行にサイトを取得できなかったと表示します。クロスオリジンの読み込みを許可するオリジン（またはデモ自身のオリジン）から配信したヘッダー JSON なら取り込めます。
   - beatoraja のコマンドフォルダのファイル（`folder/*.json`）からはランダムコースを読みます。ランダムコースを持つフォルダごとに、コースフォルダが 1 つできます。ランダムコースはステージのタイトル（なければフィルタ）を並べて表示し、beatoraja の `OPTION_RANDOMCOURSEBAR`（1031）を点けます。始めたときに、ライブラリからステージを抽選します（`drawBrowserRandomCourse`）。どの譜面にも合わないステージがあれば、コースは始めずにステータスへ理由を出します。
 - **選曲：**
-  - コースファイル 1 つが、曲フォルダの後に並ぶフォルダバー 1 つになります。その中では各コースがコースバー（`BrowserBrowseEntry` の `kind: 'course'`）です。
+  - コースファイル 1 つが、譜面フォルダの後に並ぶフォルダバー 1 つになります。その中では各コースがコースバー（`LibraryEntry` の `kind: 'course'`）です。
   - コレクションにないステージを含むコースは、一覧には出ますが開始できません。
   - LR2 と組み込みの選曲画面では、LR2 がコースをキーモードで絞るのと同じく（OpenLR2 L18030-L18053）、キーモードのフィルタがコースバーにもかかります。キーモードを持つコース（`definition.keyMode`：LR2 の `line`、表の `mode`）はそのキーモードでだけ表示し、持たないコースは常に表示します。
   - スキンごとの表示：

@@ -2,7 +2,8 @@ import { Texture } from 'pixi.js';
 import { type Lr2Skin, type Lr2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from '@be-music/lr2-skin';
 import { destroyTextureAndRevokeBlobUrl, loadSkinAssetTexture, loadTextureFromBytes } from './textures.ts';
 import { loadAssetBytes, resolveChartImageAsset, resolveSongSource } from '../../collection/collection.ts';
-import type { BrowserSongAssetSource, BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
+import type { BrowserSongAssetSource, BrowserSongCollection } from '../../collection/types.ts';
 
 type TextureLoadValidity = () => boolean;
 type SkinTexturePathCollector = (paths: Set<string>, skin: Lr2Skin) => void;
@@ -64,7 +65,7 @@ export class Lr2ChartGraphicTextureStore {
 
   public resolve(
     collection: BrowserSongCollection,
-    song: BrowserSongEntry,
+    song: LibraryChart,
     path: Lr2SpecialGraphic,
     onLoaded: () => void,
   ): Texture | undefined {
@@ -77,7 +78,7 @@ export class Lr2ChartGraphicTextureStore {
    */
   public resolveFromSource(
     source: BrowserSongAssetSource | undefined,
-    song: BrowserSongEntry,
+    song: LibraryChart,
     path: Lr2SpecialGraphic,
     onLoaded: () => void,
   ): Texture | undefined {
@@ -86,7 +87,7 @@ export class Lr2ChartGraphicTextureStore {
 
   private resolveWith(
     resolveSource: () => BrowserSongAssetSource | undefined,
-    song: BrowserSongEntry,
+    song: LibraryChart,
     path: Lr2SpecialGraphic,
     onLoaded: () => void,
   ): Texture | undefined {
@@ -117,7 +118,7 @@ export class Lr2ChartGraphicTextureStore {
 
   private async load(
     resolveSource: () => BrowserSongAssetSource | undefined,
-    song: BrowserSongEntry,
+    song: LibraryChart,
     path: Lr2SpecialGraphic,
     cacheKey: string,
     onLoaded: () => void,
@@ -180,7 +181,7 @@ export function collectDecideSkinTexturePaths(skin: Lr2Skin): Set<string> {
   return collectSkinTexturePaths(skin, [addImageTexturePaths, addNumberTexturePaths]);
 }
 
-function resolveSpecialGraphicAssetPath(song: BrowserSongEntry, path: Lr2SpecialGraphic): string | undefined {
+function resolveSpecialGraphicAssetPath(song: LibraryChart, path: Lr2SpecialGraphic): string | undefined {
   const meta = song.chart.metadata;
   return path === LR2_SPECIAL_GRAPHIC.BACKBMP
     ? meta.backBmp
@@ -274,7 +275,7 @@ export function resolveSolidSpecialGraphicTexture(path: Lr2SpecialGraphic): Text
   return path === LR2_SPECIAL_GRAPHIC.BLACK || path === LR2_SPECIAL_GRAPHIC.WHITE ? Texture.WHITE : undefined;
 }
 
-function chartGraphicCacheKey(song: BrowserSongEntry, path: Lr2SpecialGraphic): string {
+function chartGraphicCacheKey(song: LibraryChart, path: Lr2SpecialGraphic): string {
   return `${song.id}:${path}`;
 }
 

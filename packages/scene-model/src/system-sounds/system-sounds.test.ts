@@ -80,10 +80,10 @@ describe('select cues', () => {
   test('play the cursor, folder, cancel and option-change cues for what a browse command did', () => {
     const move = { type: 'move', delta: 1 } as const;
     expect(browseSystemSound(move, { kind: 'cursor', from: 0, to: 1, delta: 1 })).toBe('cursor');
-    expect(browseSystemSound({ type: 'open' }, { kind: 'folder-opened', folder: { label: 'x', songs: [] } })).toBe(
+    expect(browseSystemSound({ type: 'open' }, { kind: 'folder-opened', folder: { label: 'x', charts: [] } })).toBe(
       'folderOpen',
     );
-    expect(browseSystemSound({ type: 'close' }, { kind: 'folder-closed', folder: { label: 'x', songs: [] } })).toBe(
+    expect(browseSystemSound({ type: 'close' }, { kind: 'folder-closed', folder: { label: 'x', charts: [] } })).toBe(
       'folderClose',
     );
     expect(browseSystemSound({ type: 'close' }, { kind: 'at-root' })).toBe('cancel');
@@ -95,9 +95,9 @@ describe('select cues', () => {
   });
 
   test('play the decide cue for a chart or a playable course and the cancel cue for a course with a stage missing', () => {
-    expect(startSystemSound({ kind: 'song', song: makeChart('a', 'P') })).toBe('decide');
+    expect(startSystemSound({ kind: 'chart', chart: makeChart('a', 'P') })).toBe('decide');
     expect(startSystemSound({ kind: 'course', course: makeCourse('ok') })).toBe('decide');
     expect(startSystemSound({ kind: 'course', course: makeCourse('missing', { playable: false }) })).toBe('cancel');
-    expect(startSystemSound({ kind: 'folder', folder: { label: 'x', songs: [] } })).toBeUndefined();
+    expect(startSystemSound({ kind: 'folder', folder: { label: 'x', charts: [] } })).toBeUndefined();
   });
 });

@@ -89,5 +89,5 @@ export function resolveBeatorajaCourseText(
 
 /** The stages of a library course that are not in the library (by index), which its bar marks `(no song)`. */
 export function beatorajaMissingCourseStages(course: LibraryCourse): ReadonlySet<number> {
-  return new Set(course.stages.flatMap((stage, index) => (stage.song === undefined ? [index] : [])));
+  return new Set(course.stages.flatMap((stage, index) => (stage.chart === undefined ? [index] : [])));
 }

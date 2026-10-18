@@ -6,16 +6,15 @@
  * The prompt reads the view's state through {@link BeatorajaSelectSearchContext}; the select view passes it.
  */
 
-import { normalizeSearchQuery } from '@be-music/scene-model';
+import { normalizeSearchQuery, type LibraryEntry } from '@be-music/scene-model';
 import { Text } from 'pixi.js';
-import type { BrowserBrowseEntry } from '../../../collection/types.ts';
 import type { BeatorajaPlaySkinView } from '../skin-view.ts';
 
 /** What the search prompt reads on the select view: its fields of these names. */
 export interface BeatorajaSelectSearchContext {
   /** The skin's view: the prompt is drawn into its container, centred on its canvas. */
   readonly view: Pick<BeatorajaPlaySkinView, 'width' | 'container'>;
-  readonly entries: ReadonlyArray<BrowserBrowseEntry>;
+  readonly entries: ReadonlyArray<LibraryEntry>;
   /** The search as typed. */
   readonly searchQuery: string;
 }

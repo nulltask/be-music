@@ -258,7 +258,7 @@ export default defineBeMusicSkin({
 - **プレイ状態:** `rulesetLabel`（有効な互換ルールセット: `lr2` / `beatoraja` / `iidx`）、`autoplay`、`hasBga`、`loading`（音声デコードや BGA 変換の間は NOW LOADING を表示）、`progressRatio`、`chartMs`、`beatPhase`、`nowMs`
 - **イベント時刻:** `judgeAtMs`、`impulseAtMs`、`impulseKind`（直近の判定とキー入力。パンチやインパルスの演出用）
 - **快適性とサウンド:** `effects`、`audio`
-- **譜面:** `song`（プレイ中の `BrowserSongEntry`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBpm`、`maxBpm`、`mainBpm`、`playVariant`（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）、`laneCount`、`laneChannels`（表示順のレーンチャンネル）
+- **譜面:** `song`（プレイ中の `LibraryChart`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBpm`、`maxBpm`、`mainBpm`、`playVariant`（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）、`laneCount`、`laneChannels`（表示順のレーンチャンネル）
 - **タイミング:** `lastJudgeDeltaMs` と `judgeTimings`（タイミング付きの直近 64 判定、古い順）。[判定タイミング](#判定タイミング)を参照。`judgeWindows` はルールセットの判定幅をノーツの種類（`note`、`scratch`、`longNoteEnd`）ごとに ms で表します。プレイ開始時に `#RANK` から決まり、途中の `#EXRANK` の変更は反映されません。
 - **レーンカバー:** `laneCovers`（サイドごとの `sudden`、`hidden`、`lift`。レーンの高さに対する割合）、`visibleMs`（現在の BPM・ハイスピード・`#SCROLL` × `#SPEED` でノーツが画面に見えている時間。beatoraja と同じく、逆向きのスクロール中や停止中は 0）、`greenNumber`（`visibleMs × 0.6`）
 - **曲の時計:** `songLengthMs` と `songElapsedMs`。オーディオの時計で、曲の開始とともに 0 から進み、ポーズ中は止まります。残り時間は `songLengthMs - songElapsedMs` です。`chartMs` は譜面の最初の拍から測り、カウントイン中は負になる点が異なります。
@@ -273,7 +273,9 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 - **`select.portraitLayout`:** スキンの `portraitStage` での同じ値（省略可。無ければ `layout`）。ステージに合うほうは `resolveBeMusicSelectLayout(select, stage)` で選べます。
 - **`select.outroMs`:** 曲決定後のアウトロの長さ。終わるまで `frame.launchAt` を設定したまま描画が続き、その間の入力は無視されます。
 - **`select.draw(surface, frame)`** は `BeMusicSelectFrame` を受け取ります。
-  - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedSong`
+  - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedSong`（カーソル位置の譜面のバー）、`focusedCourse`
+  - `entries` の各要素は `LibraryEntry` です（`@be-music/scene-model` の型で、SDK が `LibraryChart`・`LibraryFolder`・`LibraryCourse`・`LibraryCourseStage`・`ChartSourceKind` とともに再 export します）。`{ kind: 'folder', folder }`（譜面フォルダは `folder.charts`、コースフォルダは `folder.courses` を並べます）、`{ kind: 'chart', chart }`、`{ kind: 'course', course }`（`course.stages` の各ステージは、見つかった譜面を `chart` に持ちます）のいずれかです。行の文言は `browseEntryTitle`・`browseEntryCount`・`browseEntryBadge` で、フォーカス中のコースのカードは `describeCourseCard` で得られます。
+  - 以前の SDK からの移行: 譜面のバーの種類は `'song'` から `'chart'` になりました。`entry.song` は `entry.chart`、`folder.songs` は `folder.charts`、`stage.song` は `stage.chart` で読みます。`Browser*` の型の別名は削除しました。`BrowserSongEntry` は `LibraryChart`、`BrowserFolderNode` は `LibraryFolder`、`BrowserCourseEntry` は `LibraryCourse`、`BrowserCourseStage` は `LibraryCourseStage`、`BrowserBrowseEntry` は `LibraryEntry`、`BrowserSongSourceKind` は `ChartSourceKind` です。
   - `listScroll`: リストが後ろのエントリ側へ引かれている量（デザインピクセル、1 行未満）。指でドラッグしている間、スワイプ後に慣性で流れている間、トラックパッドでスクロールしている途中は 0 以外になり、静止時とリストの端では 0 です。行を `selectListRows(frame, rowHeight)` で並べると、リストが指に追随します。各行の小数の `slot`（上端は `listTop + slot * rowHeight`）と、表示範囲の端にかかった行を薄くする `alpha` が得られます。無視したスキンは 1 行ずつスクロールします。
   - `folderLabel`、`searchQuery`、`totalCharts`
   - `actions`: `play`、`autoPlay`、`activateSearch`、`setPlayOption(key, value)`、`cyclePlayOption(key, step?)`（step は 1 か -1、端で折り返し）、`toggleReadme()`（フォーカス中の曲の `.txt` を開閉）

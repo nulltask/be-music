@@ -1,5 +1,5 @@
 import type { BeMusicPlaylog, PlaylogRecorderInfo } from '@be-music/player/playlog';
-import type { BrowserSongEntry } from '@be-music/player-web/collection';
+import type { LibraryChart } from '@be-music/scene-model';
 import type GUI from 'lil-gui';
 import type { Controller } from 'lil-gui';
 import {
@@ -150,7 +150,7 @@ export class LeaderboardPanel {
    * Sends the play to the Leaderboard when "Submit to Leaderboard" was on at song start. Runs in the background: the
    * result screen never waits for it, and its outcome (rank, or why it was not sent) goes to the status line.
    */
-  maybeSubmit(playlog: BeMusicPlaylog | undefined, song: BrowserSongEntry): void {
+  maybeSubmit(playlog: BeMusicPlaylog | undefined, song: LibraryChart): void {
     if (!this.submitThisPlay || playlog === undefined) return;
     const prepared = prepareLeaderboardSubmission(playlog, song.chart, song.chartPath);
     if (!prepared.ok) {
@@ -176,7 +176,7 @@ export class LeaderboardPanel {
    * charts rebuild each played stage's fingerprint documents, and go to the server for the stages it rebuilds: the
    * unreached ones, and all of a NONSTOP run). The course rank goes to the status line.
    */
-  maybeSubmitCourse(coursePlaylog: BeMusicCoursePlaylog, stageSongs: readonly BrowserSongEntry[]): void {
+  maybeSubmitCourse(coursePlaylog: BeMusicCoursePlaylog, stageSongs: readonly LibraryChart[]): void {
     if (!this.submitThisPlay) return;
     const prepared = prepareCourseLeaderboardSubmission(
       coursePlaylog,

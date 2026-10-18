@@ -18,7 +18,7 @@ export function matchesSearchQuery(entry: LibraryEntry, lowerQuery: string): boo
   if (entry.kind === 'course') {
     return entry.course.definition.name.toLowerCase().includes(lowerQuery);
   }
-  const chart = entry.song;
+  const chart = entry.chart;
   const haystacks: Array<string | undefined> = [
     chart.title,
     chart.subtitle,

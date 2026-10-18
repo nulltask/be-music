@@ -238,7 +238,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     const previous = this.library;
     const place = captureBrowse(previous, this.browse);
     this.library = library;
-    const empty = previous.songs.length === 0 && (previous.courseFolders?.length ?? 0) === 0;
+    const empty = previous.charts.length === 0 && (previous.courseFolders?.length ?? 0) === 0;
     this.browse = empty
       ? openLibrary(library, this.policy, { searchText: this.browse.searchText, list: this.browse.list })
       : restoreSelectBrowse(library, place, this.browse, this.policy).state;
@@ -523,7 +523,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
    */
   private launchEntry(entry: SelectStartEntry, autoPlay: boolean, atMs: number): void {
     if (this.launch !== undefined) return;
-    const outroMs = entry.kind === 'song' ? (this.options.launchOutroMs?.() ?? 0) : 0;
+    const outroMs = entry.kind === 'chart' ? (this.options.launchOutroMs?.() ?? 0) : 0;
     if (outroMs <= 0) {
       this.handOn(entry, autoPlay);
       return;

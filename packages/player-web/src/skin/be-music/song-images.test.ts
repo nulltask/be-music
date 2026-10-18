@@ -1,12 +1,10 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
 import { SongImageCache, resolveSongImagePath } from './song-images.ts';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
+import type { BrowserSongAssetSource } from '../../collection/types.ts';
 
-function song(
-  chartPath: string,
-  metadata: { stageFile?: string; banner?: string; backBmp?: string },
-): BrowserSongEntry {
-  return { sourceId: 'src', chartPath, chart: { metadata } } as unknown as BrowserSongEntry;
+function song(chartPath: string, metadata: { stageFile?: string; banner?: string; backBmp?: string }): LibraryChart {
+  return { sourceId: 'src', chartPath, chart: { metadata } } as unknown as LibraryChart;
 }
 
 const SOURCE = { id: 'src' } as BrowserSongAssetSource;
@@ -24,7 +22,7 @@ function fakeBitmap(path: string): FakeBitmap {
 function deferredLoader() {
   const calls: { path: string; resolve: (image: FakeBitmap | undefined) => void }[] = [];
   const load = vi.fn(
-    (_source: BrowserSongAssetSource, _song: BrowserSongEntry, path: string) =>
+    (_source: BrowserSongAssetSource, _song: LibraryChart, path: string) =>
       new Promise<ImageBitmap | undefined>((resolve) => {
         calls.push({ path, resolve: (image) => resolve(image as unknown as ImageBitmap | undefined) });
       }),

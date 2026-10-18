@@ -1,14 +1,5 @@
-import type { BrowserFolderNode, BrowserSongEntry, BrowserSongSourceKind } from '@be-music/skin-sdk';
+import type { ChartSourceKind, LibraryChart, LibraryFolder } from '@be-music/scene-model';
 import type { BrowserDroppedFile } from './dropped-file.ts';
-
-export type {
-  BrowserBrowseEntry,
-  BrowserCourseEntry,
-  BrowserCourseStage,
-  BrowserFolderNode,
-  BrowserSongEntry,
-  BrowserSongSourceKind,
-} from '@be-music/skin-sdk';
 
 /**
  * Asset payload kept inside a {@link BrowserSongAssetSource}. Each file from the dropped bundle is either:
@@ -27,17 +18,18 @@ export type BrowserSongAssetEntry = Uint8Array | BrowserDroppedFile;
 
 export interface BrowserSongAssetSource {
   id: string;
-  kind: BrowserSongSourceKind;
+  kind: ChartSourceKind;
   label: string;
   files: ReadonlyMap<string, BrowserSongAssetEntry>;
 }
 
+/** The charts loaded from every dropped source: a `Library` of `@be-music/scene-model` a select screen browses. */
 export interface BrowserSongCollection {
   sources: BrowserSongAssetSource[];
-  songs: BrowserSongEntry[];
+  charts: LibraryChart[];
   errors: Array<{ sourceId: string; path?: string; message: string }>;
-  /** Course folders (see `resolveCourseFolders`), listed after the song folders at the root of a select view. */
-  courseFolders?: BrowserFolderNode[];
+  /** Course folders (see `resolveCourseFolders`), listed after the chart folders at the root of a select view. */
+  courseFolders?: LibraryFolder[];
 }
 
 /**
@@ -48,7 +40,7 @@ export interface BrowserSongCollection {
  *   walking, so `total` is `-1` and `current` ticks upward.
  * - `reading` — slurping each collected `File` into a `Uint8Array`. This is the dominant cost for large zip / folder
  *   drops.
- * - `parsing` — running `parseBms` / `parseBmson` on each chart file inside the source, building `BrowserSongEntry`s.
+ * - `parsing` — running `parseBms` / `parseBmson` on each chart file inside the source, building `LibraryChart`s.
  * - `theme` — loading the LR2 theme bundle (skins + BGM + system sounds). Theme work happens in parallel internally;
  *   events fire as each sub-task lands so the bar still moves.
  */

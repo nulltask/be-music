@@ -4,8 +4,8 @@ import { makeChart, makeCourse } from '../test-support/library.ts';
 import { matchesSearchQuery, normalizeSearchQuery } from './search.ts';
 
 const chartEntry = (overrides: Parameters<typeof makeChart>[2]): LibraryEntry => ({
-  kind: 'song',
-  song: makeChart('id', 'P', { title: 'Untitled', ...overrides }),
+  kind: 'chart',
+  chart: makeChart('id', 'P', { title: 'Untitled', ...overrides }),
 });
 
 describe('normalizeSearchQuery', () => {
@@ -37,7 +37,7 @@ describe('matchesSearchQuery', () => {
   });
 
   test('matches a folder on its label and a course on its name', () => {
-    const folder: LibraryEntry = { kind: 'folder', folder: { label: 'LunaticCrave', songs: [] } };
+    const folder: LibraryEntry = { kind: 'folder', folder: { label: 'LunaticCrave', charts: [] } };
     expect(matchesSearchQuery(folder, 'lunatic')).toBe(true);
     expect(matchesSearchQuery(folder, 'unrelated')).toBe(false);
     const course: LibraryEntry = { kind: 'course', course: makeCourse('Satellite 10th Dan') };

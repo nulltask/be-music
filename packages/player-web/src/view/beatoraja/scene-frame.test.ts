@@ -9,7 +9,7 @@ import {
 } from '@be-music/beatoraja-skin';
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
-import type { BrowserSongEntry } from '../../collection/types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
 import {
   beatorajaSceneNowMs,
   DEFAULT_BEATORAJA_FADEOUT_MS,
@@ -19,7 +19,7 @@ import {
   resolveBeatorajaSongText,
 } from './scene-frame.ts';
 
-function makeSong(overrides: Partial<BrowserSongEntry> = {}): BrowserSongEntry {
+function makeSong(overrides: Partial<LibraryChart> = {}): LibraryChart {
   const chart = createEmptyJson();
   chart.metadata.extras.SUBARTIST = 'movie:artist';
   return {

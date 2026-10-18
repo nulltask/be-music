@@ -11,7 +11,7 @@ import type {
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { parseBeatorajaCourseData, parseBeatorajaRandomCourseData } from '@be-music/player/course';
-import type { PlayResult } from '@be-music/scene-model';
+import type { LibraryChart, PlayResult } from '@be-music/scene-model';
 import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
@@ -117,7 +117,7 @@ const BENCH_PLAY_RESULT: PlayResult = {
 };
 const BENCH_COLLECTION = {
   sources: [BENCH_SOURCE],
-  songs: [BENCH_SONG],
+  charts: [BENCH_SONG],
   errors: [],
 } satisfies playerWebCoreApi.BrowserSongCollection;
 const BENCH_SONG_MD5 = '0123456789abcdef0123456789abcdef';
@@ -350,7 +350,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       const scene = playerWebCoreApi.createSelectScene(
         { family: 'built-in', skin: playerWebCoreApi.phantomSkin },
         {
-          library: { sources: [], songs: [BENCH_SONG], errors: [] },
+          library: { sources: [], charts: [BENCH_SONG], errors: [] },
           sounds: { selectBgm: { bytes: BENCH_BYTES } },
           audio: playerWebCoreApi.createAudioService({ createContext: () => undefined }),
           on: { start: () => undefined },
@@ -936,7 +936,7 @@ function makeBenchSource(): playerWebCoreApi.BrowserSongAssetSource {
   };
 }
 
-function makeBenchSong(): playerWebCoreApi.BrowserSongEntry {
+function makeBenchSong(): LibraryChart {
   const chart: BeMusicJson = createEmptyJson('bms');
   chart.metadata.title = 'Bench Song';
   chart.events = [

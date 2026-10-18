@@ -5,9 +5,15 @@
 
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { BeMusicPlaylog, PlaylogCourseStage } from '@be-music/player/playlog';
-import { DEFAULT_PLAY_OPTIONS, type CourseView, type PlayOptions, type PlayResult } from '@be-music/scene-model';
+import {
+  DEFAULT_PLAY_OPTIONS,
+  type CourseView,
+  type LibraryChart,
+  type PlayOptions,
+  type PlayResult,
+} from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/types.ts';
+import type { BrowserSongAssetSource } from '../collection/types.ts';
 import type { GameplayRecorderResult } from '../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../recording/recording-format.ts';
 import type { AudioBusChannel, CompressorParams, CompressorStage, TunableCompressor } from '../runtime/audio-bus.ts';
@@ -77,7 +83,7 @@ export interface PlaySceneEvents {
 
 export interface PlaySceneOptions extends SessionSceneOptions {
   /** The chart to play. */
-  readonly chart: BrowserSongEntry;
+  readonly chart: LibraryChart;
   /** Where the chart's files are: its samples, BGA and images. */
   readonly source?: BrowserSongAssetSource;
   readonly settings: PlaySceneSettings;
@@ -274,14 +280,14 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
   public readonly recording: PlaySceneRecording;
   private readonly playSession: PlaySceneSession;
   private readonly familyView: FamilyPlayView;
-  private readonly chart: BrowserSongEntry;
+  private readonly chart: LibraryChart;
   private readonly source: BrowserSongAssetSource | undefined;
   private readonly prepareHost: PixiSceneHost | undefined;
 
   public constructor(
     session: PlaySceneSession,
     familyView: FamilyPlayView,
-    facts: { chart: BrowserSongEntry; source?: BrowserSongAssetSource; host?: PixiSceneHost },
+    facts: { chart: LibraryChart; source?: BrowserSongAssetSource; host?: PixiSceneHost },
     options: SessionSceneOptions,
   ) {
     super(session, familyView.view, options);

@@ -70,7 +70,7 @@ export function browseFolder(state: BrowseState): LibraryFolder | undefined {
 }
 
 interface EntriesMemo {
-  songs: Library['songs'];
+  charts: Library['charts'];
   courseFolders: Library['courseFolders'];
   query: string;
   list: BrowseListOptions;
@@ -89,7 +89,7 @@ export function browseEntries(library: Library, state: BrowseState): readonly Li
   const memo = ENTRIES_MEMO.get(state.path);
   if (
     memo !== undefined &&
-    memo.songs === library.songs &&
+    memo.charts === library.charts &&
     memo.courseFolders === library.courseFolders &&
     memo.query === query &&
     (memo.list === state.list || sameBrowseListOptions(memo.list, state.list))
@@ -98,7 +98,7 @@ export function browseEntries(library: Library, state: BrowseState): readonly Li
   }
   const entries = listEntriesAt(library, state.path, query, state.list);
   ENTRIES_MEMO.set(state.path, {
-    songs: library.songs,
+    charts: library.charts,
     courseFolders: library.courseFolders,
     query,
     list: state.list,
@@ -126,9 +126,9 @@ export function listEntriesAt(
   const base: LibraryEntry[] = top
     ? top.courses !== undefined
       ? top.courses.map((course): LibraryEntry => ({ kind: 'course', course }))
-      : top.songs.map((song): LibraryEntry => ({ kind: 'song', song }))
+      : top.charts.map((chart): LibraryEntry => ({ kind: 'chart', chart }))
     : query.length > 0
-      ? library.songs.map((song): LibraryEntry => ({ kind: 'song', song }))
+      ? library.charts.map((chart): LibraryEntry => ({ kind: 'chart', chart }))
       : libraryRootFolders(library).map((folder): LibraryEntry => ({ kind: 'folder', folder }));
   let entries = base;
   if (list.keysFilter !== 'ALL' || list.difficultyFilter !== 'ALL') {
@@ -148,7 +148,7 @@ export function focusedEntry(library: Library, state: BrowseState): LibraryEntry
 /** The chart under the cursor; `undefined` on a folder or course bar, as beatoraja reads no chart there. */
 export function focusedChart(library: Library, state: BrowseState): LibraryChart | undefined {
   const entry = focusedEntry(library, state);
-  return entry?.kind === 'song' ? entry.song : undefined;
+  return entry?.kind === 'chart' ? entry.chart : undefined;
 }
 
 /** The course under the cursor, or `undefined` on any other bar. */

@@ -18,13 +18,13 @@ import {
 
 const labels = (entries: readonly LibraryEntry[]): string[] =>
   entries.map((entry) =>
-    entry.kind === 'folder' ? entry.folder.label : entry.kind === 'song' ? entry.song.id : entry.course.id,
+    entry.kind === 'folder' ? entry.folder.label : entry.kind === 'chart' ? entry.chart.id : entry.course.id,
   );
 
 /** Two chart folders (`Alpha`: a1, a2, a3; `Beta`: b1) and a course folder (`Dan`: first, second, third). */
 function makeLibrary(): Library {
   return {
-    songs: [
+    charts: [
       makeChart('a1', 'Alpha/x', { title: 'Ignition', artist: 'YAMD' }),
       makeChart('a2', 'Alpha/x', { title: 'Sleepless' }),
       makeChart('a3', 'Alpha/y', { title: 'Lapis' }),
@@ -99,12 +99,12 @@ describe('cursor', () => {
     expect(browseCursor(run(library, state, { type: 'random', value: 0.99 }))).toBe(2);
     // The draw lands on the focused bar: the next one is taken, so the player sees the cursor move.
     expect(browseCursor(run(library, state, { type: 'random', value: 0.1 }))).toBe(1);
-    const alone = { songs: [makeChart('only', 'Solo/x')] };
+    const alone = { charts: [makeChart('only', 'Solo/x')] };
     expect(reduceBrowse(alone, createBrowseState(), { type: 'random', value: 0.5 }).event).toEqual({ kind: 'none' });
   });
 
   test('does nothing on an empty list', () => {
-    const empty = { songs: [] };
+    const empty = { charts: [] };
     expect(reduceBrowse(empty, createBrowseState(), { type: 'move', delta: 1 }).event).toEqual({ kind: 'none' });
     expect(reduceBrowse(empty, createBrowseState(), { type: 'jump', index: 3 }).event).toEqual({ kind: 'none' });
   });
@@ -151,7 +151,7 @@ describe('folders', () => {
   test('backs out onto the folder bar wherever a sort changed while the folder was open moved it', () => {
     // Without a sort the root lists the chart folders, then the course folders; a sort orders every folder by label.
     const shuffled: Library = {
-      songs: [makeChart('z1', 'Zeta/x'), makeChart('b1', 'Beta/x')],
+      charts: [makeChart('z1', 'Zeta/x'), makeChart('b1', 'Beta/x')],
       courseFolders: [makeCourseFolder('Dan', [makeCourse('first')])],
     };
     const inZeta = run(shuffled, createBrowseState(), { type: 'jump', index: 1 }, { type: 'open' });
@@ -212,7 +212,7 @@ describe('search', () => {
 
 describe('list options', () => {
   const library: Library = {
-    songs: [
+    charts: [
       makeChartWith('five-hyper', 'Pack/x', { channels: ['11'], difficulty: 3 }, { title: 'Zulu', playLevel: 9 }),
       makeChartWith(
         'seven-normal',

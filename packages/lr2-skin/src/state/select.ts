@@ -305,7 +305,7 @@ function selectNumber(
  */
 export function resolveLr2SelectState(input: Lr2SelectInput): Lr2SelectState {
   const focused = input.focused;
-  const chart = focused?.kind === 'song' ? focused.song : undefined;
+  const chart = focused?.kind === 'chart' ? focused.chart : undefined;
   const course = focused?.kind === 'course' ? resolveCourseView(focused.course) : undefined;
   const maker = input.courseMaker;
   return {
