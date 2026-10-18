@@ -856,6 +856,14 @@ class PlayerWebDemoApp {
    */
   private lr2ThemeController: Controller | undefined;
   /**
+   * The Debug Menu's other skin controls that make the select screen again: Built-in skin, Skin effects and the Add
+   * skin buttons. They, {@link skinFamilyController} and {@link lr2ThemeController} are disabled during a play
+   * ({@link setSkinControlsLocked}), since going back to the select screen would end it.
+   */
+  private readonly skinControllers: Controller[] = [];
+  /** Whether a play runs, so the skin controls are disabled ({@link setSkinControlsLocked}). */
+  private skinControlsLocked = false;
+  /**
    * Disabled string controller used as the read-only status row inside the lil-gui panel. We hold a reference so {@link
    * setStatus} can call `updateDisplay()` directly rather than relying on lil-gui's `.listen()` polling.
    */
@@ -1687,7 +1695,7 @@ class PlayerWebDemoApp {
       });
     // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
     BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
-    skin
+    const skinEffects = skin
       .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
       .name('Skin effects')
       .onChange((level: 'full' | 'reduced' | 'off') => {
@@ -1698,6 +1706,8 @@ class PlayerWebDemoApp {
         }
         this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
       });
+    // Both make the select screen again, so they wait for the play to end.
+    this.skinControllers.push(skinPicker, skinEffects);
     // Canvas pixels per CSS pixel, 1× up to the display's ratio. Lower trades sharpness for fill-rate (tablets drop
     // under 30 fps at 2×); applies from the next frame. `?resolution=` in the URL overrides it until a pick here.
     const resolutionSteps = renderResolutionSteps(window.devicePixelRatio || 1);
@@ -1761,9 +1771,10 @@ class PlayerWebDemoApp {
       addLattice: () => this.addBeMusicSkin(latticeSkin),
       addFromUrl: () => void this.addBeMusicSkinFromUrl(skinSource.url),
     };
-    addSkins.add(skinSource, 'addLattice').name('Add Lattice');
+    // Adding a skin switches to it, which makes the select screen again: the buttons wait for the play to end.
+    this.skinControllers.push(addSkins.add(skinSource, 'addLattice').name('Add Lattice'));
     addSkins.add(skinSource, 'url').name('Skin module URL');
-    addSkins.add(skinSource, 'addFromUrl').name('Add from URL');
+    this.skinControllers.push(addSkins.add(skinSource, 'addFromUrl').name('Add from URL'));
   }
 
   /**
@@ -3043,6 +3054,8 @@ class PlayerWebDemoApp {
         // hypothetical future code path that observes the picker change has a single chokepoint to subscribe to.
         void this.applyLr2ThemeByName(value);
       });
+    // A theme dropped during a play brings the picker in disabled, as the other skin controls are then.
+    this.lr2ThemeController.enable(!this.skinControlsLocked);
     // lil-gui appends; move the row up next to the beatoraja pickers so the theme pickers read as one group.
     const beatorajaFolder = this.beatorajaSkinPickerFolder?.domElement;
     if (beatorajaFolder?.parentElement === folder.$children) {
@@ -4942,7 +4955,7 @@ class PlayerWebDemoApp {
    * Latches the playlog-related GUI options for the play that is about to start and disables their controllers.
    * Playlog options are per-play: the value in effect at song start governs the whole play, and mid-song changes
    * are rejected by keeping the controls disabled until {@link unlockPlaylogOptions} runs (result mounted or back
-   * at select).
+   * at select). The skin controls are disabled with them ({@link setSkinControlsLocked}).
    */
   private lockPlaylogOptionsForPlay(liveTempo = false): void {
     this.activePlayAutoSavePlaylog = this.guiState.autoSavePlaylog;
@@ -4951,6 +4964,7 @@ class PlayerWebDemoApp {
     for (const controller of this.playOptionControllers) {
       controller.disable();
     }
+    this.setSkinControlsLocked(true);
     // The tempo slider changes this play's tempo live (`allowsLiveTempo`).
     this.liveTempoPlay = liveTempo;
     if (liveTempo) this.tempoController?.enable();
@@ -4977,13 +4991,26 @@ class PlayerWebDemoApp {
     }
   }
 
-  /** Re-enables the playlog option controllers once no play is in flight. */
+  /** Re-enables the playlog option controllers, and the skin controls, once no play is in flight. */
   private unlockPlaylogOptions(): void {
     this.liveTempoPlay = false;
     this.playlogSaveController?.enable();
     this.leaderboard.unlock();
     for (const controller of this.playOptionControllers) {
       controller.enable();
+    }
+    this.setSkinControlsLocked(false);
+  }
+
+  /**
+   * Disables the Debug Menu's skin controls for a play, or enables them again: Skin system, Built-in skin, Skin
+   * effects, the LR2 theme picker and the Add skin buttons all make the select screen again, which would end the play.
+   * A drop during a play still can; the router then ends the course run ({@link endCourseRun}).
+   */
+  private setSkinControlsLocked(locked: boolean): void {
+    this.skinControlsLocked = locked;
+    for (const controller of [this.skinFamilyController, this.lr2ThemeController, ...this.skinControllers]) {
+      controller?.enable(!locked);
     }
   }
 
