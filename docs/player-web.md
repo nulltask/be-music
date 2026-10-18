@@ -7,7 +7,10 @@ Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as ti
 
 ## Shared runtime integration
 
-The browser player drives gameplay through `@be-music/player/core/engine`.
+The browser player drives gameplay through the engine, the root of `@be-music/player`. The rest of what it needs from
+the player comes from its other entries: the input and UI buses and the state signals (`@be-music/player/signals`),
+the lane layout (`./lanes`), the notes and scroll distance it draws (`./display`) and the judge windows (`./ruleset`).
+The chart's timing (`TimingResolver`, the sample triggers) and `ChartPlayVariant` come from `@be-music/chart`.
 The engine owns judgment, keysound trigger routing, long-note handling, mine detonation, score, gauge, and chart-finish
 semantics. The play session behind every play screen starts one engine run at the skin's `PLAYSTART` gate (on a
 beatoraja skin, 1.5 s after load-end). It mirrors the engine's frame snapshots into the play state and hands the
@@ -22,7 +25,7 @@ The browser runtime uses these adapter modules:
 | [`web-ui-runtime.ts`](../packages/player-web/src/runtime/web-ui-runtime.ts)       | Drains engine UI signals into the Pixi host. Frame snapshots update notes, score, gauge, and result state; commands drive lane flashes, key holds, POOR BGA, and judge/combo effects.                                                                            |
 | [`engine-driver.ts`](../packages/player-web/src/runtime/engine-driver.ts)         | Wires audio, input, and UI adapters together and invokes `manualPlay` / `autoPlay` for one chart play.                                                                                                                                                           |
 
-`@be-music/player/core/engine` no longer imports `node:path` / `node:timers/promises`, so the module can be
+The engine (`@be-music/player`) no longer imports `node:path` / `node:timers/promises`, so it can be
 bundled into the browser as-is. The Node-only `createNodeAudioSink` backend is loaded lazily and is never reached
 when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `createWebAudioSession`).
 
@@ -618,7 +621,7 @@ An arrow is an import; a dotted one is for types only. The rules:
 
 - **A lower layer knows no scene.** It imports no `host/`, `session/` or `view/` module, not even a type. Every file of the package starts out in a lower layer, so a new directory is one until the config says otherwise.
 - **A session reaches its view and the host only for types**, and Pixi only for types too, so a session runs in Node tests against a fake view.
-- **A view reaches its session and the host only for types**, and neither the engine (`@be-music/player/core/engine`, or the package root, which re-exports it) nor `runtime/engine-driver` and the `runtime/web-*-runtime` modules.
+- **A view reaches its session and the host only for types**, and neither the engine (`@be-music/player`) nor `runtime/engine-driver` and the `runtime/web-*-runtime` modules. The player's other entries (`./signals`, `./lanes`, `./display`, `./ruleset`, …) are not the engine, so a view may import them.
 - **Only a session runs the engine.** Besides `session/`, only `runtime/engine-driver.ts` imports the engine as values; every other file imports only its types, in the web demo too.
 - **Only the audio layer creates an audio context.** `runtime/` creates the system context (`audio-service.ts`), each play's graph (`play-audio-graph.ts`) and the offline context of the keep-pitch stretch (`time-stretch-signalsmith.ts`). Everything else, the web demo included, plays through the audio service and names `AudioContext` only as a type.
 
