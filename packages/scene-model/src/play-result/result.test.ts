@@ -1,13 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createPlayState, reducePlayState, type PlayEvent, type PlayState } from '../play-state/state.ts';
 import { makeChart } from '../test-support/library.ts';
-import {
-  beatorajaCompletionFromPlayResult,
-  playResultFromBeatoraja,
-  playResultFromPlayState,
-  playResultRun,
-  resolveResultPresentation,
-} from './result.ts';
+import { playResultFromPlayState, playResultRun, resolveResultPresentation } from './result.ts';
 
 const song = makeChart('song', 'Pack/x');
 const score = { total: 4, perfect: 3, great: 1, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 7, score: 7 };
@@ -74,95 +68,6 @@ describe('playResultFromPlayState', () => {
       course,
     });
     expect(result).toMatchObject({ run: 'stage', course, playSeconds: 125 });
-  });
-});
-
-describe('playResultFromBeatoraja', () => {
-  const completion = {
-    summary: {
-      ...score,
-      fast: 1,
-      slow: 2,
-      gauge: { current: 80, max: 100, initial: 20, cleared: true, type: 'NORMAL' },
-    },
-    maxCombo: 4,
-    history: {
-      scoreHistory: [{ progress: 0.5, exScore: 3 }],
-      gaugeHistory: [{ progress: 0.5, value: 50 }],
-      timingHistory: [
-        { deltaMs: -4, kind: 'PERFECT' },
-        { deltaMs: 12, kind: 'GREAT' },
-        { deltaMs: 0, kind: 'MISS' },
-      ],
-    },
-  };
-
-  test('reads the summary, max combo and graphs into the one payload', () => {
-    const result = playResultFromBeatoraja(completion, { song, judgeRuleset: 'beatoraja', playSeconds: 95 });
-    expect(result).toMatchObject({
-      score,
-      maxCombo: 4,
-      gauge: 80,
-      cleared: true,
-      gaugeType: 'NORMAL',
-      fast: 1,
-      slow: 2,
-      playSeconds: 95,
-      lamp: 'PERFECT',
-    });
-  });
-
-  test('gives the graphs the start and end samples the built-in and LR2 scenes take', () => {
-    const result = playResultFromBeatoraja(completion, { song });
-    expect(result.gaugeHistory).toEqual([
-      { progress: 0, value: 20 },
-      { progress: 0.5, value: 50 },
-      { progress: 1, value: 80 },
-    ]);
-    expect(result.scoreHistory).toEqual([
-      { progress: 0, exScore: 0 },
-      { progress: 0.5, exScore: 3 },
-      { progress: 1, exScore: 7 },
-    ]);
-  });
-
-  test("keeps the gauge's clear border, in percent, and the TOTAL it ran on", () => {
-    const result = playResultFromBeatoraja(
-      {
-        ...completion,
-        summary: {
-          ...completion.summary,
-          gauge: { current: 40, max: 50, cleared: false, clearThreshold: 30, effectiveTotal: 260 },
-        },
-      },
-      { song },
-    );
-    expect(result).toMatchObject({ gauge: 80, gaugeBorder: 60, gaugeTotal: 260 });
-    expect(beatorajaCompletionFromPlayResult(result).summary.gauge).toMatchObject({
-      current: 80,
-      max: 100,
-      clearThreshold: 60,
-      effectiveTotal: 260,
-    });
-    expect(playResultFromBeatoraja(completion, { song })).not.toHaveProperty('gaugeBorder');
-    expect(playResultFromBeatoraja(completion, { song })).not.toHaveProperty('gaugeTotal');
-  });
-
-  test('keeps the five judgments of the timing samples, without a time of their own', () => {
-    expect(playResultFromBeatoraja(completion, { song }).judgeTimings).toEqual([
-      { atMs: 0, deltaMs: -4, judge: 'PERFECT' },
-      { atMs: 0, deltaMs: 12, judge: 'GREAT' },
-    ]);
-  });
-
-  test('goes back to the shape the beatoraja result scene reads', () => {
-    const back = beatorajaCompletionFromPlayResult(playResultFromBeatoraja(completion, { song }));
-    expect(back.summary).toMatchObject({ ...score, fast: 1, slow: 2, gauge: { current: 80, max: 100, cleared: true } });
-    expect(back.maxCombo).toBe(4);
-    expect(back.history.timingHistory).toEqual([
-      { deltaMs: -4, kind: 'PERFECT' },
-      { deltaMs: 12, kind: 'GREAT' },
-    ]);
   });
 });
 
