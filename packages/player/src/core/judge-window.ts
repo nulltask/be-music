@@ -35,6 +35,7 @@ const LR2_NORMAL_JUDGERANK_PERCENT = LR2_BMS_RANK_JUDGERANK_PERCENTS[2];
 /** bmson `judge_rank` default per the 1.0.0 spec (100 = the player's default width, i.e. NORMAL here). */
 const BMSON_DEFAULT_JUDGERANK = 100;
 
+/** LR2's judge windows in milliseconds: each judgment's half-width, the same early and late. */
 export interface JudgeWindowsMs {
   pgreat: number;
   great: number;
@@ -154,6 +155,10 @@ export function resolveJudgeRankPercent(json: BeMusicJson): number {
   return json.sourceFormat === 'bmson' ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
 }
 
+/**
+ * The LR2 judge windows a chart opens with: its judgerank ({@link resolveJudgeRankPercent}) scaled over LR2's measured
+ * anchors. `debugBadWindowMs` replaces the fixed ±200 ms BAD window, and no other window grows past it.
+ */
 export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: number): JudgeWindowsMs {
   return scaleJudgeWindowsMs(resolveJudgeRankPercent(json), debugBadWindowMs);
 }
@@ -168,6 +173,7 @@ export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: numb
  */
 export type JudgeWindowRuleset = PlaylogRulesetId;
 
+/** @deprecated Use `PLAYLOG_RULESET_IDS` from `@be-music/player/ruleset`; this lists the same ids. */
 export const JUDGE_WINDOW_RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number): JudgeWindowsMs {

@@ -49,6 +49,14 @@ export interface RulesetWindowTables {
 
 export type PlaylogRulesetId = 'lr2' | 'beatoraja' | 'iidx';
 
+/** Every judge ruleset id, in the order the play-log simulators run them. */
+export const PLAYLOG_RULESET_IDS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+
+/** Whether `value` names a judge ruleset. */
+export function isPlaylogRulesetId(value: unknown): value is PlaylogRulesetId {
+  return typeof value === 'string' && (PLAYLOG_RULESET_IDS as readonly string[]).includes(value);
+}
+
 export type BeatorajaJudgeAlgorithm = 'combo' | 'duration' | 'lowest' | 'score';
 
 /** How a ruleset plays the chart's long notes. */
