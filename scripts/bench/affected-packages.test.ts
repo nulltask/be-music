@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vite-plus/test';
 import { PACKAGE_NAMES } from './exports.types.ts';
 import { resolveAffectedBenchPackages } from './affected-packages.ts';
@@ -43,5 +44,15 @@ describe('resolveAffectedBenchPackages', () => {
     expect(resolveAffectedBenchPackages(['packages/leaderboard-api/src/app.ts'], DEPENDENCIES)).toEqual([
       ...PACKAGE_NAMES,
     ]);
+  });
+});
+
+describe('the CI benchmark path filter', () => {
+  test('lists every benchmarked package, so a change to any of them runs the PR benchmark', () => {
+    const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+    const filter = /^ +bench:\n((?: +- '[^']*'\n)+)/m.exec(ci)?.[1];
+    expect(filter).toBeDefined();
+    const missing = PACKAGE_NAMES.filter((name) => !filter!.includes(`- 'packages/${name}/**'`));
+    expect(missing).toEqual([]);
   });
 });
