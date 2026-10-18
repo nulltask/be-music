@@ -1,5 +1,5 @@
 import type { ChartPlayVariant } from '@be-music/chart';
-import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
+import { resolveLr2LaneIndex } from '@be-music/player/lanes';
 import { resolveBeMusicLaneKind } from './lane-geometry.ts';
 import { resolveGameplayLaneGeometry } from './touch-layout.ts';
 import type { BeMusicGameplayLayout, BeMusicStage, GameplayLayoutMode } from './types.ts';
