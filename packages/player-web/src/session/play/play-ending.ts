@@ -101,6 +101,8 @@ export interface PlayEndingContext {
   currentSeconds(): number;
   resolveSongDurationSeconds(): number;
   resolveJudgeRuleset(): string;
+  /** Whether `score.poor` folds the empty POORs in (LR2). */
+  resolveEmptyPoorCountsInPoorDisplay(): boolean;
 }
 
 /**
@@ -167,7 +169,8 @@ export function beginExitSequence(
 /**
  * The play as a result (`PlaySession.getResultData`): read off the play state (`playResultFromPlayState`), with the
  * graphs ending at the playhead so they reach the right edge even when the last judgment came well before the chart's
- * end, the clear lamp by the one clear-lamp rule, and the scores as the readouts show them; with the gauge's clear
+ * end, the clear lamp by the one clear-lamp rule, and the scores as the readouts show them (under LR2 with the POOR
+ * judgments alone beside them, `judgedPoor`, so a record's BP counts each empty POOR once); with the gauge's clear
  * border (in percent) and TOTAL, which a beatoraja result skin shows.
  */
 export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
@@ -186,6 +189,8 @@ export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
   });
   return {
     ...result,
+    // Folded, `score.poor` is the engine's `poor + emptyPoor` (`resolveDisplayedPoor`).
+    ...(ctx.resolveEmptyPoorCountsInPoorDisplay() ? { judgedPoor: ctx.score.poor - ctx.score.emptyPoor } : {}),
     ...(gauge.max > 0 ? { gaugeBorder: gaugePercent({ current: gauge.clearThreshold, max: gauge.max }) } : {}),
     // The TOTAL the engine reports; the placeholder gauge before its first frame has none.
     ...(gauge.effectiveTotal > 0 ? { gaugeTotal: gauge.effectiveTotal } : {}),
