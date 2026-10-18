@@ -1,6 +1,6 @@
 // Importing the courses a difficulty table publishes in its header (`header.json`), from the table's URL. The fetch,
-// the stored URL list and the group merge live here; `main.ts` only binds the Debug Menu controls and refreshes the
-// course folders.
+// the stored URL list and the group merge live here; the Debug Menu's Course folder only binds the controls, and the
+// library service (`services/library.ts`) refreshes the course folders.
 import type { CourseDefinitionGroup } from '@be-music/player-web/collection';
 import { fetchTableHeaderCourses, parseTableHeaderCourses, type TableFetchText } from '@be-music/player/course';
 import { DEMO_STORAGE_PREFIX } from './ui/debug-menu/folders.ts';
