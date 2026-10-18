@@ -6,7 +6,7 @@
 that draws it ([ADR 0002](./adr/0002-scene-model-package.md)). The built-in, LR2 and beatoraja families used to keep
 two browse models, two sets of play-state bookkeeping and two result shapes, and their drift caused most of the bugs
 the course work found ([ADR 0001](./adr/0001-skin-families-only-draw.md)). The models here are the one implementation
-each screen's session will work on; the families only draw them.
+each screen's session works on; the families only draw them.
 
 ```mermaid
 flowchart TD
@@ -22,8 +22,9 @@ flowchart TD
 ```
 
 The package is runtime-neutral: it imports no renderer, reads no DOM or Node global and no clock, and draws no random
-number. Time and randomness come in as inputs. `pnpm run check` holds it to that with the runtime-neutral lint rules,
-and a test checks that it builds on `@be-music/chart`, `@be-music/json` and `@be-music/player` only.
+number. Time and randomness come in as inputs. `pnpm run check` keeps Node built-ins and DOM / Node globals out with the
+runtime-neutral lint rules (the deterministic judge's clock and `Math.random` rules do not cover the package), and a
+test checks that it builds on `@be-music/chart`, `@be-music/json` and `@be-music/player` only.
 
 The models are derived from what the scenes did before them. Where the built-in / LR2 scenes and the beatoraja
 scenes differed, the model picks one behaviour, following the compatibility policy: what LR2 does, and beatoraja's
@@ -132,41 +133,41 @@ across a play.
 The built-in / LR2 and beatoraja columns are how the select scenes behaved before they moved onto the model; every
 family's select screen follows the model now.
 
-| Behaviour                            | Built-in / LR2 select                                                 | beatoraja select                                                         | The model                                                                                |
-| ------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Folder bars under a key-mode filter  | All listed                                                            | Regrouped from the filtered charts; empty ones vanish                    | All listed (LR2)                                                                         |
-| A chart's key mode                   | bmson `mode_hint`, else the play variant, 24-key folded onto 7 / 14   | The play variant, 24-key modes apart                                     | bmson `mode_hint`, else the play variant, 24-key modes apart (LR2 has no 24-key mode)    |
-| Key-mode filter values               | All, 5, 7, 10, 14, 9 keys                                             | Adds 24 keys and 24 keys double                                          | Both (`KEYS_24`, `KEYS_48`)                                                              |
-| Difficulty filter                    | Yes                                                                   | None                                                                     | Yes (LR2)                                                                                |
-| Fields the search matches            | Title, subtitle, artist, genre, file label; folder label; course name | Title, subtitle, artist, genre                                           | The built-in / LR2 set                                                                   |
-| Search inside a course folder        | Filters the courses by name                                           | Not filtered                                                             | Filters (LR2)                                                                            |
-| Search text                          | Trimmed and lower-cased                                               | Lower-cased                                                              | Trimmed and lower-cased; the text is kept as typed for display                           |
-| Sorts                                | Off, level, title, clear                                              | Default, title, artist, genre, level, BPM, notes, last play              | Both                                                                                     |
-| Root folders under a sort            | Sorted by label                                                       | Not sorted                                                               | Sorted by label (LR2)                                                                    |
-| Text order                           | Runtime locale, case-insensitive                                      | Japanese locale                                                          | Runtime locale, case-insensitive                                                         |
-| Level order                          | `parseFloat`, missing last, equal levels by title                     | `parseInt`, missing last, stable                                         | `parseFloat`, missing last, equal levels by title                                        |
-| Cursor after a sort or filter change | Back to the top                                                       | Stays on the focused bar, else clamped                                   | Stays on the focused bar, else clamped: keeps the player's place                         |
-| Cursor after a search change         | Back to the top                                                       | Back to the top                                                          | Back to the top                                                                          |
-| Moves past either end                | Wrap                                                                  | Wrap                                                                     | Wrap                                                                                     |
-| Home / End and clicks                | A click puts the cursor on the bar                                    | Home / End clamp                                                         | `jump` clamps                                                                            |
-| Random select                        | None                                                                  | A random bar other than the focused one                                  | Yes (beatoraja), the draw an input                                                       |
-| Back out at the root                 | Nothing happens                                                       | Cancel sound, leaves the screen                                          | `at-root` event: the session decides                                                     |
-| Favourites                           | None                                                                  | Song and chart lists; a folder bar marks its first chart                 | Song (music) and chart lists, for a focused chart only                                   |
-| Snapshot contents                    | Folder path, cursor in the deepest list                               | Folder path, cursor per depth, filter, sort, LN mode, favourites, search | Folder path, cursor per depth, focused bar's key, search, list options, favourites       |
-| Parent cursors on restore            | 0 (backing out landed on the first folder bar)                        | As saved                                                                 | The opened folder's bar, found by label                                                  |
-| Restore when a folder is gone        | Nothing restored                                                      | Root, at the cursor saved there                                          | As far as the path matches, at the cursor saved there; `restoredDepth` tells the session |
-| A new library with one chart folder  | Opens it                                                              | Root                                                                     | Left to the session                                                                      |
+| Behaviour                            | Built-in / LR2 select                                                 | beatoraja select                                                         | The model                                                                             |
+| ------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Folder bars under a key-mode filter  | All listed                                                            | Regrouped from the filtered charts; empty ones vanish                    | All listed (LR2)                                                                      |
+| A chart's key mode                   | bmson `mode_hint`, else the play variant, 24-key folded onto 7 / 14   | The play variant, 24-key modes apart                                     | bmson `mode_hint`, else the play variant, 24-key modes apart (LR2 has no 24-key mode) |
+| Key-mode filter values               | All, 5, 7, 10, 14, 9 keys                                             | Adds 24 keys and 24 keys double                                          | Both (`KEYS_24`, `KEYS_48`)                                                           |
+| Difficulty filter                    | Yes                                                                   | None                                                                     | Yes (LR2)                                                                             |
+| Fields the search matches            | Title, subtitle, artist, genre, file label; folder label; course name | Title, subtitle, artist, genre                                           | The built-in / LR2 set                                                                |
+| Search inside a course folder        | Filters the courses by name                                           | Not filtered                                                             | Filters (LR2)                                                                         |
+| Search text                          | Trimmed and lower-cased                                               | Lower-cased                                                              | Trimmed and lower-cased; the text is kept as typed for display                        |
+| Sorts                                | Off, level, title, clear                                              | Default, title, artist, genre, level, BPM, notes, last play              | Both                                                                                  |
+| Root folders under a sort            | Sorted by label                                                       | Not sorted                                                               | Sorted by label (LR2)                                                                 |
+| Text order                           | Runtime locale, case-insensitive                                      | Japanese locale                                                          | Runtime locale, case-insensitive                                                      |
+| Level order                          | `parseFloat`, missing last, equal levels by title                     | `parseInt`, missing last, stable                                         | `parseFloat`, missing last, equal levels by title                                     |
+| Cursor after a sort or filter change | Back to the top                                                       | Stays on the focused bar, else clamped                                   | Stays on the focused bar, else clamped: keeps the player's place                      |
+| Cursor after a search change         | Back to the top                                                       | Back to the top                                                          | Back to the top                                                                       |
+| Moves past either end                | Wrap                                                                  | Wrap                                                                     | Wrap                                                                                  |
+| Home / End and clicks                | A click puts the cursor on the bar                                    | Home / End clamp                                                         | `jump` clamps                                                                         |
+| Random select                        | None                                                                  | A random bar other than the focused one                                  | Yes (beatoraja), the draw an input                                                    |
+| Back out at the root                 | Nothing happens                                                       | Cancel sound, leaves the screen                                          | `at-root` event: the session decides                                                  |
+| Favourites                           | None                                                                  | Song and chart lists; a folder bar marks its first chart                 | Song (music) and chart lists, for a focused chart only                                |
+| Snapshot contents                    | Folder path, cursor in the deepest list                               | Folder path, cursor per depth, filter, sort, LN mode, favourites, search | Folder path, cursor per depth, focused bar's key, search, list options, favourites    |
+| Parent cursors on restore            | 0 (backing out landed on the first folder bar)                        | As saved                                                                 | The opened folder's bar, found by label                                               |
+| Restore when a folder is gone        | Nothing restored                                                      | Root, at the cursor saved there                                          | As far as the path matches, at the cursor saved there; `restoredDepth` says how far   |
+| A new library with one chart folder  | Opens it                                                              | Root                                                                     | Left to the session                                                                   |
 
 beatoraja's LN mode override (the LNMODE button) is not part of browsing; nothing plays it yet, so it is not in the
 models: the beatoraja select view keeps it.
 
 A select session of the web runtime makes the choices the model leaves to it with its family's select policy
 (`session/select/select-policy.ts` in `@be-music/player-web`). On the built-in and LR2 screens a back-out at the root
-does nothing, a library of one chart folder opens it when there is no position to restore, a restore goes as far as
-the path matches, and the sort and the filters are the play options', which a restore keeps. The beatoraja policy
+does nothing, a library of one chart folder opens it when there is no position to restore, and the sort and the
+filters are the play options', which a restore keeps. The beatoraja policy
 leaves the screen at the root with the cancel cue, opens a library at its root, keeps its MODE and SORT in the browse
 position (a restore brings them back), reads beatoraja's keys (page keys, Home / End, R for a random bar) and plays a
-folder's cue without the cursor cue.
+folder's cue without the cursor cue. Under every family a restore goes as far as the path matches.
 
 ## Play options
 
@@ -223,12 +224,13 @@ flowchart LR
 - **Hi-speed** (`HiSpeedState`). The player's hi-speed, on their own scale, and the drawn one the notes scroll with: the
   player's times the chart's HS-FIX multiplier (`resolveHsFixMultiplier`: MAXBPM, MINBPM and AVERAGE keep that BPM at
   the player's hi-speed, CONSTANT scrolls as AVERAGE for now). The player's keys step the player's value; a drawn value
-  reported by the engine or a replay is taken as it is. A course's `no_speed` locks the player's changes; the host's
-  setting still applies.
+  from a replay's recorded view (`hi-speed-drawn`) is taken as it is. A course's `no_speed` locks the player's changes
+  and the replay's; the host's setting still applies.
 - **Lane covers** (`LaneCoverState` per side). SUDDEN+, HIDDEN+ and LIFT, each with a height kept while it is off. A
   play starts with the select screen's options (`laneCoversFromPlayOptions`: the HIDDEN / SUDDEN mode per side, the one
   lane cover height and the LANE COVER switch); during the play a cover is raised (coming on), lowered (going off at
-  nothing), switched or set outright (a replay), on one side or every side, and locked with the hi-speed.
+  nothing), switched or set outright (a replay), on one side or every side. Like the hi-speed, `no_speed` locks the player's
+  changes; a cover set outright (`cover-set`: a replay's recorded covers, the host's setting) still applies.
   `resolveLaneCover` gives the covers as drawn, as fractions of the lane, HIDDEN+ scaled to the lane above the LIFT.
 - **View settings.** `resolvePlaylogView` is the view in the play log's units: the drawn hi-speed on the scene's
   hi-speed scale, the HS-FIX, each side's covers and the visible time at the main BPM (`resolveWhiteNumber`, the white
@@ -248,11 +250,11 @@ flowchart LR
 | Timed judgments              | PERFECT … POOR, with time and lane; the latest 64 | Any kind, offset and kind only; the latest 50                   | PERFECT … POOR, with time and lane; the latest 64 by default      |
 | Early / late per judgment    | None                                              | Counted                                                         | Counted (beatoraja; LR2 has none)                                 |
 | HS-FIX                       | Applied                                           | Not applied                                                     | Applied (beatoraja's fixed hi-speed modes; LR2 has none)          |
-| Hi-speed lock (`no_speed`)   | Keys ignored, host taken                          | Keys ignored, engine change reverted, host taken                | Player and engine changes ignored, host taken                     |
+| Hi-speed lock (`no_speed`)   | Keys ignored, host taken                          | Keys ignored, engine change reverted, host taken                | Player and replay changes ignored, host taken                     |
 | Covers at the start          | From the play options                             | Off                                                             | From the play options (LR2)                                       |
 | Covers during the play       | Fixed                                             | Lane cover, LIFT and HIDDEN keys, wheel and buttons; every side | beatoraja's adjustments (LR2 has none), on one side or every side |
 | HIDDEN+ lowered to nothing   | —                                                 | Keys keep it on, the button turns it off                        | Off                                                               |
-| Covers under `no_speed`      | —                                                 | Locked                                                          | Locked                                                            |
+| Covers under `no_speed`      | —                                                 | Locked                                                          | Locked for the player; a replay's or the host's setting applies   |
 | Visible time in the play log | Lane height less SUDDEN+ and LIFT                 | beatoraja's white number (LIFT ignored)                         | The white number (LIFT ignored)                                   |
 | HS-FIX in the play log       | Recorded                                          | Not recorded                                                    | Recorded when set                                                 |
 
@@ -297,35 +299,35 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
   `resolveResultJingle` picks one by the verdict, falling back to the generic one.
 - `browseSystemSound` is the cue for what a browse command did: the cursor cue, the folder cues, the cancel cue on
   backing out at the root, the option-change cue when the sort or a filter changed the list. `startSystemSound` is the
-  decide cue for a chart or a playable course and the cancel cue for a course with a stage missing.
+  decide cue for a chart, a playable course or a NEW COURSE bar, the cancel cue for a course with a stage missing, and
+  none for a folder.
 
 ## Where the helpers moved
 
-| Helper                                                                              | Was in                                    | Now                                                                                 |
-| ----------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
-| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                    | `@be-music/skin-sdk`                      | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (the old names are removed)     |
-| `BeMusicPlayOptions` and its value types                                            | `@be-music/skin-sdk`                      | `PlayOptions`, … (aliased in skin-sdk)                                              |
-| `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                     | `@be-music/skin-sdk`                      | `PlayResult`, … (aliased in skin-sdk)                                               |
-| `BeMusicJudge`, `BeMusicSide`, `BeMusicJudgeTiming`, `BeMusicLaneCover`             | `@be-music/skin-sdk`                      | `Judge`, `PlaySide`, `JudgeTiming`, `LaneCover` (aliased in skin-sdk)               |
-| `groupSongsByFolder`, `resolveChartPlayVariant`                                     | `player-web` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (the old names are removed) |
-| `matchesSearchQuery`, `wrappedCursorDelta`                                          | `player-web` core select                  | Same names (the re-exports are removed)                                             |
-| The core select's sort and difficulty filter                                        | `player-web` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                                |
-| `resolveSelectNavigation`                                                           | `player-web` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse`        |
-| `DEFAULT_PLAY_OPTIONS`, the option cycles                                           | `player-web` core select                  | Same names (the `DEFAULT_PLAY_OPTIONS` re-export is removed)                        |
-| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                            | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue`                                    |
-| The hi-speed range and steps                                                        | `player-web` `scene/hi-speed.ts`          | Same names (the re-exports are removed)                                             |
-| `SceneCourseInfo`, `resolveSceneCourseInfo`                                         | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (the old names are removed)                       |
-| `PixiPlayOptions` and the other `Pixi*` play-option types, `PixiGameplayResultData` | `player-web` scenes                       | `PlayOptions`, …, `PlayResult` (the old names are removed)                          |
-| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                       | `player-web` `scene/core/course-combo.ts` | Same names, with `reduceCourseCombo`                                                |
-| `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                                  | `player-web` `scene/playlog-view.ts`      | Same names, over `resolvePlaylogView` (the re-export is removed)                    |
-| `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation`    | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)                      |
-| `resolveResultViewJingles`                                                          | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                  |
+| Helper                                                                              | Was in                                    | Now                                                                                |
+| ----------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- |
+| `BrowserSongEntry`, `BrowserFolderNode`, `BrowserCourseEntry`, …                    | `@be-music/skin-sdk`                      | `LibraryChart`, `LibraryFolder`, `LibraryCourse`, … (the old names are removed)    |
+| `BeMusicPlayOptions` and its value types                                            | `@be-music/skin-sdk`                      | `PlayOptions`, … (aliased in skin-sdk)                                             |
+| `BeMusicResultData`, `GaugeHistorySample`, `ScoreHistorySample`                     | `@be-music/skin-sdk`                      | `PlayResult`, … (aliased in skin-sdk)                                              |
+| `BeMusicJudge`, `BeMusicSide`, `BeMusicJudgeTiming`, `BeMusicLaneCover`             | `@be-music/skin-sdk`                      | `Judge`, `PlaySide`, `JudgeTiming`, `LaneCover` (aliased in skin-sdk)              |
+| `groupSongsByFolder`, `resolveChartPlayVariant`                                     | `player-web` collection                   | `groupChartsByFolder`, `resolveLibraryChartPlayVariant` (player-web's are removed) |
+| `matchesSearchQuery`, `wrappedCursorDelta`                                          | `player-web` core select                  | Same names (the re-exports are removed)                                            |
+| The core select's sort and difficulty filter                                        | `player-web` core select (private)        | `sortLibraryEntries`, `chartMatchesDifficultyFilter`                               |
+| `resolveSelectNavigation`                                                           | `player-web` core select                  | Removed: the select session restores a `BrowseSnapshot` with `restoreBrowse`       |
+| `DEFAULT_PLAY_OPTIONS`, the option cycles                                           | `player-web` core select                  | Same names (the `DEFAULT_PLAY_OPTIONS` re-export is removed)                       |
+| `resolveSkinPlayOptionValue`, `cycleSkinPlayOptionValue`                            | `player-web` core select                  | `resolvePlayOptionValue`, `cyclePlayOptionValue`                                   |
+| The hi-speed range and steps                                                        | `player-web` `scene/hi-speed.ts`          | Same names (the re-exports are removed)                                            |
+| `SceneCourseInfo`, `resolveSceneCourseInfo`                                         | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (the old names are removed)                      |
+| `PixiPlayOptions` and the other `Pixi*` play-option types, `PixiGameplayResultData` | `player-web` scenes                       | `PlayOptions`, …, `PlayResult` (the old names are removed)                         |
+| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                       | `player-web` `scene/core/course-combo.ts` | Same names, with `reduceCourseCombo`                                               |
+| `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                                  | `player-web` `scene/playlog-view.ts`      | Same names, over `resolvePlaylogView` (the re-export is removed)                   |
+| `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation`    | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)                     |
+| `resolveResultViewJingles`                                                          | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                 |
 
 Every family's select screen browses with these models (`reduceBrowse`, `browseEntries`, `captureBrowse` /
 `restoreBrowse`, `browseSystemSound`). Every play screen keeps one `PlayState` and reads its result off it
 (`playResultFromPlayState`), so every play follows the model's play-state choices above: a full combo's max combo is every
 note for any play, the result carries each judgment's early / late count, and the play log's visible time is the white
-number (`resolvePlaylogView`). Every screen of the web runtime is a scene session on these
-models. The skin
-packages map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
+number (`resolvePlaylogView`). Every screen of the web runtime is a scene session on these models. The skin packages
+map the models to each skin's vocabulary: `@be-music/beatoraja-skin/scene` to beatoraja's ids (see
 [beatoraja-skin.md](./beatoraja-skin.md#scene-mapping)).

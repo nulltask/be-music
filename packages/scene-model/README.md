@@ -20,8 +20,8 @@ The models and the rules behind them are described in [Scene models](../../docs/
   variant and key mode, and the key that names a bar across rebuilds (`libraryEntryKey`).
 - **Browse**: the select screen's folder stack, cursor, search, sort, filters and favourites as one immutable state
   (`BrowseState`), changed by commands (`reduceBrowse`) that report what happened for the screen's sounds and
-  animations; the list derived from it (`browseEntries`); and its snapshot (`captureBrowse` / `restoreBrowse`), with
-  adapters from the snapshots today's select scenes keep.
+  animations; the list derived from it (`browseEntries`); and its snapshot (`captureBrowse` / `restoreBrowse`), which
+  every select screen keeps across a play.
 - **Play options**: what the player picks before a play (`PlayOptions`), its defaults, each option's choices,
   validation of values set from untyped input (`resolvePlayOptionValue`, `resolvePlayOptions`), cycling
   (`cyclePlayOptionValue`), and the hi-speed range (`snapHiSpeed`, `stepPlayerHiSpeed`, `HiSpeedTransition`).
@@ -30,7 +30,7 @@ The models and the rules behind them are described in [Scene models](../../docs/
   one immutable state fed by the engine's frames and judgments (`PlayState`, `reducePlayState`), and the view in the
   play log's units (`resolvePlaylogView`).
 - **Play result**: the one result payload for single plays, course stages, course runs and NONSTOP runs
-  (`PlayResult`), read from a play state, from the beatoraja scene's completion or from a course run.
+  (`PlayResult`), read from a play state (`playResultFromPlayState`) or from a course run (`playResultFromCourseRun`).
 - **Course view**: the course a screen shows (`CourseView`, `resolveCourseView`) and the course-wide combo.
 - **System sounds**: a theme's cues and jingles by slot (`SystemSoundSet`), from an LR2 theme or a beatoraja theme, the
   result jingle a run plays and the cue a browse command plays.
