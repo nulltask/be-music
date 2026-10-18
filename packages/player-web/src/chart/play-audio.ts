@@ -1,24 +1,14 @@
 // Chart audio preparation for the play session (`session/play/play-media.ts`), which every gameplay family plays
-// through. One place builds the play's AudioContext + bus, decodes the chart's `#WAV`
-// samples under the key the audio session looks them up by, stretches them for a keep-pitch tempo and folds the
-// `#WAVCMD` / `#EXWAV` volumes.
+// through. One place decodes the chart's `#WAV` samples under the key the audio session looks them up by, into the
+// play's audio graph (`runtime/play-audio-graph.ts`), stretches them for a keep-pitch tempo and folds the `#WAVCMD` /
+// `#EXWAV` volumes.
 
 import { runWithConcurrency } from '@be-music/utils/core';
-import {
-  collectBmsExWavVolumeMultipliers,
-  collectBmsWavCmdVolumeMultipliers,
-  volWavToLinearGain,
-} from '@be-music/chart';
+import { collectBmsExWavVolumeMultipliers, collectBmsWavCmdVolumeMultipliers } from '@be-music/chart';
 import { resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import type { NonstopStitchMap } from '@be-music/player/course';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
-import {
-  buildAudioBus,
-  type AudioBusHandle,
-  type BuildAudioBusOptions,
-  type CompressorMode,
-} from '../runtime/audio-bus.ts';
 import {
   resolveSampleStretchRates,
   stretchDecodedSamples,
@@ -32,38 +22,6 @@ const log = logger('play-audio');
 
 /** Samples decoded at once: bounded so hundreds of browser audio decoders don't allocate PCM together. */
 const AUDIO_DECODE_CONCURRENCY = 8;
-
-/** A play's audio graph: its own AudioContext and the bus every chart sample plays through. */
-export interface PlayAudioGraph {
-  audioContext: AudioContext;
-  audioBus: AudioBusHandle;
-}
-
-/**
- * Builds a play's AudioContext and audio bus, with the chart's `#VOLWAV` master volume applied (only for 0 < n < 200,
- * as beatoraja does; other charts stay at unity), so every sample and the recorder see the post-`#VOLWAV` mix.
- */
-export function createPlayAudioGraph(
-  chart: BeMusicJson,
-  compressorMode: CompressorMode,
-  busOptions?: BuildAudioBusOptions,
-): PlayAudioGraph {
-  // `interactive` asks for the lowest round-trip latency: keypress → audible sample is what a rhythm game feels.
-  const audioContext = new AudioContext({ latencyHint: 'interactive' });
-  // Most browsers start a context suspended, and its first `node.start()` then waits while the graph ramps up. We are
-  // inside the gesture chain that started the play, so resuming now pre-warms it; a refusal is harmless.
-  void audioContext.resume().catch(() => undefined);
-  log.info('AudioContext ready', {
-    sampleRate: audioContext.sampleRate,
-    state: audioContext.state,
-    baseLatencyMs: typeof audioContext.baseLatency === 'number' ? +(audioContext.baseLatency * 1000).toFixed(2) : 'n/a',
-    outputLatencyMs:
-      typeof audioContext.outputLatency === 'number' ? +(audioContext.outputLatency * 1000).toFixed(2) : 'n/a',
-  });
-  const audioBus = buildAudioBus(audioContext, compressorMode, busOptions);
-  audioBus.setMasterGain(volWavToLinearGain(chart.bms.volWav));
-  return { audioContext, audioBus };
-}
 
 /**
  * Per-slot volume multipliers of a chart: `#WAVCMD 01 xx vv` and the volume of `#EXWAVxx`, multiplied together when a
