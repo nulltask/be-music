@@ -13,7 +13,7 @@ import {
   storeFolderOpenStates,
   type DebugMenuStorage,
   type FolderNode,
-} from './debug-menu.ts';
+} from './folders.ts';
 
 function memoryStorage(initial: Record<string, string> = {}): DebugMenuStorage & { values: Map<string, string> } {
   const values = new Map(Object.entries(initial));

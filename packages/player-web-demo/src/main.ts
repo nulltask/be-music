@@ -228,7 +228,12 @@ import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
 import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
 import { applyLoadProgress } from './loading-overlay.ts';
 import { parseUrlMediaParams } from './url-load.ts';
-import { DEBUG_MENU_FOLDERS, clearDemoSettings, rememberFolderOpenStates, type DebugMenuFolder } from './debug-menu.ts';
+import {
+  DEBUG_MENU_FOLDERS,
+  clearDemoSettings,
+  rememberFolderOpenStates,
+  type DebugMenuFolder,
+} from './ui/debug-menu/folders.ts';
 import {
   enterTouchFullscreen,
   exitFullscreen,
@@ -988,7 +993,7 @@ class PlayerWebDemoApp {
    * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
    * per-stage folder on compressor mode change) without re-querying the DOM.
    *
-   * Layout (folder titles and default open states live in `debug-menu.ts`): the everyday controls sit at the top level
+   * Layout (folder titles and default open states live in `ui/debug-menu/folders.ts`): the everyday controls sit at the top level
    * — status, loading, skin pick, capture — followed by the Play options and Audio folders (open by default), then the
    * skin detail, library, and developer folders (closed by default). Every folder remembers whether it was left open.
    */
