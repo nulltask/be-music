@@ -1,8 +1,11 @@
 import type { BeMusicJson } from '@be-music/json';
-import type { PlaylogRulesetId } from '../ruleset/definitions.ts';
 
 /**
  * LR2 judge windows.
+ *
+ * Each compat ruleset owns its judge windows (signed, per lane kind and per note context; the tables live in
+ * `src/ruleset/definitions.ts`). This module only resolves LR2's own `#RANK` / `#DEFEXRANK` / `#EXRANKxx` axis, which
+ * the LR2 ruleset reads.
  *
  * Source of truth: LR2 measurements collected on hitkey's diary (2015-01-19 "Memo: LR2 timegates",
  * https://hitkey.nekokan.dyndns.info/diary1501.php#D150119) and the machine-readable LR2-compat tables in lr2oraja
@@ -162,19 +165,6 @@ export function resolveJudgeRankPercent(json: BeMusicJson): number {
 export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: number): JudgeWindowsMs {
   return scaleJudgeWindowsMs(resolveJudgeRankPercent(json), debugBadWindowMs);
 }
-
-/**
- * Which compat ruleset the engine plays under. The ruleset owns everything: judge windows (signed, per lane kind
- * and per note context), note selection, empty POOR, long-note mechanics, gauges, and scoring. The tables live in
- * `src/ruleset/definitions.ts`; this module only still resolves LR2's own `#RANK` / `#DEFEXRANK` / `#EXRANKxx`
- * axis, which the LR2 ruleset reads.
- *
- * @deprecated Use `PlaylogRulesetId` from `@be-music/player/ruleset`, the one judge ruleset id; this is an alias of it.
- */
-export type JudgeWindowRuleset = PlaylogRulesetId;
-
-/** @deprecated Use `PLAYLOG_RULESET_IDS` from `@be-music/player/ruleset`; this lists the same ids. */
-export const JUDGE_WINDOW_RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number): JudgeWindowsMs {
   const bad =

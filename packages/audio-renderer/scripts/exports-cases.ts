@@ -2,68 +2,6 @@ import * as audioRendererApi from '@be-music/audio-renderer';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): void {
-  define('audio-renderer.createTimingResolver', {
-    run: (fixtures) => {
-      audioRendererApi.createTimingResolver(fixtures.sampleBmsJson);
-    },
-  });
-  define('audio-renderer.createTimingBuildContext', {
-    run: (fixtures) => {
-      audioRendererApi.createTimingBuildContext(fixtures.sampleBmsJson);
-    },
-  });
-  define('audio-renderer.createTimingResolverWithContext', {
-    run: (fixtures) => {
-      const context = audioRendererApi.createTimingBuildContext(fixtures.sampleBmsJson);
-      audioRendererApi.createTimingResolverWithContext(fixtures.sampleBmsJson, context);
-    },
-  });
-  define('audio-renderer.mirrorBeatAtTempoReversal', {
-    run: () => {
-      const reversal = { beat: 16, seconds: 7.5 };
-      audioRendererApi.mirrorBeatAtTempoReversal(reversal, 5, 10);
-      audioRendererApi.mirrorBeatAtTempoReversal(reversal, 9, 17.5);
-      audioRendererApi.mirrorBeatAtTempoReversal(undefined, 9, 17.5);
-    },
-  });
-  define('audio-renderer.firesBeforeTempoReversal', {
-    run: () => {
-      const reversal = { beat: 16, seconds: 7.5 };
-      audioRendererApi.firesBeforeTempoReversal(reversal, 5, '01');
-      audioRendererApi.firesBeforeTempoReversal(reversal, 7.5, '01');
-      audioRendererApi.firesBeforeTempoReversal(reversal, 7.5, '11');
-      audioRendererApi.firesBeforeTempoReversal(undefined, 9, '11');
-    },
-  });
-  define('audio-renderer.collectSampleTriggers', {
-    run: (fixtures) => {
-      const resolver = audioRendererApi.createTimingResolver(fixtures.sampleBmsJson);
-      audioRendererApi.collectSampleTriggers(fixtures.sampleBmsJson, resolver, {
-        inferBmsLnTypeWhenMissing: true,
-      });
-    },
-  });
-  define('audio-renderer.collectSampleTriggersWithContext', {
-    run: (fixtures) => {
-      const context = audioRendererApi.createTimingBuildContext(fixtures.sampleBmsJson);
-      const resolver = audioRendererApi.createTimingResolverWithContext(fixtures.sampleBmsJson, context);
-      audioRendererApi.collectSampleTriggersWithContext(fixtures.sampleBmsJson, resolver, context, {
-        inferBmsLnTypeWhenMissing: true,
-      });
-    },
-  });
-  define('audio-renderer.createBmsonSamplePlaybackMap', {
-    run: (fixtures) => {
-      const context = audioRendererApi.createTimingBuildContext(fixtures.sampleBmsonJson);
-      const resolver = audioRendererApi.createTimingResolverWithContext(fixtures.sampleBmsonJson, context);
-      audioRendererApi.createBmsonSamplePlaybackMap(
-        fixtures.sampleBmsonJson,
-        resolver,
-        fixtures.sampleBmsonJson.events,
-        context.beatResolver,
-      );
-    },
-  });
   define('audio-renderer.renderJson', {
     ioBound: true,
     run: async (fixtures) => {

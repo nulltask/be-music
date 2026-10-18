@@ -1,7 +1,6 @@
 import {
   IIDX_EX_SCORE_PER_GREAT,
   IIDX_EX_SCORE_PER_PGREAT,
-  resolveIidxRankIndexFromScore,
   resolveLr2MoneyScore,
   type JudgeKind,
   type ScoreSummary,
@@ -63,11 +62,6 @@ export function breakTrackedCombo(tracker: ScoreTracker): void {
   if (tracker.course !== undefined) {
     tracker.course.combo = 0;
   }
-}
-
-export function resolveIidxSelectRankOp(score: Pick<ScoreSummary, 'total' | 'exScore'>): number | undefined {
-  const rankIndex = resolveIidxRankIndexFromScore(score);
-  return rankIndex === undefined ? undefined : 200 + rankIndex;
 }
 
 export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgeKind, tracker: ScoreTracker): void {

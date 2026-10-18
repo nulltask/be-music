@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
 import * as display from './display.ts';
+import * as engine from './index.ts';
 import * as lanes from './lanes.ts';
+import * as playlog from './playlog/index.ts';
 import * as signals from './signals.ts';
 
 /** The values an entry exports, sorted: the barrels are curated, so a new or dropped name shows up here. */
@@ -9,6 +11,24 @@ function exportedValues(entry: object): string[] {
 }
 
 describe('designed entries', () => {
+  it('@be-music/player exports the engine and nothing the other entries carry', () => {
+    expect(exportedValues(engine)).toEqual([
+      'PlayerInterruptedError',
+      'autoPlay',
+      'createTempoClock',
+      'manualPlay',
+      'preparePlaybackChart',
+      'resolveChartRulesetFacts',
+      'resolvePlayChart',
+    ]);
+  });
+
+  it('@be-music/player/playlog leaves the score vocabulary to @be-music/player/ruleset', () => {
+    for (const name of ['computeScoreRate', 'resolveIidxRankLabel', 'IIDX_RANK_LABELS']) {
+      expect(playlog).not.toHaveProperty(name);
+    }
+  });
+
   it('@be-music/player/signals exports the buses, the state signals and the high-speed controls', () => {
     expect(exportedValues(signals)).toEqual([
       'DEFAULT_HIGH_SPEED',

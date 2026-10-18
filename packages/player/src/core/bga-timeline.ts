@@ -1,14 +1,7 @@
 import { type BgaCue } from '@be-music/chart';
 
-// The BGA cue builders live in `@be-music/chart` (the resolved-chart layer); re-exported so
-// `@be-music/player/core/bga-timeline` keeps its public API.
-export {
-  buildBgaTimelines,
-  buildBmsBgaTimeline,
-  type BgaCue,
-  type BgaTimelines,
-  type BgaTimingResolver,
-} from '@be-music/chart';
+// The BGA cue builders (`buildBgaTimelines`, `buildBmsBgaTimeline`) live in `@be-music/chart`; this module only picks
+// the cue on screen, for `@be-music/player/display`.
 
 /**
  * How long a POOR / miss BGA layer stays visible after a miss before the normal base/layer composite returns.

@@ -11,7 +11,7 @@ import {
   type RulesetChartFacts,
   type RulesetConfig,
 } from '../ruleset/index.ts';
-import type { LongNoteMode } from '../playable-notes.ts';
+import type { LongNoteMode } from '@be-music/chart';
 import type { BeMusicPlaylog, PlaylogCourseStage } from './format.ts';
 import type { PlaylogRulesetId, ResolveRulesetOptions, RulesetCourseOptions } from '../ruleset/index.ts';
 

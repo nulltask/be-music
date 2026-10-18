@@ -1,4 +1,4 @@
-import type { LongNoteMode } from '../playable-notes.ts';
+import type { LongNoteMode } from '@be-music/chart';
 
 /**
  * The chart-side inputs a ruleset needs, in a form both the live engine and the play-log simulator can produce.

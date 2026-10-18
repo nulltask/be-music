@@ -1,10 +1,12 @@
 import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
+  firesBeforeTempoReversal,
   isPlayLaneSoundChannel,
   resolveChart,
   usesMonophonicWavPlayback,
   type ResolvedVolumeChange,
+  type TimedSampleTrigger,
   volWavToLinearGain,
 } from '@be-music/chart';
 // `node:fs/promises` and `node:path` are loaded lazily inside the Node-only entry points (`renderChartFile`,
@@ -25,9 +27,6 @@ import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
 import { resolveSamplePath } from './sample-path.ts';
-import { firesBeforeTempoReversal, type TimedSampleTrigger } from './triggers.ts';
-
-export * from './triggers.ts';
 export interface RenderOptions {
   sampleRate?: number;
   normalize?: boolean;

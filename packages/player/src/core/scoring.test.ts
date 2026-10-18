@@ -1,11 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import {
-  applyJudgeToSummary,
-  createScoreTracker,
-  LR2_MONEY_SCORE_MAX,
-  resolveIidxSelectRankOp,
-  type ScoreSummary,
-} from './scoring.ts';
+import { applyJudgeToSummary, createScoreTracker, LR2_MONEY_SCORE_MAX, type ScoreSummary } from './scoring.ts';
 
 function createSummary(total: number): ScoreSummary {
   return {
@@ -22,11 +16,6 @@ function createSummary(total: number): ScoreSummary {
 }
 
 describe('score trackers', () => {
-  test('resolves the DJ Rank select op', () => {
-    expect(resolveIidxSelectRankOp({ total: 100, exScore: 178 })).toBe(200);
-    expect(resolveIidxSelectRankOp({ total: 0, exScore: 0 })).toBeUndefined();
-  });
-
   test("LR2's money score is (4PG + 2GR + GD) x 50000 / notes, capped at 200000", () => {
     const summary = createSummary(100);
     const tracker = createScoreTracker({ moneyScore: true });

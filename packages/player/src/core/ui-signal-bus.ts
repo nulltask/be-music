@@ -23,7 +23,7 @@ export interface PlayerUiFrameSummary {
 
 /**
  * Gauge state carried on every summary. Shared by the UI frame payload and the engine's own
- * `PlayerSummary` so the two can never drift; the engine re-exports it as `PlayerGrooveGaugeSummary`.
+ * `PlayerSummary` (`PlayerSummary.gauge`) so the two can never drift.
  */
 export interface PlayerGaugeSummary {
   current: number;
