@@ -196,12 +196,12 @@ sequenceDiagram
 - engine には MISS 判定（beatoraja の空 POOR）がありません。number 420 は POOR の数を読み、その early / late（421 / 422）は play 中は 0、result では POOR のものを読みます。
 - result は max combo を combo（104）としても読み、75 は 0（LR2 の自己ベストの max combo）とします。play は 75 で max combo を読みます。
 - play 中の 1P のランクの op（200-207）とその「now」の写し（340-347）は、それまでに判定した note に対する EX score のランクです。最初の note の前は 100 % なので、play は AAA から始まります。beatoraja の `createNowRank` が `ScoreDataProperty.nowrate` を読むとおりで、note のない譜面ではどれも点きません（#430）。
+- 汎用のランクの op（220-227）は、全 note に対する EX score が届いたランクをすべて点けます（`beatorajaGenericRankOps`）。beatoraja の `BooleanPropertyFactory` が `ScoreDataProperty.qualifyRank`（`rate >= border / 27`）を読むとおりで、AAA なら 8 つすべて、どの score でも F が点き、note のない譜面ではどれも点きません。`computeGenericRankOp` はそのうち最も高いランクを 1 つ返します。
 - beatoraja にとって別の意味を持つ LR2 の番号がいくつかあります（`IntegerPropertyFactory`、`BooleanPropertyFactory`、`StringPropertyFactory`）。number 92 はメイン BPM（LR2 ではインターネットランキングの順位）、op 400 は CONSTANT のオプション（LR2 ではキーコンフィグのページ）です。beatoraja には number 38-41・93-94、text 17-29、op 34 がないので、何も読みません（#430）。
 
 ### 既知の未対応
 
 - 自己ベストとターゲットはまだ mapping に届いていません。number 150-158（ペースメーカーのスコア、それとの差、それに対するレート、27 分の 1 刻みの次のランクまでの差 `DIFF_NEXTRANK`）、自己ベストの number（71-89）、自己ベストとターゲットのランクの op は 0 か何も読みません。
-- 汎用のランクの op（220-227）は EX score のランク 1 つだけを点けます。beatoraja の `qualifyRank` は EX score が届いたランクをすべて点けます（AAA なら 8 つすべて）。`computeGenericRankOp` は op を 1 つ返すので、すべて点けるには新しい入口が要ります。
 - op 400（CONSTANT）は点きません。be-music には CONSTANT のオプションがありません。
 
 ## Browser player への配線

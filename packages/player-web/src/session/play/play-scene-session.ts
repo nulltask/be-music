@@ -7,6 +7,7 @@
 
 import type { CourseView, LibraryChart, PlayOptions } from '@be-music/scene-model';
 import { SILENT_AUDIO } from '@be-music/skin-sdk';
+import type { AudioService } from '../../runtime/audio-service.ts';
 import type { PlayDisposeOptions } from './play-options.ts';
 import type { PlayFrame, PlayIntent, PlayStage, PlayViewEvent } from '../../view/types.ts';
 import type { SceneSession, SessionKeyEvent } from '../session-scene.ts';
@@ -17,11 +18,16 @@ import type { PlayMoment } from './play-session-theme.ts';
 import { playViewEventFromMoment } from './play-view-events.ts';
 import { updatePlaylogView } from './play-view-settings.ts';
 
-/** What a play's frames carry besides the play itself: the chart picked, its course stage and the play options. */
+/**
+ * What a play's frames carry besides the play itself: the chart picked, its course stage and the play options; and the
+ * audio service the view's own sounds play through as the session's (a beatoraja skin's Lua sounds), stopped as the
+ * scene leaves the stage.
+ */
 export interface PlaySceneFacts {
   readonly chart: LibraryChart;
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
+  readonly audio?: Pick<AudioService, 'stopOwned'>;
 }
 
 /** A play session driven by a `SessionScene`. See the module comment. */
@@ -54,9 +60,13 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     if (host !== undefined) this.play.attachInput(host);
   }
 
-  /** The play left the stage: its input stops; its engine and sound run on (a play that ended keeps its tail). */
+  /**
+   * The play left the stage: its input stops, and so do the sounds the view played as the session's (a beatoraja
+   * skin's loops); the engine and the chart's sound run on (a play that ended keeps its tail).
+   */
   public exit(): void {
     this.play.detachInput();
+    this.facts.audio?.stopOwned(this);
   }
 
   public dispose(): void {

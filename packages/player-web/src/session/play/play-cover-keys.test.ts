@@ -1,6 +1,7 @@
+import { createLaneBindings } from '@be-music/player/core/lane-layout';
 import { createPlayState, reducePlayState, type LaneCoverState } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
-import { resolvePlayCoverKey } from './play-cover-keys.ts';
+import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
 
 const OFF: LaneCoverState = { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 };
 
@@ -46,5 +47,46 @@ describe('resolvePlayCoverKey', () => {
     for (const key of ['ArrowUp', 'Escape', 'z', 'l', 'Enter']) {
       expect(resolvePlayCoverKey({ key, shiftKey: false })).toBeUndefined();
     }
+  });
+
+  test("leaves a key one of the play's lanes takes to the lane: H / J / K on a DP chart's 2P side", () => {
+    const sp = resolveLaneInputTokens(createLaneBindings(['16', '11', '12', '13', '14', '15', '18', '19']));
+    const dp = resolveLaneInputTokens(
+      createLaneBindings([
+        '16',
+        '11',
+        '12',
+        '13',
+        '14',
+        '15',
+        '18',
+        '19',
+        '26',
+        '21',
+        '22',
+        '23',
+        '24',
+        '25',
+        '28',
+        '29',
+      ]),
+    );
+    const key = (key: string, code: string, tokens: ReadonlySet<string>) =>
+      resolvePlayCoverKey({ key, code, shiftKey: false }, tokens);
+    // A 7-key SP chart plays Z S X D C F V: H, J and K stay the HIDDEN+ keys.
+    expect(key('h', 'KeyH', sp)?.setting).toBe('hidden-toggle');
+    expect(key('j', 'KeyJ', sp)?.setting).toBe('hidden');
+    // A 14-key DP chart plays B H N J M K , on its 2P side: H, J and K are lanes, and the other cover keys still work.
+    for (const [name, code] of [
+      ['h', 'KeyH'],
+      ['J', 'KeyJ'],
+      ['k', 'KeyK'],
+    ] as const) {
+      expect(key(name, code, dp)).toBeUndefined();
+    }
+    expect(key('PageDown', 'PageDown', dp)?.setting).toBe('sudden');
+    expect(key('End', 'End', dp)?.setting).toBe('lift');
+    // The lane input reads the key's position (its `code`), so the lane's key is the one it takes.
+    expect(key('h', 'KeyQ', dp)?.setting).toBe('hidden-toggle');
   });
 });

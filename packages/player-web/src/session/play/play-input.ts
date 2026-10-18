@@ -23,7 +23,7 @@ import {
 import { HISPEED_STEP } from '../../scene/gameplay-constants.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from './play-options.ts';
-import { resolvePlayCoverKey } from './play-cover-keys.ts';
+import { resolveLaneInputTokens, resolvePlayCoverKey } from './play-cover-keys.ts';
 import type { PlayEngineContext } from './play-engine.ts';
 import { applyPlayEvent } from './play-state.ts';
 import { adjustHiSpeed } from './play-view-settings.ts';
@@ -255,10 +255,11 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
 
 /**
  * A lane cover key (`resolvePlayCoverKey`) of a play that takes them: the play state's covers move (not while a course
- * locks them), and the view hears which setting the key changed. Returns whether `event` was a cover key.
+ * locks them), and the view hears which setting the key changed. A key one of the chart's lanes takes is left to the
+ * lane. Returns whether `event` was a cover key.
  */
 function handleCoverKey(ctx: PlayInputContext, event: KeyboardEvent): boolean {
-  const key = resolvePlayCoverKey(event);
+  const key = resolvePlayCoverKey(event, resolveLaneInputTokens(ctx.preparedChart?.laneBindings));
   if (key === undefined) return false;
   event.preventDefault();
   if (ctx.playState.view.hiSpeed.locked) return true;
