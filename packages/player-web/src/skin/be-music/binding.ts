@@ -1,6 +1,6 @@
 import { CanvasSource, Container, RenderTexture, Sprite, Texture, TextureSource, type Renderer } from 'pixi.js';
-import { getDesignPixelRatio } from '../../scene/core/viewport.ts';
-import { ChildPool } from '../../scene/pixi-utils.ts';
+import { getDesignPixelRatio } from '../../stage/viewport.ts';
+import { ChildPool } from '../../stage/pixi-utils.ts';
 import {
   resolveBeMusicSkinSettings,
   resolveBeMusicStage,

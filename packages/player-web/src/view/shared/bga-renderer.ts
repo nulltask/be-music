@@ -18,7 +18,7 @@ import {
   type BgaCue,
 } from '../../scene/core/gameplay-bga.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
-import type { ChildPool } from '../../scene/pixi-utils.ts';
+import type { ChildPool } from '../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { BeMusicImage } from '../../skin/be-music/types.ts';
 import type { PlayfieldBgaTarget, PlayfieldSkin } from '../types.ts';

@@ -5,7 +5,7 @@ import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './bitmap-text.ts';
 
 const FALLBACK_TEXT_FONT = 'LINE Seed JP, system-ui, sans-serif';
 
-export { resolveScaledViewport, type ScaledViewport } from '../../scene/core/viewport.ts';
+export { resolveScaledViewport, type ScaledViewport } from '../../stage/viewport.ts';
 
 export interface Lr2TextSpriteOptions {
   maxFontSize?: number;

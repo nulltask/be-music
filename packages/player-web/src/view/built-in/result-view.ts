@@ -16,7 +16,7 @@ import {
   resolveScaledViewport,
   setDesignPixelRatio,
   setDesignTextResolution,
-} from '../../scene/core/viewport.ts';
+} from '../../stage/viewport.ts';
 import { BeMusicResultBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import type { IntentSink, ResultFrame, ResultIntent, ResultView, SceneViewTiming } from '../types.ts';
