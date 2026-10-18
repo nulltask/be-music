@@ -63,6 +63,13 @@ export interface BeatorajaThemeServiceOptions {
   readonly refreshBeatorajaSelectSkinOptions: () => void;
 }
 
+/** A beatoraja theme's play entry a play is drawn with: its path, its header and the key mode it is for. */
+export interface BeatorajaPlayEntry {
+  readonly entryPath: string;
+  readonly header: BeatorajaSkinHeader;
+  readonly variant: BeatorajaPlayableVariant;
+}
+
 /** The beatoraja theme loaded, and its entries loaded as the kits the beatoraja screens are drawn with. */
 export class BeatorajaThemeService {
   /**
@@ -100,11 +107,19 @@ export class BeatorajaThemeService {
   private beatorajaSelectBgmPath: string | undefined;
   /**
    * The beatoraja theme's play entry the play on the stage is drawn with, when it plays on a beatoraja theme: the Debug
-   * Menu's "Play 7K / Play 5K / …" skin pickers and the skin-options panel apply to it while that play is up.
+   * Menu's "Play 7K / Play 5K / …" skin pickers and the skin-options panel apply to it while that play is up. It is
+   * set as the play takes the stage and belongs to that play: once the router holds another play (one loading behind
+   * a decide screen included) or none, there is none.
    */
-  public activeBeatorajaPlay:
-    | { readonly entryPath: string; readonly header: BeatorajaSkinHeader; readonly variant: BeatorajaPlayableVariant }
-    | undefined;
+  public get activeBeatorajaPlay(): BeatorajaPlayEntry | undefined {
+    const active = this.activePlay;
+    return active !== undefined && active.view === this.gameplayView() ? active.entry : undefined;
+  }
+  public set activeBeatorajaPlay(entry: BeatorajaPlayEntry | undefined) {
+    this.activePlay = entry === undefined ? undefined : { view: this.gameplayView(), entry };
+  }
+  /** {@link activeBeatorajaPlay}, with the play it was set for. */
+  private activePlay: { readonly view: PlayScene | undefined; readonly entry: BeatorajaPlayEntry } | undefined;
   /**
    * The beatoraja theme's select entry as last loaded (`loadBeatorajaSelectKit`): the select screen takes it again on
    * every return to it while the theme and the entry stay the same, rather than loading the skin again.

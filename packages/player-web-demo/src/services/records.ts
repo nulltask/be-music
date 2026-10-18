@@ -1,6 +1,6 @@
 // The demo's best records and the chart hashes they are keyed by: each chart's SHA-256 and MD5, hashed once per chart,
-// and the record keys of the play in flight, latched when it is made. `song-records.ts` keys and stores the records;
-// `@be-music/player/records` says how a play merges into them.
+// and the record keys of the play in flight, latched as it takes the stage. `song-records.ts` keys and stores the
+// records; `@be-music/player/records` says how a play merges into them.
 
 import {
   computeChartFileHashes,
