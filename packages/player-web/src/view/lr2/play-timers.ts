@@ -2,10 +2,12 @@
  * The LR2 timers of the play screen, as the LR2 play view keeps them: each timer an LR2 skin's `#DST_*` and `#SRC_*`
  * entries count from, with when it started on the play clock (`PlayfieldRuntime.playClock`). The view starts and stops
  * them from the play's moments (`PlayFrame.events`, through `resolveLr2PlayTimers`), and retires the one-shot ones once
- * their skin animation has played out. The key-on bank (100-119) is the play's own: the session keeps the key beams by
- * LR2's key-on ids (`PlayfieldRuntime.timerStartedAt`), and the timers read it as it is.
+ * their skin animation has played out. The key-on bank (100-119) is the play's own key beams: the session keeps them
+ * by channel (`PlayfieldRuntime.keyBeamStartedAt`), and the timers map each lit channel onto its key-on timer
+ * (`resolveLr2LaneTimer('key-on', …)`).
  *
- * The LR2 timer ids and the lane index stay here and in the LR2 view: the shared playfield asks by channel.
+ * The LR2 timer ids and the lane index stay here and in the LR2 view: the session and the shared playfield go by
+ * channel.
  */
 
 import type { Lr2Skin } from '@be-music/lr2-skin';
@@ -46,9 +48,12 @@ export interface Lr2PlayTimerSource {
   readonly song: unknown;
   readonly chartPlayVariant: ChartPlayVariant;
   readonly disposed: boolean;
-  /** The key-on bank (100-119) the session keeps, and the fades it started; the timers retire them as they draw. */
-  readonly timerStartedAt: Map<number, number>;
-  readonly keyOnFadeOutStart: Map<number, number>;
+  /**
+   * The key beams the session keeps by channel, and the fades it started: the key-on bank (100-119) read through each
+   * channel's key-on timer. The timers retire them as they draw.
+   */
+  readonly keyBeamStartedAt: Map<string, number>;
+  readonly keyBeamFadeStartedAt: Map<string, number>;
   readonly pressedChannels: ReadonlySet<string>;
   playClock(): number;
   isIntroPlaying(): boolean;
@@ -176,9 +181,9 @@ export class Lr2PlayTimers {
     return timer === undefined ? KEY_ON_FADE_OUT_MS : this.keyOnFadeMsOfTimer(timer);
   }
 
-  /** When `timer` started, on the play clock: one the view started, else the play's key-on bank. */
+  /** When `timer` started, on the play clock: one the view started, else the key beam on its key-on timer. */
   public startedAt(timer: number): number | undefined {
-    return this.started.get(timer) ?? this.play.timerStartedAt.get(timer);
+    return this.started.get(timer) ?? this.keyBeamOn(this.play.keyBeamStartedAt, timer)?.[1];
   }
 
   /**
@@ -225,18 +230,16 @@ export class Lr2PlayTimers {
    */
   public releaseFadeAlpha(timer: number): number | undefined {
     let alpha: number | undefined;
-    const keyOnFadeStart = this.play.keyOnFadeOutStart.get(timer);
-    if (keyOnFadeStart !== undefined) {
+    const keyOnFade = this.keyBeamOn(this.play.keyBeamFadeStartedAt, timer);
+    if (keyOnFade !== undefined) {
       // Overrides the keyframe's alpha: the LR2 default skin's key-on keyframe 0 is the fade-in origin (alpha 0).
+      const [channel, keyOnFadeStart] = keyOnFade;
       const elapsed = this.play.playClock() - keyOnFadeStart;
       const fadeMs = this.keyOnFadeMsOfTimer(timer);
       if (elapsed >= fadeMs) {
         alpha = 0;
-        this.play.keyOnFadeOutStart.delete(timer);
-        const channel = resolveChannelForKeyOnTimer(timer, this.play.chartPlayVariant);
-        if (channel !== undefined && !this.play.pressedChannels.has(channel)) {
-          this.play.timerStartedAt.delete(timer);
-        }
+        this.play.keyBeamFadeStartedAt.delete(channel);
+        if (!this.play.pressedChannels.has(channel)) this.play.keyBeamStartedAt.delete(channel);
       } else {
         alpha = Math.max(0, 1 - elapsed / fadeMs);
       }
@@ -338,6 +341,20 @@ export class Lr2PlayTimers {
     this.lnHoldTimeouts.add(timeout);
   }
 
+  /**
+   * The channel and time of the key beam in `beams` (the session's, by channel) that key-on timer `timer` (100-119)
+   * shows, or `undefined` for another timer or with no such beam. Few beams are lit at once, so it looks them over.
+   */
+  private keyBeamOn(beams: ReadonlyMap<string, number>, timer: number): [channel: string, atMs: number] | undefined {
+    if (beams.size === 0 || timer < LR2_TIMER.KEY_ON_1P || timer >= LR2_TIMER.KEY_ON_2P + LR2_LANE_TIMER_BANK_SIZE) {
+      return undefined;
+    }
+    for (const [channel, atMs] of beams) {
+      if (this.laneTimer('key-on', channel) === timer) return [channel, atMs];
+    }
+    return undefined;
+  }
+
   /** Runs `callback` after `delayMs` (at least 0) unless the timers or the play are gone by then. */
   private after(delayMs: number, callback: () => void): TimerHandle {
     return setTimeout(
@@ -348,24 +365,6 @@ export class Lr2PlayTimers {
       Math.max(0, delayMs),
     );
   }
-}
-
-/**
- * The chart channel of key-on timer `timer` (100-119), the reverse of the session's key-on ids: lane 0 is the scratch
- * (`?6`), lanes 1-7 the keys `?1`-`?7`, and a 9 KEY play's lanes all run through the 1P bank (`1<lane>`).
- */
-export function resolveChannelForKeyOnTimer(timer: number, playVariant: ChartPlayVariant): string | undefined {
-  if (timer < LR2_TIMER.KEY_ON_1P || timer >= LR2_TIMER.KEY_ON_2P + LR2_LANE_TIMER_BANK_SIZE) {
-    return undefined;
-  }
-  const isPlayer2 = timer >= LR2_TIMER.KEY_ON_2P;
-  const laneIndex = timer - (isPlayer2 ? LR2_TIMER.KEY_ON_2P : LR2_TIMER.KEY_ON_1P);
-  if (laneIndex < 0 || laneIndex > LR2_LANE_TIMER_BANK_SIZE - 1) return undefined;
-  if (playVariant === '9') return `1${laneIndex}`;
-  const sidePrefix = isPlayer2 ? '2' : '1';
-  if (laneIndex === 0) return `${sidePrefix}6`;
-  if (laneIndex >= 1 && laneIndex <= 7) return `${sidePrefix}${laneIndex}`;
-  return undefined;
 }
 
 function replace(target: Map<number, number>, source: ReadonlyMap<number, number>): void {

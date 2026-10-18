@@ -417,7 +417,7 @@ flowchart LR
   | `prepareTheme`                                            | ビューの読み込み。セッションが走らせる（`PlaySessionTheme.prepareView`）   |
   | `disposeTheme`                                            | `FamilyView.dispose`                                                       |
 
-  LR2 のレーン番号と LR2 のタイマー番号は LR2 のビューの中にとどめ、プレイフィールドはチャンネルで尋ねます。
+  LR2 のレーン番号と LR2 のタイマー番号は LR2 のビューの中にとどめます。セッションはキービームをチャンネルごとに持ち（`keyBeamStartedAt`、`keyBeamFadeStartedAt`）、プレイフィールドはチャンネルで尋ねます。
 
 - **層の分け方。** `pnpm run check` は、セッション、ビュー、その下の層を互いに分けたまま保ちます（[層の分け方](#層の分け方)）。
 
