@@ -491,8 +491,8 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 - **Hosts:** a host registers skins in a registry:
 
   ```ts
-  import { BUILT_IN_BE_MUSIC_SKINS, createPlayScene } from '@be-music/player-web/scenes';
-  import { createBeMusicSkinRegistry } from '@be-music/player-web/skin';
+  import { createPlayScene } from '@be-music/player-web/host';
+  import { BUILT_IN_BE_MUSIC_SKINS, createBeMusicSkinRegistry } from '@be-music/player-web/skin';
   import mySkin from 'my-be-music-skin';
 
   const skins = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);

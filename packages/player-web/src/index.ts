@@ -1,18 +1,15 @@
 /**
- * Top-level `@be-music/player-web` entry. Re-exports every public symbol from the per-area subpath barrels for
- * backwards compatibility — consumers can keep importing from `@be-music/player-web` directly.
- *
- * For new code, **prefer the per-area subpaths** (`@be-music/player-web/scenes`, `/skin`, `/chart`, `/collection`,
- * `/runtime`). They document the dependency surface explicitly and keep the imports cohesive with the area being
- * worked on.
+ * Top-level `@be-music/player-web` entry: the union of the designed entries (`./host`, `./skin`, `./collection`,
+ * `./audio`, `./recording`), plus `logger` and Pixi's `Rectangle`, which belong to no single entry. Prefer the entry
+ * that matches the area being worked on (docs/player-web.md, "Entry points").
  */
 export * from './host/index.ts';
 export * from './skin/index.ts';
-export * from './chart/index.ts';
 export * from './collection/index.ts';
 export * from './runtime/index.ts';
+export * from './recording/index.ts';
 
-// Logger lives at the package root because it isn't tied to any single area — every subpath emits log lines through it.
+// Logger lives at the package root because it isn't tied to any single area — every entry emits log lines through it.
 export * from './logger.ts';
 
 // Pixi re-export. `Rectangle` is required by `extract.canvas`'s `frame` option which calls `frame.copyTo(...)`

@@ -299,24 +299,25 @@ NONSTOP のプレイ（`run`：`single`・`stage`・`course`・`nonstop`）の�
 
 ## ヘルパーの移動先
 
-| ヘルパー                                                                         | 移動前                                       | 移動後                                                                   |
-| -------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------ |
-| `BrowserSongEntry`・`BrowserFolderNode`・`BrowserCourseEntry` など               | `@be-music/skin-sdk`                         | `LibraryChart`・`LibraryFolder`・`LibraryCourse` など（skin-sdk に別名） |
-| `BeMusicPlayOptions` とその値の型                                                | `@be-music/skin-sdk`                         | `PlayOptions` など（skin-sdk に別名）                                    |
-| `BeMusicResultData`・`GaugeHistorySample`・`ScoreHistorySample`                  | `@be-music/skin-sdk`                         | `PlayResult` など（skin-sdk に別名）                                     |
-| `BeMusicJudge`・`BeMusicSide`・`BeMusicJudgeTiming`・`BeMusicLaneCover`          | `@be-music/skin-sdk`                         | `Judge`・`PlaySide`・`JudgeTiming`・`LaneCover`（skin-sdk に別名）       |
-| `groupSongsByFolder`・`resolveChartPlayVariant`                                  | `player-web` の collection                   | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（再 export）     |
-| `matchesSearchQuery`・`wrappedCursorDelta`                                       | `player-web` のコアの選曲                    | 同じ名前（再 export）                                                    |
-| コアの選曲のソートと難易度フィルター                                             | `player-web` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                     |
-| `resolveSelectNavigation`                                                        | `player-web` のコアの選曲                    | 削除。選曲セッションは `BrowseSnapshot` を `restoreBrowse` で戻す        |
-| `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                       | `player-web` のコアの選曲                    | 同じ名前（`DEFAULT_PLAY_OPTIONS` は再 export）                           |
-| `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                         | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`                         |
-| ハイスピードの範囲と刻み                                                         | `player-web` の `scene/hi-speed.ts`          | 同じ名前（`player-web/scenes` が再 export）                              |
-| `SceneCourseInfo`・`resolveSceneCourseInfo`                                      | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（`player-web/scenes` が旧名で公開）    |
-| `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                    | `player-web` の `scene/core/course-combo.ts` | 同じ名前。`reduceCourseCombo` を追加                                     |
-| `PlaylogViewCursor`・`resolveBeatorajaPlaylogView`                               | `player-web` の `scene/playlog-view.ts`      | 同じ名前（再 export は削除）。`resolvePlaylogView` の上に実装            |
-| `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation` | `player-web-demo` の `course-result.ts`      | `playResultFromCourseRun` など（旧名で再 export）                        |
-| `resolveResultViewJingles`                                                       | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                              |
+| ヘルパー                                                                          | 移動前                                       | 移動後                                                                   |
+| --------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------ |
+| `BrowserSongEntry`・`BrowserFolderNode`・`BrowserCourseEntry` など                | `@be-music/skin-sdk`                         | `LibraryChart`・`LibraryFolder`・`LibraryCourse` など（skin-sdk に別名） |
+| `BeMusicPlayOptions` とその値の型                                                 | `@be-music/skin-sdk`                         | `PlayOptions` など（skin-sdk に別名）                                    |
+| `BeMusicResultData`・`GaugeHistorySample`・`ScoreHistorySample`                   | `@be-music/skin-sdk`                         | `PlayResult` など（skin-sdk に別名）                                     |
+| `BeMusicJudge`・`BeMusicSide`・`BeMusicJudgeTiming`・`BeMusicLaneCover`           | `@be-music/skin-sdk`                         | `Judge`・`PlaySide`・`JudgeTiming`・`LaneCover`（skin-sdk に別名）       |
+| `groupSongsByFolder`・`resolveChartPlayVariant`                                   | `player-web` の collection                   | `groupChartsByFolder`・`resolveLibraryChartPlayVariant`（旧名は削除）    |
+| `matchesSearchQuery`・`wrappedCursorDelta`                                        | `player-web` のコアの選曲                    | 同じ名前（再 export は削除）                                             |
+| コアの選曲のソートと難易度フィルター                                              | `player-web` のコアの選曲（非公開）          | `sortLibraryEntries`・`chartMatchesDifficultyFilter`                     |
+| `resolveSelectNavigation`                                                         | `player-web` のコアの選曲                    | 削除。選曲セッションは `BrowseSnapshot` を `restoreBrowse` で戻す        |
+| `DEFAULT_PLAY_OPTIONS`、オプションの巡回順                                        | `player-web` のコアの選曲                    | 同じ名前（`DEFAULT_PLAY_OPTIONS` の再 export は削除）                    |
+| `resolveSkinPlayOptionValue`・`cycleSkinPlayOptionValue`                          | `player-web` のコアの選曲                    | `resolvePlayOptionValue`・`cyclePlayOptionValue`                         |
+| ハイスピードの範囲と刻み                                                          | `player-web` の `scene/hi-speed.ts`          | 同じ名前（再 export は削除）                                             |
+| `SceneCourseInfo`・`resolveSceneCourseInfo`                                       | `player-web` の `scene/course-info.ts`       | `CourseView`・`resolveCourseView`（旧名は削除）                          |
+| `PixiPlayOptions` などの `Pixi*` のプレイオプションの型・`PixiGameplayResultData` | `player-web` の scene                        | `PlayOptions` など・`PlayResult`（旧名は削除）                           |
+| `CourseComboState`・`createCourseCombo`・`advanceCourseCombo`                     | `player-web` の `scene/core/course-combo.ts` | 同じ名前。`reduceCourseCombo` を追加                                     |
+| `PlaylogViewCursor`・`resolveBeatorajaPlaylogView`                                | `player-web` の `scene/playlog-view.ts`      | 同じ名前（再 export は削除）。`resolvePlaylogView` の上に実装            |
+| `buildCourseResultData`・`joinCourseStageHistories`・`resolveResultPresentation`  | `player-web-demo` の `course-result.ts`      | `playResultFromCourseRun` など（旧名で再 export）                        |
+| `resolveResultViewJingles`                                                        | `player-web-demo` の `result-jingles.ts`     | そのまま。`resolveResultJingles` の上に実装                              |
 
 どの種類の選曲画面もこれらのモデル（`reduceBrowse`・`browseEntries`・`captureBrowse` / `restoreBrowse`・
 `browseSystemSound`）で一覧をたどります。どのプレイ画面も `PlayState` を一つ持ち、リザルトをそこから読みます

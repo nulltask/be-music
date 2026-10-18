@@ -8,7 +8,7 @@
 
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import type { BrowserBrowseEntry } from '@be-music/player-web/collection';
-import type { PixiGameplayResultData } from '@be-music/player-web/scenes';
+import type { PlayResult } from '@be-music/scene-model';
 
 /** The contract's revision. */
 export const TEST_HOOK_VERSION = 1;
@@ -256,7 +256,7 @@ export function describeBar(entry: BrowserBrowseEntry, record?: { lamp?: string;
 
 /** A result shown on the LR2 or built-in result view, from the data it was given. */
 export function resultFromData(
-  data: PixiGameplayResultData,
+  data: PlayResult,
   run: TestHookResult['run'],
   family: TestHookFamily,
   jingle?: string,

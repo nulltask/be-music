@@ -16,7 +16,7 @@ import {
   type CourseKind,
   type NonstopConnection,
 } from '@be-music/player/course';
-import { resolveChartPlayVariant } from './collection.ts';
+import { resolveLibraryChartPlayVariant } from '@be-music/scene-model';
 import { resolveCourseEntry } from './course.ts';
 import type { BrowserCourseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
 
@@ -118,7 +118,7 @@ export class CourseMaker {
     if (draft === undefined) return { ok: false, reason: 'not-making' };
     const result = appendCourseDraftStage(draft, {
       md5: md5 ?? '',
-      keyMode: Number(resolveChartPlayVariant(song)),
+      keyMode: Number(resolveLibraryChartPlayVariant(song)),
       title: song.title,
       ...(song.subtitle !== undefined ? { subtitle: song.subtitle } : {}),
       ...(song.artist !== undefined ? { artist: song.artist } : {}),

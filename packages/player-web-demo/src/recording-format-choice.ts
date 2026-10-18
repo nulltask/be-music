@@ -3,7 +3,7 @@ import {
   RECORDING_FORMATS,
   describeRecordingFormat,
   type RecordingFormat,
-} from '@be-music/player-web/runtime';
+} from '@be-music/player-web/recording';
 
 /** A recording format as one string, for the Debug Menu value and `localStorage`: `mp4/avc`, `webm/vp9`. */
 export function recordingFormatKey(format: RecordingFormat): string {
