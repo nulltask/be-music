@@ -16,6 +16,7 @@ import type { BrowserSongEntry } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
 import { BeatorajaPlaySkinView } from '../scene/beatoraja/skin-view.ts';
 import type { PixiSceneHost } from '../scene/host.ts';
+import { resolvePlaylogRecording } from '../session/play/play-engine.ts';
 import type { PlaySceneSession } from '../session/play/play-scene-session.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaRenderContext } from '../skin/beatoraja/render.ts';
@@ -46,6 +47,9 @@ const RANDOM_CHART = parseChart(
   ['#BPM 120', '#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#IF 2', '#00112:0101', '#ENDIF', '#ENDRANDOM'].join('\n'),
   'bms',
 );
+
+/** A chart with one note on lane 1, then one on lane 2. */
+const TWO_LANE_CHART = parseChart(['#BPM 120', '#00111:01', '#00112:0001'].join('\n'), 'bms');
 
 const NO_KEYS: SessionKeyTarget = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const AUDIO = { stopOwned: vi.fn(), playJingle: vi.fn(async () => true) } as unknown as AudioService;
@@ -398,18 +402,29 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it('plays without lane options and HS-FIX, its covers off, taking the cover keys', async () => {
+  it('plays without HS-FIX, its covers off, taking the cover keys', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.1);
     const { scene, play } = createBeatoraja();
     await scene.prepare();
-    expect(play.options).toMatchObject({ random1P: 'OFF', random2P: 'OFF', hsFix: 'OFF', coverKeys: true });
+    expect(play.options).toMatchObject({ hsFix: 'OFF', coverKeys: true });
     expect(play.playState.view.hsFix).toBe('OFF');
     expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 2 });
     expect(play.playState.view.covers).toEqual([
       { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 },
     ]);
-    // The #RANDOM draw of 1 puts its one note on lane 1, and no MIRROR moves it.
-    expect(play.notes.map((note) => note.channel)).toEqual(['11']);
+    scene.dispose();
+  });
+
+  it("plays the host's lane options, as every family does, and records them in the play log", async () => {
+    const { scene, play } = createBeatoraja({
+      chart: { ...CHART, chart: TWO_LANE_CHART } as BrowserSongEntry,
+      settings: { initialHiSpeed: 2, random1P: 'MIRROR', random2P: 'OFF' },
+    });
+    await scene.prepare();
+    expect(play.options).toMatchObject({ random1P: 'MIRROR', random2P: 'OFF' });
+    // MIRROR swaps the chart's two lanes: lane 1's note plays on lane 2 and lane 2's on lane 1.
+    expect(play.notes.map((note) => note.channel)).toEqual(['12', '11']);
+    expect(resolvePlaylogRecording(play.options, play.song, {}).randomLane).toEqual({ p1: 'MIRROR', p2: 'OFF' });
     scene.dispose();
   });
 
