@@ -576,7 +576,7 @@ Web のデモはどの種類のプレイもすべてこの方法で、その種�
 
 ## ノートの表示範囲
 
-描画は判定 ruleset に含まれないため、ruleset は描画に関わりません。gameplay view は、どのノート・地雷・小節線をどこに描くかを 2 つの規則のどちらかで決めます（[`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)）。
+描画は判定 ruleset に含まれないため、ruleset は描画に関わりません。gameplay view は、どのノート・地雷・小節線をどこに描くかを 2 つの規則のどちらかで決めます（[`note-draw-window.ts`](../packages/player-web/src/chart/note-draw-window.ts)）。
 
 - **LR2 の規則** — `#SCROLL` / `#SPEED` を含まないすべての譜面。ruleset は問いません。
 - **beatoraja の規則** — 1 以外の `#SCROLL` か `#SPEED` を含むすべての譜面。LR2 はどちらも扱わないため beatoraja を基準にします。値がすべて 1 の譜面は通常の譜面と同じに扱います。

@@ -421,9 +421,9 @@ These are points where be-music disagrees with a de facto implementation without
 [bm-judge-window]: ../packages/player/src/core/judge-window.ts
 [bm-ruleset]: ../packages/player/src/ruleset/definitions.ts
 [bm-scroll]: ../packages/player/src/core/scroll-distance.ts
-[bm-note-draw]: ../packages/player-web/src/scene/core/note-draw-window.ts
+[bm-note-draw]: ../packages/player-web/src/chart/note-draw-window.ts
 [bm-bga]: ../packages/chart/src/bga.ts
-[bm-web-bga]: ../packages/player-web/src/scene/core/gameplay-bga.ts
+[bm-web-bga]: ../packages/player-web/src/chart/bga-timeline.ts
 [bm-engine]: ../packages/player/src/core/engine.ts
 [cmds-indent]: https://hitkey.nekokan.dyndns.info/cmds.htm#INDENT-STYLE
 [cmds-comment]: https://hitkey.nekokan.dyndns.info/cmds.htm#COMMENT-SYNTAX

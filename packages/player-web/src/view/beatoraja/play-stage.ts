@@ -16,7 +16,7 @@ import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import type { Container, Texture } from 'pixi.js';
 import type { BeatorajaSceneKit } from '../../host/family-kit.ts';
-import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
+import type { BgaCue } from '../../chart/bga-timeline.ts';
 import { BeatorajaPlaySkinView, type BeatorajaPlaySkinViewOptions } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';

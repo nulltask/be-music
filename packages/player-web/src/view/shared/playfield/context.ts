@@ -18,11 +18,11 @@ import type { BeMusicJudgeWindows, BeMusicLaneKind, BeMusicLongNote } from '@be-
 import type { Graphics, Text, Texture } from 'pixi.js';
 import type { BrowserSongEntry } from '../../../collection/types.ts';
 import type { AudioAnalyzer, AudioFeatures } from '../../../runtime/audio-analysis.ts';
-import type { BgaCue, NonstopStageBgaTimeline } from '../../../scene/core/gameplay-bga.ts';
+import type { BgaCue, NonstopStageBgaTimeline } from '../../../chart/bga-timeline.ts';
 import type { ChartBpmRange } from '../../../scene/core/gameplay-bpm-range.ts';
 import type { PlaySessionOptions } from '../../../session/play/play-options.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
-import type { GoneDrawObjects } from '../../../scene/core/note-draw-window.ts';
+import type { GoneDrawObjects } from '../../../chart/note-draw-window.ts';
 import type { HiSpeedTransition } from '../../../scene/hi-speed.ts';
 import type { ChildPool } from '../../../stage/pixi-utils.ts';
 import type { BeMusicGameplayBinding } from '../../../skin/be-music/binding.ts';

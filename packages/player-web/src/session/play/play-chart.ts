@@ -39,11 +39,11 @@ import {
   toBrowserBgaTimeline,
   type BgaCue,
   type NonstopStageBgaTimeline,
-} from '../../scene/core/gameplay-bga.ts';
+} from '../../chart/bga-timeline.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import type { LongNoteTracker } from '../../view/shared/playfield/long-note-tracker.ts';
-import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../scene/core/note-draw-window.ts';
+import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../chart/note-draw-window.ts';
 import { createPlaceholderGaugeState } from '../../scene/core/placeholder-gauge.ts';
 import { isPlayableInputChannel, resolvePlayVariantLaneChannels } from '../../scene/gameplay-lanes.ts';
 import {

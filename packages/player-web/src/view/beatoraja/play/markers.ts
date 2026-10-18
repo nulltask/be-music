@@ -24,7 +24,7 @@ import {
   resolveDrawBottom,
   resolveDrawY,
   type NoteDrawWindow,
-} from '../../../scene/core/note-draw-window.ts';
+} from '../../../chart/note-draw-window.ts';
 
 /** Beat positions per marker kind. Caller computes these from the chart once per play. */
 export interface BeatorajaMarkerBeats {

@@ -36,10 +36,10 @@ import {
   isPastDrawWindow,
   resolveDrawBottom,
   resolveDrawY,
-} from '../../../scene/core/note-draw-window.ts';
+} from '../../../chart/note-draw-window.ts';
 import { resolveBeatorajaNoteDstBlockIndex } from './note-dst-block.ts';
 import { resolveBeatorajaScrollPlacement } from './scroll-placement.ts';
-import type { NoteDrawWindow } from '../../../scene/core/note-draw-window.ts';
+import type { NoteDrawWindow } from '../../../chart/note-draw-window.ts';
 
 /** How far above a lane's top a note still draws: the lead-in band notes scroll in through. */
 const TAP_LEAD_IN_PX = 24;
