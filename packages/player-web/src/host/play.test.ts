@@ -53,6 +53,9 @@ const RANDOM_CHART = parseChart(
 /** A chart with one note on lane 1, then one on lane 2. */
 const TWO_LANE_CHART = parseChart(['#BPM 120', '#00111:01', '#00112:0001'].join('\n'), 'bms');
 
+/** A 14-key DP chart: notes on keys 1 and 6 of each side (a 10-key DP chart has no 2P key 6, and K is no lane). */
+const DP_CHART = parseChart(['#BPM 120', '#00111:01', '#00118:01', '#00121:01', '#00128:01'].join('\n'), 'bms');
+
 /** A chart at 120 BPM that doubles to 240 BPM (`F0`) at measure 2. */
 const TEMPO_CHART = parseChart(['#BPM 120', '#00111:01', '#00203:F0', '#00211:01'].join('\n'), 'bms');
 
@@ -536,6 +539,29 @@ describe('createPlayScene with a beatoraja kit', () => {
     fake.fire('wheel', { deltaY: 1, shiftKey: false, preventDefault: vi.fn() });
     expect(locked.play.playState.view.covers[0]).toMatchObject({ sudden: 0.3, suddenOn: true });
     locked.scene.dispose();
+  });
+
+  it("leaves H / J / K to a DP chart's 2P lanes, the other cover keys still moving the covers", async () => {
+    const fake = createFakeHost();
+    const { scene, play } = createBeatoraja({
+      host: fake.host,
+      chart: { ...CHART, chart: DP_CHART } as BrowserSongEntry,
+      settings: { initialHiSpeed: 2 },
+    });
+    await scene.prepare();
+    await scene.enter(fake.host);
+    const before = play.playState.view.covers;
+    for (const [key, code] of [
+      ['h', 'KeyH'],
+      ['j', 'KeyJ'],
+      ['k', 'KeyK'],
+    ]) {
+      fake.fire('keydown', { ...keydown(key!), code });
+    }
+    expect(play.playState.view.covers).toBe(before);
+    fake.fire('keydown', keydown('PageDown'));
+    expect(play.playState.view.covers[0]).toMatchObject({ suddenOn: true });
+    scene.dispose();
   });
 
   it('leaves the cover keys to a play that takes them (not the built-in or LR2 play)', async () => {
