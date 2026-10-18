@@ -426,7 +426,7 @@ flowchart LR
   | `prepareTheme`                                            | the view's loading, run by the session (`PlaySessionTheme.prepareView`)      |
   | `disposeTheme`                                            | `FamilyView.dispose`                                                         |
 
-  The LR2 lane index and LR2 timer ids stay inside the LR2 view: the playfield asks by channel.
+  The LR2 lane index and LR2 timer ids stay inside the LR2 view: the session keeps the key beams by channel (`keyBeamStartedAt`, `keyBeamFadeStartedAt`), and the playfield asks by channel.
 
 - **Layering.** `pnpm run check` keeps the sessions, the views and the layers under them apart ([Layering](#layering)).
 

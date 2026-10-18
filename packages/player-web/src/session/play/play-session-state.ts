@@ -414,12 +414,12 @@ export class PlaySessionState {
   readonly keyFlashTimeouts: Set<number> = new Set();
   readonly pressedChannels: Set<string> = new Set();
   /**
-   * Per-key-on-timer (`100..117`) play-clock timestamp of an in-flight release fade. When set, the lane beam (and a
-   * theme's key-on sprites) taper from 1 → 0 over the view's key-beam fade starting at the recorded value, so an LN
-   * release decays instead of popping off. {@link releaseKeyOnTimer} populates this; {@link
-   * startKeyOnTimer} clears it on a fresh press.
+   * By channel, the play-clock timestamp of a key beam's in-flight release fade. When set, the lane's beam (and a
+   * skin's key-on sprites) taper from 1 → 0 over the view's key-beam fade starting at the recorded value, so an LN
+   * release decays instead of popping off. Releasing a lane (`releaseKeyBeam`) sets it; a fresh press (`startKeyBeam`)
+   * clears it.
    */
-  readonly keyOnFadeOutStart: Map<number, number> = new Map();
+  readonly keyBeamFadeStartedAt: Map<string, number> = new Map();
   readonly bombStartedAt: Map<string, number> = new Map();
   /**
    * Mirror of the engine's gauge state, refreshed from every `summary.gauge` frame. The gauge model itself
@@ -449,12 +449,11 @@ export class PlaySessionState {
    */
   readonly scrollHiSpeed: HiSpeedTransition = new HiSpeedTransition(DEFAULT_HISPEED);
   /**
-   * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering
-   * (`LR2_TIMER`). The play session drives the key-on bank (100–119) for the lane beams; theme families stamp
-   * their own timers (bombs, FC, judge, scene stages, …) into the same map. Removed when the timer "stops" (e.g. key
-   * release for key-on).
+   * By channel, the `playClock()` timestamp at which the lane's key beam came on (a press, an autoplayed note, a long
+   * note's hold); removed once the beam has faded out after the key is up. A view maps the channels onto its own
+   * timers: the LR2 view onto LR2's key-on bank (100-119).
    */
-  readonly timerStartedAt: Map<number, number> = new Map();
+  readonly keyBeamStartedAt: Map<string, number> = new Map();
   /**
    * BPM-aware seconds → beat resolver, prepared once per song. Used by `renderNotes` to position scrolling notes
    * correctly across `#BPM` change events; the previous hand-rolled `beatAtSeconds` only saw the initial BPM, which

@@ -7,11 +7,10 @@ import {
   LR2_BOMB_FALLBACK_MS,
   LR2_GAUGE_RISE_FALLBACK_MS,
   Lr2PlayTimers,
-  resolveChannelForKeyOnTimer,
   type Lr2PlayTimerSource,
 } from './play-timers.ts';
 
-/** A running play the timers read: its play clock, intro, beat and key-on bank are the test's to set. */
+/** A running play the timers read: its play clock, intro, beat and key beams are the test's to set. */
 function createPlay(overrides: { variant?: ChartPlayVariant } = {}) {
   const state = { now: 0, intro: false, beat: 0, disposed: false };
   const play: Lr2PlayTimerSource = {
@@ -20,8 +19,8 @@ function createPlay(overrides: { variant?: ChartPlayVariant } = {}) {
     get disposed() {
       return state.disposed;
     },
-    timerStartedAt: new Map<number, number>(),
-    keyOnFadeOutStart: new Map<number, number>(),
+    keyBeamStartedAt: new Map<string, number>(),
+    keyBeamFadeStartedAt: new Map<string, number>(),
     pressedChannels: new Set<string>(),
     playClock: () => state.now,
     isIntroPlaying: () => state.intro,
@@ -161,25 +160,71 @@ describe('Lr2PlayTimers', () => {
     expect(timers.isActive(hold)).toBe(false);
   });
 
-  test("reads the play's key-on bank, and retires a faded beam unless its key is still down", () => {
+  test("reads the play's key beams on the key-on bank, and retires a faded beam unless its key is still down", () => {
     const { timers, play, state } = createPlay();
     const keyOn = LR2_TIMER.KEY_ON_1P + 1;
-    play.timerStartedAt.set(keyOn, 10);
-    play.keyOnFadeOutStart.set(keyOn, 20);
+    play.keyBeamStartedAt.set('11', 10);
+    play.keyBeamFadeStartedAt.set('11', 20);
     state.now = 20 + KEY_ON_FADE_OUT_MS / 4;
     expect(timers.isActive(keyOn)).toBe(true);
+    expect(timers.startedAt(keyOn)).toBe(10);
     expect(timers.releaseFadeAlpha(keyOn)).toBeCloseTo(0.75);
     state.now = 20 + KEY_ON_FADE_OUT_MS;
     expect(timers.releaseFadeAlpha(keyOn)).toBe(0);
-    expect(play.keyOnFadeOutStart.has(keyOn)).toBe(false);
+    expect(play.keyBeamFadeStartedAt.has('11')).toBe(false);
+    expect(play.keyBeamStartedAt.has('11')).toBe(false);
     expect(timers.isActive(keyOn)).toBe(false);
-    // A key held again keeps its timer through the cleanup.
-    play.timerStartedAt.set(keyOn, 30);
-    play.keyOnFadeOutStart.set(keyOn, 30);
+    // A key held again keeps its beam through the cleanup.
+    play.keyBeamStartedAt.set('11', 30);
+    play.keyBeamFadeStartedAt.set('11', 30);
     (play.pressedChannels as Set<string>).add('11');
     state.now = 30 + KEY_ON_FADE_OUT_MS;
     expect(timers.releaseFadeAlpha(keyOn)).toBe(0);
     expect(timers.isActive(keyOn)).toBe(true);
+    expect(play.keyBeamStartedAt.get('11')).toBe(30);
+  });
+
+  test("puts each lane's key beam on its own key-on timer: 100 + lane on 1P, 110 + lane on 2P", () => {
+    const { timers, play } = createPlay({ variant: '14' });
+    play.keyBeamStartedAt.set('16', 1);
+    play.keyBeamStartedAt.set('18', 2);
+    play.keyBeamStartedAt.set('19', 3);
+    play.keyBeamStartedAt.set('23', 4);
+    play.keyBeamStartedAt.set('26', 5);
+    expect(timers.startedAt(LR2_TIMER.KEY_ON_1P)).toBe(1);
+    expect(timers.startedAt(LR2_TIMER.KEY_ON_1P + 6)).toBe(2);
+    expect(timers.startedAt(LR2_TIMER.KEY_ON_1P + 7)).toBe(3);
+    expect(timers.startedAt(LR2_TIMER.KEY_ON_2P + 3)).toBe(4);
+    expect(timers.startedAt(LR2_TIMER.KEY_ON_2P)).toBe(5);
+    expect(timers.isActive(LR2_TIMER.KEY_ON_1P + 1)).toBe(false);
+    expect(timers.isActive(LR2_TIMER.KEY_ON_2P + 7)).toBe(false);
+  });
+
+  test('runs every 9 KEY lane through the 1P key-on bank, the PMS-STD keys 6-9 on 2P channels included', () => {
+    const { timers, play, state } = createPlay({ variant: '9' });
+    play.keyBeamStartedAt.set('13', 1);
+    play.keyBeamStartedAt.set('22', 2);
+    play.keyBeamStartedAt.set('25', 3);
+    expect(timers.startedAt(LR2_TIMER.KEY_ON_1P + 3)).toBe(1);
+    expect(timers.startedAt(LR2_TIMER.KEY_ON_1P + 6)).toBe(2);
+    expect(timers.startedAt(LR2_TIMER.KEY_ON_1P + 9)).toBe(3);
+    expect(timers.isActive(LR2_TIMER.KEY_ON_2P + 2)).toBe(false);
+    // The fade retires the 2P channel's own beam.
+    play.keyBeamFadeStartedAt.set('22', 10);
+    state.now = 10 + KEY_ON_FADE_OUT_MS;
+    expect(timers.releaseFadeAlpha(LR2_TIMER.KEY_ON_1P + 6)).toBe(0);
+    expect(play.keyBeamStartedAt.has('22')).toBe(false);
+    expect(play.keyBeamStartedAt.has('25')).toBe(true);
+  });
+
+  test("leaves a key beam's fade to its own timer, and other timers to the view", () => {
+    const { timers, play, state } = createPlay();
+    play.keyBeamStartedAt.set('12', 0);
+    play.keyBeamFadeStartedAt.set('12', 0);
+    state.now = KEY_ON_FADE_OUT_MS / 2;
+    expect(timers.releaseFadeAlpha(LR2_TIMER.KEY_ON_1P + 3)).toBeUndefined();
+    expect(timers.releaseFadeAlpha(LR2_TIMER.BOMB_1P + 2)).toBeUndefined();
+    expect(timers.releaseFadeAlpha(LR2_TIMER.KEY_ON_1P + 2)).toBeCloseTo(0.5);
   });
 
   test("retires the full-combo timers once the skin's animation has played out", () => {
@@ -212,16 +257,5 @@ describe('Lr2PlayTimers', () => {
     timers.dispose();
     vi.advanceTimersByTime(300);
     expect(timers.isActive(LR2_TIMER.START_INPUT)).toBe(false);
-  });
-});
-
-describe('resolveChannelForKeyOnTimer', () => {
-  test('maps the key-on banks back to their channels', () => {
-    expect(resolveChannelForKeyOnTimer(LR2_TIMER.KEY_ON_1P, '7')).toBe('16');
-    expect(resolveChannelForKeyOnTimer(LR2_TIMER.KEY_ON_1P + 7, '7')).toBe('17');
-    expect(resolveChannelForKeyOnTimer(LR2_TIMER.KEY_ON_2P + 3, '14')).toBe('23');
-    expect(resolveChannelForKeyOnTimer(LR2_TIMER.KEY_ON_1P + 8, '7')).toBeUndefined();
-    expect(resolveChannelForKeyOnTimer(LR2_TIMER.KEY_ON_1P + 4, '9')).toBe('14');
-    expect(resolveChannelForKeyOnTimer(LR2_TIMER.LN_HOLD_1P, '7')).toBeUndefined();
   });
 });
