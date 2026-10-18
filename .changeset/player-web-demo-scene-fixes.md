@@ -1,0 +1,13 @@
+---
+'@be-music/player-web-demo': patch
+---
+
+Screen flow fixes, now that every screen change goes through one scene router:
+
+- With both an LR2 and a beatoraja theme loaded, a beatoraja select screen stayed live behind an LR2 or built-in decide or play screen, playing its BGM and preview and taking keys. The select screen now stops as the next screen shows.
+- A play started on the wrong skin family after the other family's decide screen, or left an empty stage; the play after a decide screen whose preload failed drew its `#RANDOM` branches afresh and lost its AUTO pick. The play now picks its family the same way after either decide screen, keeps the decide screen's draws, and takes the stage from the very play the decide screen prepared.
+- The beatoraja play screen plays like the built-in and LR2 ones: it loads behind the decide screen, ESC fades out over the skin's fade-out, F5 restarts the chart instead of going back to the select screen, Space pauses the play and its skin timers, the play pauses when the window loses focus, and the arrow keys step the hi-speed once per press. On a beatoraja theme a play-log replay plays on the theme's own play skin instead of falling back to the built-in one.
+- HS-FIX, HIDDEN / SUDDEN, the lane cover, BGA, BGA size, the score graph and the 2P gauge went back to their defaults whenever the select screen was made again (a change of Skin system, Built-in skin, Skin effects or LR2 theme, or a theme dropped after leaving a beatoraja select screen). The demo now keeps the full play options itself and every screen starts from them.
+- The compressor switch and its Key / BGM / Master stage toggles now apply to beatoraja plays too, at the start and while they run.
+- A beatoraja result's gauge and EX-score graphs began at the first judgment and stopped at the last; they now run from the chart's start to its end, as on the other families.
+- The status line describes the library again back on the select screen, reads "Replaying" during a replay, is no longer overwritten by the beatoraja select screen right after a drop's message, and no longer shows the EX score as `score` on a beatoraja result.
