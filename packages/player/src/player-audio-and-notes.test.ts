@@ -5,17 +5,14 @@ vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixt
 
 import { createEmptyJson } from '../../json/src/index.ts';
 import { parseChart } from '../../parser/src/index.ts';
+import { type AudioSession, autoPlay, type CreateAudioSessionContext, manualPlay } from './index.ts';
+import { preparePlaybackChartData } from './core/bootstrap.ts';
 import {
-  type AudioSession,
-  autoPlay,
-  type CreateAudioSessionContext,
   extractInvisiblePlayableNotes,
   extractLandmineNotes,
   extractPlayableNotes,
   extractTimedNotes,
-  manualPlay,
-  preparePlaybackChartData,
-} from './index.ts';
+} from './display.ts';
 import {
   resetAudioSinkState,
   audioSinkState,

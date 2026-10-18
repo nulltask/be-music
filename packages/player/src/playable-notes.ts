@@ -1,8 +1,6 @@
 import { resolveChart, type ChartPlayVariant, type LongNoteMode, type ResolvedNote } from '@be-music/chart';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 
-export type { LongNoteMode };
-
 /**
  * A judged (or invisible) note as the engine plays it: a {@link ResolvedNote} from `resolveChart` (`@be-music/chart`)
  * plus the per-play state the engine mutates (`judged`, and `channel` under lane options).

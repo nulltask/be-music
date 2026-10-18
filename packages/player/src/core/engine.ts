@@ -1,21 +1,5 @@
-import {
-  applyHighSpeedControlAction,
-  resolveHighSpeedControlActionFromLaneChannels,
-  type HighSpeedControlAction,
-} from './high-speed-control.ts';
-import { resolveJudgeWindowsMs } from './judge-window.ts';
-import {
-  type JudgeWindowSetUs,
-  type LongNoteStyle,
-  type PlaylogRulesetId,
-  type RulesetWindowTables,
-  type WindowPairUs,
-} from '../ruleset/index.ts';
-import { preparePlaybackChart, preparePlaybackChartData, type PreparedPlaybackChartData } from './bootstrap.ts';
-import { type PlayerSummary } from './engine-types.ts';
-
 /**
- * The playback engine's public surface (`@be-music/player` and `@be-music/player/core/engine`).
+ * The playback engine's public surface (`@be-music/player`).
  *
  * The engine is a deterministic judge core and one play loop around it:
  *
@@ -26,43 +10,12 @@ import { type PlayerSummary } from './engine-types.ts';
  * - `engine-effects.ts` — maps core effects onto the host's audio session, UI buses, play log and trace;
  * - `engine-preparation.ts`, `engine-audio.ts`, `engine-clock.ts`, `engine-trace.ts`, `engine-types.ts` — the
  *   services around the loop and the public types.
+ *
+ * What a host's runtimes exchange with a running play, the lanes, what a host shows and the ruleset vocabulary are the
+ * `./signals`, `./lanes`, `./display` and `./ruleset` entries.
  */
 export * from './engine-types.ts';
 export { autoPlay, manualPlay } from './play.ts';
-export {
-  formatRandomPatternSummary,
-  resolveBmsControlFlowForPlayback,
-  resolveChartRulesetFacts,
-  resolvePlayChart,
-} from './engine-preparation.ts';
-export { resolveBgmHeadroomGain, shouldUseAutoMixBgmHeadroomControl } from './engine-audio.ts';
+export { resolveChartRulesetFacts, resolvePlayChart } from './engine-preparation.ts';
 export { createTempoClock, type TempoClock, type TempoClockSegment } from './tempo-clock.ts';
-
-export type { JudgeWindowSetUs, LongNoteStyle, PlaylogRulesetId, RulesetWindowTables, WindowPairUs };
-
-export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromLaneChannels, type HighSpeedControlAction };
-
-export { resolveJudgeWindowsMs };
-
-export { preparePlaybackChart, preparePlaybackChartData, type PreparedPlaybackChartData };
-
-export function applyFastSlowForJudge(
-  summary: Pick<PlayerSummary, 'fast' | 'slow'>,
-  judge: 'PERFECT' | 'GREAT' | 'GOOD',
-  signedDeltaMs: number,
-): void {
-  if (judge === 'GREAT' || judge === 'GOOD') {
-    if (signedDeltaMs < 0) {
-      summary.fast += 1;
-    } else if (signedDeltaMs > 0) {
-      summary.slow += 1;
-    }
-  }
-}
-
-export {
-  extractInvisiblePlayableNotes,
-  extractLandmineNotes,
-  extractPlayableNotes,
-  extractTimedNotes,
-} from '../playable-notes.ts';
+export { preparePlaybackChart, type PreparedPlaybackChartData } from './bootstrap.ts';

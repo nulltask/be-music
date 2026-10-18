@@ -5,18 +5,15 @@ vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixt
 
 import { resolveChart } from '@be-music/chart';
 import { createEmptyJson } from '../../json/src/index.ts';
+import { manualPlay } from './index.ts';
+import { resolveBgmHeadroomGain, shouldUseAutoMixBgmHeadroomControl } from './core/engine-audio.ts';
+import { extractPlayableNotes, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './display.ts';
+import { resolveJudgeWindowsMs } from './ruleset/vocabulary.ts';
 import {
-  applyFastSlowForJudge,
   applyHighSpeedControlAction,
-  extractPlayableNotes,
-  manualPlay,
-  resolveBgmHeadroomGain,
-  shouldUseAutoMixBgmHeadroomControl,
   resolveHighSpeedControlActionFromLaneChannels,
-  resolveJudgeWindowsMs,
-} from './index.ts';
-import type { PlayerInputCommand } from './core/input-signal-bus.ts';
-import { resolveChartVolWavGain, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './utils.ts';
+  type PlayerInputCommand,
+} from './signals.ts';
 import {
   resetAudioSinkState,
   createLnobjLongNoteChart,
@@ -259,24 +256,6 @@ describe('player', () => {
     expect(windows.bad).toBe(200);
   });
 
-  test('player: FAST/SLOW are counted only for GREAT/GOOD', () => {
-    const summary = {
-      fast: 0,
-      slow: 0,
-    };
-
-    applyFastSlowForJudge(summary, 'PERFECT', -12);
-    applyFastSlowForJudge(summary, 'PERFECT', 8);
-    expect(summary.fast).toBe(0);
-    expect(summary.slow).toBe(0);
-
-    applyFastSlowForJudge(summary, 'GREAT', -18);
-    applyFastSlowForJudge(summary, 'GOOD', 27);
-    applyFastSlowForJudge(summary, 'GOOD', 0);
-    expect(summary.fast).toBe(1);
-    expect(summary.slow).toBe(1);
-  });
-
   test('player: bgm headroom gain does not mute BGM when play lane already clips', () => {
     const playable = {
       sampleRate: 44_100,
@@ -302,21 +281,6 @@ describe('player', () => {
     expect(shouldUseAutoMixBgmHeadroomControl({})).toBe(false);
     expect(shouldUseAutoMixBgmHeadroomControl({ limiter: true })).toBe(false);
     expect(shouldUseAutoMixBgmHeadroomControl({ limiter: false })).toBe(true);
-  });
-
-  test('player: resolves #VOLWAV gain with 100 as default baseline', () => {
-    const defaultChart = createEmptyJson('bms');
-    expect(resolveChartVolWavGain(defaultChart)).toBe(1);
-
-    defaultChart.bms.volWav = 100;
-    expect(resolveChartVolWavGain(defaultChart)).toBe(1);
-
-    defaultChart.bms.volWav = 150;
-    expect(resolveChartVolWavGain(defaultChart)).toBe(1.5);
-
-    // beatoraja applies #VOLWAV only for 0 < n < 200, so 200 plays at the original volume.
-    defaultChart.bms.volWav = 200;
-    expect(resolveChartVolWavGain(defaultChart)).toBe(1);
   });
 
   test('player: narrows judge windows for bms RANK=0 (LR2 VERY HARD)', () => {

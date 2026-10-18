@@ -1,8 +1,14 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { collectSampleTriggers, createTimingResolver } from '@be-music/audio-renderer/triggers';
-import { resolveChart, resolveChartPlayVariant, type ResolvedChart, type ResolvedNote } from '@be-music/chart';
+import {
+  collectSampleTriggers,
+  createTimingResolver,
+  resolveChart,
+  resolveChartPlayVariant,
+  type ResolvedChart,
+  type ResolvedNote,
+} from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';
 import { resolvePlayChart } from '@be-music/player';

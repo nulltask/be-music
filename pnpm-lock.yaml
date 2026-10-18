@@ -346,9 +346,6 @@ importers:
 
   packages/player-web:
     dependencies:
-      '@be-music/audio-renderer':
-        specifier: workspace:*
-        version: link:../audio-renderer
       '@be-music/beatoraja-skin':
         specifier: workspace:*
         version: link:../beatoraja-skin

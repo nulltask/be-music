@@ -1,7 +1,5 @@
 import { clamp, findLastIndexAtOrBefore } from '@be-music/utils/core';
-import type { ScrollTimelinePoint, SpeedTimelinePoint } from './timeline.ts';
-
-export type { ScrollTimelinePoint, SpeedTimelinePoint } from './timeline.ts';
+import type { ScrollTimelinePoint, SpeedTimelinePoint } from '@be-music/chart';
 
 export interface ScrollDistanceMapperOptions {
   lookaheadBeats?: number;

@@ -21,6 +21,24 @@ The core engine defaults to the `lr2` compat ruleset and its `GROOVE` gauge, whi
 gauge. Both are options: `PlayerOptions.judgeRuleset` picks the ruleset and `PlayerOptions.gauge` the gauge, and
 `bms-player` exposes them as `--ruleset` and `--gauge`.
 
+## Entry points
+
+`@be-music/player` exports designed entries, not its file layout ([ADR 0005](./adr/0005-public-entry-points.md)):
+
+| Entry              | What it exports                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@be-music/player` | The engine: `manualPlay`, `autoPlay`, `PlayerOptions` with its five category types, `PlayerSummary`, the load progress, `PlayerInterruptedError`, the runtime contracts (`AudioSession`, `PlayerInputRuntime`, `PlayerUiRuntime` and their `Create*Context` types), `resolvePlayChart`, `preparePlaybackChart`, `resolveChartRulesetFacts` and `createTempoClock` |
+| `./signals`        | What a host's input and UI runtimes exchange with a running play: the input bus and its commands, the UI bus with its frames, commands and `PlayerGaugeSummary`, the state signals, and the high-speed range and actions                                                                                                                                          |
+| `./lanes`          | The lanes of a play mode: the layout and its slots, scratch and wheel lanes, key bindings, FREE ZONE input, and the lanes the lane options permute                                                                                                                                                                                                                |
+| `./display`        | What a host shows: the timed play notes (`extract*`, `toTimed*`), `ScrollDistanceMapper`, the BGA cue on screen (`pickActiveBgaCue`, `pickActiveBgaKey`, `DEFAULT_POOR_BGA_DISPLAY_SECONDS`), the chart facts a song screen shows (`resolveDisplayed*`), `formatSeconds`, `resolveAltModifierLabel`, the TUI note heights and the BGA resize algorithms           |
+| `./ruleset`        | The vocabulary hosts, skins and the Leaderboard share: the judge ruleset ids (`PLAYLOG_RULESET_IDS`), the judge windows, gauges, clear lamps, BP and the score                                                                                                                                                                                                    |
+| `./playlog`        | The play-log format, its recorder, simulator and eligibility checks, and the course and NONSTOP logs                                                                                                                                                                                                                                                              |
+| `./records`        | Best records per judge ruleset and the rules that keep them                                                                                                                                                                                                                                                                                                       |
+| `./course`         | Course definitions: LR2 `.lr2crs`, beatoraja courses and table courses, the course maker, and NONSTOP runs                                                                                                                                                                                                                                                        |
+| `./audio-sink`     | The audio sinks for Node (`node-web-audio-api`) and for a Web Audio context                                                                                                                                                                                                                                                                                       |
+
+The chart-layer names come from `@be-music/chart`: `ChartPlayVariant`, `LongNoteMode`, the timelines and their points, `BgaCue` and the BGA timeline builders, the timing resolver and the sample triggers. Everything else in the package is internal.
+
 ## BMS compatible range
 
 This section classifies the BMS commands and channels that appear in the primary reference in [`bms-spec.md`](./bms-spec.md) relative to the current `player` implementation.
@@ -495,8 +513,7 @@ EX-SCORE is IIDX compatible.
 
 The score vocabulary is the ruleset's, exported from `@be-music/player/ruleset`: `ScoreSummary`, `JudgeKind`,
 `createEmptyScore`, `computeScoreRate`, the DJ Ranks (`resolveIidxRankIndexFromScore`, `resolveIidxRankLabel`,
-`IIDX_RANK_LABELS`), `resolveLr2MoneyScore` and `resolveDisplayedPoor`. `@be-music/player/core/scoring` is a
-deprecated alias of it, removed with the other `core/*` subpaths.
+`IIDX_RANK_LABELS`), `resolveLr2MoneyScore` and `resolveDisplayedPoor`.
 
 ### Empty POOR
 
