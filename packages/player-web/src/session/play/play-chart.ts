@@ -1,8 +1,8 @@
 /**
- * Chart preparation for a play on the built-in and LR2 play screens (`PlaySession`): resolves the chart's
- * `#RANDOM` / `#SWITCH` control flow, prepares the notes the engine judges and the playfield draws (one shared
- * `PreparedPlaybackChartData`), applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM / SCATTER) or a replay's
- * recorded arrangement, and resets the play's state for the new chart.
+ * Chart preparation for a play (`PlaySession`), whichever family draws it: resolves the chart's `#RANDOM` / `#SWITCH`
+ * control flow, prepares the notes the engine judges and the view draws (one shared `PreparedPlaybackChartData`),
+ * applies the lane options (DP FLIP, RANDOM / MIRROR / S-RANDOM / SCATTER) or a replay's recorded arrangement, and
+ * resets the play's state for the new chart.
  *
  * `prepareSong` reads and writes the play's state through {@link PlayChartContext}; the play session passes itself.
  */
