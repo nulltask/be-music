@@ -2,14 +2,10 @@
 '@be-music/player-web-demo': minor
 ---
 
-Reorganise the Debug Menu so everyday controls come first: the top level holds loading, the skin family and built-in skin, Record, and Screenshot, followed by the Play options and Audio folders (open by default; Audio holds the volumes, Play in silent mode, and the Compressor folder) and the Skin & display, Library & records, and Developer folders (closed by default). Each folder remembers whether it was left open. Stored settings keep their keys.
+Reorganise the Debug Menu so everyday controls come first. The top level holds Status, Open folder and Open files (ZIP / play log), which picks chart ZIP archives or a play log to replay; the folders follow in the order a session uses them: Play options (with Replay / ghost), Tempo, Course, Skin & display, Audio, Library & records, Capture, Leaderboard and Developer. The everyday folders start open, each folder remembers whether it was left open, and stored settings keep their keys.
 
-New controls:
-
-- Open files (ZIP / play log): pick chart ZIP archives or a play log to replay, which the folder picker could not select.
-- Toggle fullscreen, the same as double-clicking the playfield.
-- Music / Skin ZIP URL with Load from URLs, the `?music=` / `?skin=` loading on demand.
-- Clear best records, and Reset settings and reload (clears every stored demo setting except the best records).
-- An FPS read-out in the Developer folder.
-
-The Beatoraja skins folder now only shows while a beatoraja theme is loaded, and the LR2 theme picker sits next to it instead of at the bottom of the panel. The panel's dark / yellow theme and the Record button's recording / armed colours apply again: their selectors still used class names that lil-gui 0.21 renamed, and the theme now reaches the controls inside folders too.
+- Play options gains Hi-speed, and Sort, Key filter and Difficulty filter for the built-in and LR2 select screens, two-way synced with an LR2 skin's buttons, so the built-in skins, which draw no such buttons, can sort and filter too. Replay / ghost picks what a replay reproduces of the recorded view: the tempo, the hi-speed, SUDDEN+ / HIDDEN+ and LIFT, all on by default.
+- Skin & display holds Skin system, which always offers Auto, Built-in, LR2 and beatoraja (one without a loaded skin is marked "(drop a skin)", and picking it asks for a drop and switches to the skin dropped), Built-in skin, Render resolution, Toggle fullscreen, and Judged notes, which now defaults to "Keep until its time (LR2)". The Beatoraja skins folder only shows while a beatoraja theme is loaded, next to the LR2 theme picker.
+- Library & records gains Music / Skin ZIP URL with Load from URLs (the `?music=` / `?skin=` loading on demand) and Clear best records. Capture holds Record gameplay video, Video format and Screenshot. Developer holds Judge windows, an FPS read-out and Reset settings and reload, which clears every stored setting except the best records.
+- Every option read when a play starts is disabled while a play runs, now including NONSTOP placement, the tempo settings and Replay / ghost, and so are Skin system, Built-in skin, Skin effects, LR2 theme and Add skin, which go back to the select screen.
+- The panel's dark / yellow theme and the Record button's recording / armed colours apply again (their selectors used class names lil-gui 0.21 renamed), checkboxes and drop-downs get an edge and a filled tick, and the frosted panels are blurred again in Chromium browsers, where the production CSS had kept only `-webkit-backdrop-filter`.
