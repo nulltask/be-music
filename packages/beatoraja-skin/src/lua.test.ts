@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import {
   BEATORAJA_LUA_TIMER_OFF_VALUE,
   evaluateBeatorajaLuaBoolean,
@@ -353,6 +353,30 @@ describe('evaluateBeatorajaLuaSkin', () => {
     if (!result.ok) throw new Error(result.error.message);
     expect(result.value).toEqual({ a: 42, b: 42, same: true });
     expect(calls).toEqual(['util/helper.lua']); // resolver hit ONCE despite two dofile calls
+  });
+
+  it('keeps the console quiet while require() and dofile() resolve', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      const result = evaluateBeatorajaLuaSkin({
+        entry: enc(
+          [
+            'local m = require("main_state")',
+            'local u = require("util")',
+            'local h = dofile("helper.lua")',
+            'return { value = u.value + h.value, builtin = m ~= nil }',
+          ].join('\n'),
+        ),
+        modules: [{ name: 'util', source: enc('return { value = 1 }') }],
+        skinConfig: { offset: 0, option: {}, file: {} },
+        dofileResolver: (path) => (path === 'helper.lua' ? enc('return { value = 2 }') : undefined),
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      expect(result.value).toEqual({ value: 3, builtin: true });
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it('dofile raises a clear error when the resolver has no entry for the requested path', () => {

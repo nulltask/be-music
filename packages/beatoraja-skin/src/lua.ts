@@ -20,6 +20,7 @@
 import { normalizePath } from '@be-music/utils/core';
 import fengariWeb from 'fengari-web';
 import type { lua_State, LuaCFunction } from 'fengari-web';
+import { logLuaDofile, logLuaRequire } from './lua-diagnostics.ts';
 
 const { lauxlib, lua, lualib, to_luastring } = fengariWeb;
 const {
@@ -645,7 +646,7 @@ function setupCustomRequire(
       lua_pushvalue(state, -2); // duplicate the synthesized table
       lua_setfield(state, -2, to_luastring(name));
       lua_pop(state, 1); // pop cache table; module remains on top
-      logRequire(name, 'builtin');
+      logLuaRequire(name, 'builtin');
       return 1;
     }
 
@@ -667,12 +668,12 @@ function setupCustomRequire(
       lua_pushvalue(state, -2); // duplicate stub
       lua_setfield(state, -2, to_luastring(name));
       lua_pop(state, 1); // pop cache table; stub remains on top
-      logRequire(name, 'stub');
+      logLuaRequire(name, 'stub');
       return 1;
     }
     const sourceBytes = readBytesFromTop(state);
     lua_pop(state, 2); // pop string + sources table
-    logRequire(name, 'module');
+    logLuaRequire(name, 'module');
 
     // Cycle-detection sentinel (audit 3.11). Beatoraja's PackageLib stores a placeholder in
     // `package.loaded[name]` BEFORE running the module body so that re-entrant `require()`
@@ -805,8 +806,7 @@ function setupDofile(
     lua_pushvalue(state, -2);
     lua_setfield(state, -2, to_luastring(path));
     lua_pop(state, 1);
-    // eslint-disable-next-line no-console
-    console.log(`[beatoraja-lua] dofile(${JSON.stringify(path)}) -> ok (${bytes.length}B)`);
+    logLuaDofile(path, bytes.length);
     return 1;
   };
   lua_pushjsfunction(L, dofileFn);
@@ -1327,15 +1327,6 @@ function sanitizeOffsetValue(value: Partial<BeatorajaLuaOffsetValue>): Beatoraja
     r: num(value.r, 0),
     a: num(value.a, 0),
   };
-}
-
-/**
- * Diagnostic for `require()` resolutions. Direct `console.log` (not via the player-web logger
- * wrapper) so devtools resolves source-line clicks to this file rather than to a logger module.
- */
-function logRequire(name: string, kind: 'builtin' | 'module' | 'stub'): void {
-  // eslint-disable-next-line no-console
-  console.log(`[beatoraja-lua] require(${JSON.stringify(name)}) -> ${kind}`);
 }
 
 function pushJsValueAsLua(L: lua_State, value: unknown): void {
