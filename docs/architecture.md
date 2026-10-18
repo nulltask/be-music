@@ -344,7 +344,7 @@ The web demo split into services behind one scene router ([ADR 0006](./adr/0006-
 | P5.7a | The select and decide routes                                                                  | [#525](https://github.com/nulltask/be-music/pull/525) | done    |
 | P5.7b | The play, result and replay routes                                                            | [#529](https://github.com/nulltask/be-music/pull/529) | done    |
 | P5.8  | The play-log, video recording and status services                                             | [#530](https://github.com/nulltask/be-music/pull/530) | done    |
-| P5.9  | The test hook's state as a service; contract v1 unchanged                                     | —                                                     | planned |
+| P5.9  | The test hook's state as a service; contract v1 unchanged                                     | [#534](https://github.com/nulltask/be-music/pull/534) | done    |
 | P5.10 | `main.ts` down to the bootstrap, and off the file-size allowlist                              | —                                                     | planned |
 | P5.F1 | A NONSTOP placement change redraws the select screen                                          | [#517](https://github.com/nulltask/be-music/pull/517) | done    |
 | P5.F2 | F5 restarts an AUTO play as AUTO and a replay as a replay                                     | [#490](https://github.com/nulltask/be-music/pull/490) | done    |

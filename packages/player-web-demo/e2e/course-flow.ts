@@ -49,12 +49,15 @@ async function startCourse(demo: Demo, setup: FamilyCase, title: string, auto: b
   await demo.waitFor((state) => state.scene.kind === 'decide' || state.scene.kind === 'play', `${title} to start`);
 }
 
-/** Leaves the course result and checks the cursor is back on the course bar (item 8). */
-async function expectBackOnCourseBar(demo: Demo, title: string): Promise<void> {
+/**
+ * Leaves the course result and checks the cursor is back on the course bar (item 8), showing `record`, the best record
+ * the run kept for the course (item 1), when given.
+ */
+async function expectBackOnCourseBar(demo: Demo, title: string, record?: { lamp: string }): Promise<void> {
   await demo.leaveResult();
   const state = await demo.waitFor((current) => current.scene.kind === 'select', 'the select screen');
   expect(state.cursor?.folderPath).toEqual([COURSES]);
-  expect(state.cursor?.bar).toMatchObject({ kind: 'course', title });
+  expect(state.cursor?.bar).toMatchObject({ kind: 'course', title, ...record });
 }
 
 export function courseFlowTests(setup: FamilyCase): void {
@@ -155,7 +158,8 @@ export function courseFlowTests(setup: FamilyCase): void {
       });
       expect(stagesOf(result)[1]!.gauge.final).toBe(0);
       if (setup.jingles !== undefined) expect(result.jingle).toBe(setup.jingles.courseFail);
-      await expectBackOnCourseBar(demo, 'FIX GRADE FAIL');
+      // A manual run keeps the course's record (an AUTO one keeps none), and the course bar shows its lamp.
+      await expectBackOnCourseBar(demo, 'FIX GRADE FAIL', { lamp: 'FAILED' });
     });
 
     test('plays an EXPERT course with AUTO on the course gauge', async ({ demo }) => {
