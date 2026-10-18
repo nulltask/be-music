@@ -338,7 +338,7 @@ The web demo split into services behind one scene router ([ADR 0006](./adr/0006-
 | P5.10 | `main.ts` down to the bootstrap, and off the file-size allowlist                              | —                                                     | planned |
 | P5.F1 | A NONSTOP placement change redraws the select screen                                          | —                                                     | planned |
 | P5.F2 | F5 restarts an AUTO play as AUTO and a replay as a replay                                     | [#490](https://github.com/nulltask/be-music/pull/490) | done    |
-| P5.F3 | A transition during a play ends the course run and finalizes its video recording              | —                                                     | planned |
+| P5.F3 | A transition during a play ends the course run and finalizes its video recording              | [#507](https://github.com/nulltask/be-music/pull/507) | done    |
 
 #### P6: ready for devel
 
