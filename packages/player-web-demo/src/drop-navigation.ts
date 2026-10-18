@@ -1,5 +1,4 @@
-import type { BrowserSongEntry } from '@be-music/player-web/collection';
-import { groupChartsByFolder, type BrowseSnapshot } from '@be-music/scene-model';
+import { groupChartsByFolder, type BrowseSnapshot, type LibraryChart } from '@be-music/scene-model';
 
 /**
  * Where the select screen opens after a drop, as a browse snapshot (`@be-music/scene-model`): in the dropped folder when
@@ -10,7 +9,7 @@ import { groupChartsByFolder, type BrowseSnapshot } from '@be-music/scene-model'
  * dropped song folder as that song. Chart folders come first at the root, so a folder's place among them is its bar.
  */
 export function navigationAfterDrop(
-  songs: readonly BrowserSongEntry[],
+  songs: readonly LibraryChart[],
   previousSongIds: ReadonlySet<string>,
 ): BrowseSnapshot | undefined {
   const added = songs.filter((song) => !previousSongIds.has(song.id));

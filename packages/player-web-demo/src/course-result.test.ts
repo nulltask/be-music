@@ -1,13 +1,13 @@
 import { createEmptyJson } from '@be-music/json';
 import { parseBeatorajaCourseData, type NonstopConnection } from '@be-music/player/course';
-import type { BrowserCourseEntry, BrowserSongEntry } from '@be-music/player-web/collection';
+import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
 import type { BeMusicSongRecord } from '@be-music/skin-sdk';
 import { describe, expect, test } from 'vite-plus/test';
 import { courseRecordKey, lookupCourseRecord, skipsCourseStageResult } from './course-result.ts';
 
 const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
-function song(id: string): BrowserSongEntry {
+function song(id: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -22,12 +22,12 @@ function song(id: string): BrowserSongEntry {
   };
 }
 
-function course(constraint: string[] = ['MIRROR', 'GAUGE_LR2', 'NO_SPEED', 'HCN']): BrowserCourseEntry {
+function course(constraint: string[] = ['MIRROR', 'GAUGE_LR2', 'NO_SPEED', 'HCN']): LibraryCourse {
   const definition = parseBeatorajaCourseData({ name: 'Dan', hash: MD5.map((md5) => ({ md5 })), constraint })!;
   return {
     id: 'dan#0',
     definition,
-    stages: ['a', 'b', 'c'].map((id) => ({ title: id, song: song(id) })),
+    stages: ['a', 'b', 'c'].map((id) => ({ title: id, chart: song(id) })),
     playable: true,
   };
 }
@@ -41,7 +41,7 @@ describe('courseRecordKey', () => {
 
   test('courseRecordKey keys a NONSTOP course by its connections and placement', () => {
     const base = course([]);
-    const nonstop = (connections: NonstopConnection[]): BrowserCourseEntry => ({
+    const nonstop = (connections: NonstopConnection[]): LibraryCourse => ({
       ...base,
       definition: { ...base.definition, kind: 'nonstop', connections },
     });
@@ -67,7 +67,7 @@ describe('skipsCourseStageResult', () => {
 });
 
 describe('lookupCourseRecord', () => {
-  const dan = (): BrowserCourseEntry => {
+  const dan = (): LibraryCourse => {
     const entry = course(['MIRROR']);
     return {
       ...entry,
@@ -101,7 +101,7 @@ describe('lookupCourseRecord', () => {
     expect(lookupCourseRecord(course(['GAUGE_LR2']), records)).toBeUndefined();
     expect(lookupCourseRecord({ ...dan(), newCourse: true }, records)).toBeUndefined();
     const random = { ...dan(), random: { name: 'r', stages: [], constraints: [], trophies: [] } };
-    expect(lookupCourseRecord(random as unknown as BrowserCourseEntry, records)).toBeUndefined();
+    expect(lookupCourseRecord(random as unknown as LibraryCourse, records)).toBeUndefined();
     expect(lookupCourseRecord(dan(), records)).toEqual({ lamp: 'HARD' });
   });
 });

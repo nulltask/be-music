@@ -4,14 +4,15 @@ import { manualPlay } from '@be-music/player';
 import { buildNonstopCoursePlaylog, parseLr2CourseFile } from '@be-music/player/course';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '@be-music/player/playlog';
 import { simulatePlaylog } from '@be-music/player/playlog';
-import type { BrowserCourseEntry, BrowserSongAssetSource, BrowserSongEntry } from '@be-music/player-web/collection';
+import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
+import type { BrowserSongAssetSource } from '@be-music/player-web/collection';
 import { describe, expect, test } from 'vite-plus/test';
 import { courseStageChartFingerprint, prepareCourseLeaderboardSubmission } from './leaderboard.ts';
 import { prepareNonstopPlay } from './nonstop-course.ts';
 
 const MD5 = ['1', '2'].map((digit) => digit.repeat(32));
 
-function song(id: string, text: string): { song: BrowserSongEntry; source: BrowserSongAssetSource } {
+function song(id: string, text: string): { song: LibraryChart; source: BrowserSongAssetSource } {
   const chartPath = `${id}/${id}.bms`;
   return {
     song: {
@@ -38,7 +39,7 @@ function song(id: string, text: string): { song: BrowserSongEntry; source: Brows
 const STAGE_A = song('a', ['#BPM 240', '#WAV01 a.wav', '#00111:0101', '#00212:01'].join('\n'));
 const STAGE_B = song('b', ['#BPM 240', '#WAV01 b.wav', '#00211:00010000', '#00312:00010001'].join('\n'));
 
-function course(): BrowserCourseEntry {
+function course(): LibraryCourse {
   // A NONSTOP course (type 1) with a CUT connection after stage 1.
   const header = `2${'0'.repeat(9)}1${'0'.repeat(21)}`;
   const [definition] = parseLr2CourseFile(
@@ -47,13 +48,13 @@ function course(): BrowserCourseEntry {
   return {
     id: 'ns#0',
     definition: definition!,
-    stages: [STAGE_A, STAGE_B].map(({ song: entry }) => ({ title: entry.title, song: entry })),
+    stages: [STAGE_A, STAGE_B].map(({ song: entry }) => ({ title: entry.title, chart: entry })),
     playable: true,
   };
 }
 
 /** Presses every note of `chart` dead on. */
-function presses(chart: BrowserSongEntry['chart']): PlaylogInputEvent[] {
+function presses(chart: LibraryChart['chart']): PlaylogInputEvent[] {
   const events: PlaylogInputEvent[] = [];
   for (const note of resolveChart(chart).notes) {
     const timeUs = Math.round(note.seconds * 1_000_000);
@@ -63,7 +64,7 @@ function presses(chart: BrowserSongEntry['chart']): PlaylogInputEvent[] {
   return events.sort((left, right) => left.timeUs - right.timeUs).map((event, seq) => ({ ...event, seq }));
 }
 
-const sourceOf = (entry: BrowserSongEntry) => [STAGE_A, STAGE_B].find((stage) => stage.song.id === entry.id)?.source;
+const sourceOf = (entry: LibraryChart) => [STAGE_A, STAGE_B].find((stage) => stage.song.id === entry.id)?.source;
 
 describe('prepareNonstopPlay', () => {
   test("stitches the stages into one song played from the stages' own files", () => {
