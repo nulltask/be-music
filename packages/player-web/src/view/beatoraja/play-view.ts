@@ -49,6 +49,7 @@ import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { PlayPlaylogViewScale } from '../../session/play/play-session-theme.ts';
 import { playEndingFadeAlpha } from '../shared/play-frame.ts';
 import { uploadTextures } from '../shared/texture-upload.ts';
+import { TouchLaneInput } from '../shared/touch-lane-input.ts';
 import type {
   IntentSink,
   PlayFrame,
@@ -175,8 +176,17 @@ export class BeatorajaPlayView implements PlayView {
   public readonly family = 'beatoraja' as const;
   public readonly root: Container = new Container();
   public readonly timing: PlayViewTiming;
-  /** How the view answers the session: the skin's canvas (no touch lanes: the skin owns its lanes) and the beam fade. */
+  /** How the view answers the session: the skin's canvas and the beam fade. */
   public readonly playfieldSkin: PlayfieldSkin;
+  /**
+   * The canvas under the fingers: no touch lanes (the skin owns its lanes and lays none out for the playfield), but a
+   * finger still keeps the page from scrolling or zooming, as on every play screen.
+   */
+  private readonly touchLanes: TouchLaneInput = new TouchLaneInput({
+    stage: () => this.playfieldSkin.stage,
+    lanes: () => [],
+    liftCount: () => 0,
+  });
   private kit: BeatorajaKit;
   private readonly play: BeatorajaPlayRuntime;
   private readonly options: BeatorajaPlayViewOptions;
@@ -363,9 +373,11 @@ export class BeatorajaPlayView implements PlayView {
     this.host = host;
     this.emit = emit;
     if (typeof window !== 'undefined') window.addEventListener('wheel', this.handleWheel, { passive: false });
+    this.touchLanes.attach(host, emit);
   }
 
   public detach(): void {
+    this.touchLanes.detach();
     if (typeof window !== 'undefined') window.removeEventListener('wheel', this.handleWheel);
     this.host = undefined;
     this.emit = undefined;

@@ -105,6 +105,11 @@ export interface PlayfieldRuntime {
    */
   readonly keyBeamStartedAt: Map<string, number>;
   readonly keyBeamFadeStartedAt: Map<string, number>;
+  /**
+   * How many times the play has lifted every finger off the touch lanes (each pause, releasing the lanes they held): a
+   * view following the fingers forgets the ones down before the latest lift.
+   */
+  readonly touchLiftCount: number;
   readonly bombStartedAt: Map<string, number>;
   readonly bombJudge: Map<string, BeMusicJudge>;
   readonly hasBga: boolean;

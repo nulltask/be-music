@@ -60,6 +60,7 @@ import {
   type Lr2PlayElementsContext,
 } from './play-elements.ts';
 import { Lr2PlayTimers } from './play-timers.ts';
+import { playfieldTouchLanes, TouchLaneInput } from '../shared/touch-lane-input.ts';
 import { Lr2Turntable } from './play-turntable.ts';
 
 const log = logger('gameplay');
@@ -123,6 +124,8 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   /** The LR2 skin's drawing around the shared playfield. */
   public readonly chrome: PlayChrome;
   public readonly timers: Lr2PlayTimers;
+  /** The fingers on the lanes, sent to the session as `lane` intents while attached. */
+  private readonly touchLanes: TouchLaneInput = new TouchLaneInput(playfieldTouchLanes(this));
   public readonly turntable: Lr2Turntable = new Lr2Turntable();
   public readonly text: Lr2PlayText = new Lr2PlayText();
   /** The skin's images by path, and the chart's images under LR2's special paths; destroyed with the view. */
@@ -227,8 +230,9 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     await this.uploadTextures(this.textures.values(), () => this.isGone());
   }
 
-  public attach(host: PixiSceneHost, _emit: IntentSink<PlayIntent>): void {
+  public attach(host: PixiSceneHost, emit: IntentSink<PlayIntent>): void {
     build(this, host);
+    this.touchLanes.attach(host, emit);
   }
 
   public draw(frame: PlayFrame): void {
@@ -263,7 +267,9 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     if (report) log.debug('perf', report);
   }
 
-  public detach(): void {}
+  public detach(): void {
+    this.touchLanes.detach();
+  }
 
   /** Uploads `textures` to the GPU through the host's renderer, when the view has a host. */
   public uploadTextures(textures: Iterable<Texture | undefined>, isCancelled: () => boolean): Promise<void> {
