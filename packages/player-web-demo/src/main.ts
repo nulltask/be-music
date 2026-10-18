@@ -545,6 +545,9 @@ class PlayerWebDemoApp {
       },
     },
     recorder: { finalize: () => finalizeRecordingIfActive(this.recordingDeps()) },
+    // A navigation the scenes did not ask for (a drop, a skin or theme change, files or a play log loaded) ends the
+    // course run, so the next single play is not taken for its next stage.
+    onInterrupt: () => this.endCourseRun(),
   });
   private collection: BrowserSongCollection = { sources: [], charts: [], errors: [] };
   /**
@@ -1159,10 +1162,11 @@ class PlayerWebDemoApp {
   /**
    * Takes the screen showing off the stage and disposes it (a result screen), then runs `next` (the next stage, a
    * retry) unless a newer navigation has begun meanwhile. `next` may take a while to show anything, and a live screen
-   * would keep taking its keys and clicks meanwhile, starting it over.
+   * would keep taking its keys and clicks meanwhile, starting it over. The result screen asks for it, so it carries
+   * the run on.
    */
   private async leaveThen(next: () => unknown): Promise<void> {
-    if (await this.router.leave()) next();
+    if (await this.router.leave({ continuesRun: true })) next();
   }
 
   /** Last state {@link syncGameplayShellState} applied, so the per-frame check only touches the DOM on a change. */
@@ -2651,6 +2655,21 @@ class PlayerWebDemoApp {
   }
 
   /**
+   * Ends the course run (EXPERT, GRADE or NONSTOP) when a navigation the scenes did not ask for takes over (the router's
+   * `onInterrupt`: a drop, a skin or theme change, files or a play log loaded): the run is dropped unrecorded, so the
+   * next single play is not taken for its next stage, and the select screen comes back where the course was started,
+   * unless that navigation has put it somewhere already (a drop opens what it brought). Outside a run it does nothing.
+   */
+  private endCourseRun(): void {
+    this.activeCourse = undefined;
+    this.courseAutoPlay = undefined;
+    if (this.courseReturnNavigation !== undefined) {
+      this.lastSelectNavigation ??= this.courseReturnNavigation;
+      this.courseReturnNavigation = undefined;
+    }
+  }
+
+  /**
    * An LR2 skin for a course scene: the theme's skin parsed again with the course ops (290 + kind, 280-289 for a stage),
    * so its `#IF` blocks gated on them are taken as LR2 would. Falls back to the skin as mounted.
    */
@@ -3725,8 +3744,13 @@ class PlayerWebDemoApp {
         on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
       },
     );
-    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`).
-    const shown = await this.router.show(resultScene, { role: 'result', playDispose: disposeKeepingAudioTail });
+    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`). The play
+    // or the course asked for its result, so it carries the run on.
+    const shown = await this.router.show(resultScene, {
+      role: 'result',
+      playDispose: disposeKeepingAudioTail,
+      continuesRun: true,
+    });
     if (!shown) return true;
     this.setPlayStatus(
       `Result (beatoraja): ${courseResult ? course!.info.title : song.title} · ex=${result.score.exScore} maxCombo=${result.maxCombo}`,
@@ -4268,8 +4292,9 @@ class PlayerWebDemoApp {
       await start();
       return;
     }
-    // One navigation from here into the play: the play loading behind the splash, the splash and the play share it.
-    const token = this.router.begin();
+    // One navigation from here into the play: the play loading behind the splash, the splash and the play share it. A
+    // course's splash (`then`) carries its run on; a chart's starts a run of its own.
+    const token = this.router.begin({ continuesRun: then !== undefined });
     this.lastSelectNavigation = this.selectView?.snapshot();
     // The select screen goes off the stage (kept), and any decide splash or play left over goes.
     if (!(await this.router.leave({ token }))) return;
@@ -4594,7 +4619,7 @@ class PlayerWebDemoApp {
             this.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
-            if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail }))) return;
+            if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail, continuesRun: true }))) return;
             this.unlockPlaylogOptions();
             this.continueCourse();
           })();
@@ -4729,7 +4754,11 @@ class PlayerWebDemoApp {
     } = {},
   ): Promise<void> {
     this.elements.shell.classList.add('playing');
-    const token = this.router.begin();
+    // A course stage or a NONSTOP run carries its course on; any other play (a replay dropped meanwhile included) starts
+    // a run of its own.
+    const token = this.router.begin({
+      continuesRun: overrides.courseStage !== undefined || overrides.nonstop !== undefined,
+    });
     this.lastSelectNavigation = this.selectView?.snapshot();
     // The select screen goes off the stage (kept) while the play is made. A decide splash goes before the play shows —
     // a live one would keep taking its keys and clicks — and so does a play being restarted (F5).
@@ -4875,8 +4904,13 @@ class PlayerWebDemoApp {
       audio: this.audio,
       on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
     });
-    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`).
-    const shown = await this.router.show(resultScene, { role: 'result', playDispose: disposeKeepingAudioTail });
+    // The play exits as the result enters; its audio tail rings on until it is disposed (`preserveAudioTail`). The play
+    // or the course asked for its result, so it carries the run on.
+    const shown = await this.router.show(resultScene, {
+      role: 'result',
+      playDispose: disposeKeepingAudioTail,
+      continuesRun: true,
+    });
     // A newer navigation that took the stage first keeps its own status; the play is still kept, saved and ranked.
     if (shown) this.setPlayStatus(`Result: ${data.song.title}`);
     if (this.testHook !== undefined) {
