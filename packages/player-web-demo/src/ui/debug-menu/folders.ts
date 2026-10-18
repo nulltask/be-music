@@ -1,5 +1,5 @@
 // Layout and persistence helpers for the demo's lil-gui "Debug Menu". The folder titles, their order, and which ones
-// start open live here so the structure reads in one place and stays testable; `main.ts` binds the controllers.
+// start open live here so the structure reads in one place and stays testable; `index.ts` binds the controllers.
 
 /** Prefix every `localStorage` key the demo writes starts with. */
 export const DEMO_STORAGE_PREFIX = 'be-music-demo.';
