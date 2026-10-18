@@ -80,18 +80,26 @@ export interface RecordPlayResult {
   cleared: boolean;
   maxCombo: number;
   score: Pick<ScoreSummary, 'total' | 'perfect' | 'great' | 'good' | 'bad' | 'poor' | 'emptyPoor' | 'exScore'>;
+  /** The POOR judgments alone, when `score.poor` also counts the empty POORs (a result under LR2 shows them so). */
+  judgedPoor?: number;
+}
+
+/** A result's judgments with only the POOR judgments in `poor`, so a BP counts each empty POOR once. */
+function judgmentsOf(result: RecordPlayResult): RecordPlayResult['score'] {
+  return result.judgedPoor === undefined ? result.score : { ...result.score, poor: result.judgedPoor };
 }
 
 /**
  * What a play's result contributes to its chart's record: its lamp (a result without one falls back to its gauge's
- * verdict, `NORMAL` or `FAILED`), EX score, max combo and BP (BAD + POOR + empty POOR).
+ * verdict, `NORMAL` or `FAILED`), EX score, max combo and BP (BAD + POOR + empty POOR, each empty POOR once also where
+ * the result's POOR folds them in).
  */
 export function recordPlayFromResult(result: RecordPlayResult): RecordPlay {
   return {
     lamp: result.lamp ?? (result.cleared ? 'NORMAL' : 'FAILED'),
     exScore: result.score.exScore,
     maxCombo: result.maxCombo,
-    missCount: resolveMissCount(result.score),
+    missCount: resolveMissCount(judgmentsOf(result)),
   };
 }
 
@@ -134,7 +142,8 @@ function unjudgedNotes(score: Pick<ScoreSummary, 'total' | 'perfect' | 'great' |
  */
 export function courseStageRecordPlayFromResult(result: RecordPlayResult): RecordPlay {
   const play = recordPlayFromResult(result);
-  return { ...play, missCount: resolveMissCount(result.score, unjudgedNotes(result.score)) };
+  const judgments = judgmentsOf(result);
+  return { ...play, missCount: resolveMissCount(judgments, unjudgedNotes(judgments)) };
 }
 
 /** {@link courseStageRecordPlayFromResult} for a stage whose result is its engine summary (the beatoraja family). */

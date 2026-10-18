@@ -28,6 +28,11 @@ export type PlayRunKind = 'single' | 'stage' | 'course' | 'nonstop';
 export interface PlayResult {
   /** Per-judgment counts, total notes, EX score and the displayed score (LR2's money score, else the EX score). */
   score: ScoreSummary;
+  /**
+   * The POOR judgments alone, when `score.poor` also counts the empty POORs (a play under LR2, whose POOR readout folds
+   * them in): a sum over `score` that adds `emptyPoor` too, such as BP, reads this in place of `score.poor`.
+   */
+  judgedPoor?: number;
   /** The longest unbroken combo (a course run: the course-wide one). */
   maxCombo: number;
   /** The final gauge in percent (0..100). */

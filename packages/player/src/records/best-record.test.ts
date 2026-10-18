@@ -95,6 +95,12 @@ describe('recordPlayFromResult', () => {
     expect(recordPlayFromResult({ score, maxCombo: 0, cleared: false }).lamp).toBe('FAILED');
     expect(recordPlayFromResult({ score, maxCombo: 0, cleared: true }).lamp).toBe('NORMAL');
   });
+
+  it('counts each empty POOR once where the POOR folds them in (an LR2 result)', () => {
+    // The POOR readout shows 1 POOR + 4 empty POORs; the judgments alone are beside it.
+    const lr2: RecordPlayResult = { score: { ...score, poor: 5 }, judgedPoor: 1, maxCombo: 6, cleared: true };
+    expect(recordPlayFromResult(lr2).missCount).toBe(6);
+  });
 });
 
 describe('recordPlayFromSummary', () => {
@@ -147,6 +153,17 @@ describe('course stage record plays', () => {
       gauge: { type: 'GRADE', cleared: false } as RecordPlaySummary['gauge'],
     };
     expect(courseStageRecordPlayFromSummary(summary, 20)).toMatchObject({ lamp: 'FAILED', missCount: 56 });
+  });
+
+  it('count each empty POOR once where the POOR folds them in (an LR2 result)', () => {
+    const score = { total: 10, perfect: 6, great: 1, good: 0, bad: 1, poor: 4, emptyPoor: 2, exScore: 13 };
+    // 2 POORs + 2 empty POORs on the POOR readout: BAD + POOR + empty POOR is 5, and every note was judged.
+    expect(courseStageRecordPlayFromResult({ score, judgedPoor: 2, maxCombo: 5, cleared: true }).missCount).toBe(5);
+    // A stage failed with 1 note left: it counts too, and the empty POORs are not taken for judged notes.
+    const failed = { ...score, perfect: 5 };
+    expect(
+      courseStageRecordPlayFromResult({ score: failed, judgedPoor: 2, maxCombo: 2, cleared: false }).missCount,
+    ).toBe(6);
   });
 });
 
