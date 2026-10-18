@@ -8,10 +8,9 @@
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import type { ScoreSummary } from '@be-music/player/ruleset';
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
-import { gaugePercent, playResultFromPlayState, type PlayState } from '@be-music/scene-model';
+import { gaugePercent, playResultFromPlayState, type PlayResult, type PlayState } from '@be-music/scene-model';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
-import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { PlaySessionTheme } from './play-session-theme.ts';
 
 /** The scene's members the ending reads and writes: the play session's members of these names. */
@@ -105,7 +104,7 @@ export function beginExitSequence(
  * end, the clear lamp by the one clear-lamp rule, and the scores as the readouts show them; with the gauge's clear
  * border (in percent) and TOTAL, which a beatoraja result skin shows.
  */
-export function getResultData(ctx: PlayEndingContext): PixiGameplayResultData | undefined {
+export function getResultData(ctx: PlayEndingContext): PlayResult | undefined {
   if (!ctx.song) {
     return undefined;
   }

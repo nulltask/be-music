@@ -17,9 +17,8 @@ import {
   type Lr2LaneTimerBank,
   type Lr2TimerUpdate,
 } from '@be-music/lr2-skin/state';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import { resolveSideRelativeLaneIndex, type ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
-import { resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { PlayViewEvent } from '../types.ts';
 import {
   computeBombDurationsMs,

@@ -4,7 +4,7 @@
  */
 
 import { PLAYFIELD } from '@be-music/skin-sdk';
-import { resolveLr2LaneIndex } from '../../../scene/gameplay-lanes.ts';
+import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import type { BeMusicLaneFrame } from '../../../skin/be-music/types.ts';
 import { renderPhantomLanes } from '../../../skins/phantom/playfield.ts';
