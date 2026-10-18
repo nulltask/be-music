@@ -226,6 +226,16 @@ describe('resolveBeatorajaSelectNumber', () => {
     expect(read(BEATORAJA_NUM.HISPEED)).toBeUndefined();
   });
 
+  it('reads the main BPM a play shows on 92, the header BPM without one', () => {
+    const read = (facts: BeatorajaSelectChartFacts, id: number): number | undefined =>
+      resolveBeatorajaSelectNumber(id, input(SONG_BAR, { chart: facts }));
+    expect(read({ ...FACTS, mainBpm: 180.4 }, BEATORAJA_NUM.MAINBPM)).toBe(180);
+    // The header BPM stays on the current-BPM number.
+    expect(read({ ...FACTS, mainBpm: 180.4 }, BEATORAJA_NUM.NOWBPM)).toBe(150);
+    expect(read(FACTS, BEATORAJA_NUM.MAINBPM)).toBe(150);
+    expect(read({ ...FACTS, mainBpm: 0 }, BEATORAJA_NUM.MAINBPM)).toBe(150);
+  });
+
   it('reads the folder bar count and the clock on any bar, the chart numbers on a chart bar only', () => {
     const wallClock = { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 };
     expect(resolveBeatorajaSelectNumber(BEATORAJA_NUM.FOLDER_TOTALSONGS, input(FOLDER_BAR))).toBe(2);

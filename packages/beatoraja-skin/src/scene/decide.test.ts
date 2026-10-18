@@ -47,12 +47,21 @@ describe('resolveBeatorajaDecideNumber', () => {
     expect(resolveBeatorajaDecideNumber(BEATORAJA_NUM.PLAYLEVEL, decide())).toBe(0);
   });
 
-  it('reads the listed BPM, rounded, on every BPM number', () => {
+  it('reads the listed BPM, rounded, on every BPM number without a main BPM', () => {
     const input = decide({ bpm: 149.6 });
     for (const id of [BEATORAJA_NUM.MAINBPM, BEATORAJA_NUM.MAXBPM, BEATORAJA_NUM.MINBPM, BEATORAJA_NUM.NOWBPM]) {
       expect(resolveBeatorajaDecideNumber(id, input)).toBe(150);
     }
     expect(resolveBeatorajaDecideNumber(BEATORAJA_NUM.MAINBPM, decide())).toBe(0);
+  });
+
+  it('reads the main BPM the play shows on 92, the listed BPM without one', () => {
+    const input = { ...decide({ bpm: 149.6 }), mainBpm: 179.6 };
+    expect(resolveBeatorajaDecideNumber(BEATORAJA_NUM.MAINBPM, input)).toBe(180);
+    for (const id of [BEATORAJA_NUM.MAXBPM, BEATORAJA_NUM.MINBPM, BEATORAJA_NUM.NOWBPM]) {
+      expect(resolveBeatorajaDecideNumber(id, input)).toBe(150);
+    }
+    expect(resolveBeatorajaDecideNumber(BEATORAJA_NUM.MAINBPM, { ...input, mainBpm: 0 })).toBe(150);
   });
 
   it('reads the loading progress in whole percent and 0 for the numbers of a play', () => {
