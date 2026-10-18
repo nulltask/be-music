@@ -416,7 +416,7 @@ function createChartPlayState(
 
 /**
  * Each side's lane covers as the play starts: from the play options (`laneCoversFromPlayOptions`), or every cover at 0
- * and off for a play that starts without them (`coverStart: 'none'`, the beatoraja play screen's).
+ * and off for a play that starts without them (`coverStart: 'none'`).
  */
 function resolveStartingCovers(ctx: PlayChartContext): LaneCoverState[] {
   const sides = resolveLaneSides(ctx.laneChannels);
