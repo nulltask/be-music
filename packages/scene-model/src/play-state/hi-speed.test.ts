@@ -57,11 +57,19 @@ describe('reduceHiSpeed', () => {
     expect(reduceHiSpeed(fixed, { type: 'hi-speed-drawn', value: 1.5 })).toMatchObject({ player: 3, drawn: 1.5 });
   });
 
-  test('ignores the player while a course locks the hi-speed, but not the host', () => {
+  test('ignores the player while a course locks the hi-speed, but not the host or a replay', () => {
     const locked = createHiSpeedState({ hiSpeed: 2, locked: true });
     expect(reduceHiSpeed(locked, { type: 'hi-speed-step', delta: 0.1 })).toBe(locked);
-    expect(reduceHiSpeed(locked, { type: 'hi-speed-drawn', value: 3 })).toBe(locked);
+    // A replay's recorded view shows the hi-speed the play was locked at, as its recorded covers do.
+    expect(reduceHiSpeed(locked, { type: 'hi-speed-drawn', value: 3 })).toEqual({ ...locked, player: 3, drawn: 3 });
     expect(reduceHiSpeed(locked, { type: 'hi-speed-set', value: 3 })).toMatchObject({ player: 3, drawn: 3 });
+  });
+
+  test('keeps the lock after a replay sets the hi-speed', () => {
+    const locked = createHiSpeedState({ hiSpeed: 2, multiplier: 0.5, locked: true });
+    const replayed = reduceHiSpeed(locked, { type: 'hi-speed-drawn', value: 1.5 });
+    expect(replayed).toEqual({ player: 3, drawn: 1.5, multiplier: 0.5, locked: true });
+    expect(reduceHiSpeed(replayed, { type: 'hi-speed-step', delta: 0.1 })).toBe(replayed);
   });
 
   test('stops at the end of the range', () => {

@@ -4,7 +4,7 @@ import type { HsFix } from '../play-options/options.ts';
 /**
  * The hi-speed of a play: the player's, on their own scale (what the select panel, the readouts and the host show and
  * the hi-speed keys step), and the drawn one the notes scroll with: the player's times the chart's HS-FIX multiplier.
- * `locked` while a course forbids changing it (`no_speed`).
+ * `locked` while a course forbids the player changing it (`no_speed`).
  */
 export interface HiSpeedState {
   readonly player: number;
@@ -59,14 +59,16 @@ export type HiSpeedCommand =
   /** The host sets the player's hi-speed (a settings menu); HS-FIX applies on top. */
   | { type: 'hi-speed-set'; value: number }
   /**
-   * A drawn hi-speed from elsewhere — a replay's recorded view — taken as it is, the player's worked back from it
-   * (ignored while locked).
+   * A drawn hi-speed from elsewhere — a replay's recorded view — taken as it is, the player's worked back from it.
+   * Taken while locked too, as the replay's recorded covers are (`cover-set`): the lock stops the player changing the
+   * view, and a replay shows the view that was played, which a course's lock held where it started.
    */
   | { type: 'hi-speed-drawn'; value: number };
 
 /**
  * Applies a hi-speed change. Returns the same state when nothing changes: a non-finite value, a step past either end
- * of the range, or a player change while the course locks the hi-speed. The host's own setting is taken even then.
+ * of the range, or the player's step while the course locks the hi-speed. The host's own setting and a replay's
+ * recorded hi-speed are taken even then.
  */
 export function reduceHiSpeed(state: HiSpeedState, command: HiSpeedCommand): HiSpeedState {
   switch (command.type) {
@@ -84,7 +86,6 @@ export function reduceHiSpeed(state: HiSpeedState, command: HiSpeedCommand): HiS
         : { ...state, player: next.player, drawn: next.drawn };
     }
     case 'hi-speed-drawn': {
-      if (state.locked) return state;
       const drawn = snapHiSpeed(command.value);
       if (drawn === undefined || drawn === state.drawn) return state;
       return { ...state, drawn, player: snapHiSpeed(drawn / state.multiplier) ?? state.player };
