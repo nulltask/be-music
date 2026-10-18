@@ -46,11 +46,10 @@ import type { PlaySessionOptions } from './play-options.ts';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
 import type { LiveTempo } from './live-tempo.ts';
-import { resolvePlayEnding } from '../../scene/play-ending.ts';
 import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
-import { beginExitSequence, type PlayEndingContext } from './play-ending.ts';
+import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './play-ending.ts';
 import { applyPlayEvent } from './play-state.ts';
 import { shouldSkipPlayKey } from './play-keys.ts';
 import { samplePlaybackRate } from './play-media.ts';
@@ -834,7 +833,7 @@ function handleSharedEngineChartFinished(
   if (ctx.disposed || ctx.chartEnded) return;
   ctx.chartEnded = true;
   ctx.playMoments.outroAtMs ??= ctx.playClock();
-  // The end-of-play policy both gameplay families share (`scene/play-ending.ts`): a lead-out after the last note, or —
+  // The end-of-play policy both gameplay families share (`resolvePlayEnding`): a lead-out after the last note, or —
   // for a play cut short by its gauge emptying — no lead-out and a sound + picture fade-out before the result.
   const ending = resolvePlayEnding({
     summary: finalSummary,
