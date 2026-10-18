@@ -35,6 +35,7 @@ import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
 import { DEBUG_MENU_FOLDERS, rememberFolderOpenStates, type DebugMenuFolder } from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
+import { PlayLock } from './play-lock.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
 import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
@@ -185,8 +186,6 @@ export class DebugMenu {
   public hiSpeedController: Controller | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: Controller | undefined;
-  /** Whether the running play takes the tempo slider live (`allowsLiveTempo` at its start). */
-  public liveTempoPlay = false;
   /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
   public skinSettingsFolder: GUI | undefined;
   /** The Debug Menu's "Skin & display" folder, which hosts the LR2 theme picker once a drop discovers themes. */
@@ -209,11 +208,16 @@ export class DebugMenu {
   /**
    * The Debug Menu's other skin controls that make the select screen again: Built-in skin, Skin effects and the Add
    * skin buttons. They, {@link skinFamilyController} and {@link lr2ThemeController} are disabled during a play
-   * ({@link setSkinControlsLocked}), since going back to the select screen would end it.
+   * ({@link playLock}), since going back to the select screen would end it.
    */
   public readonly skinControllers: Controller[] = [];
-  /** Whether a play runs, so the skin controls are disabled ({@link setSkinControlsLocked}). */
-  public skinControlsLocked = false;
+  /** The locks a play puts on the options it latched and on the skin controls, and whether one runs. */
+  public readonly playLock: PlayLock = new PlayLock(() => ({
+    playlogSave: this.playlogSaveController,
+    playOptions: this.playOptionControllers,
+    tempo: this.tempoController,
+    skin: [this.skinFamilyController, this.lr2ThemeController, ...this.skinControllers],
+  }));
   /**
    * Disabled string controller used as the read-only status row inside the lil-gui panel. We hold a reference so {@link
    * refreshStatus} can call `updateDisplay()` directly rather than relying on lil-gui's `.listen()` polling.
@@ -349,40 +353,16 @@ export class DebugMenu {
 
   /**
    * Disables the options a play latches as it starts, so mid-song changes are rejected until {@link unlockAfterPlay}
-   * runs (result mounted or back at select), and the skin controls with them ({@link setSkinControlsLocked}). With
-   * `liveTempo`, the tempo slider stays enabled and changes the play's tempo live.
+   * runs (result mounted or back at select), and the skin controls with them ({@link playLock}). With `liveTempo`, the
+   * tempo slider stays enabled and changes the play's tempo live.
    */
   public lockForPlay(liveTempo = false): void {
-    this.playlogSaveController?.disable();
-    for (const controller of this.playOptionControllers) {
-      controller.disable();
-    }
-    this.setSkinControlsLocked(true);
-    // The tempo slider changes this play's tempo live (`allowsLiveTempo`).
-    this.liveTempoPlay = liveTempo;
-    if (liveTempo) this.tempoController?.enable();
+    this.playLock.lock(liveTempo);
   }
 
   /** Re-enables the playlog option controllers, and the skin controls, once no play is in flight. */
   public unlockAfterPlay(): void {
-    this.liveTempoPlay = false;
-    this.playlogSaveController?.enable();
-    for (const controller of this.playOptionControllers) {
-      controller.enable();
-    }
-    this.setSkinControlsLocked(false);
-  }
-
-  /**
-   * Disables the Debug Menu's skin controls for a play, or enables them again: Skin system, Built-in skin, Skin
-   * effects, the LR2 theme picker and the Add skin buttons all make the select screen again, which would end the play.
-   * A drop during a play still can; the router then ends the course run (`endCourseRun`).
-   */
-  private setSkinControlsLocked(locked: boolean): void {
-    this.skinControlsLocked = locked;
-    for (const controller of [this.skinFamilyController, this.lr2ThemeController, ...this.skinControllers]) {
-      controller?.enable(!locked);
-    }
+    this.playLock.unlock();
   }
 
   /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
