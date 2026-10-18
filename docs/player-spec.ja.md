@@ -667,7 +667,7 @@ scratch playable channel 上の演奏ノートだけを自動で処理し、そ�
 
 `highSpeed` は主に TUI の可視範囲とスクロール密度を変える表示用パラメータです。
 判定窓そのものは変えません。
-runtime は `@be-music/player/core/high-speed-control` で high-speed 値を正規化します。
+runtime は `@be-music/player/signals` の `resolveHighSpeedMultiplier` で high-speed 値を正規化します。
 有効範囲は `0.5` から `10.0` で、`0.5` 刻みに丸めます。
 
 ### pause / restart / interrupt

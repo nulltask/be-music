@@ -10,7 +10,8 @@ browser 固有の PixiJS / WebAudio 挙動は [Browser player 実装メモ](./pl
 
 `@be-music/player-tui` は、共有 `@be-music/player` engine を使う Node frontend です。
 CLI runner は chart file の parse、directory selection、loading / result screen 描画、1 回の gameplay session 起動を担当します。
-gameplay 本体は worker thread 上で動き、`@be-music/player/core/engine` の `autoPlay()` または `manualPlay()` を呼びます。
+gameplay 本体は worker thread 上で動き、`@be-music/player` の `autoPlay()` または `manualPlay()` を呼びます。
+UI worker が import するのは `@be-music/player/signals` と `@be-music/player/display` だけなので、プレイループや音声レンダラーは読み込みません。
 
 main thread は terminal input を所有し、worker 側の 2 つの surface を調停します。
 
