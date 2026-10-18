@@ -157,10 +157,6 @@ import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingle
 import {
   parsePlaylog,
   PLAYLOG_FILE_SUFFIX,
-  resolveCoursePlaylogFilename,
-  resolvePlaylogFilename,
-  serializeCoursePlaylog,
-  serializePlaylog,
   type BeMusicCoursePlaylog,
   type BeMusicPlaylog,
   type PlaylogCourseResult,
@@ -327,6 +323,7 @@ import {
 } from './services/built-in-skins.ts';
 import { SilentModeSetting } from './services/silent-mode.ts';
 import { copyPlayOptionsToGui, playOptionsFromGui, PlayOptionsService } from './services/play-options.ts';
+import { PlaylogAutoSave } from './services/playlog-auto-save.ts';
 import {
   describeBar,
   isTestHookEnabled,
@@ -692,11 +689,14 @@ class PlayerWebDemoApp {
    */
   private activeStageRecordKey: string | undefined;
   /**
-   * `guiState.autoSavePlaylog` as it was when the current play STARTED. The result-screen auto-save decision reads
-   * this latch, not the live checkbox, so the value in effect at song start governs the whole play (the checkbox is
-   * disabled during gameplay anyway — this latch is the enforcement for any path that slips through).
+   * Play-log auto-save, by `guiState.autoSavePlaylog` as it was when the current play STARTED: the result-screen
+   * auto-save of a play, and of a course after its last stage, reads this latch, not the live checkbox (the checkbox is
+   * disabled during gameplay anyway — the latch is the enforcement for any path that slips through).
    */
-  private activePlayAutoSavePlaylog = false;
+  private readonly playlogAutoSave = new PlaylogAutoSave({
+    download: downloadBlob,
+    warn: (message, error) => gameplayLog.warn(message, error),
+  });
   /**
    * Top-level "Skin family" dropdown. Rebuilt via {@link rebuildSkinFamilyPicker} on every theme load / wipe so its
    * option list reflects which families are actually selectable (LR2 only shows up once an `.lr2skin` has been
@@ -2351,7 +2351,7 @@ class PlayerWebDemoApp {
         courseRecordKey(nonstop.course, nonstop.prepared.stitched.placement),
       ),
     );
-    this.maybeAutoSaveCoursePlaylog(courseLog);
+    this.playlogAutoSave.saveCourse(courseLog);
     // Ranked as one course run: the Leaderboard stitches the stage charts again to check the stitched play.
     this.leaderboard.maybeSubmitCourse(
       courseLog,
@@ -2449,7 +2449,7 @@ class PlayerWebDemoApp {
       return;
     }
     this.recordCourseResult(resolveCourseRecordUpdate(courseLog, result, courseRecordKey(course)));
-    this.maybeAutoSaveCoursePlaylog(courseLog);
+    this.playlogAutoSave.saveCourse(courseLog);
     // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
     this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
     const courseInfo = resolveCourseView(course);
@@ -3374,7 +3374,7 @@ class PlayerWebDemoApp {
     const mounted = await this.showBeatorajaResult(data, { run: 'single' });
     if (!mounted) await this.showSelect();
     // Auto-save fires even when the theme ships no result skin, so going back to select costs no replay file.
-    this.maybeAutoSavePlaylog(data.playlog);
+    this.playlogAutoSave.savePlay(data.playlog);
     this.leaderboard.maybeSubmit(data.playlog, data.song);
     this.unlockPlaylogOptions();
   }
@@ -4656,7 +4656,7 @@ class PlayerWebDemoApp {
     this.recordActivePlay(recordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (presentation.quickRetry && mode.nonstop === undefined) {
-      this.maybeAutoSavePlaylog(data.playlog);
+      this.playlogAutoSave.savePlay(data.playlog);
       this.leaderboard.maybeSubmit(data.playlog, data.song);
     }
     this.unlockPlaylogOptions();
@@ -4669,7 +4669,7 @@ class PlayerWebDemoApp {
    * at select). The skin controls are disabled with them ({@link setSkinControlsLocked}).
    */
   private lockPlaylogOptionsForPlay(liveTempo = false): void {
-    this.activePlayAutoSavePlaylog = this.guiState.autoSavePlaylog;
+    this.playlogAutoSave.latch(this.guiState.autoSavePlaylog);
     this.playlogSaveController?.disable();
     this.leaderboard.lockForPlay();
     for (const controller of this.playOptionControllers) {
@@ -4755,35 +4755,6 @@ class PlayerWebDemoApp {
   private refreshPlayOptionControllers(): void {
     for (const controller of this.playOptionControllers) {
       controller.updateDisplay();
-    }
-  }
-
-  /**
-   * Downloads the play-log (`*.bmplay.json` input replay) when the "Auto-save play history" toggle was on at song
-   * start (the latched value — the checkbox itself is disabled during a play). Called from both result paths
-   * (LR2/default `showResult`, beatoraja `onComplete`) the moment the result presentation is up. Failures are
-   * non-fatal — the result screen must never be blocked by a download hiccup.
-   */
-  /** Saves a course run's play log when play-log auto-save is on (`<course>-<timestamp>.bmcourse.json`). */
-  private maybeAutoSaveCoursePlaylog(courseLog: BeMusicCoursePlaylog): void {
-    if (!this.guiState.autoSavePlaylog) return;
-    try {
-      const blob = new Blob([serializeCoursePlaylog(courseLog)], { type: 'application/json' });
-      downloadBlob(blob, resolveCoursePlaylogFilename(courseLog));
-    } catch (error) {
-      gameplayLog.warn('course play-log auto-save failed', error);
-    }
-  }
-
-  private maybeAutoSavePlaylog(playlog: BeMusicPlaylog | undefined): void {
-    if (!this.activePlayAutoSavePlaylog || playlog === undefined) {
-      return;
-    }
-    try {
-      const blob = new Blob([serializePlaylog(playlog)], { type: 'application/json' });
-      downloadBlob(blob, resolvePlaylogFilename(playlog));
-    } catch (error) {
-      gameplayLog.warn('play-log auto-save failed', error);
     }
   }
 }
