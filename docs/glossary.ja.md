@@ -11,6 +11,7 @@
 - **music / 曲 / 楽曲** は、タイトルとアーティストで人間が認識する作品単位です。1 つの music に複数の chart が属することがあります。
 - **song** は、このリポジトリの既定語ではありません。`song.mid`、`bemuse-song.json`、`songs[]` のような外部仕様名やファイル名をそのまま参照するときに使います。
 - **Music Select** は画面名です。この画面で選択・復元する単位は chart です。
+- 選曲画面が一覧するライブラリでは、chart は **ライブラリの譜面**（`LibraryChart`）です。譜面のバーは `{ kind: 'chart', chart }`、フォルダは `charts` を並べ、コースのステージは `chart` を指します。公開の名前の一部はまだ song のままです（`PlayResult.song`、`BrowserSongCollectionStore`、`BrowserSongAssetSource`、スキン SDK の `songRecord`、`BeMusicSongRecord`、`resolveSongStats`）。新しい名前は chart を使います。
 
 ## 譜面とリソース
 
@@ -56,11 +57,11 @@
 
 ## Runtime Package
 
-- **player core**: `@be-music/player` の共有 engine と helper surface です。解決済みの譜面からプレイを準備し、judgment、scoring、gauge helper、UI/audio adapter 契約を担当します。timing、ノートの解決、timeline は `@be-music/chart` にあります。
+- **player core**: `@be-music/player` の共有の規則と engine です。パッケージのルートは engine（`manualPlay`、`autoPlay`）で、解決済みの譜面からプレイを準備して判定し、UI / audio / input の runtime 契約を持ちます。ほかの入口は規則（`./ruleset`、`./course`、`./records`、`./playlog`）と、ホストがプレイと共有するもの（`./signals`、`./lanes`、`./display`）です。timing、ノートの解決、timeline は `@be-music/chart` にあります。
 - **terminal player**: `@be-music/player-tui` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
-- **browser player**: `@be-music/player-web` の PixiJS/WebAudio runtime と `@be-music/player-web-demo` の Vite host です。browser drop、LR2 / beatoraja skin rendering、browser gameplay、result scene、recording を扱います。
-- **skin family**: browser player が読み込み済み theme 状態から選ぶ scene family です。現在は LR2、beatoraja、built-in default family があります。
-- **default skin family**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う browser player 組み込みの skin family です。select、gameplay、result（スキンが宣言していれば decide も）を be-music skin で描き、gameplay では LR2 が default renderer を import しない形で共有 gameplay runtime へ chrome を注入します。
+- **browser player**: `@be-music/player-web` の PixiJS/WebAudio runtime と `@be-music/player-web-demo` の Vite host です。runtime はホスト向けの API から、どの画面もファミリービューが描くシーンセッションとして作り、ライブラリとスキンの読み込みとプレイの録画も持ちます。demo は browser drop、theme、Debug Menu、シーンルーターを扱います。
+- **skin family**: browser player の scene を描くスキンの種類です。`built-in`（be-music skin）、`lr2`、`beatoraja` があります（`SceneFamily`）。host は読み込んだ theme とプレイヤーの選択から選びます。
+- **built-in family（default skin family）**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う skin family です。select、play、result（スキンが宣言していれば decide も）を be-music skin で描きます。play view は LR2 と同じく共通のプレイフィールドを描き、そのまわりの chrome はスキンが描きます。
 - **be-music skin**: `@be-music/skin-sdk` に沿って書くコードベースのスキンです。player はキャンバスと毎フレームのデータを渡し、スキンは自分が持ち込んだ renderer で各画面を描きます。
 - **built-in skins**: browser player に同梱する be-music skin です。既定の Synesthesia、Phantom、Plain と、opt-in の Lattice があります。
 - **touch layout / portrait stage**: タッチ主体の端末向けの gameplay layout です。touch layout は等幅のレーンをステージいっぱいに並べます。`portraitStage` を持つスキンは縦向き（9:16）のステージでも表示できます。
@@ -86,7 +87,7 @@
 - **candidate note**: 入力イベントが来たときに、そのレーン集合で判定対象として探す未判定ノートです。
 - **keysound fallback**: LR2 互換の空打鍵時発音です。判定対象ノートがない場合、manual play は early BAD 窓がすでに開いた同レーン最新の可視または不可視 WAV を再発音できます。ただし、そのノートの判定窓が開く前の未来 pending WAV は先読みしません。
 - **empty POOR / 空POOR**: LR2 互換の空打鍵副作用です。judge 表示を `POOR` にし、POOR BGA を発火し、`EMPTY_POOR` gauge delta を適用しますが、judge counter、combo、EX-SCORE、score は変えません。
-- **stateSignals / uiSignals**: engine 本体から UI adapter へ状態を渡す信号群です。judge、combo、frame、lane flash、hold state などを通知します。
+- **stateSignals / uiSignals**: engine 本体から UI adapter へ状態を渡す信号群です。judge、combo、frame、lane flash、hold state などを通知します（`@be-music/player/signals` の `createPlayerStateSignals`、`createPlayerUiSignalBus`）。
 - **UI runtime**: player core と TUI/PixiJS などの具体的 frontend をつなぐ runtime display adapter です。
 - **gameplay worker / UI worker**: terminal frontend で重い gameplay、rendering、video BGA 処理を分離する Node worker 構成です。
 - **ANSI rendering**: 画像や BGA を terminal の文字セルと色付き文字列へ落とし込んで表示する方式です。
@@ -120,16 +121,21 @@
 ## アーキテクチャ
 
 - **シーンモデル（scene model）**: スキンの種類によらない 1 画面の状態と規則。何を見せ、どう応えるか。[ADR 0002](./adr/0002-scene-model-package.ja.md) と [シーンモデル](./scene-model.ja.md) を参照。
-- **ライブラリ / ライブラリの項目（library / library entry）**: 選曲画面が一覧する対象。ルートでフォルダにまとめた譜面と、コースフォルダです（`Library`）。一覧の 1 本のバーは譜面・フォルダ・コースのいずれかです（`LibraryEntry`）。
-- **一覧の状態（browse state）**: プレイヤーがライブラリのどこにいて、一覧がどんな形か。開いているフォルダ、各階層のカーソル、検索、ソートとフィルター（一覧のオプション）、お気に入りです（`BrowseState`）。その保存形（`BrowseSnapshot`）がプレイの通るシーンをまたいで状態を保ちます。
-- **プレイ状態（play state）**: どのプレイ画面も読むプレイの状態で、エンジンのフレームと判定で進みます。進行中のゲージと EX スコアとそのグラフ、コンボ、判定タイミング、見え方の設定です（`PlayState`）。
-- **プレイ結果（play result）**: 単独のプレイ、コースのステージ、コース全体、NONSTOP のプレイの唯一の結果の形（`PlayResult`）。どれかは実行の種類が示します。
+- **設計した入口（designed entry point）**: ファイル構成ではなく、使う側のために作ったパッケージの subpath。`@be-music/player` は `.`（エンジン）、`./signals`、`./lanes`、`./display`、`./ruleset`、`./playlog`、`./records`、`./course`、`./audio-sink` を、`@be-music/player-web` は `.`、`./host`、`./skin`、`./collection`、`./audio`、`./recording` を公開します。それ以外は内部です。[ADR 0005](./adr/0005-public-entry-points.ja.md) を参照。
+- **ライブラリ / ライブラリの譜面 / ライブラリの項目（library / library chart / library entry）**: 選曲画面が一覧する対象。ルートでフォルダにまとめた譜面と、コースフォルダです（`Library`）。その中の 1 つの譜面がライブラリの譜面（`LibraryChart`）で、一覧の 1 本のバーは譜面・フォルダ・コースのいずれかです（`LibraryEntry`、`kind: 'chart' | 'folder' | 'course'`）。
+- **一覧の状態（browse state）**: プレイヤーがライブラリのどこにいて、一覧がどんな形か。開いているフォルダ、各階層のカーソル、検索、ソートとフィルター（一覧のオプション）、お気に入りです（`BrowseState`）。その保存形（`BrowseSnapshot`。`captureBrowse` で取り、`restoreBrowse` で戻します）がプレイの通るシーンをまたいで状態を保ちます。
+- **プレイ状態（play state）**: どのプレイ画面も読むプレイの状態で、エンジンのフレームと判定で進みます。進行中のゲージと EX スコアとそのグラフ、コンボ、判定タイミング、見え方の設定です（`PlayState`。変えるのは `reducePlayState` だけです）。
+- **プレイ結果（play result）**: 単独のプレイ、コースのステージ、コース全体、NONSTOP のプレイの唯一の結果の形（`PlayResult`）。どれかは実行の種類（`single`、`stage`、`course`、`nonstop`）が示します。どのリザルト画面もこれを読みます。
 - **効果音セット（system sound set）**: テーマの効果音とジングルをスロットごとに持つもの（カーソル、決定、フォルダ、オプションパネル、選曲の BGM、クリア / 失敗のジングルなど）。それぞれバイト列かテーマ内のパスに解決済みです（`SystemSoundSet`）。
-- **シーンセッション（scene session）**: 画面の振る舞いの唯一の実装で、すべてのスキンの種類が共有します。[ADR 0001](./adr/0001-skin-families-only-draw.ja.md) を参照。
-- **ファミリービュー（family view）**: 1 つのスキンの種類が、シーンモデルをどう描くか。プレイヤーの操作をインテントとして返します。
+- **シーンセッション（scene session）**: 画面の振る舞いの唯一の実装で、すべてのスキンの種類が共有します（`@be-music/player-web` の `session/`）。一覧の操作、譜面の準備、エンジン、入力、音、終わり方です。毎ティック、シーンモデルの上に作ったフレームをファミリービューに渡し、インテントを受け取ります。[ADR 0001](./adr/0001-skin-families-only-draw.ja.md) を参照。
+- **ファミリービュー（family view）**: 1 つのスキンの種類が、シーンモデルをどう描くか（`view/built-in/`、`view/lr2/`、`view/beatoraja/`）。セッションのフレームを描き、プレイヤーの操作をインテントとして返します。エンジンは動かしません。
+- **ファミリーキット（family kit）**: ホストが画面を描かせるために渡すもので、スキンの種類ごとに違います。be-music skin とそのプレイヤーの設定（`built-in`）、LR2 skin（`lr2`）、読み込んだ beatoraja のテーマの項目（`beatoraja`）です（`SelectKit`、`DecideKit`、`PlayKit`、`ResultKit`）。
+- **ホスト向けの API（host API）**: `@be-music/player-web/host`。一度に 1 つの画面を表示する `PixiSceneHost` と、各画面をファミリーキットから `SessionScene` として作る `createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` です。
+- **画面のライフサイクル（scene lifecycle）**: どの画面も実装する唯一の契約（`PixiScene`）。`root`、`identity`（`{ kind, family }`）、`enter`、`exit`、`dispose` です。ホストは `setScene` でだけ画面を切り替えます。
 - **インテント（intent）**: ビューへの操作が画面にとって何を意味するか。フォルダを開く、コースを始める、ゲージを切り替える、など。
 - **プレイループ / 判定の戦略（play loop / judge strategy）**: すべてのプレイが通る 1 つのエンジンのループと、そこに差し込む手動・AUTO・リプレイの判定。[ADR 0003](./adr/0003-one-play-loop.ja.md) を参照。
-- **シーンルーター（scene router）**: ホストで今の画面とすべての切り替えを受け持つ唯一の部品。[ADR 0006](./adr/0006-scene-router.ja.md) を参照。
+- **シーンルーター（scene router）**: ホストで今の画面とすべての切り替えを受け持つ唯一の部品（Web のデモの `app/scene-router.ts`）。[ADR 0006](./adr/0006-scene-router.ja.md) を参照。
+- **音のサービス（audio service）**: Web のプレイヤーがプレイの譜面以外の音を鳴らす唯一の手段（`@be-music/player-web/audio` の `createAudioService`）。選曲の BGM、効果音、ジングル、譜面のプレビュー、スキンの音を 1 つのシステム `AudioContext` で鳴らします。プレイはこれを通して自分のコンテキストを開きます（`openPlayGraph`）。画面は自分が鳴らす音の持ち主（owner）として自分を渡し、`stopOwned` で止めます。[ADR 0007](./adr/0007-one-system-audio-context.ja.md) を参照。
 
 ## 関連文書
 
@@ -140,6 +146,8 @@
 - [Player 実装仕様](./player-spec.ja.md)
 - [Terminal player 実装メモ](./player-tui.ja.md)
 - [Browser player 実装メモ](./player-web.ja.md)
+- [シーンモデル](./scene-model.ja.md)
+- [アーキテクチャ](./architecture.ja.md)
 - [プレイログ（プレイ履歴）仕様](./playlog.ja.md)
 - [be-music スキンの作り方](./be-music-skin.ja.md)
 - [LR2 skin 実装メモ](./lr2-skin.ja.md)
