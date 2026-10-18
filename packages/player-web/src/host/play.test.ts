@@ -60,6 +60,15 @@ const DP_CHART = parseChart(['#BPM 120', '#00111:01', '#00118:01', '#00121:01', 
 /** A chart at 120 BPM that doubles to 240 BPM (`F0`) at measure 2. */
 const TEMPO_CHART = parseChart(['#BPM 120', '#00111:01', '#00203:F0', '#00211:01'].join('\n'), 'bms');
 
+/**
+ * A chart whose main BPM is 120, where four of its six notes sit, though 60 BPM is held longest (8 s against 4 s) and
+ * carries five mines besides its two notes.
+ */
+const MAIN_BPM_CHART = parseChart(
+  ['#BPM 120', '#00111:01010101', '#00203:3C', '#00211:01', '#002D2:0101010101', '#00411:01'].join('\n'),
+  'bms',
+);
+
 const NO_KEYS: SessionKeyTarget = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const AUDIO = { stopOwned: vi.fn(), playJingle: vi.fn(async () => true) } as unknown as AudioService;
 
@@ -463,6 +472,32 @@ describe('createPlayScene with a beatoraja kit', () => {
     expect(result.gaugeHistory.at(-1)).toMatchObject({ value: 18 });
     expect(result.scoreHistory[0]).toEqual({ progress: 0, exScore: 0 });
     scene.dispose();
+  });
+
+  it("takes the chart's main BPM by one rule on every family's play screen, for HS-FIX and the play log", async () => {
+    const options = {
+      chart: { ...CHART, chart: MAIN_BPM_CHART } as LibraryChart,
+      settings: { initialHiSpeed: 2, hsFix: 'AVERAGE' as const },
+    };
+    const builtIn = createPlayScene(
+      { family: 'built-in', skin: phantomSkin },
+      { ...options, audio: AUDIO, on: { finish: vi.fn(), exit: vi.fn(), restart: vi.fn() }, keyTarget: NO_KEYS },
+    );
+    const lr2 = createPlayScene(
+      { family: 'lr2', skin: lr2PlaySkin() },
+      { ...options, audio: AUDIO, on: { finish: vi.fn(), exit: vi.fn(), restart: vi.fn() }, keyTarget: NO_KEYS },
+    );
+    const beatoraja = createBeatoraja(options);
+    for (const scene of [builtIn, lr2, beatoraja.scene]) {
+      await scene.prepare();
+      const play = (scene as unknown as { playSession: PlaySceneSession }).playSession.play;
+      expect(play.chartBpmRange).toEqual({ minBpm: 60, maxBpm: 120, mainBpm: 120 });
+      // AVERAGE keeps the player's 2 at the main BPM, which is the reference BPM here.
+      expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 2 });
+    }
+    // The beatoraja lane of four beats at hi-speed 2 and 120 BPM shows a note for 1000 ms.
+    expect(startPlaylogView(beatoraja.play)).toMatchObject({ hiSpeedScale: 'beatoraja', visibleMs: 1000 });
+    for (const scene of [builtIn, lr2, beatoraja.scene]) scene.dispose();
   });
 
   it("plays the host's lane options, as every family does, and records them in the play log", async () => {
