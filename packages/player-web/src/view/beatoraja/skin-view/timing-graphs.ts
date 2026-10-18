@@ -4,6 +4,7 @@ import type {
   BeatorajaTimingDistributionGraphElement,
   BeatorajaTimingVisualizerElement,
 } from '@be-music/beatoraja-skin';
+import type { BeMusicJudgeWindowSet } from '@be-music/skin-sdk';
 import type { destinationToSpriteProps } from '../../../skin/beatoraja/render.ts';
 import type { BeatorajaPlaySkinViewOptions } from './options.ts';
 
@@ -42,15 +43,13 @@ export class BeatorajaTimingGraphRenderer {
   private readonly container: Container;
   private readonly resolveTimingSamples: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   private readonly resolveTimingDistribution: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
-  private readonly resolveTimingJudgeWindowsMs: () =>
-    | { pgreat: number; great: number; good: number; bad: number }
-    | undefined;
+  private readonly resolveTimingJudgeWindows: () => TimingVisualizerWindows | undefined;
 
   constructor(container: Container, options: BeatorajaPlaySkinViewOptions) {
     this.container = container;
     this.resolveTimingSamples = options.resolveTimingSamples ?? (() => undefined);
     this.resolveTimingDistribution = options.resolveTimingDistribution ?? (() => undefined);
-    this.resolveTimingJudgeWindowsMs = options.resolveTimingJudgeWindowsMs ?? (() => undefined);
+    this.resolveTimingJudgeWindows = options.resolveTimingJudgeWindows ?? (() => IIDX_NORMAL_JUDGE_WINDOWS);
   }
 
   /** Build a timingvisualizer entry — same Graphics-node + rebuild-on-change pattern. */
@@ -79,11 +78,12 @@ export class BeatorajaTimingGraphRenderer {
    * Update a timingvisualizer entry. Mirrors upstream `SkinTimingVisualizer.prepare()` +
    * `.draw()` (`SkinTimingVisualizer.java:76-149`):
    *
-   *   1. **Background** — paints the judge windows as stacked colour bands radiating
-   *      outward from the centre line. PG band sits innermost, then GR / GD / BD / PR.
-   *      Each band's half-width = the matching `JudgeWindowsMs` value mapped through
-   *      `judgeWidthRate = width / (judgeWidthMillis * 2 + 1)`. Defaults to IIDX-NORMAL
-   *      windows when no host resolver is wired (decide / select scenes / headless tests).
+   *   1. **Background** — paints the play's judge windows as stacked colour bands radiating
+   *      outward from the centre line ({@link resolveTimingVisualizerBands}). PG band sits
+   *      innermost, then GR / GD / BD / PR. Each band reaches the matching window's early
+   *      and late ms mapped through `judgeWidthRate = width / (judgeWidthMillis * 2 + 1)`.
+   *      Defaults to IIDX-NORMAL windows when no host resolver is wired (decide / select
+   *      scenes / headless tests); no bands while a wired resolver has no windows yet.
    *   2. **Tick marks** — semi-transparent black lines every 10 ms, painted on top of the
    *      bands as a fine-grain ruler.
    *   3. **Sample lines** — recent-judge offsets from {@link resolveTimingSamples}. Each
@@ -119,9 +119,8 @@ export class BeatorajaTimingGraphRenderer {
     const authoredWidth = entry.element.width > 0 ? entry.element.width : 301;
     const judgeWidthRate = authoredWidth / (halfWidthMs * 2 + 1);
     const centerLineLeft = (props.width - lineWidthPx) / 2;
-    // Resolve judge windows — host resolver wins, otherwise IIDX-NORMAL defaults so the
-    // background band still renders something sensible.
-    const windows = this.resolveTimingJudgeWindowsMs() ?? IIDX_NORMAL_JUDGE_WINDOWS_MS;
+    // The play's judge windows; IIDX-NORMAL defaults when no host resolver is wired.
+    const windows = this.resolveTimingJudgeWindows();
     // Authored band colours — fall through to upstream `JsonSkin.TimingVisualizer` defaults
     // when the skin omits a value (matches `JsonSkin.java`'s static initializer values).
     const colors = {
@@ -145,10 +144,7 @@ export class BeatorajaTimingGraphRenderer {
       lastSample?.kind ?? '-',
       props.width,
       props.height,
-      windows.pgreat.toFixed(2),
-      windows.great.toFixed(2),
-      windows.good.toFixed(2),
-      windows.bad.toFixed(2),
+      timingWindowsSignature(windows),
       colors.center,
       colors.pg,
       colors.gr,
@@ -160,41 +156,19 @@ export class BeatorajaTimingGraphRenderer {
     if (signature !== entry.lastSignature) {
       graphics.clear();
       // ─── 1. Background bands (upstream `SkinTimingVisualizer.prepare` line 90-117) ─────
-      //
-      // Bands stack OUTWARD from the centre — PG fills `[-pgreat, +pgreat]`, then GR
-      // extends beyond that to `[-great, -pgreat) ∪ (+pgreat, +great]`, etc. We track
-      // the previously-painted left/right edges and only fill the new outer slice on
-      // each iteration so adjacent bands don't overdraw each other (mirrors upstream's
-      // `beforex1 / beforex2` walk).
       if (props.height > 0 && props.width > 0) {
         const centerX = props.width / 2;
         // Centre stripe — 1 px wide at the perfect-timing axis.
         graphics.rect(centerX - 0.5, 0, 1, props.height).fill({ color: colors.center, alpha: 1 });
-        const bands: ReadonlyArray<{ halfMs: number; color: number }> = [
-          { halfMs: windows.pgreat, color: colors.pg },
-          { halfMs: windows.great, color: colors.gr },
-          { halfMs: windows.good, color: colors.gd },
-          { halfMs: windows.bad, color: colors.bd },
-          // PR band saturates at the visualizer's edge — beatoraja's
-          // `BMSPlayerRule.getNoteJudge()` returns a final "POOR" entry that's clamped
-          // to the visualizer's `±center` width. With `transparent = 1`, the band is
-          // skipped entirely (the player's PR hits show against whatever's behind the
-          // visualizer instead of the black PR band).
-          ...(transparentPr ? [] : [{ halfMs: halfWidthMs, color: colors.pr }]),
-        ];
-        let leftEdge = centerX;
-        let rightEdge = centerX;
-        for (const band of bands) {
-          const halfPx = Math.min(centerX, band.halfMs * judgeWidthRate);
-          const newLeft = centerX - halfPx;
-          const newRight = centerX + halfPx;
-          if (newLeft < leftEdge) {
-            graphics.rect(newLeft, 0, leftEdge - newLeft, props.height).fill({ color: band.color, alpha: 1 });
-            leftEdge = newLeft;
-          }
-          if (newRight > rightEdge) {
-            graphics.rect(rightEdge, 0, newRight - rightEdge, props.height).fill({ color: band.color, alpha: 1 });
-            rightEdge = newRight;
+        if (windows !== undefined) {
+          const bands = resolveTimingVisualizerBands(windows, colors, {
+            centerX,
+            judgeWidthRate,
+            halfWidthMs,
+            transparentPr,
+          });
+          for (const band of bands) {
+            graphics.rect(band.x, 0, band.width, props.height).fill({ color: band.color, alpha: 1 });
           }
         }
         // ─── 2. Tick marks (upstream line 114-117) ─────────────────────────────────
@@ -377,18 +351,88 @@ export function judgeColorFor(kind: string): number {
   }
 }
 
+/** The judge windows a `timingvisualizer[]` paints its bands from: each judgment's early and late reach in ms. */
+export type TimingVisualizerWindows = Pick<BeMusicJudgeWindowSet, 'perfect' | 'great' | 'good' | 'bad'>;
+
+/** One background band of a `timingvisualizer[]`: a slice `width` px wide from `x` (px from its left edge). */
+export interface TimingVisualizerBand {
+  readonly x: number;
+  readonly width: number;
+  readonly color: number;
+}
+
+/** Where a `timingvisualizer[]` paints: its centre (px), its scale (px per ms), its edge (ms) and its POOR band. */
+export interface TimingVisualizerBandLayout {
+  readonly centerX: number;
+  readonly judgeWidthRate: number;
+  readonly halfWidthMs: number;
+  /** `transparent = 1`: no POOR band. */
+  readonly transparentPr: boolean;
+}
+
+/**
+ * The background bands of a `timingvisualizer[]` (upstream `SkinTimingVisualizer.prepare`, the `beforex1 / beforex2`
+ * walk): PERFECT innermost, then GREAT, GOOD and BAD, each reaching its window's early ms to the left of the centre
+ * and its late ms to the right (where a late judgment's sample line is drawn), less what the windows inside it already
+ * cover; then POOR out to `halfWidthMs`, the visualizer's edge (none with `transparentPr`). Every reach clamps to the
+ * visualizer's width (`centerX` either side).
+ */
+export function resolveTimingVisualizerBands(
+  windows: TimingVisualizerWindows,
+  colors: { readonly pg: number; readonly gr: number; readonly gd: number; readonly bd: number; readonly pr: number },
+  layout: TimingVisualizerBandLayout,
+): TimingVisualizerBand[] {
+  const { centerX, judgeWidthRate, halfWidthMs, transparentPr } = layout;
+  const reaches: ReadonlyArray<{ earlyMs: number; lateMs: number; color: number }> = [
+    { ...windows.perfect, color: colors.pg },
+    { ...windows.great, color: colors.gr },
+    { ...windows.good, color: colors.gd },
+    { ...windows.bad, color: colors.bd },
+    // PR band saturates at the visualizer's edge — beatoraja's `BMSPlayerRule.getNoteJudge()` returns a final "POOR"
+    // entry that's clamped to the visualizer's `±center` width. With `transparent = 1`, the band is skipped entirely
+    // (the player's PR hits show against whatever's behind the visualizer instead of the black PR band).
+    ...(transparentPr ? [] : [{ earlyMs: halfWidthMs, lateMs: halfWidthMs, color: colors.pr }]),
+  ];
+  const bands: TimingVisualizerBand[] = [];
+  let leftEdge = centerX;
+  let rightEdge = centerX;
+  for (const reach of reaches) {
+    const newLeft = centerX - Math.min(centerX, Math.max(0, reach.earlyMs) * judgeWidthRate);
+    const newRight = centerX + Math.min(centerX, Math.max(0, reach.lateMs) * judgeWidthRate);
+    if (newLeft < leftEdge) {
+      bands.push({ x: newLeft, width: leftEdge - newLeft, color: reach.color });
+      leftEdge = newLeft;
+    }
+    if (newRight > rightEdge) {
+      bands.push({ x: rightEdge, width: newRight - rightEdge, color: reach.color });
+      rightEdge = newRight;
+    }
+  }
+  return bands;
+}
+
+function timingWindowsSignature(windows: TimingVisualizerWindows | undefined): string {
+  if (windows === undefined) return '-';
+  const { perfect, great, good, bad } = windows;
+  return [perfect, great, good, bad].map((w) => `${w.earlyMs.toFixed(2)}/${w.lateMs.toFixed(2)}`).join(',');
+}
+
+/** One IIDX-NORMAL judgment's window, the same both ways. */
+function iidxNormalWindow(ms: number): { earlyMs: number; lateMs: number } {
+  return { earlyMs: ms, lateMs: ms };
+}
+
 /**
  * IIDX-NORMAL judge window fallback for the `timingvisualizer[]` background bands when no
- * host resolver is wired (decide / select scenes / headless tests). Values from the judge
- * window constants behind `@be-music/player/ruleset`'s `resolveJudgeWindowsMs` — keep in sync
- * with the engine's actual IIDX_*_WINDOW_MS constants.
+ * host resolver is wired (decide / select scenes / headless tests): the IIDX ruleset's
+ * windows (PG 16.67, GR 33.33, GD 116.67, BD 250 ms).
  */
-const IIDX_NORMAL_JUDGE_WINDOWS_MS = {
-  pgreat: 16.67,
-  great: 33.33,
-  good: 116.67,
-  bad: 250,
-} as const;
+const IIDX_NORMAL_JUDGE_WINDOWS: TimingVisualizerWindows = {
+  perfect: iidxNormalWindow(16.67),
+  great: iidxNormalWindow(33.33),
+  good: iidxNormalWindow(116.67),
+  bad: iidxNormalWindow(250),
+};
 
 /**
  * Default colours for the `timingvisualizer[]` band background, mirroring upstream

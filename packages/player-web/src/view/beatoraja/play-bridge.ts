@@ -66,7 +66,6 @@ import {
   type BeatorajaScoreInput,
   type BeatorajaTimerChanges,
 } from '@be-music/beatoraja-skin/scene';
-import { type JudgeWindowsMs, resolveJudgeWindowsMs } from '@be-music/player/ruleset';
 import type { ChartPlayVariant } from '@be-music/chart';
 import { resolveSideKeySlot } from '@be-music/player/lanes';
 import {
@@ -76,6 +75,7 @@ import {
   type LaneCoverState,
   type PlayState,
 } from '@be-music/scene-model';
+import type { BeMusicJudgeWindows, BeMusicJudgeWindowSet } from '@be-music/skin-sdk';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
 import { computeBeatorajaChartNoteDistribution } from '../../chart/beatoraja/note-distribution.ts';
@@ -97,7 +97,7 @@ export interface BeatorajaPlayBridgeOptions {
   readonly autoPlay?: boolean;
   /**
    * The chart as the play plays it (its `#RANDOM` branches drawn, DP FLIP applied): its texts, BPM, last notes, note
-   * kinds, judge windows and the judge-state graph's seconds. Without it every text renders empty.
+   * kinds and the judge-state graph's seconds. Without it every text renders empty.
    */
   readonly chart?: BeMusicJson;
   /** The skin's name and author (texts 50 / 51). */
@@ -147,6 +147,11 @@ export interface BeatorajaPlayBridgeFrame {
   readonly engine?: BeatorajaPlayEngineInput;
   /** What happened since the last frame, oldest first. */
   readonly events: readonly PlayViewEvent[];
+  /**
+   * The windows the engine judges the play by (its judge ruleset's), as the session holds them once the engine has
+   * started; absent before. The timing visualizer's bands show the key lanes' ones.
+   */
+  readonly judgeWindows?: BeMusicJudgeWindows;
 }
 
 /** A judge plate's latest judgment and FAST / SLOW ops, which the next judgment on the plate replaces. */
@@ -286,7 +291,8 @@ export class BeatorajaPlayBridge {
   private lastFrameBeat: number | undefined;
   private lastFrameGauge: number | undefined;
   private cachedNoteBreakdown: ReturnType<typeof computeBeatorajaNoteBreakdown> | undefined;
-  private cachedJudgeWindowsMs: JudgeWindowsMs | undefined;
+  /** The play's judge windows, as the latest frame carried them. */
+  private judgeWindows: BeMusicJudgeWindows | undefined;
   /** Refs the resolvers do not cover, logged once per play each. */
   private readonly unresolvedNumberRefs = new Set<number>();
   private readonly unresolvedTextRefs = new Set<number>();
@@ -390,6 +396,7 @@ export class BeatorajaPlayBridge {
     if (frame.engine !== undefined) this.applyEngine(frame.engine, frame.hostNowMs ?? frame.nowMs);
     for (const event of frame.events) this.handle(event);
     this.applyState(frame.state);
+    this.judgeWindows = frame.judgeWindows;
     return this.renderContextAt(frame.nowMs);
   }
 
@@ -796,11 +803,12 @@ export class BeatorajaPlayBridge {
     return type === 1 ? this.judgeState : undefined;
   }
 
-  /** The chart's judge windows in ms, for the timing visualizer's bands; `undefined` without a chart. */
-  public resolveJudgeWindowsMs(): JudgeWindowsMs | undefined {
-    if (this.chart === undefined) return undefined;
-    this.cachedJudgeWindowsMs ??= resolveJudgeWindowsMs(this.chart);
-    return this.cachedJudgeWindowsMs;
+  /**
+   * The play's key-lane judge windows (its judge ruleset's, which the frames carry from the session), for the timing
+   * visualizer's bands; `undefined` until the engine has reported them.
+   */
+  public resolveTimingJudgeWindows(): BeMusicJudgeWindowSet | undefined {
+    return this.judgeWindows?.note;
   }
 
   /** A `graph[].type` fill ratio ({@link resolveBeatorajaPlayGraphValue}): the gauge, the song's progress, loading. */
