@@ -300,7 +300,7 @@ async function registerBitmapFont(args: {
     // CSS/canvas pipelines `Text` and `BitmapText` share). We can't pass through a negative
     // `style.fontSize` to reproduce upstream's double-negative cancellation, so we sign-strip
     // BOTH sides instead — `Math.abs(parsed.fontSize)` here, paired with `Math.abs(element.size)`
-    // in `scene/beatoraja/skin-view/text.ts`'s `buildTextEntry`. The result is mathematically
+    // in `view/beatoraja/skin-view/text.ts`'s `buildTextEntry`. The result is mathematically
     // equivalent: `+118 / +120 = +0.983`, same scale, same rendered glyph height.
     //
     // User report: without this normalization, `style.fontSize = abs(text.size)` (the only

@@ -3,7 +3,7 @@
  * recorder — the per-frame runtime plumbing the demo wires into the scene host.
  *
  * The lower-level runtime helpers (engine driver, web-audio session, web-input runtime, web-ui runtime) stay internal:
- * they back `audio-bus.ts` and the scene classes but aren't part of the public contract today.
+ * they back `audio-bus.ts` and the play session but aren't part of the public contract today.
  */
 export * from './audio-bus.ts';
 // One system AudioContext for the BGM, cues, jingles, chart preview and skin sounds, and the per-play graphs (ADR 0007).

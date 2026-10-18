@@ -1,7 +1,7 @@
 /**
  * Barrel for the `@be-music/player-web/skin` subpath. Re-exports skin parsing / loading / render helpers and the
  * cross-family `SkinFamily` registry. Pixi-bound texture / font / rendering helpers under `skin/lr2/*` are mostly
- * package-internal (they back the scene classes); the only one re-exported here is `loadTextureFromBytes`, which the
+ * package-internal (they back the family views); the only one re-exported here is `loadTextureFromBytes`, which the
  * demo needs to decode per-song STAGEFILE / BACKBMP / BANNER bitmaps without reaching into private modules.
  */
 export * from './family.ts';

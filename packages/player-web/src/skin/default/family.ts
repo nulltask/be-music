@@ -8,9 +8,9 @@ import type { SkinFamily } from '../family.ts';
  * - the dropped theme(s) don't cover the chart's key mode (e.g. a 9-key chart and an LR2 theme that ships only
  *   `play_7.lr2skin` — the LR2 path takes over, but at the gameplay scene it falls back to this family's chrome).
  *
- * Its select screen is `DefaultPixiSongSelectView` (`scene/default/`); its decide, play and result screens are
- * `createDecideScene`, `createPlayScene` and `createResultScene`. A be-music skin without a decide
- * screen skips the splash and hands straight off to gameplay.
+ * Its select, decide, play and result screens are `createSelectScene`, `createDecideScene`, `createPlayScene` and
+ * `createResultScene` with a built-in kit. A be-music skin without a decide screen skips the splash and hands straight
+ * off to gameplay.
  */
 export const defaultSkinFamily: SkinFamily = {
   id: 'default',
