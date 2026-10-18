@@ -7,15 +7,16 @@ const log = logger('web-input-runtime');
 /**
  * Construction-time inputs for {@link createWebInputRuntime}. The factory closes over the host's `KeyboardEvent`
  * source (typically `window`) and forwards every press / release into the engine's `inputSignals` bus as the same
- * `lane-input` / `toggle-pause` / `interrupt` / `high-speed` commands the TUI runtime emits — that way the engine's
- * judge / fallback / LN logic doesn't need a runtime-specific code path.
+ * `lane-input` / `kitty-state` / `toggle-pause` / `interrupt` commands the TUI runtime emits — that way the engine's
+ * judge / fallback / LN logic doesn't need a runtime-specific code path. Unlike the TUI it sends no `high-speed`
+ * command (the TUI's Alt / Option + lane shortcut): the play session steps the hi-speed with the arrow keys itself.
  */
 export interface WebInputRuntimeOptions {
   inputSignals: PlayerInputSignalBus;
   /**
    * Map produced by {@link createInputTokenToChannelsMap} (re-exported through the engine's
-   * {@link CreatePlayerInputRuntimeContext}). Used here only for the high-speed-modifier token lookup; the engine
-   * owns the full lane resolution path.
+   * {@link CreatePlayerInputRuntimeContext}). Not read here: the runtime sends raw tokens and the engine owns the
+   * lane resolution path.
    */
   inputTokenToChannels: ReadonlyMap<string, readonly string[]>;
   /**

@@ -59,8 +59,8 @@ export type HiSpeedCommand =
   /** The host sets the player's hi-speed (a settings menu); HS-FIX applies on top. */
   | { type: 'hi-speed-set'; value: number }
   /**
-   * A drawn hi-speed from elsewhere — the engine's hi-speed signal (its Option + lane-key shortcut), a replay's recorded
-   * view — taken as it is, the player's worked back from it (ignored while locked).
+   * A drawn hi-speed from elsewhere — a replay's recorded view — taken as it is, the player's worked back from it
+   * (ignored while locked).
    */
   | { type: 'hi-speed-drawn'; value: number };
 
