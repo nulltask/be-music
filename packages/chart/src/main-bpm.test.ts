@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
+import { createEmptyJson, type BeMusicEvent } from '../../json/src/index.ts';
 import { resolveChartMainBpm, type MainBpmChart } from './main-bpm.ts';
+import { resolveChart } from './resolved-chart.ts';
 
 /** A chart whose tempo map is a list of `[beat, bpm]` steps. */
 function chart(
@@ -64,5 +66,31 @@ describe('resolveChartMainBpm', () => {
 
   test('is undefined for a chart without notes', () => {
     expect(resolveChartMainBpm(chart([[0, 150]], []))).toBeUndefined();
+  });
+
+  test('counts a resolved chart as beatoraja counts its timelines: judged notes only, at the BPM of their position', () => {
+    const event = (measure: number, channel: string, value: string, position: [number, number] = [0, 1]) =>
+      ({ measure, channel, position, value }) satisfies BeMusicEvent;
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [
+      // Two taps at 120, with three mines and two invisible notes that do not count.
+      event(1, '11', '01'),
+      event(1, '12', '01'),
+      event(1, 'D3', '01'),
+      event(1, 'D4', '01'),
+      event(1, 'D5', '01', [1, 2]),
+      event(1, '31', '01', [1, 2]),
+      event(1, '32', '01', [1, 2]),
+      // 60 from measure 2, a tap on the change itself counting at 60: three taps at 60.
+      event(2, '03', '3C'),
+      event(2, '11', '01'),
+      event(2, '13', '01', [1, 2]),
+      event(3, '14', '01'),
+      // 240 from measure 4, held longest (64 beats, 16 s) with one tap at its end.
+      event(4, '03', 'F0'),
+      event(20, '15', '01'),
+    ];
+    expect(resolveChartMainBpm(resolveChart(json))).toBe(60);
   });
 });
