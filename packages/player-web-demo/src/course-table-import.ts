@@ -3,7 +3,7 @@
 // course folders.
 import type { CourseDefinitionGroup } from '@be-music/player-web/collection';
 import { fetchTableHeaderCourses, parseTableHeaderCourses, type TableFetchText } from '@be-music/player/course';
-import { DEMO_STORAGE_PREFIX } from './debug-menu.ts';
+import { DEMO_STORAGE_PREFIX } from './ui/debug-menu/folders.ts';
 
 /** `localStorage` key of the difficulty-table URLs whose courses are imported again on load. */
 export const COURSE_TABLE_URLS_STORAGE_KEY = `${DEMO_STORAGE_PREFIX}course-table-urls`;
