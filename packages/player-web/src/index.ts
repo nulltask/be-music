@@ -6,7 +6,7 @@
  * `/runtime`). They document the dependency surface explicitly and keep the imports cohesive with the area being
  * worked on.
  */
-export * from './scene/index.ts';
+export * from './host/index.ts';
 export * from './skin/index.ts';
 export * from './chart/index.ts';
 export * from './collection/index.ts';

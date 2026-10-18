@@ -15,10 +15,10 @@ import {
   resolveScaledViewport,
   setDesignPixelRatio,
   setDesignTextResolution,
-} from '../../scene/core/viewport.ts';
-import { BG } from '../../scene/gameplay-constants.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
-import type { PerfTracker } from '../../scene/perf.ts';
+} from '../../stage/viewport.ts';
+import { BG } from './play-constants.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
+import type { PerfTracker } from './perf.ts';
 import { renderBga, type BgaRendererContext } from './bga-renderer.ts';
 import { renderBombs } from './playfield/bombs.ts';
 import type { PlayfieldContext } from './playfield/context.ts';
@@ -136,6 +136,15 @@ export function build(ctx: PlayFrameContext, host: PixiSceneHost): void {
 }
 
 /**
+ * The picture's alpha `elapsedMs` into a play's fade-out of `fadeOutMs`: 1 → 0, and 1 when there is no fade. The
+ * built-in and LR2 views fade their design root with it, and the beatoraja view a failed play's canvas.
+ */
+export function playEndingFadeAlpha(elapsedMs: number, fadeOutMs: number): number {
+  if (!(fadeOutMs > 0)) return 1;
+  return Math.max(0, Math.min(1, 1 - elapsedMs / fadeOutMs));
+}
+
+/**
  * Drives the global "fade everything to black" tween while {@link beginExitSequence} is in flight. The skin's
  * authored `#FADEOUT` overlay (if any) only covers whatever the skin artist drew — gameplay-side layers (notes, lane
  * chrome, BGA, shutters, bombs, overlay text) sit *above* `skinLayer` in `designRoot` and would otherwise stay
@@ -165,8 +174,7 @@ function applyExitFadeAlpha(ctx: PlayFrameContext): void {
     if (ctx.designRoot.alpha !== 1) ctx.designRoot.alpha = 1;
     return;
   }
-  const elapsed = ctx.play.playClock() - fadeStart;
-  ctx.designRoot.alpha = Math.max(0, Math.min(1, 1 - elapsed / fadeOutMs));
+  ctx.designRoot.alpha = playEndingFadeAlpha(ctx.play.playClock() - fadeStart, fadeOutMs);
 }
 
 /**

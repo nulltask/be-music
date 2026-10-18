@@ -1,5 +1,5 @@
 // Where the beatoraja play skin puts notes and bar lines on the lane, and which of them it draws: the same distance
-// integrator and draw window the core gameplay view uses (`../core/note-draw-window.ts`). A chart with `#SCROLL` /
+// integrator and draw window the shared playfield uses (`chart/note-draw-window.ts`). A chart with `#SCROLL` /
 // `#SPEED` (bmson `scroll_events` included) draws by beatoraja's `LaneRenderer` rules, so SCROLL gimmicks show up as they
 // do in beatoraja; every other chart draws by LR2's, as in the other skins — a skin is a display choice, not a ruleset.
 
@@ -19,7 +19,7 @@ import {
   resolveNoteDrawWindow,
   resolveReversedDrawClock,
   type NoteDrawWindow,
-} from '../../../scene/core/note-draw-window.ts';
+} from '../../../chart/note-draw-window.ts';
 
 /** The chart's `#SCROLL` / `#SPEED` distance integrator, or `undefined` when it has neither (or only points at 1). */
 export function createBeatorajaScrollMapper(chart: BeMusicJson): ScrollDistanceMapperLike | undefined {

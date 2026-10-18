@@ -28,7 +28,7 @@ import type { BeMusicJson } from '@be-music/json';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerGaugeSummary, PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { ScoreSummary } from '@be-music/player/ruleset';
-import type { CourseView, PlayState } from '@be-music/scene-model';
+import type { CourseView, HiSpeedTransition, PlayState } from '@be-music/scene-model';
 import { BEATORAJA_HI_SPEED_SCALE } from '@be-music/scene-model';
 import { Container, Text, type Texture } from 'pixi.js';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
@@ -41,13 +41,12 @@ import {
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
-import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
-import { DESIGN_HEIGHT, DESIGN_WIDTH, KEY_ON_FADE_OUT_MS } from '../../scene/gameplay-constants.ts';
-import type { HiSpeedTransition } from '../../scene/hi-speed.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
-import { playEndingFadeAlpha } from '../../scene/play-ending.ts';
+import type { BgaCue } from '../../chart/bga-timeline.ts';
+import { DESIGN_HEIGHT, DESIGN_WIDTH, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { PlayPlaylogViewScale } from '../../session/play/play-session-theme.ts';
+import { playEndingFadeAlpha } from '../shared/play-frame.ts';
 import { uploadTextures } from '../shared/texture-upload.ts';
 import type {
   IntentSink,

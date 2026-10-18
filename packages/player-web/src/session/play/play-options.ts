@@ -3,6 +3,7 @@
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
  */
 
+import type { CourseView, PlayResult } from '@be-music/scene-model';
 import type { GameplayLayoutMode } from '@be-music/skin-sdk';
 import type { NonstopStitchMap } from '@be-music/player/course';
 import type {
@@ -16,8 +17,6 @@ import type { ResolvedPlayChart } from '@be-music/player/core/engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { TempoPitchMode, TimeStretchAlgorithm } from '../../runtime/play-tempo.ts';
-import type { SceneCourseInfo } from '../../scene/course-info.ts';
-import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
 
 /**
@@ -49,7 +48,7 @@ export interface PlaySessionOptions {
    * `onExit` is **not** called for natural completion; `onExit` is reserved for the user-initiated escape (ESC). Hosts
    * that don't want a result screen can leave this unset and rely on `onExit` for both paths (legacy behavior).
    */
-  onChartFinished?: (result: PixiGameplayResultData) => void;
+  onChartFinished?: (result: PlayResult) => void;
   /** When true, every note is auto-judged as PERFECT at its scheduled time. */
   autoPlay?: boolean;
   /**
@@ -193,7 +192,7 @@ export interface PlaySessionOptions {
    * The running course as the skin shows it — its kind, title, stage list and the stage being played (LR2 ops 280-293,
    * texts 150-170; beatoraja's course strings). Display only; the judging follows {@link course}.
    */
-  courseInfo?: SceneCourseInfo;
+  courseInfo?: CourseView;
   /**
    * The chart is a stitched NONSTOP course (`stitchNonstopCourse`'s map): each stage's samples play at its FIT rate
    * and its background sound fades at the stage seams.

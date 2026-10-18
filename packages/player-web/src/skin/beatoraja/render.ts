@@ -18,7 +18,7 @@
 // code 3 and `'difference'` for code 9 (audit 2.13). Standard modes ('add' / 'multiply' /
 // 'screen' / 'erase' / 'normal') don't need this import; the registration is idempotent so
 // re-importing from another module is harmless. Requires `useBackBuffer: true` at app init
-// — see `scene/host.ts`.
+// — see `host/scene-host.ts`.
 import 'pixi.js/advanced-blend-modes';
 import { Texture } from 'pixi.js';
 import {

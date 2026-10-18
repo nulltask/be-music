@@ -842,8 +842,8 @@ function imageFallbackPaths(path: string): string[] {
 }
 
 /**
- * Local copy of `isVideoExtension` from `scene/core/gameplay-bga`. Pulled inline rather than imported so
- * `collection.ts` (the data-layer entry point) doesn't take a dependency on the Pixi-side BGA helpers; the patterns are
+ * Local copy of `isVideoExtension` from `chart/bga-timeline.ts`. Pulled inline rather than imported so
+ * `collection.ts` (the data-layer entry point) doesn't take a dependency on the play's BGA helpers; the patterns are
  * tiny and trivially kept in sync.
  */
 function isVideoExtensionPath(path: string): boolean {

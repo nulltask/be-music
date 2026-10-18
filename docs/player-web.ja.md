@@ -211,7 +211,7 @@ theme file なしで select、gameplay、result の表示を提供します。
 プレイ画面（`createPlayScene`、[プレイ画面](#プレイ画面)）は、LR2 のプレイ画面とプレイのセッション（engine、audio bus、input）と共通のプレイフィールド・BGA renderer を共有し、クロームは be-music スキンが描きます。
 LR2 のプレイビューは be-music の renderer を import せず、LR2 skin rendering は parse 済み `.lr2skin` data に紐づいたままです。
 
-default gameplay chrome は `scene/gameplay-lanes.ts` の共通 lane geometry helper を使います。
+default gameplay chrome は `@be-music/skin-sdk` の lane geometry helper（`lane-geometry.ts`）を使います。
 scratch lane は key lane より幅広く、2P scratch は右側に表示し、DP layout では両 side を SP 幅へ押し込んで全 lane を縮小するのではなく、片側分の lane 幅を保持します。
 default family は通常テキストに LINE Seed JP、判定と combo 表示に Azeret Mono を使います。
 
@@ -252,7 +252,7 @@ beatoraja default skin を primary compatibility target とし、community theme
 
 ## Scene lifecycle
 
-browser player は session 全体で 1 つの `PixiSceneHost` を使います。
+browser player は session 全体で 1 つの `PixiSceneHost`（`host/scene-host.ts`）を使います。
 host は 1 つの PixiJS `Application` を所有し、同時に 1 つの scene だけを表示し、scene transition を直列化し、host dispose 時だけ renderer を破棄します。
 
 LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。default family は、be-music skin が decide 画面を持つときだけ decide 画面を表示します。
@@ -321,7 +321,7 @@ flowchart TD
   subgraph shared [共有モジュール]
     audio[chart/play-audio.ts]
     bga[chart/play-bga.ts]
-    ending[scene/play-ending.ts]
+    ending[session/play/play-ending.ts]
     lamp[resolveClearLamp]
   end
   session --> audio
@@ -332,7 +332,7 @@ flowchart TD
 
 - `chart/play-audio.ts` は、プレイの AudioContext と bus を作り（`#VOLWAV` を含む）、`#WAV` のサンプルを audio session が引くキーでデコードし、ピッチを保つテンポのときは伸縮し、`#WAVCMD` / `#EXWAV` の音量をまとめます。
 - `chart/play-bga.ts` は、プレイに要る BGA リソース（`#BMPxx`、bmson の `bga.header`、`#BGAxx` の切り出し元、LR2 view では暗黙の `#BMP00` POOR 画像）を選び、静止画は共通のテクスチャローダーで、動画は動画ローダーでデコードし、BMS の layer の黒を抜き、切り出し領域のビューを作ります。
-- `scene/play-ending.ts` は、プレイの終わりの時間を決めます。最後のノートのあと譜面時刻で約 2 小節の余韻を置き、テーマや skin のフェードアウトに入ります。ゲージが尽きて途中で終わったプレイは余韻を置かず、音と画面を 1.5 秒以上かけてフェードアウトします。
+- `session/play/play-ending.ts` は、プレイの終わりの時間を決めます。最後のノートのあと譜面時刻で約 2 小節の余韻を置き、テーマや skin のフェードアウトに入ります。ゲージが尽きて途中で終わったプレイは余韻を置かず、音と画面を 1.5 秒以上かけてフェードアウトします。画面のフェードは各ビューが `playEndingFadeAlpha`（`view/shared/play-frame.ts`）で行います。
 - `resolveClearLamp`（`@be-music/player/ruleset`）がクリアランプの唯一の規則です。どのリザルトもこれでプレイのランプを決めます。LR2 / 既定のリザルト（LR2 のリザルトのランプの op 101-105 も、LR2 のランプで）、`beatorajaClearLampOp` を通した beatoraja のリザルトと選曲です。demo はどの family のプレイもこれで記録し、リーダーボードもこれで順位付けします。判定のルールセットのランプに合わせ、LR2 と IIDX ではフルコンボが最上位（PERFECT・MAX なし）、LR2 では DEATH でのクリアを NORMAL にします。
 
 ## シーンセッションとファミリービュー
@@ -576,7 +576,7 @@ Web のデモはどの種類のプレイもすべてこの方法で、その種�
 
 ## ノートの表示範囲
 
-描画は判定 ruleset に含まれないため、ruleset は描画に関わりません。gameplay view は、どのノート・地雷・小節線をどこに描くかを 2 つの規則のどちらかで決めます（[`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)）。
+描画は判定 ruleset に含まれないため、ruleset は描画に関わりません。gameplay view は、どのノート・地雷・小節線をどこに描くかを 2 つの規則のどちらかで決めます（[`note-draw-window.ts`](../packages/player-web/src/chart/note-draw-window.ts)）。
 
 - **LR2 の規則** — `#SCROLL` / `#SPEED` を含まないすべての譜面。ruleset は問いません。
 - **beatoraja の規則** — 1 以外の `#SCROLL` か `#SPEED` を含むすべての譜面。LR2 はどちらも扱わないため beatoraja を基準にします。値がすべて 1 の譜面は通常の譜面と同じに扱います。

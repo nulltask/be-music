@@ -1,7 +1,10 @@
 import type { TempoPoint } from '@be-music/audio-renderer/triggers';
 
-/** The lowest, highest, and main (longest-held) BPM of a chart. */
-export interface ChartBpmRange {
+/**
+ * The lowest, highest, and main (longest-held) BPM of a play, from its tempo points: the built-in HUD shows them, and
+ * the play log's visible time reads the main one. Not the select screen's `ChartBpmRange` (`chart/bpm-range.ts`).
+ */
+export interface PlayTempoRange {
   minBpm: number;
   maxBpm: number;
   mainBpm: number;
@@ -13,11 +16,11 @@ export interface ChartBpmRange {
  * non-positive or non-finite BPM (stops encoded as BPM 0, broken headers) are ignored. Returns `fallbackBpm` for all
  * three when no point is usable, and `undefined` when there is no usable fallback either.
  */
-export function resolveChartBpmRange(
+export function resolvePlayTempoRange(
   tempoPoints: readonly Pick<TempoPoint, 'bpm' | 'seconds'>[],
   endSeconds: number,
   fallbackBpm?: number,
-): ChartBpmRange | undefined {
+): PlayTempoRange | undefined {
   let minBpm = Number.POSITIVE_INFINITY;
   let maxBpm = Number.NEGATIVE_INFINITY;
   const heldSeconds = new Map<number, number>();

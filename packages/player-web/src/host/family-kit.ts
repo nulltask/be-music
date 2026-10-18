@@ -8,11 +8,12 @@
  * - `beatoraja`: one entry of a beatoraja theme, loaded (skin, textures, fonts, the player's options, the theme files).
  */
 
-import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSkinFileEntry } from '@be-music/beatoraja-skin';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import type { BeMusicEffectLevel, BeMusicSkin } from '@be-music/skin-sdk';
-import type { BeatorajaFontCache } from '../skin/beatoraja/fonts.ts';
-import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
+import type { BeatorajaSceneKit } from '../skin/beatoraja/scene-kit.ts';
+
+// The beatoraja kit's loaded entry is the skin layer's (`loadBeatorajaSceneKit` loads it).
+export type { BeatorajaSceneKit };
 
 /** The screens of a play: select, decide, play and result. */
 export type SceneKind = 'select' | 'decide' | 'play' | 'result';
@@ -52,18 +53,6 @@ export interface Lr2PlayKit extends Lr2Kit {
    * note when they are shown; a flat green bar without it.
    */
   readonly invisibleNoteSkin?: Lr2Skin;
-}
-
-/** One entry of a beatoraja theme, loaded for a scene. */
-export interface BeatorajaSceneKit {
-  /** The parsed skin of the entry (`header.type` matching the scene). */
-  readonly skin: BeatorajaSkin;
-  readonly textures: BeatorajaTextureCache;
-  readonly fonts?: BeatorajaFontCache;
-  /** The player's picks for the skin's options (`property[]`). */
-  readonly skinConfig?: BeatorajaSkinConfig;
-  /** The theme's files: the Lua `main_state.audio_*` sounds and the theme's path-only system sounds are read from them. */
-  readonly files: ReadonlyMap<string, BeatorajaSkinFileEntry>;
 }
 
 /** A beatoraja theme entry, loaded. */

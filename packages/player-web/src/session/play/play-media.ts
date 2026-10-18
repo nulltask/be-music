@@ -26,9 +26,9 @@ import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
-import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
+import type { BgaCue } from '../../chart/bga-timeline.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
-import { resolveGameplayAudioTailCleanupDelayMs } from '../../scene/core/gameplay-result-delay.ts';
+import { resolveGameplayAudioTailCleanupDelayMs } from './result-delay.ts';
 
 /** The play state the media preparation reads and fills: the play session's fields of these names. */
 export interface PlayMediaContext {

@@ -7,7 +7,7 @@ import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { AudioService } from '../runtime/audio-service.ts';
-import type { PixiSceneHost } from '../scene/host.ts';
+import type { PixiSceneHost } from './scene-host.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';

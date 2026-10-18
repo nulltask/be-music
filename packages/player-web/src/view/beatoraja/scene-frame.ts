@@ -23,8 +23,8 @@ import { Container, Graphics, type Texture } from 'pixi.js';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import { destroyTextureAndRevokeBlobUrl } from '../../media/textures.ts';
-import type { BeatorajaPlaySkinView } from '../../scene/beatoraja/skin-view.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { BeatorajaPlaySkinView } from './skin-view.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import {
   loadBeatorajaChartImages,
   resolveBeatorajaChartImage,

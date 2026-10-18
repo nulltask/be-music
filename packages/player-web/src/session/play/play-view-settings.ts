@@ -17,19 +17,20 @@ import {
   type PlaylogViewState,
 } from '@be-music/player/playlog';
 import {
+  BE_MUSIC_HI_SPEED_SCALE,
   resolveHiSpeedForWhiteNumber,
   resolveLaneCover,
   resolvePlaylogView,
   resolveWhiteNumber,
   type LaneCover,
   type LaneCoverState,
+  type PlaylogViewCursor,
 } from '@be-music/scene-model';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { setVideoPlaybackTempo } from '../../runtime/play-tempo.ts';
 import type { PlaySessionOptions } from './play-options.ts';
-import type { ChartBpmRange } from '../../scene/core/gameplay-bpm-range.ts';
-import { PIXELS_PER_BEAT } from '../../scene/gameplay-constants.ts';
-import { BE_MUSIC_HI_SPEED_SCALE, type PlaylogViewCursor } from '../../scene/playlog-view.ts';
+import type { PlayTempoRange } from './tempo-range.ts';
+import { PIXELS_PER_BEAT } from '../../stage/design.ts';
 import type { BeMusicLaneCover } from '../../skin/be-music/types.ts';
 import type { PlayPlaylogViewScale, PlaySessionTheme } from './play-session-theme.ts';
 import { applyPlayEvent, type PlayStateContext } from './play-state.ts';
@@ -46,7 +47,7 @@ export interface PlayViewSettingsContext extends PlayStateContext {
   readonly nonstopMixer: NonstopStageMixer | undefined;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }>;
   readonly laneX: Map<string, PlayfieldLaneRect>;
-  readonly chartBpmRange: ChartBpmRange | undefined;
+  readonly chartBpmRange: PlayTempoRange | undefined;
   drawnLaneCovers: { covers: readonly LaneCoverState[]; drawn: LaneCover[] } | undefined;
   playlogViewCoalescer: PlaylogViewCoalescer | undefined;
   readonly replayViewCursor: PlaylogViewCursor | undefined;

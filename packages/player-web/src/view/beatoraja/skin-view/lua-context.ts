@@ -51,8 +51,8 @@ export class BeatorajaSkinLuaContext {
     this.luaFrame = context;
     const lua = (this.luaRuntimeContext ??= this.createLuaRuntimeContext());
     // Forward host audio hooks so BooleanProperty / customEvent callbacks evaluated at draw
-    // time can fire SE. The hooks themselves come from the demo's `BeatorajaSkinAudioPlayer`
-    // (one per loaded theme bundle); the skin-view never owns audio state.
+    // time can fire SE. The hooks are the audio service's skin sounds, owned by the scene,
+    // which the beatoraja view hands in (`skinSounds`); the skin-view never owns audio state.
     lua.audioPlay = context.audioPlay;
     lua.audioLoop = context.audioLoop;
     lua.audioStop = context.audioStop;

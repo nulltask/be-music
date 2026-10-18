@@ -15,13 +15,14 @@ import type { TempoReversalPoint } from '@be-music/chart';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import type { Container, Texture } from 'pixi.js';
-import type { BeatorajaSceneKit } from '../../host/family-kit.ts';
-import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
-import { BeatorajaPlaySkinView, type BeatorajaPlaySkinViewOptions } from '../../scene/beatoraja/skin-view.ts';
-import type { PixiSceneHost } from '../../scene/host.ts';
+import type { BeatorajaSceneKit } from '../../skin/beatoraja/scene-kit.ts';
+import type { BgaCue } from '../../chart/bga-timeline.ts';
+import { BeatorajaPlaySkinView, type BeatorajaPlaySkinViewOptions } from './skin-view.ts';
+import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import { BeatorajaBgaLayer } from './play/bga.ts';
-import { BeatorajaMarkerLayer, type BeatorajaMarkerBeats } from './play/markers.ts';
+import type { BeatorajaMarkerBeats } from '../../chart/beatoraja/markers.ts';
+import { BeatorajaMarkerLayer } from './play/markers.ts';
 import {
   BeatorajaNoteLayer,
   beatorajaDisplayScrollBeat,

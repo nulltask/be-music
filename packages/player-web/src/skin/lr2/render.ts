@@ -12,7 +12,7 @@ import { createCachedCroppedTexture, type PixiCropRect } from '../pixi-texture.t
 
 /**
  * Shared LR2 sprite-rendering helpers used by both the play view (`view/lr2/play-elements.ts`) and the song-select view
- * (`scene/lr2/select.ts`).
+ * (`view/lr2/select-view.ts`).
  *
  * These helpers cover the parts of LR2's `#SRC_*` / `#DST_*` model that are screen-agnostic — sprite tinting,
  * blend-mode mapping, source cropping, and NUMBER-cell layout. View-specific code (timer driving, op evaluation,

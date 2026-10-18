@@ -3,8 +3,8 @@
  * and draws the lane backgrounds and key beams through the be-music skin (or Phantom's) unless the skin owns them.
  */
 
-import { PLAYFIELD } from '../../../scene/gameplay-constants.ts';
-import { resolveLr2LaneIndex } from '../../../scene/gameplay-lanes.ts';
+import { PLAYFIELD } from '@be-music/skin-sdk';
+import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import type { BeMusicLaneFrame } from '../../../skin/be-music/types.ts';
 import { renderPhantomLanes } from '../../../skins/phantom/playfield.ts';

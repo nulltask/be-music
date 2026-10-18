@@ -1,5 +1,5 @@
 import { Application, type ApplicationOptions, Container, RendererType, UPDATE_PRIORITY } from 'pixi.js';
-import type { SceneIdentity } from '../host/family-kit.ts';
+import type { SceneIdentity } from './family-kit.ts';
 import { logger } from '../logger.ts';
 
 const log = logger('scene-host');

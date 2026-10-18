@@ -1,6 +1,6 @@
 /** The long notes of the shared playfield: one long note's body and caps. */
 
-import { resolveLongNoteAlpha } from '../../../scene/core/note-draw-window.ts';
+import { resolveLongNoteAlpha } from '../../../chart/note-draw-window.ts';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { renderPhantomLongNote } from '../../../skins/phantom/playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';

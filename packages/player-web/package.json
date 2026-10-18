@@ -16,7 +16,7 @@
       "default": "./dist/index.js"
     },
     "./scenes": {
-      "source": "./src/scene/index.ts",
+      "source": "./src/host/index.ts",
       "types": "./dist/scenes.d.ts",
       "default": "./dist/scenes.js"
     },

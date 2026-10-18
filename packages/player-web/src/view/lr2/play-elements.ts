@@ -22,10 +22,11 @@ import {
 import { LR2_LANE_TIMER_BANK_SIZE, LR2_NUM, LR2_OP, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { isLr2AutoLane, resolveLr2JudgeCombo, type Lr2PlayState } from '@be-music/lr2-skin/state';
 import type { CourseView } from '@be-music/scene-model';
+import { PLAYFIELD } from '@be-music/skin-sdk';
 import { Container, TextStyle, type Texture } from 'pixi.js';
-import { BLUE, PLAYFIELD } from '../../scene/gameplay-constants.ts';
-import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from '../../scene/lr2/fonts.ts';
-import type { ChildPool } from '../../scene/pixi-utils.ts';
+import { BLUE } from '../shared/play-constants.ts';
+import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from '../shared/fonts.ts';
+import type { ChildPool } from '../../stage/pixi-utils.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import {
   applyDestinationToSprite,
