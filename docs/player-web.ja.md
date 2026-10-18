@@ -7,7 +7,9 @@ timing、note、判定、score、gauge、BGA event の意味など、CLI と共�
 
 ## 共通 runtime 連携
 
-browser player は gameplay を `@be-music/player/core/engine` 経由で駆動します。
+browser player は gameplay を engine（`@be-music/player` のルート）経由で駆動します。
+player から使うほかのものは、ほかの入口から取ります。input と UI の bus と state signal は `@be-music/player/signals`、lane の配置は `./lanes`、描く note と scroll 距離は `./display`、判定幅は `./ruleset` です。
+譜面のタイミング（`TimingResolver`、sample trigger）と `ChartPlayVariant` は `@be-music/chart` から取ります。
 判定、keysound trigger routing、long note、地雷の発動、score、gauge、chart finish の意味論は engine が担当します。
 どのプレイ画面も、その裏のプレイのセッションがスキンの `PLAYSTART` gate で 1 回 engine を起動します（beatoraja のスキンでは読み込み終了の 1.5 秒後）。
 セッションは engine の frame snapshot をプレイ状態へ反映し、engine の UI command をフレームのきっかけとしてファミリービューに渡し、ビューがそれを Pixi の視覚効果にします。
@@ -21,7 +23,7 @@ browser runtime は次の adapter module を使います。
 | [`web-ui-runtime.ts`](../packages/player-web/src/runtime/web-ui-runtime.ts)       | engine UI signal を Pixi host へ流します。frame snapshot は note、score、gauge、result state を更新し、command は lane flash、key hold、POOR BGA、judge/combo effect を駆動します。                                                           |
 | [`engine-driver.ts`](../packages/player-web/src/runtime/engine-driver.ts)         | audio、input、UI adapter を組み立て、1 譜面分の `manualPlay` / `autoPlay` を呼び出します。                                                                                                                                                    |
 
-`@be-music/player/core/engine` は `node:path` / `node:timers/promises` 依存を排除済みで、 browser bundle にそのまま
+engine（`@be-music/player`）は `node:path` / `node:timers/promises` 依存を排除済みで、 browser bundle にそのまま
 含められます。 `createNodeAudioSink` (Node 専用 audio backend) も lazy import なので、 host が
 `PlayerOptions.createAudioSession` factory (= `createWebAudioSession`) を渡す経路では一切到達しません。
 
@@ -617,7 +619,7 @@ flowchart TD
 
 - **下の層はシーンを知りません。** `host/`、`session/`、`view/` のモジュールを、型であっても import しません。パッケージのファイルはどれも初めは下の層に入るので、新しいディレクトリも設定で別の層に入れるまでは下の層です。
 - **セッションがビューとホストに触れるのは型だけです。** Pixi も型にしか使いません。そのためセッションは、偽のビューを相手に Node のテストで動きます。
-- **ビューがセッションとホストに触れるのは型だけです。** エンジン（`@be-music/player/core/engine`、またはそれを再 export するパッケージのルート）も、`runtime/engine-driver` と `runtime/web-*-runtime` のモジュールも import しません。
+- **ビューがセッションとホストに触れるのは型だけです。** エンジン（`@be-music/player`）も、`runtime/engine-driver` と `runtime/web-*-runtime` のモジュールも import しません。player のほかの入口（`./signals`、`./lanes`、`./display`、`./ruleset` など）はエンジンではないので、ビューも import できます。
 - **エンジンを動かすのはセッションだけです。** `session/` のほかにエンジンを値として import するのは `runtime/engine-driver.ts` だけで、ほかのファイルは web demo も含めて型だけを import します。
 - **オーディオコンテキストを作るのは音の層だけです。** `runtime/` が、システムのコンテキスト（`audio-service.ts`）、プレイごとのグラフ（`play-audio-graph.ts`）、ピッチを保つ伸縮のオフラインのコンテキスト（`time-stretch-signalsmith.ts`）を作ります。ほかはすべて、web demo も含めてオーディオサービスを通して鳴らし、`AudioContext` は型としてだけ使います。
 

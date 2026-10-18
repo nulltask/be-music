@@ -7,9 +7,9 @@
  * The functions read and write the play's state through {@link PlayMediaContext}; the play session passes itself.
  */
 
-import type { TimedSampleTrigger } from '@be-music/audio-renderer/triggers';
+import type { TimedSampleTrigger } from '@be-music/chart';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
-import type { TimedPlayableNote } from '@be-music/player/playable-notes';
+import type { TimedPlayableNote } from '@be-music/player/display';
 import type { Texture } from 'pixi.js';
 import { loadPlaySamples } from '../../chart/play-audio.ts';
 import { loadPlayBga } from '../../chart/play-bga.ts';

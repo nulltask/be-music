@@ -13,7 +13,7 @@ import type {
   PlaylogViewReplay,
 } from '@be-music/player/playlog';
 import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
-import type { ResolvedPlayChart } from '@be-music/player/core/engine';
+import type { ResolvedPlayChart } from '@be-music/player';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { TempoPitchMode, TimeStretchAlgorithm } from '../../runtime/play-tempo.ts';

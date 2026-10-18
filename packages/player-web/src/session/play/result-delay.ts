@@ -1,6 +1,6 @@
-import type { TimingResolver, TimedSampleTrigger } from '@be-music/audio-renderer/triggers';
+import type { TimingResolver, TimedSampleTrigger } from '@be-music/chart';
 import { type BeMusicEvent, type BeMusicJson, normalizeObjectKey, resolveBmsBase } from '@be-music/json';
-import type { TimedPlayableNote } from '@be-music/player/playable-notes';
+import type { TimedPlayableNote } from '@be-music/player/display';
 import {
   clampSampleDuration,
   clampSampleOffset,

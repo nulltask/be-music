@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
+import { resolveLaneOptionChannels } from '@be-music/player/lanes';
 import { applyRandomMode, extractChartExtension, flipDpChannel, shuffleArray } from './play-chart.ts';
 
 /** A seeded random (mulberry32), so every draw is the same on every run. */

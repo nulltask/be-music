@@ -11,8 +11,8 @@
  * play view of the kit's family (built-in or LR2) and reads a `PlayFrame` off it every tick.
  */
 
-import { mirrorBeatAtTempoReversal } from '@be-music/audio-renderer/triggers';
-import { createTempoClock, type TempoClock } from '@be-music/player/core/engine';
+import { mirrorBeatAtTempoReversal } from '@be-music/chart';
+import { createTempoClock, type TempoClock } from '@be-music/player';
 import { nonstopBpmAt } from '@be-music/player/course';
 import { resolveLr2LaneTimer } from '@be-music/lr2-skin/state';
 import { DEFAULT_PLAYLOG_VIEW_REPLAY, type BeMusicPlaylog } from '@be-music/player/playlog';
@@ -40,7 +40,7 @@ import {
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, FALLBACK_INTRO_DELAY_MS, KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
-import { resolveSideRelativeLaneIndex } from '@be-music/player/core/lane-layout';
+import { resolveSideRelativeLaneIndex } from '@be-music/player/lanes';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { LiveTempo } from './live-tempo.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';

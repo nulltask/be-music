@@ -5,13 +5,10 @@
  * bombs). A play view passes itself.
  */
 
-import type { TimingResolver } from '@be-music/audio-renderer/triggers';
-import type { BmsSwitchingBga, ResolvedChart } from '@be-music/chart';
+import type { BmsSwitchingBga, ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
-import type { TimedLandmineNote, TimedPlayableNote } from '@be-music/player/playable-notes';
+import type { ScrollDistanceMapperLike, TimedLandmineNote, TimedPlayableNote } from '@be-music/player/display';
+import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import type { JudgeKind, ScoreSummary } from '@be-music/player/ruleset';
 import type { HiSpeedTransition, PlayState } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind, BeMusicLongNote } from '@be-music/skin-sdk';

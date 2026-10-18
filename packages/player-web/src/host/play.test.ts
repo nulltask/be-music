@@ -9,9 +9,9 @@ import {
 import { createEmptyJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { parseChart } from '@be-music/parser';
-import { autoPlay } from '@be-music/player/core/engine';
+import { autoPlay } from '@be-music/player';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
-import { createPlayerUiSignalBus, type PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+import { createPlayerUiSignalBus, type PlayerUiFramePayload } from '@be-music/player/signals';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
