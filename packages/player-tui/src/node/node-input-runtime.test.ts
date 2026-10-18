@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import { createPlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import { createPlayerInputSignalBus } from '@be-music/player/signals';
 
 const manualInputState = vi.hoisted(() => ({
   stopStatefulKeyboardProtocol: vi.fn(),

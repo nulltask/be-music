@@ -2,7 +2,7 @@ import { isAbortError } from '@be-music/utils/core';
 // Worker-spawn helpers live behind the dedicated `/workerize` sub-path so the package root stays browser-safe
 // (the implementation file statically imports `node:sea`).
 import { invokeWorkerizedFunction, workerize } from '@be-music/utils/workerize';
-import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
+import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player/display';
 import type { ImageFormat, DecodedImage } from './bga-image.ts';
 
 const TRANSPARENT_ALPHA_THRESHOLD = 16;

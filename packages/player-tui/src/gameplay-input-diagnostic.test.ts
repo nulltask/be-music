@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createPlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
+import { createPlayerInputSignalBus } from '@be-music/player/signals';
 
 describe('gameplay input diagnostic', () => {
   test('input signal bus queues gameplay commands in order', () => {

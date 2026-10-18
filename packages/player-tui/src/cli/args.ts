@@ -1,17 +1,14 @@
 import {
   DEFAULT_IMAGE_RESIZE_ALGORITHM,
-  isImageResizeAlgorithm,
-  type ImageResizeAlgorithm,
-} from '@be-music/player/image-resize-algorithm';
-import { JUDGE_WINDOW_RULESETS } from '@be-music/player/core/judge-window';
-import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
-import {
   DEFAULT_TUI_NOTE_HEIGHT,
+  isImageResizeAlgorithm,
   MAX_TUI_NOTE_HEIGHT,
   MIN_TUI_NOTE_HEIGHT,
   TUI_NOTE_HEIGHT_HALF,
+  type ImageResizeAlgorithm,
   type TuiNoteHeight,
-} from '@be-music/player/core/ui-options';
+} from '@be-music/player/display';
+import { PLAYLOG_RULESET_IDS, type GaugeType, type PlaylogRulesetId } from '@be-music/player/ruleset';
 import { HIGH_SPEED_STEP, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from './config.ts';
 
 export interface CliArgs {
@@ -93,9 +90,9 @@ const CLI_GAUGES: readonly GaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH'];
 
 function parseCliRuleset(rawValue: string): PlaylogRulesetId {
   const value = rawValue.trim().toLowerCase();
-  const match = JUDGE_WINDOW_RULESETS.find((ruleset) => ruleset === value);
+  const match = PLAYLOG_RULESET_IDS.find((ruleset) => ruleset === value);
   if (!match) {
-    throw new Error(`Unknown --ruleset "${rawValue}". Expected one of: ${JUDGE_WINDOW_RULESETS.join(', ')}.`);
+    throw new Error(`Unknown --ruleset "${rawValue}". Expected one of: ${PLAYLOG_RULESET_IDS.join(', ')}.`);
   }
   return match;
 }

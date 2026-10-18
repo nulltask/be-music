@@ -7,8 +7,8 @@ import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
-} from '@be-music/player/utils';
-import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+} from '@be-music/player/display';
+import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/signals';
 import { PlayerTui } from '../tui.ts';
 import { supportsKittyGraphicsProtocol } from '../tui/kitty-graphics.ts';
 import { estimateBgaAnsiDisplaySize as resolveBgaDisplaySize, resolveLaneWidths } from '../tui/layout.ts';

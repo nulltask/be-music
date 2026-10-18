@@ -1,11 +1,9 @@
 import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/utils/log';
 import type { BeMusicJson } from '@be-music/json';
-import type { PlayerUiCommand } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerJudgeComboSignalState, PlayerUiCommand } from '@be-music/player/signals';
 import type { LaneBinding } from '../manual-input.ts';
-import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
-import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
-import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
+import type { ImageResizeAlgorithm, TuiNoteHeight } from '@be-music/player/display';
 import type { PlayerUiFramePatch } from './ui-frame-patch.ts';
 
 export interface NodeUiWorkerInitData {

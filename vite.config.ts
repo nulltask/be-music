@@ -19,8 +19,9 @@ const workspacePackages = [
 ] as const;
 
 /**
- * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code,
- * the scene models and the LR2 and beatoraja state resolvers run unchanged in the browser and in Node, so they import no
+ * Layering (docs/architecture.md): the chart model, the IR, the parser, the engine's core / play-log / ruleset code
+ * with the player entries a browser host imports (signals, lanes, display), the scene models and the LR2 and beatoraja
+ * state resolvers run unchanged in the browser and in Node, so they import no
  * Node built-in and read no DOM or Node-only global. Runtime services reach them through adapters
  * (`PlayerOptions.createAudioSession`, `createUiRuntime`, the parser's `node-file.ts`) instead.
  */
@@ -32,9 +33,17 @@ const runtimeNeutralSources = [
   'packages/parser/src/**/*.ts',
   'packages/player/src/core/**/*.ts',
   'packages/player/src/course/**/*.ts',
+  'packages/player/src/display.ts',
+  'packages/player/src/image-resize-algorithm.ts',
+  'packages/player/src/judging.ts',
+  'packages/player/src/lanes.ts',
+  'packages/player/src/playable-notes.ts',
   'packages/player/src/playlog/**/*.ts',
   'packages/player/src/records/**/*.ts',
   'packages/player/src/ruleset/**/*.ts',
+  'packages/player/src/signals.ts',
+  'packages/player/src/state-signals.ts',
+  'packages/player/src/utils.ts',
   'packages/scene-model/src/**/*.ts',
 ];
 /** Node / CLI entry points inside those trees: the runtime adapters the rule above points to. */

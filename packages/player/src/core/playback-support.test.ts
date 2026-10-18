@@ -1,9 +1,8 @@
-import { createTimingResolver } from '@be-music/audio-renderer/triggers';
+import { createBeatAtSecondsResolverFromTimingResolver, createTimingResolver } from '@be-music/chart';
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from './input-signal-bus.ts';
 import { createUiFramePublisher, recordPendingViewChanges } from './playback-support.ts';
-import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
 import type { PlayerUiFramePayload, PlayerUiSignalBus } from './ui-signal-bus.ts';
 
 function createCapturingUiSignals(): { uiSignals: PlayerUiSignalBus; frames: PlayerUiFramePayload[] } {

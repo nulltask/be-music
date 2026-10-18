@@ -1,4 +1,4 @@
-import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/signals';
 
 export interface PlayerUiFrameNoteStateUpdate {
   index: number;

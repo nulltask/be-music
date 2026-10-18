@@ -1,5 +1,5 @@
-import type { BgaCue } from '@be-music/player/core/bga-timeline';
-import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
+import type { BgaCue } from '@be-music/chart';
+import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player/display';
 import {
   TERMINAL_PIXEL_ASPECT_X,
   TERMINAL_PIXEL_ASPECT_Y,

@@ -1,9 +1,13 @@
 import { availableParallelism } from 'node:os';
 import { runWithConcurrency, throwIfAborted } from '@be-music/utils/core';
 import type { BeMusicJson } from '@be-music/json';
-import { resolveChart } from '@be-music/chart';
-import { DEFAULT_POOR_BGA_DISPLAY_SECONDS, pickActiveBgaCue, type BgaCue } from '@be-music/player/core/bga-timeline';
-import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
+import { resolveChart, type BgaCue } from '@be-music/chart';
+import {
+  DEFAULT_IMAGE_RESIZE_ALGORITHM,
+  DEFAULT_POOR_BGA_DISPLAY_SECONDS,
+  pickActiveBgaCue,
+  type ImageResizeAlgorithm,
+} from '@be-music/player/display';
 import {
   TERMINAL_PIXEL_ASPECT_X,
   TERMINAL_PIXEL_ASPECT_Y,

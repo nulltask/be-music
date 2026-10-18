@@ -1,8 +1,12 @@
 import {
   createBeatResolver,
+  createBpmTimeline,
+  createStopBeatWindows,
   isBmsBgmVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
   type ResolvedChart,
+  type TimedSampleTrigger,
+  type TimingResolver,
 } from '@be-music/chart';
 import type { LogLevel } from '@be-music/utils/log';
 import {
@@ -12,7 +16,6 @@ import {
   normalizeObjectKey,
   resolveBmsBase,
 } from '@be-music/json';
-import { type TimedSampleTrigger, type TimingResolver } from '@be-music/audio-renderer';
 import { type LaneBinding } from './lane-layout.ts';
 import { formatSeconds } from '../utils.ts';
 import { type PlaybackStateLogger } from './playback-support.ts';
@@ -20,7 +23,6 @@ import { IIDX_EX_SCORE_PER_PGREAT, LR2_MONEY_SCORE_MAX } from './scoring.ts';
 import { resolveBmsJudgeWindowsMsForExRankValue } from './judge-window.ts';
 import { type JudgeWindowSetUs } from '../ruleset/index.ts';
 import { RULESET_JUDGE_KINDS } from './judge-rules.ts';
-import { createBpmTimeline, createStopBeatWindows } from './timeline.ts';
 import { REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS } from './engine-clock.ts';
 import { type PlayerOptions, type PlayerSummary } from './engine-types.ts';
 

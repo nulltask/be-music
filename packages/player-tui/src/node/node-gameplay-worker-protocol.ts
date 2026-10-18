@@ -2,13 +2,15 @@ import type { MessagePort } from 'node:worker_threads';
 import type { LogEntry } from '@be-music/utils/log';
 import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJson, BeMusicPlayLevel } from '@be-music/json';
-import type { PlayerInputCommand } from '@be-music/player/core/input-signal-bus';
-import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player/core/engine';
-import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+import type {
+  PlayerInputCommand,
+  PlayerJudgeComboSignalState,
+  PlayerUiCommand,
+  PlayerUiFramePayload,
+} from '@be-music/player/signals';
+import type { PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player';
 import type { LaneBinding } from '../manual-input.ts';
-import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
-import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
-import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
+import type { ImageResizeAlgorithm, TuiNoteHeight } from '@be-music/player/display';
 import type { GaugeType, PlaylogRulesetId } from '@be-music/player/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
