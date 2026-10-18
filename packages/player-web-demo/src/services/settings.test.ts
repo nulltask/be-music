@@ -1,7 +1,14 @@
-import { describe, expect, test } from 'vite-plus/test';
+import { DEFAULT_HISPEED } from '@be-music/scene-model';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import type { DeviceSignals } from '../device-profile.ts';
+import { HI_SPEED_STORAGE_KEY } from '../hi-speed-storage.ts';
+import { PLAY_TEMPO_STORAGE_KEY } from '../play-tempo-settings.ts';
+import { RENDER_RESOLUTION_STORAGE_KEY } from '../render-resolution.ts';
+import { PLAY_IN_SILENT_MODE_STORAGE_KEY } from '../silent-mode-playback.ts';
 import {
   BUILT_IN_SKIN_STORAGE_KEY,
+  createDemoGuiState,
+  resolveCompressorMode,
   PLAY_LAYOUT_STORAGE_KEY,
   readStoredBuiltInSkinId,
   readStoredPlayLayout,
@@ -159,5 +166,114 @@ describe('volumes', () => {
     });
     expect(readStoredVolumes(odd)).toEqual({ masterVolume: 100, keyVolume: 0, bgmVolume: 100 });
     expect(() => storeVolumes({ masterVolume: 1, keyVolume: 1, bgmVolume: 1 }, blockedStorage)).not.toThrow();
+  });
+});
+
+describe('createDemoGuiState', () => {
+  const actions = {
+    openFolder: vi.fn(),
+    openFiles: vi.fn(),
+    record: vi.fn(),
+    screenshot: vi.fn(),
+  };
+  const create = (storage: SettingStorage, overrides: { devicePixelRatio?: number; signals?: DeviceSignals } = {}) =>
+    createDemoGuiState({
+      storage,
+      signals: overrides.signals ?? desktop,
+      devicePixelRatio: overrides.devicePixelRatio ?? 2,
+      builtInSkinId: (stored) => (stored === 'plain' ? 'plain' : 'synesthesia'),
+      actions,
+    });
+
+  test('starts a first visit from the defaults', () => {
+    const state = create(memoryStorage());
+    expect(state).toMatchObject({
+      autoPlay: false,
+      masterVolume: 100,
+      keyVolume: 100,
+      bgmVolume: 100,
+      playInSilentMode: true,
+      compressor: true,
+      autoSavePlaylog: false,
+      tempoPercent: 0,
+      judgeRuleset: 'lr2',
+      gauge: 'GROOVE',
+      random1P: 'OFF',
+      sort: 'OFF',
+      hiSpeed: DEFAULT_HISPEED,
+      skinFamilyOverride: 'auto',
+      builtInSkin: 'synesthesia',
+      skinEffects: 'full',
+      renderResolution: 1.5,
+      playLayout: 'auto',
+      recordingFormat: 'mp4/avc',
+      status: 'Ready',
+    });
+    expect(state.openFolder).toBe(actions.openFolder);
+    expect(state.record).toBe(actions.record);
+  });
+
+  test('picks up every remembered setting from its be-music-demo.* key', () => {
+    const state = create(
+      memoryStorage({
+        [VOLUME_STORAGE_KEY]: JSON.stringify({ masterVolume: 70, keyVolume: 60, bgmVolume: 50 }),
+        [PLAY_IN_SILENT_MODE_STORAGE_KEY]: 'off',
+        [PLAY_TEMPO_STORAGE_KEY]: JSON.stringify({ tempoPercent: 10, tempoPitchMode: 'keep-pitch' }),
+        [HI_SPEED_STORAGE_KEY]: '3.5',
+        [BUILT_IN_SKIN_STORAGE_KEY]: 'plain',
+        [SKIN_EFFECTS_STORAGE_KEY]: 'off',
+        [RENDER_RESOLUTION_STORAGE_KEY]: '1',
+        [PLAY_LAYOUT_STORAGE_KEY]: 'touch',
+        [RECORDING_FORMAT_STORAGE_KEY]: 'webm/vp9',
+      }),
+    );
+    expect(state).toMatchObject({
+      masterVolume: 70,
+      keyVolume: 60,
+      bgmVolume: 50,
+      playInSilentMode: false,
+      tempoPercent: 10,
+      tempoPitchMode: 'keep-pitch',
+      hiSpeed: 3.5,
+      builtInSkin: 'plain',
+      skinEffects: 'off',
+      renderResolution: 1,
+      playLayout: 'touch',
+      recordingFormat: 'webm/vp9',
+    });
+  });
+
+  test('fits the render resolution to the display, and the skin effects to the device', () => {
+    expect(
+      create(memoryStorage({ [RENDER_RESOLUTION_STORAGE_KEY]: '3' }), { devicePixelRatio: 2 }).renderResolution,
+    ).toBe(2);
+    expect(create(memoryStorage(), { devicePixelRatio: 1 }).renderResolution).toBe(1);
+    expect(create(memoryStorage(), { signals: phone }).skinEffects).toBe('reduced');
+  });
+
+  test('starts from the defaults when storage is blocked', () => {
+    const state = create(blockedStorage);
+    expect(state).toMatchObject({
+      masterVolume: 100,
+      hiSpeed: DEFAULT_HISPEED,
+      builtInSkin: 'synesthesia',
+      playLayout: 'auto',
+    });
+  });
+});
+
+describe('resolveCompressorMode', () => {
+  const at = (query: string) => resolveCompressorMode(`https://be-music.app/${query}`);
+
+  test('keeps the split compressor on without a flag, or with one it does not know', () => {
+    expect(at('')).toEqual({ mode: 'split', enabled: true });
+    expect(at('?compressor=loud')).toEqual({ mode: 'split', enabled: true });
+  });
+
+  test('split and legacy pick that architecture, on; off turns it off', () => {
+    expect(at('?compressor=split')).toEqual({ mode: 'split', enabled: true });
+    expect(at('?compressor=legacy')).toEqual({ mode: 'legacy', enabled: true });
+    expect(at('?e2e=1&compressor=off')).toEqual({ mode: 'split', enabled: false });
+    expect(at('?compressor=LEGACY')).toEqual({ mode: 'legacy', enabled: true });
   });
 });

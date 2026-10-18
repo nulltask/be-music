@@ -89,14 +89,12 @@ import {
 } from '@be-music/player-web/collection';
 import {
   createAudioService,
-  parseCompressorMode,
   DEFAULT_COMPRESSOR_PARAMS,
   setMasterVolume,
   supportsSystemAudioSession,
   applySilentModePlayback,
   type AudioOwner,
   type AudioService,
-  type CompressorMode,
   type CompressorParams,
   type TunableCompressor,
 } from '@be-music/player-web/audio';
@@ -155,7 +153,7 @@ import {
   storeSkinSettings,
 } from './skin-settings.ts';
 import type { ResolvedPlayChart } from '@be-music/player';
-import { readStoredReplayView, storeReplayView } from './replay-view-settings.ts';
+import { storeReplayView } from './replay-view-settings.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingles.ts';
 import {
   parsePlaylog,
@@ -264,11 +262,10 @@ import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { navigationAfterDrop } from './drop-navigation.ts';
 import { InlineSearch } from './inline-search.ts';
 import { parseRecordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
-import { readStoredHiSpeed, storeHiSpeed } from './hi-speed-storage.ts';
+import { storeHiSpeed } from './hi-speed-storage.ts';
 import {
   allowsLiveTempo,
   describePlayingStatus,
-  readStoredPlayTempoSettings,
   storePlayTempoSettings,
   TEMPO_PERCENT_MAX,
   TEMPO_PERCENT_MIN,
@@ -301,7 +298,6 @@ import {
   installSilentModePlayback,
   mountSilentModeHint,
   mountStartSilentModeOption,
-  readPlayInSilentMode,
   readSilentModeHintSeen,
   resolveSilentModeLanguage,
   shouldShowSilentModeHint,
@@ -319,8 +315,6 @@ import {
 } from './recording-controller.ts';
 import {
   benchmarkRenderResolution,
-  DEFAULT_RENDER_RESOLUTION,
-  nearestRenderResolution,
   RenderResolutionBenchmarkCancelled,
   readStoredRenderResolution,
   renderResolutionLabel,
@@ -329,11 +323,8 @@ import {
 } from './render-resolution.ts';
 import type { DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
 import {
-  readStoredBuiltInSkinId,
-  readStoredPlayLayout,
-  readStoredRecordingFormat,
-  readStoredSkinEffects,
-  readStoredVolumes,
+  createDemoGuiState,
+  resolveCompressorMode,
   storeBuiltInSkinId,
   storePlayLayout,
   storeRecordingFormat,
@@ -760,82 +751,21 @@ class PlayerWebDemoApp {
   private readonly elements: PlayerWebDemoElements;
   public constructor(elements: PlayerWebDemoElements) {
     this.elements = elements;
-    this.guiState = {
-      autoPlay: false,
-      autoPauseOnBlur: false,
-      // Compressor stack ON by default — without it, multiple simultaneous `#WAV` samples sum past full scale and
-      // digital- clip at the destination. The `MIXER_HEADROOM_GAIN_LINEAR` attenuation in `audio-bus.ts` buys a little
-      // headroom but the master limiter is what reliably prevents audible clipping on dense charts. Power users wanting
-      // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
-      ...readStoredVolumes(),
-      playInSilentMode: readPlayInSilentMode(),
-      compressor: true,
-      compressorKey: true,
-      compressorBgm: true,
-      compressorMaster: true,
-      // BGA resize is OFF by default — original-resolution transcode is the safe choice for visual parity. Power users
-      // hitting long encode times on HD BGA can pick a pixel cap from the GUI dropdown without rebuilding. `0` means
-      // "preserve resolution"; any positive integer activates the resize path with that long-edge cap.
-      bgaResizeMaxEdgePx: 0,
-      // WebCodecs encode defaults ON when the browser exposes `VideoEncoder` — typically a 5-20× encode-side speedup
-      // over the single-threaded wasm libx264 fallback, and the runtime silently falls back to ffmpeg if the encoder
-      // rejects the configured codec parameters or any step throws. Browsers without `VideoEncoder` (Safari < 17, older
-      // Firefox) keep the toggle disabled in the GUI and the seed stays `false`.
-      bgaUseWebCodecs: typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis,
-      // Debug overlay for invisible / keysound notes — off by default. Power users investigating chart authoring (or
-      // diagnosing missing keysound triggers) flip it on; the regular gameplay surface stays clean otherwise.
-      showInvisibleNotes: false,
-      // LR2's and beatoraja's own behaviour: a judged note stays until its time, so one hit early keeps scrolling down
-      // to the judgement line. The dropdown offers `'HIDE'` (gone the moment it is judged) as a preference.
-      judgedNoteDisplay: 'KEEP_SCROLLING',
-      // Play-history auto-save defaults OFF, so plays don't pile up downloaded files. Users who want every play's
-      // play-log (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
-      // scene mounts.
-      autoSavePlaylog: false,
-      courseAutoAdvance: false,
-      nonstopPlacement: 'intended',
-      // The play tempo, its pitch handling and the keep-pitch stretcher, remembered from the last visit.
-      ...readStoredPlayTempoSettings(),
-      // What a replay reproduces of the recorded view, remembered from the last visit.
-      replayView: readStoredReplayView(),
-      // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
-      submitToLeaderboard: false,
-      // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
-      // select scene's PLAY OPTION panel where a counterpart exists; latched at song start and disabled during a
-      // play. The judge ruleset has no in-skin counterpart — the Debug Menu is its only surface.
-      judgeRuleset: 'lr2',
-      gauge: 'GROOVE',
-      random1P: 'OFF',
-      random2P: 'OFF',
-      dpFlip: false,
-      autoScratch1P: false,
-      autoScratch2P: false,
-      sort: 'OFF',
-      keysFilter: 'ALL',
-      difficultyFilter: 'ALL',
-      hiSpeed: readStoredHiSpeed(),
-      // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
-      // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
-      // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
-      skinFamilyOverride: 'auto',
-      builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
-      skinEffects: readStoredSkinEffects(),
-      renderResolution: nearestRenderResolution(
-        renderResolutionSteps(window.devicePixelRatio || 1),
-        readStoredRenderResolution() ?? DEFAULT_RENDER_RESOLUTION,
-      ),
-      playLayout: readStoredPlayLayout(),
-      status: 'Ready',
-      openFolder: () => this.elements.songInput.click(),
-      openFiles: () => this.elements.filesInput.click(),
-      recordingFormat: readStoredRecordingFormat(),
-      record: () => {
-        void toggleRecording(this.recordingDeps());
+    this.guiState = createDemoGuiState({
+      signals: readDeviceSignals(),
+      devicePixelRatio: window.devicePixelRatio || 1,
+      builtInSkinId: (stored) => BE_MUSIC_SKINS.resolve(stored).id,
+      actions: {
+        openFolder: () => this.elements.songInput.click(),
+        openFiles: () => this.elements.filesInput.click(),
+        record: () => {
+          void toggleRecording(this.recordingDeps());
+        },
+        screenshot: () => {
+          void captureScreenshot(this.recordingDeps());
+        },
       },
-      screenshot: () => {
-        void captureScreenshot(this.recordingDeps());
-      },
-    };
+    });
     // Every sound plays through the master volume; start from the remembered level.
     setMasterVolume(this.guiState.masterVolume / 100);
     // Set the platform audio session before any scene creates an AudioContext, and again on the first gesture (which
@@ -846,22 +776,10 @@ class PlayerWebDemoApp {
       visibility: document,
       onFirstGesture: () => this.maybeShowSilentModeHint(),
     });
-    // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
-    // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
-    // Unrecognized / missing flag → fall through to defaults: architecture `'split'`, GUI checkbox checked (compressor
-    // on, see the `compressor: true` seed above for the rationale).
-    //
-    // `?compressor=split|legacy` is an explicit opt-in to that architecture and keeps the checkbox checked.
-    // `?compressor=off` unchecks it for an unprocessed-signal A/B comparison.
-    const flag: CompressorMode | undefined = parseCompressorMode(
-      new URL(window.location.href).searchParams.get('compressor'),
-    );
-    if (flag === 'split' || flag === 'legacy') {
-      this.compressorMode = flag;
-      this.guiState.compressor = true;
-    } else if (flag === 'off') {
-      this.guiState.compressor = false;
-    }
+    // The `?compressor=split|legacy|off` URL flag, read once at boot.
+    const compressor = resolveCompressorMode(window.location.href);
+    this.compressorMode = compressor.mode;
+    this.guiState.compressor = compressor.enabled;
   }
 
   /** Applies and remembers the "Play in silent mode" setting (Debug Menu checkbox or the hint's button). */
