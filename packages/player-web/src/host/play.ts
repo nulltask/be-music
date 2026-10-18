@@ -464,11 +464,9 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
 const NO_KEYS = { addEventListener: (): void => {}, removeEventListener: (): void => {} };
 
 /**
- * What a beatoraja play runs with over the host's settings, until the beatoraja play takes them as the other families
- * do: the lane covers starting off, and beatoraja's cover keys. The lane options (RANDOM, MIRROR, S-RANDOM, SCATTER)
- * and HS-FIX are the host's, as on every family.
+ * What a beatoraja play runs with over the host's settings: beatoraja's cover keys. The lane options (RANDOM, MIRROR,
+ * S-RANDOM, SCATTER), HS-FIX and the lane covers it starts with are the host's, as on every family.
  */
-const BEATORAJA_PLAY_SETTINGS: Pick<PlaySessionOptions, 'coverStart' | 'coverKeys'> = {
-  coverStart: 'none',
+const BEATORAJA_PLAY_SETTINGS: Pick<PlaySessionOptions, 'coverKeys'> = {
   coverKeys: true,
 };

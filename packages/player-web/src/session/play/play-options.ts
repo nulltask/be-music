@@ -120,8 +120,7 @@ export interface PlaySessionOptions {
   laneCover?: boolean;
   /**
    * Where the lane covers start: `'play-options'` (default) from {@link hiddenSudden1P} / {@link hiddenSudden2P},
-   * {@link shutter} and {@link laneCover}; `'none'` with every cover at 0 and off, as the beatoraja play screen starts
-   * until it takes the play options' covers.
+   * {@link shutter} and {@link laneCover}; `'none'` with every cover at 0 and off.
    */
   coverStart?: 'play-options' | 'none';
   /**

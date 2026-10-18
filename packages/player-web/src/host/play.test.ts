@@ -406,13 +406,14 @@ describe('createPlayScene with a beatoraja kit', () => {
     scene.dispose();
   });
 
-  it('starts its covers off, taking the cover keys', async () => {
+  it('starts its covers from the play options, as every family does, taking the cover keys', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.1);
     const { scene, play } = createBeatoraja();
     await scene.prepare();
     expect(play.options).toMatchObject({ coverKeys: true });
+    // SUDDEN at the shutter's 0.3, the lane cover shown; HIDDEN+ keeps the height, off; no LIFT.
     expect(play.playState.view.covers).toEqual([
-      { side: '1P', sudden: 0, suddenOn: false, hidden: 0, hiddenOn: false, lift: 0 },
+      { side: '1P', sudden: 0.3, suddenOn: true, hidden: 0.3, hiddenOn: false, lift: 0 },
     ]);
     scene.dispose();
   });
@@ -484,22 +485,27 @@ describe('createPlayScene with a beatoraja kit', () => {
     fake.fire('keydown', keydown('End'));
     fake.fire('keydown', keydown('h'));
     fake.fire('wheel', { deltaY: 1, shiftKey: true, preventDefault: vi.fn() });
+    // From the play options' SUDDEN 0.3: PageDown and the Shift wheel lower SUDDEN+ by 0.01 and 0.025, End raises the
+    // LIFT, and H switches HIDDEN+ on at its kept height.
     expect(play.playState.view.covers[0]).toEqual({
       side: '1P',
-      sudden: 0.035,
+      sudden: 0.335,
       suddenOn: true,
-      hidden: 0.25,
+      hidden: 0.3,
       hiddenOn: true,
       lift: 0.01,
     });
     scene.dispose();
 
-    const locked = createBeatoraja({ host: fake.host, settings: { hiSpeedLocked: true } });
+    const locked = createBeatoraja({
+      host: fake.host,
+      settings: { hiSpeedLocked: true, hiddenSudden1P: 'SUDDEN', shutter: 0.3 },
+    });
     await locked.scene.prepare();
     await locked.scene.enter(fake.host);
     fake.fire('keydown', keydown('PageDown'));
     fake.fire('wheel', { deltaY: 1, shiftKey: false, preventDefault: vi.fn() });
-    expect(locked.play.playState.view.covers[0]).toMatchObject({ sudden: 0, suddenOn: false });
+    expect(locked.play.playState.view.covers[0]).toMatchObject({ sudden: 0.3, suddenOn: true });
     locked.scene.dispose();
   });
 
