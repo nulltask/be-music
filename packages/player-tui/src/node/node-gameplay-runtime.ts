@@ -4,9 +4,8 @@ import type { LogEntry } from '@be-music/utils/log';
 import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { Worker, type MessagePort } from 'node:worker_threads';
-import { createPlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
-import type { PlayerLoadProgress, PlayerSummary } from '@be-music/player/core/engine';
-import { PlayerInterruptedError } from '@be-music/player/core/engine';
+import { createPlayerInputSignalBus } from '@be-music/player/signals';
+import { PlayerInterruptedError, type PlayerLoadProgress, type PlayerSummary } from '@be-music/player';
 import {
   createNodeInputRuntime,
   hasNegotiatedStatefulKeyboardProtocol,
