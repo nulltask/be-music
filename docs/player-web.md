@@ -577,7 +577,7 @@ The running play is one scene-model `PlayState` (`playState`): the gauge and EX 
 
 ## Note visibility
 
-Drawing is not part of a judge ruleset, so the ruleset plays no part in it. The gameplay view picks one of two rule sets for which notes, mines and bar lines it draws and where ([`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)):
+Drawing is not part of a judge ruleset, so the ruleset plays no part in it. The gameplay view picks one of two rule sets for which notes, mines and bar lines it draws and where ([`note-draw-window.ts`](../packages/player-web/src/chart/note-draw-window.ts)):
 
 - **LR2 rules** — every chart without `#SCROLL` / `#SPEED`, whatever the ruleset.
 - **beatoraja rules** — every chart with a `#SCROLL` or `#SPEED` point other than 1. LR2 plays neither, so beatoraja is the reference; a chart whose points are all 1 scrolls as a plain chart.

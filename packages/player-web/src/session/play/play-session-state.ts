@@ -38,7 +38,7 @@ import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import type { BmsSwitchingBga, RandomDraws, ResolvedChart } from '@be-music/chart';
 import { DEFAULT_HISPEED, HiSpeedTransition } from '../../scene/hi-speed.ts';
-import type { BgaCue, NonstopStageBgaTimeline } from '../../scene/core/gameplay-bga.ts';
+import type { BgaCue, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
 import type { BeMusicJudge } from '../../skin/be-music/types.ts';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
 import { TouchLaneTracker } from '../../scene/core/touch-lanes.ts';

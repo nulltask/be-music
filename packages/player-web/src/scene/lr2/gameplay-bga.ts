@@ -1,1 +1,1 @@
-export * from '../core/gameplay-bga.ts';
+export * from '../../chart/bga-timeline.ts';
