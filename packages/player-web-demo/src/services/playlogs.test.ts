@@ -1,8 +1,36 @@
 import type { BeMusicCoursePlaylog, BeMusicPlaylog } from '@be-music/player/playlog';
-import { describe, expect, test, vi } from 'vite-plus/test';
-import { PlaylogAutoSave } from './playlogs.ts';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
+import demoPackageJson from '../../package.json' with { type: 'json' };
+import { PLAYLOG_RECORDER, PlaylogAutoSave } from './playlogs.ts';
+
+// The build's commit is a define of the demo's Vite build, which the test run does not have.
+vi.hoisted(() => {
+  (globalThis as { __BE_MUSIC_BUILD__?: string }).__BE_MUSIC_BUILD__ = '5760628d';
+});
 
 const CREATED_AT = '2026-10-19T03:00:00.000Z';
+
+describe('PLAYLOG_RECORDER', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test('names the web app, its version and the commit it was built from', () => {
+    expect(PLAYLOG_RECORDER).toEqual({
+      name: 'be-music-web',
+      version: demoPackageJson.version,
+      build: '5760628d',
+      platform: 'web',
+    });
+  });
+
+  test('names no build when the commit could not be resolved', async () => {
+    vi.stubGlobal('__BE_MUSIC_BUILD__', '');
+    vi.resetModules();
+    const { PLAYLOG_RECORDER: recorder } = await import('./playlogs.ts');
+    expect(recorder).toEqual({ name: 'be-music-web', version: demoPackageJson.version, platform: 'web' });
+  });
+});
 
 function playlog(title = 'Fixture A'): BeMusicPlaylog {
   return {
