@@ -13,10 +13,9 @@ import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-dist
 import type { PlayerGaugeSummary } from '@be-music/player/core/ui-signal-bus';
 import type { TimedLandmineNote, TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { JudgeKind, ScoreSummary } from '@be-music/player/ruleset';
-import type { HiSpeedTransition, PlayState } from '@be-music/scene-model';
+import type { HiSpeedTransition, LibraryChart, PlayState } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind, BeMusicLongNote } from '@be-music/skin-sdk';
 import type { Graphics, Text, Texture } from 'pixi.js';
-import type { BrowserSongEntry } from '../../../collection/types.ts';
 import type { AudioAnalyzer, AudioFeatures } from '../../../runtime/audio-analysis.ts';
 import type { BgaCue, NonstopStageBgaTimeline } from '../../../chart/bga-timeline.ts';
 import type { PlayTempoRange } from '../../../session/play/tempo-range.ts';
@@ -57,7 +56,7 @@ export type RuntimeMineNote = TimedLandmineNote;
  * (`PlaySession`) is one; the view reads it and writes only the lanes it lays out and the BGA videos it plays.
  */
 export interface PlayfieldRuntime {
-  readonly song: BrowserSongEntry | undefined;
+  readonly song: LibraryChart | undefined;
   readonly resolvedChart: BeMusicJson | undefined;
   readonly resolvedPlayChart: ResolvedChart | undefined;
   readonly laneChannels: string[];

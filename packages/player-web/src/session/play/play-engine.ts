@@ -34,9 +34,8 @@ import {
   type ScoreSummary,
 } from '@be-music/player/ruleset';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
-import { playEventFromUiCommand, PlaylogViewCursor, type PlayResult } from '@be-music/scene-model';
+import { playEventFromUiCommand, PlaylogViewCursor, type LibraryChart, type PlayResult } from '@be-music/scene-model';
 import type { BeMusicJudgeWindows, BeMusicLaneKind } from '@be-music/skin-sdk';
-import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { AudioBusHandle } from '../../runtime/audio-bus.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
@@ -96,7 +95,7 @@ export interface PlayEngineContext extends PlayViewSettingsContext, PlayEndingCo
       | 'hiddenSudden2P'
     >
   >;
-  readonly song: BrowserSongEntry | undefined;
+  readonly song: LibraryChart | undefined;
   readonly resolvedChart: BeMusicJson | undefined;
   readonly randomDraws: RandomDraws | undefined;
   readonly preparedChart: PreparedPlaybackChartData | undefined;
@@ -396,7 +395,7 @@ export function resolvePlaylogRecording(
     PlaySessionOptions,
     'gauge' | 'chartSha256' | 'chartMd5' | 'playlogRecorder' | 'random1P' | 'random2P' | 'dpFlip'
   >,
-  song: Pick<BrowserSongEntry, 'chart' | 'chartPath'> | undefined,
+  song: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
   view: PlaylogViewState,
 ): PlaylogRecordingOptions {
   return {

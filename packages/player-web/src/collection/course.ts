@@ -14,9 +14,13 @@ import {
   type RandomCourseDefinition,
   type RandomCourseDrawFailure,
 } from '@be-music/player/course';
-import { resolveLibraryChartPlayVariant } from '@be-music/scene-model';
+import {
+  resolveLibraryChartPlayVariant,
+  type LibraryChart,
+  type LibraryCourse,
+  type LibraryFolder,
+} from '@be-music/scene-model';
 import { resolveChartBpmRange } from '../chart/bpm-range.ts';
-import type { BrowserCourseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
 
 /** A course file's courses, under the label its folder bar shows. */
 export interface CourseDefinitionGroup {
@@ -71,10 +75,10 @@ export function readCourseFile(path: string, bytes: Uint8Array): CourseDefinitio
 
 /** A song lookup by chart-file hash, for {@link resolveCourseFolders}. */
 export function createSongHashLookup(
-  songs: Iterable<{ song: BrowserSongEntry; sha256?: string; md5?: string }>,
-): CourseChartLookup<BrowserSongEntry> {
-  const bySha256 = new Map<string, BrowserSongEntry>();
-  const byMd5 = new Map<string, BrowserSongEntry>();
+  songs: Iterable<{ song: LibraryChart; sha256?: string; md5?: string }>,
+): CourseChartLookup<LibraryChart> {
+  const bySha256 = new Map<string, LibraryChart>();
+  const byMd5 = new Map<string, LibraryChart>();
   // The first song with a hash wins, so a chart dropped twice resolves to the copy loaded first.
   for (const { song, sha256, md5 } of songs) {
     const sha = sha256?.toLowerCase();
@@ -92,15 +96,15 @@ export function createSongHashLookup(
 export function resolveCourseEntry(
   id: string,
   definition: CourseDefinition,
-  lookup: CourseChartLookup<BrowserSongEntry>,
-): BrowserCourseEntry {
+  lookup: CourseChartLookup<LibraryChart>,
+): LibraryCourse {
   const resolved = resolveCourseStages(definition, lookup);
   return {
     id,
     definition,
     stages: resolved.stages.map((stage) => ({
       title: stage.chart?.title ?? stage.ref.title ?? 'NOT FOUND',
-      ...(stage.chart !== undefined ? { song: stage.chart } : {}),
+      ...(stage.chart !== undefined ? { chart: stage.chart } : {}),
     })),
     playable: resolved.playable,
   };
@@ -113,13 +117,13 @@ export function resolveCourseEntry(
  */
 export function resolveCourseFolders(
   groups: readonly CourseDefinitionGroup[],
-  lookup: CourseChartLookup<BrowserSongEntry>,
-): BrowserFolderNode[] {
+  lookup: CourseChartLookup<LibraryChart>,
+): LibraryFolder[] {
   return groups
     .filter((group) => group.courses.length + (group.randomCourses?.length ?? 0) > 0)
-    .map((group): BrowserFolderNode => ({
+    .map((group): LibraryFolder => ({
       label: group.label,
-      songs: [],
+      charts: [],
       courses: [
         ...group.courses.map((definition, index) => resolveCourseEntry(`${group.label}#${index}`, definition, lookup)),
         ...(group.randomCourses ?? []).map((random, index) =>
@@ -134,7 +138,7 @@ export function resolveCourseFolders(
  * each stage shown by its title, else its filter, else `RANDOM`. It is playable when every stage filter can be
  * evaluated; whether each stage finds a chart is only known when it is drawn ({@link drawBrowserRandomCourse}).
  */
-export function createRandomCourseEntry(id: string, random: RandomCourseDefinition): BrowserCourseEntry {
+export function createRandomCourseEntry(id: string, random: RandomCourseDefinition): LibraryCourse {
   return {
     id,
     definition: {
@@ -168,13 +172,13 @@ type ResolvedChart = ReturnType<typeof resolveChart>;
  * none), mines, `#RANDOM`, STOP and scroll changes. `content` is not filled, so it reads as 0.
  */
 export function createCourseSongRecord(
-  song: BrowserSongEntry,
+  song: LibraryChart,
   hashes: { md5?: string; sha256?: string } = {},
-): CourseSongRecord & { readonly song: BrowserSongEntry } {
+): CourseSongRecord & { readonly song: LibraryChart } {
   const { chart } = song;
   const level = typeof song.playLevel === 'number' ? song.playLevel : Number.parseInt(String(song.playLevel ?? ''), 10);
   const subartist = chart.metadata.extras.SUBARTIST ?? chart.bmson.info.subartists?.join(' ');
-  const record: CourseSongRecord & { song: BrowserSongEntry } = {
+  const record: CourseSongRecord & { song: LibraryChart } = {
     song,
     title: song.title,
     path: song.chartPath,
@@ -227,10 +231,10 @@ function songFeatureBits(chart: BeMusicJson, resolved: ResolvedChart): number {
  * A course without `random` is returned as it is.
  */
 export function drawBrowserRandomCourse(
-  entry: BrowserCourseEntry,
-  candidates: Iterable<{ song: BrowserSongEntry; sha256?: string; md5?: string }>,
+  entry: LibraryCourse,
+  candidates: Iterable<{ song: LibraryChart; sha256?: string; md5?: string }>,
   random: () => number,
-): { ok: true; course: BrowserCourseEntry } | RandomCourseDrawFailure {
+): { ok: true; course: LibraryCourse } | RandomCourseDrawFailure {
   if (entry.random === undefined) return { ok: true, course: entry };
   const records = Array.from(candidates, ({ song, md5, sha256 }) =>
     createCourseSongRecord(song, {
@@ -245,7 +249,7 @@ export function drawBrowserRandomCourse(
     course: {
       id: entry.id,
       definition: drawn.course,
-      stages: drawn.songs.map(({ song }) => ({ title: song.title, song })),
+      stages: drawn.songs.map(({ song }) => ({ title: song.title, chart: song })),
       playable: true,
     },
   };

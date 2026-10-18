@@ -21,7 +21,7 @@ import {
 import type { LibraryChart } from '@be-music/scene-model';
 import { Container, Graphics, type Texture } from 'pixi.js';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
+import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import { destroyTextureAndRevokeBlobUrl } from '../../media/textures.ts';
 import type { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
@@ -43,10 +43,10 @@ interface BeatorajaStageView {
   readonly container: Container;
 }
 
-const SONG_TEXTS = new WeakMap<BrowserSongEntry, BeatorajaSongTextInput>();
+const SONG_TEXTS = new WeakMap<LibraryChart, BeatorajaSongTextInput>();
 
 /** What a beatoraja skin's song texts read of a library chart (its sub-artist read off the chart once). */
-export function beatorajaSongTextOf(song: BrowserSongEntry | undefined): BeatorajaSongTextInput | undefined {
+export function beatorajaSongTextOf(song: LibraryChart | undefined): BeatorajaSongTextInput | undefined {
   if (song === undefined) return undefined;
   let text = SONG_TEXTS.get(song);
   if (text === undefined) {
@@ -70,7 +70,7 @@ export function beatorajaSongTextOf(song: BrowserSongEntry | undefined): Beatora
 export function resolveBeatorajaSongText(
   refOp: number,
   options: {
-    song?: BrowserSongEntry;
+    song?: LibraryChart;
     skin: BeatorajaSkin;
     tableTextFallback?: string;
   },

@@ -39,7 +39,8 @@ import {
   type Lr2SelectState,
   type Lr2TimerUpdate,
 } from '@be-music/lr2-skin/state';
-import type { BrowserBrowseEntry, BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
+import type { LibraryChart, LibraryEntry } from '@be-music/scene-model';
+import type { BrowserSongCollection } from '../../collection/types.ts';
 import { COURSE_NAME_PROMPT } from '../../collection/course-maker.ts';
 import { hasReadtextForSong } from '../../collection/readtext.ts';
 import { resolveChartBpmRange } from '../../chart/bpm-range.ts';
@@ -103,8 +104,8 @@ type SortedSelectChromeEntry =
   | { kind: 'onMouse'; order: number; layerIsForeground: boolean; element: Lr2OnMouseElement }
   | { kind: 'slider'; order: number; layerIsForeground: boolean; element: Lr2SliderElement };
 
-const NO_ENTRIES: readonly BrowserBrowseEntry[] = [];
-const EMPTY_LIBRARY: BrowserSongCollection = { sources: [], songs: [], errors: [] };
+const NO_ENTRIES: readonly LibraryEntry[] = [];
+const EMPTY_LIBRARY: BrowserSongCollection = { sources: [], charts: [], errors: [] };
 
 /** The LR2 select view. See the module comment. */
 export class Lr2SelectView implements SelectView {
@@ -281,7 +282,7 @@ export class Lr2SelectView implements SelectView {
     const report = this.perf.endFrame(() => ({
       skin: this.skinLayer.children.length,
       list: this.listLayer.children.length,
-      songs: frame.library.songs.length,
+      charts: frame.library.charts.length,
     }));
     if (report) log.debug('perf', report);
   }
@@ -303,7 +304,7 @@ export class Lr2SelectView implements SelectView {
   // The frame
   // ---------------------------------------------------------------------------------------------------------------------
 
-  private get entries(): readonly BrowserBrowseEntry[] {
+  private get entries(): readonly LibraryEntry[] {
     return this.frame?.entries ?? NO_ENTRIES;
   }
 
@@ -315,12 +316,12 @@ export class Lr2SelectView implements SelectView {
     return this.frame?.library ?? EMPTY_LIBRARY;
   }
 
-  private focusedSong(): BrowserSongEntry | undefined {
+  private focusedSong(): LibraryChart | undefined {
     const entry = this.entries[this.cursor];
-    return entry?.kind === 'song' ? entry.song : undefined;
+    return entry?.kind === 'chart' ? entry.chart : undefined;
   }
 
-  private focusedCourse(): Extract<BrowserBrowseEntry, { kind: 'course' }>['course'] | undefined {
+  private focusedCourse(): Extract<LibraryEntry, { kind: 'course' }>['course'] | undefined {
     const entry = this.entries[this.cursor];
     return entry?.kind === 'course' ? entry.course : undefined;
   }
@@ -407,7 +408,7 @@ export class Lr2SelectView implements SelectView {
     this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, state));
     this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, state.ops));
     // With nothing loaded, a hint over the skin says what to drop.
-    if (frame.library.songs.length === 0) {
+    if (frame.library.charts.length === 0) {
       renderEmptyStateHint({ skinLayer: this.skinLayer, collection: frame.library }, skin.width, skin.height);
     }
     this.readText.render(skin.width, skin.height);
@@ -420,14 +421,14 @@ export class Lr2SelectView implements SelectView {
    */
   private computeState(skin: Lr2Skin, frame: SelectFrame): Lr2SelectState {
     const focused = frame.entries[frame.cursor];
-    const song = focused?.kind === 'song' ? focused.song : undefined;
+    const song = focused?.kind === 'chart' ? focused.chart : undefined;
     const maker = frame.courseMaker;
     return resolveLr2SelectState({
       ...(focused !== undefined ? { focused } : {}),
       options: frame.playOptions,
       record:
-        focused?.kind === 'song'
-          ? { lamp: frame.records.chart(focused.song)?.lamp }
+        focused?.kind === 'chart'
+          ? { lamp: frame.records.chart(focused.chart)?.lamp }
           : focused?.kind === 'course'
             ? { lamp: frame.records.course(focused.course)?.lamp }
             : {},
@@ -1160,8 +1161,8 @@ export class Lr2SelectView implements SelectView {
       }
       // BAR_LEVEL: per-bar level number for SONG entries only. Folder entries don't carry a level so they leave the
       // slot blank.
-      if (entry?.kind === 'song' && layout.levels.length > 0 && layout.levelDestination) {
-        this.drawBarLevel(entry.song, dst, layout.levels, layout.levelDestination);
+      if (entry?.kind === 'chart' && layout.levels.length > 0 && layout.levelDestination) {
+        this.drawBarLevel(entry.chart, dst, layout.levels, layout.levelDestination);
       }
       // BAR_FLASH: focused-bar overlay. DST is relative to the bar (like BAR_TITLE), so we add the bar's xy onto the
       // flash DST before drawing.
@@ -1181,14 +1182,14 @@ export class Lr2SelectView implements SelectView {
    * without that lamp's art draws nothing; folder bars have no lamp here.
    */
   private drawBarLamp(
-    entry: BrowserBrowseEntry,
+    entry: LibraryEntry,
     bar: Lr2DestinationRect,
     lamps: ReadonlyArray<Lr2BarLampSource>,
     lampDst: Lr2DestinationRect,
   ): void {
     if (entry.kind === 'folder') return;
     const record =
-      entry.kind === 'song' ? this.frame?.records.chart(entry.song) : this.frame?.records.course(entry.course);
+      entry.kind === 'chart' ? this.frame?.records.chart(entry.chart) : this.frame?.records.course(entry.course);
     const kind = resolveLr2BarLamp(record?.lamp);
     const lamp = lamps.find((source) => source.kind === kind);
     if (lamp === undefined) return;
@@ -1222,7 +1223,7 @@ export class Lr2SelectView implements SelectView {
    * top-left.
    */
   private drawBarLevel(
-    song: BrowserSongEntry,
+    song: LibraryChart,
     bar: Lr2DestinationRect,
     levels: ReadonlyArray<Lr2BarLevelSource>,
     levelDst: Lr2DestinationRect,
@@ -1330,7 +1331,7 @@ export class Lr2SelectView implements SelectView {
    * dedicated info panel populated by the skin's `#SRC_TEXT` slots — not the bar list itself.
    */
   private drawBarTitleText(
-    entry: BrowserBrowseEntry,
+    entry: LibraryEntry,
     bar: Lr2DestinationRect,
     titleElement: Lr2BarTitleElement | undefined,
     skin: Lr2Skin,
@@ -1341,8 +1342,8 @@ export class Lr2SelectView implements SelectView {
     const w = Math.max(1, titleRect.w);
     const h = Math.max(1, titleRect.h);
     const primaryText =
-      entry.kind === 'song'
-        ? entry.song.title
+      entry.kind === 'chart'
+        ? entry.chart.title
         : entry.kind === 'course'
           ? entry.course.definition.name
           : entry.folder.label;

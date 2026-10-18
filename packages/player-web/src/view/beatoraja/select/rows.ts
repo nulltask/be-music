@@ -22,7 +22,7 @@ import {
 import { joinBeatorajaText } from '@be-music/beatoraja-skin/scene';
 import { resolveLr2ChartFeatures } from '@be-music/lr2-skin/state';
 import { type Container, type FederatedPointerEvent, Sprite, Text, Texture } from 'pixi.js';
-import type { BrowserBrowseEntry } from '../../../collection/types.ts';
+import type { LibraryEntry } from '@be-music/scene-model';
 import type { BeatorajaFontCache } from '../../../skin/beatoraja/fonts.ts';
 import { createCroppedBeatorajaTexture } from '../../../skin/beatoraja/render.ts';
 import type { BeatorajaSceneKit } from '../../../skin/beatoraja/scene-kit.ts';
@@ -43,7 +43,7 @@ export interface BeatorajaSelectRowsContext {
   readonly options: Pick<BeatorajaSceneKit, 'skin' | 'textures'>;
   /** The layer the rows are drawn into, inside the skin's container at its `songlist` anchor. */
   readonly listLayer: Container;
-  readonly entries: ReadonlyArray<BrowserBrowseEntry>;
+  readonly entries: ReadonlyArray<LibraryEntry>;
   /** The animated cursor the rows follow. */
   readonly scrollPosition: number;
   handleRowPointerTap(rowOffset: number, event: FederatedPointerEvent): void;
@@ -79,7 +79,7 @@ export class BeatorajaSelectRows {
    *   - `CommandBar`/etc      → frame 5 (`bar-command`)
    *   - `SearchWordBar`       → frame 6 (`bar-search`)
    *
-   * Our app currently surfaces only `'song'` and `'folder'` entries (no command / search /
+   * Our app currently surfaces only `'chart'` and `'folder'` entries (no command / search /
    * grade bars on the web port), so the active branches are 0, 1, and 4 only — the rest of
    * the array is kept ready for when those types land.
    *
@@ -643,7 +643,7 @@ export class BeatorajaSelectRows {
         bar.visible = true;
         // Per-bar-type imageset frame swap. Mirrors upstream `BarRenderer.java:269`'s
         // `si.draw(sprite, time, ba.value, ...)` where `ba.value` is the bar TYPE index
-        // resolved at `BarRenderer.java:150-166`. Our app currently surfaces only `'song'`
+        // resolved at `BarRenderer.java:150-166`. Our app currently surfaces only `'chart'`
         // and `'folder'` browse entries, mapping to frames 0 (`bar-song`) and 1
         // (`bar-folder`). Future bar-type additions (table / grade / command / search)
         // would extend the switch below; today they fall through to the default frame.
@@ -676,7 +676,7 @@ export class BeatorajaSelectRows {
           for (const sprite of levelDigits) sprite.visible = false;
         }
       } else {
-        const song = entry.song;
+        const song = entry.chart;
         // `SongBar.getTitle()` (`SongBar.java:61-63`) returns `song.getFullTitle()`, which is
         // `subtitle.length() > 0 ? title + " " + subtitle : title` (`SongData.java:285-290`).
         // Authors who use `#SUBTITLE` to disambiguate difficulty (`Foo` + `[INSANE]`) rely on
@@ -910,7 +910,7 @@ export class BeatorajaSelectRows {
           // The row's width depends on the rendered value, so we look up the chart's
           // playLevel here too and pass it to the shift composer. Folder rows skip this
           // (no song.playLevel) — the shift collapses to 0 when value is 0 anyway.
-          const songForRow = entry?.kind === 'song' ? entry.song : undefined;
+          const songForRow = entry?.kind === 'chart' ? entry.chart : undefined;
           const lvlForShift = songForRow !== undefined ? (resolvePlayLevel(songForRow.playLevel) ?? 0) : 0;
           const alignShift = composeBeatorajaValueShift(valueElement, lvlForShift, slotWidth);
           for (let d = 0; d < levelDigits.length; d += 1) {
@@ -963,9 +963,9 @@ export class BeatorajaSelectRows {
    *
    * Folder rows return false uniformly — the labels are per-chart, not per-folder.
    */
-  private chartHasLabelFeature(entry: BrowserBrowseEntry, labelId: string | number): boolean {
-    if (entry.kind !== 'song') return false;
-    const features = resolveLr2ChartFeatures(entry.song.chart);
+  private chartHasLabelFeature(entry: LibraryEntry, labelId: string | number): boolean {
+    if (entry.kind !== 'chart') return false;
+    const features = resolveLr2ChartFeatures(entry.chart.chart);
     const id = String(labelId).toLowerCase();
     if (id.includes('ln')) return features.longNote;
     if (id.includes('random')) return features.random;
@@ -973,14 +973,14 @@ export class BeatorajaSelectRows {
     // doesn't expose it (it's not in the LR2 dst_option op gate set the LR2 helper was
     // built against). BMS landmine channels are `D1..D9` (1P) and `E1..E9` (2P).
     if (id.includes('mine') || id.includes('landmine')) {
-      return entry.song.chart.events.some((event) => /^[de][1-9a-z]$/iu.test(event.channel));
+      return entry.chart.chart.events.some((event) => /^[de][1-9a-z]$/iu.test(event.channel));
     }
     return false;
   }
 }
 
 /**
- * `BrowserSongEntry.playLevel` arrives as either a number (BMS `#PLAYLEVEL 12`) or a string
+ * `LibraryChart.playLevel` arrives as either a number (BMS `#PLAYLEVEL 12`) or a string
  * (some BMSON files / BMS variants store it as text). The skin's `value[]` resolver expects
  * a number, so we coerce — strings parse via `parseInt`; non-finite results return
  * `undefined` so the digit panel shows blanks rather than NaN garbage.

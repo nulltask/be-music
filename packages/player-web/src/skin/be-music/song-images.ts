@@ -1,5 +1,6 @@
 import { loadAssetBytes, resolveChartImageAsset } from '../../collection/collection.ts';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
+import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import { loadImageBitmapFromBytes } from '../../media/textures.ts';
 import { logger } from '../../logger.ts';
 import type { BeMusicSongImageKind, BeMusicSongImageLookup } from './types.ts';
@@ -13,7 +14,7 @@ const log = logger('be-music-song-images');
 export const DEFAULT_SONG_IMAGE_CAPACITY = 32;
 
 /** The chart-relative path of `song`'s `kind` image (`#STAGEFILE`, `#BANNER`, `#BACKBMP`), when the chart names one. */
-export function resolveSongImagePath(song: BrowserSongEntry, kind: BeMusicSongImageKind): string | undefined {
+export function resolveSongImagePath(song: LibraryChart, kind: BeMusicSongImageKind): string | undefined {
   const metadata = song.chart.metadata;
   const path = kind === 'stageFile' ? metadata.stageFile : kind === 'banner' ? metadata.banner : metadata.backBmp;
   return path !== undefined && path.trim().length > 0 ? path : undefined;
@@ -21,13 +22,13 @@ export function resolveSongImagePath(song: BrowserSongEntry, kind: BeMusicSongIm
 
 export interface SongImageCacheOptions {
   /** The asset source holding `song`'s files, or `undefined` when the host has none for it. */
-  resolveSource(song: BrowserSongEntry): BrowserSongAssetSource | undefined;
+  resolveSource(song: LibraryChart): BrowserSongAssetSource | undefined;
   /** Called after an image finished loading, so the screen can be redrawn (select bumps its `revision`). */
   onLoaded?: () => void;
   /** Most images kept decoded at once. Default {@link DEFAULT_SONG_IMAGE_CAPACITY}. */
   capacity?: number;
   /** Reads and decodes one image. Defaults to the chart-asset loader plus `createImageBitmap`; tests swap it. */
-  load?: (source: BrowserSongAssetSource, song: BrowserSongEntry, path: string) => Promise<ImageBitmap | undefined>;
+  load?: (source: BrowserSongAssetSource, song: LibraryChart, path: string) => Promise<ImageBitmap | undefined>;
 }
 
 /**
@@ -96,7 +97,7 @@ export class SongImageCache {
   private async load(
     key: string,
     source: BrowserSongAssetSource,
-    song: BrowserSongEntry,
+    song: LibraryChart,
     path: string,
     generation: number,
   ): Promise<void> {
@@ -131,7 +132,7 @@ export class SongImageCache {
 
 async function loadSongImage(
   source: BrowserSongAssetSource,
-  song: BrowserSongEntry,
+  song: LibraryChart,
   path: string,
 ): Promise<ImageBitmap | undefined> {
   const bytes = await loadAssetBytes(resolveChartImageAsset(source, song.chartPath, path));

@@ -5,10 +5,11 @@
 
 import { dirname } from '@be-music/utils/core';
 import { loadAssetBytes, resolveSongSource } from './collection.ts';
-import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
+import type { BrowserSongCollection } from './types.ts';
 
 /** The `.txt` files directly inside the folder of `song`'s chart, in the source's order. */
-function readtextPaths(collection: BrowserSongCollection, song: BrowserSongEntry): string[] {
+function readtextPaths(collection: BrowserSongCollection, song: LibraryChart): string[] {
   const source = resolveSongSource(collection, song);
   if (!source) return [];
   const dir = dirname(song.chartPath).toLowerCase();
@@ -21,7 +22,7 @@ function readtextPaths(collection: BrowserSongCollection, song: BrowserSongEntry
 }
 
 /** Whether the folder of `song`'s chart holds a text (`.txt`) file: LR2's readme (ops 174 / 175). */
-export function hasReadtextForSong(collection: BrowserSongCollection, song: BrowserSongEntry): boolean {
+export function hasReadtextForSong(collection: BrowserSongCollection, song: LibraryChart): boolean {
   return readtextPaths(collection, song).length > 0;
 }
 
@@ -32,7 +33,7 @@ export function hasReadtextForSong(collection: BrowserSongCollection, song: Brow
  */
 export async function findReadtextForSong(
   collection: BrowserSongCollection,
-  song: BrowserSongEntry,
+  song: LibraryChart,
 ): Promise<string | undefined> {
   const source = resolveSongSource(collection, song);
   if (!source) return undefined;

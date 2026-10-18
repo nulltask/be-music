@@ -22,10 +22,11 @@ import {
   HiSpeedTransition,
   type LaneCover,
   type LaneCoverState,
+  type LibraryChart,
   type PlaylogViewCursor,
   type PlayState,
 } from '@be-music/scene-model';
-import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
+import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type {
   AudioBusChannel,
   AudioBusHandle,
@@ -57,7 +58,7 @@ export class PlaySessionState {
    * before that, accessing `this.app` throws. See `PixiSceneHost` for the single-Application architecture rationale.
    */
   host: PixiSceneHost | undefined;
-  song: BrowserSongEntry | undefined;
+  song: LibraryChart | undefined;
   source: BrowserSongAssetSource | undefined;
   /**
    * The chart's `#RANDOM` / `#IF` control flow resolved for THIS play session. `song.chart` is the raw parsed JSON

@@ -16,9 +16,13 @@ import {
   type CourseKind,
   type NonstopConnection,
 } from '@be-music/player/course';
-import { resolveLibraryChartPlayVariant } from '@be-music/scene-model';
+import {
+  resolveLibraryChartPlayVariant,
+  type LibraryChart,
+  type LibraryCourse,
+  type LibraryFolder,
+} from '@be-music/scene-model';
 import { resolveCourseEntry } from './course.ts';
-import type { BrowserCourseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
 
 /** The course folders the player's own courses are listed in, in LR2's order (its `course1-3.lr2folder`). */
 export const COURSE_MAKER_KINDS: readonly CourseKind[] = ['expert', 'nonstop', 'grade'];
@@ -58,7 +62,7 @@ export interface CourseMakerOptions {
   /** The connection a new NONSTOP course gets after each stage (LR2's button 268). Default `fade`. */
   defaultConnection?: NonstopConnection;
   /** A song's chart MD5, which a course keys its stages by; `undefined` when it cannot be hashed. */
-  md5Of: (song: BrowserSongEntry) => Promise<string | undefined>;
+  md5Of: (song: LibraryChart) => Promise<string | undefined>;
   /** Called after every change, so a host can save the courses and redraw. */
   onChange?: (change: CourseMakerChange) => void;
 }
@@ -110,7 +114,7 @@ export class CourseMaker {
   }
 
   /** Adds a song to the course being made (see `appendCourseDraftStage` for the limits). */
-  async append(song: BrowserSongEntry): Promise<{ ok: true } | { ok: false; reason: CourseMakerAppendFailure }> {
+  async append(song: LibraryChart): Promise<{ ok: true } | { ok: false; reason: CourseMakerAppendFailure }> {
     if (this.current === undefined) return { ok: false, reason: 'not-making' };
     const md5 = await this.options.md5Of(song);
     // The course may have been finished or cancelled while the chart was hashed.
@@ -233,8 +237,8 @@ export class CourseMaker {
   }
 }
 
-/** The NEW COURSE bar of a course folder (see `BrowserCourseEntry.newCourse`). */
-export function createNewCourseEntry(kind: CourseKind): BrowserCourseEntry {
+/** The NEW COURSE bar of a course folder (see `LibraryCourse.newCourse`). */
+export function createNewCourseEntry(kind: CourseKind): LibraryCourse {
   return {
     id: `maker:${kind}#new`,
     definition: {
@@ -258,11 +262,11 @@ export function createNewCourseEntry(kind: CourseKind): BrowserCourseEntry {
  */
 export function resolveCourseMakerFolders(
   courses: readonly CourseDefinition[],
-  lookup: CourseChartLookup<BrowserSongEntry>,
-): BrowserFolderNode[] {
+  lookup: CourseChartLookup<LibraryChart>,
+): LibraryFolder[] {
   return COURSE_MAKER_KINDS.map((kind) => ({
     label: COURSE_MAKER_FOLDER_LABELS[kind],
-    songs: [],
+    charts: [],
     courses: [
       ...courses
         .filter((course) => course.kind === kind)

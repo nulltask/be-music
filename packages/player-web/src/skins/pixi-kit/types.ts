@@ -11,7 +11,7 @@ import type {
   BeMusicSelectFrame,
   BeMusicSelectLayout,
   BeMusicSkin,
-  BrowserSongEntry,
+  LibraryChart,
 } from '@be-music/skin-sdk';
 import type { ChildPool } from './pools.ts';
 
@@ -134,7 +134,7 @@ export interface PixiSelectRenderer {
    */
   render(frame: PixiSelectFrame): boolean;
   /** Per-frame, transform-only animation of the persistent layers. */
-  tick(nowMs: number, focusedSong: BrowserSongEntry | undefined, launchAt?: number, audio?: BeMusicAudioFrame): void;
+  tick(nowMs: number, focusedSong: LibraryChart | undefined, launchAt?: number, audio?: BeMusicAudioFrame): void;
   dispose(): void;
 }
 

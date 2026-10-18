@@ -11,12 +11,12 @@ import {
   readCourseFile,
   resolveCourseFolders,
 } from './course.ts';
-import type { BrowserSongEntry } from './types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
 
 const MD5_A = '0123456789abcdef0123456789abcdef';
 const SHA_B = 'b'.repeat(64);
 
-function song(id: string, title: string): BrowserSongEntry {
+function song(id: string, title: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',
@@ -177,9 +177,9 @@ describe('random courses', () => {
       playable: true,
       definition: { name: 'Random Dan', kind: 'grade', source: { format: 'beatoraja-random' } },
       stages: [
-        { title: 'Song 2', song: songs[2]!.song },
-        { title: 'Song 1', song: songs[1]!.song },
-        { title: 'Song 3', song: songs[3]!.song },
+        { title: 'Song 2', chart: songs[2]!.song },
+        { title: 'Song 1', chart: songs[1]!.song },
+        { title: 'Song 3', chart: songs[3]!.song },
       ],
     });
     expect(drawn.course.definition.stages.map((stage) => stage.md5)).toEqual([
@@ -218,14 +218,14 @@ describe('resolveCourseFolders', () => {
       ],
       lookup,
     );
-    expect(folder).toMatchObject({ label: 'dan', songs: [] });
+    expect(folder).toMatchObject({ label: 'dan', charts: [] });
     expect(folder!.courses!.map((course) => [course.id, course.playable])).toEqual([
       ['dan#0', true],
       ['dan#1', false],
     ]);
     expect(folder!.courses![0]!.stages).toEqual([
-      { title: 'Song A', song: a },
-      { title: 'Song B', song: b },
+      { title: 'Song A', chart: a },
+      { title: 'Song B', chart: b },
     ]);
     expect(folder!.courses![1]!.stages[1]).toEqual({ title: 'Gone' });
   });

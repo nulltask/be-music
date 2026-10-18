@@ -182,9 +182,9 @@ export class BuiltInSelectView implements SelectView {
       renderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
       renderer.setListScroll(this.pointer.shownListPull());
       const focused = frame.entries[frame.cursor];
-      renderer.tick(now, focused?.kind === 'song' ? focused.song : undefined, frame.startedAtMs, frame.audio);
+      renderer.tick(now, focused?.kind === 'chart' ? focused.chart : undefined, frame.startedAtMs, frame.audio);
     }
-    const report = this.perf.endFrame(() => ({ entries: frame.entries.length, songs: frame.library.songs.length }));
+    const report = this.perf.endFrame(() => ({ entries: frame.entries.length, charts: frame.library.charts.length }));
     if (report) log.debug('perf', report);
   }
 
@@ -266,12 +266,12 @@ export class BuiltInSelectView implements SelectView {
       selectedIndex: frame.cursor,
       firstVisibleIndex: window.firstVisibleIndex,
       visibleRows: window.visibleRows,
-      focusedSong: focused?.kind === 'song' ? focused.song : undefined,
+      focusedSong: focused?.kind === 'chart' ? focused.chart : undefined,
       focusedCourse: focused?.kind === 'course' ? focused.course : undefined,
       folderLabel: folder?.label,
       searchQuery: normalizeSearchQuery(frame.browse.searchText),
       searchEditing: frame.searchEditing,
-      totalCharts: frame.library.songs.length,
+      totalCharts: frame.library.charts.length,
       actions: this.actions,
       effects: this.kit.effects ?? 'full',
       launchAt: frame.startedAtMs,

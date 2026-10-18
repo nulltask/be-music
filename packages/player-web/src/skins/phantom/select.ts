@@ -25,8 +25,8 @@ import {
   bandLevel,
   type BeMusicAudioFrame,
   type BeMusicSelectLayout,
-  type BrowserBrowseEntry,
-  type BrowserSongEntry,
+  type LibraryEntry,
+  type LibraryChart,
   describeCourseCard,
   formatPlayVariantLabel,
   hash01,
@@ -243,7 +243,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
 
   public tick(
     nowMs: number,
-    focusedSong: BrowserSongEntry | undefined,
+    focusedSong: LibraryChart | undefined,
     _launchAt?: number,
     audio?: BeMusicAudioFrame,
   ): void {
@@ -578,7 +578,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
   /** One list row; returns true while it is still flying in or sliding out. */
   private renderRow(
     frame: PixiSelectFrame,
-    entry: BrowserBrowseEntry,
+    entry: LibraryEntry,
     entryIndex: number,
     visibleIndex: number,
     listWidth: number,
@@ -587,7 +587,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     const y = listTop + visibleIndex * rowHeight;
     const row = new Graphics();
     const active = entryIndex === frame.selectedIndex;
-    const song = entry.kind === 'song' ? entry.song : undefined;
+    const song = entry.kind === 'chart' ? entry.chart : undefined;
     const folder = entry.kind === 'folder' ? entry.folder : undefined;
     const titleText = browseEntryTitle(entry);
     const keyText = song ? formatPlayVariantLabel(song).replace(' KEYS', '') : 'DIR';
@@ -600,7 +600,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       song?.playLevel !== undefined
         ? String(song.playLevel)
         : folder
-          ? String(folder.courses?.length ?? folder.songs.length)
+          ? String(folder.courses?.length ?? folder.charts.length)
           : browseEntryBadge(entry);
     // The focused row slides out to the left like a pulled card; the rest stay racked against the well. On entry the
     // rows fly in from the right one after another.

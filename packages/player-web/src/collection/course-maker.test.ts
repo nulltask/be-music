@@ -2,9 +2,9 @@ import { parseChart } from '@be-music/parser';
 import { describe, expect, test } from 'vite-plus/test';
 import { CourseMaker, resolveCourseMakerFolders, type CourseMakerChange } from './course-maker.ts';
 import { createSongHashLookup } from './course.ts';
-import type { BrowserSongEntry } from './types.ts';
+import type { LibraryChart } from '@be-music/scene-model';
 
-function song(id: string, text: string): BrowserSongEntry {
+function song(id: string, text: string): LibraryChart {
   return {
     id,
     sourceId: 'drop1',

@@ -5,9 +5,9 @@ import {
   resolveSongRowFacts,
   resolveSongStats,
   type BeMusicSelectLayout,
-  type BrowserBrowseEntry,
-  type BrowserCourseEntry,
-  type BrowserFolderNode,
+  type LibraryEntry,
+  type LibraryCourse,
+  type LibraryFolder,
   type BeMusicSelectFrame,
   type BeMusicSurface,
   selectListRows,
@@ -219,7 +219,7 @@ function button(
 /** Draws one list row, its text centred on `midY`. */
 type RowDrawer = (
   ctx: CanvasRenderingContext2D,
-  entry: BrowserBrowseEntry,
+  entry: LibraryEntry,
   x: number,
   midY: number,
   w: number,
@@ -255,7 +255,7 @@ function drawList(
 
 function drawRow(
   ctx: CanvasRenderingContext2D,
-  entry: BrowserBrowseEntry,
+  entry: LibraryEntry,
   x: number,
   midY: number,
   w: number,
@@ -273,7 +273,7 @@ function drawRow(
     text(ctx, describeCourse(entry.course), x + w - 12, midY, { size: 11, color: dim, align: 'right', maxWidth: 236 });
     return;
   }
-  const song = entry.song;
+  const song = entry.chart;
   const facts = resolveSongRowFacts(song);
   text(ctx, String(song.playLevel ?? '-'), x + 22, midY, { size: 12, weight: 800, align: 'center' });
   text(ctx, song.title, x + 44, midY, { size: 12, weight: 700, maxWidth: w - 300, nowMs });
@@ -292,7 +292,7 @@ function drawRow(
  */
 function drawPortraitRow(
   ctx: CanvasRenderingContext2D,
-  entry: BrowserBrowseEntry,
+  entry: LibraryEntry,
   x: number,
   midY: number,
   w: number,
@@ -310,7 +310,7 @@ function drawPortraitRow(
     text(ctx, describeCourse(entry.course), x + 44, midY + 9, { size: 10, color: dim, maxWidth: textW });
     return;
   }
-  const song = entry.song;
+  const song = entry.chart;
   const facts = resolveSongRowFacts(song);
   text(ctx, String(song.playLevel ?? '-'), x + 22, midY, { size: 13, weight: 800, align: 'center' });
   text(ctx, song.title, x + 44, midY - 8, { size: 13, weight: 700, maxWidth: textW, nowMs });
@@ -323,13 +323,13 @@ function drawPortraitRow(
 }
 
 /** A folder bar's size: its charts, or its courses for a course folder. */
-function describeFolderSize(folder: BrowserFolderNode): string {
-  return folder.courses !== undefined ? `${folder.courses.length} courses` : `${folder.songs.length} charts`;
+function describeFolderSize(folder: LibraryFolder): string {
+  return folder.courses !== undefined ? `${folder.courses.length} courses` : `${folder.charts.length} charts`;
 }
 
 /** A course bar's facts: its kind, its stage count, and how many stages are missing from the collection. */
-function describeCourse(course: BrowserCourseEntry): string {
-  const missing = course.stages.filter((stage) => stage.song === undefined).length;
+function describeCourse(course: LibraryCourse): string {
+  const missing = course.stages.filter((stage) => stage.chart === undefined).length;
   const kind = course.definition.kind === 'grade' ? 'DAN' : course.definition.kind.toUpperCase();
   return `${kind}   ${course.stages.length} STAGES${missing > 0 ? `   ${missing} MISSING` : ''}`;
 }
