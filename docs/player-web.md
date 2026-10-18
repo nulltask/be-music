@@ -70,6 +70,8 @@ Double-click the playfield to toggle the demo into fullscreen; `Esc` leaves full
 On Chrome and Edge the demo locks `Esc` with the Keyboard Lock API while fullscreen: a short `Esc` press keeps its usual scene action (quitting the play included), and a long press leaves fullscreen.
 Holding `Backspace` for 0.5 s during play quits it the same way `Esc` does; a tap does nothing. It works in fullscreen on every browser, Keyboard Lock or not.
 
+In the demo's code, `app/drop-target.ts` takes a drop or a pick from the Debug Menu's Open folder / Open files: it shows the loading overlay, takes the select screen off the stage and reads the files, a drop's items before its handler first waits on anything, since the browser empties a drop once the handler returns. `services/library.ts` sorts what was read and keeps the library: charts go to the song collection, theme files to the LR2 and beatoraja theme loaders, course files and saved table headers to the course folders, and play logs to a replay. It also loads the `?music=` / `?skin=` archives and imports difficulty tables by URL. `services/records.ts` keeps the [best records](#best-records) and the chart hashes they are keyed by, and `services/course-maker.ts` the [courses the player makes](#courses-and-dan-certification).
+
 ### Debug Menu
 
 The lil-gui **Debug Menu** (top-right, collapsed on arrival) puts the everyday controls first and groups the rest into folders. Every folder remembers whether it was left open or closed (`localStorage`, `be-music-demo.debug-menu-folders`); the panel itself always starts collapsed.
