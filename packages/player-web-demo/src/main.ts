@@ -92,7 +92,6 @@ import {
   DEFAULT_COMPRESSOR_PARAMS,
   setMasterVolume,
   supportsSystemAudioSession,
-  applySilentModePlayback,
   type AudioOwner,
   type AudioService,
   type CompressorParams,
@@ -293,18 +292,7 @@ import {
   resolvePlayLayoutMode,
   resolveDeviceProfile,
 } from './device-profile.ts';
-import {
-  SILENT_MODE_STRINGS,
-  installSilentModePlayback,
-  mountSilentModeHint,
-  mountStartSilentModeOption,
-  readSilentModeHintSeen,
-  resolveSilentModeLanguage,
-  shouldShowSilentModeHint,
-  storePlayInSilentMode,
-  storeSilentModeHintSeen,
-  type StartSilentModeOption,
-} from './silent-mode-playback.ts';
+import { SILENT_MODE_STRINGS, mountStartSilentModeOption, resolveSilentModeLanguage } from './silent-mode-playback.ts';
 import {
   RECORD_LABEL,
   captureScreenshot,
@@ -337,6 +325,7 @@ import {
   loadSkinFonts,
   waitForDefaultUiFonts,
 } from './services/built-in-skins.ts';
+import { SilentModeSetting } from './services/silent-mode.ts';
 import {
   describeBar,
   isTestHookEnabled,
@@ -740,10 +729,8 @@ class PlayerWebDemoApp {
    * disarmAutoRecord} so the flag doesn't survive into a future session that shouldn't be auto-captured.
    */
   private autoRecordArmed = false;
-  /** The Debug Menu's "Play in silent mode" checkbox, when the browser offers the setting. */
-  private silentModeController: Controller | undefined;
-  /** The start card's "Play in silent mode" checkbox, when the browser offers the setting. */
-  private startSilentModeOption: StartSilentModeOption | undefined;
+  /** "Play in silent mode": the setting, its checkboxes and its hint. */
+  private readonly silentMode: SilentModeSetting;
   /** `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`). */
   private readonly testHook = isTestHookEnabled(window.location.href, import.meta.env.DEV)
     ? new TestHookRecorder()
@@ -768,48 +755,12 @@ class PlayerWebDemoApp {
     });
     // Every sound plays through the master volume; start from the remembered level.
     setMasterVolume(this.guiState.masterVolume / 100);
-    // Set the platform audio session before any scene creates an AudioContext, and again on the first gesture (which
-    // is when the scenes resume their contexts) — see `silent-mode-playback.ts`.
-    installSilentModePlayback({
-      enabled: () => this.guiState.playInSilentMode,
-      target: window,
-      visibility: document,
-      onFirstGesture: () => this.maybeShowSilentModeHint(),
-    });
+    this.silentMode = new SilentModeSetting({ settings: this.guiState, touchFirst: deviceProfile.touchFirst });
+    this.silentMode.install();
     // The `?compressor=split|legacy|off` URL flag, read once at boot.
     const compressor = resolveCompressorMode(window.location.href);
     this.compressorMode = compressor.mode;
     this.guiState.compressor = compressor.enabled;
-  }
-
-  /** Applies and remembers the "Play in silent mode" setting (Debug Menu checkbox or the hint's button). */
-  private setPlayInSilentMode(value: boolean): void {
-    this.guiState.playInSilentMode = value;
-    storePlayInSilentMode(value);
-    applySilentModePlayback(value);
-    this.silentModeController?.updateDisplay();
-    this.startSilentModeOption?.setChecked(value);
-    // Once the user has found the setting, the hint has nothing left to say.
-    storeSilentModeHintSeen();
-  }
-
-  /**
-   * The first time sound can start on an iPhone / iPad, point at the setting: the silent switch mutes web audio there
-   * and nothing on screen says why. Shown once per browser, only while the setting is off.
-   */
-  private maybeShowSilentModeHint(): void {
-    const show = shouldShowSilentModeHint({
-      supported: supportsSystemAudioSession(),
-      enabled: this.guiState.playInSilentMode,
-      seen: readSilentModeHintSeen(),
-      touchFirst: deviceProfile.touchFirst,
-    });
-    if (!show) return;
-    storeSilentModeHintSeen();
-    mountSilentModeHint({
-      strings: SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)],
-      onEnable: () => this.setPlayInSilentMode(true),
-    });
   }
 
   public start(): void {
@@ -1416,10 +1367,10 @@ class PlayerWebDemoApp {
     // left out rather than shown disabled.
     if (supportsSystemAudioSession()) {
       const strings = SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)];
-      this.silentModeController = audio
+      this.silentMode.controller = audio
         .add(this.guiState, 'playInSilentMode')
         .name(strings.label)
-        .onChange((value: boolean) => this.setPlayInSilentMode(value));
+        .onChange((value: boolean) => this.silentMode.set(value));
       const note = document.createElement('div');
       note.className = 'gui-note';
       note.textContent = strings.note;
@@ -1427,11 +1378,11 @@ class PlayerWebDemoApp {
       // The same setting on the start card, so it can be chosen before the first sound.
       const startSection = document.querySelector<HTMLElement>('#start-silent-mode');
       if (startSection !== null) {
-        this.startSilentModeOption = mountStartSilentModeOption({
+        this.silentMode.startOption = mountStartSilentModeOption({
           section: startSection,
           strings,
           checked: this.guiState.playInSilentMode,
-          onChange: (value) => this.setPlayInSilentMode(value),
+          onChange: (value) => this.silentMode.set(value),
         });
       }
     }
