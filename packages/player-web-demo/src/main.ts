@@ -40,7 +40,7 @@ import {
   type PlayRunKind,
   type SystemSoundSet,
 } from '@be-music/scene-model';
-import { resolveBeMusicSkinSettings, type BeMusicSkin, type BeMusicSongRecord } from '@be-music/skin-sdk';
+import { resolveBeMusicSkinSettings, type BeMusicSkin } from '@be-music/skin-sdk';
 import {
   latticeSkin,
   createBeatorajaSceneKitCaches,
@@ -52,7 +52,6 @@ import {
   pickBeatorajaPlayableVariant,
   releaseBeatorajaSceneKitAssets,
   resolveBeatorajaSkinConfig,
-  skinFamilyRegistry,
   summarizeBeatorajaPlaySkins,
   type BeatorajaChartImages,
   type BeatorajaPlayableVariant,
@@ -66,26 +65,13 @@ import {
   type BeatorajaSystemSoundPaths,
 } from '@be-music/beatoraja-skin/scene';
 import {
-  BrowserSongCollectionStore,
   checkBrowserCompat,
-  computeChartFileHashes,
   describeSongCollection,
-  materializeDroppedFiles,
-  readDroppedFiles,
   resolveSongSource,
-  splitDroppedSongAndThemeFiles,
-  createSongHashLookup,
-  isCourseFilePath,
   drawBrowserRandomCourse,
-  readCourseFile,
-  resolveCourseFolders,
-  resolveCourseMakerFolders,
-  CourseMaker,
   createCourseSongRecord,
   type BrowserDroppedFile,
-  type BrowserSongCollection,
   type ChartFileHashes,
-  type CourseDefinitionGroup,
 } from '@be-music/player-web/collection';
 import {
   createAudioService,
@@ -112,7 +98,6 @@ import {
   loadLr2ThemeSkinsFromFiles,
   pickLr2PlaySkin,
   pickLr2PlaySkinVariant,
-  summarizeLr2PlaySkins,
   type Lr2DiscoveredTheme,
   type Lr2PlaySkinMap,
   type Lr2PlayVariant,
@@ -128,22 +113,8 @@ import {
   type BeatorajaSkinHeader,
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
-import {
-  courseStageRecordKey,
-  readStoredSongRecords,
-  playRecordKey,
-  rulesetRecordKey,
-  rulesetRecords,
-  songRecordKey,
-  storeSongRecords,
-} from './song-records.ts';
-import {
-  courseStageRecordPlayFromResult,
-  mergeBestRecord,
-  mergeCourseStageRecord,
-  recordPlayFromResult,
-  type RecordPlay,
-} from '@be-music/player/records';
+import { courseStageRecordKey, playRecordKey, storeSongRecords } from './song-records.ts';
+import { courseStageRecordPlayFromResult, recordPlayFromResult } from '@be-music/player/records';
 import { LeaderboardPanel } from './leaderboard-ui.ts';
 import {
   describeSkinSettingControllers,
@@ -156,7 +127,6 @@ import { storeReplayView } from './replay-view-settings.ts';
 import { resolveResultSoundSet, resolveResultViewJingles } from './result-jingles.ts';
 import {
   parsePlaylog,
-  PLAYLOG_FILE_SUFFIX,
   type BeMusicCoursePlaylog,
   type BeMusicPlaylog,
   type PlaylogCourseResult,
@@ -188,28 +158,15 @@ import {
   type ActiveCourse,
   type CourseStagePlay,
 } from './course-flow.ts';
-import {
-  describeCourseTableImportError,
-  importCourseTable,
-  isTableHeaderFilePath,
-  readTableHeaderFile,
-  mergeCourseGroup,
-  normalizeCourseTableUrl,
-  readStoredCourseTableUrls,
-  rememberCourseTableUrl,
-} from './course-table-import.ts';
+import { normalizeCourseTableUrl } from './course-table-import.ts';
 import { prepareNonstopPlay, type PreparedNonstopPlay } from './nonstop-course.ts';
 import {
-  countLr2UnplayedStages,
-  LR2_COURSE_MAKER_MAX_STAGES,
-  LR2_MAX_PLAYED_STAGES,
   buildNonstopCoursePlaylog,
   resolveCourseStagePlaySettings,
   resolveCourseStageSettings,
 } from '@be-music/player/course';
-import { CourseMakerPanel } from './course-maker-panel.ts';
-import { loadMadeCourses, saveMadeCourses } from './course-maker-store.ts';
 import { SceneRouter, type PlayDispose, type SceneRouteToken } from './app/scene-router.ts';
+import { DropTarget } from './app/drop-target.ts';
 import { settleDecidePreload, type DecidePreload } from './app/decide-handoff.ts';
 
 /** A NONSTOP course being played as its stitched chart. */
@@ -254,7 +211,6 @@ import GUI, { type Controller } from 'lil-gui';
 import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
-import { navigationAfterDrop } from './drop-navigation.ts';
 import { InlineSearch } from './inline-search.ts';
 import { parseRecordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
 import { storeHiSpeed } from './hi-speed-storage.ts';
@@ -270,8 +226,8 @@ import {
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
 import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
-import { applyLoadProgress, hideLoadingOverlay, showLoadingOverlay } from './loading-overlay.ts';
-import { fetchZipAsFile, fetchZipAsFiles, parseUrlMediaParams } from './url-load.ts';
+import { applyLoadProgress } from './loading-overlay.ts';
+import { parseUrlMediaParams } from './url-load.ts';
 import { DEBUG_MENU_FOLDERS, clearDemoSettings, rememberFolderOpenStates, type DebugMenuFolder } from './debug-menu.ts';
 import {
   enterTouchFullscreen,
@@ -324,6 +280,9 @@ import {
 import { SilentModeSetting } from './services/silent-mode.ts';
 import { copyPlayOptionsToGui, playOptionsFromGui, PlayOptionsService } from './services/play-options.ts';
 import { PlaylogAutoSave } from './services/playlog-auto-save.ts';
+import { CourseMakerService } from './services/course-maker.ts';
+import { LibraryService } from './services/library.ts';
+import { RecordsService } from './services/records.ts';
 import {
   describeBar,
   isTestHookEnabled,
@@ -355,7 +314,6 @@ function playingFamily(view: PlayScene): { family?: 'beatoraja' } {
 }
 
 class PlayerWebDemoApp {
-  private readonly collectionStore = new BrowserSongCollectionStore();
   /**
    * Per-variant play skins, keyed by `Lr2PlayVariant`. Loaded once at theme-drop time so a DP chart can pick
    * `playSkins['14']` while a regular SP chart picks `playSkins['7']`.
@@ -398,22 +356,22 @@ class PlayerWebDemoApp {
     // course run, so the next single play is not taken for its next stage.
     onInterrupt: () => this.endCourseRun(),
   });
-  private collection: BrowserSongCollection = { sources: [], charts: [], errors: [] };
-  /**
-   * Course files dropped so far (`.lr2crs`, beatoraja `course/*.json`) and courses imported from difficulty-table URLs,
-   * resolved into `collection.courseFolders`.
-   */
-  private courseGroups: CourseDefinitionGroup[] = [];
+  /** The charts and courses the select screen lists, and the drops, file picks and URL loads that add to them. */
+  private readonly library: LibraryService;
+  /** Files dragged onto the page or picked in the Debug Menu, read and handed to {@link library}. */
+  private readonly dropTarget: DropTarget;
   /** The EXPERT / GRADE course being played, between its stages. */
   private activeCourse: ActiveCourse | undefined;
   /** Set when a course was started with AUTO (`true`), so its every stage plays itself; `undefined` follows the menu. */
   private courseAutoPlay: boolean | undefined;
-  /** The player's own courses and the course being made (LR2's course maker), kept in IndexedDB. */
-  private readonly courseMaker = new CourseMaker({
-    md5Of: async (song) => (await this.resolveChartHashes(song))?.md5,
-    onChange: (change) => void this.handleCourseMakerChange(change),
+  /** The player's own courses and the course being made (LR2's course maker), kept in IndexedDB, and its card. */
+  private readonly courseMaker = new CourseMakerService({
+    resolveChartHashes: (song) => this.records.resolveChartHashes(song),
+    collection: () => this.library.collection,
+    refreshMadeCourses: () => this.library.refreshMadeCourses(),
+    selectView: () => this.selectView,
+    setStatus: (text) => this.setStatus(text),
   });
-  private courseMakerPanel: CourseMakerPanel | undefined;
   private selectSkin: Lr2Skin | undefined;
   private resultSkin: Lr2Skin | undefined;
   /** LR2 course-result skin (`#INFORMATION` type 15); the course result falls back to {@link resultSkin} without it. */
@@ -666,28 +624,17 @@ class PlayerWebDemoApp {
   private tempoController: Controller | undefined;
   /** Whether the running play takes the tempo slider live (`allowsLiveTempo` at its start). */
   private liveTempoPlay = false;
-  /** Per-entry chart-file hash cache (`null` = lookup failed) — see {@link resolveChartHashes}. */
-  private readonly chartHashCache = new Map<string, ChartFileHashes | null>();
-  /** In-flight {@link resolveChartHashes} lookups, so a chart is hashed once however often it is asked for. */
-  private readonly chartHashPending = new Map<string, Promise<ChartFileHashes | undefined>>();
-  /** Best record per chart ({@link songRecordKey}), persisted in `localStorage` and shown to be-music select skins. */
-  private readonly songRecords = readStoredSongRecords();
+  /** The best records and the chart-file hashes they are keyed by, and the record keys of the play in flight. */
+  private readonly records = new RecordsService({
+    collection: () => this.library.collection,
+    judgeRuleset: () => this.guiState.judgeRuleset,
+  });
   /** Each be-music skin's `settings` values by skin id, persisted in `localStorage` and handed to its scenes. */
   private readonly skinSettings = readStoredSkinSettings();
   /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
   private skinSettingsFolder: GUI | undefined;
   /** The Debug Menu's "Skin & display" folder, which hosts the LR2 theme picker once a drop discovers themes. */
   private skinFolder: GUI | undefined;
-  /**
-   * Record key of the play in flight when it counts towards the chart's best record, latched at song start. `undefined`
-   * for autoplay and replay plays, which never touch the records.
-   */
-  private activePlayRecordKey: string | undefined;
-  /**
-   * Record key of the running EXPERT / GRADE course stage's chart, latched at stage start ({@link courseStageRecordKey}):
-   * as LR2 does, the stage also updates that chart's best EX score, max combo, BP and FULL COMBO lamp.
-   */
-  private activeStageRecordKey: string | undefined;
   /**
    * Play-log auto-save, by `guiState.autoSavePlaylog` as it was when the current play STARTED: the result-screen
    * auto-save of a play, and of a course after its last stage, reads this latch, not the live checkbox (the checkbox is
@@ -768,53 +715,46 @@ class PlayerWebDemoApp {
     const compressor = resolveCompressorMode(window.location.href);
     this.compressorMode = compressor.mode;
     this.guiState.compressor = compressor.enabled;
+    this.library = new LibraryService({
+      elements,
+      resolveChartHashes: (song) => this.records.resolveChartHashes(song),
+      courseMaker: this.courseMaker.maker,
+      selectView: () => this.selectView,
+      showing: () => this.router.current?.identity.kind,
+      setStatus: (text) => this.setStatus(text),
+      showSelect: () => this.showSelect(),
+      leaveSelect: () => this.leaveSelect(),
+      browseTo: (navigation) => {
+        this.lastSelectNavigation = navigation;
+      },
+      startPlaylogReplayFromFile: (file) => this.startPlaylogReplayFromFile(file),
+      loadTheme: (files) => this.loadTheme(files),
+      loadBeatorajaTheme: (files) => this.loadBeatorajaTheme(files),
+      playSkins: () => this.playSkins,
+      selectSkin: () => this.selectSkin,
+      resultSkin: () => this.resultSkin,
+      beatorajaTheme: () => this.beatorajaTheme,
+      answerSkinDropPrompt: (themeFamilies) => this.answerSkinDropPrompt(themeFamilies),
+    });
+    this.dropTarget = new DropTarget({
+      elements,
+      leaveSelect: () => this.leaveSelect(),
+      processIncomingFiles: (files) => this.library.processIncomingFiles(files),
+      loadPickedFiles: (files) => this.library.loadPickedFiles(files),
+      recordLoad: () => this.testHook?.recordLoad(),
+    });
   }
 
   public start(): void {
     this.testHook?.install(window, () => this.testHookState());
     this.buildGui();
-    this.courseMakerPanel = new CourseMakerPanel(this.courseMaker, { onStatus: (text) => this.setStatus(text) });
-    void loadMadeCourses().then(async (made) => {
-      this.courseMaker.restore(made);
-      if (made.courses.length > 0 && this.collection.charts.length > 0) await this.refreshMadeCourses();
-    });
+    this.courseMaker.start();
     // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
     // `showSelect` only once the first select screen is up.
     const initialSelectReady = this.showSelect();
 
-    const onFilesPicked = (input: HTMLInputElement, load: (files: File[]) => Promise<void>) => {
-      const files = input.files;
-      if (!files || files.length === 0) {
-        return;
-      }
-      const fileList = [...files];
-      // Reset the input value immediately so picking the SAME folder a second time still fires `change`. Browsers
-      // suppress repeat `change` events when the new selection matches the previous value — without this, a user
-      // re-picking after a misclick or an interrupted load would see the input silently ignore them.
-      input.value = '';
-      void (async () => {
-        // Browser file-picker drops go through the same loading overlay as drag-drop so a folder picked via the GUI
-        // shows progress too. Take the select scene off the stage up-front so its rendering / BGM stays paused while we
-        // read + parse — the user shouldn't see the song list flicker mid-load.
-        showLoadingOverlay(this.elements);
-        await this.leaveSelect();
-        try {
-          // Route through the same post-enumeration pipeline as drag-drop so the picker's selection produces a theme +
-          // songs split (handy when a user hand-picks a folder whose root carries both an LR2 theme and a BMS pack),
-          // instead of the previous `loadSongs`-only path that quietly skipped any LR2 assets in the selection.
-          await load(fileList);
-        } finally {
-          hideLoadingOverlay(this.elements);
-          this.testHook?.recordLoad();
-        }
-      })();
-    };
-    this.elements.songInput.addEventListener('change', () =>
-      onFilesPicked(this.elements.songInput, (files) => this.processIncomingFiles(files)),
-    );
-    this.elements.filesInput.addEventListener('change', () =>
-      onFilesPicked(this.elements.filesInput, (files) => this.loadPickedFiles(files)),
-    );
+    // The Debug Menu's file pickers, and files dragged onto the page.
+    this.dropTarget.wire();
 
     // Global `/` shortcut focuses the search input. Standard editor convention — same as GitHub / Slack / Discord. We
     // suppress the actual `/` character so it doesn't end up in the input field.
@@ -829,65 +769,9 @@ class PlayerWebDemoApp {
       this.search.open();
     });
 
-    // Drag state via a depth counter rather than a plain add/remove pair on dragover/dragleave. The browser fires
-    // `dragleave` not just when the cursor exits the window but also every time it crosses into a child element —
-    // without counting, the `.dragging` class flickers off whenever the user drags across the canvas → toolbar
-    // boundary, so the overlay would strobe (or, with `dragleave` firing once at the end, disappear before the user can
-    // read the hint).
-    //
-    // Increment on every `dragenter`, decrement on every `dragleave`. We're truly outside the window once the counter
-    // hits zero, at which point the class comes off. `drop` and the rare `dragend` reset the counter so a pathological
-    // event sequence (browser quirk, devtools overlay, etc.) can't leave the class stuck on.
-    let dragDepth = 0;
-    const setDragging = (active: boolean): void => {
-      document.body.classList.toggle('dragging', active);
-    };
-    window.addEventListener('dragenter', (event) => {
-      event.preventDefault();
-      dragDepth += 1;
-      if (dragDepth === 1) {
-        setDragging(true);
-      }
-    });
-    // `dragover` still has to call `preventDefault` for the browser to treat the page as a valid drop target. We don't
-    // toggle state here — that's `dragenter` / `dragleave`'s job — but skipping the preventDefault would silently turn
-    // drops into "open file in browser" navigations.
-    window.addEventListener('dragover', (event) => {
-      event.preventDefault();
-    });
-    window.addEventListener('dragleave', () => {
-      dragDepth = Math.max(0, dragDepth - 1);
-      if (dragDepth === 0) {
-        setDragging(false);
-      }
-    });
-    window.addEventListener('drop', (event) => {
-      event.preventDefault();
-      dragDepth = 0;
-      setDragging(false);
-      if (event.dataTransfer) {
-        void this.handleDrop(event.dataTransfer);
-      }
-    });
-    // Belt-and-braces: the spec lets `dragend` fire on the source element when a drag is canceled (Esc, drop on a
-    // non-target). For files dragged in from the OS it shouldn't normally fire on `window`, but if a custom source ever
-    // does we still want to clear state.
-    window.addEventListener('dragend', () => {
-      dragDepth = 0;
-      setDragging(false);
-    });
-
-    // `?music=<url.zip>` / `?skin=<url.zip>` auto-load: fetch + expand the archives at boot and run them through the
-    // same pipeline as a drag-drop, so the select screen lists the archive's charts (with any skin already applied).
-    // Sequenced after the first select screen shows.
-    const urlParams = parseUrlMediaParams(window.location.href);
-    const mediaParams = urlParams;
-    // Difficulty tables imported in an earlier visit are imported again, after the URL load so their stages match it.
-    const storedCourseTables = readStoredCourseTableUrls();
-    void initialSelectReady.then(async () => {
-      if (mediaParams.musicUrl || mediaParams.skinUrl) await this.loadFromUrl(mediaParams);
-      if (storedCourseTables.length > 0) await this.importCourseTables(storedCourseTables, false);
-    });
+    // `?music=<url.zip>` / `?skin=<url.zip>` auto-load, then the difficulty tables imported in an earlier visit, once the
+    // first select screen is up.
+    void this.library.autoLoad(window.location.href, initialSelectReady);
   }
 
   /**
@@ -1320,7 +1204,7 @@ class PlayerWebDemoApp {
       .onChange((value: boolean) => {
         this.guiState.courseAutoAdvance = value;
       });
-    folder.add({ open: () => this.courseMakerPanel?.openManager() }, 'open').name('My courses…');
+    folder.add({ open: () => this.courseMaker.panel?.openManager() }, 'open').name('My courses…');
     trackPlayOption(
       folder
         .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
@@ -1338,7 +1222,7 @@ class PlayerWebDemoApp {
           this.setStatus('Enter a difficulty-table URL first');
           return;
         }
-        void this.importCourseTables([url], true);
+        void this.library.importCourseTables([url], true);
       },
     };
     folder.add(courseTable, 'url').name('Table URL');
@@ -1530,7 +1414,7 @@ class PlayerWebDemoApp {
           this.setStatus('Enter a music or skin ZIP URL first');
           return;
         }
-        void this.loadFromUrl({ musicUrl, skinUrl });
+        void this.library.loadFromUrl({ musicUrl, skinUrl });
       },
     };
     library.add(urls, 'music').name('Music ZIP URL');
@@ -1551,19 +1435,19 @@ class PlayerWebDemoApp {
       .add(
         {
           clear: () => {
-            if (this.songRecords.size === 0) {
+            if (this.records.songRecords.size === 0) {
               this.setStatus('No best records to clear');
               return;
             }
             if (
               !window.confirm(
-                `Clear ${this.songRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
+                `Clear ${this.records.songRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
               )
             ) {
               return;
             }
-            this.songRecords.clear();
-            storeSongRecords(this.songRecords);
+            this.records.songRecords.clear();
+            storeSongRecords(this.records.songRecords);
             this.setStatus('Best records cleared');
           },
         },
@@ -1703,14 +1587,14 @@ class PlayerWebDemoApp {
     // The play's running result, whichever family draws it.
     const progress = this.gameplayView?.progress();
     const active = this.activeCourse;
-    const draft = this.courseMaker.draft;
+    const draft = this.courseMaker.maker.draft;
     return {
       scene,
       status: this.guiState.status,
       loading: this.elements.loadingOverlay.classList.contains('visible'),
       library: {
-        songs: this.collection.charts.length,
-        courseFolders: (this.collection.courseFolders ?? []).map((folder) => folder.label),
+        songs: this.library.collection.charts.length,
+        courseFolders: (this.library.collection.courseFolders ?? []).map((folder) => folder.label),
       },
       cursor:
         scene.kind === 'select'
@@ -1721,9 +1605,9 @@ class PlayerWebDemoApp {
                 describeBar(
                   entry,
                   entry.kind === 'chart'
-                    ? this.lookupSongRecord(entry.chart)
+                    ? this.records.lookupSongRecord(entry.chart)
                     : entry.kind === 'course'
-                      ? lookupCourseRecord(entry.course, this.songRecords, this.guiState.nonstopPlacement)
+                      ? lookupCourseRecord(entry.course, this.records.songRecords, this.guiState.nonstopPlacement)
                       : undefined,
                 ),
               list: navigation && {
@@ -1799,158 +1683,6 @@ class PlayerWebDemoApp {
     };
   }
 
-  private async handleDrop(dataTransfer: DataTransfer): Promise<void> {
-    // The "Drop a skin" prompt has done its job once something lands.
-    document.querySelector<HTMLDialogElement>('#skin-drop')?.close();
-    // Show the overlay before we even start enumerating files — walking a deep `webkitGetAsEntry` tree on a chart pack
-    // with tens of thousands of WAVs visibly stalls the UI for several seconds, and we want the user to see "we're
-    // working on it" immediately rather than after the slow phase finishes.
-    showLoadingOverlay(this.elements);
-    // Take the select scene off the stage for the duration of the load. Its exit pauses BGM + the rAF tick + the song
-    // list rendering, so:
-    //
-    // - the loaded LR2 theme's `select.wav` doesn't start the moment the (small) theme bundle finishes parsing while
-    //   the (large) song collection is still being read,
-    // - the song list doesn't visually shuffle as new entries land,
-    // - and the user only sees the overlay until everything is ready — not a half-rendered scene behind it.
-    //
-    // `showSelect()` at the end of the try block shows the scene again with the freshly populated state in one shot.
-    // Not awaited: the drop's items must be read before this handler yields.
-    void this.leaveSelect();
-    try {
-      const files = await readDroppedFiles(dataTransfer, {
-        onProgress: (progress) => applyLoadProgress(this.elements, progress),
-      });
-      await this.processIncomingFiles(files);
-    } finally {
-      // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedSongAndThemeFiles`
-      // produced an empty bucket. Otherwise a failed drop would leave the UI permanently masked.
-      hideLoadingOverlay(this.elements);
-      this.testHook?.recordLoad();
-    }
-  }
-
-  /**
-   * Shared post-enumeration pipeline for both drag-drop and the Debug Menu's "Open folder" / "Open files" pickers. Routes the incoming
-   * file list through {@link splitDroppedSongAndThemeFiles}, dispatches theme + song loaders in parallel, then mounts
-   * the freshly populated select view.
-   *
-   * The caller is responsible for showing / hiding the loading overlay and pausing the select view — both entry points
-   * handle that around their own enumeration phase.
-   *
-   * `loadSongs` appends to the existing collection so a second / third invocation of this routine accumulates entries
-   * rather than wiping the previous pack — the host can call this multiple times in succession (e.g. Open folder
-   * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the collection
-   * per-source prefixing.
-   */
-  private async processIncomingFiles(files: BrowserDroppedFile[]): Promise<void> {
-    if (files.length === 0) {
-      return;
-    }
-    // Play-log files ride their own path: they are replay inputs, not chart / theme assets. They are peeled off
-    // BEFORE the song/theme split so a stray `.bmplay.json` never classifies as a theme candidate — and handled
-    // AFTER the split's loaders ran, so dropping a song folder together with its play-log loads the song first and
-    // then starts the replay in one gesture.
-    const playlogFiles = files.filter((file) => file.name.toLowerCase().endsWith(PLAYLOG_FILE_SUFFIX));
-    files = files.filter((file) => !file.name.toLowerCase().endsWith(PLAYLOG_FILE_SUFFIX));
-    if (files.length === 0 && playlogFiles.length > 0) {
-      await this.startPlaylogReplayFromFile(playlogFiles[0]!);
-      return;
-    }
-    // Course files (LR2 `.lr2crs`, beatoraja `course/*.json`) list charts by hash; they are read here and matched
-    // against the collection once its songs are in.
-    const courseFiles = files.filter((file) => isCourseFilePath(file.webkitRelativePath || file.name));
-    files = files.filter((file) => !isCourseFilePath(file.webkitRelativePath || file.name));
-    const courseGroupCount = this.courseGroups.length;
-    await this.readCourseFiles(courseFiles);
-    // A saved difficulty-table header stands in for a table whose site cannot be fetched from here.
-    const tableHeaders = await this.readTableHeaderFiles(files.filter((file) => isTableHeaderFilePath(file.name)));
-    files = files.filter((file) => !tableHeaders.has(file));
-    courseFiles.push(...tableHeaders);
-    if (files.length === 0 && courseFiles.length > 0) {
-      if (this.courseGroups.length > courseGroupCount) {
-        await this.refreshCourseFolders();
-        await this.showSelect();
-      }
-      return;
-    }
-    const split = splitDroppedSongAndThemeFiles(files);
-    const songFiles = split.songFiles;
-    // Folder drops leave song-bundle files unopened; the theme side is opened up front by the drop walk, so this is
-    // normally a pass-through that only narrows the type for the theme loaders.
-    const themeFiles = await materializeDroppedFiles(split.themeFiles, {
-      onError: (file, error) => dropLog.warn(`skipped (open failed): ${file.webkitRelativePath}`, error),
-    });
-    // `splitDroppedSongAndThemeFiles` routes any non-chart files outside a chart directory into `themeFiles`. That
-    // includes stray `readme.txt` / `info.json` / album-art images sitting at the root of a BMS pack that isn't a real
-    // theme bundle. Funnel the detection through `skinFamilyRegistry` so each family's `matchesThemeFile` predicate
-    // owns its own decision — this keeps "what counts as an LR2 theme file?" colocated with the LR2 family metadata
-    // (and the same for beatoraja). Adding a fourth family in the future is a one-line registry edit instead of an
-    // edit here.
-    const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
-      themeFiles.map((file) => file.webkitRelativePath || file.name),
-    );
-    const carriesLr2Theme = themeFamilies.has('lr2');
-    const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
-    const themeMarkers = [...themeFamilies];
-    dropLog.info(
-      `received ${files.length} file(s) · theme=${themeFiles.length}${
-        themeMarkers.length > 0 ? ` (${themeMarkers.join('+')})` : ' (no skin entry → preserving current theme)'
-      } · songs=${songFiles.length}`,
-    );
-    // The songs already listed, so the select screen can open on what this drop added.
-    const previousSongIds = new Set(this.collection.charts.map((song) => song.id));
-    const tasks: Array<Promise<unknown>> = [];
-    if (carriesLr2Theme) {
-      tasks.push(this.loadTheme(themeFiles));
-    }
-    if (carriesBeatorajaTheme) {
-      tasks.push(this.loadBeatorajaTheme(themeFiles));
-    }
-    if (songFiles.length > 0) {
-      tasks.push(this.loadSongs(songFiles));
-    }
-    if (tasks.length === 0) {
-      dropLog.warn('nothing to load — neither theme nor chart files matched');
-      return;
-    }
-    await Promise.all(tasks);
-    const playSkinSummary = summarizeLr2PlaySkins(this.playSkins);
-    const beatorajaSummary = this.beatorajaTheme
-      ? summarizeBeatorajaPlaySkins(this.beatorajaTheme.theme.playSkins) || 'none'
-      : 'none';
-    dropLog.info(
-      `loaded · songs=${this.collection.charts.length} · errors=${
-        this.collection.errors.length
-      } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}${
-        this.beatorajaTheme ? ` · beatoraja-skins=${beatorajaSummary}` : ''
-      }`,
-    );
-    if (this.collection.errors.length > 0) {
-      dropLog.warn('parse errors:', this.collection.errors);
-    }
-    // Status panel stays terse on purpose — only show "loaded" when there's something to celebrate, and skip the
-    // per-key-mode skin enumeration since the user can see the active skin in-canvas. "0 charts loaded" is suppressed
-    // so a theme-only drop doesn't read like an error.
-    if (this.collection.charts.length > 0) {
-      this.setStatus(describeSongCollection(this.collection));
-    } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
-      this.setStatus('Theme loaded');
-    }
-    await this.refreshCourseFolders();
-    // Open what was dropped: its folder, or the folder list when the drop carried several.
-    const dropped = navigationAfterDrop(this.collection.charts, previousSongIds);
-    if (dropped !== undefined) this.lastSelectNavigation = dropped;
-    await this.showSelect();
-    // A skin the player asked for through the Debug Menu ("drop a skin") is switched to once the drop brings it.
-    const asked = this.pendingSkinSystem;
-    this.pendingSkinSystem = undefined;
-    if (asked !== undefined && themeFamilies.has(asked)) this.handleSkinFamilyOverrideChange(asked);
-    if (playlogFiles.length > 0) {
-      await this.startPlaylogReplayFromFile(playlogFiles[0]!);
-    }
-  }
-
   /**
    * Asks for a drop of a skin of `family`, picked in the Debug Menu with none loaded: a drop-card-like prompt that any
    * drop closes. The skin it brings is then used without the "Use this skin?" question.
@@ -1983,25 +1715,11 @@ class PlayerWebDemoApp {
     if (!dialog.open) dialog.showModal();
   }
 
-  /**
-   * Loads what the Debug Menu's "Open files" picker returned: chart archives (`.zip`) go to the song collection whole,
-   * the way `?music=` archives do (the collection expands them itself), and anything else — play logs — takes the
-   * drop pipeline, which starts the replay once the archives are listed.
-   */
-  private async loadPickedFiles(files: File[]): Promise<void> {
-    const isZip = (file: File) => file.name.toLowerCase().endsWith('.zip');
-    const archives = files.filter(isZip);
-    const others = files.filter((file) => !isZip(file));
-    if (archives.length > 0) {
-      await this.loadSongs(archives);
-      await this.showSelect();
-      if (this.collection.charts.length > 0) {
-        this.setStatus(describeSongCollection(this.collection));
-      }
-    }
-    if (others.length > 0) {
-      await this.processIncomingFiles(others);
-    }
+  /** Switches to the skin the player asked for through the Debug Menu ("drop a skin") once a drop brings it. */
+  private answerSkinDropPrompt(themeFamilies: ReadonlySet<SkinFamilyId>): void {
+    const asked = this.pendingSkinSystem;
+    this.pendingSkinSystem = undefined;
+    if (asked !== undefined && themeFamilies.has(asked)) this.handleSkinFamilyOverrideChange(asked);
   }
 
   /**
@@ -2044,15 +1762,15 @@ class PlayerWebDemoApp {
     // Content hash first — stable across sessions, machines, and file moves.
     const sha256 = playlog.chart.sha256?.toLowerCase();
     if (sha256 !== undefined && sha256.length > 0) {
-      for (const entry of this.collection.charts) {
-        if ((await this.resolveChartSha256(entry)) === sha256) {
+      for (const entry of this.library.collection.charts) {
+        if ((await this.records.resolveChartSha256(entry)) === sha256) {
           return entry;
         }
       }
     }
     const nativeChartPath = playlog.play.native?.chartPath;
     if (typeof nativeChartPath === 'string' && nativeChartPath.length > 0) {
-      const exact = this.collection.charts.find((entry) => entry.chartPath === nativeChartPath);
+      const exact = this.library.collection.charts.find((entry) => entry.chartPath === nativeChartPath);
       if (exact) {
         return exact;
       }
@@ -2061,165 +1779,9 @@ class PlayerWebDemoApp {
     if (title === undefined || title.length === 0) {
       return undefined;
     }
-    return this.collection.charts.find(
+    return this.library.collection.charts.find(
       (entry) => entry.title === title && (playlog.chart.artist === undefined || entry.artist === playlog.chart.artist),
     );
-  }
-
-  /** Reads dropped course files into `courseGroups`; a file that holds no valid course is skipped with a warning. */
-  /** Reads dropped `header.json` files that are difficulty-table headers into `courseGroups`; returns the ones read. */
-  private async readTableHeaderFiles(files: readonly BrowserDroppedFile[]): Promise<Set<BrowserDroppedFile>> {
-    const read = new Set<BrowserDroppedFile>();
-    for (const file of files) {
-      const path = file.webkitRelativePath || file.name;
-      const folder = path.replaceAll('\\', '/').split('/').slice(-2, -1)[0] ?? 'table';
-      const group = readTableHeaderFile(new TextDecoder().decode(await file.arrayBuffer()), folder);
-      if (group === undefined) continue;
-      this.courseGroups = mergeCourseGroup(this.courseGroups, group);
-      read.add(file);
-      dropLog.info(`table header: ${path} · ${group.label} · courses=${group.courses.length}`);
-    }
-    return read;
-  }
-
-  private async readCourseFiles(files: readonly BrowserDroppedFile[]): Promise<void> {
-    for (const file of files) {
-      const path = file.webkitRelativePath || file.name;
-      try {
-        const groups = readCourseFile(path, new Uint8Array(await file.arrayBuffer()));
-        if (groups.length === 0) {
-          dropLog.warn(`skipped (no course): ${path}`);
-          continue;
-        }
-        // A file dropped again replaces its folder instead of adding another.
-        for (const group of groups) this.courseGroups = mergeCourseGroup(this.courseGroups, group);
-        for (const group of groups) {
-          dropLog.info(
-            `course file: ${path} · ${group.label} · courses=${group.courses.length} random=${group.randomCourses?.length ?? 0}`,
-          );
-        }
-        // LR2 plays only the first five stages of a course, so an `.lr2crs` course listing more is read cut short.
-        const cutShort = groups
-          .flatMap((group) => group.courses)
-          .filter((course) => countLr2UnplayedStages(course) > 0);
-        if (cutShort.length > 0) {
-          const names = cutShort.map((course) => course.name || '(untitled)').join(', ');
-          dropLog.warn(`course file: ${path} · read as the first ${LR2_MAX_PLAYED_STAGES} stages LR2 plays: ${names}`);
-          this.setStatus(
-            `${path}: ${cutShort.length} course(s) list more than ${LR2_MAX_PLAYED_STAGES} stages; LR2 plays only the first ${LR2_MAX_PLAYED_STAGES}, so the rest were left out`,
-          );
-        }
-      } catch (error) {
-        dropLog.warn(`skipped (course read failed): ${path}`, error);
-      }
-    }
-  }
-
-  /**
-   * Imports the courses of difficulty tables by URL into `courseGroups` (replacing a group with the same label), then
-   * matches them against the collection. With `remember`, a table that imported is stored to be imported again on load.
-   */
-  private async importCourseTables(urls: readonly string[], remember: boolean): Promise<void> {
-    let imported = 0;
-    for (const url of urls) {
-      this.setStatus('Fetching course table…');
-      try {
-        const { group } = await importCourseTable(url);
-        this.courseGroups = mergeCourseGroup(this.courseGroups, group);
-        if (remember) rememberCourseTableUrl(url);
-        imported += 1;
-        dropLog.info(`course table: ${url} · ${group.label} · courses=${group.courses.length}`);
-        this.setStatus(`Course table: ${group.label} (${group.courses.length} courses)`);
-      } catch (error) {
-        dropLog.warn(`course table import failed: ${url}`, error);
-        this.setStatus(describeCourseTableImportError(error));
-      }
-    }
-    if (imported === 0) return;
-    await this.refreshCourseFolders();
-    // Re-list the select screen so the new folders show; mid-play they show the next time it opens.
-    const showing = this.router.current?.identity.kind;
-    const busy = this.elements.shell.classList.contains('playing') || showing === 'result' || showing === 'decide';
-    if (!busy) await this.showSelect();
-  }
-
-  /**
-   * Matches every dropped course's stages against the collection by chart-file hash and lists them as course folders.
-   * Hashing the whole library is cheap (chart files are small) and cached per song.
-   */
-  private async refreshCourseFolders(): Promise<void> {
-    const hashed = await Promise.all(
-      this.collection.charts.map(async (song) => ({ song, ...(await this.resolveChartHashes(song)) })),
-    );
-    this.collection = {
-      ...this.collection,
-      courseFolders: [
-        ...resolveCourseFolders(this.courseGroups, createSongHashLookup(hashed)),
-        ...resolveCourseMakerFolders(this.courseMaker.courses, createSongHashLookup(hashed)),
-      ],
-    };
-  }
-
-  /**
-   * Reacts to the course maker: redraws its card and the select skin for the course being made, and saves the courses
-   * (and relists them) when they or the default connection change.
-   */
-  private async handleCourseMakerChange(change: 'draft' | 'courses' | 'settings'): Promise<void> {
-    this.courseMakerPanel?.update();
-    if (change === 'draft') {
-      // Same collection: the select view only redraws (an LR2 skin's course-maker ops and texts).
-      this.selectView?.setLibrary(this.collection);
-      return;
-    }
-    try {
-      await saveMadeCourses({
-        courses: [...this.courseMaker.courses],
-        defaultConnection: this.courseMaker.defaultConnection,
-      });
-    } catch (error) {
-      this.setStatus('Could not save your courses in this browser; they last until the page is closed');
-      dropLog.warn('course save failed', error);
-    }
-    if (change === 'courses') await this.refreshMadeCourses();
-    else this.selectView?.setLibrary(this.collection);
-  }
-
-  /** Relists the course folders after the player's own courses changed, keeping the select screen where it was. */
-  private async refreshMadeCourses(): Promise<void> {
-    await this.refreshCourseFolders();
-    const view = this.selectView;
-    if (view === undefined) return;
-    const navigation = view.snapshot();
-    view.setLibrary(this.collection);
-    view.restore(navigation);
-  }
-
-  /**
-   * While a course is being made, deciding a song adds it to the course instead of playing it, as LR2 does; deciding one
-   * more once it holds five saves the course. Returns whether the song was taken.
-   */
-  private addSongToCourseBeingMade(song: LibraryChart): boolean {
-    const draft = this.courseMaker.draft;
-    if (draft === undefined) return false;
-    if (draft.stages.length >= LR2_COURSE_MAKER_MAX_STAGES) {
-      const saved = this.courseMaker.finish();
-      if (saved !== undefined) this.setStatus(`Saved the course "${saved.name}"`);
-      return true;
-    }
-    void this.courseMaker.append(song).then((result) => {
-      if (result.ok) {
-        this.setStatus(`Added ${song.title} to the course (${this.courseMaker.draft?.stages.length ?? 0} / 5)`);
-        return;
-      }
-      const reasons = {
-        full: 'the course already has 5 songs',
-        'key-mode': 'its key mode differs from the first song’s',
-        'no-md5': 'its chart could not be hashed',
-        'not-making': 'no course is being made',
-      } as const;
-      this.setStatus(`Could not add ${song.title}: ${reasons[result.reason]}`);
-    });
-    return true;
   }
 
   /**
@@ -2232,7 +1794,7 @@ class PlayerWebDemoApp {
     const plan = planCourseStart(entry);
     // A NEW COURSE bar starts making a course of its folder's kind; songs decided from now on join it.
     if (plan.action === 'make') {
-      this.courseMaker.start(plan.kind);
+      this.courseMaker.maker.start(plan.kind);
       this.setStatus('Making a course: decide songs to add them, then save');
       return;
     }
@@ -2244,7 +1806,10 @@ class PlayerWebDemoApp {
     let course = entry;
     if (plan.action === 'draw') {
       const candidates = await Promise.all(
-        this.collection.charts.map(async (song) => ({ song, ...(await this.resolveChartHashes(song)) })),
+        this.library.collection.charts.map(async (song) => ({
+          song,
+          ...(await this.records.resolveChartHashes(song)),
+        })),
       );
       const drawn = drawBrowserRandomCourse(entry, candidates, Math.random);
       if (!drawn.ok) {
@@ -2286,11 +1851,11 @@ class PlayerWebDemoApp {
     const hashes = new Map<string, ChartFileHashes>();
     for (const stage of course.stages) {
       if (stage.chart === undefined) continue;
-      const found = await this.resolveChartHashes(stage.chart);
+      const found = await this.records.resolveChartHashes(stage.chart);
       if (found !== undefined) hashes.set(stage.chart.id, found);
     }
     const prepared = prepareNonstopPlay(course, {
-      sourceOf: (song) => resolveSongSource(this.collection, song),
+      sourceOf: (song) => resolveSongSource(this.library.collection, song),
       hashesOf: (song) => hashes.get(song.id),
       placement: this.guiState.nonstopPlacement,
     });
@@ -2299,10 +1864,10 @@ class PlayerWebDemoApp {
       return;
     }
     // The stitched chart loads its assets from a composite source; keep one at a time.
-    this.collection = {
-      ...this.collection,
+    this.library.collection = {
+      ...this.library.collection,
       sources: [
-        ...this.collection.sources.filter((source) => !source.id.startsWith('nonstop:')),
+        ...this.library.collection.sources.filter((source) => !source.id.startsWith('nonstop:')),
         prepared.prepared.source,
       ],
     };
@@ -2344,7 +1909,7 @@ class PlayerWebDemoApp {
       await (fallback !== undefined ? this.showResult(fallback) : this.showSelect());
       return;
     }
-    this.recordCourseResult(
+    this.records.recordCourseResult(
       resolveCourseRecordUpdate(
         courseLog,
         native,
@@ -2448,7 +2013,7 @@ class PlayerWebDemoApp {
       await this.showSelect();
       return;
     }
-    this.recordCourseResult(resolveCourseRecordUpdate(courseLog, result, courseRecordKey(course)));
+    this.records.recordCourseResult(resolveCourseRecordUpdate(courseLog, result, courseRecordKey(course)));
     this.playlogAutoSave.saveCourse(courseLog);
     // The course is ranked as one run (its stages never go one by one); the rank lands in the status line.
     this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
@@ -2483,149 +2048,9 @@ class PlayerWebDemoApp {
     });
   }
 
-  /**
-   * SHA-256 and MD5 (lowercase hex) of a song's source chart file, cached per entry id — the hashes feed the play-log
-   * recording (`chart.sha256` / `chart.md5`) and dropped-log matching, and chart files are small enough that hashing
-   * the whole library on a dropped log stays cheap.
-   */
-  private async resolveChartHashes(song: LibraryChart): Promise<ChartFileHashes | undefined> {
-    const cached = this.chartHashCache.get(song.id);
-    if (cached !== undefined) {
-      return cached ?? undefined;
-    }
-    const pending = this.chartHashPending.get(song.id);
-    if (pending !== undefined) {
-      return pending;
-    }
-    const lookup = computeChartFileHashes(resolveSongSource(this.collection, song), song.chartPath)
-      .catch(() => undefined)
-      .then((hashes) => {
-        this.chartHashCache.set(song.id, hashes ?? null);
-        return hashes;
-      })
-      .finally(() => this.chartHashPending.delete(song.id));
-    this.chartHashPending.set(song.id, lookup);
-    return lookup;
-  }
-
-  /** The SHA-256 half of {@link resolveChartHashes}. */
-  private async resolveChartSha256(song: LibraryChart): Promise<string | undefined> {
-    return (await this.resolveChartHashes(song))?.sha256;
-  }
-
-  /**
-   * A chart's best record for the select skin's `frame.songRecord`. Records are keyed by chart hash, which is only known
-   * once the chart has been hashed: the first lookup starts hashing it and answers from the path key meanwhile (where a
-   * chart that could not be hashed keeps its record), so a skin sees the record a frame or two later.
-   */
-  private lookupSongRecord(song: LibraryChart): BeMusicSongRecord | undefined {
-    if (this.songRecords.size === 0) {
-      return undefined;
-    }
-    const hashes = this.chartHashCache.get(song.id);
-    if (hashes === undefined) {
-      void this.resolveChartHashes(song);
-    }
-    return this.songRecords.get(rulesetRecordKey(this.guiState.judgeRuleset, songRecordKey(song, hashes?.sha256)));
-  }
-
-  /** The best records of the current judge ruleset, by chart or course key: the ones the select screen shows. */
-  private currentRulesetRecords(): { get(key: string): BeMusicSongRecord | undefined } {
-    return rulesetRecords(this.songRecords, this.guiState.judgeRuleset);
-  }
-
   /** Redraws the select screen in place with the records of the current judge ruleset, after it changed. */
   private refreshSelectRecords(): void {
-    this.selectView?.setLibrary(this.collection);
-  }
-
-  /** Records the running play's result under its chart, when the play counts ({@link playRecordKey}). */
-  private recordActivePlay(play: RecordPlay): void {
-    if (this.activePlayRecordKey === undefined) return;
-    this.recordSongResult(this.activePlayRecordKey, play);
-    this.activePlayRecordKey = undefined;
-  }
-
-  /** Folds the running course stage into its chart's record ({@link mergeCourseStageRecord}), when the stage counts. */
-  private recordActiveCourseStage(play: RecordPlay): void {
-    const key = this.activeStageRecordKey;
-    this.activeStageRecordKey = undefined;
-    if (key === undefined) return;
-    this.songRecords.set(key, mergeCourseStageRecord(this.songRecords.get(key), play));
-    storeSongRecords(this.songRecords);
-  }
-
-  /** Folds a finished play into its chart's best record and persists the records. */
-  private recordSongResult(key: string, play: RecordPlay): void {
-    this.songRecords.set(key, mergeBestRecord(this.songRecords.get(key), play));
-    storeSongRecords(this.songRecords);
-  }
-
-  /**
-   * Keeps a course run's best lamp, EX score, course max combo and BP under the course's key, when the run keeps a
-   * record ({@link resolveCourseRecordUpdate}).
-   */
-  private recordCourseResult(update: { key: string; play: RecordPlay } | undefined): void {
-    if (update === undefined) return;
-    this.songRecords.set(update.key, mergeBestRecord(this.songRecords.get(update.key), update.play));
-    storeSongRecords(this.songRecords);
-  }
-
-  /**
-   * Auto-loads a music and/or skin archive named by the `?music=` / `?skin=` URL parameters at boot, reusing the drop
-   * pipeline so nothing about song listing or skin application is special-cased.
-   *
-   * - The skin archive is expanded into per-file `File`s and handed to {@link processIncomingFiles}, which detects the
-   *   LR2 / beatoraja family and mounts it (it carries no charts, so it routes entirely to the theme loaders).
-   * - The music archive is passed as a single `.zip` to {@link loadSongs}, letting the player-web loader expand it via
-   *   its own guarded `unzipSync`; the select scene then lists every chart inside.
-   *
-   * Skin is loaded first so the select screen that follows is already themed. Failures (bad link, CORS, HTTP error)
-   * surface as a status line rather than throwing, so a broken URL never wedges the boot.
-   */
-  private async loadFromUrl(params: { musicUrl: string | undefined; skinUrl: string | undefined }): Promise<void> {
-    if (!params.musicUrl && !params.skinUrl) {
-      return;
-    }
-    showLoadingOverlay(this.elements);
-    await this.leaveSelect();
-    try {
-      if (params.skinUrl) {
-        this.setStatus('Fetching skin…');
-        await this.processIncomingFiles(await fetchZipAsFiles(params.skinUrl));
-      }
-      if (params.musicUrl) {
-        this.setStatus('Fetching music…');
-        await this.loadSongs([await fetchZipAsFile(params.musicUrl)]);
-        if (this.courseGroups.length > 0) await this.refreshCourseFolders();
-        await this.showSelect();
-      }
-      if (this.collection.charts.length > 0) {
-        this.setStatus(describeSongCollection(this.collection));
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      dropLog.error('URL auto-load failed', error);
-      this.setStatus(`URL load failed: ${message}`);
-    } finally {
-      hideLoadingOverlay(this.elements);
-    }
-  }
-
-  private async loadSongs(files: BrowserDroppedFile[]): Promise<void> {
-    this.setStatus('Loading songs...');
-    // Append rather than replace so a second / third folder drop adds to the existing collection instead of wiping the
-    // previous pack. The store re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The
-    // very first drop is just `append onto an empty collection`, which produces the same result as `loadFromFiles`
-    // would have.
-    this.collection = await this.collectionStore.appendFromFiles(files, {
-      onProgress: (progress) => applyLoadProgress(this.elements, progress),
-    });
-    // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
-    // text is set by `handleDrop` once both theme + songs land, so a mid-flight transient is plenty.
-    if (this.collection.charts.length > 0) {
-      this.setStatus(describeSongCollection(this.collection));
-    }
+    this.selectView?.setLibrary(this.library.collection);
   }
 
   private async loadTheme(files: File[]): Promise<void> {
@@ -3290,7 +2715,7 @@ class PlayerWebDemoApp {
    * out and the matching destinations stay hidden.
    */
   private loadBeatorajaChartImages(song: LibraryChart): Promise<BeatorajaChartImages> {
-    return loadBeatorajaChartImages(song, resolveSongSource(this.collection, song));
+    return loadBeatorajaChartImages(song, resolveSongSource(this.library.collection, song));
   }
 
   /**
@@ -3361,7 +2786,7 @@ class PlayerWebDemoApp {
     const active = this.activeCourse;
     if (courseStage && active !== undefined) {
       active.run.recordStage(data.playlog, data);
-      this.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
+      this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
       const mounted = await this.showBeatorajaResult(data, {
         run: 'stage',
         course: { info: activeCourseInfo(active) },
@@ -3370,7 +2795,7 @@ class PlayerWebDemoApp {
       this.unlockPlaylogOptions();
       return;
     }
-    this.recordActivePlay(recordPlayFromResult(data));
+    this.records.recordActivePlay(recordPlayFromResult(data));
     const mounted = await this.showBeatorajaResult(data, { run: 'single' });
     if (!mounted) await this.showSelect();
     // Auto-save fires even when the theme ships no result skin, so going back to select costs no replay file.
@@ -3487,7 +2912,7 @@ class PlayerWebDemoApp {
       {
         result,
         run,
-        source: resolveSongSource(this.collection, song),
+        source: resolveSongSource(this.library.collection, song),
         ...(playChart !== undefined ? { playChart } : {}),
         sounds,
         audio: this.audio,
@@ -3772,7 +3197,7 @@ class PlayerWebDemoApp {
 
   private async showSelect(): Promise<void> {
     // Back from a play or a result: the status line describes the library again instead of the play just left.
-    if (this.playStatusShown) this.setStatus(describeSongCollection(this.collection));
+    if (this.playStatusShown) this.setStatus(describeSongCollection(this.library.collection));
     // Back from a course: the cursor returns to the course bar it was started from.
     if (this.courseReturnNavigation !== undefined && this.activeCourse === undefined) {
       this.lastSelectNavigation = this.courseReturnNavigation;
@@ -3783,14 +3208,14 @@ class PlayerWebDemoApp {
     // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
     // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
     // canvas.
-    this.elements.shell.classList.toggle('empty', this.collection.charts.length === 0);
+    this.elements.shell.classList.toggle('empty', this.library.collection.charts.length === 0);
     // Family dispatch. The Debug Menu's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default). The
     // beatoraja family draws the theme's select entry when the library has charts (an empty library shows the built-in
     // screen's drop hint); the LR2 family draws the loaded LR2 select skin when it has a bar list; otherwise the built-in
     // family draws the be-music skin.
     const activeFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'select');
     const beatorajaKit =
-      activeFamily === 'beatoraja' && this.collection.charts.length > 0
+      activeFamily === 'beatoraja' && this.library.collection.charts.length > 0
         ? await this.loadBeatorajaSelectKit()
         : undefined;
     const lr2SelectSkin =
@@ -3816,7 +3241,7 @@ class PlayerWebDemoApp {
       // its BGM starts as it enters. The other way round, the previous theme's BGM would start for a moment.
       if (kit.family !== 'built-in') kept.updateKit(kit);
       kept.setSounds(sounds);
-      kept.setLibrary(this.collection);
+      kept.setLibrary(this.library.collection);
       if (!(await this.router.show(kept, { role: 'select' }))) return;
       if (this.lastSelectNavigation) kept.restore(this.lastSelectNavigation);
       if (kit.family === 'beatoraja') this.refreshBeatorajaSelectSkinOptions();
@@ -3828,16 +3253,17 @@ class PlayerWebDemoApp {
     // The select session plays through the audio service; its decide jingle plays out through the decide screen into
     // the play.
     const scene = createSelectScene(kit, {
-      library: this.collection,
+      library: this.library.collection,
       ...(this.lastSelectNavigation !== undefined ? { browse: this.lastSelectNavigation } : {}),
       playOptions,
       records: {
-        chart: (song) => this.lookupSongRecord(song),
-        course: (course) => lookupCourseRecord(course, this.currentRulesetRecords(), this.guiState.nonstopPlacement),
+        chart: (song) => this.records.lookupSongRecord(song),
+        course: (course) =>
+          lookupCourseRecord(course, this.records.currentRulesetRecords(), this.guiState.nonstopPlacement),
       },
       sounds,
       audio: this.audio,
-      courseMaker: this.courseMaker,
+      courseMaker: this.courseMaker.maker,
       on: {
         start: (entry, { autoPlay }) => this.startFromSelect(entry, autoPlay),
         playOptions: (options) => {
@@ -3851,8 +3277,8 @@ class PlayerWebDemoApp {
         search: () => this.search.openFromPointer(),
         // An LR2 skin's course name (text 170) and delete button (233): the panel names the course or confirms first.
         courseMaker: (action, course) => {
-          if (action === 'name') this.courseMakerPanel?.focusName();
-          else if (course !== undefined) this.courseMakerPanel?.confirmDelete(course.definition);
+          if (action === 'name') this.courseMaker.panel?.focusName();
+          else if (course !== undefined) this.courseMaker.panel?.confirmDelete(course.definition);
         },
         // A beatoraja skin's JUDGE TIMING button: the options are kept for the entry and the skin loaded again with
         // them, which also brings the skin-options panel's readout up to date.
@@ -3884,7 +3310,7 @@ class PlayerWebDemoApp {
    */
   private startFromSelect(entry: SelectStartEntry, autoPlay: boolean): boolean {
     if (entry.kind === 'chart') {
-      if (this.addSongToCourseBeingMade(entry.chart)) return false;
+      if (this.courseMaker.addSongToCourseBeingMade(entry.chart)) return false;
       // The skin's AUTOPLAY forces auto play for this play only; the Debug Menu's checkbox keeps its state.
       void this.showDecide(entry.chart, autoPlay ? { autoPlay: true } : {});
       return true;
@@ -4061,7 +3487,7 @@ class PlayerWebDemoApp {
     const decide = createDecideScene(kit, {
       chart: song,
       playOptions: { ...this.playOptions.current, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay },
-      source: resolveSongSource(this.collection, song),
+      source: resolveSongSource(this.library.collection, song),
       // The LR2 / built-in select screen plays the theme's decide jingle as the chart is picked, and lets it ring on
       // into the play, so those screens play none of their own. The beatoraja screen plays its theme's decide sound.
       sounds: kit.family === 'beatoraja' ? systemSoundSetFromBeatoraja({ bgm: this.beatorajaThemeBgm }) : {},
@@ -4115,7 +3541,7 @@ class PlayerWebDemoApp {
     // fast-path.
     const kit = await this.resolvePlayKit(song, {});
     if (kit === undefined) throw new Error(`no play skin for ${song.title}`);
-    const chartHashes = await this.resolveChartHashes(song);
+    const chartHashes = await this.records.resolveChartHashes(song);
     const view = this.buildPlayScene(song, kit, { ...overrides, chartHashes });
     return (await this.router.prepare(view, { token })) ? view : undefined;
   }
@@ -4212,7 +3638,7 @@ class PlayerWebDemoApp {
     // A play at another tempo is practice: it is not ranked, and leaves the records alone too.
     // A play keeps the record of the judge ruleset it runs under (a replay keeps none).
     const judgeRuleset = this.guiState.judgeRuleset;
-    this.activePlayRecordKey = playRecordKey(song, overrides.chartHashes?.sha256, {
+    this.records.activePlayRecordKey = playRecordKey(song, overrides.chartHashes?.sha256, {
       autoPlay,
       replay: replay !== undefined,
       course: courseStage !== undefined || nonstop !== undefined,
@@ -4220,7 +3646,7 @@ class PlayerWebDemoApp {
       judgeRuleset,
     });
     // An EXPERT / GRADE stage also updates its chart's record, as LR2 does (not a NONSTOP run's stitched play).
-    this.activeStageRecordKey =
+    this.records.activeStageRecordKey =
       courseStage !== undefined
         ? courseStageRecordKey(song, overrides.chartHashes?.sha256, {
             autoPlay,
@@ -4340,7 +3766,7 @@ class PlayerWebDemoApp {
           void (async () => {
             this.testHook?.recordPlaylog(result.playlog);
             this.activeCourse?.run.recordStage(result.playlog, result);
-            this.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
+            this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(result));
             // No screen comes between the stages: the play leaves the stage, its last samples ringing out, and the next
             // stage (or the course result) shows.
             if (!(await this.router.leave({ playDispose: disposeKeepingAudioTail, continuesRun: true }))) return;
@@ -4388,7 +3814,7 @@ class PlayerWebDemoApp {
       courseInfo,
       ...settings
     } = sharedOptions;
-    const source = resolveSongSource(this.collection, song);
+    const source = resolveSongSource(this.library.collection, song);
     return createPlayScene(kit, {
       chart: song,
       ...(source !== undefined ? { source } : {}),
@@ -4502,7 +3928,7 @@ class PlayerWebDemoApp {
     // NONSTOP chart, which has no file).
     const chartHashes =
       overrides.replay === undefined && overrides.nonstop === undefined
-        ? await this.resolveChartHashes(song)
+        ? await this.records.resolveChartHashes(song)
         : undefined;
     const view = this.buildPlayScene(song, kit, { ...overrides, chartHashes });
     // A replay plays at its recorded tempo, unless the Replay / ghost options keep the viewer's own.
@@ -4550,7 +3976,7 @@ class PlayerWebDemoApp {
     const presentation = resolveResultPresentation(run);
     if (courseStage) {
       this.activeCourse!.run.recordStage(data.playlog, data);
-      this.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
+      this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data));
     }
     // Family dispatch for result. Only the LR2 / default split is modelled here — a play on the beatoraja play screen
     // shows its result on the beatoraja skin (`showBeatorajaPlayResult`), a NONSTOP run on a beatoraja theme too
@@ -4623,7 +4049,7 @@ class PlayerWebDemoApp {
       // The LR2 skin shows the course of the result (`result.course`): the stage's course, or the course run.
       result: lr2ResultSkin !== undefined && courseInfo !== undefined ? { ...data, course: courseInfo } : data,
       run,
-      source: resolveSongSource(this.collection, data.song),
+      source: resolveSongSource(this.library.collection, data.song),
       sounds: resolveResultSoundSet(resultFamily, themeJingles),
       audio: this.audio,
       on: { continue: onContinue, ...(onRetry !== undefined ? { retry: onRetry } : {}) },
@@ -4653,7 +4079,7 @@ class PlayerWebDemoApp {
         );
       }
     }
-    this.recordActivePlay(recordPlayFromResult(data));
+    this.records.recordActivePlay(recordPlayFromResult(data));
     // A course's stages are saved and ranked as the course, not one by one (a NONSTOP run's course log already was).
     if (presentation.quickRetry && mode.nonstop === undefined) {
       this.playlogAutoSave.savePlay(data.playlog);
@@ -4697,8 +4123,8 @@ class PlayerWebDemoApp {
       );
     }
     if (tempo !== 1) {
-      this.activePlayRecordKey = undefined;
-      this.activeStageRecordKey = undefined;
+      this.records.activePlayRecordKey = undefined;
+      this.records.activeStageRecordKey = undefined;
     }
   }
 
