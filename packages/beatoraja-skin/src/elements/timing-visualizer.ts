@@ -1,7 +1,8 @@
 // Strict-typed normalization for beatoraja `timingvisualizer[]` declarations.
 //
 // The timingvisualizer plots the player's recent judgement timing offsets on a horizontal scale
-// (early on the left, late on the right, perfect at center). Each judgement adds one mark; older
+// (late on the left, early on the right, perfect at center: beatoraja's offsets are note time
+// minus press time, drawn at `center + offset`). Each judgement adds one mark; older
 // samples fade upward. Authors point this at a destination strip on the play screen so the
 // player can read their timing pattern at a glance during the run.
 //
