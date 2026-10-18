@@ -116,11 +116,14 @@ const webLayerGroup = (...dirs: string[]): string[] => dirs.flatMap((dir) => [`*
 const lowerLayerMessage =
   'A lower layer of the web runtime knows no scene: it imports no host, session or view module.';
 const lowerLayerPatterns = [{ group: webLayerGroup('host', 'session', 'view'), message: lowerLayerMessage }];
-/** `@be-music/player` is the engine too: its root re-exports `core/engine`. */
-const engineModules = ['@be-music/player', '@be-music/player/core/engine'];
-const engineMessage = 'Only a scene session (and runtime/engine-driver.ts) runs the engine; import its types only.';
+/**
+ * The engine is the root of `@be-music/player`. Its other entries (`./signals`, `./lanes`, `./display`, `./ruleset`, …)
+ * are the vocabulary a host shares with a play, not the engine, so any layer may import them.
+ */
+const engineModule = '@be-music/player';
+const engineMessage = `Only a scene session (and runtime/engine-driver.ts) runs the engine (${engineModule}); import its types only.`;
 const engineTypeImports = {
-  paths: engineModules.map((name) => ({ name, allowTypeImports: true, message: engineMessage })),
+  paths: [{ name: engineModule, allowTypeImports: true, message: engineMessage }],
 };
 const lowerLayerImports = { ...engineTypeImports, patterns: lowerLayerPatterns };
 const engineDriverImports = { patterns: lowerLayerPatterns };
@@ -138,7 +141,9 @@ const sceneSessionImports = {
 };
 const familyViewEngineMessage = 'A family view draws frames and returns intents; the scene session drives the engine.';
 const familyViewImports = {
-  paths: engineModules.map((name) => ({ name, message: familyViewEngineMessage })),
+  paths: [
+    { name: engineModule, message: `${familyViewEngineMessage} Import nothing from ${engineModule}, not even a type.` },
+  ],
   patterns: [
     { group: ['**/runtime/engine-driver*', '**/runtime/web-*-runtime*'], message: familyViewEngineMessage },
     {
