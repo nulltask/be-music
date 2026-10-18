@@ -3,7 +3,7 @@ import {
   resolveSideKeySlot as resolveCoreSideKeySlot,
   resolveSideRelativeLaneIndex,
   resolveWheelLaneDirection,
-} from '@be-music/player/core/lane-layout';
+} from '@be-music/player/lanes';
 import type { BeMusicLaneKind } from './types.ts';
 
 /** Lanes sit edge to edge, and in double play the 2P bank butts straight onto the 1P bank. */
