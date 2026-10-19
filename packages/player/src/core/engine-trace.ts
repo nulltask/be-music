@@ -676,8 +676,10 @@ export function createNoTuiPlaybackEventTracer(params: {
     layer2BgaEvents,
   ]);
 
+  // LR2 starts its miss layer from `#BMP00`; only `#POORBGA 2` (no POOR image) turns that off, and a missing,
+  // unparsable or out-of-range value is `0`, the usual behaviour.
   const shouldUsePoorBmp00Fallback =
-    typeof json.bms.poorBga !== 'string' &&
+    (json.bms.poorBga === undefined || Number.parseInt(json.bms.poorBga.trim(), 10) !== 2) &&
     typeof json.resources.bmp['00'] === 'string' &&
     json.resources.bmp['00'].length > 0;
   const poorFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;

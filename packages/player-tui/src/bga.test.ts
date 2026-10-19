@@ -1108,38 +1108,45 @@ describe('player bga', () => {
     }
   });
 
-  test('player bga: does not apply #BMP00 POOR fallback when #POORBGA is specified', async () => {
-    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-no-fallback-'));
-    try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writePng(join(baseDir, 'fallback.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
-      await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+  test.each([
+    { poorBga: '2', expected: { r: 255, g: 0, b: 0 } },
+    { poorBga: '0', expected: { r: 0, g: 0, b: 255 } },
+    { poorBga: 'x', expected: { r: 0, g: 0, b: 255 } },
+  ])(
+    'player bga: only #POORBGA 2 turns off the #BMP00 POOR fallback (#POORBGA $poorBga)',
+    async ({ poorBga, expected }) => {
+      const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-no-fallback-'));
+      try {
+        await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+        await writePng(join(baseDir, 'fallback.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+        await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
 
-      const json = createEmptyJson('bms');
-      json.metadata.bpm = 120;
-      json.bms.poorBga = '01';
-      json.resources.bmp['00'] = 'fallback.png';
-      json.resources.bmp['01'] = 'base.png';
-      json.resources.bmp['02'] = 'poor.png';
-      json.events = [
-        { measure: 0, channel: '04', position: [0, 1], value: '01' },
-        { measure: 1, channel: '06', position: [0, 1], value: '02' },
-      ];
+        const json = createEmptyJson('bms');
+        json.metadata.bpm = 120;
+        json.bms.poorBga = poorBga;
+        json.resources.bmp['00'] = 'fallback.png';
+        json.resources.bmp['01'] = 'base.png';
+        json.resources.bmp['02'] = 'poor.png';
+        json.events = [
+          { measure: 0, channel: '04', position: [0, 1], value: '01' },
+          { measure: 1, channel: '06', position: [0, 1], value: '02' },
+        ];
 
-      const renderer = await createBgaAnsiRenderer(json, {
-        baseDir,
-        width: 40,
-        height: 20,
-      });
-      expect(renderer).toBeDefined();
+        const renderer = await createBgaAnsiRenderer(json, {
+          baseDir,
+          width: 40,
+          height: 20,
+        });
+        expect(renderer).toBeDefined();
 
-      renderer?.triggerPoor(0);
-      const beforeFirstPoorCue = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
-      expect(beforeFirstPoorCue[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
-    } finally {
-      await rm(baseDir, { recursive: true, force: true });
-    }
-  });
+        renderer?.triggerPoor(0);
+        const beforeFirstPoorCue = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+        expect(beforeFirstPoorCue[10]?.[20]).toEqual(expected);
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    },
+  );
 
   test('player bga: updates output size when display size changes', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-resize-'));

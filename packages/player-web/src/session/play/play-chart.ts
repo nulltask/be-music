@@ -367,7 +367,7 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
     ctx.options.nonstop !== undefined
       ? splitNonstopBgaTimeline(ctx.bgaTimeline, ctx.options.nonstop.stages)
       : undefined;
-  // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
+  // BMS spec — when `#BMP00` exists (and `#POORBGA` is not 2), BMP00 becomes the implicit POOR placeholder until an
   // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
   // black POOR plate on misses for charts that rely on this convention.
   ctx.poorBgaFallbackKey = resolvePoorBgaFallbackKey(resolved);
