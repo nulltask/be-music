@@ -27,7 +27,7 @@
   "dependencies": {
     "@be-music/chart": "workspace:*",
     "@be-music/player": "workspace:*",
-    "@better-auth/passkey": "^1.7.7",
+    "@better-auth/passkey": "^1.7.10",
     "@hono/standard-validator": "^0.4.0",
     "@scalar/hono-api-reference": "^0.12.12",
     "@valibot/to-json-schema": "^1.8.0",
