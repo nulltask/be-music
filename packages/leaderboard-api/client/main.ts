@@ -3,9 +3,6 @@
  * what needs the browser: passkey sign-in and sign-out in the header, and the settings page (profile form, icon upload,
  * passkey creation). The pages work without it, minus these actions.
  */
-import { passkeyClient } from '@better-auth/passkey/client';
-import { createAuthClient } from 'better-auth/client';
-import { anonymousClient } from 'better-auth/client/plugins';
 import type { ScoreCardData } from '../src/pages/score-card-data.ts';
 import { clientMessages } from './messages.ts';
 import { centerSquare, describeAccountError } from './profile.ts';
@@ -17,26 +14,12 @@ const t = clientMessages(document.documentElement.lang);
 /** The server's limit for a share card (src/cards.ts). */
 const CARD_UPLOAD_LIMIT = 512 * 1024;
 
-let client: ReturnType<typeof createClient> | undefined;
-function createClient() {
-  return createAuthClient({ plugins: [anonymousClient(), passkeyClient()] });
-}
-/** Better Auth on this origin (`/api/auth`), created on first use. */
-function auth() {
-  client ??= createClient();
-  return client;
-}
-
 /** Shows a message in the element `selector` names (the header status line by default), or clears it. */
 function say(message: string | undefined, selector = '[data-account-status]'): void {
   const target = document.querySelector<HTMLElement>(selector);
   if (target === null) return;
   target.textContent = message ?? '';
   target.hidden = message === undefined;
-}
-
-function errorText(error: { message?: string; code?: string } | null | undefined): string {
-  return error?.message ?? error?.code ?? t.somethingWentWrong;
 }
 
 /** Answers of the account API: the body on success, a message otherwise. */
@@ -48,30 +31,24 @@ async function callAccountAPI(path: string, init: RequestInit): Promise<{ ok: tr
 }
 
 const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
-  async 'sign-in'(button) {
-    const result = await auth().signIn.passkey();
-    // Inside the sign-in dialog the message goes under its button; elsewhere (Settings) to the header's status line.
-    const status = button.closest('dialog') !== null ? '[data-sign-in-status]' : undefined;
-    if (result?.error) return say(t.signInFailed(errorText(result.error)), status);
-    location.reload();
+  async 'sign-in'() {
+    location.assign(`/api/auth/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`);
   },
   async 'sign-out'() {
-    await auth().signOut();
+    await fetch('/api/auth/sign-out', { method: 'POST' });
     location.reload();
   },
   async 'open-sign-in'() {
-    openDialog('#sign-in');
+    location.assign('/api/auth/sign-in');
   },
   async 'open-sign-up'() {
-    openDialog('#sign-up');
+    location.assign('/api/auth/sign-in?returnTo=/settings');
   },
   async 'close-dialogs'() {
     for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]')) dialog.close();
   },
   async 'create-passkey'() {
-    const result = await auth().passkey.addPasskey({ name: 'be-music' });
-    if (result?.error) return say(t.passkeyFailed(errorText(result.error)), '[data-settings-status]');
-    location.reload();
+    location.assign('/api/auth/manage');
   },
   async 'hide-score'(button) {
     await setScoreHidden(button, true);
@@ -103,12 +80,6 @@ async function setScoreHidden(button: HTMLButtonElement, hidden: boolean): Promi
   });
   if (!result.ok) return say(result.message, '[data-visibility-status]');
   location.reload();
-}
-
-/** Opens one account dialog, closing any other first (Sign in links to Sign up). */
-function openDialog(selector: string): void {
-  for (const open of document.querySelectorAll<HTMLDialogElement>('dialog[open]')) open.close();
-  document.querySelector<HTMLDialogElement>(selector)?.showModal();
 }
 
 document.addEventListener('click', (event) => {
@@ -147,47 +118,6 @@ document.addEventListener('submit', (event) => {
       if (result.ok) location.reload();
       else say(result.message, '[data-settings-status]');
     })
-    .finally(() => {
-      if (submit !== null) submit.disabled = false;
-    });
-});
-
-/**
- * Sign-up: an anonymous account first (the passkey needs a session to belong to), then the handle and name, then the
- * passkey, which claims the account. Each step can fail on its own: the message says where it stopped, and an account
- * left without a passkey can add one in Settings.
- */
-document.addEventListener('submit', (event) => {
-  const form = event.target;
-  if (!(form instanceof HTMLFormElement) || !form.matches('[data-sign-up-form]')) return;
-  event.preventDefault();
-  const data = new FormData(form);
-  const status = '[data-sign-up-status]';
-  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-  if (submit !== null) submit.disabled = true;
-  say(undefined, status);
-  void (async () => {
-    const session = await auth().getSession();
-    if (session.data === null) {
-      const anonymous = await auth().signIn.anonymous();
-      if (anonymous?.error) return say(t.accountStartFailed(errorText(anonymous.error)), status);
-    }
-    const saved = await callAccountAPI('/api/v0/me', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        handle: formText(data, 'handle'),
-        displayName: formText(data, 'displayName'),
-      }),
-    });
-    if (!saved.ok) return say(saved.message, status);
-    const passkey = await auth().passkey.addPasskey({ name: 'be-music' });
-    if (passkey?.error) {
-      return say(t.passkeyNotMade(errorText(passkey.error)), status);
-    }
-    location.reload();
-  })()
-    .catch((error: unknown) => say(error instanceof Error ? error.message : String(error), status))
     .finally(() => {
       if (submit !== null) submit.disabled = false;
     });

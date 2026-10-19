@@ -17,6 +17,7 @@ const workspacePackages = [
   'editor',
   'player-web',
   'accounts',
+  'auth-client',
   'dashboard',
   'play',
 ] as const;

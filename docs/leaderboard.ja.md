@@ -61,17 +61,7 @@ flowchart LR
   マイグレーションで管理します。
 - **ホスト**（docs/services.ja.md）: Leaderboard は、ページと API を `leaderboard.be-music.app` で配信します（ページは
   ルートに置きます）。Player の Worker（`play`）が `/api/*` を Service Binding で転送するので、プレイヤーからの
-  リクエストはプレイヤー自身のオリジンのままです。Better Auth は、Accounts を切り出すまでここに置きます。base URL は
-  `accounts.be-music.app` で、その Worker が `/api/auth/*` をここへ転送します。セッション Cookie は `be-music.app` で共有
-  するので、どのサービスも同じセッションを読みます。
-
-### 2.1 環境とデプロイ
-
-| ブランチ | Leaderboard の Worker | D1 / R2                            | ホスト                             |
-| -------- | --------------------- | ---------------------------------- | ---------------------------------- |
-| `main`   | `leaderboard`         | 本番                               | `leaderboard.be-music.app`         |
-| `devel`  | `leaderboard-preview` | preview 用のデータベースとバケット | `leaderboard.preview.be-music.app` |
-
+  リクエストはプレイヤー自身のオリジンのままです。各アプリはホスト専用の OIDC セッションを持ち、API 向けのアクセストークンで転送します。Accounts が独立した Worker と D1 に認証を所有し、Leaderboard は公開プロフィールとスコアを所有します。
 - **CI/CD**: Deploy ワークフロー（`.github/workflows/deploy.yml`）が、`main` と `devel` への push で全サービスをデプロイ
   します（docs/services.ja.md 2 章）。
 - **マイグレーションはデプロイより先に実行する**ので、どのマイグレーションも動いている旧コードと両立させます
@@ -99,15 +89,11 @@ Leaderboard は **Workers の無料プラン**で始め、必要になったら�
 
 ## 3. 認証とアカウント
 
-- **ライブラリ**: Hono と D1 の上で Better Auth を使います。
-- **ログイン手段**: Discord と Google の OAuth、およびプロバイダに依存しない手段としての passkey。プロバイダは後から
-  増やすかもしれません。GitHub は検討したうえで採用しませんでした。
-- **セッション**: ブラウザでは同一オリジンの HttpOnly Cookie。ターミナル版のプレイヤーはデバイス認可フロー
-  （RFC 8628）を使い、bearer トークンを保存します。
-- **匿名でのプレイ**: ログインしなくてもスコアを送れます。Better Auth の匿名セッションが匿名ユーザーを作り、後から
-  Discord や Google のアカウントに紐付けられます。匿名のスコアもほかと同じように保存し、ランキングに含めるかどうか
-  は閲覧する側のフィルタで選びます。passkey を登録したアカウントは、ログインし直す手段を持つので通常のアカウントに
-  なります。匿名セッションのまま passkey でログインすると、そのセッションのプレイは passkey のアカウントに移ります。
+- **認証**: 独立した Accounts Worker が Better Auth と専用 D1 を所有します。Leaderboard は OIDC クライアント兼 API のリソースサーバーです。[サービス構成の 3 章](./services.ja.md#3-ログイン)を参照してください。
+- **ログイン手段**: Accounts がパスキー・ゲスト・設定済みの Discord／Google を提供します。パスキーの操作は Accounts のホストで行います。
+- **セッション**: ブラウザはホスト専用・暗号化・HttpOnly のアプリ Cookie を使い、期限は最大 10 分です。サーバー間の API 呼び出しは、この API 向けの audience と `be-music:api` スコープを持つアクセストークンを使います。ターミナル向けのデバイス認可は今後の実装です。
+- **ゲストのプレイ**: スコア送信前に Accounts でゲストアカウントを作ります。プレイ終了時に暗黙には作成しません。保存と表示フィルタは従来どおりです。パスキーの登録で通常のアカウントになり、別アカウントへの連携時は署名された連携情報から、移動先の次のアクセスでプレイを冪等に移します。
+- **識別**: `oidc_identity` が `(issuer, sub)` とローカルのプレイヤー ID を対応させます。移行では既存の ID とスコアの所有者を保ち、新規ユーザーは初回アクセス時に必要な行を作ります。メールでは紐付けません。古い認証テーブルはロールバックと localhost のテスト用に残し、公開ホストでは以前の共有 Cookie を受け付けません。
 - **handle**: すべてのアカウントが、一意で変更できる `handle`（URL に使う）と `display_name` を持ちます。OAuth の
   プロフィール名やメールアドレスは表示しません。変更した handle は旧 URL からのリダイレクトを残し、手放された
   handle はしばらくのあいだ他人が取れないようにします（15 章）。
@@ -405,7 +391,7 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK、best_score
                  best_ex, best_ex_score_id, best_lamp, best_lamp_score_id,
                  min_miss, min_miss_score_id, best_trophy, best_trophy_rank, best_trophy_score_id,
                  play_count, played_here, updated_at)
--- ほかに Better Auth のテーブル (user, session, account, verification, passkey)
+-- ほかにローカルのユーザーと oidc_identity（古い認証テーブルはロールバック用に残す）
 ```
 
 - ランキングの取得には `best_scores (chart_fp, ruleset, assisted, best_ex DESC)` のインデックスを使います。
@@ -442,7 +428,7 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK、best_score
 | `GET`                    | `/players/:handle/versus/:rival?ruleset=`                                | ライバルとの勝ち・負け・引き分け                                                   |
 | `GET` / `PUT` / `DELETE` | `/me/rivals`、`/me/rivals/:handle`                                       | ライバル                                                                           |
 | `PUT` / `DELETE`         | `/me/blocks/:handle`                                                     | ブロック                                                                           |
-| `*`                      | `/api/auth/*`                                                            | Better Auth                                                                        |
+| `*`                      | `/api/auth/*`                                                            | OIDC のログイン・コールバック・セッション・ログアウト                              |
 
 読み取りは公開で、Cache API で短時間キャッシュします。送信があると、影響するランキングのキャッシュを消します。
 
@@ -454,7 +440,7 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK、best_score
 - **新しいバージョン**: 互換性を壊す変更は新しいバージョンに入れます。たとえばフィールドの削除・改名、値の意味の変更、リクエストの検証を厳しくすることです。
 - **古いバージョンの廃止**: 旧バージョンは、使っているクライアントがいなくなるまで動かし続け、その後 `410 Gone` を返します。まだ呼んでいるクライアントは、play log の `recorder` と `be-music-client` ヘッダで分かります。
 - **未知のパス**: `/api` 以下のそれ以外のパス（未知のバージョンを含む）は `404` と `{"error": "not-found"}` を返します。
-- **バージョンを付けないもの**: `/api/auth/*` は Better Auth 自身のプロトコルです。Discord と Google に登録した OAuth コールバック URL もここを指します。
+- **バージョンを付けないもの**: `/api/auth/*` はアプリの OIDC セッション用プロトコルです。Discord と Google のコールバックは Leaderboard ではなく Accounts を指します。
 
 **レート制限**（提案）: 送信はログインユーザー 1 分あたり 10 回、匿名の端末 1 分あたり 5 回。読み取りは IP ごとに
 1 分あたり 120 回。Workers のレート制限機能は 10 秒か 60 秒の単位でしか数えられないので、もっと長い期間は D1 で

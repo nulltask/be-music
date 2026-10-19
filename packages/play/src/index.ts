@@ -4,7 +4,7 @@
 // `@be-music/player-web-demo` builds.
 //
 // `/api/*` goes to the Leaderboard Worker through the `LEADERBOARD` Service Binding, so the player's API requests and
-// session cookies stay on its own origin.
+// host-only OIDC session stays on its own origin; the upstream receives only a resource-bound access token.
 //
 // Almost everything is served straight from Workers Static Assets (`env.ASSETS`; wrangler.config.ts points at the
 // demo's `dist`). The exceptions are the ffmpeg.wasm core under `/ffmpeg-core/` and URL auto-load archives under
@@ -15,9 +15,10 @@
 //
 // The core files only change when the pinned `@ffmpeg/core` version changes — upload them with the `cf:r2:push` script.
 
+import { handleAuth, readSession, type OIDCEnv } from '@be-music/auth-client';
 import { isLeaderboardPath } from './leaderboard-paths.ts';
 
-interface Env {
+interface Env extends OIDCEnv {
   ASSETS: Fetcher;
   FFMPEG_CORE: R2Bucket;
   /** The Leaderboard Worker (`packages/leaderboard-api`) of the same environment. */
@@ -119,17 +120,28 @@ async function serveURLLoadProxy(request: Request): Promise<Response> {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const { pathname } = new URL(request.url);
+    const auth = await handleAuth(request, env);
+    if (auth) return auth;
+    const { pathname, origin } = new URL(request.url);
+    if (origin !== env.PUBLIC_ORIGIN) return new Response('Unknown origin', { status: 400 });
     if (pathname.startsWith(FFMPEG_PREFIX)) {
       return serveFFmpegCore(request, env, pathname);
     }
     if (pathname === URL_LOAD_PROXY_PATH) {
       return serveURLLoadProxy(request);
     }
-    // The request goes over as is, so the Leaderboard sees this origin: its session cookies and sign-in callbacks stay
-    // first-party, and no CORS is involved.
+    // The browser only calls this origin. Strip browser credentials and forward the server-held API token.
     if (isLeaderboardPath(pathname)) {
-      return env.LEADERBOARD.fetch(request);
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.headers.get('origin') !== env.PUBLIC_ORIGIN)
+        return new Response('Invalid origin', { status: 403 });
+      const session = await readSession(request, env);
+      const headers = new Headers(request.headers);
+      headers.delete('cookie');
+      headers.delete('authorization');
+      if (session) headers.set('authorization', `Bearer ${session.accessToken}`);
+      const url = new URL(request.url);
+      url.host = new URL(env.API_AUDIENCE).host;
+      return env.LEADERBOARD.fetch(new Request(url, new Request(request, { headers })));
     }
     // Everything else: static assets, with `not_found_handling: single-page-application` serving index.html on a miss.
     return env.ASSETS.fetch(request);

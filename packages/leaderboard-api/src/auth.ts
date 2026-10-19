@@ -1,159 +1,108 @@
-import { passkey } from '@better-auth/passkey';
-import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { anonymous } from 'better-auth/plugins/anonymous';
-import { drizzle } from 'drizzle-orm/d1';
-import * as schema from './db/schema.ts';
+import { handleAuth, readSession, verifyAccess, type Identity, type OIDCEnv } from '@be-music/auth-client';
+import { and, eq } from 'drizzle-orm';
 import type { Env } from './env.ts';
+import { loadSession as loadLegacySession } from './legacy-auth.ts';
+import { openDatabase } from './db/client.ts';
+import { oidcIdentity, user } from './db/schema.ts';
+import { claimAccount } from './accounts.ts';
 import { createProfile } from './profiles.ts';
 import { reassignScores } from './scores/reassign.ts';
+export { createAuth, authSettings, hasSessionCookie, passOnSetCookies } from './legacy-auth.ts';
 
-/**
- * Whether a request carries a Better Auth session cookie (`better-auth.session_token`, `__Secure-` prefixed over HTTPS).
- * Without one `getSession` can only answer null, so callers skip building the auth instance and asking it.
- */
-export function hasSessionCookie(headers: Headers): boolean {
-  return headers.get('cookie')?.includes('session_token=') ?? false;
-}
-
-/**
- * Better Auth for a request's bindings and origin (docs/leaderboard.md section 3), built once per bindings object and
- * origin and reused while the isolate lives: setting it up and its context per request cost every request. The
- * bindings come from the request (`c.env`), so the cache is keyed by that object and never outlives it. Discord and
- * Google sign-in are enabled only when their secrets are configured, so local runs and tests work with anonymous
- * sessions alone.
- */
-export function createAuth(env: Env, origin: string): Auth {
-  let byOrigin = AUTH_BY_ENV.get(env);
-  if (byOrigin === undefined) {
-    byOrigin = new Map();
-    AUTH_BY_ENV.set(env, byOrigin);
-  }
-  let auth = byOrigin.get(origin);
-  if (auth === undefined) {
-    auth = buildAuth(env, origin);
-    byOrigin.set(origin, auth);
-  }
-  return auth;
-}
-
-const AUTH_BY_ENV = new WeakMap<Env, Map<string, Auth>>();
-
-/**
- * The signed-in session of a request (null without one), and the cookies Better Auth set while reading it: the
- * refreshed five-minute cookie cache, or a session whose expiry it extended. Passing those on with the response keeps
- * the cache warm, so later requests read the session from the cookie instead of D1.
- */
-export async function loadSession(
-  env: Env,
-  request: Request,
-): Promise<{ session: Awaited<ReturnType<Auth['api']['getSession']>>; setCookies: string[] }> {
-  if (!hasSessionCookie(request.headers)) {
-    return { session: null, setCookies: [] };
-  }
-  const result = await createAuth(env, new URL(request.url).origin).api.getSession({
-    headers: request.headers,
-    returnHeaders: true,
-  });
-  return { session: result.response, setCookies: result.headers?.getSetCookie() ?? [] };
-}
-
-/**
- * Adds the cookies {@link loadSession} collected to a response, unless it is publicly cacheable (a play log, a card):
- * a shared cache must not keep one player's cookie, and a response with one would not be cached at all.
- */
-export function passOnSetCookies(response: Response, setCookies: readonly string[]): void {
-  if (setCookies.length === 0 || /\bpublic\b/.test(response.headers.get('cache-control') ?? '')) {
-    return;
-  }
-  for (const cookie of setCookies) {
-    response.headers.append('set-cookie', cookie);
-  }
-}
-
-/** How Better Auth is reached and where its cookies go, for a request's bindings and origin. */
-export interface AuthSettings {
-  baseURL: string;
-  /** Origins allowed to call Better Auth and to run passkey ceremonies; the base URL's origin comes first. */
-  trustedOrigins: string[];
-  cookieDomain: string | undefined;
-  cookiePrefix: string | undefined;
-  rpID: string;
-}
-
-/**
- * Better Auth's settings from the bindings (docs/services.md section 3). With `AUTH_ORIGIN` set, every service reaches
- * one Better Auth at that origin and shares its cookies on `COOKIE_DOMAIN`; without it (local runs, tests), the
- * request's own origin serves as before.
- */
-export function authSettings(env: Env, requestOrigin: string): AuthSettings {
-  const baseURL = env.AUTH_ORIGIN?.trim() || requestOrigin;
-  const extra = (env.TRUSTED_ORIGINS ?? '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
-  const trustedOrigins = [...new Set([new URL(baseURL).origin, ...extra])];
+export function oidcEnv(env: Env): OIDCEnv {
+  if (!env.AUTH_ISSUER || !env.PUBLIC_ORIGIN || !env.OIDC_CLIENT_ID || !env.SESSION_SECRET || !env.API_AUDIENCE)
+    throw new Error('Incomplete OIDC configuration');
   return {
-    baseURL,
-    trustedOrigins,
-    cookieDomain: env.COOKIE_DOMAIN?.trim() || undefined,
-    cookiePrefix: env.COOKIE_PREFIX?.trim() || undefined,
-    rpID: env.PASSKEY_RP_ID?.trim() || new URL(baseURL).hostname,
+    AUTH_ISSUER: env.AUTH_ISSUER,
+    PUBLIC_ORIGIN: env.PUBLIC_ORIGIN,
+    OIDC_CLIENT_ID: env.OIDC_CLIENT_ID,
+    SESSION_SECRET: env.SESSION_SECRET,
+    API_AUDIENCE: env.API_AUDIENCE,
   };
 }
-
-function buildAuth(env: Env, origin: string) {
-  const settings = authSettings(env, origin);
-  const db = drizzle(env.DB, { schema });
-  const socialProviders: Parameters<typeof betterAuth>[0]['socialProviders'] = {};
-  if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
-    socialProviders.discord = { clientId: env.DISCORD_CLIENT_ID, clientSecret: env.DISCORD_CLIENT_SECRET };
-  }
-  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
-    socialProviders.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
-  }
-  return betterAuth({
-    baseURL: settings.baseURL,
-    basePath: '/api/auth',
-    secret: env.BETTER_AUTH_SECRET,
-    trustedOrigins: settings.trustedOrigins,
-    advanced: {
-      ...(settings.cookiePrefix ? { cookiePrefix: settings.cookiePrefix } : {}),
-      ...(settings.cookieDomain ? { crossSubDomainCookies: { enabled: true, domain: settings.cookieDomain } } : {}),
-    },
-    database: drizzleAdapter(db, {
-      provider: 'sqlite',
-      schema: {
-        user: schema.user,
-        session: schema.session,
-        account: schema.account,
-        verification: schema.verification,
-        passkey: schema.passkey,
-      },
-    }),
-    socialProviders,
-    // Keep the session in a signed cookie for 5 minutes, so pages and the API read it without a D1 round trip. A
-    // signed-out or revoked session lingers that long at most; nothing here trusts more than its user id.
-    session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
-    plugins: [
-      anonymous({
-        // Runs before the anonymous user is deleted, so its plays move instead of cascading away.
-        onLinkAccount: async ({ anonymousUser, newUser }) => {
-          await reassignScores(db, anonymousUser.user.id, newUser.user.id);
-        },
-      }),
-      passkey({ rpID: settings.rpID, rpName: 'be-music', origin: settings.trustedOrigins }),
-    ],
-    databaseHooks: {
-      user: {
-        create: {
-          after: async (created) => {
-            await createProfile(db, created.id, (created as { isAnonymous?: boolean | null }).isAnonymous === true);
-          },
-        },
-      },
-    },
-  });
+export async function oidcAuth(request: Request, env: Env): Promise<Response | null> {
+  return handleAuth(request, oidcEnv(env));
 }
 
-export type Auth = ReturnType<typeof buildAuth>;
+/** The identity mapping, not email, connects an issuer/subject to a local player. */
+export async function syncIdentity(env: Env, identity: Identity): Promise<string> {
+  const db = openDatabase(env.DB);
+  let mapped = await db.query.oidcIdentity.findFirst({
+    where: and(eq(oidcIdentity.issuer, identity.issuer), eq(oidcIdentity.subject, identity.sub)),
+  });
+  if (!mapped) {
+    // Use one deterministic namespaced ID so concurrent first requests cannot create duplicate mirror accounts.
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(JSON.stringify([identity.issuer, identity.sub])),
+    );
+    const id = `oidc_${Array.from(new Uint8Array(digest), (n) => n.toString(16).padStart(2, '0')).join('')}`;
+    await db.batch([
+      db
+        .insert(user)
+        .values({
+          id,
+          name: 'Player',
+          email: `${id}@identity.invalid`,
+          emailVerified: false,
+          isAnonymous: identity.anonymous,
+        })
+        .onConflictDoNothing(),
+      db
+        .insert(oidcIdentity)
+        .values({ issuer: identity.issuer, subject: identity.sub, userId: id })
+        .onConflictDoNothing(),
+    ]);
+    mapped = await db.query.oidcIdentity.findFirst({
+      where: and(eq(oidcIdentity.issuer, identity.issuer), eq(oidcIdentity.subject, identity.sub)),
+    });
+  }
+  if (!mapped) throw new Error('Identity synchronization failed');
+  const previous = await db.query.user.findFirst({ where: eq(user.id, mapped.userId) });
+  if (previous?.isAnonymous && !identity.anonymous) await claimAccount(db, mapped.userId);
+  await db
+    .update(user)
+    .set({ isAnonymous: identity.anonymous, passkeyCount: identity.passkeys ?? 0 })
+    .where(eq(user.id, mapped.userId));
+  await createProfile(db, mapped.userId, identity.anonymous);
+  for (const subject of identity.linkedGuests ?? []) {
+    const guest = await db.query.oidcIdentity.findFirst({
+      where: and(eq(oidcIdentity.issuer, identity.issuer), eq(oidcIdentity.subject, subject)),
+    });
+    if (!guest || guest.userId === mapped.userId) continue;
+    const account = await db.query.user.findFirst({ where: eq(user.id, guest.userId) });
+    if (account?.isAnonymous !== true) continue;
+    await reassignScores(db, guest.userId, mapped.userId);
+    // Keep the mapping as a tombstone: an old guest token must never recreate the same account.
+    await db
+      .update(oidcIdentity)
+      .set({ userId: mapped.userId })
+      .where(and(eq(oidcIdentity.issuer, identity.issuer), eq(oidcIdentity.subject, subject)));
+    await db.delete(user).where(eq(user.id, guest.userId));
+  }
+  return mapped.userId;
+}
+
+export async function loadSession(env: Env, request: Request) {
+  if (!env.AUTH_ISSUER) {
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(request.url).hostname))
+      return { session: null, setCookies: [] };
+    return loadLegacySession(env, request);
+  }
+  const settings = oidcEnv(env);
+  const identity = request.headers.has('authorization')
+    ? await verifyAccess(request, settings)
+    : (await readSession(request, settings))?.identity;
+  if (!identity) return { session: null, setCookies: [] };
+  // A guest token that has been linked is no longer authorized, even while its JWT is otherwise valid.
+  const db = openDatabase(env.DB);
+  const old = await db.query.oidcIdentity.findFirst({
+    where: and(eq(oidcIdentity.issuer, identity.issuer), eq(oidcIdentity.subject, identity.sub)),
+  });
+  if (old && identity.anonymous) {
+    const account = await db.query.user.findFirst({ where: eq(user.id, old.userId) });
+    if (account?.isAnonymous === false) return { session: null, setCookies: [] };
+  }
+  const userId = await syncIdentity(env, identity);
+  return { session: { user: { id: userId, name: identity.name, isAnonymous: identity.anonymous } }, setCookies: [] };
+}
