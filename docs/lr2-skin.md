@@ -84,7 +84,7 @@ Not named here: ops 900-999 (the skin's own `#CUSTOMOPTION`s), the `#SRC_BARGRAP
 
 ## Scene state
 
-`@be-music/lr2-skin/state` maps the scene models of `@be-music/scene-model` ([Scene models](./scene-model.md)) to the [id tables](#id-tables): for each screen, which ops hold, which value each number and text draws and where each slider sits (an `Lr2SceneState`; the select screen's `Lr2SelectState` adds the cell each button draws), and which timers a moment of the select or play screen starts and stops (an `Lr2TimerUpdate`: each timer with the time it starts at, and the timers that stop). The skin family's view asks the state for the ids its skin draws; it keeps only the timer ids and the lane index it stamps, and works out the decide and result screens' few timers itself (`resolveLr2DecideTimers`, `resolveLr2ResultTimers` in `view/lr2/`).
+`@be-music/lr2-skin/state` maps the scene models of `@be-music/scene-model` ([Scene models](./scene-model.md)) to the [id tables](#id-tables): for each screen, which ops hold, which value each number and text draws and where each slider sits (an `Lr2SceneState`; the select screen's `Lr2SelectState` adds the cell each button draws), which timers a moment of the select or play screen starts and stops (an `Lr2TimerUpdate`: each timer with the time it starts at, and the timers that stop), and which timers run on a moment of the decide or result screen (`resolveLr2DecideTimers`, `resolveLr2ResultTimers`: each running timer with the time it started at), with how much of a result graph shows (`resolveLr2GraphReveal`). The skin family's view asks the state for the ids its skin draws; it keeps only the timer ids and the lane index it stamps.
 
 ```mermaid
 flowchart LR
