@@ -1,26 +1,58 @@
 /// <reference types="@cloudflare/workers-types" />
-
-// The Accounts Worker (docs/services.md section 3). Better Auth still runs inside the Leaderboard Worker; this one gives
-// it its own host, `accounts.<site>`, which is Better Auth's base URL: OAuth callbacks and every service's sign-in
-// requests land here and go to the Leaderboard through the `LEADERBOARD` Service Binding. The session cookies Better
-// Auth sets are shared on `<site>`, so every service reads the same session. The bare host leads to the dashboard.
-
-import { dashboardFor, isAuthPath } from './routing.ts';
-
-interface Env {
-  /** The Leaderboard Worker, which holds Better Auth until Accounts is split out. */
-  LEADERBOARD: Fetcher;
-}
+import { oauthProviderAuthServerMetadata, oauthProviderOpenIdConfigMetadata } from '@better-auth/oauth-provider';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/d1';
+import { createAuth, provisionClients, type Env } from './auth.ts';
+import { renderAccountPage } from './page.ts';
+import { CLIENT_JS } from './client.generated.ts';
+import { user } from './schema.ts';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (isAuthPath(url.pathname)) {
-      return env.LEADERBOARD.fetch(request);
+    if (url.origin !== env.AUTH_ORIGIN) return new Response('Unknown origin', { status: 400 });
+    await provisionClients(env);
+    const auth = createAuth(env);
+    if (
+      url.pathname === '/.well-known/openid-configuration' ||
+      url.pathname === '/api/auth/.well-known/openid-configuration'
+    )
+      return oauthProviderOpenIdConfigMetadata(auth)(request);
+    if (url.pathname === '/.well-known/oauth-authorization-server/api/auth')
+      return oauthProviderAuthServerMetadata(auth)(request);
+    if (url.pathname.startsWith('/api/auth/')) {
+      const response = await auth.handler(request);
+      if (url.pathname === '/api/auth/passkey/verify-registration' && response.ok) {
+        const session = await auth.api.getSession({ headers: request.headers });
+        if (session) await drizzle(env.DB).update(user).set({ isAnonymous: false }).where(eq(user.id, session.user.id));
+      }
+      return response;
     }
-    const dashboard = dashboardFor(url.hostname);
-    if (url.pathname === '/' && dashboard !== undefined) {
-      return Response.redirect(dashboard, 302);
+    if (url.pathname === '/assets/client.js' && request.method === 'GET')
+      return new Response(CLIENT_JS, { headers: { 'content-type': 'text/javascript', 'cache-control': 'no-cache' } });
+    if (['/', '/login', '/account'].includes(url.pathname) && request.method === 'GET') {
+      const session = await auth.api.getSession({ headers: request.headers });
+      return new Response(
+        renderAccountPage({
+          signedIn: !!session,
+          anonymous: session?.user.isAnonymous === true,
+          name: session?.user.name ?? '',
+          login: url.pathname === '/login',
+          discord: !!env.DISCORD_CLIENT_ID && !!env.DISCORD_CLIENT_SECRET,
+          google: !!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET,
+          apps: JSON.parse(env.OIDC_CLIENTS) as Record<string, string>,
+        }),
+        {
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'cache-control': 'private, no-store',
+            'content-security-policy':
+              "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+            'referrer-policy': 'no-referrer',
+            'x-content-type-options': 'nosniff',
+          },
+        },
+      );
     }
     return new Response('Not Found', { status: 404 });
   },

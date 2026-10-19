@@ -90,9 +90,11 @@ export async function createProfile(db: Database, userId: string, isAnonymous: b
     const inserted = await db
       .insert(profile)
       .values({ userId, handle, displayName: isAnonymous ? 'Anonymous' : 'Player' })
-      .onConflictDoNothing({ target: profile.handle })
+      .onConflictDoNothing()
       .returning({ userId: profile.userId });
     if (inserted.length > 0) return;
+    // Concurrent first requests may have inserted this player's profile with another generated handle.
+    if (await db.query.profile.findFirst({ where: eq(profile.userId, userId), columns: { userId: true } })) return;
   }
   throw new Error('could not generate a unique handle');
 }

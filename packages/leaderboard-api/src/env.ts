@@ -1,5 +1,10 @@
 /** Bindings of the Leaderboard Worker (see `cloudflare.config.ts`). */
 export interface Env {
+  AUTH_ISSUER?: string;
+  PUBLIC_ORIGIN?: string;
+  OIDC_CLIENT_ID?: string;
+  SESSION_SECRET?: string;
+  API_AUDIENCE?: string;
   DB: D1Database;
   /** Play logs, chart documents (and later ghosts and OG cards), keyed by prefix (docs/leaderboard.md section 7). */
   BLOBS: R2Bucket;

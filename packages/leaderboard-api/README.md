@@ -7,7 +7,7 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 
 ## What is implemented
 
-- Sign-in with Better Auth: anonymous sessions, passkeys, and Discord / Google OAuth when their secrets are set.
+- OIDC sign-in through the independent Accounts service, with guest accounts, passkeys and configured Discord/Google providers.
 - `POST /api/v0/scores`: submits a play log (gzip). The server checks eligibility and the play and chart fingerprint
   documents (verification layers L1–L3, and L4 for charts without `#RANDOM`), re-simulates the play under `lr2`,
   `beatoraja` and `iidx`, stores the log in R2 and updates personal bests. A retried play is recognised; the same play
@@ -68,19 +68,9 @@ pnpm exec cf r2 buckets create --name be-music-leaderboard-preview --location-hi
 
 ### Secrets
 
-Secrets live in 1Password, in the `be-music` vault of the `my.1password.com` account, one item per Worker
-(`be-music-leaderboard-preview`, `be-music-leaderboard`; they hold the secrets of `leaderboard-preview` and
-`leaderboard`). The repository holds only references:
-`secrets/<environment>.env.tpl` maps each secret to its 1Password field (`KEY={{ op://… }}`). Set them on the Worker
-with the [1Password CLI](https://developer.1password.com/docs/cli/) signed in:
+Production authentication is owned by [Accounts](../../docs/services.md#3-sign-in). This Worker needs `SESSION_SECRET` for its host-only OIDC cookie; provider secrets and signing keys belong to Accounts. The old local Better Auth adapter is restricted to localhost tests/development.
 
-```bash
-pnpm --filter @be-music/leaderboard-api run secrets:preview
-```
-
-`scripts/put-secrets.ts` reads each value with `op read` and passes it to `cf workers secrets update`; nothing is
-written to disk or printed. Set `OP_ACCOUNT` to use another 1Password account. To rotate a secret, regenerate it in
-1Password and run the script again (rotating `BETTER_AUTH_SECRET` signs everyone out; passkeys stay).
+Store each environment's secret in the `be-music` vault of `my.1password.com`: `cloudflare-leaderboard-oidc/credential` for production, `cloudflare-leaderboard-preview-oidc/credential` for preview. `secrets/<environment>.env.tpl` contains references only. With the 1Password CLI signed in, `pnpm --filter @be-music/leaderboard-api run secrets:preview` installs the preview secret without printing values. Rotating `SESSION_SECRET` signs users out of this app only.
 
 Use `cf`, not Wrangler, for anything that touches an account: Wrangler keeps its own login, which may be another
 Cloudflare account.
@@ -94,11 +84,9 @@ d=$(mktemp -d) && mkfifo -m 600 "$d/secrets" && (op inject -i secrets/preview.en
 
 Later deploys keep the secrets already set.
 
-| Secret                                       | Purpose                                                        |
-| -------------------------------------------- | -------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`                         | Signs sessions; any long random string                         |
-| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Discord sign-in (optional; off when unset; declare when added) |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`   | Google sign-in (optional; off when unset; declare when added)  |
+| Secret           | Purpose                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `SESSION_SECRET` | A separate random secret of at least 32 characters per app/environment; encrypts the OIDC app cookie |
 
 ## Database
 

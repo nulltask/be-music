@@ -1,7 +1,3 @@
-import { passkeyClient } from '@better-auth/passkey/client';
-import { createAuthClient } from 'better-auth/client';
-import { anonymousClient } from 'better-auth/client/plugins';
-
 /** The player's Leaderboard account as `GET /api/v0/me` reports it. */
 export interface LeaderboardAccount {
   handle: string;
@@ -11,21 +7,6 @@ export interface LeaderboardAccount {
 }
 
 export type AccountActionResult = { ok: true } | { ok: false; error: string };
-
-/**
- * Better Auth on the Leaderboard (same origin, `/api/auth`), with the anonymous and passkey plugins the server runs.
- * Created on first use so a player who never touches the Leaderboard never loads it.
- */
-let client: ReturnType<typeof createClient> | undefined;
-
-function createClient() {
-  return createAuthClient({ plugins: [anonymousClient(), passkeyClient()] });
-}
-
-function authClient(): ReturnType<typeof createClient> {
-  client ??= createClient();
-  return client;
-}
 
 /**
  * The signed-in account, or `undefined` without a session (or when the Leaderboard cannot be reached). The session is
@@ -42,28 +23,16 @@ export async function loadLeaderboardAccount(doFetch: typeof fetch = fetch): Pro
   }
 }
 
-/**
- * Creates a passkey for this player's account, so it can be signed into again on any device. Without a session the
- * player gets an anonymous account first; the server makes the account non-anonymous once the passkey is registered.
- */
+/** Open Accounts to manage the shared account and enroll passkeys on the correct relying-party origin. */
 export async function createLeaderboardPasskey(): Promise<AccountActionResult> {
-  const auth = authClient();
-  const session = await auth.getSession();
-  if (session.data === null) {
-    const signIn = await auth.signIn.anonymous();
-    if (signIn.error !== null) return { ok: false, error: describeError(signIn.error) };
-  }
-  const added = await auth.passkey.addPasskey({ name: 'be-music' });
-  return added?.error ? { ok: false, error: describeError(added.error) } : { ok: true };
+  location.assign('/api/auth/manage');
+  return { ok: true };
 }
 
-/**
- * Signs in with a passkey. An anonymous session on this device is linked into the passkey's account, so its plays move
- * there.
- */
+/** Open Accounts to sign in; the OIDC callback returns to this player. */
 export async function signInWithLeaderboardPasskey(): Promise<AccountActionResult> {
-  const result = await authClient().signIn.passkey();
-  return result?.error ? { ok: false, error: describeError(result.error) } : { ok: true };
+  location.assign(`/api/auth/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`);
+  return { ok: true };
 }
 
 /** The handle and name a new account is made with. */
@@ -72,32 +41,14 @@ export interface SignUpDetails {
   displayName: string;
 }
 
-/**
- * Sign-up, as the Leaderboard's own dialog does it: an anonymous account first (the passkey needs a session to belong
- * to; an anonymous account already in this browser is the one kept), then the handle and name, then the passkey, which
- * claims the account. Each step can fail on its own, and the message says where it stopped.
- */
+/** Save a signed-in player's profile when possible, then open the central Accounts sign-in. */
 export async function signUpForLeaderboard(
   details: SignUpDetails,
   doFetch: typeof fetch = fetch,
 ): Promise<AccountActionResult> {
-  const auth = authClient();
-  const session = await auth.getSession();
-  if (session.data === null) {
-    const anonymous = await auth.signIn.anonymous();
-    if (anonymous.error !== null) {
-      return { ok: false, error: `Could not start the account: ${describeError(anonymous.error)}` };
-    }
-  }
   const saved = await saveProfile(details, doFetch);
-  if (!saved.ok) return saved;
-  const passkey = await auth.passkey.addPasskey({ name: 'be-music' });
-  if (passkey?.error) {
-    return {
-      ok: false,
-      error: `Your account is ready, but the passkey was not made (${describeError(passkey.error)}). Try “Keep this account” again.`,
-    };
-  }
+  if (!saved.ok && saved.error !== 'Sign in first.') return saved;
+  location.assign('/api/auth/sign-in');
   return { ok: true };
 }
 
@@ -135,8 +86,8 @@ export function describeProfileError(error: string, detail?: string): string {
 }
 
 export async function signOutOfLeaderboard(): Promise<AccountActionResult> {
-  const result = await authClient().signOut();
-  return result.error ? { ok: false, error: describeError(result.error) } : { ok: true };
+  const response = await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' });
+  return response.ok ? { ok: true } : { ok: false, error: 'Could not sign out.' };
 }
 
 /** One status-line summary of the account. */
@@ -145,10 +96,6 @@ export function describeLeaderboardAccount(account: LeaderboardAccount | undefin
   // Short enough for the Debug Menu row; the "Create passkey (keep this account)" button carries the hint.
   if (account.anonymous) return `${account.handle} (anonymous)`;
   return `${account.displayName} @${account.handle} · ${account.passkeys} passkey${account.passkeys === 1 ? '' : 's'}`;
-}
-
-function describeError(error: { message?: string; statusText?: string; status?: number }): string {
-  return error.message || error.statusText || `HTTP ${error.status ?? '?'}`;
 }
 
 /** What the account chip on the select screens shows: the sign-in state at a glance. */
@@ -224,7 +171,7 @@ export function describeStartAccount(account: LeaderboardAccount | undefined): S
       label: 'Not signed in',
       href: undefined,
       actions: ['sign-in', 'sign-up'],
-      hint: 'Plays are recorded anonymously in this browser. Sign up to show them in the rankings.',
+      hint: 'Sign in through Accounts before submitting plays. You can start with a guest account.',
     };
   }
   const href = `/players/${encodeURIComponent(account.handle)}`;

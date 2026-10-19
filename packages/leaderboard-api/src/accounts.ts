@@ -22,6 +22,7 @@ export async function loadAccount(db: Database, userId: string): Promise<Account
         handle: profile.handle,
         displayName: profile.displayName,
         anonymous: user.isAnonymous,
+        passkeyCount: user.passkeyCount,
         avatarKey: profile.avatarKey,
       })
       .from(user)
@@ -34,7 +35,7 @@ export async function loadAccount(db: Database, userId: string): Promise<Account
     handle: row.handle,
     displayName: row.displayName,
     anonymous: row.anonymous === true,
-    passkeys,
+    passkeys: row.passkeyCount ?? passkeys,
     avatarUrl: avatarURL(row.handle, row.avatarKey),
   };
 }

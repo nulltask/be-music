@@ -48,12 +48,14 @@ jobs:
       - name: Migrate the Leaderboard database
         run: pnpm --filter @be-music/leaderboard-api run "db:migrate:$DB_ENV"
 
-      # The Leaderboard first: every other Worker binds it.
-      - name: Deploy the Leaderboard
-        run: pnpm --filter @be-music/leaderboard-api run "deploy$SUFFIX"
+      - name: Migrate Accounts
+        run: pnpm --filter @be-music/accounts run "db:migrate:$DB_ENV"
 
       - name: Deploy Accounts
         run: pnpm --filter @be-music/accounts run "deploy$SUFFIX"
+
+      - name: Deploy the Leaderboard
+        run: pnpm --filter @be-music/leaderboard-api run "deploy$SUFFIX"
 
       - name: Deploy the Player
         run: pnpm --filter @be-music/play run "deploy$SUFFIX"

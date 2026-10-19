@@ -10,7 +10,7 @@ export type Locale = 'ja' | 'en';
 /** The other services of the dashboard's environment: `be-music.app` → `play.be-music.app`, and so on. */
 export function serviceLinks(hostname: string): { play: string; leaderboard: string } {
   const site = hostname.toLowerCase();
-  return { play: `https://play.${site}/`, leaderboard: `https://leaderboard.${site}/leaderboard` };
+  return { play: `https://play.${site}/`, leaderboard: `https://leaderboard.${site}/` };
 }
 
 /** Japanese when the browser prefers it, English otherwise. */
@@ -25,7 +25,7 @@ const TEXT = {
     signedIn: (name: string, handle: string) => `${name}（@${handle}）でログイン中です。`,
     anonymous: (handle: string) =>
       `匿名アカウント @${handle} でログイン中です。パスキーを作ると、ほかの端末でも使えます。`,
-    signedOut: 'ログインしていません。ログインは Leaderboard の右上から行えます。',
+    signedOut: 'ログインしていません。',
     play: 'プレイする',
     leaderboard: 'ランキングを見る',
     note: 'このページは仮のダッシュボードです。',
@@ -34,7 +34,7 @@ const TEXT = {
     title: 'be-music',
     signedIn: (name: string, handle: string) => `Signed in as ${name} (@${handle}).`,
     anonymous: (handle: string) => `Signed in anonymously as @${handle}. Create a passkey to use it on other devices.`,
-    signedOut: 'Not signed in. Sign in from the top right of the Leaderboard.',
+    signedOut: 'Not signed in.',
     play: 'Play',
     leaderboard: 'Leaderboard',
     note: 'This is a temporary dashboard.',
@@ -54,9 +54,10 @@ export function renderDashboard(input: {
   account: DashboardAccount | undefined;
   hostname: string;
   locale: Locale;
+  links?: { play: string; leaderboard: string; donate: string };
 }): string {
   const t = TEXT[input.locale];
-  const links = serviceLinks(input.hostname);
+  const links = input.links ?? { ...serviceLinks(input.hostname), donate: `https://donate.${input.hostname}/` };
   const status =
     input.account === undefined
       ? t.signedOut
@@ -88,8 +89,11 @@ h1{font-size:1.75rem;margin:0 0 .5em}
 <h1>${t.title}</h1>
 <p class="status" data-state="${input.account === undefined ? 'signed-out' : input.account.anonymous ? 'anonymous' : 'signed-in'}">${escapeHTML(status)}</p>
 <nav class="links">
-<a href="${links.play}">${t.play}</a>
-<a href="${links.leaderboard}">${t.leaderboard}</a>
+<a href="/api/auth/sign-in">${input.locale === 'ja' ? 'ログイン' : 'Sign in'}</a>
+<a href="/api/auth/manage">${input.locale === 'ja' ? 'アカウント管理' : 'Manage account'}</a>
+<a href="${escapeHTML(links.donate)}">${input.locale === 'ja' ? '支援する' : 'Support'}</a>
+<a href="${escapeHTML(links.play)}">${t.play}</a>
+<a href="${escapeHTML(links.leaderboard)}">${t.leaderboard}</a>
 </nav>
 <p class="note">${t.note}</p>
 </main>

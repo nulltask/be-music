@@ -26,3 +26,5 @@ examples/*
 tmp/*
 !tmp/.keep
 .vitest/
+
+packages/accounts/src/client.generated.ts

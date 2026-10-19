@@ -5,7 +5,7 @@ describe('serviceLinks', () => {
   test('links the services of the same environment', () => {
     expect(serviceLinks('be-music.app')).toEqual({
       play: 'https://play.be-music.app/',
-      leaderboard: 'https://leaderboard.be-music.app/leaderboard',
+      leaderboard: 'https://leaderboard.be-music.app/',
     });
     expect(serviceLinks('preview.be-music.app').play).toBe('https://play.preview.be-music.app/');
   });
@@ -30,7 +30,7 @@ describe('renderDashboard', () => {
     expect(html).toContain('data-state="signed-in"');
     expect(html).toContain('Signed in as Alice (@alice).');
     expect(html).toContain('href="https://play.be-music.app/"');
-    expect(html).toContain('href="https://leaderboard.be-music.app/leaderboard"');
+    expect(html).toContain('href="https://leaderboard.be-music.app/"');
   });
 
   test('tells anonymous and signed-out visitors apart', () => {

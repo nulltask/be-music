@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { claimAccount } from './accounts.ts';
 import { createV0API } from './api/v0.ts';
-import { createAuth } from './auth.ts';
+import { createAuth, oidcAuth } from './auth.ts';
 import { bmsSearchLookup, type ChartsetLookup } from './chartsets/refresh.ts';
 import { openDatabase, type Database } from './db/client.ts';
 import type { Env } from './env.ts';
@@ -30,6 +30,9 @@ export function createApp(options: { now?: () => number; newId?: () => string; c
   app.use('*', serverTiming<AppEnv>());
 
   app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
+    if (c.env.AUTH_ISSUER) return (await oidcAuth(c.req.raw, c.env)) ?? c.json({ error: 'not-found' }, 404);
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(c.req.url).hostname))
+      return c.json({ error: 'oidc-not-configured' }, 503);
     const auth = createAuth(c.env, new URL(c.req.url).origin);
     const response = await auth.handler(c.req.raw);
     // A registered passkey is a way back into the account, so it stops being anonymous (docs/leaderboard.md section 3).
@@ -38,6 +41,17 @@ export function createApp(options: { now?: () => number; newId?: () => string; c
       if (session !== null) await claimAccount(openDatabase(c.env.DB), session.user.id);
     }
     return response;
+  });
+
+  app.use('/api/v0/*', async (c, next) => {
+    if (
+      c.env.AUTH_ISSUER &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
+      !c.req.header('authorization') &&
+      c.req.header('origin') !== c.env.PUBLIC_ORIGIN
+    )
+      return c.json({ error: 'invalid-origin' }, 403);
+    await next();
   });
 
   app.route('/api/v0', createV0API({ now, newId, chartsetLookup }));
