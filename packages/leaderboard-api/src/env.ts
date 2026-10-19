@@ -11,4 +11,17 @@ export interface Env {
   DISCORD_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  /**
+   * Where Better Auth lives (docs/services.md section 3): `https://accounts.be-music.app`. Unset (local runs, tests),
+   * each request's own origin is used, as before the services were split.
+   */
+  AUTH_ORIGIN?: string;
+  /** Parent domain the session cookies are shared on (`be-music.app`). Unset, cookies stay on the request's host. */
+  COOKIE_DOMAIN?: string;
+  /** Cookie name prefix; the preview sets its own so production's parent-domain cookies never collide with it. */
+  COOKIE_PREFIX?: string;
+  /** Comma-separated origins allowed to call Better Auth and run passkey ceremonies, besides `AUTH_ORIGIN`. */
+  TRUSTED_ORIGINS?: string;
+  /** Passkey relying party ID (`be-music.app`). Unset, the auth origin's hostname. */
+  PASSKEY_RP_ID?: string;
 }

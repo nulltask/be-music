@@ -65,7 +65,7 @@ pnpm exec cf r2 buckets create --name be-music-leaderboard-preview --location-hi
 
 ### Secrets
 
-secrets は 1Password の `my.1password.com` アカウントの `be-music` Vault に、Worker ごとに 1 アイテム（`be-music-leaderboard-preview`、`be-music-leaderboard`）で保存しています。リポジトリには参照だけを置きます。`secrets/<環境>.env.tpl` が各 secret と 1Password のフィールドを対応づけます（`KEY={{ op://… }}`）。[1Password CLI](https://developer.1password.com/docs/cli/) にサインインした状態で、Worker に設定します。
+secrets は 1Password の `my.1password.com` アカウントの `be-music` Vault に、Worker ごとに 1 アイテム（`be-music-leaderboard-preview`、`be-music-leaderboard`。それぞれ `leaderboard-preview` と `leaderboard` の secret）で保存しています。リポジトリには参照だけを置きます。`secrets/<環境>.env.tpl` が各 secret と 1Password のフィールドを対応づけます（`KEY={{ op://… }}`）。[1Password CLI](https://developer.1password.com/docs/cli/) にサインインした状態で、Worker に設定します。
 
 ```bash
 pnpm --filter @be-music/leaderboard-api run secrets:preview
@@ -105,43 +105,37 @@ pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 
 ## デプロイ
 
-環境は 2 つで、プレイヤーのデモの Workers Builds に合わせています。`devel` が本番、それ以外のブランチが preview です。
+環境は、どのサービスとも同じく 2 つです（docs/services.ja.md 2 章）。`main` が本番、`devel` がプレビューです。
 
-| 環境    | Worker                         | D1 / R2                        | プレイヤーのデモ                               |
-| ------- | ------------------------------ | ------------------------------ | ---------------------------------------------- |
-| 本番    | `be-music-leaderboard`         | `be-music-leaderboard`         | `be-music-player-demo`（`devel` からデプロイ） |
-| preview | `be-music-leaderboard-preview` | `be-music-leaderboard-preview` | それ以外のブランチのプレビュー版               |
+| 環境       | Worker                | ホスト                             | D1 / R2                        |
+| ---------- | --------------------- | ---------------------------------- | ------------------------------ |
+| 本番       | `leaderboard`         | `leaderboard.be-music.app`         | `be-music-leaderboard`         |
+| プレビュー | `leaderboard-preview` | `leaderboard.preview.be-music.app` | `be-music-leaderboard-preview` |
 
-`packages/leaderboard-api/`、`packages/player/`、`packages/chart/`、`pnpm-lock.yaml` のいずれかに触れる push のたびに、
-Workers Builds がデプロイします。ビルドは Node 26.7.0（トリガーの `NODE_VERSION`）でワークスペースをインストールし、
-その環境の D1 にマイグレーションを適用してからデプロイします。
-
-| ブランチ | トリガーを持つ Worker          | デプロイコマンド                                         |
-| -------- | ------------------------------ | -------------------------------------------------------- |
-| `devel`  | `be-music-leaderboard`         | `pnpm run db:migrate:production && pnpm run deploy`      |
-| それ以外 | `be-music-leaderboard-preview` | `pnpm run db:migrate:preview && pnpm run deploy:preview` |
-
-push ごとに 1 つの環境のトリガーが動きます。`deploy` と `deploy:preview` はページのアセットを生成し、`build:worker` を実行してから `cf deploy` します。
+`main` か `devel` に push するたびに、Deploy ワークフロー（`.github/workflows/deploy.yml`）が動きます。その環境の D1 に
+マイグレーションを適用してから、ほかの Worker より先にこの Worker をデプロイします。ほかの Worker がこの Worker を
+バインドしているためです。
 
 ```mermaid
 flowchart TD
-  push(["このパッケージ、player、chart、<br/>lockfile に触れる push"]) --> branch{"ブランチ?"}
-  branch -->|devel| prod
-  branch -->|それ以外| prev
-  subgraph prod["be-music-leaderboard"]
-    i1["Node 26.7.0 でインストール"] --> m1["db:migrate:production"] --> d1["deploy"]
+  push([push]) --> branch{ブランチ}
+  branch -->|main| prod
+  branch -->|devel| prev
+  subgraph prod[leaderboard]
+    m1[db:migrate:production] --> d1[deploy]
   end
-  subgraph prev["be-music-leaderboard-preview"]
-    i2["Node 26.7.0 でインストール"] --> m2["db:migrate:preview"] --> d2["deploy:preview"]
+  subgraph prev[leaderboard-preview]
+    m2[db:migrate:preview] --> d2[deploy:preview]
   end
 ```
 
-Workers Builds はトリガーを持つ Worker にしかデプロイできないため、環境ごとの Worker にそれぞれトリガーがあります。
-preview の Worker は全ブランチで共有し、最後に push したブランチが反映されます。手動でデプロイするときは、この
-パッケージで同じコマンドを実行します。
+`deploy` と `deploy:preview` は、ページのアセットを生成し、`build:worker` を実行してから `cf deploy` します。手で
+デプロイするときは、このパッケージで同じコマンドを実行します。新しい Worker にはまだ secret がないので、最初の
+デプロイでは `--secrets-file` で渡します（例: `cf deploy --secrets-file <(op inject -i secrets/production.env.tpl)`）。
 
-この Worker は公開 URL を持ちません。プレイヤーの Worker が `/api/*` と `/leaderboard/*` を Service Binding で
-転送します。
+この Worker は、自分のホストでページと API を配信し、Accounts を切り出すまでは全サービスの Better Auth も受け持ちます
+（docs/services.ja.md 3 章）。Accounts、Player、Dashboard の Worker は Service Binding でこの Worker を呼び、セッション
+Cookie は環境の親ドメインで共有します。
 
 ## ページ
 
