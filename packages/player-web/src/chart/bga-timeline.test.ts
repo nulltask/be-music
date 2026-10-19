@@ -9,6 +9,7 @@ import {
   pickActiveBgaCue,
   pickActiveBgaKey,
   resolveBgaImageRect,
+  resolveBgaStacks,
   resolveNonstopBgaAlpha,
   splitNonstopBgaTimeline,
   toBrowserBgaTimeline,
@@ -276,5 +277,56 @@ describe('NONSTOP BGA', () => {
     expect(resolveNonstopBgaAlpha(stages[1]!, 16)).toBe(0);
     expect(resolveNonstopBgaAlpha(stages[1]!, 18.5)).toBeCloseTo(0.5);
     expect(resolveNonstopBgaAlpha(stages[1]!, 30)).toBe(1);
+  });
+
+  it('resolves one stack per stage at its crossfade opacity, earlier stages first', () => {
+    const timelines = [
+      {
+        base: [{ seconds: 0, bmpKey: '01' }],
+        layer: [{ seconds: 1, bmpKey: '02' }],
+        poor: [{ seconds: 0, bmpKey: '01' }],
+      },
+      { base: [{ seconds: 18, bmpKey: '03' }], layer: [], poor: [] },
+    ];
+    const at = (seconds: number, inPoorWindow = false) =>
+      resolveBgaStacks({ timeline: { base: [], layer: [] }, nonstop: { stages, timelines }, seconds, inPoorWindow });
+    expect(at(10)).toEqual([
+      { alpha: 1, baseCue: { seconds: 0, bmpKey: '01' }, layerCue: { seconds: 1, bmpKey: '02' } },
+    ]);
+    const seam = at(21.5);
+    expect(seam.map((stack) => stack.baseCue?.bmpKey)).toEqual(['01', '03']);
+    expect(seam[0]!.alpha).toBeCloseTo(0.5);
+    expect(seam[1]!.alpha).toBe(1);
+    expect(at(30).map((stack) => stack.baseCue?.bmpKey)).toEqual(['03']);
+    // During a POOR each stage shows its own POOR image; a stage without one has none.
+    expect(at(21.5, true).map((stack) => stack.poorKey)).toEqual(['01', undefined]);
+  });
+});
+
+describe('resolveBgaStacks', () => {
+  const timeline = {
+    base: [{ seconds: 0, bmpKey: '01' }],
+    layer: [{ seconds: 0, bmpKey: '02' }],
+    poor: [{ seconds: 0, bmpKey: '03' }],
+  };
+
+  it('resolves a chart that is not stitched to one opaque stack', () => {
+    expect(resolveBgaStacks({ timeline, seconds: 1, inPoorWindow: false })).toEqual([
+      { alpha: 1, baseCue: { seconds: 0, bmpKey: '01' }, layerCue: { seconds: 0, bmpKey: '02' } },
+    ]);
+  });
+
+  it('picks the POOR cue only during a POOR and only when POOR cues are given', () => {
+    expect(resolveBgaStacks({ timeline, seconds: 1, inPoorWindow: true })[0]!.poorKey).toBe('03');
+    expect(resolveBgaStacks({ timeline, seconds: 1, inPoorWindow: false })[0]).not.toHaveProperty('poorKey');
+    const withoutPoor = { base: timeline.base, layer: timeline.layer };
+    expect(resolveBgaStacks({ timeline: withoutPoor, seconds: 1, inPoorWindow: true })[0]).not.toHaveProperty(
+      'poorKey',
+    );
+  });
+
+  it('leaves out the base or layer the BGA rect hides', () => {
+    const [stack] = resolveBgaStacks({ timeline, seconds: 1, noBase: true, noLayer: true, inPoorWindow: false });
+    expect(stack).toEqual({ alpha: 1, baseCue: undefined, layerCue: undefined });
   });
 });

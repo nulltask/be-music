@@ -18,6 +18,10 @@
 // precedence (poor > layer > base). Real beatoraja stacks all three on separate sprites, but a single
 // overlay reads correctly for ~95% of charts and dodges the per-cue sprite overhead until profiling
 // shows it matters.
+//
+// A stitched NONSTOP chart draws one such sprite per stage at the opacity of its crossfade
+// (`resolveBgaStacks`, the stacks the built-in and LR2 scenes draw too), so the BGA cross-fades over
+// 3 s at a stage seam as LR2 does.
 
 import { Container, Sprite, Texture } from 'pixi.js';
 import { destinationToSpriteProps, type BeatorajaRenderContext } from '../../../skin/beatoraja/render.ts';
@@ -26,7 +30,13 @@ import {
   type BeatorajaDestinationGroup,
   type BeatorajaSkin,
 } from '@be-music/beatoraja-skin';
-import { pickActiveBgaKey, resolveBgaImageRect, type BgaCue } from '../../../chart/bga-timeline.ts';
+import {
+  resolveBgaImageRect,
+  resolveBgaStacks,
+  type BgaCue,
+  type NonstopBgaStage,
+  type NonstopStageBgaTimeline,
+} from '../../../chart/bga-timeline.ts';
 
 export interface BeatorajaBgaLayerOptions {
   skin: BeatorajaSkin;
@@ -54,39 +64,54 @@ export interface BeatorajaBgaLayerOptions {
    * layout but mismatches the rect when the user has a non-default skin option active.
    */
   skinConfigOps?: ReadonlySet<number>;
+  /**
+   * A stitched NONSTOP chart's stages and each stage's own cues (`splitNonstopBgaTimeline`): the layer draws each
+   * stage's BGA at the opacity of its crossfade instead of `cues`.
+   */
+  nonstop?: { stages: readonly NonstopBgaStage[]; timelines: readonly NonstopStageBgaTimeline[] } | undefined;
 }
+
+/** One stack's sprites: the black canvas behind a small image, and the image. */
+interface BgaSpritePair {
+  readonly canvas: Sprite;
+  readonly sprite: Sprite;
+}
+
+type BgaDestinationProps = ReturnType<typeof destinationToSpriteProps>;
 
 export class BeatorajaBgaLayer {
   readonly container: Container = new Container();
-  /** Black fill behind an image smaller than the BGA canvas, which beatoraja leaves black around it. */
-  private readonly canvasSprite: Sprite;
-  private readonly sprite: Sprite;
+  /**
+   * One sprite pair per stack drawn (one, or a NONSTOP chart's stages at a seam), earlier stacks behind. Each pair is a
+   * black fill behind an image smaller than the BGA canvas, which beatoraja leaves black around it, and the image. The
+   * first pair is mounted at construction.
+   */
+  private readonly pairs: BgaSpritePair[] = [];
   private readonly group: BeatorajaDestinationGroup | undefined;
   private readonly textures: ReadonlyMap<string, Texture>;
   private readonly videoElements: ReadonlyMap<string, HTMLVideoElement>;
   private readonly cues: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };
+  private readonly nonstop: BeatorajaBgaLayerOptions['nonstop'];
   /**
    * Skin canvas height in skin-pixel units. Read from `skin.h` at construction so we can flip
    * the BGA's Y-UP dst rect into Pixi Y-DOWN — same convention the play skin view uses.
    */
   private readonly canvasHeight: number;
-  private currentKey: string | undefined;
+  /** The keys the stacks show now, whose videos play. */
+  private currentKeys = new Set<string>();
   private disposed = false;
 
   constructor(options: BeatorajaBgaLayerOptions) {
     this.textures = options.textures;
     this.videoElements = options.videoElements ?? new Map();
     this.cues = options.cues;
+    this.nonstop = options.nonstop;
     this.group = resolveBgaDestinationGroup(options.skin, options.skinConfigOps);
     const rawH = (options.skin as { h?: unknown }).h;
     this.canvasHeight = typeof rawH === 'number' && Number.isFinite(rawH) && rawH > 0 ? rawH : 720;
-
     // Mounted with no texture — `update()` swaps in the active BGA texture per frame. Kept invisible
     // until the destination group resolves with `visible = true` so a chart with no BGA stays clean.
-    this.canvasSprite = new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false });
-    this.sprite = new Sprite();
-    this.sprite.visible = false;
-    this.container.addChild(this.canvasSprite, this.sprite);
+    this.pairAt(0);
   }
 
   /**
@@ -96,124 +121,55 @@ export class BeatorajaBgaLayer {
    */
   update(seconds: number, context: BeatorajaRenderContext, poorBgaActive: boolean): void {
     if (this.disposed) return;
-    this.canvasSprite.visible = false;
-    if (this.group === undefined) {
-      this.sprite.visible = false;
-      return;
+    for (const pair of this.pairs) {
+      pair.canvas.visible = false;
+      pair.sprite.visible = false;
     }
+    if (this.group === undefined) return;
     const props = destinationToSpriteProps(this.group, context, this.canvasHeight);
-    const effectiveKey = this.pickEffectiveKey(seconds, poorBgaActive);
-    const texture = effectiveKey !== undefined ? this.textures.get(effectiveKey) : undefined;
-    const keyChanged = effectiveKey !== this.currentKey;
-    if (keyChanged) {
-      // Pause + reset the video on the OLD key (when one was a video) before swapping.
-      // Without this, multiple video BGAs queued back-to-back would keep playing in the
-      // background, contending for compositor frame callbacks.
-      if (this.currentKey !== undefined) {
-        const prevVideo = this.videoElements.get(this.currentKey);
-        if (prevVideo !== undefined) {
-          prevVideo.pause();
-          prevVideo.currentTime = 0;
-        }
-      }
-      this.currentKey = effectiveKey;
-    }
-
-    // No decoded texture (or Pixi's source-less EMPTY singleton) must not enter the renderer's
-    // batch. Other beatoraja skin paths already skip EMPTY because WebGPU can crash while creating
-    // the bind group for that source; BGA cues can hit the same path when a chart references a
-    // missing/corrupt BMP slot mid-play.
-    if (!props.visible || texture === undefined || texture === Texture.EMPTY) {
-      this.sprite.visible = false;
-      return;
-    }
-
-    if (this.sprite.texture !== texture) {
-      this.sprite.texture = texture;
-    }
-    // The destination stands for the 256x256 BMS canvas: a still image that fits it is centered horizontally and
-    // top-aligned at its pixel size on a black canvas (beatoraja's `BGImageProcessor`), anything larger and videos
-    // fill the rect.
-    const rect = { x: props.x, y: props.y, w: props.width, h: props.height };
-    const placed =
-      effectiveKey !== undefined && this.videoElements.has(effectiveKey)
-        ? rect
-        : resolveBgaImageRect(texture.frame.width, texture.frame.height, rect);
-    if (placed.w < rect.w || placed.h < rect.h) {
-      this.canvasSprite.visible = true;
-      this.canvasSprite.x = rect.x;
-      this.canvasSprite.y = rect.y;
-      this.canvasSprite.width = rect.w;
-      this.canvasSprite.height = rect.h;
-      this.canvasSprite.alpha = props.alpha;
-      this.canvasSprite.angle = props.angle;
-      this.canvasSprite.blendMode = props.blendMode;
-    }
-    this.sprite.visible = true;
-    this.sprite.x = placed.x;
-    this.sprite.y = placed.y;
-    this.sprite.width = placed.w;
-    this.sprite.height = placed.h;
-    this.sprite.alpha = props.alpha;
-    this.sprite.tint = props.tint;
-    this.sprite.angle = props.angle;
-    this.sprite.blendMode = props.blendMode;
-
-    // Start the new key's video from the beginning. Browsers gate `.play()` behind the
-    // user-gesture autoplay policy — when the gameplay scene mounts as a result of a
-    // click / keypress (the typical entry path), the gesture transfers and play() resolves
-    // synchronously. Otherwise the promise rejects silently and the video stays at frame
-    // 0 until the next cue brings it into focus.
-    if (keyChanged && effectiveKey !== undefined) {
-      const nextVideo = this.videoElements.get(effectiveKey);
-      if (nextVideo !== undefined) {
-        nextVideo.currentTime = 0;
-        // Use the promise form so we can swallow the autoplay-rejection cleanly.
-        const playPromise = nextVideo.play();
-        if (playPromise !== undefined && typeof playPromise.catch === 'function') {
-          playPromise.catch(() => undefined);
-        }
-      }
-    }
+    // One stack, or a NONSTOP chart's stages at their crossfade opacity, earlier stages behind.
+    const stacks = resolveBgaStacks({
+      timeline: this.cues,
+      nonstop: this.nonstop,
+      seconds,
+      inPoorWindow: poorBgaActive,
+    });
+    const keys = new Set<string>();
+    stacks.forEach((stack, index) => {
+      const key = stack.poorKey ?? stack.layerCue?.bmpKey ?? stack.baseCue?.bmpKey;
+      if (key === undefined) return;
+      keys.add(key);
+      this.drawStack(this.pairAt(index), key, props, stack.alpha);
+    });
+    this.syncVideos(keys);
   }
 
   /**
-   * Plays the current cue's video again when it is paused: a paused play pauses every BGA video, and the layer only
+   * Plays the current cues' videos again when they are paused: a paused play pauses every BGA video, and the layer only
    * starts one on a cue change.
    */
   resume(): void {
-    if (this.disposed || this.currentKey === undefined) return;
-    const video = this.videoElements.get(this.currentKey);
-    if (video === undefined || !video.paused) return;
-    try {
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // Autoplay policy or a codec refused it: the video stays on its frame.
-        });
-      }
-    } catch {
-      // Same as above.
+    if (this.disposed) return;
+    for (const key of this.currentKeys) {
+      const video = this.videoElements.get(key);
+      if (video !== undefined && video.paused) playVideo(video);
     }
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    // Pause the active video before tearing down the container — otherwise the
+    // Pause the active videos before tearing down the container — otherwise the
     // `requestVideoFrameCallback` poll keeps running on the compositor thread, fighting
     // for frame slots even though no Pixi sprite consumes the frames anymore. The prep
     // pipeline's `dispose()` clears `src` + revokes the URL on EVERY video; this layer
     // pause is just the "stop the in-flight cue" half so a rapid scene-swap (replaceSkin
     // mid-play) doesn't briefly drive two videos before the prep cleanup runs.
-    if (this.currentKey !== undefined) {
-      const active = this.videoElements.get(this.currentKey);
-      if (active !== undefined) {
-        try {
-          active.pause();
-        } catch {
-          // Already paused / disposed.
-        }
+    for (const key of this.currentKeys) {
+      try {
+        this.videoElements.get(key)?.pause();
+      } catch {
+        // Already paused / disposed.
       }
     }
     if (!this.container.destroyed) {
@@ -221,11 +177,98 @@ export class BeatorajaBgaLayer {
     }
   }
 
-  private pickEffectiveKey(seconds: number, poorActive: boolean): string | undefined {
-    const baseKey = pickActiveBgaKey(this.cues.base, seconds);
-    const layerKey = pickActiveBgaKey(this.cues.layer, seconds);
-    const poorKey = poorActive ? pickActiveBgaKey(this.cues.poor, seconds) : undefined;
-    return poorKey ?? layerKey ?? baseKey;
+  /** The sprite pair of the stack at `index`, mounted on first use. */
+  private pairAt(index: number): BgaSpritePair {
+    while (this.pairs.length <= index) {
+      const pair: BgaSpritePair = {
+        canvas: new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false }),
+        sprite: new Sprite({ visible: false }),
+      };
+      this.pairs.push(pair);
+      this.container.addChild(pair.canvas, pair.sprite);
+    }
+    return this.pairs[index]!;
+  }
+
+  /** Draws `key` on `pair` into the destination `props`, at `alpha` (a NONSTOP stage's crossfade) on top of its own. */
+  private drawStack(pair: BgaSpritePair, key: string, props: BgaDestinationProps, alpha: number): void {
+    const texture = this.textures.get(key);
+    // No decoded texture (or Pixi's source-less EMPTY singleton) must not enter the renderer's
+    // batch. Other beatoraja skin paths already skip EMPTY because WebGPU can crash while creating
+    // the bind group for that source; BGA cues can hit the same path when a chart references a
+    // missing/corrupt BMP slot mid-play.
+    if (!props.visible || texture === undefined || texture === Texture.EMPTY) return;
+    const { canvas, sprite } = pair;
+    if (sprite.texture !== texture) {
+      sprite.texture = texture;
+    }
+    // The destination stands for the 256x256 BMS canvas: a still image that fits it is centered horizontally and
+    // top-aligned at its pixel size on a black canvas (beatoraja's `BGImageProcessor`), anything larger and videos
+    // fill the rect.
+    const rect = { x: props.x, y: props.y, w: props.width, h: props.height };
+    const placed = this.videoElements.has(key)
+      ? rect
+      : resolveBgaImageRect(texture.frame.width, texture.frame.height, rect);
+    if (placed.w < rect.w || placed.h < rect.h) {
+      canvas.visible = true;
+      canvas.x = rect.x;
+      canvas.y = rect.y;
+      canvas.width = rect.w;
+      canvas.height = rect.h;
+      canvas.alpha = props.alpha * alpha;
+      canvas.angle = props.angle;
+      canvas.blendMode = props.blendMode;
+    }
+    sprite.visible = true;
+    sprite.x = placed.x;
+    sprite.y = placed.y;
+    sprite.width = placed.w;
+    sprite.height = placed.h;
+    sprite.alpha = props.alpha * alpha;
+    sprite.tint = props.tint;
+    sprite.angle = props.angle;
+    sprite.blendMode = props.blendMode;
+  }
+
+  /**
+   * Pauses and rewinds the videos of the keys no longer shown, and starts the newly shown ones from the beginning.
+   * Without the pause, video BGAs queued back-to-back would keep playing in the background, contending for compositor
+   * frame callbacks.
+   */
+  private syncVideos(keys: Set<string>): void {
+    for (const key of this.currentKeys) {
+      if (keys.has(key)) continue;
+      const video = this.videoElements.get(key);
+      if (video !== undefined) {
+        video.pause();
+        video.currentTime = 0;
+      }
+    }
+    for (const key of keys) {
+      if (this.currentKeys.has(key)) continue;
+      const video = this.videoElements.get(key);
+      if (video !== undefined) {
+        video.currentTime = 0;
+        playVideo(video);
+      }
+    }
+    this.currentKeys = keys;
+  }
+}
+
+/**
+ * Plays `video`. Browsers gate `.play()` behind the user-gesture autoplay policy — when the gameplay scene mounts as a
+ * result of a click / keypress (the typical entry path), the gesture transfers and play() resolves. Otherwise the
+ * promise rejects silently and the video stays on its frame until the next cue brings it into focus.
+ */
+function playVideo(video: HTMLVideoElement): void {
+  try {
+    const playPromise = video.play();
+    if (playPromise !== undefined && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => undefined);
+    }
+  } catch {
+    // Autoplay policy or a codec refused it: the video stays on its frame.
   }
 }
 

@@ -207,3 +207,51 @@ export function resolveNonstopBgaAlpha(stage: NonstopBgaStage, seconds: number):
   if (seconds >= stage.windowEnd) return stage.bgaFadeOut !== undefined ? 1 - ramp(stage.bgaFadeOut) : 0;
   return 1;
 }
+
+/** One BGA stack to draw: its base and layer cues (and a POOR image in place of them) at `alpha`. */
+export interface BgaStack {
+  alpha: number;
+  baseCue: BgaCue | undefined;
+  layerCue: BgaCue | undefined;
+  /** Set only while a POOR is being shown and the stack has a POOR cue. */
+  poorKey?: string | undefined;
+}
+
+/** What {@link resolveBgaStacks} reads: the chart's cues, a stitched NONSTOP chart's stages and the BGA rect's flags. */
+export interface BgaStacksInput {
+  /** The chart's cues; its POOR cues, when given, are picked during a POOR. */
+  timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor?: readonly BgaCue[] };
+  /** A stitched NONSTOP chart's stages and their own cues (`splitNonstopBgaTimeline`), in stage order. */
+  nonstop?: { stages: readonly NonstopBgaStage[]; timelines: readonly NonstopStageBgaTimeline[] } | undefined;
+  /** The cue clock in chart seconds. */
+  seconds: number;
+  noBase?: boolean;
+  noLayer?: boolean;
+  /** A POOR is being shown. */
+  inPoorWindow: boolean;
+}
+
+/**
+ * The BGA stacks to draw at `seconds`: the chart's base and layer cues at full opacity, or for a stitched NONSTOP chart
+ * each stage's own cues (and, during a POOR, its own POOR image) at the opacity of its crossfade
+ * ({@link resolveNonstopBgaAlpha}), earlier stages first. Every skin family draws a NONSTOP chart's BGA from these.
+ */
+export function resolveBgaStacks(input: BgaStacksInput): BgaStack[] {
+  const { seconds } = input;
+  const pick = (
+    timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor?: readonly BgaCue[] },
+    alpha: number,
+  ): BgaStack => ({
+    alpha,
+    baseCue: input.noBase ? undefined : pickActiveBgaCue(timeline.base, seconds),
+    layerCue: input.noLayer ? undefined : pickActiveBgaCue(timeline.layer, seconds),
+    ...(input.inPoorWindow && timeline.poor !== undefined ? { poorKey: pickActiveBgaKey(timeline.poor, seconds) } : {}),
+  });
+  const nonstop = input.nonstop;
+  if (nonstop === undefined) return [pick(input.timeline, 1)];
+  return nonstop.stages.flatMap((stage, index) => {
+    const timeline = nonstop.timelines[index];
+    const alpha = resolveNonstopBgaAlpha(stage, seconds);
+    return timeline !== undefined && alpha > 0 ? [pick(timeline, alpha)] : [];
+  });
+}

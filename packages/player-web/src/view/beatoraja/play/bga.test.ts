@@ -70,4 +70,60 @@ describe('BeatorajaBgaLayer', () => {
 
     layer.dispose();
   });
+
+  it('cross-fades a stitched NONSTOP chart from one stage to the next at the seam', () => {
+    const red = fakeTexture();
+    const blue = fakeTexture();
+    const layer = new BeatorajaBgaLayer({
+      skin: skin(),
+      textures: new Map([
+        ['01', red],
+        ['02', blue],
+      ]),
+      // The stitched chart's latest cue is the second stage's.
+      cues: {
+        base: [
+          { seconds: 0, bmpKey: '01' },
+          { seconds: 18, bmpKey: '02' },
+        ],
+        layer: [],
+        poor: [],
+      },
+      nonstop: {
+        stages: [
+          { windowStart: 0, windowEnd: 20, bmpKeys: ['01'], bgaFadeOut: { start: 20, end: 23 } },
+          { windowStart: 20, windowEnd: Number.POSITIVE_INFINITY, bmpKeys: ['02'], bgaFadeIn: { start: 17, end: 20 } },
+        ],
+        timelines: [
+          { base: [{ seconds: 0, bmpKey: '01' }], layer: [], poor: [] },
+          { base: [{ seconds: 18, bmpKey: '02' }], layer: [], poor: [] },
+        ],
+      },
+    });
+    const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+    const shown = () =>
+      (layer.container.children as Sprite[])
+        .filter((sprite, index) => index % 2 === 1 && sprite.visible)
+        .map((sprite) => ({ texture: sprite.texture, alpha: sprite.alpha }));
+
+    layer.update(10, context, false);
+    expect(shown()).toEqual([{ texture: red, alpha: 1 }]);
+
+    // Before the seam the next stage fades in over the first, after it the first fades out under the next.
+    layer.update(18.5, context, false);
+    const fadingIn = shown();
+    expect(fadingIn.map((entry) => entry.texture)).toEqual([red, blue]);
+    expect(fadingIn[0]!.alpha).toBe(1);
+    expect(fadingIn[1]!.alpha).toBeCloseTo(0.5);
+    layer.update(21.5, context, false);
+    const fadingOut = shown();
+    expect(fadingOut.map((entry) => entry.texture)).toEqual([red, blue]);
+    expect(fadingOut[0]!.alpha).toBeCloseTo(0.5);
+    expect(fadingOut[1]!.alpha).toBe(1);
+
+    layer.update(24, context, false);
+    expect(shown()).toEqual([{ texture: blue, alpha: 1 }]);
+
+    layer.dispose();
+  });
 });
