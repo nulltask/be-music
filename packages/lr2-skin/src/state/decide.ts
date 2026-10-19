@@ -1,5 +1,5 @@
 import type { CourseView, LibraryChart } from '@be-music/scene-model';
-import { LR2_OP } from '../ids/index.ts';
+import { LR2_OP, LR2_TIMER } from '../ids/index.ts';
 import { resolveLr2ChartText, resolveLr2DifficultyOp, resolveLr2KeyModeOp } from './chart.ts';
 import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
 import type { Lr2SceneState } from './scene-state.ts';
@@ -36,4 +36,25 @@ export function resolveLr2DecideState(input: Lr2DecideInput): Lr2SceneState {
       (course !== undefined ? resolveLr2CourseText(st, course) : undefined) ?? resolveLr2ChartText(st, chart),
     slider: () => undefined,
   };
+}
+
+/** A moment of the decide screen, as its LR2 timers read it; every time is on the clock the screen stamps timers with. */
+export interface Lr2DecideTimerInput {
+  /** The time now, and when the screen was entered. */
+  readonly clock: { readonly nowMs: number; readonly enteredAtMs: number };
+  /** When input opens: the skin's `#STARTINPUT` after the entry. */
+  readonly inputOpenAtMs: number;
+  /** When the screen started leaving; absent until it does. */
+  readonly leaving?: { readonly atMs: number };
+}
+
+/**
+ * The LR2 timers running on a moment of the decide screen, each with when it started: timer 0 (the scene) from the
+ * screen's entry, timer 1 (input) once input has opened, and timer 2 (the fade-out) once the screen is leaving.
+ */
+export function resolveLr2DecideTimers(input: Lr2DecideTimerInput): ReadonlyMap<number, number> {
+  const timers = new Map<number, number>([[LR2_TIMER.SCENE_START, input.clock.enteredAtMs]]);
+  if (input.clock.nowMs >= input.inputOpenAtMs) timers.set(LR2_TIMER.START_INPUT, input.inputOpenAtMs);
+  if (input.leaving !== undefined) timers.set(LR2_TIMER.FADE_OUT, input.leaving.atMs);
+  return timers;
 }

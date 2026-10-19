@@ -1,8 +1,9 @@
 /**
  * The LR2 family's decide screen: an LR2 decide skin (`Decide/decide.lr2skin`) drawn on its canvas over the chart's
  * `#STAGEFILE`, letterboxed into the window. It draws the decide session's frames through the LR2 decide state
- * (`resolveLr2DecideState`) and LR2's scene timers, which it reads off each frame, and turns a click into a `continue`
- * intent; the session times the screen from the skin's timing ({@link resolveLr2DecideTiming}).
+ * (`resolveLr2DecideState`) and LR2's scene timers (`resolveLr2DecideTimers`), which it reads off each frame, and
+ * turns a click into a `continue` intent; the session times the screen from the skin's timing
+ * ({@link resolveLr2DecideTiming}).
  */
 
 import {
@@ -13,7 +14,7 @@ import {
   type Lr2SpecialGraphic,
 } from '@be-music/lr2-skin';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
-import { resolveLr2DecideState, type Lr2SceneState } from '@be-music/lr2-skin/state';
+import { resolveLr2DecideState, resolveLr2DecideTimers, type Lr2SceneState } from '@be-music/lr2-skin/state';
 import type { LibraryChart } from '@be-music/scene-model';
 import { Color, Container, Graphics, Sprite, type Texture } from 'pixi.js';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
@@ -61,19 +62,6 @@ export function resolveLr2DecideTiming(skin: Pick<Lr2Skin, 'timing'>): SceneView
     autoAdvanceMs: inputDelayMs + LR2_DECIDE_AUTO_ADVANCE_AFTER_INPUT_MS,
     fadeOutMs: Math.max(0, skin.timing.fadeOut ?? 0),
   };
-}
-
-/**
- * The LR2 timers running on a decide frame, each with when it started on the frame's clock: timer 0 (the scene) from
- * the screen's entry, timer 1 (input) once input has opened, and timer 2 (the fade-out) once the screen is leaving.
- */
-export function resolveLr2DecideTimers(
-  frame: Pick<DecideFrame, 'clock' | 'inputOpenAtMs' | 'leaving'>,
-): Map<number, number> {
-  const timers = new Map<number, number>([[LR2_TIMER.SCENE_START, frame.clock.enteredAtMs]]);
-  if (frame.clock.nowMs >= frame.inputOpenAtMs) timers.set(LR2_TIMER.START_INPUT, frame.inputOpenAtMs);
-  if (frame.leaving !== undefined) timers.set(LR2_TIMER.FADE_OUT, frame.leaving.atMs);
-  return timers;
 }
 
 export interface Lr2DecideViewOptions {
