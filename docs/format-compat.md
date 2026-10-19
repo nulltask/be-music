@@ -377,6 +377,8 @@ flowchart LR
 
 ## 5. be-music decisions in short
 
+Outside the judge rulesets be-music follows LR2 first, and beatoraja where LR2 has no such feature; [LR2 and beatoraja semantics](./semantics-lr2-beatoraja.md) surveys where that policy meets the layers above the chart format (judging, records, lamps, options and skins) and what it risks.
+
 - Parse leniently (indentation, `#END IF`, lower-case commands) but require whitespace after a header name ([§2.1](#21-lines-headers-and-object-data)).
 - One judged note per lane and position: a long note beats a tap, otherwise the lowest object ID wins; a dropped note with a different keysound still sounds ([§2.1](#21-lines-headers-and-object-data)).
 - Detect encodings without trusting `#CHARSET` alone, with Japanese encodings, Korean EUC-KR (as beatoraja and Bemuse) and UTF-8 as candidates ([§2.2](#22-character-encoding)).
