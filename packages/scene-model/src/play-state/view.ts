@@ -4,10 +4,8 @@ import {
   type PlaylogViewChange,
   type PlaylogViewState,
 } from '@be-music/player/playlog';
-import { createHiSpeedState } from './hi-speed.ts';
-import { resolveLaneCover, type LaneCoverState } from './lane-cover.ts';
+import { resolveLaneCover } from './lane-cover.ts';
 import type { PlayViewState } from './state.ts';
-import type { PlaySide } from './types.ts';
 
 /** The hi-speed scale of the built-in and LR2 scenes (`PIXELS_PER_BEAT × hiSpeed`), as `PlaylogViewState.hiSpeedScale`. */
 export const BE_MUSIC_HI_SPEED_SCALE = 'be-music';
@@ -89,43 +87,6 @@ export function resolvePlaylogView(
     });
   }
   return roundPlaylogView(playlogView);
-}
-
-/** What the beatoraja scene shows: its hi-speed and its runtime adapter's cover state. */
-export interface BeatorajaViewInput {
-  hiSpeed: number;
-  /** The lane cover (SUDDEN+), a fraction of the lane height. */
-  lanecover: number;
-  /** The lift, a fraction of the lane height. */
-  lift: number;
-  /** The HIDDEN cover's ratio, of the lane above the lift. */
-  hiddenRatio: number;
-  hiddenEnabled: boolean;
-  /** The chart's main BPM, for the visible time. */
-  mainBpm: number;
-  /** The play sides with lanes: the scene's one cover state applies to each. */
-  sides: readonly PlaySide[];
-}
-
-/**
- * The beatoraja scene's view in the play log's units ({@link resolvePlaylogView} on the beatoraja scale, a lane of four
- * beats): the cover state of its runtime adapter on every side, the HIDDEN cover scaled by `1 - lift`, and the
- * visible time at the main BPM (beatoraja's white number).
- */
-export function resolveBeatorajaPlaylogView(input: BeatorajaViewInput): PlaylogViewState {
-  const covers = input.sides.map((side): LaneCoverState => ({
-    side,
-    sudden: input.lanecover,
-    suddenOn: true,
-    hidden: input.hiddenRatio,
-    hiddenOn: input.hiddenEnabled,
-    lift: input.lift,
-  }));
-  const hiSpeed = { ...createHiSpeedState(), player: input.hiSpeed, drawn: input.hiSpeed };
-  return resolvePlaylogView(
-    { hiSpeed, covers },
-    { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4, ...(input.mainBpm > 0 ? { mainBpm: input.mainBpm } : {}) },
-  );
 }
 
 /**

@@ -291,8 +291,9 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 `optionChange`), the select BGM and the decide jingle, and the result jingles (`clear`, `fail`, `result`,
 `courseClear`, `courseFail`).
 
-- `systemSoundSetFromLr2Theme` reads an LR2 theme load's audio (by bytes); `LR2_SOUND_SET_SLOTS` maps each command of an
-  LR2 sound set to its slot (`SCRATCH` is the cursor cue, `PANEL_*` the option panel ones).
+- An LR2 theme's sounds come by bytes from its theme load, and the host fills the slots it plays (the web demo's LR2
+  theme service fills the select ones). `LR2_SOUND_SET_SLOTS` maps each command of an LR2 sound set to its slot
+  (`SCRATCH` is the cursor cue, `PANEL_*` the option panel ones).
 - `systemSoundSetFromBeatoraja` reads a beatoraja theme's cue paths and select BGM path (played through the theme's
   audio) and its jingles (by bytes). beatoraja has no option panel cues; LR2 has no cancel cue.
 - `resolveResultJingles` picks a result's jingles from the first set with any (the theme whose result skin is shown,
@@ -320,8 +321,8 @@ the select cues (`cursor`, `decide`, `cancel`, `folderOpen`, `folderClose`, `opt
 | The hi-speed range and steps                                                        | `player-web` `scene/hi-speed.ts`          | Same names (the re-exports are removed)                                            |
 | `SceneCourseInfo`, `resolveSceneCourseInfo`                                         | `player-web` `scene/course-info.ts`       | `CourseView`, `resolveCourseView` (the old names are removed)                      |
 | `PixiPlayOptions` and the other `Pixi*` play-option types, `PixiGameplayResultData` | `player-web` scenes                       | `PlayOptions`, …, `PlayResult` (the old names are removed)                         |
-| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                       | `player-web` `scene/core/course-combo.ts` | Same names, with `reduceCourseCombo`                                               |
-| `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                                  | `player-web` `scene/playlog-view.ts`      | Same names, over `resolvePlaylogView` (the re-export is removed)                   |
+| `CourseComboState`, `createCourseCombo`, `advanceCourseCombo`                       | `player-web` `scene/core/course-combo.ts` | Same names, but `advanceCourseCombo` is replaced by the pure `reduceCourseCombo`   |
+| `PlaylogViewCursor`, `resolveBeatorajaPlaylogView`                                  | `player-web` `scene/playlog-view.ts`      | `PlaylogViewCursor`; every play view resolves its view with `resolvePlaylogView`   |
 | `buildCourseResultData`, `joinCourseStageHistories`, `resolveResultPresentation`    | `player-web-demo` `course-result.ts`      | `playResultFromCourseRun`, … (re-exported under the old names)                     |
 | `resolveResultViewJingles`                                                          | `player-web-demo` `result-jingles.ts`     | Stays, over `resolveResultJingles`                                                 |
 
