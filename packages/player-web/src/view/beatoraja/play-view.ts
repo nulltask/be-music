@@ -362,12 +362,13 @@ export class BeatorajaPlayView implements PlayView {
     this.root.addChildAt(stage.root, 0);
   }
 
-  /** The session's BGA as the BGA layer draws it; a key drawn only on the layer track uses its layer texture. */
+  /** The session's BGA as the BGA layer draws it: the base track over the base textures, the layer over its own. */
   private bgaOf(): BeatorajaPlayBga {
     const play = this.play;
     const nonstop = this.options.nonstop;
     return {
-      textures: new Map<string, Texture>([...play.bgaLayerTextures, ...play.bgaTextures]),
+      textures: play.bgaTextures,
+      layerTextures: play.bgaLayerTextures,
       videos: new Map([...play.bgaVideos].map(([key, { video }]) => [key, video] as const)),
       cues: play.bgaTimeline,
       ...(nonstop !== undefined && play.nonstopBgaTimelines !== undefined
