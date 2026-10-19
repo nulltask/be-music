@@ -1,9 +1,9 @@
 import { generateSpecs } from 'hono-openapi';
 import { describe, expect, test } from 'vite-plus/test';
 import { bmsSearchLookup } from '../chartsets/refresh.ts';
-import { createV0Api, OPENAPI_DOCUMENTATION } from './v0.ts';
+import { createV0API, OPENAPI_DOCUMENTATION } from './v0.ts';
 
-const api = createV0Api({ now: Date.now, newId: () => 'id', chartsetLookup: bmsSearchLookup() });
+const api = createV0API({ now: Date.now, newId: () => 'id', chartsetLookup: bmsSearchLookup() });
 
 describe('OpenAPI document', () => {
   test('describes every route of /api/v0 from its schemas', async () => {

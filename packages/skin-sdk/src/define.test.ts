@@ -3,7 +3,7 @@ import type { BeMusicSkin } from './types.ts';
 import {
   BE_MUSIC_SKIN_API_VERSION,
   defineBeMusicSkin,
-  isSupportedBeMusicSkinApiVersion,
+  isSupportedBeMusicSkinAPIVersion,
   validateBeMusicSkin,
 } from './define.ts';
 
@@ -23,20 +23,20 @@ function skin(overrides: Partial<BeMusicSkin> = {}): BeMusicSkin {
   };
 }
 
-describe('isSupportedBeMusicSkinApiVersion', () => {
+describe('isSupportedBeMusicSkinAPIVersion', () => {
   it('accepts the current revision, the unstable 0', () => {
     expect(BE_MUSIC_SKIN_API_VERSION).toBe(0);
-    expect(isSupportedBeMusicSkinApiVersion(BE_MUSIC_SKIN_API_VERSION)).toBe(true);
+    expect(isSupportedBeMusicSkinAPIVersion(BE_MUSIC_SKIN_API_VERSION)).toBe(true);
   });
 
   it('still accepts 1, which skins declared before the API was marked unstable', () => {
-    expect(isSupportedBeMusicSkinApiVersion(1)).toBe(true);
+    expect(isSupportedBeMusicSkinAPIVersion(1)).toBe(true);
   });
 
   it('refuses future and unknown revisions', () => {
-    expect(isSupportedBeMusicSkinApiVersion(2)).toBe(false);
-    expect(isSupportedBeMusicSkinApiVersion(-1)).toBe(false);
-    expect(isSupportedBeMusicSkinApiVersion(1.5)).toBe(false);
+    expect(isSupportedBeMusicSkinAPIVersion(2)).toBe(false);
+    expect(isSupportedBeMusicSkinAPIVersion(-1)).toBe(false);
+    expect(isSupportedBeMusicSkinAPIVersion(1.5)).toBe(false);
   });
 });
 

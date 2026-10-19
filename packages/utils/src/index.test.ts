@@ -20,39 +20,39 @@ import {
   loadFileEntryBytes,
   lookupCaseInsensitiveMapEntry,
   normalizePath,
-  normalizeAsciiBase36Code,
-  normalizeAsciiBase62Code,
+  normalizeASCIIBase36Code,
+  normalizeASCIIBase62Code,
   normalizeFractionNumerator,
   normalizeNonNegativeInt,
   normalizeSortedUniqueNonNegativeIntegers,
   normalizePositiveInt,
   readFilesIntoEntryMap,
-  resolveCliPath,
+  resolveCLIPath,
   runWithConcurrency,
 } from './index.ts';
 describe('utils', () => {
-  test('resolveCliPath: resolves to an absolute path from the specified cwd', () => {
-    expect(resolveCliPath('chart/test.bms', '/tmp')).toBe(resolve('/tmp', 'chart/test.bms'));
-    expect(resolveCliPath('./chart/test.bms', '/tmp')).toBe(resolve('/tmp', './chart/test.bms'));
-    expect(resolveCliPath('./', '/tmp')).toBe(resolve('/tmp', './'));
+  test('resolveCLIPath: resolves to an absolute path from the specified cwd', () => {
+    expect(resolveCLIPath('chart/test.bms', '/tmp')).toBe(resolve('/tmp', 'chart/test.bms'));
+    expect(resolveCLIPath('./chart/test.bms', '/tmp')).toBe(resolve('/tmp', './chart/test.bms'));
+    expect(resolveCLIPath('./', '/tmp')).toBe(resolve('/tmp', './'));
   });
 
-  test('resolveCliPath: returns POSIX absolute paths verbatim regardless of cwd', () => {
+  test('resolveCLIPath: returns POSIX absolute paths verbatim regardless of cwd', () => {
     // The previous implementation routed absolute inputs through the lazy `node:path` `require` slow
     // path, which silently fell back to `cwd` on pure-ESM Node runtimes (`tsx`, `node --import tsx/esm`)
     // because `eval('require')` throws in strict ESM. Result: every CLI invocation with an absolute
     // argument turned into "scan cwd as a directory." Verify the fast-path branch never reaches that
     // code path now by exercising it from a cwd that doesn't share a prefix with the input.
-    expect(resolveCliPath('/Users/foo/song/chart.bms', '/tmp')).toBe('/Users/foo/song/chart.bms');
-    expect(resolveCliPath('/abs', '/tmp')).toBe('/abs');
+    expect(resolveCLIPath('/Users/foo/song/chart.bms', '/tmp')).toBe('/Users/foo/song/chart.bms');
+    expect(resolveCLIPath('/abs', '/tmp')).toBe('/abs');
   });
 
-  test('resolveCliPath: returns Windows drive-absolute paths verbatim', () => {
+  test('resolveCLIPath: returns Windows drive-absolute paths verbatim', () => {
     // Same regression class as the POSIX case — `C:\foo` / `C:/foo` would silently collapse to `cwd`
     // when the slow path's `require` lookup failed.
-    expect(resolveCliPath('C:\\Users\\foo\\chart.bms', '/tmp')).toBe('C:\\Users\\foo\\chart.bms');
-    expect(resolveCliPath('C:/Users/foo/chart.bms', '/tmp')).toBe('C:/Users/foo/chart.bms');
-    expect(resolveCliPath('d:\\song.bms', '/tmp')).toBe('d:\\song.bms');
+    expect(resolveCLIPath('C:\\Users\\foo\\chart.bms', '/tmp')).toBe('C:\\Users\\foo\\chart.bms');
+    expect(resolveCLIPath('C:/Users/foo/chart.bms', '/tmp')).toBe('C:/Users/foo/chart.bms');
+    expect(resolveCLIPath('d:\\song.bms', '/tmp')).toBe('d:\\song.bms');
   });
 
   test('clamp/clampSignedUnit: clamps values to configured ranges', () => {
@@ -246,31 +246,31 @@ describe('utils', () => {
     expect(errors).toEqual(['broken.txt']);
   });
 
-  test('normalizeAsciiBase36Code: normalizes ASCII 0-9/A-Z/a-z to uppercase base36 codes', () => {
-    expect(normalizeAsciiBase36Code(0x30)).toBe(0x30);
-    expect(normalizeAsciiBase36Code(0x39)).toBe(0x39);
-    expect(normalizeAsciiBase36Code(0x41)).toBe(0x41);
-    expect(normalizeAsciiBase36Code(0x5a)).toBe(0x5a);
-    expect(normalizeAsciiBase36Code(0x61)).toBe(0x41);
-    expect(normalizeAsciiBase36Code(0x7a)).toBe(0x5a);
-    expect(normalizeAsciiBase36Code(0x2d)).toBe(-1);
+  test('normalizeASCIIBase36Code: normalizes ASCII 0-9/A-Z/a-z to uppercase base36 codes', () => {
+    expect(normalizeASCIIBase36Code(0x30)).toBe(0x30);
+    expect(normalizeASCIIBase36Code(0x39)).toBe(0x39);
+    expect(normalizeASCIIBase36Code(0x41)).toBe(0x41);
+    expect(normalizeASCIIBase36Code(0x5a)).toBe(0x5a);
+    expect(normalizeASCIIBase36Code(0x61)).toBe(0x41);
+    expect(normalizeASCIIBase36Code(0x7a)).toBe(0x5a);
+    expect(normalizeASCIIBase36Code(0x2d)).toBe(-1);
   });
 
-  test('normalizeAsciiBase62Code: preserves case for the beatoraja base-62 extension', () => {
+  test('normalizeASCIIBase62Code: preserves case for the beatoraja base-62 extension', () => {
     // 0-9 unchanged.
-    expect(normalizeAsciiBase62Code(0x30)).toBe(0x30);
-    expect(normalizeAsciiBase62Code(0x39)).toBe(0x39);
+    expect(normalizeASCIIBase62Code(0x30)).toBe(0x30);
+    expect(normalizeASCIIBase62Code(0x39)).toBe(0x39);
     // A-Z unchanged.
-    expect(normalizeAsciiBase62Code(0x41)).toBe(0x41);
-    expect(normalizeAsciiBase62Code(0x5a)).toBe(0x5a);
+    expect(normalizeASCIIBase62Code(0x41)).toBe(0x41);
+    expect(normalizeASCIIBase62Code(0x5a)).toBe(0x5a);
     // a-z preserved (NOT folded to uppercase, unlike base-36).
-    expect(normalizeAsciiBase62Code(0x61)).toBe(0x61);
-    expect(normalizeAsciiBase62Code(0x7a)).toBe(0x7a);
+    expect(normalizeASCIIBase62Code(0x61)).toBe(0x61);
+    expect(normalizeASCIIBase62Code(0x7a)).toBe(0x7a);
     // Out-of-range codes rejected the same way.
-    expect(normalizeAsciiBase62Code(0x2d)).toBe(-1);
-    expect(normalizeAsciiBase62Code(0x40)).toBe(-1);
-    expect(normalizeAsciiBase62Code(0x60)).toBe(-1);
-    expect(normalizeAsciiBase62Code(0x7b)).toBe(-1);
+    expect(normalizeASCIIBase62Code(0x2d)).toBe(-1);
+    expect(normalizeASCIIBase62Code(0x40)).toBe(-1);
+    expect(normalizeASCIIBase62Code(0x60)).toBe(-1);
+    expect(normalizeASCIIBase62Code(0x7b)).toBe(-1);
   });
 
   test('normalizePath/dirname/basename: normalizes browser and archive-style paths', () => {

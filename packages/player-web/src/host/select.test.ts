@@ -1,7 +1,7 @@
 // Pixi's event mixin (`eventMode`, `isInteractive`) is installed by its events entry; nothing else loads it in Node.
 import 'pixi.js/events';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import type { Texture } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import { SILENT_AUDIO } from '../runtime/audio-analysis.ts';
@@ -34,8 +34,8 @@ function createKeys() {
 
 function createFakeAudio() {
   const audio = {
-    playBgm: vi.fn(async () => true),
-    stopBgm: vi.fn(),
+    playBGM: vi.fn(async () => true),
+    stopBGM: vi.fn(),
     playCue: vi.fn(async () => true),
     playJingle: vi.fn(async () => true),
     stopOwned: vi.fn(),
@@ -55,7 +55,7 @@ describe('createSelectScene', () => {
     const start = vi.fn();
     const scene = createSelectScene(KIT, {
       library: makeCollection([makeChart('a', 'pack'), makeChart('b', 'pack')]),
-      sounds: { decideBgm: { bytes: new Uint8Array([1]) } },
+      sounds: { decideBGM: { bytes: new Uint8Array([1]) } },
       audio: service,
       on: { start },
       keyTarget: keys.target,
@@ -64,7 +64,7 @@ describe('createSelectScene', () => {
     expect(scene.identity).toEqual({ kind: 'select', family: 'built-in' });
     keys.press('Enter');
     expect(start).not.toHaveBeenCalled();
-    expect(audio.playBgm).not.toHaveBeenCalled();
+    expect(audio.playBGM).not.toHaveBeenCalled();
     scene.dispose();
   });
 
@@ -96,7 +96,7 @@ describe('createSelectScene with an LR2 kit', () => {
     const { service } = createFakeAudio();
     const start = vi.fn();
     const scene = createSelectScene(
-      { family: 'lr2', skin: {} as Lr2Skin },
+      { family: 'lr2', skin: {} as LR2Skin },
       {
         library: makeCollection([makeChart('a', 'pack')]),
         sounds: {},

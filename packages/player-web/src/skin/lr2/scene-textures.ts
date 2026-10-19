@@ -1,15 +1,15 @@
 import { Texture } from 'pixi.js';
-import { type Lr2Skin, type Lr2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from '@be-music/lr2-skin';
-import { destroyTextureAndRevokeBlobUrl, loadSkinAssetTexture, loadTextureFromBytes } from './textures.ts';
+import { type LR2Skin, type LR2SpecialGraphic, LR2_SPECIAL_GRAPHIC, isLR2SpecialGraphic } from '@be-music/lr2-skin';
+import { destroyTextureAndRevokeBlobURL, loadSkinAssetTexture, loadTextureFromBytes } from './textures.ts';
 import { loadAssetBytes, resolveChartImageAsset, resolveSongSource } from '../../collection/collection.ts';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { BrowserSongAssetSource, BrowserSongCollection } from '../../collection/types.ts';
 
 type TextureLoadValidity = () => boolean;
-type SkinTexturePathCollector = (paths: Set<string>, skin: Lr2Skin) => void;
+type SkinTexturePathCollector = (paths: Set<string>, skin: LR2Skin) => void;
 type SkinTextureSourceElement = { source: { imagePath: string } };
 
-export class Lr2SkinTextureStore {
+export class LR2SkinTextureStore {
   private readonly textures = new Map<string, Texture>();
   private loadSerial = 0;
   private disposed = false;
@@ -36,7 +36,7 @@ export class Lr2SkinTextureStore {
   }
 
   public async preload(
-    skin: Lr2Skin,
+    skin: LR2Skin,
     paths: ReadonlySet<string>,
     isStillCurrent: TextureLoadValidity,
   ): Promise<boolean> {
@@ -48,7 +48,7 @@ export class Lr2SkinTextureStore {
           return;
         }
         if (this.disposed || serial !== this.loadSerial || !isStillCurrent()) {
-          destroyTextureAndRevokeBlobUrl(texture, true);
+          destroyTextureAndRevokeBlobURL(texture, true);
           return;
         }
         this.textures.set(path, texture);
@@ -58,7 +58,7 @@ export class Lr2SkinTextureStore {
   }
 }
 
-export class Lr2ChartGraphicTextureStore {
+export class LR2ChartGraphicTextureStore {
   private readonly textures = new Map<string, Texture>();
   private readonly pending = new Set<string>();
   private disposed = false;
@@ -66,7 +66,7 @@ export class Lr2ChartGraphicTextureStore {
   public resolve(
     collection: BrowserSongCollection,
     song: LibraryChart,
-    path: Lr2SpecialGraphic,
+    path: LR2SpecialGraphic,
     onLoaded: () => void,
   ): Texture | undefined {
     return this.resolveWith(() => resolveSongSource(collection, song), song, path, onLoaded);
@@ -79,7 +79,7 @@ export class Lr2ChartGraphicTextureStore {
   public resolveFromSource(
     source: BrowserSongAssetSource | undefined,
     song: LibraryChart,
-    path: Lr2SpecialGraphic,
+    path: LR2SpecialGraphic,
     onLoaded: () => void,
   ): Texture | undefined {
     return this.resolveWith(() => source, song, path, onLoaded);
@@ -88,7 +88,7 @@ export class Lr2ChartGraphicTextureStore {
   private resolveWith(
     resolveSource: () => BrowserSongAssetSource | undefined,
     song: LibraryChart,
-    path: Lr2SpecialGraphic,
+    path: LR2SpecialGraphic,
     onLoaded: () => void,
   ): Texture | undefined {
     const solidTexture = resolveSolidSpecialGraphicTexture(path);
@@ -119,7 +119,7 @@ export class Lr2ChartGraphicTextureStore {
   private async load(
     resolveSource: () => BrowserSongAssetSource | undefined,
     song: LibraryChart,
-    path: Lr2SpecialGraphic,
+    path: LR2SpecialGraphic,
     cacheKey: string,
     onLoaded: () => void,
   ): Promise<void> {
@@ -146,7 +146,7 @@ export class Lr2ChartGraphicTextureStore {
         return;
       }
       if (this.disposed) {
-        destroyTextureAndRevokeBlobUrl(texture, true);
+        destroyTextureAndRevokeBlobURL(texture, true);
         return;
       }
       this.textures.set(cacheKey, texture);
@@ -157,7 +157,7 @@ export class Lr2ChartGraphicTextureStore {
   }
 }
 
-export function collectSelectSkinTexturePaths(skin: Lr2Skin): Set<string> {
+export function collectSelectSkinTexturePaths(skin: LR2Skin): Set<string> {
   return collectSkinTexturePaths(skin, [
     addImageTexturePaths,
     addNumberTexturePaths,
@@ -173,18 +173,18 @@ export function collectSelectSkinTexturePaths(skin: Lr2Skin): Set<string> {
   ]);
 }
 
-export function collectResultSkinTexturePaths(skin: Lr2Skin): Set<string> {
+export function collectResultSkinTexturePaths(skin: LR2Skin): Set<string> {
   return collectBaseSkinTexturePaths(skin);
 }
 
-export function collectDecideSkinTexturePaths(skin: Lr2Skin): Set<string> {
+export function collectDecideSkinTexturePaths(skin: LR2Skin): Set<string> {
   return collectSkinTexturePaths(skin, [addImageTexturePaths, addNumberTexturePaths]);
 }
 
-function resolveSpecialGraphicAssetPath(song: LibraryChart, path: Lr2SpecialGraphic): string | undefined {
+function resolveSpecialGraphicAssetPath(song: LibraryChart, path: LR2SpecialGraphic): string | undefined {
   const meta = song.chart.metadata;
   return path === LR2_SPECIAL_GRAPHIC.BACKBMP
-    ? meta.backBmp
+    ? meta.backBMP
     : path === LR2_SPECIAL_GRAPHIC.BANNER
       ? meta.banner
       : path === LR2_SPECIAL_GRAPHIC.STAGEFILE
@@ -192,7 +192,7 @@ function resolveSpecialGraphicAssetPath(song: LibraryChart, path: Lr2SpecialGrap
         : undefined;
 }
 
-function collectBaseSkinTexturePaths(skin: Lr2Skin): Set<string> {
+function collectBaseSkinTexturePaths(skin: LR2Skin): Set<string> {
   return collectSkinTexturePaths(skin, [
     addImageTexturePaths,
     addNumberTexturePaths,
@@ -201,7 +201,7 @@ function collectBaseSkinTexturePaths(skin: Lr2Skin): Set<string> {
   ]);
 }
 
-function collectSkinTexturePaths(skin: Lr2Skin, collectors: readonly SkinTexturePathCollector[]): Set<string> {
+function collectSkinTexturePaths(skin: LR2Skin, collectors: readonly SkinTexturePathCollector[]): Set<string> {
   const paths = new Set<string>();
   for (const collector of collectors) {
     collector(paths, skin);
@@ -209,51 +209,51 @@ function collectSkinTexturePaths(skin: Lr2Skin, collectors: readonly SkinTexture
   return paths;
 }
 
-function addImageTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addImageTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.images);
 }
 
-function addNumberTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addNumberTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.numbers);
 }
 
-function addBargraphTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addBargraphTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.bargraphs);
 }
 
-function addSliderTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addSliderTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.sliders);
 }
 
-function addBarBodyTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addBarBodyTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.barLayout.bodies);
 }
 
-function addBarLevelTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addBarLevelTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.barLayout.levels);
 }
 
-function addBarLampTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addBarLampTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.barLayout.lamps);
 }
 
-function addBarRankTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addBarRankTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.barLayout.ranks);
 }
 
-function addButtonTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addButtonTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.buttons);
 }
 
-function addOnMouseTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addOnMouseTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.onMouseElements);
 }
 
-function addMouseCursorTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+function addMouseCursorTexturePaths(paths: Set<string>, skin: LR2Skin): void {
   addSourceTexturePaths(paths, skin.mouseCursors);
 }
 
-function addBarFlashTexturePath(paths: Set<string>, skin: Lr2Skin): void {
+function addBarFlashTexturePath(paths: Set<string>, skin: LR2Skin): void {
   if (skin.barLayout.flash) {
     addSkinTexturePath(paths, skin.barLayout.flash.source.imagePath);
   }
@@ -266,22 +266,22 @@ function addSourceTexturePaths(paths: Set<string>, elements: readonly SkinTextur
 }
 
 function addSkinTexturePath(paths: Set<string>, path: string): void {
-  if (!isLr2SpecialGraphic(path)) {
+  if (!isLR2SpecialGraphic(path)) {
     paths.add(path);
   }
 }
 
-export function resolveSolidSpecialGraphicTexture(path: Lr2SpecialGraphic): Texture | undefined {
+export function resolveSolidSpecialGraphicTexture(path: LR2SpecialGraphic): Texture | undefined {
   return path === LR2_SPECIAL_GRAPHIC.BLACK || path === LR2_SPECIAL_GRAPHIC.WHITE ? Texture.WHITE : undefined;
 }
 
-function chartGraphicCacheKey(song: LibraryChart, path: Lr2SpecialGraphic): string {
+function chartGraphicCacheKey(song: LibraryChart, path: LR2SpecialGraphic): string {
   return `${song.id}:${path}`;
 }
 
 function destroyTextureMap(textures: Map<string, Texture>): void {
   for (const texture of textures.values()) {
-    destroyTextureAndRevokeBlobUrl(texture, true);
+    destroyTextureAndRevokeBlobURL(texture, true);
   }
   textures.clear();
 }

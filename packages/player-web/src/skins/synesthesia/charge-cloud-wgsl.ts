@@ -478,7 +478,7 @@ function program(source: string, name: string): GpuProgram {
   });
 }
 
-export interface ChargeCloudGpuPrograms {
+export interface ChargeCloudGPUPrograms {
   velocity: GpuProgram;
   position: GpuProgram;
   particles: GpuProgram;
@@ -486,10 +486,10 @@ export interface ChargeCloudGpuPrograms {
   splat: GpuProgram;
 }
 
-let programs: ChargeCloudGpuPrograms | undefined;
+let programs: ChargeCloudGPUPrograms | undefined;
 
 /** The charge cloud's WGSL programs, built once. */
-export function chargeCloudGpuPrograms(): ChargeCloudGpuPrograms {
+export function chargeCloudGPUPrograms(): ChargeCloudGPUPrograms {
   programs ??= {
     velocity: program(VELOCITY_WGSL, 'charge-cloud-velocity'),
     position: program(POSITION_WGSL, 'charge-cloud-position'),

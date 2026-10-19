@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { computePlayFingerprint, createPlayFingerprintDocument } from '@be-music/chart';
-import { parseBms } from '@be-music/parser';
+import { parseBMS } from '@be-music/parser';
 import { checkFingerprintDocument } from './documents.ts';
 
-const json = parseBms(['#BPM 150', '#00111:01020102', '#00112:0001'].join('\n'));
+const json = parseBMS(['#BPM 150', '#00111:01020102', '#00112:0001'].join('\n'));
 const fingerprint = computePlayFingerprint(json, { chartPath: undefined });
 const document = createPlayFingerprintDocument(json, { chartPath: undefined });
 

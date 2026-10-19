@@ -2,21 +2,21 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
-import { createEmptyJson } from '../../json/src/index.ts';
-import { parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from '../../parser/src/index.ts';
+import { createEmptyJSON } from '../../json/src/index.ts';
+import { parseBmson, parseChart, parseChartFile, resolveBMSControlFlow } from '../../parser/src/index.ts';
 import {
   resolveRuleset,
   rulesetChartFactsFromChart,
   type JudgeWindowSetUs,
   type PlaylogRulesetId,
 } from '../../player/src/ruleset/index.ts';
-import { stringifyBms, stringifyBmson } from './index.ts';
+import { stringifyBMS, stringifyBmson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('stringifier', () => {
   test('BMS stringify: generates measure resolution from fractional positions', () => {
-    const json = createEmptyJson('json');
+    const json = createEmptyJSON('json');
     json.metadata.title = 'Stringify BMS Test';
     json.metadata.artist = 'Codex';
     json.resources.wav['01'] = 'sample.wav';
@@ -27,7 +27,7 @@ describe('stringifier', () => {
       { measure: 0, channel: '11', position: [3, 4], value: '01' },
     ];
 
-    const text = stringifyBms(json);
+    const text = stringifyBMS(json);
     const lines = text.split('\n');
     const sections = [
       'METADATA',
@@ -70,7 +70,7 @@ describe('stringifier', () => {
   });
 
   test('bmson stringify: generates lines from measure lengths when IR has no lines', () => {
-    const json = createEmptyJson('json');
+    const json = createEmptyJSON('json');
     json.metadata.title = 'Lines Fallback Test';
     json.metadata.artist = 'Codex';
     json.metadata.bpm = 120;
@@ -88,9 +88,9 @@ describe('stringifier', () => {
   });
 
   test('BMS stringify: preserves and writes controlFlow', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    const json = await parseChartFile(unifiedBMSChartPath);
 
-    const output = stringifyBms(json);
+    const output = stringifyBMS(json);
     expect(output).toMatch(/#SETRANDOM 2/);
     expect(output).toMatch(/#IF 2/);
     expect(output).toMatch(/#02012:01/);
@@ -103,9 +103,9 @@ describe('stringifier', () => {
   });
 
   test('BMS stringify: writes extension headers', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    const json = await parseChartFile(unifiedBMSChartPath);
 
-    const output = stringifyBms(json);
+    const output = stringifyBMS(json);
     expect(output).toMatch(/#PREVIEW sample\.wav/);
     expect(output).toMatch(/#PLAYER 3/);
     expect(output).toMatch(/#PATH_WAV \.\//);
@@ -139,10 +139,10 @@ describe('stringifier', () => {
   });
 
   test('BMS stringify: writes multiple LNOBJ declarations in order', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.bms.lnObjs = ['AA', 'BB'];
 
-    const output = stringifyBms(json);
+    const output = stringifyBMS(json);
     const lnObjLines = output
       .split('\n')
       .filter((line) => line.startsWith('#LNOBJ '))
@@ -151,10 +151,10 @@ describe('stringifier', () => {
   });
 
   test('BMS stringify: writes SPEED indexed headers', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.bms.speed = { '01': 1, '02': 0.5 };
 
-    const output = stringifyBms(json);
+    const output = stringifyBMS(json);
     expect(output).toMatch(/#SPEED01 1/);
     expect(output).toMatch(/#SPEED02 0\.5/);
   });
@@ -175,7 +175,7 @@ describe('stringifier', () => {
       ].join('\n'),
     );
 
-    const output = stringifyBms(parsed);
+    const output = stringifyBMS(parsed);
     const measureLines = output.split('\n').filter((line) => line.startsWith('#00102:'));
     const objectLines = output.split('\n').filter((line) => /^#001(13|01|A6):/.test(line));
 
@@ -206,7 +206,7 @@ describe('stringifier', () => {
       '',
     ].join('\n');
 
-    const output = stringifyBms(parseChart(input));
+    const output = stringifyBMS(parseChart(input));
 
     expect(output.split('\n')).toEqual([
       '#RANDOM 2',
@@ -226,7 +226,7 @@ describe('stringifier', () => {
     const parsed = parseChart(['#00113:11', '#00113:22', ''].join('\n'));
     parsed.events.push({ measure: 1, channel: '13', position: [1, 2], value: '33' });
 
-    const output = stringifyBms(parsed);
+    const output = stringifyBMS(parsed);
     const objectLines = output.split('\n').filter((line) => line.startsWith('#00113:'));
 
     expect(objectLines).toEqual(['#00113:2233']);
@@ -236,7 +236,7 @@ describe('stringifier', () => {
     const parsed = parseChart(['#TITLE Original', '#00111:11', ''].join('\n'));
     parsed.metadata.title = 'Changed';
 
-    const output = stringifyBms(parsed);
+    const output = stringifyBMS(parsed);
 
     expect(output).toContain('*---------------------- METADATA FIELD');
     expect(output).toContain('#TITLE Changed');
@@ -342,7 +342,7 @@ describe('stringifier', () => {
   });
 
   test('BMS stringify: handles maxResolution/eol options and controlFlow objects', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.title = 'Options';
     json.metadata.artist = 'Codex';
     json.metadata.extras = {
@@ -375,7 +375,7 @@ describe('stringifier', () => {
       },
     ];
 
-    const output = stringifyBms(json, { maxResolution: 4, eol: '\r\n' });
+    const output = stringifyBMS(json, { maxResolution: 4, eol: '\r\n' });
     expect(output).toContain('#CUSTOM YES');
     expect(output).not.toContain('#PLAYER ignored-as-extra');
     expect(output).toContain('#00011:0001');
@@ -386,7 +386,7 @@ describe('stringifier', () => {
   });
 
   test('BMS stringify: writes optional metadata and sorts extension/resource entries', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.title = 'Sort Check';
     json.metadata.subtitle = 'Sub';
     json.metadata.artist = 'Codex';
@@ -407,9 +407,9 @@ describe('stringifier', () => {
 
     json.bms.changeOption = { '0B': 'MIRROR', '0A': 'RANDOM' };
     json.bms.exRank = { '0B': '120,90,60,30', '0A': '100,80,50,20' };
-    json.bms.exWav = { '0B': 'b.wav', '0A': 'a.wav' };
-    json.bms.exBmp = { '0B': 'b.bmp', '0A': 'a.bmp' };
-    json.bms.swBga = { '0B': '0B', '0A': '0A' };
+    json.bms.exWAV = { '0B': 'b.wav', '0A': 'a.wav' };
+    json.bms.exBMP = { '0B': 'b.bmp', '0A': 'a.bmp' };
+    json.bms.swBGA = { '0B': '0B', '0A': '0A' };
 
     json.resources.bpm = { '0B': 180, '0A': 150 };
     json.resources.stop = { '0B': 64, '0A': 32 };
@@ -424,7 +424,7 @@ describe('stringifier', () => {
       { measure: 0, channel: '11', position: [0, 1], value: '01' },
     ];
 
-    const output = stringifyBms(json);
+    const output = stringifyBMS(json);
 
     expect(output).toContain('#SUBTITLE Sub');
     expect(output).toContain('#PLAYLEVEL 7');
@@ -454,42 +454,42 @@ describe('stringifier', () => {
   });
 
   test('BMS stringify: writes string PLAYLEVEL values as-is', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.title = 'String Level';
     json.metadata.artist = 'Codex';
     json.metadata.playLevel = '安心';
 
-    const output = stringifyBms(json);
+    const output = stringifyBMS(json);
 
     expect(output).toContain('#PLAYLEVEL 安心');
   });
 
   test('BMS stringify: writes #RANK 4 without normalization', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.title = 'Rank 4';
     json.metadata.bpm = 130;
     json.metadata.rank = 4;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
 
-    const output = stringifyBms(json);
+    const output = stringifyBMS(json);
 
     expect(output).toContain('#RANK 4');
   });
 
   test('BMS stringify: writes #DEFEXRANK decimals without normalization', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.title = 'DefExRank';
     json.metadata.bpm = 130;
     json.bms.defExRank = 199.97;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
 
-    const output = stringifyBms(json);
+    const output = stringifyBMS(json);
 
     expect(output).toContain('#DEFEXRANK 199.97');
   });
 
   test('bmson stringify: handles resolution/version/lines normalization and fallback metadata', () => {
-    const json = createEmptyJson('json');
+    const json = createEmptyJSON('json');
     json.metadata.title = 'Fallback';
     json.metadata.artist = 'Composer';
     json.metadata.genre = 'Genre';
@@ -554,8 +554,8 @@ describe('stringifier', () => {
     expect(document.stop_events[0].duration).toBe(960);
   });
 
-  test('stringifier: stringifyBms/stringifyBmson handle equivalent chart content', () => {
-    const demo = createEmptyJson('json');
+  test('stringifier: stringifyBMS/stringifyBmson handle equivalent chart content', () => {
+    const demo = createEmptyJSON('json');
     demo.metadata.title = 'Demo Chart';
     demo.metadata.artist = 'unknown';
     demo.resources.wav['01'] = 'kick.wav';
@@ -566,7 +566,7 @@ describe('stringifier', () => {
       { measure: 1, channel: '11', position: [1, 2], value: '01' },
     ];
 
-    const bms = stringifyBms(demo);
+    const bms = stringifyBMS(demo);
     const bmson = stringifyBmson(demo);
     expect(bms).toContain('#TITLE Demo Chart');
     expect(bmson).toContain('"sound_channels"');
@@ -580,7 +580,7 @@ describe('stringifier', () => {
     // Re-parsing the stringified output must yield an equivalent chart. We assert at the JSON level (not raw line text)
     // because the stringifier may reorder or rewrap lines — what matters is that the case-sensitive base-62 IDs survive
     // intact.
-    const output = stringifyBms(parsed);
+    const output = stringifyBMS(parsed);
     expect(output).toContain('#BASE 62');
 
     const reparsed = parseChart(output);
@@ -598,7 +598,7 @@ describe('stringifier', () => {
     const parsed = parseChart(['#TITLE Before', '#WAVCMD 00 01 48', '#WAVCMD 01 02 50', '#00111:01', ''].join('\n'));
     parsed.metadata.title = 'After';
 
-    const output = stringifyBms(parsed);
+    const output = stringifyBMS(parsed);
 
     expect(output).toContain('#TITLE After');
     expect(output.split('\n').filter((line) => line.startsWith('#WAVCMD'))).toEqual([
@@ -609,11 +609,11 @@ describe('stringifier', () => {
   });
 
   test('BMS stringify: falls back to the legacy `wavCmd` when `wavCmds` is empty', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.bms.wavCmd = '00 01 48';
 
     expect(
-      stringifyBms(json)
+      stringifyBMS(json)
         .split('\n')
         .filter((line) => line.startsWith('#WAVCMD')),
     ).toEqual(['#WAVCMD 00 01 48']);
@@ -714,7 +714,7 @@ describe('stringifier', () => {
   });
 
   test('bmson stringify: writes a 24 KEY chart as keyboard-24k with fixed x lanes, wheel included', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.resources.wav['01'] = 'key.wav';
     json.events = ['11', '1A', '1O', '1P', '1Q', 'DQ'].map((channel, index) => ({
       measure: 0,
@@ -893,10 +893,10 @@ describe('stringifier', () => {
     // Force the re-generated layout, which writes every top-level header before the control flow.
     json.preservation.bms.sourceLines = [];
     json.preservation.bms.objectLines = [];
-    const output = stringifyBms(json);
+    const output = stringifyBMS(json);
 
     expect(output).not.toContain('branch-loses.wav');
-    const resolved = resolveBmsControlFlow(parseChart(output), { random: () => 0 });
+    const resolved = resolveBMSControlFlow(parseChart(output), { random: () => 0 });
     expect(resolved.resources.wav['01']).toBe('branch-wins.wav');
     expect(resolved.resources.wav['02']).toBe('top-after.wav');
   });

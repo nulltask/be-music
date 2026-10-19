@@ -10,13 +10,13 @@ export const MIN_BGA_ASCII_HEIGHT = 6;
 export const DEFAULT_TERMINAL_COLUMNS = 120;
 export const PLAY_PROGRESS_INDICATOR_SIDE_WIDTH = 1;
 
-interface TuiLayoutOptions {
+interface TUILayoutOptions {
   showLaneChannels?: boolean;
   hasRandomPatternSummary?: boolean;
   hasAudioDebugLine?: boolean;
 }
 
-interface TuiBgaDisplaySizeOptions extends TuiLayoutOptions {
+interface TuiBGADisplaySizeOptions extends TUILayoutOptions {
   laneWidths: number[];
   splitAfterIndex: number;
   columns?: number;
@@ -27,7 +27,7 @@ export function resolveLaneWidths(lanes: ReadonlyArray<{ isScratch?: boolean }>)
   return lanes.map((lane) => (lane.isScratch ? WIDE_SCRATCH_LANE_WIDTH : DEFAULT_LANE_WIDTH));
 }
 
-export function calculateTuiReservedLineCount(options: TuiLayoutOptions): number {
+export function calculateTUIReservedLineCount(options: TUILayoutOptions): number {
   return (
     BASE_TUI_RESERVED_LINES +
     (options.showLaneChannels ? 1 : 0) +
@@ -36,13 +36,13 @@ export function calculateTuiReservedLineCount(options: TuiLayoutOptions): number
   );
 }
 
-export function calculateTuiGridRowCount(rows: number | undefined, options: TuiLayoutOptions): number {
-  const reservedLineCount = calculateTuiReservedLineCount(options);
+export function calculateTUIGridRowCount(rows: number | undefined, options: TUILayoutOptions): number {
+  const reservedLineCount = calculateTUIReservedLineCount(options);
   const terminalRows = rows ?? DEFAULT_GRID_ROWS + reservedLineCount;
   return Math.max(MIN_GRID_ROWS, terminalRows - reservedLineCount);
 }
 
-export function calculateTuiLaneLinesCount(rowCount: number, showLaneChannels = false): number {
+export function calculateTUILaneLinesCount(rowCount: number, showLaneChannels = false): number {
   return rowCount + 3 + (showLaneChannels ? 1 : 0);
 }
 
@@ -64,7 +64,7 @@ export function calculateLaneBlockVisibleWidth(laneWidths: number[], splitAfterI
   );
 }
 
-export function estimateBgaAnsiDisplaySize(options: TuiBgaDisplaySizeOptions): { width: number; height: number } {
+export function estimateBgaANSIDisplaySize(options: TuiBGADisplaySizeOptions): { width: number; height: number } {
   const width = Math.max(
     MIN_BGA_ASCII_WIDTH,
     (options.columns ?? DEFAULT_TERMINAL_COLUMNS) -
@@ -72,10 +72,10 @@ export function estimateBgaAnsiDisplaySize(options: TuiBgaDisplaySizeOptions): {
       calculateProgressIndicatorVisibleWidth(options.laneWidths, options.splitAfterIndex) -
       BGA_LANE_GAP,
   );
-  const rowCount = calculateTuiGridRowCount(options.rows, options);
+  const rowCount = calculateTUIGridRowCount(options.rows, options);
   const height = Math.max(
     MIN_BGA_ASCII_HEIGHT,
-    calculateTuiLaneLinesCount(rowCount, Boolean(options.showLaneChannels)),
+    calculateTUILaneLinesCount(rowCount, Boolean(options.showLaneChannels)),
   );
   return { width, height };
 }

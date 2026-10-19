@@ -3,7 +3,7 @@ import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/ch
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { applyHighSpeedControlAction, type HighSpeedControlAction } from './high-speed-control.ts';
 import { type PlayerInputCommand, type PlayerInputSignalBus } from './input-signal-bus.ts';
-import { type PlayerUiFramePayload, type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import { type PlayerUIFramePayload, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type TempoClock } from './tempo-clock.ts';
 import type { PlayerTempoChange } from './engine-types.ts';
 
@@ -50,7 +50,7 @@ export interface PlaybackStateLogger {
       endSeconds?: number;
     },
   ) => void;
-  logResult: (seconds: number, params: { reason: string; summary: PlayerUiFramePayload['summary'] }) => void;
+  logResult: (seconds: number, params: { reason: string; summary: PlayerUIFramePayload['summary'] }) => void;
 }
 
 export function createNoopPlaybackStateLogger(): PlaybackStateLogger {
@@ -62,18 +62,18 @@ export function createNoopPlaybackStateLogger(): PlaybackStateLogger {
   };
 }
 
-export function createUiFramePublisher(params: {
+export function createUIFramePublisher(params: {
   uiEnabled: boolean;
-  uiSignals: PlayerUiSignalBus;
+  uiSignals: PlayerUISignalBus;
   totalSeconds: number;
-  summary: PlayerUiFramePayload['summary'];
-  notes: PlayerUiFramePayload['notes'];
-  landmineNotes?: PlayerUiFramePayload['landmineNotes'];
-  invisibleNotes?: PlayerUiFramePayload['invisibleNotes'];
+  summary: PlayerUIFramePayload['summary'];
+  notes: PlayerUIFramePayload['notes'];
+  landmineNotes?: PlayerUIFramePayload['landmineNotes'];
+  invisibleNotes?: PlayerUIFramePayload['invisibleNotes'];
   audioBackend: string;
   resolveDebugActiveAudioState: (
     seconds: number,
-  ) => Pick<PlayerUiFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>;
+  ) => Pick<PlayerUIFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>;
   /**
    * LR2 negative-BPM reversal anchor. Past `seconds`, frames carry a display beat mirrored in chart-POSITION space —
    * `displayBeat = 2 * beat - currentBeat` — exactly like LR2's `songtimer = 2 * bpmChangedBmstime - songtimer`

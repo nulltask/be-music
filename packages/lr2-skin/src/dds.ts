@@ -12,7 +12,7 @@
  * - DX10 extended headers (`fourCC === 'DX10'`)
  * - Non-32-bit uncompressed pixel formats (R5G6B5, A1R5G5B5, etc.)
  *
- * Themes using those will return `undefined` from {@link decodeDdsImageData} and the caller falls back to whatever
+ * Themes using those will return `undefined` from {@link decodeDDSImageData} and the caller falls back to whatever
  * "skin asset missing" path it has. Extending coverage later is straightforward — the header parsing here recovers
  * the fields the decoder would need.
  *
@@ -20,7 +20,7 @@
  */
 
 /** Decoded image ready to hand to `createImageBitmap` / `Texture.from`. RGBA byte order; 8 bits per channel. */
-export interface DecodedDdsImage {
+export interface DecodedDDSImage {
   width: number;
   height: number;
   /** RGBA8888 pixel data, row-major, top-to-bottom. Length === `width * height * 4`. */
@@ -52,7 +52,7 @@ const DDPF_FOURCC = 0x04;
  * The decoder swizzles BGRA → RGBA on the fly so the returned buffer is directly usable with `createImageBitmap` /
  * `ImageData` constructors.
  */
-export function decodeDdsImageData(bytes: Uint8Array): DecodedDdsImage | undefined {
+export function decodeDDSImageData(bytes: Uint8Array): DecodedDDSImage | undefined {
   if (bytes.length < DDS_HEADER_SIZE) return undefined;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (view.getUint32(0, true) !== DDS_MAGIC) return undefined;

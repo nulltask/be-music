@@ -205,7 +205,7 @@ describe('composeBeatorajaValueCells (audit A-3 — upstream-faithful 24-cell ze
     });
 
     it('11-cell single-strip with zp forced to 2: leading slots are pad cell 10', () => {
-      // `JsonSkinObjectLoader.java:151` forces zeropadding=2 for d=11. Our parser handles this
+      // `JSONSkinObjectLoader.java:151` forces zeropadding=2 for d=11. Our parser handles this
       // dispatch internally via `divx === 11 → zp=2`.
       const cells = composeBeatorajaValueCells(dualStrip({ divx: 11 }), 12);
       expect(cells.map((c) => c.cell)).toEqual([10, 10, 1, 2]);

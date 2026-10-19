@@ -33,12 +33,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 3,
       "lnType": 1,
       "lnMode": 1
@@ -141,7 +141,7 @@
       "randomPatterns": [],
       "title": "LN 9-key Test (POPN)",
       "playVariant": "9",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -184,8 +184,8 @@
           "percent": 75
         },
         "noteCount": 26,
-        "chartFingerprint": "bmfp0:6c7cefcc3b95212d3a9e04ded74a0c03f07c30d0ead94acd10d7e9063fe33c10",
-        "playFingerprint": "bmfp0:6c7cefcc3b95212d3a9e04ded74a0c03f07c30d0ead94acd10d7e9063fe33c10",
+        "chartFingerprint": "bmfp0:2834248bfdbdbf1c9a62fe040360cefe2f87df9128a0c7eeeeceaf2034c5f091",
+        "playFingerprint": "bmfp0:2834248bfdbdbf1c9a62fe040360cefe2f87df9128a0c7eeeeceaf2034c5f091",
         "title": "LN 9-key Test (POPN)",
         "subtitle": "Pop'n 9-key LN — channels 11..19, keys Z S X D C F V G B",
         "artist": "be-music",

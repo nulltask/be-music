@@ -1,16 +1,16 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { Lr2Turntable } from './play-turntable.ts';
+import { LR2Turntable } from './play-turntable.ts';
 
 const PLAYING = { introPlaying: false, paused: false };
 
 /** The turntable after a first update at `start`, so the next one integrates. */
-function started(start = 1000): Lr2Turntable {
-  const turntable = new Lr2Turntable();
+function started(start = 1000): LR2Turntable {
+  const turntable = new LR2Turntable();
   turntable.update(start, PLAYING);
   return turntable;
 }
 
-describe('Lr2Turntable', () => {
+describe('LR2Turntable', () => {
   test('spins forward at one turn a second while nobody scratches', () => {
     const turntable = started();
     turntable.update(1500, PLAYING);

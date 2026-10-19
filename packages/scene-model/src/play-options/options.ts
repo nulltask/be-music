@@ -25,12 +25,12 @@ export interface PlayOptions {
    * When `'AUTOPLAY_ONLY'` the BGA renders only when {@link autoPlay} (or a start in AUTO) is also active — matches
    * LR2 behavior where AUTOPLAY ONLY hides BGA during regular human-played sessions.
    */
-  bga: BgaMode;
+  bga: BGAMode;
   /**
    * BGA frame size — `'NORMAL'` uses the skin's default `#DST_BGA` rect (op 30), `'EXTEND'` uses the larger variant
    * gated on op 31. Mirrors `#SRC_BUTTON,type=73`.
    */
-  bgaSize: BgaSize;
+  bgaSize: BGASize;
   /**
    * Score-graph (per-judge prediction line) display flag. Mirrors `#SRC_BUTTON,type=70` and ops 38 (off) / 39 (on). The
    * LR2 default skin gates its score-graph chrome on op 39 — toggling this on reveals those elements without needing a
@@ -66,7 +66,7 @@ export interface PlayOptions {
    * - `'CONSTANT'` — adjusts HS at every BPM change so visual scroll is exactly constant. Falls back to `'AVERAGE'`
    *   behavior for now (per-frame BPM-aware scroll requires a render-pipeline change that hasn't landed yet).
    */
-  hsFix: HsFix;
+  hsFix: HSFix;
   /**
    * 1P-side HIDDEN / SUDDEN effect picked from `#SRC_BUTTON,type=50`. Cycles OFF → HIDDEN → SUDDEN → HID+SUD on each
    * click. Drives the opaque mask over the 1P keyboard / scratch lanes. SP charts only render this side; DP charts pair
@@ -132,7 +132,7 @@ export interface PlayOptions {
 }
 
 /** Allowed values for {@link PlayOptions.hsFix}. */
-export type HsFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
+export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
 
 /** Allowed values for {@link PlayOptions.hiddenSudden1P} / `hiddenSudden2P`: which ends of the lanes are covered. */
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
@@ -141,10 +141,10 @@ export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 export type RandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
 
 /** Allowed values for {@link PlayOptions.bga}. */
-export type BgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
+export type BGAMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
 
 /** Allowed values for {@link PlayOptions.bgaSize}. */
-export type BgaSize = 'NORMAL' | 'EXTEND';
+export type BGASize = 'NORMAL' | 'EXTEND';
 
 /** The choices of each enum / on-off play option, in their LR2 button cycle order: what a skin can pick from. */
 export type PlayOptionChoices = {

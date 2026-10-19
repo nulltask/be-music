@@ -1,10 +1,10 @@
 import { resolveChart, type ResolvedChart } from '@be-music/chart';
 import {
-  createEmptyJson,
+  createEmptyJSON,
   normalizeChannel,
   normalizeObjectKey,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 import type { NonstopConnection } from '../definition.ts';
 import { NonstopKeyAllocator } from './ids.ts';
@@ -24,7 +24,7 @@ import { createNonstopStageTiming } from './stage.ts';
 
 /** One stage to stitch: its BMS chart with control flow resolved, and whether it is a `.pms` chart. */
 export interface NonstopStageInput {
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   pms?: boolean;
 }
 
@@ -83,7 +83,7 @@ export interface NonstopStitchStage {
 export interface NonstopStitchMap {
   stages: NonstopStitchStage[];
   /**
-   * What the BPM readouts show over the play ({@link resolveNonstopTempo}, look it up with `nonstopBpmAt`): each
+   * What the BPM readouts show over the play ({@link resolveNonstopTempo}, look it up with `nonstopBPMAt`): each
    * stage's own BPM, scaled by its FIT rate, where the stitched chart itself runs at 150 BPM.
    */
   tempo: NonstopTempoPoint[];
@@ -95,7 +95,7 @@ export interface NonstopStitchMap {
 }
 
 export type StitchNonstopResult =
-  | { ok: true; chart: BeMusicJson; map: NonstopStitchMap }
+  | { ok: true; chart: BeMusicJSON; map: NonstopStitchMap }
   | { ok: false; reason: 'bmson' | 'id-space' | 'no-stage' | 'stitch-version'; stage?: number };
 
 /** The stitched chart's tempo: LR2 scrolls a NONSTOP play at `realtime × 1.2` per 1920-unit measure, 150 BPM. */
@@ -170,13 +170,13 @@ export function stitchNonstopCourse(
   const wavKeys = new NonstopKeyAllocator();
   const bmpKeys = new NonstopKeyAllocator();
   const stopKeys = new NonstopKeyAllocator();
-  const chart = createEmptyJson('bms');
+  const chart = createEmptyJSON('bms');
   chart.bms.base = 62;
   const objects: StitchedObject[] = [];
   const stops: StitchedStop[] = [];
   const barLines: number[] = [];
-  const stageWav: string[][] = stages.map(() => []);
-  const stageBmp: string[][] = stages.map(() => []);
+  const stageWAV: string[][] = stages.map(() => []);
+  const stageBMP: string[][] = stages.map(() => []);
 
   for (let index = 0; index < stages.length; index += 1) {
     const source = stages[index]!.chart;
@@ -190,7 +190,7 @@ export function stitchNonstopCourse(
       if (stitched === undefined) return undefined;
       if (!known.has(`w${stitched}`)) {
         known.add(`w${stitched}`);
-        stageWav[index]!.push(stitched);
+        stageWAV[index]!.push(stitched);
         const path = source.resources.wav[key];
         if (path !== undefined) chart.resources.wav[stitched] = assetPath(index, 'wav', path);
       }
@@ -201,7 +201,7 @@ export function stitchNonstopCourse(
       if (stitched === undefined) return undefined;
       if (!known.has(`b${stitched}`)) {
         known.add(`b${stitched}`);
-        stageBmp[index]!.push(stitched);
+        stageBMP[index]!.push(stitched);
         const path = source.resources.bmp[key];
         if (path !== undefined) chart.resources.bmp[stitched] = assetPath(index, 'bmp', path);
       }
@@ -249,9 +249,9 @@ export function stitchNonstopCourse(
     ...stageNoteHeads(objects, index),
     tempo: resolved[index]!.timing.tempoPoints.map((point) => ({
       seconds: point.seconds,
-      bpm: point.displayBpm ?? point.bpm,
+      bpm: point.displayBPM ?? point.bpm,
     })),
-    headerBpm: stage.chart.metadata.bpm,
+    headerBPM: stage.chart.metadata.bpm,
     ...(stage.chart.metadata.rank !== undefined ? { rank: stage.chart.metadata.rank } : {}),
   }));
 
@@ -272,8 +272,8 @@ export function stitchNonstopCourse(
           placement,
           windowStart: Math.max(0, windows[index]!.start),
           windowEnd: windows[index]!.end,
-          wavKeys: stageWav[index]!,
-          bmpKeys: stageBmp[index]!,
+          wavKeys: stageWAV[index]!,
+          bmpKeys: stageBMP[index]!,
           ...(fadeOut !== undefined ? { soundFadeOut: { start: boundary, end: boundary + fadeOut } } : {}),
           ...(fadeIn !== undefined ? { soundFadeIn: { start: previousBoundary - fadeIn, end: previousBoundary } } : {}),
           ...(after !== undefined ? { bgaFadeOut: { start: boundary, end: boundary + BGA_FADE_SECONDS } } : {}),
@@ -411,7 +411,7 @@ function scrollSeconds(seconds: number, stops: readonly StitchedStop[]): number 
  * position its scroll time gives, and each STOP becomes a `#STOP` of its exact length (in 1/192 of a 150-BPM measure).
  */
 function layOnGrid(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   objects: readonly StitchedObject[],
   stops: StitchedStop[],
   barLineSeconds: readonly number[],

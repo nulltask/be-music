@@ -10,19 +10,19 @@ import {
   KEYS_FILTER_CYCLE,
   RANDOM_CYCLE,
   SORT_CYCLE,
-  type BgaMode,
+  type BGAMode,
   type DifficultyFilter,
   type PlayOptions,
 } from '@be-music/scene-model';
 import { LR2_BUTTON, LR2_NUM, LR2_OP, LR2_SLIDER, LR2_TEXT } from '../ids/index.ts';
 
 /** Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH. */
-export function isLr2RedGauge(gauge: GaugeType): boolean {
+export function isLR2RedGauge(gauge: GaugeType): boolean {
   return gauge === 'HARD' || gauge === 'DEATH';
 }
 
 /** Whether the BGA shows: ON, or AUTOPLAY ONLY while AUTOPLAY is on. */
-export function isLr2BgaShown(bga: BgaMode, autoPlay: boolean): boolean {
+export function isLR2BGAShown(bga: BGAMode, autoPlay: boolean): boolean {
   return bga === 'ON' || (bga === 'AUTOPLAY_ONLY' && autoPlay);
 }
 
@@ -31,15 +31,15 @@ export function isLr2BgaShown(bga: BgaMode, autoPlay: boolean): boolean {
  * score graph (38 / 39), each side's auto scratch (54-57) and gauge (42-45: HARD and DEATH are the red gauges) and the
  * difficulty filter (46 / 47).
  */
-export function resolveLr2PlayOptionOps(options: PlayOptions): number[] {
+export function resolveLR2PlayOptionOps(options: PlayOptions): number[] {
   return [
-    isLr2BgaShown(options.bga, options.autoPlay) ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF,
+    isLR2BGAShown(options.bga, options.autoPlay) ? LR2_OP.BGA_ON : LR2_OP.BGA_OFF,
     options.bgaSize === 'EXTEND' ? LR2_OP.BGA_EXTEND : LR2_OP.BGA_NORMAL,
     options.scoreGraph ? LR2_OP.SCORE_GRAPH_ON : LR2_OP.SCORE_GRAPH_OFF,
     options.autoScratch1P ? LR2_OP.AUTO_SCRATCH_1P_ON : LR2_OP.AUTO_SCRATCH_1P_OFF,
     options.autoScratch2P ? LR2_OP.AUTO_SCRATCH_2P_ON : LR2_OP.AUTO_SCRATCH_2P_OFF,
-    isLr2RedGauge(options.gauge1P) ? LR2_OP.GAUGE_1P_RED : LR2_OP.GAUGE_1P_NORMAL,
-    isLr2RedGauge(options.gauge2P) ? LR2_OP.GAUGE_2P_RED : LR2_OP.GAUGE_2P_NORMAL,
+    isLR2RedGauge(options.gauge1P) ? LR2_OP.GAUGE_1P_RED : LR2_OP.GAUGE_1P_NORMAL,
+    isLR2RedGauge(options.gauge2P) ? LR2_OP.GAUGE_2P_RED : LR2_OP.GAUGE_2P_NORMAL,
     options.difficultyFilter !== 'ALL' ? LR2_OP.DIFFICULTY_FILTER_ON : LR2_OP.DIFFICULTY_FILTER_OFF,
   ];
 }
@@ -77,7 +77,7 @@ function playStyleLabel(keyModeOp: number | undefined): string {
  * the selected chart's key-mode op (`SINGLE` without one). The options be-music does not have read as their off
  * setting. `undefined` for any other text.
  */
-export function resolveLr2OptionText(
+export function resolveLR2OptionText(
   st: number,
   options: PlayOptions,
   keyModeOp: number | undefined,
@@ -140,7 +140,7 @@ export function resolveLr2OptionText(
  * The option numbers (10-15): each side's hi-speed × 100 (both sides read the one hi-speed). The judge timing, the
  * target rate and the lane cover numbers read 0 until the options exist. `undefined` for any other number.
  */
-export function resolveLr2OptionNumber(num: number, options: Pick<PlayOptions, 'hiSpeed'>): number | undefined {
+export function resolveLR2OptionNumber(num: number, options: Pick<PlayOptions, 'hiSpeed'>): number | undefined {
   switch (num) {
     case LR2_NUM.HISPEED_1P:
     case LR2_NUM.HISPEED_2P:
@@ -159,7 +159,7 @@ export function resolveLr2OptionNumber(num: number, options: Pick<PlayOptions, '
  * The hi-speed and lane cover sliders (2-5): each side's hi-speed over the hi-speed range and the lane cover height
  * (both sides read the one setting). `undefined` for any other slider.
  */
-export function resolveLr2OptionSlider(
+export function resolveLR2OptionSlider(
   type: number,
   options: Pick<PlayOptions, 'hiSpeed' | 'shutter'>,
 ): number | undefined {
@@ -191,7 +191,7 @@ function cell<T>(choices: readonly T[], value: T): number {
  * value in its LR2 cycle order (an on / off option: 0 off, 1 on; a direct difficulty button: 1 while its difficulty
  * is the filter). `undefined` for any other button; the caller clamps it to the button's cells.
  */
-export function resolveLr2OptionButton(type: number, options: PlayOptions): number | undefined {
+export function resolveLR2OptionButton(type: number, options: PlayOptions): number | undefined {
   switch (type) {
     case LR2_BUTTON.BGA:
       return cell(BGA_CYCLE, options.bga);

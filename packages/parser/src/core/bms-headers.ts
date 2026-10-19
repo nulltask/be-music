@@ -1,4 +1,4 @@
-import { normalizeObjectKey, type BeMusicJson } from '@be-music/json';
+import { normalizeObjectKey, type BeMusicJSON } from '@be-music/json';
 
 const INDEXED_HEADER_COMMAND =
   /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Za-z]{2})$/;
@@ -40,7 +40,7 @@ export function resolveHeaderDefinitionKey(command: string, commandRaw: string, 
 }
 
 export function pushHeaderLine(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   command: string,
   commandRaw: string,
   value: string,
@@ -79,7 +79,7 @@ export function pushHeaderLine(
       json.metadata.stageFile = value;
       return;
     case 'BACKBMP':
-      json.metadata.backBmp = value;
+      json.metadata.backBMP = value;
       return;
     case 'BANNER':
       json.metadata.banner = value;
@@ -137,7 +137,7 @@ export function pushHeaderLine(
       return;
     case 'VOLWAV':
       if (Number.isFinite(numericValue) && numericValue >= 0) {
-        json.bms.volWav = numericValue;
+        json.bms.volWAV = numericValue;
       }
       return;
     case 'DEFEXRANK':
@@ -152,12 +152,12 @@ export function pushHeaderLine(
       return;
     case 'PATH_WAV':
       if (value.length > 0) {
-        json.bms.pathWav = value;
+        json.bms.pathWAV = value;
       }
       return;
     case 'BASEBPM':
       if (Number.isFinite(numericValue) && numericValue > 0) {
-        json.bms.baseBpm = numericValue;
+        json.bms.baseBPM = numericValue;
       }
       return;
     case 'STP':
@@ -184,7 +184,7 @@ export function pushHeaderLine(
       return;
     case 'POORBGA':
       if (value.length > 0) {
-        json.bms.poorBga = value;
+        json.bms.poorBGA = value;
       }
       return;
     case 'VIDEOFILE':
@@ -214,7 +214,7 @@ export function pushHeaderLine(
       return;
     case 'BASE':
       // `#BASE 62` is the beatoraja base-62 ID extension. The base was already resolved during pre-scan
-      // (`detectBmsBase`) and stamped onto `json.bms.base` before this header reaches us; swallow the directive here so
+      // (`detectBMSBase`) and stamped onto `json.bms.base` before this header reaches us; swallow the directive here so
       // it doesn't leak into `metadata.extras`.
       return;
     default:
@@ -239,7 +239,7 @@ function parsePlayLevelValue(value: string): number | string | undefined {
 }
 
 function applyIndexedHeaderLine(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   directive: IndexedHeaderDirective,
   key: string,
   value: string,
@@ -264,10 +264,10 @@ function applyIndexedHeaderLine(
       applyIndexedStringValue(json.bms.changeOption, key, value);
       return;
     case 'EXWAV':
-      applyIndexedStringValue(json.bms.exWav, key, value);
+      applyIndexedStringValue(json.bms.exWAV, key, value);
       return;
     case 'EXBMP':
-      applyIndexedStringValue(json.bms.exBmp, key, value);
+      applyIndexedStringValue(json.bms.exBMP, key, value);
       return;
     case 'BGA':
       applyIndexedStringValue(json.bms.bga, key, value);
@@ -281,7 +281,7 @@ function applyIndexedHeaderLine(
       return;
     }
     case 'SWBGA':
-      applyIndexedStringValue(json.bms.swBga, key, value);
+      applyIndexedStringValue(json.bms.swBGA, key, value);
       return;
     case 'BPM':
     case 'STOP': {

@@ -1,7 +1,7 @@
 import type {
-  BeMusicJson,
+  BeMusicJSON,
   BeMusicPosition,
-  BmsonBpmEventEntry,
+  BmsonBPMEventEntry,
   BmsonKeyChannelEntry,
   BmsonMineChannelEntry,
   BmsonMineNoteEntry,
@@ -37,7 +37,7 @@ interface BmsonLine {
   y: number;
 }
 
-export interface BmsonBpmEvent {
+export interface BmsonBPMEvent {
   y: number;
   bpm: number;
 }
@@ -86,7 +86,7 @@ export interface BmsonDocument {
   info?: BmsonInfo;
   lines?: Array<number | BmsonLine>;
   resolution?: number;
-  bpm_events?: BmsonBpmEvent[];
+  bpm_events?: BmsonBPMEvent[];
   stop_events?: BmsonStopEvent[];
   /** beatoraja extension — scroll speed changes, read as BMS `#SCROLLxx` on channel `SC`. */
   scroll_events?: BmsonScrollEvent[];
@@ -261,12 +261,12 @@ export function normalizeBmsonLines(lines: unknown): number[] {
   return sorted;
 }
 
-export function normalizeBmsonBpmEvents(input: unknown): BmsonBpmEventEntry[] {
+export function normalizeBmsonBPMEvents(input: unknown): BmsonBPMEventEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
 
-  const events: BmsonBpmEventEntry[] = [];
+  const events: BmsonBPMEventEntry[] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       continue;
@@ -479,8 +479,8 @@ function normalizeBmsonLongNoteType(value: unknown): 1 | 2 | 3 | undefined {
   return undefined;
 }
 
-export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): BeMusicJson['bmson']['info'] {
-  const normalized: BeMusicJson['bmson']['info'] = {};
+export function normalizeBmsonInfoForIR(info: BmsonInfo, resolution: number): BeMusicJSON['bmson']['info'] {
+  const normalized: BeMusicJSON['bmson']['info'] = {};
   copyIfString(normalized, 'title', info.title);
   copyIfString(normalized, 'subtitle', info.subtitle);
   copyIfString(normalized, 'artist', info.artist);
@@ -502,7 +502,7 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
   // fallback (`undefined` → no displayed level) is what the chart's level shows in the UI. Non-integer inputs are
   // floored to honor the spec's `unsigned long` type.
   copyIfNonNegativeInteger(normalized, 'level', info.level);
-  copyIfFiniteNumber(normalized, 'initBpm', info.init_bpm);
+  copyIfFiniteNumber(normalized, 'initBPM', info.init_bpm);
   // bmson 1.0.0 spec — `judge_rank` describes "the width of judgment window" with the spec text only making sense for
   // positive values ("smaller than 100" / "larger than 100" are framed relative to the player's default; 0 / negative
   // would mean a zero-or-inverted window). Drop the field for non-positive inputs so the consumer falls back to the
@@ -527,7 +527,7 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
   return normalized;
 }
 
-export function normalizeBmsonBgaForIr(input: BmsonDocument['bga'] | undefined): BeMusicJson['bmson']['bga'] {
+export function normalizeBmsonBGAForIR(input: BmsonDocument['bga'] | undefined): BeMusicJSON['bmson']['bga'] {
   if (!input || typeof input !== 'object') {
     return {
       header: [],
@@ -537,15 +537,15 @@ export function normalizeBmsonBgaForIr(input: BmsonDocument['bga'] | undefined):
     };
   }
   return {
-    header: normalizeBmsonBgaHeaderEntries(input.bga_header),
-    events: normalizeBmsonBgaEventEntries(input.bga_events),
-    layerEvents: normalizeBmsonBgaEventEntries(input.layer_events),
-    poorEvents: normalizeBmsonBgaEventEntries(input.poor_events),
+    header: normalizeBmsonBGAHeaderEntries(input.bga_header),
+    events: normalizeBmsonBGAEventEntries(input.bga_events),
+    layerEvents: normalizeBmsonBGAEventEntries(input.layer_events),
+    poorEvents: normalizeBmsonBGAEventEntries(input.poor_events),
   };
 }
 
-export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
-  const normalized: BeMusicJson['bmson'] = {
+export function normalizeBmsonExtensions(input: unknown): BeMusicJSON['bmson'] {
+  const normalized: BeMusicJSON['bmson'] = {
     info: {},
     bga: {
       header: [],
@@ -563,8 +563,8 @@ export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
     normalized.version = raw.version;
   }
 
-  normalized.info = normalizeBmsonInfoFromIr(raw.info);
-  normalized.bga = normalizeBmsonBgaFromIr(raw.bga);
+  normalized.info = normalizeBmsonInfoFromIR(raw.info);
+  normalized.bga = normalizeBmsonBGAFromIR(raw.bga);
   if (raw.barlinesSuppressed === true) {
     normalized.barlinesSuppressed = true;
   }
@@ -578,11 +578,11 @@ function laneIndexToChannel(index: number): string {
   return `${first}${second}`;
 }
 
-function normalizeBmsonBgaHeaderEntries(input: unknown): BeMusicJson['bmson']['bga']['header'] {
+function normalizeBmsonBGAHeaderEntries(input: unknown): BeMusicJSON['bmson']['bga']['header'] {
   if (!Array.isArray(input)) {
     return [];
   }
-  const entries: BeMusicJson['bmson']['bga']['header'] = [];
+  const entries: BeMusicJSON['bmson']['bga']['header'] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       continue;
@@ -600,11 +600,11 @@ function normalizeBmsonBgaHeaderEntries(input: unknown): BeMusicJson['bmson']['b
   return entries;
 }
 
-function normalizeBmsonBgaEventEntries(input: unknown): BeMusicJson['bmson']['bga']['events'] {
+function normalizeBmsonBGAEventEntries(input: unknown): BeMusicJSON['bmson']['bga']['events'] {
   if (!Array.isArray(input)) {
     return [];
   }
-  const entries: BeMusicJson['bmson']['bga']['events'] = [];
+  const entries: BeMusicJSON['bmson']['bga']['events'] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       continue;
@@ -794,8 +794,8 @@ function normalizePositiveInteger(value: unknown): number | undefined {
   return normalized;
 }
 
-function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] {
-  const info: BeMusicJson['bmson']['info'] = {};
+function normalizeBmsonInfoFromIR(input: unknown): BeMusicJSON['bmson']['info'] {
+  const info: BeMusicJSON['bmson']['info'] = {};
   if (!input || typeof input !== 'object') {
     return info;
   }
@@ -817,10 +817,10 @@ function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] 
     info.subartists = subartists;
   }
 
-  // Match `normalizeBmsonInfoForIr`'s spec-compliant unsigned- integer + positive + abs handling for the re-parse path
+  // Match `normalizeBmsonInfoForIR`'s spec-compliant unsigned- integer + positive + abs handling for the re-parse path
   // so JSON round-trips don't reintroduce a negative / float level / judge_rank / total.
   copyIfNonNegativeInteger(info, 'level', raw.level);
-  copyIfFiniteNumber(info, 'initBpm', raw.initBpm ?? raw.init_bpm);
+  copyIfFiniteNumber(info, 'initBPM', raw.initBPM ?? raw.initBpm ?? raw.init_bpm);
   copyIfPositiveFiniteNumber(info, 'judgeRank', raw.judgeRank ?? raw.judge_rank);
   copyIfFiniteNumberAbs(info, 'total', raw.total);
   const lnType = normalizeBmsonLongNoteType(raw.lnType ?? raw.ln_type);
@@ -836,7 +836,7 @@ function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] 
   return info;
 }
 
-function normalizeBmsonBgaFromIr(input: unknown): BeMusicJson['bmson']['bga'] {
+function normalizeBmsonBGAFromIR(input: unknown): BeMusicJSON['bmson']['bga'] {
   if (!input || typeof input !== 'object') {
     return {
       header: [],
@@ -847,10 +847,10 @@ function normalizeBmsonBgaFromIr(input: unknown): BeMusicJson['bmson']['bga'] {
   }
   const raw = input as Record<string, unknown>;
   return {
-    header: normalizeBmsonBgaHeaderEntries(raw.header ?? raw.bga_header),
-    events: normalizeBmsonBgaEventEntries(raw.events ?? raw.bga_events),
-    layerEvents: normalizeBmsonBgaEventEntries(raw.layerEvents ?? raw.layer_events),
-    poorEvents: normalizeBmsonBgaEventEntries(raw.poorEvents ?? raw.poor_events),
+    header: normalizeBmsonBGAHeaderEntries(raw.header ?? raw.bga_header),
+    events: normalizeBmsonBGAEventEntries(raw.events ?? raw.bga_events),
+    layerEvents: normalizeBmsonBGAEventEntries(raw.layerEvents ?? raw.layer_events),
+    poorEvents: normalizeBmsonBGAEventEntries(raw.poorEvents ?? raw.poor_events),
   };
 }
 

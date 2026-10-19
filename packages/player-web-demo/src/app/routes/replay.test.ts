@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { BrowserDroppedFile, BrowserSongCollection } from '@be-music/player-web/collection';
 import { parsePlaylog, type BeMusicPlaylog } from '@be-music/player/playlog';
 import type { LibraryChart } from '@be-music/scene-model';
@@ -19,7 +19,7 @@ function song(id: string, changes: Partial<LibraryChart> = {}): LibraryChart {
     title: id,
     artist: 'artist',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
     ...changes,
   };
 }
@@ -47,7 +47,7 @@ function harness() {
   const deps = {
     library: { collection: { sources: [], charts, errors: [] } as BrowserSongCollection },
     records: {
-      resolveChartSha256: vi.fn<ReplayRouteDeps['records']['resolveChartSha256']>(async (chart) => `sha-${chart.id}`),
+      resolveChartSHA256: vi.fn<ReplayRouteDeps['records']['resolveChartSHA256']>(async (chart) => `sha-${chart.id}`),
     },
     setStatus: vi.fn<ReplayRouteDeps['setStatus']>(),
     setPlayStatus: vi.fn<ReplayRouteDeps['setPlayStatus']>(),

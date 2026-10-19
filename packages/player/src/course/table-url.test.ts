@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { fetchTableHeaderCourses, resolveTableHeaderUrl } from './index.ts';
+import { fetchTableHeaderCourses, resolveTableHeaderURL } from './index.ts';
 
 const MD5_A = '0123456789abcdef0123456789abcdef';
 const HEADER = {
@@ -22,43 +22,43 @@ function stubFetch(pages: Record<string, string>): { fetchText: (url: string) =>
   };
 }
 
-describe('resolveTableHeaderUrl', () => {
+describe('resolveTableHeaderURL', () => {
   const page = 'https://example.com/sl/table.html';
 
   test('resolves the bmstable meta content against the page URL', () => {
-    expect(resolveTableHeaderUrl(page, '<head><meta name="bmstable" content="header.json"></head>')).toBe(
+    expect(resolveTableHeaderURL(page, '<head><meta name="bmstable" content="header.json"></head>')).toBe(
       'https://example.com/sl/header.json',
     );
-    expect(resolveTableHeaderUrl(page, '<meta content="/tables/h.json" name="bmstable" />')).toBe(
+    expect(resolveTableHeaderURL(page, '<meta content="/tables/h.json" name="bmstable" />')).toBe(
       'https://example.com/tables/h.json',
     );
   });
 
   test('accepts any quoting and case, and decodes entities', () => {
-    expect(resolveTableHeaderUrl(page, "<META NAME='BMSTable' CONTENT='./a/header.json'>")).toBe(
+    expect(resolveTableHeaderURL(page, "<META NAME='BMSTable' CONTENT='./a/header.json'>")).toBe(
       'https://example.com/sl/a/header.json',
     );
-    expect(resolveTableHeaderUrl(page, '<meta name=bmstable content=header.json>')).toBe(
+    expect(resolveTableHeaderURL(page, '<meta name=bmstable content=header.json>')).toBe(
       'https://example.com/sl/header.json',
     );
-    expect(resolveTableHeaderUrl(page, '<meta name="bmstable" content="h.json?a=1&amp;b=2">')).toBe(
+    expect(resolveTableHeaderURL(page, '<meta name="bmstable" content="h.json?a=1&amp;b=2">')).toBe(
       'https://example.com/sl/h.json?a=1&b=2',
     );
-    expect(resolveTableHeaderUrl(page, '<meta name="bmstable" content="https://cdn.example.org/h.json">')).toBe(
+    expect(resolveTableHeaderURL(page, '<meta name="bmstable" content="https://cdn.example.org/h.json">')).toBe(
       'https://cdn.example.org/h.json',
     );
   });
 
   test('skips other meta tags and returns undefined without a bmstable meta', () => {
     expect(
-      resolveTableHeaderUrl(
+      resolveTableHeaderURL(
         page,
         '<meta charset="utf-8"><meta name="viewport" content="x"><meta name="bmstable" content="h.json">',
       ),
     ).toBe('https://example.com/sl/h.json');
-    expect(resolveTableHeaderUrl(page, '<meta name="description" content="header.json">')).toBeUndefined();
-    expect(resolveTableHeaderUrl(page, '<meta name="bmstable" content="">')).toBeUndefined();
-    expect(resolveTableHeaderUrl('not a url', '<meta name="bmstable" content="h.json">')).toBeUndefined();
+    expect(resolveTableHeaderURL(page, '<meta name="description" content="header.json">')).toBeUndefined();
+    expect(resolveTableHeaderURL(page, '<meta name="bmstable" content="">')).toBeUndefined();
+    expect(resolveTableHeaderURL('not a url', '<meta name="bmstable" content="h.json">')).toBeUndefined();
   });
 });
 
@@ -70,7 +70,7 @@ describe('fetchTableHeaderCourses', () => {
     });
     const result = await fetchTableHeaderCourses('https://example.com/sl/table.html', fetchText);
     expect(result.label).toBe('Example table');
-    expect(result.headerUrl).toBe('https://example.com/sl/header.json');
+    expect(result.headerURL).toBe('https://example.com/sl/header.json');
     expect(result.courses.map((course) => course.name)).toEqual(['ex0', 'ex1']);
     // The song list behind data_url is never fetched.
     expect(fetched).toEqual(['https://example.com/sl/table.html', 'https://example.com/sl/header.json']);

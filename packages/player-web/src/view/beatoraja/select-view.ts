@@ -27,7 +27,7 @@ import {
   BEATORAJA_SORTS,
   beatorajaClearLampOp,
   beatorajaKeysFilterIndex,
-  beatorajaLnModeIndex,
+  beatorajaLNModeIndex,
   beatorajaSortIndex,
   resolveBeatorajaSelectSliderValue,
 } from '@be-music/beatoraja-skin/scene';
@@ -265,7 +265,7 @@ export class BeatorajaSelectView implements SelectView {
       resolveFontKind: fonts !== undefined ? (id) => fonts.kind(id) : undefined,
       // The focused chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` (-100 / -101 / -102), its BPM and notes graphs.
       chartImageProvider: (id) => this.chartImages.resolveChartImageForFocus(id),
-      resolveBpmGraphData: () => this.chartImages.resolveBpmGraphDataForFocus(),
+      resolveBPMGraphData: () => this.chartImages.resolveBPMGraphDataForFocus(),
       resolveNoteDistribution: () => this.chartImages.resolveNoteDistributionForFocus(),
     });
     const stage = new BeatorajaSkinStage(view);
@@ -400,13 +400,13 @@ export class BeatorajaSelectView implements SelectView {
         return;
       }
       case BEATORAJA_BUTTON.LNMODE:
-        this.stepLnMode(step);
+        this.stepLNMode(step);
         return;
       case BEATORAJA_BUTTON.JUDGE_TIMING:
         this.stepJudgeTiming(step);
         return;
       case BEATORAJA_BUTTON.OPEN_IR_WEBSITE:
-        openIrWebsite();
+        openIRWebsite();
         return;
       default:
         // The replay slots, key config, skin select and the community extensions (GdbG's volume, 900) do nothing yet.
@@ -419,11 +419,11 @@ export class BeatorajaSelectView implements SelectView {
    * Steps the LNMODE button's choice (LN / CN / HCN), starting from the focused chart's own `#LNMODE` the first time,
    * so the first press moves on from what the button showed.
    */
-  private stepLnMode(step: number): void {
+  private stepLNMode(step: number): void {
     const focused = this.frame?.entries[this.frame.cursor];
     const current =
       this.lnModeOverride ??
-      beatorajaLnModeIndex(focused?.kind === 'chart' ? focused.chart.chart.bms?.lnMode : undefined);
+      beatorajaLNModeIndex(focused?.kind === 'chart' ? focused.chart.chart.bms?.lnMode : undefined);
     this.lnModeOverride = ((((current + step) % 3) + 3) % 3) as 0 | 1 | 2;
   }
 
@@ -522,7 +522,7 @@ function stepIndex(index: number, step: number, count: number): number {
  * beatoraja players use. The chart's MD5 is not worked out, so it opens the site's ranking page for the player to
  * search; `noopener` keeps the site from reaching back into the player.
  */
-function openIrWebsite(): void {
+function openIRWebsite(): void {
   if (typeof window === 'undefined') return;
   window.open('http://www.dream-pro.info/~lavalse/LR2IR/search.cgi?mode=ranking', '_blank', 'noopener,noreferrer');
 }

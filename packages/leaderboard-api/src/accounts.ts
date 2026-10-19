@@ -1,6 +1,6 @@
 import { and, count, eq } from 'drizzle-orm';
 import type { Database } from './db/client.ts';
-import { avatarUrl } from './avatars.ts';
+import { avatarURL } from './avatars.ts';
 import { refreshPlayedChartListings } from './charts.ts';
 import { passkey, profile, user } from './db/schema.ts';
 
@@ -35,7 +35,7 @@ export async function loadAccount(db: Database, userId: string): Promise<Account
     displayName: row.displayName,
     anonymous: row.anonymous === true,
     passkeys,
-    avatarUrl: avatarUrl(row.handle, row.avatarKey),
+    avatarUrl: avatarURL(row.handle, row.avatarKey),
   };
 }
 

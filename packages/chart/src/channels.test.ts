@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { isPlayableNormalizedChannel, mapBmsLongNoteNormalizedChannelToPlayable } from './channels.ts';
+import { isPlayableNormalizedChannel, mapBMSLongNoteNormalizedChannelToPlayable } from './channels.ts';
 
 describe('normalized channel helpers', () => {
   test('isPlayableNormalizedChannel accepts the 1P / 2P lane channels, classic and extended', () => {
@@ -11,11 +11,11 @@ describe('normalized channel helpers', () => {
     }
   });
 
-  test('mapBmsLongNoteNormalizedChannelToPlayable maps 5x / 6x onto the 1x / 2x lane', () => {
-    expect(mapBmsLongNoteNormalizedChannelToPlayable('51')).toBe('11');
-    expect(mapBmsLongNoteNormalizedChannelToPlayable('5A')).toBe('1A');
-    expect(mapBmsLongNoteNormalizedChannelToPlayable('69')).toBe('29');
-    expect(mapBmsLongNoteNormalizedChannelToPlayable('11')).toBeUndefined();
-    expect(mapBmsLongNoteNormalizedChannelToPlayable('50')).toBeUndefined();
+  test('mapBMSLongNoteNormalizedChannelToPlayable maps 5x / 6x onto the 1x / 2x lane', () => {
+    expect(mapBMSLongNoteNormalizedChannelToPlayable('51')).toBe('11');
+    expect(mapBMSLongNoteNormalizedChannelToPlayable('5A')).toBe('1A');
+    expect(mapBMSLongNoteNormalizedChannelToPlayable('69')).toBe('29');
+    expect(mapBMSLongNoteNormalizedChannelToPlayable('11')).toBeUndefined();
+    expect(mapBMSLongNoteNormalizedChannelToPlayable('50')).toBeUndefined();
   });
 });

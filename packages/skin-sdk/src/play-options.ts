@@ -1,10 +1,10 @@
 import type {
-  BgaMode,
-  BgaSize,
+  BGAMode,
+  BGASize,
   BrowseSort,
   DifficultyFilter,
   HiddenSuddenMode,
-  HsFix,
+  HSFix,
   KeysFilter,
   PlayOptions,
   RandomMode,
@@ -30,7 +30,7 @@ export type BeMusicKeysFilter = KeysFilter;
 export type BeMusicSelectSort = BrowseSort;
 
 /** Allowed values for {@link BeMusicPlayOptions.hsFix}. */
-export type BeMusicHsFix = HsFix;
+export type BeMusicHSFix = HSFix;
 
 /** Allowed values for {@link BeMusicPlayOptions.hiddenSudden1P} / `hiddenSudden2P`. */
 export type BeMusicHiddenSudden = HiddenSuddenMode;
@@ -42,7 +42,7 @@ export type BeMusicRandomMode = RandomMode;
 export type BeMusicGaugeType = GaugeType;
 
 /** Allowed values for {@link BeMusicPlayOptions.bga}. */
-export type BeMusicBgaMode = BgaMode;
+export type BeMusicBGAMode = BGAMode;
 
 /** Allowed values for {@link BeMusicPlayOptions.bgaSize}. */
-export type BeMusicBgaSize = BgaSize;
+export type BeMusicBGASize = BGASize;

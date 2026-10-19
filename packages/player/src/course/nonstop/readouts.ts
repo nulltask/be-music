@@ -14,7 +14,7 @@ export interface NonstopStageReadoutInput {
    */
   tempo: readonly NonstopTempoPoint[];
   /** The header `#BPM`, when the chart has one. */
-  headerBpm?: number;
+  headerBPM?: number;
   /** The header `#RANK`, when the chart has one. */
   rank?: number;
   /** Stitched seconds of the stage's first and last judged note heads, when it has any. */
@@ -71,7 +71,7 @@ export function resolveNonstopTempo(
     }));
     const window = stageWindow(placements, index);
     if (lr2) {
-      const own = index > 0 && stage.headerBpm === undefined ? stitched.slice(1) : stitched;
+      const own = index > 0 && stage.headerBPM === undefined ? stitched.slice(1) : stitched;
       points.push(...own.filter((point) => point.seconds < window.end));
       return;
     }
@@ -85,7 +85,7 @@ export function resolveNonstopTempo(
 }
 
 /** The BPM a NONSTOP readout shows at stitched `seconds` ({@link resolveNonstopTempo}); the first one before it. */
-export function nonstopBpmAt(tempo: readonly NonstopTempoPoint[], seconds: number): number | undefined {
+export function nonstopBPMAt(tempo: readonly NonstopTempoPoint[], seconds: number): number | undefined {
   let low = 0;
   let high = tempo.length - 1;
   let found = -1;

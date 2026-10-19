@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { avatarUrl, detectAvatarType, generatedAvatarSvg } from './avatars.ts';
+import { avatarURL, detectAvatarType, generatedAvatarSVG } from './avatars.ts';
 
 const bytes = (...values: number[]) => new Uint8Array(values);
 
@@ -19,18 +19,18 @@ describe('detectAvatarType', () => {
 
 describe('avatarUrl', () => {
   test('versions the URL by the upload hash, or marks the generated icon', () => {
-    expect(avatarUrl('dj_taro', null)).toBe('/players/dj_taro/avatar?v=g');
-    expect(avatarUrl('dj_taro', `avatars/u1/${'0123456789abcdef'.repeat(4)}.webp`)).toBe(
+    expect(avatarURL('dj_taro', null)).toBe('/players/dj_taro/avatar?v=g');
+    expect(avatarURL('dj_taro', `avatars/u1/${'0123456789abcdef'.repeat(4)}.webp`)).toBe(
       '/players/dj_taro/avatar?v=0123456789abcdef',
     );
   });
 });
 
-describe('generatedAvatarSvg', () => {
+describe('generatedAvatarSVG', () => {
   test('draws the same picture for the same account and different ones for others', () => {
-    const first = generatedAvatarSvg('user-1');
-    expect(first).toBe(generatedAvatarSvg('user-1'));
-    expect(first).not.toBe(generatedAvatarSvg('user-2'));
+    const first = generatedAvatarSVG('user-1');
+    expect(first).toBe(generatedAvatarSVG('user-1'));
+    expect(first).not.toBe(generatedAvatarSVG('user-2'));
     expect(first).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
   });
 });

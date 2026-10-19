@@ -1,7 +1,7 @@
 import { dirname } from 'node:path';
 import { isAbortError } from '@be-music/utils/core';
 import readline from 'node:readline';
-import { loadTerminalAnsiImage, type TerminalAnsiImage } from '../bga.ts';
+import { loadTerminalANSIImage, type TerminalANSIImage } from '../bga.ts';
 import type { ImageResizeAlgorithm } from '@be-music/player/display';
 import {
   buildKittyGraphicsDeleteImageSequence,
@@ -72,9 +72,9 @@ interface MusicSelectBannerLayout {
 }
 
 interface MusicSelectBannerState {
-  cache: Map<string, TerminalAnsiImage | null>;
+  cache: Map<string, TerminalANSIImage | null>;
   activeCacheKey?: string;
-  activeImage?: TerminalAnsiImage;
+  activeImage?: TerminalANSIImage;
   loadController?: AbortController;
   loadSequence: number;
   kittyVisible: boolean;
@@ -264,7 +264,7 @@ function resolveMusicSelectBannerDisplayWidth(lineWidth: number): number {
 
 function createMusicSelectBannerState(): MusicSelectBannerState {
   return {
-    cache: new Map<string, TerminalAnsiImage | null>(),
+    cache: new Map<string, TerminalANSIImage | null>(),
     loadSequence: 0,
     kittyVisible: false,
   };
@@ -318,7 +318,7 @@ function syncMusicSelectBanner(params: {
   const controller = new AbortController();
   params.state.loadController = controller;
   const requestSequence = ++params.state.loadSequence;
-  void loadTerminalAnsiImage(dirname(params.entry.filePath), params.entry.bannerPath, {
+  void loadTerminalANSIImage(dirname(params.entry.filePath), params.entry.bannerPath, {
     width: bannerWidth,
     height: MUSIC_SELECT_BANNER_HEIGHT,
     signal: controller.signal,

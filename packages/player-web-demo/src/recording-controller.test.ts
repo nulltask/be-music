@@ -9,7 +9,7 @@ import {
 
 vi.mock('@be-music/player-web/recording', () => ({
   downloadBlob: vi.fn(),
-  makeWebmSeekable: vi.fn(async (blob: Blob) => blob),
+  makeWebMSeekable: vi.fn(async (blob: Blob) => blob),
   recordingFileExtension: () => 'webm',
 }));
 

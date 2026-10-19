@@ -24,10 +24,10 @@ import {
   type BeatorajaNoteBreakdown,
   type BeatorajaResultInput,
 } from '@be-music/beatoraja-skin/scene';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { LibraryChart, PlayResult } from '@be-music/scene-model';
 import type { Container } from 'pixi.js';
-import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
+import { computeBeatorajaBPMCurve, type BPMCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
@@ -77,11 +77,11 @@ export function resolveBeatorajaResultPointerIntent(pointerType: string): Result
 /** What the result skin reads of one result, worked out once per result ({@link readBeatorajaResult}). */
 export interface BeatorajaResultReading {
   readonly result: PlayResult;
-  readonly playChart: BeMusicJson | undefined;
+  readonly playChart: BeMusicJSON | undefined;
   readonly input: BeatorajaResultInput;
   /** The run's ops (rank, verdict, lamp, judgments, course stage). */
   readonly ops: readonly number[];
-  readonly bpmCurve: readonly BpmCurvePoint[];
+  readonly bpmCurve: readonly BPMCurvePoint[];
   /** Every timed judgment, as the timing distribution graph reads them. */
   readonly timings: readonly { deltaMs: number; kind: string }[];
 }
@@ -129,7 +129,7 @@ export class BeatorajaResultView implements ResultView {
         resolveGraphPolyline: (type) => this.read((input) => resolveBeatorajaResultPolyline(type, input)),
         resolveGaugePercent: () => this.read((input) => resolveBeatorajaResultGaugePercent(input)),
         resolveJudgeGraphBars: (type) => this.read((input) => resolveBeatorajaResultJudgeGraph(type, input)),
-        resolveBpmGraphPoints: () => {
+        resolveBPMGraphPoints: () => {
           const curve = this.reading?.bpmCurve;
           return curve !== undefined && curve.length > 0 ? curve : undefined;
         },
@@ -250,7 +250,7 @@ export class BeatorajaResultView implements ResultView {
  */
 export function readBeatorajaResult(
   result: PlayResult,
-  playChart: BeMusicJson | undefined,
+  playChart: BeMusicJSON | undefined,
   skin: Pick<BeatorajaSkin, 'name' | 'author'>,
 ): BeatorajaResultReading {
   let breakdown: BeatorajaNoteBreakdown | undefined;
@@ -271,7 +271,7 @@ export function readBeatorajaResult(
     playChart,
     input,
     ops: resolveBeatorajaResultOps(input),
-    bpmCurve: playChart !== undefined ? computeBeatorajaBpmCurve(playChart) : [],
+    bpmCurve: playChart !== undefined ? computeBeatorajaBPMCurve(playChart) : [],
     timings: (result.judgeTimings ?? []).map((timing) => ({ deltaMs: timing.deltaMs, kind: timing.judge })),
   };
 }

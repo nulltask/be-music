@@ -1,39 +1,39 @@
-import * as editorApi from '@be-music/editor';
+import * as editorAPI from '@be-music/editor';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 export function registerEditorExportsCases(define: DefineBenchmarkCase): void {
   define('editor.importChart', {
     ioBound: true,
     run: async (fixtures) => {
-      await editorApi.importChart(fixtures.paths.bmsPath);
+      await editorAPI.importChart(fixtures.paths.bmsPath);
     },
   });
-  define('editor.loadJsonFile', {
+  define('editor.loadJSONFile', {
     ioBound: true,
     run: async (fixtures) => {
-      await editorApi.loadJsonFile(fixtures.paths.jsonPath);
+      await editorAPI.loadJSONFile(fixtures.paths.jsonPath);
     },
   });
-  define('editor.saveJsonFile', {
+  define('editor.saveJSONFile', {
     ioBound: true,
     run: async (fixtures) => {
-      await editorApi.saveJsonFile(fixtures.paths.editorSavePath, fixtures.sampleBmsJson);
+      await editorAPI.saveJSONFile(fixtures.paths.editorSavePath, fixtures.sampleBmsJSON);
     },
   });
   define('editor.exportChart', {
     ioBound: true,
     run: async (fixtures) => {
-      await editorApi.exportChart(fixtures.paths.editorExportBmsPath, fixtures.sampleBmsJson);
+      await editorAPI.exportChart(fixtures.paths.editorExportBMSPath, fixtures.sampleBmsJSON);
     },
   });
   define('editor.setMetadata', {
     run: (fixtures) => {
-      editorApi.setMetadata(fixtures.sampleBmsJson, 'title', 'Updated by benchmark');
+      editorAPI.setMetadata(fixtures.sampleBmsJSON, 'title', 'Updated by benchmark');
     },
   });
   define('editor.addNote', {
     run: (fixtures) => {
-      editorApi.addNote(fixtures.sampleBmsJson, {
+      editorAPI.addNote(fixtures.sampleBmsJSON, {
         measure: 3,
         channel: '11',
         positionNumerator: 1,
@@ -44,7 +44,7 @@ export function registerEditorExportsCases(define: DefineBenchmarkCase): void {
   });
   define('editor.deleteNote', {
     run: (fixtures) => {
-      editorApi.deleteNote(fixtures.sampleBmsJson, {
+      editorAPI.deleteNote(fixtures.sampleBmsJSON, {
         measure: 1,
         channel: '11',
         positionNumerator: 0,
@@ -54,12 +54,12 @@ export function registerEditorExportsCases(define: DefineBenchmarkCase): void {
   });
   define('editor.listNotes', {
     run: (fixtures) => {
-      editorApi.listNotes(fixtures.sampleBmsJson, 1);
+      editorAPI.listNotes(fixtures.sampleBmsJSON, 1);
     },
   });
-  define('editor.createBlankJson', {
+  define('editor.createBlankJSON', {
     run: () => {
-      editorApi.createBlankJson();
+      editorAPI.createBlankJSON();
     },
   });
 }

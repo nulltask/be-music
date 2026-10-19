@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { parseBms, resolveBmsControlFlowWithDraws } from '../../parser/src/index.ts';
+import { parseBMS, resolveBMSControlFlowWithDraws } from '../../parser/src/index.ts';
 import { drawRandomOutcomes, type RandomDraws } from './control-flow.ts';
 import { createOutcomeComposer, expandChartFingerprintDocument } from './fingerprint-compose.ts';
 import {
@@ -156,7 +156,7 @@ function drawsFor(text: string, vector: ReadonlyArray<number>): RandomDraws {
     }
   });
   let cursor = 0;
-  return drawRandomOutcomes(parseBms(text), () => values[cursor++] ?? 0);
+  return drawRandomOutcomes(parseBMS(text), () => values[cursor++] ?? 0);
 }
 
 /** Checks every outcome of `text` against the parser and the document's distribution; returns the outcomes checked. */
@@ -165,12 +165,12 @@ function checkAgainstParser(text: string, label: string): number {
   if (!outcomes) {
     return 0;
   }
-  const json = parseBms(text);
+  const json = parseBMS(text);
   const distribution = new Map<string, bigint>();
   const compose = createOutcomeComposer(json, OPTIONS);
   for (const vector of outcomes) {
     const draws = drawsFor(text, vector);
-    const expected = createPlayFingerprintDocument(resolveBmsControlFlowWithDraws(json, draws), OPTIONS);
+    const expected = createPlayFingerprintDocument(resolveBMSControlFlowWithDraws(json, draws), OPTIONS);
     const composed = compose(draws);
     expect(composed, `${label}, outcome ${vector.join(',')}\n${text}`).toEqual(expected);
     const key = canonicalizeFingerprintDocument(expected);
@@ -261,7 +261,7 @@ describe('reviewer repros (finding A6)', () => {
       ['#BPM 150', '#RANDOM 2', '#IF 1', '#00211:01', '#IF 2', '#00212:01', '#ENDIF', '#ENDRANDOM', '#00511:01'],
     ],
     [
-      'an #IF inside a #SWITCH outside the #IFs of a #RANDOM',
+      'an #IF inside a #SWITCH outside the #IFS of a #RANDOM',
       [
         '#BPM 150',
         '#RANDOM 2',
@@ -337,7 +337,7 @@ describe('reviewer repros (finding A6)', () => {
       '#ENDRANDOM',
       '#00511:01',
     ].join('\n');
-    const compose = createOutcomeComposer(parseBms(text), OPTIONS);
+    const compose = createOutcomeComposer(parseBMS(text), OPTIONS);
     expect(compose(drawsFor(text, [1])).notes).toContainEqual({ m: '5', p: '0', lane: '11' });
     expect(compose(drawsFor(text, [2])).notes).not.toContainEqual({ m: '5', p: '0', lane: '11' });
   });
@@ -359,7 +359,7 @@ describe('reviewer repros (finding A6)', () => {
         '#ENDIF',
         '#ENDRANDOM',
       ].join('\n');
-    const chart = (lane: string): string => computeChartFingerprint(parseBms(text(lane)), OPTIONS);
+    const chart = (lane: string): string => computeChartFingerprint(parseBMS(text(lane)), OPTIONS);
     expect(chart('13')).not.toBe(chart('14'));
   });
 });
@@ -370,7 +370,7 @@ describe('evaluation budget (finding A7)', () => {
     ms: number;
     document: ReturnType<typeof createChartFingerprintDocument>;
   } {
-    const json = parseBms(text);
+    const json = parseBMS(text);
     const started = performance.now();
     const fingerprint = computeChartFingerprint(json, OPTIONS);
     const ms = performance.now() - started;

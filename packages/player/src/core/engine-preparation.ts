@@ -5,20 +5,20 @@ import {
   type RandomDraws,
   type ResolvedChart,
 } from '@be-music/chart';
-import { type BeMusicEvent, type BeMusicJson, cloneJson } from '@be-music/json';
-import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
+import { type BeMusicEvent, type BeMusicJSON, cloneJSON } from '@be-music/json';
+import { resolveBMSControlFlowWithDraws } from '@be-music/parser';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { type LaneBinding } from './lane-layout.ts';
-import { type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import { type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type RulesetConfig } from '../ruleset/index.ts';
-import { initializePlayerUiRuntime } from './bootstrap.ts';
+import { initializePlayerUIRuntime } from './bootstrap.ts';
 import { createAudioSessionIfEnabled } from './engine-audio.ts';
 import { resolveChartRulesetFacts, resolveEngineChart, resolvePlayChart } from './play-chart.ts';
 import { delay } from './engine-clock.ts';
 import {
   type AudioSession,
   type AudioSessionLoadProgress,
-  type CreatePlayerUiRuntimeContext,
+  type CreatePlayerUIRuntimeContext,
   type PlayerLoadComponentStatus,
   type PlayerLoadProgress,
   type PlayerOptions,
@@ -41,7 +41,7 @@ export function reportResolvedRuleset(options: PlayerOptions, ruleset: RulesetCo
 }
 
 interface ControlFlowResolutionResult {
-  resolvedJson: BeMusicJson;
+  resolvedJSON: BeMusicJSON;
   randomPatterns: RandomPatternSelection[];
 }
 
@@ -105,7 +105,7 @@ function createPlaybackPreparationProgressReporter(options: PlayerOptions): Play
   };
 
   return {
-    reportUiProgress: (ratio, message, detail) => {
+    reportUIProgress: (ratio, message, detail) => {
       uiRatio = Math.max(0, Math.min(1, ratio));
       graphicsStatus = createPendingLoadComponentStatus(message, detail);
       emit(message, detail);
@@ -115,7 +115,7 @@ function createPlaybackPreparationProgressReporter(options: PlayerOptions): Play
       audioStatus = resolveAudioLoadComponentStatus(progress);
       emit(progress.message, progress.detail);
     },
-    markUiReady: (enabled) => {
+    markUIReady: (enabled) => {
       graphicsStatus = enabled
         ? createReadyLoadComponentStatus('Ready')
         : createDisabledLoadComponentStatus('Disabled');
@@ -168,9 +168,9 @@ function resolveAudioLoadComponentStatus(progress: AudioSessionLoadProgress): Pl
 }
 
 interface PlaybackPreparationProgressReporter {
-  reportUiProgress: (ratio: number, message: string, detail?: string) => void;
+  reportUIProgress: (ratio: number, message: string, detail?: string) => void;
   reportAudioProgress: (progress: AudioSessionLoadProgress) => void;
-  markUiReady: (enabled: boolean) => void;
+  markUIReady: (enabled: boolean) => void;
   markAudioReady: (audioSession: AudioSession | undefined, audioRequested: boolean | undefined) => void;
 }
 
@@ -192,22 +192,22 @@ const PLAYBACK_PREPARATION_AUDIO_RATIO_WEIGHT = 0.68;
 
 const PREPARED_UI_RUNTIME_SETTLE_TIMEOUT_MS = 300;
 
-async function disposePreparedUiRuntime(
-  initializedUiRuntime: Awaited<ReturnType<typeof initializePlayerUiRuntime>>,
+async function disposePreparedUIRuntime(
+  initializedUIRuntime: Awaited<ReturnType<typeof initializePlayerUIRuntime>>,
 ): Promise<void> {
-  await settleMaybeAsyncWithTimeout(initializedUiRuntime.uiRuntime?.stop(), PREPARED_UI_RUNTIME_SETTLE_TIMEOUT_MS);
-  await settleMaybeAsyncWithTimeout(initializedUiRuntime.uiRuntime?.dispose(), PREPARED_UI_RUNTIME_SETTLE_TIMEOUT_MS);
+  await settleMaybeAsyncWithTimeout(initializedUIRuntime.uiRuntime?.stop(), PREPARED_UI_RUNTIME_SETTLE_TIMEOUT_MS);
+  await settleMaybeAsyncWithTimeout(initializedUIRuntime.uiRuntime?.dispose(), PREPARED_UI_RUNTIME_SETTLE_TIMEOUT_MS);
 }
 
 async function cleanupFailedPlaybackPreparation(
-  uiInitialization: TrackedPromise<Awaited<ReturnType<typeof initializePlayerUiRuntime>>>,
+  uiInitialization: TrackedPromise<Awaited<ReturnType<typeof initializePlayerUIRuntime>>>,
   audioInitialization: TrackedPromise<AudioSession | undefined>,
 ): Promise<void> {
   const uiState = uiInitialization.getState();
   if (uiState.status === 'fulfilled') {
-    await disposePreparedUiRuntime(uiState.value);
+    await disposePreparedUIRuntime(uiState.value);
   } else if (uiState.status === 'pending') {
-    void uiInitialization.promise.then(disposePreparedUiRuntime).catch(() => undefined);
+    void uiInitialization.promise.then(disposePreparedUIRuntime).catch(() => undefined);
   }
 
   const audioState = audioInitialization.getState();
@@ -221,10 +221,10 @@ async function cleanupFailedPlaybackPreparation(
 }
 
 export async function initializePlaybackRuntimeResources(params: {
-  resolvedJson: BeMusicJson;
+  resolvedJSON: BeMusicJSON;
   resolvedChart: ResolvedChart;
   options: PlayerOptions;
-  mode: CreatePlayerUiRuntimeContext['mode'];
+  mode: CreatePlayerUIRuntimeContext['mode'];
   laneDisplayMode: string;
   laneBindings: LaneBinding[];
   speed: number;
@@ -232,19 +232,19 @@ export async function initializePlaybackRuntimeResources(params: {
   highSpeed: number;
   randomPatternSummary: string | undefined;
   stateSignals: PlayerStateSignals;
-  uiSignals: PlayerUiSignalBus;
+  uiSignals: PlayerUISignalBus;
   totalSeconds: number;
   audioMode: 'auto' | 'manual';
 }): Promise<
-  Awaited<ReturnType<typeof initializePlayerUiRuntime>> & {
+  Awaited<ReturnType<typeof initializePlayerUIRuntime>> & {
     audioSession: AudioSession | undefined;
   }
 > {
   const progressReporter = createPlaybackPreparationProgressReporter(params.options);
   const uiInitialization = createTrackedPromise(
-    initializePlayerUiRuntime({
+    initializePlayerUIRuntime({
       options: params.options,
-      resolvedJson: params.resolvedJson,
+      resolvedJSON: params.resolvedJSON,
       mode: params.mode,
       laneDisplayMode: params.laneDisplayMode,
       laneBindings: params.laneBindings,
@@ -255,10 +255,10 @@ export async function initializePlaybackRuntimeResources(params: {
       stateSignals: params.stateSignals,
       uiSignals: params.uiSignals,
       totalSeconds: params.totalSeconds,
-      onLoadProgress: progressReporter.reportUiProgress,
-    }).then((initializedUiRuntime) => {
-      progressReporter.markUiReady(initializedUiRuntime.uiEnabled);
-      return initializedUiRuntime;
+      onLoadProgress: progressReporter.reportUIProgress,
+    }).then((initializedUIRuntime) => {
+      progressReporter.markUIReady(initializedUIRuntime.uiEnabled);
+      return initializedUIRuntime;
     }),
   );
   const audioInitialization = createTrackedPromise(
@@ -287,10 +287,10 @@ export async function initializePlaybackRuntimeResources(params: {
 
 /**
  * Draws `json`'s `#RANDOM` / `#SWITCH` outcomes with `randomSource` and resolves the chart with them, reporting the
- * `#RANDOM` / `#SETRANDOM` patterns for the summary. Shorthand for `drawRandomOutcomes` + `resolveBmsControlFlowWithDraws`.
+ * `#RANDOM` / `#SETRANDOM` patterns for the summary. Shorthand for `drawRandomOutcomes` + `resolveBMSControlFlowWithDraws`.
  */
-export function resolveBmsControlFlowForPlayback(
-  json: BeMusicJson,
+export function resolveBMSControlFlowForPlayback(
+  json: BeMusicJSON,
   randomSource: () => number = Math.random,
 ): ControlFlowResolutionResult {
   return resolvePlaybackControlFlow(json, drawRandomOutcomes(json, randomSource));
@@ -300,20 +300,20 @@ export function resolveBmsControlFlowForPlayback(
  * The engine's single control-flow step: a chart that still carries control flow is resolved exactly once with
  * `draws`; a resolved chart (no control flow) is played as is. `draws` also feed the RANDOM summary.
  */
-function resolvePlaybackControlFlow(json: BeMusicJson, draws: RandomDraws): ControlFlowResolutionResult {
+function resolvePlaybackControlFlow(json: BeMusicJSON, draws: RandomDraws): ControlFlowResolutionResult {
   return {
-    resolvedJson: hasControlFlow(json) ? resolveBmsControlFlowWithDraws(json, draws) : cloneJson(json),
+    resolvedJSON: hasControlFlow(json) ? resolveBMSControlFlowWithDraws(json, draws) : cloneJSON(json),
     randomPatterns: randomPatternsFromDraws(draws),
   };
 }
 
-export function resolvePlayerChart(json: BeMusicJson, options: PlayerOptions): ControlFlowResolutionResult {
+export function resolvePlayerChart(json: BeMusicJSON, options: PlayerOptions): ControlFlowResolutionResult {
   if (options.randomDraws === undefined && hasControlFlow(json)) {
     // The engine never draws: rolling here would give the play branches nobody outside the engine knows about (the
     // host's scene, result screen and play log would show another roll, or stack a second branch on top).
     throw new TypeError(
       'The chart still carries #RANDOM / #SWITCH control flow. Resolve it once with resolvePlayChart (or ' +
-        'drawRandomOutcomes + resolveBmsControlFlowWithDraws) and pass the draws as PlayerOptions.randomDraws.',
+        'drawRandomOutcomes + resolveBMSControlFlowWithDraws) and pass the draws as PlayerOptions.randomDraws.',
     );
   }
   return resolvePlaybackControlFlow(json, options.randomDraws ?? []);

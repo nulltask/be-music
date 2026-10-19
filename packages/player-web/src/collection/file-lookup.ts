@@ -11,7 +11,7 @@ export { isMaliciousAssetPath } from '@be-music/utils/core';
 
 /**
  * Shared case-insensitive lookup helpers for the file maps used by the song collection (`BrowserSongAssetSource.files`)
- * and the LR2 skin asset map (`Lr2Skin.files`).
+ * and the LR2 skin asset map (`LR2Skin.files`).
  *
  * Map values can be either:
  *

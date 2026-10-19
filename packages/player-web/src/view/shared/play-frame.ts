@@ -19,7 +19,7 @@ import {
 import { BG } from './play-constants.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { PerfTracker } from './perf.ts';
-import { renderBga, type BgaRendererContext } from './bga-renderer.ts';
+import { renderBGA, type BGARendererContext } from './bga-renderer.ts';
 import { renderBombs } from './playfield/bombs.ts';
 import type { PlayfieldContext } from './playfield/context.ts';
 import { renderLanes } from './playfield/lanes.ts';
@@ -32,7 +32,7 @@ import type { PlayfieldStage } from '../types.ts';
 const BE_MUSIC_ENTER_FADE_MS = 400;
 
 /** The view's members the frame passes use: a play view's members of these names. */
-export interface PlayFrameContext extends PlayfieldContext, BgaRendererContext {
+export interface PlayFrameContext extends PlayfieldContext, BGARendererContext {
   readonly options: Readonly<
     Pick<
       PlaySessionOptions,
@@ -213,7 +213,7 @@ export function render(
   // (progress ratio, time readouts, judge-until comparisons) stay on the true clock.
   const reversalSeconds = ctx.play.timingResolver?.reversal?.seconds;
   const bgaCueSeconds = reversalSeconds === undefined ? seconds : Math.min(seconds, reversalSeconds);
-  ctx.perf.time('renderBga', () => renderBga(ctx, seconds, bgaCueSeconds));
+  ctx.perf.time('renderBGA', () => renderBGA(ctx, seconds, bgaCueSeconds));
   ctx.perf.time('renderLanes', () => renderLanes(ctx, designWidth, designHeight));
   ctx.perf.time('renderNotes', () => renderNotes(ctx, seconds, designHeight));
   ctx.perf.time('renderShutter', () => renderShutter(ctx));

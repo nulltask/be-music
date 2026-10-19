@@ -8,7 +8,7 @@ import {
   beatorajaJudgeRankOp,
   beatorajaKeyModeIndex,
   beatorajaKeysFilterIndex,
-  beatorajaLnModeIndex,
+  beatorajaLNModeIndex,
   beatorajaSortIndex,
   resolveBeatorajaSelectBarOps,
   resolveBeatorajaSelectNumber,
@@ -92,7 +92,7 @@ describe('button orders', () => {
       1, 2, 3, 4, 5, 6, 7, 0, 0,
     ]);
     // `#LNMODE` counts from 1; a missing or out-of-range one reads as LN.
-    expect([1, 2, 3, 0, 4, undefined].map(beatorajaLnModeIndex)).toEqual([0, 1, 2, 0, 0, 0]);
+    expect([1, 2, 3, 0, 4, undefined].map(beatorajaLNModeIndex)).toEqual([0, 1, 2, 0, 0, 0]);
   });
 });
 
@@ -229,11 +229,11 @@ describe('resolveBeatorajaSelectNumber', () => {
   it('reads the main BPM a play shows on 92, the header BPM without one', () => {
     const read = (facts: BeatorajaSelectChartFacts, id: number): number | undefined =>
       resolveBeatorajaSelectNumber(id, input(SONG_BAR, { chart: facts }));
-    expect(read({ ...FACTS, mainBpm: 180.4 }, BEATORAJA_NUM.MAINBPM)).toBe(180);
+    expect(read({ ...FACTS, mainBPM: 180.4 }, BEATORAJA_NUM.MAINBPM)).toBe(180);
     // The header BPM stays on the current-BPM number.
-    expect(read({ ...FACTS, mainBpm: 180.4 }, BEATORAJA_NUM.NOWBPM)).toBe(150);
+    expect(read({ ...FACTS, mainBPM: 180.4 }, BEATORAJA_NUM.NOWBPM)).toBe(150);
     expect(read(FACTS, BEATORAJA_NUM.MAINBPM)).toBe(150);
-    expect(read({ ...FACTS, mainBpm: 0 }, BEATORAJA_NUM.MAINBPM)).toBe(150);
+    expect(read({ ...FACTS, mainBPM: 0 }, BEATORAJA_NUM.MAINBPM)).toBe(150);
   });
 
   it('reads the folder bar count and the clock on any bar, the chart numbers on a chart bar only', () => {

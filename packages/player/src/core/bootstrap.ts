@@ -1,6 +1,6 @@
 import { throwIfAborted } from '@be-music/utils/core';
 import { resolveChart, type ResolvedChart } from '@be-music/chart';
-import { normalizeChannel, type BeMusicJson } from '@be-music/json';
+import { normalizeChannel, type BeMusicJSON } from '@be-music/json';
 import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import {
   GAUGE_JUDGE_BAD,
@@ -13,8 +13,8 @@ import {
   type GaugeJudgeIndex,
   type RulesetConfig,
 } from '../ruleset/index.ts';
-import { type PlayerGaugeSummary, type PlayerUiSignalBus } from './ui-signal-bus.ts';
-import type { CreatePlayerUiRuntimeContext, PlayerOptions, PlayerSummary, PlayerUiRuntime } from './engine-types.ts';
+import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
+import type { CreatePlayerUIRuntimeContext, PlayerOptions, PlayerSummary, PlayerUIRuntime } from './engine-types.ts';
 import {
   toTimedInvisibleNote,
   toTimedLandmineNote,
@@ -67,8 +67,8 @@ export interface PreparedPlaybackChartData {
   resolvedChart: ResolvedChart;
 }
 
-export interface InitializedPlayerUiRuntime {
-  uiRuntime: PlayerUiRuntime | undefined;
+export interface InitializedPlayerUIRuntime {
+  uiRuntime: PlayerUIRuntime | undefined;
   totalSeconds: number;
   uiEnabled: boolean;
   activeStateSignals: PlayerStateSignals | undefined;
@@ -201,30 +201,30 @@ export function preparePlaybackChart(
 }
 
 /**
- * Resolves `resolvedJson` (a chart without control flow) with `resolveChart` and prepares it with
+ * Resolves `resolvedJSON` (a chart without control flow) with `resolveChart` and prepares it with
  * {@link preparePlaybackChart}. The play variant is the host-declared one, else the shared `resolveChartPlayVariant`
  * rule over the chart's events and `laneModeExtension`.
  */
 export function preparePlaybackChartData(
-  resolvedJson: BeMusicJson,
+  resolvedJSON: BeMusicJSON,
   options: Pick<PlayerOptions, 'showInvisibleNotes' | 'laneModeExtension' | 'playVariant'>,
-  inferBmsLnTypeWhenMissing: boolean,
+  inferBmsLNTypeWhenMissing: boolean,
   auxiliaryPlaybackEndSeconds: number,
 ): PreparedPlaybackChartData {
   return preparePlaybackChart(
-    resolveChart(resolvedJson, {
+    resolveChart(resolvedJSON, {
       chartPath: options.laneModeExtension,
       playVariant: options.playVariant,
-      inferBmsLnTypeWhenMissing,
+      inferBmsLNTypeWhenMissing,
     }),
     options,
     auxiliaryPlaybackEndSeconds,
   );
 }
 
-export async function initializePlayerUiRuntime({
+export async function initializePlayerUIRuntime({
   options,
-  resolvedJson,
+  resolvedJSON,
   mode,
   laneDisplayMode,
   laneBindings,
@@ -238,8 +238,8 @@ export async function initializePlayerUiRuntime({
   onLoadProgress,
 }: {
   options: PlayerOptions;
-  resolvedJson: BeMusicJson;
-  mode: CreatePlayerUiRuntimeContext['mode'];
+  resolvedJSON: BeMusicJSON;
+  mode: CreatePlayerUIRuntimeContext['mode'];
   laneDisplayMode: string;
   laneBindings: LaneBinding[];
   speed: number;
@@ -247,32 +247,32 @@ export async function initializePlayerUiRuntime({
   highSpeed: number;
   randomPatternSummary: string | undefined;
   stateSignals: PlayerStateSignals;
-  uiSignals: PlayerUiSignalBus;
+  uiSignals: PlayerUISignalBus;
   totalSeconds: number;
   onLoadProgress: (ratio: number, message: string, detail?: string) => void;
-}): Promise<InitializedPlayerUiRuntime> {
+}): Promise<InitializedPlayerUIRuntime> {
   throwIfAborted(options.signal);
   onLoadProgress(0.18, 'Preparing BGA...');
-  const uiRuntime = await options.createUiRuntime?.({
-    json: resolvedJson,
+  const uiRuntime = await options.createUIRuntime?.({
+    json: resolvedJSON,
     mode,
     laneDisplayMode,
     laneBindings,
     speed,
-    uiFps: options.uiFps,
+    uiFPS: options.uiFPS,
     tuiVisibleNotesLimit: options.tuiVisibleNotesLimit,
     tuiNoteHeight: options.tuiNoteHeight ?? DEFAULT_TUI_NOTE_HEIGHT,
     judgeWindowMs,
     highSpeed,
     imageResizeAlgorithm: options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM,
-    videoBgaStreaming: options.videoBgaStreaming,
+    videoBGAStreaming: options.videoBGAStreaming,
     showLaneChannels: Boolean(options.debugActiveAudio),
     randomPatternSummary,
     stateSignals,
     uiSignals,
     baseDir: options.audioBaseDir ?? resolveDefaultBaseDir(),
     loadSignal: options.signal,
-    onBgaLoadProgress: (progress) => {
+    onBGALoadProgress: (progress) => {
       onLoadProgress(0.18 + progress.ratio * 0.12, 'Preparing BGA...', progress.detail);
     },
   });

@@ -15,7 +15,7 @@ export const BE_MUSIC_SKIN_API_VERSION = 0;
 const SUPPORTED_API_VERSIONS: ReadonlySet<number> = new Set([BE_MUSIC_SKIN_API_VERSION, 1]);
 
 /** Whether this host can run a skin written against `apiVersion`. */
-export function isSupportedBeMusicSkinApiVersion(apiVersion: number): boolean {
+export function isSupportedBeMusicSkinAPIVersion(apiVersion: number): boolean {
   return SUPPORTED_API_VERSIONS.has(apiVersion);
 }
 
@@ -26,7 +26,7 @@ const SKIN_ID = /^[a-z0-9][a-z0-9-]*$/u;
 const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 
-function isHttpUrl(value: string): boolean {
+function isHttpURL(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === 'https:' || url.protocol === 'http:';
@@ -46,7 +46,7 @@ function isNonEmptyString(value: unknown): value is string {
  */
 export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
   const problems: string[] = [];
-  if (!isSupportedBeMusicSkinApiVersion(skin.apiVersion)) {
+  if (!isSupportedBeMusicSkinAPIVersion(skin.apiVersion)) {
     problems.push(
       `apiVersion ${String(skin.apiVersion)} is not supported (this player runs ${[...SUPPORTED_API_VERSIONS].join(', ')})`,
     );
@@ -59,10 +59,10 @@ export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
     problems.push(`version "${String(skin.version)}" is not a semantic version (e.g. 1.0.0)`);
   }
   if (!isNonEmptyString(skin.author?.name)) problems.push('author.name must not be empty');
-  if (skin.author?.url !== undefined && !isHttpUrl(skin.author.url)) {
+  if (skin.author?.url !== undefined && !isHttpURL(skin.author.url)) {
     problems.push(`author.url "${skin.author.url}" must be an http(s) URL`);
   }
-  if (skin.homepage !== undefined && !isHttpUrl(skin.homepage)) {
+  if (skin.homepage !== undefined && !isHttpURL(skin.homepage)) {
     problems.push(`homepage "${skin.homepage}" must be an http(s) URL`);
   }
   if (!Array.isArray(skin.fontLoads) || skin.fontLoads.some((font) => typeof font !== 'string')) {

@@ -116,7 +116,7 @@ export const LR2_TIMER = {
 } as const;
 
 /** One of LR2's timers ({@link LR2_TIMER}); a lane bank names only its scratch timer. */
-export type Lr2Timer = (typeof LR2_TIMER)[keyof typeof LR2_TIMER];
+export type LR2Timer = (typeof LR2_TIMER)[keyof typeof LR2_TIMER];
 
 /**
  * Timers in each lane bank: the scratch (index 0) and keys 1-9. A lane past that (the 24-key modes' lanes 10-24) has no

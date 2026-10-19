@@ -3,7 +3,7 @@ import { SongImageCache, resolveSongImagePath } from './song-images.ts';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 
-function song(chartPath: string, metadata: { stageFile?: string; banner?: string; backBmp?: string }): LibraryChart {
+function song(chartPath: string, metadata: { stageFile?: string; banner?: string; backBMP?: string }): LibraryChart {
   return { sourceId: 'src', chartPath, chart: { metadata } } as unknown as LibraryChart;
 }
 
@@ -34,10 +34,10 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('resolveSongImagePath', () => {
   it('maps each kind to its chart header', () => {
-    const entry = song('a.bms', { stageFile: 'stage.png', banner: 'banner.bmp', backBmp: 'back.jpg' });
+    const entry = song('a.bms', { stageFile: 'stage.png', banner: 'banner.bmp', backBMP: 'back.jpg' });
     expect(resolveSongImagePath(entry, 'stageFile')).toBe('stage.png');
     expect(resolveSongImagePath(entry, 'banner')).toBe('banner.bmp');
-    expect(resolveSongImagePath(entry, 'backBmp')).toBe('back.jpg');
+    expect(resolveSongImagePath(entry, 'backBMP')).toBe('back.jpg');
   });
 
   it('treats a missing or blank header as no image', () => {

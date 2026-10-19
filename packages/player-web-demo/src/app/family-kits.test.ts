@@ -1,6 +1,6 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { BeatorajaSkinEntry } from '@be-music/beatoraja-skin';
-import type { Lr2PlaySkinMap, Lr2Skin } from '@be-music/lr2-skin';
+import type { LR2PlaySkinMap, LR2Skin } from '@be-music/lr2-skin';
 import type { BeatorajaKit, BuiltInKit } from '@be-music/player-web/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-web/skin';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
@@ -11,13 +11,13 @@ import type { CourseStagePlay } from '../course-flow.ts';
 import type { SkinFamilyOverride } from '../types.ts';
 import { FamilyKits, type FamilyKitsOptions } from './family-kits.ts';
 
-function skin(name: string): Lr2Skin {
-  return { name } as unknown as Lr2Skin;
+function skin(name: string): LR2Skin {
+  return { name } as unknown as LR2Skin;
 }
 
 /** A 7 KEY chart: a note on key 1 and one on key 6. */
 function chart(): LibraryChart {
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   json.events.push(
     { measure: 1, channel: '11', position: [0, 1], value: '01' },
     { measure: 1, channel: '18', position: [0, 1], value: '01' },
@@ -57,8 +57,8 @@ function beatorajaTheme(scenes: { decide?: boolean } = {}): BeatorajaThemeBundle
 
 const BUILT_IN_KIT: BuiltInKit = { family: 'built-in', skin: { id: 'synesthesia' } as BeMusicSkin };
 const BEATORAJA_KIT = { family: 'beatoraja', kit: {} } as BeatorajaKit;
-const LR2_SOUNDS: SystemSoundSet = { selectBgm: { bytes: new Uint8Array([1]) } };
-const BEATORAJA_SOUNDS: SystemSoundSet = { selectBgm: { path: 'bgm/select.wav' } };
+const LR2_SOUNDS: SystemSoundSet = { selectBGM: { bytes: new Uint8Array([1]) } };
+const BEATORAJA_SOUNDS: SystemSoundSet = { selectBGM: { path: 'bgm/select.wav' } };
 
 interface Fakes {
   kits: FamilyKits;
@@ -69,14 +69,14 @@ interface Fakes {
 }
 
 function fakes(
-  loaded: { playSkins?: Lr2PlaySkinMap; decideSkin?: Lr2Skin; beatoraja?: BeatorajaThemeBundle } = {},
+  loaded: { playSkins?: LR2PlaySkinMap; decideSkin?: LR2Skin; beatoraja?: BeatorajaThemeBundle } = {},
 ): Fakes {
   const lr2: Fakes['lr2'] = {
     playSkins: loaded.playSkins ?? {},
     selectSkin: undefined,
     decideSkin: loaded.decideSkin,
     resultSkin: undefined,
-    courseLr2Skin: vi.fn((mounted: Lr2Skin | undefined) => mounted && skin(`${mounted.name} (course)`)),
+    courseLR2Skin: vi.fn((mounted: LR2Skin | undefined) => mounted && skin(`${mounted.name} (course)`)),
     selectSoundSet: vi.fn(() => LR2_SOUNDS),
   };
   const beatoraja: Fakes['beatoraja'] = {
@@ -171,11 +171,11 @@ describe('FamilyKits.resolvePlayKit', () => {
     expect(await kits.resolvePlayKit(chart(), { courseStage })).toEqual({
       kit: { family: 'lr2', skin: skin('play7 (course)') },
     });
-    expect(lr2.courseLr2Skin).toHaveBeenLastCalledWith(play7, courseInfo, { kind: 'play', playVariant: '7' });
+    expect(lr2.courseLR2Skin).toHaveBeenLastCalledWith(play7, courseInfo, { kind: 'play', playVariant: '7' });
 
     const nonstop = course();
     await kits.resolvePlayKit(chart(), { nonstop: { course: nonstop } });
-    expect(lr2.courseLr2Skin).toHaveBeenLastCalledWith(play7, resolveCourseView(nonstop, 0), {
+    expect(lr2.courseLR2Skin).toHaveBeenLastCalledWith(play7, resolveCourseView(nonstop, 0), {
       kind: 'play',
       playVariant: '7',
     });

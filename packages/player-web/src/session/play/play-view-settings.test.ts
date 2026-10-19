@@ -34,7 +34,7 @@ function createView(
     playState: createPlayState({ view: { hiSpeed: createHiSpeedState({ hiSpeed: 2 }), covers, hsFix: 'OFF' } }),
     scrollHiSpeed: new HiSpeedTransition(2),
     laneX: new Map([['11', LANE]]),
-    chartBpmRange: { minBpm: 120, maxBpm: 120, mainBpm: 120 },
+    chartBPMRange: { minBPM: 120, maxBPM: 120, mainBPM: 120 },
     drawnLaneCovers: undefined,
     playlogViewCoalescer: undefined,
     replayViewCursor: options.replay !== undefined ? new PlaylogViewCursor(options.replay) : undefined,
@@ -94,7 +94,7 @@ describe("the play log's view on the built-in and LR2 play screens", () => {
   test("records on the view's own scale when the view has one, at the play's main BPM, with no lanes laid out", () => {
     const ctx = createView({ theme: { playlogView: () => ({ scale: 'beatoraja', laneBeats: 4 }) } });
     ctx.laneX.clear();
-    (ctx as { chartBpmRange: PlayTempoRange }).chartBpmRange = { minBpm: 120, maxBpm: 300, mainBpm: 150 };
+    (ctx as { chartBPMRange: PlayTempoRange }).chartBPMRange = { minBPM: 120, maxBPM: 300, mainBPM: 150 };
     const view = startPlaylogView(ctx);
     // 4 beats / 2 × (1 - 0.25) at the main 150 BPM, the one HS-FIX reads on every family's play screen.
     expect(view).toEqual({

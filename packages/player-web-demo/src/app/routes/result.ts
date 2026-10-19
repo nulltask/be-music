@@ -29,7 +29,7 @@ import type { PlaylogAutoSave } from '../../services/playlogs.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
-import type { Lr2ThemeService } from '../../services/themes/lr2.ts';
+import type { LR2ThemeService } from '../../services/themes/lr2.ts';
 import { resultFromCourseLog, resultFromData, type TestHookRecorder } from '../../test-hook.ts';
 import type { DemoScene } from '../../types.ts';
 import type { FamilyKits } from '../family-kits.ts';
@@ -54,9 +54,9 @@ export interface ResultRouteDeps {
   /** The family the result is drawn by. */
   readonly familyKits: Pick<FamilyKits, 'familyDispatchState'>;
   /** The LR2 theme's result and course-result skins, and its jingles. */
-  readonly lr2: Pick<Lr2ThemeService, 'resultSkin' | 'courseResultSkin' | 'courseLr2Skin' | 'resultJingles'>;
+  readonly lr2: Pick<LR2ThemeService, 'resultSkin' | 'courseResultSkin' | 'courseLR2Skin' | 'resultJingles'>;
   /** The beatoraja theme's result entries, loaded as kits, and its jingles. */
-  readonly beatoraja: Pick<BeatorajaThemeService, 'loadBeatorajaResultKit' | 'beatorajaThemeBgm'>;
+  readonly beatoraja: Pick<BeatorajaThemeService, 'loadBeatorajaResultKit' | 'beatorajaThemeBGM'>;
   /** The be-music skin the built-in family draws with. */
   readonly builtIn: Pick<BuiltInThemeService, 'builtInKit'>;
   /** A single play's play-log auto-save, by the setting latched at the play's start. */
@@ -227,7 +227,7 @@ export class ResultRoute {
     });
     // beatoraja plays every result from its theme's one set: a course run's `course_clear` / `course_fail`, falling back
     // to the clear / fail ones, else the generic `result` one.
-    const sounds = systemSoundSetFromBeatoraja({ bgm: this.beatoraja.beatorajaThemeBgm });
+    const sounds = systemSoundSetFromBeatoraja({ bgm: this.beatoraja.beatorajaThemeBGM });
     const jingleBytes = resolveResultJingle(
       resolveResultJingles([sounds], presentation.courseJingles),
       result.cleared,
@@ -319,7 +319,7 @@ export class ResultRoute {
         ? undefined
         : courseInfo === undefined
           ? mountedResultSkin
-          : this.lr2.courseLr2Skin(mountedResultSkin, courseInfo, {
+          : this.lr2.courseLR2Skin(mountedResultSkin, courseInfo, {
               kind:
                 presentation.courseResultSkin && this.lr2.courseResultSkin !== undefined ? 'courseResult' : 'result',
             });
@@ -343,7 +343,7 @@ export class ResultRoute {
     // theme without a result skin).
     const themeJingles = {
       lr2: this.lr2.resultJingles(),
-      beatoraja: this.beatoraja.beatorajaThemeBgm,
+      beatoraja: this.beatoraja.beatorajaThemeBGM,
     };
     const jingles = resolveResultViewJingles(resultFamily, presentation.courseJingles, themeJingles);
     const onContinue = (): void => {
@@ -385,7 +385,7 @@ export class ResultRoute {
     if (this.testHook !== undefined) {
       if (mode.course === undefined) this.testHook.recordPlaylog(data.playlog);
       const family = lr2ResultSkin !== undefined ? 'lr2' : 'built-in';
-      const jingle = this.nameResultJingle(data.cleared ? jingles.clearBgm : jingles.failBgm);
+      const jingle = this.nameResultJingle(data.cleared ? jingles.clearBGM : jingles.failBGM);
       if (shown) {
         this.testHook.recordResult(
           mode.courseLog !== undefined

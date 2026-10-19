@@ -102,7 +102,7 @@ function collectRandomCourseFolders(value: unknown, parents: string[], out: Beat
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return;
   const data = value as Record<string, unknown>;
   const path = typeof data.name === 'string' && data.name.length > 0 ? [...parents, data.name] : parents;
-  // beatoraja reads `folder/default.json` with libGDX's `Json`, which maps keys onto field names: `rcourse`.
+  // beatoraja reads `folder/default.json` with libGDX's `JSON`, which maps keys onto field names: `rcourse`.
   const courses = asArray(data.rcourse)
     .map(parseBeatorajaRandomCourseData)
     .filter((course) => course !== undefined);

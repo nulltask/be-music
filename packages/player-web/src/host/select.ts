@@ -13,7 +13,7 @@ import { SelectSession, type SelectCourseMaker, type SelectSessionEvents } from 
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { BeatorajaSelectView } from '../view/beatoraja/select-view.ts';
 import { BuiltInSelectView } from '../view/built-in/select-view.ts';
-import { Lr2SelectView } from '../view/lr2/select-view.ts';
+import { LR2SelectView } from '../view/lr2/select-view.ts';
 import type { SelectFrame, SelectIntent, SelectRecords, SelectView } from '../view/types.ts';
 import type { SelectKit } from './family-kit.ts';
 
@@ -44,8 +44,8 @@ export interface SelectSceneOptions extends SessionSceneOptions {
   /** The player's best records, for the bars and panels. */
   readonly records?: SelectRecords;
   /**
-   * The theme's sounds: the select BGM (`selectBgm`, ducked under the chart preview), the cues, and the decide jingle
-   * (`decideBgm`), which plays out through the screens that follow.
+   * The theme's sounds: the select BGM (`selectBGM`, ducked under the chart preview), the cues, and the decide jingle
+   * (`decideBGM`), which plays out through the screens that follow.
    */
   readonly sounds: SystemSoundSet;
   readonly audio: AudioService;
@@ -110,7 +110,7 @@ function createSelectView(
 ): FamilySelectView {
   switch (kit.family) {
     case 'lr2': {
-      const view = new Lr2SelectView(kit);
+      const view = new LR2SelectView(kit);
       return { view, updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')) };
     }
     case 'beatoraja': {

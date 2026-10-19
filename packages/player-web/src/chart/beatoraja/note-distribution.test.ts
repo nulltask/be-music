@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { computeBeatorajaChartNoteDistribution, NOTE_DISTRIBUTION_CATEGORIES } from './note-distribution.ts';
 
 function makeChart(
@@ -7,8 +7,8 @@ function makeChart(
   bpm = 120,
   resources?: { bpm?: Record<string, number>; stop?: Record<string, number> },
   lnObjs?: string[],
-): BeMusicJson {
-  const chart = createEmptyJson('bms');
+): BeMusicJSON {
+  const chart = createEmptyJSON('bms');
   chart.metadata.bpm = bpm;
   chart.metadata.title = 'test';
   chart.events = events.map((e) => ({
@@ -92,7 +92,7 @@ describe('computeBeatorajaChartNoteDistribution', () => {
     expect(out.bpmSegments[1]?.timeMs).toBeCloseTo(2000, 0);
   });
 
-  it('picks mainBpm as the BPM with the highest note count', () => {
+  it('picks mainBPM as the BPM with the highest note count', () => {
     // 1 note at 120 BPM, BPM change at beat 2, then 5 notes at 180.
     const chart = makeChart(
       [
@@ -108,12 +108,12 @@ describe('computeBeatorajaChartNoteDistribution', () => {
       { bpm: { XX: 180 } },
     );
     const out = computeBeatorajaChartNoteDistribution(chart);
-    expect(out.mainBpm).toBe(180);
-    expect(out.minBpm).toBe(120);
-    expect(out.maxBpm).toBe(180);
+    expect(out.mainBPM).toBe(180);
+    expect(out.minBPM).toBe(120);
+    expect(out.maxBPM).toBe(180);
   });
 
-  it("counts only the judged notes toward mainBpm, as beatoraja's TimeLine.getTotalNotes does", () => {
+  it("counts only the judged notes toward mainBPM, as beatoraja's TimeLine.getTotalNotes does", () => {
     // At 120: two taps and a long note's head. At 180: the long note's end (not judged under LN) and three mines.
     const chart = makeChart(
       [
@@ -130,12 +130,12 @@ describe('computeBeatorajaChartNoteDistribution', () => {
       { bpm: { XX: 180 } },
     );
     const out = computeBeatorajaChartNoteDistribution(chart);
-    expect(out.mainBpm).toBe(120);
+    expect(out.mainBPM).toBe(120);
     // The distribution still shows the mines.
     expect(out.buckets.reduce((sum, bucket) => sum + bucket[NOTE_DISTRIBUTION_CATEGORIES.MINE]!, 0)).toBe(3);
   });
 
-  it('emits stop pairs as `(stopStart, 0)` and `(stopEnd, prevBpm)` segments', () => {
+  it('emits stop pairs as `(stopStart, 0)` and `(stopEnd, prevBPM)` segments', () => {
     // STOP at beat 4 (start of measure 1) with `XX = 192` units (= 1 standard measure =
     // 4 beats). At 120 BPM: pre-stop time = 4*500 = 2000ms; stop duration = 4*500 = 2000ms;
     // restore at 4000ms.

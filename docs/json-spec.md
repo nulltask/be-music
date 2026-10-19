@@ -25,6 +25,26 @@ Also, as it is still in the early stages of development, backward compatibility 
 - Surface information that is not explicitly maintained by the IR, such as blank lines, comments, white space, line breaks, character codes, etc., is not subject to this principle.
 - As a result of editing the IR, if the retained structural information and the normalized `events` / `measures` / extension information no longer match, the stringifier will prioritize consistency and regenerate it.
 
+## Identifier and key naming
+
+Abbreviations in code identifiers and Be-Music JSON keys use uppercase, while the first segment of lowerCamelCase stays lowercase: `BeMusicJSON`, `backBMP`, `initBPM`, `poorBGA`, and `bpm`. In consecutive abbreviations, only the last is uppercase (`BmsJSON`, `inferBmsLNTypeWhenMissing`). `Id` / `Ids` and `bmson` / `Bmson` keep their conventional spelling. External BMS and bmson keys, database schemas, and external tool and API contract keys retain their required spelling.
+
+Protected proper names are indivisible and retain their official capitalization ahead of the consecutive-abbreviation rule: `LR2BGAElement`, `LR2JSON`, `FFmpegAPI`, and `WebGLAPI`. The protected names are listed in [Naming Rules](../AGENTS.md#naming-rules). LowerCamelCase starts with the conventional leading form (`ffmpegQueue`, `lr2Skin`, `webGLContext`, `libavFactory`), while `sRGB` keeps its distinctive lowercase prefix (`sRGBChannelToLinear`). Official short names such as `Pixi` may stay abbreviated. Ordinary format abbreviations such as `BMS` and `JSON` remain subject to the consecutive-abbreviation rule (`BmsJSON`).
+
+The parser accepts the former IR keys below on input and emits their canonical spelling. When both spellings occur, the canonical key wins. This input compatibility does not provide aliases for renamed TypeScript exports.
+
+| Former key           | Canonical key        |
+| -------------------- | -------------------- |
+| `metadata.backBmp`   | `metadata.backBMP`   |
+| `bmson.info.initBpm` | `bmson.info.initBPM` |
+| `bms.volWav`         | `bms.volWAV`         |
+| `bms.pathWav`        | `bms.pathWAV`        |
+| `bms.baseBpm`        | `bms.baseBPM`        |
+| `bms.exWav`          | `bms.exWAV`          |
+| `bms.exBmp`          | `bms.exBMP`          |
+| `bms.poorBga`        | `bms.poorBGA`        |
+| `bms.swBga`          | `bms.swBGA`          |
+
 ## Root structure
 
 The root object and its parts (field types are in `packages/json/src/index.ts`):
@@ -32,7 +52,7 @@ The root object and its parts (field types are in `packages/json/src/index.ts`):
 ```mermaid
 classDiagram
   direction LR
-  class BeMusicJson {
+  class BeMusicJSON {
     format
     sourceFormat
   }
@@ -43,7 +63,7 @@ classDiagram
     total
     extras
   }
-  class BmsResources {
+  class BMSResources {
     wav
     bmp
     bpm
@@ -61,7 +81,7 @@ classDiagram
     value
     bmson?
   }
-  class BmsExtensions {
+  class BMSExtensions {
     controlFlow
     …
   }
@@ -70,7 +90,7 @@ classDiagram
     info
     bga
   }
-  class BmsPreservation {
+  class BMSPreservation {
     sourceLines
     objectLines
   }
@@ -80,14 +100,14 @@ classDiagram
     stopEvents
     soundChannels
   }
-  BeMusicJson *-- BeMusicMetadata : metadata
-  BeMusicJson *-- BmsResources : resources
-  BeMusicJson *-- "*" BeMusicMeasure : measures
-  BeMusicJson *-- "*" BeMusicEvent : events
-  BeMusicJson *-- BmsExtensions : bms
-  BeMusicJson *-- BmsonExtensions : bmson
-  BeMusicJson *-- BeMusicPreservation : preservation
-  BeMusicPreservation *-- BmsPreservation : bms
+  BeMusicJSON *-- BeMusicMetadata : metadata
+  BeMusicJSON *-- BMSResources : resources
+  BeMusicJSON *-- "*" BeMusicMeasure : measures
+  BeMusicJSON *-- "*" BeMusicEvent : events
+  BeMusicJSON *-- BMSExtensions : bms
+  BeMusicJSON *-- BmsonExtensions : bmson
+  BeMusicJSON *-- BeMusicPreservation : preservation
+  BeMusicPreservation *-- BMSPreservation : bms
   BeMusicPreservation *-- BmsonPreservation : bmson
 ```
 
@@ -100,7 +120,7 @@ A full example:
   "metadata": {
     "title": "Example",
     "bpm": 130,
-    "backBmp": "back.png",
+    "backBMP": "back.png",
     "banner": "banner.png",
     "extras": {}
   },
@@ -119,9 +139,9 @@ A full example:
       "0A": "FF000000"
     },
     "player": 1,
-    "pathWav": "sounds/",
+    "pathWAV": "sounds/",
     "base": 62,
-    "baseBpm": 155,
+    "baseBPM": 155,
     "stp": ["001.240"],
     "option": "HIGH-SPEED",
     "changeOption": {
@@ -129,10 +149,10 @@ A full example:
     },
     "wavCmd": "legacy",
     "wavCmds": ["01 01 64"],
-    "exWav": {
+    "exWAV": {
       "01": "sample_ex.wav"
     },
-    "exBmp": {
+    "exBMP": {
       "01": "image_ex.bmp"
     },
     "bga": {
@@ -141,8 +161,8 @@ A full example:
     "scroll": {
       "01": 0.5
     },
-    "poorBga": "01",
-    "swBga": {
+    "poorBGA": "01",
+    "swBGA": {
       "01": "02"
     },
     "videoFile": "movie.mp4",
@@ -261,7 +281,7 @@ A full example:
 `metadata` is the normalized, format-neutral metadata area.
 
 - `stageFile`: BMS `#STAGEFILE`; bmson mirrors `info.eyecatch_image` here when present
-- `backBmp`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
+- `backBMP`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
 - `banner`: BMS `#BANNER`; bmson mirrors `info.banner_image` here when present
 - `playLevel`: BMS `#PLAYLEVEL` or bmson `info.level`; can be a number or a string
 - `rank`: BMS `#RANK` (a `0`–`4` rank index) or bmson `info.judge_rank` (a percentage, `100` = NORMAL); the stringifier converts between the two units when writing bmson
@@ -276,26 +296,26 @@ A full example:
 - `lnType`: value of `#LNTYPE`
 - `lnMode`: value of `#LNMODE` (`1` = LN, `2` = CN, `3` = HCN); only positive values are kept
 - `lnObjs`: Array holding multiple `#LNOBJ` declarations in declaration order (2 digit base36)
-- `volWav`: value of `#VOLWAV`
+- `volWAV`: value of `#VOLWAV`
 - `defExRank`: value of `#DEFEXRANK`
 - `exRank`: Map of `#EXRANKxx`
 - `argb`: map of `#ARGBxx`
 - `player`: value of `#PLAYER`
-- `pathWav`: value of `#PATH_WAV`
+- `pathWAV`: value of `#PATH_WAV`
 - `base`: `62` when the chart declares `#BASE 62`; omitted otherwise, which means `36`.
-- `baseBpm`: value of `#BASEBPM`
+- `baseBPM`: value of `#BASEBPM`
 - `stp`: `#STP` value array
 - `option`: value of `#OPTION`
 - `changeOption`: Map of `#CHANGEOPTIONxx`
 - `wavCmd`: first value of `#WAVCMD`, kept for legacy compatibility
 - `wavCmds`: all `#WAVCMD` lines as raw post-directive text in declaration order
-- `exWav`: Map of `#EXWAVxx`
-- `exBmp`: Map of `#EXBMPxx`
+- `exWAV`: Map of `#EXWAVxx`
+- `exBMP`: Map of `#EXBMPxx`
 - `bga`: Map of `#BGAxx`
 - `scroll`: Map of `#SCROLLxx`
 - `speed`: Map of `#SPEEDxx`
-- `poorBga`: value of `#POORBGA`
-- `swBga`: Map of `#SWBGAxx`
+- `poorBGA`: value of `#POORBGA`
+- `swBGA`: Map of `#SWBGAxx`
 - `videoFile`: value of `#VIDEOFILE`
 - `midiFile`: value of `#MIDIFILE`
 - `materials`: value of `#MATERIALS`
@@ -315,24 +335,24 @@ When `bms.base` is `62`, object IDs use the beatoraja-style base-62 set (`0-9A-Z
 This affects all two-character indexed IDs stored in the IR:
 
 - Resource maps such as `resources.wav`, `resources.bmp`, `resources.bpm`, `resources.stop`, and `resources.text`
-- BMS extension maps such as `bms.exRank`, `bms.argb`, `bms.exWav`, `bms.exBmp`, `bms.bga`, `bms.scroll`, `bms.speed`, and `bms.swBga`
+- BMS extension maps such as `bms.exRank`, `bms.argb`, `bms.exWAV`, `bms.exBMP`, `bms.bga`, `bms.scroll`, `bms.speed`, and `bms.swBGA`
 - BMS object event `value` fields, including events retained in `preservation.bms.sourceLines` and `bms.controlFlow`
 - `bms.lnObjs`
 
-Code that consumes IDs should call `resolveBmsBase(json)` and pass the result to ID normalization helpers instead of uppercasing manually.
+Code that consumes IDs should call `resolveBMSBase(json)` and pass the result to ID normalization helpers instead of uppercasing manually.
 This keeps `0a` and `0A` distinct for base-62 charts while preserving base-36 behavior for ordinary charts.
 
 `bmson` is an extension area that holds additional bmson-specific information.
 
 - `version`: bmson version string
-- `info`: In addition to `resolution`, retains `subartists`, `chartName`, `level`, `initBpm`, `modeHint`, `judgeRank`, `total`, `lnType` (beatoraja `info.ln_type`: `1` = LN, `2` = CN, `3` = HCN), and image/preview fields.
+- `info`: In addition to `resolution`, retains `subartists`, `chartName`, `level`, `initBPM`, `modeHint`, `judgeRank`, `total`, `lnType` (beatoraja `info.ln_type`: `1` = LN, `2` = CN, `3` = HCN), and image/preview fields.
 - `barlinesSuppressed`: `true` only when the bmson source authored an explicit `lines: []`; missing `lines` remains distinct and means the default 4/4 barline model.
 - `bga`: Keep `header`, `events`, `layerEvents`, `poorEvents`
 
 `preservation` is an auxiliary layer that maintains source-level information for round-trips.
 
 - `preservation.bms.sourceLines`: Snapshot that preserves all lines of BMS in declaration order, excluding blank lines/comments.
-- `preservation.bms.sourceLines` is the first choice to reproduce `stringifyBms(parseChart(...))` while preserving the relative position of BMS header / object / control syntax
+- `preservation.bms.sourceLines` is the first choice to reproduce `stringifyBMS(parseChart(...))` while preserving the relative position of BMS header / object / control syntax
 - `preservation.bms.objectLines`: declaration order snapshot of object lines outside of control constructs
 - `preservation.bms.objectLines` is a partial snapshot for processing where you only want to handle object lines outside the control syntax
 - If `preservation.bms.objectLines` does not match `events` / `measures`, stringifier ignores and regenerates this array
@@ -398,16 +418,16 @@ flowchart LR
     bmsonIn[".bmson"]
     jsonIn[".json"]
   end
-  ir["BeMusicJson<br/>(@be-music/json)"]
+  ir["BeMusicJSON<br/>(@be-music/json)"]
   subgraph out["Written"]
     bmsOut[".bms"]
     bmsonOut[".bmson"]
     jsonOut[".json"]
   end
-  bmsIn -->|parseBms| ir
+  bmsIn -->|parseBMS| ir
   bmsonIn -->|parseBmson| ir
   jsonIn -->|"parseChart(…, 'json')"| ir
-  ir -->|stringifyBms| bmsOut
+  ir -->|stringifyBMS| bmsOut
   ir -->|stringifyBmson| bmsonOut
   ir -->|"parser CLI: JSON.stringify"| jsonOut
 ```

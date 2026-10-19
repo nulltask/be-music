@@ -34,7 +34,7 @@ export interface BeatorajaImagesetElement {
   /** Sub-image ids (each an `image[].id`). Empty array → renders nothing. */
   images: ReadonlyArray<BeatorajaImageId>;
   /**
-   * Click-event code (audit 2.5). Mirrors beatoraja's `Event act` field on `JsonSkin.ImageSet`.
+   * Click-event code (audit 2.5). Mirrors beatoraja's `Event act` field on `JSONSkin.ImageSet`.
    * When non-zero AND the host wires an `onButtonAction` callback, the renderer makes the
    * imageset's sprite interactive and forwards this code on tap. Default skin uses it for
    * `modeset` (`act:11` cycles keymode filter), GdbG for its mode-cycle button, and

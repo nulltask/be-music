@@ -50,14 +50,14 @@ export function computeScoreRate(score: Pick<ScoreSummary, 'total' | 'exScore'>)
   return Math.max(0, Math.min(1, score.exScore / max));
 }
 
-export function resolveIidxRankIndexFromScore(score: Pick<ScoreSummary, 'total' | 'exScore'>): number | undefined {
+export function resolveIIDXRankIndexFromScore(score: Pick<ScoreSummary, 'total' | 'exScore'>): number | undefined {
   if (score.total <= 0) {
     return undefined;
   }
-  return resolveIidxRankIndexFromRate(computeScoreRate(score));
+  return resolveIIDXRankIndexFromRate(computeScoreRate(score));
 }
 
-export function resolveIidxRankIndexFromRate(rate: number): number {
+export function resolveIIDXRankIndexFromRate(rate: number): number {
   if (rate >= 8 / 9) return 0;
   if (rate >= 7 / 9) return 1;
   if (rate >= 6 / 9) return 2;
@@ -68,8 +68,8 @@ export function resolveIidxRankIndexFromRate(rate: number): number {
   return 7;
 }
 
-export function resolveIidxRankLabel(exScore: number, total: number): string {
-  const rankIndex = resolveIidxRankIndexFromScore({ exScore, total });
+export function resolveIIDXRankLabel(exScore: number, total: number): string {
+  const rankIndex = resolveIIDXRankIndexFromScore({ exScore, total });
   if (rankIndex === undefined) {
     return '-';
   }
@@ -80,12 +80,12 @@ export function resolveIidxRankLabel(exScore: number, total: number): string {
  * LR2's money score: `floor((4×PGREAT + 2×GREAT + GOOD) × 50000 / notes)`, capped at 200000 (OpenLR2
  * `LR2_play.cpp`). Purely a function of the judge tally — no combo bonus, unlike the invented curve this replaced.
  */
-export function resolveLr2MoneyScore(summary: Pick<ScoreSummary, 'total' | 'perfect' | 'great' | 'good'>): number {
+export function resolveLR2MoneyScore(summary: Pick<ScoreSummary, 'total' | 'perfect' | 'great' | 'good'>): number {
   const notes = Math.max(1, summary.total);
   const weighted = 4 * summary.perfect + 2 * summary.great + summary.good;
   return Math.min(LR2_MONEY_SCORE_MAX, Math.floor((weighted * LR2_MONEY_SCORE_UNIT) / notes));
 }
 
-/** The DJ Ranks (DJ LEVEL) on the IIDX ninths, best first: the labels `resolveIidxRankLabel` returns. */
+/** The DJ Ranks (DJ LEVEL) on the IIDX ninths, best first: the labels `resolveIIDXRankLabel` returns. */
 export const IIDX_RANK_LABELS = ['AAA', 'AA', 'A', 'B', 'C', 'D', 'E', 'F'] as const;
-export type IidxRankLabel = (typeof IIDX_RANK_LABELS)[number];
+export type IIDXRankLabel = (typeof IIDX_RANK_LABELS)[number];

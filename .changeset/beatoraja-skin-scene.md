@@ -9,10 +9,10 @@ Add `@be-music/beatoraja-skin/scene`, which maps the scene models of `@be-music/
 - Select: `resolveBeatorajaSelectBarOps`, `resolveBeatorajaSelectNumber`, `resolveBeatorajaSelectText` and `resolveBeatorajaSelectRefValue` for the focused library entry (a chart bar is `{ kind: 'chart', chart }`), with the MODE / SORT / LNMODE button orders.
 - Decide: from the chart about to be played and how far the play behind the screen has loaded (`BeatorajaDecideInput`), `resolveBeatorajaDecideOps` lights the chart's difficulty ops and `NOW_LOADING`, then `LOADED`; `resolveBeatorajaDecideNumber` reads the chart's `#PLAYLEVEL`, its BPMs and the loading progress in percent (165); `resolveBeatorajaDecideGraphValue` fills the loading bar (graph type 102).
 - Course: the course bar, stage and title ids from a `LibraryCourse` / `CourseView` (`beatorajaMissingCourseStages` reads each stage's `chart`), and `beatorajaClearLampOp`.
-- System sounds: `discoverBeatorajaSystemSoundPaths`, `discoverBeatorajaSelectBgmPath` and `pickBeatorajaThemeBgmPaths`.
+- System sounds: `discoverBeatorajaSystemSoundPaths`, `discoverBeatorajaSelectBGMPath` and `pickBeatorajaThemeBGMPaths`.
 
 The values follow beatoraja:
 
 - The 1P rank ops (200-207) and the "now" rank ops (340-347) rank the EX score over the notes judged so far, as `createNowRank` reads `ScoreDataProperty.nowrate`, which is 100 % before the first note, so a play starts on AAA.
 - The generic rank ops (220-227) light every rank the EX score reaches over the chart's notes, as `ScoreDataProperty.qualifyRank` does (an AAA lights all eight, so a skin can stack its rank letters on them); `beatorajaGenericRankOps(score)` gives them. A chart without notes lights none of these.
-- The main BPM (number 92) on the select and decide screens is the main BPM a play shows, the BPM the most judged notes sit at (`BeatorajaSelectChartFacts.mainBpm`, `BeatorajaDecideInput.mainBpm`), falling back to the header BPM without one.
+- The main BPM (number 92) on the select and decide screens is the main BPM a play shows, the BPM the most judged notes sit at (`BeatorajaSelectChartFacts.mainBPM`, `BeatorajaDecideInput.mainBPM`), falling back to the header BPM without one.

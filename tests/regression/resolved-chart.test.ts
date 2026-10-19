@@ -9,7 +9,7 @@ import {
   type ResolvedChart,
   type ResolvedNote,
 } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';
 import { resolvePlayChart } from '@be-music/player';
 import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/display';
@@ -73,11 +73,11 @@ describe('resolved chart equivalence', async () => {
       const variants = hasControlFlow ? RANDOM_VARIANTS : [{ id: 'default', random: () => 0 }];
       for (const variant of variants) {
         const { chart, randomDraws } = resolvePlayChart(parsed, { random: variant.random });
-        for (const inferBmsLnTypeWhenMissing of [false, true]) {
-          const resolved = resolveChart(chart, { randomDraws, chartPath: path, inferBmsLnTypeWhenMissing });
+        for (const inferBmsLNTypeWhenMissing of [false, true]) {
+          const resolved = resolveChart(chart, { randomDraws, chartPath: path, inferBmsLNTypeWhenMissing });
           expect(resolved.randomDraws).toBe(randomDraws);
           expect(resolved.hasUnresolvedControlFlow).toBe(false);
-          expectConsumerEquivalence(resolved, chart, path, inferBmsLnTypeWhenMissing);
+          expectConsumerEquivalence(resolved, chart, path, inferBmsLNTypeWhenMissing);
         }
         expectPinnedEquivalence(resolveChart(chart, { randomDraws, chartPath: path }), expected.variants[variant.id]!);
       }
@@ -87,9 +87,9 @@ describe('resolved chart equivalence', async () => {
 
 function expectConsumerEquivalence(
   resolved: ResolvedChart,
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   path: string,
-  inferBmsLnTypeWhenMissing: boolean,
+  inferBmsLNTypeWhenMissing: boolean,
 ): void {
   const playVariant = resolveChartPlayVariant({
     chartPath: path,
@@ -102,7 +102,7 @@ function expectConsumerEquivalence(
   const extracted = extractTimedNotes(chart, {
     includeLandmine: true,
     includeInvisible: true,
-    inferBmsLnTypeWhenMissing,
+    inferBmsLNTypeWhenMissing,
     playVariant,
   });
   expect(resolved.notes.map(describeResolved)).toEqual(extracted.playableNotes.map(describeTimed));
@@ -115,7 +115,7 @@ function expectConsumerEquivalence(
   const timing = createTimingResolver(chart);
   expect(resolved.timing.tempoPoints).toEqual(timing.tempoPoints);
   expect(resolved.timing.stopPoints).toEqual(timing.stopPoints);
-  expect(resolved.sampleTriggers).toEqual(collectSampleTriggers(chart, timing, { inferBmsLnTypeWhenMissing }));
+  expect(resolved.sampleTriggers).toEqual(collectSampleTriggers(chart, timing, { inferBmsLNTypeWhenMissing }));
 }
 
 function expectPinnedEquivalence(resolved: ResolvedChart, expected: ExpectedVariant): void {

@@ -14,7 +14,7 @@ import {
   resolveLoggedLongNoteMode,
   resolveLongNoteEndSeconds,
   resolveRulesetLongNoteMode,
-  toUiLongNoteMode,
+  toUILongNoteMode,
   type PendingAutoLongNoteState,
 } from './judge-rules.ts';
 import { clampToReversal } from './judge-core-score.ts';
@@ -244,7 +244,7 @@ function applyDueJudgements(state: AutoJudgeState, referenceSeconds: number, emi
           kind: 'long-note-start',
           channel: note.channel,
           beat: note.beat,
-          mode: toUiLongNoteMode(resolveRulesetLongNoteMode(ruleset.longNoteStyle, note) ?? 2),
+          mode: toUILongNoteMode(resolveRulesetLongNoteMode(ruleset.longNoteStyle, note) ?? 2),
         },
       });
       emit({ kind: 'frame', seconds: note.seconds, beat: note.beat });

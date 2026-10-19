@@ -1,28 +1,28 @@
 import { createAbortError, isAbortError } from '@be-music/utils/core';
 import type { LogLevel } from '@be-music/utils/log';
-import { createBpmTimeline, createMeasureTimeline, createStopBeatWindows, resolveChart } from '@be-music/chart';
+import { createBPMTimeline, createMeasureTimeline, createStopBeatWindows, resolveChart } from '@be-music/chart';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
-import { createBgaAnsiRenderer } from '../bga.ts';
+import { createBgaANSIRenderer } from '../bga.ts';
 import {
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
 } from '@be-music/player/display';
-import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/signals';
-import { PlayerTui } from '../tui.ts';
+import type { PlayerUICommand, PlayerUIFramePayload } from '@be-music/player/signals';
+import { PlayerTUI } from '../tui.ts';
 import { supportsKittyGraphicsProtocol } from '../tui/kitty-graphics.ts';
-import { estimateBgaAnsiDisplaySize as resolveBgaDisplaySize, resolveLaneWidths } from '../tui/layout.ts';
-import { createDeferredUiFlush } from './deferred-ui-flush.ts';
+import { estimateBgaANSIDisplaySize as resolveBGADisplaySize, resolveLaneWidths } from '../tui/layout.ts';
+import { createDeferredUIFlush } from './deferred-ui-flush.ts';
 import { createRenderThrottle } from './render-throttle.ts';
-import { createUiWorkerFrameState } from './ui-worker-frame-state.ts';
+import { createUIWorkerFrameState } from './ui-worker-frame-state.ts';
 import type {
-  NodeUiWorkerInboundMessage,
-  NodeUiWorkerInitData,
-  NodeUiWorkerOutboundMessage,
+  NodeUIWorkerInboundMessage,
+  NodeUIWorkerInitData,
+  NodeUIWorkerOutboundMessage,
 } from './node-ui-worker-protocol.ts';
 
 const port = parentPort;
-const initData = workerData as NodeUiWorkerInitData;
+const initData = workerData as NodeUIWorkerInitData;
 const DEFAULT_UI_FPS = 60;
 
 void bootstrap().catch((error) => {
@@ -44,11 +44,11 @@ async function bootstrap(): Promise<void> {
   }
   postLog('info', 'ui-worker.bootstrap.start', {
     kittyGraphics: Boolean(initData.kittyGraphics),
-    uiFps: initData.uiFps ?? DEFAULT_UI_FPS,
+    uiFPS: initData.uiFPS ?? DEFAULT_UI_FPS,
     tuiVisibleNotesLimit: initData.tuiVisibleNotesLimit,
   });
   const abortController = new AbortController();
-  const handleAbortMessage = (message: NodeUiWorkerInboundMessage): void => {
+  const handleAbortMessage = (message: NodeUIWorkerInboundMessage): void => {
     if (message.kind !== 'abort' || abortController.signal.aborted) {
       return;
     }
@@ -75,7 +75,7 @@ async function bootstrap(): Promise<void> {
     measureLengths.set(measureIndex, measure.length);
   }
   const measureTimeline = createMeasureTimeline(initData.json, timingResolver, beatResolver);
-  const bpmTimeline = createBpmTimeline(initData.json, timingResolver);
+  const bpmTimeline = createBPMTimeline(initData.json, timingResolver);
   const scrollTimeline = resolvedChart.scroll;
   const speedTimeline = resolvedChart.speed;
   const stopWindows = createStopBeatWindows(timingResolver).map((window) => ({
@@ -85,7 +85,7 @@ async function bootstrap(): Promise<void> {
   // The resolved chart's bar lines: none when a bmson chart suppresses them with `lines: []`.
   const measureBoundariesBeats = [...resolvedChart.barLines];
 
-  const tui = new PlayerTui({
+  const tui = new PlayerTUI({
     mode: initData.mode,
     laneDisplayMode: initData.laneDisplayMode,
     title: initData.json.metadata.title ?? 'Untitled',
@@ -125,21 +125,21 @@ async function bootstrap(): Promise<void> {
     return;
   }
 
-  const useKittyGraphicsForBga = tui.usesKittyGraphicsForBga();
+  const useKittyGraphicsForBGA = tui.usesKittyGraphicsForBGA();
   postLog('info', 'ui-worker.bga.render-mode', {
-    terminalImageProtocol: useKittyGraphicsForBga ? 'kitty' : 'none',
+    terminalImageProtocol: useKittyGraphicsForBGA ? 'kitty' : 'none',
     kittyGraphicsRequested: Boolean(initData.kittyGraphics),
     kittyGraphicsSupported: supportsKittyGraphicsProtocol(process.env),
-    useKittyGraphicsForBga,
+    useKittyGraphicsForBGA,
   });
 
-  const initialBgaSize = estimateBgaAnsiDisplaySize(initData.laneBindings);
-  const bgaRenderer = await createBgaAnsiRenderer(initData.json, {
+  const initialBGASize = estimateBgaANSIDisplaySize(initData.laneBindings);
+  const bgaRenderer = await createBgaANSIRenderer(initData.json, {
     baseDir: initData.baseDir,
-    width: initialBgaSize.width,
-    height: initialBgaSize.height,
+    width: initialBGASize.width,
+    height: initialBGASize.height,
     imageResizeAlgorithm: initData.imageResizeAlgorithm,
-    videoBgaStreaming: initData.videoBgaStreaming,
+    videoBGAStreaming: initData.videoBGAStreaming,
     signal: abortController.signal,
     onLoadProgress: (progress) => {
       postWorkerMessage({
@@ -152,21 +152,21 @@ async function bootstrap(): Promise<void> {
     },
   });
   postLog('info', 'ui-worker.ready', {
-    hasBgaRenderer: bgaRenderer !== undefined,
+    hasBGARenderer: bgaRenderer !== undefined,
     bgaPlaybackEndSeconds: bgaRenderer?.playbackEndSeconds,
-    videoBgaStreaming: initData.videoBgaStreaming !== false,
+    videoBGAStreaming: initData.videoBGAStreaming !== false,
   });
 
-  const queuedCommands: PlayerUiCommand[] = [];
+  const queuedCommands: PlayerUICommand[] = [];
   let bridgePort: MessagePort | undefined;
   let firstFrameRendered = false;
 
-  const syncBgaDisplaySize = (
-    frame: PlayerUiFramePayload | undefined,
+  const syncBGADisplaySize = (
+    frame: PlayerUIFramePayload | undefined,
     columns: number | undefined,
     rows: number | undefined,
   ): void => {
-    const size = estimateBgaAnsiDisplaySize(initData.laneBindings, columns, rows, frame);
+    const size = estimateBgaANSIDisplaySize(initData.laneBindings, columns, rows, frame);
     bgaRenderer?.setDisplaySize(size.width, size.height);
   };
 
@@ -174,8 +174,8 @@ async function bootstrap(): Promise<void> {
   let bgaStreamingScheduled = false;
   let loggedFirstKittyImageReady = false;
   let loggedFirstKittyImageMissing = false;
-  let loggedFirstAnsiFrameReady = false;
-  const frameState = createUiWorkerFrameState({
+  let loggedFirstANSIFrameReady = false;
+  const frameState = createUIWorkerFrameState({
     initialPaused: initData.initialPaused,
     initialHighSpeed: initData.highSpeed,
     initialJudgeCombo: initData.initialJudgeCombo,
@@ -192,14 +192,14 @@ async function bootstrap(): Promise<void> {
       tui.setTerminalSize(columns, rows);
     },
     syncFrameLayout: (frame, columns, rows) => {
-      syncBgaDisplaySize(frame, columns, rows);
+      syncBGADisplaySize(frame, columns, rows);
     },
     requestFrameRender: () => {
-      deferredUiFlush.markFrameDirty();
+      deferredUIFlush.markFrameDirty();
     },
   });
 
-  const deferredUiFlush = createDeferredUiFlush(({ commands, frame }) => {
+  const deferredUIFlush = createDeferredUIFlush(({ commands, frame }) => {
     if (commands) {
       while (queuedCommands.length > 0) {
         const command = queuedCommands.shift();
@@ -247,9 +247,9 @@ async function bootstrap(): Promise<void> {
       }
       // The BGA renderer itself stops cue changes at an LR2 negative-BPM reversal (a playing movie keeps running), so
       // it is driven by the true clock.
-      const bgaAnsiLines = useKittyGraphicsForBga ? undefined : bgaRenderer?.getAnsiLines(latestFrame.currentSeconds);
-      const bgaKittyImage = useKittyGraphicsForBga ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined;
-      if (useKittyGraphicsForBga) {
+      const bgaANSILines = useKittyGraphicsForBGA ? undefined : bgaRenderer?.getANSILines(latestFrame.currentSeconds);
+      const bgaKittyImage = useKittyGraphicsForBGA ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined;
+      if (useKittyGraphicsForBGA) {
         if (bgaKittyImage && !loggedFirstKittyImageReady) {
           loggedFirstKittyImageReady = true;
           postLog('info', 'ui-worker.bga.kitty-image.ready', {
@@ -263,19 +263,19 @@ async function bootstrap(): Promise<void> {
           loggedFirstKittyImageMissing = true;
           postLog('warn', 'ui-worker.bga.kitty-image.missing', {
             seconds: latestFrame.currentSeconds,
-            hasBgaRenderer: Boolean(bgaRenderer),
+            hasBGARenderer: Boolean(bgaRenderer),
           });
         }
-      } else if (bgaAnsiLines && bgaAnsiLines.length > 0 && !loggedFirstAnsiFrameReady) {
-        loggedFirstAnsiFrameReady = true;
+      } else if (bgaANSILines && bgaANSILines.length > 0 && !loggedFirstANSIFrameReady) {
+        loggedFirstANSIFrameReady = true;
         postLog('info', 'ui-worker.bga.ansi-frame.ready', {
           seconds: latestFrame.currentSeconds,
-          lineCount: bgaAnsiLines.length,
+          lineCount: bgaANSILines.length,
         });
       }
       tui.render({
         ...latestFrame,
-        bgaAnsiLines,
+        bgaANSILines,
         bgaKittyImage,
       });
       if (!firstFrameRendered) {
@@ -286,11 +286,11 @@ async function bootstrap(): Promise<void> {
       }
     },
     {
-      minIntervalMs: resolveTuiRenderMinIntervalMs(initData.uiFps),
+      minIntervalMs: resolveTUIRenderMinIntervalMs(initData.uiFPS),
     },
   );
 
-  const handleRenderMessage = (message: NodeUiWorkerInboundMessage): boolean => {
+  const handleRenderMessage = (message: NodeUIWorkerInboundMessage): boolean => {
     if (message.kind === 'start') {
       postLog('info', 'ui-worker.start.received');
       tui.start();
@@ -300,7 +300,7 @@ async function bootstrap(): Promise<void> {
           bgaRenderer?.startStreaming();
         });
       }
-      deferredUiFlush.markFrameDirty();
+      deferredUIFlush.markFrameDirty();
       return true;
     }
     if (message.kind === 'frame') {
@@ -309,7 +309,7 @@ async function bootstrap(): Promise<void> {
     }
     if (message.kind === 'commands') {
       queuedCommands.push(...message.commands);
-      deferredUiFlush.markCommandsDirty();
+      deferredUIFlush.markCommandsDirty();
       return true;
     }
     if (message.kind === 'set-paused') {
@@ -337,7 +337,7 @@ async function bootstrap(): Promise<void> {
     return false;
   };
 
-  const handleControlMessage = (message: NodeUiWorkerInboundMessage): void => {
+  const handleControlMessage = (message: NodeUIWorkerInboundMessage): void => {
     if (message.kind === 'attach-bridge-port') {
       bridgePort?.off('message', handleControlMessage);
       bridgePort = message.port;
@@ -355,7 +355,7 @@ async function bootstrap(): Promise<void> {
     }
     if (message.kind === 'dispose') {
       frameState.dispose();
-      deferredUiFlush.dispose();
+      deferredUIFlush.dispose();
       renderThrottle?.dispose();
       bridgePort?.close();
       tui.stop();
@@ -376,7 +376,7 @@ async function bootstrap(): Promise<void> {
   postWorkerMessage({ kind: 'ready', bgaPlaybackEndSeconds: bgaRenderer?.playbackEndSeconds });
 }
 
-function resolveSplitAfterIndex(bindings: NodeUiWorkerInitData['laneBindings']): number {
+function resolveSplitAfterIndex(bindings: NodeUIWorkerInitData['laneBindings']): number {
   const has2P = bindings.some((binding) => binding.side === '2P');
   if (!has2P) {
     return -1;
@@ -389,18 +389,18 @@ function resolveSplitAfterIndex(bindings: NodeUiWorkerInitData['laneBindings']):
   return -1;
 }
 
-function resolveTuiRenderMinIntervalMs(uiFps: number | undefined): number {
-  const fps = typeof uiFps === 'number' && Number.isFinite(uiFps) && uiFps > 0 ? uiFps : DEFAULT_UI_FPS;
+function resolveTUIRenderMinIntervalMs(uiFPS: number | undefined): number {
+  const fps = typeof uiFPS === 'number' && Number.isFinite(uiFPS) && uiFPS > 0 ? uiFPS : DEFAULT_UI_FPS;
   return 1000 / fps;
 }
 
-function estimateBgaAnsiDisplaySize(
-  bindings: NodeUiWorkerInitData['laneBindings'],
+function estimateBgaANSIDisplaySize(
+  bindings: NodeUIWorkerInitData['laneBindings'],
   columns = process.stdout.columns,
   rows = process.stdout.rows,
-  frame?: Pick<PlayerUiFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>,
+  frame?: Pick<PlayerUIFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>,
 ): { width: number; height: number } {
-  return resolveBgaDisplaySize({
+  return resolveBGADisplaySize({
     laneWidths: resolveLaneWidths(bindings),
     splitAfterIndex: resolveSplitAfterIndex(bindings),
     columns,
@@ -412,7 +412,7 @@ function estimateBgaAnsiDisplaySize(
   });
 }
 
-function postWorkerMessage(message: NodeUiWorkerOutboundMessage): void {
+function postWorkerMessage(message: NodeUIWorkerOutboundMessage): void {
   port?.postMessage(message);
 }
 

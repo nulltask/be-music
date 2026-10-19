@@ -1,9 +1,9 @@
 import { parseChart } from '@be-music/parser';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import { beatorajaPlayChartFacts, beatorajaPlayChartTraits, computeBeatorajaLastNoteBeats } from './play-facts.ts';
 
-function chartOf(...lines: string[]): BeMusicJson {
+function chartOf(...lines: string[]): BeMusicJSON {
   return parseChart(['#BPM 120', ...lines].join('\n'), 'bms');
 }
 
@@ -21,7 +21,7 @@ describe('beatorajaPlayChartTraits', () => {
       bga: true,
       stageFile: true,
       banner: false,
-      backBmp: false,
+      backBMP: false,
     });
     expect(beatorajaPlayChartTraits(chartOf('#00111:01'))).toEqual({
       longNote: false,
@@ -31,7 +31,7 @@ describe('beatorajaPlayChartTraits', () => {
       bga: false,
       stageFile: false,
       banner: false,
-      backBmp: false,
+      backBMP: false,
     });
   });
 });
@@ -49,13 +49,13 @@ describe('computeBeatorajaLastNoteBeats', () => {
 describe('beatorajaPlayChartFacts', () => {
   it('reads the header and the distribution, and the BPM range when asked', () => {
     const chart = chartOf('#PLAYLEVEL 11', '#00103:F0', '#00203:3C');
-    const facts = beatorajaPlayChartFacts(chart, { mainBpm: 240, bpmSegments: [{ timeMs: 0, bpm: 120 }] });
+    const facts = beatorajaPlayChartFacts(chart, { mainBPM: 240, bpmSegments: [{ timeMs: 0, bpm: 120 }] });
     expect(facts.bpm).toBe(120);
-    expect(facts.mainBpm).toBe(240);
+    expect(facts.mainBPM).toBe(240);
     expect(facts.bpmSegments).toEqual([{ timeMs: 0, bpm: 120 }]);
     expect(facts.playLevel).toBe(11);
-    expect(facts.minBpm).toBe(60);
-    expect(facts.maxBpm).toBe(240);
-    expect(beatorajaPlayChartFacts(undefined, undefined)).toEqual({ bpm: 0, minBpm: 0, maxBpm: 0 });
+    expect(facts.minBPM).toBe(60);
+    expect(facts.maxBPM).toBe(240);
+    expect(beatorajaPlayChartFacts(undefined, undefined)).toEqual({ bpm: 0, minBPM: 0, maxBPM: 0 });
   });
 });

@@ -4,8 +4,8 @@
 // `#EXWAV` volumes.
 
 import { runWithConcurrency } from '@be-music/utils/core';
-import { collectBmsExWavVolumeMultipliers, collectBmsWavCmdVolumeMultipliers } from '@be-music/chart';
-import { resolveBmsBase, type BeMusicJson } from '@be-music/json';
+import { collectBMSExWAVVolumeMultipliers, collectBmsWAVCmdVolumeMultipliers } from '@be-music/chart';
+import { resolveBMSBase, type BeMusicJSON } from '@be-music/json';
 import type { NonstopStitchMap } from '@be-music/player/course';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
@@ -27,9 +27,9 @@ const AUDIO_DECODE_CONCURRENCY = 8;
  * Per-slot volume multipliers of a chart: `#WAVCMD 01 xx vv` and the volume of `#EXWAVxx`, multiplied together when a
  * slot has both. Pitch / pan / loop parameters are not applied.
  */
-export function collectChartVolumeMultipliers(chart: BeMusicJson): Map<string, number> {
-  const multipliers = collectBmsWavCmdVolumeMultipliers(chart.bms.wavCmds, resolveBmsBase(chart));
-  for (const [slot, multiplier] of collectBmsExWavVolumeMultipliers(chart.bms.exWav)) {
+export function collectChartVolumeMultipliers(chart: BeMusicJSON): Map<string, number> {
+  const multipliers = collectBmsWAVCmdVolumeMultipliers(chart.bms.wavCmds, resolveBMSBase(chart));
+  for (const [slot, multiplier] of collectBMSExWAVVolumeMultipliers(chart.bms.exWAV)) {
     multipliers.set(slot, (multipliers.get(slot) ?? 1) * multiplier);
   }
   return multipliers;
@@ -38,7 +38,7 @@ export function collectChartVolumeMultipliers(chart: BeMusicJson): Map<string, n
 export interface LoadPlaySamplesOptions {
   audioContext: BaseAudioContext;
   /** The resolved chart (after `#RANDOM` / `#IF`), so `#IF`-gated `#WAV`s match the chosen branches. */
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   source: BrowserSongAssetSource;
   chartPath: string;
   /** The map the samples land in, keyed by {@link decodedSampleKey} of the chart's `#WAV` path. */
@@ -64,7 +64,7 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   // Every declared path: a `#WAVxx` slot is base-36, so a dense chart can use well over 256 samples.
   const wavPaths = Object.values(chart.resources.wav).filter((path): path is string => typeof path === 'string');
   // `#PATH_WAV <prefix>`: the chart's samples live under that directory; the resolver tries the prefixed path first.
-  const pathPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
+  const pathPrefix = typeof chart.bms.pathWAV === 'string' ? chart.bms.pathWAV : undefined;
   await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
     if (isCancelled()) return;
     // Audio entries are lazy `File` references; `loadAssetBytes` reads this chart's bytes on demand.

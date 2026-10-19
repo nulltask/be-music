@@ -1,11 +1,11 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createEmptyJson } from '../../../json/src/index.ts';
+import { createEmptyJSON } from '../../../json/src/index.ts';
 import { vi } from 'vite-plus/test';
-import type { CreatePlayerUiRuntimeContext } from '../index.ts';
+import type { CreatePlayerUIRuntimeContext } from '../index.ts';
 import { getEngineScheduler } from '../core/engine-clock.ts';
 import type { PlayerInputCommand } from '../core/input-signal-bus.ts';
-import type { PlayerUiCommand } from '../core/ui-signal-bus.ts';
+import type { PlayerUICommand } from '../core/ui-signal-bus.ts';
 
 /**
  * Shared set-up of the player engine's tests (`*.test.ts` next to `index.ts`): a mocked Node audio sink whose clock
@@ -96,10 +96,10 @@ export function mockAudioSinkModule() {
 }
 
 export const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-export const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+export const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 
-export function createLnobjLongNoteChart(lnMode?: 1 | 2 | 3) {
-  const json = createEmptyJson('bms');
+export function createLNOBJLongNoteChart(lnMode?: 1 | 2 | 3) {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 480;
   json.bms.lnObjs = ['AA'];
   json.resources.wav['01'] = 'ln.wav';
@@ -113,8 +113,8 @@ export function createLnobjLongNoteChart(lnMode?: 1 | 2 | 3) {
   return json;
 }
 
-export function createScratchLnobjLongNoteChart() {
-  const json = createEmptyJson('bms');
+export function createScratchLNOBJLongNoteChart() {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 480;
   json.bms.lnObjs = ['AA'];
   json.events = [
@@ -125,7 +125,7 @@ export function createScratchLnobjLongNoteChart() {
 }
 
 export function createDynamicExRankChart() {
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 480;
   json.metadata.rank = 2;
   json.bms.exRank['AA'] = '48';
@@ -140,7 +140,7 @@ export function createDynamicExRankChart() {
 }
 
 export function createInvisibleOnlyChart(channel = '31') {
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 120;
   json.resources.wav['01'] = 'not-found.wav';
   json.events = [{ measure: 0, channel, position: [0, 1] as const, value: '01' }];
@@ -148,15 +148,15 @@ export function createInvisibleOnlyChart(channel = '31') {
 }
 
 export function createPlayableOnlyChart() {
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 120;
   json.resources.wav['01'] = 'not-found.wav';
   json.events = [{ measure: 0, channel: '11', position: [0, 1] as const, value: '01' }];
   return json;
 }
 
-export function createBgmOnlyChart() {
-  const json = createEmptyJson('bms');
+export function createBGMOnlyChart() {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 120;
   json.resources.wav['01'] = 'not-found.wav';
   json.events = [{ measure: 0, channel: '01', position: [0, 1] as const, value: '01' }];
@@ -164,7 +164,7 @@ export function createBgmOnlyChart() {
 }
 
 export function createTimelineLoggingChart() {
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 120;
   json.measures.push({ index: 1, length: 0.5 });
   json.resources.wav['01'] = 'not-found.wav';
@@ -193,8 +193,8 @@ export function createTimelineLoggingChart() {
   return json;
 }
 
-export function createPoorBgaLoggingChart() {
-  const json = createEmptyJson('bms');
+export function createPoorBGALoggingChart() {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 120;
   json.resources.wav['01'] = 'not-found.wav';
   json.resources.bmp['00'] = 'fallback.png';
@@ -204,7 +204,7 @@ export function createPoorBgaLoggingChart() {
 
 export function createLandmineOnlyChart(options: { includeExplosionSound?: boolean; value?: string } = {}) {
   const { includeExplosionSound = true, value = '10' } = options;
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 120;
   if (includeExplosionSound) {
     json.resources.wav['00'] = 'explode.wav';
@@ -259,7 +259,7 @@ export interface RecordedJudgeCombo {
 }
 
 export function createJudgeComboRecorder(records: RecordedJudgeCombo[]) {
-  return async (context: CreatePlayerUiRuntimeContext) => {
+  return async (context: CreatePlayerUIRuntimeContext) => {
     const originalPublishJudgeCombo = context.stateSignals.publishJudgeCombo;
     context.stateSignals.publishJudgeCombo = (judge, combo, channel, updatedAtMs) => {
       records.push({
@@ -282,8 +282,8 @@ export function createJudgeComboRecorder(records: RecordedJudgeCombo[]) {
 }
 
 /** UI runtime that records every long-note command the engine pushes (the UI must be enabled for them to fire). */
-export function createLongNoteCommandRecorder(records: PlayerUiCommand[]) {
-  return async (context: CreatePlayerUiRuntimeContext) => {
+export function createLongNoteCommandRecorder(records: PlayerUICommand[]) {
+  return async (context: CreatePlayerUIRuntimeContext) => {
     const original = context.uiSignals.pushCommand;
     context.uiSignals.pushCommand = (command) => {
       if (command.kind === 'long-note-start' || command.kind === 'long-note-end') {
@@ -303,7 +303,7 @@ export function createLongNoteCommandRecorder(records: PlayerUiCommand[]) {
 }
 
 export function createPlaybackEndRecorder(targetSeconds: number, records: number[]) {
-  return async (context: CreatePlayerUiRuntimeContext) => ({
+  return async (context: CreatePlayerUIRuntimeContext) => ({
     tuiEnabled: true,
     playbackEndSeconds: targetSeconds,
     start: () => undefined,

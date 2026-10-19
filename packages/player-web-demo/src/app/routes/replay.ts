@@ -15,7 +15,7 @@ export interface ReplayRouteDeps {
   /** The library the log's chart is looked for in. */
   readonly library: Pick<LibraryService, 'collection'>;
   /** The charts' SHA-256, which a log records. */
-  readonly records: Pick<RecordsService, 'resolveChartSha256'>;
+  readonly records: Pick<RecordsService, 'resolveChartSHA256'>;
   readonly setStatus: (text: string) => void;
   /** Shows a status about the play, which the select screen replaces when it comes back. */
   readonly setPlayStatus: (text: string) => void;
@@ -83,7 +83,7 @@ export class ReplayRoute {
     const sha256 = playlog.chart.sha256?.toLowerCase();
     if (sha256 !== undefined && sha256.length > 0) {
       for (const entry of this.library.collection.charts) {
-        if ((await this.records.resolveChartSha256(entry)) === sha256) {
+        if ((await this.records.resolveChartSHA256(entry)) === sha256) {
           return entry;
         }
       }

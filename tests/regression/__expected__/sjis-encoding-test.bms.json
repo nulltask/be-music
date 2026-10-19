@@ -25,12 +25,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {}
+      "swBGA": {}
     },
     "controlFlow": [],
     "events": [
@@ -53,7 +53,7 @@
       "randomPatterns": [],
       "title": "テスト曲",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -71,8 +71,8 @@
           "percent": 75
         },
         "noteCount": 1,
-        "chartFingerprint": "bmfp0:c02b47a1309be7f5c4cebdaa94895ff1d2df3ef056272a3148ae863fc1893ab8",
-        "playFingerprint": "bmfp0:c02b47a1309be7f5c4cebdaa94895ff1d2df3ef056272a3148ae863fc1893ab8",
+        "chartFingerprint": "bmfp0:3fb8afb0b5291e42ec0c143fdde64b919e0fb57bb5e20d1827800d355b641473",
+        "playFingerprint": "bmfp0:3fb8afb0b5291e42ec0c143fdde64b919e0fb57bb5e20d1827800d355b641473",
         "title": "テスト曲",
         "artist": "佐藤"
       },

@@ -1,5 +1,5 @@
 import { and, desc, eq, or, sql, type SQL } from 'drizzle-orm';
-import { avatarUrl } from '../avatars.ts';
+import { avatarURL } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import { course, courseScore, courseScoreResult, profile, user } from '../db/schema.ts';
 import type { RulesetId } from '../rulesets.ts';
@@ -108,7 +108,7 @@ export async function loadRecentCourseRuns(db: Database, filter: RecentCourseRun
     createdAt: createdAt.getTime(),
     stageCount: stageChartFingerprints.length,
     anonymous: anonymous === true,
-    avatarUrl: avatarUrl(row.handle, avatarKey),
+    avatarUrl: avatarURL(row.handle, avatarKey),
     rank: Number(above) + 1,
     players: Number(players),
   }));

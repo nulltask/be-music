@@ -32,12 +32,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1,
       "lnType": 2,
       "lnMode": 1
@@ -103,7 +103,7 @@
       "randomPatterns": [],
       "title": "LNTYPE 2 Continuous Long Note",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -136,8 +136,8 @@
           "percent": 75
         },
         "noteCount": 16,
-        "chartFingerprint": "bmfp0:90f5b1d995dfd51b5576451ce0c1b4a7c3d081aa9639cee86b42314c22820785",
-        "playFingerprint": "bmfp0:90f5b1d995dfd51b5576451ce0c1b4a7c3d081aa9639cee86b42314c22820785",
+        "chartFingerprint": "bmfp0:1b10d8858ff197afcbef17bae62a10276dbd813682ba3f15906ca50350617fcb",
+        "playFingerprint": "bmfp0:1b10d8858ff197afcbef17bae62a10276dbd813682ba3f15906ca50350617fcb",
         "title": "LNTYPE 2 Continuous Long Note",
         "subtitle": "MGQ-style long notes spelled as a run of repeated tokens",
         "artist": "be-music",

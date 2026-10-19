@@ -6,9 +6,9 @@ import {
   normalizeChannel,
   normalizeObjectKey,
   type BeMusicEvent,
-  type BeMusicJson,
-  type BmsControlFlowEntry,
-  type BmsControlFlowHeaderEntry,
+  type BeMusicJSON,
+  type BMSControlFlowEntry,
+  type BMSControlFlowHeaderEntry,
 } from '@be-music/json';
 import { formatRational, type Rational } from './fingerprint-rational.ts';
 import {
@@ -47,7 +47,7 @@ import {
   type FingerprintBranch,
   type FingerprintDeltaLists,
   type FingerprintHeaderChange,
-  canonicalizeJsonValue,
+  canonicalizeJSONValue,
 } from './fingerprint-document.ts';
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -66,8 +66,8 @@ interface DeltaLists {
   lengths: Array<Keyed<[number, Rational]>>;
 }
 
-type HeaderField = 'bpm' | 'baseBpm' | 'judge' | 'total' | 'player3';
-export const HEADER_FIELDS: ReadonlyArray<HeaderField> = ['bpm', 'baseBpm', 'judge', 'total', 'player3'];
+type HeaderField = 'bpm' | 'baseBPM' | 'judge' | 'total' | 'player3';
+export const HEADER_FIELDS: ReadonlyArray<HeaderField> = ['bpm', 'baseBPM', 'judge', 'total', 'player3'];
 
 export interface ItemDelta {
   add: DeltaLists;
@@ -96,15 +96,15 @@ function timelineKey(item: TimelineItem): string {
 }
 
 export function headerFieldText(header: Partial<HeaderItems>, field: HeaderField): string {
-  return canonicalizeJsonValue(formatHeaderField(header, field));
+  return canonicalizeJSONValue(formatHeaderField(header, field));
 }
 
 function formatHeaderField(header: Partial<HeaderItems>, field: HeaderField): unknown {
   switch (field) {
     case 'bpm':
       return header.bpm === undefined ? undefined : formatRational(header.bpm);
-    case 'baseBpm':
-      return header.baseBpm === undefined ? undefined : header.baseBpm === null ? null : formatRational(header.baseBpm);
+    case 'baseBPM':
+      return header.baseBPM === undefined ? undefined : header.baseBPM === null ? null : formatRational(header.baseBPM);
     case 'judge':
       return header.judge === undefined ? undefined : formatJudge(header.judge);
     case 'total':
@@ -266,7 +266,7 @@ const ALL_LANES = '*lanes';
 export interface ReplayContext {
   /** Measures at or after this are past every included event of every outcome (spec 3.6.6). */
   measureLimit: number;
-  top: BeMusicJson;
+  top: BeMusicJSON;
   topBuckets: Map<string, BeMusicEvent[]>;
   topItems: ChartItems;
   base: 36 | 62;
@@ -279,11 +279,11 @@ export interface ReplayContext {
  */
 function replayEntries(
   context: ReplayContext,
-  entries: ReadonlyArray<BmsControlFlowEntry>,
+  entries: ReadonlyArray<BMSControlFlowEntry>,
   applied: ReadonlyArray<number>,
-): { json: BeMusicJson; buckets: Map<string, BeMusicEvent[]>; touched: Set<string> } {
+): { json: BeMusicJSON; buckets: Map<string, BeMusicEvent[]>; touched: Set<string> } {
   const { top, base } = context;
-  const json: BeMusicJson = {
+  const json: BeMusicJSON = {
     ...top,
     metadata: { ...top.metadata },
     resources: { ...top.resources, bpm: { ...top.resources.bpm }, stop: { ...top.resources.stop } },
@@ -363,8 +363,8 @@ function replayEntries(
 
 /** Re-applies a captured header line, limited to the headers the fingerprint reads, with the parser's rules. */
 function applyFingerprintHeader(
-  json: BeMusicJson,
-  entry: BmsControlFlowHeaderEntry,
+  json: BeMusicJSON,
+  entry: BMSControlFlowHeaderEntry,
   base: 36 | 62,
   touched: Set<string>,
 ): void {
@@ -414,7 +414,7 @@ function applyFingerprintHeader(
       return;
     case 'BASEBPM':
       if (Number.isFinite(numeric) && numeric > 0) {
-        json.bms.baseBpm = numeric;
+        json.bms.baseBPM = numeric;
         touched.add(HEADER_BUCKET);
       }
       return;
@@ -474,7 +474,7 @@ function applyFingerprintHeader(
 /** What the lines `applied` change in the content outside control flow. */
 export function computeDelta(
   context: ReplayContext,
-  entries: ReadonlyArray<BmsControlFlowEntry>,
+  entries: ReadonlyArray<BMSControlFlowEntry>,
   applied: ReadonlyArray<number>,
 ): ItemDelta {
   const delta: ItemDelta = { add: emptyLists(), remove: emptyLists(), header: {} };
@@ -671,8 +671,8 @@ export function parseDelta(branch: FingerprintBranch): ItemDelta {
   if (change.bpm !== undefined) {
     header.bpm = parseRational(change.bpm);
   }
-  if (change.baseBpm !== undefined) {
-    header.baseBpm = change.baseBpm === null ? null : parseRational(change.baseBpm);
+  if (change.baseBPM !== undefined) {
+    header.baseBPM = change.baseBPM === null ? null : parseRational(change.baseBPM);
   }
   if (change.judge !== undefined) {
     header.judge = parseJudge(change.judge);

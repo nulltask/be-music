@@ -1,9 +1,9 @@
 import {
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 import {
   createBeatResolver,
@@ -12,9 +12,9 @@ import {
   sortEvents,
   type BeatResolver,
 } from './beats.ts';
-import { isPlayableNormalizedChannel, mapBmsLongNoteNormalizedChannelToPlayable } from './channels.ts';
+import { isPlayableNormalizedChannel, mapBMSLongNoteNormalizedChannelToPlayable } from './channels.ts';
 
-export interface BmsLongNote {
+export interface BMSLongNote {
   event: BeMusicEvent;
   sourceChannel: string;
   channel: string;
@@ -27,18 +27,18 @@ export interface BmsLongNote {
   endEvent?: BeMusicEvent;
 }
 
-export interface BmsLongNoteResolution {
-  notes: BmsLongNote[];
+export interface BMSLongNoteResolution {
+  notes: BMSLongNote[];
   suppressedTriggerEvents: Set<BeMusicEvent>;
   /** The `#LNTYPE` the `5x` / `6x` objects were read with: the chart's own, else inferred or 1. */
   lnType: 1 | 2;
 }
 
-export interface ResolveBmsLongNotesOptions {
-  inferLnTypeWhenMissing?: boolean;
+export interface ResolveBMSLongNotesOptions {
+  inferLNTypeWhenMissing?: boolean;
 }
 
-interface ResolvedBmsLongNoteEvent {
+interface ResolvedBMSLongNoteEvent {
   event: BeMusicEvent;
   sourceChannel: string;
   channel: string;
@@ -50,49 +50,49 @@ interface NormalizedChartEvent {
   normalizedChannel: string;
 }
 
-export function resolveBmsLongNotes(
-  json: BeMusicJson,
-  options: ResolveBmsLongNotesOptions = {},
-): BmsLongNoteResolution {
-  const declaredLnType = json.bms.lnType === 1 || json.bms.lnType === 2 ? json.bms.lnType : 1;
+export function resolveBMSLongNotes(
+  json: BeMusicJSON,
+  options: ResolveBMSLongNotesOptions = {},
+): BMSLongNoteResolution {
+  const declaredLNType = json.bms.lnType === 1 || json.bms.lnType === 2 ? json.bms.lnType : 1;
   if (json.sourceFormat !== 'bms') {
     return {
       notes: [],
       suppressedTriggerEvents: new Set(),
-      lnType: declaredLnType,
+      lnType: declaredLNType,
     };
   }
 
-  const longNoteEvents = prepareResolvedBmsLongNoteEvents(json.events, resolveBmsBase(json));
+  const longNoteEvents = prepareResolvedBMSLongNoteEvents(json.events, resolveBMSBase(json));
   if (longNoteEvents.length === 0) {
     return {
       notes: [],
       suppressedTriggerEvents: new Set(),
-      lnType: declaredLnType,
+      lnType: declaredLNType,
     };
   }
 
   const beatResolver = createBeatResolver(json);
-  const lnType = resolveBmsLongNoteType(json, longNoteEvents, options);
+  const lnType = resolveBMSLongNoteType(json, longNoteEvents, options);
   const resolved =
     lnType === 2
-      ? resolveBmsLongNotesType2(longNoteEvents, beatResolver)
-      : resolveBmsLongNotesType1(longNoteEvents, beatResolver);
+      ? resolveBMSLongNotesType2(longNoteEvents, beatResolver)
+      : resolveBMSLongNotesType1(longNoteEvents, beatResolver);
   return { ...resolved, lnType };
 }
 
-export function collectLnobjEndEvents(json: BeMusicJson): Set<BeMusicEvent> {
-  return resolveLnobjLongNotes(json).endEvents;
+export function collectLNOBJEndEvents(json: BeMusicJSON): Set<BeMusicEvent> {
+  return resolveLNOBJLongNotes(json).endEvents;
 }
 
-export interface LnobjLongNoteResolution {
+export interface LNOBJLongNoteResolution {
   startToEndBeat: Map<BeMusicEvent, number>;
   /** The end object each long-note start pairs with (the same pairs as {@link startToEndBeat}). */
   startToEndEvent: Map<BeMusicEvent, BeMusicEvent>;
   endEvents: Set<BeMusicEvent>;
 }
 
-export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolution {
+export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolution {
   if (json.sourceFormat !== 'bms') {
     return {
       startToEndBeat: new Map(),
@@ -101,8 +101,8 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
     };
   }
 
-  const idBase = resolveBmsBase(json);
-  const lnObjValues = resolveLnobjValues(json, idBase);
+  const idBase = resolveBMSBase(json);
+  const lnObjValues = resolveLNOBJValues(json, idBase);
   if (lnObjValues.size === 0) {
     return {
       startToEndBeat: new Map(),
@@ -153,13 +153,13 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
   };
 }
 
-function resolveBmsLongNotesType1(
-  events: ResolvedBmsLongNoteEvent[],
+function resolveBMSLongNotesType1(
+  events: ResolvedBMSLongNoteEvent[],
   beatResolver: BeatResolver,
-): Omit<BmsLongNoteResolution, 'lnType'> {
-  const notes: BmsLongNote[] = [];
+): Omit<BMSLongNoteResolution, 'lnType'> {
+  const notes: BMSLongNote[] = [];
   const suppressedTriggerEvents = new Set<BeMusicEvent>();
-  const pendingByChannel = new Map<string, BmsLongNote>();
+  const pendingByChannel = new Map<string, BMSLongNote>();
 
   for (const item of events) {
     const beat = beatResolver.eventToBeat(item.event);
@@ -171,7 +171,7 @@ function resolveBmsLongNotesType1(
       pendingByChannel.delete(item.sourceChannel);
       continue;
     }
-    const note: BmsLongNote = {
+    const note: BMSLongNote = {
       event: item.event,
       sourceChannel: item.sourceChannel,
       channel: item.channel,
@@ -184,7 +184,7 @@ function resolveBmsLongNotesType1(
   return { notes, suppressedTriggerEvents };
 }
 
-function resolveLnobjValues(json: BeMusicJson, base: 36 | 62 = 36): Set<string> {
+function resolveLNOBJValues(json: BeMusicJSON, base: 36 | 62 = 36): Set<string> {
   const values = new Set<string>();
   for (const candidate of json.bms.lnObjs ?? []) {
     if (typeof candidate === 'string' && candidate.length > 0) {
@@ -205,19 +205,19 @@ function prepareNormalizedChartEvents(events: ReadonlyArray<BeMusicEvent>): Norm
   return prepared;
 }
 
-function prepareResolvedBmsLongNoteEvents(
+function prepareResolvedBMSLongNoteEvents(
   events: ReadonlyArray<BeMusicEvent>,
   base: 36 | 62 = 36,
-): ResolvedBmsLongNoteEvent[] {
-  const prepared: ResolvedBmsLongNoteEvent[] = [];
+): ResolvedBMSLongNoteEvent[] {
+  const prepared: ResolvedBMSLongNoteEvent[] = [];
   // Only the `5x` / `6x` objects are sorted, not the whole chart: the sort is stable, so they come out in the same order
   // as when picked from the sorted chart.
   const longNoteEvents = events.filter(
-    (event) => mapBmsLongNoteNormalizedChannelToPlayable(normalizeChannel(event.channel)) !== undefined,
+    (event) => mapBMSLongNoteNormalizedChannelToPlayable(normalizeChannel(event.channel)) !== undefined,
   );
   for (const event of sortEvents(longNoteEvents)) {
     const sourceChannel = normalizeChannel(event.channel);
-    const mapped = mapBmsLongNoteNormalizedChannelToPlayable(sourceChannel)!;
+    const mapped = mapBMSLongNoteNormalizedChannelToPlayable(sourceChannel)!;
     prepared.push({
       event,
       sourceChannel,
@@ -231,7 +231,7 @@ function prepareResolvedBmsLongNoteEvents(
 function collectLegacyLongNoteTickKeysFromPreparedEvents(events: ReadonlyArray<NormalizedChartEvent>): Set<string> {
   const keys = new Set<string>();
   for (const item of events) {
-    const playableChannel = mapBmsLongNoteNormalizedChannelToPlayable(item.normalizedChannel);
+    const playableChannel = mapBMSLongNoteNormalizedChannelToPlayable(item.normalizedChannel);
     if (!playableChannel) {
       continue;
     }
@@ -251,16 +251,16 @@ function createEventTickKey(event: BeMusicEvent): string {
   return `${measure}:${numerator}/${denominator}`;
 }
 
-function resolveBmsLongNotesType2(
-  events: ResolvedBmsLongNoteEvent[],
+function resolveBMSLongNotesType2(
+  events: ResolvedBMSLongNoteEvent[],
   beatResolver: BeatResolver,
-): Omit<BmsLongNoteResolution, 'lnType'> {
-  const notes: BmsLongNote[] = [];
+): Omit<BMSLongNoteResolution, 'lnType'> {
+  const notes: BMSLongNote[] = [];
   const suppressedTriggerEvents = new Set<BeMusicEvent>();
   const eventsByChannel = groupResolvedLongNoteEventsBySourceChannel(events);
 
   for (const channelEvents of eventsByChannel.values()) {
-    let runNote: BmsLongNote | undefined;
+    let runNote: BMSLongNote | undefined;
     let previousEvent: BeMusicEvent | undefined;
 
     for (const item of channelEvents) {
@@ -277,14 +277,14 @@ function resolveBmsLongNotesType2(
         continue;
       }
 
-      if (previousEvent && isBmsLongNoteType2Continuation(previousEvent, item.event)) {
+      if (previousEvent && isBMSLongNoteType2Continuation(previousEvent, item.event)) {
         suppressedTriggerEvents.add(item.event);
         previousEvent = item.event;
         continue;
       }
 
       if (previousEvent) {
-        const endBeat = resolveBmsLongNoteType2SegmentEndBeat(previousEvent, beatResolver);
+        const endBeat = resolveBMSLongNoteType2SegmentEndBeat(previousEvent, beatResolver);
         if (endBeat > runNote.beat) {
           runNote.endBeat = endBeat;
           runNote.endEvent = previousEvent;
@@ -301,7 +301,7 @@ function resolveBmsLongNotesType2(
     }
 
     if (runNote && previousEvent) {
-      const endBeat = resolveBmsLongNoteType2SegmentEndBeat(previousEvent, beatResolver);
+      const endBeat = resolveBMSLongNoteType2SegmentEndBeat(previousEvent, beatResolver);
       if (endBeat > runNote.beat) {
         runNote.endBeat = endBeat;
         runNote.endEvent = previousEvent;
@@ -325,27 +325,27 @@ function resolveBmsLongNotesType2(
   return { notes, suppressedTriggerEvents };
 }
 
-function resolveBmsLongNoteType(
-  json: BeMusicJson,
-  events: ResolvedBmsLongNoteEvent[],
-  options: ResolveBmsLongNotesOptions,
+function resolveBMSLongNoteType(
+  json: BeMusicJSON,
+  events: ResolvedBMSLongNoteEvent[],
+  options: ResolveBMSLongNotesOptions,
 ): 1 | 2 {
   if (json.bms.lnType === 1 || json.bms.lnType === 2) {
     return json.bms.lnType;
   }
-  if (options.inferLnTypeWhenMissing !== true) {
+  if (options.inferLNTypeWhenMissing !== true) {
     return 1;
   }
-  return inferBmsLongNoteType(events);
+  return inferBMSLongNoteType(events);
 }
 
-function inferBmsLongNoteType(events: ResolvedBmsLongNoteEvent[]): 1 | 2 {
+function inferBMSLongNoteType(events: ResolvedBMSLongNoteEvent[]): 1 | 2 {
   for (const channelEvents of groupResolvedLongNoteEventsBySourceChannel(events).values()) {
     let previous: BeMusicEvent | undefined;
     let previousValue: string | undefined;
     let continuationCount = 0;
     for (const item of channelEvents) {
-      if (previous && previousValue === item.normalizedValue && isBmsLongNoteType2Continuation(previous, item.event)) {
+      if (previous && previousValue === item.normalizedValue && isBMSLongNoteType2Continuation(previous, item.event)) {
         // A single same-value continuation is ambiguous because legacy LNTYPE=1 charts also use same-value pairs for
         // their start/end markers.
         continuationCount += 1;
@@ -364,9 +364,9 @@ function inferBmsLongNoteType(events: ResolvedBmsLongNoteEvent[]): 1 | 2 {
 }
 
 function groupResolvedLongNoteEventsBySourceChannel(
-  events: ReadonlyArray<ResolvedBmsLongNoteEvent>,
-): Map<string, ResolvedBmsLongNoteEvent[]> {
-  const grouped = new Map<string, ResolvedBmsLongNoteEvent[]>();
+  events: ReadonlyArray<ResolvedBMSLongNoteEvent>,
+): Map<string, ResolvedBMSLongNoteEvent[]> {
+  const grouped = new Map<string, ResolvedBMSLongNoteEvent[]>();
   for (const item of events) {
     const bucket = grouped.get(item.sourceChannel);
     if (bucket) {
@@ -378,7 +378,7 @@ function groupResolvedLongNoteEventsBySourceChannel(
   return grouped;
 }
 
-function isBmsLongNoteType2Continuation(previous: BeMusicEvent, current: BeMusicEvent): boolean {
+function isBMSLongNoteType2Continuation(previous: BeMusicEvent, current: BeMusicEvent): boolean {
   if (current.measure === previous.measure) {
     return (
       current.position[1] === previous.position[1] &&
@@ -399,7 +399,7 @@ function isBmsLongNoteType2Continuation(previous: BeMusicEvent, current: BeMusic
   return previousNumerator + 1 === previousDenominator && currentNumerator === 0;
 }
 
-function resolveBmsLongNoteType2SegmentEndBeat(event: BeMusicEvent, beatResolver: BeatResolver): number {
+function resolveBMSLongNoteType2SegmentEndBeat(event: BeMusicEvent, beatResolver: BeatResolver): number {
   const measure = Math.max(0, Math.floor(event.measure));
   const denominator = normalizePositionDenominator(event.position[1]);
   const numerator = normalizePositionNumerator(event.position[0], denominator);

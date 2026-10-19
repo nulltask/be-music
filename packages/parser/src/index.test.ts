@@ -4,21 +4,21 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
 import { BMS_JSON_FORMAT, type BeMusicEvent } from '../../json/src/index.ts';
 import {
-  decodeBmsText,
-  decodeUtf8Text,
+  decodeBMSText,
+  decodeUTF8Text,
   parseBmson,
   parseChart,
   parseChartFile,
-  resolveBmsControlFlow,
-  resolveBmsControlFlowWithDraws,
+  resolveBMSControlFlow,
+  resolveBMSControlFlowWithDraws,
 } from './index.ts';
 import { drawRandomOutcomes } from '../../chart/src/index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
+const unifiedBMSChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
 describe('parser', () => {
   test('BMS: parses measure length, BPM, STOP, and BGA channels', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    const json = await parseChartFile(unifiedBMSChartPath);
 
     expect(json.sourceFormat).toBe('bms');
     expect(json.metadata.title).toBe('Four-Measure Command Combo Test');
@@ -144,16 +144,16 @@ describe('parser', () => {
     ].join('\n');
     const parsed = parseChart(source);
 
-    const branch1 = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const branch1 = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(branch1.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['1:01', '2:03']);
     expect(branch1.metadata.extras.END).toBeUndefined();
 
-    const branch2 = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    const branch2 = resolveBMSControlFlow(parsed, { random: () => 0.9999999 });
     expect(branch2.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['1:02', '2:03']);
 
     // Bare `#END` also closes the block; the measure-2 note must survive a non-matching roll.
     const bareEndSource = ['#BPM 120', '#RANDOM 2', '#IF 1', '#00111:01', '#END', '#00211:03', ''].join('\n');
-    const bareEnd = resolveBmsControlFlow(parseChart(bareEndSource), { random: () => 0.9999999 });
+    const bareEnd = resolveBMSControlFlow(parseChart(bareEndSource), { random: () => 0.9999999 });
     expect(bareEnd.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['2:03']);
 
     // `#END <other value>` is NOT a control-flow alias — it stays an unknown header.
@@ -229,10 +229,10 @@ describe('parser', () => {
     const parsed = parseChart(['#RANDOM 2', '#IF 1', '#BPM 150', '#ENDIF', '#ENDRANDOM', '#00111:01', ''].join('\n'));
     expect(parsed.metadata.bpm).toBe(130);
 
-    const resolvedWhenBranchIsActive = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const resolvedWhenBranchIsActive = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(resolvedWhenBranchIsActive.metadata.bpm).toBe(150);
 
-    const resolvedWhenBranchIsInactive = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    const resolvedWhenBranchIsInactive = resolveBMSControlFlow(parsed, { random: () => 0.9999999 });
     expect(resolvedWhenBranchIsInactive.metadata.bpm).toBe(130);
   });
 
@@ -254,7 +254,7 @@ describe('parser', () => {
       '#00111:0102',
       '',
     ].join('\n');
-    const resolved = resolveBmsControlFlow(parseChart(source), { random: () => 0 });
+    const resolved = resolveBMSControlFlow(parseChart(source), { random: () => 0 });
 
     // A branch line beats an earlier top-level line and loses to a later one, whatever the header.
     expect(resolved.resources.wav['01']).toBe('branch.wav');
@@ -264,20 +264,20 @@ describe('parser', () => {
     expect([...resolved.bms.stp].sort()).toEqual(['001.000 100', '002.000 100']);
 
     // The rule survives a round trip through the JSON IR.
-    const viaJson = resolveBmsControlFlow(parseChart(JSON.stringify(parseChart(source)), 'chart.json'), {
+    const viaJSON = resolveBMSControlFlow(parseChart(JSON.stringify(parseChart(source)), 'chart.json'), {
       random: () => 0,
     });
-    expect(viaJson.resources.wav['02']).toBe('top-after.wav');
-    expect(viaJson.metadata.bpm).toBe(180);
+    expect(viaJSON.resources.wav['02']).toBe('top-after.wav');
+    expect(viaJSON.metadata.bpm).toBe(180);
   });
 
   test('BMS: parses extension headers into dedicated fields', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    const json = await parseChartFile(unifiedBMSChartPath);
 
     expect(json.bms.preview).toBe('sample.wav');
     expect(json.bms.player).toBe(3);
-    expect(json.bms.pathWav).toBe('./');
-    expect(json.bms.baseBpm).toBe(128);
+    expect(json.bms.pathWAV).toBe('./');
+    expect(json.bms.baseBPM).toBe(128);
     expect(json.bms.stp).toEqual(['008.192']);
     expect(json.bms.option).toBe('RANDOM');
     expect(json.bms.changeOption['01']).toBe('MIRROR');
@@ -286,18 +286,18 @@ describe('parser', () => {
     expect(json.bms.lnType).toBe(1);
     expect(json.bms.lnMode).toBe(1);
     expect(json.bms.lnObjs).toEqual(['AA', 'AB']);
-    expect(json.bms.volWav).toBe(90);
+    expect(json.bms.volWAV).toBe(90);
     expect(json.bms.defExRank).toBe(120);
     expect(json.bms.exRank['01']).toBe('120,90,60,30');
     expect(json.bms.argb['01']).toBe('FF000000');
-    expect(json.bms.exWav['01']).toBe('ex_sample.wav');
-    expect(json.bms.exBmp['01']).toBe('ex_image.bmp');
+    expect(json.bms.exWAV['01']).toBe('ex_sample.wav');
+    expect(json.bms.exBMP['01']).toBe('ex_image.bmp');
     expect(json.bms.bga['01']).toBe('01');
     expect(json.bms.scroll['01']).toBe(0.5);
     expect(json.bms.scroll['02']).toBe(1);
     expect(json.bms.scroll['03']).toBe(1.5);
-    expect(json.bms.poorBga).toBe('03');
-    expect(json.bms.swBga['01']).toBe('02');
+    expect(json.bms.poorBGA).toBe('03');
+    expect(json.bms.swBGA['01']).toBe('02');
     expect(json.bms.videoFile).toBe('demo.mp4');
     expect(json.bms.midiFile).toBe('demo.mid');
     expect(json.bms.materials).toBe('demo.materials');
@@ -459,7 +459,7 @@ describe('parser', () => {
   });
 
   test('BMS: parses RANDOM/IF/SWITCH control flow directives', async () => {
-    const parsed = await parseChartFile(unifiedBmsChartPath);
+    const parsed = await parseChartFile(unifiedBMSChartPath);
 
     expect(parsed.resources.wav['02']).toBe('branch.wav');
     expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
@@ -467,7 +467,7 @@ describe('parser', () => {
     expect(parsed.events.some((event) => event.measure === 21 && event.channel === '16')).toBe(false);
     expect(parsed.events.some((event) => event.measure === 23 && event.channel === '22')).toBe(false);
 
-    const resolvedWhenRandomIs1 = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const resolvedWhenRandomIs1 = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(resolvedWhenRandomIs1.resources.wav['02']).toBe('right.wav');
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(true);
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 22 && event.channel === '11')).toBe(false);
@@ -482,7 +482,7 @@ describe('parser', () => {
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(true);
     expect(resolvedWhenRandomIs1.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(false);
 
-    const resolvedWhenRandomIs2 = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    const resolvedWhenRandomIs2 = resolveBMSControlFlow(parsed, { random: () => 0.9999999 });
     expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(false);
     expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(true);
 
@@ -493,13 +493,13 @@ describe('parser', () => {
   });
 
   test('BMS: resolves control flow with explicit draws, the same draws always giving the same chart', async () => {
-    const parsed = await parseChartFile(unifiedBmsChartPath);
+    const parsed = await parseChartFile(unifiedBMSChartPath);
     for (const roll of [0, 0.5, 0.9999999]) {
       const draws = drawRandomOutcomes(parsed, () => roll);
-      const resolved = resolveBmsControlFlowWithDraws(parsed, draws);
-      expect(resolveBmsControlFlowWithDraws(parsed, draws)).toEqual(resolved);
-      // `resolveBmsControlFlow` is the same resolution with draws it makes itself.
-      expect(resolveBmsControlFlow(parsed, { random: () => roll })).toEqual(resolved);
+      const resolved = resolveBMSControlFlowWithDraws(parsed, draws);
+      expect(resolveBMSControlFlowWithDraws(parsed, draws)).toEqual(resolved);
+      // `resolveBMSControlFlow` is the same resolution with draws it makes itself.
+      expect(resolveBMSControlFlow(parsed, { random: () => roll })).toEqual(resolved);
     }
     // Resolving does not touch the source chart.
     expect(parsed.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(false);
@@ -520,27 +520,27 @@ describe('parser', () => {
       ].join('\n'),
       'bms',
     );
-    const resolved = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const resolved = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(resolved.bms.controlFlow).toEqual([]);
     expect(resolved.events.map((event) => event.channel)).toEqual(['11']);
     for (const roll of [0, 0.9]) {
       // Without control flow there is nothing left to draw, so no roll can stack a second branch on top.
-      expect(resolveBmsControlFlow(resolved, { random: () => roll })).toEqual(resolved);
+      expect(resolveBMSControlFlow(resolved, { random: () => roll })).toEqual(resolved);
     }
     expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
   });
 
   test('BMS: rejects draws that were not drawn for the chart', () => {
     const parsed = parseChart(['#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#ENDRANDOM'].join('\n'), 'bms');
-    expect(() => resolveBmsControlFlowWithDraws(parsed, [])).toThrow(RangeError);
-    expect(() => resolveBmsControlFlowWithDraws(parsed, [{ command: 'RANDOM', range: 2, value: 3 }])).toThrow(
+    expect(() => resolveBMSControlFlowWithDraws(parsed, [])).toThrow(RangeError);
+    expect(() => resolveBMSControlFlowWithDraws(parsed, [{ command: 'RANDOM', range: 2, value: 3 }])).toThrow(
       RangeError,
     );
     const plain = parseChart('#00111:01', 'bms');
-    expect(() => resolveBmsControlFlowWithDraws(plain, [{ command: 'RANDOM', range: 2, value: 1 }])).toThrow(
+    expect(() => resolveBMSControlFlowWithDraws(plain, [{ command: 'RANDOM', range: 2, value: 1 }])).toThrow(
       RangeError,
     );
-    expect(resolveBmsControlFlowWithDraws(plain, [])).toEqual(plain);
+    expect(resolveBMSControlFlowWithDraws(plain, [])).toEqual(plain);
   });
 
   test('bmson: maps version/lines/info.resolution into IR', async () => {
@@ -1421,11 +1421,11 @@ describe('parser', () => {
           lnMode: '1',
           lnObj: 'yy',
           lnObjs: ['zz'],
-          volWav: '90',
+          volWAV: '90',
           defExRank: '100.5',
           player: '2',
-          pathWav: 'sounds/',
-          baseBpm: '145.5',
+          pathWAV: 'sounds/',
+          baseBPM: '145.5',
           stp: ['001.240', 120, '002.120'],
           option: 'HS',
           changeOption: {
@@ -1439,10 +1439,10 @@ describe('parser', () => {
           argb: {
             a: 'FF000000',
           },
-          exWav: {
+          exWAV: {
             1: 'extended.wav',
           },
-          exBmp: {
+          exBMP: {
             2: 'extended.bmp',
           },
           bga: {
@@ -1454,8 +1454,8 @@ describe('parser', () => {
           speed: {
             1: '1.5',
           },
-          poorBga: '02',
-          swBga: {
+          poorBGA: '02',
+          swBGA: {
             4: '03',
           },
           videoFile: 'movie.mp4',
@@ -1507,11 +1507,11 @@ describe('parser', () => {
     expect(parsed.bms.lnMode).toBe(1);
     expect(parsed.bms.lnObjs).toEqual(['ZZ']);
     expect(parsed.bms.lnObjs).not.toContain('YY');
-    expect(parsed.bms.volWav).toBe(90);
+    expect(parsed.bms.volWAV).toBe(90);
     expect(parsed.bms.defExRank).toBe(100.5);
     expect(parsed.bms.player).toBe(2);
-    expect(parsed.bms.pathWav).toBe('sounds/');
-    expect(parsed.bms.baseBpm).toBe(145.5);
+    expect(parsed.bms.pathWAV).toBe('sounds/');
+    expect(parsed.bms.baseBPM).toBe(145.5);
     expect(parsed.bms.stp).toEqual(['001.240', '002.120']);
     expect(parsed.bms.option).toBe('HS');
     expect(parsed.bms.changeOption['01']).toBe('MIRROR');
@@ -1519,13 +1519,13 @@ describe('parser', () => {
     expect(parsed.bms.exRank['01']).toBe('120');
     expect(parsed.bms.exRank.AB).toBe('70,55,40,25');
     expect(parsed.bms.argb['0A']).toBe('FF000000');
-    expect(parsed.bms.exWav['01']).toBe('extended.wav');
-    expect(parsed.bms.exBmp['02']).toBe('extended.bmp');
+    expect(parsed.bms.exWAV['01']).toBe('extended.wav');
+    expect(parsed.bms.exBMP['02']).toBe('extended.bmp');
     expect(parsed.bms.bga['03']).toBe('01');
     expect(parsed.bms.scroll['01']).toBe(0.5);
     expect(parsed.bms.speed['01']).toBe(1.5);
-    expect(parsed.bms.poorBga).toBe('02');
-    expect(parsed.bms.swBga['04']).toBe('03');
+    expect(parsed.bms.poorBGA).toBe('02');
+    expect(parsed.bms.swBGA['04']).toBe('03');
     expect(parsed.bms.videoFile).toBe('movie.mp4');
     expect(parsed.bms.midiFile).toBe('song.mid');
     expect(parsed.bms.materials).toBe('materials.def');
@@ -1631,24 +1631,24 @@ describe('parser', () => {
     expect(parsed.bms.lnType).toBe(1);
     expect(parsed.bms.lnMode).toBe(2);
     expect(parsed.bms.lnObjs).toEqual(['ZZ']);
-    expect(parsed.bms.volWav).toBe(70);
+    expect(parsed.bms.volWAV).toBe(70);
     expect(parsed.bms.defExRank).toBe(120);
     expect(parsed.bms.player).toBe(1);
-    expect(parsed.bms.pathWav).toBe('sounds/');
-    expect(parsed.bms.baseBpm).toBe(150);
+    expect(parsed.bms.pathWAV).toBe('sounds/');
+    expect(parsed.bms.baseBPM).toBe(150);
     expect(parsed.bms.stp).toEqual(['001.240']);
     expect(parsed.bms.option).toBe('HS');
     expect(parsed.bms.changeOption['01']).toBe('MIRROR');
     expect(parsed.bms.wavCmd).toBe('legacy');
     expect(parsed.bms.exRank['01']).toBe('100,80,60,40');
     expect(parsed.bms.argb['0A']).toBe('FF000000');
-    expect(parsed.bms.exWav['01']).toBe('extended.wav');
-    expect(parsed.bms.exBmp['0A']).toBe('extended.bmp');
+    expect(parsed.bms.exWAV['01']).toBe('extended.wav');
+    expect(parsed.bms.exBMP['0A']).toBe('extended.bmp');
     expect(parsed.bms.bga['01']).toBe('01');
     expect(parsed.bms.scroll['01']).toBe(1.25);
     expect(parsed.bms.speed['01']).toBe(1.5);
-    expect(parsed.bms.poorBga).toBe('02');
-    expect(parsed.bms.swBga['01']).toBe('03');
+    expect(parsed.bms.poorBGA).toBe('02');
+    expect(parsed.bms.swBGA['01']).toBe('03');
     expect(parsed.bms.videoFile).toBe('movie.mp4');
     expect(parsed.bms.midiFile).toBe('song.mid');
     expect(parsed.bms.materials).toBe('materials.def');
@@ -1794,67 +1794,67 @@ describe('parser', () => {
 
     // Resolving the control flow under a deterministic random value applies the IF block; the resolved chart should now
     // carry both case variants in `wav` as separate slots.
-    const resolved = resolveBmsControlFlow(parsed, { random: () => 0 });
+    const resolved = resolveBMSControlFlow(parsed, { random: () => 0 });
     expect(resolved.resources.wav['0a']).toBe('lower.wav');
     expect(resolved.resources.wav['0A']).toBe('upper.wav');
   });
 
-  test('decodeBmsText: honors #CHARSET UTF-8 even when shift_jis would also parse', () => {
+  test('decodeBMSText: honors #CHARSET UTF-8 even when shift_jis would also parse', () => {
     // The chart is authored in UTF-8 with the directive at the top. Without `#CHARSET`, the auto-detect path would
     // still reach UTF-8 here (no byte hits the 0x80+ shift_jis lead range), so we deliberately include a UTF-8 byte
     // sequence (`éclair` → `é` = 0xC3 0xA9) that decodes garbled under shift_jis. Honoring the directive yields the
     // correct accented form.
     const utf8Bytes = new TextEncoder().encode('#CHARSET UTF-8\n#TITLE éclair\n#ARTIST foo\n');
-    const decoded = decodeBmsText(utf8Bytes);
+    const decoded = decodeBMSText(utf8Bytes);
     expect(decoded.encoding).toBe('utf8');
     expect(decoded.text).toContain('#TITLE éclair');
   });
 
-  test('decodeBmsText: falls back to shift_jis default when no #CHARSET is declared', () => {
+  test('decodeBMSText: falls back to shift_jis default when no #CHARSET is declared', () => {
     // No directive, only shift_jis bytes (`「テスト」` = typical Japanese kana / brackets, well-formed in shift_jis but
     // garbled under UTF-8). The decoder should pick shift_jis automatically.
     const sjisBytes = new Uint8Array([
       0x23, 0x54, 0x49, 0x54, 0x4c, 0x45, 0x20, 0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x0a,
     ]); // "#TITLE テスト\n" in Shift_JIS
-    const decoded = decodeBmsText(sjisBytes);
+    const decoded = decodeBMSText(sjisBytes);
     expect(decoded.encoding).toBe('shift_jis');
     expect(decoded.text).toContain('テスト');
   });
 
-  test('decodeBmsText: detects a Korean EUC-KR chart, as beatoraja and Bemuse do', () => {
+  test('decodeBMSText: detects a Korean EUC-KR chart, as beatoraja and Bemuse do', () => {
     // "#TITLE 한국 노래\n#ARTIST 가수\n#BPM 150\n#00111:01\n" in EUC-KR (KS X 1001).
     const eucKrBytes = new Uint8Array([
       35, 84, 73, 84, 76, 69, 32, 199, 209, 177, 185, 32, 179, 235, 183, 161, 10, 35, 65, 82, 84, 73, 83, 84, 32, 176,
       161, 188, 246, 10, 35, 66, 80, 77, 32, 49, 53, 48, 10, 35, 48, 48, 49, 49, 49, 58, 48, 49, 10,
     ]);
-    const decoded = decodeBmsText(eucKrBytes);
+    const decoded = decodeBMSText(eucKrBytes);
     expect(decoded.encoding).toBe('euc-kr');
     const parsed = parseChart(decoded.text);
     expect(parsed.metadata.title).toBe('한국 노래');
     expect(parsed.metadata.artist).toBe('가수');
   });
 
-  test('decodeBmsText: honors #CHARSET EUC-KR / CP949', () => {
+  test('decodeBMSText: honors #CHARSET EUC-KR / CP949', () => {
     const directive = new TextEncoder().encode('#CHARSET CP949\n');
     const title = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 199, 209, 177, 185, 10]); // "#TITLE 한국\n"
     const merged = new Uint8Array(directive.length + title.length);
     merged.set(directive, 0);
     merged.set(title, directive.length);
-    const decoded = decodeBmsText(merged);
+    const decoded = decodeBMSText(merged);
     expect(decoded.encoding).toBe('euc-kr');
     expect(decoded.text).toContain('#TITLE 한국');
   });
 
-  test('decodeBmsText: does not read half-width katakana Shift_JIS that is not Hangul-shaped as EUC-KR', () => {
+  test('decodeBMSText: does not read half-width katakana Shift_JIS that is not Hangul-shaped as EUC-KR', () => {
     // "#TITLE ﾃﾞﾝﾜ\n#00111:01\n" in Shift_JIS. These bytes also form valid EUC-KR pairs, but one of the two is a
     // Hanja, which Korean chart text does not look like.
     const sjisBytes = new Uint8Array([
       35, 84, 73, 84, 76, 69, 32, 195, 222, 221, 220, 10, 35, 48, 48, 49, 49, 49, 58, 48, 49, 10,
     ]);
-    expect(decodeBmsText(sjisBytes).encoding).not.toBe('euc-kr');
+    expect(decodeBMSText(sjisBytes).encoding).not.toBe('euc-kr');
   });
 
-  test('decodeBmsText: #CHARSET shift_jis with non-ASCII title surfaces the kana', () => {
+  test('decodeBMSText: #CHARSET shift_jis with non-ASCII title surfaces the kana', () => {
     // Same shift_jis content as above but with the directive explicitly set. The directive should drive the decode path
     // even though autodetect would also pick shift_jis, ensuring deterministic decoding when the chart author declares
     // an encoding.
@@ -1866,21 +1866,21 @@ describe('parser', () => {
     const merged = new Uint8Array(directiveBytes.length + titleBytes.length);
     merged.set(directiveBytes, 0);
     merged.set(titleBytes, directiveBytes.length);
-    const decoded = decodeBmsText(merged);
+    const decoded = decodeBMSText(merged);
     expect(decoded.encoding).toBe('shift_jis');
     expect(decoded.text).toContain('テスト');
   });
 
-  test('decodeUtf8Text: decodes UTF-8 bytes and strips a leading BOM', () => {
-    const withBom = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('#TITLE éclair\n')]);
-    expect(decodeUtf8Text(withBom)).toBe('#TITLE éclair\n');
-    expect(decodeUtf8Text(new TextEncoder().encode('#TITLE plain\n'))).toBe('#TITLE plain\n');
+  test('decodeUTF8Text: decodes UTF-8 bytes and strips a leading BOM', () => {
+    const withBOM = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('#TITLE éclair\n')]);
+    expect(decodeUTF8Text(withBOM)).toBe('#TITLE éclair\n');
+    expect(decodeUTF8Text(new TextEncoder().encode('#TITLE plain\n'))).toBe('#TITLE plain\n');
   });
 
-  test('decodeBmsText: decodes UTF-16LE charts via their BOM', () => {
+  test('decodeBMSText: decodes UTF-16LE charts via their BOM', () => {
     const source = '#TITLE てすと\n#BPM 150\n#00111:01\n';
     const bytes = new Uint8Array(Buffer.from(`﻿${source}`, 'utf16le'));
-    const decoded = decodeBmsText(bytes);
+    const decoded = decodeBMSText(bytes);
     expect(decoded.encoding).toBe('utf-16le');
     const parsed = parseChart(decoded.text);
     expect(parsed.metadata.title).toBe('てすと');
@@ -1888,7 +1888,7 @@ describe('parser', () => {
     expect(parsed.events).toHaveLength(1);
   });
 
-  test('decodeBmsText: decodes UTF-16BE charts via their BOM', () => {
+  test('decodeBMSText: decodes UTF-16BE charts via their BOM', () => {
     const source = '#TITLE てすと\n#BPM 150\n#00111:01\n';
     const littleEndian = Buffer.from(`﻿${source}`, 'utf16le');
     const bytes = new Uint8Array(littleEndian.length);
@@ -1896,31 +1896,31 @@ describe('parser', () => {
       bytes[index] = littleEndian[index + 1]!;
       bytes[index + 1] = littleEndian[index]!;
     }
-    const decoded = decodeBmsText(bytes);
+    const decoded = decodeBMSText(bytes);
     expect(decoded.encoding).toBe('utf-16be');
     expect(parseChart(decoded.text).metadata.title).toBe('てすと');
   });
 
-  test('decodeBmsText: detects BOM-less UTF-8 via strict validation', () => {
+  test('decodeBMSText: detects BOM-less UTF-8 via strict validation', () => {
     const bytes = new TextEncoder().encode('#TITLE 灼熱\n#BPM 150\n#00111:01\n');
-    const decoded = decodeBmsText(bytes);
+    const decoded = decodeBMSText(bytes);
     expect(decoded.encoding).toBe('utf8');
     expect(parseChart(decoded.text).metadata.title).toBe('灼熱');
   });
 
-  test('decodeBmsText: scores BOM-less EUC-JP charts as euc-jp', () => {
+  test('decodeBMSText: scores BOM-less EUC-JP charts as euc-jp', () => {
     // "テスト" in EUC-JP (A5C6 A5B9 A5C8) — invalid as strict UTF-8, half-width-kana garbage under shift_jis, clean
     // kana under euc-jp, so the scoring walk must land on euc-jp.
     const eucTitle = new Uint8Array([0xa5, 0xc6, 0xa5, 0xb9, 0xa5, 0xc8]);
     const head = new TextEncoder().encode('#TITLE ');
     const tail = new TextEncoder().encode('\n#BPM 150\n#00111:01\n');
     const bytes = new Uint8Array([...head, ...eucTitle, ...tail]);
-    const decoded = decodeBmsText(bytes);
+    const decoded = decodeBMSText(bytes);
     expect(decoded.encoding).toBe('euc-jp');
     expect(parseChart(decoded.text).metadata.title).toBe('テスト');
   });
 
-  test('decodeBmsText: scores only the non-ASCII lines per candidate, and returns the whole file decoded', () => {
+  test('decodeBMSText: scores only the non-ASCII lines per candidate, and returns the whole file decoded', () => {
     // CRLF Shift_JIS with many ASCII-only lines: those read the same under every candidate, so they are counted once,
     // and the result is still the whole file decoded with the winning candidate.
     const ascii = (text: string) => [...new TextEncoder().encode(text)];
@@ -1938,7 +1938,7 @@ describe('parser', () => {
       0x83,
       0x65, // テ, on the last line with no line break after it
     ]);
-    const decoded = decodeBmsText(bytes);
+    const decoded = decodeBMSText(bytes);
     expect(decoded.encoding).toBe('shift_jis');
     expect(decoded.text).toBe(new TextDecoder('shift_jis').decode(bytes));
     const parsed = parseChart(decoded.text);

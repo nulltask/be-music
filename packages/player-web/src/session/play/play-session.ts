@@ -13,7 +13,7 @@
 
 import { mirrorBeatAtTempoReversal } from '@be-music/chart';
 import { createTempoClock, type TempoClock } from '@be-music/player';
-import { nonstopBpmAt } from '@be-music/player/course';
+import { nonstopBPMAt } from '@be-music/player/course';
 import { DEFAULT_PLAYLOG_VIEW_REPLAY, type BeMusicPlaylog } from '@be-music/player/playlog';
 import type { GaugeType } from '@be-music/player/ruleset';
 import { createHiSpeedState, createPlayState, type LibraryChart, type PlayResult } from '@be-music/scene-model';
@@ -58,7 +58,7 @@ import {
   handleWindowFocus,
   togglePause,
 } from './play-input.ts';
-import { disposeBgaVideos, disposePlayAudio, prepareAudio, prepareBga } from './play-media.ts';
+import { disposeBGAVideos, disposePlayAudio, prepareAudio, prepareBGA } from './play-media.ts';
 import { PlaySessionState } from './play-session-state.ts';
 import type { PlaySessionTheme } from './play-session-theme.ts';
 import { applyPlayEvent } from './play-state.ts';
@@ -177,7 +177,7 @@ export class PlaySession extends PlaySessionState {
     if (this.disposed) return;
     await prepareAudio(this);
     if (this.disposed) return;
-    this.bgaReadyPromise = prepareBga(this).catch((error) => {
+    this.bgaReadyPromise = prepareBGA(this).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
     void this.bgaReadyPromise.then(() => {
@@ -498,7 +498,7 @@ export class PlaySession extends PlaySessionState {
     }
     this.keyFlashTimeouts.clear();
     log.info('listeners detached');
-    disposeBgaVideos(this);
+    disposeBGAVideos(this);
     // Hard-stop any active recording before tearing down the bus. `GameplayRecorder.dispose` calls
     // `MediaRecorder.stop()` synchronously (no chunk-flush wait) and disconnects its audio tap from the bus's output
     // node, so the bus can be disposed cleanly afterwards.
@@ -540,7 +540,7 @@ export class PlaySession extends PlaySessionState {
     this.bombJudge.clear();
     this.keyBeamFadeStartedAt.clear();
     this.wavCmdVolumeMultipliers.clear();
-    this.switchingBgas.clear();
+    this.switchingBGAs.clear();
     this.bgaSubRegionOrigins.clear();
     this.playState = createPlayState();
     this.notes = [];
@@ -558,9 +558,9 @@ export class PlaySession extends PlaySessionState {
     this.bgaTimeline = { base: [], layer: [], poor: [] };
     this.laneChannels = [];
     this.laneX.clear();
-    this.poorBgaFallbackKey = undefined;
-    this.poorBgaFallbackUntilSeconds = Number.POSITIVE_INFINITY;
-    this.hasBga = false;
+    this.poorBGAFallbackKey = undefined;
+    this.poorBGAFallbackUntilSeconds = Number.POSITIVE_INFINITY;
+    this.hasBGA = false;
     this.bgaReadyPromise = undefined;
     this.song = undefined;
     this.source = undefined;
@@ -607,11 +607,11 @@ export class PlaySession extends PlaySessionState {
    * the reversal — LR2's frozen event pump never applies a later BPM event — even though the reverse scroll itself
    * keeps following the forward tempo map.
    */
-  nowBpm(seconds: number): number | undefined {
+  nowBPM(seconds: number): number | undefined {
     const resolver = this.timingResolver;
     if (!resolver) return undefined;
-    // `displayBpmAtBeat`: a negative `#BPMxx` reads as |trunc(BPM)|, LR2's int NOWBPM.
-    return resolver.displayBpmAtBeat(
+    // `displayBPMAtBeat`: a negative `#BPMxx` reads as |trunc(BPM)|, LR2's int NOWBPM.
+    return resolver.displayBPMAtBeat(
       this.currentBeat(Math.min(seconds, resolver.reversal?.seconds ?? Number.POSITIVE_INFINITY)),
     );
   }
@@ -619,11 +619,11 @@ export class PlaySession extends PlaySessionState {
   /**
    * The BPM the readouts (NOWBPM, the HUD) show at `seconds`: for a stitched NONSTOP chart, whose scroll runs at a
    * constant 150 BPM, the BPM of the stage being played, scaled by its FIT rate (`NonstopStitchMap.tempo`), as LR2
-   * shows it; otherwise {@link nowBpm}.
+   * shows it; otherwise {@link nowBPM}.
    */
-  displayBpm(seconds: number): number | undefined {
+  displayBPM(seconds: number): number | undefined {
     const tempo = this.options.nonstop?.tempo;
-    return tempo !== undefined && tempo.length > 0 ? nonstopBpmAt(tempo, seconds) : this.nowBpm(seconds);
+    return tempo !== undefined && tempo.length > 0 ? nonstopBPMAt(tempo, seconds) : this.nowBPM(seconds);
   }
 
   /**
@@ -719,7 +719,7 @@ export class PlaySession extends PlaySessionState {
    * Pauses every BGA video element in the chart's video pool. The `<video>` element doesn't honor the audio-context
    * suspend, so without this the video keeps playing during a pause overlay.
    */
-  pauseAllBgaVideos(): void {
+  pauseAllBGAVideos(): void {
     for (const handle of this.bgaVideos.values()) {
       if (!handle.video.paused) {
         handle.video.pause();
@@ -729,9 +729,9 @@ export class PlaySession extends PlaySessionState {
 
   /**
    * Resumes only the videos tied to currently-active base / layer cues. Avoids touching videos that were paused for a
-   * different reason (e.g. an earlier cue switched away from them in `syncBgaVideo`).
+   * different reason (e.g. an earlier cue switched away from them in `syncBGAVideo`).
    */
-  resumeActiveBgaVideos(): void {
+  resumeActiveBGAVideos(): void {
     for (const track of ['base', 'layer'] as const) {
       const active = this.bgaActiveVideos[track];
       if (!active) continue;

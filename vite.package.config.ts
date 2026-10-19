@@ -6,7 +6,7 @@ interface CreatePackageConfigOptions {
   entries: Record<string, string>;
 }
 
-function createCliShebangPlugin() {
+function createCLIShebangPlugin() {
   return {
     name: 'be-music-cli-shebang',
     generateBundle(_options: unknown, bundle: Record<string, { type?: string; code?: string }>) {
@@ -48,6 +48,6 @@ export function createPackageConfig(options: CreatePackageConfigOptions): PackUs
     platform: 'node',
     sourcemap: true,
     target: 'node26',
-    plugins: Object.hasOwn(entry, 'cli') ? [createCliShebangPlugin()] : undefined,
+    plugins: Object.hasOwn(entry, 'cli') ? [createCLIShebangPlugin()] : undefined,
   };
 }

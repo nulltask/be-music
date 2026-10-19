@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { LibraryChart, PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { ResultViewTiming } from '../../view/types.ts';
@@ -15,7 +15,7 @@ const CHART: LibraryChart = {
   fileLabel: 'chart.bms',
   title: 'Chart',
   totalNotes: 10,
-  chart: createEmptyJson('bms'),
+  chart: createEmptyJSON('bms'),
 };
 
 function playResult(overrides: Partial<PlayResult> = {}): PlayResult {
@@ -75,7 +75,7 @@ function createSession(
     sounds?: SystemSoundSet;
     retry?: boolean;
     timing?: Partial<ResultViewTiming>;
-    playChart?: ReturnType<typeof createEmptyJson>;
+    playChart?: ReturnType<typeof createEmptyJSON>;
   } = {},
 ) {
   const audio = createAudio();
@@ -186,7 +186,7 @@ describe('ResultSession', () => {
   });
 
   it('carries the chart as the play played it, for the chart graphs', () => {
-    const playChart = createEmptyJson('bms');
+    const playChart = createEmptyJSON('bms');
     const { session } = createSession({ playChart });
     session.enter(0);
     expect(session.frame(0).playChart).toBe(playChart);
@@ -283,7 +283,7 @@ describe('ResultSession', () => {
   });
 
   it('plays nothing for a theme without result jingles', () => {
-    const { session, audio } = createSession({ sounds: { decideBgm: sound(9) } });
+    const { session, audio } = createSession({ sounds: { decideBGM: sound(9) } });
     session.enter(0);
     expect(audio.playJingle).not.toHaveBeenCalled();
   });

@@ -40,7 +40,7 @@ function errorText(error: { message?: string; code?: string } | null | undefined
 }
 
 /** Answers of the account API: the body on success, a message otherwise. */
-async function callAccountApi(path: string, init: RequestInit): Promise<{ ok: true } | { ok: false; message: string }> {
+async function callAccountAPI(path: string, init: RequestInit): Promise<{ ok: true } | { ok: false; message: string }> {
   const response = await fetch(path, { credentials: 'same-origin', ...init });
   if (response.ok) return { ok: true };
   const body = (await response.json().catch(() => ({}))) as { error?: string; detail?: string };
@@ -80,7 +80,7 @@ const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
     await setScoreHidden(button, false);
   },
   async 'remove-avatar'() {
-    const result = await callAccountApi('/api/v0/me/avatar', { method: 'DELETE' });
+    const result = await callAccountAPI('/api/v0/me/avatar', { method: 'DELETE' });
     if (!result.ok) return say(result.message, '[data-settings-status]');
     location.reload();
   },
@@ -96,7 +96,7 @@ async function setScoreHidden(button: HTMLButtonElement, hidden: boolean): Promi
         ? `/api/v0/scores/${encodeURIComponent(scoreId)}`
         : undefined;
   if (path === undefined) return;
-  const result = await callAccountApi(path, {
+  const result = await callAccountAPI(path, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ hidden }),
@@ -135,7 +135,7 @@ document.addEventListener('submit', (event) => {
   const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
   if (submit !== null) submit.disabled = true;
   say(undefined, '[data-settings-status]');
-  void callAccountApi('/api/v0/me', {
+  void callAccountAPI('/api/v0/me', {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -172,7 +172,7 @@ document.addEventListener('submit', (event) => {
       const anonymous = await auth().signIn.anonymous();
       if (anonymous?.error) return say(t.accountStartFailed(errorText(anonymous.error)), status);
     }
-    const saved = await callAccountApi('/api/v0/me', {
+    const saved = await callAccountAPI('/api/v0/me', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -230,7 +230,7 @@ document.addEventListener('change', (event) => {
   input.disabled = true;
   void toAvatar(file)
     .then((blob) =>
-      callAccountApi('/api/v0/me/avatar', { method: 'PUT', headers: { 'content-type': blob.type }, body: blob }),
+      callAccountAPI('/api/v0/me/avatar', { method: 'PUT', headers: { 'content-type': blob.type }, body: blob }),
     )
     .then((result) => {
       if (result.ok) location.reload();
@@ -298,8 +298,8 @@ async function ensureScoreCard(source: HTMLScriptElement): Promise<void> {
   const upload = source.dataset.upload;
   if (upload === undefined || source.dataset.hasCard === 'true') return;
   const data = JSON.parse(source.textContent ?? '{}') as ScoreCardData;
-  const { fontFamily, fontUrl } = source.dataset;
-  const font = fontFamily !== undefined && fontUrl !== undefined ? { family: fontFamily, url: fontUrl } : undefined;
+  const { fontFamily, fontUrl: fontURL } = source.dataset;
+  const font = fontFamily !== undefined && fontURL !== undefined ? { family: fontFamily, url: fontURL } : undefined;
   const blob = await renderScoreCard(data, font);
   const response = await fetch(upload, {
     method: 'PUT',
@@ -308,10 +308,10 @@ async function ensureScoreCard(source: HTMLScriptElement): Promise<void> {
     body: blob,
   });
   if (!response.ok) throw new Error(`the card upload answered ${response.status}`);
-  const { cardUrl } = (await response.json()) as { cardUrl: string };
+  const { cardUrl: cardURL } = (await response.json()) as { cardUrl: string };
   source.dataset.hasCard = 'true';
   const preview = document.querySelector<HTMLImageElement>('[data-card-preview]');
-  if (preview !== null) preview.src = cardUrl;
+  if (preview !== null) preview.src = cardURL;
   say(t.cardReady, '[data-share-status]');
 }
 

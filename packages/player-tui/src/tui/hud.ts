@@ -2,7 +2,7 @@ import type { BeMusicPlayLevel } from '@be-music/json';
 import { clamp } from '@be-music/utils/core';
 import type { PlayerSummary } from '@be-music/player';
 import { normalizeHighSpeed } from './high-speed.ts';
-import { type RgbColor, colorizeText, dimRgb } from './ansi-text.ts';
+import { type RGBColor, colorizeText, dimRGB } from './ansi-text.ts';
 import { colorizeLaneOuterBorder } from './lane-rows.ts';
 
 const JUDGE_COMBO_VISIBILITY_TIMEOUT_MS = 1000;
@@ -14,19 +14,19 @@ export interface JudgeComboDisplayState {
   updatedAtMs: number;
 }
 
-const PAUSE_FOREGROUND_RGB: RgbColor = { r: 255, g: 255, b: 255 };
-const PAUSE_BACKGROUND_RGB: RgbColor = { r: 200, g: 59, b: 59 };
-const GREAT_JUDGE_RGB: RgbColor = { r: 255, g: 215, b: 95 };
-const GOOD_JUDGE_RGB: RgbColor = { r: 135, g: 255, b: 118 };
-const BAD_JUDGE_RGB: RgbColor = { r: 255, g: 159, b: 74 };
-const POOR_JUDGE_RGB: RgbColor = { r: 255, g: 107, b: 107 };
-const READY_JUDGE_RGB: RgbColor = { r: 95, g: 215, b: 255 };
-const IDLE_JUDGE_RGB: RgbColor = { r: 154, g: 161, b: 170 };
-const GROOVE_GAUGE_SAFE_RGB: RgbColor = { r: 72, g: 238, b: 255 };
-const GROOVE_GAUGE_SAFE_EMPTY_RGB: RgbColor = { r: 18, g: 74, b: 86 };
-const GROOVE_GAUGE_CLEAR_RGB: RgbColor = { r: 255, g: 72, b: 72 };
-const GROOVE_GAUGE_CLEAR_EMPTY_RGB: RgbColor = { r: 84, g: 18, b: 18 };
-const RAINBOW_RGB_STEPS: RgbColor[] = [
+const PAUSE_FOREGROUND_RGB: RGBColor = { r: 255, g: 255, b: 255 };
+const PAUSE_BACKGROUND_RGB: RGBColor = { r: 200, g: 59, b: 59 };
+const GREAT_JUDGE_RGB: RGBColor = { r: 255, g: 215, b: 95 };
+const GOOD_JUDGE_RGB: RGBColor = { r: 135, g: 255, b: 118 };
+const BAD_JUDGE_RGB: RGBColor = { r: 255, g: 159, b: 74 };
+const POOR_JUDGE_RGB: RGBColor = { r: 255, g: 107, b: 107 };
+const READY_JUDGE_RGB: RGBColor = { r: 95, g: 215, b: 255 };
+const IDLE_JUDGE_RGB: RGBColor = { r: 154, g: 161, b: 170 };
+const GROOVE_GAUGE_SAFE_RGB: RGBColor = { r: 72, g: 238, b: 255 };
+const GROOVE_GAUGE_SAFE_EMPTY_RGB: RGBColor = { r: 18, g: 74, b: 86 };
+const GROOVE_GAUGE_CLEAR_RGB: RGBColor = { r: 255, g: 72, b: 72 };
+const GROOVE_GAUGE_CLEAR_EMPTY_RGB: RGBColor = { r: 84, g: 18, b: 18 };
+const RAINBOW_RGB_STEPS: RGBColor[] = [
   { r: 255, g: 0, b: 0 },
   { r: 255, g: 135, b: 0 },
   { r: 255, g: 255, b: 0 },
@@ -85,16 +85,16 @@ export function formatJudgeComboDisplay(latestJudge: string, combo: number, nowM
     return colorizeBlinkingRainbow(baseText, nowMs);
   }
   if (latestJudge === 'GREAT') {
-    return colorizeBlinkingText(baseText, GREAT_JUDGE_RGB, dimRgb(GREAT_JUDGE_RGB, 0.5), nowMs);
+    return colorizeBlinkingText(baseText, GREAT_JUDGE_RGB, dimRGB(GREAT_JUDGE_RGB, 0.5), nowMs);
   }
   if (latestJudge === 'GOOD') {
-    return colorizeBlinkingText(baseText, GOOD_JUDGE_RGB, dimRgb(GOOD_JUDGE_RGB, 0.5), nowMs);
+    return colorizeBlinkingText(baseText, GOOD_JUDGE_RGB, dimRGB(GOOD_JUDGE_RGB, 0.5), nowMs);
   }
   if (latestJudge === 'BAD') {
-    return colorizeBlinkingText(baseText, BAD_JUDGE_RGB, dimRgb(BAD_JUDGE_RGB, 0.5), nowMs);
+    return colorizeBlinkingText(baseText, BAD_JUDGE_RGB, dimRGB(BAD_JUDGE_RGB, 0.5), nowMs);
   }
   if (latestJudge === 'POOR') {
-    return colorizeBlinkingText(baseText, POOR_JUDGE_RGB, dimRgb(POOR_JUDGE_RGB, 0.5), nowMs);
+    return colorizeBlinkingText(baseText, POOR_JUDGE_RGB, dimRGB(POOR_JUDGE_RGB, 0.5), nowMs);
   }
   if (latestJudge === 'READY') {
     return colorizeText(baseText, READY_JUDGE_RGB);
@@ -105,7 +105,7 @@ export function formatJudgeComboDisplay(latestJudge: string, combo: number, nowM
   return baseText;
 }
 
-function colorizeBlinkingText(value: string, onColor: RgbColor, offColor: RgbColor, nowMs: number): string {
+function colorizeBlinkingText(value: string, onColor: RGBColor, offColor: RGBColor, nowMs: number): string {
   // ANSI blink is not consistently supported, so emulate blink with a time-based pulse.
   const blinkOn = Math.floor(nowMs / JUDGE_COMBO_BLINK_INTERVAL_MS) % 2 === 0;
   return colorizeText(value, blinkOn ? onColor : offColor);
@@ -121,7 +121,7 @@ function colorizeRainbow(value: string, bright = true): string {
   const characters = Array.from(value);
   return characters
     .map((character, index) =>
-      colorizeText(character, dimRgb(RAINBOW_RGB_STEPS[index % RAINBOW_RGB_STEPS.length]!, brightness)),
+      colorizeText(character, dimRGB(RAINBOW_RGB_STEPS[index % RAINBOW_RGB_STEPS.length]!, brightness)),
     )
     .join('');
 }
@@ -248,7 +248,7 @@ export function formatActiveAudioFiles(files: string[]): string {
   return `${visible.join(', ')}${suffix}`;
 }
 
-export function formatBpm(bpm: number): string {
+export function formatBPM(bpm: number): string {
   const safe = Number.isFinite(bpm) ? Math.max(0, bpm) : 0;
   return safe % 1 === 0 ? `${safe.toFixed(0)}` : safe.toFixed(2);
 }
@@ -292,7 +292,7 @@ export function formatGenreLabel(value: string | undefined): string {
   return normalized.length > 0 ? normalized : '-';
 }
 
-export function formatFps(fps: number | undefined): string {
+export function formatFPS(fps: number | undefined): string {
   if (typeof fps !== 'number' || !Number.isFinite(fps) || fps <= 0) {
     return '-';
   }

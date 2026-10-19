@@ -4,21 +4,21 @@ import { fileURLToPath } from 'node:url';
 import {
   loadExportsBenchmarkSnapshot,
   loadExportsBenchmarkSnapshotOrUndefined,
-  parseNonNegativeCliNumber,
-  parsePositiveCliInteger,
-  resolveCliValue,
-  runCliMain,
+  parseNonNegativeCLINumber,
+  parsePositiveCLIInteger,
+  resolveCLIValue,
+  runCLIMain,
 } from './cli-utils.ts';
 import type { BenchmarkTaskStats, ExportsBenchmarkSnapshot } from './exports.types.ts';
 import { resolveComparisonHz, resolveSampleMs } from './task-stats.ts';
 
-interface CliDefaults {
+interface CLIDefaults {
   outputPath: string;
   thresholdPercent: number;
   topCount: number;
 }
 
-interface CliOptions {
+interface CLIOptions {
   headPath: string;
   basePath?: string;
   outputPath: string;
@@ -26,7 +26,7 @@ interface CliOptions {
   topCount: number;
   summaryPath?: string;
   failOnRegression: boolean;
-  repositoryUrl?: string;
+  repositoryURL?: string;
   changedPackages: string[];
 }
 
@@ -75,7 +75,7 @@ export interface ComparisonSummary {
 
 export interface DiffMarkdownOptions {
   /** `https://github.com/owner/repo`, to link the commits. */
-  repositoryUrl?: string;
+  repositoryURL?: string;
   /** Packages the pull request touches; their cases are listed first. */
   changedPackages?: readonly string[];
 }
@@ -92,7 +92,7 @@ const COMMENT_MARKER = '<!-- be-music-exports-benchmark -->';
  */
 const MIN_RELIABLE_SAMPLE_MS = 0.001;
 
-const DEFAULTS: CliDefaults = {
+const DEFAULTS: CLIDefaults = {
   outputPath: resolve(repositoryDir, 'tmp/bench/exports-pr-comment.md'),
   thresholdPercent: 5,
   topCount: 10,
@@ -103,7 +103,7 @@ async function main(): Promise<void> {
   const headSnapshot = await loadExportsBenchmarkSnapshot(options.headPath);
   const baseSnapshot = options.basePath ? await loadExportsBenchmarkSnapshotOrUndefined(options.basePath) : undefined;
   const markdownOptions: DiffMarkdownOptions = {
-    repositoryUrl: options.repositoryUrl,
+    repositoryURL: options.repositoryURL,
     changedPackages: options.changedPackages,
   };
 
@@ -177,7 +177,7 @@ export function buildDiffMarkdown(
   lines.push(formatHeadline(summary));
   lines.push('');
   lines.push(
-    `<sub>${formatShaLink(baseSnapshot.gitSha, options.repositoryUrl)} → ${formatShaLink(headSnapshot.gitSha, options.repositoryUrl)} · ${formatRunCount(baseSnapshot)} base / ${formatRunCount(headSnapshot)} head · a regression or improvement is a change past ±${thresholdPercent.toFixed(0)}% whose runs do not overlap · times are per call (median)</sub>`,
+    `<sub>${formatShaLink(baseSnapshot.gitSha, options.repositoryURL)} → ${formatShaLink(headSnapshot.gitSha, options.repositoryURL)} · ${formatRunCount(baseSnapshot)} base / ${formatRunCount(headSnapshot)} head · a regression or improvement is a change past ±${thresholdPercent.toFixed(0)}% whose runs do not overlap · times are per call (median)</sub>`,
   );
 
   if (regressions.length > 0) {
@@ -284,7 +284,7 @@ function buildHeadOnlyMarkdown(
   lines.push('**No baseline**: the base commit could not be benchmarked, so this report shows the head only.');
   lines.push('');
   lines.push(
-    `<sub>${formatShaLink(headSnapshot.gitSha, options.repositoryUrl)} · ${formatRunCount(headSnapshot)} · ${headSnapshot.totals.benchmarked} benchmarked, ${headSnapshot.totals.skipped} skipped${basePath ? ` · tried base snapshot \`${basePath}\`` : ''}</sub>`,
+    `<sub>${formatShaLink(headSnapshot.gitSha, options.repositoryURL)} · ${formatRunCount(headSnapshot)} · ${headSnapshot.totals.benchmarked} benchmarked, ${headSnapshot.totals.skipped} skipped${basePath ? ` · tried base snapshot \`${basePath}\`` : ''}</sub>`,
   );
   lines.push('', '### Slowest cases');
   if (slowest.length === 0) {
@@ -549,7 +549,7 @@ export function formatTimeChange(deltaPercent: number): string {
   return `${Math.abs(timePercent).toFixed(1)}% ${timePercent > 0 ? 'slower' : 'faster'}`;
 }
 
-function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
+function parseArgs(args: string[], defaults: CLIDefaults): CLIOptions {
   let headPath: string | undefined;
   let basePath: string | undefined;
   let outputPath = defaults.outputPath;
@@ -557,7 +557,7 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
   let topCount = defaults.topCount;
   let summaryPath: string | undefined;
   let failOnRegression = false;
-  let repositoryUrl: string | undefined;
+  let repositoryURL: string | undefined;
   let changedPackages: string[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
@@ -571,37 +571,37 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
       process.exit(0);
     }
     if (token === '--head') {
-      headPath = resolveCliValue(args[index + 1], '--head');
+      headPath = resolveCLIValue(args[index + 1], '--head');
       index += 1;
       continue;
     }
     if (token === '--base') {
-      basePath = resolveCliValue(args[index + 1], '--base');
+      basePath = resolveCLIValue(args[index + 1], '--base');
       index += 1;
       continue;
     }
     if (token === '--output') {
-      outputPath = resolveCliValue(args[index + 1], '--output');
+      outputPath = resolveCLIValue(args[index + 1], '--output');
       index += 1;
       continue;
     }
     if (token === '--threshold') {
-      thresholdPercent = parseNonNegativeCliNumber(args[index + 1], '--threshold');
+      thresholdPercent = parseNonNegativeCLINumber(args[index + 1], '--threshold');
       index += 1;
       continue;
     }
     if (token === '--top') {
-      topCount = parsePositiveCliInteger(args[index + 1], '--top');
+      topCount = parsePositiveCLIInteger(args[index + 1], '--top');
       index += 1;
       continue;
     }
     if (token === '--summary') {
-      summaryPath = resolveCliValue(args[index + 1], '--summary');
+      summaryPath = resolveCLIValue(args[index + 1], '--summary');
       index += 1;
       continue;
     }
     if (token === '--repository-url') {
-      repositoryUrl = resolveCliValue(args[index + 1], '--repository-url');
+      repositoryURL = resolveCLIValue(args[index + 1], '--repository-url');
       index += 1;
       continue;
     }
@@ -634,12 +634,12 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
     topCount,
     summaryPath,
     failOnRegression,
-    repositoryUrl,
+    repositoryURL,
     changedPackages,
   };
 }
 
-function printUsage(defaults: CliDefaults): void {
+function printUsage(defaults: CLIDefaults): void {
   const lines = [
     'Usage: pnpm run bench:compare --head <path> [options]',
     '',
@@ -662,12 +662,12 @@ function printUsage(defaults: CliDefaults): void {
   process.stdout.write(`${lines.join('\n')}\n`);
 }
 
-function formatShaLink(sha: string | undefined, repositoryUrl: string | undefined): string {
+function formatShaLink(sha: string | undefined, repositoryURL: string | undefined): string {
   if (!sha || sha.length === 0) {
     return '`unknown`';
   }
   const short = `\`${sha.slice(0, 8)}\``;
-  return repositoryUrl ? `[${short}](${repositoryUrl}/commit/${sha})` : short;
+  return repositoryURL ? `[${short}](${repositoryURL}/commit/${sha})` : short;
 }
 
 function formatPercent(value: number): string {
@@ -682,4 +682,4 @@ function formatRunCount(snapshot: ExportsBenchmarkSnapshot): string {
   return `${runCount} run${runCount === 1 ? '' : 's'}`;
 }
 
-runCliMain(import.meta.url, main);
+runCLIMain(import.meta.url, main);

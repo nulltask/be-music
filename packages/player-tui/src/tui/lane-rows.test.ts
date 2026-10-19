@@ -14,7 +14,7 @@ import {
   setLaneCell,
 } from './lane-rows.ts';
 
-function stripAnsi(value: string): string {
+function stripANSI(value: string): string {
   // eslint-disable-next-line no-control-regex
   return value.replaceAll(/\u001b\[[0-9;]*m/g, '');
 }
@@ -39,14 +39,14 @@ describe('colorizeLaneOuterBorder', () => {
 
 describe('renderLaneRow', () => {
   test('draws empty lanes and notes between the lane borders', () => {
-    expect(stripAnsi(renderLaneRow([LANE_FILL_SYMBOL, NOTE_HEAD_SYMBOL], ['11', '12'], [3, 3], -1, 8))).toBe(
+    expect(stripANSI(renderLaneRow([LANE_FILL_SYMBOL, NOTE_HEAD_SYMBOL], ['11', '12'], [3, 3], -1, 8))).toBe(
       '┃   │███┃',
     );
-    expect(stripAnsi(renderLaneRow([NOTE_HEAD_SYMBOL], ['11'], [2], -1, 1))).toBe('┃▁▁┃');
+    expect(stripANSI(renderLaneRow([NOTE_HEAD_SYMBOL], ['11'], [2], -1, 1))).toBe('┃▁▁┃');
   });
 
   test('puts the split panel between the two sides', () => {
-    expect(stripAnsi(renderLaneRow([LANE_FILL_SYMBOL, NOTE_HEAD_SYMBOL], ['11', '21'], [3, 3], 0, 8))).toBe(
+    expect(stripANSI(renderLaneRow([LANE_FILL_SYMBOL, NOTE_HEAD_SYMBOL], ['11', '21'], [3, 3], 0, 8))).toBe(
       `┃   ┃${SPLIT_PANEL}┃███┃`,
     );
   });
@@ -62,10 +62,10 @@ describe('renderLaneRow', () => {
 
 describe('renderJudgeRow', () => {
   test('draws the judge line across the lanes in the note height', () => {
-    expect(stripAnsi(renderJudgeRow([LANE_FILL_SYMBOL, LANE_FILL_SYMBOL], ['11', '12'], [2, 2], -1, 8))).toBe(
+    expect(stripANSI(renderJudgeRow([LANE_FILL_SYMBOL, LANE_FILL_SYMBOL], ['11', '12'], [2, 2], -1, 8))).toBe(
       '┃█████┃',
     );
-    expect(stripAnsi(renderJudgeRow([LANE_FILL_SYMBOL, NOTE_HEAD_SYMBOL], ['11', '12'], [2, 2], -1, 1))).toBe(
+    expect(stripANSI(renderJudgeRow([LANE_FILL_SYMBOL, NOTE_HEAD_SYMBOL], ['11', '12'], [2, 2], -1, 1))).toBe(
       '┃▁▁▁▁▁┃',
     );
   });
@@ -73,10 +73,10 @@ describe('renderJudgeRow', () => {
 
 describe('renderMeasureRow', () => {
   test('draws the measure line, keeping notes on it', () => {
-    expect(stripAnsi(renderMeasureRow([LANE_FILL_SYMBOL, LANE_FILL_SYMBOL], ['11', '12'], [2, 2]))).toBe(
+    expect(stripANSI(renderMeasureRow([LANE_FILL_SYMBOL, LANE_FILL_SYMBOL], ['11', '12'], [2, 2]))).toBe(
       `┃${MEASURE_LINE_SYMBOL.repeat(2)}┬${MEASURE_LINE_SYMBOL.repeat(2)}┃`,
     );
-    expect(stripAnsi(renderMeasureRow([LANE_FILL_SYMBOL, NOTE_HEAD_SYMBOL], ['11', '12'], [2, 2], -1, 8))).toBe(
+    expect(stripANSI(renderMeasureRow([LANE_FILL_SYMBOL, NOTE_HEAD_SYMBOL], ['11', '12'], [2, 2], -1, 8))).toBe(
       `┃${MEASURE_LINE_SYMBOL.repeat(2)}┬██┃`,
     );
   });
@@ -103,14 +103,14 @@ describe('renderInputKeyRows', () => {
 
   test('puts the black keys on the upper row and the white keys and scratch on the lower row', () => {
     const [upper, lower] = renderInputKeyRows(lanes, [3, 3, 3]);
-    expect(stripAnsi(upper)).toBe('┃   │   │ S ┃');
-    expect(stripAnsi(lower)).toBe('┃ A │ Z │   ┃');
+    expect(stripANSI(upper)).toBe('┃   │   │ S ┃');
+    expect(stripANSI(lower)).toBe('┃ A │ Z │   ┃');
   });
 
   test('can split the keys by odd and even lane numbers', () => {
     const [upper, lower] = renderInputKeyRows(lanes, [3, 3, 3], -1, new Set(), true);
-    expect(stripAnsi(upper)).toBe('┃ A │   │ S ┃');
-    expect(stripAnsi(lower)).toBe('┃   │ Z │   ┃');
+    expect(stripANSI(upper)).toBe('┃ A │   │ S ┃');
+    expect(stripANSI(lower)).toBe('┃   │ Z │   ┃');
   });
 
   test('lights a pressed key', () => {

@@ -53,8 +53,8 @@ export async function decodeAudioSample(
   signal?: AbortSignal,
 ): Promise<DecodedAudio> {
   throwIfAborted(signal);
-  if (isWavBuffer(buffer)) {
-    return decodeWav(buffer, signal);
+  if (isWAVBuffer(buffer)) {
+    return decodeWAV(buffer, signal);
   }
   if (isMp3Buffer(buffer)) {
     return decodeMp3(buffer, signal);
@@ -70,7 +70,7 @@ export async function decodeAudioSample(
   }
 
   try {
-    return decodeWav(buffer, signal);
+    return decodeWAV(buffer, signal);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -98,7 +98,7 @@ function decodeAudioSampleByExtension(
     return decodeMp3(buffer, signal);
   }
   if (extension === '.wav') {
-    return decodeWav(buffer, signal);
+    return decodeWAV(buffer, signal);
   }
   return undefined;
 }
@@ -147,9 +147,9 @@ async function decodeOggLike(buffer: Uint8Array, signal?: AbortSignal): Promise<
   }
 }
 
-function decodeWav(buffer: Uint8Array, signal?: AbortSignal): DecodedAudio {
+function decodeWAV(buffer: Uint8Array, signal?: AbortSignal): DecodedAudio {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  if (readAscii(view, 0, 4) !== 'RIFF' || readAscii(view, 8, 4) !== 'WAVE') {
+  if (readASCII(view, 0, 4) !== 'RIFF' || readASCII(view, 8, 4) !== 'WAVE') {
     throw new Error('Unsupported file format. Only RIFF/WAVE is supported for samples.');
   }
 
@@ -168,7 +168,7 @@ function decodeWav(buffer: Uint8Array, signal?: AbortSignal): DecodedAudio {
 
   while (offset + 8 <= view.byteLength) {
     throwIfAborted(signal);
-    const id = readAscii(view, offset, 4);
+    const id = readASCII(view, offset, 4);
     const size = view.getUint32(offset + 4, true);
     const bodyOffset = offset + 8;
 
@@ -315,12 +315,12 @@ function decodeSample(view: DataView, offset: number, audioFormat: number, bitsP
   }
 }
 
-function isWavBuffer(buffer: Uint8Array): boolean {
+function isWAVBuffer(buffer: Uint8Array): boolean {
   if (buffer.byteLength < 12) {
     return false;
   }
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  return readAscii(view, 0, 4) === 'RIFF' && readAscii(view, 8, 4) === 'WAVE';
+  return readASCII(view, 0, 4) === 'RIFF' && readASCII(view, 8, 4) === 'WAVE';
 }
 
 function isOggBuffer(buffer: Uint8Array): boolean {
@@ -328,20 +328,20 @@ function isOggBuffer(buffer: Uint8Array): boolean {
     return false;
   }
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  return readAscii(view, 0, 4) === 'OggS';
+  return readASCII(view, 0, 4) === 'OggS';
 }
 
 function isOggOpusBuffer(buffer: Uint8Array): boolean {
   if (buffer.byteLength < 32) {
     return false;
   }
-  return includesAscii(buffer, 'OpusHead');
+  return includesASCII(buffer, 'OpusHead');
 }
 
 function isMp3Buffer(buffer: Uint8Array): boolean {
   if (buffer.byteLength >= 3) {
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    if (readAscii(view, 0, 3) === 'ID3') {
+    if (readASCII(view, 0, 3) === 'ID3') {
       return true;
     }
   }
@@ -353,7 +353,7 @@ function isMp3Buffer(buffer: Uint8Array): boolean {
   return header0 === 0xff && (header1 & 0xe0) === 0xe0;
 }
 
-function readAscii(view: DataView, offset: number, length: number): string {
+function readASCII(view: DataView, offset: number, length: number): string {
   let result = '';
   for (let index = 0; index < length; index += 1) {
     result += String.fromCharCode(view.getUint8(offset + index));
@@ -361,7 +361,7 @@ function readAscii(view: DataView, offset: number, length: number): string {
   return result;
 }
 
-function includesAscii(buffer: Uint8Array, needle: string): boolean {
+function includesASCII(buffer: Uint8Array, needle: string): boolean {
   const needleLength = needle.length;
   if (needleLength === 0) {
     return true;
@@ -382,7 +382,7 @@ function includesAscii(buffer: Uint8Array, needle: string): boolean {
   return false;
 }
 
-function decodeUtf8(bytes: Uint8Array): string {
+function decodeUTF8(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
 }
 
@@ -401,7 +401,7 @@ async function withSuppressedMpg123Warnings<T>(fn: () => Promise<T>): Promise<T>
     encoding?: BufferEncoding | ((error?: Error | null) => void),
     callback?: (error?: Error | null) => void,
   ): boolean => {
-    const message = typeof chunk === 'string' ? chunk : decodeUtf8(chunk);
+    const message = typeof chunk === 'string' ? chunk : decodeUTF8(chunk);
     if (MPG123_SUPPRESSED_LOG_PATTERNS.some((pattern) => pattern.test(message))) {
       if (typeof encoding === 'function') {
         encoding();

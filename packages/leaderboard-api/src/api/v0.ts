@@ -4,12 +4,12 @@ import { parsePlaylog, PlaylogParseError, serializePlaylog } from '@be-music/pla
 import * as v from 'valibot';
 import { loadAccount } from '../accounts.ts';
 import { AVATAR_MAX_BYTES, putAvatar, removeAvatar } from '../avatars.ts';
-import { CARD_HEIGHT, CARD_MAX_BYTES, CARD_WIDTH, cardUrl, putScoreCard } from '../cards.ts';
+import { CARD_HEIGHT, CARD_MAX_BYTES, CARD_WIDTH, cardURL, putScoreCard } from '../cards.ts';
 import { updateProfile } from '../profiles.ts';
 import type { AppEnv } from '../app.ts';
 import { loadSession, passOnSetCookies } from '../auth.ts';
 import { openDatabase } from '../db/client.ts';
-import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
+import { readJSONBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { loadMyRank, loadRanking, type RankingFilter } from '../ranking.ts';
 import { refreshChartsetIfUnchecked, type ChartsetLookup } from '../chartsets/refresh.ts';
 import { isOn } from '../http/query.ts';
@@ -60,7 +60,7 @@ export const OPENAPI_DOCUMENTATION = {
  * still change incompatibly. Once stable it becomes `/api/v1`, and breaking changes after that go into a new version
  * mounted next to the old one.
  */
-export function createV0Api(options: { now: () => number; newId: () => string; chartsetLookup: ChartsetLookup }) {
+export function createV0API(options: { now: () => number; newId: () => string; chartsetLookup: ChartsetLookup }) {
   const { now, newId, chartsetLookup } = options;
   const v0 = new Hono<AppEnv>();
 
@@ -242,7 +242,7 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
         const { success } = await c.env.SUBMIT_LIMITER.limit({ key: userId });
         if (!success) return c.json({ error: 'rate-limited' }, 429, { 'Retry-After': '60' });
       }
-      const body = await readJsonBody(c.req.raw, SUBMISSION_LIMITS);
+      const body = await readJSONBody(c.req.raw, SUBMISSION_LIMITS);
       if (!body.ok) {
         return c.json({ error: body.reason }, body.status);
       }
@@ -354,7 +354,7 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
       const bytes = new Uint8Array(await c.req.arrayBuffer());
       const result = await putScoreCard(c.get('db'), c.env.BLOBS, c.req.param('id'), userId, bytes);
       if (!result.ok) return c.json({ error: result.error }, result.status);
-      return c.json({ cardUrl: cardUrl(c.req.param('id'), result.cardKey) });
+      return c.json({ cardUrl: cardURL(c.req.param('id'), result.cardKey) });
     },
   );
 

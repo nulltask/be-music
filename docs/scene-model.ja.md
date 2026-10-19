@@ -189,7 +189,7 @@ export します。
 プレイ状態（`PlayState`）は、どのプレイ画面も読むプレイの状態です。進行中のゲージと EX スコアとそのグラフ、コンボと
 最大コンボ（コースのステージではコース全体のコンボも）、判定タイミングつきのすべての判定と判定ごとの早い / 遅いの数、
 そして見え方（ハイスピードとレーンカバー）です。状態はイミュータブルで、`reducePlayState` にイベントを渡して進めます。
-エンジンのフレームと判定、`trigger-poor-bga` コマンド（空 POOR。`playEventFromUiCommand` で変換）、最後の集計、
+エンジンのフレームと判定、`trigger-poor-bga` コマンド（空 POOR。`playEventFromUICommand` で変換）、最後の集計、
 プレイヤーとホストによるハイスピードとカバーの変更です。時計は読みません。譜面上の時刻とプレイの時計の時刻はイベントと
 一緒に渡します。
 
@@ -220,7 +220,7 @@ flowchart LR
   `recentJudgeTimings` は実時間のメーター用の直近 64 件です（判定の一覧ごとに同じ配列を返します）。判定ごとの
   早い / 遅いの数（beatoraja のもの）も数えます。
 - **ハイスピード**（`HiSpeedState`）。プレイヤー自身の尺度でのハイスピードと、ノーツの流れに使う描画用の値です。描画用は
-  プレイヤーの値に譜面の HS-FIX 倍率を掛けたものです（`resolveHsFixMultiplier`。MAXBPM・MINBPM・AVERAGE はその BPM で
+  プレイヤーの値に譜面の HS-FIX 倍率を掛けたものです（`resolveHSFixMultiplier`。MAXBPM・MINBPM・AVERAGE はその BPM で
   プレイヤーのハイスピードになるように保ち、CONSTANT は当面 AVERAGE と同じ）。プレイヤーのキーはプレイヤーの値を動かし、
   リプレイが記録した見え方の描画用の値（`hi-speed-drawn`）はそのまま受け取ります。コースの `no_speed` はプレイヤーの
   変更を止めますが、ホストの設定と、リプレイが記録したハイスピードは、リプレイが記録したカバーと同じく効きます。

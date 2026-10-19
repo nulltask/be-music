@@ -8,19 +8,19 @@ Migration:
 
 - `@be-music/player-web/scenes` → `@be-music/player-web/host` (`PixiSceneHost`, `PixiScene`, `PixiSceneHostMountOptions`, `resolveRendererPreference`).
 - `BUILT_IN_BE_MUSIC_SKINS`, `phantomSkin`, `plainSkin`, `latticeSkin`, `synesthesiaSkin` from `/scenes` → `@be-music/player-web/skin`.
-- `PixiPlayOptions`, `PixiBgaMode`, `PixiBgaSize`, `PixiSelectSort`, `PixiDifficultyFilter`, `PixiHiddenSudden`, `PixiHsFix`, `PixiKeysFilter`, `PixiRandomMode` from `/scenes` → `PlayOptions`, `BgaMode`, `BgaSize`, `BrowseSort`, `DifficultyFilter`, `HiddenSuddenMode`, `HsFix`, `KeysFilter`, `RandomMode` from `@be-music/scene-model`, whose key filters and sorts also take beatoraja's 24-key choices.
+- `PixiPlayOptions`, `PixiBgaMode`, `PixiBgaSize`, `PixiSelectSort`, `PixiDifficultyFilter`, `PixiHiddenSudden`, `PixiHsFix`, `PixiKeysFilter`, `PixiRandomMode` from `/scenes` → `PlayOptions`, `BGAMode`, `BGASize`, `BrowseSort`, `DifficultyFilter`, `HiddenSuddenMode`, `HSFix`, `KeysFilter`, `RandomMode` from `@be-music/scene-model`, whose key filters and sorts also take beatoraja's 24-key choices.
 - `DEFAULT_PLAY_OPTIONS`, `matchesSearchQuery`, `wrappedCursorDelta` from `/scenes` → the same names from `@be-music/scene-model`.
 - `PixiGaugeType` from `/scenes` → `GaugeType` from `@be-music/player/ruleset`.
 - `PixiGameplayResultData`, `GaugeHistorySample`, `ScoreHistorySample` from `/scenes` → `PlayResult`, `GaugeHistorySample`, `ScoreHistorySample` from `@be-music/scene-model`.
 - `RESULT_DYNAMIC_OPS` from `/scenes` → `LR2_OP` from `@be-music/lr2-skin/ids` (`RESULT_CLEARED` is `RESULT_CLEAR`, `RANK_NOW_*` / `RANK_PREV_*` / `RANK_NEXT_*` are `RESULT_RANK_*` / `PREVIOUS_RANK_*` / `UPDATED_RANK_*`, `RESULT_FLIP_DISABLED` / `_ENABLED` are `RESULT_FLIP_OFF` / `_ON`, `KEYCONFIG_*` are `KEY_CONFIG_*`).
-- `computeResultOps` from `/scenes` → `resolveLr2ResultState` from `@be-music/lr2-skin/state`, which takes the result, the course, the played skin's `#FLIPRESULT` and the result skin's custom options instead of a skin.
-- `Lr2ImageRect`, `Lr2BarBodySlot` from `/scenes` → `@be-music/lr2-skin`.
-- `lnModeDirectiveToIndex` and `BeatorajaSelectSystemSoundPaths` from `/scenes` → `beatorajaLnModeIndex` and `BeatorajaSystemSoundPaths` from `@be-music/beatoraja-skin/scene`; `discoverBeatorajaSystemSoundPaths` and `discoverBeatorajaSelectBgmPath` from `/skin` → `@be-music/beatoraja-skin/scene`.
-- `BeatorajaBgaLayer`, `BeatorajaNoteLayer`, `BeatorajaMarkerLayer`, `BeatorajaPlaySkinView` (and their option types), `BeatorajaMarkerBeats`, `beatorajaPixelsPerBeat` from `/scenes` → removed; draw the beatoraja play screen with `createPlayScene` and a beatoraja kit.
+- `computeResultOps` from `/scenes` → `resolveLR2ResultState` from `@be-music/lr2-skin/state`, which takes the result, the course, the played skin's `#FLIPRESULT` and the result skin's custom options instead of a skin.
+- `LR2ImageRect`, `LR2BarBodySlot` from `/scenes` → `@be-music/lr2-skin`.
+- `lnModeDirectiveToIndex` and `BeatorajaSelectSystemSoundPaths` from `/scenes` → `beatorajaLNModeIndex` and `BeatorajaSystemSoundPaths` from `@be-music/beatoraja-skin/scene`; `discoverBeatorajaSystemSoundPaths` and `discoverBeatorajaSelectBGMPath` from `/skin` → `@be-music/beatoraja-skin/scene`.
+- `BeatorajaBGALayer`, `BeatorajaNoteLayer`, `BeatorajaMarkerLayer`, `BeatorajaPlaySkinView` (and their option types), `BeatorajaMarkerBeats`, `beatorajaPixelsPerBeat` from `/scenes` → removed; draw the beatoraja play screen with `createPlayScene` and a beatoraja kit.
 - `renderDefaultGameplayFrame`, `renderFallbackLr2Frame`, `FallbackGameplayRenderOptions`, `FallbackGameplayRuntime` from `/scenes` → removed; draw with `phantomSkin` through a built-in kit (`createPlayScene({ family: 'built-in', skin: phantomSkin }, …)`).
-- `isInsideLr2DefaultSearchBox`, `Lr2DefaultSearchBoxHitTestInput` from `/scenes` → removed.
+- `isInsideLR2DefaultSearchBox`, `LR2DefaultSearchBoxHitTestInput` from `/scenes` → removed.
 - The audio bus and its compressor parameters, and the master volume, from `/runtime` → `@be-music/player-web/audio`.
-- `GameplayRecorder`, `GameplayRecorderOptions`, `GameplayRecorderResult`, `pickRecorderMimeType`, `makeWebmSeekable`, `downloadBlob`, `resolveCaptureSize`, `shouldCaptureFrame`, `alignAudioChunk`, `resolveFrameTimestamp`, `supportsWebCodecsRecording` from `/runtime` → `@be-music/player-web/recording`.
+- `GameplayRecorder`, `GameplayRecorderOptions`, `GameplayRecorderResult`, `pickRecorderMIMEType`, `makeWebMSeekable`, `downloadBlob`, `resolveCaptureSize`, `shouldCaptureFrame`, `alignAudioChunk`, `resolveFrameTimestamp`, `supportsWebCodecsRecording` from `/runtime` → `@be-music/player-web/recording`.
 - `serializePlaylog`, `parsePlaylog`, `resolvePlaylogFilename`, `PLAYLOG_FILE_SUFFIX`, `BeMusicPlaylog` from `/runtime` → `@be-music/player/playlog`.
 - `ChartPreviewEngine`, `ChartPreviewEngineOptions`, `ChartPreviewTarget`, `LR2_PREVIEW_FOCUS_DELAY_MS`, `DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS`, `CHART_PREVIEW_STOP_FADE_OUT_SECONDS` from `/chart` → `@be-music/player-web/audio`.
 - `resolveChartPreviewPath`, `collectChartPreviewTriggers`, `findFirstAudibleOffsetSeconds`, `AudibleOffsetBuffer`, `computeBeatorajaChartMarkers` from `/chart` → removed (internal to the preview and the beatoraja views).

@@ -1,4 +1,4 @@
-import { type AnsiFrame, createSolidAnsiFrame } from './bga-frame.ts';
+import { type ANSIFrame, createSolidANSIFrame } from './bga-frame.ts';
 
 const ANSI_RESET = '\u001b[0m';
 
@@ -9,7 +9,7 @@ export interface CompositeFrame {
   opaqueMask: Uint8Array;
 }
 
-export function cropAnsiFrameToOpaqueBounds(source: AnsiFrame): AnsiFrame {
+export function cropANSIFrameToOpaqueBounds(source: ANSIFrame): ANSIFrame {
   let minX = source.width;
   let minY = source.height;
   let maxX = -1;
@@ -28,7 +28,7 @@ export function cropAnsiFrameToOpaqueBounds(source: AnsiFrame): AnsiFrame {
   }
 
   if (maxX < 0 || maxY < 0) {
-    return createSolidAnsiFrame(1, 1, 0, 0, 0, 0);
+    return createSolidANSIFrame(1, 1, 0, 0, 0, 0);
   }
   if (minX === 0 && minY === 0 && maxX === source.width - 1 && maxY === source.height - 1) {
     return source;
@@ -36,7 +36,7 @@ export function cropAnsiFrameToOpaqueBounds(source: AnsiFrame): AnsiFrame {
 
   const width = maxX - minX + 1;
   const height = maxY - minY + 1;
-  const cropped = createSolidAnsiFrame(width, height, 0, 0, 0, 0);
+  const cropped = createSolidANSIFrame(width, height, 0, 0, 0, 0);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -45,11 +45,11 @@ export function cropAnsiFrameToOpaqueBounds(source: AnsiFrame): AnsiFrame {
         continue;
       }
       const targetPixelOffset = y * width + x;
-      const sourceRgbOffset = sourcePixelOffset * 3;
-      const targetRgbOffset = targetPixelOffset * 3;
-      cropped.rgb[targetRgbOffset] = source.rgb[sourceRgbOffset] ?? 0;
-      cropped.rgb[targetRgbOffset + 1] = source.rgb[sourceRgbOffset + 1] ?? 0;
-      cropped.rgb[targetRgbOffset + 2] = source.rgb[sourceRgbOffset + 2] ?? 0;
+      const sourceRGBOffset = sourcePixelOffset * 3;
+      const targetRGBOffset = targetPixelOffset * 3;
+      cropped.rgb[targetRGBOffset] = source.rgb[sourceRGBOffset] ?? 0;
+      cropped.rgb[targetRGBOffset + 1] = source.rgb[sourceRGBOffset + 1] ?? 0;
+      cropped.rgb[targetRGBOffset + 2] = source.rgb[sourceRGBOffset + 2] ?? 0;
       cropped.opaqueMask[targetPixelOffset] = 1;
     }
   }
@@ -57,8 +57,8 @@ export function cropAnsiFrameToOpaqueBounds(source: AnsiFrame): AnsiFrame {
   return cropped;
 }
 
-export function mergeCompositeFrames(...sourceFrames: Array<AnsiFrame | undefined>): CompositeFrame | undefined {
-  const frames = sourceFrames.filter((frame): frame is AnsiFrame => frame !== undefined);
+export function mergeCompositeFrames(...sourceFrames: Array<ANSIFrame | undefined>): CompositeFrame | undefined {
+  const frames = sourceFrames.filter((frame): frame is ANSIFrame => frame !== undefined);
   if (frames.length === 0) {
     return undefined;
   }
@@ -91,8 +91,8 @@ export function mergeCompositeFrames(...sourceFrames: Array<AnsiFrame | undefine
   };
 }
 
-export function fillAnsiFrameBackground(source: AnsiFrame, r: number, g: number, b: number): AnsiFrame {
-  const frame = createSolidAnsiFrame(source.width, source.height, r, g, b, 1);
+export function fillANSIFrameBackground(source: ANSIFrame, r: number, g: number, b: number): ANSIFrame {
+  const frame = createSolidANSIFrame(source.width, source.height, r, g, b, 1);
   for (let pixelOffset = 0; pixelOffset < source.width * source.height; pixelOffset += 1) {
     if (source.opaqueMask[pixelOffset] === 0) {
       continue;
@@ -106,11 +106,11 @@ export function fillAnsiFrameBackground(source: AnsiFrame, r: number, g: number,
 }
 
 function paintFrame(
-  canvasRgb: Uint8Array,
+  canvasRGB: Uint8Array,
   canvasMask: Uint8Array,
   canvasWidth: number,
   canvasHeight: number,
-  frame: AnsiFrame,
+  frame: ANSIFrame,
 ): void {
   const offsetX = Math.floor((canvasWidth - frame.width) / 2);
   const offsetY = Math.floor((canvasHeight - frame.height) / 2);
@@ -130,18 +130,18 @@ function paintFrame(
       if (targetX < 0 || targetX >= canvasWidth) {
         continue;
       }
-      const sourceRgbOffset = sourcePixelOffset * 3;
+      const sourceRGBOffset = sourcePixelOffset * 3;
       const targetPixelOffset = targetY * canvasWidth + targetX;
-      const targetRgbOffset = targetPixelOffset * 3;
-      canvasRgb[targetRgbOffset] = frame.rgb[sourceRgbOffset] ?? 0;
-      canvasRgb[targetRgbOffset + 1] = frame.rgb[sourceRgbOffset + 1] ?? 0;
-      canvasRgb[targetRgbOffset + 2] = frame.rgb[sourceRgbOffset + 2] ?? 0;
+      const targetRGBOffset = targetPixelOffset * 3;
+      canvasRGB[targetRGBOffset] = frame.rgb[sourceRGBOffset] ?? 0;
+      canvasRGB[targetRGBOffset + 1] = frame.rgb[sourceRGBOffset + 1] ?? 0;
+      canvasRGB[targetRGBOffset + 2] = frame.rgb[sourceRGBOffset + 2] ?? 0;
       canvasMask[targetPixelOffset] = 1;
     }
   }
 }
 
-export function composeAnsiLines(rgb: Uint8Array, opaqueMask: Uint8Array, width: number, height: number): string[] {
+export function composeANSILines(rgb: Uint8Array, opaqueMask: Uint8Array, width: number, height: number): string[] {
   const lines: string[] = [];
   for (let y = 0; y < height; y += 1) {
     let line = '';
@@ -184,10 +184,10 @@ export function composeAnsiLines(rgb: Uint8Array, opaqueMask: Uint8Array, width:
   return lines;
 }
 
-export function createBlackBackgroundAnsiLines(width: number, height: number): string[] {
+export function createBlackBackgroundANSILines(width: number, height: number): string[] {
   const safeWidth = Math.max(1, Math.floor(width));
   const safeHeight = Math.max(1, Math.floor(height));
   const opaqueMask = new Uint8Array(safeWidth * safeHeight).fill(1);
   const rgb = new Uint8Array(safeWidth * safeHeight * 3);
-  return composeAnsiLines(rgb, opaqueMask, safeWidth, safeHeight);
+  return composeANSILines(rgb, opaqueMask, safeWidth, safeHeight);
 }

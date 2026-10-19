@@ -1,16 +1,16 @@
 import { LR2_BAR_BODY, LR2_BAR_LAMP } from '../ids/bar.ts';
 import type { ParseContext, SourceRect } from './parse-context.ts';
 import type {
-  Lr2BarBodyKind,
-  Lr2BarGraphMuki,
-  Lr2BarLampKind,
-  Lr2BarLevelKind,
-  Lr2BarRankKind,
-  Lr2BarRivalKind,
-  Lr2DestinationRect,
-  Lr2NumberAlignment,
-  Lr2SliderMuki,
-  Lr2TextAlignment,
+  LR2BarBodyKind,
+  LR2BarGraphMuki,
+  LR2BarLampKind,
+  LR2BarLevelKind,
+  LR2BarRankKind,
+  LR2BarRivalKind,
+  LR2DestinationRect,
+  LR2NumberAlignment,
+  LR2SliderMuki,
+  LR2TextAlignment,
 } from './types.ts';
 
 export function clampColorByte(value: number): number {
@@ -38,7 +38,7 @@ export function parseSource(row: string[], context: ParseContext): SourceRect {
   };
 }
 
-export function parseDestination(row: string[]): Lr2DestinationRect {
+export function parseDestination(row: string[]): LR2DestinationRect {
   // #DST_*,(NULL),time,x,y,w,h,acc,a,r,g,b,blend,filter,angle,center,loop,timer,op1,op2,op3 row index: 0 1 2 3 4 5 6 7
   // 8 9 10 11 12 13 14 15 16 17 18 19 20 (row[0] is the command itself when split by parseRow.)
   const ops = [toNumber(row[18], 0), toNumber(row[19], 0), toNumber(row[20], 0)].filter(
@@ -83,7 +83,7 @@ export function parseDestination(row: string[]): Lr2DestinationRect {
  * with op=55, …) leak in unrelated modes. The destination check uses the *final* keyframe, so its `ops` MUST carry the
  * gate forward.
  */
-export function appendDestinationKeyframe(group: Lr2DestinationRect[], row: string[], context?: ParseContext): void {
+export function appendDestinationKeyframe(group: LR2DestinationRect[], row: string[], context?: ParseContext): void {
   const dst = parseDestination(row);
   const previous = group[group.length - 1];
   if (dst.timer === -1) {
@@ -123,7 +123,7 @@ function isBlank(value: string | undefined): boolean {
   return typeof value !== 'string' || value.trim() === '';
 }
 
-export function parseNumberAlignment(value: string | undefined): Lr2NumberAlignment {
+export function parseNumberAlignment(value: string | undefined): LR2NumberAlignment {
   switch (toNumber(value, 0)) {
     case 1:
       return 'left';
@@ -137,7 +137,7 @@ export function parseNumberAlignment(value: string | undefined): Lr2NumberAlignm
 // LR2 NOWCOMBO_1P alignment. The spec says 0=left/1=center/2=right but matching the LR2 reference video visually
 // requires NUMBER's encoding (0=right, 1=left, 2=center) — for the LR2 default 7-keys skin (`align=1`) the combo digits
 // sit IMMEDIATELY to the right of the judgement plate (left-aligned at the relative x), not centered on it.
-export function parseNowComboAlignment(value: string | undefined): Lr2NumberAlignment {
+export function parseNowComboAlignment(value: string | undefined): LR2NumberAlignment {
   switch (toNumber(value, 0)) {
     case 1:
       return 'left';
@@ -149,7 +149,7 @@ export function parseNowComboAlignment(value: string | undefined): Lr2NumberAlig
 }
 
 /** LR2 SRC_TEXT alignment: 0=left, 1=center, 2=right. */
-export function parseTextAlignment(value: string | undefined): Lr2TextAlignment {
+export function parseTextAlignment(value: string | undefined): LR2TextAlignment {
   switch (toNumber(value, 0)) {
     case 1:
       return 'center';
@@ -161,7 +161,7 @@ export function parseTextAlignment(value: string | undefined): Lr2TextAlignment 
 }
 
 /** LR2 SRC_BARGRAPH `muki`: 0=horizontal, 1=vertical. */
-export function parseBarGraphMuki(value: string | undefined): Lr2BarGraphMuki {
+export function parseBarGraphMuki(value: string | undefined): LR2BarGraphMuki {
   return toNumber(value, 0) === 1 ? 'vertical' : 'horizontal';
 }
 
@@ -172,7 +172,7 @@ export function parseBarGraphMuki(value: string | undefined): Lr2BarGraphMuki {
  *
  * 0=right (horizontal default), 1=left, 2=down, 3=up.
  */
-export function parseSliderMuki(value: string | undefined): Lr2SliderMuki {
+export function parseSliderMuki(value: string | undefined): LR2SliderMuki {
   switch (toNumber(value, 0)) {
     case 1:
       return 'left';
@@ -185,7 +185,7 @@ export function parseSliderMuki(value: string | undefined): Lr2SliderMuki {
   }
 }
 
-export function parseBarBodyKind(value: string | undefined): Lr2BarBodyKind | undefined {
+export function parseBarBodyKind(value: string | undefined): LR2BarBodyKind | undefined {
   switch (Math.trunc(toNumber(value, -1))) {
     case LR2_BAR_BODY.SONG:
       return 'song';
@@ -212,7 +212,7 @@ export function parseBarBodyKind(value: string | undefined): Lr2BarBodyKind | un
   }
 }
 
-export function parseBarLevelKind(value: string | undefined): Lr2BarLevelKind | undefined {
+export function parseBarLevelKind(value: string | undefined): LR2BarLevelKind | undefined {
   switch (Math.trunc(toNumber(value, -1))) {
     case 0:
       return 'undefined';
@@ -233,7 +233,7 @@ export function parseBarLevelKind(value: string | undefined): Lr2BarLevelKind | 
   }
 }
 
-export function parseBarLampKind(value: string | undefined): Lr2BarLampKind | undefined {
+export function parseBarLampKind(value: string | undefined): LR2BarLampKind | undefined {
   switch (Math.trunc(toNumber(value, -1))) {
     case LR2_BAR_LAMP.NO_PLAY:
       return 'noplay';
@@ -252,7 +252,7 @@ export function parseBarLampKind(value: string | undefined): Lr2BarLampKind | un
   }
 }
 
-export function parseBarRankKind(value: string | undefined): Lr2BarRankKind | undefined {
+export function parseBarRankKind(value: string | undefined): LR2BarRankKind | undefined {
   switch (Math.trunc(toNumber(value, -1))) {
     case 0:
       return 'noplay';
@@ -277,7 +277,7 @@ export function parseBarRankKind(value: string | undefined): Lr2BarRankKind | un
   }
 }
 
-export function parseBarRivalKind(value: string | undefined): Lr2BarRivalKind | undefined {
+export function parseBarRivalKind(value: string | undefined): LR2BarRivalKind | undefined {
   switch (Math.trunc(toNumber(value, -1))) {
     case 0:
       return 'win';

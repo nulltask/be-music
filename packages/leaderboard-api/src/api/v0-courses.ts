@@ -13,7 +13,7 @@ import { loadCourseRanking } from '../courses/ranking.ts';
 import { loadRecentCourseRuns } from '../courses/runs.ts';
 import { submitCourseScore } from '../courses/submit.ts';
 import { setCourseScoreHidden } from '../courses/visibility.ts';
-import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
+import { readJSONBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { isOn } from '../http/query.ts';
 import {
   courseRankingResponse,
@@ -115,7 +115,7 @@ export function mountCourseRoutes(v0: Hono<AppEnv>, options: { now: () => number
         const { success } = await c.env.SUBMIT_LIMITER.limit({ key: userId });
         if (!success) return c.json({ error: 'rate-limited' }, 429, { 'Retry-After': '60' });
       }
-      const body = await readJsonBody(c.req.raw, SUBMISSION_LIMITS);
+      const body = await readJSONBody(c.req.raw, SUBMISSION_LIMITS);
       if (!body.ok) return c.json({ error: body.reason }, body.status);
       const parsedBody = v.safeParse(courseSubmissionBody, body.value);
       if (!parsedBody.success) return c.json({ error: 'invalid-submission' }, 400);

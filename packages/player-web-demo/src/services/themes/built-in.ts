@@ -4,12 +4,12 @@
 import type { BuiltInKit } from '@be-music/player-web/host';
 import type { BeMusicSkin } from '@be-music/skin-sdk';
 import { readStoredSkinSettings, type StoredSkinSettings } from '../../skin-settings.ts';
-import type { DemoGuiState } from '../../types.ts';
+import type { DemoGUIState } from '../../types.ts';
 import { BE_MUSIC_SKINS, loadSkinFonts } from '../built-in-skins.ts';
 
 export interface BuiltInThemeServiceOptions {
   /** The Debug Menu's state: the built-in skin picked (`builtInSkin`) and how much motion skins show (`skinEffects`). */
-  readonly guiState: Pick<DemoGuiState, 'builtInSkin' | 'skinEffects'>;
+  readonly guiState: Pick<DemoGUIState, 'builtInSkin' | 'skinEffects'>;
   readonly setStatus: (text: string) => void;
   /** Switches to the skin `id`: it is stored, and the select screen is made again with it. */
   readonly handleBuiltInSkinChange: (id: string) => void;
@@ -50,7 +50,7 @@ export class BuiltInThemeService {
    * Imports a skin module from `url` and adds its default export. A skin is code that runs with this page's full
    * access, so the user confirms the source first.
    */
-  public async addBeMusicSkinFromUrl(url: string): Promise<void> {
+  public async addBeMusicSkinFromURL(url: string): Promise<void> {
     const trimmed = url.trim();
     if (!trimmed) {
       this.setStatus('Enter the URL of a skin module first');

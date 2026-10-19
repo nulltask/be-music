@@ -1,6 +1,6 @@
 import { drawRandomOutcomes, resolveChart, type ResolvedChart } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
-import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
+import type { BeMusicJSON } from '@be-music/json';
+import { resolveBMSControlFlowWithDraws } from '@be-music/parser';
 import { rulesetChartFactsFromChart, type RulesetChartFacts } from '../ruleset/index.ts';
 import { preparePlaybackChart } from './bootstrap.ts';
 import type { PlayerOptions, ResolvedPlayChart, ResolvePlayChartOptions } from './engine-types.ts';
@@ -15,21 +15,21 @@ import type { PlayerOptions, ResolvedPlayChart, ResolvePlayChartOptions } from '
  * `options.randomDraws`) and resolves the chart with them. Every consumer of the play — the scene, the engine, the
  * result screen, the play log — then works from the returned chart and draws, so nothing rolls `#RANDOM` again.
  */
-export function resolvePlayChart(source: BeMusicJson, options: ResolvePlayChartOptions = {}): ResolvedPlayChart {
+export function resolvePlayChart(source: BeMusicJSON, options: ResolvePlayChartOptions = {}): ResolvedPlayChart {
   const randomDraws = options.randomDraws ?? drawRandomOutcomes(source, options.random ?? Math.random);
-  return { chart: resolveBmsControlFlowWithDraws(source, randomDraws), randomDraws };
+  return { chart: resolveBMSControlFlowWithDraws(source, randomDraws), randomDraws };
 }
 
 /**
  * The engine's Resolved layer for a play: `resolveChart` over the control-flow-resolved chart, with the host's lane mode
  * inputs and long-note inference. Timing, triggers, timelines and chart facts all come from it.
  */
-export function resolveEngineChart(resolvedJson: BeMusicJson, options: PlayerOptions): ResolvedChart {
-  return resolveChart(resolvedJson, {
+export function resolveEngineChart(resolvedJSON: BeMusicJSON, options: PlayerOptions): ResolvedChart {
+  return resolveChart(resolvedJSON, {
     randomDraws: options.randomDraws,
     chartPath: options.laneModeExtension,
     playVariant: options.playVariant,
-    inferBmsLnTypeWhenMissing: Boolean(options.inferBmsLnTypeWhenMissing),
+    inferBmsLNTypeWhenMissing: Boolean(options.inferBmsLNTypeWhenMissing),
   });
 }
 
@@ -38,8 +38,8 @@ export function resolveEngineChart(resolvedJson: BeMusicJson, options: PlayerOpt
  * run never reached. `#RANDOM` / `#SWITCH` take their first branch, so the count is the same every time.
  */
 export function resolveChartRulesetFacts(
-  json: BeMusicJson,
-  options: Pick<PlayerOptions, 'laneModeExtension' | 'playVariant' | 'inferBmsLnTypeWhenMissing'> = {},
+  json: BeMusicJSON,
+  options: Pick<PlayerOptions, 'laneModeExtension' | 'playVariant' | 'inferBmsLNTypeWhenMissing'> = {},
 ): RulesetChartFacts {
   const { chart, randomDraws } = resolvePlayChart(json, { random: () => 0 });
   const resolved = resolveEngineChart(chart, { ...options, randomDraws });

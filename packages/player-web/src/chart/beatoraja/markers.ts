@@ -13,12 +13,12 @@
 // measures' lengths × 4. Within a measure, `event.position = [num, denom]` becomes a fractional
 // position multiplied by the measure's length.
 
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import {
   beatorajaEventBeat,
   computeBeatorajaMeasureBaseBeats,
   hasBeatorajaEventValue,
-  isBeatorajaBpmEventChannel,
+  isBeatorajaBPMEventChannel,
   isBeatorajaStopEventChannel,
 } from './timing.ts';
 
@@ -40,7 +40,7 @@ export interface BeatorajaMarkerBeats {
  * a `time` destination).
  */
 export function computeBeatorajaChartMarkers(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   options: { timeIntervalSec?: number; totalSeconds?: number; beatToSeconds?: (beat: number) => number } = {},
 ): BeatorajaMarkerBeats {
   // 1. Build per-measure base beats. We need this for BPM / STOP event positions too, so it's
@@ -63,7 +63,7 @@ export function computeBeatorajaChartMarkers(
     if (!hasBeatorajaEventValue(event.value)) continue;
     const beat = beatorajaEventBeat(event, measureBaseBeat);
     if (beat === undefined) continue;
-    if (isBeatorajaBpmEventChannel(event.channel)) {
+    if (isBeatorajaBPMEventChannel(event.channel)) {
       bpm.push(beat);
     } else if (isBeatorajaStopEventChannel(event.channel)) {
       stop.push(beat);

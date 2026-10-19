@@ -1,4 +1,4 @@
-import { parseLr2NonstopConnections, type CourseKind, type NonstopConnection } from '@be-music/player/course';
+import { parseLR2NonstopConnections, type CourseKind, type NonstopConnection } from '@be-music/player/course';
 import type { LibraryCourse } from '../library/entries.ts';
 
 /** One stage of a course, as a skin shows it: the stage chart's title, subtitle, play level and difficulty. */
@@ -50,7 +50,7 @@ export function resolveCourseView(course: LibraryCourse, stageIndex?: number): C
       ? {
           connections:
             course.definition.source.format === 'lr2crs'
-              ? parseLr2NonstopConnections(course.definition.source.header).slice(0, 9)
+              ? parseLR2NonstopConnections(course.definition.source.header).slice(0, 9)
               : (course.definition.connections ?? []),
         }
       : {}),

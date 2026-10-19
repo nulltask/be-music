@@ -6,12 +6,12 @@ import {
   TIMER_SCENE_START,
   type BeatorajaSkin,
 } from '@be-music/beatoraja-skin';
-import { createEmptyJson } from '@be-music/json';
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import { createEmptyJSON } from '@be-music/json';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import { parseChart } from '@be-music/parser';
 import { autoPlay } from '@be-music/player';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
-import { createPlayerUiSignalBus, type PlayerUiFramePayload } from '@be-music/player/signals';
+import { createPlayerUISignalBus, type PlayerUIFramePayload } from '@be-music/player/signals';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
@@ -28,8 +28,8 @@ import { phantomSkin } from '../skins/phantom/index.ts';
 import { resolveBeatorajaPlayTiming } from '../view/beatoraja/play-view.ts';
 import { createDecideScene } from './decide.ts';
 import type { BeatorajaKit } from './family-kit.ts';
-import { resolveLr2LaneRect } from '../view/lr2/play-elements.ts';
-import { resolveLr2PlayTiming } from '../view/lr2/play-view.ts';
+import { resolveLR2LaneRect } from '../view/lr2/play-elements.ts';
+import { resolveLR2PlayTiming } from '../view/lr2/play-view.ts';
 import { createPlayScene, type PlaySceneOptions } from './play.ts';
 
 const CHART: LibraryChart = {
@@ -42,7 +42,7 @@ const CHART: LibraryChart = {
   fileLabel: 'chart.bms',
   title: 'Chart',
   totalNotes: 0,
-  chart: createEmptyJson('bms'),
+  chart: createEmptyJSON('bms'),
 };
 
 /** A chart whose `#RANDOM 2` puts one note on lane 1 for a draw of 1 and two on lane 2 for a draw of 2. */
@@ -252,7 +252,7 @@ describe('createPlayScene', () => {
 });
 
 /** An LR2 play skin drawing nothing, with `timing`; LR2's 640x480 unless `size` says otherwise. */
-function lr2PlaySkin(timing: Lr2Skin['timing'] = {}, size = { width: 640, height: 480 }): Lr2Skin {
+function lr2PlaySkin(timing: LR2Skin['timing'] = {}, size = { width: 640, height: 480 }): LR2Skin {
   return {
     ...size,
     timing,
@@ -274,37 +274,37 @@ function lr2PlaySkin(timing: Lr2Skin['timing'] = {}, size = { width: 640, height
     customFiles: [],
     lr2FontPaths: [],
     files: new Map(),
-  } as unknown as Lr2Skin;
+  } as unknown as LR2Skin;
 }
 
-describe('resolveLr2PlayTiming', () => {
+describe('resolveLR2PlayTiming', () => {
   it('gates the chart on #LOADSTART + #LOADEND, then #PLAYSTART, and ends on #FADEOUT and #CLOSE', () => {
     expect(
-      resolveLr2PlayTiming({ timing: { loadStart: 100, loadEnd: 1500, playStart: 1500, fadeOut: 500, close: 1000 } }),
+      resolveLR2PlayTiming({ timing: { loadStart: 100, loadEnd: 1500, playStart: 1500, fadeOut: 500, close: 1000 } }),
     ).toEqual({ loadEndOffsetMs: 1600, playStartOffsetMs: 3100, fadeOutMs: 500, closeMs: 1000 });
-    expect(resolveLr2PlayTiming({ timing: {} })).toEqual({
+    expect(resolveLR2PlayTiming({ timing: {} })).toEqual({
       loadEndOffsetMs: 0,
       playStartOffsetMs: 0,
       fadeOutMs: 0,
       closeMs: 0,
     });
-    expect(resolveLr2PlayTiming({ timing: { loadEnd: -5, fadeOut: -1 } }).fadeOutMs).toBe(0);
+    expect(resolveLR2PlayTiming({ timing: { loadEnd: -5, fadeOut: -1 } }).fadeOutMs).toBe(0);
   });
 });
 
-describe('resolveLr2LaneRect', () => {
+describe('resolveLR2LaneRect', () => {
   it("scales the skin's #DST_NOTE rect onto the stage, down to the judgement line's bottom edge", () => {
     const skin = {
       ...lr2PlaySkin({}, { width: 1280, height: 720 }),
       laneRects: [undefined, { x: 100, y: 600, w: 60, h: 8 }],
-    } as unknown as Lr2Skin;
-    expect(resolveLr2LaneRect(skin, 1, { width: 640, height: 480 })).toEqual({ x: 50, w: 30, top: 60, bottom: 364 });
-    expect(resolveLr2LaneRect(skin, 2, { width: 640, height: 480 })).toBeUndefined();
+    } as unknown as LR2Skin;
+    expect(resolveLR2LaneRect(skin, 1, { width: 640, height: 480 })).toEqual({ x: 50, w: 30, top: 60, bottom: 364 });
+    expect(resolveLR2LaneRect(skin, 2, { width: 640, height: 480 })).toBeUndefined();
   });
 });
 
 describe('createPlayScene with an LR2 kit', () => {
-  function createLr2(timing: Lr2Skin['timing'] = {}, overrides: Partial<PlaySceneOptions> = {}) {
+  function createLR2(timing: LR2Skin['timing'] = {}, overrides: Partial<PlaySceneOptions> = {}) {
     const on = { finish: vi.fn(), exit: vi.fn(), restart: vi.fn() };
     const scene = createPlayScene(
       { family: 'lr2', skin: lr2PlaySkin(timing) },
@@ -321,7 +321,7 @@ describe('createPlayScene with an LR2 kit', () => {
   }
 
   it('is the LR2 play screen', async () => {
-    const { scene } = createLr2();
+    const { scene } = createLR2();
     expect(scene.identity).toEqual({ kind: 'play', family: 'lr2' });
     expect(scene.getHiSpeed()).toBe(2);
     await scene.prepare();
@@ -332,7 +332,7 @@ describe('createPlayScene with an LR2 kit', () => {
   it("draws its frames once started and leaves through the skin's #FADEOUT, not its #CLOSE (a failure's)", async () => {
     vi.useFakeTimers();
     const fake = createFakeHost();
-    const { scene, on } = createLr2({ fadeOut: 300, close: 200 }, { host: fake.host });
+    const { scene, on } = createLR2({ fadeOut: 300, close: 200 }, { host: fake.host });
     await scene.prepare();
     await scene.enter(fake.host);
     expect(scene.root.visible).toBe(false);
@@ -352,7 +352,7 @@ describe('createPlayScene with an LR2 kit', () => {
   });
 
   it('keeps its family and skin when handed another kit', () => {
-    const { scene } = createLr2();
+    const { scene } = createLR2();
     expect(() => scene.updateKit({ family: 'built-in', skin: phantomSkin })).not.toThrow();
     expect(() => scene.updateKit({ family: 'lr2', skin: lr2PlaySkin() })).not.toThrow();
     scene.dispose();
@@ -456,14 +456,14 @@ describe('createPlayScene with a beatoraja kit', () => {
     await scene.prepare();
     // The #RANDOM draw of 1 leaves one note, at 2 s: the graphs run over the chart's 2 s from LR2's starting 20 %.
     expect(play.resolveSongDurationSeconds()).toBe(2);
-    const frame = (seconds: number, gauge: number): PlayerUiFramePayload => ({
+    const frame = (seconds: number, gauge: number): PlayerUIFramePayload => ({
       currentBeat: seconds * 2,
       currentSeconds: seconds,
       totalSeconds: 2,
       notes: [],
       summary: { ...play.score, fast: 0, slow: 0, emptyPoor: 1, gauge: { ...play.gaugeState, current: gauge } },
     });
-    const uiSignals = createPlayerUiSignalBus(frame(0.5, 18));
+    const uiSignals = createPlayerUISignalBus(frame(0.5, 18));
     play.sharedEngineSignals = { uiSignals };
     // An empty POOR at 0.5 s takes the gauge to 18 % with no judgment.
     uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: 0.5 });
@@ -495,7 +495,7 @@ describe('createPlayScene with a beatoraja kit', () => {
     for (const scene of [builtIn, lr2, beatoraja.scene]) {
       await scene.prepare();
       const play = (scene as unknown as { playSession: PlaySceneSession }).playSession.play;
-      expect(play.chartBpmRange).toEqual({ minBpm: 60, maxBpm: 120, mainBpm: 120 });
+      expect(play.chartBPMRange).toEqual({ minBPM: 60, maxBPM: 120, mainBPM: 120 });
       // AVERAGE keeps the player's 2 at the main BPM, which is the reference BPM here.
       expect(play.playState.view.hiSpeed).toMatchObject({ player: 2, drawn: 2 });
     }

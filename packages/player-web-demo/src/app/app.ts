@@ -24,11 +24,11 @@ import { DebugMenu, type DebugMenuDeps } from '../ui/debug-menu/index.ts';
 import { promptSkinDrop } from '../ui/skin-drop-prompt.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
-import type { DemoGuiState, DemoScene, PlayerWebDemoElements, SkinFamilyOverride } from '../types.ts';
-import { createDemoGuiState, resolveCompressorMode, storeBuiltInSkinId } from '../services/settings.ts';
+import type { DemoGUIState, DemoScene, PlayerWebDemoElements, SkinFamilyOverride } from '../types.ts';
+import { createDemoGUIState, resolveCompressorMode, storeBuiltInSkinId } from '../services/settings.ts';
 import { BE_MUSIC_SKINS } from '../services/built-in-skins.ts';
 import { SilentModeSetting } from '../services/silent-mode.ts';
-import { playOptionsFromGui, PlayOptionsService } from '../services/play-options.ts';
+import { playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
 import { PLAYLOG_RECORDER, PlaylogAutoSave } from '../services/playlogs.ts';
 import { RecordingService } from '../services/recording.ts';
 import { StatusLine } from '../services/status.ts';
@@ -38,7 +38,7 @@ import { RecordsService } from '../services/records.ts';
 import { CourseRunService } from '../services/courses.ts';
 import { BeatorajaThemeService } from '../services/themes/beatoraja.ts';
 import { BuiltInThemeService } from '../services/themes/built-in.ts';
-import { Lr2ThemeService } from '../services/themes/lr2.ts';
+import { LR2ThemeService } from '../services/themes/lr2.ts';
 import { FamilyKits } from './family-kits.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
 import { nameResultJingle, type LiveTestHookDeps } from '../services/test-hook.ts';
@@ -60,7 +60,7 @@ export interface PlayerWebDemoAppOptions {
  */
 export class PlayerWebDemoApp {
   /** The LR2 theme: every theme the drops brought, the one mounted, and its skins, BGM and system sounds. */
-  private readonly lr2: Lr2ThemeService;
+  private readonly lr2: LR2ThemeService;
   /** The beatoraja theme: its bundle, BGM and system sounds, and its entries loaded as scene kits. */
   private readonly beatoraja: BeatorajaThemeService;
   /** The be-music skin the built-in family draws with, the player's values for its settings, and the skins added. */
@@ -173,7 +173,7 @@ export class PlayerWebDemoApp {
    * handlers (`toggleRecording` etc.) share a single source of truth — programmatic updates go through `state.foo = …`
    * + `controller.updateDisplay()`.
    */
-  private readonly guiState: DemoGuiState;
+  private readonly guiState: DemoGUIState;
   /** The Leaderboard's Debug Menu folder, account chip and play submission. */
   private readonly leaderboard = new LeaderboardPanel({
     // Read on use: `guiState` is initialized after this field.
@@ -217,7 +217,7 @@ export class PlayerWebDemoApp {
   public constructor({ elements, deviceProfile, testHook }: PlayerWebDemoAppOptions) {
     this.elements = elements;
     this.testHook = testHook;
-    this.guiState = createDemoGuiState({
+    this.guiState = createDemoGUIState({
       signals: readDeviceSignals(),
       devicePixelRatio: window.devicePixelRatio || 1,
       builtInSkinId: (stored) => BE_MUSIC_SKINS.resolve(stored).id,
@@ -246,18 +246,18 @@ export class PlayerWebDemoApp {
     });
     // Every sound plays through the master volume; start from the remembered level.
     setMasterVolume(this.guiState.masterVolume / 100);
-    this.playOptions = new PlayOptionsService(playOptionsFromGui(this.guiState));
+    this.playOptions = new PlayOptionsService(playOptionsFromGUI(this.guiState));
     this.silentMode = new SilentModeSetting({ settings: this.guiState, touchFirst: deviceProfile.touchFirst });
     this.silentMode.install();
     // The `?compressor=split|legacy|off` URL flag, read once at boot.
     const compressor = resolveCompressorMode(window.location.href);
     this.compressorMode = compressor.mode;
     this.guiState.compressor = compressor.enabled;
-    this.lr2 = new Lr2ThemeService({
+    this.lr2 = new LR2ThemeService({
       elements,
       setStatus: (text) => this.status.set(text),
       rebuildSkinFamilyPicker: () => this.debugMenu.rebuildSkinFamilyPicker(),
-      rebuildLr2ThemePicker: () => this.debugMenu.rebuildLr2ThemePicker(),
+      rebuildLR2ThemePicker: () => this.debugMenu.rebuildLR2ThemePicker(),
     });
     this.beatoraja = new BeatorajaThemeService({
       elements,
@@ -482,8 +482,8 @@ export class PlayerWebDemoApp {
       stageMounted: () => this.stageMount !== undefined,
       familyDispatchState: () => this.familyKits.familyDispatchState(),
       beatorajaTheme: () => this.beatoraja.beatorajaTheme,
-      availableLr2Themes: () => this.lr2.availableLr2Themes,
-      activeLr2ThemeName: () => this.lr2.activeLr2ThemeName,
+      availableLR2Themes: () => this.lr2.availableLR2Themes,
+      activeLR2ThemeName: () => this.lr2.activeLR2ThemeName,
       beMusicSkin: () => this.builtIn.beMusicSkin,
       activeBeatorajaPlay: () => this.beatoraja.activeBeatorajaPlay,
       beatorajaSkinConfig: (entryPath, header) => this.beatoraja.beatorajaSkinConfig(entryPath, header),
@@ -494,9 +494,9 @@ export class PlayerWebDemoApp {
       handleSkinFamilyOverrideChange: (value) => this.handleSkinFamilyOverrideChange(value),
       handleBuiltInSkinChange: (id) => this.handleBuiltInSkinChange(id),
       addBeMusicSkin: (skin) => this.builtIn.addBeMusicSkin(skin),
-      addBeMusicSkinFromUrl: (url) => this.builtIn.addBeMusicSkinFromUrl(url),
+      addBeMusicSkinFromURL: (url) => this.builtIn.addBeMusicSkinFromURL(url),
       applyBeMusicSkinSettings: () => this.applyBeMusicSkinSettings(),
-      applyLr2ThemeByName: (name) => this.applyLr2ThemeByName(name),
+      applyLR2ThemeByName: (name) => this.applyLR2ThemeByName(name),
       promptSkinDrop: (family) =>
         promptSkinDrop(family, (pending) => {
           this.pendingSkinSystem = pending;
@@ -541,7 +541,7 @@ export class PlayerWebDemoApp {
   }
 
   public start(): void {
-    this.debugMenu.buildGui();
+    this.debugMenu.buildGUI();
     this.courseMaker.start();
     // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
     // `showSelect` only once the first select screen is up.
@@ -608,11 +608,11 @@ export class PlayerWebDemoApp {
    * Apply a user-picked LR2 theme. Disposes the persistent select view so it gets reconstructed against the new
    * skin on the next `showSelect`, mounts the theme into the slot fields, and returns to song-select.
    */
-  private async applyLr2ThemeByName(name: string): Promise<void> {
-    const theme = this.lr2.availableLr2Themes.find((entry) => entry.name === name);
+  private async applyLR2ThemeByName(name: string): Promise<void> {
+    const theme = this.lr2.availableLR2Themes.find((entry) => entry.name === name);
     if (theme === undefined) return;
     await this.selectRoute.dropSelect();
-    await this.lr2.mountLr2Theme(theme.files, theme.name);
+    await this.lr2.mountLR2Theme(theme.files, theme.name);
     await this.showSelect();
   }
 

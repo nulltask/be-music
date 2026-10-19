@@ -1,4 +1,4 @@
-import { createEmptyJson } from '../../../json/src/index.ts';
+import { createEmptyJSON } from '../../../json/src/index.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import { autoPlay, manualPlay } from '../index.ts';
 import type { PlayerInputCommand } from '../core/input-signal-bus.ts';
@@ -14,7 +14,7 @@ import { simulatePlaylog } from './simulate.ts';
 
 /** Four notes on lane 11, a beat apart at 120 BPM: chart 0.5, 1.0, 1.5 and 2.0 s. */
 function chart() {
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 120;
   json.events = [
     { measure: 0, channel: '11', position: [1, 4] as const, value: '01' },

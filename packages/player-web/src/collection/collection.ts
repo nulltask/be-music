@@ -1,6 +1,6 @@
 import { unzipSync } from 'fflate';
 import { countScoredNotes } from '@be-music/chart';
-import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
+import { decodeBMSText, decodeUTF8Text, parseBMS, parseBmson } from '@be-music/parser';
 import { seedLibraryChartPlayVariant, type ChartSourceKind, type LibraryChart } from '@be-music/scene-model';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
@@ -360,7 +360,7 @@ export async function loadSongCollectionFromFiles(
     }
   }
   // Defer EVERY song-bundle file. Charts get read on demand by the parse loop below (each chart's bytes are released as
-  // soon as the parser produces its `BeMusicJson`), and asset files (BGA images, audio, video, banner, …) stay as lazy
+  // soon as the parser produces its `BeMusicJSON`), and asset files (BGA images, audio, video, banner, …) stay as lazy
   // `File` references until gameplay-mount actually needs them. This keeps the at-rest heap to "parsed chart metadata
   // only" for the song bundle — the dropped pack itself sits on disk until the user picks a song. The throttled
   // progress wrapper keeps the 4000-emit storm from dominating the read time.
@@ -465,7 +465,7 @@ export async function loadSongCollectionFromFiles(
         }
         const chart = parseChart(path, chartBytes);
         // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
-        const scored = countScoredNotes(chart, { chartPath: path, inferBmsLnTypeWhenMissing: true });
+        const scored = countScoredNotes(chart, { chartPath: path, inferBmsLNTypeWhenMissing: true });
         const libraryChart: LibraryChart = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
@@ -576,11 +576,11 @@ function formatBytes(bytes: number): string {
 
 function parseChart(path: string, bytes: Uint8Array) {
   if (extensionOf(path) === '.bmson') {
-    return parseBmson(decodeUtf8Text(bytes));
+    return parseBmson(decodeUTF8Text(bytes));
   }
-  // Single canonical decode pipeline (`@be-music/parser`'s `decodeBmsText`) so the web player resolves a chart's
+  // Single canonical decode pipeline (`@be-music/parser`'s `decodeBMSText`) so the web player resolves a chart's
   // encoding exactly like the CLI / TUI do \u2014 BOM, `#CHARSET`, and the shift_jis fallback all live in one module.
-  return parseBms(decodeBmsText(bytes).text);
+  return parseBMS(decodeBMSText(bytes).text);
 }
 
 /**
@@ -701,7 +701,7 @@ export function resolveChartAudioAsset(
       // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
       // doesn't resolve. Charts that don't author `#PATH_WAV` pass `pathPrefix: undefined` and behave exactly as
       // before.
-      const prefixed = joinPathWavPrefix(options.pathPrefix, candidate);
+      const prefixed = joinPathWAVPrefix(options.pathPrefix, candidate);
       if (prefixed !== undefined) {
         const entry = resolveChartAssetInFolder(source, folderChartPath, prefixed);
         if (entry) return entry;
@@ -715,7 +715,7 @@ export function resolveChartAudioAsset(
   return undefined;
 }
 
-function joinPathWavPrefix(prefix: string | undefined, samplePath: string): string | undefined {
+function joinPathWAVPrefix(prefix: string | undefined, samplePath: string): string | undefined {
   if (typeof prefix !== 'string') return undefined;
   const trimmedPrefix = prefix.trim();
   if (trimmedPrefix.length === 0) return undefined;
@@ -773,14 +773,14 @@ export function resolveChartImageAsset(
   chartPath: string,
   assetPath: string,
 ): BrowserSongAssetEntry | undefined {
-  return resolveChartBgaAsset(source, chartPath, assetPath)?.entry;
+  return resolveChartBGAAsset(source, chartPath, assetPath)?.entry;
 }
 
 /**
  * {@link resolveChartImageAsset}, also naming the file it found (`path`, relative like `assetPath`): a video declared
  * as `_bga.mpg` may resolve to `_bga.mp4`, and the video loader should treat the bytes as what they are.
  */
-export function resolveChartBgaAsset(
+export function resolveChartBGAAsset(
   source: BrowserSongAssetSource,
   chartPath: string,
   assetPath: string,

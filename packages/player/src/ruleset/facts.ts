@@ -4,7 +4,7 @@ import type { LongNoteMode } from '@be-music/chart';
  * The chart-side inputs a ruleset needs, in a form both the live engine and the play-log simulator can produce.
  *
  * The rulesets used to read a `PlaylogChart` directly, which tied them to the offline replay path. The live engine
- * has the same facts available (a resolved `BeMusicJson` plus its prepared note arrays) but in a different shape,
+ * has the same facts available (a resolved `BeMusicJSON` plus its prepared note arrays) but in a different shape,
  * so the ruleset tables now take this neutral record and each caller supplies an adapter. Everything here is
  * chart-derived and fixed for the whole play — per-play choices (gauge, judge algorithm) travel separately in
  * `ResolveRulesetOptions`.
@@ -39,7 +39,7 @@ export interface RulesetJudgeRankFacts {
 
 /**
  * A later NONSTOP stage's `#RANK` setting the judge windows from `timeUs` on: as a chart opening with it does
- * (`'chart'`), or by LR2's NONSTOP rank table (`'lr2-nonstop'`, `resolveLr2NonstopRankWindowsMs`). Only the LR2 ruleset
+ * (`'chart'`), or by LR2's NONSTOP rank table (`'lr2-nonstop'`, `resolveLR2NonstopRankWindowsMs`). Only the LR2 ruleset
  * applies it, as with `#EXRANKxx`.
  */
 export interface RulesetStageRank {

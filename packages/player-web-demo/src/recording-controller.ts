@@ -2,7 +2,7 @@ import type { PixiSceneHost } from '@be-music/player-web/host';
 import { Rectangle, logger } from '@be-music/player-web';
 import {
   downloadBlob,
-  makeWebmSeekable,
+  makeWebMSeekable,
   recordingFileExtension,
   type RecordingFormat,
 } from '@be-music/player-web/recording';
@@ -171,7 +171,7 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
         // A WebM from the `MediaRecorder` fallback has no seek index — post-process it to inject `Duration` + `Cues` so
         // external players can seek inside it. Falls back to the raw blob if the patch fails, so a take is never
         // silently lost. The WebCodecs backend, and MP4 from either, carry the index already.
-        const seekable = result.seekable ? result.blob : await makeWebmSeekable(result.blob);
+        const seekable = result.seekable ? result.blob : await makeWebMSeekable(result.blob);
         // Named after what was written: the browser may have fallen back to another container.
         const filename = `${deps.getRecordingFilenameBase()}.${recordingFileExtension(result.mimeType)}`;
         downloadBlob(seekable, filename);

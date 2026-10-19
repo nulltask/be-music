@@ -2,7 +2,7 @@ import { gzipSync } from 'node:zlib';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart';
-import { parseBms } from '@be-music/parser';
+import { parseBMS } from '@be-music/parser';
 import { manualPlay } from '@be-music/player';
 import { buildNonstopCoursePlaylog, normalizeCourseConstraints, prepareNonstopCourse } from '@be-music/player/course';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogInputEvent } from '@be-music/player/playlog';
@@ -41,7 +41,7 @@ const COURSE = { name: 'Test Nonstop', kind: 'nonstop' as const, constraints: ['
  * note.
  */
 const SOURCES = [
-  parseBms(
+  parseBMS(
     [
       '#PLAYER 1',
       '#BPM 240',
@@ -56,9 +56,9 @@ const SOURCES = [
       '#ENDIF',
     ].join('\n'),
   ),
-  parseBms(['#PLAYER 1', '#BPM 240', '#WAV01 b.wav', '#LNOBJ ZZ', '#00211:00010001', '#00312:01ZZ'].join('\n')),
+  parseBMS(['#PLAYER 1', '#BPM 240', '#WAV01 b.wav', '#LNOBJ ZZ', '#00211:00010001', '#00312:01ZZ'].join('\n')),
 ];
-const OTHER_SOURCE = parseBms(['#PLAYER 1', '#BPM 240', '#WAV01 c.wav', '#00211:01010101'].join('\n'));
+const OTHER_SOURCE = parseBMS(['#PLAYER 1', '#BPM 240', '#WAV01 c.wav', '#00211:01010101'].join('\n'));
 
 /** Presses every note of `chart` dead on, up to `untilUs`. */
 function presses(chart: Parameters<typeof resolveChart>[0], untilUs = Number.POSITIVE_INFINITY): PlaylogInputEvent[] {

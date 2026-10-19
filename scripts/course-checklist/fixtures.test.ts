@@ -1,11 +1,11 @@
 import { inflateSync } from 'node:zlib';
 import { describe, expect, test } from 'vite-plus/test';
-import { parseLr2CourseFile } from '../../packages/player/src/course/lr2crs.ts';
-import { bandsPng, fixtureBms, lr2CourseList, sineWav } from './fixtures.ts';
+import { parseLR2CourseFile } from '../../packages/player/src/course/lr2crs.ts';
+import { bandsPNG, fixtureBMS, lr2CourseList, sineWAV } from './fixtures.ts';
 
 describe('course checklist fixtures', () => {
   test('writes a playable WAV header for the sample length', () => {
-    const wav = sineWav(440, 0.1, 1000, true);
+    const wav = sineWAV(440, 0.1, 1000, true);
     const view = new DataView(wav.buffer);
     expect(String.fromCharCode(...wav.slice(0, 4))).toBe('RIFF');
     expect(view.getUint32(40, true)).toBe(Math.floor(22050 * 0.1) * 2);
@@ -13,7 +13,7 @@ describe('course checklist fixtures', () => {
   });
 
   test('spreads the notes over the lanes, measure by measure', () => {
-    const bms = fixtureBms({
+    const bms = fixtureBMS({
       title: 'T',
       measures: 1,
       perMeasure: 2,
@@ -29,7 +29,7 @@ describe('course checklist fixtures', () => {
 
   test('writes course lists LR2 reads back with their kinds and stages', () => {
     const md5 = 'a'.repeat(32);
-    const courses = parseLr2CourseFile(
+    const courses = parseLR2CourseFile(
       lr2CourseList([
         { title: 'G', type: 2, md5s: [md5, md5] },
         { title: 'N', type: 1, md5s: [md5, md5] },
@@ -42,7 +42,7 @@ describe('course checklist fixtures', () => {
   });
 
   test('draws the skin image as bands of solid colour, top to bottom', () => {
-    const png = bandsPng(2, 1, [
+    const png = bandsPNG(2, 1, [
       [10, 20, 30],
       [40, 50, 60],
     ]);

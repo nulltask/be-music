@@ -6,19 +6,19 @@ import {
   MIN_TUI_NOTE_HEIGHT,
   TUI_NOTE_HEIGHT_HALF,
   type ImageResizeAlgorithm,
-  type TuiNoteHeight,
+  type TUINoteHeight,
 } from '@be-music/player/display';
 import { PLAYLOG_RULESET_IDS, type GaugeType, type PlaylogRulesetId } from '@be-music/player/ruleset';
 import { HIGH_SPEED_STEP, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from './config.ts';
 
-export interface CliArgs {
+export interface CLIArgs {
   input?: string;
   logFile?: string;
   auto: boolean;
   autoScratch: boolean;
   kittyGraphics: boolean;
-  videoBgaStreaming: boolean;
-  inferBmsLnTypeWhenMissing: boolean;
+  videoBGAStreaming: boolean;
+  inferBmsLNTypeWhenMissing: boolean;
   showInvisibleNotes: boolean;
   compressor: boolean;
   compressorThresholdDb?: number;
@@ -30,9 +30,9 @@ export interface CliArgs {
   limiterCeilingDb?: number;
   limiterReleaseMs?: number;
   speed?: number;
-  uiFps: number;
+  uiFPS: number;
   tuiVisibleNotesLimit: number;
-  tuiNoteHeight: TuiNoteHeight;
+  tuiNoteHeight: TUINoteHeight;
   imageResizeAlgorithm: ImageResizeAlgorithm;
   highSpeed?: number;
   judgeWindowMs?: number;
@@ -58,21 +58,21 @@ export interface CliArgs {
 const DEFAULT_TUI_FPS = 60;
 const DEFAULT_TUI_VISIBLE_NOTES_LIMIT = 8192;
 
-export function parseArgs(rawArgs: string[]): CliArgs {
-  const args = createDefaultCliArgs();
+export function parseArgs(rawArgs: string[]): CLIArgs {
+  const args = createDefaultCLIArgs();
   const positional: string[] = [];
 
   for (let index = 0; index < rawArgs.length; index += 1) {
     const token = rawArgs[index];
-    if (applyCliToggleArg(args, token)) {
+    if (applyCLIToggleArg(args, token)) {
       continue;
     }
-    const nextIndex = consumeCliValueArg(args, rawArgs, index);
+    const nextIndex = consumeCLIValueArg(args, rawArgs, index);
     if (nextIndex !== undefined) {
       index = nextIndex;
       continue;
     }
-    if (consumeDeprecatedCliArg(token)) {
+    if (consumeDeprecatedCLIArg(token)) {
       if ((token === '--judge-window' || token === '--audio-offset-ms') && index + 1 < rawArgs.length) {
         index += 1;
       }
@@ -88,7 +88,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
 /** The gauge types, in the order the CLI lists them. */
 const CLI_GAUGES: readonly GaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH'];
 
-function parseCliRuleset(rawValue: string): PlaylogRulesetId {
+function parseCLIRuleset(rawValue: string): PlaylogRulesetId {
   const value = rawValue.trim().toLowerCase();
   const match = PLAYLOG_RULESET_IDS.find((ruleset) => ruleset === value);
   if (!match) {
@@ -97,7 +97,7 @@ function parseCliRuleset(rawValue: string): PlaylogRulesetId {
   return match;
 }
 
-function parseCliGauge(rawValue: string): GaugeType {
+function parseCLIGauge(rawValue: string): GaugeType {
   const value = rawValue.trim().toUpperCase();
   const match = CLI_GAUGES.find((gauge) => gauge === value);
   if (!match) {
@@ -106,28 +106,28 @@ function parseCliGauge(rawValue: string): GaugeType {
   return match;
 }
 
-function createDefaultCliArgs(): CliArgs {
+function createDefaultCLIArgs(): CLIArgs {
   return {
     auto: false,
     autoScratch: false,
     kittyGraphics: true,
-    videoBgaStreaming: true,
+    videoBGAStreaming: true,
     imageResizeAlgorithm: DEFAULT_IMAGE_RESIZE_ALGORITHM,
-    inferBmsLnTypeWhenMissing: true,
+    inferBmsLNTypeWhenMissing: true,
     showInvisibleNotes: false,
     compressor: true,
     limiter: true,
     audio: true,
     volume: undefined,
     tui: true,
-    uiFps: DEFAULT_TUI_FPS,
+    uiFPS: DEFAULT_TUI_FPS,
     tuiVisibleNotesLimit: DEFAULT_TUI_VISIBLE_NOTES_LIMIT,
     tuiNoteHeight: DEFAULT_TUI_NOTE_HEIGHT,
     debugActiveAudio: false,
   };
 }
 
-function applyCliToggleArg(args: CliArgs, token: string): boolean {
+function applyCLIToggleArg(args: CLIArgs, token: string): boolean {
   switch (token) {
     case '--auto':
       args.auto = true;
@@ -138,10 +138,10 @@ function applyCliToggleArg(args: CliArgs, token: string): boolean {
       args.autoScratch = true;
       return true;
     case '--ln-type-auto':
-      args.inferBmsLnTypeWhenMissing = true;
+      args.inferBmsLNTypeWhenMissing = true;
       return true;
     case '--no-ln-type-auto':
-      args.inferBmsLnTypeWhenMissing = false;
+      args.inferBmsLNTypeWhenMissing = false;
       return true;
     case '--show-invisible-notes':
       args.showInvisibleNotes = true;
@@ -183,17 +183,17 @@ function applyCliToggleArg(args: CliArgs, token: string): boolean {
       args.kittyGraphics = false;
       return true;
     case '--video-bga-streaming':
-      args.videoBgaStreaming = true;
+      args.videoBGAStreaming = true;
       return true;
     case '--no-video-bga-streaming':
-      args.videoBgaStreaming = false;
+      args.videoBGAStreaming = false;
       return true;
     default:
       return false;
   }
 }
 
-function consumeCliValueArg(args: CliArgs, rawArgs: string[], index: number): number | undefined {
+function consumeCLIValueArg(args: CLIArgs, rawArgs: string[], index: number): number | undefined {
   const token = rawArgs[index];
   const rawValue = rawArgs[index + 1];
 
@@ -205,19 +205,19 @@ function consumeCliValueArg(args: CliArgs, rawArgs: string[], index: number): nu
       args.highSpeed = parseHighSpeedArg(rawValue);
       return index + 1;
     case '--tui-fps':
-      args.uiFps = parseTuiFpsArg(rawValue);
+      args.uiFPS = parseTuiFPSArg(rawValue);
       return index + 1;
     case '--tui-visible-notes-limit':
-      args.tuiVisibleNotesLimit = parseTuiVisibleNotesLimitArg(rawValue);
+      args.tuiVisibleNotesLimit = parseTUIVisibleNotesLimitArg(rawValue);
       return index + 1;
     case '--tui-note-height':
-      args.tuiNoteHeight = parseTuiNoteHeightArg(rawValue);
+      args.tuiNoteHeight = parseTUINoteHeightArg(rawValue);
       return index + 1;
     case '--image-resize-algorithm':
       args.imageResizeAlgorithm = parseImageResizeAlgorithmArg(rawValue);
       return index + 1;
     case '--log-file':
-      args.logFile = readRequiredCliPathArg(rawValue, '--log-file');
+      args.logFile = readRequiredCLIPathArg(rawValue, '--log-file');
       return index + 1;
     case '--compressor-threshold-db':
       args.compressorThresholdDb = Number.parseFloat(rawValue);
@@ -244,10 +244,10 @@ function consumeCliValueArg(args: CliArgs, rawArgs: string[], index: number): nu
       args.judgeWindowMs = Number.parseInt(rawValue, 10);
       return index + 1;
     case '--ruleset':
-      args.judgeRuleset = parseCliRuleset(rawValue);
+      args.judgeRuleset = parseCLIRuleset(rawValue);
       return index + 1;
     case '--gauge':
-      args.gauge = parseCliGauge(rawValue);
+      args.gauge = parseCLIGauge(rawValue);
       return index + 1;
     case '--render-audio':
       args.renderAudioPath = rawValue;
@@ -285,7 +285,7 @@ function consumeCliValueArg(args: CliArgs, rawArgs: string[], index: number): nu
   }
 }
 
-function consumeDeprecatedCliArg(token: string): boolean {
+function consumeDeprecatedCLIArg(token: string): boolean {
   if (token === '--audio-io-buffer-ms' || token === '--audio-io-high-water-ms' || token === '--audio-io-low-water-ms') {
     throw new Error(`${token} is no longer supported; audio-io backend has been removed`);
   }
@@ -325,7 +325,7 @@ function consumeDeprecatedCliArg(token: string): boolean {
   return false;
 }
 
-function readRequiredCliPathArg(raw: string | undefined, option: string): string {
+function readRequiredCLIPathArg(raw: string | undefined, option: string): string {
   if (typeof raw === 'string' && raw.length > 0) {
     return raw;
   }
@@ -348,7 +348,7 @@ function parseHighSpeedArg(raw: string | undefined): number {
   return roundedSteps * HIGH_SPEED_STEP;
 }
 
-function parseTuiFpsArg(raw: string | undefined): number {
+function parseTuiFPSArg(raw: string | undefined): number {
   const parsed = Number.parseFloat(raw ?? '');
   if (!Number.isFinite(parsed)) {
     throw new Error('--tui-fps expects a numeric value');
@@ -359,7 +359,7 @@ function parseTuiFpsArg(raw: string | undefined): number {
   return parsed;
 }
 
-function parseTuiVisibleNotesLimitArg(raw: string | undefined): number {
+function parseTUIVisibleNotesLimitArg(raw: string | undefined): number {
   const parsed = Number.parseInt(raw ?? '', 10);
   if (!Number.isFinite(parsed)) {
     throw new Error('--tui-visible-notes-limit expects an integer value');
@@ -370,7 +370,7 @@ function parseTuiVisibleNotesLimitArg(raw: string | undefined): number {
   return parsed;
 }
 
-function parseTuiNoteHeightArg(raw: string | undefined): TuiNoteHeight {
+function parseTUINoteHeightArg(raw: string | undefined): TUINoteHeight {
   if (raw === 'full') {
     return MAX_TUI_NOTE_HEIGHT;
   }
@@ -384,7 +384,7 @@ function parseTuiNoteHeightArg(raw: string | undefined): TuiNoteHeight {
     parsed <= MAX_TUI_NOTE_HEIGHT &&
     Number.isInteger(parsed)
   ) {
-    return parsed as TuiNoteHeight;
+    return parsed as TUINoteHeight;
   }
   throw new Error('--tui-note-height must be an integer from 1 to 8, or the alias full or half');
 }

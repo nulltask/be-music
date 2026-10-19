@@ -35,12 +35,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1,
       "lnType": 1,
       "lnMode": 1
@@ -119,7 +119,7 @@
       "randomPatterns": [],
       "title": "7 KEY Long Note (BML)",
       "playVariant": "7",
-      "referenceBpm": 140,
+      "referenceBPM": 140,
       "timing": {
         "tempo": [
           "0 140 0"
@@ -161,8 +161,8 @@
           "percent": 75
         },
         "noteCount": 25,
-        "chartFingerprint": "bmfp0:2c3271273f1ecc05775b89dcc0323988dfb94d944979b645127aeb4d9b6371fa",
-        "playFingerprint": "bmfp0:2c3271273f1ecc05775b89dcc0323988dfb94d944979b645127aeb4d9b6371fa",
+        "chartFingerprint": "bmfp0:45034647642b7e06f1728953fa97583debfc304e75a9b4b3734057a66a78d60f",
+        "playFingerprint": "bmfp0:45034647642b7e06f1728953fa97583debfc304e75a9b4b3734057a66a78d60f",
         "title": "7 KEY Long Note (BML)",
         "subtitle": "The .bml extension - 7 keys plus scratch with #LNOBJ long notes",
         "artist": "be-music",

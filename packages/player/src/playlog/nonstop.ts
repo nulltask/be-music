@@ -1,5 +1,5 @@
 import { resolveChart, type RandomDraw } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { NonstopConnection } from '../course/definition.ts';
 import type { NonstopStitchMap } from '../course/nonstop/compose.ts';
 import type { BeMusicPlaylog, PlaylogChart, PlaylogInputEvent, PlaylogJudgeRank, PlaylogNote } from './format.ts';
@@ -71,7 +71,7 @@ export function resolveNonstopPlaylogStages(
  * the lane options moved them.
  */
 export function resolveNonstopNoteStages(
-  stitchedChart: BeMusicJson,
+  stitchedChart: BeMusicJSON,
   map: NonstopStitchMap,
   notes: readonly PlaylogNote[],
 ): number[] {

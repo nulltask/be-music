@@ -51,7 +51,7 @@ describe('resolvePlaylogView on the beatoraja scale', () => {
     lift: number;
     hiddenRatio: number;
     hiddenEnabled: boolean;
-    mainBpm: number;
+    mainBPM: number;
     sides: readonly PlaySide[];
   }) {
     const covers = view.sides.map((side) => ({
@@ -64,7 +64,7 @@ describe('resolvePlaylogView on the beatoraja scale', () => {
     }));
     return resolvePlaylogView(
       { hiSpeed: createHiSpeedState({ hiSpeed: view.hiSpeed }), covers },
-      { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4, ...(view.mainBpm > 0 ? { mainBpm: view.mainBpm } : {}) },
+      { scale: BEATORAJA_HI_SPEED_SCALE, laneBeats: 4, ...(view.mainBPM > 0 ? { mainBPM: view.mainBPM } : {}) },
     );
   }
   const input = {
@@ -73,7 +73,7 @@ describe('resolvePlaylogView on the beatoraja scale', () => {
     lift: 0.2,
     hiddenRatio: 0.5,
     hiddenEnabled: true,
-    mainBpm: 150,
+    mainBPM: 150,
     sides: ['1P'] as const,
   };
 
@@ -88,7 +88,7 @@ describe('resolvePlaylogView on the beatoraja scale', () => {
   });
 
   test('a disabled HIDDEN cover is 0, every side gets the cover, and an unknown BPM leaves the visible time out', () => {
-    const view = beatorajaView({ ...input, hiddenEnabled: false, mainBpm: 0, sides: ['1P', '2P'] });
+    const view = beatorajaView({ ...input, hiddenEnabled: false, mainBPM: 0, sides: ['1P', '2P'] });
     expect(view.visibleMs).toBeUndefined();
     expect(view.covers).toEqual([
       { side: '1P', sudden: 0.25, hidden: 0, lift: 0.2 },
@@ -151,7 +151,7 @@ describe('resolvePlaylogView', () => {
     const hiSpeed = createHiSpeedState({ hiSpeed: 2, multiplier: 1.5 });
     const view = resolvePlaylogView(
       { hiSpeed, covers, hsFix: 'MAXBPM' },
-      { scale: BE_MUSIC_HI_SPEED_SCALE, laneBeats: 4, mainBpm: 120 },
+      { scale: BE_MUSIC_HI_SPEED_SCALE, laneBeats: 4, mainBPM: 120 },
     );
     expect(view).toEqual({
       hiSpeed: 3,

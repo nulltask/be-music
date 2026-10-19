@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { parseBms } from '@be-music/parser';
+import { parseBMS } from '@be-music/parser';
 import {
   createBeatorajaLaneTimelines,
   createBeatorajaScrollMapper,
   resolveBeatorajaScrollPlacement,
 } from './scroll-placement.ts';
 
-const SCROLL_CHART = parseBms(
+const SCROLL_CHART = parseBMS(
   ['#BPM 120', '#WAV01 a.wav', '#SCROLL01 0.5', '#00111:01', '#001SC:01', '#00211:01'].join('\n'),
 );
 
@@ -20,11 +20,11 @@ describe('createBeatorajaScrollMapper', () => {
   });
 
   it('is undefined for a chart without #SCROLL or #SPEED, so plain charts keep the beat-difference path', () => {
-    expect(createBeatorajaScrollMapper(parseBms(['#BPM 120', '#00111:01'].join('\n')))).toBeUndefined();
+    expect(createBeatorajaScrollMapper(parseBMS(['#BPM 120', '#00111:01'].join('\n')))).toBeUndefined();
   });
 
   it('is undefined when every #SCROLL / #SPEED point is 1, so the chart keeps LR2 drawing rules', () => {
-    const chart = parseBms(
+    const chart = parseBMS(
       ['#BPM 120', '#WAV01 a.wav', '#SCROLL01 1', '#SPEED01 1', '#00111:01', '#001SC:01', '#001SP:01'].join('\n'),
     );
     expect(createBeatorajaScrollMapper(chart)).toBeUndefined();

@@ -1,28 +1,28 @@
 import type { ParseContext, SourceRect } from './parse-context.ts';
 import type {
-  Lr2BarGraphElement,
-  Lr2BgaElement,
-  Lr2ButtonElement,
-  Lr2DestinationRect,
-  Lr2GaugeChartElement,
-  Lr2GrooveGaugeElement,
-  Lr2JudgeLineElement,
-  Lr2MeasureLineElement,
-  Lr2MouseCursorElement,
-  Lr2NowComboElement,
-  Lr2NumberElement,
-  Lr2OnMouseElement,
-  Lr2ReadmeElement,
-  Lr2ScoreChartElement,
-  Lr2Skin,
-  Lr2SliderElement,
-  Lr2TextElement,
+  LR2BarGraphElement,
+  LR2BGAElement,
+  LR2ButtonElement,
+  LR2DestinationRect,
+  LR2GaugeChartElement,
+  LR2GrooveGaugeElement,
+  LR2JudgeLineElement,
+  LR2MeasureLineElement,
+  LR2MouseCursorElement,
+  LR2NowComboElement,
+  LR2NumberElement,
+  LR2OnMouseElement,
+  LR2ReadmeElement,
+  LR2ScoreChartElement,
+  LR2Skin,
+  LR2SliderElement,
+  LR2TextElement,
 } from './types.ts';
 
 // LR2 NOWJUDGE_1P index mapping (per the LR2skin spec): 0 = early POOR (empty-press / kara-poor), 1 = POOR
 // (miss / minogashi-poor), 2 = BAD, 3 = GOOD, 4 = GREAT, 5 = PERFECT (= JUST GREAT). Both POOR variants render
 // with the same kind.
-const NOW_JUDGE_1P_KIND_BY_INDEX: ReadonlyMap<number, keyof Lr2Skin['judges']> = new Map([
+const NOW_JUDGE_1P_KIND_BY_INDEX: ReadonlyMap<number, keyof LR2Skin['judges']> = new Map([
   [0, 'poor'],
   [1, 'poor'],
   [2, 'bad'],
@@ -37,8 +37,8 @@ const NOW_COMBO_1P_KIND_BY_INDEX: ReadonlyMap<number, 'good' | 'great' | 'perfec
   [5, 'perfect'],
 ]);
 
-export function createNumberElements(context: ParseContext): Lr2NumberElement[] {
-  const elements: Lr2NumberElement[] = [];
+export function createNumberElements(context: ParseContext): LR2NumberElement[] {
+  const elements: LR2NumberElement[] = [];
   for (let index = 0; index < context.numberSources.length; index += 1) {
     const entry = context.numberSources[index]!;
     const dstGroup = context.numberDstGroups[index];
@@ -73,8 +73,8 @@ export function createNumberElements(context: ParseContext): Lr2NumberElement[] 
   return elements;
 }
 
-export function createNowComboElements(context: ParseContext): Lr2NowComboElement[] {
-  const elements: Lr2NowComboElement[] = [];
+export function createNowComboElements(context: ParseContext): LR2NowComboElement[] {
+  const elements: LR2NowComboElement[] = [];
   for (let index = 0; index < context.nowComboSources.length; index += 1) {
     const entry = context.nowComboSources[index]!;
     const dstGroup = context.nowComboDstGroups[index];
@@ -113,8 +113,8 @@ export function createNowComboElements(context: ParseContext): Lr2NowComboElemen
   return elements;
 }
 
-export function createJudgeLineElements(context: ParseContext): Lr2JudgeLineElement[] {
-  const elements: Lr2JudgeLineElement[] = [];
+export function createJudgeLineElements(context: ParseContext): LR2JudgeLineElement[] {
+  const elements: LR2JudgeLineElement[] = [];
   for (let index = 0; index < context.judgeLineSources.length; index += 1) {
     const entry = context.judgeLineSources[index]!;
     const dstGroup = context.judgeLineDstGroups[index];
@@ -136,8 +136,8 @@ export function createJudgeLineElements(context: ParseContext): Lr2JudgeLineElem
   return elements;
 }
 
-export function createMeasureLineElements(context: ParseContext): Lr2MeasureLineElement[] {
-  const elements: Lr2MeasureLineElement[] = [];
+export function createMeasureLineElements(context: ParseContext): LR2MeasureLineElement[] {
+  const elements: LR2MeasureLineElement[] = [];
   for (let index = 0; index < context.measureLineSources.length; index += 1) {
     const entry = context.measureLineSources[index]!;
     const dstGroup = context.measureLineDstGroups[index];
@@ -159,8 +159,8 @@ export function createMeasureLineElements(context: ParseContext): Lr2MeasureLine
   return elements;
 }
 
-export function createBgaElements(context: ParseContext): Lr2BgaElement[] {
-  const elements: Lr2BgaElement[] = [];
+export function createBGAElements(context: ParseContext): LR2BGAElement[] {
+  const elements: LR2BGAElement[] = [];
   for (let index = 0; index < context.bgaSources.length; index += 1) {
     const entry = context.bgaSources[index]!;
     const dstGroup = context.bgaDstGroups[index];
@@ -179,8 +179,8 @@ export function createBgaElements(context: ParseContext): Lr2BgaElement[] {
   return elements;
 }
 
-export function createGrooveGaugeElements(context: ParseContext): Lr2GrooveGaugeElement[] {
-  const elements: Lr2GrooveGaugeElement[] = [];
+export function createGrooveGaugeElements(context: ParseContext): LR2GrooveGaugeElement[] {
+  const elements: LR2GrooveGaugeElement[] = [];
   for (let index = 0; index < context.grooveGaugeSources.length; index += 1) {
     const entry = context.grooveGaugeSources[index]!;
     const dstGroup = context.grooveGaugeDstGroups[index];
@@ -204,8 +204,8 @@ export function createGrooveGaugeElements(context: ParseContext): Lr2GrooveGauge
   return elements;
 }
 
-export function createTextElements(context: ParseContext): Lr2TextElement[] {
-  const elements: Lr2TextElement[] = [];
+export function createTextElements(context: ParseContext): LR2TextElement[] {
+  const elements: LR2TextElement[] = [];
   for (let index = 0; index < context.textSources.length; index += 1) {
     const entry = context.textSources[index]!;
     const dstGroup = context.textDstGroups[index];
@@ -227,8 +227,8 @@ export function createTextElements(context: ParseContext): Lr2TextElement[] {
   return elements;
 }
 
-export function createBarGraphElements(context: ParseContext): Lr2BarGraphElement[] {
-  const elements: Lr2BarGraphElement[] = [];
+export function createBarGraphElements(context: ParseContext): LR2BarGraphElement[] {
+  const elements: LR2BarGraphElement[] = [];
   for (let index = 0; index < context.bargraphSources.length; index += 1) {
     const entry = context.bargraphSources[index]!;
     const dstGroup = context.bargraphDstGroups[index];
@@ -262,8 +262,8 @@ export function createBarGraphElements(context: ParseContext): Lr2BarGraphElemen
  * `loadSkinAssetTexture` fallback consumers, falling back to the first declared `#IMAGE` when `gr` indexes outside the
  * table.
  */
-export function createGaugeChartElements(context: ParseContext): Lr2GaugeChartElement[] {
-  const elements: Lr2GaugeChartElement[] = [];
+export function createGaugeChartElements(context: ParseContext): LR2GaugeChartElement[] {
+  const elements: LR2GaugeChartElement[] = [];
   for (let index = 0; index < context.gaugeChartSources.length; index += 1) {
     const entry = context.gaugeChartSources[index]!;
     const dstGroup = context.gaugeChartDstGroups[index];
@@ -291,8 +291,8 @@ export function createGaugeChartElements(context: ParseContext): Lr2GaugeChartEl
   return elements;
 }
 
-export function createScoreChartElements(context: ParseContext): Lr2ScoreChartElement[] {
-  const elements: Lr2ScoreChartElement[] = [];
+export function createScoreChartElements(context: ParseContext): LR2ScoreChartElement[] {
+  const elements: LR2ScoreChartElement[] = [];
   for (let index = 0; index < context.scoreChartSources.length; index += 1) {
     const entry = context.scoreChartSources[index]!;
     const dstGroup = context.scoreChartDstGroups[index];
@@ -319,8 +319,8 @@ export function createScoreChartElements(context: ParseContext): Lr2ScoreChartEl
   return elements;
 }
 
-export function createSliderElements(context: ParseContext): Lr2SliderElement[] {
-  const elements: Lr2SliderElement[] = [];
+export function createSliderElements(context: ParseContext): LR2SliderElement[] {
+  const elements: LR2SliderElement[] = [];
   for (let index = 0; index < context.sliderSources.length; index += 1) {
     const entry = context.sliderSources[index]!;
     const dstGroup = context.sliderDstGroups[index];
@@ -345,8 +345,8 @@ export function createSliderElements(context: ParseContext): Lr2SliderElement[] 
   return elements;
 }
 
-export function createButtonElements(context: ParseContext): Lr2ButtonElement[] {
-  const elements: Lr2ButtonElement[] = [];
+export function createButtonElements(context: ParseContext): LR2ButtonElement[] {
+  const elements: LR2ButtonElement[] = [];
   for (let index = 0; index < context.buttonSources.length; index += 1) {
     const entry = context.buttonSources[index]!;
     const dstGroup = context.buttonDstGroups[index];
@@ -372,8 +372,8 @@ export function createButtonElements(context: ParseContext): Lr2ButtonElement[] 
   return elements;
 }
 
-export function createOnMouseElements(context: ParseContext): Lr2OnMouseElement[] {
-  const elements: Lr2OnMouseElement[] = [];
+export function createOnMouseElements(context: ParseContext): LR2OnMouseElement[] {
+  const elements: LR2OnMouseElement[] = [];
   for (let index = 0; index < context.onMouseSources.length; index += 1) {
     const entry = context.onMouseSources[index]!;
     const dstGroup = context.onMouseDstGroups[index];
@@ -400,8 +400,8 @@ export function createOnMouseElements(context: ParseContext): Lr2OnMouseElement[
   return elements;
 }
 
-export function createReadmeElements(context: ParseContext): Lr2ReadmeElement[] {
-  const elements: Lr2ReadmeElement[] = [];
+export function createReadmeElements(context: ParseContext): LR2ReadmeElement[] {
+  const elements: LR2ReadmeElement[] = [];
   for (let index = 0; index < context.readmeSources.length; index += 1) {
     const entry = context.readmeSources[index]!;
     const dstGroup = context.readmeDstGroups[index];
@@ -419,8 +419,8 @@ export function createReadmeElements(context: ParseContext): Lr2ReadmeElement[] 
   return elements;
 }
 
-export function createMouseCursorElements(context: ParseContext): Lr2MouseCursorElement[] {
-  const elements: Lr2MouseCursorElement[] = [];
+export function createMouseCursorElements(context: ParseContext): LR2MouseCursorElement[] {
+  const elements: LR2MouseCursorElement[] = [];
   for (let index = 0; index < context.mouseCursorSources.length; index += 1) {
     const source = context.mouseCursorSources[index]!;
     const dstGroup = context.mouseCursorDstGroups[index];
@@ -442,24 +442,24 @@ export function createMouseCursorElements(context: ParseContext): Lr2MouseCursor
   return elements;
 }
 
-export function createJudgeElements(context: ParseContext): Lr2Skin['judges'] {
+export function createJudgeElements(context: ParseContext): LR2Skin['judges'] {
   return buildJudgeMap(context.nowJudge1PSources, context.nowJudge1PDstGroups, context);
 }
 
-export function createJudge2PElements(context: ParseContext): Lr2Skin['judges2P'] {
+export function createJudge2PElements(context: ParseContext): LR2Skin['judges2P'] {
   return buildJudgeMap(context.nowJudge2PSources, context.nowJudge2PDstGroups, context);
 }
 
 /**
- * Shared body for the per-side judge factories. Walks the kind map and emits an `Lr2ImageElement[]` per verdict (or
+ * Shared body for the per-side judge factories. Walks the kind map and emits an `LR2ImageElement[]` per verdict (or
  * `[]` for verdicts the skin omitted on this side). Kept as a helper so the 1P / 2P paths can't drift apart silently.
  */
 function buildJudgeMap(
   sources: SourceRect[],
-  dstGroups: Lr2DestinationRect[][],
+  dstGroups: LR2DestinationRect[][],
   context: ParseContext,
-): Lr2Skin['judges'] {
-  const judges: Lr2Skin['judges'] = {};
+): LR2Skin['judges'] {
+  const judges: LR2Skin['judges'] = {};
   for (const [id, kind] of NOW_JUDGE_1P_KIND_BY_INDEX) {
     const source = sources[id];
     const dstGroup = dstGroups[id];

@@ -56,7 +56,7 @@ export interface DecideSessionOptions {
   readonly course?: CourseView;
   /** The options the play will run with. Defaults to `DEFAULT_PLAY_OPTIONS`. */
   readonly playOptions?: PlayOptions;
-  /** The theme's sounds: the decide jingle is `decideBgm`, none without it. */
+  /** The theme's sounds: the decide jingle is `decideBGM`, none without it. */
   readonly sounds: SystemSoundSet;
   readonly audio: DecideAudio;
   /** When the screen takes input and how it leaves, as the view's skin authors it. */
@@ -119,7 +119,7 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
     this.nowMs = nowMs;
     this.leaving = undefined;
     this.completed = false;
-    const jingle = this.options.sounds.decideBgm;
+    const jingle = this.options.sounds.decideBGM;
     if (jingle !== undefined) void this.options.audio.playJingle(jingle, { owner: this });
   }
 

@@ -31,12 +31,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 2,
       "lnType": 1
     },
@@ -121,7 +121,7 @@
       "randomPatterns": [],
       "title": "10 KEY DP Lane Mode",
       "playVariant": "10",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -174,8 +174,8 @@
           "percent": 75
         },
         "noteCount": 36,
-        "chartFingerprint": "bmfp0:cebada4e8dab523087493bfd418c275aa3caa4ab920c107d1363790fd8b4b7cf",
-        "playFingerprint": "bmfp0:cebada4e8dab523087493bfd418c275aa3caa4ab920c107d1363790fd8b4b7cf",
+        "chartFingerprint": "bmfp0:c784da4ad98fc42257375c50c3bc154d2b4cd7abea959e7a0c48a19565bf6487",
+        "playFingerprint": "bmfp0:c784da4ad98fc42257375c50c3bc154d2b4cd7abea959e7a0c48a19565bf6487",
         "title": "10 KEY DP Lane Mode",
         "subtitle": "IIDX 5-key double play - channels 11..16 and 21..26",
         "artist": "be-music",

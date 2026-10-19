@@ -18,7 +18,7 @@ export const CARD_MAX_BYTES = 512 * 1024;
 const EXTENSIONS = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg' } as const;
 
 /** The URL of a play's card; the version (the upload's hash, or `d` for the default card) busts caches. */
-export function cardUrl(scoreId: string, cardKey: string | null): string {
+export function cardURL(scoreId: string, cardKey: string | null): string {
   const version = cardKey === null ? 'd' : (/\/([0-9a-f]{16})[0-9a-f]*\.\w+$/.exec(cardKey)?.[1] ?? 'u');
   return `/scores/${encodeURIComponent(scoreId)}/card?v=${version}`;
 }

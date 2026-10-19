@@ -1,5 +1,5 @@
 /**
- * Sentinel paths used in `Lr2ImageRect.imagePath` for LR2's runtime-bound textures (`#SRC_IMAGE,gr=...`).
+ * Sentinel paths used in `LR2ImageRect.imagePath` for LR2's runtime-bound textures (`#SRC_IMAGE,gr=...`).
  */
 export const LR2_SPECIAL_GRAPHIC = {
   STAGEFILE: '__lr2_special:stagefile',
@@ -10,9 +10,9 @@ export const LR2_SPECIAL_GRAPHIC = {
   WHITE: '__lr2_special:white',
 } as const;
 
-export type Lr2SpecialGraphic = (typeof LR2_SPECIAL_GRAPHIC)[keyof typeof LR2_SPECIAL_GRAPHIC];
+export type LR2SpecialGraphic = (typeof LR2_SPECIAL_GRAPHIC)[keyof typeof LR2_SPECIAL_GRAPHIC];
 
-export function isLr2SpecialGraphic(path: string): path is Lr2SpecialGraphic {
+export function isLR2SpecialGraphic(path: string): path is LR2SpecialGraphic {
   return (
     path === LR2_SPECIAL_GRAPHIC.STAGEFILE ||
     path === LR2_SPECIAL_GRAPHIC.BACKBMP ||

@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createEmptyJson } from '../../json/src/index.ts';
+import { createEmptyJSON } from '../../json/src/index.ts';
 import { DEFAULT_LANDMINE_DAMAGE, resolveChartLongNoteMode, resolveLandmineDamage } from './index.ts';
 
 describe('note rules', () => {
   test('resolveChartLongNoteMode reads #LNMODE and bmson ln_type, defaulting to LN', () => {
-    const bms = createEmptyJson('bms');
+    const bms = createEmptyJSON('bms');
     expect(resolveChartLongNoteMode(bms)).toBe(1);
     bms.bms.lnMode = 3;
     expect(resolveChartLongNoteMode(bms)).toBe(3);
-    const bmson = createEmptyJson('bmson');
+    const bmson = createEmptyJSON('bmson');
     bmson.bmson.info.lnType = 2;
     expect(resolveChartLongNoteMode(bmson)).toBe(2);
     bmson.bmson.info.lnType = 7;

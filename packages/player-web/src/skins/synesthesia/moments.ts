@@ -24,7 +24,7 @@ import {
   STAGE_WIDTH as DESIGN_WIDTH,
   stageProgress,
 } from '@be-music/skin-sdk';
-import { addHudText, type ChildPool } from '../pixi-kit/index.ts';
+import { addHUDText, type ChildPool } from '../pixi-kit/index.ts';
 
 /** Stand-in for a layout without a BGA (a page-wide keyboard field): milestones then play in their area. */
 const NO_MONITOR: BeMusicRect = { x: 0, y: 0, w: 0, h: 0 };
@@ -132,7 +132,7 @@ function drawCountIn(
     const half = 30 + (at.half - 30) * form;
     graphics.rect(at.x - half, cy + 22, half * 2, 1).fill({ color: SYN_WHITE, alpha: 0.85 * fade });
     graphics.rect(at.x - half, cy + 19, half * 2, 7).fill({ color, alpha: 0.18 * fade });
-    const text = addHudText(
+    const text = addHUDText(
       layer,
       'READY',
       at.x,
@@ -154,7 +154,7 @@ function drawCountIn(
   const start = stageProgress(chartMs, 0, 900);
   if (start > 0 && start < 1) {
     const eased = easeOutCubic(start);
-    const text = addHudText(
+    const text = addHUDText(
       layer,
       'START',
       at.x,
@@ -198,7 +198,7 @@ function drawMilestone(
   // A spot narrower than the compact lock-on shrinks the whole cut-in to fit it.
   const fit = !onMonitor && spot ? Math.min(1, spot.w / 120) : 1;
   const alpha = Math.min(1, t / 0.12) * (1 - Math.max(0, (t - 0.7) / 0.3));
-  const count = addHudText(
+  const count = addHUDText(
     layer,
     String(value),
     cx,
@@ -224,7 +224,7 @@ function drawMilestone(
     arm: 14,
     width: 2,
   });
-  const label = addHudText(
+  const label = addHUDText(
     layer,
     'COMBO',
     cx,
@@ -257,7 +257,7 @@ function drawClear(
   graphics.rect(groove.x, groove.y - 2, head - groove.x, groove.h + 4).fill({ color, alpha: 0.22 * fade });
   graphics.rect(head - 3, groove.y - 8, 6, groove.h + 16).fill({ color: SYN_WHITE, alpha: 0.9 * fade });
   graphics.circle(head, groove.y + groove.h / 2, 14).fill({ color, alpha: 0.3 * fade });
-  const text = addHudText(
+  const text = addHUDText(
     layer,
     'CLEAR LINE',
     // Landscape: between the playfield frame's bottom edge and the gauge panel, touching neither. Portrait: centred on
@@ -318,7 +318,7 @@ function drawFullCombo(
   }
   const form = easeOutCubic(Math.min(1, t / 0.3));
   const color = emberColor(0.6 + 0.3 * Math.sin(nowMs / 260));
-  const text = addHudText(
+  const text = addHUDText(
     layer,
     'FULL COMBO',
     cx,

@@ -68,7 +68,7 @@ export function resolveGreenNumber(whiteNumberMs: number): number {
  */
 export function resolvePlaylogView(
   view: PlayViewState,
-  options: { scale: string; laneBeats?: number; mainBpm?: number },
+  options: { scale: string; laneBeats?: number; mainBPM?: number },
 ): PlaylogViewState {
   const covers = view.covers.map(resolveLaneCover);
   const playlogView: PlaylogViewState = {
@@ -77,13 +77,13 @@ export function resolvePlaylogView(
     ...(view.hsFix !== undefined ? { hsFix: view.hsFix } : {}),
     covers,
   };
-  const { laneBeats, mainBpm } = options;
-  if (laneBeats !== undefined && laneBeats > 0 && mainBpm !== undefined && mainBpm > 0 && view.hiSpeed.drawn > 0) {
+  const { laneBeats, mainBPM } = options;
+  if (laneBeats !== undefined && laneBeats > 0 && mainBPM !== undefined && mainBPM > 0 && view.hiSpeed.drawn > 0) {
     playlogView.visibleMs = resolveWhiteNumber({
       laneBeats,
       hiSpeed: view.hiSpeed.drawn,
       sudden: covers[0]?.sudden ?? 0,
-      bpm: mainBpm,
+      bpm: mainBPM,
     });
   }
   return roundPlaylogView(playlogView);

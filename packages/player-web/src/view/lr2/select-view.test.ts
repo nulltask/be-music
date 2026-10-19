@@ -1,32 +1,32 @@
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import { describe, expect, it } from 'vite-plus/test';
 import type { SelectFrame, SelectIntent } from '../types.ts';
-import { isInsideLr2DefaultSearchBox, Lr2SelectView } from './select-view.ts';
+import { isInsideLR2DefaultSearchBox, LR2SelectView } from './select-view.ts';
 
-describe('isInsideLr2DefaultSearchBox', () => {
+describe('isInsideLR2DefaultSearchBox', () => {
   it('accepts the LR2 default search-box chrome on the canonical 1280x720 design canvas', () => {
-    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 561 })).toBe(true);
+    expect(isInsideLR2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 561 })).toBe(true);
   });
 
   it('keeps the fallback rectangle boundaries inclusive to match the select-view click path', () => {
-    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 0, y: 540 })).toBe(true);
-    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 920, y: 582 })).toBe(true);
+    expect(isInsideLR2DefaultSearchBox({ width: 1280, height: 720, x: 0, y: 540 })).toBe(true);
+    expect(isInsideLR2DefaultSearchBox({ width: 1280, height: 720, x: 920, y: 582 })).toBe(true);
   });
 
   it('rejects clicks just outside the LR2 default search-box rectangle', () => {
-    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: -0.01, y: 561 })).toBe(false);
-    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 920.01, y: 561 })).toBe(false);
-    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 539.99 })).toBe(false);
-    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 582.01 })).toBe(false);
+    expect(isInsideLR2DefaultSearchBox({ width: 1280, height: 720, x: -0.01, y: 561 })).toBe(false);
+    expect(isInsideLR2DefaultSearchBox({ width: 1280, height: 720, x: 920.01, y: 561 })).toBe(false);
+    expect(isInsideLR2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 539.99 })).toBe(false);
+    expect(isInsideLR2DefaultSearchBox({ width: 1280, height: 720, x: 460, y: 582.01 })).toBe(false);
   });
 
   it('does not apply the hardcoded fallback to custom design sizes', () => {
-    expect(isInsideLr2DefaultSearchBox({ width: 640, height: 480, x: 460, y: 561 })).toBe(false);
-    expect(isInsideLr2DefaultSearchBox({ width: 1280, height: 800, x: 460, y: 561 })).toBe(false);
+    expect(isInsideLR2DefaultSearchBox({ width: 640, height: 480, x: 460, y: 561 })).toBe(false);
+    expect(isInsideLR2DefaultSearchBox({ width: 1280, height: 800, x: 460, y: 561 })).toBe(false);
   });
 });
 
-describe('Lr2SelectView buttons', () => {
+describe('LR2SelectView buttons', () => {
   type ButtonView = {
     emit: (intent: SelectIntent) => void;
     frame: Partial<SelectFrame> | undefined;
@@ -36,7 +36,7 @@ describe('Lr2SelectView buttons', () => {
   /** A view (not attached, so nothing draws) whose buttons report the intents they send. */
   function createView(frame: Partial<SelectFrame> = {}) {
     const intents: SelectIntent[] = [];
-    const view = new Lr2SelectView({ family: 'lr2', skin: {} as Lr2Skin }) as unknown as ButtonView;
+    const view = new LR2SelectView({ family: 'lr2', skin: {} as LR2Skin }) as unknown as ButtonView;
     view.emit = (intent) => intents.push(intent);
     view.frame = frame;
     return { view, intents };

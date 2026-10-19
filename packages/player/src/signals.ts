@@ -12,15 +12,15 @@ export {
   type PlayerInputSignalBus,
 } from './core/input-signal-bus.ts';
 export {
-  createPlayerUiSignalBus,
+  createPlayerUISignalBus,
   type PlayerGaugeSummary,
-  type PlayerUiCommand,
-  type PlayerUiFrameNote,
-  type PlayerUiFramePayload,
-  type PlayerUiFrameSummary,
-  type PlayerUiLongNoteMode,
-  type PlayerUiLongNoteOutcome,
-  type PlayerUiSignalBus,
+  type PlayerUICommand,
+  type PlayerUIFrameNote,
+  type PlayerUIFramePayload,
+  type PlayerUIFrameSummary,
+  type PlayerUILongNoteMode,
+  type PlayerUILongNoteOutcome,
+  type PlayerUISignalBus,
 } from './core/ui-signal-bus.ts';
 export {
   createPlayerStateSignals,

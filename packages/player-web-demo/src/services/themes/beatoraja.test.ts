@@ -1,10 +1,10 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { BEATORAJA_SKIN_TYPE, type BeatorajaSkinConfig, type BeatorajaSkinEntry } from '@be-music/beatoraja-skin';
-import { discoverBeatorajaSelectBgmPath, discoverBeatorajaSystemSoundPaths } from '@be-music/beatoraja-skin/scene';
+import { discoverBeatorajaSelectBGMPath, discoverBeatorajaSystemSoundPaths } from '@be-music/beatoraja-skin/scene';
 import type { AudioOwner } from '@be-music/player-web/audio';
 import type { PlayScene, SelectScene } from '@be-music/player-web/host';
 import {
-  findBeatorajaThemeBgm,
+  findBeatorajaThemeBGM,
   loadBeatorajaSceneKit,
   loadBeatorajaThemeFromFiles,
   releaseBeatorajaSceneKitAssets,
@@ -22,14 +22,14 @@ vi.mock('@be-music/player-web/skin', async (importOriginal) => {
     ...actual,
     loadBeatorajaThemeFromFiles: vi.fn(),
     loadBeatorajaSceneKit: vi.fn(),
-    findBeatorajaThemeBgm: vi.fn(),
+    findBeatorajaThemeBGM: vi.fn(),
     releaseBeatorajaSceneKitAssets: vi.fn(actual.releaseBeatorajaSceneKitAssets),
   };
 });
 
 const loadTheme = vi.mocked(loadBeatorajaThemeFromFiles);
 const loadKit = vi.mocked(loadBeatorajaSceneKit);
-const findBgm = vi.mocked(findBeatorajaThemeBgm);
+const findBGM = vi.mocked(findBeatorajaThemeBGM);
 const release = vi.mocked(releaseBeatorajaSceneKitAssets);
 
 function entry(type: number, entryPath: string): BeatorajaSkinEntry {
@@ -71,7 +71,7 @@ const FULL = (): BeatorajaThemeBundle =>
 
 /** A 7 KEY chart: a note on key 1 and one on key 6. */
 function chart(): LibraryChart {
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   json.events.push(
     { measure: 1, channel: '11', position: [0, 1], value: '01' },
     { measure: 1, channel: '18', position: [0, 1], value: '01' },
@@ -153,7 +153,7 @@ function loadedEntries(): string[] {
 beforeEach(() => {
   vi.clearAllMocks();
   loadKit.mockImplementation(async (options) => loaded(options.entryPath, options.skinConfig));
-  findBgm.mockResolvedValue({});
+  findBGM.mockResolvedValue({});
 });
 
 describe('BeatorajaThemeService.loadBeatorajaTheme', () => {
@@ -161,8 +161,8 @@ describe('BeatorajaThemeService.loadBeatorajaTheme', () => {
     const { service, options, calls } = harness();
     service.beatorajaSkinOverridesByType.set(BEATORAJA_SKIN_TYPE.DECIDE, DECIDE_B.entryPath);
     const clear = new Uint8Array([1]);
-    findBgm.mockImplementation(async () => {
-      calls.push('findBeatorajaThemeBgm');
+    findBGM.mockImplementation(async () => {
+      calls.push('findBeatorajaThemeBGM');
       return { clear };
     });
     const theme = FULL();
@@ -172,7 +172,7 @@ describe('BeatorajaThemeService.loadBeatorajaTheme', () => {
     expect(release).toHaveBeenCalledWith(service.beatorajaKitCaches);
     expect(options.audio.setTheme).toHaveBeenCalledWith({ files: theme.files });
     expect(service.beatorajaSkinOverridesByType.size).toBe(0);
-    expect(service.beatorajaThemeBgm).toEqual({ clear });
+    expect(service.beatorajaThemeBGM).toEqual({ clear });
     // The previous theme's skin sounds stop before the new one's files are set, and the pickers are rebuilt (overrides
     // gone) before the theme's BGM is scanned.
     expect(calls).toEqual([
@@ -180,7 +180,7 @@ describe('BeatorajaThemeService.loadBeatorajaTheme', () => {
       'setTheme',
       'rebuildBeatorajaSkinPickers',
       'rebuildSkinFamilyPicker',
-      'findBeatorajaThemeBgm',
+      'findBeatorajaThemeBGM',
     ]);
   });
 
@@ -215,10 +215,10 @@ describe('BeatorajaThemeService.loadBeatorajaTheme', () => {
     expect(service.selectSoundSet()).toEqual(
       systemSoundSetFromBeatoraja({
         paths: discoverBeatorajaSystemSoundPaths(theme.files),
-        selectBgmPath: discoverBeatorajaSelectBgmPath(theme.files)!,
+        selectBGMPath: discoverBeatorajaSelectBGMPath(theme.files)!,
       }),
     );
-    expect(service.selectSoundSet().selectBgm).toEqual({ path: 'bgm/select.wav' });
+    expect(service.selectSoundSet().selectBGM).toEqual({ path: 'bgm/select.wav' });
   });
 });
 

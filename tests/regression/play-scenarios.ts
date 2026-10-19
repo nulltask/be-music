@@ -1,5 +1,5 @@
 import type { RandomDraws } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { manualPlay, type PlayerSummary } from '@be-music/player';
 import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import type {
@@ -69,7 +69,7 @@ export interface EngineReplay {
  * together with the playlog it re-recorded. The chart must already be resolved with `randomDraws`, the way the
  * hosts hand it to the engine.
  */
-export async function replayEngine(json: BeMusicJson, options: EngineReplayOptions): Promise<EngineReplay> {
+export async function replayEngine(json: BeMusicJSON, options: EngineReplayOptions): Promise<EngineReplay> {
   let playlog: BeMusicPlaylog | undefined;
   const summary = await manualPlay(json, {
     randomDraws: options.randomDraws,
@@ -128,7 +128,7 @@ function flattenResult(value: object, prefix = ''): Map<string, unknown> {
  * so overlapping them only shortens the wall-clock time.
  */
 export async function replayEngineRulesets(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   options: Omit<EngineReplayOptions, 'judgeRuleset'>,
 ): Promise<Array<{ ruleset: PlaylogRulesetId; replay: EngineReplay }>> {
   return Promise.all(

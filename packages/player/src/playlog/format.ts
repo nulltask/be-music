@@ -173,7 +173,7 @@ export interface PlaylogPlay {
   judgeRuleset?: PlaylogRulesetId;
   /**
    * The play's `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes (`RandomDraws` from `@be-music/chart`): one
-   * entry per such line of the chart, in file order. With the chart file, `resolveBmsControlFlowWithDraws(json,
+   * entry per such line of the chart, in file order. With the chart file, `resolveBMSControlFlowWithDraws(json,
    * randomDraws)` rebuilds the chart that was played (so a verifier can recompute `chart.playFingerprint`), and a
    * replay passes them back as `PlayerOptions.randomDraws`. Absent for charts without control flow.
    */

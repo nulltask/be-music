@@ -394,7 +394,7 @@ export class BuiltInSelectView implements SelectView {
       jumpCursor: (index) => emit({ type: 'browse', command: { type: 'jump', index } }),
       activateFocused: () => emit({ type: 'activate' }),
       handleThemePointerDown: () => {},
-      startSelectBgm: async () => emit({ type: 'gesture' }),
+      startSelectBGM: async () => emit({ type: 'gesture' }),
     };
   }
 }

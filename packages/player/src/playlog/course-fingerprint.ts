@@ -1,4 +1,4 @@
-import { canonicalizeJsonValue, sha256Hex } from '@be-music/chart';
+import { canonicalizeJSONValue, sha256Hex } from '@be-music/chart';
 import { normalizeCourseConstraints, type CourseConstraint, type NonstopConnection } from '../course/definition.ts';
 import type { RulesetCourseKind } from '../ruleset/course.ts';
 import type { BeMusicCoursePlaylog } from './course.ts';
@@ -70,7 +70,7 @@ export function createCourseFingerprintDocument(input: CourseFingerprintInput): 
  * random course, once its stages are drawn, is keyed like a fixed one.
  */
 export function computeCourseFingerprint(input: CourseFingerprintInput): string {
-  return `${COURSE_FINGERPRINT_VERSION}:${sha256Hex(canonicalizeJsonValue(createCourseFingerprintDocument(input)))}`;
+  return `${COURSE_FINGERPRINT_VERSION}:${sha256Hex(canonicalizeJSONValue(createCourseFingerprintDocument(input)))}`;
 }
 
 /**

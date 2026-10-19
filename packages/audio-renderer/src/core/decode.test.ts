@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { decodeAudioSample } from './decode.ts';
-import { encodeWav16 } from './file-codec.ts';
+import { encodeWAV16 } from './file-codec.ts';
 
 describe('decodeAudioSample', () => {
   test('accepts Uint8Array WAV bytes without requiring Node Buffer helpers', async () => {
-    const encoded = encodeWav16({
+    const encoded = encodeWAV16({
       sampleRate: 8000,
       left: new Float32Array([1, -1]),
       right: new Float32Array([-0.5, 0.5]),

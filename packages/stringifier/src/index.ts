@@ -1,3 +1,3 @@
-export type { BmsStringifyOptions, BmsonStringifyOptions } from './options.ts';
-export { stringifyBms } from './bms.ts';
+export type { BMSStringifyOptions, BmsonStringifyOptions } from './options.ts';
+export { stringifyBMS } from './bms.ts';
 export { stringifyBmson } from './bmson.ts';

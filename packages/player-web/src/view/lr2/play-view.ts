@@ -2,23 +2,23 @@
  * The LR2 family's play screen: an LR2 play skin (`play_<variant>.lr2skin`) drawn around the shared playfield
  * (`view/shared/playfield`) on LR2's 640x480 canvas, letterboxed into the window. It draws the play session's frames:
  *
- * - the skin's ops, numbers, texts, sliders and bar graphs through the frame's LR2 state (`resolveLr2PlayState` over the
+ * - the skin's ops, numbers, texts, sliders and bar graphs through the frame's LR2 state (`resolveLR2PlayState` over the
  *   frame's `PlayState` and the play's score);
- * - its timers from the play's moments in the frame (`resolveLr2PlayTimers`, kept by {@link Lr2PlayTimers});
+ * - its timers from the play's moments in the frame (`resolveLR2PlayTimers`, kept by {@link LR2PlayTimers});
  * - the shared playfield through a {@link PlayfieldSkin}: the skin's lane rects, note cells, measure lines, BGA rects,
  *   and the bomb and key-beam spans of its timers. The skin draws the lane backgrounds, key beams and bombs itself.
  *
  * The LR2 lane index and timer ids stay in this view and its modules: the playfield asks by channel. The session times
- * the play from the skin's timing ({@link resolveLr2PlayTiming}) and handles its input.
+ * the play from the skin's timing ({@link resolveLR2PlayTiming}) and handles its input.
  */
 
-import type { Lr2Skin, Lr2SpecialGraphic } from '@be-music/lr2-skin';
-import { LR2_SPECIAL_GRAPHIC, isLr2SpecialGraphic } from '@be-music/lr2-skin';
+import type { LR2Skin, LR2SpecialGraphic } from '@be-music/lr2-skin';
+import { LR2_SPECIAL_GRAPHIC, isLR2SpecialGraphic } from '@be-music/lr2-skin';
 import {
-  resolveLr2NonstopStage,
-  resolveLr2PlayState,
-  type Lr2PlaySetup,
-  type Lr2PlayState,
+  resolveLR2NonstopStage,
+  resolveLR2PlayState,
+  type LR2PlaySetup,
+  type LR2PlayState,
 } from '@be-music/lr2-skin/state';
 import type { GaugeType } from '@be-music/player/ruleset';
 import type { CourseView } from '@be-music/scene-model';
@@ -26,11 +26,11 @@ import type { GameplayLayoutMode } from '@be-music/skin-sdk';
 import type { Application, Texture } from 'pixi.js';
 import { loadAssetBytes, resolveChartImageAsset } from '../../collection/collection.ts';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
-import type { Lr2PlayKit } from '../../host/family-kit.ts';
+import type { LR2PlayKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../../stage/design.ts';
-import { resolveLr2LaneIndex } from '@be-music/player/lanes';
+import { resolveLR2LaneIndex } from '@be-music/player/lanes';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { releaseTexturesOnHost } from '../../stage/pixi-utils.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
@@ -50,18 +50,18 @@ import type {
   PlayfieldStage,
 } from '../types.ts';
 import {
-  collectLr2BgaTargets,
-  drawLr2FallbackJudge,
-  drawLr2PlaySkin,
-  Lr2PlayText,
-  resolveLr2LaneRect,
-  resolveLr2MeasureLines,
-  resolveLr2NoteCell,
-  type Lr2PlayElementsContext,
+  collectLR2BGATargets,
+  drawLR2FallbackJudge,
+  drawLR2PlaySkin,
+  LR2PlayText,
+  resolveLR2LaneRect,
+  resolveLR2MeasureLines,
+  resolveLR2NoteCell,
+  type LR2PlayElementsContext,
 } from './play-elements.ts';
-import { Lr2PlayTimers } from './play-timers.ts';
+import { LR2PlayTimers } from './play-timers.ts';
 import { playfieldTouchLanes, TouchLaneInput } from '../shared/touch-lane-input.ts';
-import { Lr2Turntable } from './play-turntable.ts';
+import { LR2Turntable } from './play-turntable.ts';
 
 const log = logger('gameplay');
 
@@ -77,7 +77,7 @@ const NOTE_OVERSCAN = 48;
  * chart, not the whole intro (the LR2 default 7-keys skin: about 3 s before the notes, as its title fades). `#FADEOUT`
  * and `#CLOSE` time the ending: the fade-out, then the hold before the next screen.
  */
-export function resolveLr2PlayTiming(skin: Pick<Lr2Skin, 'timing'>): PlayViewTiming {
+export function resolveLR2PlayTiming(skin: Pick<LR2Skin, 'timing'>): PlayViewTiming {
   const timing = skin.timing;
   const loadEndOffsetMs = Math.max(0, timing.loadStart ?? 0) + Math.max(0, timing.loadEnd ?? 0);
   return {
@@ -89,7 +89,7 @@ export function resolveLr2PlayTiming(skin: Pick<Lr2Skin, 'timing'>): PlayViewTim
 }
 
 /** What the LR2 play view draws with besides its kit: the options of the play that change what is drawn. */
-export type Lr2PlayViewOptions = Pick<
+export type LR2PlayViewOptions = Pick<
   PlaySessionOptions,
   | 'bga'
   | 'bgaSize'
@@ -112,28 +112,28 @@ export type Lr2PlayViewOptions = Pick<
 };
 
 /** The LR2 play view. See the module comment. */
-export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContext, Lr2PlayElementsContext {
+export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContext, LR2PlayElementsContext {
   public readonly family = 'lr2' as const;
   public readonly timing: PlayViewTiming;
   /** The play options the view draws with; the setters change them during the play. */
-  public readonly options: Lr2PlayViewOptions;
-  public readonly skin: Lr2Skin;
-  public readonly invisibleNoteSkin: Lr2Skin | undefined;
+  public readonly options: LR2PlayViewOptions;
+  public readonly skin: LR2Skin;
+  public readonly invisibleNoteSkin: LR2Skin | undefined;
   /** How the LR2 skin answers the shared playfield. */
   public readonly playfieldSkin: PlayfieldSkin;
   /** The LR2 skin's drawing around the shared playfield. */
   public readonly chrome: PlayChrome;
-  public readonly timers: Lr2PlayTimers;
+  public readonly timers: LR2PlayTimers;
   /** The fingers on the lanes, sent to the session as `lane` intents while attached. */
   private readonly touchLanes: TouchLaneInput = new TouchLaneInput(playfieldTouchLanes(this));
-  public readonly turntable: Lr2Turntable = new Lr2Turntable();
-  public readonly text: Lr2PlayText = new Lr2PlayText();
+  public readonly turntable: LR2Turntable = new LR2Turntable();
+  public readonly text: LR2PlayText = new LR2PlayText();
   /** The skin's images by path, and the chart's images under LR2's special paths; destroyed with the view. */
   public readonly textures: Map<string, Texture> = new Map();
-  /** The frame's LR2 state (`resolveLr2PlayState`). */
-  public lr2State: Lr2PlayState | undefined;
+  /** The frame's LR2 state (`resolveLR2PlayState`). */
+  public lr2State: LR2PlayState | undefined;
   /** What stays the same for the play: the LR2 state's setup. */
-  private lr2Setup: Lr2PlaySetup | undefined;
+  private lr2Setup: LR2PlaySetup | undefined;
   /** Whether the chart has loaded (LR2 op 81; op 80 before): off from the scene start until READY. */
   private loaded = true;
   /** The stage a stitched NONSTOP play shows. */
@@ -144,32 +144,32 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   private fpsWindowStart = 0;
   private disposed = false;
 
-  public constructor(kit: Lr2PlayKit, play: PlayfieldRuntime, options: Lr2PlayViewOptions = {}) {
+  public constructor(kit: LR2PlayKit, play: PlayfieldRuntime, options: LR2PlayViewOptions = {}) {
     super(play);
     this.skin = kit.skin;
     this.invisibleNoteSkin = kit.invisibleNoteSkin;
     this.options = { ...options };
-    this.timing = resolveLr2PlayTiming(kit.skin);
-    this.timers = new Lr2PlayTimers(play);
+    this.timing = resolveLR2PlayTiming(kit.skin);
+    this.timers = new LR2PlayTimers(play);
     const skin = kit.skin;
     this.playfieldSkin = {
       stage: LR2_PLAY_STAGE,
       ownsLanes: true,
-      laneRect: (channel, stage) => resolveLr2LaneRect(skin, this.laneIndex(channel), stage),
-      noteCell: (kind, channel) => resolveLr2NoteCell(this, kind, this.laneIndex(channel)),
-      measureLines: () => resolveLr2MeasureLines(this),
-      bgaTargets: (out) => collectLr2BgaTargets(this, out),
+      laneRect: (channel, stage) => resolveLR2LaneRect(skin, this.laneIndex(channel), stage),
+      noteCell: (kind, channel) => resolveLR2NoteCell(this, kind, this.laneIndex(channel)),
+      measureLines: () => resolveLR2MeasureLines(this),
+      bgaTargets: (out) => collectLR2BGATargets(this, out),
       bombCell: () => undefined,
       bombDurationMs: (channel) => this.timers.bombDurationMs(channel),
       keyOnFadeMs: (channel) => this.timers.keyOnFadeMs(channel),
     };
     this.chrome = {
       attachLayers: () => this.skinLayer.addChild(this.text.layer),
-      draw: (width, height) => drawLr2PlaySkin(this, width, height),
+      draw: (width, height) => drawLR2PlaySkin(this, width, height),
       drawText: (seconds) => {
         // After the bombs, as LR2's FC graphic retires once played out, then the judge as text if the skin has none.
         this.timers.retireFullCombo();
-        drawLr2FallbackJudge(this, seconds);
+        drawLR2FallbackJudge(this, seconds);
       },
       bombRetired: (channel) => this.timers.bombRetired(channel),
     };
@@ -177,7 +177,7 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   /** The host's `Application`; the view draws only once attached (or built for a host ahead of its first frame). */
   get app(): Application {
-    if (!this.host) throw new Error('Lr2PlayView: app accessed before attach');
+    if (!this.host) throw new Error('LR2PlayView: app accessed before attach');
     return this.host.app;
   }
 
@@ -241,7 +241,7 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.root.visible = frame.shown;
     if (!frame.shown || this.disposed) return;
     this.perf.beginTick();
-    this.perf.time('updateFps', () => this.updateFps());
+    this.perf.time('updateFPS', () => this.updateFPS());
     this.perf.time('updateScores', () => {
       this.updateNonstopStage();
       this.refreshState(frame);
@@ -277,7 +277,7 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   }
 
   /** An LR2 kit carries nothing but its skins, which the view keeps: another skin needs another play. */
-  public updateKit(kit: Lr2PlayKit): void {
+  public updateKit(kit: LR2PlayKit): void {
     if (kit.skin !== this.skin) log.warn('a play view keeps its skin; ignoring a kit of another skin');
   }
 
@@ -317,7 +317,7 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   /** The LR2 lane index of `channel` (`#SRC_NOTE` / `#DST_NOTE` index: 1P 0-9, 2P 10-19). */
   private laneIndex(channel: string): number {
-    return resolveLr2LaneIndex(channel, this.play.chartPlayVariant);
+    return resolveLR2LaneIndex(channel, this.play.chartPlayVariant);
   }
 
   /** The view or its play is gone: loading stops. */
@@ -362,7 +362,7 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       features: {
         longNote: play.notes.some((note) => note.endBeat !== undefined),
         bpmChange: (play.timingResolver?.tempoPoints.length ?? 0) > 1,
-        bga: play.hasBga,
+        bga: play.hasBGA,
       },
       options: {
         autoPlay: options.autoPlay === true,
@@ -383,15 +383,15 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   /**
    * The frame's LR2 state: the setup's ops and values with the running play (the frame's `PlayState`), the score, the
    * time and the frame rate. NOWBPM freezes at an LR2 negative-BPM reversal and shows a stitched NONSTOP play's stage
-   * BPM (`displayBpm`).
+   * BPM (`displayBPM`).
    */
   private refreshState(frame?: PlayFrame): void {
     const setup = this.lr2Setup;
     if (setup === undefined) return;
     const play = this.play;
     const seconds = play.currentSeconds();
-    const bpm = play.displayBpm(seconds);
-    this.lr2State = resolveLr2PlayState(setup, {
+    const bpm = play.displayBPM(seconds);
+    this.lr2State = resolveLR2PlayState(setup, {
       play: frame?.state ?? play.playState,
       score: play.score,
       seconds,
@@ -405,17 +405,17 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   /**
    * The stage a stitched NONSTOP play shows: the one LR2 last announced, after a BLANK connection
-   * (`resolveLr2NonstopStage`). It moves the stage ops (280-289) and the title; the skin stays as parsed for the first
+   * (`resolveLR2NonstopStage`). It moves the stage ops (280-289) and the title; the skin stays as parsed for the first
    * stage, as LR2 reads it once for the whole play.
    */
   private updateNonstopStage(): void {
     const nonstop = this.options.nonstop;
     if (nonstop === undefined || this.options.course === undefined) return;
-    this.nonstopStage = resolveLr2NonstopStage(nonstop.stages, this.play.currentSeconds());
+    this.nonstopStage = resolveLR2NonstopStage(nonstop.stages, this.play.currentSeconds());
   }
 
   /** Samples the frame rate over a sliding one-second window. */
-  private updateFps(): void {
+  private updateFPS(): void {
     const now = performance.now();
     if (this.fpsWindowStart === 0) {
       this.fpsWindowStart = now;
@@ -452,7 +452,7 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     skin.nowCombos.forEach((combo) => imagePaths.add(combo.source.imagePath));
     await Promise.all(
       [...imagePaths].map(async (path) => {
-        if (this.isGone() || isLr2SpecialGraphic(path)) return;
+        if (this.isGone() || isLR2SpecialGraphic(path)) return;
         const texture = await loadSkinAssetTexture(skin, path);
         if (!texture) return;
         if (this.isGone()) {
@@ -492,9 +492,9 @@ export class Lr2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const source = this.options.source;
     if (!song || !source) return;
     const meta = song.chart.metadata;
-    const candidates: Array<{ key: Lr2SpecialGraphic; assetPath: string }> = [];
+    const candidates: Array<{ key: LR2SpecialGraphic; assetPath: string }> = [];
     if (meta.stageFile) candidates.push({ key: LR2_SPECIAL_GRAPHIC.STAGEFILE, assetPath: meta.stageFile });
-    if (meta.backBmp) candidates.push({ key: LR2_SPECIAL_GRAPHIC.BACKBMP, assetPath: meta.backBmp });
+    if (meta.backBMP) candidates.push({ key: LR2_SPECIAL_GRAPHIC.BACKBMP, assetPath: meta.backBMP });
     if (meta.banner) candidates.push({ key: LR2_SPECIAL_GRAPHIC.BANNER, assetPath: meta.banner });
     await Promise.all(
       candidates.map(async ({ key, assetPath }) => {

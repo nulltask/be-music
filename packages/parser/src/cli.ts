@@ -1,8 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolveCliPath } from '@be-music/utils/cli-path';
+import { resolveCLIPath } from '@be-music/utils/cli-path';
 import { parseChart, parseChartFile } from './index.ts';
 
-interface CliArgs {
+interface CLIArgs {
   input?: string;
   output?: string;
   formatHint?: string;
@@ -21,7 +21,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const inputPath = resolveCliPath(args.input);
+  const inputPath = resolveCLIPath(args.input);
   const json = await parseChartFile(inputPath).catch(async () => {
     const content = await readFile(inputPath, 'utf8');
     return parseChart(content, args.formatHint);
@@ -33,13 +33,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  const outputPath = resolveCliPath(args.output);
+  const outputPath = resolveCLIPath(args.output);
   await writeFile(outputPath, output, 'utf8');
   process.stdout.write(`Wrote parsed JSON to ${outputPath}\n`);
 }
 
-function parseArgs(rawArgs: string[]): CliArgs {
-  const args: CliArgs = {};
+function parseArgs(rawArgs: string[]): CLIArgs {
+  const args: CLIArgs = {};
   const positional: string[] = [];
 
   for (let index = 0; index < rawArgs.length; index += 1) {

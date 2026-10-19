@@ -16,12 +16,12 @@ import {
   resolveBeatorajaDecideOps,
   type BeatorajaDecideInput,
 } from '@be-music/beatoraja-skin/scene';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { Container } from 'pixi.js';
-import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
+import { computeBeatorajaBPMCurve, type BPMCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import { resolveShownChartMainBpm } from '../../chart/main-bpm.ts';
+import { resolveShownChartMainBPM } from '../../chart/main-bpm.ts';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import type { BeatorajaKit } from '../../host/family-kit.ts';
 import { logger } from '../../logger.ts';
@@ -43,7 +43,7 @@ const log = logger('decide');
 
 /**
  * How long a beatoraja decide screen shows before it moves on by itself, for a skin without `scene`: the 3000 ms of
- * `decidemain.lua` (beatoraja's `MusicDecide` moves on once `Skin.scene` has passed). Upstream's `JsonSkin.Skin.scene`
+ * `decidemain.lua` (beatoraja's `MusicDecide` moves on once `Skin.scene` has passed). Upstream's `JSONSkin.Skin.scene`
  * has no initializer (Java's 0, which moves on at once), but the reference skin authors one, so an unauthored skin falls
  * back to it, as the fade-out does (`DEFAULT_BEATORAJA_FADEOUT_MS`).
  */
@@ -77,12 +77,12 @@ export function resolveBeatorajaDecideTiming(
  * per chart.
  */
 interface ChartGraphs {
-  readonly chart: BeMusicJson;
-  readonly bpmCurve: readonly BpmCurvePoint[];
+  readonly chart: BeMusicJSON;
+  readonly bpmCurve: readonly BPMCurvePoint[];
   /** The note-kind bars (`[normal, ln, scratch, bss]`) of the judge graph's type 0. */
   readonly noteKinds: readonly number[];
-  /** The BPM the most judged notes sit at (`resolveShownChartMainBpm`); absent without notes. */
-  readonly mainBpm: number | undefined;
+  /** The BPM the most judged notes sit at (`resolveShownChartMainBPM`); absent without notes. */
+  readonly mainBPM: number | undefined;
 }
 
 export interface BeatorajaDecideViewOptions {
@@ -129,7 +129,7 @@ export class BeatorajaDecideView implements DecideView {
         resolveNumberValue: (ref) => (this.input !== undefined ? resolveBeatorajaDecideNumber(ref, this.input) : 0),
         resolveFontFamily: fonts !== undefined ? (id) => fonts.family(id) : undefined,
         resolveFontKind: fonts !== undefined ? (id) => fonts.kind(id) : undefined,
-        resolveBpmGraphPoints: () => {
+        resolveBPMGraphPoints: () => {
           const curve = this.graphs?.bpmCurve;
           return curve !== undefined && curve.length > 0 ? curve : undefined;
         },
@@ -193,11 +193,11 @@ export class BeatorajaDecideView implements DecideView {
     this.stage.fitTo(host);
     this.frame = frame;
     if (this.graphs?.chart !== frame.playChart) this.graphs = chartGraphsOf(frame.playChart, frame.chart.chartPath);
-    const mainBpm = this.graphs.mainBpm;
+    const mainBPM = this.graphs.mainBPM;
     // Without the host's progress or an auto advance, nothing is loading: the play is ready.
     const input: BeatorajaDecideInput = {
       chart: frame.chart,
-      ...(mainBpm !== undefined ? { mainBpm } : {}),
+      ...(mainBPM !== undefined ? { mainBPM } : {}),
       progress: frame.progress ?? 1,
     };
     this.input = input;
@@ -221,12 +221,12 @@ export class BeatorajaDecideView implements DecideView {
   }
 }
 
-function chartGraphsOf(chart: BeMusicJson, chartPath: string): ChartGraphs {
+function chartGraphsOf(chart: BeMusicJSON, chartPath: string): ChartGraphs {
   const kinds = computeBeatorajaNoteBreakdown(chart);
   return {
     chart,
-    bpmCurve: computeBeatorajaBpmCurve(chart),
+    bpmCurve: computeBeatorajaBPMCurve(chart),
     noteKinds: [kinds.normal, kinds.ln, kinds.scratch, kinds.bss],
-    mainBpm: resolveShownChartMainBpm(chart, chartPath),
+    mainBPM: resolveShownChartMainBPM(chart, chartPath),
   };
 }

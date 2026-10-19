@@ -192,7 +192,7 @@ The play state (`PlayState`) is what every gameplay screen reads of a play: the 
 graphs, the combo and max combo (and a course stage's course-wide combo), every timed judgment with the early / late
 count of each judgment, and the view — the hi-speed and the lane covers. It is immutable and fed by events through
 `reducePlayState`: the engine's frames and judgments, its `trigger-poor-bga` command (an empty POOR, through
-`playEventFromUiCommand`), the final summary, and the player's and the host's hi-speed and cover changes. No clock is
+`playEventFromUICommand`), the final summary, and the player's and the host's hi-speed and cover changes. No clock is
 read: chart time and play-clock time come in with the events.
 
 ```mermaid
@@ -222,7 +222,7 @@ flowchart LR
   `recentJudgeTimings` is the latest 64 for a live meter (one array per judgment list). Each judgment's early and late
   count (beatoraja's) comes with them.
 - **Hi-speed** (`HiSpeedState`). The player's hi-speed, on their own scale, and the drawn one the notes scroll with: the
-  player's times the chart's HS-FIX multiplier (`resolveHsFixMultiplier`: MAXBPM, MINBPM and AVERAGE keep that BPM at
+  player's times the chart's HS-FIX multiplier (`resolveHSFixMultiplier`: MAXBPM, MINBPM and AVERAGE keep that BPM at
   the player's hi-speed, CONSTANT scrolls as AVERAGE for now). The player's keys step the player's value; a drawn value
   from a replay's recorded view (`hi-speed-drawn`) is taken as it is. A course's `no_speed` locks the player's changes;
   the host's setting and a replay's recorded hi-speed still apply, as a replay's recorded covers do. beatoraja's

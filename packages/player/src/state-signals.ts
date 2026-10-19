@@ -40,7 +40,7 @@ export interface PlayerStateSignals {
    * plate restarts, FC timer evaluations) without losing intermediate publishes when several judgements
    * resolve in the same engine tick — which is exactly what happens for AUTO PLAY chords, where one tick
    * can resolve a 2..7-note simultaneous-press in a single drain pass. Without the queue, a `getJudgeCombo()`
-   * peek inside `drainWebUiSignals` only sees the LAST publish in the tick, so only one of the chord's
+   * peek inside `drainWebUISignals` only sees the LAST publish in the tick, so only one of the chord's
    * notes gets a bomb / FC update. With the queue, every publish surfaces.
    */
   drainPendingJudgeCombos: () => Readonly<PlayerJudgeComboSignalState>[];

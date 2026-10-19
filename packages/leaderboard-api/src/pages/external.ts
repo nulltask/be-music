@@ -44,7 +44,7 @@ export function externalLinks(
   aliases: readonly ChartAlias[],
   files: ReadonlyArray<{ sha256: string; md5: string | null }> = [],
 ): ExternalLink[] {
-  const sha256OfMd5 = new Map(
+  const sha256OfMD5 = new Map(
     files.flatMap((file) => (file.md5 === null ? [] : [[file.md5.toLowerCase(), file.sha256.toLowerCase()] as const])),
   );
   const links: ExternalLink[] = [];
@@ -53,7 +53,7 @@ export function externalLinks(
     const sites =
       alias.kind === 'sha256' && SHA256.test(hash) ? BY_SHA256 : alias.kind === 'md5' && MD5.test(hash) ? BY_MD5 : [];
     for (const site of sites) {
-      const file = alias.kind === 'md5' ? sha256OfMd5.get(hash) : undefined;
+      const file = alias.kind === 'md5' ? sha256OfMD5.get(hash) : undefined;
       links.push({
         name: site.name,
         url: site.url(hash),

@@ -1,17 +1,17 @@
 import {
-  type BmsControlFlowEntry,
-  type BmsObjectLineEntry,
-  type BmsSourceLineEntry,
+  type BMSControlFlowEntry,
+  type BMSObjectLineEntry,
+  type BMSSourceLineEntry,
   type BeMusicEvent,
-  type BeMusicJson,
-  createEmptyJson,
+  type BeMusicJSON,
+  createEmptyJSON,
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
 } from '@be-music/json';
-import { buildBmsObjectLineEntry, sortAndNormalizeEvents } from './event-utils.ts';
+import { buildBMSObjectLineEntry, sortAndNormalizeEvents } from './event-utils.ts';
 import {
-  normalizeBmsonBpmEvents,
+  normalizeBmsonBPMEvents,
   normalizeBmsonExtensions,
   normalizeBmsonLines,
   normalizeBmsonScrollEvents,
@@ -20,10 +20,10 @@ import {
 } from './bmson.ts';
 import { normalizeControlFlowCommand } from './control-flow.ts';
 
-export function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
-  const json = createEmptyJson(raw.sourceFormat ?? 'json');
+export function parseJSONDocument(raw: Partial<BeMusicJSON>): BeMusicJSON {
+  const json = createEmptyJSON(raw.sourceFormat ?? 'json');
   const structured = raw as Record<string, unknown>;
-  const rawBms = structured.bms;
+  const rawBMS = structured.bms;
   const rawBmson = structured.bmson;
   json.sourceFormat = raw.sourceFormat ?? 'json';
   json.metadata = {
@@ -34,6 +34,13 @@ export function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
       ...(raw.metadata as { extras?: Record<string, string> } | undefined)?.extras,
     },
   };
+  // Accept the former IR spelling on input, but emit only the canonical key.
+  const metadata = raw.metadata as Record<string, unknown> | undefined;
+  const backBMP = metadata?.backBMP ?? metadata?.backBmp;
+  delete (json.metadata as unknown as Record<string, unknown>).backBmp;
+  if (typeof backBMP === 'string') {
+    json.metadata.backBMP = backBMP;
+  }
   json.resources = {
     ...json.resources,
     ...raw.resources,
@@ -49,25 +56,25 @@ export function parseJsonDocument(raw: Partial<BeMusicJson>): BeMusicJson {
   // When re-parsing a previously-emitted BMS-JSON, honor the chart's recorded base so case-sensitive base-62 IDs don't
   // get folded back to uppercase. The full `bms` extension is normalized a few lines below; we only need the `base`
   // hint here.
-  const rawBmsBase = (rawBms as { base?: unknown } | undefined)?.base;
-  const reparseBase: 36 | 62 = rawBmsBase === 62 ? 62 : 36;
+  const rawBMSBase = (rawBMS as { base?: unknown } | undefined)?.base;
+  const reparseBase: 36 | 62 = rawBMSBase === 62 ? 62 : 36;
   json.events = sortAndNormalizeEvents(rawEvents as Array<BeMusicEvent | Record<string, unknown>>, reparseBase);
   if (json.events.length !== rawEvents.length) {
     throw new Error('Invalid bms-json event: position [numerator, denominator] is required.');
   }
-  json.bms = normalizeBmsExtensions(rawBms);
+  json.bms = normalizeBMSExtensions(rawBMS);
   json.bmson = normalizeBmsonExtensions(rawBmson);
-  json.preservation = normalizePreservation(structured.preservation, rawBms, rawBmson);
-  migrateBmsExtensionHeadersFromExtras(json);
+  json.preservation = normalizePreservation(structured.preservation, rawBMS, rawBmson);
+  migrateBMSExtensionHeadersFromExtras(json);
   return json;
 }
 
-function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
+function migrateBMSExtensionHeadersFromExtras(json: BeMusicJSON): void {
   const migratedExtras: Record<string, string> = {};
   // Honor `#BASE 62` so any indexed-header keys that landed in `metadata.extras` (typically from a re-parsed JSON
   // whose upstream parser didn't recognize the directive) get preserved in their authored case rather than folded to
   // uppercase. The common base-36 case-insensitive path keeps its existing behavior because `idBase` is 36 by default.
-  const idBase = resolveBmsBase(json);
+  const idBase = resolveBMSBase(json);
 
   for (const [command, value] of Object.entries(json.metadata.extras ?? {})) {
     const upper = command.toUpperCase();
@@ -78,14 +85,14 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
       continue;
     }
     if (upper === 'LNTYPE') {
-      const parsed = normalizeNumericBmsExtensionValue(value);
+      const parsed = normalizeNumericBMSExtensionValue(value);
       if (typeof json.bms.lnType !== 'number' && typeof parsed === 'number' && parsed > 0) {
         json.bms.lnType = Math.floor(parsed);
       }
       continue;
     }
     if (upper === 'LNMODE') {
-      const parsed = normalizeNumericBmsExtensionValue(value);
+      const parsed = normalizeNumericBMSExtensionValue(value);
       if (typeof json.bms.lnMode !== 'number' && typeof parsed === 'number' && parsed > 0) {
         json.bms.lnMode = Math.floor(parsed);
       }
@@ -101,36 +108,36 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
       continue;
     }
     if (upper === 'VOLWAV') {
-      const parsed = normalizeNumericBmsExtensionValue(value);
-      if (typeof json.bms.volWav !== 'number' && typeof parsed === 'number' && parsed >= 0) {
-        json.bms.volWav = parsed;
+      const parsed = normalizeNumericBMSExtensionValue(value);
+      if (typeof json.bms.volWAV !== 'number' && typeof parsed === 'number' && parsed >= 0) {
+        json.bms.volWAV = parsed;
       }
       continue;
     }
     if (upper === 'DEFEXRANK') {
-      const parsed = normalizeNumericBmsExtensionValue(value);
+      const parsed = normalizeNumericBMSExtensionValue(value);
       if (typeof json.bms.defExRank !== 'number' && typeof parsed === 'number') {
         json.bms.defExRank = parsed;
       }
       continue;
     }
     if (upper === 'PLAYER') {
-      const parsed = normalizeNumericBmsExtensionValue(value);
+      const parsed = normalizeNumericBMSExtensionValue(value);
       if (typeof json.bms.player !== 'number' && typeof parsed === 'number' && parsed > 0) {
         json.bms.player = Math.floor(parsed);
       }
       continue;
     }
     if (upper === 'PATH_WAV') {
-      if (typeof json.bms.pathWav !== 'string' && value.length > 0) {
-        json.bms.pathWav = value;
+      if (typeof json.bms.pathWAV !== 'string' && value.length > 0) {
+        json.bms.pathWAV = value;
       }
       continue;
     }
     if (upper === 'BASEBPM') {
-      const parsed = normalizeNumericBmsExtensionValue(value);
-      if (typeof json.bms.baseBpm !== 'number' && typeof parsed === 'number' && parsed > 0) {
-        json.bms.baseBpm = parsed;
+      const parsed = normalizeNumericBMSExtensionValue(value);
+      if (typeof json.bms.baseBPM !== 'number' && typeof parsed === 'number' && parsed > 0) {
+        json.bms.baseBPM = parsed;
       }
       continue;
     }
@@ -160,8 +167,8 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
       continue;
     }
     if (upper === 'POORBGA') {
-      if (typeof json.bms.poorBga !== 'string' && value.length > 0) {
-        json.bms.poorBga = value;
+      if (typeof json.bms.poorBGA !== 'string' && value.length > 0) {
+        json.bms.poorBGA = value;
       }
       continue;
     }
@@ -223,20 +230,20 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
       continue;
     }
 
-    const exWavMatch = upper.match(/^EXWAV([0-9A-Z]{2})$/);
-    if (exWavMatch) {
-      const key = normalizeObjectKey(exWavMatch[1]);
-      if (!(key in json.bms.exWav) && value.length > 0) {
-        json.bms.exWav[key] = value;
+    const exWAVMatch = upper.match(/^EXWAV([0-9A-Z]{2})$/);
+    if (exWAVMatch) {
+      const key = normalizeObjectKey(exWAVMatch[1]);
+      if (!(key in json.bms.exWAV) && value.length > 0) {
+        json.bms.exWAV[key] = value;
       }
       continue;
     }
 
-    const exBmpMatch = upper.match(/^EXBMP([0-9A-Z]{2})$/);
-    if (exBmpMatch) {
-      const key = normalizeObjectKey(exBmpMatch[1]);
-      if (!(key in json.bms.exBmp) && value.length > 0) {
-        json.bms.exBmp[key] = value;
+    const exBMPMatch = upper.match(/^EXBMP([0-9A-Z]{2})$/);
+    if (exBMPMatch) {
+      const key = normalizeObjectKey(exBMPMatch[1]);
+      if (!(key in json.bms.exBMP) && value.length > 0) {
+        json.bms.exBMP[key] = value;
       }
       continue;
     }
@@ -253,7 +260,7 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
     const scrollMatch = upper.match(/^SCROLL([0-9A-Z]{2})$/);
     if (scrollMatch) {
       const key = normalizeObjectKey(scrollMatch[1]);
-      const parsed = normalizeNumericBmsExtensionValue(value);
+      const parsed = normalizeNumericBMSExtensionValue(value);
       if (!(key in json.bms.scroll) && typeof parsed === 'number') {
         json.bms.scroll[key] = parsed;
       }
@@ -263,18 +270,18 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
     const speedMatch = upper.match(/^SPEED([0-9A-Z]{2})$/);
     if (speedMatch) {
       const key = normalizeObjectKey(speedMatch[1]);
-      const parsed = normalizeNumericBmsExtensionValue(value);
+      const parsed = normalizeNumericBMSExtensionValue(value);
       if (!(key in json.bms.speed) && typeof parsed === 'number') {
         json.bms.speed[key] = parsed;
       }
       continue;
     }
 
-    const swBgaMatch = upper.match(/^SWBGA([0-9A-Z]{2})$/);
-    if (swBgaMatch) {
-      const key = normalizeObjectKey(swBgaMatch[1]);
-      if (!(key in json.bms.swBga) && value.length > 0) {
-        json.bms.swBga[key] = value;
+    const swBGAMatch = upper.match(/^SWBGA([0-9A-Z]{2})$/);
+    if (swBGAMatch) {
+      const key = normalizeObjectKey(swBGAMatch[1]);
+      if (!(key in json.bms.swBGA) && value.length > 0) {
+        json.bms.swBGA[key] = value;
       }
       continue;
     }
@@ -285,8 +292,8 @@ function migrateBmsExtensionHeadersFromExtras(json: BeMusicJson): void {
   json.metadata.extras = migratedExtras;
 }
 
-function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
-  const normalized: BeMusicJson['bms'] = {
+function normalizeBMSExtensions(input: unknown): BeMusicJSON['bms'] {
+  const normalized: BeMusicJSON['bms'] = {
     controlFlow: [],
     lnObjs: [],
     exRank: {},
@@ -294,12 +301,12 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
     stp: [],
     wavCmds: [],
     changeOption: {},
-    exWav: {},
-    exBmp: {},
+    exWAV: {},
+    exBMP: {},
     bga: {},
     scroll: {},
     speed: {},
-    swBga: {},
+    swBGA: {},
   };
   if (!input || typeof input !== 'object') {
     return normalized;
@@ -313,9 +320,9 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   }
   const idBase: 36 | 62 = normalized.base === 62 ? 62 : 36;
   if (Array.isArray(raw.controlFlow)) {
-    const entries: BmsControlFlowEntry[] = [];
+    const entries: BMSControlFlowEntry[] = [];
     for (const item of raw.controlFlow) {
-      const entry = normalizeBmsControlFlowEntry(item);
+      const entry = normalizeBMSControlFlowEntry(item);
       if (entry) {
         entries.push(entry);
       }
@@ -327,50 +334,50 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
     normalized.preview = raw.preview;
   }
 
-  const lnType = normalizeNumericBmsExtensionValue(raw.lnType);
+  const lnType = normalizeNumericBMSExtensionValue(raw.lnType);
   if (typeof lnType === 'number' && lnType > 0) {
     normalized.lnType = Math.floor(lnType);
   }
 
-  const lnMode = normalizeNumericBmsExtensionValue(raw.lnMode ?? raw.lnmode ?? raw.ln_mode);
+  const lnMode = normalizeNumericBMSExtensionValue(raw.lnMode ?? raw.lnmode ?? raw.ln_mode);
   if (typeof lnMode === 'number' && lnMode > 0) {
     normalized.lnMode = Math.floor(lnMode);
   }
 
-  const lnObjs = normalizeBmsExtensionStringList(raw.lnObjs ?? raw.ln_objs);
+  const lnObjs = normalizeBMSExtensionStringList(raw.lnObjs ?? raw.ln_objs);
   if (lnObjs.length > 0) {
     normalized.lnObjs = lnObjs.map((value) => normalizeObjectKey(value, idBase));
   }
 
-  const volWav = normalizeNumericBmsExtensionValue(raw.volWav ?? raw.volwav ?? raw.vol_wav);
-  if (typeof volWav === 'number' && volWav >= 0) {
-    normalized.volWav = volWav;
+  const volWAV = normalizeNumericBMSExtensionValue(raw.volWAV ?? raw.volWav ?? raw.volwav ?? raw.vol_wav);
+  if (typeof volWAV === 'number' && volWAV >= 0) {
+    normalized.volWAV = volWAV;
   }
 
-  const defExRank = normalizeNumericBmsExtensionValue(raw.defExRank);
+  const defExRank = normalizeNumericBMSExtensionValue(raw.defExRank);
   if (typeof defExRank === 'number') {
     normalized.defExRank = defExRank;
   }
 
-  normalized.exRank = normalizeIndexedBmsExtensionMap(raw.exRank, idBase);
-  normalized.argb = normalizeIndexedBmsExtensionMap(raw.argb, idBase);
+  normalized.exRank = normalizeIndexedBMSExtensionMap(raw.exRank, idBase);
+  normalized.argb = normalizeIndexedBMSExtensionMap(raw.argb, idBase);
 
-  const player = normalizeNumericBmsExtensionValue(raw.player);
+  const player = normalizeNumericBMSExtensionValue(raw.player);
   if (typeof player === 'number' && player > 0) {
     normalized.player = Math.floor(player);
   }
 
-  const pathWav = raw.pathWav ?? raw.path_wav;
-  if (typeof pathWav === 'string' && pathWav.length > 0) {
-    normalized.pathWav = pathWav;
+  const pathWAV = raw.pathWAV ?? raw.pathWav ?? raw.path_wav;
+  if (typeof pathWAV === 'string' && pathWAV.length > 0) {
+    normalized.pathWAV = pathWAV;
   }
 
-  const baseBpm = normalizeNumericBmsExtensionValue(raw.baseBpm ?? raw.base_bpm);
-  if (typeof baseBpm === 'number' && baseBpm > 0) {
-    normalized.baseBpm = baseBpm;
+  const baseBPM = normalizeNumericBMSExtensionValue(raw.baseBPM ?? raw.baseBpm ?? raw.base_bpm);
+  if (typeof baseBPM === 'number' && baseBPM > 0) {
+    normalized.baseBPM = baseBPM;
   }
 
-  normalized.stp = normalizeBmsExtensionStringList(raw.stp);
+  normalized.stp = normalizeBMSExtensionStringList(raw.stp);
 
   if (typeof raw.option === 'string' && raw.option.length > 0) {
     normalized.option = raw.option;
@@ -382,25 +389,25 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   }
   // Spec-faithful per-line list. Falls back to the legacy single string when only `wavCmd` was preserved (older
   // roundtripped JSON), so older fixtures keep round-tripping.
-  normalized.wavCmds = normalizeBmsExtensionStringList(raw.wavCmds ?? raw.wav_cmds);
+  normalized.wavCmds = normalizeBMSExtensionStringList(raw.wavCmds ?? raw.wav_cmds);
   if (normalized.wavCmds.length === 0 && typeof normalized.wavCmd === 'string') {
     normalized.wavCmds.push(normalized.wavCmd);
   }
 
-  normalized.changeOption = normalizeIndexedBmsExtensionMap(
+  normalized.changeOption = normalizeIndexedBMSExtensionMap(
     raw.changeOption ?? raw.change_option ?? raw.changeoption,
     idBase,
   );
-  normalized.exWav = normalizeIndexedBmsExtensionMap(raw.exWav ?? raw.ex_wav ?? raw.exwav, idBase);
-  normalized.exBmp = normalizeIndexedBmsExtensionMap(raw.exBmp ?? raw.ex_bmp ?? raw.exbmp, idBase);
-  normalized.bga = normalizeIndexedBmsExtensionMap(raw.bga, idBase);
-  normalized.scroll = normalizeIndexedBmsExtensionNumericMap(raw.scroll, idBase);
-  normalized.speed = normalizeIndexedBmsExtensionNumericMap(raw.speed, idBase);
-  normalized.swBga = normalizeIndexedBmsExtensionMap(raw.swBga ?? raw.sw_bga ?? raw.swbga, idBase);
+  normalized.exWAV = normalizeIndexedBMSExtensionMap(raw.exWAV ?? raw.exWav ?? raw.ex_wav ?? raw.exwav, idBase);
+  normalized.exBMP = normalizeIndexedBMSExtensionMap(raw.exBMP ?? raw.exBmp ?? raw.ex_bmp ?? raw.exbmp, idBase);
+  normalized.bga = normalizeIndexedBMSExtensionMap(raw.bga, idBase);
+  normalized.scroll = normalizeIndexedBMSExtensionNumericMap(raw.scroll, idBase);
+  normalized.speed = normalizeIndexedBMSExtensionNumericMap(raw.speed, idBase);
+  normalized.swBGA = normalizeIndexedBMSExtensionMap(raw.swBGA ?? raw.swBga ?? raw.sw_bga ?? raw.swbga, idBase);
 
-  const poorBga = raw.poorBga ?? raw.poor_bga;
-  if (typeof poorBga === 'string' && poorBga.length > 0) {
-    normalized.poorBga = poorBga;
+  const poorBGA = raw.poorBGA ?? raw.poorBga ?? raw.poor_bga;
+  if (typeof poorBGA === 'string' && poorBGA.length > 0) {
+    normalized.poorBGA = poorBGA;
   }
 
   const videoFile = raw.videoFile ?? raw.video_file;
@@ -429,11 +436,11 @@ function normalizeBmsExtensions(input: unknown): BeMusicJson['bms'] {
   return normalized;
 }
 
-function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: unknown): BeMusicJson['preservation'] {
-  const normalized = createEmptyJson('json').preservation;
+function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: unknown): BeMusicJSON['preservation'] {
+  const normalized = createEmptyJSON('json').preservation;
 
   const raw = input && typeof input === 'object' ? (input as Record<string, unknown>) : undefined;
-  const rawBms =
+  const rawBMS =
     raw?.bms && typeof raw.bms === 'object'
       ? (raw.bms as Record<string, unknown>)
       : bmsInput && typeof bmsInput === 'object'
@@ -446,11 +453,11 @@ function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: un
         ? (bmsonInput as Record<string, unknown>)
         : undefined;
 
-  const rawSourceLines = rawBms?.sourceLines ?? rawBms?.source_lines;
+  const rawSourceLines = rawBMS?.sourceLines ?? rawBMS?.source_lines;
   if (Array.isArray(rawSourceLines)) {
-    const entries: BmsSourceLineEntry[] = [];
+    const entries: BMSSourceLineEntry[] = [];
     for (const item of rawSourceLines) {
-      const entry = normalizeBmsControlFlowEntry(item);
+      const entry = normalizeBMSControlFlowEntry(item);
       if (entry) {
         entries.push(entry);
       }
@@ -458,11 +465,11 @@ function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: un
     normalized.bms.sourceLines = entries;
   }
 
-  const rawObjectLines = rawBms?.objectLines ?? rawBms?.object_lines;
+  const rawObjectLines = rawBMS?.objectLines ?? rawBMS?.object_lines;
   if (Array.isArray(rawObjectLines)) {
-    const entries: BmsObjectLineEntry[] = [];
+    const entries: BMSObjectLineEntry[] = [];
     for (const item of rawObjectLines) {
-      const entry = normalizeBmsObjectLineEntry(item);
+      const entry = normalizeBMSObjectLineEntry(item);
       if (entry) {
         entries.push(entry);
       }
@@ -471,7 +478,7 @@ function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: un
   }
 
   normalized.bmson.lines = normalizeBmsonLines(rawBmson?.lines);
-  normalized.bmson.bpmEvents = normalizeBmsonBpmEvents(rawBmson?.bpmEvents ?? rawBmson?.bpm_events);
+  normalized.bmson.bpmEvents = normalizeBmsonBPMEvents(rawBmson?.bpmEvents ?? rawBmson?.bpm_events);
   normalized.bmson.stopEvents = normalizeBmsonStopEvents(rawBmson?.stopEvents ?? rawBmson?.stop_events);
   const scrollEvents = normalizeBmsonScrollEvents(rawBmson?.scrollEvents ?? rawBmson?.scroll_events);
   if (scrollEvents.length > 0) {
@@ -482,7 +489,7 @@ function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: un
   return normalized;
 }
 
-function normalizeNumericBmsExtensionValue(value: unknown): number | undefined {
+function normalizeNumericBMSExtensionValue(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
   }
@@ -493,7 +500,7 @@ function normalizeNumericBmsExtensionValue(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function normalizeIndexedBmsExtensionMap(input: unknown, base: 36 | 62 = 36): Record<string, string> {
+function normalizeIndexedBMSExtensionMap(input: unknown, base: 36 | 62 = 36): Record<string, string> {
   if (!input || typeof input !== 'object') {
     return {};
   }
@@ -512,14 +519,14 @@ function normalizeIndexedBmsExtensionMap(input: unknown, base: 36 | 62 = 36): Re
   return normalized;
 }
 
-function normalizeIndexedBmsExtensionNumericMap(input: unknown, base: 36 | 62 = 36): Record<string, number> {
+function normalizeIndexedBMSExtensionNumericMap(input: unknown, base: 36 | 62 = 36): Record<string, number> {
   if (!input || typeof input !== 'object') {
     return {};
   }
 
   const normalized: Record<string, number> = {};
   for (const [rawKey, rawValue] of Object.entries(input as Record<string, unknown>)) {
-    const parsed = normalizeNumericBmsExtensionValue(rawValue);
+    const parsed = normalizeNumericBMSExtensionValue(rawValue);
     if (typeof parsed === 'number') {
       normalized[normalizeObjectKey(rawKey, base)] = parsed;
     }
@@ -527,7 +534,7 @@ function normalizeIndexedBmsExtensionNumericMap(input: unknown, base: 36 | 62 = 
   return normalized;
 }
 
-function normalizeBmsExtensionStringList(input: unknown): string[] {
+function normalizeBMSExtensionStringList(input: unknown): string[] {
   if (typeof input === 'string') {
     return input.length > 0 ? [input] : [];
   }
@@ -544,7 +551,7 @@ function normalizeBmsExtensionStringList(input: unknown): string[] {
   return normalized;
 }
 
-function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | undefined {
+function normalizeBMSControlFlowEntry(input: unknown): BMSControlFlowEntry | undefined {
   if (!input || typeof input !== 'object') {
     return undefined;
   }
@@ -585,7 +592,7 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
     };
   }
   if (kind === 'object') {
-    const objectLine = normalizeBmsObjectLineEntry(raw);
+    const objectLine = normalizeBMSObjectLineEntry(raw);
     if (!objectLine) {
       return undefined;
     }
@@ -597,7 +604,7 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
   return undefined;
 }
 
-function normalizeBmsObjectLineEntry(input: unknown): BmsObjectLineEntry | undefined {
+function normalizeBMSObjectLineEntry(input: unknown): BMSObjectLineEntry | undefined {
   if (!input || typeof input !== 'object') {
     return undefined;
   }
@@ -631,7 +638,7 @@ function normalizeBmsObjectLineEntry(input: unknown): BmsObjectLineEntry | undef
 
   if (normalizedEvents.length === 0 && measureLength === undefined) {
     const fallbackData = typeof raw.data === 'string' ? raw.data.trim() : '';
-    return buildBmsObjectLineEntry(measure, channel, fallbackData);
+    return buildBMSObjectLineEntry(measure, channel, fallbackData);
   }
 
   return {

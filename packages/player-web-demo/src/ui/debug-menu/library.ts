@@ -2,7 +2,7 @@
 
 import type { GUI } from 'lil-gui';
 import { storeSongRecords } from '../../song-records.ts';
-import { parseUrlMediaParams } from '../../url-load.ts';
+import { parseURLMediaParams } from '../../url-load.ts';
 import { DEBUG_MENU_FOLDERS, type DebugMenuFolder } from './folders.ts';
 import type { DebugMenu } from './index.ts';
 
@@ -15,18 +15,18 @@ export function buildLibraryFolder(
   library: GUI,
   addFolder: (parent: GUI, folder: DebugMenuFolder) => GUI,
 ): void {
-  const urlParams = parseUrlMediaParams(window.location.href);
+  const urlParams = parseURLMediaParams(window.location.href);
   const urls = {
-    music: urlParams.musicUrl ?? '',
-    skin: urlParams.skinUrl ?? '',
+    music: urlParams.musicURL ?? '',
+    skin: urlParams.skinURL ?? '',
     load: () => {
-      const musicUrl = urls.music.trim() || undefined;
-      const skinUrl = urls.skin.trim() || undefined;
-      if (!musicUrl && !skinUrl) {
+      const musicURL = urls.music.trim() || undefined;
+      const skinURL = urls.skin.trim() || undefined;
+      if (!musicURL && !skinURL) {
         this.setStatus('Enter a music or skin ZIP URL first');
         return;
       }
-      void this.library.loadFromUrl({ musicUrl, skinUrl });
+      void this.library.loadFromURL({ musicURL, skinURL });
     },
   };
   library.add(urls, 'music').name('Music ZIP URL');

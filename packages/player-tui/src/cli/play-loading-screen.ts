@@ -1,5 +1,5 @@
 import type { PlayerLoadComponentStatus } from '@be-music/player';
-import type { StageFileAnsiImage } from '../bga.ts';
+import type { StageFileANSIImage } from '../bga.ts';
 import { buildKittyGraphicsDeleteImageSequence, buildKittyGraphicsRenderSequence } from '../tui/kitty-graphics.ts';
 import { truncateForDisplay } from './selection-format.ts';
 
@@ -92,7 +92,7 @@ export function createPlayLoadingProgressScreenLines(
   progress: PlayLoadingProgress,
   options: {
     columns?: number;
-    stageFileImage?: StageFileAnsiImage;
+    stageFileImage?: StageFileANSIImage;
     useKittyGraphics?: boolean;
   } = {},
 ): string[] {
@@ -125,7 +125,7 @@ export function createPlayLoadingProgressScreenOutput(
   progress: PlayLoadingProgress,
   options: {
     columns?: number;
-    stageFileImage?: StageFileAnsiImage;
+    stageFileImage?: StageFileANSIImage;
     useKittyGraphics?: boolean;
     resetScreen?: boolean;
     includeStageFileImage?: boolean;
@@ -145,7 +145,7 @@ export function createPlayLoadingProgressScreenOutput(
 }
 
 function resolvePlayLoadingStageFileBlock(
-  stageFileImage: StageFileAnsiImage | undefined,
+  stageFileImage: StageFileANSIImage | undefined,
   options: {
     includeStageFileImage?: boolean;
     useKittyGraphics?: boolean;
@@ -196,7 +196,7 @@ function stylePlayLoadingOverlayLineOnImage(
   text: string,
   lineWidth: number,
   rowIndex: number,
-  stageFileImage: StageFileAnsiImage,
+  stageFileImage: StageFileANSIImage,
 ): string {
   const content = truncateForDisplay(text, lineWidth).padEnd(lineWidth, ' ');
   if (rowIndex >= stageFileImage.height) {
@@ -225,7 +225,7 @@ function stylePlayLoadingOverlayLineOnKittyImage(
   text: string,
   lineWidth: number,
   rowIndex: number,
-  stageFileImage: StageFileAnsiImage,
+  stageFileImage: StageFileANSIImage,
 ): string {
   const content = truncateForDisplay(text, lineWidth).padEnd(lineWidth, ' ');
   if (rowIndex >= stageFileImage.height) {
@@ -261,7 +261,7 @@ function stylePlayLoadingOverlayLineOnKittyImage(
 }
 
 function getStageFilePixel(
-  stageFileImage: StageFileAnsiImage,
+  stageFileImage: StageFileANSIImage,
   rowIndex: number,
   columnIndex: number,
 ): { r: number; g: number; b: number } {
@@ -297,13 +297,13 @@ function calculateContrastRatio(
 }
 
 function calculateRelativeLuminance(r: number, g: number, b: number): number {
-  const red = convertSrgbChannelToLinear(r);
-  const green = convertSrgbChannelToLinear(g);
-  const blue = convertSrgbChannelToLinear(b);
+  const red = sRGBChannelToLinear(r);
+  const green = sRGBChannelToLinear(g);
+  const blue = sRGBChannelToLinear(b);
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
-function convertSrgbChannelToLinear(value: number): number {
+function sRGBChannelToLinear(value: number): number {
   const normalized = Math.max(0, Math.min(255, value)) / 255;
   if (normalized <= 0.04045) {
     return normalized / 12.92;

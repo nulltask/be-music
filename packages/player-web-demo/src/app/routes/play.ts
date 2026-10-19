@@ -31,10 +31,10 @@ import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import { courseStageRecordKey, playRecordKey } from '../../song-records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
-import type { DemoGuiState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
 import type { DebugMenu } from '../../ui/debug-menu/index.ts';
 import type { FamilyKits, ResolvedPlayKit } from '../family-kits.ts';
-import { resolvePlaySceneOptions, type PlaySceneGuiState } from '../play-scene-options.ts';
+import { resolvePlaySceneOptions, type PlaySceneGUIState } from '../play-scene-options.ts';
 import type { SceneRouter } from '../scene-router.ts';
 import type { CourseRoute } from './course.ts';
 import { playingFamily } from './decide.ts';
@@ -91,7 +91,7 @@ export interface PlayRouteDeps {
   /** The play options in force: the covers, HS-FIX, BGA and score graph the play is made with. */
   readonly playOptions: Pick<PlayOptionsService, 'current'>;
   /** The Debug Menu's state: the lane, gauge, tempo, audio and debug options the play is made with. */
-  readonly guiState: PlaySceneGuiState & Pick<DemoGuiState, 'courseAutoAdvance' | 'playLayout'>;
+  readonly guiState: PlaySceneGUIState & Pick<DemoGUIState, 'courseAutoAdvance' | 'playLayout'>;
   /** The Debug Menu: the compressor's tuned parameters, and the hi-speed slider. */
   readonly debugMenu: DebugMenu;
   /** The compressor architecture every play mounts with (`?compressor=`). */

@@ -3,78 +3,78 @@
  * which value a number or a text draws, where a slider sits and which LR2 timers a moment of a scene starts. Pure and
  * deterministic: no renderer, no DOM, no clock; time comes in as an input. See `docs/lr2-skin.md`.
  *
- * - Scene state: {@link Lr2SceneState}, what a skin reads of a scene (ops, numbers, texts, sliders).
- * - Select: {@link resolveLr2SelectState} for the bar under the cursor, the buttons' actions, the bars' bodies, levels
+ * - Scene state: {@link LR2SceneState}, what a skin reads of a scene (ops, numbers, texts, sliders).
+ * - Select: {@link resolveLR2SelectState} for the bar under the cursor, the buttons' actions, the bars' bodies, levels
  *   and lamps, and the select timers.
- * - Decide: {@link resolveLr2DecideState} for the chart about to be played (and its course), and the decide timers.
- * - Play: {@link resolveLr2PlayState} for a frame of a play (its setup and the running play state), the timers a
+ * - Decide: {@link resolveLR2DecideState} for the chart about to be played (and its course), and the decide timers.
+ * - Play: {@link resolveLR2PlayState} for a frame of a play (its setup and the running play state), the timers a
  *   moment of the play starts and stops, and the lane timer banks.
- * - Result: {@link resolveLr2ResultState} for a play's result (and its course), the result timers and how much of a
+ * - Result: {@link resolveLR2ResultState} for a play's result (and its course), the result timers and how much of a
  *   result graph shows.
  * - Charts and records: a chart's key-mode op and features, a record's clear-lamp op and bar lamp.
  * - Courses: the course ops, numbers and texts of a `CourseView`, the course maker's ops, texts and buttons.
  */
-export type { Lr2Clock, Lr2SceneState, Lr2TimerUpdate } from './scene-state.ts';
-export { resolveLr2ChartFeatures, resolveLr2KeyModeOp, type Lr2ChartFeatures } from './chart.ts';
-export { resolveLr2BarLamp, resolveLr2LampOp } from './records.ts';
+export type { LR2Clock, LR2SceneState, LR2TimerUpdate } from './scene-state.ts';
+export { resolveLR2ChartFeatures, resolveLR2KeyModeOp, type LR2ChartFeatures } from './chart.ts';
+export { resolveLR2BarLamp, resolveLR2LampOp } from './records.ts';
 export {
-  resolveLr2DecideState,
-  resolveLr2DecideTimers,
-  type Lr2DecideInput,
-  type Lr2DecideTimerInput,
+  resolveLR2DecideState,
+  resolveLR2DecideTimers,
+  type LR2DecideInput,
+  type LR2DecideTimerInput,
 } from './decide.ts';
 export {
-  isLr2AutoLane,
-  resolveLr2GaugeRangeOp,
-  resolveLr2GaugeTypeOps,
-  resolveLr2LaneTimer,
-  resolveLr2PlayKeyModeOp,
-  resolveLr2PlayState,
-  resolveLr2PlayTimers,
-  resolveLr2RankOp,
-  type Lr2Lane,
-  type Lr2LaneTimerBank,
-  type Lr2PlayFrame,
-  type Lr2PlayLanes,
-  type Lr2PlaySetup,
-  type Lr2PlayState,
-  type Lr2PlayTimerEvent,
-  type Lr2PlayView,
+  isLR2AutoLane,
+  resolveLR2GaugeRangeOp,
+  resolveLR2GaugeTypeOps,
+  resolveLR2LaneTimer,
+  resolveLR2PlayKeyModeOp,
+  resolveLR2PlayState,
+  resolveLR2PlayTimers,
+  resolveLR2RankOp,
+  type LR2Lane,
+  type LR2LaneTimerBank,
+  type LR2PlayFrame,
+  type LR2PlayLanes,
+  type LR2PlaySetup,
+  type LR2PlayState,
+  type LR2PlayTimerEvent,
+  type LR2PlayView,
 } from './play.ts';
 export {
-  resolveLr2GraphReveal,
-  resolveLr2ResultState,
-  resolveLr2ResultTimers,
-  type Lr2ResultInput,
-  type Lr2ResultState,
-  type Lr2ResultTimerInput,
+  resolveLR2GraphReveal,
+  resolveLR2ResultState,
+  resolveLR2ResultTimers,
+  type LR2ResultInput,
+  type LR2ResultState,
+  type LR2ResultTimerInput,
 } from './result.ts';
 export {
-  pickLr2BarBody,
-  resolveLr2BarLevel,
-  resolveLr2SelectButton,
-  resolveLr2SelectState,
-  resolveLr2SelectTimers,
-  type Lr2CourseMakerInput,
-  type Lr2CycledOption,
-  type Lr2SelectButtonAction,
-  type Lr2SelectInput,
-  type Lr2SelectState,
-  type Lr2SelectTimerEvent,
+  pickLR2BarBody,
+  resolveLR2BarLevel,
+  resolveLR2SelectButton,
+  resolveLR2SelectState,
+  resolveLR2SelectTimers,
+  type LR2CourseMakerInput,
+  type LR2CycledOption,
+  type LR2SelectButtonAction,
+  type LR2SelectInput,
+  type LR2SelectState,
+  type LR2SelectTimerEvent,
 } from './select.ts';
 export {
   lr2ShowsCourseCombo,
-  resolveLr2CourseConnectionText,
-  resolveLr2CourseDraftInfo,
-  resolveLr2CourseMakerAction,
-  resolveLr2CourseMakerButtonState,
-  resolveLr2CourseMakerOps,
-  resolveLr2CourseMakerText,
-  resolveLr2CourseNumber,
-  resolveLr2CourseOps,
-  resolveLr2CourseStageDifficultyOps,
-  resolveLr2CourseText,
-  resolveLr2JudgeCombo,
-  resolveLr2NonstopStage,
-  type Lr2CourseMakerAction,
+  resolveLR2CourseConnectionText,
+  resolveLR2CourseDraftInfo,
+  resolveLR2CourseMakerAction,
+  resolveLR2CourseMakerButtonState,
+  resolveLR2CourseMakerOps,
+  resolveLR2CourseMakerText,
+  resolveLR2CourseNumber,
+  resolveLR2CourseOps,
+  resolveLR2CourseStageDifficultyOps,
+  resolveLR2CourseText,
+  resolveLR2JudgeCombo,
+  resolveLR2NonstopStage,
+  type LR2CourseMakerAction,
 } from './course.ts';

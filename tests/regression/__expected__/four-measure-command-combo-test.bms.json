@@ -95,10 +95,10 @@
         "01": "MIRROR",
         "02": "RANDOM"
       },
-      "exWav": {
+      "exWAV": {
         "01": "ex_sample.wav"
       },
-      "exBmp": {
+      "exBMP": {
         "01": "ex_image.bmp"
       },
       "bga": {
@@ -110,20 +110,20 @@
         "03": 1.5
       },
       "speed": {},
-      "swBga": {
+      "swBGA": {
         "01": "02"
       },
       "preview": "sample.wav",
       "player": 3,
-      "pathWav": "./",
-      "baseBpm": 128,
+      "pathWAV": "./",
+      "baseBPM": 128,
       "option": "RANDOM",
       "wavCmd": "legacy",
       "lnType": 1,
       "lnMode": 1,
-      "volWav": 90,
+      "volWAV": 90,
       "defExRank": 120,
-      "poorBga": "03",
+      "poorBGA": "03",
       "videoFile": "demo.mp4",
       "midiFile": "demo.mid",
       "materials": "demo.materials",
@@ -619,7 +619,7 @@
       ],
       "title": "Four-Measure Command Combo Test",
       "playVariant": "14",
-      "referenceBpm": 128,
+      "referenceBPM": 128,
       "timing": {
         "tempo": [
           "0 128 0",
@@ -759,7 +759,7 @@
           "sourceExRank": 120
         },
         "noteCount": 84,
-        "playFingerprint": "bmfp0:8285b8f7a98651f2462c58e4654a087568a451b61f103d47478085aa384a0fc0",
+        "playFingerprint": "bmfp0:d251472fe5b98e8d9747182aed23a5bc3f1912fd5c7d406f8b74d1a6f751ef13",
         "title": "Four-Measure Command Combo Test",
         "subtitle": "Visual 4-Bar Command Blocks",
         "artist": "Codex",
@@ -1331,7 +1331,7 @@
       ],
       "title": "Four-Measure Command Combo Test",
       "playVariant": "14",
-      "referenceBpm": 128,
+      "referenceBPM": 128,
       "timing": {
         "tempo": [
           "0 128 0",
@@ -1471,7 +1471,7 @@
           "sourceExRank": 120
         },
         "noteCount": 84,
-        "playFingerprint": "bmfp0:d7d070266fb032c900c4793a9e265e06621db1eeed350b9d859a870e4347a253",
+        "playFingerprint": "bmfp0:6ed798a13595eade4224bedff67596dda6c81b71b311b089d8a92c10b8913c5f",
         "title": "Four-Measure Command Combo Test",
         "subtitle": "Visual 4-Bar Command Blocks",
         "artist": "Codex",

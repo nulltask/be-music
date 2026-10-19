@@ -1,4 +1,4 @@
-import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicEvent, type BeMusicJSON } from '@be-music/json';
 import { PackedEventStrings, packEvents, unpackEvents, type PackedEvents } from './packed-events.ts';
 
 export { PackedEventStrings } from './packed-events.ts';
@@ -11,7 +11,7 @@ export { PackedEventStrings } from './packed-events.ts';
 const UNPACKED_EVENTS_CACHE_SIZE = 64;
 
 /** Least-recently-read charts first; re-reading a chart moves it to the end. */
-const unpackedEvents = new Map<BeMusicJson, BeMusicEvent[]>();
+const unpackedEvents = new Map<BeMusicJSON, BeMusicEvent[]>();
 
 /**
  * Trims a freshly parsed chart down to what the player keeps resident for every song in a collection. Mutates and
@@ -29,8 +29,8 @@ const unpackedEvents = new Map<BeMusicJson, BeMusicEvent[]>();
  *
  * The chart object itself keeps its identity, so caches keyed by the chart keep working.
  */
-export function compactCollectionChart(chart: BeMusicJson, strings: PackedEventStrings): BeMusicJson {
-  chart.preservation = createEmptyJson(chart.sourceFormat).preservation;
+export function compactCollectionChart(chart: BeMusicJSON, strings: PackedEventStrings): BeMusicJSON {
+  chart.preservation = createEmptyJSON(chart.sourceFormat).preservation;
   chart.metadata = structuredClone(chart.metadata);
   chart.resources = structuredClone(chart.resources);
   chart.bms = structuredClone(chart.bms);
@@ -42,11 +42,11 @@ export function compactCollectionChart(chart: BeMusicJson, strings: PackedEventS
   return chart;
 }
 
-function defineLazyEvents(chart: BeMusicJson, packed: PackedEvents, strings: PackedEventStrings): void {
+function defineLazyEvents(chart: BeMusicJSON, packed: PackedEvents, strings: PackedEventStrings): void {
   Object.defineProperty(chart, 'events', {
     configurable: true,
     enumerable: true,
-    get(this: BeMusicJson): BeMusicEvent[] {
+    get(this: BeMusicJSON): BeMusicEvent[] {
       let events = unpackedEvents.get(this);
       if (events !== undefined) {
         unpackedEvents.delete(this);
@@ -59,7 +59,7 @@ function defineLazyEvents(chart: BeMusicJson, packed: PackedEvents, strings: Pac
       unpackedEvents.set(this, events);
       return events;
     },
-    set(this: BeMusicJson, events: BeMusicEvent[]) {
+    set(this: BeMusicJSON, events: BeMusicEvent[]) {
       unpackedEvents.delete(this);
       Object.defineProperty(this, 'events', { configurable: true, enumerable: true, writable: true, value: events });
     },

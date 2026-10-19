@@ -1,8 +1,8 @@
 // The Debug Menu's Course folder. It is built with the menu as `this` (`DebugMenu`).
 
 import type { Controller, GUI } from 'lil-gui';
-import { normalizeCourseTableUrl } from '../../course-table-import.ts';
-import type { DemoGuiState } from '../../types.ts';
+import { normalizeCourseTableURL } from '../../course-table-import.ts';
+import type { DemoGUIState } from '../../types.ts';
 import type { DebugMenu, DebugMenuDeps } from './index.ts';
 
 /**
@@ -22,13 +22,13 @@ export function buildCourseFolder(this: DebugMenu, folder: GUI): void {
     folder
       .add(this.guiState, 'nonstopPlacement', ['intended', 'lr2'])
       .name('NONSTOP placement')
-      .onChange((value: DemoGuiState['nonstopPlacement']) => applyNonstopPlacement(this.deps, value)),
+      .onChange((value: DemoGUIState['nonstopPlacement']) => applyNonstopPlacement(this.deps, value)),
   );
   // Courses from a difficulty table's page (or header JSON) URL; the URL is remembered and imported again on load.
   const courseTable = {
     url: '',
     import: () => {
-      const url = normalizeCourseTableUrl(courseTable.url);
+      const url = normalizeCourseTableURL(courseTable.url);
       if (url === undefined) {
         this.setStatus('Enter a difficulty-table URL first');
         return;
@@ -47,7 +47,7 @@ export function buildCourseFolder(this: DebugMenu, folder: GUI): void {
  */
 export function applyNonstopPlacement(
   deps: Pick<DebugMenuDeps, 'settings' | 'refreshSelectRecords'>,
-  value: DemoGuiState['nonstopPlacement'],
+  value: DemoGUIState['nonstopPlacement'],
 ): void {
   deps.settings.nonstopPlacement = value;
   deps.refreshSelectRecords();

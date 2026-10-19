@@ -1,13 +1,13 @@
 import { type BLEND_MODES, type Container, Sprite, Texture } from 'pixi.js';
 import type {
-  Lr2BarGraphElement,
-  Lr2DestinationRect,
-  Lr2ImageElement,
-  Lr2NumberElement,
-  Lr2SliderElement,
-  Lr2SpecialGraphic,
+  LR2BarGraphElement,
+  LR2DestinationRect,
+  LR2ImageElement,
+  LR2NumberElement,
+  LR2SliderElement,
+  LR2SpecialGraphic,
 } from '@be-music/lr2-skin';
-import { isLr2SpecialGraphic } from '@be-music/lr2-skin';
+import { isLR2SpecialGraphic } from '@be-music/lr2-skin';
 import { createCachedCroppedTexture, type PixiCropRect } from '../pixi-texture.ts';
 
 /**
@@ -61,10 +61,10 @@ export function containerSpriteSink(layer: Container): SpriteSink {
  * sprite's screen position is shifted by the same fraction so the painted rectangle stays put — only the rotation pivot
  * moves.
  */
-export function applyDestinationToSprite(sprite: Sprite, destination: Lr2DestinationRect): void {
+export function applyDestinationToSprite(sprite: Sprite, destination: LR2DestinationRect): void {
   sprite.alpha = destination.alpha;
   sprite.tint = (destination.r << 16) | (destination.g << 8) | destination.b;
-  sprite.blendMode = mapLr2BlendMode(destination.blend);
+  sprite.blendMode = mapLR2BlendMode(destination.blend);
   if (destination.angle !== 0) {
     sprite.rotation = (destination.angle * Math.PI) / 180;
     const pivot = resolveCenterAnchor(destination.center);
@@ -107,7 +107,7 @@ function resolveCenterAnchor(center: number): { x: number; y: number } {
  * Maps the LR2 `blend` field (0..11) onto PixiJS v8 blend mode names. Pixi has no native subtractive blend, so blend=3
  * falls back to normal.
  */
-function mapLr2BlendMode(blend: number): BLEND_MODES {
+function mapLR2BlendMode(blend: number): BLEND_MODES {
   switch (blend) {
     case 2:
       return 'add';
@@ -154,44 +154,44 @@ export function normalizeRect(rect: { x: number; y: number; w: number; h: number
   return { x, y, w, h };
 }
 
-export interface Lr2DestinationElement {
-  destination: Lr2DestinationRect;
-  keyframes: Lr2DestinationRect[];
+export interface LR2DestinationElement {
+  destination: LR2DestinationRect;
+  keyframes: LR2DestinationRect[];
 }
 
-type NormalizedLr2Rect = ReturnType<typeof normalizeRect>;
-type Lr2TextureSourceElement = { source: { imagePath: string } };
+type NormalizedLR2Rect = ReturnType<typeof normalizeRect>;
+type LR2TextureSourceElement = { source: { imagePath: string } };
 
-interface Lr2ValueSpriteMetrics {
+interface LR2ValueSpriteMetrics {
   texture: Texture;
-  rect: NormalizedLr2Rect;
+  rect: NormalizedLR2Rect;
   ratio: number;
 }
 
 export function evaluateElementDestination(
-  element: Lr2DestinationElement,
+  element: LR2DestinationElement,
   elapsedSinceTimer: (timer: number) => number,
-): Lr2DestinationRect {
+): LR2DestinationRect {
   if (element.keyframes.length > 1) {
     return evaluateKeyframes(element.keyframes, elapsedSinceTimer(element.destination.timer));
   }
   return element.destination;
 }
 
-export interface Lr2StaticImageSpriteOptions {
+export interface LR2StaticImageSpriteOptions {
   textures: ReadonlyMap<string, Texture>;
   elapsedSinceTimer: (timer: number) => number;
-  resolveSpecialGraphicTexture?: (path: Lr2SpecialGraphic) => Texture | undefined;
+  resolveSpecialGraphicTexture?: (path: LR2SpecialGraphic) => Texture | undefined;
 }
 
-export function makeLr2StaticImageSprite(
-  image: Lr2ImageElement,
-  dst: Lr2DestinationRect,
-  options: Lr2StaticImageSpriteOptions,
+export function makeLR2StaticImageSprite(
+  image: LR2ImageElement,
+  dst: LR2DestinationRect,
+  options: LR2StaticImageSpriteOptions,
 ): Sprite | undefined {
   const path = image.source.imagePath;
   let texture = options.textures.get(path);
-  if (!texture && isLr2SpecialGraphic(path)) {
+  if (!texture && isLR2SpecialGraphic(path)) {
     texture = options.resolveSpecialGraphicTexture?.(path);
   }
   if (!texture) {
@@ -202,7 +202,7 @@ export function makeLr2StaticImageSprite(
     return undefined;
   }
   let cropped: Texture;
-  if (isLr2SpecialGraphic(path)) {
+  if (isLR2SpecialGraphic(path)) {
     cropped = texture;
   } else {
     const cell = pickAnimatedCell(image.source, options.elapsedSinceTimer(image.source.timer), dst.loop, {
@@ -223,9 +223,9 @@ export function makeLr2StaticImageSprite(
   return sprite;
 }
 
-export function makeLr2BargraphSprite(
-  element: Lr2BarGraphElement,
-  dst: Lr2DestinationRect,
+export function makeLR2BargraphSprite(
+  element: LR2BarGraphElement,
+  dst: LR2DestinationRect,
   value: number,
   textures: ReadonlyMap<string, Texture>,
 ): Sprite | undefined {
@@ -241,7 +241,7 @@ export function makeLr2BargraphSprite(
       h: cropH,
     });
     if (!cropped) return undefined;
-    return createLr2DestinationSprite(cropped, `bargraph[type=${element.type}]`, dst, (sprite) => {
+    return createLR2DestinationSprite(cropped, `bargraph[type=${element.type}]`, dst, (sprite) => {
       sprite.position.set(rect.x, horizontal ? rect.y : rect.y + rect.h * (1 - ratio));
       sprite.width = horizontal ? rect.w * ratio : rect.w;
       sprite.height = horizontal ? rect.h : rect.h * ratio;
@@ -249,9 +249,9 @@ export function makeLr2BargraphSprite(
   });
 }
 
-export function makeLr2SliderSprite(
-  element: Lr2SliderElement,
-  dst: Lr2DestinationRect,
+export function makeLR2SliderSprite(
+  element: LR2SliderElement,
+  dst: LR2DestinationRect,
   value: number,
   textures: ReadonlyMap<string, Texture>,
 ): Sprite | undefined {
@@ -279,7 +279,7 @@ export function makeLr2SliderSprite(
         x = rect.x - element.range * ratio;
         break;
     }
-    return createLr2DestinationSprite(cropped, `slider[type=${element.type}]`, dst, (sprite) => {
+    return createLR2DestinationSprite(cropped, `slider[type=${element.type}]`, dst, (sprite) => {
       sprite.position.set(x, y);
       sprite.width = rect.w;
       sprite.height = rect.h;
@@ -288,22 +288,22 @@ export function makeLr2SliderSprite(
 }
 
 function renderValueSprite(
-  element: Lr2TextureSourceElement,
-  dst: Lr2DestinationRect,
+  element: LR2TextureSourceElement,
+  dst: LR2DestinationRect,
   value: number,
   textures: ReadonlyMap<string, Texture>,
-  render: (metrics: Lr2ValueSpriteMetrics) => Sprite | undefined,
+  render: (metrics: LR2ValueSpriteMetrics) => Sprite | undefined,
 ): Sprite | undefined {
   const metrics = resolveValueSpriteMetrics(element, dst, value, textures);
   return metrics ? render(metrics) : undefined;
 }
 
 function resolveValueSpriteMetrics(
-  element: Lr2TextureSourceElement,
-  dst: Lr2DestinationRect,
+  element: LR2TextureSourceElement,
+  dst: LR2DestinationRect,
   value: number,
   textures: ReadonlyMap<string, Texture>,
-): Lr2ValueSpriteMetrics | undefined {
+): LR2ValueSpriteMetrics | undefined {
   const texture = textures.get(element.source.imagePath);
   if (!texture) return undefined;
   const rect = normalizeRect(dst);
@@ -315,10 +315,10 @@ function resolveValueSpriteMetrics(
   };
 }
 
-function createLr2DestinationSprite(
+function createLR2DestinationSprite(
   texture: Texture,
   label: string,
-  dst: Lr2DestinationRect,
+  dst: LR2DestinationRect,
   layout: (sprite: Sprite) => void,
 ): Sprite {
   const sprite = new Sprite(texture);
@@ -341,7 +341,7 @@ function createLr2DestinationSprite(
  *   interpolated by `(t - tA) / (tB - tA)`. Discrete attributes (blend, filter, center, timer, ops, op4) come from the
  *   **target** keyframe so visibility / blending changes cleanly at boundaries.
  */
-export function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, elapsedMs: number): Lr2DestinationRect {
+export function evaluateKeyframes(keyframes: ReadonlyArray<LR2DestinationRect>, elapsedMs: number): LR2DestinationRect {
   if (keyframes.length === 1 || elapsedMs < 0) {
     return keyframes[0]!;
   }
@@ -423,7 +423,7 @@ function applyAccEasing(u: number, acc: number): number {
   }
 }
 
-function interpolateKeyframe(a: Lr2DestinationRect, b: Lr2DestinationRect, t: number): Lr2DestinationRect {
+function interpolateKeyframe(a: LR2DestinationRect, b: LR2DestinationRect, t: number): LR2DestinationRect {
   return {
     time: a.time + (b.time - a.time) * t,
     x: a.x + (b.x - a.x) * t,
@@ -519,10 +519,10 @@ export interface RenderNumberOptions {
  */
 export function renderNumberElement(
   sink: SpriteSink,
-  element: Lr2NumberElement,
+  element: LR2NumberElement,
   value: number,
   textures: ReadonlyMap<string, Texture>,
-  dst: Lr2DestinationRect,
+  dst: LR2DestinationRect,
   options: RenderNumberOptions = {},
 ): void {
   const baseTexture = textures.get(element.source.imagePath);

@@ -3,7 +3,7 @@
  * kit's family and returns the scene to show with `PixiSceneHost.setScene`.
  */
 
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/scene-model';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
@@ -12,7 +12,7 @@ import { SessionScene, type SessionSceneOptions } from '../session/session-scene
 import { logger } from '../logger.ts';
 import { BeatorajaResultView, resolveBeatorajaResultTiming } from '../view/beatoraja/result-view.ts';
 import { BUILT_IN_RESULT_TIMING, BuiltInResultView } from '../view/built-in/result-view.ts';
-import { Lr2ResultView, resolveLr2ResultTiming } from '../view/lr2/result-view.ts';
+import { LR2ResultView, resolveLR2ResultTiming } from '../view/lr2/result-view.ts';
 import type { ResultFrame, ResultIntent, ResultView, ResultViewTiming } from '../view/types.ts';
 import type { ResultKit } from './family-kit.ts';
 
@@ -41,7 +41,7 @@ export interface ResultSceneOptions extends SessionSceneOptions {
    * The chart as the play played it (its `#RANDOM` branches drawn), when the host has it: a beatoraja skin's BPM graph,
    * note kinds and TOTAL readout read it, and show nothing of the chart without it.
    */
-  readonly playChart?: BeMusicJson;
+  readonly playChart?: BeMusicJSON;
   /** The theme's sounds: the screen plays its clear, fail or result jingle and stops it as it leaves. */
   readonly sounds: SystemSoundSet;
   /**
@@ -75,7 +75,7 @@ interface FamilyResultView {
 function resultTimingOf(kit: ResultSceneKit): ResultViewTiming {
   switch (kit.family) {
     case 'lr2':
-      return resolveLr2ResultTiming(kit.skin);
+      return resolveLR2ResultTiming(kit.skin);
     case 'beatoraja':
       return resolveBeatorajaResultTiming(kit.kit.skin);
     case 'built-in':
@@ -95,7 +95,7 @@ function createResultView(
   const source = options.source !== undefined ? { source: options.source } : {};
   switch (kit.family) {
     case 'lr2': {
-      const view = new Lr2ResultView(kit, source);
+      const view = new LR2ResultView(kit, source);
       return {
         view,
         updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),

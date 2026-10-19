@@ -1,5 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { avatarUrl } from './avatars.ts';
+import { avatarURL } from './avatars.ts';
 import type { Database } from './db/client.ts';
 import type { RankingEntry, RankingFilter } from './ranking.ts';
 import { rawToPlayInfo, type PlayInfo, type RawPlayInfoRow } from './play-info.ts';
@@ -83,7 +83,7 @@ export async function loadPlayRanking(
       handle: row.handle,
       displayName: row.display_name,
       anonymous: row.is_anonymous === 1,
-      avatarUrl: avatarUrl(row.handle, row.avatar_key),
+      avatarUrl: avatarURL(row.handle, row.avatar_key),
       exScore: Number(row.ex_score),
       exScoreId: row.score_id,
       clearLamp: Number(row.clear_lamp),

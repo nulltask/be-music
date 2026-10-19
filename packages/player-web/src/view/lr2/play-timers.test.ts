@@ -1,4 +1,4 @@
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import { LR2_TIMER } from '@be-music/lr2-skin/ids';
 import type { ChartPlayVariant } from '@be-music/chart';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
@@ -6,14 +6,14 @@ import { KEY_ON_FADE_OUT_MS } from '../../stage/design.ts';
 import {
   LR2_BOMB_FALLBACK_MS,
   LR2_GAUGE_RISE_FALLBACK_MS,
-  Lr2PlayTimers,
-  type Lr2PlayTimerSource,
+  LR2PlayTimers,
+  type LR2PlayTimerSource,
 } from './play-timers.ts';
 
 /** A running play the timers read: its play clock, intro, beat and key beams are the test's to set. */
 function createPlay(overrides: { variant?: ChartPlayVariant } = {}) {
   const state = { now: 0, intro: false, beat: 0, disposed: false };
-  const play: Lr2PlayTimerSource = {
+  const play: LR2PlayTimerSource = {
     song: {},
     chartPlayVariant: overrides.variant ?? '7',
     get disposed() {
@@ -27,11 +27,11 @@ function createPlay(overrides: { variant?: ChartPlayVariant } = {}) {
     currentSeconds: () => state.now / 1000,
     currentBeat: () => state.beat,
   };
-  return { play, state, timers: new Lr2PlayTimers(play) };
+  return { play, state, timers: new LR2PlayTimers(play) };
 }
 
 /** A skin with one element on each of `timers`, whose keyframes end at `spanMs`. */
-function skinWithSpans(timers: readonly number[], spanMs: number): Lr2Skin {
+function skinWithSpans(timers: readonly number[], spanMs: number): LR2Skin {
   return {
     images: timers.map((timer) => ({
       destination: { timer },
@@ -49,14 +49,14 @@ function skinWithSpans(timers: readonly number[], spanMs: number): Lr2Skin {
     nowCombos: [],
     judges: {},
     judges2P: {},
-  } as unknown as Lr2Skin;
+  } as unknown as LR2Skin;
 }
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('Lr2PlayTimers', () => {
+describe('LR2PlayTimers', () => {
   test('the scene start starts timer 0, and timer 1 at once without #STARTINPUT', () => {
     const { timers } = createPlay();
     timers.handle({ kind: 'scene-start', atMs: 100 }, undefined);

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { createUiWorkerFrameState } from './ui-worker-frame-state.ts';
+import { createUIWorkerFrameState } from './ui-worker-frame-state.ts';
 
 describe('ui worker frame state', () => {
   test('applies reactive HUD updates and rerenders frame layout on changes', () => {
@@ -9,7 +9,7 @@ describe('ui worker frame state', () => {
     const applyTerminalSize = vi.fn();
     const syncFrameLayout = vi.fn();
     const requestFrameRender = vi.fn();
-    const frameState = createUiWorkerFrameState({
+    const frameState = createUIWorkerFrameState({
       initialPaused: false,
       initialHighSpeed: 1,
       initialJudgeCombo: {
@@ -93,7 +93,7 @@ describe('ui worker frame state', () => {
     const applyTerminalSize = vi.fn();
     const syncFrameLayout = vi.fn();
     const requestFrameRender = vi.fn();
-    const frameState = createUiWorkerFrameState({
+    const frameState = createUIWorkerFrameState({
       initialPaused: false,
       initialHighSpeed: 1,
       initialJudgeCombo: {
@@ -135,7 +135,7 @@ describe('ui worker frame state', () => {
   });
 
   test('merges note state updates into the retained frame notes', () => {
-    const frameState = createUiWorkerFrameState({
+    const frameState = createUIWorkerFrameState({
       initialPaused: false,
       initialHighSpeed: 1,
       initialJudgeCombo: {

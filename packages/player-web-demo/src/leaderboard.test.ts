@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { computeChartFingerprint, computePlayFingerprint, drawRandomOutcomes } from '@be-music/chart';
-import { parseBms, resolveBmsControlFlowWithDraws } from '@be-music/parser';
+import { parseBMS, resolveBMSControlFlowWithDraws } from '@be-music/parser';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog } from '@be-music/player/playlog';
 import {
   courseStageChartFingerprint,
@@ -16,7 +16,7 @@ import {
   type LeaderboardSubmission,
 } from './leaderboard.ts';
 
-const SOURCE = parseBms(
+const SOURCE = parseBMS(
   ['#BPM 150', '#00111:01010101', '#RANDOM 2', '#IF 1', '#00113:01', '#ENDIF', '#IF 2', '#00114:01', '#ENDIF'].join(
     '\n',
   ),
@@ -26,7 +26,7 @@ const CHART_PATH = 'song/chart.bms';
 /** A play log fingerprinted the way the recorder does it: source chart, its draws, and the chart path. */
 function recordedPlaylog(play: Partial<BeMusicPlaylog['play']> = {}): BeMusicPlaylog {
   const randomDraws = [...drawRandomOutcomes(SOURCE, () => 0.9)];
-  const played = resolveBmsControlFlowWithDraws(SOURCE, randomDraws);
+  const played = resolveBMSControlFlowWithDraws(SOURCE, randomDraws);
   return {
     format: 'be-music-playlog',
     version: 0,
@@ -193,7 +193,7 @@ describe('describeSkippedSubmission', () => {
 });
 
 describe('course submissions', () => {
-  const OTHER = parseBms(['#BPM 150', '#00112:01010101'].join('\n'));
+  const OTHER = parseBMS(['#BPM 150', '#00112:01010101'].join('\n'));
   const stageCharts = [
     { chart: SOURCE, chartPath: CHART_PATH },
     { chart: OTHER, chartPath: 'song/other.bms' },

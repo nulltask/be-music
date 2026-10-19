@@ -59,7 +59,7 @@ export function checkBrowserCompat(): BrowserCompatReport {
       id: 'file-api',
       label: 'Drag & Drop',
       required: true,
-      supported: detectFileApi(),
+      supported: detectFileAPI(),
       note: 'Loads BMS folders / LR2 themes from drag-drop',
     },
     {
@@ -139,7 +139,7 @@ function detectAudioContext(): boolean {
   return 'AudioContext' in globalThis || 'webkitAudioContext' in (globalThis as unknown as Record<string, unknown>);
 }
 
-function detectFileApi(): boolean {
+function detectFileAPI(): boolean {
   if (typeof globalThis === 'undefined') return false;
   return 'File' in globalThis && 'FileReader' in globalThis && 'DataTransfer' in globalThis;
 }

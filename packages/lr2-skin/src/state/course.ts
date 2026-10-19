@@ -11,9 +11,9 @@ const KIND_OPS: Record<CourseKind, number> = {
 /**
  * The LR2 ops a course lights: 290 and its kind's op, plus the stage op while a stage is played (280 + index for
  * stages 1-9 that are not the last, 289 for the last). LR2 reads a skin at each scene start, so these also serve as
- * parse-time ops for a course stage's skin (`Lr2ThemeSkins.loadSkin`).
+ * parse-time ops for a course stage's skin (`LR2ThemeSkins.loadSkin`).
  */
-export function resolveLr2CourseOps(course: CourseView): number[] {
+export function resolveLR2CourseOps(course: CourseView): number[] {
   const ops: number[] = [LR2_OP.COURSE, KIND_OPS[course.kind]];
   const index = course.stageIndex;
   if (index === undefined) return ops;
@@ -27,7 +27,7 @@ export function resolveLr2CourseOps(course: CourseView): number[] {
  * of the selected bar's course, by the stage chart's `#DIFFICULTY` (0 undefined, 1 BEGINNER … 5 INSANE). LR2 reads
  * 0 for a stage it does not have, a chart it does not own and any bar that is not a course, so those light the `x0` op.
  */
-export function resolveLr2CourseStageDifficultyOps(course: CourseView | undefined): number[] {
+export function resolveLR2CourseStageDifficultyOps(course: CourseView | undefined): number[] {
   return [0, 1, 2, 3, 4].map((index) => {
     const difficulty = Math.trunc(course?.stages[index]?.difficulty ?? 0);
     return LR2_OP.COURSE_STAGE_DIFFICULTY + index * 10 + (difficulty >= 0 && difficulty <= 5 ? difficulty : 0);
@@ -35,7 +35,7 @@ export function resolveLr2CourseStageDifficultyOps(course: CourseView | undefine
 }
 
 /** LR2 numbers 250-259: the play level of course stage 1-10 (OpenLR2 L923-L942). */
-export function resolveLr2CourseNumber(num: number, course: CourseView): number | undefined {
+export function resolveLR2CourseNumber(num: number, course: CourseView): number | undefined {
   if (num < LR2_NUM.COURSE_STAGE1_LEVEL || num > LR2_NUM.COURSE_STAGE10_LEVEL) return undefined;
   return course.stages[num - LR2_NUM.COURSE_STAGE1_LEVEL]?.level;
 }
@@ -44,7 +44,7 @@ export function resolveLr2CourseNumber(num: number, course: CourseView): number 
  * LR2 course texts (OpenLR2 L8408-L8420): 150-154 the titles of stages 1-5, 160-164 their subtitles, 170 the course
  * title. A stage the course does not have reads empty.
  */
-export function resolveLr2CourseText(st: number, course: CourseView): string | undefined {
+export function resolveLR2CourseText(st: number, course: CourseView): string | undefined {
   if (st >= LR2_TEXT.COURSE_STAGE1_TITLE && st <= LR2_TEXT.COURSE_STAGE5_TITLE) {
     return course.stages[st - LR2_TEXT.COURSE_STAGE1_TITLE]?.title ?? '';
   }
@@ -67,7 +67,7 @@ export function lr2ShowsCourseCombo(kind: CourseKind): boolean {
  * The combo an LR2 skin shows next to the judgement (`#DST_NOWCOMBO`): the course combo during an expert or grade
  * course, as LR2 draws `now_combo_course` there (OpenLR2 L2019-L2034, L2516), else the stage's own combo.
  */
-export function resolveLr2JudgeCombo(
+export function resolveLR2JudgeCombo(
   stageCombo: number,
   courseCombo: number | undefined,
   kind: CourseKind | undefined,
@@ -89,7 +89,7 @@ const LR2_CONNECTION_LABELS: Readonly<Record<NonstopConnection, string>> = {
  * LR2 texts 171-179 (OpenLR2 L8400-L8405): the connection after stages 1-9 of the selected NONSTOP course, or
  * `DISABLE` for any other course. Returns `undefined` for other text ids.
  */
-export function resolveLr2CourseConnectionText(st: number, course: CourseView): string | undefined {
+export function resolveLR2CourseConnectionText(st: number, course: CourseView): string | undefined {
   if (st < LR2_TEXT.COURSE_CONNECTION1 || st > LR2_TEXT.COURSE_CONNECTION9) return undefined;
   if (course.kind !== 'nonstop' || course.connections === undefined) return 'DISABLE';
   return LR2_CONNECTION_LABELS[course.connections[st - LR2_TEXT.COURSE_CONNECTION1] ?? 'fade'];
@@ -100,7 +100,7 @@ export function resolveLr2CourseConnectionText(st: number, course: CourseView): 
  * a stage that follows a BLANK connection (its op 1002 marker, OpenLR2 L12878-L12889), so after a FADE or CUT the
  * previous stage stays shown.
  */
-export function resolveLr2NonstopStage(
+export function resolveLR2NonstopStage(
   stages: ReadonlyArray<{ windowStart: number; lr2StageMarker: boolean }>,
   seconds: number,
 ): number {
@@ -117,7 +117,7 @@ export function resolveLr2NonstopStage(
  * more than N stages. (OpenLR2 marks 571 / 572 as falling through to the next case, a decompilation artefact; this
  * follows the evident intent.)
  */
-export function resolveLr2CourseMakerOps(draft: CourseDraft | undefined, selectedStageCount = 0): number[] {
+export function resolveLR2CourseMakerOps(draft: CourseDraft | undefined, selectedStageCount = 0): number[] {
   if (draft !== undefined) {
     return [LR2_OP.COURSE_MAKING, LR2_OP.COURSE_SONGS_ADDED + Math.min(draft.stages.length, 9)];
   }
@@ -131,7 +131,7 @@ export function resolveLr2CourseMakerOps(draft: CourseDraft | undefined, selecte
  * and the name being typed on text 170 (`namePrompt` while it is empty), in place of the selected bar's course
  * (OpenLR2 L8408-L8414).
  */
-export function resolveLr2CourseDraftInfo(draft: CourseDraft, namePrompt = ''): CourseView {
+export function resolveLR2CourseDraftInfo(draft: CourseDraft, namePrompt = ''): CourseView {
   return {
     kind: draft.kind,
     title: draft.name.length > 0 ? draft.name : namePrompt,
@@ -143,12 +143,12 @@ export function resolveLr2CourseDraftInfo(draft: CourseDraft, namePrompt = ''): 
 }
 
 /** LR2 text 198: the connection a new NONSTOP course gets (its `config.course.defaultconnection`). */
-export function resolveLr2CourseMakerText(st: number, defaultConnection: NonstopConnection): string | undefined {
+export function resolveLR2CourseMakerText(st: number, defaultConnection: NonstopConnection): string | undefined {
   return st === LR2_TEXT.COURSE_DEFAULT_CONNECTION ? LR2_CONNECTION_LABELS[defaultConnection] : undefined;
 }
 
 /** What an LR2 select button does to the player's courses (OpenLR2 L11063-L11137). */
-export type Lr2CourseMakerAction =
+export type LR2CourseMakerAction =
   | { kind: 'finish' }
   | { kind: 'cancel' }
   | { kind: 'delete' }
@@ -160,7 +160,7 @@ export type Lr2CourseMakerAction =
  * the selected course, 240-248 step the connection after stage 1-9 of the selected NONSTOP course and 268 the default
  * connection. `undefined` for any other button.
  */
-export function resolveLr2CourseMakerAction(type: number): Lr2CourseMakerAction | undefined {
+export function resolveLR2CourseMakerAction(type: number): LR2CourseMakerAction | undefined {
   if (type === LR2_BUTTON.COURSE_FINISH) return { kind: 'finish' };
   if (type === LR2_BUTTON.COURSE_CANCEL) return { kind: 'cancel' };
   if (type === LR2_BUTTON.COURSE_DELETE) return { kind: 'delete' };
@@ -176,12 +176,12 @@ export function resolveLr2CourseMakerAction(type: number): Lr2CourseMakerAction 
  * connection after stage 1-9 and 268 the default connection, each by its index in LR2's order (`ButtonByInput` draws the
  * value it edits). `undefined` for other buttons.
  */
-export function resolveLr2CourseMakerButtonState(
+export function resolveLR2CourseMakerButtonState(
   type: number,
   course: CourseView | undefined,
   defaultConnection: NonstopConnection,
 ): number | undefined {
-  const action = resolveLr2CourseMakerAction(type);
+  const action = resolveLR2CourseMakerAction(type);
   if (action?.kind === 'default-connection') return LR2_CONNECTION_ORDER.indexOf(defaultConnection);
   if (action?.kind !== 'connection') return undefined;
   if (course?.kind !== 'nonstop') return 0;

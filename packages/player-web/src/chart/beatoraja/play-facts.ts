@@ -3,8 +3,8 @@
 // themselves come from `@be-music/beatoraja-skin/scene`; this file only reads the chart.
 
 import type { BeatorajaChartTraits, BeatorajaPlayChartFacts } from '@be-music/beatoraja-skin/scene';
-import type { BeMusicJson } from '@be-music/json';
-import { resolveChartBpmRange } from '../bpm-range.ts';
+import type { BeMusicJSON } from '@be-music/json';
+import { resolveChartBPMRange } from '../bpm-range.ts';
 import type { BeatorajaChartNoteDistribution } from './note-distribution.ts';
 import { beatorajaEventBeat, computeBeatorajaMeasureBaseBeats } from './timing.ts';
 
@@ -13,7 +13,7 @@ import { beatorajaEventBeat, computeBeatorajaMeasureBaseBeats } from './timing.t
  * STOPs (`09`), text (`99`), BGA (a `#BMP` table), and the stage file, banner and back image the header names. Read off
  * the channels, as the play scene has always read them.
  */
-export function beatorajaPlayChartTraits(chart: BeMusicJson): BeatorajaChartTraits {
+export function beatorajaPlayChartTraits(chart: BeMusicJSON): BeatorajaChartTraits {
   let longNote = false;
   let bpmChange = false;
   let stop = false;
@@ -38,7 +38,7 @@ export function beatorajaPlayChartTraits(chart: BeMusicJson): BeatorajaChartTrai
     bga: Object.keys(chart.resources?.bmp ?? {}).length > 0,
     stageFile: Boolean(meta.stageFile),
     banner: Boolean(meta.banner),
-    backBmp: Boolean(meta.backBmp),
+    backBMP: Boolean(meta.backBMP),
   };
 }
 
@@ -47,7 +47,7 @@ export function beatorajaPlayChartTraits(chart: BeMusicJson): BeatorajaChartTrai
  * objects do not count, so the end of the notes is the last note to play). A side without notes is left out and never
  * reaches its end.
  */
-export function computeBeatorajaLastNoteBeats(chart: BeMusicJson): { 1?: number; 2?: number } {
+export function computeBeatorajaLastNoteBeats(chart: BeMusicJSON): { 1?: number; 2?: number } {
   const measureBaseBeat = computeBeatorajaMeasureBaseBeats(chart);
   const last: { 1?: number; 2?: number } = {};
   for (const event of chart.events ?? []) {
@@ -65,26 +65,26 @@ export function computeBeatorajaLastNoteBeats(chart: BeMusicJson): { 1?: number;
   return last;
 }
 
-const NO_CHART: BeatorajaPlayChartFacts = { bpm: 0, minBpm: 0, maxBpm: 0 };
+const NO_CHART: BeatorajaPlayChartFacts = { bpm: 0, minBPM: 0, maxBPM: 0 };
 
 /**
  * The tempo facts a play skin's numbers read: the header BPM and `#PLAYLEVEL`, the main BPM and the tempo changes of
  * the note distribution, and the tempo map's lowest and highest BPM (resolved only when a skin asks for them).
  */
 export function beatorajaPlayChartFacts(
-  chart: BeMusicJson | undefined,
-  distribution: Pick<BeatorajaChartNoteDistribution, 'mainBpm' | 'bpmSegments'> | undefined,
+  chart: BeMusicJSON | undefined,
+  distribution: Pick<BeatorajaChartNoteDistribution, 'mainBPM' | 'bpmSegments'> | undefined,
 ): BeatorajaPlayChartFacts {
   if (chart === undefined) return NO_CHART;
   return {
     bpm: chart.metadata.bpm,
-    ...(distribution !== undefined ? { mainBpm: distribution.mainBpm, bpmSegments: distribution.bpmSegments } : {}),
+    ...(distribution !== undefined ? { mainBPM: distribution.mainBPM, bpmSegments: distribution.bpmSegments } : {}),
     ...(chart.metadata.playLevel !== undefined ? { playLevel: chart.metadata.playLevel } : {}),
-    get minBpm(): number {
-      return resolveChartBpmRange(chart).min;
+    get minBPM(): number {
+      return resolveChartBPMRange(chart).min;
     },
-    get maxBpm(): number {
-      return resolveChartBpmRange(chart).max;
+    get maxBPM(): number {
+      return resolveChartBPMRange(chart).max;
     },
   };
 }

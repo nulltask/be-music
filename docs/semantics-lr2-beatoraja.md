@@ -599,7 +599,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
   - The stored quantity is **`duration`** (visible ms, the green number). HS is derived from it and re-derived when the cover moves ([play/LaneRenderer.java#L145-L151](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L145-L151), [#L206-L210](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L206-L210)).
 - **Kind:** semantic: what the player's number means.
 - **be-music today:**
-  - `resolveHsFixMultiplier` ([`packages/scene-model/src/play-state/hi-speed.ts`](../packages/scene-model/src/play-state/hi-speed.ts)) is chart-relative: it uses `#BASEBPM` or the start BPM.
+  - `resolveHSFixMultiplier` ([`packages/scene-model/src/play-state/hi-speed.ts`](../packages/scene-model/src/play-state/hi-speed.ts)) is chart-relative: it uses `#BASEBPM` or the start BPM.
   - AVERAGE and CONSTANT both use the main BPM.
   - There is no duration-keeping mode, and CONSTANT is not an assist.
 - **Impact:** C; B through the missing CONSTANT assist.
@@ -611,7 +611,7 @@ Already per ruleset: LR2 death border and guts, the LR2 DEATH table (**fixed in 
 
 - **LR2:** cover 0-100 % ([#L460-L471](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L460-L471)), shown in numbers 14/15.
 - **beatoraja:** 0..1, shown per mille, relative to the area above LIFT ([#417](https://github.com/nulltask/be-music/issues/417)).
-- **be-music today:** the beatoraja numbers 14/314 are now per mille (**fixed in [#563](https://github.com/nulltask/be-music/issues/563)**). LR2 numbers 12, 14 and 15 still read 0 ([`packages/lr2-skin/src/state/options.ts`](../packages/lr2-skin/src/state/options.ts) `resolveLr2OptionNumber`).
+- **be-music today:** the beatoraja numbers 14/314 are now per mille (**fixed in [#563](https://github.com/nulltask/be-music/issues/563)**). LR2 numbers 12, 14 and 15 still read 0 ([`packages/lr2-skin/src/state/options.ts`](../packages/lr2-skin/src/state/options.ts) `resolveLR2OptionNumber`).
 - **Impact:** C.
 - **Recommendation:** feed `round(shutter × 100)` to LR2 numbers 14/15 and the offset to 12. The LIFT basis is covered in [#417](https://github.com/nulltask/be-music/issues/417).
 
@@ -832,7 +832,7 @@ Overall shape: two separate state mappings. LR2 CSV skins get LR2 vocabulary ([`
 ### Song-list lamps (JSON/Lua) and N/A numbers
 
 - **beatoraja:**
-  - `songlist.lamp[i]` is indexed by ClearType 0-10 ([skin/json/JsonSelectSkinObjectLoader.java#L83-L92](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/json/JsonSelectSkinObjectLoader.java#L83-L92)).
+  - `songlist.lamp[i]` is indexed by ClearType 0-10 ([skin/json/JSONSelectSkinObjectLoader.java#L83-L92](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/json/JSONSelectSkinObjectLoader.java#L83-L92)).
   - Properties that do not apply return `Integer.MIN_VALUE`, which hides the number ([skin/SkinNumber.java#L138-L143](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/skin/SkinNumber.java#L138-L143)).
 - **be-music today:** only the focused bar's lamp; ref 370 reads 0; many N/A numbers read 0.
 - **Impact:** A/C.

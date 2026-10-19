@@ -1,4 +1,4 @@
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { manualPlay } from '@be-music/player';
 import type { PlaylogInputEvent, PlaylogNote, PlaylogRulesetId } from '@be-music/player/playlog';
 import type { EngineReplay } from './play-scenarios.ts';
@@ -27,7 +27,7 @@ export function createRandom(seed: number): () => number {
 }
 
 export interface FuzzChart {
-  json: BeMusicJson;
+  json: BeMusicJSON;
   /** The play variant to pass the engine; undefined lets it classify the chart (7 / 14 keys). */
   playVariant: '5' | '9' | '24' | undefined;
 }
@@ -39,7 +39,7 @@ export interface FuzzChart {
  */
 export function buildFuzzChart(mode: FuzzMode, random: () => number): FuzzChart {
   const pick = <T>(values: readonly T[]): T => values[Math.floor(random() * values.length)]!;
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   const lnMode = pick([1, 2, 3] as const);
   const mines = random() < 0.4;
   const bpmChange = random() < 0.3;
@@ -66,7 +66,7 @@ export function buildFuzzChart(mode: FuzzMode, random: () => number): FuzzChart 
   const slotsPerMeasure = 16;
   const totalSlots = (3 + Math.floor(random() * 4)) * slotsPerMeasure;
   const density = 0.06 + random() * 0.12;
-  const events: BeMusicJson['events'] = [];
+  const events: BeMusicJSON['events'] = [];
   const at = (slot: number): { measure: number; position: [number, number] } => ({
     measure: 1 + Math.floor(slot / slotsPerMeasure),
     position: [slot % slotsPerMeasure, slotsPerMeasure],

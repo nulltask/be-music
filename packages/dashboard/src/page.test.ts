@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { escapeHtml, pickLocale, renderDashboard, serviceLinks } from './page.ts';
+import { escapeHTML, pickLocale, renderDashboard, serviceLinks } from './page.ts';
 
 describe('serviceLinks', () => {
   test('links the services of the same environment', () => {
@@ -56,8 +56,8 @@ describe('renderDashboard', () => {
   });
 });
 
-describe('escapeHtml', () => {
+describe('escapeHTML', () => {
   test('escapes markup and quotes', () => {
-    expect(escapeHtml(`<a href="x">'&'</a>`)).toBe('&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
+    expect(escapeHTML(`<a href="x">'&'</a>`)).toBe('&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
   });
 });

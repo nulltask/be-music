@@ -44,8 +44,8 @@
           {"id":4,"channel":"12","type":"normal","timeUs":2000000},
           {"id":5,"channel":"16","type":"mine","timeUs":2500000,"damage":10}
         ],
-        "chartFingerprint": "bmfp0:7719c9ad20d70c73e90d53c2051d731e35c4153ad74de8d3945dcb438b9fb7e3",
-        "playFingerprint": "bmfp0:7719c9ad20d70c73e90d53c2051d731e35c4153ad74de8d3945dcb438b9fb7e3",
+        "chartFingerprint": "bmfp0:12bbe4844f4b2afd2cb103491815587fbfc828b7cb58a796005b11ddac8acdfb",
+        "playFingerprint": "bmfp0:12bbe4844f4b2afd2cb103491815587fbfc828b7cb58a796005b11ddac8acdfb",
         "title": "mines",
         "artist": "characterization"
       },

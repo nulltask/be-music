@@ -1,11 +1,11 @@
 import type { CourseView, LibraryChart } from '@be-music/scene-model';
 import { LR2_OP, LR2_TIMER } from '../ids/index.ts';
-import { resolveLr2ChartText, resolveLr2DifficultyOp, resolveLr2KeyModeOp } from './chart.ts';
-import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
-import type { Lr2SceneState } from './scene-state.ts';
+import { resolveLR2ChartText, resolveLR2DifficultyOp, resolveLR2KeyModeOp } from './chart.ts';
+import { resolveLR2CourseNumber, resolveLR2CourseOps, resolveLR2CourseText } from './course.ts';
+import type { LR2SceneState } from './scene-state.ts';
 
 /** What the LR2 decide screen shows: the chart about to be played, and the course it is a stage of. */
-export interface Lr2DecideInput {
+export interface LR2DecideInput {
   /** The chart about to be played. */
   readonly chart: LibraryChart;
   /** The course the chart is a stage of (with the stage being played): the course ops, numbers and texts. */
@@ -22,24 +22,24 @@ const DECIDE_BASE_OPS: readonly number[] = [LR2_OP.OFFLINE, LR2_OP.LOADED];
  * mode (160-164) ops, the chart's texts (10-28) and, for a course stage, the course ops, numbers and texts. It draws
  * no slider.
  */
-export function resolveLr2DecideState(input: Lr2DecideInput): Lr2SceneState {
+export function resolveLR2DecideState(input: LR2DecideInput): LR2SceneState {
   const { chart, course } = input;
   const ops = new Set<number>(DECIDE_BASE_OPS);
   for (const op of input.customOps ?? []) ops.add(op);
-  ops.add(resolveLr2DifficultyOp(chart.chart.metadata.difficulty));
-  ops.add(resolveLr2KeyModeOp(chart));
-  if (course !== undefined) for (const op of resolveLr2CourseOps(course)) ops.add(op);
+  ops.add(resolveLR2DifficultyOp(chart.chart.metadata.difficulty));
+  ops.add(resolveLR2KeyModeOp(chart));
+  if (course !== undefined) for (const op of resolveLR2CourseOps(course)) ops.add(op);
   return {
     ops,
-    number: (num) => (course !== undefined ? resolveLr2CourseNumber(num, course) : undefined),
+    number: (num) => (course !== undefined ? resolveLR2CourseNumber(num, course) : undefined),
     text: (st) =>
-      (course !== undefined ? resolveLr2CourseText(st, course) : undefined) ?? resolveLr2ChartText(st, chart),
+      (course !== undefined ? resolveLR2CourseText(st, course) : undefined) ?? resolveLR2ChartText(st, chart),
     slider: () => undefined,
   };
 }
 
 /** A moment of the decide screen, as its LR2 timers read it; every time is on the clock the screen stamps timers with. */
-export interface Lr2DecideTimerInput {
+export interface LR2DecideTimerInput {
   /** The time now, and when the screen was entered. */
   readonly clock: { readonly nowMs: number; readonly enteredAtMs: number };
   /** When input opens: the skin's `#STARTINPUT` after the entry. */
@@ -52,7 +52,7 @@ export interface Lr2DecideTimerInput {
  * The LR2 timers running on a moment of the decide screen, each with when it started: timer 0 (the scene) from the
  * screen's entry, timer 1 (input) once input has opened, and timer 2 (the fade-out) once the screen is leaving.
  */
-export function resolveLr2DecideTimers(input: Lr2DecideTimerInput): ReadonlyMap<number, number> {
+export function resolveLR2DecideTimers(input: LR2DecideTimerInput): ReadonlyMap<number, number> {
   const timers = new Map<number, number>([[LR2_TIMER.SCENE_START, input.clock.enteredAtMs]]);
   if (input.clock.nowMs >= input.inputOpenAtMs) timers.set(LR2_TIMER.START_INPUT, input.inputOpenAtMs);
   if (input.leaving !== undefined) timers.set(LR2_TIMER.FADE_OUT, input.leaving.atMs);

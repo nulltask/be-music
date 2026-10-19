@@ -8,10 +8,10 @@
  */
 
 import {
-  parseBmsSwBga,
+  parseBMSSwBGA,
   resolveChart,
-  resolveChartReferenceBpm,
-  type BmsSwitchingBga,
+  resolveChartReferenceBPM,
+  type BMSSwitchingBGA,
   type RandomDraws,
   type ResolvedChart,
   createBmsonSamplePlaybackMap,
@@ -20,7 +20,7 @@ import {
   type ChartPlayVariant,
   createBeatAtSecondsResolverFromTimingResolver,
 } from '@be-music/chart';
-import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { resolveBMSBase, type BeMusicEvent, type BeMusicJSON } from '@be-music/json';
 import { preparePlaybackChart, resolvePlayChart, type PreparedPlaybackChartData } from '@be-music/player';
 import {
   isPlayableInputChannel,
@@ -36,13 +36,13 @@ import {
 import type { PlayerGaugeSummary } from '@be-music/player/signals';
 import { createEmptyScore, type GaugeType, type JudgeKind, type ScoreSummary } from '@be-music/player/ruleset';
 import { collectChartVolumeMultipliers } from '../../chart/play-audio.ts';
-import { resolvePoorBgaFallbackKey } from '../../chart/play-bga.ts';
+import { resolvePoorBGAFallbackKey } from '../../chart/play-bga.ts';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
 import {
-  splitNonstopBgaTimeline,
-  toBrowserBgaTimeline,
-  type BgaCue,
-  type NonstopStageBgaTimeline,
+  splitNonstopBGATimeline,
+  toBrowserBGATimeline,
+  type BGACue,
+  type NonstopStageBGATimeline,
 } from '../../chart/bga-timeline.ts';
 import { resolvePlayTempoRange, type PlayTempoRange } from './tempo-range.ts';
 import type { PlaySessionOptions } from './play-options.ts';
@@ -55,7 +55,7 @@ import {
   gaugePercent,
   laneCoversFromPlayOptions,
   reducePlayState,
-  resolveHsFixMultiplier,
+  resolveHSFixMultiplier,
   resolveLibraryChartPlayVariant,
   SHUTTER_DEFAULT,
   type HiSpeedTransition,
@@ -90,7 +90,7 @@ export interface PlayChartContext {
     >
   >;
   song: LibraryChart | undefined;
-  resolvedChart: BeMusicJson | undefined;
+  resolvedChart: BeMusicJSON | undefined;
   resolvedPlayChart: ResolvedChart | undefined;
   randomDraws: RandomDraws | undefined;
   beatAtSeconds: ((seconds: number) => number) | undefined;
@@ -107,7 +107,7 @@ export interface PlayChartContext {
   chartPlayVariant: ChartPlayVariant;
   touchTokenByChannel: Map<string, string> | undefined;
   wavCmdVolumeMultipliers: Map<string, number>;
-  switchingBgas: Map<string, BmsSwitchingBga>;
+  switchingBGAs: Map<string, BMSSwitchingBGA>;
   bmsonSlicePlayback:
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
@@ -116,7 +116,7 @@ export interface PlayChartContext {
   playState: PlayState;
   readonly scrollHiSpeed: HiSpeedTransition;
   readonly longNotes: LongNoteTracker;
-  chartBpmRange: PlayTempoRange | undefined;
+  chartBPMRange: PlayTempoRange | undefined;
   autoScratchChannels: ReadonlySet<string>;
   playMoments: {
     failedAtMs?: number;
@@ -135,11 +135,11 @@ export interface PlayChartContext {
   slowCount: number;
   fullComboFired: boolean;
   timingResolver: TimingResolver | undefined;
-  nonstopBgaTimelines: NonstopStageBgaTimeline[] | undefined;
-  bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] };
-  poorBgaFallbackKey: string | undefined;
-  poorBgaFallbackUntilSeconds: number;
-  hasBga: boolean;
+  nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
+  bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  poorBGAFallbackKey: string | undefined;
+  poorBGAFallbackUntilSeconds: number;
+  hasBGA: boolean;
   displayedScore: number;
   chartEnded: boolean;
   /** The gauge the run plays on (a replay's recorded pick wins). */
@@ -165,13 +165,13 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   // Map lookup; slots without an entry take the unity-gain fast path.
   ctx.wavCmdVolumeMultipliers = collectChartVolumeMultipliers(resolved);
   // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an animated BGA slot. Pre-parse every entry now so
-  // per-frame BGA composition stays a single `Map.get` plus `pickSwitchingBgaFrame` (no per-frame regex / split).
-  ctx.switchingBgas.clear();
-  const base = resolveBmsBase(resolved);
-  for (const [slot, raw] of Object.entries(resolved.bms.swBga)) {
-    const parsed = parseBmsSwBga(raw, base);
+  // per-frame BGA composition stays a single `Map.get` plus `pickSwitchingBGAFrame` (no per-frame regex / split).
+  ctx.switchingBGAs.clear();
+  const base = resolveBMSBase(resolved);
+  for (const [slot, raw] of Object.entries(resolved.bms.swBGA)) {
+    const parsed = parseBMSSwBGA(raw, base);
     if (parsed) {
-      ctx.switchingBgas.set(slot, parsed);
+      ctx.switchingBGAs.set(slot, parsed);
     }
   }
   // Build the chart's playable / landmine / invisible note arrays via the engine's own `preparePlaybackChartData`
@@ -180,7 +180,7 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   // `engineOptions.preparedChart` later, telling the engine to skip its own internal extract pass.
   //
   // This is the structural fix for the whole class of view ↔ engine drift bugs the Phase-4c shared-engine
-  // migration kept tripping over: an `inferBmsLnTypeWhenMissing` flag missing on one side, a
+  // migration kept tripping over: an `inferBmsLNTypeWhenMissing` flag missing on one side, a
   // `bms.controlFlow` array re-resolved on the engine side, a `random1P: 'OFF'` truthy-check evaluating to
   // `false` because `'OFF'` is a non-empty string, a missing `laneModeExtension` mapping PMS to IIDX 10-key
   // DP, … each one shifted the index alignment of the renderer's parallel `this.notes` arrays vs the
@@ -201,7 +201,7 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   const resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: hostPlayVariant,
-    inferBmsLnTypeWhenMissing: true,
+    inferBmsLNTypeWhenMissing: true,
   });
   ctx.resolvedPlayChart = resolvedPlay;
   // The invisible / keysound array is always prepared even when the overlay is off — so the lil-gui toggle can flip
@@ -232,13 +232,13 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
     // same visual lane after the flip.
     if (ctx.options.dpFlip) {
       for (const note of ctx.notes) {
-        note.channel = flipDpChannel(note.channel);
+        note.channel = flipDPChannel(note.channel);
       }
       for (const mine of ctx.mineNotes) {
-        mine.channel = flipDpChannel(mine.channel);
+        mine.channel = flipDPChannel(mine.channel);
       }
       for (const invisible of ctx.invisibleNotes) {
-        invisible.channel = flipDpChannel(invisible.channel);
+        invisible.channel = flipDPChannel(invisible.channel);
       }
     }
     // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
@@ -344,11 +344,11 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   // per PG/GR.
   ctx.gaugeState = createPlaceholderGaugeState(ctx.resolveSelectedGauge(), resolveCourseStartGaugeInput(ctx));
   // The one BPM range of the play: HS-FIX, the HUD and the play log's visible time all take the main BPM from it.
-  ctx.chartBpmRange = resolvePlayTempoRange(
+  ctx.chartBPMRange = resolvePlayTempoRange(
     resolvedPlay,
     resolved.metadata.bpm > 0 ? resolved.metadata.bpm : ctx.song?.bpm,
   );
-  ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBpm(resolved, ctx.song?.bpm));
+  ctx.playState = createChartPlayState(ctx, resolver, resolveChartReferenceBPM(resolved, ctx.song?.bpm));
   // Chart setup, before the notes are on screen — no glide.
   ctx.scrollHiSpeed.jump(ctx.playState.view.hiSpeed.drawn);
   ctx.fastCount = 0;
@@ -362,17 +362,17 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
   ctx.autoScratchChannels = resolveAutoScratchEnabled(ctx)
     ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
     : new Set();
-  ctx.bgaTimeline = toBrowserBgaTimeline(resolvedPlay.bga);
-  ctx.nonstopBgaTimelines =
+  ctx.bgaTimeline = toBrowserBGATimeline(resolvedPlay.bga);
+  ctx.nonstopBGATimelines =
     ctx.options.nonstop !== undefined
-      ? splitNonstopBgaTimeline(ctx.bgaTimeline, ctx.options.nonstop.stages)
+      ? splitNonstopBGATimeline(ctx.bgaTimeline, ctx.options.nonstop.stages)
       : undefined;
   // BMS spec — when `#BMP00` exists (and `#POORBGA` is not 2), BMP00 becomes the implicit POOR placeholder until an
   // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
   // black POOR plate on misses for charts that rely on this convention.
-  ctx.poorBgaFallbackKey = resolvePoorBgaFallbackKey(resolved);
-  ctx.poorBgaFallbackUntilSeconds = ctx.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
-  ctx.hasBga = ctx.bgaTimeline.base.length > 0 || ctx.bgaTimeline.layer.length > 0 || ctx.bgaTimeline.poor.length > 0;
+  ctx.poorBGAFallbackKey = resolvePoorBGAFallbackKey(resolved);
+  ctx.poorBGAFallbackUntilSeconds = ctx.bgaTimeline.poor[0]?.seconds ?? Number.POSITIVE_INFINITY;
+  ctx.hasBGA = ctx.bgaTimeline.base.length > 0 || ctx.bgaTimeline.layer.length > 0 || ctx.bgaTimeline.poor.length > 0;
 }
 
 /**
@@ -382,23 +382,23 @@ export function prepareSong(ctx: PlayChartContext, song: LibraryChart): void {
  * chart's HS-FIX, and each side's lane covers from the play options.
  *
  * HS-FIX keeps the player's hi-speed at the chart's reference BPM (`#BASEBPM`, else the start BPM:
- * `resolveChartReferenceBpm` prefers `#BASEBPM` so a chart whose `#BPM` is its peak or average still calibrates at the
- * speed the author intended) and rescales it at the chart's MAXBPM, MINBPM or main BPM (`resolveHsFixMultiplier`), the
- * main BPM being the play's (`chartBpmRange`), which the play log's visible time reads too.
+ * `resolveChartReferenceBPM` prefers `#BASEBPM` so a chart whose `#BPM` is its peak or average still calibrates at the
+ * speed the author intended) and rescales it at the chart's MAXBPM, MINBPM or main BPM (`resolveHSFixMultiplier`), the
+ * main BPM being the play's (`chartBPMRange`), which the play log's visible time reads too.
  */
 function createChartPlayState(
   ctx: PlayChartContext,
   resolver: TimingResolver,
-  referenceBpm: number | undefined,
+  referenceBPM: number | undefined,
 ): PlayState {
   const hsFix = ctx.options.hsFix ?? 'OFF';
-  const mainBpm = ctx.chartBpmRange?.mainBpm;
+  const mainBPM = ctx.chartBPMRange?.mainBPM;
   const hiSpeed = createHiSpeedState({
     hiSpeed: ctx.playState.view.hiSpeed.player,
-    multiplier: resolveHsFixMultiplier(hsFix, {
-      ...(referenceBpm !== undefined ? { referenceBpm } : {}),
+    multiplier: resolveHSFixMultiplier(hsFix, {
+      ...(referenceBPM !== undefined ? { referenceBPM } : {}),
       bpms: resolver.tempoPoints.map((point) => point.bpm),
-      ...(mainBpm !== undefined ? { mainBpm } : {}),
+      ...(mainBPM !== undefined ? { mainBPM } : {}),
     }),
     locked: ctx.options.hiSpeedLocked === true,
   });
@@ -488,7 +488,7 @@ export function extractChartExtension(chartPath: string | undefined): string | u
  * apply DP FLIP at chart-prepare time. Non-side channels (BGM, BGA, any single-character channel) pass through
  * unchanged.
  */
-export function flipDpChannel(channel: string): string {
+export function flipDPChannel(channel: string): string {
   if (channel.length !== 2) return channel;
   const side = channel[0];
   const lane = channel[1]!;

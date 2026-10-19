@@ -79,7 +79,7 @@ export class RecordsService {
   }
 
   /** The SHA-256 half of {@link resolveChartHashes}. */
-  public async resolveChartSha256(song: LibraryChart): Promise<string | undefined> {
+  public async resolveChartSHA256(song: LibraryChart): Promise<string | undefined> {
     return (await this.resolveChartHashes(song))?.sha256;
   }
 

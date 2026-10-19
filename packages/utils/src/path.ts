@@ -6,11 +6,11 @@ import { isMaliciousAssetPath } from './core.ts';
 // browser bundle. Vite externalises `node:`-prefixed imports for browser targets, but only emits a runtime error
 // if the externalised symbol is actually accessed; keeping these lazy confines that to the Node-specific call
 // paths the browser never exercises.
-type NodeFsPromises = typeof import('node:fs/promises');
+type NodeFSPromises = typeof import('node:fs/promises');
 type NodePath = typeof import('node:path');
-let nodeFsPromisesPromise: Promise<NodeFsPromises> | undefined;
+let nodeFSPromisesPromise: Promise<NodeFSPromises> | undefined;
 let nodePathPromise: Promise<NodePath> | undefined;
-const loadNodeFsPromises = (): Promise<NodeFsPromises> => (nodeFsPromisesPromise ??= import('node:fs/promises'));
+const loadNodeFSPromises = (): Promise<NodeFSPromises> => (nodeFSPromisesPromise ??= import('node:fs/promises'));
 const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
 
 /**
@@ -58,7 +58,7 @@ export async function resolveFirstExistingPath(
 async function pathExists(path: string, signal?: AbortSignal): Promise<boolean> {
   try {
     throwIfAborted(signal);
-    const { access } = await loadNodeFsPromises();
+    const { access } = await loadNodeFSPromises();
     await access(path);
     throwIfAborted(signal);
     return true;

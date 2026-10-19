@@ -79,7 +79,7 @@ export interface SelectPointerContext {
   /** Opens the folder or starts the bar under the cursor (`SelectSession.activateFocused`). */
   activateFocused(): void;
   handleThemePointerDown(virtualX: number, virtualY: number): void;
-  startSelectBgm(): Promise<void>;
+  startSelectBGM(): Promise<void>;
 }
 
 /** The select screen's pointer input. See the module comment. */
@@ -291,7 +291,7 @@ export class SelectPointer {
     // Retry BGM start on the first user gesture — browsers gate `AudioContext.resume()` behind a user-input event, so
     // the start on entering the scene may have left the context suspended. Cheap to call repeatedly
     // (early-returns when a source is already playing).
-    void this.ctx.startSelectBgm();
+    void this.ctx.startSelectBGM();
     // A finger may be starting a swipe over the list, so its tap waits for the lift (`handlePointerUp`).
     if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       if (this.touchGesture !== undefined) return;

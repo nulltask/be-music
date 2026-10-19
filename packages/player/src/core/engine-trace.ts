@@ -1,9 +1,9 @@
 import {
   createBeatResolver,
-  createBpmTimeline,
+  createBPMTimeline,
   createStopBeatWindows,
-  isBmsBgmVolumeChangeChannel,
-  isBmsKeyVolumeChangeChannel,
+  isBmsBGMVolumeChangeChannel,
+  isBMSKeyVolumeChangeChannel,
   type ResolvedChart,
   type TimedSampleTrigger,
   type TimingResolver,
@@ -11,16 +11,16 @@ import {
 import type { LogLevel } from '@be-music/utils/log';
 import {
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
 } from '@be-music/json';
 import { type LaneBinding } from './lane-layout.ts';
 import { formatSeconds } from '../utils.ts';
 import { type PlaybackStateLogger } from './playback-support.ts';
 import { IIDX_EX_SCORE_PER_PGREAT, LR2_MONEY_SCORE_MAX } from './scoring.ts';
-import { resolveBmsJudgeWindowsMsForExRankValue } from './judge-window.ts';
+import { resolveBMSJudgeWindowsMsForExRankValue } from './judge-window.ts';
 import { type JudgeWindowSetUs } from '../ruleset/index.ts';
 import { RULESET_JUDGE_KINDS } from './judge-rules.ts';
 import { REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS } from './engine-clock.ts';
@@ -40,16 +40,16 @@ const basename = (path: string): string => {
   return lastSep === -1 ? trimmed : trimmed.slice(lastSep + 1);
 };
 
-type LoggedBgaLayer = 'base' | 'poor' | 'layer' | 'layer2';
+type LoggedBGALayer = 'base' | 'poor' | 'layer' | 'layer2';
 
-interface LoggedBgaCue {
+interface LoggedBGACue {
   seconds: number;
   key?: string;
   resourcePath?: string;
-  layer: LoggedBgaLayer;
+  layer: LoggedBGALayer;
 }
 
-interface NoTuiScheduledPlaybackEvent {
+interface NoTUIScheduledPlaybackEvent {
   seconds: number;
   order: number;
   text: string;
@@ -59,7 +59,7 @@ type RuntimeEventFieldValue = string | number | boolean;
 
 type RuntimeEventField = readonly [key: string, value: RuntimeEventFieldValue | undefined];
 
-export interface NoTuiPlaybackEventTracer {
+export interface NoTUIPlaybackEventTracer {
   flushUntil: (seconds: number) => void;
   logPoorTriggered: (seconds: number) => void;
   logPoorCleared: (seconds: number) => void;
@@ -213,7 +213,7 @@ export function writeSampleStopEventLog(
   ]);
 }
 
-export function createNoTuiPlaybackStateLogger(params: {
+export function createNoTUIPlaybackStateLogger(params: {
   writeOutput: (text: string) => void;
   summary: PlayerSummary;
   /**
@@ -294,9 +294,9 @@ export function writeRealtimeVolumeEventLog(
   event: BeMusicEvent,
 ): void {
   const normalizedChannel = normalizeChannel(event.channel);
-  const target = isBmsKeyVolumeChangeChannel(normalizedChannel)
+  const target = isBMSKeyVolumeChangeChannel(normalizedChannel)
     ? 'key'
-    : isBmsBgmVolumeChangeChannel(normalizedChannel)
+    : isBmsBGMVolumeChangeChannel(normalizedChannel)
       ? 'bgm'
       : 'master';
   writeRuntimeEventLog(writeOutput, 'volume-change', [
@@ -320,7 +320,7 @@ function normalizeLoggedResourcePath(resourcePath: string): string {
 }
 
 function resolveLoggedMeasureLengthTimeline(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   resolver: TimingResolver,
   beatResolver: ReturnType<typeof createBeatResolver>,
 ): Array<{ measure: number; length: number; seconds: number }> {
@@ -366,16 +366,16 @@ function resolveLoggedMeasureLengthTimeline(
   return timeline;
 }
 
-function buildLoggedBgaCueTimeline(
+function buildLoggedBGACueTimeline(
   sortedEvents: readonly BeMusicEvent[],
   resolver: TimingResolver,
   resources: Record<string, string>,
   channel: string,
-  layer: LoggedBgaLayer,
+  layer: LoggedBGALayer,
   base: 36 | 62 = 36,
-): LoggedBgaCue[] {
+): LoggedBGACue[] {
   const normalizedChannel = normalizeChannel(channel);
-  const timeline: LoggedBgaCue[] = [];
+  const timeline: LoggedBGACue[] = [];
   for (const event of sortedEvents) {
     if (normalizeChannel(event.channel) !== normalizedChannel) {
       continue;
@@ -392,7 +392,7 @@ function buildLoggedBgaCueTimeline(
   return timeline;
 }
 
-function findActiveLoggedBgaCue(timeline: readonly LoggedBgaCue[], seconds: number): LoggedBgaCue | undefined {
+function findActiveLoggedBGACue(timeline: readonly LoggedBGACue[], seconds: number): LoggedBGACue | undefined {
   let low = 0;
   let high = timeline.length - 1;
   let answer = -1;
@@ -410,7 +410,7 @@ function findActiveLoggedBgaCue(timeline: readonly LoggedBgaCue[], seconds: numb
   return answer >= 0 ? timeline[answer] : undefined;
 }
 
-function formatLoggedBgaCueText(cue: LoggedBgaCue): string {
+function formatLoggedBGACueText(cue: LoggedBGACue): string {
   if (!cue.key) {
     return createRuntimeEventLine('bga-cue', [
       ['time', formatSeconds(cue.seconds)],
@@ -465,7 +465,7 @@ function createScheduledPlaybackEvent(
   seconds: number,
   order: number,
   text: string,
-): NoTuiScheduledPlaybackEvent | undefined {
+): NoTUIScheduledPlaybackEvent | undefined {
   if (!Number.isFinite(seconds)) {
     return undefined;
   }
@@ -477,14 +477,14 @@ function createScheduledPlaybackEvent(
 }
 
 function mergeScheduledPlaybackEventGroups(
-  groups: ReadonlyArray<ReadonlyArray<NoTuiScheduledPlaybackEvent>>,
-): NoTuiScheduledPlaybackEvent[] {
+  groups: ReadonlyArray<ReadonlyArray<NoTUIScheduledPlaybackEvent>>,
+): NoTUIScheduledPlaybackEvent[] {
   const cursors = Array.from({ length: groups.length }, () => 0);
-  const merged: NoTuiScheduledPlaybackEvent[] = [];
+  const merged: NoTUIScheduledPlaybackEvent[] = [];
 
   while (true) {
     let selectedGroupIndex = -1;
-    let selectedEvent: NoTuiScheduledPlaybackEvent | undefined;
+    let selectedEvent: NoTUIScheduledPlaybackEvent | undefined;
 
     for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
       const event = groups[groupIndex]?.[cursors[groupIndex] ?? 0];
@@ -512,7 +512,7 @@ function mergeScheduledPlaybackEventGroups(
   return merged;
 }
 
-export function createNoopPlaybackEventTracer(): NoTuiPlaybackEventTracer {
+export function createNoopPlaybackEventTracer(): NoTUIPlaybackEventTracer {
   return {
     flushUntil: () => undefined,
     logPoorTriggered: () => undefined,
@@ -520,11 +520,11 @@ export function createNoopPlaybackEventTracer(): NoTuiPlaybackEventTracer {
   };
 }
 
-export function createNoTuiPlaybackEventTracer(params: {
+export function createNoTUIPlaybackEventTracer(params: {
   resolved: ResolvedChart;
   writeOutput: (text: string) => void;
   judgeWindowMs?: number;
-}): NoTuiPlaybackEventTracer {
+}): NoTUIPlaybackEventTracer {
   const { resolved, writeOutput, judgeWindowMs } = params;
   const json = resolved.source;
   const resolver = resolved.timing;
@@ -543,8 +543,8 @@ export function createNoTuiPlaybackEventTracer(params: {
         ]),
       ),
     )
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
-  const bpmEvents = createBpmTimeline(json, resolver)
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
+  const bpmEvents = createBPMTimeline(json, resolver)
     .map((point) =>
       createScheduledPlaybackEvent(
         point.seconds,
@@ -555,7 +555,7 @@ export function createNoTuiPlaybackEventTracer(params: {
         ]),
       ),
     )
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
   const scrollEvents = resolved.scroll
     .map((point) => {
       const seconds = resolver.beatToSeconds(point.beat);
@@ -568,7 +568,7 @@ export function createNoTuiPlaybackEventTracer(params: {
         ]),
       );
     })
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
   const speedEvents = resolved.speed
     .map((point) => {
       const seconds = resolver.beatToSeconds(point.beat);
@@ -581,7 +581,7 @@ export function createNoTuiPlaybackEventTracer(params: {
         ]),
       );
     })
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
   const stopEvents = createStopBeatWindows(resolver)
     .flatMap((window) => [
       createScheduledPlaybackEvent(
@@ -602,10 +602,10 @@ export function createNoTuiPlaybackEventTracer(params: {
         ]),
       ),
     ])
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
   const judgeRankEvents = resolved.judgeRank.changes
     .map((change) => {
-      const badWindow = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, judgeWindowMs).bad;
+      const badWindow = resolveBMSJudgeWindowsMsForExRankValue(change.exRankValue, judgeWindowMs).bad;
       return createScheduledPlaybackEvent(
         change.seconds,
         nextOrder++,
@@ -616,10 +616,10 @@ export function createNoTuiPlaybackEventTracer(params: {
         ]),
       );
     })
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
 
-  const idBase = resolveBmsBase(json);
-  const baseBgaTimeline = buildLoggedBgaCueTimeline(
+  const idBase = resolveBMSBase(json);
+  const baseBGATimeline = buildLoggedBGACueTimeline(
     sortedEvents,
     resolver,
     json.resources.bmp,
@@ -627,7 +627,7 @@ export function createNoTuiPlaybackEventTracer(params: {
     'base',
     idBase,
   );
-  const poorBgaTimeline = buildLoggedBgaCueTimeline(
+  const poorBGATimeline = buildLoggedBGACueTimeline(
     sortedEvents,
     resolver,
     json.resources.bmp,
@@ -635,7 +635,7 @@ export function createNoTuiPlaybackEventTracer(params: {
     'poor',
     idBase,
   );
-  const layerBgaTimeline = buildLoggedBgaCueTimeline(
+  const layerBGATimeline = buildLoggedBGACueTimeline(
     sortedEvents,
     resolver,
     json.resources.bmp,
@@ -643,7 +643,7 @@ export function createNoTuiPlaybackEventTracer(params: {
     'layer',
     idBase,
   );
-  const layer2BgaTimeline = buildLoggedBgaCueTimeline(
+  const layer2BGATimeline = buildLoggedBGACueTimeline(
     sortedEvents,
     resolver,
     json.resources.bmp,
@@ -651,18 +651,18 @@ export function createNoTuiPlaybackEventTracer(params: {
     'layer2',
     idBase,
   );
-  const baseBgaEvents = baseBgaTimeline
-    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBgaCueText(cue)))
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
-  const poorBgaEvents = poorBgaTimeline
-    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBgaCueText(cue)))
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
-  const layerBgaEvents = layerBgaTimeline
-    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBgaCueText(cue)))
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
-  const layer2BgaEvents = layer2BgaTimeline
-    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBgaCueText(cue)))
-    .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
+  const baseBGAEvents = baseBGATimeline
+    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBGACueText(cue)))
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
+  const poorBGAEvents = poorBGATimeline
+    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBGACueText(cue)))
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
+  const layerBGAEvents = layerBGATimeline
+    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBGACueText(cue)))
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
+  const layer2BGAEvents = layer2BGATimeline
+    .map((cue) => createScheduledPlaybackEvent(cue.seconds, nextOrder++, formatLoggedBGACueText(cue)))
+    .filter((event): event is NoTUIScheduledPlaybackEvent => event !== undefined);
   const scheduledEvents = mergeScheduledPlaybackEventGroups([
     measureLengthEvents,
     bpmEvents,
@@ -670,26 +670,26 @@ export function createNoTuiPlaybackEventTracer(params: {
     speedEvents,
     stopEvents,
     judgeRankEvents,
-    baseBgaEvents,
-    poorBgaEvents,
-    layerBgaEvents,
-    layer2BgaEvents,
+    baseBGAEvents,
+    poorBGAEvents,
+    layerBGAEvents,
+    layer2BGAEvents,
   ]);
 
   // LR2 starts its miss layer from `#BMP00`; only `#POORBGA 2` (no POOR image) turns that off, and a missing,
   // unparsable or out-of-range value is `0`, the usual behaviour.
-  const shouldUsePoorBmp00Fallback =
-    (json.bms.poorBga === undefined || Number.parseInt(json.bms.poorBga.trim(), 10) !== 2) &&
+  const shouldUsePoorBMP00Fallback =
+    (json.bms.poorBGA === undefined || Number.parseInt(json.bms.poorBGA.trim(), 10) !== 2) &&
     typeof json.resources.bmp['00'] === 'string' &&
     json.resources.bmp['00'].length > 0;
-  const poorFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;
+  const poorFallbackKey = shouldUsePoorBMP00Fallback ? '00' : undefined;
   const poorFallbackResourcePath = poorFallbackKey ? json.resources.bmp[poorFallbackKey] : undefined;
-  const poorFallbackUntilSeconds = poorBgaTimeline[0]?.seconds ?? Number.POSITIVE_INFINITY;
+  const poorFallbackUntilSeconds = poorBGATimeline[0]?.seconds ?? Number.POSITIVE_INFINITY;
   let cursor = 0;
   let poorActive = false;
 
-  const resolvePoorCueAt = (seconds: number): LoggedBgaCue | undefined => {
-    const activeCue = findActiveLoggedBgaCue(poorBgaTimeline, seconds);
+  const resolvePoorCueAt = (seconds: number): LoggedBGACue | undefined => {
+    const activeCue = findActiveLoggedBGACue(poorBGATimeline, seconds);
     if (activeCue?.key) {
       return activeCue;
     }

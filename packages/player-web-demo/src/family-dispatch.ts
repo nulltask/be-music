@@ -1,7 +1,7 @@
 import type { SkinFamilyId } from '@be-music/player-web/skin';
 import type { BeatorajaThemeBundle } from '@be-music/player-web/skin';
 import type { LibraryChart } from '@be-music/scene-model';
-import { pickLr2PlaySkin, type Lr2PlaySkinMap, type Lr2Skin } from '@be-music/lr2-skin';
+import { pickLR2PlaySkin, type LR2PlaySkinMap, type LR2Skin } from '@be-music/lr2-skin';
 import type { SkinFamilyOverride, SkinFamilySceneKind } from './types.ts';
 import { canPlaySongBeatoraja } from './chart-shape.ts';
 
@@ -12,10 +12,10 @@ import { canPlaySongBeatoraja } from './chart-shape.ts';
  */
 export interface FamilyDispatchState {
   readonly beatorajaTheme: BeatorajaThemeBundle | undefined;
-  readonly selectSkin: Lr2Skin | undefined;
-  readonly decideSkin: Lr2Skin | undefined;
-  readonly resultSkin: Lr2Skin | undefined;
-  readonly playSkins: Lr2PlaySkinMap;
+  readonly selectSkin: LR2Skin | undefined;
+  readonly decideSkin: LR2Skin | undefined;
+  readonly resultSkin: LR2Skin | undefined;
+  readonly playSkins: LR2PlaySkinMap;
   readonly skinFamilyOverride: SkinFamilyOverride;
 }
 
@@ -44,14 +44,14 @@ export function availableFamiliesForScene(
       available.add('beatoraja');
     }
   }
-  // LR2 availability per scene. The play scene needs an LR2 skin for the chart's variant — if `pickLr2PlaySkin`
+  // LR2 availability per scene. The play scene needs an LR2 skin for the chart's variant — if `pickLR2PlaySkin`
   // returns `undefined` the play path would fall through to the default-family scene anyway, so it's correct to
   // mark LR2 unavailable here. The other scenes consult the slot directly because every LR2 theme can ship a
   // partial set (e.g. a play-only theme has no `selectSkin`).
   if (scene === 'select' && state.selectSkin !== undefined) available.add('lr2');
   else if (scene === 'decide' && state.decideSkin !== undefined) available.add('lr2');
   else if (scene === 'result' && state.resultSkin !== undefined) available.add('lr2');
-  else if (scene === 'gameplay' && song !== undefined && pickLr2PlaySkin(state.playSkins, song) !== undefined) {
+  else if (scene === 'gameplay' && song !== undefined && pickLR2PlaySkin(state.playSkins, song) !== undefined) {
     available.add('lr2');
   }
   return available;
@@ -85,17 +85,17 @@ export function pickActiveFamilyForScene(
 }
 
 /**
- * Subset of {@link FamilyDispatchState} {@link hasAnyLr2Skin} actually reads. Lets callers pass a snapshot that
+ * Subset of {@link FamilyDispatchState} {@link hasAnyLR2Skin} actually reads. Lets callers pass a snapshot that
  * doesn't carry the beatoraja / override fields (e.g. when probing inside `rebuildSkinFamilyPicker`).
  */
-export type Lr2SkinPresence = Pick<FamilyDispatchState, 'selectSkin' | 'decideSkin' | 'resultSkin' | 'playSkins'>;
+export type LR2SkinPresence = Pick<FamilyDispatchState, 'selectSkin' | 'decideSkin' | 'resultSkin' | 'playSkins'>;
 
 /**
  * Returns `true` when any LR2 skin asset is loaded — used by `rebuildSkinFamilyPicker` to decide whether the
  * `'LR2'` dropdown entry should be enabled. A play-only theme without `selectSkin` still counts: the gameplay
  * scene will paint LR2 chrome even though the select stays on the default family.
  */
-export function hasAnyLr2Skin(state: Lr2SkinPresence): boolean {
+export function hasAnyLR2Skin(state: LR2SkinPresence): boolean {
   if (state.selectSkin !== undefined) return true;
   if (state.decideSkin !== undefined) return true;
   if (state.resultSkin !== undefined) return true;

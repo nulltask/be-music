@@ -5,7 +5,7 @@ import {
   loadSongCollectionFromFiles,
   resolveChartAsset,
   resolveChartAudioAsset,
-  resolveChartBgaAsset,
+  resolveChartBGAAsset,
   resolveChartImageAsset,
 } from './collection.ts';
 import { resolveChart } from '@be-music/chart';
@@ -81,7 +81,7 @@ describe('loadSongCollectionFromFiles with deferred drop handles', () => {
 
 describe('loadSongCollectionFromFiles note counts', () => {
   const engineScorableNotes = (path: string, text: string): number =>
-    preparePlaybackChart(resolveChart(parseChart(text, path), { chartPath: path, inferBmsLnTypeWhenMissing: true }))
+    preparePlaybackChart(resolveChart(parseChart(text, path), { chartPath: path, inferBmsLNTypeWhenMissing: true }))
       .scorableNotes.length;
 
   test.each([
@@ -349,12 +349,12 @@ describe('resolveChartImageAsset', () => {
   });
 });
 
-describe('resolveChartBgaAsset', () => {
+describe('resolveChartBGAAsset', () => {
   test('finds a video re-encoded under another video extension, and names it', () => {
     const MP4_BYTES = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70]);
     const source = makeAssetSource({ 'Song/_bga.mp4': MP4_BYTES });
-    expect(resolveChartBgaAsset(source, 'Song/main.bms', '_bga.mpg')).toEqual({ entry: MP4_BYTES, path: '_bga.mp4' });
-    expect(resolveChartBgaAsset(source, 'Song/main.bms', '_bga.wmv')?.path).toBe('_bga.mp4');
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', '_bga.mpg')).toEqual({ entry: MP4_BYTES, path: '_bga.mp4' });
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', '_bga.wmv')?.path).toBe('_bga.mp4');
   });
 
   test('prefers the declared file, then browser-native containers', () => {
@@ -362,14 +362,14 @@ describe('resolveChartBgaAsset', () => {
     const MP4 = new Uint8Array([2]);
     const WMV = new Uint8Array([3]);
     const both = makeAssetSource({ 'Song/m.mpg': MPG, 'Song/m.mp4': MP4 });
-    expect(resolveChartBgaAsset(both, 'Song/main.bms', 'm.mpg')?.path).toBe('m.mpg');
+    expect(resolveChartBGAAsset(both, 'Song/main.bms', 'm.mpg')?.path).toBe('m.mpg');
     const legacy = makeAssetSource({ 'Song/m.wmv': WMV, 'Song/m.mp4': MP4 });
-    expect(resolveChartBgaAsset(legacy, 'Song/main.bms', 'm.avi')?.path).toBe('m.mp4');
+    expect(resolveChartBGAAsset(legacy, 'Song/main.bms', 'm.avi')?.path).toBe('m.mp4');
   });
 
   test('still never answers a video with an image', () => {
     const source = makeAssetSource({ 'Song/m.png': new Uint8Array([0x89]) });
-    expect(resolveChartBgaAsset(source, 'Song/main.bms', 'm.mpg')).toBeUndefined();
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', 'm.mpg')).toBeUndefined();
   });
 });
 
@@ -387,7 +387,7 @@ describe('parent-folder retry (LR2)', () => {
     });
     const chart = 'Pack/Song/差分用/hard.bms';
     expect(resolveChartAudioAsset(source, chart, 'kick.wav')).toBe(OGG);
-    expect(resolveChartBgaAsset(source, chart, '_bga.mpg')).toEqual({ entry: MP4, path: '_bga.mp4' });
+    expect(resolveChartBGAAsset(source, chart, '_bga.mpg')).toEqual({ entry: MP4, path: '_bga.mp4' });
     expect(resolveChartImageAsset(source, chart, 'stage.bmp')).toBe(PNG);
     expect(resolveChartAsset(source, chart, 'stage.png')).toBe(PNG);
   });

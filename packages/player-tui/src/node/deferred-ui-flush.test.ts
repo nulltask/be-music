@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
-import { createDeferredUiFlush } from './deferred-ui-flush.ts';
+import { createDeferredUIFlush } from './deferred-ui-flush.ts';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -9,7 +9,7 @@ describe('deferred ui flush', () => {
   test('defers flush work and coalesces repeated frame marks', async () => {
     vi.useFakeTimers();
     const flushSpy = vi.fn();
-    const deferred = createDeferredUiFlush(flushSpy);
+    const deferred = createDeferredUIFlush(flushSpy);
 
     deferred.markFrameDirty();
     deferred.markFrameDirty();
@@ -25,7 +25,7 @@ describe('deferred ui flush', () => {
   test('flushes frame and command dirties together in one asynchronous pass', async () => {
     vi.useFakeTimers();
     const flushSpy = vi.fn();
-    const deferred = createDeferredUiFlush(flushSpy);
+    const deferred = createDeferredUIFlush(flushSpy);
 
     deferred.markFrameDirty();
     deferred.markCommandsDirty();

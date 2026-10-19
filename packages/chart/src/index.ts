@@ -52,13 +52,13 @@ export {
 export {
   createBeatAtSecondsResolver,
   createBeatAtSecondsResolverFromTimingResolver,
-  createBpmTimeline,
+  createBPMTimeline,
   createMeasureBoundariesBeats,
   createMeasureTimeline,
   createScrollTimeline,
   createSpeedTimeline,
   createStopBeatWindows,
-  type BpmTimelinePoint,
+  type BPMTimelinePoint,
   type MeasureTimelinePoint,
   type ScrollTimelinePoint,
   type SpeedTimelinePoint,
@@ -66,11 +66,11 @@ export {
 } from './timelines.ts';
 
 export {
-  buildBgaTimelines,
-  buildBmsBgaTimeline,
-  type BgaCue,
-  type BgaTimelines,
-  type BgaTimingResolver,
+  buildBGATimelines,
+  buildBmsBGATimeline,
+  type BGACue,
+  type BGATimelines,
+  type BGATimingResolver,
 } from './bga.ts';
 
 export {
@@ -122,8 +122,8 @@ export {
   type FingerprintTimelineType,
   type FingerprintTotal,
 } from './fingerprint.ts';
-export { resolveChartMainBpm, type MainBpmChart } from './main-bpm.ts';
-export { canonicalizeJsonValue } from './fingerprint-document.ts';
+export { resolveChartMainBPM, type MainBPMChart } from './main-bpm.ts';
+export { canonicalizeJSONValue } from './fingerprint-document.ts';
 export { sha256Hex } from './sha256.ts';
 
 export {
@@ -139,10 +139,10 @@ export {
 export { resolveChartPlayVariant, type ChartPlayVariant, type ChartPlayVariantInput } from './play-variant.ts';
 
 export {
-  isBmsBgmVolumeChangeChannel,
-  isBmsDynamicVolumeChangeChannel,
-  isBmsKeyVolumeChangeChannel,
-  isBmsLongNoteChannel,
+  isBmsBGMVolumeChangeChannel,
+  isBMSDynamicVolumeChangeChannel,
+  isBMSKeyVolumeChangeChannel,
+  isBMSLongNoteChannel,
   isLandmineChannel,
   isPlayableChannel,
   isPlayLaneSoundChannel,
@@ -150,46 +150,46 @@ export {
   isScrollChannel,
   isStopChannel,
   isTempoChannel,
-  mapBmsLongNoteChannelToPlayable,
-  parseBmsDynamicVolumeGain,
-  parseBpmFrom03Token,
+  mapBMSLongNoteChannelToPlayable,
+  parseBMSDynamicVolumeGain,
+  parseBPMFrom03Token,
 } from './channels.ts';
 
-export { resolveChartReferenceBpm } from './reference-bpm.ts';
+export { resolveChartReferenceBPM } from './reference-bpm.ts';
 
 export {
-  collectBmsExWavVolumeMultipliers,
-  collectBmsWavCmdVolumeMultipliers,
-  exWavVolumeCentibelsToLinearGain,
-  parseBmsExWav,
-  parseBmsWavCmd,
-  usesMonophonicWavPlayback,
-  volWavToLinearGain,
+  collectBMSExWAVVolumeMultipliers,
+  collectBmsWAVCmdVolumeMultipliers,
+  exWAVVolumeCentibelsToLinearGain,
+  parseBMSExWAV,
+  parseBmsWAVCmd,
+  usesMonophonicWAVPlayback,
+  volWAVToLinearGain,
   wavCmdVolumeByteToLinearGain,
-  type BmsExWav,
-  type BmsWavCmdEntry,
-  type BmsWavCmdParam,
+  type BMSExWAV,
+  type BmsWAVCmdEntry,
+  type BmsWAVCmdParam,
 } from './wav-directives.ts';
 
 export {
-  parseBmsArgb,
-  parseBmsBga,
-  parseBmsExBmp,
-  parseBmsSwBga,
-  pickSwitchingBgaFrame,
-  resolveBmsBmpArgb,
-  type BmsArgb,
-  type BmsExBmp,
-  type BmsSubRegionBga,
-  type BmsSwitchingBga,
+  parseBmsARGB,
+  parseBmsBGA,
+  parseBMSExBMP,
+  parseBMSSwBGA,
+  pickSwitchingBGAFrame,
+  resolveBmsBmpARGB,
+  type BmsARGB,
+  type BMSExBMP,
+  type BMSSubRegionBGA,
+  type BMSSwitchingBGA,
 } from './bmp-directives.ts';
 
 export {
-  collectLnobjEndEvents,
-  resolveBmsLongNotes,
-  resolveLnobjLongNotes,
-  type BmsLongNote,
-  type BmsLongNoteResolution,
-  type LnobjLongNoteResolution,
-  type ResolveBmsLongNotesOptions,
+  collectLNOBJEndEvents,
+  resolveBMSLongNotes,
+  resolveLNOBJLongNotes,
+  type BMSLongNote,
+  type BMSLongNoteResolution,
+  type LNOBJLongNoteResolution,
+  type ResolveBMSLongNotesOptions,
 } from './long-notes.ts';

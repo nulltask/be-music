@@ -1,6 +1,6 @@
 import { Graphics, type Container } from 'pixi.js';
 import type {
-  BeatorajaBpmGraphElement,
+  BeatorajaBPMGraphElement,
   BeatorajaDestinationGroup,
   BeatorajaJudgeGraphElement,
 } from '@be-music/beatoraja-skin';
@@ -9,10 +9,10 @@ import type { destinationToSpriteProps } from '../../../skin/beatoraja/render.ts
 import type { BeatorajaPlaySkinViewOptions } from './options.ts';
 import { judgeColorFor } from './timing-graphs.ts';
 
-export interface BpmGraphEntry {
+export interface BPMGraphEntry {
   kind: 'bpmgraph';
   group: BeatorajaDestinationGroup;
-  element: BeatorajaBpmGraphElement;
+  element: BeatorajaBPMGraphElement;
   /** Pixi `Graphics` painting the BPM curve. Same rebuild-on-change pattern as polyline-graph. */
   graphics: Graphics;
   /**
@@ -29,7 +29,7 @@ export interface BpmGraphEntry {
    */
   lastPointCount: number;
   /**
-   * Signature of the most-recent BPM graph data — `${segments.length}|${mainBpm}|...`.
+   * Signature of the most-recent BPM graph data — `${segments.length}|${mainBPM}|...`.
    * Used by the rich segment-data path to skip rebuilds when the underlying chart data
    * hasn't changed (cursor moves through a folder still hit the same focused chart).
    */
@@ -48,7 +48,7 @@ export interface JudgeGraphEntry {
   graphics: Graphics;
   /**
    * Per-frame playhead cursor for `type=0` (note distribution). Same model as
-   * {@link BpmGraphEntry.cursor} — separate Graphics so the static distribution stays
+   * {@link BPMGraphEntry.cursor} — separate Graphics so the static distribution stays
    * cached while only the cursor's `x` updates per tick. Hidden for type 1 / 2 (those
    * graphs don't have a time axis to plot a playhead on).
    */
@@ -66,17 +66,17 @@ export interface JudgeGraphEntry {
  */
 export class BeatorajaChartGraphRenderer {
   private readonly container: Container;
-  private readonly resolveBpmGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
+  private readonly resolveBPMGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveJudgeGraphBars: (type: number) => ReadonlyArray<number> | undefined;
   private readonly resolveNoteDistribution: () =>
     | { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number }
     | undefined;
-  private readonly resolveBpmGraphData: () =>
+  private readonly resolveBPMGraphData: () =>
     | {
         segments: ReadonlyArray<{ timeMs: number; bpm: number }>;
-        mainBpm: number;
-        minBpm: number;
-        maxBpm: number;
+        mainBPM: number;
+        minBPM: number;
+        maxBPM: number;
         totalMs: number;
       }
     | undefined;
@@ -87,8 +87,8 @@ export class BeatorajaChartGraphRenderer {
 
   constructor(container: Container, options: BeatorajaPlaySkinViewOptions) {
     this.container = container;
-    this.resolveBpmGraphPoints = options.resolveBpmGraphPoints ?? (() => undefined);
-    this.resolveBpmGraphData = options.resolveBpmGraphData ?? (() => undefined);
+    this.resolveBPMGraphPoints = options.resolveBPMGraphPoints ?? (() => undefined);
+    this.resolveBPMGraphData = options.resolveBPMGraphData ?? (() => undefined);
     this.resolveJudgeGraphBars = options.resolveJudgeGraphBars ?? (() => undefined);
     this.resolveNoteDistribution = options.resolveNoteDistribution ?? (() => undefined);
     this.resolveJudgeStateBuckets = options.resolveJudgeStateBuckets ?? (() => undefined);
@@ -99,7 +99,7 @@ export class BeatorajaChartGraphRenderer {
    * Build a bpmgraph entry — pre-allocates the `Graphics` node; the actual polyline gets drawn
    * once on first `update()` (the chart's BPM curve is static, so we don't re-stroke per frame).
    */
-  buildBpmGraphEntry(group: BeatorajaDestinationGroup, element: BeatorajaBpmGraphElement): BpmGraphEntry {
+  buildBPMGraphEntry(group: BeatorajaDestinationGroup, element: BeatorajaBPMGraphElement): BPMGraphEntry {
     const graphics = new Graphics();
     graphics.alpha = 0;
     this.container.addChild(graphics);
@@ -137,37 +137,37 @@ export class BeatorajaChartGraphRenderer {
    *   - The destination's standard `props` say so (op gate, timer not started, alpha 0)
    *   - The resolver returned `undefined` or fewer than 2 points (no BPM data on this chart)
    */
-  updateBpmGraphEntry(entry: BpmGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+  updateBPMGraphEntry(entry: BPMGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
     const graphics = entry.graphics;
     graphics.visible = props.visible;
     if (!props.visible) {
       entry.cursor.visible = false;
       return;
     }
-    // Prefer the rich segment-data resolver (`{segments, mainBpm, minBpm, maxBpm, totalMs}`);
+    // Prefer the rich segment-data resolver (`{segments, mainBPM, minBPM, maxBPM, totalMs}`);
     // matches upstream `SkinBPMGraph.draw()` which paints color-coded segments at log-scaled
-    // y positions relative to mainBpm. Falls back to the legacy `[{x, y}]` polyline resolver
+    // y positions relative to mainBPM. Falls back to the legacy `[{x, y}]` polyline resolver
     // when the host hasn't wired the rich data — produces a single white curve instead of
     // the per-segment color identity, but at least keeps something visible.
-    const data = this.resolveBpmGraphData();
+    const data = this.resolveBPMGraphData();
     if (data === undefined) {
-      this.updateBpmGraphLegacy(entry, props);
+      this.updateBPMGraphLegacy(entry, props);
       entry.cursor.visible = false;
       return;
     }
-    const { segments, mainBpm, minBpm, maxBpm, totalMs } = data;
-    if (segments.length < 1 || totalMs <= 0 || mainBpm <= 0) {
+    const { segments, mainBPM, minBPM, maxBPM, totalMs } = data;
+    if (segments.length < 1 || totalMs <= 0 || mainBPM <= 0) {
       graphics.visible = false;
       entry.cursor.visible = false;
       return;
     }
-    const signature = `${segments.length}|${mainBpm}|${minBpm}|${maxBpm}|${totalMs}`;
+    const signature = `${segments.length}|${mainBPM}|${minBPM}|${maxBPM}|${totalMs}`;
     if (signature !== entry.lastSignature) {
       graphics.clear();
-      // Log-scale window: BPM is plotted as `log10(bpm / mainBpm)` clamped to [1/8, 8] —
+      // Log-scale window: BPM is plotted as `log10(bpm / mainBPM)` clamped to [1/8, 8] —
       // the same range upstream uses (`SkinBPMGraph.minValue = 1/8, maxValue = 8`). Within
-      // this band, mainBpm sits at the middle of the destination box; values doubling
-      // above mainBpm climb toward the top edge, values halving below sink toward the
+      // this band, mainBPM sits at the middle of the destination box; values doubling
+      // above mainBPM climb toward the top edge, values halving below sink toward the
       // bottom. Beyond 8x or below 1/8 clamp to the edges.
       const minRatio = 1 / 8;
       const maxRatio = 8;
@@ -176,16 +176,16 @@ export class BeatorajaChartGraphRenderer {
       const ratioLogRange = maxRatioLog - minRatioLog;
       const projectY = (bpm: number): number => {
         if (bpm <= 0) return props.height; // stop → bottom edge
-        const ratio = Math.min(maxRatio, Math.max(minRatio, bpm / mainBpm));
+        const ratio = Math.min(maxRatio, Math.max(minRatio, bpm / mainBPM));
         const norm = (Math.log10(ratio) - minRatioLog) / ratioLogRange;
         // Pixi y grows DOWNWARD; invert so high BPM paints toward the top.
         return (1 - norm) * props.height;
       };
       const colorFor = (bpm: number): number => {
         if (bpm <= 0) return 0xff00ff; // stop → magenta
-        if (bpm === mainBpm) return 0x00ff00; // main → green
-        if (bpm === minBpm) return 0x0000ff; // min → blue
-        if (bpm === maxBpm) return 0xff0000; // max → red
+        if (bpm === mainBPM) return 0x00ff00; // main → green
+        if (bpm === minBPM) return 0x0000ff; // min → blue
+        if (bpm === maxBPM) return 0xff0000; // max → red
         return 0xffff00; // other → yellow
       };
       const transitionColor = 0x7f7f7f; // gray
@@ -229,12 +229,12 @@ export class BeatorajaChartGraphRenderer {
   }
 
   /**
-   * Legacy `{x, y}` polyline path — used when `resolveBpmGraphData` isn't wired (older host
+   * Legacy `{x, y}` polyline path — used when `resolveBPMGraphData` isn't wired (older host
    * code paths). Single white step curve, no per-segment colours.
    */
-  private updateBpmGraphLegacy(entry: BpmGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
+  private updateBPMGraphLegacy(entry: BPMGraphEntry, props: ReturnType<typeof destinationToSpriteProps>): void {
     const graphics = entry.graphics;
-    const points = this.resolveBpmGraphPoints();
+    const points = this.resolveBPMGraphPoints();
     if (points === undefined || points.length < 2) {
       graphics.visible = false;
       return;
@@ -500,7 +500,7 @@ export class BeatorajaChartGraphRenderer {
 
   /**
    * Position + show / hide the playhead cursor over a graph's destination rect. Called by
-   * `updateBpmGraphEntry` and `paintNoteDistribution`. Reads `resolveCurrentTimeMs()` and
+   * `updateBPMGraphEntry` and `paintNoteDistribution`. Reads `resolveCurrentTimeMs()` and
    * `totalMs` to compute the X position; hides the cursor when either is missing or when
    * the destination's `props.visible` is false.
    *
