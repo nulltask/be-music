@@ -1,4 +1,4 @@
-import { normalizeObjectKey, type BeMusicJson } from '@be-music/json';
+import { normalizeObjectKey, type BeMusicJSON } from '@be-music/json';
 
 /**
  * Parsed `#EXWAVxx [flags] params filename` directive.
@@ -15,7 +15,7 @@ import { normalizeObjectKey, type BeMusicJson } from '@be-music/json';
  * Real-world charts use this most often for `v` (per-slot volume trim) and occasionally `p` for stereo placement of
  * one-shots.
  */
-export interface BmsExWav {
+export interface BMSExWAV {
   /** Raw filename token, joined back together if it contained spaces. */
   filename: string;
   /** Pan, when the `p` flag was present. */
@@ -37,7 +37,7 @@ export interface BmsExWav {
  * Returns `undefined` for malformed input — better to skip a broken `#EXWAV` than to apply nonsense to the audible
  * signal.
  */
-export function parseBmsExWav(raw: string): BmsExWav | undefined {
+export function parseBMSExWAV(raw: string): BMSExWAV | undefined {
   if (typeof raw !== 'string') return undefined;
   const trimmed = raw.trim();
   if (trimmed.length === 0) return undefined;
@@ -49,7 +49,7 @@ export function parseBmsExWav(raw: string): BmsExWav | undefined {
   // encoded, so a literal space in the name is the only edge.)
   const filename = tokens.slice(2).join(' ');
   if (filename.length === 0) return undefined;
-  const out: BmsExWav = { filename };
+  const out: BMSExWAV = { filename };
   for (let index = 0; index < flags.length; index += 1) {
     const flag = flags[index];
     const valueRaw = params[index];
@@ -72,7 +72,7 @@ export function parseBmsExWav(raw: string): BmsExWav | undefined {
  * Centibels rather than decibels because LR2 / beatoraja both persist `#EXWAV v` as cB — `v -200` = −2 dB, `v -600` =
  * −6 dB. Treating the value as straight dB would silently halve every attenuation in the wild.
  */
-export function exWavVolumeCentibelsToLinearGain(centibels: number): number {
+export function exWAVVolumeCentibelsToLinearGain(centibels: number): number {
   if (!Number.isFinite(centibels)) return 1;
   const dB = centibels / 100;
   const gain = 10 ** (dB / 20);
@@ -85,16 +85,16 @@ export function exWavVolumeCentibelsToLinearGain(centibels: number): number {
  * without a parsed `v` (or whose `#EXWAVxx` doesn't even have three tokens) are absent from the result so the consumer
  * falls through to unity gain.
  *
- * `entries` is the parser-produced `chart.bms.exWav` map (raw post-`#EXWAVxx ` strings keyed by slot id). The returned
+ * `entries` is the parser-produced `chart.bms.exWAV` map (raw post-`#EXWAVxx ` strings keyed by slot id). The returned
  * keys are passed through verbatim — they're already normalized to the chart's id base when the parser ingested them.
  */
-export function collectBmsExWavVolumeMultipliers(entries: Readonly<Record<string, string>>): Map<string, number> {
+export function collectBMSExWAVVolumeMultipliers(entries: Readonly<Record<string, string>>): Map<string, number> {
   const out = new Map<string, number>();
   for (const [slot, raw] of Object.entries(entries)) {
-    const parsed = parseBmsExWav(raw);
+    const parsed = parseBMSExWAV(raw);
     if (parsed === undefined) continue;
     if (parsed.volumeCentibels === undefined) continue;
-    out.set(slot, exWavVolumeCentibelsToLinearGain(parsed.volumeCentibels));
+    out.set(slot, exWAVVolumeCentibelsToLinearGain(parsed.volumeCentibels));
   }
   return out;
 }
@@ -108,32 +108,32 @@ export function collectBmsExWavVolumeMultipliers(entries: Readonly<Record<string
  * - `'loop'` (`pp = 02`) — sample-frame loop point. `0` disables looping; otherwise the sample loops back to that frame
  *   index after reaching its end.
  */
-export type BmsWavCmdParam = 'pitch' | 'volume' | 'loop';
+export type BmsWAVCmdParam = 'pitch' | 'volume' | 'loop';
 
-export interface BmsWavCmdEntry {
-  param: BmsWavCmdParam;
+export interface BmsWAVCmdEntry {
+  param: BmsWAVCmdParam;
   /** Slot id (`#WAVxx`), normalized via `normalizeObjectKey`. */
   slot: string;
   /**
-   * Raw integer value as written in the chart. The interpretation depends on `param` — see {@link BmsWavCmdParam}.
+   * Raw integer value as written in the chart. The interpretation depends on `param` — see {@link BmsWAVCmdParam}.
    * Volume here is the literal 0..127 byte; convert to a gain multiplier via {@link wavCmdVolumeByteToLinearGain}.
    */
   value: number;
 }
 
 /**
- * Maps a BMS `#VOLWAV n` value (`bms.volWav`) to the chart-wide linear gain: `n / 100` for `0 < n < 200`, unity for
+ * Maps a BMS `#VOLWAV n` value (`bms.volWAV`) to the chart-wide linear gain: `n / 100` for `0 < n < 200`, unity for
  * anything else, including a missing value.
  *
  * This is beatoraja's range (`AbstractAudioDriver` applies `#VOLWAV` only when `0 < n < 200`). LR2 ignores `#VOLWAV`,
  * so a chart tuned for it plays at full volume there; following beatoraja keeps `#VOLWAV 0` from muting a chart and
  * keeps values of 200 and above from amplifying it into clipping.
  */
-export function volWavToLinearGain(volWav: number | undefined): number {
-  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav <= 0 || volWav >= 200) {
+export function volWAVToLinearGain(volWAV: number | undefined): number {
+  if (typeof volWAV !== 'number' || !Number.isFinite(volWAV) || volWAV <= 0 || volWAV >= 200) {
     return 1;
   }
-  return volWav / 100;
+  return volWAV / 100;
 }
 
 /**
@@ -161,7 +161,7 @@ export function wavCmdVolumeByteToLinearGain(byteValue: number): number {
  * @param idBase  Pass `62` for charts declared with `#BASE 62` so
  *                lowercase slot ids are preserved as-is.
  */
-export function parseBmsWavCmd(line: string, idBase: 36 | 62 = 36): BmsWavCmdEntry | undefined {
+export function parseBmsWAVCmd(line: string, idBase: 36 | 62 = 36): BmsWAVCmdEntry | undefined {
   if (typeof line !== 'string') return undefined;
   const tokens = line.trim().split(/\s+/u);
   if (tokens.length < 3) return undefined;
@@ -172,7 +172,7 @@ export function parseBmsWavCmd(line: string, idBase: 36 | 62 = 36): BmsWavCmdEnt
   const paramByte = Number.parseInt(paramRaw, 10);
   const value = Number.parseInt(valueRaw, 10);
   if (!Number.isFinite(paramByte) || !Number.isFinite(value)) return undefined;
-  let param: BmsWavCmdParam;
+  let param: BmsWAVCmdParam;
   switch (paramByte) {
     case 0:
       param = 'pitch';
@@ -199,13 +199,13 @@ export function parseBmsWavCmd(line: string, idBase: 36 | 62 = 36): BmsWavCmdEnt
  * Pitch / loop lines are intentionally skipped — they require sample-graph wiring (playback rate, loop points) that
  * lives in the audio engine, not in this pure pre-process.
  */
-export function collectBmsWavCmdVolumeMultipliers(
+export function collectBmsWAVCmdVolumeMultipliers(
   lines: ReadonlyArray<string>,
   idBase: 36 | 62 = 36,
 ): Map<string, number> {
   const out = new Map<string, number>();
   for (const line of lines) {
-    const entry = parseBmsWavCmd(line, idBase);
+    const entry = parseBmsWAVCmd(line, idBase);
     if (entry?.param === 'volume') {
       out.set(entry.slot, wavCmdVolumeByteToLinearGain(entry.value));
     }
@@ -221,6 +221,6 @@ export function collectBmsWavCmdVolumeMultipliers(
  * Every audio backend (Node mixer, WebAudio session, offline renderer) must consult this single predicate rather than
  * encoding the per-format rule locally.
  */
-export function usesMonophonicWavPlayback(json: Pick<BeMusicJson, 'sourceFormat'>): boolean {
+export function usesMonophonicWAVPlayback(json: Pick<BeMusicJSON, 'sourceFormat'>): boolean {
   return json.sourceFormat === 'bms';
 }

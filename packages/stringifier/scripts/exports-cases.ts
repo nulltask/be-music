@@ -1,15 +1,15 @@
-import * as stringifierApi from '@be-music/stringifier';
+import * as stringifierAPI from '@be-music/stringifier';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 export function registerStringifierExportsCases(define: DefineBenchmarkCase): void {
-  define('stringifier.stringifyBms', {
+  define('stringifier.stringifyBMS', {
     run: (fixtures) => {
-      stringifierApi.stringifyBms(fixtures.sampleBmsJson);
+      stringifierAPI.stringifyBMS(fixtures.sampleBmsJSON);
     },
   });
   define('stringifier.stringifyBmson', {
     run: (fixtures) => {
-      stringifierApi.stringifyBmson(fixtures.sampleBmsonJson);
+      stringifierAPI.stringifyBmson(fixtures.sampleBmsonJSON);
     },
   });
 }

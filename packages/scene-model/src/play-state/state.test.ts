@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import { createHiSpeedState } from './hi-speed.ts';
 import {
   createPlayState,
-  playEventFromUiCommand,
+  playEventFromUICommand,
   playProgress,
   recentJudgeTimings,
   reducePlayState,
@@ -59,11 +59,11 @@ describe('graphs', () => {
       seconds: 40,
     });
     expect(state.gaugeHistory.at(-1)).toEqual({ progress: 0.4, value: 18 });
-    expect(playEventFromUiCommand({ kind: 'trigger-poor-bga', seconds: 40 })).toEqual({
+    expect(playEventFromUICommand({ kind: 'trigger-poor-bga', seconds: 40 })).toEqual({
       type: 'empty-poor',
       seconds: 40,
     });
-    expect(playEventFromUiCommand({ kind: 'clear-poor-bga' })).toBeUndefined();
+    expect(playEventFromUICommand({ kind: 'clear-poor-bga' })).toBeUndefined();
   });
 
   test('read the gauge in percent of its maximum', () => {

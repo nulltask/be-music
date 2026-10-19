@@ -1,4 +1,4 @@
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
@@ -9,7 +9,7 @@ export function getMeasureBeats(length: number): number {
   return 4 * length;
 }
 
-export function measureToBeat(json: BeMusicJson, measure: number, position = 0): number {
+export function measureToBeat(json: BeMusicJSON, measure: number, position = 0): number {
   const safeMeasure = Math.max(0, Math.floor(measure));
   if (json.measures.length === 0) {
     return safeMeasure * 4 + 4 * clamp01(position);
@@ -24,7 +24,7 @@ export function measureToBeat(json: BeMusicJson, measure: number, position = 0):
   return beats;
 }
 
-export function eventToBeat(json: BeMusicJson, event: BeMusicEvent): number {
+export function eventToBeat(json: BeMusicJSON, event: BeMusicEvent): number {
   if (json.measures.length === 0) {
     const measure = Math.max(0, Math.floor(event.measure));
     const denominator = normalizePositionDenominator(event.position[1]);
@@ -34,7 +34,7 @@ export function eventToBeat(json: BeMusicJson, event: BeMusicEvent): number {
   return measureToBeat(json, event.measure, getEventPosition(event));
 }
 
-export function createBeatResolver(json: BeMusicJson): BeatResolver {
+export function createBeatResolver(json: BeMusicJSON): BeatResolver {
   if (json.measures.length === 0) {
     return {
       measureToBeat: (measure, position = 0) => {
@@ -159,7 +159,7 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
   return 0;
 }
 
-function createExactMeasureLengthRecord(json: BeMusicJson): Record<number, number> {
+function createExactMeasureLengthRecord(json: BeMusicJSON): Record<number, number> {
   const measureLengths: number[] = [];
   for (const measure of json.measures) {
     measureLengths[measure.index] = measure.length;

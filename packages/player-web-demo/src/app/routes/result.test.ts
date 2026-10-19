@@ -1,5 +1,5 @@
-import { createEmptyJson } from '@be-music/json';
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import { createEmptyJSON } from '@be-music/json';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { AudioService } from '@be-music/player-web/audio';
 import type { BrowserSongCollection } from '@be-music/player-web/collection';
@@ -12,7 +12,7 @@ import {
   type ResultSceneOptions,
   type SelectScene,
 } from '@be-music/player-web/host';
-import type { BeatorajaThemeBgm, BeatorajaThemeBundle } from '@be-music/player-web/skin';
+import type { BeatorajaThemeBGM, BeatorajaThemeBundle } from '@be-music/player-web/skin';
 import type { CourseDefinition } from '@be-music/player/course';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import { courseStageRecordPlayFromResult, recordPlayFromResult } from '@be-music/player/records';
@@ -26,7 +26,7 @@ import {
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { activeCourseInfo } from '../../course-flow.ts';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
-import { resolveResultSoundSet, type Lr2ResultJingles } from '../../result-jingles.ts';
+import { resolveResultSoundSet, type LR2ResultJingles } from '../../result-jingles.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { resultFromCourseLog, resultFromData } from '../../test-hook.ts';
 import type { DemoScene } from '../../types.ts';
@@ -50,7 +50,7 @@ function song(id: string): LibraryChart {
     title: id,
     artist: 'artist',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 
@@ -104,13 +104,13 @@ const COURSE_LOG = {
   } as unknown as PlaylogCourseResult,
 };
 
-const LR2_RESULT = { name: 'result' } as unknown as Lr2Skin;
-const LR2_COURSE_RESULT = { name: 'course result' } as unknown as Lr2Skin;
+const LR2_RESULT = { name: 'result' } as unknown as LR2Skin;
+const LR2_COURSE_RESULT = { name: 'course result' } as unknown as LR2Skin;
 const BUILT_IN_KIT = { family: 'built-in' } as unknown as ResultSceneKit;
 const BEATORAJA_KIT = { family: 'beatoraja', kit: { entryPath: 'result/result.json' } } as unknown as BeatorajaKit;
-const LR2_JINGLES: Lr2ResultJingles = { clear: new Uint8Array([1]), fail: new Uint8Array([2]) };
-const BEATORAJA_BGM = { clear: new Uint8Array([3]), fail: new Uint8Array([4]) } as BeatorajaThemeBgm;
-const PLAYED = { chart: createEmptyJson('bms'), draws: [1] } as unknown as ResolvedPlayChart;
+const LR2_JINGLES: LR2ResultJingles = { clear: new Uint8Array([1]), fail: new Uint8Array([2]) };
+const BEATORAJA_BGM = { clear: new Uint8Array([3]), fail: new Uint8Array([4]) } as BeatorajaThemeBGM;
+const PLAYED = { chart: createEmptyJSON('bms'), draws: [1] } as unknown as ResolvedPlayChart;
 
 /** A result screen as `createResultScene` makes it: the kit and options it was made with. */
 interface FakeResult {
@@ -175,8 +175,8 @@ async function harness(options: { family?: 'lr2' | 'beatoraja' | 'none'; lastPla
     lr2: {
       resultSkin: family === 'lr2' ? LR2_RESULT : undefined,
       courseResultSkin: family === 'lr2' ? LR2_COURSE_RESULT : undefined,
-      courseLr2Skin: vi.fn(
-        (mounted: Lr2Skin | undefined) => mounted && ({ name: `${mounted.name} (course)` } as Lr2Skin),
+      courseLR2Skin: vi.fn(
+        (mounted: LR2Skin | undefined) => mounted && ({ name: `${mounted.name} (course)` } as LR2Skin),
       ),
       resultJingles: vi.fn(() => LR2_JINGLES),
     },
@@ -184,7 +184,7 @@ async function harness(options: { family?: 'lr2' | 'beatoraja' | 'none'; lastPla
       loadBeatorajaResultKit: vi.fn<ResultRouteDeps['beatoraja']['loadBeatorajaResultKit']>(async () =>
         family === 'beatoraja' ? BEATORAJA_KIT : undefined,
       ),
-      beatorajaThemeBgm: family === 'beatoraja' ? BEATORAJA_BGM : {},
+      beatorajaThemeBGM: family === 'beatoraja' ? BEATORAJA_BGM : {},
     },
     builtIn: { builtInKit: BUILT_IN_KIT },
     playlogAutoSave: { savePlay: vi.fn<ResultRouteDeps['playlogAutoSave']['savePlay']>() },
@@ -299,7 +299,7 @@ describe('ResultRoute.showResult: a course', () => {
     await h.route.showResult(data);
     expect(h.deps.records.recordActiveCourseStage).toHaveBeenCalledWith(courseStageRecordPlayFromResult(data));
     const info = activeCourseInfo(active);
-    expect(h.deps.lr2.courseLr2Skin).toHaveBeenCalledWith(LR2_RESULT, info, { kind: 'result' });
+    expect(h.deps.lr2.courseLR2Skin).toHaveBeenCalledWith(LR2_RESULT, info, { kind: 'result' });
     const result = shown(h);
     expect(result.options).toMatchObject({ run: 'stage', result: { ...data, course: info } });
     // No quick retry in a course, and its stages are saved and ranked as the course.
@@ -318,7 +318,7 @@ describe('ResultRoute.showResult: a course', () => {
     const info = resolveCourseView(course());
     const data = resultOf(song('a'));
     await h.route.showResult(data, { course: info, courseLog: COURSE_LOG });
-    expect(h.deps.lr2.courseLr2Skin).toHaveBeenCalledWith(LR2_COURSE_RESULT, info, { kind: 'courseResult' });
+    expect(h.deps.lr2.courseLR2Skin).toHaveBeenCalledWith(LR2_COURSE_RESULT, info, { kind: 'courseResult' });
     expect(shown(h).options.run).toBe('course');
     expect(h.deps.testHook.recordPlaylog).not.toHaveBeenCalled();
     expect(h.deps.testHook.recordResult).toHaveBeenCalledWith(
@@ -376,7 +376,7 @@ describe('ResultRoute: the beatoraja result', () => {
     h.route.lastBeatorajaChart = { resolved: PLAYED, chartPath: 'b.bms' };
     await h.route.showBeatorajaResult(resultOf(song('a')), { run: 'single' });
     expect(shown(h).options).not.toHaveProperty('playChart');
-    const stitched = createEmptyJson('bms');
+    const stitched = createEmptyJSON('bms');
     const retry = vi.fn();
     await h.route.showBeatorajaResult(resultOf(song('a')), {
       run: 'nonstop',

@@ -1,18 +1,18 @@
 import type {
-  Lr2BarBodyKind,
-  Lr2BarGraphMuki,
-  Lr2BarLampKind,
-  Lr2BarLevelKind,
-  Lr2BarRankKind,
-  Lr2BarRivalKind,
-  Lr2CustomFile,
-  Lr2CustomOption,
-  Lr2DestinationRect,
-  Lr2NumberAlignment,
-  Lr2ScratchFlip,
-  Lr2SkinTiming,
-  Lr2SliderMuki,
-  Lr2TextAlignment,
+  LR2BarBodyKind,
+  LR2BarGraphMuki,
+  LR2BarLampKind,
+  LR2BarLevelKind,
+  LR2BarRankKind,
+  LR2BarRivalKind,
+  LR2CustomFile,
+  LR2CustomOption,
+  LR2DestinationRect,
+  LR2NumberAlignment,
+  LR2ScratchFlip,
+  LR2SkinTiming,
+  LR2SliderMuki,
+  LR2TextAlignment,
 } from './types.ts';
 
 export interface SourceRect {
@@ -30,7 +30,7 @@ export interface SourceRect {
    * relative order this `#SRC_*` line appeared at so the renderer can stratify chrome elements (`#SRC_IMAGE` /
    * `#SRC_NUMBER` / `#SRC_SLIDER` / `#SRC_TEXT` / `#SRC_BUTTON` / `#SRC_ONMOUSE`) around the bar list
    * (`#SRC_BAR_BODY`). Internal — only propagated to public element types via the typed `declarationOrder` field on
-   * each `Lr2*Element`.
+   * each `LR2*Element`.
    */
   declarationOrder: number;
 }
@@ -38,7 +38,7 @@ export interface SourceRect {
 interface NumberSourceEntry {
   source: SourceRect;
   num: number;
-  alignment: Lr2NumberAlignment;
+  alignment: LR2NumberAlignment;
   padding: number;
 }
 
@@ -52,7 +52,7 @@ interface GrooveGaugeSourceEntry {
 interface NowComboSourceEntry {
   source: SourceRect;
   index: number;
-  alignment: Lr2NumberAlignment;
+  alignment: LR2NumberAlignment;
   padding: number;
   side: '1P' | '2P';
 }
@@ -67,7 +67,7 @@ interface MeasureLineSourceEntry {
   index: number;
 }
 
-interface BgaSourceEntry {
+interface BGASourceEntry {
   noBase: boolean;
   noLayer: boolean;
   noPoor: boolean;
@@ -76,7 +76,7 @@ interface BgaSourceEntry {
 interface TextSourceEntry {
   font: number;
   st: number;
-  alignment: Lr2TextAlignment;
+  alignment: LR2TextAlignment;
   edit: number;
   panel: number;
   /**
@@ -89,13 +89,13 @@ interface TextSourceEntry {
 interface BarGraphSourceEntry {
   source: SourceRect;
   type: number;
-  muki: Lr2BarGraphMuki;
+  muki: LR2BarGraphMuki;
 }
 
 interface SliderSourceEntry {
   source: SourceRect;
   type: number;
-  muki: Lr2SliderMuki;
+  muki: LR2SliderMuki;
   range: number;
 }
 
@@ -141,12 +141,12 @@ interface ReadmeSourceEntry {
 }
 
 export interface BarRivalSourceEntry {
-  kind: Lr2BarRivalKind;
+  kind: LR2BarRivalKind;
   source: SourceRect;
 }
 
 export interface BarBodySourceEntry {
-  kind: Lr2BarBodyKind;
+  kind: LR2BarBodyKind;
   source: SourceRect;
 }
 
@@ -155,19 +155,19 @@ interface BarTitleSourceEntry {
 }
 
 export interface BarLevelSourceEntry {
-  kind: Lr2BarLevelKind;
+  kind: LR2BarLevelKind;
   source: SourceRect;
-  alignment: Lr2NumberAlignment;
+  alignment: LR2NumberAlignment;
   padding: number;
 }
 
 export interface BarLampSourceEntry {
-  kind: Lr2BarLampKind;
+  kind: LR2BarLampKind;
   source: SourceRect;
 }
 
 export interface BarRankSourceEntry {
-  kind: Lr2BarRankKind;
+  kind: LR2BarRankKind;
   source: SourceRect;
 }
 
@@ -178,73 +178,73 @@ export interface ParseContext {
   /** Declared `#FONT,size` sizes for system-font fallback. */
   systemFontSizes: number[];
   imageSources: SourceRect[];
-  imageDstGroups: Lr2DestinationRect[][];
+  imageDstGroups: LR2DestinationRect[][];
   noteSources: Map<string, SourceRect[]>;
   nowJudge1PSources: SourceRect[];
   /**
    * Full keyframe chain per judgement id — [first DST, … last DST]. The renderer needs the whole sequence (not just the
    * first row) to play the judge plate's fade-in / fade-out animation off timer 46.
    */
-  nowJudge1PDstGroups: Lr2DestinationRect[][];
+  nowJudge1PDstGroups: LR2DestinationRect[][];
   /**
    * 2P-side counterparts for DP charts. LR2's `play_14.lr2skin` and any DP-aware skin authors a separate set of
    * `#SRC_NOWJUDGE_2P` / `#DST_NOWJUDGE_2P` rows so the 2P judge plate renders at the 2P-side coordinates rather than
    * overlapping the 1P plate.
    */
   nowJudge2PSources: SourceRect[];
-  nowJudge2PDstGroups: Lr2DestinationRect[][];
+  nowJudge2PDstGroups: LR2DestinationRect[][];
   numberSources: NumberSourceEntry[];
-  numberDstGroups: Lr2DestinationRect[][];
+  numberDstGroups: LR2DestinationRect[][];
   grooveGaugeSources: GrooveGaugeSourceEntry[];
-  grooveGaugeDstGroups: Lr2DestinationRect[][];
+  grooveGaugeDstGroups: LR2DestinationRect[][];
   /**
    * `#SRC_NOWCOMBO_*` entries from both sides. The `side` field on each entry distinguishes 1P from 2P so the renderer
    * can pick the right block at runtime.
    */
   nowComboSources: NowComboSourceEntry[];
-  nowComboDstGroups: Lr2DestinationRect[][];
+  nowComboDstGroups: LR2DestinationRect[][];
   judgeLineSources: JudgeLineSourceEntry[];
-  judgeLineDstGroups: Lr2DestinationRect[][];
+  judgeLineDstGroups: LR2DestinationRect[][];
   measureLineSources: MeasureLineSourceEntry[];
-  measureLineDstGroups: Lr2DestinationRect[][];
-  bgaSources: BgaSourceEntry[];
-  bgaDstGroups: Lr2DestinationRect[][];
+  measureLineDstGroups: LR2DestinationRect[][];
+  bgaSources: BGASourceEntry[];
+  bgaDstGroups: LR2DestinationRect[][];
   textSources: TextSourceEntry[];
-  textDstGroups: Lr2DestinationRect[][];
+  textDstGroups: LR2DestinationRect[][];
   bargraphSources: BarGraphSourceEntry[];
-  bargraphDstGroups: Lr2DestinationRect[][];
+  bargraphDstGroups: LR2DestinationRect[][];
   sliderSources: SliderSourceEntry[];
-  sliderDstGroups: Lr2DestinationRect[][];
+  sliderDstGroups: LR2DestinationRect[][];
   /**
    * `#SRC_GAUGECHART_1P` and `#SRC_GAUGECHART_2P` staging arrays. Pairing with `#DST_*` mirrors the `imageSources` /
    * `imageDstGroups` pattern: each new SRC starts a new keyframe group; the next DST extends the group at the same
    * array index.
    */
   gaugeChartSources: GaugeChartSourceEntry[];
-  gaugeChartDstGroups: Lr2DestinationRect[][];
+  gaugeChartDstGroups: LR2DestinationRect[][];
   /** `#SRC_SCORECHART` staging arrays (1P only — `index` carries side meaning). */
   scoreChartSources: ScoreChartSourceEntry[];
-  scoreChartDstGroups: Lr2DestinationRect[][];
+  scoreChartDstGroups: LR2DestinationRect[][];
   buttonSources: ButtonSourceEntry[];
-  buttonDstGroups: Lr2DestinationRect[][];
+  buttonDstGroups: LR2DestinationRect[][];
   onMouseSources: OnMouseSourceEntry[];
-  onMouseDstGroups: Lr2DestinationRect[][];
+  onMouseDstGroups: LR2DestinationRect[][];
   readmeSources: ReadmeSourceEntry[];
-  readmeDstGroups: Lr2DestinationRect[][];
+  readmeDstGroups: LR2DestinationRect[][];
   mouseCursorSources: SourceRect[];
-  mouseCursorDstGroups: Lr2DestinationRect[][];
+  mouseCursorDstGroups: LR2DestinationRect[][];
   /** `#SRC_BAR_FLASH` source (single SRC per spec, last-wins). */
   barFlashSource?: SourceRect;
   /** `#DST_BAR_FLASH` keyframes. */
-  barFlashDst: Lr2DestinationRect[];
+  barFlashDst: LR2DestinationRect[];
   /** `#SRC_BAR_RIVAL` per-outcome sources. */
   barRivalSources: BarRivalSourceEntry[];
-  barRivalDst: Lr2DestinationRect[];
+  barRivalDst: LR2DestinationRect[];
   /** Rival-mode lamp variants. */
   barMyLampSources: BarLampSourceEntry[];
-  barMyLampDst: Lr2DestinationRect[];
+  barMyLampDst: LR2DestinationRect[];
   barRivalLampSources: BarLampSourceEntry[];
-  barRivalLampDst: Lr2DestinationRect[];
+  barRivalLampDst: LR2DestinationRect[];
   /**
    * Song-select bar `#SRC_BAR_BODY` definitions (one per kind id 0..9). Sparse — only kinds the skin actually defines
    * have an entry.
@@ -254,9 +254,9 @@ export interface ParseContext {
    * `#DST_BAR_BODY_OFF` keyframes per slot index 0..29. Sparse like the play-skin DST groups — slot 0 is the topmost
    * off-state position.
    */
-  barBodyOffDstGroups: Lr2DestinationRect[][];
+  barBodyOffDstGroups: LR2DestinationRect[][];
   /** `#DST_BAR_BODY_ON` keyframes per slot index 0..29 (focus-state). */
-  barBodyOnDstGroups: Lr2DestinationRect[][];
+  barBodyOnDstGroups: LR2DestinationRect[][];
   /** `#BAR_CENTER` value (clamped to slot range at finalization). */
   barCenter: number;
   /** `#BAR_AVAILABLE` value (clamped to slot range at finalization). */
@@ -267,27 +267,27 @@ export interface ParseContext {
    */
   barTitleSource?: BarTitleSourceEntry;
   /** `#DST_BAR_TITLE` keyframes (relative to the bar's xy). */
-  barTitleDst: Lr2DestinationRect[];
+  barTitleDst: LR2DestinationRect[];
   /** `#SRC_BAR_LEVEL` per-difficulty cell sheets (sparse by kind). */
   barLevelSources: BarLevelSourceEntry[];
   /** `#DST_BAR_LEVEL` shared keyframes (LR2 only ships one DST chain). */
-  barLevelDst: Lr2DestinationRect[];
+  barLevelDst: LR2DestinationRect[];
   /** `#SRC_BAR_LAMP` per-clear-lamp sprites. */
   barLampSources: BarLampSourceEntry[];
   /** `#DST_BAR_LAMP` shared keyframes. */
-  barLampDst: Lr2DestinationRect[];
+  barLampDst: LR2DestinationRect[];
   /** `#SRC_BAR_RANK` per-clear-rank sprites. */
   barRankSources: BarRankSourceEntry[];
   /** `#DST_BAR_RANK` shared keyframes. */
-  barRankDst: Lr2DestinationRect[];
-  laneRects: Lr2DestinationRect[];
-  customOptions: Lr2CustomOption[];
-  customFiles: Lr2CustomFile[];
+  barRankDst: LR2DestinationRect[];
+  laneRects: LR2DestinationRect[];
+  customOptions: LR2CustomOption[];
+  customFiles: LR2CustomFile[];
   customFileLookup: Map<string, string>;
   transparentColor?: { r: number; g: number; b: number };
   trueOps: Set<number>;
-  timing: Lr2SkinTiming;
-  scratchFlip: Lr2ScratchFlip;
+  timing: LR2SkinTiming;
+  scratchFlip: LR2ScratchFlip;
   name: string;
   width: number;
   height: number;
@@ -313,7 +313,7 @@ export interface ParseContext {
    * Monotonic counter that increments every time we record a `#SRC_*` declaration the renderer wants z-order context
    * for (currently `#SRC_SLIDER` and the first `#SRC_BAR_BODY`). The counter is process-local to a single skin parse —
    * so a later reference's `declarationOrder > earlier reference's` iff it appeared later in the CSV stream (including
-   * across `#INCLUDE`s, which feed back into the same `readLr2Path` call chain).
+   * across `#INCLUDE`s, which feed back into the same `readLR2Path` call chain).
    */
   nextDeclarationOrder: number;
   /**

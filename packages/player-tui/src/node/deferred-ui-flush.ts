@@ -1,17 +1,17 @@
 import { clearImmediate, setImmediate } from 'node:timers';
 
-export interface DeferredUiFlushState {
+export interface DeferredUIFlushState {
   frame: boolean;
   commands: boolean;
 }
 
-export interface DeferredUiFlush {
+export interface DeferredUIFlush {
   markFrameDirty: () => void;
   markCommandsDirty: () => void;
   dispose: () => void;
 }
 
-export function createDeferredUiFlush(flush: (state: Readonly<DeferredUiFlushState>) => void): DeferredUiFlush {
+export function createDeferredUIFlush(flush: (state: Readonly<DeferredUIFlushState>) => void): DeferredUIFlush {
   let framePending = false;
   let commandsPending = false;
   let disposed = false;
@@ -23,7 +23,7 @@ export function createDeferredUiFlush(flush: (state: Readonly<DeferredUiFlushSta
       return;
     }
 
-    const pendingState: DeferredUiFlushState = {
+    const pendingState: DeferredUIFlushState = {
       frame: framePending,
       commands: commandsPending,
     };

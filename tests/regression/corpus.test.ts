@@ -5,15 +5,15 @@ import {
   collectSampleTriggers,
   createTimingResolver,
   resolveChartPlayVariant,
-  resolveChartReferenceBpm,
+  resolveChartReferenceBPM,
 } from '@be-music/chart';
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 import { parseChart, parseChartFile } from '@be-music/parser';
 import type { RandomDraws } from '@be-music/chart';
 import { resolvePlayChart } from '@be-music/player';
 import { extractTimedNotes } from '@be-music/player/display';
 import { simulatePlaylogRulesets, type PlaylogNote, type PlaylogRulesetResult } from '@be-music/player/playlog';
-import { stringifyBms, stringifyBmson } from '@be-music/stringifier';
+import { stringifyBMS, stringifyBmson } from '@be-music/stringifier';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   buildScenarios,
@@ -87,7 +87,7 @@ async function buildExpected(path: string, name: string): Promise<Record<string,
   };
 }
 
-function summarizeParse(json: BeMusicJson): Record<string, unknown> {
+function summarizeParse(json: BeMusicJSON): Record<string, unknown> {
   const { controlFlow, ...bms } = json.bms;
   return {
     sourceFormat: json.sourceFormat,
@@ -113,9 +113,9 @@ function formatEvent(event: BeMusicEvent): string {
  * show up as a readable diff, and the playable notes of the re-parsed chart are compared against the original's so
  * a lossy round trip is visible in the expected file instead of hidden behind a text diff.
  */
-function summarizeStringify(json: BeMusicJson): Record<string, unknown> {
+function summarizeStringify(json: BeMusicJSON): Record<string, unknown> {
   const isBmson = json.sourceFormat === 'bmson';
-  const text = isBmson ? stringifyBmson(json) : stringifyBms(json, { eol: '\n' });
+  const text = isBmson ? stringifyBmson(json) : stringifyBMS(json, { eol: '\n' });
   const reparsed = parseChart(text, isBmson ? 'bmson' : 'bms');
   const before = formatPlayableNotes(resolveForComparison(json));
   const after = formatPlayableNotes(resolveForComparison(reparsed));
@@ -126,11 +126,11 @@ function summarizeStringify(json: BeMusicJson): Record<string, unknown> {
   };
 }
 
-function resolveForComparison(json: BeMusicJson): BeMusicJson {
+function resolveForComparison(json: BeMusicJSON): BeMusicJSON {
   return resolvePlayChart(json, { random: () => 0 }).chart;
 }
 
-function formatPlayableNotes(json: BeMusicJson): string[] {
+function formatPlayableNotes(json: BeMusicJSON): string[] {
   const { playableNotes, landmineNotes, invisibleNotes } = extractTimedNotes(json, { includeInvisible: true });
   return [
     ...playableNotes.map(
@@ -145,7 +145,7 @@ function formatPlayableNotes(json: BeMusicJson): string[] {
 }
 
 async function buildResolvedExpected(
-  parsed: BeMusicJson,
+  parsed: BeMusicJSON,
   path: string,
   random: () => number,
 ): Promise<Record<string, unknown>> {
@@ -181,7 +181,7 @@ async function buildResolvedExpected(
     randomPatterns: formatRandomPatterns(randomDraws),
     title: json.metadata.title,
     playVariant: resolveChartPlayVariant({ chartPath: path, events: json.events, bms: json.bms }),
-    referenceBpm: resolveChartReferenceBpm(json),
+    referenceBPM: resolveChartReferenceBPM(json),
     timing: {
       tempo: timing.tempoPoints.map((point) => `${round6(point.beat)} ${point.bpm} ${roundUs(point.seconds)}`),
       stops: timing.stopPoints.map(

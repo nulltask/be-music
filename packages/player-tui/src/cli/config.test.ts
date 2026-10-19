@@ -43,7 +43,7 @@ describe('cli config', { concurrent: false }, () => {
     expect(config.decreaseHighSpeed(1)).toBe(0.5);
     expect(config.formatHighSpeedLabel(1.24)).toBe('1.0');
 
-    expect(config.resolveCliConfigOverrideFlags(['chart.bms', '--auto-scratch', '--high-speed=2.0'])).toEqual({
+    expect(config.resolveCLIConfigOverrideFlags(['chart.bms', '--auto-scratch', '--high-speed=2.0'])).toEqual({
       playMode: true,
       highSpeed: true,
     });

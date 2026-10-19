@@ -62,7 +62,7 @@
 - [x] メタヘッダ `#GENRE` を解釈
 - [x] メタヘッダ `#COMMENT` を解釈
 - [x] `#SUBARTIST` を `metadata.extras.SUBARTIST` として保持し、player の選曲画面 metadata に使用
-- [x] `#BACKBMP` を browser LR2 special graphic 向けに `metadata.backBmp` として保持
+- [x] `#BACKBMP` を browser LR2 special graphic 向けに `metadata.backBMP` として保持
 - [x] `#BANNER` を `metadata.banner` として保持し、player の選曲画面 banner に使用
 - [x] メタヘッダ `#STAGEFILE` を解釈
 - [x] `#STAGEFILE` を選曲後の loading screen 専用画像として表示
@@ -199,7 +199,7 @@
 LR2 を基準とします（issue #134。OpenLR2 による LR2 beta3 100201 の再構成 — ブランチ `LR2Beta3-v100201` の `583a385`、`LR2f.cpp` — と LR2body.exe の対応コード、hitkey command memo、LR2 同梱 `history.txt` で検証）。
 
 - **タイミング。** LR2 は `#BPMxx` を符号付きのままパースし、ロード時のタイミング事前計算では **|BPM|** で積分します（`LR2_bmsload.cpp:2841-2843`）— 時間軸は決して逆行しません。timing resolver（`@be-music/chart` の `timing.ts`）も同じく `Math.abs(bpm)` で積分し、最初に反転を起こすイベントの位置を `TimingResolver.reversal`（beat と seconds）として公開します。Resolved Chart はこれを `ResolvedChart.reversal` として持ちます。
-- **切り捨て。** LR2 は `< 0` 判定の前に BPM を int へ変換します（LR2body.exe 0x42b960 `__ftol`）。反転するのは `trunc(BPM) < 0` のときだけで、`-1 < BPM < 0` は反転せず |BPM| で這うように進むだけです。負の値の NOWBPM は `|trunc(BPM)|`（`-0.5` なら 0、`-65.5` なら 65）を表示し、タイミングは |BPM| をそのまま使います（`TempoPoint.displayBpm`、`TimingResolver.displayBpmAtBeat`）。
+- **切り捨て。** LR2 は `< 0` 判定の前に BPM を int へ変換します（LR2body.exe 0x42b960 `__ftol`）。反転するのは `trunc(BPM) < 0` のときだけで、`-1 < BPM < 0` は反転せず |BPM| で這うように進むだけです。負の値の NOWBPM は `|trunc(BPM)|`（`-0.5` なら 0、`-65.5` なら 65）を表示し、タイミングは |BPM| をそのまま使います（`TempoPoint.displayBPM`、`TimingResolver.displayBPMAtBeat`）。
 - **イベントポンプ。** 負の BPM が発火すると LR2 のイベントポンプは以後ずっと凍結します。後続の BGM キー音・BGA キュー・BPM・STOP イベントは一切発火せず、オートプレイも止まり、NOWBPM は `|trunc(BPM)|` のままです。反転と同じティックでは、LR2 はイベントを op 順に並べます（`CMP_NotesByRealTimingOp`、`LR2f.cpp:24013`）。BGM（op 1）・BPM（op 3）・BGA レイヤー（op 4 / 6 / 7）は負の BPM（op 8）より**前に**発火し、そのティックの STOP（op 9）・レーン音（10〜29）・不可視オブジェクト（30 以降）は凍結します。エンジン・オフラインレンダラー・選曲プレビューは `firesBeforeTempoReversal` で絞り込みます（`0A` は BGA レイヤー扱い）。再生中の動画 BGA はそのまま流れ続け、止まるのはキューの切り替えだけです。
 - **表示。** LR2 は時刻ではなく譜面の**位置**を鏡映します。反転点 R 以降は `2·pos(R) − pos(now)` で描画し、`pos(now)` は |BPM| のテンポマップに沿って前進し続けます（`LR2f.cpp:2185-2188`、LR2body.exe 0x406d81）。そのため逆スクロールの速さは反転前のテンポをなぞるのではなく反転後のテンポに従い、負の値の |BPM| で進み、タイミングテーブル上の後続の BPM 変化に追従し、反転後の STOP では止まります。エンジンは UI フレームに `displayBeat = 2·beat(R) − beat(now)`（`mirrorBeatAtTempoReversal`）を載せ、TUI グリッド・beatoraja レイヤー・web シーンの `currentBeat` はこれでスクロールします。be-music には時刻ベース（「constant」）の HS-FIX スクロールがないため、時刻空間の鏡映はどこにも要りません。LR2 のノート描画規則は反転後も続きます。LR2 の `draw_count` は戻らないため、反転前に消えたノート・地雷・小節線はスクロールが戻っても消えたままで、反転より後に置かれた判定されないノートは判定ラインから上へ遠ざかります。beatoraja の描画規則（SCROLL や SPEED を含む譜面）では、オブジェクトの時刻を鏡映した判定クロックと比べます（`resolveReversedDrawClock`）。
 - **判定。** LR2 は鏡映クロック `t' = 2R − now` で押下を判定し続けます（`LR2f.cpp:12624`、`:12931`、LR2body.exe 0x42c25b / 0x42c788）。R ± BAD 窓程度にあるノートは R 直後も叩けます。レーンの次のノートが `t'` から届く範囲（LR2 の早押し 1 秒）にある間は押下で空 POOR が出るため、R の後およそ 1 秒は空 POOR が発生します。`t'` は R を超えないので、R 以降のノートがミスとして掃かれることはありません。R を跨ぐ LN は離した時点で BAD になり（`LR2f.cpp:7613-7616`）、離さなければ開いたままです。エンジンの判定コアは反転を譜面のデータ（`reversalSeconds`）として受け取り、押下・解放・ホールド判定をこの鏡映クロックで行い（ログ・ゲージ履歴・UI 合図は実時刻のまま）、プレイログ・シミュレータも反転後の入力を同じく鏡映するので、リプレイと再シミュレーションは同じ結果を再現します。地雷は反転点で凍結します。
@@ -227,7 +227,7 @@ runtime と round-trip の扱い:
 - `stringifier` は `bms.base` が `62` の場合に `#BASE 62` を出力します。
 - `#WAVxx`, `#BMPxx`, `#BPMxx`, `#STOPxx`, `#TEXTxx`, `#LNOBJ`, BGA 系 indexed map、object stream value は有効な base で正規化します。
 - 制御構文 (`#RANDOM` / `#IF` / `#SWITCH` block) の内側も通常行と同じ base を使うため、branch 内の小文字 ID も parse と branch resolution を通して保持します。
-- `player`, `audio-renderer`, `chart`, `player-web` は sample、BGA、BPM/STOP、LN、地雷、timing 参照を `resolveBmsBase()` 経由で解決し、base-62 の小文字 ID を runtime でも区別します。
+- `player`, `audio-renderer`, `chart`, `player-web` は sample、BGA、BPM/STOP、LN、地雷、timing 参照を `resolveBMSBase()` 経由で解決し、base-62 の小文字 ID を runtime でも区別します。
 
 例:
 
@@ -243,8 +243,8 @@ runtime と round-trip の扱い:
 
 ### `#VOLWAV`
 
-`parser` は `#VOLWAV` を非負の数値として `bms.volWav` に保持します。
-`stringifier` は `bms.volWav` が存在する場合、その値を `#VOLWAV n` としてそのまま出力します。
+`parser` は `#VOLWAV` を非負の数値として `bms.volWAV` に保持します。
+`stringifier` は `bms.volWAV` が存在する場合、その値を `#VOLWAV n` としてそのまま出力します。
 
 再生時とレンダリング時は、`#VOLWAV` を譜面全体へ掛かる線形 gain として扱います。
 省略時は `100` を既定値とします。`0 < n < 200` の値では実効倍率が `n / 100` になり、それ以外の値では原音量で鳴らします。
@@ -254,9 +254,9 @@ runtime と round-trip の扱い:
 - `#VOLWAV 150`: 原音量の `1.5` 倍
 - `#VOLWAV 0`、`#VOLWAV 200` 以上: 原音量
 
-この範囲は beatoraja に合わせたものです（beatoraja は `0 < n < 200` のときだけ `#VOLWAV` を適用します）。LR2 は `#VOLWAV` を無視します。beatoraja に合わせることで、`#VOLWAV 0` で譜面が無音になったり、大きな値で増幅されて音割れしたりすることを防ぎます。この規則は `@be-music/chart` の `volWavToLinearGain` が実装しています。
+この範囲は beatoraja に合わせたものです（beatoraja は `0 < n < 200` のときだけ `#VOLWAV` を適用します）。LR2 は `#VOLWAV` を無視します。beatoraja に合わせることで、`#VOLWAV 0` で譜面が無音になったり、大きな値で増幅されて音割れしたりすることを防ぎます。この規則は `@be-music/chart` の `volWAVToLinearGain` が実装しています。
 
-この倍率は `player` のリアルタイム再生、選曲画面プレビュー、`audio-renderer` の `renderJson()` / `renderChartFile()` に適用します。
+この倍率は `player` のリアルタイム再生、選曲画面プレビュー、`audio-renderer` の `renderJSON()` / `renderChartFile()` に適用します。
 各 player やハードウェア固有の音量差は再現せず、現実装では単純な gain 倍率としてのみ扱います。
 
 ### `#xxx97` / `#xxx98`
@@ -400,7 +400,7 @@ runtime と round-trip の扱い:
 - 厳密 UTF-8 検証（マルチバイト列を含み fatal デコードに成功）を通れば UTF-8 とみなす
 - 非 ASCII のバイトがすべて KS X 1001 の 2 バイトの組（先頭・後続とも `0xA1`〜`0xFE`。beatoraja の EUC-KR 判定と同じ）になり、非 ASCII の文字の 90 % 以上がハングル音節なら韓国語の `euc-kr`
 - 上記以外は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
-- この判定は `@be-music/parser` の `decodeBmsText` に一本化されており、CLI / TUI / Web のすべてが同じ結果になる
+- この判定は `@be-music/parser` の `decodeBMSText` に一本化されており、CLI / TUI / Web のすべてが同じ結果になる
 
 ## stringifier ルール
 
@@ -412,7 +412,7 @@ runtime と round-trip の扱い:
 ## 制御構文の評価ルール
 
 - `parser` は制御構文を `bms.controlFlow` として保持し、パース時には分岐を確定しない
-- 分岐はプレイごとに 1 回、明示的な draws（`drawRandomOutcomes` で引いた `RandomDraws`）で決める。評価器は `@be-music/chart` の `evaluateControlFlow` だけで、parser の `resolveBmsControlFlowWithDraws` が有効ブロックを展開し、`bms.controlFlow` を持たない解決済みの譜面を作る。ホストは再生や描画の前に解決し、解決済みの譜面と draws をエンジンに渡す（[プレイヤー仕様 — 制御構文の扱い](./player-spec.ja.md#制御構文の扱い)）
+- 分岐はプレイごとに 1 回、明示的な draws（`drawRandomOutcomes` で引いた `RandomDraws`）で決める。評価器は `@be-music/chart` の `evaluateControlFlow` だけで、parser の `resolveBMSControlFlowWithDraws` が有効ブロックを展開し、`bms.controlFlow` を持たない解決済みの譜面を作る。ホストは再生や描画の前に解決し、解決済みの譜面と draws をエンジンに渡す（[プレイヤー仕様 — 制御構文の扱い](./player-spec.ja.md#制御構文の扱い)）
 - `#RANDOM n` / `#SWITCH n` は `1..n` の整数を生成して選択値にする
 - `#SETRANDOM n` / `#SETSWITCH n` は選択値を固定する
 - `#IF` チェーンは現在の RANDOM 選択値で分岐し、`#ELSEIF` / `#ELSE` は先に成立した枝がある場合は無効

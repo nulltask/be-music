@@ -1,5 +1,5 @@
 import { createCourseCombo, reduceCourseCombo, type CourseComboState } from '../course-view/course-combo.ts';
-import type { HsFix } from '../play-options/options.ts';
+import type { HSFix } from '../play-options/options.ts';
 import { createHiSpeedState, reduceHiSpeed, type HiSpeedCommand, type HiSpeedState } from './hi-speed.ts';
 import { reduceLaneCovers, type LaneCoverCommand, type LaneCoverState } from './lane-cover.ts';
 import {
@@ -28,7 +28,7 @@ export interface EarlyLateCount {
 export interface PlayViewState {
   readonly hiSpeed: HiSpeedState;
   readonly covers: readonly LaneCoverState[];
-  readonly hsFix?: HsFix;
+  readonly hsFix?: HSFix;
 }
 
 /**
@@ -110,7 +110,7 @@ export type PlayEvent =
   | { type: 'judge'; judge: PlayJudgeInput; seconds: number; atMs: number }
   /**
    * An empty POOR (or a miss) at chart time `seconds`: the gauge moved without a judgment of a note, so the graphs are
-   * sampled (the engine's `trigger-poor-bga` command; see {@link playEventFromUiCommand}).
+   * sampled (the engine's `trigger-poor-bga` command; see {@link playEventFromUICommand}).
    */
   | { type: 'empty-poor'; seconds: number }
   /** The play's final judgment counts: a full combo's max combo is every note. */
@@ -119,7 +119,7 @@ export type PlayEvent =
   | LaneCoverCommand;
 
 /** The play event an engine UI command stands for, when it stands for one (`trigger-poor-bga` → `empty-poor`). */
-export function playEventFromUiCommand(command: { kind: string; seconds?: number }): PlayEvent | undefined {
+export function playEventFromUICommand(command: { kind: string; seconds?: number }): PlayEvent | undefined {
   return command.kind === 'trigger-poor-bga' && command.seconds !== undefined
     ? { type: 'empty-poor', seconds: command.seconds }
     : undefined;

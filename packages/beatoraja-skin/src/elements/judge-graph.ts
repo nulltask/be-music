@@ -34,7 +34,7 @@ export interface BeatorajaJudgeGraphElement {
   backTexOff: number;
   /**
    * Delay in milliseconds before the bars start their reveal animation (audit 3.4). Mirrors
-   * beatoraja's `JsonSkin.JudgeGraph.delay = 500` default. The renderer can use this to stagger
+   * beatoraja's `JSONSkin.JudgeGraph.delay = 500` default. The renderer can use this to stagger
    * each bar's grow-from-baseline animation so the histogram fills in over time rather than
    * snapping in.
    */
@@ -77,7 +77,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaJudgeGraphElement | un
     id,
     type: numberField(f, 'type', 0),
     backTexOff: numberField(f, 'backTexOff', 0),
-    // Audit 3.4 — defaults mirror beatoraja's JsonSkin.JudgeGraph declarations.
+    // Audit 3.4 — defaults mirror beatoraja's JSONSkin.JudgeGraph declarations.
     delay: numberField(f, 'delay', 500),
     orderReverse: numberField(f, 'orderReverse', 0),
     noGap: numberField(f, 'noGap', 0),

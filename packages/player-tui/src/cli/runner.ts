@@ -1,11 +1,11 @@
 import { stat } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveCliPath } from '@be-music/utils/cli-path';
+import { resolveCLIPath } from '@be-music/utils/cli-path';
 import { createFileLogger, createNoopLogger, type LogEntry, type Logger, type LogLevel } from '@be-music/utils/log';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';
-import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
+import { renderJSON, writeAudioFile } from '@be-music/audio-renderer';
 import {
   PlayerInterruptedError,
   type PlayerLoadProgress,
@@ -13,9 +13,9 @@ import {
   resolvePlayChart,
   type ResolvedPlayChart,
 } from '@be-music/player';
-import { loadStageFileAnsiImage, type StageFileAnsiImage } from '../bga.ts';
+import { loadStageFileANSIImage, type StageFileANSIImage } from '../bga.ts';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
-import { ensureSeaEmbeddedNodeModules } from '../node/sea-embedded-modules.ts';
+import { ensureSEAEmbeddedNodeModules } from '../node/sea-embedded-modules.ts';
 import { supportsKittyGraphicsProtocol } from '../tui/kitty-graphics.ts';
 import {
   resolveDisplayedJudgeRankLabel,
@@ -29,7 +29,7 @@ import {
   createDefaultPersistedPlayerConfig,
   loadPersistedPlayerConfig,
   normalizeHighSpeedValue,
-  resolveCliConfigOverrideFlags,
+  resolveCLIConfigOverrideFlags,
   resolveDefaultPlayerLogPath,
   resolvePersistedPlayerConfigFromArgs,
   resolvePlayModeFromArgs,
@@ -46,7 +46,7 @@ import {
   type ChartSummaryLoadingProgress,
 } from './chart-selection.ts';
 import { createChartFocusKey } from './music-select-state.ts';
-import { type CliArgs, parseArgs, printUsage } from './args.ts';
+import { type CLIArgs, parseArgs, printUsage } from './args.ts';
 import {
   type RawInputCapture,
   beginLoadingAbortCapture,
@@ -72,7 +72,7 @@ export {
   applyPersistedPlayerConfigToArgs,
   cyclePlayMode,
   formatPlayModeLabel,
-  resolveCliConfigOverrideFlags,
+  resolveCLIConfigOverrideFlags,
   resolveDefaultPlayerLogPath,
   resolvePersistedPlayerConfigFromArgs,
   resolvePlayModeFromArgs,
@@ -132,12 +132,12 @@ export async function main(): Promise<void> {
     printUsage();
     return;
   }
-  const overrideFlags = resolveCliConfigOverrideFlags(rawArgs);
-  let args: CliArgs;
+  const overrideFlags = resolveCLIConfigOverrideFlags(rawArgs);
+  let args: CLIArgs;
   try {
     args = parseArgs(rawArgs);
   } catch (error) {
-    process.stdout.write(`${formatCliParseError(error)}\n\n`);
+    process.stdout.write(`${formatCLIParseError(error)}\n\n`);
     printUsage();
     process.exitCode = 1;
     return;
@@ -147,7 +147,7 @@ export async function main(): Promise<void> {
   try {
     persistedConfig = await loadPersistedPlayerConfig();
   } catch (error) {
-    process.stdout.write(`Warning: failed to load ~/.be-music/player.json (${formatCliParseError(error)}).\n`);
+    process.stdout.write(`Warning: failed to load ~/.be-music/player.json (${formatCLIParseError(error)}).\n`);
   }
   args = applyPersistedPlayerConfigToArgs(args, persistedConfig, overrideFlags);
   let nextPersistedConfig = resolvePersistedPlayerConfigFromArgs(args, persistedConfig);
@@ -160,26 +160,26 @@ export async function main(): Promise<void> {
 
   const resolvedLogFilePath =
     typeof args.logFile === 'string' && args.logFile.length > 0
-      ? resolveCliPath(args.logFile)
+      ? resolveCLIPath(args.logFile)
       : resolveDefaultPlayerLogPath();
   activePlayerLogger = await createFileLogger(resolvedLogFilePath);
-  logCli('info', 'cli.start', {
+  logCLI('info', 'cli.start', {
     input: args.input,
     logFile: resolvedLogFilePath,
   });
 
   try {
     // Must run before any worker spawn so the extraction directory propagates through the environment.
-    await ensureSeaEmbeddedNodeModules();
+    await ensureSEAEmbeddedNodeModules();
   } catch (error) {
-    process.stdout.write(`Warning: failed to extract embedded optional modules (${formatCliParseError(error)}).\n`);
+    process.stdout.write(`Warning: failed to extract embedded optional modules (${formatCLIParseError(error)}).\n`);
   }
 
   if (typeof args.judgeWindowMs === 'number' && Number.isFinite(args.judgeWindowMs)) {
     process.stdout.write(`Warning: debug judge override enabled (BAD window: ${Math.round(args.judgeWindowMs)}ms).\n`);
   }
 
-  const inputPath = resolveCliPath(args.input);
+  const inputPath = resolveCLIPath(args.input);
   let sessionInputCapture: RawInputCapture | undefined;
   try {
     const inputStat = await stat(inputPath);
@@ -187,7 +187,7 @@ export async function main(): Promise<void> {
       sessionInputCapture = beginSharedRawInputCapture({
         forceResetRawMode: process.platform === 'win32',
       });
-      logCli('info', 'cli.session-input-capture.started', {
+      logCLI('info', 'cli.session-input-capture.started', {
         inputIsDirectory: inputStat.isDirectory(),
         tui: args.tui,
         stdinIsRaw: Boolean(sessionInputCapture.stdin.isRaw),
@@ -214,7 +214,7 @@ export async function main(): Promise<void> {
   } finally {
     sessionInputCapture?.restore();
     if (sessionInputCapture) {
-      logCli('info', 'cli.session-input-capture.stopped', {
+      logCLI('info', 'cli.session-input-capture.stopped', {
         stdinIsRaw: Boolean((process.stdin as NodeJS.ReadStream & { isRaw?: boolean }).isRaw),
       });
       sessionInputCapture = undefined;
@@ -222,15 +222,15 @@ export async function main(): Promise<void> {
     try {
       await savePersistedPlayerConfig(nextPersistedConfig);
     } catch (error) {
-      process.stdout.write(`Warning: failed to save ~/.be-music/player.json (${formatCliParseError(error)}).\n`);
+      process.stdout.write(`Warning: failed to save ~/.be-music/player.json (${formatCLIParseError(error)}).\n`);
     }
-    logCli('info', 'cli.finish', {
+    logCLI('info', 'cli.finish', {
       exitCode: process.exitCode ?? 0,
     });
     try {
       await activePlayerLogger.close();
     } catch (error) {
-      process.stderr.write(`Warning: failed to close log file (${formatCliParseError(error)}).\n`);
+      process.stderr.write(`Warning: failed to close log file (${formatCLIParseError(error)}).\n`);
     }
     activePlayerLogger = createNoopLogger();
   }
@@ -238,7 +238,7 @@ export async function main(): Promise<void> {
 
 async function runDirectoryInput(
   rootDir: string,
-  args: CliArgs,
+  args: CLIArgs,
   initialConfig: PersistedPlayerConfig,
 ): Promise<PersistedPlayerConfig> {
   let persistedConfig = persistMusicSelectConfig(initialConfig, rootDir, {
@@ -620,13 +620,13 @@ function resolveDirectoryStateFromResultAction(
   };
 }
 
-async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedChartResult> {
+async function playChartOnce(chartPath: string, args: CLIArgs): Promise<PlayedChartResult> {
   let resolvedHighSpeed = normalizeHighSpeedValue(args.highSpeed);
-  const effectivePlayMode = resolveEffectivePlayModeFromCliArgs(args);
-  let playLoadingStageFileImage: StageFileAnsiImage | undefined;
+  const effectivePlayMode = resolveEffectivePlayModeFromCLIArgs(args);
+  let playLoadingStageFileImage: StageFileANSIImage | undefined;
   const stageFileKittySupported = supportsKittyGraphicsProtocol(process.env);
   const useKittyGraphicsForStageFile = args.kittyGraphics && Boolean(process.stdout.isTTY) && stageFileKittySupported;
-  logCli('info', 'play.loading.stagefile.mode', {
+  logCLI('info', 'play.loading.stagefile.mode', {
     chartPath,
     kittyGraphicsRequested: Boolean(args.kittyGraphics),
     stdoutIsTTY: Boolean(process.stdout.isTTY),
@@ -676,14 +676,14 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         detail: json.metadata.stageFile.replaceAll('\\', '/'),
       });
       const stageFileDisplaySize = resolvePlayLoadingStageFileDisplaySize(process.stdout.columns, process.stdout.rows);
-      playLoadingStageFileImage = await loadStageFileAnsiImage(json, {
+      playLoadingStageFileImage = await loadStageFileANSIImage(json, {
         baseDir: dirname(chartPath),
         width: stageFileDisplaySize.width,
         height: stageFileDisplaySize.height,
         imageResizeAlgorithm: args.imageResizeAlgorithm,
         signal: chartLoadingAbortCapture?.signal,
       });
-      logCli('info', 'play.loading.stagefile.loaded', {
+      logCLI('info', 'play.loading.stagefile.loaded', {
         chartPath,
         stageFile: json.metadata.stageFile.replaceAll('\\', '/'),
         requestedWidth: stageFileDisplaySize.width,
@@ -711,10 +711,10 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         ratio: 0.2,
         message: 'Rendering preview audio...',
       });
-      const outputPath = resolveCliPath(args.renderAudioPath);
-      const audioRendered = await renderJson(playChart.chart, {
+      const outputPath = resolveCLIPath(args.renderAudioPath);
+      const audioRendered = await renderJSON(playChart.chart, {
         baseDir: dirname(chartPath),
-        inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
+        inferBmsLNTypeWhenMissing: args.inferBmsLNTypeWhenMissing,
         signal: chartLoadingAbortCapture?.signal,
       });
       await writeAudioFile(outputPath, audioRendered);
@@ -734,12 +734,12 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     chartLoadingAbortCapture?.dispose();
   }
 
-  const playOptions = createPlayOptionsFromCliArgs(args, chartPath);
-  logCli('info', 'play.start', {
+  const playOptions = createPlayOptionsFromCLIArgs(args, chartPath);
+  logCLI('info', 'play.start', {
     chartPath,
     mode: effectivePlayMode,
     kittyGraphics: args.kittyGraphics,
-    videoBgaStreaming: args.videoBgaStreaming,
+    videoBGAStreaming: args.videoBGAStreaming,
   });
 
   let summary: PlayerSummary;
@@ -776,7 +776,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
             }
           : undefined,
         onLoadComplete: () => {
-          logCli('info', 'play.loading.complete', {
+          logCLI('info', 'play.loading.complete', {
             chartPath,
           });
           clearPlayLoadingScreen(playLoadingScreenRenderState);
@@ -826,9 +826,9 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
   };
 }
 
-function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
+function createPlayOptionsFromCLIArgs(args: CLIArgs, chartPath: string) {
   return {
-    inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
+    inferBmsLNTypeWhenMissing: args.inferBmsLNTypeWhenMissing,
     showInvisibleNotes: args.showInvisibleNotes,
     compressor: args.compressor,
     compressorThresholdDb: args.compressorThresholdDb,
@@ -840,7 +840,7 @@ function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
     limiterCeilingDb: args.limiterCeilingDb,
     limiterReleaseMs: args.limiterReleaseMs,
     speed: args.speed,
-    uiFps: args.uiFps,
+    uiFPS: args.uiFPS,
     tuiVisibleNotesLimit: args.tuiVisibleNotesLimit,
     tuiNoteHeight: args.tuiNoteHeight,
     imageResizeAlgorithm: args.imageResizeAlgorithm,
@@ -863,11 +863,11 @@ function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
     laneModeExtension: resolveChartLaneModeExtension(chartPath),
     tui: args.tui,
     kittyGraphics: args.kittyGraphics,
-    videoBgaStreaming: args.videoBgaStreaming,
+    videoBGAStreaming: args.videoBGAStreaming,
   };
 }
 
-export function resolveEffectivePlayModeFromCliArgs(args: Pick<CliArgs, 'auto' | 'autoScratch' | 'tui'>): PlayMode {
+export function resolveEffectivePlayModeFromCLIArgs(args: Pick<CLIArgs, 'auto' | 'autoScratch' | 'tui'>): PlayMode {
   if (!args.tui) {
     return 'auto';
   }
@@ -882,7 +882,7 @@ function resolveChartLaneModeExtension(chartPath: string): string | undefined {
 async function playSingleChartUntilExit(
   chartPath: string,
   rootDir: string,
-  args: CliArgs,
+  args: CLIArgs,
 ): Promise<ResultScreenExitAction> {
   while (true) {
     const played = await playChartOnce(chartPath, args);
@@ -897,7 +897,7 @@ async function playSingleChartUntilExit(
   }
 }
 
-function logCli(level: LogLevel, event: string, fields?: Record<string, unknown>): void {
+function logCLI(level: LogLevel, event: string, fields?: Record<string, unknown>): void {
   const entry: LogEntry = {
     source: 'cli',
     level,
@@ -907,7 +907,7 @@ function logCli(level: LogLevel, event: string, fields?: Record<string, unknown>
   activePlayerLogger.log(entry);
 }
 
-function formatCliParseError(error: unknown): string {
+function formatCLIParseError(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
@@ -962,7 +962,7 @@ function renderPlayLoadingProgress(
   progress: PlayLoadingProgress,
   options: {
     columns?: number;
-    stageFileImage?: StageFileAnsiImage;
+    stageFileImage?: StageFileANSIImage;
     useKittyGraphics?: boolean;
     state: PlayLoadingScreenRenderState;
   },
@@ -980,7 +980,7 @@ function renderPlayLoadingProgress(
     return;
   }
   if (shouldRedrawStageFile && options.stageFileImage && !options.state.stageFileRenderLogged) {
-    logCli('info', 'play.loading.stagefile.render', {
+    logCLI('info', 'play.loading.stagefile.render', {
       useKittyGraphics: options.useKittyGraphics === true && options.stageFileImage.kittyImage !== undefined,
       width: options.stageFileImage.width,
       height: options.stageFileImage.height,
@@ -1037,30 +1037,30 @@ export function resolveMusicSelectInitialFocusKey(
   return createChartFocusKey(normalized);
 }
 
-function isCliEntryPoint(): boolean {
+function isCLIEntryPoint(): boolean {
   const entry = process.argv[1];
   if (!entry) {
     return false;
   }
 
   try {
-    const moduleUrl = (import.meta as { url?: unknown }).url;
-    if (typeof moduleUrl !== 'string' || moduleUrl.length === 0) {
+    const moduleURL = (import.meta as { url?: unknown }).url;
+    if (typeof moduleURL !== 'string' || moduleURL.length === 0) {
       return false;
     }
-    return resolve(entry) === fileURLToPath(moduleUrl);
+    return resolve(entry) === fileURLToPath(moduleURL);
   } catch {
     return false;
   }
 }
 
-if (isCliEntryPoint()) {
+if (isCLIEntryPoint()) {
   void main()
     .then(() => {
       process.exit(process.exitCode ?? 0);
     })
     .catch((error) => {
-      process.stderr.write(`${formatCliParseError(error)}\n`);
+      process.stderr.write(`${formatCLIParseError(error)}\n`);
       process.exit(1);
     });
 }

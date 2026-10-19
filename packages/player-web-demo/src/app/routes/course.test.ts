@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { drawBrowserRandomCourse, type BrowserSongCollection } from '@be-music/player-web/collection';
 import type { BeatorajaThemeBundle } from '@be-music/player-web/skin';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
@@ -27,7 +27,7 @@ function song(id: string): LibraryChart {
     subtitle: `${id} [ANOTHER]`,
     artist: 'artist',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 

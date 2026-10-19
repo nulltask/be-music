@@ -122,4 +122,4 @@ export const LR2_BUTTON = {
 } as const;
 
 /** One of LR2's buttons ({@link LR2_BUTTON}). */
-export type Lr2Button = (typeof LR2_BUTTON)[keyof typeof LR2_BUTTON];
+export type LR2Button = (typeof LR2_BUTTON)[keyof typeof LR2_BUTTON];

@@ -52,12 +52,12 @@
         "01": "MIRROR",
         "02": "RANDOM"
       },
-      "exWav": {
+      "exWAV": {
         "01": "pvf 1024,-200,48000 sample.wav",
         "02": "vp -600,-500 branch.wav",
         "03": "v 0 right.wav"
       },
-      "exBmp": {
+      "exBMP": {
         "01": "255,0,0,0,bga-base.bmp",
         "02": "128,255,255,255,bga-layer.bmp"
       },
@@ -67,13 +67,13 @@
       },
       "scroll": {},
       "speed": {},
-      "swBga": {
+      "swBGA": {
         "01": "10:5:1:FF000000 01 02 03 04 05",
         "02": "5:3:0 01 02 03"
       },
       "player": 1,
       "lnType": 1,
-      "volWav": 90,
+      "volWAV": 90,
       "defExRank": 100,
       "wavCmd": "01 01 64"
     },
@@ -159,7 +159,7 @@
       "randomPatterns": [],
       "title": "Extended Directive Payloads",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -201,8 +201,8 @@
           ]
         },
         "noteCount": 12,
-        "chartFingerprint": "bmfp0:5a3ad64ec10af9ed6783101281a6d951be6c0e8de751c46938faa627b31a7908",
-        "playFingerprint": "bmfp0:5a3ad64ec10af9ed6783101281a6d951be6c0e8de751c46938faa627b31a7908",
+        "chartFingerprint": "bmfp0:0e66276d3f73a3e85568caa2eb260b99853fc56da1eb34048768f230b4cbc593",
+        "playFingerprint": "bmfp0:0e66276d3f73a3e85568caa2eb260b99853fc56da1eb34048768f230b4cbc593",
         "title": "Extended Directive Payloads",
         "subtitle": "Structurally valid #EXWAV / #EXBMP / #ARGB / #BGA / #SWBGA / #WAVCMD / #EXRANK payloads",
         "artist": "be-music",

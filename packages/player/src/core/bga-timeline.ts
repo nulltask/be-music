@@ -1,6 +1,6 @@
-import { type BgaCue } from '@be-music/chart';
+import { type BGACue } from '@be-music/chart';
 
-// The BGA cue builders (`buildBgaTimelines`, `buildBmsBgaTimeline`) live in `@be-music/chart`; this module only picks
+// The BGA cue builders (`buildBGATimelines`, `buildBmsBGATimeline`) live in `@be-music/chart`; this module only picks
 // the cue on screen, for `@be-music/player/display`.
 
 /**
@@ -13,7 +13,7 @@ import { type BgaCue } from '@be-music/chart';
  */
 export const DEFAULT_POOR_BGA_DISPLAY_SECONDS = 0.5;
 
-export function pickActiveBgaCue<T extends { seconds: number }>(
+export function pickActiveBGACue<T extends { seconds: number }>(
   cues: ReadonlyArray<T>,
   seconds: number,
 ): T | undefined {
@@ -34,6 +34,6 @@ export function pickActiveBgaCue<T extends { seconds: number }>(
   return answer < 0 ? undefined : cues[answer];
 }
 
-export function pickActiveBgaKey(cues: ReadonlyArray<BgaCue>, seconds: number): string | undefined {
-  return pickActiveBgaCue(cues, seconds)?.key;
+export function pickActiveBGAKey(cues: ReadonlyArray<BGACue>, seconds: number): string | undefined {
+  return pickActiveBGACue(cues, seconds)?.key;
 }

@@ -92,13 +92,13 @@ const AMBIGUOUS_COLUMNS: ReadonlySet<string> = new Set([
 ]);
 
 /** An SQL value: SQLite's INTEGER / REAL (`number`), TEXT (`string`) or NULL. */
-export type CourseSqlValue = number | string | null;
+export type CourseSQLValue = number | string | null;
 
 /** The parsed form of a filter. */
 export type CourseSongFilterExpr =
   | {
       type: 'literal';
-      value: CourseSqlValue;
+      value: CourseSQLValue;
       /** A number written with a `.` or an exponent: SQLite REAL. */ real?: true;
     }
   | { type: 'column'; column: CourseSongColumn }
@@ -555,14 +555,14 @@ function affinityOf(expr: CourseSongFilterExpr): Affinity {
   return expr.type === 'column' ? COLUMN_TYPES[expr.column] : 'none';
 }
 
-function columnValue(record: CourseSongRecord, column: CourseSongColumn): CourseSqlValue {
+function columnValue(record: CourseSongRecord, column: CourseSongColumn): CourseSQLValue {
   const value = record[column];
   if (COLUMN_TYPES[column] === 'text') return typeof value === 'string' ? value : '';
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 /** SQLite's NUMERIC affinity: a text value that reads as a number in full becomes that number. */
-function applyNumericAffinity(value: CourseSqlValue): CourseSqlValue {
+function applyNumericAffinity(value: CourseSQLValue): CourseSQLValue {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
   if (trimmed.length === 0 || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(trimmed)) return value;
@@ -593,7 +593,7 @@ function comparisonOperands(
   left: CourseSongFilterExpr,
   right: CourseSongFilterExpr,
   record: CourseSongRecord,
-): [CourseSqlValue, CourseSqlValue] {
+): [CourseSQLValue, CourseSQLValue] {
   let a = evaluate(left, record);
   let b = evaluate(right, record);
   const la = affinityOf(left);
@@ -610,7 +610,7 @@ function compare(
   left: CourseSongFilterExpr,
   right: CourseSongFilterExpr,
   record: CourseSongRecord,
-): CourseSqlValue {
+): CourseSQLValue {
   const [a, b] = comparisonOperands(left, right, record);
   if (a === null || b === null) return null;
   const order = compareValues(a, b);
@@ -630,12 +630,12 @@ function compare(
 }
 
 /** Three-valued truth: `true`, `false`, or `null` (unknown). */
-function truth(value: CourseSqlValue): boolean | null {
+function truth(value: CourseSQLValue): boolean | null {
   if (value === null) return null;
   return toNumber(value) !== 0;
 }
 
-function fromTruth(value: boolean | null): CourseSqlValue {
+function fromTruth(value: boolean | null): CourseSQLValue {
   return value === null ? null : value ? 1 : 0;
 }
 
@@ -681,7 +681,7 @@ function isRealExpr(expr: CourseSongFilterExpr): boolean {
   return false;
 }
 
-function arithmetic(op: '+' | '-' | '*' | '/' | '%' | '&' | '|', a: number, b: number, real: boolean): CourseSqlValue {
+function arithmetic(op: '+' | '-' | '*' | '/' | '%' | '&' | '|', a: number, b: number, real: boolean): CourseSQLValue {
   switch (op) {
     case '+':
       return a + b;
@@ -707,7 +707,7 @@ function arithmetic(op: '+' | '-' | '*' | '/' | '%' | '&' | '|', a: number, b: n
   }
 }
 
-function evaluate(expr: CourseSongFilterExpr, record: CourseSongRecord): CourseSqlValue {
+function evaluate(expr: CourseSongFilterExpr, record: CourseSongRecord): CourseSQLValue {
   switch (expr.type) {
     case 'literal':
       return expr.value;
@@ -779,7 +779,7 @@ export function evaluateCourseSongFilter(filter: CourseSongFilterExpr, record: C
 }
 
 /** SQLite's `ORDER BY` order of two values for one term: NULL first ascending, last descending, unless `nulls` says. */
-function compareOrderValues(a: CourseSqlValue, b: CourseSqlValue, term: CourseSongOrderTerm): number {
+function compareOrderValues(a: CourseSQLValue, b: CourseSQLValue, term: CourseSongOrderTerm): number {
   if (a === null || b === null) {
     if (a === b) return 0;
     const nullsFirst = term.nulls !== undefined ? term.nulls === 'first' : !term.descending;
@@ -806,7 +806,7 @@ export function selectCourseSongs<T>(
   if (query.orderBy.length > 0) {
     const keyed = selected.map((candidate) => {
       const record = recordOf(candidate);
-      const keys = query.orderBy.map(({ key }): CourseSqlValue => {
+      const keys = query.orderBy.map(({ key }): CourseSQLValue => {
         if (key.type !== 'random') return evaluate(key, record);
         if (random === undefined) throw new Error('ORDER BY RANDOM() needs a random source');
         return random();

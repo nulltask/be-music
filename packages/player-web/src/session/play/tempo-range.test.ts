@@ -14,7 +14,7 @@ function tempoOnly(tempoPoints: TempoPoint[]): PlayTempoChart {
 
 describe('resolvePlayTempoRange', () => {
   it('reports a constant tempo as its own range', () => {
-    expect(resolvePlayTempoRange(bms(['#BPM 150', '#00111:01']))).toEqual({ minBpm: 150, maxBpm: 150, mainBpm: 150 });
+    expect(resolvePlayTempoRange(bms(['#BPM 150', '#00111:01']))).toEqual({ minBPM: 150, maxBPM: 150, mainBPM: 150 });
   });
 
   it('takes the main BPM from the notes (the BPM most of them sit at), not the BPM held longest', () => {
@@ -26,7 +26,7 @@ describe('resolvePlayTempoRange', () => {
       '#00211:01',
       '#00411:01',
     ]);
-    expect(resolvePlayTempoRange(chart)).toEqual({ minBpm: 60, maxBpm: 120, mainBpm: 120 });
+    expect(resolvePlayTempoRange(chart)).toEqual({ minBPM: 60, maxBPM: 120, mainBPM: 120 });
   });
 
   it('is not moved by a split-second BPM spike (BPM × N + STOP)', () => {
@@ -41,11 +41,11 @@ describe('resolvePlayTempoRange', () => {
       '#00303:91',
       '#00311:0101',
     ]);
-    expect(resolvePlayTempoRange(chart)).toMatchObject({ maxBpm: 14_500_145, mainBpm: 145 });
+    expect(resolvePlayTempoRange(chart)).toMatchObject({ maxBPM: 14_500_145, mainBPM: 145 });
   });
 
   it('takes the start BPM as the main BPM of a chart without notes', () => {
-    expect(resolvePlayTempoRange(bms(['#BPM 140', '#00103:B4']))).toEqual({ minBpm: 140, maxBpm: 180, mainBpm: 140 });
+    expect(resolvePlayTempoRange(bms(['#BPM 140', '#00103:B4']))).toEqual({ minBPM: 140, maxBPM: 180, mainBPM: 140 });
   });
 
   it('ignores zero and non-finite BPMs', () => {
@@ -54,12 +54,12 @@ describe('resolvePlayTempoRange', () => {
       { beat: 1, bpm: 0, seconds: 5 },
       { beat: 2, bpm: Number.NaN, seconds: 6 },
     ];
-    expect(resolvePlayTempoRange(tempoOnly(points))).toEqual({ minBpm: 140, maxBpm: 140, mainBpm: 140 });
+    expect(resolvePlayTempoRange(tempoOnly(points))).toEqual({ minBPM: 140, maxBPM: 140, mainBPM: 140 });
   });
 
   it('falls back to the given BPM when no tempo point is usable', () => {
-    expect(resolvePlayTempoRange(tempoOnly([]), 130)).toEqual({ minBpm: 130, maxBpm: 130, mainBpm: 130 });
-    expect(resolvePlayTempoRange(tempoOnly([{ beat: 0, bpm: 0, seconds: 0 }]), 130)?.mainBpm).toBe(130);
+    expect(resolvePlayTempoRange(tempoOnly([]), 130)).toEqual({ minBPM: 130, maxBPM: 130, mainBPM: 130 });
+    expect(resolvePlayTempoRange(tempoOnly([{ beat: 0, bpm: 0, seconds: 0 }]), 130)?.mainBPM).toBe(130);
     expect(resolvePlayTempoRange(tempoOnly([]))).toBeUndefined();
     expect(resolvePlayTempoRange(tempoOnly([]), 0)).toBeUndefined();
   });

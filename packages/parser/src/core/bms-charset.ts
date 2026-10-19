@@ -15,7 +15,7 @@
  * / `sjis` / `MS932` / `cp932`, …). The normalization strips separators and lower-cases so every common spelling
  * collapses onto one canonical name.
  */
-export function canonicalizeBmsCharset(raw: string | undefined): string | undefined {
+export function canonicalizeBMSCharset(raw: string | undefined): string | undefined {
   if (typeof raw !== 'string') return undefined;
   const normalized = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (normalized.length === 0) return undefined;
@@ -64,14 +64,14 @@ export function canonicalizeBmsCharset(raw: string | undefined): string | undefi
  * so a latin1 first-pass decode (which preserves bytes 1:1) always lets us read it. Looking at only the first ~4 KB
  * keeps the scan cheap and avoids regex-walking a multi-MB chart needlessly.
  */
-export function extractDeclaredBmsCharset(text: string): string | undefined {
+export function extractDeclaredBMSCharset(text: string): string | undefined {
   const head = text.length > 4096 ? text.slice(0, 4096) : text;
   for (const line of head.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed.startsWith('#')) continue;
     const match = /^#CHARSET\s+(\S+)/i.exec(trimmed);
     if (match) {
-      return canonicalizeBmsCharset(match[1]);
+      return canonicalizeBMSCharset(match[1]);
     }
   }
   return undefined;

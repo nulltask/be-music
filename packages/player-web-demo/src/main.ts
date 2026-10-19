@@ -6,7 +6,7 @@ import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { readDeviceSignals, resolveDeviceProfile } from './device-profile.ts';
-import { waitForDefaultUiFonts } from './services/built-in-skins.ts';
+import { waitForDefaultUIFonts } from './services/built-in-skins.ts';
 import { isTestHookEnabled, TestHookRecorder } from './test-hook.ts';
 import { liveTestHookState } from './services/test-hook.ts';
 import './styles.css';
@@ -33,7 +33,7 @@ document.documentElement.classList.toggle('phone', deviceProfile.phone);
 // open of the OSS tab, so the initial paint isn't blocked on rendering ~30 dependency cards.
 wireHelpModal();
 
-void waitForDefaultUiFonts().finally(() => {
+void waitForDefaultUIFonts().finally(() => {
   // `window.__beMusicTest` for the end-to-end suite (`?e2e=1` or a development build; `test-hook.ts`).
   const testHook = isTestHookEnabled(window.location.href, import.meta.env.DEV) ? new TestHookRecorder() : undefined;
   const demo = new PlayerWebDemoApp({

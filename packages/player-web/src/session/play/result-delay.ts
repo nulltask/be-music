@@ -1,5 +1,5 @@
 import type { TimingResolver, TimedSampleTrigger } from '@be-music/chart';
-import { type BeMusicEvent, type BeMusicJson, normalizeObjectKey, resolveBmsBase } from '@be-music/json';
+import { type BeMusicEvent, type BeMusicJSON, normalizeObjectKey, resolveBMSBase } from '@be-music/json';
 import type { TimedPlayableNote } from '@be-music/player/display';
 import {
   clampSampleDuration,
@@ -37,7 +37,7 @@ export function resolvePostChartResultDelayMs(
 }
 
 export function resolveGameplayAudioTailCleanupDelayMs(options: {
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   notes: ReadonlyArray<Pick<TimedPlayableNote, 'event' | 'seconds'>>;
   autoSampleTriggers: ReadonlyArray<Pick<TimedSampleTrigger, 'event' | 'seconds'>>;
   decodedSamples: ReadonlyMap<string, AudioBuffer>;
@@ -76,7 +76,7 @@ function resolveSamplePlaybackDurationSeconds(
     'chart' | 'decodedSamples' | 'bmsonSlicePlayback'
   >,
 ): number | undefined {
-  const sampleKey = normalizeObjectKey(event.value, resolveBmsBase(context.chart));
+  const sampleKey = normalizeObjectKey(event.value, resolveBMSBase(context.chart));
   const path = context.chart.resources.wav[sampleKey];
   if (typeof path !== 'string') return undefined;
   const buffer = context.decodedSamples.get(normalizeSamplePath(path));

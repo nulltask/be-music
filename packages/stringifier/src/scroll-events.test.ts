@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createBeatResolver, createScrollTimeline } from '../../chart/src/index.ts';
-import type { BeMusicJson } from '../../json/src/index.ts';
-import { parseBms, parseBmson } from '../../parser/src/index.ts';
-import { stringifyBms, stringifyBmson } from './index.ts';
+import type { BeMusicJSON } from '../../json/src/index.ts';
+import { parseBMS, parseBmson } from '../../parser/src/index.ts';
+import { stringifyBMS, stringifyBmson } from './index.ts';
 
 const SCROLL_BMSON = JSON.stringify({
   version: '1.0.0',
@@ -26,7 +26,7 @@ const SCROLL_BMS = [
   '#002SC:01',
 ].join('\n');
 
-function scrollTimeline(json: BeMusicJson) {
+function scrollTimeline(json: BeMusicJSON) {
   return createScrollTimeline(json, createBeatResolver(json));
 }
 
@@ -64,7 +64,7 @@ describe('bmson scroll_events output', () => {
   });
 
   test('BMS #SCROLL / SC convert to scroll_events that play the same scroll timeline', () => {
-    const bms = parseBms(SCROLL_BMS);
+    const bms = parseBMS(SCROLL_BMS);
     const output = JSON.parse(stringifyBmson(bms)) as { scroll_events?: unknown };
     expect(output.scroll_events).toEqual([
       { y: 1200, rate: 0.5 },
@@ -91,10 +91,10 @@ describe('bmson scroll_events output', () => {
 describe('bmson scroll_events to BMS', () => {
   test('scroll_events become #SCROLLxx and SC objects that play the same scroll timeline', () => {
     const json = parseBmson(SCROLL_BMSON);
-    const bms = stringifyBms(json);
+    const bms = stringifyBMS(json);
     expect(bms).toMatch(/^#SCROLL01 0\.5$/m);
     expect(bms).toMatch(/^#SCROLL02 2$/m);
     expect(bms).toMatch(/^#000SC:/m);
-    expect(scrollTimeline(parseBms(bms))).toEqual(scrollTimeline(json));
+    expect(scrollTimeline(parseBMS(bms))).toEqual(scrollTimeline(json));
   });
 });

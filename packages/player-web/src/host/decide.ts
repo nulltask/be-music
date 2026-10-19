@@ -12,7 +12,7 @@ import { SessionScene, type SessionSceneOptions } from '../session/session-scene
 import { logger } from '../logger.ts';
 import { BeatorajaDecideView, resolveBeatorajaDecideTiming } from '../view/beatoraja/decide-view.ts';
 import { BuiltInDecideView, resolveBuiltInDecideTiming } from '../view/built-in/decide-view.ts';
-import { Lr2DecideView, resolveLr2DecideTiming } from '../view/lr2/decide-view.ts';
+import { LR2DecideView, resolveLR2DecideTiming } from '../view/lr2/decide-view.ts';
 import type { DecideFrame, DecideIntent, DecideView, SceneViewTiming } from '../view/types.ts';
 import type { DecideKit } from './family-kit.ts';
 
@@ -33,7 +33,7 @@ export interface DecideSceneOptions extends SessionSceneOptions {
   readonly playOptions?: PlayOptions;
   /** Where the chart's files are, for the images a skin shows. */
   readonly source?: BrowserSongAssetSource;
-  /** The theme's sounds: the screen plays `decideBgm`, its jingle, and stops it as it leaves. */
+  /** The theme's sounds: the screen plays `decideBGM`, its jingle, and stops it as it leaves. */
   readonly sounds: SystemSoundSet;
   /**
    * The host's audio service: the jingle plays through it, and so do a beatoraja skin's Lua sounds (`skinSounds`,
@@ -75,7 +75,7 @@ interface FamilyDecideView {
 function decideTimingOf(kit: DecideSceneKit): SceneViewTiming {
   switch (kit.family) {
     case 'lr2':
-      return resolveLr2DecideTiming(kit.skin);
+      return resolveLR2DecideTiming(kit.skin);
     case 'beatoraja':
       return resolveBeatorajaDecideTiming(kit.kit.skin);
     case 'built-in':
@@ -95,7 +95,7 @@ function createDecideView(
   const source = options.source !== undefined ? { source: options.source } : {};
   switch (kit.family) {
     case 'lr2': {
-      const view = new Lr2DecideView(kit, source);
+      const view = new LR2DecideView(kit, source);
       return {
         view,
         updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),

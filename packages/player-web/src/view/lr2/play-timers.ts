@@ -1,23 +1,23 @@
 /**
  * The LR2 timers of the play screen, as the LR2 play view keeps them: each timer an LR2 skin's `#DST_*` and `#SRC_*`
  * entries count from, with when it started on the play clock (`PlayfieldRuntime.playClock`). The view starts and stops
- * them from the play's moments (`PlayFrame.events`, through `resolveLr2PlayTimers`), and retires the one-shot ones once
+ * them from the play's moments (`PlayFrame.events`, through `resolveLR2PlayTimers`), and retires the one-shot ones once
  * their skin animation has played out. The key-on bank (100-119) is the play's own key beams: the session keeps them
  * by channel (`PlayfieldRuntime.keyBeamStartedAt`), and the timers map each lit channel onto its key-on timer
- * (`resolveLr2LaneTimer('key-on', …)`).
+ * (`resolveLR2LaneTimer('key-on', …)`).
  *
  * The LR2 timer ids and the lane index stay here and in the LR2 view: the session and the shared playfield go by
  * channel.
  */
 
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import { LR2_LANE_TIMER_BANK_SIZE, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import {
-  resolveLr2LaneTimer,
-  resolveLr2PlayTimers,
-  type Lr2Lane,
-  type Lr2LaneTimerBank,
-  type Lr2TimerUpdate,
+  resolveLR2LaneTimer,
+  resolveLR2PlayTimers,
+  type LR2Lane,
+  type LR2LaneTimerBank,
+  type LR2TimerUpdate,
 } from '@be-music/lr2-skin/state';
 import { resolveSideRelativeLaneIndex } from '@be-music/player/lanes';
 import type { ChartPlayVariant } from '@be-music/chart';
@@ -28,7 +28,7 @@ import {
   computeFullComboDurationMs,
   computeGaugeTimerDurationsMs,
   computeKeyOnFadeDurationsMs,
-  computeLnHoldDurationsMs,
+  computeLNHoldDurationsMs,
 } from './play-hud.ts';
 
 /**
@@ -44,7 +44,7 @@ export const LR2_GAUGE_RISE_FALLBACK_MS = 300;
 const FULL_COMBO_FALLBACK_MS = 3000;
 
 /** What the timers read of the running play (`PlayfieldRuntime`'s members of these names). */
-export interface Lr2PlayTimerSource {
+export interface LR2PlayTimerSource {
   readonly song: unknown;
   readonly chartPlayVariant: ChartPlayVariant;
   readonly disposed: boolean;
@@ -64,8 +64,8 @@ export interface Lr2PlayTimerSource {
 type TimerHandle = ReturnType<typeof setTimeout>;
 
 /** The LR2 play screen's timers. See the module comment. */
-export class Lr2PlayTimers {
-  private readonly play: Lr2PlayTimerSource;
+export class LR2PlayTimers {
+  private readonly play: LR2PlayTimerSource;
   /** The timers the view started, by id, with their start on the play clock. */
   private readonly started = new Map<number, number>();
   /** When the scene started (timer 0), on the play clock; the judge timers count from it before the first judgment. */
@@ -83,32 +83,32 @@ export class Lr2PlayTimers {
   private readonly lnHoldTimeouts = new Set<TimerHandle>();
   private disposed = false;
 
-  public constructor(play: Lr2PlayTimerSource) {
+  public constructor(play: LR2PlayTimerSource) {
     this.play = play;
   }
 
   /** Takes the skin's timer spans: the key-beam, bomb, long-note hold, gauge and full-combo animation lengths. */
-  public setSpans(skin: Lr2Skin): void {
+  public setSpans(skin: LR2Skin): void {
     this.fullComboSpan = computeFullComboDurationMs(skin);
     replace(this.keyOnFadeSpans, computeKeyOnFadeDurationsMs(skin));
     replace(this.bombSpans, computeBombDurationsMs(skin));
-    replace(this.lnHoldSpans, computeLnHoldDurationsMs(skin));
+    replace(this.lnHoldSpans, computeLNHoldDurationsMs(skin));
     replace(this.gaugeSpans, computeGaugeTimerDurationsMs(skin));
   }
 
   /** `channel`'s lane as LR2's lane timer banks address it: its index on its side and the play variant. */
-  public lane(channel: string): Lr2Lane {
+  public lane(channel: string): LR2Lane {
     const playVariant = this.play.chartPlayVariant;
     return { channel, laneIndex: resolveSideRelativeLaneIndex(channel, playVariant), playVariant };
   }
 
-  /** The LR2 timer of `channel`'s lane in a timer bank (`resolveLr2LaneTimer`). */
-  public laneTimer(bank: Lr2LaneTimerBank, channel: string): number | undefined {
-    return resolveLr2LaneTimer(bank, this.lane(channel));
+  /** The LR2 timer of `channel`'s lane in a timer bank (`resolveLR2LaneTimer`). */
+  public laneTimer(bank: LR2LaneTimerBank, channel: string): number | undefined {
+    return resolveLR2LaneTimer(bank, this.lane(channel));
   }
 
   /** Starts and stops the timers a moment of the play changes. */
-  public apply(update: Lr2TimerUpdate): void {
+  public apply(update: LR2TimerUpdate): void {
     for (const timer of update.stop) this.started.delete(timer);
     for (const [timer, at] of update.start) this.started.set(timer, at);
   }
@@ -124,7 +124,7 @@ export class Lr2PlayTimers {
         // moments. Timer 2 (FADEOUT) starts only as the play ends normally, and timer 3 (FAILED) only as it fails, so the
         // LR2 default 7-keys shutters and FAILED plate (timer 3) paint on a failure alone.
         this.sceneStartAt = event.atMs;
-        this.apply(resolveLr2PlayTimers({ kind: 'scene-start', at: event.atMs }));
+        this.apply(resolveLR2PlayTimers({ kind: 'scene-start', at: event.atMs }));
         this.seedStartInput(event.atMs, startInputMs);
         return;
       case 'load-end':
@@ -132,26 +132,26 @@ export class Lr2PlayTimers {
       case 'exit-fade-out':
       case 'exit-close':
       case 'full-combo':
-        this.apply(resolveLr2PlayTimers({ kind: event.kind, at: event.atMs }));
+        this.apply(resolveLR2PlayTimers({ kind: event.kind, at: event.atMs }));
         return;
       case 'judge':
         // Timer 46 (1P) / 47 (2P) restarts on every judgement on its side, so the `#DST_NOWJUDGE` / `#DST_NOWCOMBO`
         // chains animate from time 0 per hit.
-        this.apply(resolveLr2PlayTimers({ kind: 'judge', side: event.side, at: event.atMs }));
+        this.apply(resolveLR2PlayTimers({ kind: 'judge', side: event.side, at: event.atMs }));
         return;
       case 'gauge':
         this.gaugeMoved(event.previous, event.next, event.atMs);
         return;
       case 'bomb':
         this.apply(
-          resolveLr2PlayTimers({ kind: 'lane', bank: 'bomb', lane: this.lane(event.channel), at: event.atMs }),
+          resolveLR2PlayTimers({ kind: 'lane', bank: 'bomb', lane: this.lane(event.channel), at: event.atMs }),
         );
         return;
       case 'lane':
-        if (event.action === 'release') this.releaseLnHold(event.channel);
+        if (event.action === 'release') this.releaseLNHold(event.channel);
         return;
       case 'lane-hold':
-        this.startLnHold(event.channel);
+        this.startLNHold(event.channel);
         return;
       default:
         return;
@@ -305,7 +305,7 @@ export class Lr2PlayTimers {
    * has played out; timer 44 runs from reaching 100 % until the gauge drops below it.
    */
   private gaugeMoved(previous: number, next: number, at: number): void {
-    this.apply(resolveLr2PlayTimers({ kind: 'gauge', previous, next, at }));
+    this.apply(resolveLR2PlayTimers({ kind: 'gauge', previous, next, at }));
     if (next <= previous) return;
     if (this.gaugeRiseTimeout !== undefined) clearTimeout(this.gaugeRiseTimeout);
     const fadeMs = this.gaugeSpans.get(LR2_TIMER.GAUGE_UP_1P) ?? LR2_GAUGE_RISE_FALLBACK_MS;
@@ -316,7 +316,7 @@ export class Lr2PlayTimers {
   }
 
   /** A long note's hold began on `channel`: its hold timer (70-89) starts, fully on. */
-  private startLnHold(channel: string): void {
+  private startLNHold(channel: string): void {
     const timer = this.laneTimer('ln-hold', channel);
     if (timer === undefined) return;
     this.started.set(timer, this.play.playClock());
@@ -327,7 +327,7 @@ export class Lr2PlayTimers {
    * `channel` was released: its hold timer fades out over the skin's span (`releaseFadeAlpha`), then stops. The fade
    * starts even when the timer has already gone, so a sprite still showing tapers to nothing.
    */
-  private releaseLnHold(channel: string): void {
+  private releaseLNHold(channel: string): void {
     const timer = this.laneTimer('ln-hold', channel);
     if (timer === undefined) return;
     this.lnHoldFadeOutStart.set(timer, this.play.playClock());

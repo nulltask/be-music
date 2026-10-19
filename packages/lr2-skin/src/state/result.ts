@@ -1,14 +1,14 @@
-import { resolveClearLamp, resolveIidxRankIndexFromScore } from '@be-music/player/ruleset';
+import { resolveClearLamp, resolveIIDXRankIndexFromScore } from '@be-music/player/ruleset';
 import type { CourseView, PlayResult } from '@be-music/scene-model';
 import { LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
-import { resolveLr2ChartText, resolveLr2DifficultyOp, resolveLr2KeyModeOp } from './chart.ts';
-import { resolveLr2CourseNumber, resolveLr2CourseOps, resolveLr2CourseText } from './course.ts';
-import { resolveLr2LampOp } from './records.ts';
-import { resolveLr2RateNumber } from './score.ts';
-import type { Lr2SceneState } from './scene-state.ts';
+import { resolveLR2ChartText, resolveLR2DifficultyOp, resolveLR2KeyModeOp } from './chart.ts';
+import { resolveLR2CourseNumber, resolveLR2CourseOps, resolveLR2CourseText } from './course.ts';
+import { resolveLR2LampOp } from './records.ts';
+import { resolveLR2RateNumber } from './score.ts';
+import type { LR2SceneState } from './scene-state.ts';
 
 /** What the LR2 result screen shows: a play's result, the course it belongs to, and the skins' facts. */
-export interface Lr2ResultInput {
+export interface LR2ResultInput {
   /** The result of the play (a single play, a course stage, a course run or a NONSTOP run). */
   readonly result: PlayResult;
   /** The course the result belongs to: a stage of a running course (with its `stageIndex`) or a whole course run. */
@@ -19,8 +19,8 @@ export interface Lr2ResultInput {
   readonly customOps?: Iterable<number>;
 }
 
-/** The LR2 result screen's state: a {@link Lr2SceneState} and the fill of each bar graph. */
-export interface Lr2ResultState extends Lr2SceneState {
+/** The LR2 result screen's state: a {@link LR2SceneState} and the fill of each bar graph. */
+export interface LR2ResultState extends LR2SceneState {
   /** How full a `#SRC_BARGRAPH` of this `type` is, 0..1; `undefined` leaves it undrawn. */
   bargraph(type: number): number | undefined;
 }
@@ -61,10 +61,10 @@ function keyConfigOp(keyModeOp: number): number {
  * something.
  */
 function rankIndex(result: PlayResult): number {
-  return resolveIidxRankIndexFromScore(result.score) ?? 0;
+  return resolveIIDXRankIndexFromScore(result.score) ?? 0;
 }
 
-function resultOps(input: Lr2ResultInput): number[] {
+function resultOps(input: LR2ResultInput): number[] {
   const { result } = input;
   const ops = [...RESULT_BASE_OPS];
   for (const op of input.customOps ?? []) ops.push(op);
@@ -72,10 +72,10 @@ function resultOps(input: Lr2ResultInput): number[] {
   // The result is always on a chart.
   ops.push(LR2_OP.SONG_BAR, LR2_OP.PLAYABLE_BAR);
   // The key mode in both ranges, as skins gate on either.
-  const keyModeOp = resolveLr2KeyModeOp(result.song);
+  const keyModeOp = resolveLR2KeyModeOp(result.song);
   ops.push(keyModeOp, keyConfigOp(keyModeOp));
   // A chart without a difficulty reads NORMAL here: the stock skin ships per-difficulty panels for 152-155 only.
-  const difficultyOp = resolveLr2DifficultyOp(result.song.chart.metadata.difficulty);
+  const difficultyOp = resolveLR2DifficultyOp(result.song.chart.metadata.difficulty);
   ops.push(difficultyOp === LR2_OP.DIFFICULTY_UNDEFINED ? LR2_OP.DIFFICULTY_NORMAL : difficultyOp);
   // The play's lamp, else the one clear-lamp rule over its result.
   const lamp =
@@ -86,14 +86,14 @@ function resultOps(input: Lr2ResultInput): number[] {
       ...(result.gaugeType !== undefined ? { gauge: result.gaugeType } : {}),
       ...(result.judgeRuleset !== undefined ? { ruleset: result.judgeRuleset } : {}),
     });
-  ops.push(resolveLr2LampOp(lamp));
+  ops.push(resolveLR2LampOp(lamp));
   // The rank now and after the update (300-308 / 340-347); without score history there was no rank before (328) and
   // every play updates the best score, max combo, BP and rank (330-335).
   const rank = rankIndex(result);
   ops.push(LR2_OP.RESULT_RANK_AAA + rank, LR2_OP.UPDATED_RANK_AAA + rank, LR2_OP.PREVIOUS_RANK_0);
   ops.push(LR2_OP.SCORE_UPDATED, LR2_OP.MAX_COMBO_UPDATED, LR2_OP.MIN_BP_UPDATED, LR2_OP.RANK_UPDATED);
   ops.push(input.flipResult === true ? LR2_OP.RESULT_FLIP_ON : LR2_OP.RESULT_FLIP_OFF);
-  if (input.course !== undefined) ops.push(...resolveLr2CourseOps(input.course));
+  if (input.course !== undefined) ops.push(...resolveLR2CourseOps(input.course));
   return ops;
 }
 
@@ -104,7 +104,7 @@ function resultOps(input: Lr2ResultInput): number[] {
  */
 function resultNumber(num: number, result: PlayResult): number | undefined {
   const { score } = result;
-  const rateNumber = resolveLr2RateNumber(num, score);
+  const rateNumber = resolveLR2RateNumber(num, score);
   if (rateNumber !== undefined) return rateNumber;
   const totalNotes = score.total;
   const exMax = totalNotes * 2;
@@ -191,8 +191,8 @@ function resultNumber(num: number, result: PlayResult): number | undefined {
   }
 }
 
-function resultText(st: number, input: Lr2ResultInput): string | undefined {
-  const courseText = input.course !== undefined ? resolveLr2CourseText(st, input.course) : undefined;
+function resultText(st: number, input: LR2ResultInput): string | undefined {
+  const courseText = input.course !== undefined ? resolveLR2CourseText(st, input.course) : undefined;
   if (courseText !== undefined) return courseText;
   switch (st) {
     case LR2_TEXT.RIVAL:
@@ -204,7 +204,7 @@ function resultText(st: number, input: Lr2ResultInput): string | undefined {
       // `ProcI_Result` sets it): with no internet ranking there is none.
       return '';
     default:
-      return resolveLr2ChartText(st, input.result.song);
+      return resolveLR2ChartText(st, input.result.song);
   }
 }
 
@@ -235,12 +235,12 @@ function resultBargraph(type: number, result: PlayResult): number | undefined {
  * numbers (this play's score, counts, rates, combo, gauge and time, and the best-record and before / after numbers
  * read off it), the chart's and the course's texts, and the bar graphs (the sliders read the bar graphs' values).
  */
-export function resolveLr2ResultState(input: Lr2ResultInput): Lr2ResultState {
+export function resolveLR2ResultState(input: LR2ResultInput): LR2ResultState {
   const { result, course } = input;
   return {
     ops: new Set(resultOps(input)),
     number: (num) =>
-      (course !== undefined ? resolveLr2CourseNumber(num, course) : undefined) ?? resultNumber(num, result),
+      (course !== undefined ? resolveLR2CourseNumber(num, course) : undefined) ?? resultNumber(num, result),
     text: (st) => resultText(st, input),
     slider: (type) => resultBargraph(type, result),
     bargraph: (type) => resultBargraph(type, result),
@@ -248,7 +248,7 @@ export function resolveLr2ResultState(input: Lr2ResultInput): Lr2ResultState {
 }
 
 /** A moment of the result screen, as its LR2 timers read it; every time is on the clock the screen stamps timers with. */
-export interface Lr2ResultTimerInput {
+export interface LR2ResultTimerInput {
   /** The time now, and when the screen was entered. */
   readonly clock: { readonly nowMs: number; readonly enteredAtMs: number };
   /** When input opens: the skin's `#STARTINPUT` after the entry. The graphs start drawing then. */
@@ -267,7 +267,7 @@ export interface Lr2ResultTimerInput {
  * - timer 151 (the graphs drawn: the rank and the score show) once the graphs have drawn or been skipped;
  * - timer 152 (the record update) once the player has pressed on to it.
  */
-export function resolveLr2ResultTimers(input: Lr2ResultTimerInput): ReadonlyMap<number, number> {
+export function resolveLR2ResultTimers(input: LR2ResultTimerInput): ReadonlyMap<number, number> {
   const timers = new Map<number, number>([[LR2_TIMER.SCENE_START, input.clock.enteredAtMs]]);
   if (input.clock.nowMs >= input.inputOpenAtMs) {
     timers.set(LR2_TIMER.START_INPUT, input.inputOpenAtMs);
@@ -283,7 +283,7 @@ export function resolveLr2ResultTimers(input: Lr2ResultTimerInput): ReadonlyMap<
  * the graph's `start` ms, then a linear sweep to all of it at `end` ms. LR2's stock result skin sweeps from 500 to
  * 2000 ms after timer 150.
  */
-export function resolveLr2GraphReveal(elapsedMs: number | undefined, start: number, end: number): number {
+export function resolveLR2GraphReveal(elapsedMs: number | undefined, start: number, end: number): number {
   if (elapsedMs === undefined || elapsedMs < start) return 0;
   if (end <= start) return 1;
   return Math.max(0, Math.min(1, (elapsedMs - start) / (end - start)));

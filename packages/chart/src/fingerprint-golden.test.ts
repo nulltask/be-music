@@ -5,7 +5,7 @@
  * update of the expected value.
  */
 import { describe, expect, test } from 'vite-plus/test';
-import { parseBms, parseBmson, resolveBmsControlFlowWithDraws } from '../../parser/src/index.ts';
+import { parseBMS, parseBmson, resolveBMSControlFlowWithDraws } from '../../parser/src/index.ts';
 import { computeChartFingerprint, computePlayFingerprint } from './index.ts';
 
 const SP7 = [
@@ -154,46 +154,46 @@ describe('golden fingerprints (bmfp0)', () => {
   test.each([
     [
       'BMS 7 KEY with LN, mines, BPM, STOP, SCROLL, SPEED',
-      () => computePlayFingerprint(parseBms(SP7), { chartPath: 'golden.bms' }),
-      'bmfp0:ade823cec58e427c39f8d50616a5b8140724046cfdb80f50cc6cdee17ea88fc3',
+      () => computePlayFingerprint(parseBMS(SP7), { chartPath: 'golden.bms' }),
+      'bmfp0:0448b7f45f40e5a5fa70bc9678154a57d55a5c6a3b134beb4c98285aa1042349',
     ],
     [
       'bmson',
       () => computePlayFingerprint(parseBmson(BMSON), { chartPath: 'golden.bmson' }),
-      'bmfp0:e3049307e79f2d3f4e4e07315197741c1d575fc43240e2f3014bb06bebe17f33',
+      'bmfp0:364f1aed23cb84fb0a8f8a8110ba0c259a44f0f503a5e78a6f1c64027d3cfa25',
     ],
     [
       'PMS',
-      () => computePlayFingerprint(parseBms(PMS), { chartPath: 'golden.pms' }),
-      'bmfp0:a4c2c340bc12ece964cbb04646b95dc28da0d87840a9340ca3a4bdc2aef806d1',
+      () => computePlayFingerprint(parseBMS(PMS), { chartPath: 'golden.pms' }),
+      'bmfp0:a3abd7386f12ae30af985765299f2fac6a8bdb80bfa6ed784a1373c5849a3e5c',
     ],
     [
       'DP',
-      () => computePlayFingerprint(parseBms(DP), { chartPath: 'golden.bms' }),
-      'bmfp0:104518b32c44d40cf6e6cf2092254c99453a6ecd43672d607e8d8761b015f67c',
+      () => computePlayFingerprint(parseBMS(DP), { chartPath: 'golden.bms' }),
+      'bmfp0:a4a0425fe634602d02bfe2d157e6e4fd6989d9d220874cfe5d047153f8e22ea1',
     ],
     [
       '#RANDOM chart',
-      () => computeChartFingerprint(parseBms(RANDOM), { chartPath: 'golden.bms' }),
-      'bmfp0:b34137d8903aa514ca8128cd31d01464adfc1d43ab78d6f0c25143f26d19902b',
+      () => computeChartFingerprint(parseBMS(RANDOM), { chartPath: 'golden.bms' }),
+      'bmfp0:b83b4f1280090c1bfb45c6c0ec6fa2228732a8e59b7e6195836e1c0c5658a5d8',
     ],
     [
       '#RANDOM play',
       () =>
         computePlayFingerprint(
-          resolveBmsControlFlowWithDraws(parseBms(RANDOM), [
+          resolveBMSControlFlowWithDraws(parseBMS(RANDOM), [
             { command: 'RANDOM', range: 3, value: 3 },
             { command: 'SWITCH', range: 2, value: 2 },
             { command: 'RANDOM', range: 2, value: 1 },
           ]),
           { chartPath: 'golden.bms' },
         ),
-      'bmfp0:e3b5390634a28b5cef277084c99fa39c078ae75c6899946e30f0151965601c36',
+      'bmfp0:8cf13280e1af1b275d9f9889c58cb4ef15349806957f25c8af46d83a328fbfd9',
     ],
     [
       'bmson keyboard-24k with wheel notes',
       () => computePlayFingerprint(parseBmson(KEYBOARD_24K), { chartPath: 'golden.bmson' }),
-      'bmfp0:dd5fe26f10d52ffbae1a43063c665b41c6a18a27d4daf43cb8a9f0b279334ee4',
+      'bmfp0:18daccb87f573c15d6ae49c580918356dffcb384921d2e462d572ba8b48c86d3',
     ],
   ])('%s', (_label, compute, expected) => {
     expect(compute()).toBe(expected);

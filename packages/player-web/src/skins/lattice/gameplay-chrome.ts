@@ -2,7 +2,7 @@ import { Graphics, type Container } from 'pixi.js';
 import { GROOVE } from './layout.ts';
 import {
   addOdometer,
-  addStaggeredHudText,
+  addStaggeredHUDText,
   drawNeedleField,
   drawPaperGrid,
   drawRulerTicks,
@@ -46,7 +46,7 @@ import {
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
 } from '@be-music/skin-sdk';
-import { addHudNumber, addHudText, type ChildPool, type PixiChromeContext } from '../pixi-kit/index.ts';
+import { addHUDNumber, addHUDText, type ChildPool, type PixiChromeContext } from '../pixi-kit/index.ts';
 
 type Runtime = BeMusicGameplayRuntime;
 
@@ -102,7 +102,7 @@ export function renderLatticeChrome({
   const { left: playfieldLeft, right: playfieldRight } = layout.playfield;
   Object.assign(BGA, layout.bga ?? NO_MONITOR);
   const hasMonitor = BGA.w > 0;
-  const hasBga = runtime.hasBga === true && hasMonitor;
+  const hasBGA = runtime.hasBGA === true && hasMonitor;
   const effects = effectProfile(runtime.effects);
   const tier = effects.enabled ? Math.min(comboTier(runtime.combo ?? 0), effects.screenWide ? 4 : 2) : 0;
   // The paper listens: needles flow harder with loudness and ripple out of the monitor on every onset, the pendulums
@@ -121,7 +121,7 @@ export function renderLatticeChrome({
     poor: runtime.poor ?? 0,
   });
 
-  ensureStaticPaper(layer, hasBga);
+  ensureStaticPaper(layer, hasBGA);
 
   const field = layerPool.acquireGraphics();
   field.label = 'lattice-gameplay/field';
@@ -157,7 +157,7 @@ export function renderLatticeChrome({
     drawPendulums(panels, layer, runtime, (playfieldRight + BGA.x - 5) / 2, effects.amount, drive, layerPool);
   }
   if (hasMonitor) {
-    drawBgaFrame(panels, layer, hasBga, seconds, beatPhase, effects.amount, drive, layerPool);
+    drawBGAFrame(panels, layer, hasBGA, seconds, beatPhase, effects.amount, drive, layerPool);
   }
   drawGauge(panels, layer, runtime, moments, layerPool);
   drawSongPlate(panels, layer, runtime, layerPool);
@@ -276,7 +276,7 @@ function drawPendulums(
     graphics.rect(bobX - 3, bobY - 3, 6, 6).fill(index === 0 ? LAT_ACCENT : LAT_INK);
     // Live angle readout of the whole string, from pivot to bob.
     const angle = (Math.atan2(bobX - chain.x[0]!, bobY - chain.y[0]!) * 180) / Math.PI;
-    addHudNumber(
+    addHUDNumber(
       layer,
       `${angle >= 0 ? '+' : '-'}${Math.abs(angle).toFixed(1)}`,
       bobX,
@@ -369,7 +369,7 @@ function drawLoading(layer: Container, runtime: Runtime, cx: number, pool: Child
   const nowMs = runtime.nowMs ?? 0;
   // Re-decodes once per cycle (a short scramble, then the plain caption for the rest of it) so it stays readable.
   const word = scrambleText(LOADING_WORD, Math.min(1, (nowMs % 1800) / 360), scrambleTick(nowMs), 77);
-  addHudText(
+  addHUDText(
     layer,
     `${word}${loadingDots(nowMs).padEnd(3, ' ')}`,
     cx,
@@ -392,9 +392,9 @@ function drawLoading(layer: Container, runtime: Runtime, cx: number, pool: Child
  */
 const STATIC_PAPER = new WeakMap<Container, { graphics: Graphics; hole: string }>();
 
-function ensureStaticPaper(layer: Container, hasBga: boolean): void {
+function ensureStaticPaper(layer: Container, hasBGA: boolean): void {
   // The paper is cut around the live BGA, whose rect depends on the playfield; redraw when either changes.
-  const hole = hasBga ? `${BGA.x},${BGA.y},${BGA.w},${BGA.h}` : '';
+  const hole = hasBGA ? `${BGA.x},${BGA.y},${BGA.w},${BGA.h}` : '';
   let entry = STATIC_PAPER.get(layer);
   if (!entry) {
     const graphics = new Graphics();
@@ -406,22 +406,22 @@ function ensureStaticPaper(layer: Container, hasBga: boolean): void {
   if (entry.hole === hole) return;
   entry.hole = hole;
   entry.graphics.clear();
-  fillAroundBga(entry.graphics, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, LAT_PAPER, hasBga);
-  drawPaperGrid(entry.graphics, { x: 0, y: 0, w: DESIGN_WIDTH, h: DESIGN_HEIGHT }, 0.45, hasBga ? BGA : undefined);
+  fillAroundBGA(entry.graphics, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, LAT_PAPER, hasBGA);
+  drawPaperGrid(entry.graphics, { x: 0, y: 0, w: DESIGN_WIDTH, h: DESIGN_HEIGHT }, 0.45, hasBGA ? BGA : undefined);
 }
 
-function fillAroundBga(
+function fillAroundBGA(
   graphics: Graphics,
   x: number,
   y: number,
   w: number,
   h: number,
   color: number,
-  hasBga: boolean,
+  hasBGA: boolean,
 ): void {
   const right = x + w;
   const bottom = y + h;
-  if (!hasBga) {
+  if (!hasBGA) {
     graphics.rect(x, y, w, h).fill(color);
     return;
   }
@@ -465,10 +465,10 @@ function drawPlayfieldFrame(graphics: Graphics, left: number, right: number, pro
  * Monitor: a hairline frame with ruler ticks along its top and bottom edges and crop marks at the corners. With no BGA
  * the screen idles on an 8 × 8 grid of tiles flipping in a diagonal wave on every beat, plus a running clock.
  */
-function drawBgaFrame(
+function drawBGAFrame(
   graphics: Graphics,
   layer: Container,
-  hasBga: boolean,
+  hasBGA: boolean,
   seconds: number,
   beatPhase: number,
   amount: number,
@@ -488,7 +488,7 @@ function drawBgaFrame(
   graphics.stroke({ color: LAT_INK, width: 1 });
   drawRulerTicks(graphics, x, y, w, 1, LAT_INK, 0.55);
   drawRulerTicks(graphics, x, y + h, w, -1, LAT_INK, 0.55);
-  if (hasBga) return;
+  if (hasBGA) return;
 
   graphics.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill(LAT_WHITE);
   const columns = 16;
@@ -538,7 +538,7 @@ function drawBgaFrame(
   graphics.rect(BGA.x, BGA.y + BGA.h - 22, BGA.w, 1).fill({ color: LAT_RULE, alpha: 1 });
   // SOUND ONLY re-decodes every few seconds while the monitor idles.
   const idle = amount > 0 ? (seconds % 5) / 0.7 : 1;
-  addHudText(
+  addHUDText(
     layer,
     scrambleText('SOUND ONLY', idle, scrambleTick(seconds * 1000), 60),
     BGA.x + 8,
@@ -548,7 +548,7 @@ function drawBgaFrame(
   );
   const minutes = Math.floor(seconds / 60);
   const secs = seconds - minutes * 60;
-  addHudNumber(
+  addHUDNumber(
     layer,
     `${String(minutes).padStart(2, '0')}:${secs.toFixed(2).padStart(5, '0')}`,
     BGA.x + BGA.w - 8,
@@ -582,7 +582,7 @@ function drawHeader(graphics: Graphics, layer: Container, runtime: Runtime, beat
   graphics.circle(cx, cy, 1.5).fill(LAT_INK);
 
   const sc = hudScramble(runtime);
-  addHudText(
+  addHUDText(
     layer,
     sc(autoplay ? 'AUTO PLAY' : 'PLAY', 0, 1),
     40,
@@ -590,14 +590,14 @@ function drawHeader(graphics: Graphics, layer: Container, runtime: Runtime, beat
     { ...monoStyle(LAT_INK), letterSpacing: 1.5 },
     pool,
   );
-  addHudText(layer, sc('BPM', 60, 2), 128, 11, monoStyle(), pool);
-  addHudNumber(layer, formatBpm(runtime.bpm), 152, 7, displayStyle(15, LAT_INK, '300'), pool);
-  addHudText(layer, sc('SPEED', 120, 3), 214, 11, monoStyle(), pool);
-  addHudNumber(layer, `×${formatHiSpeed(runtime.hiSpeed)}`, 250, 7, displayStyle(15, LAT_INK, '300'), pool);
+  addHUDText(layer, sc('BPM', 60, 2), 128, 11, monoStyle(), pool);
+  addHUDNumber(layer, formatBPM(runtime.bpm), 152, 7, displayStyle(15, LAT_INK, '300'), pool);
+  addHUDText(layer, sc('SPEED', 120, 3), 214, 11, monoStyle(), pool);
+  addHUDNumber(layer, `×${formatHiSpeed(runtime.hiSpeed)}`, 250, 7, displayStyle(15, LAT_INK, '300'), pool);
   // Nervous readouts: chart time to the millisecond, the beat fraction, and a 16-step beat meter.
   const chartMs = runtime.chartMs;
-  addHudText(layer, sc('T', 200, 9), 326, 11, monoStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, sc('T', 200, 9), 326, 11, monoStyle(), pool);
+  addHUDNumber(
     layer,
     chartMs !== undefined && Number.isFinite(chartMs) ? formatChartTime(chartMs) : '+000.000',
     338,
@@ -605,15 +605,15 @@ function drawHeader(graphics: Graphics, layer: Container, runtime: Runtime, beat
     { ...monoStyle(LAT_INK) },
     pool,
   );
-  addHudText(layer, sc('BEAT', 240, 10), 416, 11, monoStyle(), pool);
-  addHudNumber(layer, beatPhase.toFixed(3).slice(1), 444, 11, { ...monoStyle(LAT_INK) }, pool);
+  addHUDText(layer, sc('BEAT', 240, 10), 416, 11, monoStyle(), pool);
+  addHUDNumber(layer, beatPhase.toFixed(3).slice(1), 444, 11, { ...monoStyle(LAT_INK) }, pool);
   const lit = Math.floor(beatPhase * 16);
   for (let step = 0; step < 16; step += 1) {
     const x = 486 + step * 4;
     if (step <= lit) graphics.rect(x, 11, 2, 8).fill(step === lit ? LAT_ACCENT : LAT_INK);
     else graphics.rect(x, 17, 2, 2).fill({ color: LAT_RULE, alpha: 1 });
   }
-  addHudText(
+  addHUDText(
     layer,
     sc(formatRuleset(runtime.rulesetLabel), 180, 4),
     HUD_RIGHT,
@@ -637,7 +637,7 @@ function drawGauge(
   const nowMs = runtime.nowMs ?? 0;
   const sc = hudScramble(runtime);
   graphics.rect(HUD_LEFT, GROOVE.y - 24, GROOVE.w + 24, 1).fill(LAT_INK);
-  addHudText(
+  addHUDText(
     layer,
     sc(`${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`, 240, 5),
     HUD_LEFT,
@@ -645,7 +645,7 @@ function drawGauge(
     { ...monoStyle(), maxWidth: 130 },
     pool,
   );
-  addHudNumber(
+  addHUDNumber(
     layer,
     `${Math.round(gauge)}%`,
     GROOVE.x + GROOVE.w + 12,
@@ -683,12 +683,12 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, p
   const { x, y, w } = SONG_PLATE;
   const sc = hudScramble(runtime);
   graphics.rect(x, y, w, 1).fill(LAT_INK);
-  addHudText(layer, sc('TRACK', 300, 6), x, y + 6, monoStyle(), pool);
+  addHUDText(layer, sc('TRACK', 300, 6), x, y + 6, monoStyle(), pool);
   // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
   const genre = runtime.songGenre?.trim();
   const lift = genre ? 9 : 0;
   if (genre) {
-    addHudText(
+    addHUDText(
       layer,
       sc(genre.toUpperCase(), 330, 9),
       x + 48,
@@ -697,7 +697,7 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, p
       pool,
     );
   }
-  addHudText(
+  addHUDText(
     layer,
     sc(runtime.songTitle?.trim() || 'Untitled chart', 360, 7),
     x + 48,
@@ -707,7 +707,7 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, p
   );
   const artist = runtime.songArtist?.trim();
   if (artist) {
-    addHudText(
+    addHUDText(
       layer,
       sc(artist, 460, 8),
       x + 48,
@@ -725,8 +725,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
   graphics.rect(x, y, w, 1).fill(LAT_INK);
   graphics.rect(x + 146, y + 10, 1, h - 16).fill({ color: LAT_RULE, alpha: 1 });
   graphics.rect(x, y + h, w, 1).fill({ color: LAT_RULE, alpha: 1 });
-  addHudText(layer, sc('01 SCORE', 520, 20), x, y + 8, monoStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, sc('01 SCORE', 520, 20), x, y + 8, monoStyle(), pool);
+  addHUDNumber(
     layer,
     formatCount(runtime.score),
     x + 136,
@@ -734,8 +734,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     { ...displayStyle(24, LAT_INK, '200'), anchorX: 1, maxWidth: 130 },
     pool,
   );
-  addHudText(layer, sc('02 EX', 580, 21), x, y + 56, monoStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, sc('02 EX', 580, 21), x, y + 56, monoStyle(), pool);
+  addHUDNumber(
     layer,
     `${formatCount(runtime.exScore)}/${formatCount(runtime.exScoreMax)}`,
     x + 136,
@@ -743,8 +743,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     { ...displayStyle(10, LAT_INK, '400'), anchorX: 1, maxWidth: 80 },
     pool,
   );
-  addHudText(layer, sc('03 RATE', 640, 22), x, y + 74, monoStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, sc('03 RATE', 640, 22), x, y + 74, monoStyle(), pool);
+  addHUDNumber(
     layer,
     formatExRate(runtime.exScore, runtime.exScoreMax),
     x + 136,
@@ -763,8 +763,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     graphics.moveTo(x + (meterW * ninth) / 9, y + 97).lineTo(x + (meterW * ninth) / 9, y + (ninth >= 6 ? 102 : 100));
   }
   graphics.stroke({ color: LAT_INK, width: 1, alpha: 0.5 });
-  addHudText(layer, sc('04 COMBO', 700, 23), x + 156, y + 8, monoStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, sc('04 COMBO', 700, 23), x + 156, y + 8, monoStyle(), pool);
+  addHUDNumber(
     layer,
     formatCount(runtime.combo),
     x + w,
@@ -772,8 +772,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     { ...displayStyle(16, LAT_INK, '300'), anchorX: 1, maxWidth: 70 },
     pool,
   );
-  addHudText(layer, sc('05 MAX', 760, 24), x + 156, y + 56, monoStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, sc('05 MAX', 760, 24), x + 156, y + 56, monoStyle(), pool);
+  addHUDNumber(
     layer,
     formatCount(runtime.maxCombo),
     x + w,
@@ -782,8 +782,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     pool,
   );
   const rank = runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F';
-  addHudText(layer, sc('06 RANK', 820, 25), x + 156, y + 74, monoStyle(), pool);
-  addHudText(
+  addHUDText(layer, sc('06 RANK', 820, 25), x + 156, y + 74, monoStyle(), pool);
+  addHUDText(
     layer,
     rank,
     x + w,
@@ -825,8 +825,8 @@ function drawJudgeTally(
     const rowY = y + 10 + row * 28;
     const count = runtime[key] ?? 0;
     const color = JUDGE_COLORS[TALLY_NAMES[key]] ?? LAT_INK;
-    addHudText(layer, sc(label, 300 + row * 60, 40 + row), x, rowY, { ...monoStyle(color) }, pool);
-    addHudNumber(
+    addHUDText(layer, sc(label, 300 + row * 60, 40 + row), x, rowY, { ...monoStyle(color) }, pool);
+    addHUDNumber(
       layer,
       formatCount(count),
       x + w,
@@ -844,8 +844,8 @@ function drawJudgeTally(
     [1, 'SLOW', LAT_SIGNAL, runtime.slow],
   ] as const) {
     const rowY = footerY + row * 18;
-    addHudText(layer, sc(label, 620 + row * 60, 50 + row), x, rowY, monoStyle(color), pool);
-    addHudNumber(
+    addHUDText(layer, sc(label, 620 + row * 60, 50 + row), x, rowY, monoStyle(color), pool);
+    addHUDNumber(
       layer,
       formatCount(count),
       x + w,
@@ -867,8 +867,8 @@ function drawJudgeTally(
       .rect(x + bar * barPitch, specY - h, Math.max(1, barPitch - 1.5), h)
       .fill(value > 0.8 ? LAT_ACCENT : LAT_INK);
   }
-  addHudText(layer, sc('dB', 700, 60), x, specY + 5, monoStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, sc('dB', 700, 60), x, specY + 5, monoStyle(), pool);
+  addHUDNumber(
     layer,
     drive.db <= -95 ? '-inf' : drive.db.toFixed(1),
     x + w,
@@ -908,7 +908,7 @@ function drawJudgements(
     const color = isFlashingGreat(display.judge)
       ? flashingGreatColor(nowMs, FLASHING_GREAT)
       : (JUDGE_COLORS[display.judge] ?? LAT_INK);
-    addStaggeredHudText(
+    addStaggeredHUDText(
       layer,
       amount > 0 ? scrambleText(word, age / 90, scrambleTick(nowMs, 25), word.length) : word,
       display.x,
@@ -978,7 +978,7 @@ function formatCount(value: number | undefined): string {
   return String(Math.max(0, Math.floor(value)));
 }
 
-function formatBpm(value: number | undefined): string {
+function formatBPM(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return '---';
   return String(Math.round(value));
 }

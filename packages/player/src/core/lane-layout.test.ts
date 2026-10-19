@@ -6,7 +6,7 @@ import {
   resolvePlayVariantLaneChannels,
   resolveLaneDisplayMode,
   resolveLaneOptionChannels,
-  resolveLr2LaneIndex,
+  resolveLR2LaneIndex,
   resolveSideKeySlot,
   resolveSideRelativeLaneIndex,
   resolveWheelLaneDirection,
@@ -127,13 +127,13 @@ describe('24 KEY / 48 KEY keyboard modes', () => {
     expect(resolveLaneOptionChannels('1P')).toEqual(['11', '12', '13', '14', '15', '18', '19']);
   });
 
-  test('resolveLr2LaneIndex — keyboard modes have no LR2 lane rects, so every channel reports -1', () => {
+  test('resolveLR2LaneIndex — keyboard modes have no LR2 lane rects, so every channel reports -1', () => {
     // LR2 only defines the 20 IIDX rects; returning -1 sends these charts to the fallback playfield
     // instead of squeezing 26 lanes into the 7-key rect table.
-    expect(resolveLr2LaneIndex('11', '24')).toBe(-1);
-    expect(resolveLr2LaneIndex('1O', '24')).toBe(-1);
-    expect(resolveLr2LaneIndex('2A', '48')).toBe(-1);
-    expect(resolveLr2LaneIndex('1P', '24')).toBe(-1);
+    expect(resolveLR2LaneIndex('11', '24')).toBe(-1);
+    expect(resolveLR2LaneIndex('1O', '24')).toBe(-1);
+    expect(resolveLR2LaneIndex('2A', '48')).toBe(-1);
+    expect(resolveLR2LaneIndex('1P', '24')).toBe(-1);
   });
 
   test('resolveLaneChannels — lanes render in ascending column order, 1P bank before 2P, wheels outside', () => {
@@ -191,24 +191,24 @@ describe('24 KEY / 48 KEY keyboard modes', () => {
   });
 });
 
-describe('resolveLr2LaneIndex', () => {
+describe('resolveLR2LaneIndex', () => {
   test('IIDX-side — 1P stays at 0..7, 2P offsets by 10', () => {
-    expect(resolveLr2LaneIndex('11')).toBe(1);
-    expect(resolveLr2LaneIndex('16')).toBe(0);
-    expect(resolveLr2LaneIndex('19')).toBe(7);
-    expect(resolveLr2LaneIndex('21')).toBe(11);
-    expect(resolveLr2LaneIndex('26')).toBe(10);
-    expect(resolveLr2LaneIndex('29')).toBe(17);
+    expect(resolveLR2LaneIndex('11')).toBe(1);
+    expect(resolveLR2LaneIndex('16')).toBe(0);
+    expect(resolveLR2LaneIndex('19')).toBe(7);
+    expect(resolveLR2LaneIndex('21')).toBe(11);
+    expect(resolveLR2LaneIndex('26')).toBe(10);
+    expect(resolveLR2LaneIndex('29')).toBe(17);
   });
 
   test('PMS / 9 KEY — single-side; both layouts collapse onto slots 1..9', () => {
     // COMPAT
-    expect(resolveLr2LaneIndex('11', '9')).toBe(1);
-    expect(resolveLr2LaneIndex('17', '9')).toBe(7);
-    expect(resolveLr2LaneIndex('19', '9')).toBe(9);
+    expect(resolveLR2LaneIndex('11', '9')).toBe(1);
+    expect(resolveLR2LaneIndex('17', '9')).toBe(7);
+    expect(resolveLR2LaneIndex('19', '9')).toBe(9);
     // STD
-    expect(resolveLr2LaneIndex('22', '9')).toBe(6);
-    expect(resolveLr2LaneIndex('25', '9')).toBe(9);
+    expect(resolveLR2LaneIndex('22', '9')).toBe(6);
+    expect(resolveLR2LaneIndex('25', '9')).toBe(9);
   });
 });
 

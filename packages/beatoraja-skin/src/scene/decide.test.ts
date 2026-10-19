@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import { BEATORAJA_NUM, BEATORAJA_OP } from '../runtime-ids.ts';
 import {
@@ -12,7 +12,7 @@ function decide(
   chart: { playLevel?: number | string; bpm?: number; difficulty?: number } = {},
   progress = 0,
 ): BeatorajaDecideInput {
-  const json = createEmptyJson('bms');
+  const json = createEmptyJSON('bms');
   if (chart.difficulty !== undefined) json.metadata.difficulty = chart.difficulty;
   return {
     chart: {
@@ -56,12 +56,12 @@ describe('resolveBeatorajaDecideNumber', () => {
   });
 
   it('reads the main BPM the play shows on 92, the listed BPM without one', () => {
-    const input = { ...decide({ bpm: 149.6 }), mainBpm: 179.6 };
+    const input = { ...decide({ bpm: 149.6 }), mainBPM: 179.6 };
     expect(resolveBeatorajaDecideNumber(BEATORAJA_NUM.MAINBPM, input)).toBe(180);
     for (const id of [BEATORAJA_NUM.MAXBPM, BEATORAJA_NUM.MINBPM, BEATORAJA_NUM.NOWBPM]) {
       expect(resolveBeatorajaDecideNumber(id, input)).toBe(150);
     }
-    expect(resolveBeatorajaDecideNumber(BEATORAJA_NUM.MAINBPM, { ...input, mainBpm: 0 })).toBe(150);
+    expect(resolveBeatorajaDecideNumber(BEATORAJA_NUM.MAINBPM, { ...input, mainBPM: 0 })).toBe(150);
   });
 
   it('reads the loading progress in whole percent and 0 for the numbers of a play', () => {

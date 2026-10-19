@@ -20,7 +20,7 @@ export function isChartFilePath(path: string): boolean {
  * `true` when the dropped file looks like an LR2 skin entry. Used to gate the LR2 theme loader so a stray text file
  * inside a chart pack doesn't reset the active theme to "no LR2 theme".
  */
-export function isLr2SkinFilePath(path: string): boolean {
+export function isLR2SkinFilePath(path: string): boolean {
   return extensionOf(path) === '.lr2skin';
 }
 
@@ -35,7 +35,7 @@ export function isBeatorajaLuaSkinFilePath(path: string): boolean {
 
 /**
  * Heuristic for "this dropped folder probably contains a beatoraja skin theme". Used to gate the beatoraja theme
- * loader the same way {@link isLr2SkinFilePath} gates LR2's. Triggers on:
+ * loader the same way {@link isLR2SkinFilePath} gates LR2's. Triggers on:
  *
  * - any `.luaskin` file (definitive),
  * - or a `.json` file whose path includes a `skin/` segment (matches the standard `beatoraja/skin/<name>/…` layout).

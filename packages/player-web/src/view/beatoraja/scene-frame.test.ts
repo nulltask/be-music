@@ -7,7 +7,7 @@ import {
   TIMER_STARTINPUT,
   type BeatorajaSkin,
 } from '@be-music/beatoraja-skin';
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import type { LibraryChart } from '@be-music/scene-model';
 import {
@@ -20,7 +20,7 @@ import {
 } from './scene-frame.ts';
 
 function makeSong(overrides: Partial<LibraryChart> = {}): LibraryChart {
-  const chart = createEmptyJson();
+  const chart = createEmptyJSON();
   chart.metadata.extras.SUBARTIST = 'movie:artist';
   return {
     id: 'song',

@@ -1,4 +1,4 @@
-export interface ReleasablePackageJson {
+export interface ReleasablePackageJSON {
   name: string;
   version: string;
   private?: boolean;
@@ -9,7 +9,7 @@ export interface ReleasablePackageJson {
  * (the player demo, the Leaderboard) are versioned by Changesets but never tagged (`privatePackages.tag: false` in
  * .changeset/config.json), so they get no release either.
  */
-export function shouldReleasePackage(current: ReleasablePackageJson, base: ReleasablePackageJson | null): boolean {
+export function shouldReleasePackage(current: ReleasablePackageJSON, base: ReleasablePackageJSON | null): boolean {
   if (current.private === true) {
     return false;
   }

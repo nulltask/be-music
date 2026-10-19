@@ -10,12 +10,12 @@ import { chartHref, LocalTime, playerHref, Tag } from './components/basics.tsx';
 import { loadChartsetOf } from './data.ts';
 import { pickPlayInfoRows } from './components/play-info.tsx';
 import { toPlayInfo } from '../play-info.ts';
-import { avatarUrl } from '../avatars.ts';
-import { cardUrl } from '../cards.ts';
+import { avatarURL } from '../avatars.ts';
+import { cardURL } from '../cards.ts';
 import { CARD_FONT } from './icons.ts';
 import type { ScoreDetail } from '../scores/detail.ts';
 import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, rulesetName } from './format.ts';
-import { shareText, xIntentUrl, type ScoreCardData } from './score-card-data.ts';
+import { shareText, xIntentURL, type ScoreCardData } from './score-card-data.ts';
 import { scoreCardExcerpt } from './score-card-excerpt.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { helpHref } from './help-topics.ts';
@@ -41,7 +41,7 @@ function scoreCardData(detail: ScoreDetail, played: ScoreDetail['results'][numbe
     artist: detail.chart.artist,
     playerName: detail.player?.displayName ?? '',
     handle: detail.player?.handle ?? '',
-    avatarUrl: detail.player !== null ? avatarUrl(detail.player.handle, detail.player.avatarKey) : '',
+    avatarUrl: detail.player !== null ? avatarURL(detail.player.handle, detail.player.avatarKey) : '',
     rulesetLabel: rulesetName(played.ruleset),
     lamp: { label: lamp.label, color: lamp.color },
     exScore: played.exScore,
@@ -66,7 +66,7 @@ function scoreCardData(detail: ScoreDetail, played: ScoreDetail['results'][numbe
  * The share section: the card, a post on X (a plain link, so it works without script), the system share sheet and a
  * copy-link button. For the play's own player, the client script draws the card and uploads it when there is none yet.
  */
-function ShareCard(props: { data: ScoreCardData; pageUrl: string; image: string; upload?: string; hasCard: boolean }) {
+function ShareCard(props: { data: ScoreCardData; pageURL: string; image: string; upload?: string; hasCard: boolean }) {
   const t = useMessages().score;
   const text = shareText(props.data);
   return (
@@ -85,7 +85,7 @@ function ShareCard(props: { data: ScoreCardData; pageUrl: string; image: string;
           data-card-preview
         />
         <div class="flex flex-wrap gap-2">
-          <a class="btn" href={xIntentUrl(text, props.pageUrl)} target="_blank" rel="noopener" data-share-x>
+          <a class="btn" href={xIntentURL(text, props.pageURL)} target="_blank" rel="noopener" data-share-x>
             {t.postOnX}
           </a>
           <button type="button" class="btn" data-variant="outline" data-share-native hidden>
@@ -172,7 +172,7 @@ export async function scorePage(c: PageContext<'/scores/:id'>) {
     const excerpt = await loadCardExcerpt(c, detail.chart.documentKey, detail.chart.laneMode);
     if (excerpt !== null) card.excerpt = excerpt;
   }
-  const image = cardUrl(detail.score.id, detail.score.cardKey);
+  const image = cardURL(detail.score.id, detail.score.cardKey);
   const { hidden } = detail.score;
   const info = toPlayInfo({
     scoreId: detail.score.id,
@@ -310,7 +310,7 @@ export async function scorePage(c: PageContext<'/scores/:id'>) {
       {card !== undefined && !hidden ? (
         <ShareCard
           data={card}
-          pageUrl={c.req.url}
+          pageURL={c.req.url}
           image={image}
           upload={isOwner ? `/api/v0/scores/${encodeURIComponent(detail.score.id)}/card` : undefined}
           hasCard={detail.score.cardKey !== null}

@@ -1,4 +1,4 @@
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 import type { WebAudioStageMixer } from './nonstop-audio.ts';
 import type { PlayerInputSignalBus } from '@be-music/player/signals';
 import {
@@ -13,12 +13,12 @@ import { logger } from '../logger.ts';
 import { type AudioBusHandle } from './audio-bus.ts';
 import { createWebAudioSession, type WebAudioSessionSlicePlayback } from './web-audio-session.ts';
 import { createWebInputRuntimeFactory } from './web-input-runtime.ts';
-import { createWebUiRuntimeFactory, type WebUiRuntimeCallbacks } from './web-ui-runtime.ts';
+import { createWebUIRuntimeFactory, type WebUIRuntimeCallbacks } from './web-ui-runtime.ts';
 
 const log = logger('engine-driver');
 
 /**
- * Shape the engine driver expects from the host's preloaded sample cache. Decoupled from `BeMusicJson` so the host
+ * Shape the engine driver expects from the host's preloaded sample cache. Decoupled from `BeMusicJSON` so the host
  * can decode `#WAVxx` slots once during the prepare phase and reuse the same `AudioBuffer` set across pause /
  * resume / restart cycles without re-decoding.
  */
@@ -43,13 +43,13 @@ export interface EngineDriverAudioContext {
  */
 export interface EngineDriverOptions {
   /** Reference chart already resolved via `parseChart` / `parseChartFile`. */
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   /** Audio backend resources prepared by the host. The driver constructs a {@link createWebAudioSession} on top. */
   audio: EngineDriverAudioContext;
   /** Engine play mode. Mirrors the play session's `autoPlay` option. */
   mode: 'manual' | 'auto';
   /** Pixi-side rendering callbacks. The driver subscribes them to the engine's `uiSignals`. */
-  ui: WebUiRuntimeCallbacks;
+  ui: WebUIRuntimeCallbacks;
   /**
    * DOM key event source (defaults to `window`). Scoped targets work too — pass a focusable canvas to keep stray
    * keystrokes outside the player from reaching the engine.
@@ -64,7 +64,7 @@ export interface EngineDriverOptions {
    */
   onInputSignalsReady?: (signals: { inputSignals: PlayerInputSignalBus }) => void;
   /** Forwarded to the engine. The driver supplies sensible defaults but a host can override any field. */
-  engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUiRuntime' | 'auto'>;
+  engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUIRuntime' | 'auto'>;
 }
 
 /**
@@ -75,7 +75,7 @@ export type EngineDriverResult = PlayerSummary;
 
 /**
  * Glue layer that wires the three runtime adapters ({@link createWebAudioSession},
- * {@link createWebInputRuntimeFactory}, {@link createWebUiRuntimeFactory}) together and invokes the shared engine's
+ * {@link createWebInputRuntimeFactory}, {@link createWebUIRuntimeFactory}) together and invokes the shared engine's
  * `manualPlay` / `autoPlay`. Hosts call this once per chart play; the returned promise resolves with the final
  * `PlayerSummary` when the chart ends (or rejects with `PlayerInterruptedError` when the player aborts).
  *
@@ -98,8 +98,8 @@ export type EngineDriverResult = PlayerSummary;
  * Test-coverage trail for the dynamic-judge / sample-routing features the migration depends on:
  * - **EXRANK dynamic judge windows** — engine end-to-end at
  *   `packages/player/src/player-long-notes-and-windows.test.ts:'player: updates manual judge windows from dynamic
- *   EXRANK events'`. Frame summary propagation through `createWebUiRuntime` is covered by
- *   `packages/player-web/src/runtime/web-ui-runtime.test.ts:'drainWebUiSignals routes the current frame snapshot ...'`.
+ *   EXRANK events'`. Frame summary propagation through `createWebUIRuntime` is covered by
+ *   `packages/player-web/src/runtime/web-ui-runtime.test.ts:'drainWebUISignals routes the current frame snapshot ...'`.
  * - **#WAVCMD per-slot gain** — covered by
  *   `packages/player-web/src/runtime/web-audio-session.test.ts:'applies #WAVCMD per-slot gain via an intermediate
  *   GainNode'`, which verifies the BufferSource → GainNode → mixer routing instead of BufferSource → mixer.
@@ -133,14 +133,14 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
     shouldSkipKey,
     onReady: onInputSignalsReady,
   });
-  const createUiRuntime = createWebUiRuntimeFactory(ui);
+  const createUIRuntime = createWebUIRuntimeFactory(ui);
   const compositeOptions: PlayerOptions = {
     ...engineOptions,
     auto: mode === 'auto',
     tui: false,
     createAudioSession,
     createInputRuntime,
-    createUiRuntime,
+    createUIRuntime,
   };
   log.info('engine driver starting', { mode, hasInputTarget: inputTarget !== undefined });
   const summary =

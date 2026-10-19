@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { BrowserSongAssetSource, BrowserSongCollection } from '@be-music/player-web/collection';
 import type { BeatorajaThemeBundle } from '@be-music/player-web/skin';
@@ -32,7 +32,7 @@ function song(id: string): LibraryChart {
     fileLabel: `${id}.bms`,
     title: id,
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 

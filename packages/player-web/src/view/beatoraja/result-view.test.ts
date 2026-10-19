@@ -5,7 +5,7 @@ import {
   TIMER_STARTINPUT,
   type BeatorajaSkin,
 } from '@be-music/beatoraja-skin';
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
 import { resolveResultPresentation, type PlayResult } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
@@ -41,7 +41,7 @@ const RESULT: PlayResult = {
     fileLabel: 'chart.bms',
     title: 'Chart',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   },
   gaugeHistory: [
     { progress: 0, value: 20 },

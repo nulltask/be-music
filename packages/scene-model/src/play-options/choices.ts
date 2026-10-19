@@ -2,10 +2,10 @@ import { GAUGE_TYPES } from '@be-music/player/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 import { DEFAULT_HISPEED, snapHiSpeed } from './hi-speed.ts';
 import type {
-  BgaMode,
-  BgaSize,
+  BGAMode,
+  BGASize,
   HiddenSuddenMode,
-  HsFix,
+  HSFix,
   PlayOptionChoices,
   PlayOptions,
   RandomMode,
@@ -18,10 +18,10 @@ export const SHUTTER_DEFAULT = 0.25;
  * Cycle order for {@link PlayOptions.bga}. Matches the LR2 default-skin cell order on the `#SRC_BUTTON,type=72` sprite —
  * `divx*divy` produces 3 cells (`OFF` / `ON` / `AUTOPLAY ONLY`) and clicks advance through them in this order.
  */
-export const BGA_CYCLE: readonly BgaMode[] = ['OFF', 'ON', 'AUTOPLAY_ONLY'];
+export const BGA_CYCLE: readonly BGAMode[] = ['OFF', 'ON', 'AUTOPLAY_ONLY'];
 
 /** Cycle order for {@link PlayOptions.bgaSize}. LR2 button cell order on `#SRC_BUTTON,type=73`: NORMAL, EXTEND. */
-export const BGA_SIZE_CYCLE: readonly BgaSize[] = ['NORMAL', 'EXTEND'];
+export const BGA_SIZE_CYCLE: readonly BGASize[] = ['NORMAL', 'EXTEND'];
 
 /**
  * Cycle order for {@link PlayOptions.difficultyFilter}. Matches the LR2 `#SRC_BUTTON,type=10` cell order (off / easy /
@@ -49,7 +49,7 @@ export const SORT_CYCLE: readonly BrowseSort[] = ['OFF', 'LEVEL', 'TITLE', 'CLEA
  * Cycle order for {@link PlayOptions.hsFix}. LR2 button cells 0..4 on `#SRC_BUTTON,type=55`: off / maxbpm / minbpm /
  * average / constant.
  */
-export const HS_FIX_CYCLE: readonly HsFix[] = ['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'CONSTANT'];
+export const HS_FIX_CYCLE: readonly HSFix[] = ['OFF', 'MAXBPM', 'MINBPM', 'AVERAGE', 'CONSTANT'];
 
 /**
  * Cycle order for {@link PlayOptions.hiddenSudden1P} / `hiddenSudden2P`. LR2 button cells 0..3 on `#SRC_BUTTON,type=50`

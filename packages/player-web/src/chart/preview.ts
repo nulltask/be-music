@@ -2,10 +2,10 @@ import {
   firesBeforeTempoReversal,
   isInvisibleNoteChannel,
   resolveChart,
-  usesMonophonicWavPlayback,
+  usesMonophonicWAVPlayback,
   type TimedSampleTrigger,
 } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
@@ -94,7 +94,7 @@ export interface ChartPreviewEngineOptions {
  * chain (`.opus` / `.ogg` / `.mp3` / `.wav`) and case-insensitive lookup so a chart that says `preview.wav` still
  * resolves to a shipped `preview.ogg`.
  */
-export function resolveChartPreviewPath(chart: BeMusicJson): string | undefined {
+export function resolveChartPreviewPath(chart: BeMusicJSON): string | undefined {
   const bms = chart.bms?.preview;
   if (typeof bms === 'string' && bms.length > 0) return bms;
   const bmson = chart.bmson?.info?.previewMusic;
@@ -480,7 +480,7 @@ export class ChartPreviewEngine {
         this.finishSource(handle);
       };
       try {
-        if (usesMonophonicWavPlayback(chart) && activeSameSlot) {
+        if (usesMonophonicWAVPlayback(chart) && activeSameSlot) {
           this.stopSourceAt(activeSameSlot, when);
         }
         if (typeof trigger.sampleDurationSeconds === 'number') {
@@ -510,9 +510,9 @@ export class ChartPreviewEngine {
  *
  * `cutoffSeconds <= 0` returns an empty array — the engine skips the in-place fallback entirely in that case.
  */
-export function collectChartPreviewTriggers(chart: BeMusicJson, cutoffSeconds: number): TimedSampleTrigger[] {
+export function collectChartPreviewTriggers(chart: BeMusicJSON, cutoffSeconds: number): TimedSampleTrigger[] {
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
-  const resolved = resolveChart(chart, { inferBmsLnTypeWhenMissing: true });
+  const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: true });
   // LR2 negative-BPM reversal: the gameplay engine's event pump freezes at the reversal — nothing past it ever
   // sounds, and on the reversal tick only the BGM LR2 orders before the negative BPM does — so the select-scene
   // preview drops the same triggers.

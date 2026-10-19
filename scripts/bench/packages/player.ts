@@ -1,12 +1,12 @@
-import * as playerApi from '@be-music/player';
-import * as audioSinkApi from '@be-music/player/audio-sink';
-import * as courseApi from '@be-music/player/course';
-import * as displayApi from '@be-music/player/display';
-import * as lanesApi from '@be-music/player/lanes';
-import * as playlogApi from '@be-music/player/playlog';
-import * as recordsApi from '@be-music/player/records';
-import * as rulesetApi from '@be-music/player/ruleset';
-import * as signalsApi from '@be-music/player/signals';
+import * as playerAPI from '@be-music/player';
+import * as audioSinkAPI from '@be-music/player/audio-sink';
+import * as courseAPI from '@be-music/player/course';
+import * as displayAPI from '@be-music/player/display';
+import * as lanesAPI from '@be-music/player/lanes';
+import * as playlogAPI from '@be-music/player/playlog';
+import * as recordsAPI from '@be-music/player/records';
+import * as rulesetAPI from '@be-music/player/ruleset';
+import * as signalsAPI from '@be-music/player/signals';
 import { registerPlayerExportsCases } from '../../../packages/player/scripts/exports-cases.ts';
 import type { BenchmarkPackageDefinition } from '../exports.types.ts';
 
@@ -17,15 +17,15 @@ function prefixed(prefix: string, entry: object): Record<string, unknown> {
 
 export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
   module: {
-    ...(playerApi as Record<string, unknown>),
-    ...prefixed('signals', signalsApi),
-    ...prefixed('lanes', lanesApi),
-    ...prefixed('display', displayApi),
-    ...prefixed('audio-sink', audioSinkApi),
-    ...prefixed('course', courseApi),
-    ...prefixed('records', recordsApi),
-    ...prefixed('ruleset', rulesetApi),
-    ...prefixed('playlog', playlogApi),
+    ...(playerAPI as Record<string, unknown>),
+    ...prefixed('signals', signalsAPI),
+    ...prefixed('lanes', lanesAPI),
+    ...prefixed('display', displayAPI),
+    ...prefixed('audio-sink', audioSinkAPI),
+    ...prefixed('course', courseAPI),
+    ...prefixed('records', recordsAPI),
+    ...prefixed('ruleset', rulesetAPI),
+    ...prefixed('playlog', playlogAPI),
   },
   registerCases: registerPlayerExportsCases,
 };

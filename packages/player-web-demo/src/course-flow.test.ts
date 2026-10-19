@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { parseBeatorajaCourseData } from '@be-music/player/course';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import type { LibraryChart, LibraryCourse } from '@be-music/scene-model';
@@ -35,7 +35,7 @@ function song(id: string): LibraryChart {
     artist: 'artist',
     genre: 'genre',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 

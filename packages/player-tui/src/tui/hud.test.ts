@@ -4,8 +4,8 @@ import {
   createJudgeComboDisplayState,
   formatActiveAudioFiles,
   formatAudioBackendLabel,
-  formatBpm,
-  formatFps,
+  formatBPM,
+  formatFPS,
   formatGenreLabel,
   formatGrooveGaugeLine,
   formatHighSpeed,
@@ -22,7 +22,7 @@ import {
   resolveVisibleJudgeComboLabel,
 } from './hud.ts';
 
-function stripAnsi(value: string): string {
+function stripANSI(value: string): string {
   // eslint-disable-next-line no-control-regex
   return value.replaceAll(/\u001b\[[0-9;]*m/g, '');
 }
@@ -40,11 +40,11 @@ describe('renderProgress', () => {
 });
 
 describe('number readouts', () => {
-  test('formatBpm drops the decimals of a whole BPM', () => {
-    expect(formatBpm(150)).toBe('150');
-    expect(formatBpm(150.5)).toBe('150.50');
-    expect(formatBpm(-10)).toBe('0');
-    expect(formatBpm(Number.NaN)).toBe('0');
+  test('formatBPM drops the decimals of a whole BPM', () => {
+    expect(formatBPM(150)).toBe('150');
+    expect(formatBPM(150.5)).toBe('150.50');
+    expect(formatBPM(-10)).toBe('0');
+    expect(formatBPM(Number.NaN)).toBe('0');
   });
 
   test('formatScroll drops the decimals of a whole SCROLL and shows 1 when unknown', () => {
@@ -68,11 +68,11 @@ describe('number readouts', () => {
     expect(formatJudgeWindowMs(-5)).toBe('0.00');
   });
 
-  test('formatFps shows one decimal below 100 and none above', () => {
-    expect(formatFps(59.94)).toBe('59.9');
-    expect(formatFps(120)).toBe('120');
-    expect(formatFps(0)).toBe('-');
-    expect(formatFps(undefined)).toBe('-');
+  test('formatFPS shows one decimal below 100 and none above', () => {
+    expect(formatFPS(59.94)).toBe('59.9');
+    expect(formatFPS(120)).toBe('120');
+    expect(formatFPS(0)).toBe('-');
+    expect(formatFPS(undefined)).toBe('-');
   });
 
   test('formatNotesProgress counts the judged notes, at most the total', () => {
@@ -129,7 +129,7 @@ describe('formatGrooveGaugeLine', () => {
     const summary = createSummary({
       gauge: { current: 80, clearThreshold: 80, max: 100 } as PlayerSummary['gauge'],
     });
-    expect(stripAnsi(formatGrooveGaugeLine(summary, 12, 1))).toBe(` ┃${'█'.repeat(8)}${'░'.repeat(2)}┃ 80%`);
+    expect(stripANSI(formatGrooveGaugeLine(summary, 12, 1))).toBe(` ┃${'█'.repeat(8)}${'░'.repeat(2)}┃ 80%`);
   });
 
   test('is - without a gauge', () => {
@@ -154,6 +154,6 @@ describe('judge and combo display state', () => {
   });
 
   test('resolveVisibleJudgeComboLabel shows PAUSE while paused', () => {
-    expect(stripAnsi(resolveVisibleJudgeComboLabel(createJudgeComboDisplayState(), 0, true))).toBe('PAUSE');
+    expect(stripANSI(resolveVisibleJudgeComboLabel(createJudgeComboDisplayState(), 0, true))).toBe('PAUSE');
   });
 });

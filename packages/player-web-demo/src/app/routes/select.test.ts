@@ -1,5 +1,5 @@
-import { createEmptyJson } from '@be-music/json';
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import { createEmptyJSON } from '@be-music/json';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import type { AudioService } from '@be-music/player-web/audio';
 import { describeSongCollection, type BrowserSongCollection } from '@be-music/player-web/collection';
 import {
@@ -38,7 +38,7 @@ function song(id: string): LibraryChart {
     title: id,
     artist: 'artist',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 
@@ -61,7 +61,7 @@ const AT_FIXTURE = { folderPath: ['fixtures'] } as unknown as BrowseSnapshot;
 const AT_DROPPED = { folderPath: ['dropped'] } as unknown as BrowseSnapshot;
 
 const BUILT_IN_KIT = { family: 'built-in' } as unknown as SelectSceneKit;
-const LR2_SKIN = { barLayout: { slots: [{}] } } as unknown as Lr2Skin;
+const LR2_SKIN = { barLayout: { slots: [{}] } } as unknown as LR2Skin;
 const BEATORAJA_KIT = { family: 'beatoraja', entryPath: 'select/select.json' } as unknown as SelectSceneKit;
 
 /** A select scene as `createSelectScene` makes it: the kit and options it was made with, and what it was told. */
@@ -137,7 +137,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
   const { classes, shell } = fakeShell();
   const courses = new CourseRunService();
   const playOptions = new PlayOptionsService({ hiSpeed: 2 });
-  const lr2: { selectSkin: Lr2Skin | undefined } = { selectSkin: undefined };
+  const lr2: { selectSkin: LR2Skin | undefined } = { selectSkin: undefined };
   const deps = {
     router,
     elements: { shell } as Pick<PlayerWebDemoElements, 'shell'>,
@@ -157,7 +157,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     },
     familyKits: {
       familyDispatchState: state,
-      selectSoundSet: vi.fn((kitFamily: Family) => ({ selectBgm: { path: `${kitFamily}.ogg` } })),
+      selectSoundSet: vi.fn((kitFamily: Family) => ({ selectBGM: { path: `${kitFamily}.ogg` } })),
     },
     lr2,
     beatoraja: {
@@ -226,7 +226,7 @@ describe('SelectRoute: the first select screen', () => {
     expect(scene.options.library).toBe(h.deps.library.collection);
     expect(scene.options.browse).toBe(AT_FOLDER);
     expect(scene.options.playOptions).toEqual(h.playOptions.current);
-    expect(scene.options.sounds).toEqual({ selectBgm: { path: 'built-in.ogg' } });
+    expect(scene.options.sounds).toEqual({ selectBGM: { path: 'built-in.ogg' } });
     expect(scene.options.audio).toBe(h.deps.audio);
     expect(scene.options.courseMaker).toBe(h.deps.courseMaker.maker);
     // The router shows it as its select scene, and keeps it.
@@ -253,7 +253,7 @@ describe('SelectRoute: the first select screen', () => {
     h.setFamily('lr2');
     await h.route.showSelect();
     expect(lastMade(h).kit).toEqual({ family: 'lr2', skin: LR2_SKIN });
-    expect(lastMade(h).options.sounds).toEqual({ selectBgm: { path: 'lr2.ogg' } });
+    expect(lastMade(h).options.sounds).toEqual({ selectBGM: { path: 'lr2.ogg' } });
   });
 
   test('the status line goes back to the library when it described a play or result', async () => {
@@ -294,7 +294,7 @@ describe('SelectRoute: coming back to the select screen', () => {
     expect(h.router.current).toBe(scene);
     expect(h.stage.slice(shownBefore)).toEqual([scene]);
     expect(scene.updateKit).toHaveBeenCalledWith({ family: 'lr2', skin: LR2_SKIN });
-    expect(scene.setSounds).toHaveBeenCalledWith({ selectBgm: { path: 'lr2.ogg' } });
+    expect(scene.setSounds).toHaveBeenCalledWith({ selectBGM: { path: 'lr2.ogg' } });
     expect(scene.setLibrary).toHaveBeenCalledWith(h.deps.library.collection);
     expect(scene.restore).toHaveBeenCalledWith(AT_FOLDER);
     // The skin and sounds go on before it enters (its BGM starts as it enters), the cursor once it is up.
@@ -439,7 +439,7 @@ describe('SelectRoute: coming back to the select screen', () => {
     await h.route.showSelect();
     const scene = lastMade(h);
     expect(scene.kit).toBe(BEATORAJA_KIT);
-    expect(scene.options.sounds).toEqual({ selectBgm: { path: 'beatoraja.ogg' } });
+    expect(scene.options.sounds).toEqual({ selectBGM: { path: 'beatoraja.ogg' } });
     expect(h.deps.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions).toHaveBeenCalledOnce();
 
     await h.router.leave();

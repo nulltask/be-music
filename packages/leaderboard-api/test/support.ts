@@ -8,7 +8,7 @@ import {
   createChartFingerprintDocument,
   createPlayFingerprintDocument,
 } from '@be-music/chart';
-import { parseBms } from '@be-music/parser';
+import { parseBMS } from '@be-music/parser';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogNote } from '@be-music/player/playlog';
 import type { Env } from '../src/env.ts';
 
@@ -57,8 +57,8 @@ export async function signInAnonymously(
 
 export interface TestChart {
   text: string;
-  /** The chart parsed (`BeMusicJson`), as a client sends a stage chart. */
-  json: ReturnType<typeof parseBms>;
+  /** The chart parsed (`BeMusicJSON`), as a client sends a stage chart. */
+  json: ReturnType<typeof parseBMS>;
   chartFingerprint: string;
   playFingerprint: string;
   chartDocument: unknown;
@@ -68,7 +68,7 @@ export interface TestChart {
 /** A chart without control flow (both fingerprints equal) built from `#xxxyy:` object lines. */
 export function makeChart(lines: readonly string[]): TestChart {
   const text = ['#PLAYER 1', '#BPM 120', ...lines].join('\n');
-  const json = parseBms(text);
+  const json = parseBMS(text);
   const options = { chartPath: undefined };
   return {
     text,

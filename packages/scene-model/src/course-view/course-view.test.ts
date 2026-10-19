@@ -1,11 +1,11 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { CourseDefinition } from '@be-music/player/course';
 import { describe, expect, it } from 'vite-plus/test';
 import type { LibraryChart, LibraryCourse } from '../library/entries.ts';
 import { resolveCourseView } from './course-view.ts';
 
 function chart(title: string, extra: Partial<LibraryChart> = {}): LibraryChart {
-  return { id: title, title, chart: createEmptyJson('bms'), ...extra } as LibraryChart;
+  return { id: title, title, chart: createEmptyJSON('bms'), ...extra } as LibraryChart;
 }
 
 const definition = {

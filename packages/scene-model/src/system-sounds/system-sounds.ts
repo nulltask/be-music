@@ -15,8 +15,8 @@ export type SystemSoundSlot =
   | 'optionOpen'
   | 'optionClose'
   | 'optionChange'
-  | 'selectBgm'
-  | 'decideBgm'
+  | 'selectBGM'
+  | 'decideBGM'
   | 'clear'
   | 'fail'
   | 'result'
@@ -33,8 +33,8 @@ export const SYSTEM_SOUND_SLOTS: readonly SystemSoundSlot[] = [
   'optionOpen',
   'optionClose',
   'optionChange',
-  'selectBgm',
-  'decideBgm',
+  'selectBGM',
+  'decideBGM',
   'clear',
   'fail',
   'result',
@@ -59,8 +59,8 @@ export type SystemSoundSet = { readonly [S in SystemSoundSlot]?: SystemSound };
  * generic result jingle command.
  */
 export const LR2_SOUND_SET_SLOTS: Readonly<Record<string, SystemSoundSlot>> = {
-  SELECT: 'selectBgm',
-  DECIDE: 'decideBgm',
+  SELECT: 'selectBGM',
+  DECIDE: 'decideBGM',
   FOLDER_OPEN: 'folderOpen',
   FOLDER_CLOSE: 'folderClose',
   PANEL_OPEN: 'optionOpen',
@@ -81,7 +81,7 @@ function compact(entries: ReadonlyArray<readonly [SystemSoundSlot, SystemSound |
   return set;
 }
 
-/** What a beatoraja theme gives: its cue paths, its select BGM path and its jingles (`BeatorajaThemeBgm`). */
+/** What a beatoraja theme gives: its cue paths, its select BGM path and its jingles (`BeatorajaThemeBGM`). */
 export interface BeatorajaThemeSounds {
   /** The cue paths found in the theme's files (`BeatorajaSelectSystemSoundPaths`). */
   readonly paths?: {
@@ -92,7 +92,7 @@ export interface BeatorajaThemeSounds {
     readonly folderClose?: string;
     readonly optionChange?: string;
   };
-  readonly selectBgmPath?: string;
+  readonly selectBGMPath?: string;
   /** The jingles read up front, by bytes. */
   readonly bgm?: {
     readonly decide?: Uint8Array;
@@ -126,8 +126,8 @@ export function systemSoundSetFromBeatoraja(theme: BeatorajaThemeSounds): System
     ['folderOpen', fromPath(paths.folderOpen)],
     ['folderClose', fromPath(paths.folderClose)],
     ['optionChange', fromPath(paths.optionChange)],
-    ['selectBgm', fromPath(theme.selectBgmPath)],
-    ['decideBgm', fromBytes(bgm.decide)],
+    ['selectBGM', fromPath(theme.selectBGMPath)],
+    ['decideBGM', fromBytes(bgm.decide)],
     ['clear', fromBytes(bgm.clear)],
     ['fail', fromBytes(bgm.fail)],
     ['result', fromBytes(bgm.result)],

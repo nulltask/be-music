@@ -18,4 +18,4 @@ export const LR2_GR = {
 } as const;
 
 /** One of LR2's runtime-bound image ids ({@link LR2_GR}). */
-export type Lr2Gr = (typeof LR2_GR)[keyof typeof LR2_GR];
+export type LR2Gr = (typeof LR2_GR)[keyof typeof LR2_GR];

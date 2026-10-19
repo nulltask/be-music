@@ -209,11 +209,11 @@ export class WebCodecsCapture {
     if (!videoCodec || !audioCodec) {
       throw new Error(`WebCodecsCapture: no codec pair for ${format.container} is encodable`);
     }
-    const moduleUrl = URL.createObjectURL(new Blob([CAPTURE_WORKLET_SOURCE], { type: 'text/javascript' }));
+    const moduleURL = URL.createObjectURL(new Blob([CAPTURE_WORKLET_SOURCE], { type: 'text/javascript' }));
     try {
-      await audioContext.audioWorklet.addModule(moduleUrl);
+      await audioContext.audioWorklet.addModule(moduleURL);
     } finally {
-      URL.revokeObjectURL(moduleUrl);
+      URL.revokeObjectURL(moduleURL);
     }
     if (this.closed) return;
 

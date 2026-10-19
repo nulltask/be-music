@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
-import { resolveLr2DecideState, resolveLr2DecideTimers } from './decide.ts';
+import { resolveLR2DecideState, resolveLR2DecideTimers } from './decide.ts';
 import { makeChartWith } from './test-support.ts';
 
-describe('resolveLr2DecideState', () => {
+describe('resolveLR2DecideState', () => {
   it('lights the base ops and the chart’s difficulty and key-mode ops', () => {
-    const { ops } = resolveLr2DecideState({ chart: makeChartWith({ channels: ['11', '18'], difficulty: 4 }) });
+    const { ops } = resolveLR2DecideState({ chart: makeChartWith({ channels: ['11', '18'], difficulty: 4 }) });
     expect([...ops].sort((a, b) => a - b)).toEqual([
       LR2_OP.OFFLINE,
       LR2_OP.LOADED,
       LR2_OP.DIFFICULTY_ANOTHER,
       LR2_OP.KEYS_7,
     ]);
-    expect(resolveLr2DecideState({ chart: makeChartWith({}) }).ops.has(LR2_OP.DIFFICULTY_UNDEFINED)).toBe(true);
+    expect(resolveLR2DecideState({ chart: makeChartWith({}) }).ops.has(LR2_OP.DIFFICULTY_UNDEFINED)).toBe(true);
   });
 
   it('draws the chart’s texts, the INSANE level among them', () => {
-    const state = resolveLr2DecideState({
+    const state = resolveLR2DecideState({
       chart: makeChartWith({ difficulty: 5 }, { title: 'T', artist: 'A', playLevel: 12 }),
     });
     expect(state.text(LR2_TEXT.TITLE)).toBe('T');
@@ -30,7 +30,7 @@ describe('resolveLr2DecideState', () => {
   });
 
   it('lights a course stage’s course ops and draws its course texts and numbers', () => {
-    const state = resolveLr2DecideState({
+    const state = resolveLR2DecideState({
       chart: makeChartWith({}),
       course: {
         kind: 'expert',
@@ -48,11 +48,11 @@ describe('resolveLr2DecideState', () => {
   });
 });
 
-describe('resolveLr2DecideTimers', () => {
+describe('resolveLR2DecideTimers', () => {
   it('runs timer 0 from the entry, and timer 1 once input has opened', () => {
     const frame = (nowMs: number) => ({ clock: { nowMs, enteredAtMs: 1000 }, inputOpenAtMs: 1300 });
-    expect([...resolveLr2DecideTimers(frame(1200))]).toEqual([[LR2_TIMER.SCENE_START, 1000]]);
-    expect([...resolveLr2DecideTimers(frame(1300))]).toEqual([
+    expect([...resolveLR2DecideTimers(frame(1200))]).toEqual([[LR2_TIMER.SCENE_START, 1000]]);
+    expect([...resolveLR2DecideTimers(frame(1300))]).toEqual([
       [LR2_TIMER.SCENE_START, 1000],
       [LR2_TIMER.START_INPUT, 1300],
     ]);
@@ -61,7 +61,7 @@ describe('resolveLr2DecideTimers', () => {
   it('runs timer 2 from when the screen started leaving', () => {
     const leaving = { to: 'play' as const, atMs: 1400 };
     expect(
-      resolveLr2DecideTimers({ clock: { nowMs: 1450, enteredAtMs: 1000 }, inputOpenAtMs: 1300, leaving }).get(
+      resolveLR2DecideTimers({ clock: { nowMs: 1450, enteredAtMs: 1000 }, inputOpenAtMs: 1300, leaving }).get(
         LR2_TIMER.FADE_OUT,
       ),
     ).toBe(1400);

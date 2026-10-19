@@ -180,7 +180,7 @@ skin parser.
 | Select | The focused `LibraryEntry` and its chart's facts, the list options, the clock | `resolveBeatorajaSelectBarOps`, `resolveBeatorajaSelectNumber`, `resolveBeatorajaSelectText`, `resolveBeatorajaSelectRefValue`, `resolveBeatorajaSelectSliderValue`                                                                                                                                                                                                                     |
 | Decide | The `LibraryChart` about to be played, the play's loading progress            | `resolveBeatorajaDecideOps`, `resolveBeatorajaDecideNumber`, `resolveBeatorajaDecideGraphValue`                                                                                                                                                                                                                                                                                         |
 | Course | A `LibraryCourse` (a bar) or a `CourseView` (a running course)                | `resolveBeatorajaCourseBarOps`, `resolveBeatorajaCourseStageOps`, `resolveBeatorajaCourseText`                                                                                                                                                                                                                                                                                          |
-| Sounds | The theme's file map                                                          | `discoverBeatorajaSystemSoundPaths`, `discoverBeatorajaSelectBgmPath`, `pickBeatorajaThemeBgmPaths`                                                                                                                                                                                                                                                                                     |
+| Sounds | The theme's file map                                                          | `discoverBeatorajaSystemSoundPaths`, `discoverBeatorajaSelectBGMPath`, `pickBeatorajaThemeBGMPaths`                                                                                                                                                                                                                                                                                     |
 
 The play and result number tables share one score table (`resolveBeatorajaScoreNumber`): the score and its rates, the
 combo, the judgment counts and their early / late split, the gauge and the chart TOTAL. The play adds the hi-speed, the
@@ -190,7 +190,7 @@ score table: it reads the focused chart's facts, 0 for the play's main live numb
 gauge and judgment counts), and nothing for the rest. The decide screen does not use the score table: it reads the chart's
 `#PLAYLEVEL`, its listed BPM on the BPM numbers and the loading progress (165), and 0 for every other number. On the
 select and decide screens the main BPM (92) is the one the play shows, the BPM the most judged notes sit at
-(`resolveChartMainBpm` in `@be-music/chart`), which the caller passes in (`mainBpm`); without it they read the header
+(`resolveChartMainBPM` in `@be-music/chart`), which the caller passes in (`mainBPM`); without it they read the header
 BPM.
 
 ### Timers as data
@@ -265,7 +265,7 @@ draw the sessions' frames through the select, decide and result resolvers, the r
 directly, and read beatoraja's scene timers off each frame. The select view reads the browse position's list options for
 the MODE and SORT image sets (`BEATORAJA_KEYS_FILTERS` and `BEATORAJA_SORTS` give their order, `beatorajaKeysFilterIndex`
 and `beatorajaSortIndex` an option's place) and keeps the LNMODE choice itself (`lnMode` of the select input, else the
-chart's `#LNMODE` through `beatorajaLnModeIndex`); its buttons come back to the select session as intents.
+chart's `#LNMODE` through `beatorajaLNModeIndex`); its buttons come back to the select session as intents.
 The play view draws through `BeatorajaPlayBridge`: the play's state is the play session's `PlayState`, and the bridge
 applies the ops and timers the mapping resolves for each frame, judgment and lane action
 ([player-web.md](./player-web.md#the-play-screen)).

@@ -4,7 +4,7 @@ import {
   isBeatorajaLuaSkinFilePath,
   isBeatorajaSkinIndicator,
   isChartFilePath,
-  isLr2SkinFilePath,
+  isLR2SkinFilePath,
   resolveDropFilePath,
   splitDroppedSongAndThemeFiles,
 } from './drop.ts';
@@ -34,14 +34,14 @@ describe('drop helpers', () => {
 
   test('splitDroppedSongAndThemeFiles keeps chart-directory assets together', () => {
     const songChart = file('LR2files/Sound/Example/main.bms');
-    const songWav = file('LR2files/Sound/Example/kick.wav');
+    const songWAV = file('LR2files/Sound/Example/kick.wav');
     const themeSkin = file('LR2files/Theme/play_7.lr2skin');
-    const themePng = file('LR2files/Theme/parts.png');
+    const themePNG = file('LR2files/Theme/parts.png');
 
-    const result = splitDroppedSongAndThemeFiles([songChart, songWav, themeSkin, themePng]);
+    const result = splitDroppedSongAndThemeFiles([songChart, songWAV, themeSkin, themePNG]);
 
-    expect(result.songFiles).toEqual([songChart, songWav]);
-    expect(result.themeFiles).toEqual([themeSkin, themePng]);
+    expect(result.songFiles).toEqual([songChart, songWAV]);
+    expect(result.themeFiles).toEqual([themeSkin, themePNG]);
   });
 
   test('splitDroppedSongAndThemeFiles treats chart-at-root drops as song material', () => {
@@ -103,11 +103,11 @@ describe('drop helpers', () => {
     expect(isEager('Theme/play_7.lr2skin')).toBe(false);
   });
 
-  test('isLr2SkinFilePath only matches `.lr2skin`', () => {
-    expect(isLr2SkinFilePath('Theme/play.lr2skin')).toBe(true);
-    expect(isLr2SkinFilePath('Theme/play.LR2SKIN')).toBe(true);
-    expect(isLr2SkinFilePath('Theme/play.luaskin')).toBe(false);
-    expect(isLr2SkinFilePath('Theme/play.json')).toBe(false);
+  test('isLR2SkinFilePath only matches `.lr2skin`', () => {
+    expect(isLR2SkinFilePath('Theme/play.lr2skin')).toBe(true);
+    expect(isLR2SkinFilePath('Theme/play.LR2SKIN')).toBe(true);
+    expect(isLR2SkinFilePath('Theme/play.luaskin')).toBe(false);
+    expect(isLR2SkinFilePath('Theme/play.json')).toBe(false);
   });
 
   test('isBeatorajaLuaSkinFilePath only matches `.luaskin`', () => {

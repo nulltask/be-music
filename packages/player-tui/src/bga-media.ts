@@ -7,12 +7,12 @@ import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-m
 import { decodeImageBuffer } from './bga-image.ts';
 import {
   type FrameMode,
-  type AnsiFrame,
+  type ANSIFrame,
   convertImageToSpecFrameOffThread,
   convertImageToSourceFrame,
 } from './bga-frame.ts';
 import {
-  type TimedAnsiFrame,
+  type TimedANSIFrame,
   type VideoFrameSource,
   type FrameSource,
   createStaticFrameSource,
@@ -23,7 +23,7 @@ async function loadImageAsSpecFrame(
   mode: FrameMode,
   resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
   signal?: AbortSignal,
-): Promise<AnsiFrame | undefined> {
+): Promise<ANSIFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
   if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
     return undefined;
@@ -47,7 +47,7 @@ async function loadImageAsSourceFrame(
   imagePath: string,
   mode: FrameMode,
   signal?: AbortSignal,
-): Promise<AnsiFrame | undefined> {
+): Promise<ANSIFrame | undefined> {
   const extension = extname(imagePath).toLowerCase();
   if (extension !== '.bmp' && extension !== '.png' && extension !== '.jpg' && extension !== '.jpeg') {
     return undefined;
@@ -73,7 +73,7 @@ export async function loadFrameSource(
   _width: number,
   _height: number,
   imageResizeAlgorithm: ImageResizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
-  videoBgaStreaming = true,
+  videoBGAStreaming = true,
   signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
@@ -82,17 +82,17 @@ export async function loadFrameSource(
     return createStaticFrameSource(imageFrame);
   }
 
-  return loadVideoAsFrameSource(resourcePath, mode, videoBgaStreaming, signal);
+  return loadVideoAsFrameSource(resourcePath, mode, videoBGAStreaming, signal);
 }
 
 async function loadVideoAsFrameSource(
   videoPath: string,
   mode: FrameMode,
-  videoBgaStreaming = true,
+  videoBGAStreaming = true,
   signal?: AbortSignal,
 ): Promise<FrameSource | undefined> {
   throwIfAborted(signal);
-  const frames: TimedAnsiFrame[] = [];
+  const frames: TimedANSIFrame[] = [];
   const source: VideoFrameSource = {
     kind: 'video',
     frames,
@@ -132,7 +132,7 @@ async function loadVideoAsFrameSource(
     });
   };
 
-  if (!videoBgaStreaming) {
+  if (!videoBGAStreaming) {
     const decoded = await decodeVideoFramesStream(
       videoPath,
       (frame) => {

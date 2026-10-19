@@ -62,7 +62,7 @@ export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
  * `controller.updateDisplay()` and the GUI reflects the new value. Function members are bound to the host so `this`
  * keeps its meaning when lil-gui invokes them.
  */
-export interface DemoGuiState extends PlayTempoSettings {
+export interface DemoGUIState extends PlayTempoSettings {
   autoPlay: boolean;
   /** Id of the be-music skin the default (no-theme) family renders with. Persisted in `localStorage`. */
   builtInSkin: string;
@@ -94,7 +94,7 @@ export interface DemoGuiState extends PlayTempoSettings {
   playInSilentMode: boolean;
   compressor: boolean;
   compressorKey: boolean;
-  compressorBgm: boolean;
+  compressorBGM: boolean;
   compressorMaster: boolean;
   /**
    * Pixel cap for the longest edge of BGA videos that need the ffmpeg.wasm transcode fallback. Single-threaded libx264

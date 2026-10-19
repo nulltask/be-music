@@ -6,7 +6,7 @@ import { decodeText, parseRows } from './csv.ts';
  * a file's name does not have to match the command: the stock set names the course jingles `course_clear.wav` /
  * `course_fail.wav`.
  */
-export type Lr2SoundSetKey =
+export type LR2SoundSetKey =
   | 'SELECT'
   | 'DECIDE'
   | 'FOLDER_OPEN'
@@ -20,17 +20,17 @@ export type Lr2SoundSetKey =
   | 'COURSECLEAR'
   | 'COURSEFAIL';
 
-export interface Lr2SoundSet {
+export interface LR2SoundSet {
   /** Each command's paths in file order, `\` turned into `/`. A later one is LR2's fallback for an earlier one. */
   readonly paths: ReadonlyMap<string, readonly string[]>;
-  /** `#CUSTOMFILE` folder patterns (`LR2files/Bgm/*`) with their default choice (`LR2 ver sta`). */
+  /** `#CUSTOMFILE` folder patterns (`LR2files/BGM/*`) with their default choice (`LR2 ver sta`). */
   readonly customFiles: ReadonlyArray<{ readonly pattern: string; readonly defaultValue: string }>;
 }
 
 const AUDIO_EXTENSIONS = ['.wav', '.ogg', '.mp3', '.opus', '.flac', '.oga'] as const;
 
 /** Parses an `.lr2ss` sound-set definition (Shift_JIS text, CSV rows starting with `#`). */
-export function parseLr2SoundSet(text: string): Lr2SoundSet {
+export function parseLR2SoundSet(text: string): LR2SoundSet {
   const paths = new Map<string, string[]>();
   const customFiles: Array<{ pattern: string; defaultValue: string }> = [];
   for (const row of parseRows(text)) {
@@ -51,10 +51,10 @@ export function parseLr2SoundSet(text: string): Lr2SoundSet {
 }
 
 /** Reads the sound set from a dropped theme's files, preferring the stock `lr2.lr2ss`. */
-export function readLr2SoundSet(
+export function readLR2SoundSet(
   files: ReadonlyMap<string, unknown>,
   bytesOf: (path: string) => Uint8Array | undefined,
-): Lr2SoundSet | undefined {
+): LR2SoundSet | undefined {
   let chosen: string | undefined;
   for (const path of files.keys()) {
     const lower = path.toLowerCase();
@@ -67,7 +67,7 @@ export function readLr2SoundSet(
   }
   if (chosen === undefined) return undefined;
   const bytes = bytesOf(chosen);
-  return bytes ? parseLr2SoundSet(decodeText(bytes)) : undefined;
+  return bytes ? parseLR2SoundSet(decodeText(bytes)) : undefined;
 }
 
 /**
@@ -76,10 +76,10 @@ export function readLr2SoundSet(
  * `LR2files/` or of `Sound/` both resolve. A `*` folder takes the `#CUSTOMFILE` default first and then any folder. A
  * file with another audio extension stands in for a missing one (`clear.ogg` for `clear.wav`).
  */
-export function resolveLr2SoundSetPath(
+export function resolveLR2SoundSetPath(
   paths: Iterable<string>,
-  soundSet: Lr2SoundSet,
-  key: Lr2SoundSetKey,
+  soundSet: LR2SoundSet,
+  key: LR2SoundSetKey,
 ): string | undefined {
   const definitions = soundSet.paths.get(key);
   if (!definitions) return undefined;
@@ -93,7 +93,7 @@ export function resolveLr2SoundSetPath(
   return undefined;
 }
 
-function expandCustomFiles(definition: string, soundSet: Lr2SoundSet): string[] {
+function expandCustomFiles(definition: string, soundSet: LR2SoundSet): string[] {
   const star = definition.indexOf('*');
   if (star < 0) return [definition];
   const prefix = definition.slice(0, star).toLowerCase();
@@ -107,7 +107,7 @@ function findMatchingPath(
   candidates: ReadonlyArray<{ path: string; lower: string }>,
   pattern: string,
 ): string | undefined {
-  const relative = stripLr2FilesPrefix(pattern.toLowerCase());
+  const relative = stripLR2FilesPrefix(pattern.toLowerCase());
   const dot = relative.lastIndexOf('.');
   const slash = relative.lastIndexOf('/');
   const hasExtension = dot > slash;
@@ -140,7 +140,7 @@ function normalizeSoundSetPath(path: string): string {
     .replace(/\/{2,}/gu, '/');
 }
 
-function stripLr2FilesPrefix(lower: string): string {
+function stripLR2FilesPrefix(lower: string): string {
   return lower.startsWith('lr2files/') ? lower.slice('lr2files/'.length) : lower;
 }
 

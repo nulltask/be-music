@@ -610,7 +610,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
     const playLevelNumber =
       song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
-    const songBpm = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
+    const songBPM = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
     const modeLabel = song ? formatPlayVariantLabel(song) : '- KEYS';
     const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
     const position =
@@ -676,7 +676,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     const stats: ReadonlyArray<readonly [x: number, w: number, label: string, value: string, fill: number]> = [
       [30, 80, 'MODE', modeLabel, SYN_WHITE],
-      [118, 76, 'BPM', songBpm, SYN_WHITE],
+      [118, 76, 'BPM', songBPM, SYN_WHITE],
       [202, 86, 'LEVEL', playLevel, SYN_AMBER],
     ];
     for (const [x, w, label, value, fill] of stats) {

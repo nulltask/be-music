@@ -38,7 +38,7 @@ function resolveBuildCommit(): string {
 // single-threaded.
 const playerWebCoreRequire = createRequire(resolve(repositoryDir, 'packages/player-web/package.json'));
 const ffmpegCorePackageRoot = dirname(dirname(dirname(playerWebCoreRequire.resolve('@ffmpeg/core'))));
-const ffmpegCoreEsmDir = resolve(ffmpegCorePackageRoot, 'dist/esm');
+const ffmpegCoreESMDir = resolve(ffmpegCorePackageRoot, 'dist/esm');
 const URL_LOAD_PROXY_PATH = '/__url-load-proxy';
 
 /**
@@ -103,11 +103,11 @@ function ffmpegCorePlugin(sourceDir: string): Plugin {
   };
 }
 
-function resolveUrlLoadProxyTarget(rawUrl: string | null): URL {
-  if (!rawUrl) {
+function resolveURLLoadProxyTarget(rawURL: string | null): URL {
+  if (!rawURL) {
     throw new Error('missing url query parameter');
   }
-  const target = new URL(rawUrl);
+  const target = new URL(rawURL);
   if (target.protocol !== 'https:') {
     throw new Error('only https proxy targets are allowed');
   }
@@ -132,8 +132,8 @@ function urlLoadProxyPlugin(): Plugin {
 
           let target: URL;
           try {
-            const requestUrl = new URL(req.url ?? '/', 'http://localhost');
-            target = resolveUrlLoadProxyTarget(requestUrl.searchParams.get('url'));
+            const requestURL = new URL(req.url ?? '/', 'http://localhost');
+            target = resolveURLLoadProxyTarget(requestURL.searchParams.get('url'));
           } catch (error) {
             res.statusCode = 400;
             res.end(error instanceof Error ? error.message : 'invalid proxy target');
@@ -195,8 +195,8 @@ async function collectAcknowledgements(roots: string[]): Promise<
   }>
 > {
   const seen = new Map<string, Awaited<ReturnType<typeof readPackageMeta>>>();
-  const queue: Array<{ pkgJsonPath: string; basePath: string }> = roots.map((p) => ({
-    pkgJsonPath: p,
+  const queue: Array<{ pkgJSONPath: string; basePath: string }> = roots.map((p) => ({
+    pkgJSONPath: p,
     basePath: dirname(p),
   }));
 
@@ -204,7 +204,7 @@ async function collectAcknowledgements(roots: string[]): Promise<
     const item = queue.shift()!;
     let pkg: { dependencies?: Record<string, string> };
     try {
-      pkg = JSON.parse(await readFile(item.pkgJsonPath, 'utf8'));
+      pkg = JSON.parse(await readFile(item.pkgJSONPath, 'utf8'));
     } catch {
       continue;
     }
@@ -216,16 +216,16 @@ async function collectAcknowledgements(roots: string[]): Promise<
       if (depName.startsWith('@be-music/')) continue;
       if (seen.has(depName)) continue;
 
-      const resolved = await resolveDependencyPackageJson(depName, item.basePath);
+      const resolved = await resolveDependencyPackageJSON(depName, item.basePath);
       if (!resolved) continue;
-      const meta = await readPackageMeta(resolved.pkgJsonPath, resolved.pkgDir);
+      const meta = await readPackageMeta(resolved.pkgJSONPath, resolved.pkgDir);
       if (!meta) continue;
       seen.set(depName, meta);
       // pnpm symlinks each package's `node_modules/<name>` to a location inside `.pnpm/...`. Walking from the symlinked
       // path finds nothing because the package's own siblings live next to its `realpath` target. Resolving the symlink
       // here lets the next iteration find transitive deps in the pnpm virtual store.
       const realPkgDir = await realpath(resolved.pkgDir).catch(() => resolved.pkgDir);
-      queue.push({ pkgJsonPath: resolved.pkgJsonPath, basePath: realPkgDir });
+      queue.push({ pkgJSONPath: resolved.pkgJSONPath, basePath: realPkgDir });
     }
   }
 
@@ -246,10 +246,10 @@ async function collectAcknowledgements(roots: string[]): Promise<
  *
  * Returns `undefined` when no resolution path succeeds.
  */
-async function resolveDependencyPackageJson(
+async function resolveDependencyPackageJSON(
   depName: string,
   basePath: string,
-): Promise<{ pkgJsonPath: string; pkgDir: string } | undefined> {
+): Promise<{ pkgJSONPath: string; pkgDir: string } | undefined> {
   // Strategy 1: walk parent `node_modules` directories. This mirrors Node's resolution algorithm and works for both
   // hoisted and non-hoisted layouts. Avoids the `exports` gating that blocks `require.resolve(pkg/package.json)`.
   let dir = basePath;
@@ -257,7 +257,7 @@ async function resolveDependencyPackageJson(
     const candidate = resolve(dir, 'node_modules', depName, 'package.json');
     try {
       await readFile(candidate, 'utf8');
-      return { pkgJsonPath: candidate, pkgDir: dirname(candidate) };
+      return { pkgJSONPath: candidate, pkgDir: dirname(candidate) };
     } catch {
       // Not in this `node_modules`; walk up.
     }
@@ -277,7 +277,7 @@ async function resolveDependencyPackageJson(
         const text = await readFile(candidate, 'utf8');
         const json = JSON.parse(text) as { name?: string };
         if (json.name === depName) {
-          return { pkgJsonPath: candidate, pkgDir: cursor };
+          return { pkgJSONPath: candidate, pkgDir: cursor };
         }
       } catch {
         // Not here; walk up.
@@ -293,7 +293,7 @@ async function resolveDependencyPackageJson(
 }
 
 async function readPackageMeta(
-  pkgJsonPath: string,
+  pkgJSONPath: string,
   pkgDir: string,
 ): Promise<
   | {
@@ -309,7 +309,7 @@ async function readPackageMeta(
 > {
   let raw: Record<string, unknown>;
   try {
-    raw = JSON.parse(await readFile(pkgJsonPath, 'utf8'));
+    raw = JSON.parse(await readFile(pkgJSONPath, 'utf8'));
   } catch {
     return undefined;
   }
@@ -415,7 +415,7 @@ function acknowledgementsPlugin(roots: string[]): Plugin {
 
 export default defineConfig({
   plugins: [
-    ffmpegCorePlugin(ffmpegCoreEsmDir),
+    ffmpegCorePlugin(ffmpegCoreESMDir),
     urlLoadProxyPlugin(),
     // Build-time acknowledgement collector. Walks the runtime dep tree from the demo + `player-web` package.json entry
     // points so every npm dependency that ships in the bundle (direct or transitive) ends up listed in the about modal

@@ -11,9 +11,9 @@ import type { BeatorajaSkin, BeatorajaSkinHeader } from './types.ts';
  * Parse a beatoraja JSON skin file into a typed tree. Throws on syntax errors; callers wrap that into their own
  * load-failure surface (consistent with the Lua evaluator's Result-typed error).
  */
-export function parseBeatorajaSkinJson(source: Uint8Array | string): BeatorajaSkin {
+export function parseBeatorajaSkinJSON(source: Uint8Array | string): BeatorajaSkin {
   const text = typeof source === 'string' ? source : new TextDecoder('utf-8').decode(source);
-  const sanitized = relaxBeatorajaJson(text);
+  const sanitized = relaxBeatorajaJSON(text);
   const parsed = JSON.parse(sanitized) as Record<string, unknown>;
   return parsed as BeatorajaSkin;
 }
@@ -24,8 +24,8 @@ export function parseBeatorajaSkinJson(source: Uint8Array | string): BeatorajaSk
  * partial tokenizer; the field exists to stay symmetric with the Lua side, where `parseBeatorajaSkinHeader` is the
  * cheap path that avoids running `main()`.
  */
-export function parseBeatorajaSkinJsonHeader(source: Uint8Array | string): BeatorajaSkinHeader {
-  const skin = parseBeatorajaSkinJson(source);
+export function parseBeatorajaSkinJSONHeader(source: Uint8Array | string): BeatorajaSkinHeader {
+  const skin = parseBeatorajaSkinJSON(source);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const {
     source: _src,
@@ -62,7 +62,7 @@ export function parseBeatorajaSkinJsonHeader(source: Uint8Array | string): Beato
  * Line / block comments and unquoted keys are NOT supported — none of the bundled skins use those, and
  * `JSON.parse` will reject them with a clear error if a community theme tries.
  */
-export function relaxBeatorajaJson(source: string): string {
+export function relaxBeatorajaJSON(source: string): string {
   let result = '';
   let inString = false;
   let escape = false;

@@ -25,9 +25,9 @@ export function decodeCourseText(bytes: Uint8Array): string {
 }
 
 /** A parsed XML element: its name, its child elements and its own text (entities decoded, CDATA kept verbatim). */
-export interface CourseXmlElement {
+export interface CourseXMLElement {
   name: string;
-  children: CourseXmlElement[];
+  children: CourseXMLElement[];
   text: string;
 }
 
@@ -49,9 +49,9 @@ function decodeEntities(text: string): string {
  * instructions. Attributes are skipped (no course format uses them). Returns the root element, or `undefined` when
  * the text holds none. Unclosed elements are closed at the end of the text.
  */
-export function parseCourseXml(text: string): CourseXmlElement | undefined {
-  const root: CourseXmlElement = { name: '', children: [], text: '' };
-  const stack: CourseXmlElement[] = [root];
+export function parseCourseXML(text: string): CourseXMLElement | undefined {
+  const root: CourseXMLElement = { name: '', children: [], text: '' };
+  const stack: CourseXMLElement[] = [root];
   let index = 0;
   while (index < text.length) {
     const open = text.indexOf('<', index);
@@ -86,7 +86,7 @@ export function parseCourseXml(text: string): CourseXmlElement | undefined {
       }
       const selfClosing = tag.endsWith('/');
       const name = /^[^\s/]+/u.exec(tag)?.[0] ?? '';
-      const element: CourseXmlElement = { name, children: [], text: '' };
+      const element: CourseXMLElement = { name, children: [], text: '' };
       top.children.push(element);
       if (!selfClosing) stack.push(element);
     }

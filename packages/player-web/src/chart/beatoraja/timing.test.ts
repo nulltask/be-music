@@ -1,4 +1,4 @@
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import {
   beatorajaEventBeat,
@@ -6,20 +6,20 @@ import {
   collectBeatorajaChartTimingEntries,
   computeBeatorajaMeasureLayout,
   hasBeatorajaEventValue,
-  isBeatorajaBpmEventChannel,
+  isBeatorajaBPMEventChannel,
   isBeatorajaStopEventChannel,
-  resolveBeatorajaBpmEventValue,
-  resolveBeatorajaInitialBpm,
+  resolveBeatorajaBPMEventValue,
+  resolveBeatorajaInitialBPM,
   resolveBeatorajaStopDurationBeats,
 } from './timing.ts';
 
-type ChartOverrides = Omit<Partial<BeMusicJson>, 'metadata' | 'resources'> & {
-  metadata?: Partial<BeMusicJson['metadata']>;
-  resources?: Partial<BeMusicJson['resources']>;
+type ChartOverrides = Omit<Partial<BeMusicJSON>, 'metadata' | 'resources'> & {
+  metadata?: Partial<BeMusicJSON['metadata']>;
+  resources?: Partial<BeMusicJSON['resources']>;
 };
 
-function chartWith(overrides: ChartOverrides): BeMusicJson {
-  const empty = createEmptyJson();
+function chartWith(overrides: ChartOverrides): BeMusicJSON {
+  const empty = createEmptyJSON();
   return {
     ...empty,
     ...overrides,
@@ -59,23 +59,23 @@ describe('beatoraja timing helpers', () => {
   });
 
   it('resolves the initial BPM with beatoraja fallback semantics', () => {
-    expect(resolveBeatorajaInitialBpm(chartWith({ metadata: { title: '', bpm: 175 } }))).toBe(175);
-    expect(resolveBeatorajaInitialBpm(chartWith({ metadata: { title: '', bpm: 0 } }))).toBe(130);
+    expect(resolveBeatorajaInitialBPM(chartWith({ metadata: { title: '', bpm: 175 } }))).toBe(175);
+    expect(resolveBeatorajaInitialBPM(chartWith({ metadata: { title: '', bpm: 0 } }))).toBe(130);
   });
 
   it('classifies BPM and STOP timing channels', () => {
-    expect(isBeatorajaBpmEventChannel('03')).toBe(true);
-    expect(isBeatorajaBpmEventChannel('08')).toBe(true);
-    expect(isBeatorajaBpmEventChannel('09')).toBe(false);
+    expect(isBeatorajaBPMEventChannel('03')).toBe(true);
+    expect(isBeatorajaBPMEventChannel('08')).toBe(true);
+    expect(isBeatorajaBPMEventChannel('09')).toBe(false);
     expect(isBeatorajaStopEventChannel('09')).toBe(true);
     expect(isBeatorajaStopEventChannel('08')).toBe(false);
   });
 
   it('resolves BPM event values from inline hex and case-insensitive table keys', () => {
-    expect(resolveBeatorajaBpmEventValue('03', 'F0')).toBe(240);
-    expect(resolveBeatorajaBpmEventValue('08', 'aa', { AA: '175.5' })).toBe(175.5);
-    expect(resolveBeatorajaBpmEventValue('08', 'BB', { bb: 90 })).toBe(90);
-    expect(resolveBeatorajaBpmEventValue('09', 'AA', { AA: 120 })).toBeUndefined();
+    expect(resolveBeatorajaBPMEventValue('03', 'F0')).toBe(240);
+    expect(resolveBeatorajaBPMEventValue('08', 'aa', { AA: '175.5' })).toBe(175.5);
+    expect(resolveBeatorajaBPMEventValue('08', 'BB', { bb: 90 })).toBe(90);
+    expect(resolveBeatorajaBPMEventValue('09', 'AA', { AA: 120 })).toBeUndefined();
   });
 
   it('resolves STOP table values into beat durations', () => {

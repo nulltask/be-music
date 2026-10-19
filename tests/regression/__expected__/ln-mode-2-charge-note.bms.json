@@ -33,12 +33,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 1,
       "lnType": 1,
       "lnMode": 2
@@ -100,7 +100,7 @@
       "randomPatterns": [],
       "title": "LN Mode 2 Test (CN)",
       "playVariant": "7",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -129,8 +129,8 @@
           "percent": 75
         },
         "noteCount": 12,
-        "chartFingerprint": "bmfp0:a97d36361a08ad4e7be570b702e079a95eb821346a25145efe9cd3d1c628c1f4",
-        "playFingerprint": "bmfp0:a97d36361a08ad4e7be570b702e079a95eb821346a25145efe9cd3d1c628c1f4",
+        "chartFingerprint": "bmfp0:abd61247a94c4eac364ef855580cd8c032d43211c269fa29afff84246161defc",
+        "playFingerprint": "bmfp0:abd61247a94c4eac364ef855580cd8c032d43211c269fa29afff84246161defc",
         "title": "LN Mode 2 Test (CN)",
         "subtitle": "Charge Note — held continuously to tail; release-before-tail is NOT BAD",
         "artist": "be-music",

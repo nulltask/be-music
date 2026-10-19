@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vite-plus/test';
 import { normalizeBeatorajaTimingVisualizers } from './timing-visualizer.ts';
 
 describe('normalizeBeatorajaTimingVisualizers', () => {
-  it('keeps id and falls back to JsonSkin.java upstream defaults (reference-theme shape)', () => {
-    // Defaults mirror `JsonSkin.java:297-311` (`TimingVisualizer`):
+  it('keeps id and falls back to JSONSkin.java upstream defaults (reference-theme shape)', () => {
+    // Defaults mirror `JSONSkin.java:297-311` (`TimingVisualizer`):
     //   width = 301, judgeWidthMillis = 150, lineWidth = 1, transparent = 0, drawDecay = 1.
     // The reference theme authors only `{id = "timing"}` and relies on these.
     expect(normalizeBeatorajaTimingVisualizers([{ id: 'timing' }])).toEqual([

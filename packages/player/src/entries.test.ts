@@ -24,7 +24,7 @@ describe('designed entries', () => {
   });
 
   it('@be-music/player/playlog leaves the score vocabulary to @be-music/player/ruleset', () => {
-    for (const name of ['computeScoreRate', 'resolveIidxRankLabel', 'IIDX_RANK_LABELS']) {
+    for (const name of ['computeScoreRate', 'resolveIIDXRankLabel', 'IIDX_RANK_LABELS']) {
       expect(playlog).not.toHaveProperty(name);
     }
   });
@@ -38,7 +38,7 @@ describe('designed entries', () => {
       'applyHighSpeedControlAction',
       'createPlayerInputSignalBus',
       'createPlayerStateSignals',
-      'createPlayerUiSignalBus',
+      'createPlayerUISignalBus',
       'resolveHighSpeedControlActionFromLaneChannels',
       'resolveHighSpeedMultiplier',
     ]);
@@ -52,10 +52,10 @@ describe('designed entries', () => {
       'isPlayableInputChannel',
       'isScratch',
       'resolveKeyChannel',
+      'resolveLR2LaneIndex',
       'resolveLaneChannels',
       'resolveLaneDisplayMode',
       'resolveLaneOptionChannels',
-      'resolveLr2LaneIndex',
       'resolvePlayVariantLaneChannels',
       'resolveSideKeySlot',
       'resolveSideRelativeLaneIndex',
@@ -80,8 +80,8 @@ describe('designed entries', () => {
       'extractTimedNotes',
       'formatSeconds',
       'isImageResizeAlgorithm',
-      'pickActiveBgaCue',
-      'pickActiveBgaKey',
+      'pickActiveBGACue',
+      'pickActiveBGAKey',
       'resolveAltModifierLabel',
       'resolveDisplayedDifficultyValue',
       'resolveDisplayedJudgeRankLabel',

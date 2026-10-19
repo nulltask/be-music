@@ -8,11 +8,11 @@
  */
 
 import type { TimedSampleTrigger } from '@be-music/chart';
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 import type { TimedPlayableNote } from '@be-music/player/display';
 import type { Texture } from 'pixi.js';
 import { loadPlaySamples } from '../../chart/play-audio.ts';
-import { loadPlayBga } from '../../chart/play-bga.ts';
+import { loadPlayBGA } from '../../chart/play-bga.ts';
 import type { LibraryChart } from '@be-music/scene-model';
 import type { BrowserSongAssetSource } from '../../collection/types.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
@@ -28,7 +28,7 @@ import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/n
 import { createPlayAudioGraph } from '../../runtime/play-audio-graph.ts';
 import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
-import type { BgaCue } from '../../chart/bga-timeline.ts';
+import type { BGACue } from '../../chart/bga-timeline.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveGameplayAudioTailCleanupDelayMs } from './result-delay.ts';
 
@@ -50,7 +50,7 @@ export interface PlayMediaContext {
   >;
   readonly song: LibraryChart | undefined;
   readonly source: BrowserSongAssetSource | undefined;
-  readonly resolvedChart: BeMusicJson | undefined;
+  readonly resolvedChart: BeMusicJSON | undefined;
   readonly disposed: boolean;
   readonly tempo: number;
   audioContext: AudioContext | undefined;
@@ -68,12 +68,12 @@ export interface PlayMediaContext {
   bmsonSlicePlayback:
     | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
     | undefined;
-  readonly hasBga: boolean;
-  readonly bgaTimeline: { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] };
-  readonly poorBgaFallbackKey: string | undefined;
+  readonly hasBGA: boolean;
+  readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; poor: BGACue[] };
+  readonly poorBGAFallbackKey: string | undefined;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;
-  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }>;
+  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
   /** Uploads `textures` to the GPU now (Pixi's `PrepareSystem`), so the first frame that draws them does not stall. */
   preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void>;
@@ -172,22 +172,22 @@ export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'temp
  * the timeline cues reference. Loads run with bounded parallelism so a long preamble doesn't gate the playfield
  * without fanning browser decoders out without limit.
  */
-export async function prepareBga(ctx: PlayMediaContext): Promise<void> {
+export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
   const song = ctx.song;
   const source = ctx.source;
-  if (!song || !source || !ctx.hasBga) {
+  if (!song || !source || !ctx.hasBGA) {
     return;
   }
   // Use the control-flow-resolved chart so #IF-gated BMP / bga header declarations match the chosen #RANDOM branch.
   const chart = ctx.resolvedChart ?? song.chart;
   // Loaded as the beatoraja prep loads them (`chart/play-bga.ts`): base + POOR textures keep their blacks, the layer
   // track's are keyed out for BMS, videos get one texture for both tracks, and `#BGAxx` sub-regions become views.
-  await loadPlayBga({
+  await loadPlayBGA({
     chart,
     source,
     chartPath: song.chartPath,
     timeline: ctx.bgaTimeline,
-    poorFallbackKey: ctx.poorBgaFallbackKey,
+    poorFallbackKey: ctx.poorBGAFallbackKey,
     into: {
       textures: ctx.bgaTextures,
       layerTextures: ctx.bgaLayerTextures,
@@ -204,7 +204,7 @@ export async function prepareBga(ctx: PlayMediaContext): Promise<void> {
   if (ctx.disposed) return;
   // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
   // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
-  // forget from the prepareBga callsite — `bgaReadyPromise` already gates chart start, and adding the upload to
+  // forget from the prepareBGA callsite — `bgaReadyPromise` already gates chart start, and adding the upload to
   // its tail just lengthens that promise by the upload work, which is what we want.
   await ctx.preparePixiUpload(ctx.bgaTextures.values());
   if (ctx.disposed) return;
@@ -300,15 +300,15 @@ export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: PlayDis
 }
 
 /** Stops the BGA videos and lets go of them as the play is disposed. */
-export function disposeBgaVideos(ctx: {
-  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectUrl: string }>;
+export function disposeBGAVideos(ctx: {
+  readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   bgaActiveVideos: { base?: { key: string; cueSeconds: number }; layer?: { key: string; cueSeconds: number } };
 }): void {
   // Pause every BGA video BEFORE we touch textures. The Pixi `VideoSource` wrapping each video registers a
   // `requestVideoFrameCallback` that re-uploads frames into the GL texture as they decode — leaving those callbacks
   // in flight while we destroy the textures throws inside the GL texture system. Pausing also revokes the Blob URL so
   // the underlying buffer can be released.
-  for (const { video, objectUrl } of ctx.bgaVideos.values()) {
+  for (const { video, objectURL } of ctx.bgaVideos.values()) {
     try {
       video.pause();
       video.removeAttribute('src');
@@ -316,7 +316,7 @@ export function disposeBgaVideos(ctx: {
     } catch {
       // Defensive — `load()` can throw on detached videos.
     }
-    URL.revokeObjectURL(objectUrl);
+    URL.revokeObjectURL(objectURL);
   }
   ctx.bgaVideos.clear();
   ctx.bgaActiveVideos = {};

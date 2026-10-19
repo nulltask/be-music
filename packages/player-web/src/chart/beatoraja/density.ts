@@ -10,7 +10,7 @@
 // - end is the busiest 5-second average from the second where the notes left fit inside the TOTAL-based border.
 
 import { resolveChart, type ResolvedChart } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 
 /** A density readout: its whole part and its two decimal digits, as beatoraja's numbers show them. */
 export interface DensityReadout {
@@ -60,7 +60,7 @@ interface CountedObject {
  * The densities beatoraja's `SongInformation(BMSModel)` computes for `chart` (`SongInformation.java` L86-L176), from the
  * chart's resolved notes. All zero for a chart without timelines or longer than beatoraja analyses.
  */
-export function computeBeatorajaChartDensityValues(chart: BeMusicJson | ResolvedChart): ChartDensityValues {
+export function computeBeatorajaChartDensityValues(chart: BeMusicJSON | ResolvedChart): ChartDensityValues {
   const resolved = 'sortedEvents' in chart ? chart : resolveChart(chart);
   const zero = { peak: 0, end: 0, average: 0 };
 
@@ -82,7 +82,7 @@ export function computeBeatorajaChartDensityValues(chart: BeMusicJson | Resolved
 
   // `SongInformation` walks a long note's end only outside LN mode (`#LNMODE` 1, or none with the LN type the song
   // database reads with); `BMSModel.getTotalNotes` counts the end of a CN / HCN note.
-  const chartLnMode = resolved.lnMode;
+  const chartLNMode = resolved.lnMode;
   const objects: CountedObject[] = [];
   let totalNotes = 0;
   for (const note of resolved.notes) {
@@ -90,8 +90,8 @@ export function computeBeatorajaChartDensityValues(chart: BeMusicJson | Resolved
     if (note.kind === 'ln' && note.endSeconds !== undefined) {
       const endMs = toTimelineMs(note.endSeconds);
       objects.push({ ms, notes: 0, heldUntilMs: endMs });
-      totalNotes += (note.lnMode ?? chartLnMode) === 1 ? 1 : 2;
-      if (chartLnMode !== 1) objects.push({ ms: endMs, notes: 0 });
+      totalNotes += (note.lnMode ?? chartLNMode) === 1 ? 1 : 2;
+      if (chartLNMode !== 1) objects.push({ ms: endMs, notes: 0 });
     } else {
       objects.push({ ms, notes: 1 });
       totalNotes += 1;
@@ -150,7 +150,7 @@ export function toBeatorajaDensityReadout(value: number): DensityReadout {
 }
 
 /** The chart's note-density readouts for beatoraja's numbers 360-365 ({@link computeBeatorajaChartDensityValues}). */
-export function computeBeatorajaChartDensity(chart: BeMusicJson | ResolvedChart): ChartDensity {
+export function computeBeatorajaChartDensity(chart: BeMusicJSON | ResolvedChart): ChartDensity {
   const values = computeBeatorajaChartDensityValues(chart);
   return {
     peak: toBeatorajaDensityReadout(values.peak),

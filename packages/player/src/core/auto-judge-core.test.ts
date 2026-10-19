@@ -1,5 +1,5 @@
 import { resolveChart } from '@be-music/chart';
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveRuleset, rulesetChartFactsFromChart, type PlaylogRulesetId } from '../ruleset/index.ts';
 import {
@@ -15,8 +15,8 @@ import type { JudgeCoreEffect } from './judge-core.ts';
 import { createScoreTracker } from './scoring.ts';
 
 /** BPM 240 → one measure per second. A tap on `11` at 1 s, a CN-capable long note on `12` from 1.5 s to 2.5 s. */
-const CHART: BeMusicJson = (() => {
-  const json = createEmptyJson('bms');
+const CHART: BeMusicJSON = (() => {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 240;
   json.bms.lnObjs = ['AA'];
   json.events = [
@@ -28,7 +28,7 @@ const CHART: BeMusicJson = (() => {
   return json;
 })();
 
-function createAuto(ruleset: PlaylogRulesetId, chart: BeMusicJson = CHART): AutoJudgeState {
+function createAuto(ruleset: PlaylogRulesetId, chart: BeMusicJSON = CHART): AutoJudgeState {
   const source = structuredClone(chart);
   const resolved = resolveChart(source);
   const prepared = preparePlaybackChart(resolved);

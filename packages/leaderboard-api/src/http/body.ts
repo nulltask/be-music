@@ -13,7 +13,7 @@ export type BodyResult = { ok: true; value: unknown } | { ok: false; status: 400
  * to one). Both the encoded and the decoded size are counted while streaming, so an oversized or decompression-bomb
  * body is cut off instead of buffered.
  */
-export async function readJsonBody(request: Request, limits: BodyLimits): Promise<BodyResult> {
+export async function readJSONBody(request: Request, limits: BodyLimits): Promise<BodyResult> {
   const contentType = request.headers.get('content-type') ?? '';
   if (!contentType.toLowerCase().startsWith('application/json')) {
     return { ok: false, status: 415, reason: 'expected-json' };

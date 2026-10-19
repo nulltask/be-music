@@ -1,5 +1,5 @@
 import { and, asc, countDistinct, desc, eq, or, sql, type SQL } from 'drizzle-orm';
-import { avatarUrl } from '../avatars.ts';
+import { avatarURL } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import type { RulesetId } from '../rulesets.ts';
 import {
@@ -158,7 +158,7 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
     }) => ({
       ...row,
       info: toPlayInfo(info),
-      avatarUrl: avatarUrl(row.handle, avatarKey),
+      avatarUrl: avatarURL(row.handle, avatarKey),
       createdAt: createdAt.getTime(),
       anonymous: anonymous === true,
       chartListed: chartStatus === 'listed',
@@ -281,7 +281,7 @@ export async function loadPlayer(db: Database, handle: string) {
         ...row,
         anonymous: row.anonymous === true,
         joinedAt: row.joinedAt.getTime(),
-        avatarUrl: avatarUrl(row.handle, row.avatarKey),
+        avatarUrl: avatarURL(row.handle, row.avatarKey),
       };
 }
 

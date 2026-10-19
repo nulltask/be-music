@@ -11,7 +11,7 @@ const SPEC_BGA_CANVAS_SIZE = 256;
 export const TERMINAL_PIXEL_ASPECT_X = 2;
 export const TERMINAL_PIXEL_ASPECT_Y = 1;
 const lanczosAxisContributionCache = new Map<string, LanczosAxisContribution[]>();
-const resizedAnsiFrameCache = new WeakMap<AnsiFrame, Map<string, AnsiFrame>>();
+const resizedANSIFrameCache = new WeakMap<ANSIFrame, Map<string, ANSIFrame>>();
 
 /**
  * Composition mode for a BGA frame.
@@ -25,7 +25,7 @@ const resizedAnsiFrameCache = new WeakMap<AnsiFrame, Map<string, AnsiFrame>>();
  */
 export type FrameMode = 'base' | 'layer' | 'bmson-layer';
 
-export interface AnsiFrame {
+export interface ANSIFrame {
   width: number;
   height: number;
   rgb: Uint8Array;
@@ -41,7 +41,7 @@ type WorkerizedSpecFrameConverter = ((
   image: DecodedImage,
   mode: FrameMode,
   resizeAlgorithm: ImageResizeAlgorithm,
-  callback: (error: unknown, result: AnsiFrame) => void,
+  callback: (error: unknown, result: ANSIFrame) => void,
 ) => void) & { close: () => void };
 
 let convertImageToSpecFrameWorker: WorkerizedSpecFrameConverter | undefined;
@@ -51,7 +51,7 @@ export async function convertImageToSpecFrameOffThread(
   mode: FrameMode,
   resizeAlgorithm: ImageResizeAlgorithm,
   signal?: AbortSignal,
-): Promise<AnsiFrame> {
+): Promise<ANSIFrame> {
   const activeWorker = resolveConvertImageToSpecFrameWorker();
   try {
     const frame = await invokeWorkerizedFunction(activeWorker, [image, mode, resizeAlgorithm], {
@@ -90,11 +90,11 @@ function createConvertImageToSpecFrameWorker(): WorkerizedSpecFrameConverter {
       convertImageToSpecFrame(image, mode, resizeAlgorithm),
     () => [
       convertImageToSpecFrame,
-      createSolidAnsiFrame,
+      createSolidANSIFrame,
       fitSizeWithinSpecCanvas,
       isOpaquePixel,
       resolveNearestImageSampleOffset,
-      resampleDecodedImageRgbaLanczos,
+      resampleDecodedImageRGBALanczos,
       createLanczosAxisContributions,
       clampToByte,
       lanczosKernel,
@@ -107,19 +107,19 @@ function createConvertImageToSpecFrameWorker(): WorkerizedSpecFrameConverter {
   ) as WorkerizedSpecFrameConverter;
 }
 
-export function createMissingSourceFrame(mode: FrameMode): AnsiFrame {
+export function createMissingSourceFrame(mode: FrameMode): ANSIFrame {
   const specMaskFill = mode === 'base' ? 1 : 0;
-  return createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, specMaskFill);
+  return createSolidANSIFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, specMaskFill);
 }
 
-export function createSolidAnsiFrame(
+export function createSolidANSIFrame(
   width: number,
   height: number,
   r: number,
   g: number,
   b: number,
   maskFill: 0 | 1,
-): AnsiFrame {
+): ANSIFrame {
   const safeWidth = Math.max(1, width);
   const safeHeight = Math.max(1, height);
   const rgb = new Uint8Array(safeWidth * safeHeight * 3);
@@ -153,8 +153,8 @@ function convertImageToSpecFrame(
   image: DecodedImage,
   mode: FrameMode,
   resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
-): AnsiFrame {
-  const specFrame = createSolidAnsiFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, 0);
+): ANSIFrame {
+  const specFrame = createSolidANSIFrame(SPEC_BGA_CANVAS_SIZE, SPEC_BGA_CANVAS_SIZE, 0, 0, 0, 0);
   const fittedSize =
     image.format === 'video'
       ? {
@@ -164,9 +164,9 @@ function convertImageToSpecFrame(
       : fitSizeWithinSpecCanvas(image.width, image.height);
   const offsetX = image.format === 'video' ? 0 : Math.floor((SPEC_BGA_CANVAS_SIZE - fittedSize.width) / 2);
   const offsetY = 0;
-  const resizedRgba =
+  const resizedRGBA =
     resizeAlgorithm === 'lanczos'
-      ? resampleDecodedImageRgbaLanczos(image, fittedSize.width, fittedSize.height)
+      ? resampleDecodedImageRGBALanczos(image, fittedSize.width, fittedSize.height)
       : undefined;
 
   for (let targetYWithinImage = 0; targetYWithinImage < fittedSize.height; targetYWithinImage += 1) {
@@ -182,7 +182,7 @@ function convertImageToSpecFrame(
       }
 
       const sampleOffset =
-        resizedRgba !== undefined
+        resizedRGBA !== undefined
           ? (targetYWithinImage * fittedSize.width + targetXWithinImage) * 4
           : resolveNearestImageSampleOffset(
               image.width,
@@ -192,19 +192,19 @@ function convertImageToSpecFrame(
               fittedSize.width,
               fittedSize.height,
             );
-      const r = (resizedRgba ?? image.data)[sampleOffset] ?? 0;
-      const g = (resizedRgba ?? image.data)[sampleOffset + 1] ?? 0;
-      const b = (resizedRgba ?? image.data)[sampleOffset + 2] ?? 0;
-      const a = (resizedRgba ?? image.data)[sampleOffset + 3] ?? 255;
+      const r = (resizedRGBA ?? image.data)[sampleOffset] ?? 0;
+      const g = (resizedRGBA ?? image.data)[sampleOffset + 1] ?? 0;
+      const b = (resizedRGBA ?? image.data)[sampleOffset + 2] ?? 0;
+      const a = (resizedRGBA ?? image.data)[sampleOffset + 3] ?? 255;
       if (!isOpaquePixel(r, g, b, a, image.format, mode)) {
         continue;
       }
 
       const targetPixelOffset = targetY * SPEC_BGA_CANVAS_SIZE + targetX;
-      const targetRgbOffset = targetPixelOffset * 3;
-      specFrame.rgb[targetRgbOffset] = r;
-      specFrame.rgb[targetRgbOffset + 1] = g;
-      specFrame.rgb[targetRgbOffset + 2] = b;
+      const targetRGBOffset = targetPixelOffset * 3;
+      specFrame.rgb[targetRGBOffset] = r;
+      specFrame.rgb[targetRGBOffset + 1] = g;
+      specFrame.rgb[targetRGBOffset + 2] = b;
       specFrame.opaqueMask[targetPixelOffset] = 1;
     }
   }
@@ -225,7 +225,7 @@ function resolveNearestImageSampleOffset(
   return (sourceY * sourceWidth + sourceX) * 4;
 }
 
-function resampleDecodedImageRgbaLanczos(image: DecodedImage, targetWidth: number, targetHeight: number): Uint8Array {
+function resampleDecodedImageRGBALanczos(image: DecodedImage, targetWidth: number, targetHeight: number): Uint8Array {
   const horizontalPlan = createLanczosAxisContributions(image.width, targetWidth);
   const verticalPlan = createLanczosAxisContributions(image.height, targetHeight);
   const horizontal = new Float32Array(targetWidth * image.height * 4);
@@ -353,15 +353,15 @@ function clampToByte(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
-function getCachedResizedAnsiFrame(source: AnsiFrame, cacheKey: string): AnsiFrame | undefined {
-  return resizedAnsiFrameCache.get(source)?.get(cacheKey);
+function getCachedResizedANSIFrame(source: ANSIFrame, cacheKey: string): ANSIFrame | undefined {
+  return resizedANSIFrameCache.get(source)?.get(cacheKey);
 }
 
-function setCachedResizedAnsiFrame(source: AnsiFrame, cacheKey: string, resized: AnsiFrame): void {
-  let cache = resizedAnsiFrameCache.get(source);
+function setCachedResizedANSIFrame(source: ANSIFrame, cacheKey: string, resized: ANSIFrame): void {
+  let cache = resizedANSIFrameCache.get(source);
   if (!cache) {
     cache = new Map();
-    resizedAnsiFrameCache.set(source, cache);
+    resizedANSIFrameCache.set(source, cache);
   }
   cache.set(cacheKey, resized);
 }
@@ -382,10 +382,10 @@ function lanczosKernel(value: number): number {
   return sinc(distance) * sinc(distance / 3);
 }
 
-export function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode): AnsiFrame {
+export function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode): ANSIFrame {
   const safeWidth = Math.max(1, Math.floor(image.width));
   const safeHeight = Math.max(1, Math.floor(image.height));
-  const sourceFrame = createSolidAnsiFrame(safeWidth, safeHeight, 0, 0, 0, 0);
+  const sourceFrame = createSolidANSIFrame(safeWidth, safeHeight, 0, 0, 0, 0);
 
   for (let y = 0; y < safeHeight; y += 1) {
     for (let x = 0; x < safeWidth; x += 1) {
@@ -399,10 +399,10 @@ export function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode):
       }
 
       const targetPixelOffset = y * safeWidth + x;
-      const targetRgbOffset = targetPixelOffset * 3;
-      sourceFrame.rgb[targetRgbOffset] = r;
-      sourceFrame.rgb[targetRgbOffset + 1] = g;
-      sourceFrame.rgb[targetRgbOffset + 2] = b;
+      const targetRGBOffset = targetPixelOffset * 3;
+      sourceFrame.rgb[targetRGBOffset] = r;
+      sourceFrame.rgb[targetRGBOffset + 1] = g;
+      sourceFrame.rgb[targetRGBOffset + 2] = b;
       sourceFrame.opaqueMask[targetPixelOffset] = 1;
     }
   }
@@ -410,7 +410,7 @@ export function convertImageToSourceFrame(image: DecodedImage, mode: FrameMode):
   return image.format === 'video' ? trimBlackVideoFrameBorders(sourceFrame) : sourceFrame;
 }
 
-function trimBlackVideoFrameBorders(source: AnsiFrame): AnsiFrame {
+function trimBlackVideoFrameBorders(source: ANSIFrame): ANSIFrame {
   let minX = source.width;
   let minY = source.height;
   let maxX = -1;
@@ -445,7 +445,7 @@ function trimBlackVideoFrameBorders(source: AnsiFrame): AnsiFrame {
 
   const width = maxX - minX + 1;
   const height = maxY - minY + 1;
-  const trimmed = createSolidAnsiFrame(width, height, 0, 0, 0, 0);
+  const trimmed = createSolidANSIFrame(width, height, 0, 0, 0, 0);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -456,11 +456,11 @@ function trimBlackVideoFrameBorders(source: AnsiFrame): AnsiFrame {
         continue;
       }
       const targetPixelOffset = y * width + x;
-      const sourceRgbOffset = sourcePixelOffset * 3;
-      const targetRgbOffset = targetPixelOffset * 3;
-      trimmed.rgb[targetRgbOffset] = source.rgb[sourceRgbOffset] ?? 0;
-      trimmed.rgb[targetRgbOffset + 1] = source.rgb[sourceRgbOffset + 1] ?? 0;
-      trimmed.rgb[targetRgbOffset + 2] = source.rgb[sourceRgbOffset + 2] ?? 0;
+      const sourceRGBOffset = sourcePixelOffset * 3;
+      const targetRGBOffset = targetPixelOffset * 3;
+      trimmed.rgb[targetRGBOffset] = source.rgb[sourceRGBOffset] ?? 0;
+      trimmed.rgb[targetRGBOffset + 1] = source.rgb[sourceRGBOffset + 1] ?? 0;
+      trimmed.rgb[targetRGBOffset + 2] = source.rgb[sourceRGBOffset + 2] ?? 0;
       trimmed.opaqueMask[targetPixelOffset] = 1;
     }
   }
@@ -480,13 +480,13 @@ function fitSizeWithinSpecCanvas(sourceWidth: number, sourceHeight: number): { w
   };
 }
 
-export function resizeAnsiFrame(
-  source: AnsiFrame,
+export function resizeANSIFrame(
+  source: ANSIFrame,
   maxWidth: number,
   maxHeight: number,
   resizeAlgorithm: ImageResizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
-): AnsiFrame {
-  return resizeAnsiFrameWithAspect(
+): ANSIFrame {
+  return resizeANSIFrameWithAspect(
     source,
     maxWidth,
     maxHeight,
@@ -496,26 +496,26 @@ export function resizeAnsiFrame(
   );
 }
 
-function resizeAnsiFrameWithAspect(
-  source: AnsiFrame,
+function resizeANSIFrameWithAspect(
+  source: ANSIFrame,
   maxWidth: number,
   maxHeight: number,
   aspectX: number,
   aspectY: number,
   resizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
-): AnsiFrame {
-  return resizeAnsiFrameWithAspectMode(source, maxWidth, maxHeight, aspectX, aspectY, 'contain', resizeAlgorithm);
+): ANSIFrame {
+  return resizeANSIFrameWithAspectMode(source, maxWidth, maxHeight, aspectX, aspectY, 'contain', resizeAlgorithm);
 }
 
-export function resizeAnsiFrameWithAspectMode(
-  source: AnsiFrame,
+export function resizeANSIFrameWithAspectMode(
+  source: ANSIFrame,
   maxWidth: number,
   maxHeight: number,
   aspectX: number,
   aspectY: number,
   mode: 'contain' | 'cover',
   resizeAlgorithm: ImageResizeAlgorithm = DEFAULT_IMAGE_RESIZE_ALGORITHM,
-): AnsiFrame {
+): ANSIFrame {
   const canvasWidth = Math.max(1, maxWidth);
   const canvasHeight = Math.max(1, maxHeight);
   if (source.width === canvasWidth && source.height === canvasHeight && aspectX === 1 && aspectY === 1) {
@@ -538,14 +538,14 @@ export function resizeAnsiFrameWithAspectMode(
   const cacheKey =
     `${canvasWidth}x${canvasHeight}:${fitted.width}x${fitted.height}:` +
     `${aspectX}:${aspectY}:${mode}:${resizeAlgorithm}`;
-  const cached = getCachedResizedAnsiFrame(source, cacheKey);
+  const cached = getCachedResizedANSIFrame(source, cacheKey);
   if (cached) {
     return cached;
   }
   const offsetX = Math.floor((canvasWidth - fitted.width) / 2);
   const offsetY = Math.floor((canvasHeight - fitted.height) / 2);
   const resizedFrame =
-    resizeAlgorithm === 'lanczos' ? resampleAnsiFrameLanczos(source, fitted.width, fitted.height) : undefined;
+    resizeAlgorithm === 'lanczos' ? resampleANSIFrameLanczos(source, fitted.width, fitted.height) : undefined;
   const rgb = new Uint8Array(canvasWidth * canvasHeight * 3);
   const opaqueMask = new Uint8Array(canvasWidth * canvasHeight);
 
@@ -572,13 +572,13 @@ export function resizeAnsiFrameWithAspectMode(
         continue;
       }
 
-      const sourceRgb = resizedFrame !== undefined ? resizedFrame.rgb : source.rgb;
-      const sourceRgbOffset = sourcePixelOffset * 3;
+      const sourceRGB = resizedFrame !== undefined ? resizedFrame.rgb : source.rgb;
+      const sourceRGBOffset = sourcePixelOffset * 3;
       const targetPixelOffset = targetY * canvasWidth + targetX;
-      const targetRgbOffset = targetPixelOffset * 3;
-      rgb[targetRgbOffset] = sourceRgb[sourceRgbOffset] ?? 0;
-      rgb[targetRgbOffset + 1] = sourceRgb[sourceRgbOffset + 1] ?? 0;
-      rgb[targetRgbOffset + 2] = sourceRgb[sourceRgbOffset + 2] ?? 0;
+      const targetRGBOffset = targetPixelOffset * 3;
+      rgb[targetRGBOffset] = sourceRGB[sourceRGBOffset] ?? 0;
+      rgb[targetRGBOffset + 1] = sourceRGB[sourceRGBOffset + 1] ?? 0;
+      rgb[targetRGBOffset + 2] = sourceRGB[sourceRGBOffset + 2] ?? 0;
       opaqueMask[targetPixelOffset] = 1;
     }
   }
@@ -589,11 +589,11 @@ export function resizeAnsiFrameWithAspectMode(
     rgb,
     opaqueMask,
   };
-  setCachedResizedAnsiFrame(source, cacheKey, result);
+  setCachedResizedANSIFrame(source, cacheKey, result);
   return result;
 }
 
-function resampleAnsiFrameLanczos(source: AnsiFrame, targetWidth: number, targetHeight: number): AnsiFrame {
+function resampleANSIFrameLanczos(source: ANSIFrame, targetWidth: number, targetHeight: number): ANSIFrame {
   if (source.width === targetWidth && source.height === targetHeight) {
     return source;
   }
@@ -617,10 +617,10 @@ function resampleAnsiFrameLanczos(source: AnsiFrame, targetWidth: number, target
         if (source.opaqueMask[sourcePixelOffset] === 0) {
           continue;
         }
-        const sourceRgbOffset = sourcePixelOffset * 3;
-        premultipliedR += (source.rgb[sourceRgbOffset] ?? 0) * weight;
-        premultipliedG += (source.rgb[sourceRgbOffset + 1] ?? 0) * weight;
-        premultipliedB += (source.rgb[sourceRgbOffset + 2] ?? 0) * weight;
+        const sourceRGBOffset = sourcePixelOffset * 3;
+        premultipliedR += (source.rgb[sourceRGBOffset] ?? 0) * weight;
+        premultipliedG += (source.rgb[sourceRGBOffset + 1] ?? 0) * weight;
+        premultipliedB += (source.rgb[sourceRGBOffset + 2] ?? 0) * weight;
         alpha += 255 * weight;
       }
       const horizontalOffset = horizontalRowOffset + targetX * 4;
@@ -631,7 +631,7 @@ function resampleAnsiFrameLanczos(source: AnsiFrame, targetWidth: number, target
     }
   }
 
-  const resized = createSolidAnsiFrame(targetWidth, targetHeight, 0, 0, 0, 0);
+  const resized = createSolidANSIFrame(targetWidth, targetHeight, 0, 0, 0, 0);
   for (let targetY = 0; targetY < targetHeight; targetY += 1) {
     const contribution = verticalPlan[targetY]!;
     for (let targetX = 0; targetX < targetWidth; targetX += 1) {
@@ -652,10 +652,10 @@ function resampleAnsiFrameLanczos(source: AnsiFrame, targetWidth: number, target
         continue;
       }
       const targetPixelOffset = targetY * targetWidth + targetX;
-      const targetRgbOffset = targetPixelOffset * 3;
-      resized.rgb[targetRgbOffset] = clampToByte((premultipliedR * 255) / alpha);
-      resized.rgb[targetRgbOffset + 1] = clampToByte((premultipliedG * 255) / alpha);
-      resized.rgb[targetRgbOffset + 2] = clampToByte((premultipliedB * 255) / alpha);
+      const targetRGBOffset = targetPixelOffset * 3;
+      resized.rgb[targetRGBOffset] = clampToByte((premultipliedR * 255) / alpha);
+      resized.rgb[targetRGBOffset + 1] = clampToByte((premultipliedG * 255) / alpha);
+      resized.rgb[targetRGBOffset + 2] = clampToByte((premultipliedB * 255) / alpha);
       resized.opaqueMask[targetPixelOffset] = alpha >= 128 ? 1 : 0;
     }
   }

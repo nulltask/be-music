@@ -1,7 +1,7 @@
-import { createEmptyJson } from '@be-music/json';
-import * as lr2StateApi from '@be-music/lr2-skin/state';
+import { createEmptyJSON } from '@be-music/json';
+import * as lr2StateAPI from '@be-music/lr2-skin/state';
 import { createEmptyScore } from '@be-music/player/ruleset';
-import type { Lr2BarBodySource } from '@be-music/lr2-skin';
+import type { LR2BarBodySource } from '@be-music/lr2-skin';
 import {
   DEFAULT_PLAY_OPTIONS,
   type CourseView,
@@ -40,16 +40,16 @@ const BENCH_CHART: LibraryChart = {
   playLevel: 7,
   bpm: 150,
   totalNotes: 500,
-  chart: createEmptyJson(),
+  chart: createEmptyJSON(),
 };
 const BENCH_ENTRY: LibraryEntry = { kind: 'chart', chart: BENCH_CHART };
 const BENCH_BAR_BODIES = [
   { kind: 'song', source: { imagePath: 'song.png' } },
   { kind: 'folder', source: { imagePath: 'folder.png' } },
-] as unknown as Lr2BarBodySource[];
+] as unknown as LR2BarBodySource[];
 const BENCH_AUTO_SCRATCH_OPS: ReadonlySet<number> = new Set([55]);
 const BENCH_CLOCK = { year: 2026, month: 10, day: 16, hour: 9, minute: 5, second: 30 };
-const BENCH_PLAY_SETUP: lr2StateApi.Lr2PlaySetup = {
+const BENCH_PLAY_SETUP: lr2StateAPI.LR2PlaySetup = {
   chart: BENCH_CHART,
   lanes: { playVariant: '7', channels: ['11', '12', '16', '18'] },
   features: { longNote: true, bpmChange: false, bga: true },
@@ -64,7 +64,7 @@ const BENCH_PLAY_SETUP: lr2StateApi.Lr2PlaySetup = {
   gauge: 'GROOVE',
   course: BENCH_COURSE,
 };
-const BENCH_PLAY_FRAME: lr2StateApi.Lr2PlayFrame = {
+const BENCH_PLAY_FRAME: lr2StateAPI.LR2PlayFrame = {
   play: { gauge: 54, combo: 12, maxCombo: 30, totalSeconds: 120, view: { hiSpeed: { player: 2.5 } } },
   score: { ...createEmptyScore(500), perfect: 100, great: 20, exScore: 220, score: 50000 },
   seconds: 75,
@@ -84,73 +84,73 @@ const BENCH_RESULT: PlayResult = {
 };
 
 /** Cases for `@be-music/lr2-skin/state`, keyed `lr2-skin.state.<export>`. */
-export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): void {
-  define('lr2-skin.state.isLr2AutoLane', {
+export function registerLR2SkinStateExportsCases(define: DefineBenchmarkCase): void {
+  define('lr2-skin.state.isLR2AutoLane', {
     run: () => {
-      lr2StateApi.isLr2AutoLane(0, BENCH_AUTO_SCRATCH_OPS);
+      lr2StateAPI.isLR2AutoLane(0, BENCH_AUTO_SCRATCH_OPS);
     },
   });
-  define('lr2-skin.state.pickLr2BarBody', {
+  define('lr2-skin.state.pickLR2BarBody', {
     run: () => {
-      lr2StateApi.pickLr2BarBody(BENCH_BAR_BODIES, BENCH_ENTRY);
-      lr2StateApi.pickLr2BarBody(BENCH_BAR_BODIES, undefined);
+      lr2StateAPI.pickLR2BarBody(BENCH_BAR_BODIES, BENCH_ENTRY);
+      lr2StateAPI.pickLR2BarBody(BENCH_BAR_BODIES, undefined);
     },
   });
-  define('lr2-skin.state.resolveLr2BarLamp', {
+  define('lr2-skin.state.resolveLR2BarLamp', {
     run: () => {
-      lr2StateApi.resolveLr2BarLamp('EX_HARD');
+      lr2StateAPI.resolveLR2BarLamp('EX_HARD');
     },
   });
-  define('lr2-skin.state.resolveLr2BarLevel', {
+  define('lr2-skin.state.resolveLR2BarLevel', {
     run: () => {
-      lr2StateApi.resolveLr2BarLevel(BENCH_CHART);
+      lr2StateAPI.resolveLR2BarLevel(BENCH_CHART);
     },
   });
-  define('lr2-skin.state.resolveLr2ChartFeatures', {
+  define('lr2-skin.state.resolveLR2ChartFeatures', {
     run: () => {
-      lr2StateApi.resolveLr2ChartFeatures(BENCH_CHART.chart);
+      lr2StateAPI.resolveLR2ChartFeatures(BENCH_CHART.chart);
     },
   });
-  define('lr2-skin.state.resolveLr2DecideState', {
+  define('lr2-skin.state.resolveLR2DecideState', {
     run: () => {
-      const state = lr2StateApi.resolveLr2DecideState({ chart: BENCH_CHART, course: BENCH_COURSE });
+      const state = lr2StateAPI.resolveLR2DecideState({ chart: BENCH_CHART, course: BENCH_COURSE });
       state.text(10);
       state.text(150);
     },
   });
-  define('lr2-skin.state.resolveLr2DecideTimers', {
+  define('lr2-skin.state.resolveLR2DecideTimers', {
     run: () => {
-      lr2StateApi.resolveLr2DecideTimers({
+      lr2StateAPI.resolveLR2DecideTimers({
         clock: { nowMs: 1450, enteredAtMs: 1000 },
         inputOpenAtMs: 1300,
         leaving: { atMs: 1400 },
       });
     },
   });
-  define('lr2-skin.state.resolveLr2GaugeRangeOp', {
+  define('lr2-skin.state.resolveLR2GaugeRangeOp', {
     run: () => {
-      lr2StateApi.resolveLr2GaugeRangeOp(54);
+      lr2StateAPI.resolveLR2GaugeRangeOp(54);
     },
   });
-  define('lr2-skin.state.resolveLr2GaugeTypeOps', {
+  define('lr2-skin.state.resolveLR2GaugeTypeOps', {
     run: () => {
-      lr2StateApi.resolveLr2GaugeTypeOps('HARD');
+      lr2StateAPI.resolveLR2GaugeTypeOps('HARD');
     },
   });
-  define('lr2-skin.state.resolveLr2LaneTimer', {
+  define('lr2-skin.state.resolveLR2LaneTimer', {
     run: () => {
-      lr2StateApi.resolveLr2LaneTimer('bomb', BENCH_LANE);
-      lr2StateApi.resolveLr2LaneTimer('key-on', BENCH_LANE);
+      lr2StateAPI.resolveLR2LaneTimer('bomb', BENCH_LANE);
+      lr2StateAPI.resolveLR2LaneTimer('key-on', BENCH_LANE);
     },
   });
-  define('lr2-skin.state.resolveLr2PlayKeyModeOp', {
+  define('lr2-skin.state.resolveLR2PlayKeyModeOp', {
     run: () => {
-      lr2StateApi.resolveLr2PlayKeyModeOp(BENCH_PLAY_SETUP.lanes);
+      lr2StateAPI.resolveLR2PlayKeyModeOp(BENCH_PLAY_SETUP.lanes);
     },
   });
-  define('lr2-skin.state.resolveLr2PlayState', {
+  define('lr2-skin.state.resolveLR2PlayState', {
     run: () => {
-      const state = lr2StateApi.resolveLr2PlayState(BENCH_PLAY_SETUP, BENCH_PLAY_FRAME);
+      const state = lr2StateAPI.resolveLR2PlayState(BENCH_PLAY_SETUP, BENCH_PLAY_FRAME);
       state.number(101);
       state.number(104);
       state.text(10);
@@ -158,15 +158,15 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
       state.bargraph(10);
     },
   });
-  define('lr2-skin.state.resolveLr2PlayTimers', {
+  define('lr2-skin.state.resolveLR2PlayTimers', {
     run: () => {
-      lr2StateApi.resolveLr2PlayTimers({ kind: 'gauge', previous: 98, next: 100, at: 0 });
-      lr2StateApi.resolveLr2PlayTimers({ kind: 'lane', bank: 'bomb', lane: BENCH_LANE, at: 0 });
+      lr2StateAPI.resolveLR2PlayTimers({ kind: 'gauge', previous: 98, next: 100, at: 0 });
+      lr2StateAPI.resolveLR2PlayTimers({ kind: 'lane', bank: 'bomb', lane: BENCH_LANE, at: 0 });
     },
   });
-  define('lr2-skin.state.resolveLr2ResultState', {
+  define('lr2-skin.state.resolveLR2ResultState', {
     run: () => {
-      const state = lr2StateApi.resolveLr2ResultState({
+      const state = lr2StateAPI.resolveLR2ResultState({
         result: BENCH_RESULT,
         course: BENCH_COURSE,
         flipResult: false,
@@ -176,9 +176,9 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
       state.bargraph(2);
     },
   });
-  define('lr2-skin.state.resolveLr2ResultTimers', {
+  define('lr2-skin.state.resolveLR2ResultTimers', {
     run: () => {
-      lr2StateApi.resolveLr2ResultTimers({
+      lr2StateAPI.resolveLR2ResultTimers({
         clock: { nowMs: 5000, enteredAtMs: 1000 },
         inputOpenAtMs: 1300,
         graphShownAtMs: 2000,
@@ -186,35 +186,35 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
       });
     },
   });
-  define('lr2-skin.state.resolveLr2GraphReveal', {
+  define('lr2-skin.state.resolveLR2GraphReveal', {
     run: () => {
-      lr2StateApi.resolveLr2GraphReveal(1250, 500, 2000);
+      lr2StateAPI.resolveLR2GraphReveal(1250, 500, 2000);
     },
   });
-  define('lr2-skin.state.resolveLr2RankOp', {
+  define('lr2-skin.state.resolveLR2RankOp', {
     run: () => {
-      lr2StateApi.resolveLr2RankOp(BENCH_PLAY_FRAME.score);
+      lr2StateAPI.resolveLR2RankOp(BENCH_PLAY_FRAME.score);
     },
   });
-  define('lr2-skin.state.resolveLr2KeyModeOp', {
+  define('lr2-skin.state.resolveLR2KeyModeOp', {
     run: () => {
-      lr2StateApi.resolveLr2KeyModeOp(BENCH_CHART);
+      lr2StateAPI.resolveLR2KeyModeOp(BENCH_CHART);
     },
   });
-  define('lr2-skin.state.resolveLr2LampOp', {
+  define('lr2-skin.state.resolveLR2LampOp', {
     run: () => {
-      lr2StateApi.resolveLr2LampOp('FULL_COMBO');
+      lr2StateAPI.resolveLR2LampOp('FULL_COMBO');
     },
   });
-  define('lr2-skin.state.resolveLr2SelectButton', {
+  define('lr2-skin.state.resolveLR2SelectButton', {
     run: () => {
-      lr2StateApi.resolveLr2SelectButton(12);
-      lr2StateApi.resolveLr2SelectButton(93);
+      lr2StateAPI.resolveLR2SelectButton(12);
+      lr2StateAPI.resolveLR2SelectButton(93);
     },
   });
-  define('lr2-skin.state.resolveLr2SelectState', {
+  define('lr2-skin.state.resolveLR2SelectState', {
     run: () => {
-      const state = lr2StateApi.resolveLr2SelectState({
+      const state = lr2StateAPI.resolveLR2SelectState({
         focused: BENCH_ENTRY,
         options: DEFAULT_PLAY_OPTIONS,
         record: { lamp: 'HARD' },
@@ -229,82 +229,82 @@ export function registerLr2SkinStateExportsCases(define: DefineBenchmarkCase): v
       state.slider(2);
     },
   });
-  define('lr2-skin.state.resolveLr2SelectTimers', {
+  define('lr2-skin.state.resolveLR2SelectTimers', {
     run: () => {
-      lr2StateApi.resolveLr2SelectTimers({ kind: 'cursor', delta: 1, at: 0 });
-      lr2StateApi.resolveLr2SelectTimers({ kind: 'panel', panel: 1, open: true, at: 0 });
+      lr2StateAPI.resolveLR2SelectTimers({ kind: 'cursor', delta: 1, at: 0 });
+      lr2StateAPI.resolveLR2SelectTimers({ kind: 'panel', panel: 1, open: true, at: 0 });
     },
   });
   define('lr2-skin.state.lr2ShowsCourseCombo', {
     run: () => {
-      lr2StateApi.lr2ShowsCourseCombo('grade');
+      lr2StateAPI.lr2ShowsCourseCombo('grade');
     },
   });
-  define('lr2-skin.state.resolveLr2CourseConnectionText', {
+  define('lr2-skin.state.resolveLR2CourseConnectionText', {
     run: () => {
-      lr2StateApi.resolveLr2CourseConnectionText(171, BENCH_NONSTOP);
-      lr2StateApi.resolveLr2CourseConnectionText(172, BENCH_COURSE);
+      lr2StateAPI.resolveLR2CourseConnectionText(171, BENCH_NONSTOP);
+      lr2StateAPI.resolveLR2CourseConnectionText(172, BENCH_COURSE);
     },
   });
-  define('lr2-skin.state.resolveLr2CourseDraftInfo', {
+  define('lr2-skin.state.resolveLR2CourseDraftInfo', {
     run: () => {
-      lr2StateApi.resolveLr2CourseDraftInfo(BENCH_DRAFT, 'Type the course title');
+      lr2StateAPI.resolveLR2CourseDraftInfo(BENCH_DRAFT, 'Type the course title');
     },
   });
-  define('lr2-skin.state.resolveLr2CourseMakerAction', {
+  define('lr2-skin.state.resolveLR2CourseMakerAction', {
     run: () => {
-      lr2StateApi.resolveLr2CourseMakerAction(230);
-      lr2StateApi.resolveLr2CourseMakerAction(244);
+      lr2StateAPI.resolveLR2CourseMakerAction(230);
+      lr2StateAPI.resolveLR2CourseMakerAction(244);
     },
   });
-  define('lr2-skin.state.resolveLr2CourseMakerButtonState', {
+  define('lr2-skin.state.resolveLR2CourseMakerButtonState', {
     run: () => {
-      lr2StateApi.resolveLr2CourseMakerButtonState(240, BENCH_NONSTOP, 'fade');
-      lr2StateApi.resolveLr2CourseMakerButtonState(268, undefined, 'blank1');
+      lr2StateAPI.resolveLR2CourseMakerButtonState(240, BENCH_NONSTOP, 'fade');
+      lr2StateAPI.resolveLR2CourseMakerButtonState(268, undefined, 'blank1');
     },
   });
-  define('lr2-skin.state.resolveLr2CourseMakerOps', {
+  define('lr2-skin.state.resolveLR2CourseMakerOps', {
     run: () => {
-      lr2StateApi.resolveLr2CourseMakerOps(BENCH_DRAFT);
-      lr2StateApi.resolveLr2CourseMakerOps(undefined, 3);
+      lr2StateAPI.resolveLR2CourseMakerOps(BENCH_DRAFT);
+      lr2StateAPI.resolveLR2CourseMakerOps(undefined, 3);
     },
   });
-  define('lr2-skin.state.resolveLr2CourseMakerText', {
+  define('lr2-skin.state.resolveLR2CourseMakerText', {
     run: () => {
-      lr2StateApi.resolveLr2CourseMakerText(198, 'cut');
+      lr2StateAPI.resolveLR2CourseMakerText(198, 'cut');
     },
   });
-  define('lr2-skin.state.resolveLr2CourseNumber', {
+  define('lr2-skin.state.resolveLR2CourseNumber', {
     run: () => {
-      lr2StateApi.resolveLr2CourseNumber(250, BENCH_COURSE);
+      lr2StateAPI.resolveLR2CourseNumber(250, BENCH_COURSE);
     },
   });
-  define('lr2-skin.state.resolveLr2CourseOps', {
+  define('lr2-skin.state.resolveLR2CourseOps', {
     run: () => {
-      lr2StateApi.resolveLr2CourseOps(BENCH_COURSE);
+      lr2StateAPI.resolveLR2CourseOps(BENCH_COURSE);
     },
   });
-  define('lr2-skin.state.resolveLr2CourseStageDifficultyOps', {
+  define('lr2-skin.state.resolveLR2CourseStageDifficultyOps', {
     run: () => {
-      lr2StateApi.resolveLr2CourseStageDifficultyOps(BENCH_COURSE);
-      lr2StateApi.resolveLr2CourseStageDifficultyOps(undefined);
+      lr2StateAPI.resolveLR2CourseStageDifficultyOps(BENCH_COURSE);
+      lr2StateAPI.resolveLR2CourseStageDifficultyOps(undefined);
     },
   });
-  define('lr2-skin.state.resolveLr2CourseText', {
+  define('lr2-skin.state.resolveLR2CourseText', {
     run: () => {
-      lr2StateApi.resolveLr2CourseText(150, BENCH_COURSE);
-      lr2StateApi.resolveLr2CourseText(170, BENCH_COURSE);
+      lr2StateAPI.resolveLR2CourseText(150, BENCH_COURSE);
+      lr2StateAPI.resolveLR2CourseText(170, BENCH_COURSE);
     },
   });
-  define('lr2-skin.state.resolveLr2JudgeCombo', {
+  define('lr2-skin.state.resolveLR2JudgeCombo', {
     run: () => {
-      lr2StateApi.resolveLr2JudgeCombo(12, 340, 'grade');
-      lr2StateApi.resolveLr2JudgeCombo(12, 340, 'nonstop');
+      lr2StateAPI.resolveLR2JudgeCombo(12, 340, 'grade');
+      lr2StateAPI.resolveLR2JudgeCombo(12, 340, 'nonstop');
     },
   });
-  define('lr2-skin.state.resolveLr2NonstopStage', {
+  define('lr2-skin.state.resolveLR2NonstopStage', {
     run: () => {
-      lr2StateApi.resolveLr2NonstopStage(
+      lr2StateAPI.resolveLR2NonstopStage(
         [
           { windowStart: 0, lr2StageMarker: false },
           { windowStart: 20, lr2StageMarker: true },

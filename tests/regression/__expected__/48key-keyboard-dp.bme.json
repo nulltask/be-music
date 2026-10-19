@@ -33,12 +33,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {},
+      "swBGA": {},
       "player": 3,
       "lnType": 1,
       "lnMode": 1
@@ -450,7 +450,7 @@
       "randomPatterns": [],
       "title": "48 KEY Keyboard Test (DP)",
       "playVariant": "48",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -667,8 +667,8 @@
           "percent": 75
         },
         "noteCount": 200,
-        "chartFingerprint": "bmfp0:14ea3a1a4f1222327cd700fe148438b0343a17adcf236d74f0ab491b76886d85",
-        "playFingerprint": "bmfp0:14ea3a1a4f1222327cd700fe148438b0343a17adcf236d74f0ab491b76886d85",
+        "chartFingerprint": "bmfp0:558fecc8c8675c477919582810de4cbccd70c3f8287925be4c0aa6248e8e0ca3",
+        "playFingerprint": "bmfp0:558fecc8c8675c477919582810de4cbccd70c3f8287925be4c0aa6248e8e0ca3",
         "title": "48 KEY Keyboard Test (DP)",
         "subtitle": "48 KEY DP — channels 11..19 + 1A..1O and 21..29 + 2A..2O",
         "artist": "be-music",

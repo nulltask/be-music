@@ -1,14 +1,14 @@
 import {
   BMS_JSON_FORMAT,
-  type BmsControlFlowCommand,
-  type BmsControlFlowHeaderEntry,
-  type BmsSourceLineEntry,
-  type BeMusicJson,
-  createEmptyJson,
+  type BMSControlFlowCommand,
+  type BMSControlFlowHeaderEntry,
+  type BMSSourceLineEntry,
+  type BeMusicJSON,
+  createEmptyJSON,
 } from '@be-music/json';
 import { compareEvents, drawRandomOutcomes, type RandomDraws } from '@be-music/chart';
-import { normalizeAsciiBase36Code } from '@be-music/utils/core';
-import { buildBmsObjectLineEntry, upsertMeasureLength } from './event-utils.ts';
+import { normalizeASCIIBase36Code } from '@be-music/utils/core';
+import { buildBMSObjectLineEntry, upsertMeasureLength } from './event-utils.ts';
 import type { BmsonDocument } from './bmson.ts';
 import {
   createControlFlowObjectEntry,
@@ -18,7 +18,7 @@ import {
   updateControlFlowCaptureStack,
 } from './control-flow.ts';
 import { pushHeaderLine, resolveHeaderDefinitionKey } from './bms-headers.ts';
-import { parseJsonDocument } from './bms-json-document.ts';
+import { parseJSONDocument } from './bms-json-document.ts';
 import { parseBmsonDocument } from './bmson-document.ts';
 
 /**
@@ -26,9 +26,9 @@ import { parseBmsonDocument } from './bmson-document.ts';
  * or `#BASE 36` are recognized. We do a one-pass forward scan and stop at the first object data line, mirroring real
  * implementations that require `#BASE` to come before any objects.
  */
-// A whole `#BASE 36` / `#BASE 62` line, with the leading / separating whitespace `parseBms` trims (never a line break).
+// A whole `#BASE 36` / `#BASE 62` line, with the leading / separating whitespace `parseBMS` trims (never a line break).
 const BASE_DIRECTIVE_REGEX = /^[^\S\r\n]*#BASE[^\S\r\n]+(36|62)\b/gim;
-const CONTROL_FLOW_COMMANDS: ReadonlySet<BmsControlFlowCommand> = new Set([
+const CONTROL_FLOW_COMMANDS: ReadonlySet<BMSControlFlowCommand> = new Set([
   'RANDOM',
   'SETRANDOM',
   'IF',
@@ -44,19 +44,19 @@ const CONTROL_FLOW_COMMANDS: ReadonlySet<BmsControlFlowCommand> = new Set([
   'ENDSW',
 ]);
 
-type MeasureLengthEntry = BeMusicJson['measures'][number];
+type MeasureLengthEntry = BeMusicJSON['measures'][number];
 
-export function parseBms(input: string): BeMusicJson {
-  const json = createEmptyJson('bms');
+export function parseBMS(input: string): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   const controlFlowCaptureStack: ControlFlowCaptureFrameType[] = [];
   // Branch header lines by the header they define, until a later top-level line of the same header overrides them.
-  const capturedHeadersByKey = new Map<string, BmsControlFlowHeaderEntry[]>();
+  const capturedHeadersByKey = new Map<string, BMSControlFlowHeaderEntry[]>();
   const measureByIndex = new Map<number, MeasureLengthEntry>();
-  let hasValidMainBpmHeader = false;
+  let hasValidMainBPMHeader = false;
   // Resolve the chart's object-ID radix BEFORE main parsing so that every `#WAVxx` / `#BMPxx` key + every
   // channel-stream token gets normalized under the right rule. Default is base 36 (case-fold lowercase to uppercase).
   // `#BASE 62` opts into the beatoraja extension where lowercase `a-z` is a separate ID space.
-  const base = detectBmsBase(input);
+  const base = detectBMSBase(input);
   if (base === 62) {
     json.bms.base = 62;
   }
@@ -83,7 +83,7 @@ export function parseBms(input: string): BeMusicJson {
         }
       } else {
         // Tokenized once: the preserved line and the chart's events come from the same entry.
-        const objectLine = buildBmsObjectLineEntry(measure, channel, data, base);
+        const objectLine = buildBMSObjectLineEntry(measure, channel, data, base);
         if (objectLine) {
           json.preservation.bms.objectLines.push(objectLine);
           json.preservation.bms.sourceLines.push({
@@ -117,7 +117,7 @@ export function parseBms(input: string): BeMusicJson {
     // captured entries store the canonical form, so round-tripped output is normalized too.
     const aliasedDirective = resolveControlFlowAliasDirective(command, value);
     if (aliasedDirective) {
-      const directiveEntry: BmsSourceLineEntry = {
+      const directiveEntry: BMSSourceLineEntry = {
         kind: 'directive',
         command: aliasedDirective.command,
         value: aliasedDirective.value,
@@ -129,7 +129,7 @@ export function parseBms(input: string): BeMusicJson {
     }
 
     if (isControlFlowCommand(command)) {
-      const directiveEntry: BmsSourceLineEntry = {
+      const directiveEntry: BMSSourceLineEntry = {
         kind: 'directive',
         command,
         value: value.length > 0 ? value : undefined,
@@ -146,7 +146,7 @@ export function parseBms(input: string): BeMusicJson {
     const commandCaseDiffers = command !== commandRaw;
     const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
     if (controlFlowCaptureStack.length > 0) {
-      const headerEntry: BmsControlFlowHeaderEntry = {
+      const headerEntry: BMSControlFlowHeaderEntry = {
         kind: 'header',
         command,
         value,
@@ -181,15 +181,15 @@ export function parseBms(input: string): BeMusicJson {
       ...(commandCaseDiffers ? { commandRaw } : {}),
     });
     if (command === 'BPM') {
-      const parsedMainBpm = Number.parseFloat(value);
-      if (Number.isFinite(parsedMainBpm) && parsedMainBpm > 0) {
-        hasValidMainBpmHeader = true;
+      const parsedMainBPM = Number.parseFloat(value);
+      if (Number.isFinite(parsedMainBPM) && parsedMainBPM > 0) {
+        hasValidMainBPMHeader = true;
       }
     }
     pushHeaderLine(json, command, commandRaw, value, base);
   });
 
-  if (!hasValidMainBpmHeader) {
+  if (!hasValidMainBPMHeader) {
     // BMS compatibility: if #BPM is not declared, treat 130 as the default base BPM.
     json.metadata.bpm = 130;
   }
@@ -199,23 +199,23 @@ export function parseBms(input: string): BeMusicJson {
   return json;
 }
 
-export function parseBmson(input: string): BeMusicJson {
+export function parseBmson(input: string): BeMusicJSON {
   const document = JSON.parse(input) as BmsonDocument;
   return parseBmsonDocument(document);
 }
 
-function parseStructuredChartObject(parsed: Record<string, unknown>): BeMusicJson {
+function parseStructuredChartObject(parsed: Record<string, unknown>): BeMusicJSON {
   if (parsed.format === BMS_JSON_FORMAT) {
-    return parseJsonDocument(parsed as Partial<BeMusicJson>);
+    return parseJSONDocument(parsed as Partial<BeMusicJSON>);
   }
   return parseBmsonDocument(parsed as BmsonDocument);
 }
 
-export function parseChart(input: string, formatHint?: string): BeMusicJson {
+export function parseChart(input: string, formatHint?: string): BeMusicJSON {
   if (formatHint === undefined) {
     const firstCode = input.charCodeAt(0);
     if (firstCode === 0x23) {
-      return parseBms(input);
+      return parseBMS(input);
     }
   }
 
@@ -241,22 +241,22 @@ export function parseChart(input: string, formatHint?: string): BeMusicJson {
     return parseStructuredChartObject(parsed);
   }
 
-  return parseBms(input);
+  return parseBMS(input);
 }
 
-export interface ResolveBmsControlFlowOptions {
+export interface ResolveBMSControlFlowOptions {
   /** Random source for the draws, in `[0, 1)`. Defaults to `Math.random`. */
   random?: () => number;
 }
 
 /**
  * Resolves `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow with freshly drawn outcomes: shorthand for
- * `resolveBmsControlFlowWithDraws(input, drawRandomOutcomes(input, random))`. A host that needs to know which branches
+ * `resolveBMSControlFlowWithDraws(input, drawRandomOutcomes(input, random))`. A host that needs to know which branches
  * it played (the play log, the RANDOM summary, a second scene showing the same chart) draws once with
- * `drawRandomOutcomes` (`@be-music/chart`) and resolves with {@link resolveBmsControlFlowWithDraws} instead.
+ * `drawRandomOutcomes` (`@be-music/chart`) and resolves with {@link resolveBMSControlFlowWithDraws} instead.
  */
-export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsControlFlowOptions = {}): BeMusicJson {
-  return resolveBmsControlFlowWithDraws(input, drawRandomOutcomes(input, options.random ?? Math.random));
+export function resolveBMSControlFlow(input: BeMusicJSON, options: ResolveBMSControlFlowOptions = {}): BeMusicJSON {
+  return resolveBMSControlFlowWithDraws(input, drawRandomOutcomes(input, options.random ?? Math.random));
 }
 
 /**
@@ -265,7 +265,7 @@ export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsCon
  *
  * @throws RangeError when `draws` was not drawn for `input`'s control flow.
  */
-export function resolveBmsControlFlowWithDraws(input: BeMusicJson, draws: RandomDraws): BeMusicJson {
+export function resolveBMSControlFlowWithDraws(input: BeMusicJSON, draws: RandomDraws): BeMusicJSON {
   return resolveControlFlow(input, draws, {
     applyHeader: (json, command, commandRaw, value) => {
       // Replay path: prefer the case-preserved `commandRaw` when available so a `#WAV0a` captured inside a `#RANDOM` /
@@ -276,8 +276,8 @@ export function resolveBmsControlFlowWithDraws(input: BeMusicJson, draws: Random
   });
 }
 
-export { decodeBmsText, decodeUtf8Text, type DecodedBmsText } from './bms-text-decode.ts';
-export { canonicalizeBmsCharset, extractDeclaredBmsCharset } from './bms-charset.ts';
+export { decodeBMSText, decodeUTF8Text, type DecodedBMSText } from './bms-text-decode.ts';
+export { canonicalizeBMSCharset, extractDeclaredBMSCharset } from './bms-charset.ts';
 
 interface ParsedObjectDataLine {
   measure: number;
@@ -297,14 +297,14 @@ function parseObjectDataLine(line: string): ParsedObjectDataLine | undefined {
     return undefined;
   }
 
-  const channel0 = normalizeAsciiBase36Code(line.charCodeAt(4));
-  const channel1 = normalizeAsciiBase36Code(line.charCodeAt(5));
+  const channel0 = normalizeASCIIBase36Code(line.charCodeAt(4));
+  const channel1 = normalizeASCIIBase36Code(line.charCodeAt(5));
   if (channel0 < 0 || channel1 < 0) {
     return undefined;
   }
 
   let cursor = 6;
-  while (cursor < line.length && isAsciiWhitespace(line.charCodeAt(cursor))) {
+  while (cursor < line.length && isASCIIWhitespace(line.charCodeAt(cursor))) {
     cursor += 1;
   }
   if (cursor >= line.length || line.charCodeAt(cursor) !== 0x3a) {
@@ -312,7 +312,7 @@ function parseObjectDataLine(line: string): ParsedObjectDataLine | undefined {
   }
 
   cursor += 1;
-  while (cursor < line.length && isAsciiWhitespace(line.charCodeAt(cursor))) {
+  while (cursor < line.length && isASCIIWhitespace(line.charCodeAt(cursor))) {
     cursor += 1;
   }
   if (cursor >= line.length) {
@@ -347,7 +347,7 @@ function parseHeaderDirectiveLine(line: string): ParsedHeaderDirectiveLine | und
     return undefined;
   }
   const commandStart = line.charCodeAt(1);
-  if (!isAsciiLetter(commandStart)) {
+  if (!isASCIILetter(commandStart)) {
     return undefined;
   }
 
@@ -355,13 +355,13 @@ function parseHeaderDirectiveLine(line: string): ParsedHeaderDirectiveLine | und
   while (cursor < line.length && isHeaderCommandChar(line.charCodeAt(cursor))) {
     cursor += 1;
   }
-  if (cursor < line.length && !isAsciiWhitespace(line.charCodeAt(cursor))) {
+  if (cursor < line.length && !isASCIIWhitespace(line.charCodeAt(cursor))) {
     return undefined;
   }
 
   const commandRaw = line.slice(1, cursor);
   const command = commandRaw.toUpperCase();
-  while (cursor < line.length && isAsciiWhitespace(line.charCodeAt(cursor))) {
+  while (cursor < line.length && isASCIIWhitespace(line.charCodeAt(cursor))) {
     cursor += 1;
   }
 
@@ -369,23 +369,23 @@ function parseHeaderDirectiveLine(line: string): ParsedHeaderDirectiveLine | und
   return { command, commandRaw, value };
 }
 
-function isAsciiWhitespace(code: number): boolean {
+function isASCIIWhitespace(code: number): boolean {
   return code === 0x20 || code === 0x09 || code === 0x0b || code === 0x0c;
 }
 
-function isAsciiLetter(code: number): boolean {
+function isASCIILetter(code: number): boolean {
   return (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
 }
 
 function isHeaderCommandChar(code: number): boolean {
-  if (isAsciiLetter(code)) {
+  if (isASCIILetter(code)) {
     return true;
   }
   return (code >= 0x30 && code <= 0x39) || code === 0x5f;
 }
 
-function isControlFlowCommand(command: string): command is BmsControlFlowCommand {
-  return CONTROL_FLOW_COMMANDS.has(command as BmsControlFlowCommand);
+function isControlFlowCommand(command: string): command is BMSControlFlowCommand {
+  return CONTROL_FLOW_COMMANDS.has(command as BMSControlFlowCommand);
 }
 
 function forEachLine(input: string, visitor: (line: string) => void): void {
@@ -416,7 +416,7 @@ function forEachLine(input: string, visitor: (line: string) => void): void {
  * Like beatoraja's BMSDecoder, the scan covers the whole file before anything is decoded, so the directive's position
  * does not matter (it may follow object data) and control-flow blocks are not evaluated. Other values are ignored.
  */
-function detectBmsBase(input: string): 36 | 62 {
+function detectBMSBase(input: string): 36 | 62 {
   let resolved: 36 | 62 = 36;
   for (const match of input.matchAll(BASE_DIRECTIVE_REGEX)) {
     resolved = match[1] === '62' ? 62 : 36;

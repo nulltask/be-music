@@ -16,7 +16,7 @@ const STORAGE_KEY = 'be-music-demo.song-records';
  * Bumped when the stored shape changes; a stored map with an unknown version is ignored. Version 3 keys every record by
  * its judge ruleset ({@link rulesetRecordKey}). Versions 1 and 2 kept one record per chart whatever the ruleset; they
  * are read as LR2 records, the demo's default ruleset, and version 1 lamps (kept before the LR2 ruleset's lamps followed
- * LR2) through {@link toLr2RecordLamp}.
+ * LR2) through {@link toLR2RecordLamp}.
  */
 const STORAGE_VERSION = 3;
 
@@ -52,10 +52,10 @@ export function rulesetRecords<T>(
  */
 export function playRecordKey(
   song: Pick<LibraryChart, 'chartPath'>,
-  chartSha256: string | undefined,
+  chartSHA256: string | undefined,
   play: RecordedPlayKind & { course: boolean },
 ): string | undefined {
-  return playKeepsRecord(play) ? rulesetRecordKey(play.judgeRuleset, songRecordKey(song, chartSha256)) : undefined;
+  return playKeepsRecord(play) ? rulesetRecordKey(play.judgeRuleset, songRecordKey(song, chartSHA256)) : undefined;
 }
 
 /**
@@ -65,11 +65,11 @@ export function playRecordKey(
  */
 export function courseStageRecordKey(
   song: Pick<LibraryChart, 'chartPath'>,
-  chartSha256: string | undefined,
+  chartSHA256: string | undefined,
   play: RecordedPlayKind,
 ): string | undefined {
   return courseStageKeepsRecord(play)
-    ? rulesetRecordKey(play.judgeRuleset, songRecordKey(song, chartSha256))
+    ? rulesetRecordKey(play.judgeRuleset, songRecordKey(song, chartSHA256))
     : undefined;
 }
 
@@ -78,8 +78,8 @@ export function courseStageRecordKey(
  * when known (stable across sessions, machines, and file moves — the same hash the play-logs record), else its chart
  * path inside the dropped library.
  */
-export function songRecordKey(song: Pick<LibraryChart, 'chartPath'>, chartSha256: string | undefined): string {
-  return chartSha256 !== undefined && chartSha256.length > 0 ? `sha256:${chartSha256}` : `path:${song.chartPath}`;
+export function songRecordKey(song: Pick<LibraryChart, 'chartPath'>, chartSHA256: string | undefined): string {
+  return chartSHA256 !== undefined && chartSHA256.length > 0 ? `sha256:${chartSHA256}` : `path:${song.chartPath}`;
 }
 
 /**
@@ -108,7 +108,7 @@ export function parseSongRecords(raw: string | null | undefined): Map<string, Be
   // Versions 1 and 2 kept one record per chart whatever the ruleset; the demo plays on LR2's ruleset by default, so they
   // are read as LR2 records. Version 1 lamps also predate LR2's lamp rules.
   const readKey = version === STORAGE_VERSION ? (key: string) => key : (key: string) => rulesetRecordKey('lr2', key);
-  const readLamp = version === 1 ? toLr2RecordLamp : (lamp: ClearLamp) => lamp;
+  const readLamp = version === 1 ? toLR2RecordLamp : (lamp: ClearLamp) => lamp;
   for (const [storedKey, entry] of Object.entries(stored)) {
     const key = readKey(storedKey);
     if (!JUDGE_RULESETS.some((ruleset) => key.startsWith(`${ruleset}:`))) continue;
@@ -129,7 +129,7 @@ export function parseSongRecords(raw: string | null | undefined): Map<string, Be
  * A record lamp kept before LR2's lamp rules, as LR2 awards it: LR2 has no PERFECT or MAX lamp (FULL COMBO is its top),
  * and under its ruleset an EX HARD lamp could only come from a DEATH clear, which LR2 lamps NORMAL. Other lamps stay.
  */
-export function toLr2RecordLamp(lamp: ClearLamp): ClearLamp {
+export function toLR2RecordLamp(lamp: ClearLamp): ClearLamp {
   if (lamp === 'PERFECT' || lamp === 'MAX') return 'FULL_COMBO';
   if (lamp === 'EX_HARD') return 'NORMAL';
   return lamp;

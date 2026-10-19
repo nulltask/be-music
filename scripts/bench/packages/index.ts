@@ -12,10 +12,10 @@ import { jsonBenchmarkPackage } from './json.ts';
 import { parserBenchmarkPackage } from './parser.ts';
 import { lr2SkinBenchmarkPackage } from './lr2-skin.ts';
 import { playerBenchmarkPackage } from './player.ts';
-import { playerTuiBenchmarkPackage } from './player-tui.ts';
+import { playerTUIBenchmarkPackage } from './player-tui.ts';
 import { sceneModelBenchmarkPackage } from './scene-model.ts';
 import { playerWebCoreBenchmarkPackage } from './player-web.ts';
-import { skinSdkBenchmarkPackage } from './skin-sdk.ts';
+import { skinSDKBenchmarkPackage } from './skin-sdk.ts';
 import { stringifierBenchmarkPackage } from './stringifier.ts';
 import { utilsBenchmarkPackage } from './utils.ts';
 
@@ -29,10 +29,10 @@ export const PACKAGE_DEFINITIONS: Record<PackageName, BenchmarkPackageDefinition
   'audio-renderer': audioRendererBenchmarkPackage,
   player: playerBenchmarkPackage,
   'scene-model': sceneModelBenchmarkPackage,
-  'player-tui': playerTuiBenchmarkPackage,
+  'player-tui': playerTUIBenchmarkPackage,
   'lr2-skin': lr2SkinBenchmarkPackage,
   'beatoraja-skin': beatorajaSkinBenchmarkPackage,
-  'skin-sdk': skinSdkBenchmarkPackage,
+  'skin-sdk': skinSDKBenchmarkPackage,
   'player-web': playerWebCoreBenchmarkPackage,
 };
 

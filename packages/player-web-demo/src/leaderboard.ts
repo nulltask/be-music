@@ -6,8 +6,8 @@ import {
   hasControlFlow,
   type BeMusicFingerprintDocument,
 } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
-import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
+import type { BeMusicJSON } from '@be-music/json';
+import { resolveBMSControlFlowWithDraws } from '@be-music/parser';
 import {
   checkCoursePlaylogEligibility,
   checkPlaylogEligibility,
@@ -36,7 +36,7 @@ export type SubmissionPreparation =
  */
 export function prepareLeaderboardSubmission(
   playlog: BeMusicPlaylog,
-  sourceChart: BeMusicJson,
+  sourceChart: BeMusicJSON,
   chartPath: string | undefined,
 ): SubmissionPreparation {
   // The server applies the same check (`checkPlaylogEligibility`); assists are allowed and ranked apart there.
@@ -55,12 +55,12 @@ export function prepareLeaderboardSubmission(
  */
 function rebuildDocuments(
   playlog: BeMusicPlaylog,
-  sourceChart: BeMusicJson,
+  sourceChart: BeMusicJSON,
   chartPath: string | undefined,
   fingerprints: { chartFingerprint: string; playFingerprint: string },
 ): { playDocument: BeMusicFingerprintDocument; chartDocument: BeMusicFingerprintDocument } | undefined {
   const playedChart = hasControlFlow(sourceChart)
-    ? resolveBmsControlFlowWithDraws(sourceChart, playlog.play.randomDraws ?? [])
+    ? resolveBMSControlFlowWithDraws(sourceChart, playlog.play.randomDraws ?? [])
     : sourceChart;
   const options = { chartPath };
   const playDocument = createPlayFingerprintDocument(playedChart, options);
@@ -148,7 +148,7 @@ async function postWithChartDocuments(
         'content-encoding': 'gzip',
         ...(options.client !== undefined ? { 'be-music-client': options.client } : {}),
       },
-      body: await gzipJson(body(withChartDocuments)),
+      body: await gzipJSON(body(withChartDocuments)),
     });
 
   const response = await post(false);
@@ -166,7 +166,7 @@ export interface CourseLeaderboardSubmission {
   coursePlaylog: BeMusicCoursePlaylog;
   /** One entry per played stage; none for a NONSTOP run. */
   stages: Array<{ playDocument: BeMusicFingerprintDocument; chartDocument: BeMusicFingerprintDocument }>;
-  stageCharts: Array<{ stage: number; chart: BeMusicJson; pms?: boolean }>;
+  stageCharts: Array<{ stage: number; chart: BeMusicJSON; pms?: boolean }>;
 }
 
 export type CourseSubmissionPreparation =
@@ -184,7 +184,7 @@ export type CourseSubmissionPreparation =
  */
 export function prepareCourseLeaderboardSubmission(
   coursePlaylog: BeMusicCoursePlaylog,
-  stageCharts: ReadonlyArray<{ chart: BeMusicJson; chartPath: string | undefined }>,
+  stageCharts: ReadonlyArray<{ chart: BeMusicJSON; chartPath: string | undefined }>,
 ): CourseSubmissionPreparation {
   const eligibility = checkCoursePlaylogEligibility(coursePlaylog);
   if (!eligibility.eligible) {
@@ -226,7 +226,7 @@ export function prepareCourseLeaderboardSubmission(
  * log; `undefined` when the chart cannot be fingerprinted.
  */
 export function courseStageChartFingerprint(stage: {
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   chartPath: string | undefined;
 }): string | undefined {
   try {
@@ -338,7 +338,7 @@ export function describeSkippedCourseSubmission(
   }
 }
 
-async function gzipJson(value: unknown): Promise<Blob> {
+async function gzipJSON(value: unknown): Promise<Blob> {
   const stream = new Blob([JSON.stringify(value)]).stream().pipeThrough(new CompressionStream('gzip'));
   return await new Response(stream).blob();
 }

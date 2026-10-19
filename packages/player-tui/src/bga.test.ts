@@ -1,16 +1,16 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createEmptyJson } from '../../json/src/index.ts';
+import { createEmptyJSON } from '../../json/src/index.ts';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import { encode as encodeBmp } from 'fast-bmp';
 import { encode as encodePng } from 'fast-png';
 import {
-  BgaAnsiRenderer,
-  createBgaAnsiRenderer,
-  loadStageFileAnsiImage,
-  loadStageFileAnsiLines,
-  loadTerminalAnsiImage,
+  BgaANSIRenderer,
+  createBgaANSIRenderer,
+  loadStageFileANSIImage,
+  loadStageFileANSILines,
+  loadTerminalANSIImage,
 } from './bga.ts';
 import { decodeVideoFramesStream, decodeVideoFramesToSourceFramesInWorker } from './bga-video.ts';
 
@@ -88,13 +88,13 @@ vi.mock('./bga-video.ts', () => ({
 const decodeVideoFramesStreamMock = vi.mocked(decodeVideoFramesStream);
 const decodeVideoFramesToSourceFramesInWorkerMock = vi.mocked(decodeVideoFramesToSourceFramesInWorker);
 
-interface RgbColor {
+interface RGBColor {
   r: number;
   g: number;
   b: number;
 }
 
-type Pixel = RgbColor | undefined;
+type Pixel = RGBColor | undefined;
 
 async function resolvePromiseState<T>(promise: Promise<T>, timeoutMs: number): Promise<'ready' | 'pending'> {
   return await Promise.race([
@@ -106,7 +106,7 @@ async function resolvePromiseState<T>(promise: Promise<T>, timeoutMs: number): P
 function createSolidSourceVideoFrame(
   width: number,
   height: number,
-  color: RgbColor,
+  color: RGBColor,
 ): {
   rgb: Uint8Array;
   opaqueMask: Uint8Array;
@@ -130,10 +130,10 @@ describe('player bga', () => {
   test('player bga: reports loading progress details with target file names', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-progress-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writePng(join(baseDir, 'stage.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'stage.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.metadata.stageFile = 'stage.png';
       json.resources.bmp['01'] = 'base.png';
@@ -141,7 +141,7 @@ describe('player bga', () => {
 
       const progressDetails: string[] = [];
       const progressRatios: number[] = [];
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
@@ -164,9 +164,9 @@ describe('player bga', () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-shared-load-'));
     try {
       const sharedPath = join(baseDir, 'shared.png');
-      await writePng(sharedPath, 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(sharedPath, 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'shared.png';
       json.events = [
@@ -181,9 +181,9 @@ describe('player bga', () => {
         ...fsPromises,
         readFile: readFileMock,
       }));
-      const { createBgaAnsiRenderer: createBgaAnsiRendererWithMock } = await import('./bga.ts');
+      const { createBgaANSIRenderer: createBgaANSIRendererWithMock } = await import('./bga.ts');
 
-      const renderer = await createBgaAnsiRendererWithMock(json, {
+      const renderer = await createBgaANSIRendererWithMock(json, {
         baseDir,
         width: 40,
         height: 20,
@@ -202,20 +202,20 @@ describe('player bga', () => {
   test('player bga: loads STAGEFILE splash lines as a full-screen cover image', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-stagefile-splash-'));
     try {
-      await writePng(join(baseDir, 'stage.png'), 64, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'stage.png'), 64, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.metadata.stageFile = 'stage.png';
 
-      const lines = await loadStageFileAnsiLines(json, {
+      const lines = await loadStageFileANSILines(json, {
         baseDir,
         width: 40,
         height: 20,
       });
 
       expect(lines).toBeDefined();
-      const pixels = parseAnsiPixels(lines ?? []);
+      const pixels = parseANSIPixels(lines ?? []);
       expect(pixels[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
       expect(pixels[0]?.[0]).toEqual({ r: 0, g: 0, b: 255 });
       expect(pixels[19]?.[39]).toEqual({ r: 0, g: 0, b: 255 });
@@ -227,13 +227,13 @@ describe('player bga', () => {
   test('player bga: prepares kitty graphics data for STAGEFILE splash images', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-stagefile-kitty-'));
     try {
-      await writePng(join(baseDir, 'stage.png'), 64, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'stage.png'), 64, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.metadata.stageFile = 'stage.png';
 
-      const image = await loadStageFileAnsiImage(json, {
+      const image = await loadStageFileANSIImage(json, {
         baseDir,
         width: 40,
         height: 20,
@@ -256,29 +256,29 @@ describe('player bga', () => {
   test('player bga: supports lanczos resizing for STAGEFILE images', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-stagefile-lanczos-'));
     try {
-      await writePng(join(baseDir, 'stage.png'), 512, 512, (x) =>
+      await writePNG(join(baseDir, 'stage.png'), 512, 512, (x) =>
         x < 256 ? { r: 255, g: 0, b: 0, a: 255 } : { r: 0, g: 0, b: 255, a: 255 },
       );
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.metadata.stageFile = 'stage.png';
 
-      const nearest = await loadStageFileAnsiImage(json, {
+      const nearest = await loadStageFileANSIImage(json, {
         baseDir,
         width: 8,
         height: 6,
         imageResizeAlgorithm: 'nearest',
       });
-      const lanczos = await loadStageFileAnsiImage(json, {
+      const lanczos = await loadStageFileANSIImage(json, {
         baseDir,
         width: 8,
         height: 6,
         imageResizeAlgorithm: 'lanczos',
       });
 
-      const nearestPixels = parseAnsiPixels(nearest?.lines ?? []);
-      const lanczosPixels = parseAnsiPixels(lanczos?.lines ?? []);
+      const nearestPixels = parseANSIPixels(nearest?.lines ?? []);
+      const lanczosPixels = parseANSIPixels(lanczos?.lines ?? []);
       expect(nearestPixels[3]?.[3]).toEqual({ r: 255, g: 0, b: 0 });
       expect(nearestPixels[3]?.[4]).toEqual({ r: 0, g: 0, b: 255 });
       expect((lanczosPixels[3]?.[3]?.r ?? 0) > 0).toBe(true);
@@ -293,9 +293,9 @@ describe('player bga', () => {
   test('player bga: loads banner images with contain sizing for music-select metadata blocks', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-banner-ansi-'));
     try {
-      await writePng(join(baseDir, 'banner.png'), 300, 80, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'banner.png'), 300, 80, () => ({ r: 0, g: 0, b: 255, a: 255 }));
 
-      const image = await loadTerminalAnsiImage(baseDir, 'banner.png', {
+      const image = await loadTerminalANSIImage(baseDir, 'banner.png', {
         width: 16,
         height: 4,
         fitMode: 'contain',
@@ -304,7 +304,7 @@ describe('player bga', () => {
       expect(image).toBeDefined();
       expect(image?.width).toBe(16);
       expect(image?.height).toBe(2);
-      const pixels = parseAnsiPixels(image?.lines ?? []);
+      const pixels = parseANSIPixels(image?.lines ?? []);
       expect(pixels[0]?.[0]).toEqual({ r: 0, g: 0, b: 255 });
       expect(pixels[1]?.[8]).toEqual({ r: 0, g: 0, b: 255 });
       expect(pixels[0]?.[15]).toEqual({ r: 0, g: 0, b: 255 });
@@ -316,9 +316,9 @@ describe('player bga', () => {
   test('player bga: prepares kitty graphics data for music-select banners', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-banner-kitty-'));
     try {
-      await writePng(join(baseDir, 'banner.png'), 300, 80, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'banner.png'), 300, 80, () => ({ r: 0, g: 0, b: 255, a: 255 }));
 
-      const image = await loadTerminalAnsiImage(baseDir, 'banner.png', {
+      const image = await loadTerminalANSIImage(baseDir, 'banner.png', {
         width: 16,
         height: 4,
         fitMode: 'contain',
@@ -343,25 +343,25 @@ describe('player bga', () => {
   test('player bga: supports lanczos resizing for banner images', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-banner-lanczos-'));
     try {
-      await writePng(join(baseDir, 'banner.png'), 512, 64, (x) =>
+      await writePNG(join(baseDir, 'banner.png'), 512, 64, (x) =>
         x < 256 ? { r: 255, g: 0, b: 0, a: 255 } : { r: 0, g: 0, b: 255, a: 255 },
       );
 
-      const nearest = await loadTerminalAnsiImage(baseDir, 'banner.png', {
+      const nearest = await loadTerminalANSIImage(baseDir, 'banner.png', {
         width: 1,
         height: 1,
         fitMode: 'contain',
         imageResizeAlgorithm: 'nearest',
       });
-      const lanczos = await loadTerminalAnsiImage(baseDir, 'banner.png', {
+      const lanczos = await loadTerminalANSIImage(baseDir, 'banner.png', {
         width: 1,
         height: 1,
         fitMode: 'contain',
         imageResizeAlgorithm: 'lanczos',
       });
 
-      const nearestPixels = parseAnsiPixels(nearest?.lines ?? []);
-      const lanczosPixels = parseAnsiPixels(lanczos?.lines ?? []);
+      const nearestPixels = parseANSIPixels(nearest?.lines ?? []);
+      const lanczosPixels = parseANSIPixels(lanczos?.lines ?? []);
       expect(nearestPixels[0]?.[0]).toEqual({ r: 0, g: 0, b: 255 });
       expect((lanczosPixels[0]?.[0]?.r ?? 0) > 0).toBe(true);
       expect((lanczosPixels[0]?.[0]?.b ?? 0) > 0).toBe(true);
@@ -373,13 +373,13 @@ describe('player bga', () => {
   test('player bga: does not create a gameplay renderer for STAGEFILE-only charts', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-stagefile-only-'));
     try {
-      await writePng(join(baseDir, 'stage.png'), 64, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'stage.png'), 64, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.metadata.stageFile = 'stage.png';
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
@@ -394,12 +394,12 @@ describe('player bga', () => {
   test('player bga: composites layer with black treated as transparent', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-layer-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writeBmp(join(baseDir, 'layer.bmp'), 256, 256, (x) =>
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writeBMP(join(baseDir, 'layer.bmp'), 256, 256, (x) =>
         x < 128 ? { r: 0, g: 0, b: 0, a: 255 } : { r: 0, g: 255, b: 0, a: 255 },
       );
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'base.png';
       json.resources.bmp['02'] = 'layer.bmp';
@@ -408,16 +408,16 @@ describe('player bga', () => {
         { measure: 0, channel: '07', position: [0, 1], value: '02' },
       ];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const lines = renderer?.getAnsiLines(0);
+      const lines = renderer?.getANSILines(0);
       expect(lines).toBeDefined();
-      const pixels = parseAnsiPixels(lines ?? []);
+      const pixels = parseANSIPixels(lines ?? []);
 
       expect(pixels[10]?.[5]).toEqual({ r: 255, g: 0, b: 0 });
       expect(pixels[10]?.[30]).toEqual({ r: 0, g: 255, b: 0 });
@@ -429,10 +429,10 @@ describe('player bga', () => {
   test('player bga: composites 4-bit indexed bmp layer with black treated as transparent', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-layer-indexed-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writeIndexed4BitBmp(join(baseDir, 'layer4.bmp'), 256, 256, (x) => (x < 128 ? 0 : 1));
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writeIndexed4BitBMP(join(baseDir, 'layer4.bmp'), 256, 256, (x) => (x < 128 ? 0 : 1));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'base.png';
       json.resources.bmp['02'] = 'layer4.bmp';
@@ -441,16 +441,16 @@ describe('player bga', () => {
         { measure: 0, channel: '07', position: [0, 1], value: '02' },
       ];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const lines = renderer?.getAnsiLines(0);
+      const lines = renderer?.getANSILines(0);
       expect(lines).toBeDefined();
-      const pixels = parseAnsiPixels(lines ?? []);
+      const pixels = parseANSIPixels(lines ?? []);
 
       expect(pixels[10]?.[5]).toEqual({ r: 255, g: 0, b: 0 });
       expect(pixels[10]?.[30]).toEqual({ r: 0, g: 255, b: 0 });
@@ -462,15 +462,15 @@ describe('player bga', () => {
   test('player bga: composites channel 0A above channel 07', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-layer2-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writeBmp(join(baseDir, 'layer.bmp'), 256, 256, (x) =>
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writeBMP(join(baseDir, 'layer.bmp'), 256, 256, (x) =>
         x < 128 ? { r: 0, g: 0, b: 0, a: 255 } : { r: 0, g: 255, b: 0, a: 255 },
       );
-      await writePng(join(baseDir, 'layer2.png'), 256, 256, (x) =>
+      await writePNG(join(baseDir, 'layer2.png'), 256, 256, (x) =>
         x < 128 ? { r: 0, g: 0, b: 255, a: 255 } : { r: 0, g: 0, b: 0, a: 0 },
       );
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'base.png';
       json.resources.bmp['02'] = 'layer.bmp';
@@ -481,16 +481,16 @@ describe('player bga', () => {
         { measure: 0, channel: '0A', position: [0, 1], value: '03' },
       ];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const lines = renderer?.getAnsiLines(0);
+      const lines = renderer?.getANSILines(0);
       expect(lines).toBeDefined();
-      const pixels = parseAnsiPixels(lines ?? []);
+      const pixels = parseANSIPixels(lines ?? []);
 
       expect(pixels[10]?.[5]).toEqual({ r: 0, g: 0, b: 255 });
       expect(pixels[10]?.[30]).toEqual({ r: 0, g: 255, b: 0 });
@@ -502,23 +502,23 @@ describe('player bga', () => {
   test('player bga: renders images smaller than 256x256 centered on X and top-aligned on Y', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-small-'));
     try {
-      await writePng(join(baseDir, 'small.png'), 128, 128, () => ({ r: 255, g: 255, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'small.png'), 128, 128, () => ({ r: 255, g: 255, b: 0, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'small.png';
       json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const lines = renderer?.getAnsiLines(0);
+      const lines = renderer?.getANSILines(0);
       expect(lines).toBeDefined();
-      const bounds = findOpaqueBounds(parseAnsiPixels(lines ?? []));
+      const bounds = findOpaqueBounds(parseANSIPixels(lines ?? []));
       expect(bounds).toBeDefined();
       expect(bounds?.minY).toBe(0);
       expect(bounds?.maxY).toBeGreaterThanOrEqual(9);
@@ -535,25 +535,25 @@ describe('player bga', () => {
   test('player bga: scales down sources larger than 256x256 without clipping bottom area', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-large-square-'));
     try {
-      await writePng(join(baseDir, 'large-square.png'), 512, 512, (_x, y) =>
+      await writePNG(join(baseDir, 'large-square.png'), 512, 512, (_x, y) =>
         y < 256 ? { r: 255, g: 0, b: 0, a: 255 } : { r: 0, g: 0, b: 255, a: 255 },
       );
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'large-square.png';
       json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const lines = renderer?.getAnsiLines(0);
+      const lines = renderer?.getANSILines(0);
       expect(lines).toBeDefined();
-      const pixels = parseAnsiPixels(lines ?? []);
+      const pixels = parseANSIPixels(lines ?? []);
 
       expect(pixels[4]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
       expect(pixels[16]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
@@ -565,30 +565,30 @@ describe('player bga', () => {
   test('player bga: supports lanczos resizing for gameplay image BGA', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-lanczos-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 512, 512, (x) =>
+      await writePNG(join(baseDir, 'base.png'), 512, 512, (x) =>
         x < 256 ? { r: 255, g: 0, b: 0, a: 255 } : { r: 0, g: 0, b: 255, a: 255 },
       );
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'base.png';
       json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
 
-      const nearest = await createBgaAnsiRenderer(json, {
+      const nearest = await createBgaANSIRenderer(json, {
         baseDir,
         width: 8,
         height: 6,
         imageResizeAlgorithm: 'nearest',
       });
-      const lanczos = await createBgaAnsiRenderer(json, {
+      const lanczos = await createBgaANSIRenderer(json, {
         baseDir,
         width: 8,
         height: 6,
         imageResizeAlgorithm: 'lanczos',
       });
 
-      const nearestPixels = parseAnsiPixels(nearest?.getAnsiLines(0) ?? []);
-      const lanczosPixels = parseAnsiPixels(lanczos?.getAnsiLines(0) ?? []);
+      const nearestPixels = parseANSIPixels(nearest?.getANSILines(0) ?? []);
+      const lanczosPixels = parseANSIPixels(lanczos?.getANSILines(0) ?? []);
       expect(nearestPixels[3]?.[3]).toEqual({ r: 255, g: 0, b: 0 });
       expect(nearestPixels[3]?.[4]).toEqual({ r: 0, g: 0, b: 255 });
       expect((lanczosPixels[3]?.[3]?.r ?? 0) > 0).toBe(true);
@@ -605,19 +605,19 @@ describe('player bga', () => {
     try {
       await writeFile(join(baseDir, 'movie.mp4'), '');
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'movie.mp4';
       json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
 
       expect(renderer).toBeDefined();
-      const pixels = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const pixels = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       const bounds = findOpaqueBounds(pixels);
       expect(bounds).toBeDefined();
       expect(bounds).toMatchObject({
@@ -636,19 +636,19 @@ describe('player bga', () => {
     try {
       await writeFile(join(baseDir, 'portrait.mp4'), '');
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'portrait.mp4';
       json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
 
       expect(renderer).toBeDefined();
-      const pixels = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const pixels = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       const bounds = findOpaqueBounds(pixels);
       expect(bounds).toBeDefined();
       expect(bounds).toMatchObject({
@@ -667,19 +667,19 @@ describe('player bga', () => {
     try {
       await writeFile(join(baseDir, 'bordered.mp4'), '');
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'bordered.mp4';
       json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
 
       expect(renderer).toBeDefined();
-      const pixels = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const pixels = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       const bounds = findOpaqueBounds(pixels);
       expect(bounds).toBeDefined();
       expect(bounds).toMatchObject({
@@ -698,12 +698,12 @@ describe('player bga', () => {
     try {
       await writeFile(join(baseDir, 'movie.mp4'), '');
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'movie.mp4';
       json.events = [{ measure: 0, channel: '04', position: [1, 2], value: '01' }];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
@@ -731,7 +731,7 @@ describe('player bga', () => {
           seconds: 0,
           width: 320,
           height: 240,
-          rgba: createSolidVideoRgba(320, 240, { r: 255, g: 0, b: 0 }),
+          rgba: createSolidVideoRGBA(320, 240, { r: 255, g: 0, b: 0 }),
         });
         await new Promise<void>((resolve) => {
           releaseRemainingFrames = resolve;
@@ -740,7 +740,7 @@ describe('player bga', () => {
           seconds: 1,
           width: 320,
           height: 240,
-          rgba: createSolidVideoRgba(320, 240, { r: 0, g: 255, b: 0 }),
+          rgba: createSolidVideoRGBA(320, 240, { r: 0, g: 255, b: 0 }),
         });
         return {
           codecName: 'h264',
@@ -777,12 +777,12 @@ describe('player bga', () => {
         },
       );
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'streaming.mp4';
       json.events = [{ measure: 0, channel: '04', position: [1, 2], value: '01' }];
 
-      const rendererPromise = createBgaAnsiRenderer(json, {
+      const rendererPromise = createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
@@ -792,7 +792,7 @@ describe('player bga', () => {
 
       const renderer = await rendererPromise;
       expect(renderer?.playbackEndSeconds).toBeCloseTo(3.5, 6);
-      expect(parseAnsiPixels(renderer?.getAnsiLines(1.1) ?? [])[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+      expect(parseANSIPixels(renderer?.getANSILines(1.1) ?? [])[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
       expect(decodeVideoFramesStreamMock.mock.calls.length - initialDecodeCallCount).toBe(1);
 
       renderer?.startStreaming();
@@ -800,7 +800,7 @@ describe('player bga', () => {
       releaseRemainingFrames?.();
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? [])[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
+      expect(parseANSIPixels(renderer?.getANSILines(2.1) ?? [])[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
     } finally {
       releaseRemainingFrames?.();
       await rm(baseDir, { recursive: true, force: true });
@@ -822,7 +822,7 @@ describe('player bga', () => {
           seconds: 0,
           width: 320,
           height: 240,
-          rgba: createSolidVideoRgba(320, 240, { r: 255, g: 0, b: 0 }),
+          rgba: createSolidVideoRGBA(320, 240, { r: 255, g: 0, b: 0 }),
         });
         await new Promise<void>((resolve) => {
           releaseRemainingFrames = resolve;
@@ -831,7 +831,7 @@ describe('player bga', () => {
           seconds: 1,
           width: 320,
           height: 240,
-          rgba: createSolidVideoRgba(320, 240, { r: 0, g: 255, b: 0 }),
+          rgba: createSolidVideoRGBA(320, 240, { r: 0, g: 255, b: 0 }),
         });
         return {
           codecName: 'h264',
@@ -840,16 +840,16 @@ describe('player bga', () => {
         };
       });
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'legacy.mp4';
       json.events = [{ measure: 0, channel: '04', position: [1, 2], value: '01' }];
 
-      const rendererPromise = createBgaAnsiRenderer(json, {
+      const rendererPromise = createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
-        videoBgaStreaming: false,
+        videoBGAStreaming: false,
       });
       for (let attempt = 0; attempt < 10 && !releaseRemainingFrames; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -862,7 +862,7 @@ describe('player bga', () => {
 
       expect(decodeVideoFramesStreamMock.mock.calls.length - initialDecodeCallCount).toBe(1);
       expect(renderer?.playbackEndSeconds).toBeCloseTo(3.5, 6);
-      expect(parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? [])[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
+      expect(parseANSIPixels(renderer?.getANSILines(2.1) ?? [])[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
     } finally {
       releaseRemainingFrames?.();
       await rm(baseDir, { recursive: true, force: true });
@@ -872,23 +872,23 @@ describe('player bga', () => {
   test('player bga: renders undefined base keys as black instead of STAGEFILE', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-undefined-base-'));
     try {
-      await writePng(join(baseDir, 'stage.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'stage.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.metadata.stageFile = 'stage.png';
       json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '02' }];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const lines = renderer?.getAnsiLines(0);
+      const lines = renderer?.getANSILines(0);
       expect(lines).toBeDefined();
-      const pixels = parseAnsiPixels(lines ?? []);
+      const pixels = parseANSIPixels(lines ?? []);
       expect(pixels[10]?.[20]).toEqual({ r: 0, g: 0, b: 0 });
       expect(countColor(pixels, { r: 0, g: 0, b: 255 })).toBe(0);
     } finally {
@@ -899,26 +899,26 @@ describe('player bga', () => {
   test('player bga: uses black viewport background before first BGA cue', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-black-viewport-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writePng(join(baseDir, 'stage.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'stage.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.metadata.stageFile = 'stage.png';
       json.resources.bmp['01'] = 'base.png';
       json.events = [{ measure: 1, channel: '04', position: [0, 1], value: '01' }];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const beforeCue = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const beforeCue = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       expect(beforeCue[10]?.[20]).toEqual({ r: 0, g: 0, b: 0 });
 
-      const afterCue = parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? []);
+      const afterCue = parseANSIPixels(renderer?.getANSILines(2.1) ?? []);
       expect(afterCue[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
     } finally {
       await rm(baseDir, { recursive: true, force: true });
@@ -928,10 +928,10 @@ describe('player bga', () => {
   test('player bga: switches to channel 06 frame when POOR is triggered', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'base.png';
       json.resources.bmp['02'] = 'poor.png';
@@ -940,21 +940,21 @@ describe('player bga', () => {
         { measure: 0, channel: '06', position: [0, 1], value: '02' },
       ];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const beforePoor = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const beforePoor = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       expect(beforePoor[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
 
       renderer?.triggerPoor(0);
-      const duringPoor = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const duringPoor = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       expect(duringPoor[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
 
-      const afterPoor = parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? []);
+      const afterPoor = parseANSIPixels(renderer?.getANSILines(2.1) ?? []);
       expect(afterPoor[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
     } finally {
       await rm(baseDir, { recursive: true, force: true });
@@ -964,10 +964,10 @@ describe('player bga', () => {
   test('player bga: clears POOR overlay and resumes normal BGA', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-clear-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'base.png';
       json.resources.bmp['02'] = 'poor.png';
@@ -976,7 +976,7 @@ describe('player bga', () => {
         { measure: 0, channel: '06', position: [0, 1], value: '02' },
       ];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
@@ -984,11 +984,11 @@ describe('player bga', () => {
       expect(renderer).toBeDefined();
 
       renderer?.triggerPoor(0);
-      const duringPoor = parseAnsiPixels(renderer?.getAnsiLines(0.3) ?? []);
+      const duringPoor = parseANSIPixels(renderer?.getANSILines(0.3) ?? []);
       expect(duringPoor[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
 
       renderer?.clearPoor();
-      const resumed = parseAnsiPixels(renderer?.getAnsiLines(0.3) ?? []);
+      const resumed = parseANSIPixels(renderer?.getANSILines(0.3) ?? []);
       expect(resumed[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
     } finally {
       await rm(baseDir, { recursive: true, force: true });
@@ -998,10 +998,10 @@ describe('player bga', () => {
   test('player bga: POOR overlay expires exactly at the 500 ms LR2 default window', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-window-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'base.png';
       json.resources.bmp['02'] = 'poor.png';
@@ -1010,7 +1010,7 @@ describe('player bga', () => {
         { measure: 0, channel: '06', position: [0, 1], value: '02' },
       ];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
@@ -1020,10 +1020,10 @@ describe('player bga', () => {
       renderer?.triggerPoor(0);
       // The window is DEFAULT_POOR_BGA_DISPLAY_SECONDS (0.5 s, LR2's `<poorbga>` default) with a strict `<`
       // expiry: the overlay is still visible just before the boundary and gone exactly at it.
-      const justBefore = parseAnsiPixels(renderer?.getAnsiLines(0.49) ?? []);
+      const justBefore = parseANSIPixels(renderer?.getANSILines(0.49) ?? []);
       expect(justBefore[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
 
-      const atBoundary = parseAnsiPixels(renderer?.getAnsiLines(0.5) ?? []);
+      const atBoundary = parseANSIPixels(renderer?.getANSILines(0.5) ?? []);
       expect(atBoundary[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
     } finally {
       await rm(baseDir, { recursive: true, force: true });
@@ -1033,12 +1033,12 @@ describe('player bga', () => {
   test('player bga: prioritizes POOR over 04/07/0A while active', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-priority-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writePng(join(baseDir, 'layer.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
-      await writePng(join(baseDir, 'layer2.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
-      await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 255, g: 255, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'layer.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'layer2.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 255, g: 255, b: 0, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'base.png';
       json.resources.bmp['02'] = 'layer.png';
@@ -1051,21 +1051,21 @@ describe('player bga', () => {
         { measure: 0, channel: '06', position: [0, 1], value: '04' },
       ];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const beforePoor = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const beforePoor = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       expect(beforePoor[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
 
       renderer?.triggerPoor(0);
-      const duringPoor = parseAnsiPixels(renderer?.getAnsiLines(0.3) ?? []);
+      const duringPoor = parseANSIPixels(renderer?.getANSILines(0.3) ?? []);
       expect(duringPoor[10]?.[20]).toEqual({ r: 255, g: 255, b: 0 });
 
-      const afterPoor = parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? []);
+      const afterPoor = parseANSIPixels(renderer?.getANSILines(2.1) ?? []);
       expect(afterPoor[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
     } finally {
       await rm(baseDir, { recursive: true, force: true });
@@ -1075,11 +1075,11 @@ describe('player bga', () => {
   test('player bga: uses #BMP00 as default POOR image before first channel 06 cue when #POORBGA is unspecified', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-bmp00-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-      await writePng(join(baseDir, 'fallback.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
-      await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'fallback.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+      await writePNG(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['00'] = 'fallback.png';
       json.resources.bmp['01'] = 'base.png';
@@ -1089,7 +1089,7 @@ describe('player bga', () => {
         { measure: 1, channel: '06', position: [0, 1], value: '02' },
       ];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
@@ -1097,11 +1097,11 @@ describe('player bga', () => {
       expect(renderer).toBeDefined();
 
       renderer?.triggerPoor(0);
-      const beforeFirstPoorCue = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const beforeFirstPoorCue = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       expect(beforeFirstPoorCue[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
 
       renderer?.triggerPoor(2.1);
-      const afterFirstPoorCue = parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? []);
+      const afterFirstPoorCue = parseANSIPixels(renderer?.getANSILines(2.1) ?? []);
       expect(afterFirstPoorCue[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
     } finally {
       await rm(baseDir, { recursive: true, force: true });
@@ -1109,21 +1109,21 @@ describe('player bga', () => {
   });
 
   test.each([
-    { poorBga: '2', expected: { r: 255, g: 0, b: 0 } },
-    { poorBga: '0', expected: { r: 0, g: 0, b: 255 } },
-    { poorBga: 'x', expected: { r: 0, g: 0, b: 255 } },
+    { poorBGA: '2', expected: { r: 255, g: 0, b: 0 } },
+    { poorBGA: '0', expected: { r: 0, g: 0, b: 255 } },
+    { poorBGA: 'x', expected: { r: 0, g: 0, b: 255 } },
   ])(
-    'player bga: only #POORBGA 2 turns off the #BMP00 POOR fallback (#POORBGA $poorBga)',
-    async ({ poorBga, expected }) => {
+    'player bga: only #POORBGA 2 turns off the #BMP00 POOR fallback (#POORBGA $poorBGA)',
+    async ({ poorBGA, expected }) => {
       const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-no-fallback-'));
       try {
-        await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
-        await writePng(join(baseDir, 'fallback.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
-        await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+        await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+        await writePNG(join(baseDir, 'fallback.png'), 256, 256, () => ({ r: 0, g: 0, b: 255, a: 255 }));
+        await writePNG(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
 
-        const json = createEmptyJson('bms');
+        const json = createEmptyJSON('bms');
         json.metadata.bpm = 120;
-        json.bms.poorBga = poorBga;
+        json.bms.poorBGA = poorBGA;
         json.resources.bmp['00'] = 'fallback.png';
         json.resources.bmp['01'] = 'base.png';
         json.resources.bmp['02'] = 'poor.png';
@@ -1132,7 +1132,7 @@ describe('player bga', () => {
           { measure: 1, channel: '06', position: [0, 1], value: '02' },
         ];
 
-        const renderer = await createBgaAnsiRenderer(json, {
+        const renderer = await createBgaANSIRenderer(json, {
           baseDir,
           width: 40,
           height: 20,
@@ -1140,7 +1140,7 @@ describe('player bga', () => {
         expect(renderer).toBeDefined();
 
         renderer?.triggerPoor(0);
-        const beforeFirstPoorCue = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+        const beforeFirstPoorCue = parseANSIPixels(renderer?.getANSILines(0) ?? []);
         expect(beforeFirstPoorCue[10]?.[20]).toEqual(expected);
       } finally {
         await rm(baseDir, { recursive: true, force: true });
@@ -1151,26 +1151,26 @@ describe('player bga', () => {
   test('player bga: updates output size when display size changes', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-resize-'));
     try {
-      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePNG(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
 
-      const json = createEmptyJson('bms');
+      const json = createEmptyJSON('bms');
       json.metadata.bpm = 120;
       json.resources.bmp['01'] = 'base.png';
       json.events = [{ measure: 0, channel: '04', position: [0, 1], value: '01' }];
 
-      const renderer = await createBgaAnsiRenderer(json, {
+      const renderer = await createBgaANSIRenderer(json, {
         baseDir,
         width: 40,
         height: 20,
       });
       expect(renderer).toBeDefined();
 
-      const before = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const before = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       expect(before.length).toBe(20);
       expect(before[0]?.length).toBe(40);
 
       renderer?.setDisplaySize(60, 24);
-      const after = parseAnsiPixels(renderer?.getAnsiLines(0) ?? []);
+      const after = parseANSIPixels(renderer?.getANSILines(0) ?? []);
       expect(after.length).toBe(24);
       expect(after[0]?.length).toBe(60);
       expect(after[12]?.[30]).toEqual({ r: 255, g: 0, b: 0 });
@@ -1183,12 +1183,12 @@ describe('player bga', () => {
     // LR2's event pump stops firing BGA cues at a negative-BPM reversal, but a movie that is already playing keeps
     // running, and the POOR overlay times out on the real clock. Reversal at 1 s; the movie on `01` turns green at
     // 2 s; the 3 s cue to `02` never fires.
-    const solid = (color: RgbColor) => createOpaqueAnsiFrame(40, 20, () => color);
+    const solid = (color: RGBColor) => createOpaqueANSIFrame(40, 20, () => color);
     const red = { r: 255, g: 0, b: 0 };
     const green = { r: 0, g: 255, b: 0 };
     const blue = { r: 0, g: 0, b: 255 };
     const yellow = { r: 255, g: 255, b: 0 };
-    const renderer = new BgaAnsiRenderer({
+    const renderer = new BgaANSIRenderer({
       baseTimeline: [
         { seconds: 0, key: '01' },
         { seconds: 3, key: '02' },
@@ -1212,9 +1212,9 @@ describe('player bga', () => {
       poorSourceFramesByKey: new Map([['PP', { kind: 'static', frame: solid(yellow) }]]) as any,
       layerSourceFramesByKey: new Map(),
       layer2SourceFramesByKey: new Map(),
-      missingBaseSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
-      missingPoorSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
-      missingLayerSourceFrame: createTransparentAnsiFrame(256, 256),
+      missingBaseSourceFrame: createOpaqueANSIFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
+      missingPoorSourceFrame: createOpaqueANSIFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
+      missingLayerSourceFrame: createTransparentANSIFrame(256, 256),
       poorFallbackKey: undefined,
       poorFallbackUntilSeconds: Number.POSITIVE_INFINITY,
       playbackEndSeconds: 0,
@@ -1224,20 +1224,20 @@ describe('player bga', () => {
       resizeAlgorithm: 'nearest',
     });
 
-    expect(parseAnsiPixels(renderer.getAnsiLines(0.5) ?? [])[10]?.[20]).toEqual(red);
+    expect(parseANSIPixels(renderer.getANSILines(0.5) ?? [])[10]?.[20]).toEqual(red);
     // The movie keeps running past the reversal...
-    expect(parseAnsiPixels(renderer.getAnsiLines(2.5) ?? [])[10]?.[20]).toEqual(green);
+    expect(parseANSIPixels(renderer.getANSILines(2.5) ?? [])[10]?.[20]).toEqual(green);
     // ...but the 3 s cue never fires.
-    expect(parseAnsiPixels(renderer.getAnsiLines(3.5) ?? [])[10]?.[20]).toEqual(green);
+    expect(parseANSIPixels(renderer.getANSILines(3.5) ?? [])[10]?.[20]).toEqual(green);
     // A POOR after the reversal shows, then clears on the true clock instead of sticking.
     renderer.triggerPoor(4);
-    expect(parseAnsiPixels(renderer.getAnsiLines(4.1) ?? [])[10]?.[20]).toEqual(yellow);
-    expect(parseAnsiPixels(renderer.getAnsiLines(5) ?? [])[10]?.[20]).toEqual(green);
+    expect(parseANSIPixels(renderer.getANSILines(4.1) ?? [])[10]?.[20]).toEqual(yellow);
+    expect(parseANSIPixels(renderer.getANSILines(5) ?? [])[10]?.[20]).toEqual(green);
   });
 
   test('player bga: fits raw video frames with terminal aspect correction once', () => {
-    const frame = createOpaqueAnsiFrame(40, 20, (_x, y) => (y < 10 ? { r: 255, g: 0, b: 0 } : { r: 0, g: 0, b: 255 }));
-    const renderer = new BgaAnsiRenderer({
+    const frame = createOpaqueANSIFrame(40, 20, (_x, y) => (y < 10 ? { r: 255, g: 0, b: 0 } : { r: 0, g: 0, b: 255 }));
+    const renderer = new BgaANSIRenderer({
       baseTimeline: [{ seconds: 0, key: '01' }],
       poorTimeline: [],
       layerTimeline: [],
@@ -1254,9 +1254,9 @@ describe('player bga', () => {
       poorSourceFramesByKey: new Map(),
       layerSourceFramesByKey: new Map(),
       layer2SourceFramesByKey: new Map(),
-      missingBaseSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
-      missingPoorSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
-      missingLayerSourceFrame: createTransparentAnsiFrame(256, 256),
+      missingBaseSourceFrame: createOpaqueANSIFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
+      missingPoorSourceFrame: createOpaqueANSIFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
+      missingLayerSourceFrame: createTransparentANSIFrame(256, 256),
       poorFallbackKey: undefined,
       poorFallbackUntilSeconds: Number.POSITIVE_INFINITY,
       playbackEndSeconds: 0,
@@ -1265,14 +1265,14 @@ describe('player bga', () => {
       resizeAlgorithm: 'nearest',
     });
 
-    const pixels = parseAnsiPixels(renderer.getAnsiLines(0) ?? []);
+    const pixels = parseANSIPixels(renderer.getANSILines(0) ?? []);
     expect(pixels[7]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
     expect(pixels[12]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
     expect(pixels[4]?.[20]).toBeUndefined();
     expect(pixels[15]?.[20]).toBeUndefined();
   });
 
-  async function writePng(
+  async function writePNG(
     path: string,
     width: number,
     height: number,
@@ -1301,7 +1301,7 @@ describe('player bga', () => {
     );
   }
 
-  async function writeBmp(
+  async function writeBMP(
     path: string,
     width: number,
     height: number,
@@ -1331,7 +1331,7 @@ describe('player bga', () => {
     );
   }
 
-  async function writeIndexed4BitBmp(
+  async function writeIndexed4BitBMP(
     path: string,
     width: number,
     height: number,
@@ -1389,7 +1389,7 @@ describe('player bga', () => {
     await writeFile(path, data);
   }
 
-  function createSolidVideoRgba(width: number, height: number, color: RgbColor): Uint8Array {
+  function createSolidVideoRGBA(width: number, height: number, color: RGBColor): Uint8Array {
     const rgba = new Uint8Array(width * height * 4);
     for (let index = 0; index < rgba.length; index += 4) {
       rgba[index] = color.r;
@@ -1400,11 +1400,11 @@ describe('player bga', () => {
     return rgba;
   }
 
-  function parseAnsiPixels(lines: string[]): Pixel[][] {
-    return lines.map(parseAnsiPixelLine);
+  function parseANSIPixels(lines: string[]): Pixel[][] {
+    return lines.map(parseANSIPixelLine);
   }
 
-  function parseAnsiPixelLine(line: string): Pixel[] {
+  function parseANSIPixelLine(line: string): Pixel[] {
     const pixels: Pixel[] = [];
     let currentColor: Pixel = undefined;
     let index = 0;
@@ -1416,7 +1416,7 @@ describe('player bga', () => {
           continue;
         }
         const sequence = line.slice(index + 2, sequenceEnd);
-        currentColor = applySgr(currentColor, sequence);
+        currentColor = applySGR(currentColor, sequence);
         index = sequenceEnd + 1;
         continue;
       }
@@ -1426,7 +1426,7 @@ describe('player bga', () => {
     return pixels;
   }
 
-  function applySgr(currentColor: Pixel, sequence: string): Pixel {
+  function applySGR(currentColor: Pixel, sequence: string): Pixel {
     if (sequence === '0') {
       return undefined;
     }
@@ -1465,7 +1465,7 @@ describe('player bga', () => {
     return { minX, minY, maxX, maxY };
   }
 
-  function countColor(pixels: Pixel[][], color: RgbColor): number {
+  function countColor(pixels: Pixel[][], color: RGBColor): number {
     let count = 0;
     for (const row of pixels) {
       for (const pixel of row) {
@@ -1480,10 +1480,10 @@ describe('player bga', () => {
     return count;
   }
 
-  function createOpaqueAnsiFrame(
+  function createOpaqueANSIFrame(
     width: number,
     height: number,
-    pixel: (x: number, y: number) => RgbColor,
+    pixel: (x: number, y: number) => RGBColor,
   ): {
     width: number;
     height: number;
@@ -1506,7 +1506,7 @@ describe('player bga', () => {
     return { width, height, rgb, opaqueMask };
   }
 
-  function createTransparentAnsiFrame(
+  function createTransparentANSIFrame(
     width: number,
     height: number,
   ): {

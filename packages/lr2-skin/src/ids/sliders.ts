@@ -15,4 +15,4 @@ export const LR2_SLIDER = {
 } as const;
 
 /** One of LR2's sliders ({@link LR2_SLIDER}). */
-export type Lr2Slider = (typeof LR2_SLIDER)[keyof typeof LR2_SLIDER];
+export type LR2Slider = (typeof LR2_SLIDER)[keyof typeof LR2_SLIDER];

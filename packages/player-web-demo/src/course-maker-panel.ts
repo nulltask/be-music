@@ -5,9 +5,9 @@
 import {
   courseConstraintGroup,
   LR2_NONSTOP_CONNECTIONS,
-  parseLr2NonstopConnections,
+  parseLR2NonstopConnections,
   serializeBeatorajaCourseFile,
-  serializeLr2CourseFile,
+  serializeLR2CourseFile,
   type CourseConstraint,
   type CourseConstraintGroup,
   type CourseDefinition,
@@ -32,7 +32,7 @@ const KIND_LABELS: Readonly<Record<CourseKind, string>> = { expert: 'EXPERT', no
 export function madeCourseConnections(course: CourseDefinition): NonstopConnection[] {
   if (course.kind !== 'nonstop') return [];
   const header = course.source.format === 'lr2crs' ? course.source.header : '';
-  return parseLr2NonstopConnections(header).slice(0, Math.max(0, course.stages.length - 1));
+  return parseLR2NonstopConnections(header).slice(0, Math.max(0, course.stages.length - 1));
 }
 
 /** The constraint choices of each group, as beatoraja's course editor offers them; the first one is "none". */
@@ -329,7 +329,7 @@ export class CourseMakerPanel {
         : courses.map((course) => this.renderCourse(course)),
     );
     const exportButton = button('Export .lr2crs', 'account-dialog-quiet', () =>
-      download('my-courses.lr2crs', serializeLr2CourseFile(this.maker.courses)),
+      download('my-courses.lr2crs', serializeLR2CourseFile(this.maker.courses)),
     );
     exportButton.disabled = courses.length === 0;
     // beatoraja's course file keeps the constraints, which `.lr2crs` cannot hold; it has no NONSTOP courses.

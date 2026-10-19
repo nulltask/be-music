@@ -1,44 +1,44 @@
-import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
-import { parseBmsBga, type BgaTimelines, type TimingResolver, buildBgaTimelines } from '@be-music/chart';
-import { pickActiveBgaCue as pickActiveCoreBgaCue } from '@be-music/player/display';
+import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/json';
+import { parseBmsBGA, type BGATimelines, type TimingResolver, buildBGATimelines } from '@be-music/chart';
+import { pickActiveBGACue as pickActiveCoreBGACue } from '@be-music/player/display';
 
-export interface BgaCue {
+export interface BGACue {
   seconds: number;
   bmpKey: string | undefined;
 }
 
-export interface BgaTextureLoadKeys {
+export interface BGATextureLoadKeys {
   base: Set<string>;
   layer: Set<string>;
 }
 
-export function buildBgaTimeline(
-  chart: BeMusicJson,
+export function buildBGATimeline(
+  chart: BeMusicJSON,
   resolver: TimingResolver,
-): { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } {
-  return toBrowserBgaTimeline(buildBgaTimelines(chart, resolver));
+): { base: BGACue[]; layer: BGACue[]; poor: BGACue[] } {
+  return toBrowserBGATimeline(buildBGATimelines(chart, resolver));
 }
 
 /**
  * The browser scenes' BGA cue lists from a chart's BGA timelines (`ResolvedChart.bga`): the base and POOR cues as is,
  * and the two layer channels (`07` / `0A`) merged into one time-ordered layer.
  */
-export function toBrowserBgaTimeline(timelines: BgaTimelines): { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } {
+export function toBrowserBGATimeline(timelines: BGATimelines): { base: BGACue[]; layer: BGACue[]; poor: BGACue[] } {
   const layer = [...timelines.layer, ...timelines.layer2]
     .sort((left, right) => left.seconds - right.seconds)
-    .map(toBrowserBgaCue);
+    .map(toBrowserBGACue);
   return {
-    base: timelines.base.map(toBrowserBgaCue),
+    base: timelines.base.map(toBrowserBGACue),
     layer,
-    poor: timelines.poor.map(toBrowserBgaCue),
+    poor: timelines.poor.map(toBrowserBGACue),
   };
 }
 
-export function collectBgaTextureLoadKeys(
-  chart: BeMusicJson,
-  timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor: readonly BgaCue[] },
-  poorBgaFallbackKey: string | undefined,
-): BgaTextureLoadKeys {
+export function collectBGATextureLoadKeys(
+  chart: BeMusicJSON,
+  timeline: { base: readonly BGACue[]; layer: readonly BGACue[]; poor: readonly BGACue[] },
+  poorBGAFallbackKey: string | undefined,
+): BGATextureLoadKeys {
   const base = new Set<string>();
   const layer = new Set<string>();
   for (const cue of [...timeline.base, ...timeline.poor]) {
@@ -47,33 +47,33 @@ export function collectBgaTextureLoadKeys(
   for (const cue of timeline.layer) {
     if (cue.bmpKey) layer.add(cue.bmpKey);
   }
-  if (poorBgaFallbackKey) {
-    base.add(poorBgaFallbackKey);
+  if (poorBGAFallbackKey) {
+    base.add(poorBGAFallbackKey);
   }
   addReferencedSubRegionSources(chart, base);
   addReferencedSubRegionSources(chart, layer);
   return { base, layer };
 }
 
-export function pickActiveBgaKey(cues: ReadonlyArray<BgaCue>, seconds: number): string | undefined {
-  return pickActiveBgaCue(cues, seconds)?.bmpKey;
+export function pickActiveBGAKey(cues: ReadonlyArray<BGACue>, seconds: number): string | undefined {
+  return pickActiveBGACue(cues, seconds)?.bmpKey;
 }
 
-export function pickActiveBgaCue(cues: ReadonlyArray<BgaCue>, seconds: number): BgaCue | undefined {
-  return pickActiveCoreBgaCue(cues, seconds);
+export function pickActiveBGACue(cues: ReadonlyArray<BGACue>, seconds: number): BGACue | undefined {
+  return pickActiveCoreBGACue(cues, seconds);
 }
 
-function toBrowserBgaCue(cue: { seconds: number; key?: string }): BgaCue {
+function toBrowserBGACue(cue: { seconds: number; key?: string }): BGACue {
   return { seconds: cue.seconds, bmpKey: cue.key };
 }
 
-function addReferencedSubRegionSources(chart: BeMusicJson, keys: Set<string>): void {
-  const base = resolveBmsBase(chart);
+function addReferencedSubRegionSources(chart: BeMusicJSON, keys: Set<string>): void {
+  const base = resolveBMSBase(chart);
   for (const [rawSlot, raw] of Object.entries(chart.bms.bga)) {
     const slot = normalizeObjectKey(rawSlot, base);
     if (!keys.has(slot)) continue;
-    const parsed = parseBmsBga(raw, base);
-    if (parsed) keys.add(parsed.sourceBmp);
+    const parsed = parseBmsBGA(raw, base);
+    if (parsed) keys.add(parsed.sourceBMP);
   }
 }
 
@@ -85,7 +85,7 @@ export function isVideoExtension(path: string): boolean {
 /** Edge length of the BMS BGA canvas: every BGA rect on screen stands for this 256x256 image space. */
 export const BMS_BGA_CANVAS_SIZE = 256;
 
-export interface BgaRect {
+export interface BGARect {
   x: number;
   y: number;
   w: number;
@@ -99,12 +99,12 @@ export interface BgaRect {
  * an empty band at the bottom rather than being stretched. A larger image fills the whole rect, as in LR2 and
  * beatoraja. `origin` places a `#BGAxx` sub-region at its authored `dx dy` on the canvas instead of centering it.
  */
-export function resolveBgaImageRect(
+export function resolveBGAImageRect(
   imageWidth: number,
   imageHeight: number,
-  rect: BgaRect,
+  rect: BGARect,
   origin?: { x: number; y: number },
-): BgaRect {
+): BGARect {
   if (!(imageWidth > 0) || !(imageHeight > 0) || Math.max(imageWidth, imageHeight) > BMS_BGA_CANVAS_SIZE) {
     return { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
   }
@@ -120,8 +120,8 @@ export function resolveBgaImageRect(
   };
 }
 
-/** The BGA keys showing this frame, as `renderBga` resolved them (`#SWBGA` frames already picked). */
-export interface ActiveBgaKeys {
+/** The BGA keys showing this frame, as `renderBGA` resolved them (`#SWBGA` frames already picked). */
+export interface ActiveBGAKeys {
   base: string | undefined;
   layer: string | undefined;
   /** Set only while a POOR is being shown. */
@@ -129,11 +129,11 @@ export interface ActiveBgaKeys {
 }
 
 /**
- * The `frame.bga` a skin that sets `drawsBga` receives: the image behind each active key (`resolve` reads the base or
+ * The `frame.bga` a skin that sets `drawsBGA` receives: the image behind each active key (`resolve` reads the base or
  * layer texture map), with `poorActive` set when a POOR image is there to show in place of the base and layer.
  */
-export function buildSkinBgaFrame<Image>(
-  keys: ActiveBgaKeys,
+export function buildSkinBGAFrame<Image>(
+  keys: ActiveBGAKeys,
   resolve: (key: string, track: 'base' | 'layer') => Image | undefined,
 ): { base?: Image; layer?: Image; poor?: Image; poorActive: boolean } {
   const base = keys.base !== undefined ? resolve(keys.base, 'base') : undefined;
@@ -149,7 +149,7 @@ export function buildSkinBgaFrame<Image>(
 }
 
 /** One stage of a stitched NONSTOP chart as its BGA needs it (`NonstopStitchStage` from `@be-music/player/course`). */
-export interface NonstopBgaStage {
+export interface NonstopBGAStage {
   windowStart: number;
   windowEnd: number;
   bmpKeys: readonly string[];
@@ -160,10 +160,10 @@ export interface NonstopBgaStage {
 /**
  * A stage's own base, layer and POOR BGA cues, the stitched timeline's cues split by the stage that owns each BMP key.
  */
-export interface NonstopStageBgaTimeline {
-  base: BgaCue[];
-  layer: BgaCue[];
-  poor: BgaCue[];
+export interface NonstopStageBGATimeline {
+  base: BGACue[];
+  layer: BGACue[];
+  poor: BGACue[];
 }
 
 /**
@@ -176,17 +176,17 @@ export interface NonstopStageBgaTimeline {
  * stage on screen, never a `#BMP00` fallback. The scenes draw each stage's stack at its crossfade opacity instead of
  * picking one at random, and a stage's POOR image replaces that stage's base and layer.
  */
-export function splitNonstopBgaTimeline(
-  timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor?: readonly BgaCue[] },
-  stages: readonly NonstopBgaStage[],
-): NonstopStageBgaTimeline[] {
+export function splitNonstopBGATimeline(
+  timeline: { base: readonly BGACue[]; layer: readonly BGACue[]; poor?: readonly BGACue[] },
+  stages: readonly NonstopBGAStage[],
+): NonstopStageBGATimeline[] {
   const stageOfKey = new Map<string, number>();
   stages.forEach((stage, index) => stage.bmpKeys.forEach((key) => stageOfKey.set(key, index)));
   const stageAt = (seconds: number): number => {
     const index = stages.findIndex((stage) => seconds < stage.windowEnd);
     return index < 0 ? stages.length - 1 : index;
   };
-  const split = stages.map((): NonstopStageBgaTimeline => ({ base: [], layer: [], poor: [] }));
+  const split = stages.map((): NonstopStageBGATimeline => ({ base: [], layer: [], poor: [] }));
   for (const track of ['base', 'layer', 'poor'] as const) {
     for (const cue of timeline[track] ?? []) {
       const stage = (cue.bmpKey !== undefined ? stageOfKey.get(cue.bmpKey) : undefined) ?? stageAt(cue.seconds);
@@ -200,7 +200,7 @@ export function splitNonstopBgaTimeline(
  * How opaque a NONSTOP stage's BGA is at `seconds`: fully inside its window, fading in over the 3 s before it and out
  * over the 3 s after it, linearly as LR2 mixes its stage BGA layers (OpenLR2 L27047-L27052).
  */
-export function resolveNonstopBgaAlpha(stage: NonstopBgaStage, seconds: number): number {
+export function resolveNonstopBGAAlpha(stage: NonstopBGAStage, seconds: number): number {
   const ramp = (window: { start: number; end: number }): number =>
     window.end > window.start ? Math.min(1, Math.max(0, (seconds - window.start) / (window.end - window.start))) : 1;
   if (seconds < stage.windowStart) return stage.bgaFadeIn !== undefined ? ramp(stage.bgaFadeIn) : 0;
@@ -218,20 +218,20 @@ export function isMissLayerShown(missSeconds: number | undefined, seconds: numbe
 }
 
 /** One BGA stack to draw: its base and layer cues (and a POOR image in place of them) at `alpha`. */
-export interface BgaStack {
+export interface BGAStack {
   alpha: number;
-  baseCue: BgaCue | undefined;
-  layerCue: BgaCue | undefined;
+  baseCue: BGACue | undefined;
+  layerCue: BGACue | undefined;
   /** Set only while a POOR is being shown and the stack has a POOR cue. */
   poorKey?: string | undefined;
 }
 
-/** What {@link resolveBgaStacks} reads: the chart's cues, a stitched NONSTOP chart's stages and the BGA rect's flags. */
-export interface BgaStacksInput {
+/** What {@link resolveBGAStacks} reads: the chart's cues, a stitched NONSTOP chart's stages and the BGA rect's flags. */
+export interface BGAStacksInput {
   /** The chart's cues; its POOR cues, when given, are picked during a POOR. */
-  timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor?: readonly BgaCue[] };
-  /** A stitched NONSTOP chart's stages and their own cues (`splitNonstopBgaTimeline`), in stage order. */
-  nonstop?: { stages: readonly NonstopBgaStage[]; timelines: readonly NonstopStageBgaTimeline[] } | undefined;
+  timeline: { base: readonly BGACue[]; layer: readonly BGACue[]; poor?: readonly BGACue[] };
+  /** A stitched NONSTOP chart's stages and their own cues (`splitNonstopBGATimeline`), in stage order. */
+  nonstop?: { stages: readonly NonstopBGAStage[]; timelines: readonly NonstopStageBGATimeline[] } | undefined;
   /** The cue clock in chart seconds. */
   seconds: number;
   noBase?: boolean;
@@ -243,24 +243,24 @@ export interface BgaStacksInput {
 /**
  * The BGA stacks to draw at `seconds`: the chart's base and layer cues at full opacity, or for a stitched NONSTOP chart
  * each stage's own cues (and, during a POOR, its own POOR image) at the opacity of its crossfade
- * ({@link resolveNonstopBgaAlpha}), earlier stages first. Every skin family draws a NONSTOP chart's BGA from these.
+ * ({@link resolveNonstopBGAAlpha}), earlier stages first. Every skin family draws a NONSTOP chart's BGA from these.
  */
-export function resolveBgaStacks(input: BgaStacksInput): BgaStack[] {
+export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
   const { seconds } = input;
   const pick = (
-    timeline: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor?: readonly BgaCue[] },
+    timeline: { base: readonly BGACue[]; layer: readonly BGACue[]; poor?: readonly BGACue[] },
     alpha: number,
-  ): BgaStack => ({
+  ): BGAStack => ({
     alpha,
-    baseCue: input.noBase ? undefined : pickActiveBgaCue(timeline.base, seconds),
-    layerCue: input.noLayer ? undefined : pickActiveBgaCue(timeline.layer, seconds),
-    ...(input.inPoorWindow && timeline.poor !== undefined ? { poorKey: pickActiveBgaKey(timeline.poor, seconds) } : {}),
+    baseCue: input.noBase ? undefined : pickActiveBGACue(timeline.base, seconds),
+    layerCue: input.noLayer ? undefined : pickActiveBGACue(timeline.layer, seconds),
+    ...(input.inPoorWindow && timeline.poor !== undefined ? { poorKey: pickActiveBGAKey(timeline.poor, seconds) } : {}),
   });
   const nonstop = input.nonstop;
   if (nonstop === undefined) return [pick(input.timeline, 1)];
   return nonstop.stages.flatMap((stage, index) => {
     const timeline = nonstop.timelines[index];
-    const alpha = resolveNonstopBgaAlpha(stage, seconds);
+    const alpha = resolveNonstopBGAAlpha(stage, seconds);
     return timeline !== undefined && alpha > 0 ? [pick(timeline, alpha)] : [];
   });
 }

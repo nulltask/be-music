@@ -12,7 +12,7 @@ import {
   startTestBindings,
   submissionBody,
 } from '../../test/support.ts';
-import type { BmsSearchPattern } from './bms-search.ts';
+import type { BMSSearchPattern } from './bms-search.ts';
 import {
   RECHECK_LINKED_MS,
   RECHECK_UNLINKED_MS,
@@ -55,7 +55,7 @@ async function submitChart(cookie: string, lines: string[], sha256: string, titl
 }
 
 /** A lookup answering from a table of SHA-256 → pattern, counting its calls. */
-function stubLookup(answers: Record<string, BmsSearchPattern>) {
+function stubLookup(answers: Record<string, BMSSearchPattern>) {
   const calls: string[] = [];
   const lookup: ChartsetLookup = async (aliases) => {
     const hash = aliases.find((alias) => alias.kind === 'sha256')?.hash ?? '';

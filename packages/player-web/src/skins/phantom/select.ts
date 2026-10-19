@@ -398,7 +398,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
     const playLevelNumber =
       song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
-    const songBpm = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
+    const songBPM = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
     const fileLabel = song?.fileLabel ?? '';
     const modeLabel = song ? formatPlayVariantLabel(song) : '- KEYS';
     const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
@@ -472,7 +472,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       readonly [x: number, w: number, label: string, value: string, fill: number, size: number]
     > = [
       [24, 76, 'MODE', modeLabel, PHANTOM_WHITE, 16],
-      [112, 76, 'BPM', songBpm, PHANTOM_WHITE, 22],
+      [112, 76, 'BPM', songBPM, PHANTOM_WHITE, 22],
       [200, 92, 'LEVEL', playLevel, PHANTOM_GOLD, 24],
     ];
     for (const [x, w, label, value, fill, size] of chips) {

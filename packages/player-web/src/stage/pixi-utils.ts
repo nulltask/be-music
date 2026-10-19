@@ -1,5 +1,5 @@
 import { type Container, type Texture } from 'pixi.js';
-import { destroyTextureAndRevokeBlobUrl } from '../media/textures.ts';
+import { destroyTextureAndRevokeBlobURL } from '../media/textures.ts';
 
 /**
  * Removes every child of `container` AND destroys each removed child so its renderer-side state is released.
@@ -36,10 +36,10 @@ export function destroyUniqueTextures(textures: Iterable<Texture | undefined>, d
   for (const texture of textures) {
     if (texture === undefined || destroyed.has(texture)) continue;
     destroyed.add(texture);
-    // `destroyTextureAndRevokeBlobUrl` is `texture.destroy(destroySource)` plus a revoke of any blob URL the texture
-    // was decoded from. The LR2 skin asset loader stamps the URL onto the texture via `attachBlobUrlToTexture`, so
+    // `destroyTextureAndRevokeBlobURL` is `texture.destroy(destroySource)` plus a revoke of any blob URL the texture
+    // was decoded from. The LR2 skin asset loader stamps the URL onto the texture via `attachBlobURLToTexture`, so
     // disposing through this helper releases both the GPU resource AND the in-memory blob the URL was holding open.
-    destroyTextureAndRevokeBlobUrl(texture, destroySource);
+    destroyTextureAndRevokeBlobURL(texture, destroySource);
   }
   return destroyed.size;
 }
@@ -68,7 +68,7 @@ export interface StaggerDestroyTexturesHandle {
  * pass a callback, get a stop function. Callers that don't have a host ticker handy can wrap `requestAnimationFrame`
  * directly. The callback is fired once per frame and receives no arguments.
  *
- * Errors thrown by `destroyTextureAndRevokeBlobUrl` are swallowed so that one corrupted texture doesn't strand the
+ * Errors thrown by `destroyTextureAndRevokeBlobURL` are swallowed so that one corrupted texture doesn't strand the
  * remaining queue; the underlying call already runs the URL revoke before the texture destroy, so a half-finished
  * destroy still releases the blob.
  */
@@ -109,7 +109,7 @@ export function staggerDestroyTextures(
     const end = Math.min(cursor + perFrame, queue.length);
     for (let i = cursor; i < end; i += 1) {
       try {
-        destroyTextureAndRevokeBlobUrl(queue[i]!, destroySource);
+        destroyTextureAndRevokeBlobURL(queue[i]!, destroySource);
       } catch {
         // Already destroyed / detached — keep walking the queue so a single corrupted entry doesn't strand the rest.
       }

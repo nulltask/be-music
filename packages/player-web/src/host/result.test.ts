@@ -1,6 +1,6 @@
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
-import { createEmptyJson } from '@be-music/json';
-import type { Lr2Skin } from '@be-music/lr2-skin';
+import { createEmptyJSON } from '@be-music/json';
+import type { LR2Skin } from '@be-music/lr2-skin';
 import type { PlayResult, PlayRunKind, SystemSoundSet } from '@be-music/scene-model';
 import type { Texture } from 'pixi.js';
 import { describe, expect, it, vi } from 'vite-plus/test';
@@ -11,8 +11,8 @@ import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { phantomSkin } from '../skins/phantom/index.ts';
 import { resolveBeatorajaResultTiming } from '../view/beatoraja/result-view.ts';
 import { BUILT_IN_RESULT_TIMING, BuiltInResultView, resolveBuiltInRankLabel } from '../view/built-in/result-view.ts';
-import { resolveLr2ResultTiming } from '../view/lr2/result-view.ts';
-import type { BeatorajaKit, Lr2Kit } from './family-kit.ts';
+import { resolveLR2ResultTiming } from '../view/lr2/result-view.ts';
+import type { BeatorajaKit, LR2Kit } from './family-kit.ts';
 import { createResultScene } from './result.ts';
 
 const RESULT: PlayResult = {
@@ -31,7 +31,7 @@ const RESULT: PlayResult = {
     fileLabel: 'chart.bms',
     title: 'Chart',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   },
   gaugeHistory: [],
   scoreHistory: [],
@@ -138,7 +138,7 @@ function createDrawingHost() {
 }
 
 /** An LR2 result skin with nothing to draw, and its scene timing. */
-function lr2ResultSkin(timing: Lr2Skin['timing'] = {}): Lr2Skin {
+function lr2ResultSkin(timing: LR2Skin['timing'] = {}): LR2Skin {
   return {
     width: 640,
     height: 480,
@@ -153,23 +153,23 @@ function lr2ResultSkin(timing: Lr2Skin['timing'] = {}): Lr2Skin {
     lr2FontPaths: [],
     systemFontSizes: [],
     files: new Map(),
-  } as unknown as Lr2Skin;
+  } as unknown as LR2Skin;
 }
 
-describe('resolveLr2ResultTiming', () => {
+describe('resolveLR2ResultTiming', () => {
   it("waits for the skin's #STARTINPUT, 1500 ms without one, with no auto advance or fade-out", () => {
-    expect(resolveLr2ResultTiming({ timing: { startInput: 300 } })).toEqual({ inputDelayMs: 300, fadeOutMs: 0 });
-    expect(resolveLr2ResultTiming({ timing: {} })).toEqual({ inputDelayMs: 1500, fadeOutMs: 0 });
-    expect(resolveLr2ResultTiming({ timing: { startInput: -1 } }).inputDelayMs).toBe(0);
+    expect(resolveLR2ResultTiming({ timing: { startInput: 300 } })).toEqual({ inputDelayMs: 300, fadeOutMs: 0 });
+    expect(resolveLR2ResultTiming({ timing: {} })).toEqual({ inputDelayMs: 1500, fadeOutMs: 0 });
+    expect(resolveLR2ResultTiming({ timing: { startInput: -1 } }).inputDelayMs).toBe(0);
   });
 });
 
 describe('createResultScene with an LR2 kit', () => {
-  function create(timing: Lr2Skin['timing'] = { startInput: 300 }) {
+  function create(timing: LR2Skin['timing'] = { startInput: 300 }) {
     const audio = { playJingle: vi.fn(async () => true), stopOwned: vi.fn() };
     const on = { continue: vi.fn(), retry: vi.fn() };
     const clock = { now: 1000 };
-    const kit: Lr2Kit = { family: 'lr2', skin: lr2ResultSkin(timing) };
+    const kit: LR2Kit = { family: 'lr2', skin: lr2ResultSkin(timing) };
     const scene = createResultScene(kit, {
       result: RESULT,
       sounds: {},

@@ -1,16 +1,16 @@
 import { Texture } from 'pixi.js';
 import {
-  type Lr2DestinationRect,
-  type Lr2GrooveGaugeElement,
-  type Lr2ImageElement,
-  type Lr2NowComboElement,
-  type Lr2NowComboKind,
-  type Lr2Skin,
+  type LR2DestinationRect,
+  type LR2GrooveGaugeElement,
+  type LR2ImageElement,
+  type LR2NowComboElement,
+  type LR2NowComboKind,
+  type LR2Skin,
 } from '@be-music/lr2-skin';
 import { LR2_LANE_TIMER_BANK_SIZE, LR2_TIMER } from '@be-music/lr2-skin/ids';
 import { applyDestinationToSprite, createCroppedTexture, type SpriteSink } from '../../skin/lr2/render.ts';
 
-export function isLr2OverlayImage(image: Lr2ImageElement): boolean {
+export function isLR2OverlayImage(image: LR2ImageElement): boolean {
   const t = image.destination.timer;
   // Bombs and long-note holds (50-89), key on / off (100-139).
   return (
@@ -19,7 +19,7 @@ export function isLr2OverlayImage(image: Lr2ImageElement): boolean {
   );
 }
 
-export function lastJudgeToNowComboKind(lastJudge: string): Lr2NowComboKind | undefined {
+export function lastJudgeToNowComboKind(lastJudge: string): LR2NowComboKind | undefined {
   switch (lastJudge) {
     case 'PERFECT':
       return 'perfect';
@@ -34,13 +34,13 @@ export function lastJudgeToNowComboKind(lastJudge: string): Lr2NowComboKind | un
 
 export function renderNowComboElement(
   sink: SpriteSink,
-  element: Lr2NowComboElement,
+  element: LR2NowComboElement,
   combo: number,
-  judgeAnchor: Lr2DestinationRect,
+  judgeAnchor: LR2DestinationRect,
   textures: ReadonlyMap<string, Texture>,
   elapsedMs: number,
   offsetX: number,
-  dst: Lr2DestinationRect,
+  dst: LR2DestinationRect,
 ): void {
   if (dst.w === 0 || dst.h === 0) {
     return;
@@ -137,10 +137,10 @@ export function resolveGrooveGaugeBeads(percent: number, options: { survivalGaug
 
 export function renderGrooveGaugeElement(
   sink: SpriteSink,
-  gauge: Lr2GrooveGaugeElement,
+  gauge: LR2GrooveGaugeElement,
   percent: number,
   textures: ReadonlyMap<string, Texture>,
-  dst: Lr2DestinationRect,
+  dst: LR2DestinationRect,
   options: { survivalGauge?: boolean; elapsedMs?: number } = {},
 ): void {
   if (dst.w === 0 || dst.h === 0) {
@@ -200,7 +200,7 @@ export function renderGrooveGaugeElement(
   }
 }
 
-export function resolveJudgeSkinKind(judge: string): keyof Lr2Skin['judges'] | undefined {
+export function resolveJudgeSkinKind(judge: string): keyof LR2Skin['judges'] | undefined {
   switch (judge) {
     case 'PERFECT':
       return 'perfect';
@@ -217,9 +217,9 @@ export function resolveJudgeSkinKind(judge: string): keyof Lr2Skin['judges'] | u
   }
 }
 
-export function computeFullComboDurationMs(skin: Lr2Skin): number {
+export function computeFullComboDurationMs(skin: LR2Skin): number {
   let max = 0;
-  const visit = (entry: { destination?: Lr2DestinationRect; keyframes?: Lr2DestinationRect[] }): void => {
+  const visit = (entry: { destination?: LR2DestinationRect; keyframes?: LR2DestinationRect[] }): void => {
     const dst = entry.destination;
     if (!dst) return;
     if (dst.timer !== LR2_TIMER.FULL_COMBO_1P && dst.timer !== LR2_TIMER.FULL_COMBO_2P) return;
@@ -248,7 +248,7 @@ export function computeFullComboDurationMs(skin: Lr2Skin): number {
  * `time` per timer slot, and reuses `destination` when `keyframes` is empty so static (single-keyframe) elements still
  * report a span.
  */
-export function computeKeyOnFadeDurationsMs(skin: Lr2Skin): Map<number, number> {
+export function computeKeyOnFadeDurationsMs(skin: LR2Skin): Map<number, number> {
   // Through 2P key 7.
   return collectMaxKeyframeTimePerTimer(skin, LR2_TIMER.KEY_ON_1P, LR2_TIMER.KEY_ON_2P + 7);
 }
@@ -259,16 +259,16 @@ export function computeKeyOnFadeDurationsMs(skin: Lr2Skin): Map<number, number> 
  * `bombStartedAt` entry and its bomb timer once the skin's authored explosion animation has finished,
  * instead of pinning every chart to a hard-coded "LR2 default 150 ms" cycle.
  */
-export function computeBombDurationsMs(skin: Lr2Skin): Map<number, number> {
+export function computeBombDurationsMs(skin: LR2Skin): Map<number, number> {
   return collectMaxKeyframeTimePerTimer(skin, LR2_TIMER.BOMB_1P, LR2_TIMER.BOMB_2P + LR2_LANE_TIMER_BANK_SIZE - 1);
 }
 
 /**
  * LR2 LN-hold-effect timers (`70..89` — 1P 70..79 / 2P 80..89). These fire while a long note is being held and stop on
- * release; `releaseLnHoldTimer` consults the returned span to fade out any sustain-glow / hold-sparkle elements gated
+ * release; `releaseLNHoldTimer` consults the returned span to fade out any sustain-glow / hold-sparkle elements gated
  * on the timer.
  */
-export function computeLnHoldDurationsMs(skin: Lr2Skin): Map<number, number> {
+export function computeLNHoldDurationsMs(skin: LR2Skin): Map<number, number> {
   return collectMaxKeyframeTimePerTimer(
     skin,
     LR2_TIMER.LN_HOLD_1P,
@@ -283,7 +283,7 @@ export function computeLnHoldDurationsMs(skin: Lr2Skin): Map<number, number> {
  * map is only consulted for the rise variants in practice — but we expose all four for symmetry with the bomb / FC /
  * key-on / LN-hold helpers.
  */
-export function computeGaugeTimerDurationsMs(skin: Lr2Skin): Map<number, number> {
+export function computeGaugeTimerDurationsMs(skin: LR2Skin): Map<number, number> {
   return collectMaxKeyframeTimePerTimer(skin, LR2_TIMER.GAUGE_UP_1P, LR2_TIMER.GAUGE_MAX_2P);
 }
 
@@ -293,9 +293,9 @@ export function computeGaugeTimerDurationsMs(skin: Lr2Skin): Map<number, number>
  * report `destination.time` so static authored placements still produce a span (otherwise the caller would never see
  * them).
  */
-function collectMaxKeyframeTimePerTimer(skin: Lr2Skin, minTimer: number, maxTimer: number): Map<number, number> {
+function collectMaxKeyframeTimePerTimer(skin: LR2Skin, minTimer: number, maxTimer: number): Map<number, number> {
   const result = new Map<number, number>();
-  const visit = (entry: { destination?: Lr2DestinationRect; keyframes?: Lr2DestinationRect[] }): void => {
+  const visit = (entry: { destination?: LR2DestinationRect; keyframes?: LR2DestinationRect[] }): void => {
     const dst = entry.destination;
     if (!dst) return;
     const t = dst.timer;

@@ -1,5 +1,5 @@
 import { resolveChart, resolveChartLongNoteMode, type LongNoteMode, type ResolvedChart } from '@be-music/chart';
-import { type BeMusicJson } from '@be-music/json';
+import { type BeMusicJSON } from '@be-music/json';
 import { resolveJudgeRankPercent } from '../core/judge-window.ts';
 import type { TimedPlayableNote } from '../playable-notes.ts';
 import { createEmptyRulesetNoteCounts, type RulesetChartFacts } from './facts.ts';
@@ -22,7 +22,7 @@ export interface EngineRulesetChartInput {
  * the chart's own `#RANK` / `#DEFEXRANK` (bmson `judge_rank`) from the resolved chart.
  */
 export function resolveChartJudgeRankFacts(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   resolved: ResolvedChart,
 ): { percent: number; sourceRank?: number; sourceExRank?: number } {
   const judgeRank: { percent: number; sourceRank?: number; sourceExRank?: number } = {
@@ -46,13 +46,13 @@ export { resolveChartLongNoteMode };
  * rulesets from the same chart.
  */
 export function rulesetChartFactsFromChart(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   chart: EngineRulesetChartInput,
   dynamicJudgeRankChanges: ReadonlyArray<{ seconds: number; exRankValue: number }> = [],
   stageRanks: ReadonlyArray<{ seconds: number; rank: number; table: 'chart' | 'lr2-nonstop' }> = [],
 ): RulesetChartFacts {
   const resolved = chart.resolvedChart ?? resolveChart(json);
-  const chartLnMode = resolved.lnMode;
+  const chartLNMode = resolved.lnMode;
   const notes = createEmptyRulesetNoteCounts();
   const long: Record<LongNoteMode, number> = { 1: 0, 2: 0, 3: 0 };
   let normal = 0;
@@ -60,7 +60,7 @@ export function rulesetChartFactsFromChart(
     const hasTail =
       typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
     if (hasTail) {
-      long[note.longNoteMode ?? chartLnMode] += 1;
+      long[note.longNoteMode ?? chartLNMode] += 1;
     } else {
       normal += 1;
     }
@@ -84,7 +84,7 @@ export function rulesetChartFactsFromChart(
   const facts: RulesetChartFacts = {
     sourceFormat: json.sourceFormat === 'bmson' ? 'bmson' : 'bms',
     laneMode: chart.laneDisplayMode,
-    lnMode: chartLnMode,
+    lnMode: chartLNMode,
     judgeRank,
     notes: { ...notes, normal, long },
   };

@@ -1,5 +1,5 @@
 import type { GaugeType } from '../ruleset/gauge-type.ts';
-import { resolveIidxRankLabel } from '../ruleset/score.ts';
+import { resolveIIDXRankLabel } from '../ruleset/score.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { resolveRuleset, type PlaylogRulesetId } from '../ruleset/index.ts';
 import { CLEAR_LAMPS, resolveCourseClearLamp, resolveMissCount, type ClearLamp } from '../ruleset/clear-lamp.ts';
@@ -227,7 +227,7 @@ export function aggregateCourseResult(
     noteCount,
     missCount,
     maxCombo: partial.maxCombo,
-    djLevel: resolveIidxRankLabel(exScore, noteCount),
+    djLevel: resolveIIDXRankLabel(exScore, noteCount),
     gauge,
     stagesPlayed: stageResults.length,
     lamp: resolveCourseLamp(ruleset.split('/')[0]!, partial, pick),
@@ -334,7 +334,7 @@ function nonstopCourseResult(
     noteCount,
     missCount: resolveMissCount(judge, noteCount - judged),
     maxCombo: run.maxCombo,
-    djLevel: resolveIidxRankLabel(run.exScore, noteCount),
+    djLevel: resolveIIDXRankLabel(run.exScore, noteCount),
     gauge,
     stagesPlayed: courseLog.stages.filter((entry) => entry.played).length,
     lamp: resolveCourseLamp(

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { type AnsiFrame, createSolidAnsiFrame } from './bga-frame.ts';
+import { type ANSIFrame, createSolidANSIFrame } from './bga-frame.ts';
 import {
   createStaticFrameSource,
   type FrameSource,
@@ -17,8 +17,8 @@ import {
 const RED = [255, 0, 0];
 const BLUE = [0, 0, 255];
 
-function createRedBlueFrame(): AnsiFrame {
-  const frame = createSolidAnsiFrame(2, 1, 0, 0, 0, 1);
+function createRedBlueFrame(): ANSIFrame {
+  const frame = createSolidANSIFrame(2, 1, 0, 0, 0, 1);
   frame.rgb.set([...RED, ...BLUE]);
   return frame;
 }
@@ -26,7 +26,7 @@ function createRedBlueFrame(): AnsiFrame {
 function createVideo(seconds: number[], durationSeconds?: number): VideoFrameSource {
   return {
     kind: 'video',
-    frames: seconds.map((second) => ({ seconds: second, frame: createSolidAnsiFrame(1, 1, second, 0, 0, 1) })),
+    frames: seconds.map((second) => ({ seconds: second, frame: createSolidANSIFrame(1, 1, second, 0, 0, 1) })),
     durationSeconds,
   };
 }
@@ -50,7 +50,7 @@ describe('selectFrameFromSource', () => {
 describe('resolveFrameSelection', () => {
   test('selects by key, falling back to the missing frame for an unknown key', () => {
     const frame = createRedBlueFrame();
-    const missing = createSolidAnsiFrame(1, 1, 0, 0, 0, 1);
+    const missing = createSolidANSIFrame(1, 1, 0, 0, 0, 1);
     const sources = new Map<string, FrameSource>([['01', createStaticFrameSource(frame)]]);
     expect(resolveFrameSelection(sources, missing, '01', 0)).toEqual({ frame, index: 0 });
     expect(resolveFrameSelection(sources, missing, '02', 0)).toEqual({ frame: missing, index: 0 });
@@ -114,7 +114,7 @@ describe('resizing frame sources', () => {
     const resized = resizeFrameSourceWithAspectMode(video, 3, 3, 1, 1, 'contain', 'nearest') as VideoFrameSource;
     expect(resized.frames).toHaveLength(1);
     expect(resized.frames[0]!.frame.width).toBe(3);
-    video.frames.push({ seconds: 1, frame: createSolidAnsiFrame(1, 1, 0, 0, 0, 1) });
+    video.frames.push({ seconds: 1, frame: createSolidANSIFrame(1, 1, 0, 0, 0, 1) });
     expect(resized.frames.map((entry) => entry.seconds)).toEqual([0, 1]);
     expect(resized.durationSeconds).toBe(4);
     resized.ensureStreaming?.();

@@ -1,5 +1,5 @@
 import { Graphics, type Container } from 'pixi.js';
-import { GROOVE, resolveGrooveRect, resolvePortraitHudColumn } from './layout.ts';
+import { GROOVE, resolveGrooveRect, resolvePortraitHUDColumn } from './layout.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
 import { ChargeCloud } from './charge-cloud.ts';
 import { KICK_REST, stepKick, type KickState } from './kick.ts';
@@ -72,10 +72,10 @@ import {
   punchScale,
 } from '@be-music/skin-sdk';
 import {
-  addHudNumber,
-  addHudText,
+  addHUDNumber,
+  addHUDText,
   type ChildPool,
-  type HudTextOptions,
+  type HUDTextOptions,
   type PixiChromeContext,
 } from '../pixi-kit/index.ts';
 
@@ -242,7 +242,7 @@ export function renderSynesthesiaChrome({
   const portrait = layout.orientation === 'portrait';
   setView(layout.stage, portrait);
   Object.assign(BGA, layout.bga ?? NO_MONITOR);
-  const hasBga = runtime.hasBga === true && BGA.w > 0;
+  const hasBGA = runtime.hasBGA === true && BGA.w > 0;
 
   const space = layerPool.acquireGraphics();
   space.label = 'synesthesia-gameplay/space';
@@ -260,7 +260,7 @@ export function renderSynesthesiaChrome({
   const horizon = vanishingPoint(camera, VIEW.centerX, VIEW.horizon, FLOOR.focal).y;
   // The space listens to the mix: the ember haze and floor swell on the bass, dust speeds with loudness, rivers weave with the mids, the schools tighten on bass hits and scatter on transients.
   const drive = audioDrive(runtime.audio, runtime.effects);
-  drawGround(space, hasBga, hit, hitColor, horizon);
+  drawGround(space, hasBGA, hit, hitColor, horizon);
 
   const light = layerPool.acquireGraphics();
   light.label = 'synesthesia-gameplay/light';
@@ -276,11 +276,11 @@ export function renderSynesthesiaChrome({
     },
     drive.bands,
   );
-  drawDust(light, hasBga, tier, hit, camera, travel.dust);
-  drawFloor(light, travel.floor, travel.spectrum, seconds, pulse, hasBga, tier, hit, camera, drive);
+  drawDust(light, hasBGA, tier, hit, camera, travel.dust);
+  drawFloor(light, travel.floor, travel.spectrum, seconds, pulse, hasBGA, tier, hit, camera, drive);
   const rivers = tier >= 4 ? 3 : tier >= 2 ? 2 : 1;
   for (let river = 0; river < rivers; river += 1) {
-    drawRiver(light, seconds, travel.river, river, hasBga, tier, camera, drive);
+    drawRiver(light, seconds, travel.river, river, hasBGA, tier, camera, drive);
   }
   if (effects.enabled) {
     // Schools of light fish swimming through the space: tighter on the beat, scattering on every key press.
@@ -307,7 +307,7 @@ export function renderSynesthesiaChrome({
           swell,
           glowLevel: drive[SCHOOL_SPECS[school]!.band],
           seconds,
-          skip: (x, y) => x < -10 || x > VIEW.width + 10 || y < 0 || y > VIEW.height || (hasBga && insideBga(x, y, 4)),
+          skip: (x, y) => x < -10 || x > VIEW.width + 10 || y < 0 || y > VIEW.height || (hasBGA && insideBGA(x, y, 4)),
         },
       );
     }
@@ -326,12 +326,12 @@ export function renderSynesthesiaChrome({
     const standby = layerPool.acquireGraphics();
     standby.label = 'synesthesia-gameplay/standby';
     standby.blendMode = 'add';
-    drawBgaFrame(panels, standby, layer, hasBga, seconds, pulse, hue, camera, drive, layerPool);
+    drawBGAFrame(panels, standby, layer, hasBGA, seconds, pulse, hue, camera, drive, layerPool);
   }
   const front = overlayLayerPool.acquireGraphics();
   front.label = 'synesthesia-gameplay/header';
   if (portrait) {
-    drawPortraitHud(panels, layer, runtime, layout, accent, layerPool);
+    drawPortraitHUD(panels, layer, runtime, layout, accent, layerPool);
     drawPortraitHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   } else {
     drawGauge(panels, layer, runtime, accent, layerPool);
@@ -378,7 +378,7 @@ function resolveJudgeWordY(layout: BeMusicGameplayLayout): number {
 /** NOW LOADING on the lanes: wide-tracked light breathing in the accent glow, dots ticking beneath. */
 function drawLoading(layer: Container, nowMs: number, cx: number, y: number, accent: number, pool: ChildPool): void {
   const breath = 0.55 + 0.45 * Math.sin(nowMs / 420) ** 2;
-  addHudText(
+  addHUDText(
     layer,
     LOADING_WORD,
     cx,
@@ -395,7 +395,7 @@ function drawLoading(layer: Container, nowMs: number, cx: number, y: number, acc
     },
     pool,
   );
-  addHudText(
+  addHUDText(
     layer,
     loadingDots(nowMs).padEnd(3, ' '),
     cx,
@@ -405,7 +405,7 @@ function drawLoading(layer: Container, nowMs: number, cx: number, y: number, acc
   );
 }
 
-function insideBga(x: number, y: number, margin = 0): boolean {
+function insideBGA(x: number, y: number, margin = 0): boolean {
   return x > BGA.x - margin && x < BGA.x + BGA.w + margin && y > BGA.y - margin && y < BGA.y + BGA.h + margin;
 }
 
@@ -453,7 +453,7 @@ function setView(stage: { width: number; height: number }, portrait: boolean): v
  * Warm-black ground (a stack of bands, so a live BGA stays untouched), plus a brief tint of the pressed lane's light on
  * each key press above `horizon`, which follows the camera's pitch.
  */
-function drawGround(graphics: Graphics, hasBga: boolean, hit: number, hitColor: number, horizon: number): void {
+function drawGround(graphics: Graphics, hasBGA: boolean, hit: number, hitColor: number, horizon: number): void {
   const bands: ReadonlyArray<readonly [number, number]> = [
     [0x090302, 140],
     [0x060201, 260],
@@ -465,11 +465,11 @@ function drawGround(graphics: Graphics, hasBga: boolean, hit: number, hitColor: 
   let top = 0;
   for (const [color, until] of bands) {
     const bottom = until * stretch;
-    fillAroundBga(graphics, 0, top, VIEW.width, bottom - top, color, hasBga);
+    fillAroundBGA(graphics, 0, top, VIEW.width, bottom - top, color, hasBGA);
     top = bottom;
   }
   if (hit > 0) {
-    fillAroundBga(graphics, 0, 0, VIEW.width, horizon, hitColor, hasBga, 0.06 * hit);
+    fillAroundBGA(graphics, 0, 0, VIEW.width, horizon, hitColor, hasBGA, 0.06 * hit);
   }
 }
 
@@ -479,7 +479,7 @@ function drawGround(graphics: Graphics, hasBga: boolean, hit: number, hitColor: 
  */
 function drawDust(
   graphics: Graphics,
-  hasBga: boolean,
+  hasBGA: boolean,
   tier: number,
   hit: number,
   camera: CameraPose,
@@ -494,7 +494,7 @@ function drawDust(
     const projected = projectViewInto(SCRATCH_A, point.x, point.y, point.z, basis, VIEW.centerX, VIEW.vanishY, 180);
     if (!projected.visible) continue;
     if (projected.x < 0 || projected.x > VIEW.width || projected.y < 0 || projected.y > VIEW.height) continue;
-    if (hasBga && insideBga(projected.x, projected.y, 4)) continue;
+    if (hasBGA && insideBGA(projected.x, projected.y, 4)) continue;
     const nearness = Math.min(1, projected.scale);
     const size = 0.5 + 1.3 * nearness;
     const color = index % 9 === 0 ? SYN_CYAN : index % 13 === 0 ? SYN_MAGENTA : emberColor(0.35 + 0.65 * nearness);
@@ -519,7 +519,7 @@ function drawFloor(
   spectrum: SpectrumHistory,
   seconds: number,
   pulse: number,
-  hasBga: boolean,
+  hasBGA: boolean,
   tier: number,
   hit: number,
   camera: CameraPose,
@@ -536,7 +536,7 @@ function drawFloor(
     const near = projectViewInto(SCRATCH_A, x, height, 0, basis, VIEW.centerX, horizon, focal);
     const far = projectViewInto(SCRATCH_B, x, height, 2400, basis, VIEW.centerX, horizon, focal);
     if (!near.visible || !far.visible) continue;
-    if (hasBga) clipSegmentOutsideRect(near.x, near.y, far.x, far.y, BGA, pieces);
+    if (hasBGA) clipSegmentOutsideRect(near.x, near.y, far.x, far.y, BGA, pieces);
     else pieces.push(near.x, near.y, far.x, far.y);
   }
   for (let index = 0; index < pieces.length; index += 4) {
@@ -560,7 +560,7 @@ function drawFloor(
       const rise = ridge + floorRise(x, z + distance, seconds, FLOOR_GROUND);
       const point = projectViewInto(SCRATCH_A, x, height - rise, z, basis, VIEW.centerX, horizon, focal);
       if (!point.visible || point.x < -4 || point.x > VIEW.width + 4 || point.y > VIEW.height + 4) continue;
-      if (hasBga && insideBga(point.x, point.y, 2)) continue;
+      if (hasBGA && insideBGA(point.x, point.y, 2)) continue;
       // Crests catch more light than the valleys.
       const lit = Math.min(1, alpha * (1 + (1.4 * ridge) / SPECTRUM_RIDGE_HEIGHT));
       sharedShapeBatch.rect(graphics, color, lit, point.x - size / 2, point.y - size / 2, size, size);
@@ -594,7 +594,7 @@ function drawRiver(
   seconds: number,
   distance: number,
   river: number,
-  hasBga: boolean,
+  hasBGA: boolean,
   tier: number,
   camera: CameraPose,
   drive: AudioDrive,
@@ -617,7 +617,7 @@ function drawRiver(
     const tail = projectPoint(toWorld({ ...local, x: local.x - 26 }), VIEW.centerX, VIEW.horizon, FLOOR.focal);
     if (!head.visible || !tail.visible) continue;
     if (head.x < -20 || head.x > VIEW.width + 20 || head.y < 0 || head.y > VIEW.height) continue;
-    if (hasBga && (insideBga(head.x, head.y, 4) || insideBga(tail.x, tail.y, 4))) continue;
+    if (hasBGA && (insideBGA(head.x, head.y, 4) || insideBGA(tail.x, tail.y, 4))) continue;
     const heat = hash01(index * 3 + river * 101);
     const color = river === 1 ? (heat > 0.7 ? SYN_WHITE : SYN_CYAN) : emberColor(0.5 + 0.5 * heat);
     const nearness = Math.min(1, head.scale);
@@ -635,14 +635,14 @@ function drawRiver(
   sharedShapeBatch.flush();
 }
 
-function fillAroundBga(
+function fillAroundBGA(
   graphics: Graphics,
   x: number,
   y: number,
   w: number,
   h: number,
   color: number,
-  hasBga: boolean,
+  hasBGA: boolean,
   alpha = 1,
 ): void {
   const fill = { color, alpha };
@@ -650,7 +650,7 @@ function fillAroundBga(
   const bottom = y + h;
   const holeRight = BGA.x + BGA.w;
   const holeBottom = BGA.y + BGA.h;
-  if (!hasBga || right <= BGA.x || x >= holeRight || bottom <= BGA.y || y >= holeBottom) {
+  if (!hasBGA || right <= BGA.x || x >= holeRight || bottom <= BGA.y || y >= holeBottom) {
     graphics.rect(x, y, w, h).fill(fill);
     return;
   }
@@ -702,11 +702,11 @@ function drawPlayfieldWell(
  * visualizer-style orb roaming in front of particle pyramids on an ember horizon — the
  * "nothing is playing, but the space is alive" state. The idle scene draws into `light` (additive).
  */
-function drawBgaFrame(
+function drawBGAFrame(
   graphics: Graphics,
   light: Graphics,
   layer: Container,
-  hasBga: boolean,
+  hasBGA: boolean,
   seconds: number,
   pulse: number,
   hue: number,
@@ -723,10 +723,10 @@ function drawBgaFrame(
   graphics.rect(frameX, frameY, frameW, frameH).stroke({ color, width: 4, alpha: 0.06 });
   graphics.rect(frameX, frameY, frameW, frameH).stroke({ color, width: 1, alpha: 0.4 });
   drawReticle(graphics, frameX, frameY, frameW, frameH, SYN_WHITE, 0.9, { arm: 18, width: 2 });
-  if (hasBga) return;
+  if (hasBGA) return;
 
   graphics.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill({ color: SYN_VOID, alpha: 0.92 });
-  const inside = (x: number, y: number) => !insideBga(x, y, -2);
+  const inside = (x: number, y: number) => !insideBGA(x, y, -2);
   // The monitor's camera circles the scene: the shot's turn is exaggerated into an orbit, its travel damped.
   const orbit = 60;
   const orbitCamera: CameraPose = {
@@ -806,7 +806,7 @@ function drawBgaFrame(
   slip.label = 'synesthesia-gameplay/standby-slip';
   slip.blendMode = 'normal';
   slip.rect(cx - 76, BGA.y + BGA.h - 26, 152, 17).fill({ color: SYN_VOID, alpha: 0.9 });
-  addHudText(
+  addHUDText(
     layer,
     'SOUND ONLY',
     cx,
@@ -840,11 +840,11 @@ function drawHeader(
   graphics.rect(0, 34, DESIGN_WIDTH, 1).fill({ color: accent, alpha: 0.35 + 0.35 * pulse });
   drawModeLight(graphics, layer, autoplay, HUD_MARGIN + inset, 17, accent, pulse, 10, pool);
   // Readouts on a fixed rhythm after the mode: label, then its value 40 px on; groups 96 px apart.
-  addHudText(layer, 'BPM', 172 + inset, 14, labelStyle(), pool);
-  addHudNumber(layer, formatBpm(runtime.bpm), 212 + inset, 9, displayStyle(14, SYN_WHITE), pool);
-  addHudText(layer, 'SPEED', 268 + inset, 14, labelStyle(), pool);
-  addHudNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 328 + inset, 9, displayStyle(14, SYN_WHITE), pool);
-  addHudText(
+  addHUDText(layer, 'BPM', 172 + inset, 14, labelStyle(), pool);
+  addHUDNumber(layer, formatBPM(runtime.bpm), 212 + inset, 9, displayStyle(14, SYN_WHITE), pool);
+  addHUDText(layer, 'SPEED', 268 + inset, 14, labelStyle(), pool);
+  addHUDNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 328 + inset, 9, displayStyle(14, SYN_WHITE), pool);
+  addHUDText(
     layer,
     formatRuleset(runtime.rulesetLabel),
     DESIGN_WIDTH - TOUCH_CORNER,
@@ -873,7 +873,7 @@ function drawModeLight(
   const color = autoplay ? SYN_AMBER : accent;
   graphics.circle(x + 8, y, 3).fill({ color, alpha: 1 });
   graphics.circle(x + 8, y, 8).fill({ color, alpha: 0.18 + 0.2 * pulse });
-  addHudText(
+  addHUDText(
     layer,
     autoplay ? autoLabel : 'PLAY',
     x + 22,
@@ -889,7 +889,7 @@ function drawGauge(graphics: Graphics, layer: Container, runtime: Runtime, accen
   const survival = runtime.gaugeSurvival === true || clear <= 0;
   const cleared = survival ? gauge > 0 : gauge >= clear;
   drawFrame(graphics, GAUGE_FRAME.x, GAUGE_FRAME.y, GAUGE_FRAME.w, GAUGE_FRAME.h, accent);
-  addHudText(
+  addHUDText(
     layer,
     `${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
     GROOVE.x - 2,
@@ -897,7 +897,7 @@ function drawGauge(graphics: Graphics, layer: Container, runtime: Runtime, accen
     { ...labelStyle(), maxWidth: GAUGE_LABEL_MAX_WIDTH },
     pool,
   );
-  addHudNumber(
+  addHUDNumber(
     layer,
     `${Math.round(gauge)}%`,
     GAUGE_FRAME.x + GAUGE_FRAME.w - 14,
@@ -956,7 +956,7 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, a
   const genre = runtime.songGenre?.trim();
   const lift = genre ? 5 : 0;
   if (genre) {
-    addHudText(
+    addHUDText(
       layer,
       genre.toUpperCase(),
       x + 14,
@@ -965,7 +965,7 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, a
       pool,
     );
   }
-  addHudText(
+  addHUDText(
     layer,
     runtime.songTitle?.trim() || 'Untitled chart',
     x + 14,
@@ -982,7 +982,7 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, a
   );
   const artist = runtime.songArtist?.trim();
   if (artist) {
-    addHudText(
+    addHUDText(
       layer,
       artist,
       x + 14,
@@ -997,8 +997,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
   const { x, y, w, h } = SCORE_PANEL;
   drawFrame(graphics, x, y, w, h, accent);
   graphics.rect(x + SCORE_DIVIDER, y + 14, 1, h - 28).fill({ color: accent, alpha: 0.3 });
-  addHudText(layer, 'SCORE', x + 14, y + 12, labelStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, 'SCORE', x + 14, y + 12, labelStyle(), pool);
+  addHUDNumber(
     layer,
     formatCount(runtime.score),
     x + SCORE_DIVIDER - 14,
@@ -1011,8 +1011,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     },
     pool,
   );
-  addHudText(layer, 'EX SCORE', x + 14, y + 54, labelStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, 'EX SCORE', x + 14, y + 54, labelStyle(), pool);
+  addHUDNumber(
     layer,
     `${formatCount(runtime.exScore)}/${formatCount(runtime.exScoreMax)}`,
     x + SCORE_DIVIDER - 14,
@@ -1020,8 +1020,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 46 },
     pool,
   );
-  addHudText(layer, 'EX RATE', x + 14, y + 76, labelStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, 'EX RATE', x + 14, y + 76, labelStyle(), pool);
+  addHUDNumber(
     layer,
     formatExRate(runtime.exScore, runtime.exScoreMax),
     x + SCORE_DIVIDER - 14,
@@ -1046,8 +1046,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
       .rect(meterX + (meterW * ninth) / 9, y + 91, 1, 8)
       .fill({ color: SYN_WHITE, alpha: ninth >= 6 ? 0.45 : 0.18 });
   }
-  addHudText(layer, 'COMBO', x + SCORE_DIVIDER + 14, y + 12, labelStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, 'COMBO', x + SCORE_DIVIDER + 14, y + 12, labelStyle(), pool);
+  addHUDNumber(
     layer,
     formatCount(runtime.combo),
     x + w - 12,
@@ -1055,8 +1055,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     { ...displayStyle(14, SYN_WHITE), anchorX: 1, maxWidth: 62 },
     pool,
   );
-  addHudText(layer, 'MAX', x + SCORE_DIVIDER + 14, y + 54, labelStyle(), pool);
-  addHudNumber(
+  addHUDText(layer, 'MAX', x + SCORE_DIVIDER + 14, y + 54, labelStyle(), pool);
+  addHUDNumber(
     layer,
     formatCount(runtime.maxCombo),
     x + w - 12,
@@ -1065,8 +1065,8 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     pool,
   );
   const rank = runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F';
-  addHudText(layer, 'RANK', x + SCORE_DIVIDER + 14, y + 76, labelStyle(), pool);
-  addHudText(
+  addHUDText(layer, 'RANK', x + SCORE_DIVIDER + 14, y + 76, labelStyle(), pool);
+  addHUDText(
     layer,
     rank,
     x + w - 12,
@@ -1102,8 +1102,8 @@ function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, 
     const color = JUDGE_COLORS[TALLY_NAMES[key]] ?? SYN_WHITE;
     graphics.circle(x + 9, rowY + 6, 2).fill({ color, alpha: 1 });
     graphics.circle(x + 9, rowY + 6, 5).fill({ color, alpha: 0.2 });
-    addHudText(layer, label, x + 17, rowY + 1, { ...labelStyle(), fill: color }, pool);
-    addHudNumber(
+    addHUDText(layer, label, x + 17, rowY + 1, { ...labelStyle(), fill: color }, pool);
+    addHUDNumber(
       layer,
       formatCount(runtime[key]),
       x + w - 7,
@@ -1119,8 +1119,8 @@ function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, 
     [1, 'SLOW', SYN_MAGENTA, runtime.slow],
   ] as const) {
     const rowY = footerY + row * 20;
-    addHudText(layer, label, x + 8, rowY + 2, { ...labelStyle(), fill: color }, pool);
-    addHudNumber(
+    addHUDText(layer, label, x + 8, rowY + 2, { ...labelStyle(), fill: color }, pool);
+    addHUDNumber(
       layer,
       formatCount(count),
       x + w - 7,
@@ -1132,7 +1132,7 @@ function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, 
 }
 
 /** Label and figure styles of the portrait HUD: nothing under 10 design px, which is ~8 CSS px on a phone. */
-function portraitLabel(fill: number = SYN_DIM): HudTextOptions {
+function portraitLabel(fill: number = SYN_DIM): HUDTextOptions {
   return { size: 10, fill, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 0.8 };
 }
 
@@ -1155,10 +1155,10 @@ function drawPortraitHeader(
   const cy = PORTRAIT_HEADER_H / 2;
   drawModeLight(graphics, layer, runtime.autoplay === true, TOUCH_CORNER, cy, accent, pulse, 10, pool, 'AUTO');
   // Readouts on a fixed rhythm, as on the landscape header: label, then its value 40 px on (60 after SPEED).
-  addHudText(layer, 'BPM', 190, cy - 3, portraitLabel(), pool);
-  addHudNumber(layer, formatBpm(runtime.bpm), 230, cy - 7, displayStyle(13, SYN_WHITE), pool);
-  addHudText(layer, 'SPEED', 300, cy - 3, portraitLabel(), pool);
-  addHudNumber(
+  addHUDText(layer, 'BPM', 190, cy - 3, portraitLabel(), pool);
+  addHUDNumber(layer, formatBPM(runtime.bpm), 230, cy - 7, displayStyle(13, SYN_WHITE), pool);
+  addHUDText(layer, 'SPEED', 300, cy - 3, portraitLabel(), pool);
+  addHUDNumber(
     layer,
     `x${formatHiSpeed(runtime.hiSpeed)}`,
     360,
@@ -1175,7 +1175,7 @@ const PORTRAIT_HEADER_H = 40;
  * Portrait HUD: a column beside the BGA monitor (song plate, score panel, judgement tally) and the gauge across the
  * stage in the band between the monitor and the lanes, its label carrying the ruleset.
  */
-function drawPortraitHud(
+function drawPortraitHUD(
   graphics: Graphics,
   layer: Container,
   runtime: Runtime,
@@ -1183,14 +1183,14 @@ function drawPortraitHud(
   accent: number,
   pool: ChildPool,
 ): void {
-  const { plate, score, tally } = resolvePortraitHudColumn(layout.stage, layout.bga);
+  const { plate, score, tally } = resolvePortraitHUDColumn(layout.stage, layout.bga);
 
   // Gauge strip.
   const groove = resolveGrooveRect(layout);
   const gauge = clampPercent(runtime.gauge ?? 0);
   const clear = clampPercent(runtime.clearThreshold ?? 80);
   const cleared = runtime.gaugeSurvival === true || clear <= 0 ? gauge > 0 : gauge >= clear;
-  addHudText(
+  addHUDText(
     layer,
     `${formatRuleset(runtime.rulesetLabel)} · ${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
     groove.x,
@@ -1198,7 +1198,7 @@ function drawPortraitHud(
     { ...portraitLabel(), maxWidth: groove.w - 60 },
     pool,
   );
-  addHudNumber(
+  addHUDNumber(
     layer,
     `${Math.round(gauge)}%`,
     groove.x + groove.w,
@@ -1213,7 +1213,7 @@ function drawPortraitHud(
   const textX = plate.x + 10;
   const textW = plate.w - 20;
   const genre = runtime.songGenre?.trim();
-  addHudText(
+  addHUDText(
     layer,
     genre ? genre.toUpperCase() : 'NOW PLAYING',
     textX,
@@ -1221,7 +1221,7 @@ function drawPortraitHud(
     { size: 10, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: textW },
     pool,
   );
-  addHudText(
+  addHUDText(
     layer,
     runtime.songTitle?.trim() || 'Untitled chart',
     textX,
@@ -1238,7 +1238,7 @@ function drawPortraitHud(
   );
   const artist = runtime.songArtist?.trim();
   if (artist) {
-    addHudText(
+    addHUDText(
       layer,
       artist,
       textX,
@@ -1252,8 +1252,8 @@ function drawPortraitHud(
   drawFrame(graphics, score.x, score.y, score.w, score.h, accent);
   const divider = score.x + Math.round(score.w * 0.56);
   graphics.rect(divider, score.y + 10, 1, score.h - 20).fill({ color: accent, alpha: 0.3 });
-  addHudText(layer, 'SCORE', score.x + 10, score.y + 8, portraitLabel(), pool);
-  addHudNumber(
+  addHUDText(layer, 'SCORE', score.x + 10, score.y + 8, portraitLabel(), pool);
+  addHUDNumber(
     layer,
     formatCount(runtime.score),
     divider - 10,
@@ -1266,8 +1266,8 @@ function drawPortraitHud(
     },
     pool,
   );
-  addHudText(layer, 'EX', score.x + 10, score.y + 44, portraitLabel(), pool);
-  addHudNumber(
+  addHUDText(layer, 'EX', score.x + 10, score.y + 44, portraitLabel(), pool);
+  addHUDNumber(
     layer,
     `${formatCount(runtime.exScore)}/${formatCount(runtime.exScoreMax)}`,
     divider - 10,
@@ -1293,8 +1293,8 @@ function drawPortraitHud(
       .fill({ color: SYN_WHITE, alpha: ninth >= 6 ? 0.45 : 0.18 });
   }
   const right = score.x + score.w - 10;
-  addHudText(layer, 'COMBO', divider + 10, score.y + 8, portraitLabel(), pool);
-  addHudNumber(
+  addHUDText(layer, 'COMBO', divider + 10, score.y + 8, portraitLabel(), pool);
+  addHUDNumber(
     layer,
     formatCount(runtime.combo),
     right,
@@ -1303,8 +1303,8 @@ function drawPortraitHud(
     pool,
   );
   const rank = runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F';
-  addHudText(layer, 'RANK', divider + 10, score.y + 44, portraitLabel(), pool);
-  addHudText(
+  addHUDText(layer, 'RANK', divider + 10, score.y + 44, portraitLabel(), pool);
+  addHUDText(
     layer,
     rank,
     right,
@@ -1335,8 +1335,8 @@ function drawPortraitHud(
   cells.forEach(([label, color, count], index) => {
     const x = tally.x + 6 + (index % 4) * cellW;
     const y = tally.y + 6 + Math.floor(index / 4) * 28;
-    addHudText(layer, label, x + 4, y, { ...portraitLabel(color) }, pool);
-    addHudNumber(
+    addHUDText(layer, label, x + 4, y, { ...portraitLabel(color) }, pool);
+    addHUDNumber(
       layer,
       formatCount(count),
       x + cellW - 4,
@@ -1378,7 +1378,7 @@ function drawJudgements(
     const color = isFlashingGreat(display.judge)
       ? flashingGreatColor(nowMs, FLASHING_GREAT)
       : (JUDGE_COLORS[display.judge] ?? SYN_WHITE);
-    addHudText(
+    addHUDText(
       layer,
       judgeDisplayWord(display.judge),
       display.x,
@@ -1396,7 +1396,7 @@ function drawJudgements(
     );
     const combo = resolveVisibleCombo(display.judge, display.combo);
     if (combo > 0) {
-      addHudNumber(
+      addHUDNumber(
         layer,
         formatCount(combo),
         display.x,
@@ -1444,11 +1444,11 @@ function resolveVisibleCombo(judge: string, combo: number | undefined): number {
   return combo !== undefined && Number.isFinite(combo) ? Math.max(0, Math.floor(combo)) : 0;
 }
 
-function labelStyle(): HudTextOptions {
+function labelStyle(): HUDTextOptions {
   return { size: 9, fill: SYN_DIM, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 0.8 };
 }
 
-function displayStyle(size: number, fill: number): HudTextOptions {
+function displayStyle(size: number, fill: number): HUDTextOptions {
   return { size, fill, fontFamily: SYN_DISPLAY_FONT, weight: '400' };
 }
 
@@ -1457,7 +1457,7 @@ function formatCount(value: number | undefined): string {
   return String(Math.max(0, Math.floor(value)));
 }
 
-function formatBpm(value: number | undefined): string {
+function formatBPM(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return '---';
   return String(Math.round(value));
 }

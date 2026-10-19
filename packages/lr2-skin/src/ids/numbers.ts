@@ -230,4 +230,4 @@ export const LR2_NUM = {
 } as const;
 
 /** One of LR2's numbers ({@link LR2_NUM}). */
-export type Lr2Num = (typeof LR2_NUM)[keyof typeof LR2_NUM];
+export type LR2Num = (typeof LR2_NUM)[keyof typeof LR2_NUM];

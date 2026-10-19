@@ -22,7 +22,7 @@
 // renderer can either honor them when supplied or pick its own defaults — most skins won't
 // supply them.
 //
-// Defaults match `JsonSkin.java:297-311` (`TimingVisualizer`):
+// Defaults match `JSONSkin.java:297-311` (`TimingVisualizer`):
 //   width = 301, judgeWidthMillis = 150, lineWidth = 1, transparent = 0, drawDecay = 1.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './base.ts';
@@ -38,12 +38,12 @@ export interface BeatorajaTimingVisualizerElement {
    * authored `width` is INDEPENDENT of the destination's runtime `region.width` — the
    * background is stretched to `region.width` but sample-line offsets are computed against
    * this value so the px/ms scale stays constant if the dst rect animates. Default `301`
-   * matches `JsonSkin.java:299`.
+   * matches `JSONSkin.java:299`.
    */
   width: number;
   /**
    * Horizontal half-range in ms. The destination box represents `[-judgeWidthMillis,
-   * +judgeWidthMillis]`. Default `150` matches `JsonSkin.java:300` (= the half-range of the
+   * +judgeWidthMillis]`. Default `150` matches `JSONSkin.java:300` (= the half-range of the
    * GOOD window in most judges, paired with `width = 301` to give exactly 1 px/ms).
    */
   judgeWidthMillis: number;
@@ -86,7 +86,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaTimingVisualizerElemen
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;
   return {
     id,
-    // Defaults follow `JsonSkin.java:297-311`. Most skins author only `id` and rely on these.
+    // Defaults follow `JSONSkin.java:297-311`. Most skins author only `id` and rely on these.
     width: numberField(f, 'width', 301),
     judgeWidthMillis: numberField(f, 'judgeWidthMillis', 150),
     lineWidth: numberField(f, 'lineWidth', 1),

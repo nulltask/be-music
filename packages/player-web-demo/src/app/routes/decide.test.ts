@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { ResolvedPlayChart } from '@be-music/player';
 import type { AudioService } from '@be-music/player-web/audio';
 import type { BrowserSongCollection, ChartFileHashes } from '@be-music/player-web/collection';
@@ -37,12 +37,12 @@ function song(id: string): LibraryChart {
     title: id,
     artist: 'artist',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 
 /** The chart as the decide screen drew it (its `#RANDOM` branches). */
-const RESOLVED = { chart: createEmptyJson('bms'), draws: [2] } as unknown as ResolvedPlayChart;
+const RESOLVED = { chart: createEmptyJSON('bms'), draws: [2] } as unknown as ResolvedPlayChart;
 const HASHES = { sha256: 'f'.repeat(64), md5: 'e'.repeat(32) } as ChartFileHashes;
 /** Where the select screen was when the chart was started. */
 const AT_BAR = { folderPath: ['pack'] } as unknown as BrowseSnapshot;
@@ -165,7 +165,7 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
       })),
     },
     beatoraja: {
-      beatorajaThemeBgm: { decide: new Uint8Array([1, 2, 3]) } as DecideRouteDeps['beatoraja']['beatorajaThemeBgm'],
+      beatorajaThemeBGM: { decide: new Uint8Array([1, 2, 3]) } as DecideRouteDeps['beatoraja']['beatorajaThemeBGM'],
     },
     playOptions: new PlayOptionsService({ hiSpeed: 3 }),
     guiState: { autoPlay: false, tempoPercent: 0, tempoPitchMode: 'pitch' as const },
@@ -424,7 +424,7 @@ describe('DecideRoute: the other families', () => {
     const h = await harness({ decideFamily: 'beatoraja' });
     await h.route.showDecide(song('a'));
     expect(h.decides[0]!.options.sounds).toEqual(
-      systemSoundSetFromBeatoraja({ bgm: h.deps.beatoraja.beatorajaThemeBgm }),
+      systemSoundSetFromBeatoraja({ bgm: h.deps.beatoraja.beatorajaThemeBGM }),
     );
     expect(h.deps.setStatus).toHaveBeenCalledWith('Decide (beatoraja): a');
   });

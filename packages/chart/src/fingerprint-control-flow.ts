@@ -15,7 +15,7 @@
  * label some `#IF` / `#ELSEIF` (random) or `#CASE` (switch) line compares it with, within `1..max`, plus one class
  * `0` for all the values no line names. Values of one class behave identically.
  */
-import type { BmsControlFlowEntry } from '@be-music/json';
+import type { BMSControlFlowEntry } from '@be-music/json';
 import {
   applyBranchCommand,
   drawRange,
@@ -84,7 +84,7 @@ interface DirectiveInfo {
  * into its decision diagram.
  */
 export function analyzeControlFlow(
-  entries: ReadonlyArray<BmsControlFlowEntry>,
+  entries: ReadonlyArray<BMSControlFlowEntry>,
   stepLimit: number = CONTROL_FLOW_STEP_LIMIT,
 ): ControlFlowAnalysis {
   const variables: ControlFlowVariable[] = [];
@@ -189,7 +189,7 @@ interface Walk {
 }
 
 class SegmentEvaluator {
-  readonly #entries: ReadonlyArray<BmsControlFlowEntry>;
+  readonly #entries: ReadonlyArray<BMSControlFlowEntry>;
   readonly #directives: Map<number, DirectiveInfo>;
   readonly #lastTests: Map<number, Map<number, number>>;
   readonly #stepLimit: number;
@@ -198,7 +198,7 @@ class SegmentEvaluator {
   #nextId = 1;
 
   constructor(
-    entries: ReadonlyArray<BmsControlFlowEntry>,
+    entries: ReadonlyArray<BMSControlFlowEntry>,
     directives: Map<number, DirectiveInfo>,
     lastTests: Map<number, Map<number, number>>,
     stepLimit: number,

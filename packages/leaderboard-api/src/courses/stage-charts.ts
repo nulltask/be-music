@@ -16,13 +16,13 @@ import {
   type RulesetChartFacts,
 } from '@be-music/player/playlog';
 
-type ChartJson = Parameters<typeof computeChartFingerprint>[0];
+type ChartJSON = Parameters<typeof computeChartFingerprint>[0];
 
 /** A course stage's chart as the client loaded it (`#RANDOM` / `#SWITCH` still in), sent for the server to rebuild. */
 export interface StageChartInput {
   /** The course stage, zero-based. */
   stage: number;
-  /** The parsed chart (`BeMusicJson`). Never stored. */
+  /** The parsed chart (`BeMusicJSON`). Never stored. */
   chart: unknown;
   /** Whether the chart is a `.pms` file: the one lane-mode input that is not in the chart itself. */
   pms?: boolean;
@@ -48,14 +48,14 @@ export type StageChartRejection =
 export type StageChartCheck = { ok: true } | { ok: false; reason: StageChartRejection; stage?: number };
 
 interface LoadedChart {
-  json: ChartJson;
+  json: ChartJSON;
   /** The lane-mode input the fingerprints and facts read: `.pms` or none. */
   chartPath: '.pms' | undefined;
 }
 
 type Loaded = { ok: true; charts: Map<number, LoadedChart> } | Extract<StageChartCheck, { ok: false }>;
 
-function isChartJson(value: unknown): value is ChartJson {
+function isChartJSON(value: unknown): value is ChartJSON {
   if (typeof value !== 'object' || value === null) return false;
   const chart = value as Record<string, unknown>;
   return (
@@ -83,7 +83,7 @@ function loadStageCharts(
   for (const stage of stages) {
     const input = byStage.get(stage);
     if (input === undefined) return { ok: false, reason: 'stage-chart-required', stage };
-    if (!isChartJson(input.chart)) return { ok: false, reason: 'stage-chart-invalid', stage };
+    if (!isChartJSON(input.chart)) return { ok: false, reason: 'stage-chart-invalid', stage };
     const chartPath = input.pms === true ? '.pms' : undefined;
     let fingerprint: string;
     try {

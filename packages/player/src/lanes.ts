@@ -13,7 +13,7 @@ export {
   resolveLaneChannels,
   resolveLaneDisplayMode,
   resolveLaneOptionChannels,
-  resolveLr2LaneIndex,
+  resolveLR2LaneIndex,
   resolvePlayVariantLaneChannels,
   resolveSideKeySlot,
   resolveSideRelativeLaneIndex,

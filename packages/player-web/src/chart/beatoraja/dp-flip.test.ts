@@ -1,56 +1,56 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
-import { parseBms } from '@be-music/parser';
+import type { BeMusicJSON } from '@be-music/json';
+import { parseBMS } from '@be-music/parser';
 import { preparePlaybackChart } from '@be-music/player';
-import { flipDpChannel as flipPreparedChannel } from '../../session/play/play-chart.ts';
-import { flipDpChannel, flipDpChart } from './dp-flip.ts';
+import { flipDPChannel as flipPreparedChannel } from '../../session/play/play-chart.ts';
+import { flipDPChannel, flipDPChart } from './dp-flip.ts';
 
-describe('flipDpChannel', () => {
+describe('flipDPChannel', () => {
   it('swaps the side digit on visible (1X ↔ 2X) channels', () => {
-    expect(flipDpChannel('11')).toBe('21');
-    expect(flipDpChannel('15')).toBe('25');
-    expect(flipDpChannel('19')).toBe('29');
-    expect(flipDpChannel('21')).toBe('11');
-    expect(flipDpChannel('29')).toBe('19');
+    expect(flipDPChannel('11')).toBe('21');
+    expect(flipDPChannel('15')).toBe('25');
+    expect(flipDPChannel('19')).toBe('29');
+    expect(flipDPChannel('21')).toBe('11');
+    expect(flipDPChannel('29')).toBe('19');
     // Scratch lane 6 — same swap rule applies, beatoraja DP flip mirrors scratches too.
-    expect(flipDpChannel('16')).toBe('26');
-    expect(flipDpChannel('26')).toBe('16');
+    expect(flipDPChannel('16')).toBe('26');
+    expect(flipDPChannel('26')).toBe('16');
   });
 
   it('swaps invisible (3X ↔ 4X) channels', () => {
-    expect(flipDpChannel('31')).toBe('41');
-    expect(flipDpChannel('48')).toBe('38');
+    expect(flipDPChannel('31')).toBe('41');
+    expect(flipDPChannel('48')).toBe('38');
   });
 
   it('swaps LN (5X ↔ 6X) channels', () => {
-    expect(flipDpChannel('51')).toBe('61');
-    expect(flipDpChannel('69')).toBe('59');
+    expect(flipDPChannel('51')).toBe('61');
+    expect(flipDPChannel('69')).toBe('59');
   });
 
   it('swaps landmine (DX ↔ EX) channels', () => {
-    expect(flipDpChannel('D1')).toBe('E1');
-    expect(flipDpChannel('E5')).toBe('D5');
+    expect(flipDPChannel('D1')).toBe('E1');
+    expect(flipDPChannel('E5')).toBe('D5');
   });
 
   it('leaves non-flippable channels (BPM 03, BGA 04, sound 01) alone', () => {
-    expect(flipDpChannel('01')).toBe('01'); // BGM key sound
-    expect(flipDpChannel('03')).toBe('03'); // BPM
-    expect(flipDpChannel('04')).toBe('04'); // BGA
-    expect(flipDpChannel('06')).toBe('06'); // POOR BGA
-    expect(flipDpChannel('07')).toBe('07'); // BGA layer
-    expect(flipDpChannel('09')).toBe('09'); // STOP
+    expect(flipDPChannel('01')).toBe('01'); // BGM key sound
+    expect(flipDPChannel('03')).toBe('03'); // BPM
+    expect(flipDPChannel('04')).toBe('04'); // BGA
+    expect(flipDPChannel('06')).toBe('06'); // POOR BGA
+    expect(flipDPChannel('07')).toBe('07'); // BGA layer
+    expect(flipDPChannel('09')).toBe('09'); // STOP
   });
 
   it('returns the original string for short / malformed channels', () => {
-    expect(flipDpChannel('')).toBe('');
-    expect(flipDpChannel('1')).toBe('1');
-    expect(flipDpChannel('111')).toBe('111');
+    expect(flipDPChannel('')).toBe('');
+    expect(flipDPChannel('1')).toBe('1');
+    expect(flipDPChannel('111')).toBe('111');
   });
 });
 
-describe('flipDpChart', () => {
-  function makeChart(events: ReadonlyArray<{ channel: string; value?: string }>): BeMusicJson {
+describe('flipDPChart', () => {
+  function makeChart(events: ReadonlyArray<{ channel: string; value?: string }>): BeMusicJSON {
     return {
       events: events.map((e, i) => ({
         measure: 0,
@@ -58,7 +58,7 @@ describe('flipDpChart', () => {
         position: { numerator: i, denominator: 1 },
         value: e.value ?? '01',
       })),
-    } as unknown as BeMusicJson;
+    } as unknown as BeMusicJSON;
   }
 
   it('flips every flippable channel and leaves others alone', () => {
@@ -69,20 +69,20 @@ describe('flipDpChart', () => {
       { channel: '52' }, // 1P LN key 2
       { channel: 'D7' }, // 1P landmine key 7
     ]);
-    const flipped = flipDpChart(original);
+    const flipped = flipDPChart(original);
     const channels = flipped.events.map((e: { channel: string }) => e.channel);
     expect(channels).toEqual(['21', '15', '03', '62', 'E7']);
   });
 
   it('returns the SAME object reference when no flippable channel exists (fast-path)', () => {
     const original = makeChart([{ channel: '01' }, { channel: '03' }, { channel: '04' }]);
-    const flipped = flipDpChart(original);
+    const flipped = flipDPChart(original);
     expect(flipped).toBe(original);
   });
 
   it('is idempotent only over double-flip (flip twice == original)', () => {
     const original = makeChart([{ channel: '11' }, { channel: '29' }, { channel: 'D5' }]);
-    const twice = flipDpChart(flipDpChart(original));
+    const twice = flipDPChart(flipDPChart(original));
     const channels = twice.events.map((e: { channel: string }) => e.channel);
     expect(channels).toEqual(['11', '29', 'D5']);
   });
@@ -90,7 +90,7 @@ describe('flipDpChart', () => {
   it('does not mutate the input chart', () => {
     const original = makeChart([{ channel: '11' }]);
     const originalChannelsBefore = original.events.map((e: { channel: string }) => e.channel);
-    flipDpChart(original);
+    flipDPChart(original);
     const originalChannelsAfter = original.events.map((e: { channel: string }) => e.channel);
     expect(originalChannelsAfter).toEqual(originalChannelsBefore);
   });
@@ -124,8 +124,8 @@ describe('DP FLIP on the prepared notes', () => {
 
   type Prepared = ReturnType<typeof preparePlaybackChart>;
 
-  function prepare(json: BeMusicJson): Prepared {
-    return preparePlaybackChart(resolveChart(json, { playVariant: '14', inferBmsLnTypeWhenMissing: true }), {}, 0);
+  function prepare(json: BeMusicJSON): Prepared {
+    return preparePlaybackChart(resolveChart(json, { playVariant: '14', inferBmsLNTypeWhenMissing: true }), {}, 0);
   }
 
   function lanes(notes: Prepared['notes']): string[] {
@@ -137,8 +137,8 @@ describe('DP FLIP on the prepared notes', () => {
   }
 
   it('flipping the chart before preparing it gives the notes flipping the prepared notes does', () => {
-    const chart = parseBms(DP_CHART);
-    const fromFlippedChart = prepare(flipDpChart(chart));
+    const chart = parseBMS(DP_CHART);
+    const fromFlippedChart = prepare(flipDPChart(chart));
     const flippedNotes = prepare(chart);
     for (const list of [flippedNotes.notes, flippedNotes.landmineNotes, flippedNotes.invisibleNotes]) {
       for (const note of list) note.channel = flipPreparedChannel(note.channel);

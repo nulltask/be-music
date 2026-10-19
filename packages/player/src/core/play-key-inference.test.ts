@@ -1,5 +1,5 @@
 import { resolveChart } from '@be-music/chart';
-import { createEmptyJson, resolveBmsBase, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, resolveBMSBase, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { resolveRuleset, rulesetChartFactsFromChart } from '../ruleset/index.ts';
 import { createInitialPlayerSummary, preparePlaybackChart } from './bootstrap.ts';
@@ -11,8 +11,8 @@ import { createScoreTracker } from './scoring.ts';
  * BPM 240 → one measure per second: a tap on `11` at 1.0 s, a long note on `12` from 1.0 s to 2.0 s (`#LNOBJ`) and a
  * tap on `13` at 3.0 s.
  */
-function chart(): BeMusicJson {
-  const json = createEmptyJson('bms');
+function chart(): BeMusicJSON {
+  const json = createEmptyJSON('bms');
   json.metadata.bpm = 240;
   json.metadata.rank = 2;
   json.bms.lnObjs = ['AA'];
@@ -42,7 +42,7 @@ function createCore(judgeMsPerChartSecond = 1000): JudgeCoreState {
       judgeMsPerChartSecond,
       endOnFailure: false,
       wavResources: source.resources.wav,
-      idBase: resolveBmsBase(source),
+      idBase: resolveBMSBase(source),
       sourceFormat: source.sourceFormat,
     },
     {

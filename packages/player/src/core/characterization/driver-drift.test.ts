@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { PlaylogRulesetResult } from '../../playlog/format.ts';
 import { basicChart, denseChart, exRankChart, longNoteChart, mineChart } from './charts.ts';
 import { command, observePlay, tap, type PlayObservation, type ScriptStep } from './harness.ts';
@@ -238,7 +238,7 @@ describe('driver drift', () => {
       }));
     const press = (atMs: number, lane: string, pressedAtMs?: number): ScriptStep =>
       pressedAtMs === undefined ? { atMs, press: [lane] } : { atMs, press: [lane], pressedAtMs };
-    const cases: Array<{ name: string; chart: BeMusicJson; script: ScriptStep[] }> = [];
+    const cases: Array<{ name: string; chart: BeMusicJSON; script: ScriptStep[] }> = [];
     for (const lnMode of [1, 2, 3] as const) {
       // Held through a long note's tail, a long note let go early, a tap, a scratch long note, a late press.
       cases.push({

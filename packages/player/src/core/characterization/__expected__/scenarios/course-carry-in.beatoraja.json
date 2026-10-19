@@ -50,8 +50,8 @@
           {"id":9,"channel":"12","type":"normal","timeUs":3000000},
           {"id":10,"channel":"11","type":"normal","timeUs":3500000}
         ],
-        "chartFingerprint": "bmfp0:0c3b10c263349360c5d2989d9a886958e800e4040c295a44193475104e20067d",
-        "playFingerprint": "bmfp0:0c3b10c263349360c5d2989d9a886958e800e4040c295a44193475104e20067d",
+        "chartFingerprint": "bmfp0:6786c0ecfaf1461b14e0f0b60e422b9138384824ef2587ab10f4288bc039fd78",
+        "playFingerprint": "bmfp0:6786c0ecfaf1461b14e0f0b60e422b9138384824ef2587ab10f4288bc039fd78",
         "title": "basic",
         "artist": "characterization",
         "total": 160

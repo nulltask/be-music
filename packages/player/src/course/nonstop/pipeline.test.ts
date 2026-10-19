@@ -1,5 +1,5 @@
 import { computeChartFingerprint, computePlayFingerprint, resolveChart } from '@be-music/chart';
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
 import { describe, expect, test } from 'vite-plus/test';
 import { manualPlay } from '../../index.ts';
@@ -61,7 +61,7 @@ function prepare(options: Partial<Parameters<typeof prepareNonstopCourse>[1]> = 
 }
 
 /** Presses every note of `chart` dead on, up to `untilUs`. */
-function presses(chart: BeMusicJson, untilUs = Number.POSITIVE_INFINITY): PlaylogInputEvent[] {
+function presses(chart: BeMusicJSON, untilUs = Number.POSITIVE_INFINITY): PlaylogInputEvent[] {
   const events: PlaylogInputEvent[] = [];
   for (const note of resolveChart(chart).notes) {
     const timeUs = Math.round(note.seconds * 1_000_000);
@@ -96,7 +96,7 @@ async function play(course: PreparedNonstopCourse, untilUs?: number): Promise<Be
 
 describe('prepareNonstopCourse', () => {
   test('resolves each stage with its draws, applies the long-note constraint and stitches the stages', () => {
-    let seen: readonly BeMusicJson[] = [];
+    let seen: readonly BeMusicJSON[] = [];
     const course = prepare({
       title: 'Nonstop',
       assetPath: (stageCharts) => {
@@ -123,14 +123,14 @@ describe('prepareNonstopCourse', () => {
       { constraints: ['hcn'], connections: ['cut'] },
     );
     if (!rebuilt.ok) throw new Error(rebuilt.reason);
-    const fingerprint = (chart: BeMusicJson) => computePlayFingerprint(chart, { chartPath: undefined });
+    const fingerprint = (chart: BeMusicJSON) => computePlayFingerprint(chart, { chartPath: undefined });
     expect(fingerprint(rebuilt.course.chart)).toBe(fingerprint(drawn.chart));
     expect(fingerprint(rebuilt.course.chart)).not.toBe(fingerprint(prepare().chart));
   });
 
   test('refuses what it cannot stitch, naming the stage', () => {
     expect(
-      prepareNonstopCourse([STAGES[0]!, { chart: createEmptyJson('bmson') }], { constraints: [], connections: [] }),
+      prepareNonstopCourse([STAGES[0]!, { chart: createEmptyJSON('bmson') }], { constraints: [], connections: [] }),
     ).toEqual({
       ok: false,
       reason: 'bmson',
@@ -141,7 +141,7 @@ describe('prepareNonstopCourse', () => {
       reason: 'stitch-version',
     });
     expect(prepareNonstopCourse([], { constraints: [], connections: [] })).toEqual({ ok: false, reason: 'no-stage' });
-    const broken = { chart: { sourceFormat: 'bms' } as unknown as BeMusicJson };
+    const broken = { chart: { sourceFormat: 'bms' } as unknown as BeMusicJSON };
     expect(prepareNonstopCourse([STAGES[0]!, broken], { constraints: [], connections: [] })).toEqual({
       ok: false,
       reason: 'stage-chart',

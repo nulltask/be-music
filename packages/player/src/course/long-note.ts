@@ -1,4 +1,4 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { CourseConstraint } from './definition.ts';
 
 /**
@@ -8,9 +8,9 @@ import type { CourseConstraint } from './definition.ts';
  * and the Leaderboard to the stage charts it stitches a NONSTOP run from again, so both get the same chart.
  */
 export function applyCourseLongNoteConstraint(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   constraints: readonly CourseConstraint[],
-): BeMusicJson {
+): BeMusicJSON {
   const mode = constraints.includes('ln')
     ? 1
     : constraints.includes('cn')

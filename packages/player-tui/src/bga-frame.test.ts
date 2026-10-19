@@ -1,16 +1,16 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { DecodedImage } from './bga-image.ts';
 import {
-  type AnsiFrame,
+  type ANSIFrame,
   convertImageToSourceFrame,
   createMissingSourceFrame,
-  createSolidAnsiFrame,
-  resizeAnsiFrame,
-  resizeAnsiFrameWithAspectMode,
+  createSolidANSIFrame,
+  resizeANSIFrame,
+  resizeANSIFrameWithAspectMode,
 } from './bga-frame.ts';
 
-function createFrame(width: number, height: number, pixels: ReadonlyArray<[number, number, number] | null>): AnsiFrame {
-  const frame = createSolidAnsiFrame(width, height, 0, 0, 0, 0);
+function createFrame(width: number, height: number, pixels: ReadonlyArray<[number, number, number] | null>): ANSIFrame {
+  const frame = createSolidANSIFrame(width, height, 0, 0, 0, 0);
   pixels.forEach((pixel, index) => {
     if (!pixel) {
       return;
@@ -28,9 +28,9 @@ function createImage(format: DecodedImage['format'], width: number, rgba: number
 const RED: [number, number, number] = [255, 0, 0];
 const BLUE: [number, number, number] = [0, 0, 255];
 
-describe('createSolidAnsiFrame', () => {
+describe('createSolidANSIFrame', () => {
   test('fills every pixel with the colour when opaque', () => {
-    const frame = createSolidAnsiFrame(2, 1, 10, 20, 30, 1);
+    const frame = createSolidANSIFrame(2, 1, 10, 20, 30, 1);
     expect(frame.width).toBe(2);
     expect(frame.height).toBe(1);
     expect([...frame.rgb]).toEqual([10, 20, 30, 10, 20, 30]);
@@ -38,7 +38,7 @@ describe('createSolidAnsiFrame', () => {
   });
 
   test('leaves a transparent frame empty and keeps at least one pixel', () => {
-    const frame = createSolidAnsiFrame(0, 1, 10, 20, 30, 0);
+    const frame = createSolidANSIFrame(0, 1, 10, 20, 30, 0);
     expect(frame.width).toBe(1);
     expect([...frame.rgb]).toEqual([0, 0, 0]);
     expect([...frame.opaqueMask]).toEqual([0]);
@@ -82,9 +82,9 @@ describe('convertImageToSourceFrame', () => {
   });
 });
 
-describe('resizeAnsiFrame', () => {
+describe('resizeANSIFrame', () => {
   test('fits the frame into the cells, doubling its width for the terminal pixel aspect', () => {
-    const resized = resizeAnsiFrame(createFrame(2, 1, [RED, BLUE]), 4, 2, 'nearest');
+    const resized = resizeANSIFrame(createFrame(2, 1, [RED, BLUE]), 4, 2, 'nearest');
     expect(resized.width).toBe(4);
     expect(resized.height).toBe(2);
     expect([...resized.opaqueMask]).toEqual([1, 1, 1, 1, 0, 0, 0, 0]);
@@ -92,14 +92,14 @@ describe('resizeAnsiFrame', () => {
   });
 });
 
-describe('resizeAnsiFrameWithAspectMode', () => {
+describe('resizeANSIFrameWithAspectMode', () => {
   test('returns the frame itself when it already fits at a 1:1 aspect', () => {
     const frame = createFrame(2, 1, [RED, BLUE]);
-    expect(resizeAnsiFrameWithAspectMode(frame, 2, 1, 1, 1, 'contain', 'nearest')).toBe(frame);
+    expect(resizeANSIFrameWithAspectMode(frame, 2, 1, 1, 1, 'contain', 'nearest')).toBe(frame);
   });
 
   test('covers the canvas, cropping the overflow evenly', () => {
-    const resized = resizeAnsiFrameWithAspectMode(createFrame(2, 1, [RED, BLUE]), 2, 2, 1, 1, 'cover', 'nearest');
+    const resized = resizeANSIFrameWithAspectMode(createFrame(2, 1, [RED, BLUE]), 2, 2, 1, 1, 'cover', 'nearest');
     expect(resized.width).toBe(2);
     expect(resized.height).toBe(2);
     expect([...resized.opaqueMask]).toEqual([1, 1, 1, 1]);

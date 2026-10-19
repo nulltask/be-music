@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
 
 import { resolveChart } from '@be-music/chart';
-import { createEmptyJson } from '../../json/src/index.ts';
+import { createEmptyJSON } from '../../json/src/index.ts';
 import { manualPlay } from './index.ts';
-import { resolveBgmHeadroomGain, shouldUseAutoMixBgmHeadroomControl } from './core/engine-audio.ts';
+import { resolveBGMHeadroomGain, shouldUseAutoMixBGMHeadroomControl } from './core/engine-audio.ts';
 import { extractPlayableNotes, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './display.ts';
 import { resolveJudgeWindowsMs } from './ruleset/vocabulary.ts';
 import {
@@ -16,7 +16,7 @@ import {
 } from './signals.ts';
 import {
   resetAudioSinkState,
-  createLnobjLongNoteChart,
+  createLNOBJLongNoteChart,
   createDynamicExRankChart,
   createScheduledInputRuntime,
 } from './test-support/player-fixtures.ts';
@@ -25,7 +25,7 @@ beforeEach(resetAudioSinkState);
 
 describe('player', () => {
   test('player: LNMODE=1 treats early release as BAD', async () => {
-    const summary = await manualPlay(createLnobjLongNoteChart(1), {
+    const summary = await manualPlay(createLNOBJLongNoteChart(1), {
       speed: 1,
       leadInMs: 0,
       audio: false,
@@ -44,7 +44,7 @@ describe('player', () => {
   });
 
   test('player: LNMODE=2 keeps long notes active until the end timing', async () => {
-    const summary = await manualPlay(createLnobjLongNoteChart(2), {
+    const summary = await manualPlay(createLNOBJLongNoteChart(2), {
       speed: 1,
       leadInMs: 0,
       audio: false,
@@ -98,7 +98,7 @@ describe('player', () => {
       })),
       { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
     ];
-    const baselineSummary = await manualPlay(createLnobjLongNoteChart(2), {
+    const baselineSummary = await manualPlay(createLNOBJLongNoteChart(2), {
       speed: 1,
       leadInMs: 0,
       audio: false,
@@ -106,7 +106,7 @@ describe('player', () => {
       createInputRuntime: createScheduledInputRuntime(inputSchedule),
     });
 
-    const json = createLnobjLongNoteChart(2);
+    const json = createLNOBJLongNoteChart(2);
     json.events.push({ measure: 1, channel: 'D1', position: [1, 2] as const, value: '08' });
 
     const summary = await manualPlay(json, {
@@ -135,10 +135,10 @@ describe('player', () => {
   });
 
   test('player: LNMODE=3 drains groove gauge while the hold is broken', async () => {
-    expect(extractPlayableNotes(createLnobjLongNoteChart(3))[0]?.longNoteMode).toBe(3);
+    expect(extractPlayableNotes(createLNOBJLongNoteChart(3))[0]?.longNoteMode).toBe(3);
     // HCN is a beatoraja mechanic — the chart's `#LNMODE` only reaches the engine under the rulesets that honour
     // it. LR2 plays every long note as a plain LN (asserted below).
-    const mode2Summary = await manualPlay(createLnobjLongNoteChart(2), {
+    const mode2Summary = await manualPlay(createLNOBJLongNoteChart(2), {
       speed: 1,
       leadInMs: 0,
       audio: false,
@@ -149,7 +149,7 @@ describe('player', () => {
         { delayMs: 1100, command: { kind: 'interrupt', reason: 'escape' } },
       ]),
     });
-    const mode3Summary = await manualPlay(createLnobjLongNoteChart(3), {
+    const mode3Summary = await manualPlay(createLNOBJLongNoteChart(3), {
       speed: 1,
       leadInMs: 0,
       audio: false,
@@ -170,7 +170,7 @@ describe('player', () => {
   test('player: LR2 plays every long note as an LN, whatever #LNMODE says', async () => {
     // `longNoteStyle: 'ln'` — LR2 has neither CN nor HCN, so a `#LNMODE 3` chart is one deferred judgment with no
     // hold-drain, exactly like a `#LNMODE 1` chart.
-    const summary = await manualPlay(createLnobjLongNoteChart(3), {
+    const summary = await manualPlay(createLNOBJLongNoteChart(3), {
       speed: 1,
       leadInMs: 0,
       audio: false,
@@ -188,7 +188,7 @@ describe('player', () => {
   test('player: no-TUI logs long-note, gauge, combo, sample-stop, and result events', async () => {
     const output: string[] = [];
 
-    await manualPlay(createLnobjLongNoteChart(3), {
+    await manualPlay(createLNOBJLongNoteChart(3), {
       speed: 1,
       leadInMs: 0,
       audio: false,
@@ -247,7 +247,7 @@ describe('player', () => {
   });
 
   test('player: uses baseline judge windows for bms RANK=2', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.rank = 2;
     const windows = resolveJudgeWindowsMs(json);
     expect(windows.pgreat).toBeCloseTo(18, 6);
@@ -272,19 +272,19 @@ describe('player', () => {
       peak: 0.5,
     };
 
-    const gain = resolveBgmHeadroomGain(playable, bgm);
+    const gain = resolveBGMHeadroomGain(playable, bgm);
     expect(gain).toBeGreaterThan(0);
     expect(gain).toBeLessThanOrEqual(1);
   });
 
   test('player: auto mix headroom control is disabled while limiter is enabled', () => {
-    expect(shouldUseAutoMixBgmHeadroomControl({})).toBe(false);
-    expect(shouldUseAutoMixBgmHeadroomControl({ limiter: true })).toBe(false);
-    expect(shouldUseAutoMixBgmHeadroomControl({ limiter: false })).toBe(true);
+    expect(shouldUseAutoMixBGMHeadroomControl({})).toBe(false);
+    expect(shouldUseAutoMixBGMHeadroomControl({ limiter: true })).toBe(false);
+    expect(shouldUseAutoMixBGMHeadroomControl({ limiter: false })).toBe(true);
   });
 
   test('player: narrows judge windows for bms RANK=0 (LR2 VERY HARD)', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.rank = 0;
     const windows = resolveJudgeWindowsMs(json);
     expect(windows.pgreat).toBeCloseTo(8, 6);
@@ -294,7 +294,7 @@ describe('player', () => {
   });
 
   test('player: bms RANK=4 maps onto NORMAL windows (LR2 behavior)', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.rank = 4;
     const windows = resolveJudgeWindowsMs(json);
     expect(windows.pgreat).toBeCloseTo(18, 6);
@@ -304,7 +304,7 @@ describe('player', () => {
   });
 
   test('player: scales judge windows from bms DEFEXRANK via the LR2 anchor interpolation', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.rank = 0;
     json.bms.defExRank = 120; // percent 90 — between NORMAL (75) and EASY (100)
     const windows = resolveJudgeWindowsMs(json);
@@ -315,15 +315,15 @@ describe('player', () => {
   });
 
   test('player: resolves displayed judge rank from bms DEFEXRANK and defaults', () => {
-    const defExRankChart = createEmptyJson('bms');
+    const defExRankChart = createEmptyJSON('bms');
     defExRankChart.metadata.rank = 1;
     defExRankChart.bms.defExRank = 199.97;
     expect(resolveDisplayedJudgeRankValue(defExRankChart)).toBe(199.97);
 
-    const defaultChart = createEmptyJson('bms');
+    const defaultChart = createEmptyJSON('bms');
     expect(resolveDisplayedJudgeRankValue(defaultChart)).toBe(2);
 
-    const truncatedRankChart = createEmptyJson('bms');
+    const truncatedRankChart = createEmptyJSON('bms');
     truncatedRankChart.metadata.rank = 3.9;
     expect(resolveDisplayedJudgeRankValue(truncatedRankChart)).toBe(3);
   });
@@ -344,12 +344,12 @@ describe('player', () => {
     json.bms.defExRank = 120;
     expect(resolveDisplayedJudgeRankLabel(resolveChart(json))).toBe('120');
 
-    const bmson = createEmptyJson('bmson');
+    const bmson = createEmptyJSON('bmson');
     expect(resolveDisplayedJudgeRankLabel(resolveChart(bmson))).toBe('100');
   });
 
   test('player: resolves displayed judge rank from bmson judge rank', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     expect(resolveDisplayedJudgeRankValue(json)).toBe(100);
 
     json.bmson.info.judgeRank = 199.97;
@@ -382,7 +382,7 @@ describe('player', () => {
   });
 
   test('player: uses NORMAL windows for bmson judge_rank=100', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     json.bmson.info.judgeRank = 100;
     const windows = resolveJudgeWindowsMs(json);
     expect(windows.pgreat).toBeCloseTo(18, 6);
@@ -392,7 +392,7 @@ describe('player', () => {
   });
 
   test('player: debug judge window override affects BAD only', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.rank = 4;
     const windows = resolveJudgeWindowsMs(json, 180);
     expect(windows.pgreat).toBeCloseTo(18, 6);

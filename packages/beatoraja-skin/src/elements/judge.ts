@@ -164,7 +164,7 @@ export function expandBeatorajaJudgeDestinations(
    *
    * Mirrors upstream `JsonPlaySkinObjectLoader.java:220-221`'s instantiation guard:
    *
-   *     for (JsonSkin.Judge judge : sk.judge) {
+   *     for (JSONSkin.Judge judge : sk.judge) {
    *         if (dst.id.equals(judge.id)) { ... instantiate ... }
    *     }
    *

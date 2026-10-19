@@ -172,7 +172,7 @@ describe('normalizeBeatorajaDestinations', () => {
   });
 
   it('expands `{if, value}` keyframe wrappers inline (default play5.json judge popup)', () => {
-    // Mirrors upstream `JsonSkinSerializer.ArraySerializer.read` (lines 222-252): a dst[]
+    // Mirrors upstream `JSONSkinSerializer.ArraySerializer.read` (lines 222-252): a dst[]
     // element shaped `{"if": [...], "value": {...}}` is a CONDITIONAL INSERT — the wrapper
     // expands to its inner `value` when the `if` test passes, drops entirely otherwise. Default
     // play5.json's judge popup uses this for per-side rect placement:
@@ -222,7 +222,7 @@ describe('normalizeBeatorajaDestinations', () => {
   });
 
   it('expands `{if, values}` keyframe wrappers (multi-keyframe insert per match)', () => {
-    // Upstream `JsonSkinSerializer.ArraySerializer.read` line 239-242 inserts ALL of `values`
+    // Upstream `JSONSkinSerializer.ArraySerializer.read` line 239-242 inserts ALL of `values`
     // when the `if` matches — used by skins that authoring a multi-frame animation segment
     // conditionally. Mirrors `Collections.addAll(items, json.readValue(cls, values))`.
     const out = normalizeBeatorajaDestinations(
@@ -334,7 +334,7 @@ describe('sampleBeatorajaDestination', () => {
   });
 
   it('default loop is 0 (NOT -1) so omitting `loop` keeps a length-1 dst visible (regression)', () => {
-    // Beatoraja's `JsonSkin.Destination.loop` is a Java int with no explicit default → `0`.
+    // Beatoraja's `JSONSkin.Destination.loop` is a Java int with no explicit default → `0`.
     // Authors that author a static element as a single-keyframe dst with no `loop` field rely
     // on this default to keep the element visible across the whole scene. Our parser
     // previously defaulted to `-1`, which combined with the audit-1.6 length-1 single-frame
@@ -618,8 +618,8 @@ describe('applyBeatorajaOffsetAlpha (audit A-10 — per-step clamp matches SkinO
 });
 
 describe('normalizeBeatorajaDestinations — mouseRect (audit C-12)', () => {
-  it('parses {x, y, w, h} as a Rect object (matches JsonSkin.Rect)', () => {
-    // Mirrors `JsonSkinObjectLoader.java:723-725` — `dst.mouseRect` is a `Rect` object,
+  it('parses {x, y, w, h} as a Rect object (matches JSONSkin.Rect)', () => {
+    // Mirrors `JSONSkinObjectLoader.java:723-725` — `dst.mouseRect` is a `Rect` object,
     // NOT an integer index. Previous TS impl read it as `numberField(f, 'mouseRect', -1)`
     // which silently dropped the 4 component values.
     const out = normalizeBeatorajaDestinations([

@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { ANSI_RESET } from './ansi-text.ts';
 import {
-  renderLaneBlockWithBga,
+  renderLaneBlockWithBGA,
   renderLaneBlockWithKittyPadding,
   renderLaneLinesWithProgressIndicators,
   resolveGrooveGaugeLeftPadding,
 } from './lane-block.ts';
 
-function stripAnsi(value: string): string {
+function stripANSI(value: string): string {
   // eslint-disable-next-line no-control-regex
   return value.replaceAll(/\u001b\[[0-9;]*m/g, '');
 }
@@ -24,7 +24,7 @@ describe('resolveGrooveGaugeLeftPadding', () => {
 describe('renderLaneLinesWithProgressIndicators', () => {
   test('draws the indicator beside the lane rows, lit at the play position', () => {
     const lines = renderLaneLinesWithProgressIndicators(['a', 'b', 'c'], 0, 10, 0, 2, false);
-    expect(lines.map(stripAnsi)).toEqual(['┃a', '┃b', '┃c']);
+    expect(lines.map(stripANSI)).toEqual(['┃a', '┃b', '┃c']);
     expect(lines[0]).toContain('\u001b[38;2;255;186;54m');
     expect(lines[1]).toContain('\u001b[38;2;18;18;18m');
     const ended = renderLaneLinesWithProgressIndicators(['a', 'b', 'c'], 10, 10, 0, 2, false);
@@ -32,20 +32,20 @@ describe('renderLaneLinesWithProgressIndicators', () => {
   });
 
   test('pads the rows outside the indicator range and can draw it on both sides', () => {
-    expect(renderLaneLinesWithProgressIndicators(['a', 'b'], 0, 10, 1, 1, true).map(stripAnsi)).toEqual([' a ', '┃b┃']);
+    expect(renderLaneLinesWithProgressIndicators(['a', 'b'], 0, 10, 1, 1, true).map(stripANSI)).toEqual([' a ', '┃b┃']);
     expect(renderLaneLinesWithProgressIndicators([], 0, 10, 0, 0, true)).toEqual([]);
   });
 });
 
-describe('renderLaneBlockWithBga', () => {
+describe('renderLaneBlockWithBGA', () => {
   test('keeps the lanes alone without a BGA', () => {
     const laneLines = ['L1', 'L2'];
-    expect(renderLaneBlockWithBga(laneLines)).toBe(laneLines);
-    expect(renderLaneBlockWithBga(laneLines, [])).toBe(laneLines);
+    expect(renderLaneBlockWithBGA(laneLines)).toBe(laneLines);
+    expect(renderLaneBlockWithBGA(laneLines, [])).toBe(laneLines);
   });
 
   test('draws the BGA backgrounds beside the lanes, centered and padded in black', () => {
-    expect(renderLaneBlockWithBga(['L1', 'L2', 'L3'], [`\u001b[48;2;10;20;30m  ${ANSI_RESET}`])).toEqual([
+    expect(renderLaneBlockWithBGA(['L1', 'L2', 'L3'], [`\u001b[48;2;10;20;30m  ${ANSI_RESET}`])).toEqual([
       `L1   ${BLACK_CELLS}`,
       `L2   \u001b[48;2;10;20;30m  ${ANSI_RESET}`,
       `L3   ${BLACK_CELLS}`,

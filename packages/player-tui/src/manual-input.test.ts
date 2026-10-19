@@ -159,12 +159,12 @@ describe('manual input', () => {
   });
 
   test('manual-input: takes the lane mode from the lanes in use, not the `.bme` extension', () => {
-    const fiveKeySp = ['16', '11', '12', '13', '14', '15'];
-    expect(createLaneBindings(['11'], { chartExtension: '.bms' }).map((binding) => binding.channel)).toEqual(fiveKeySp);
+    const fiveKeySP = ['16', '11', '12', '13', '14', '15'];
+    expect(createLaneBindings(['11'], { chartExtension: '.bms' }).map((binding) => binding.channel)).toEqual(fiveKeySP);
     // A `.bme` chart without a 6 / 7 key column is 5 KEY like beatoraja reads it, not 7 KEY.
-    expect(createLaneBindings(['11'], { chartExtension: '.bme' }).map((binding) => binding.channel)).toEqual(fiveKeySp);
+    expect(createLaneBindings(['11'], { chartExtension: '.bme' }).map((binding) => binding.channel)).toEqual(fiveKeySP);
     expect(createLaneBindings(['11', '21'], { chartExtension: '.bme' }).map((binding) => binding.channel)).toEqual([
-      ...fiveKeySp,
+      ...fiveKeySP,
       '21',
       '22',
       '23',

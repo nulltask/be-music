@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 // The engine writes to a mocked Node audio sink (shared state in test-support/player-fixtures.ts).
 vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
 
-import { createEmptyJson } from '../../json/src/index.ts';
+import { createEmptyJSON } from '../../json/src/index.ts';
 import { parseChart } from '../../parser/src/index.ts';
 import { autoPlay, manualPlay } from './index.ts';
 import { preparePlaybackChartData } from './core/bootstrap.ts';
@@ -22,7 +22,7 @@ describe('player', () => {
     // lr2oraja `MultiBadCollector`: one press at 1.15 s sits 150 ms after the `11` note and 150 ms before the `12`
     // note — inside BAD (±200 ms at `#RANK 2`) but outside GOOD (±100 ms) for both. LR2 BADs both; beatoraja has
     // no collector, so its press consumes one note and the other misses on its own deadline.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.metadata.rank = 2;
     json.events = [
@@ -46,7 +46,7 @@ describe('player', () => {
   });
 
   test('player: recordPlaylog stamps the chart hash and judge ruleset into the playlog', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
@@ -57,7 +57,7 @@ describe('player', () => {
       audio: false,
       tui: false,
       judgeRuleset: 'iidx',
-      recordPlaylog: { chartSha256: 'ABCDEF0123456789' },
+      recordPlaylog: { chartSHA256: 'ABCDEF0123456789' },
       onPlaylogRecorded: (recorded) => {
         playlog = recorded;
       },
@@ -74,7 +74,7 @@ describe('player', () => {
   });
 
   test('player: ESC-interrupted play records an aborted playlog', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
@@ -132,7 +132,7 @@ describe('player', () => {
   });
 
   test('player: blank press between same-lane notes plays the previous keysound, not the next pending keysound', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.resources.wav = {
       '01': 'a.wav',
@@ -188,7 +188,7 @@ describe('player', () => {
   });
 
   test('player: invisible objects update the same-lane fallback keysound', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.resources.wav = {
       '01': 'a.wav',
@@ -245,7 +245,7 @@ describe('player', () => {
   });
 
   test('player: invisible objects do not auto-trigger without lane input in manual play', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.resources.wav = {
       '03': 'invisible.wav',

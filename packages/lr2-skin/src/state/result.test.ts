@@ -1,8 +1,8 @@
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import type { CourseView, PlayResult } from '@be-music/scene-model';
 import { describe, expect, it } from 'vite-plus/test';
 import { LR2_NUM, LR2_OP, LR2_TEXT, LR2_TIMER } from '../ids/index.ts';
-import { resolveLr2GraphReveal, resolveLr2ResultState, resolveLr2ResultTimers } from './result.ts';
+import { resolveLR2GraphReveal, resolveLR2ResultState, resolveLR2ResultTimers } from './result.ts';
 
 /** The facts of the skins a result is shown with: the played skin's `#FLIPRESULT` and the result skin's options. */
 interface SkinFacts {
@@ -16,7 +16,7 @@ function makeSkin(flipResult = false): SkinFacts {
 
 /** The result ops of `result` on a skin, for a result of `course` when given. */
 function resultOps(result: PlayResult, skin: SkinFacts, course?: CourseView): ReadonlySet<number> {
-  return resolveLr2ResultState({
+  return resolveLR2ResultState({
     result,
     ...(skin.flipResult !== undefined ? { flipResult: skin.flipResult } : {}),
     ...(skin.customOps !== undefined ? { customOps: skin.customOps } : {}),
@@ -49,7 +49,7 @@ interface ResultOverrides extends SongOverrides {
  * `song.chart.metadata.difficulty`. Other fields are filler so the type checks.
  */
 function makeResult(overrides: ResultOverrides = {}): PlayResult {
-  const chart: BeMusicJson = createEmptyJson();
+  const chart: BeMusicJSON = createEmptyJSON();
   if (overrides.modeHint !== undefined) {
     chart.bmson.info ??= {};
     chart.bmson.info.modeHint = overrides.modeHint;
@@ -100,11 +100,11 @@ function makeResult(overrides: ResultOverrides = {}): PlayResult {
   };
 }
 
-describe('resolveLr2ResultState ops', () => {
+describe('resolveLR2ResultState ops', () => {
   // -- CUSTOMOPTION defaults --------------------------------------- LITONE4 (and many 1920×1080 LR2 themes) gates a
   // large fraction of its result chrome on `#IF,<customOptionDefault>` blocks. The runtime op set MUST include the
   // skin's CUSTOMOPTION default values or those elements get filtered out at render time. Mirrors how
-  // `resolveLr2SelectState` / `resolveLr2PlayState` feed the same defaults into their op sets.
+  // `resolveLR2SelectState` / `resolveLR2PlayState` feed the same defaults into their op sets.
   describe('skin CUSTOMOPTION defaults', () => {
     it('adds every custom option to the op set', () => {
       const ops = resultOps(makeResult({ cleared: true }), { customOps: [984, 990, 996] });
@@ -327,10 +327,10 @@ describe('resolveLr2ResultState ops', () => {
   });
 });
 
-describe('resolveLr2ResultState values', () => {
+describe('resolveLR2ResultState values', () => {
   it('reads this play’s score, counts, rates, combo and time; nothing before it', () => {
     const result = { ...makeResult({ total: 100, exScore: 150, perfect: 60, bad: 2, poor: 3 }), maxCombo: 77 };
-    const state = resolveLr2ResultState({ result });
+    const state = resolveLR2ResultState({ result });
     expect(state.number(LR2_NUM.EXSCORE)).toBe(150);
     expect(state.number(LR2_NUM.BEST_EXSCORE)).toBe(150);
     expect(state.number(LR2_NUM.EXSCORE_MAX)).toBe(200);
@@ -351,20 +351,20 @@ describe('resolveLr2ResultState values', () => {
 
   it('truncates the best record’s rates (73, 85-89) as LR2 draws them', () => {
     // 179 of 200 points is 89.5 %; 2 of 3 notes PGREAT is 66.6… %, 1 of 3 GREAT 33.3… %.
-    const rated = resolveLr2ResultState({ result: makeResult({ total: 100, exScore: 179 }) });
+    const rated = resolveLR2ResultState({ result: makeResult({ total: 100, exScore: 179 }) });
     expect(rated.number(LR2_NUM.BEST_RATE)).toBe(89);
     const thirds = makeResult({ total: 3, exScore: 5, perfect: 2 });
-    const state = resolveLr2ResultState({ result: { ...thirds, score: { ...thirds.score, great: 1 } } });
+    const state = resolveLR2ResultState({ result: { ...thirds, score: { ...thirds.score, great: 1 } } });
     expect(state.number(LR2_NUM.BEST_PERFECT_RATE)).toBe(66);
     expect(state.number(LR2_NUM.BEST_GREAT_RATE)).toBe(33);
     expect(state.number(LR2_NUM.BEST_POOR_RATE)).toBe(0);
-    expect(resolveLr2ResultState({ result: makeResult({ total: 0, exScore: 0 }) }).number(LR2_NUM.BEST_RATE)).toBe(0);
+    expect(resolveLR2ResultState({ result: makeResult({ total: 0, exScore: 0 }) }).number(LR2_NUM.BEST_RATE)).toBe(0);
   });
 
   it('draws the rate over the notes judged on 102 / 103 and over every note on 115 / 116', () => {
     // A play that failed after 95 of 100 notes: 150 of the 190 points judged (78.94 %), of the 200 of the chart (75 %).
     const result = makeResult({ cleared: false, total: 100, exScore: 150, perfect: 60, bad: 2, poor: 3 });
-    const state = resolveLr2ResultState({ result: { ...result, score: { ...result.score, great: 30 } } });
+    const state = resolveLR2ResultState({ result: { ...result, score: { ...result.score, great: 30 } } });
     expect(state.number(LR2_NUM.SCORE_RATE)).toBe(78);
     expect(state.number(LR2_NUM.SCORE_RATE_AFTERDOT)).toBe(94);
     expect(state.number(LR2_NUM.TOTAL_RATE)).toBe(75);
@@ -373,14 +373,14 @@ describe('resolveLr2ResultState values', () => {
 
   it('reads the course’s stage levels and texts before the chart’s', () => {
     const course = { kind: 'grade' as const, title: 'Dan', stages: [{ title: 'A', level: 12 }] };
-    const state = resolveLr2ResultState({ result: makeResult(), course });
+    const state = resolveLR2ResultState({ result: makeResult(), course });
     expect(state.number(LR2_NUM.COURSE_STAGE1_LEVEL)).toBe(12);
     expect(state.text(LR2_TEXT.COURSE_TITLE)).toBe('Dan');
     expect(state.text(LR2_TEXT.TITLE)).toBe('Test');
   });
 
   it('draws the chart’s texts, the INSANE level among them', () => {
-    const state = resolveLr2ResultState({ result: makeResult({ difficulty: 5 }) });
+    const state = resolveLR2ResultState({ result: makeResult({ difficulty: 5 }) });
     expect(state.text(LR2_TEXT.RIVAL)).toBe('TARGET');
     expect(state.text(LR2_TEXT.TITLE)).toBe('Test');
     // Text 20 is the internet ranking's message on the result screen: none without one.
@@ -393,7 +393,7 @@ describe('resolveLr2ResultState values', () => {
 
   it('fills the bar graphs and sliders', () => {
     const result = { ...makeResult({ total: 100, exScore: 50 }), maxCombo: 25 };
-    const state = resolveLr2ResultState({ result });
+    const state = resolveLR2ResultState({ result });
     expect(state.bargraph(2)).toBe(0.25);
     expect(state.bargraph(6)).toBe(0.8);
     expect(state.bargraph(7)).toBe(0.25);
@@ -402,7 +402,7 @@ describe('resolveLr2ResultState values', () => {
   });
 });
 
-describe('resolveLr2ResultTimers', () => {
+describe('resolveLR2ResultTimers', () => {
   const frame = (nowMs: number, steps: { graphShownAtMs?: number; updateShownAtMs?: number } = {}) => ({
     clock: { nowMs, enteredAtMs: 1000 },
     inputOpenAtMs: 1300,
@@ -410,8 +410,8 @@ describe('resolveLr2ResultTimers', () => {
   });
 
   it('runs timer 0 from the entry, and timers 1 and 150 once input has opened', () => {
-    expect([...resolveLr2ResultTimers(frame(1299))]).toEqual([[LR2_TIMER.SCENE_START, 1000]]);
-    expect([...resolveLr2ResultTimers(frame(1300))]).toEqual([
+    expect([...resolveLR2ResultTimers(frame(1299))]).toEqual([[LR2_TIMER.SCENE_START, 1000]]);
+    expect([...resolveLR2ResultTimers(frame(1300))]).toEqual([
       [LR2_TIMER.SCENE_START, 1000],
       [LR2_TIMER.START_INPUT, 1300],
       [LR2_TIMER.RESULT_GRAPH_START, 1300],
@@ -419,24 +419,24 @@ describe('resolveLr2ResultTimers', () => {
   });
 
   it('runs timer 151 from when the graphs showed and timer 152 from when the record update did', () => {
-    const timers = resolveLr2ResultTimers(frame(5000, { graphShownAtMs: 2000, updateShownAtMs: 4000 }));
+    const timers = resolveLR2ResultTimers(frame(5000, { graphShownAtMs: 2000, updateShownAtMs: 4000 }));
     expect(timers.get(LR2_TIMER.RESULT_GRAPH_END)).toBe(2000);
     expect(timers.get(LR2_TIMER.RESULT_UPDATE)).toBe(4000);
-    expect(resolveLr2ResultTimers(frame(1500)).has(LR2_TIMER.RESULT_GRAPH_END)).toBe(false);
+    expect(resolveLR2ResultTimers(frame(1500)).has(LR2_TIMER.RESULT_GRAPH_END)).toBe(false);
   });
 });
 
-describe('resolveLr2GraphReveal', () => {
+describe('resolveLR2GraphReveal', () => {
   it('shows nothing before its timer or its start, then sweeps to all of it at its end', () => {
-    expect(resolveLr2GraphReveal(undefined, 500, 2000)).toBe(0);
-    expect(resolveLr2GraphReveal(499, 500, 2000)).toBe(0);
-    expect(resolveLr2GraphReveal(1250, 500, 2000)).toBe(0.5);
-    expect(resolveLr2GraphReveal(2000, 500, 2000)).toBe(1);
-    expect(resolveLr2GraphReveal(9000, 500, 2000)).toBe(1);
+    expect(resolveLR2GraphReveal(undefined, 500, 2000)).toBe(0);
+    expect(resolveLR2GraphReveal(499, 500, 2000)).toBe(0);
+    expect(resolveLR2GraphReveal(1250, 500, 2000)).toBe(0.5);
+    expect(resolveLR2GraphReveal(2000, 500, 2000)).toBe(1);
+    expect(resolveLR2GraphReveal(9000, 500, 2000)).toBe(1);
   });
 
   it('shows all of a graph whose end is not after its start, once started', () => {
-    expect(resolveLr2GraphReveal(0, 0, 0)).toBe(1);
-    expect(resolveLr2GraphReveal(100, 200, 200)).toBe(0);
+    expect(resolveLR2GraphReveal(0, 0, 0)).toBe(1);
+    expect(resolveLR2GraphReveal(100, 200, 200)).toBe(0);
   });
 });

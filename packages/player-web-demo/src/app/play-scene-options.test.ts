@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { ChartFileHashes } from '@be-music/player-web/collection';
 import type { PlaySceneSettings } from '@be-music/player-web/host';
 import type { CourseConstraint, CourseDefinition, CourseKind, CourseSource } from '@be-music/player/course';
@@ -12,7 +12,7 @@ import {
 } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { nextCourseStagePlay, startCourseRun } from '../course-flow.ts';
-import { resolvePlaySceneOptions, type PlaySceneGuiState, type PlaySceneOptionsInput } from './play-scene-options.ts';
+import { resolvePlaySceneOptions, type PlaySceneGUIState, type PlaySceneOptionsInput } from './play-scene-options.ts';
 import type { NonstopPlay } from './routes/nonstop.ts';
 
 function song(id: string): LibraryChart {
@@ -27,7 +27,7 @@ function song(id: string): LibraryChart {
     title: id,
     artist: 'artist',
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 
@@ -59,7 +59,7 @@ function course(
 const LR2CRS: CourseSource = { format: 'lr2crs', type: 0, header: '', hash: '' };
 
 /** The Debug Menu as a player left it: RANDOM on 1P, FLIP, auto scratch, the EASY gauge, a slower tempo. */
-function gui(changes: Partial<PlaySceneGuiState> = {}): PlaySceneGuiState {
+function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
   return {
     autoPlay: false,
     random1P: 'RANDOM',
@@ -79,14 +79,14 @@ function gui(changes: Partial<PlaySceneGuiState> = {}): PlaySceneGuiState {
     bgmVolume: 60,
     compressor: true,
     compressorKey: true,
-    compressorBgm: false,
+    compressorBGM: false,
     compressorMaster: true,
     bgaResizeMaxEdgePx: 0,
     bgaUseWebCodecs: false,
     showInvisibleNotes: false,
     judgedNoteDisplay: 'KEEP_SCROLLING',
     ...changes,
-  } as PlaySceneGuiState;
+  } as PlaySceneGUIState;
 }
 
 /** The play options in force: SUDDEN on 1P, HS-FIX, a lane cover and the BGA off. */
@@ -149,8 +149,8 @@ describe('resolvePlaySceneOptions: a single play', () => {
       tempoPitchMode: 'pitch',
       tempoStretchAlgorithm: 'wsola',
       judgeRuleset: 'lr2',
-      chartSha256: HASHES.sha256,
-      chartMd5: HASHES.md5,
+      chartSHA256: HASHES.sha256,
+      chartMD5: HASHES.md5,
       playlogRecorder: RECORDER,
       replayView: { tempo: true, hiSpeed: true, covers: true, lift: true },
       audioVolumes: { key: 0.8, bgm: 0.6 },
@@ -174,8 +174,8 @@ describe('resolvePlaySceneOptions: a single play', () => {
 
   test('a play with no chart hashes records none', () => {
     const { settings } = resolvePlaySceneOptions(input());
-    expect(settings).not.toHaveProperty('chartSha256');
-    expect(settings).not.toHaveProperty('chartMd5');
+    expect(settings).not.toHaveProperty('chartSHA256');
+    expect(settings).not.toHaveProperty('chartMD5');
   });
 
   test('a BGA resize cap passes on when set, and the replay view is a copy the play cannot change', () => {

@@ -1,4 +1,4 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { resolveChart, resolveChartPlayVariant } from '@be-music/chart';
 import type { LibraryChart } from './song.ts';
 
@@ -9,8 +9,8 @@ import type { LibraryChart } from './song.ts';
 export interface SongStats {
   /** Seconds from the chart's start to the last playable note's end. */
   lengthSeconds: number;
-  minBpm: number;
-  maxBpm: number;
+  minBPM: number;
+  maxBPM: number;
   longNotes: number;
   mines: number;
   /** Whether the chart has STOP sequences. */
@@ -23,7 +23,7 @@ export interface SongStats {
   judgeRank: string;
 }
 
-const STATS = new WeakMap<BeMusicJson, SongStats>();
+const STATS = new WeakMap<BeMusicJSON, SongStats>();
 
 /** {@link SongStats} for a song, computed once per chart (the select screen asks every frame). */
 export function resolveSongStats(song: Pick<LibraryChart, 'chart' | 'bpm'>): SongStats {
@@ -34,17 +34,17 @@ export function resolveSongStats(song: Pick<LibraryChart, 'chart' | 'bpm'>): Son
   return stats;
 }
 
-function computeSongStats(chart: BeMusicJson, fallbackBpm: number | undefined): SongStats {
+function computeSongStats(chart: BeMusicJSON, fallbackBPM: number | undefined): SongStats {
   let lengthSeconds = 0;
   let longNotes = 0;
   let mines = 0;
-  let minBpm = Number.POSITIVE_INFINITY;
-  let maxBpm = 0;
+  let minBPM = Number.POSITIVE_INFINITY;
+  let maxBPM = 0;
   let stops = false;
   let rankChanges = false;
   try {
     // The song list sees the chart before any `#RANDOM` draw: only its unconditional content counts.
-    const resolved = resolveChart(chart, { inferBmsLnTypeWhenMissing: true });
+    const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: true });
     for (const note of resolved.notes) {
       lengthSeconds = Math.max(lengthSeconds, note.endSeconds ?? note.seconds);
       if (note.endBeat !== undefined) longNotes += 1;
@@ -55,21 +55,21 @@ function computeSongStats(chart: BeMusicJson, fallbackBpm: number | undefined): 
       // Zero / negative tempos are stop-like gimmicks, not a tempo the player reads.
       if (!(point.bpm > 0) || !Number.isFinite(point.bpm)) continue;
       // Only tempos in effect before the last note count — a closing tempo change after it never plays.
-      if (point.seconds > lengthSeconds && minBpm !== Number.POSITIVE_INFINITY) continue;
-      minBpm = Math.min(minBpm, point.bpm);
-      maxBpm = Math.max(maxBpm, point.bpm);
+      if (point.seconds > lengthSeconds && minBPM !== Number.POSITIVE_INFINITY) continue;
+      minBPM = Math.min(minBPM, point.bpm);
+      maxBPM = Math.max(maxBPM, point.bpm);
     }
     stops = timing.stopPoints.some((stop) => stop.seconds > 0 && stop.seconds <= lengthSeconds);
     rankChanges = resolved.judgeRank.changes.length > 0;
   } catch {
     // A chart the timing pass can't read still lists; it just shows no extra facts.
   }
-  if (minBpm === Number.POSITIVE_INFINITY) {
-    const bpm = fallbackBpm !== undefined && fallbackBpm > 0 ? fallbackBpm : 0;
-    minBpm = bpm;
-    maxBpm = bpm;
+  if (minBPM === Number.POSITIVE_INFINITY) {
+    const bpm = fallbackBPM !== undefined && fallbackBPM > 0 ? fallbackBPM : 0;
+    minBPM = bpm;
+    maxBPM = bpm;
   }
-  return { lengthSeconds, minBpm, maxBpm, longNotes, mines, stops, judgeRank: judgeRankLabel(chart, rankChanges) };
+  return { lengthSeconds, minBPM, maxBPM, longNotes, mines, stops, judgeRank: judgeRankLabel(chart, rankChanges) };
 }
 
 const JUDGE_RANK_NAMES = ['VERY HARD', 'HARD', 'NORMAL', 'EASY', 'VERY EASY'] as const;
@@ -79,7 +79,7 @@ const JUDGE_RANK_NAMES = ['VERY HARD', 'HARD', 'NORMAL', 'EASY', 'VERY EASY'] as
  * `@be-music/player`'s `utils.ts`): a positive `#DEFEXRANK` / bmson `judge_rank` wins, then `#RANK` 0–4 (truncated),
  * then the format's default.
  */
-function judgeRankLabel(chart: BeMusicJson, changes: boolean): string {
+function judgeRankLabel(chart: BeMusicJSON, changes: boolean): string {
   if (changes) return 'RANDOM';
   const exRank = chart.sourceFormat === 'bmson' ? chart.bmson.info.judgeRank : chart.bms.defExRank;
   if (typeof exRank === 'number' && Number.isFinite(exRank) && exRank > 0) {
@@ -103,9 +103,9 @@ export function formatSongLength(seconds: number): string {
 }
 
 /** `150`, or `120-240` for a chart whose tempo changes. */
-export function formatBpmRange(minBpm: number, maxBpm: number): string {
-  const low = Math.round(minBpm);
-  const high = Math.round(maxBpm);
+export function formatBPMRange(minBPM: number, maxBPM: number): string {
+  const low = Math.round(minBPM);
+  const high = Math.round(maxBPM);
   if (high <= 0) return '-';
   return low === high ? String(high) : `${low}-${high}`;
 }
@@ -114,7 +114,7 @@ export function formatBpmRange(minBpm: number, maxBpm: number): string {
 export function resolveSongTags(stats: SongStats): string[] {
   const tags: string[] = [];
   if (stats.longNotes > 0) tags.push('LN');
-  if (Math.round(stats.minBpm) !== Math.round(stats.maxBpm)) tags.push('SOFLAN');
+  if (Math.round(stats.minBPM) !== Math.round(stats.maxBPM)) tags.push('SOFLAN');
   if (stats.stops) tags.push('STOP');
   if (stats.mines > 0) tags.push('MINE');
   return tags;
@@ -133,7 +133,7 @@ export function resolveSongRowFacts(song: Pick<LibraryChart, 'chart' | 'bpm' | '
   return {
     notes: String(Math.max(0, song.totalNotes)),
     length: formatSongLength(stats.lengthSeconds),
-    bpm: formatBpmRange(stats.minBpm, stats.maxBpm),
+    bpm: formatBPMRange(stats.minBPM, stats.maxBPM),
     tags: resolveSongTags(stats),
   };
 }

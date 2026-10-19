@@ -1,5 +1,5 @@
-import { createEmptyJson } from '@be-music/json';
-import { parseLr2CourseFile } from '@be-music/player/course';
+import { createEmptyJSON } from '@be-music/json';
+import { parseLR2CourseFile } from '@be-music/player/course';
 import type { SelectScene } from '@be-music/player-web/host';
 import type { BeMusicCoursePlaylog, BeMusicPlaylog, PlaylogCourseResult } from '@be-music/player/playlog';
 import type { LibraryChart, LibraryCourse, PlayResult } from '@be-music/scene-model';
@@ -29,7 +29,7 @@ function song(title: string): LibraryChart {
     fileLabel: `${title}.bms`,
     title,
     totalNotes: 10,
-    chart: createEmptyJson('bms'),
+    chart: createEmptyJSON('bms'),
   };
 }
 
@@ -173,7 +173,7 @@ describe('describeBar', () => {
       title: 'Fixture A',
       lamp: 'HARD',
     });
-    const [definition] = parseLr2CourseFile(
+    const [definition] = parseLR2CourseFile(
       `<courselist><course><title>C</title><type>2</type><hash>${'0'.repeat(32)}${'1'.repeat(32)}${'2'.repeat(32)}</hash></course></courselist>`,
     );
     const course: LibraryCourse = {

@@ -1,26 +1,26 @@
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { Texture } from 'pixi.js';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserSongAssetSource } from '../collection/types.ts';
 import {
-  collectPlayBgaResources,
-  loadPlayBga,
-  registerSubRegionBgaTextures,
-  resolvePoorBgaFallbackKey,
-  resolvePoorBgaMode,
-  type PlayBgaResources,
+  collectPlayBGAResources,
+  loadPlayBGA,
+  registerSubRegionBGATextures,
+  resolvePoorBGAFallbackKey,
+  resolvePoorBGAMode,
+  type PlayBGAResources,
 } from './play-bga.ts';
 
 const mocks = vi.hoisted(() => ({
   loadAssetBytes: vi.fn(),
-  resolveChartBgaAsset: vi.fn(),
+  resolveChartBGAAsset: vi.fn(),
   loadTextureFromBytes: vi.fn(),
   loadVideoTextureFromBytes: vi.fn(),
 }));
 
 vi.mock('../collection/collection.ts', () => ({
   loadAssetBytes: mocks.loadAssetBytes,
-  resolveChartBgaAsset: mocks.resolveChartBgaAsset,
+  resolveChartBGAAsset: mocks.resolveChartBGAAsset,
 }));
 
 vi.mock('../media/textures.ts', () => ({
@@ -30,46 +30,46 @@ vi.mock('../media/textures.ts', () => ({
 
 const SOURCE = {} as BrowserSongAssetSource;
 
-function bmsChart(bmp: Record<string, string>): BeMusicJson {
-  const chart = createEmptyJson('bms');
+function bmsChart(bmp: Record<string, string>): BeMusicJSON {
+  const chart = createEmptyJSON('bms');
   chart.resources.bmp = bmp;
   return chart;
 }
 
-function emptyResources(): PlayBgaResources {
+function emptyResources(): PlayBGAResources {
   return { textures: new Map(), layerTextures: new Map(), videos: new Map(), subRegionOrigins: new Map() };
 }
 
-describe('resolvePoorBgaMode', () => {
+describe('resolvePoorBGAMode', () => {
   test('parses 0..2 and treats a missing, unparsable or out-of-range value as 0', () => {
-    expect(resolvePoorBgaMode(undefined)).toBe(0);
-    expect(resolvePoorBgaMode('0')).toBe(0);
-    expect(resolvePoorBgaMode('1')).toBe(1);
-    expect(resolvePoorBgaMode(' 2 ')).toBe(2);
-    expect(resolvePoorBgaMode('02')).toBe(2);
-    expect(resolvePoorBgaMode('3')).toBe(0);
-    expect(resolvePoorBgaMode('-1')).toBe(0);
-    expect(resolvePoorBgaMode('abc')).toBe(0);
-    expect(resolvePoorBgaMode('')).toBe(0);
+    expect(resolvePoorBGAMode(undefined)).toBe(0);
+    expect(resolvePoorBGAMode('0')).toBe(0);
+    expect(resolvePoorBGAMode('1')).toBe(1);
+    expect(resolvePoorBGAMode(' 2 ')).toBe(2);
+    expect(resolvePoorBGAMode('02')).toBe(2);
+    expect(resolvePoorBGAMode('3')).toBe(0);
+    expect(resolvePoorBGAMode('-1')).toBe(0);
+    expect(resolvePoorBGAMode('abc')).toBe(0);
+    expect(resolvePoorBGAMode('')).toBe(0);
   });
 });
 
-describe('resolvePoorBgaFallbackKey', () => {
+describe('resolvePoorBGAFallbackKey', () => {
   test('uses #BMP00 as the POOR image unless #POORBGA is 2', () => {
-    expect(resolvePoorBgaFallbackKey(bmsChart({ '00': 'miss.bmp' }))).toBe('00');
-    expect(resolvePoorBgaFallbackKey(bmsChart({ '01': 'a.bmp' }))).toBeUndefined();
+    expect(resolvePoorBGAFallbackKey(bmsChart({ '00': 'miss.bmp' }))).toBe('00');
+    expect(resolvePoorBGAFallbackKey(bmsChart({ '01': 'a.bmp' }))).toBeUndefined();
     for (const value of ['0', '1', 'x', '5']) {
       const chart = bmsChart({ '00': 'miss.bmp' });
-      chart.bms.poorBga = value;
-      expect(resolvePoorBgaFallbackKey(chart)).toBe('00');
+      chart.bms.poorBGA = value;
+      expect(resolvePoorBGAFallbackKey(chart)).toBe('00');
     }
     const hidden = bmsChart({ '00': 'miss.bmp' });
-    hidden.bms.poorBga = '2';
-    expect(resolvePoorBgaFallbackKey(hidden)).toBeUndefined();
+    hidden.bms.poorBGA = '2';
+    expect(resolvePoorBGAFallbackKey(hidden)).toBeUndefined();
   });
 });
 
-describe('collectPlayBgaResources', () => {
+describe('collectPlayBGAResources', () => {
   test('maps the referenced keys to their files, per track, with sub-region sources and the POOR fallback', () => {
     const chart = bmsChart({
       '00': 'miss.bmp',
@@ -79,7 +79,7 @@ describe('collectPlayBgaResources', () => {
       '04': 'src.png',
     });
     chart.bms.bga = { '05': '04 0 0 16 16 0 0' };
-    const resources = collectPlayBgaResources(
+    const resources = collectPlayBGAResources(
       chart,
       {
         base: [{ seconds: 0, bmpKey: '01' }],
@@ -102,9 +102,9 @@ describe('collectPlayBgaResources', () => {
   });
 
   test('loads a bmson BGA by its header name', () => {
-    const chart = createEmptyJson('bmson');
+    const chart = createEmptyJSON('bmson');
     chart.bmson.bga.header = [{ id: 1, name: 'movie.mp4' }];
-    const resources = collectPlayBgaResources(
+    const resources = collectPlayBGAResources(
       chart,
       { base: [{ seconds: 0, bmpKey: 'movie.mp4' }], layer: [], poor: [] },
       undefined,
@@ -113,10 +113,10 @@ describe('collectPlayBgaResources', () => {
   });
 });
 
-describe('loadPlayBga', () => {
+describe('loadPlayBGA', () => {
   beforeEach(() => {
     for (const mock of Object.values(mocks)) mock.mockReset();
-    mocks.resolveChartBgaAsset.mockImplementation((_source, _chartPath, path: string) => ({ entry: path, path }));
+    mocks.resolveChartBGAAsset.mockImplementation((_source, _chartPath, path: string) => ({ entry: path, path }));
     mocks.loadAssetBytes.mockImplementation(async (path: string) => new TextEncoder().encode(path));
     mocks.loadTextureFromBytes.mockImplementation(async () => new Texture());
   });
@@ -124,7 +124,7 @@ describe('loadPlayBga', () => {
   test('keys the layer track black out for BMS but not for bmson', async () => {
     const timeline = { base: [{ seconds: 0, bmpKey: '01' }], layer: [{ seconds: 0, bmpKey: '01' }], poor: [] };
     const into = emptyResources();
-    await loadPlayBga({
+    await loadPlayBGA({
       chart: bmsChart({ '01': 'a.bmp' }),
       source: SOURCE,
       chartPath: 'x.bms',
@@ -138,9 +138,9 @@ describe('loadPlayBga', () => {
     expect(into.layerTextures.has('01')).toBe(true);
 
     mocks.loadTextureFromBytes.mockClear();
-    const bmson = createEmptyJson('bmson');
+    const bmson = createEmptyJSON('bmson');
     bmson.bmson.bga.header = [{ id: 1, name: 'a.png' }];
-    await loadPlayBga({
+    await loadPlayBGA({
       chart: bmson,
       source: SOURCE,
       chartPath: 'x.bmson',
@@ -154,10 +154,10 @@ describe('loadPlayBga', () => {
   test('starts a video paused at the play tempo, under the file name it was found as', async () => {
     const video = { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 };
     const texture = new Texture();
-    mocks.resolveChartBgaAsset.mockReturnValue({ entry: 'bga.mp4', path: 'bga.mp4' });
-    mocks.loadVideoTextureFromBytes.mockResolvedValue({ video, texture, objectUrl: 'blob:1' });
+    mocks.resolveChartBGAAsset.mockReturnValue({ entry: 'bga.mp4', path: 'bga.mp4' });
+    mocks.loadVideoTextureFromBytes.mockResolvedValue({ video, texture, objectURL: 'blob:1' });
     const into = emptyResources();
-    await loadPlayBga({
+    await loadPlayBGA({
       chart: bmsChart({ '01': 'bga.mpg' }),
       source: SOURCE,
       chartPath: 'x.bms',
@@ -172,14 +172,14 @@ describe('loadPlayBga', () => {
     expect(video.pause).toHaveBeenCalled();
     expect(video.playbackRate).toBe(1.25);
     expect(video.defaultPlaybackRate).toBe(1.25);
-    expect(into.videos.get('01')).toEqual({ video, objectUrl: 'blob:1' });
+    expect(into.videos.get('01')).toEqual({ video, objectURL: 'blob:1' });
     expect(into.textures.get('01')).toBe(texture);
     expect(into.layerTextures.has('01')).toBe(false);
   });
 
   test('loads nothing once the play is cancelled', async () => {
     const into = emptyResources();
-    await loadPlayBga({
+    await loadPlayBGA({
       chart: bmsChart({ '01': 'a.bmp' }),
       source: SOURCE,
       chartPath: 'x.bms',
@@ -193,14 +193,14 @@ describe('loadPlayBga', () => {
   });
 });
 
-describe('registerSubRegionBgaTextures', () => {
+describe('registerSubRegionBGATextures', () => {
   test('cuts a view of the loaded source on its track and records the placement', () => {
     const chart = bmsChart({ '04': 'src.png' });
     chart.bms.bga = { '05': '04 8 4 24 20 10 12', '06': '09 0 0 16 16 0 0' };
     const into = emptyResources();
     const source = new Texture();
     into.layerTextures.set('04', source);
-    registerSubRegionBgaTextures(chart, into);
+    registerSubRegionBGATextures(chart, into);
     const view = into.layerTextures.get('05');
     expect(view?.source).toBe(source.source);
     expect(view?.frame).toMatchObject({ x: 8, y: 4, width: 16, height: 16 });

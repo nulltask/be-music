@@ -1,4 +1,4 @@
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaylog } from '../playlog/format.ts';
 import { rulesetChartFactsFromPlaylog } from '../playlog/rulesets.ts';
@@ -7,7 +7,7 @@ import {
   countBaseNotes,
   createEmptyRulesetNoteCounts,
   resolveBeatorajaDefaultTotal,
-  resolveLr2DefaultTotal,
+  resolveLR2DefaultTotal,
   resolveRuleset,
   rulesetChartFactsFromChart,
   type RulesetChartFacts,
@@ -95,7 +95,7 @@ describe('ruleset/facts', () => {
 
 describe('ruleset/beatoraja bmson judge_rank default', () => {
   test('a bmson chart without `judge_rank` judges like `judge_rank: 100` (the bmson default), not like #RANK 2', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     expect(json.bmson.info.judgeRank).toBeUndefined();
     const chart = { scorableNotes: [], laneDisplayMode: '7 KEY SP' };
     const absent = resolveRuleset(rulesetChartFactsFromChart(json, chart), 'beatoraja').windows;
@@ -121,7 +121,7 @@ describe('ruleset/beatoraja bmson judge_rank default', () => {
 
 describe('effective TOTAL', () => {
   // 100 base notes: LR2 default (100 / 5 + 200) × 0.8 = 176; beatoraja default max(260, 760.5 / 7.5) = 260.
-  const lr2Default = resolveLr2DefaultTotal(100);
+  const lr2Default = resolveLR2DefaultTotal(100);
   const beatorajaDefault = resolveBeatorajaDefaultTotal(100);
   const defaults = { lr2: lr2Default, beatoraja: beatorajaDefault, iidx: lr2Default } as const;
 
@@ -173,7 +173,7 @@ describe('effective TOTAL', () => {
 describe('ruleset chart-facts adapters agree', () => {
   test('the engine adapter and the play-log adapter derive the same facts from one chart', () => {
     // A live play and a replay of that same play must resolve the SAME ruleset, so the two adapters have to agree.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.rank = 2;
     json.metadata.total = 300;
     json.bms.lnMode = 2;
@@ -214,7 +214,7 @@ describe('ruleset chart-facts adapters agree', () => {
   });
 
   test('a bmson play and its replay resolve the same effective TOTAL', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     json.metadata.total = 150;
     const scorableNotes = [{ channel: '11', seconds: 1, beat: 0, judged: false, event: {} as never }] as never;
     const fromChart = rulesetChartFactsFromChart(json, { scorableNotes, laneDisplayMode: '7keys' });
@@ -240,7 +240,7 @@ describe('ruleset chart-facts adapters agree', () => {
       const live = resolveRuleset(fromChart, id).effectiveTotal;
       expect(resolveRuleset(fromPlaylog, id).effectiveTotal).toBe(live);
       // 150 % of the ruleset's default for one note, never an absolute TOTAL 150.
-      const fallback = id === 'beatoraja' ? resolveBeatorajaDefaultTotal(1) : resolveLr2DefaultTotal(1);
+      const fallback = id === 'beatoraja' ? resolveBeatorajaDefaultTotal(1) : resolveLR2DefaultTotal(1);
       expect(live).toBeCloseTo(fallback * 1.5, 9);
     }
   });

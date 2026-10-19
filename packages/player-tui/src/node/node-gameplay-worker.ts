@@ -1,7 +1,7 @@
 import { effect } from 'alien-signals';
 import { createAbortError } from '@be-music/utils/core';
 import type { LogEntry, LogLevel } from '@be-music/utils/log';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import {
   resolveDisplayedJudgeRankLabel,
@@ -13,18 +13,18 @@ import {
   manualPlay,
   PlayerInterruptedError,
   type CreatePlayerInputRuntimeContext,
-  type CreatePlayerUiRuntimeContext,
+  type CreatePlayerUIRuntimeContext,
   type PlayerInputRuntime,
   type PlayerLoadProgress,
 } from '@be-music/player';
-import { createDeferredUiFlush } from './deferred-ui-flush.ts';
-import { createUiFramePatchBuilder } from './ui-frame-patch.ts';
+import { createDeferredUIFlush } from './deferred-ui-flush.ts';
+import { createUIFramePatchBuilder } from './ui-frame-patch.ts';
 import type {
   NodeGameplayWorkerInboundMessage,
   NodeGameplayWorkerInitData,
   NodeGameplayWorkerOutboundMessage,
   NodeGameplayResolvedChartMetadata,
-  NodeGameplayUiRuntimeInit,
+  NodeGameplayUIRuntimeInit,
 } from './node-gameplay-worker-protocol.ts';
 
 const port = parentPort;
@@ -51,18 +51,18 @@ async function bootstrap(): Promise<void> {
 
   const abortController = new AbortController();
   let bridgedInputContext: CreatePlayerInputRuntimeContext | undefined;
-  let nextUiRequestId = 0;
+  let nextUIRequestId = 0;
 
-  const pendingUiInit = new Map<
+  const pendingUIInit = new Map<
     number,
     {
       resolve: (result: { enabled: boolean; port?: MessagePort; bgaPlaybackEndSeconds?: number }) => void;
       reject: (error: Error) => void;
-      onProgress: CreatePlayerUiRuntimeContext['onBgaLoadProgress'];
+      onProgress: CreatePlayerUIRuntimeContext['onBGALoadProgress'];
     }
   >();
-  const pendingUiStop = new Map<number, { resolve: () => void; reject: (error: Error) => void }>();
-  const pendingUiDispose = new Map<number, { resolve: () => void; reject: (error: Error) => void }>();
+  const pendingUIStop = new Map<number, { resolve: () => void; reject: (error: Error) => void }>();
+  const pendingUIDispose = new Map<number, { resolve: () => void; reject: (error: Error) => void }>();
 
   port.on('message', (message: NodeGameplayWorkerInboundMessage) => {
     if (message.kind === 'abort') {
@@ -82,13 +82,13 @@ async function bootstrap(): Promise<void> {
       return;
     }
     if (message.kind === 'ui-init-result') {
-      const pending = pendingUiInit.get(message.requestId);
+      const pending = pendingUIInit.get(message.requestId);
       if (!pending) {
         return;
       }
-      pendingUiInit.delete(message.requestId);
+      pendingUIInit.delete(message.requestId);
       if (typeof message.error === 'string' && message.error.length > 0) {
-        pending.reject(deserializeUiInitError(message.error, message.errorName));
+        pending.reject(deserializeUIInitError(message.error, message.errorName));
         return;
       }
       pending.resolve({
@@ -99,11 +99,11 @@ async function bootstrap(): Promise<void> {
       return;
     }
     if (message.kind === 'ui-bga-load-progress') {
-      const pending = pendingUiInit.get(message.requestId);
+      const pending = pendingUIInit.get(message.requestId);
       pending?.onProgress(message.progress);
       return;
     }
-    const pendingAcks = message.kind === 'ui-stop-result' ? pendingUiStop : pendingUiDispose;
+    const pendingAcks = message.kind === 'ui-stop-result' ? pendingUIStop : pendingUIDispose;
     const pending = pendingAcks.get(message.requestId);
     if (!pending) {
       return;
@@ -151,14 +151,14 @@ async function bootstrap(): Promise<void> {
     };
   };
 
-  const createUiRuntime = async (context: CreatePlayerUiRuntimeContext) => {
-    const initRequestId = nextUiRequestId;
-    nextUiRequestId += 1;
+  const createUIRuntime = async (context: CreatePlayerUIRuntimeContext) => {
+    const initRequestId = nextUIRequestId;
+    nextUIRequestId += 1;
     postLog('debug', 'ui.init.requested', {
       requestId: initRequestId,
       mode: context.mode,
     });
-    const uiInitResult = await requestUiInit(initRequestId, context, pendingUiInit);
+    const uiInitResult = await requestUIInit(initRequestId, context, pendingUIInit);
     postLog('info', 'ui.init.resolved', {
       requestId: initRequestId,
       enabled: uiInitResult.enabled,
@@ -183,64 +183,64 @@ async function bootstrap(): Promise<void> {
     }
     const bridgePort = uiInitResult.port;
 
-    const buildUiFramePatch = createUiFramePatchBuilder();
-    const postUiMessage = (
+    const buildUIFramePatch = createUIFramePatchBuilder();
+    const postUIMessage = (
       message:
         | { kind: 'start' }
-        | { kind: 'frame'; frame: ReturnType<typeof buildUiFramePatch> }
-        | { kind: 'commands'; commands: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['drainCommands']> }
+        | { kind: 'frame'; frame: ReturnType<typeof buildUIFramePatch> }
+        | { kind: 'commands'; commands: ReturnType<CreatePlayerUIRuntimeContext['uiSignals']['drainCommands']> }
         | { kind: 'set-paused'; value: boolean }
         | { kind: 'set-high-speed'; value: number }
-        | { kind: 'set-judge-combo'; state: ReturnType<CreatePlayerUiRuntimeContext['stateSignals']['getJudgeCombo']> }
+        | { kind: 'set-judge-combo'; state: ReturnType<CreatePlayerUIRuntimeContext['stateSignals']['getJudgeCombo']> }
         | { kind: 'trigger-poor'; seconds: number }
         | { kind: 'clear-poor' },
     ): void => {
       bridgePort.postMessage(message);
     };
-    const createUiFrameMessage = (
-      frame: ReturnType<CreatePlayerUiRuntimeContext['uiSignals']['getFrame']>,
-    ): { kind: 'frame'; frame: ReturnType<typeof buildUiFramePatch> } => ({
+    const createUIFrameMessage = (
+      frame: ReturnType<CreatePlayerUIRuntimeContext['uiSignals']['getFrame']>,
+    ): { kind: 'frame'; frame: ReturnType<typeof buildUIFramePatch> } => ({
       kind: 'frame',
-      frame: buildUiFramePatch(frame),
+      frame: buildUIFramePatch(frame),
     });
 
     let disposed = false;
     let stopPromise: Promise<void> | undefined;
     let disposePromise: Promise<void> | undefined;
 
-    const deferredUiFlush = createDeferredUiFlush(({ commands, frame }) => {
+    const deferredUIFlush = createDeferredUIFlush(({ commands, frame }) => {
       if (commands) {
         const queuedCommands = context.uiSignals.drainCommands();
         if (queuedCommands.length > 0) {
-          postUiMessage({ kind: 'commands', commands: queuedCommands });
+          postUIMessage({ kind: 'commands', commands: queuedCommands });
         }
       }
       if (frame) {
-        postUiMessage(createUiFrameMessage(context.uiSignals.getFrame()));
+        postUIMessage(createUIFrameMessage(context.uiSignals.getFrame()));
       }
     });
 
     const stopFrameEffect = effect(() => {
       context.uiSignals.frameTick();
-      deferredUiFlush.markFrameDirty();
+      deferredUIFlush.markFrameDirty();
     });
 
     const stopCommandEffect = effect(() => {
       context.uiSignals.commandTick();
-      deferredUiFlush.markCommandsDirty();
+      deferredUIFlush.markCommandsDirty();
     });
 
     const stopPausedEffect = effect(() => {
-      postUiMessage({ kind: 'set-paused', value: context.stateSignals.paused() });
+      postUIMessage({ kind: 'set-paused', value: context.stateSignals.paused() });
     });
 
     const stopHighSpeedEffect = effect(() => {
-      postUiMessage({ kind: 'set-high-speed', value: context.stateSignals.highSpeed() });
+      postUIMessage({ kind: 'set-high-speed', value: context.stateSignals.highSpeed() });
     });
 
     const stopJudgeComboEffect = effect(() => {
       context.stateSignals.judgeComboTick();
-      postUiMessage({ kind: 'set-judge-combo', state: context.stateSignals.getJudgeCombo() });
+      postUIMessage({ kind: 'set-judge-combo', state: context.stateSignals.getJudgeCombo() });
     });
 
     return {
@@ -251,7 +251,7 @@ async function bootstrap(): Promise<void> {
           return;
         }
         postLog('info', 'ui.start.posted');
-        postUiMessage({ kind: 'start' });
+        postUIMessage({ kind: 'start' });
       },
       stop: () => {
         if (disposed) {
@@ -260,9 +260,9 @@ async function bootstrap(): Promise<void> {
         if (stopPromise) {
           return stopPromise;
         }
-        const requestId = nextUiRequestId;
-        nextUiRequestId += 1;
-        stopPromise = requestUiLifecycleAck('ui-stop', requestId, pendingUiStop);
+        const requestId = nextUIRequestId;
+        nextUIRequestId += 1;
+        stopPromise = requestUILifecycleAck('ui-stop', requestId, pendingUIStop);
         return stopPromise;
       },
       dispose: () => {
@@ -271,28 +271,28 @@ async function bootstrap(): Promise<void> {
         }
         disposed = true;
         bridgePort.close();
-        deferredUiFlush.dispose();
+        deferredUIFlush.dispose();
         stopFrameEffect();
         stopCommandEffect();
         stopPausedEffect();
         stopHighSpeedEffect();
         stopJudgeComboEffect();
-        const requestId = nextUiRequestId;
-        nextUiRequestId += 1;
-        disposePromise = requestUiLifecycleAck('ui-dispose', requestId, pendingUiDispose);
+        const requestId = nextUIRequestId;
+        nextUIRequestId += 1;
+        disposePromise = requestUILifecycleAck('ui-dispose', requestId, pendingUIDispose);
         return disposePromise;
       },
       triggerPoor: (seconds: number) => {
         if (disposed) {
           return;
         }
-        postUiMessage({ kind: 'trigger-poor', seconds });
+        postUIMessage({ kind: 'trigger-poor', seconds });
       },
       clearPoor: () => {
         if (disposed) {
           return;
         }
-        postUiMessage({ kind: 'clear-poor' });
+        postUIMessage({ kind: 'clear-poor' });
       },
     };
   };
@@ -303,7 +303,7 @@ async function bootstrap(): Promise<void> {
       ...(initData.randomDraws !== undefined ? { randomDraws: initData.randomDraws } : {}),
       signal: abortController.signal,
       createInputRuntime,
-      createUiRuntime: initData.playOptions.tui ? createUiRuntime : undefined,
+      createUIRuntime: initData.playOptions.tui ? createUIRuntime : undefined,
       writeOutput: (text: string): void => {
         postWorkerMessage({ kind: 'output', text });
       },
@@ -316,7 +316,7 @@ async function bootstrap(): Promise<void> {
       onLoadComplete: (): void => {
         postWorkerMessage({ kind: 'load-complete' });
       },
-      onResolvedChart: (json: BeMusicJson): void => {
+      onResolvedChart: (json: BeMusicJSON): void => {
         const metadata: NodeGameplayResolvedChartMetadata = {
           title: json.metadata.title,
           artist: json.metadata.artist,
@@ -365,33 +365,33 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-function requestUiInit(
+function requestUIInit(
   requestId: number,
-  context: CreatePlayerUiRuntimeContext,
-  pendingUiInit: Map<
+  context: CreatePlayerUIRuntimeContext,
+  pendingUIInit: Map<
     number,
     {
       resolve: (result: { enabled: boolean; port?: MessagePort; bgaPlaybackEndSeconds?: number }) => void;
       reject: (error: Error) => void;
-      onProgress: CreatePlayerUiRuntimeContext['onBgaLoadProgress'];
+      onProgress: CreatePlayerUIRuntimeContext['onBGALoadProgress'];
     }
   >,
 ): Promise<{ enabled: boolean; port?: MessagePort; bgaPlaybackEndSeconds?: number }> {
   return new Promise<{ enabled: boolean; port?: MessagePort; bgaPlaybackEndSeconds?: number }>((resolve, reject) => {
-    pendingUiInit.set(requestId, {
+    pendingUIInit.set(requestId, {
       resolve,
       reject,
-      onProgress: context.onBgaLoadProgress,
+      onProgress: context.onBGALoadProgress,
     });
     postWorkerMessage({
       kind: 'ui-init',
       requestId,
-      runtime: serializeUiRuntimeInit(context),
+      runtime: serializeUIRuntimeInit(context),
     });
   });
 }
 
-function requestUiLifecycleAck(
+function requestUILifecycleAck(
   kind: 'ui-stop' | 'ui-dispose',
   requestId: number,
   pending: Map<number, { resolve: () => void; reject: (error: Error) => void }>,
@@ -402,14 +402,14 @@ function requestUiLifecycleAck(
   });
 }
 
-function serializeUiRuntimeInit(context: CreatePlayerUiRuntimeContext): NodeGameplayUiRuntimeInit {
+function serializeUIRuntimeInit(context: CreatePlayerUIRuntimeContext): NodeGameplayUIRuntimeInit {
   return {
     json: context.json,
     mode: context.mode,
     laneDisplayMode: context.laneDisplayMode,
     laneBindings: [...context.laneBindings],
     speed: context.speed,
-    uiFps: context.uiFps,
+    uiFPS: context.uiFPS,
     tuiVisibleNotesLimit: context.tuiVisibleNotesLimit,
     tuiNoteHeight: context.tuiNoteHeight,
     judgeWindowMs: context.judgeWindowMs,
@@ -419,7 +419,7 @@ function serializeUiRuntimeInit(context: CreatePlayerUiRuntimeContext): NodeGame
     randomPatternSummary: context.randomPatternSummary,
     baseDir: context.baseDir,
     kittyGraphics: Boolean(initData.playOptions.kittyGraphics),
-    videoBgaStreaming: context.videoBgaStreaming !== false,
+    videoBGAStreaming: context.videoBGAStreaming !== false,
     initialFrame: context.uiSignals.getFrame(),
     initialPaused: context.stateSignals.paused(),
     initialJudgeCombo: context.stateSignals.getJudgeCombo(),
@@ -434,7 +434,7 @@ function resolveAbortReason(reason?: string): Error {
   return error;
 }
 
-function deserializeUiInitError(message: string, name: string | undefined): Error {
+function deserializeUIInitError(message: string, name: string | undefined): Error {
   if (name === 'AbortError') {
     return resolveAbortReason(message);
   }

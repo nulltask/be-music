@@ -1,5 +1,5 @@
 import type { RenderResult } from '@be-music/audio-renderer';
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 
 export const PACKAGE_NAMES = [
   'utils',
@@ -20,7 +20,7 @@ export const PACKAGE_NAMES = [
 
 export type PackageName = (typeof PACKAGE_NAMES)[number];
 
-export interface ExportsBenchmarkCliOverrides {
+export interface ExportsBenchmarkCLIOverrides {
   defaultOutputPath?: string;
   defaultPackages?: readonly PackageName[];
 }
@@ -101,11 +101,11 @@ export interface BenchFixtures {
   bmsonText: string;
   jsonText: string;
   bmsBuffer: Buffer;
-  sampleBmsJson: BeMusicJson;
-  sampleBmsonJson: BeMusicJson;
-  sampleJsonIr: BeMusicJson;
-  controlFlowJson: BeMusicJson;
-  emptyBmsJson: BeMusicJson;
+  sampleBmsJSON: BeMusicJSON;
+  sampleBmsonJSON: BeMusicJSON;
+  sampleJsonIR: BeMusicJSON;
+  controlFlowJSON: BeMusicJSON;
+  emptyBmsJSON: BeMusicJSON;
   eventA: BeMusicEvent;
   eventB: BeMusicEvent;
   fractionItems: ReadonlyArray<{ value: number }>;
@@ -116,7 +116,7 @@ export interface BenchFixtures {
     bmsonPath: string;
     jsonPath: string;
     editorSavePath: string;
-    editorExportBmsPath: string;
+    editorExportBMSPath: string;
     editorExportBmsonPath: string;
     audioOutputPath: string;
     renderOutputPath: string;

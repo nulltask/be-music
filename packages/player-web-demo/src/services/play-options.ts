@@ -5,11 +5,11 @@
 // theme) starts from them.
 
 import { resolvePlayOptions, type PlayOptions } from '@be-music/scene-model';
-import type { DemoGuiState } from '../types.ts';
+import type { DemoGUIState } from '../types.ts';
 
 /** The play options the Debug Menu holds itself, under its own names (`gauge` is `gauge1P`). */
-export type GuiPlayOptions = Pick<
-  DemoGuiState,
+export type GUIPlayOptions = Pick<
+  DemoGUIState,
   | 'autoPlay'
   | 'gauge'
   | 'random1P'
@@ -24,7 +24,7 @@ export type GuiPlayOptions = Pick<
 >;
 
 /** The Debug Menu's play options as `PlayOptions` fields. */
-export function playOptionsFromGui(state: Readonly<GuiPlayOptions>): Partial<PlayOptions> {
+export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<PlayOptions> {
   return {
     autoPlay: state.autoPlay,
     gauge1P: state.gauge,
@@ -44,7 +44,7 @@ export function playOptionsFromGui(state: Readonly<GuiPlayOptions>): Partial<Pla
  * Mirrors a select screen's play options (an LR2 panel, a skin's buttons) into the Debug Menu's state, so both surfaces
  * agree. The hi-speed is left to the caller, which also remembers it for the next visit.
  */
-export function copyPlayOptionsToGui(options: Readonly<PlayOptions>, state: GuiPlayOptions): void {
+export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIPlayOptions): void {
   state.autoPlay = options.autoPlay;
   state.gauge = options.gauge1P;
   state.random1P = options.random1P;

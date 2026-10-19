@@ -7,7 +7,7 @@ import type { BrowserSongAssetSource } from './types.ts';
  * SHA-256 (lowercase hex) of a byte buffer via Web Crypto. Shared by the play-log recorder plumbing (stamping
  * `chart.sha256` at record time) and the play-log drop matching (hashing loaded charts for comparison).
  */
-export async function computeSha256Hex(bytes: Uint8Array): Promise<string> {
+export async function computeSHA256Hex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
   let hex = '';
   for (const byte of new Uint8Array(digest)) {
@@ -21,7 +21,7 @@ export async function computeSha256Hex(bytes: Uint8Array): Promise<string> {
  * located in the asset source (or the runtime lacks Web Crypto). The hash is over the file exactly as dropped —
  * the same bytes any other tool would hash — so it is stable across sessions, machines, and `#RANDOM` rolls.
  */
-export async function computeChartFileSha256(
+export async function computeChartFileSHA256(
   source: BrowserSongAssetSource | undefined,
   chartPath: string,
 ): Promise<string | undefined> {
@@ -34,7 +34,7 @@ export async function computeChartFileSha256(
     return undefined;
   }
   try {
-    return await computeSha256Hex(bytes);
+    return await computeSHA256Hex(bytes);
   } catch {
     return undefined;
   }
@@ -48,7 +48,7 @@ export interface ChartFileHashes {
 
 /**
  * SHA-256 and MD5 (lowercase hex) of a song entry's source chart FILE bytes, read once. `undefined` when the chart file
- * cannot be located in the asset source or the runtime lacks Web Crypto, as with {@link computeChartFileSha256}.
+ * cannot be located in the asset source or the runtime lacks Web Crypto, as with {@link computeChartFileSHA256}.
  */
 export async function computeChartFileHashes(
   source: BrowserSongAssetSource | undefined,
@@ -63,7 +63,7 @@ export async function computeChartFileHashes(
     return undefined;
   }
   try {
-    return { sha256: await computeSha256Hex(bytes), md5: md5HexOfBytes(bytes) };
+    return { sha256: await computeSHA256Hex(bytes), md5: md5HexOfBytes(bytes) };
   } catch {
     return undefined;
   }

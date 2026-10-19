@@ -1,5 +1,5 @@
-import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
-import { resolveBmsLongNotes, resolveLnobjLongNotes, type BeatResolver, type ChartPlayVariant } from './index.ts';
+import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJSON } from '@be-music/json';
+import { resolveBMSLongNotes, resolveLNOBJLongNotes, type BeatResolver, type ChartPlayVariant } from './index.ts';
 import { DEFAULT_LONG_NOTE_MODE, resolveLandmineDamage, type LongNoteMode } from './note-rules.ts';
 import type { TimingResolver } from './timing.ts';
 
@@ -43,14 +43,14 @@ export interface ResolvedNoteLists {
 }
 
 export interface ResolvedNoteContext {
-  json: BeMusicJson;
+  json: BeMusicJSON;
   timing: TimingResolver;
   beatResolver: BeatResolver;
   sortedEvents: ReadonlyArray<BeMusicEvent>;
   idBase: 36 | 62;
   /** The play variant (only judged notes need it, for FREE ZONE), resolved on demand. */
   resolvePlayVariant: () => ChartPlayVariant;
-  inferBmsLnTypeWhenMissing: boolean;
+  inferBmsLNTypeWhenMissing: boolean;
   /**
    * Overrides whether `17` / `27` are FREE ZONE instead of reading it from the play variant. The chart fingerprint
    * resolves with `false` and applies FREE ZONE itself once an outcome's lane mode is known.
@@ -152,12 +152,12 @@ function resolveMutableJudgedNotes(context: ResolvedNoteContext): { notes: Mutab
     notes.push(note);
   }
 
-  const bmsLongNoteMode = resolveBmsLongNoteMode(json);
-  const withLnobj = applyLnobjLongNotes(json, notes, timing, bmsLongNoteMode);
-  appendLnTypeLongNotes(context, withLnobj, bmsLongNoteMode);
-  withLnobj.sort(compareNotes);
-  const shadowed = collapseSamePositionNotes(withLnobj);
-  return { notes: withLnobj, shadowed };
+  const bmsLongNoteMode = resolveBMSLongNoteMode(json);
+  const withLNOBJ = applyLNOBJLongNotes(json, notes, timing, bmsLongNoteMode);
+  appendLNTypeLongNotes(context, withLNOBJ, bmsLongNoteMode);
+  withLNOBJ.sort(compareNotes);
+  const shadowed = collapseSamePositionNotes(withLNOBJ);
+  return { notes: withLNOBJ, shadowed };
 }
 
 /** Resolves the landmines (`Dx` / `Ex`), on the lane they sit on, with their gauge damage. */
@@ -331,8 +331,8 @@ function compareNotes(left: MutableNote, right: MutableNote): number {
 }
 
 /** Turns `#LNOBJ` starts into long notes and drops their end objects. Returns the kept notes. */
-function applyLnobjLongNotes(
-  json: BeMusicJson,
+function applyLNOBJLongNotes(
+  json: BeMusicJSON,
   notes: MutableNote[],
   timing: TimingResolver,
   longNoteMode: LongNoteMode,
@@ -340,7 +340,7 @@ function applyLnobjLongNotes(
   if (json.sourceFormat !== 'bms') {
     return notes;
   }
-  const resolved = resolveLnobjLongNotes(json);
+  const resolved = resolveLNOBJLongNotes(json);
   if (resolved.startToEndBeat.size === 0) {
     return notes;
   }
@@ -367,12 +367,12 @@ function applyLnobjLongNotes(
 }
 
 /** Appends the `#LNTYPE` long notes authored on `5x` / `6x`. */
-function appendLnTypeLongNotes(context: ResolvedNoteContext, notes: MutableNote[], longNoteMode: LongNoteMode): void {
+function appendLNTypeLongNotes(context: ResolvedNoteContext, notes: MutableNote[], longNoteMode: LongNoteMode): void {
   const { json, timing } = context;
   if (json.sourceFormat !== 'bms') {
     return;
   }
-  const resolved = resolveBmsLongNotes(json, { inferLnTypeWhenMissing: context.inferBmsLnTypeWhenMissing });
+  const resolved = resolveBMSLongNotes(json, { inferLNTypeWhenMissing: context.inferBmsLNTypeWhenMissing });
   for (const longNote of resolved.notes) {
     const endBeat =
       typeof longNote.endBeat === 'number' && longNote.endBeat > longNote.beat && longNote.endEvent !== undefined
@@ -395,7 +395,7 @@ function appendLnTypeLongNotes(context: ResolvedNoteContext, notes: MutableNote[
 }
 
 /** Long-note mode of a BMS `#LNOBJ` / `#LNTYPE` long note: `#LNMODE`, otherwise LN. */
-function resolveBmsLongNoteMode(json: BeMusicJson): LongNoteMode {
+function resolveBMSLongNoteMode(json: BeMusicJSON): LongNoteMode {
   if (json.sourceFormat === 'bms' && (json.bms.lnMode === 2 || json.bms.lnMode === 3)) {
     return json.bms.lnMode;
   }

@@ -2,9 +2,9 @@ import { findLastIndexAtOrBefore } from '@be-music/utils/core';
 import {
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 import { isScrollChannel, sortEvents, type BeatResolver } from './index.ts';
 import { createTimingResolver, type TimingResolver } from './timing.ts';
@@ -14,7 +14,7 @@ export interface MeasureTimelinePoint {
   seconds: number;
 }
 
-export interface BpmTimelinePoint {
+export interface BPMTimelinePoint {
   bpm: number;
   seconds: number;
 }
@@ -37,7 +37,7 @@ export interface StopBeatWindow {
 }
 
 export function createMeasureTimeline(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   resolver: TimingResolver,
   beatResolver: BeatResolver,
 ): MeasureTimelinePoint[] {
@@ -54,10 +54,10 @@ export function createMeasureTimeline(
   return timeline;
 }
 
-export function createBpmTimeline(json: BeMusicJson, resolver: TimingResolver): BpmTimelinePoint[] {
-  const timeline: BpmTimelinePoint[] = [];
+export function createBPMTimeline(json: BeMusicJSON, resolver: TimingResolver): BPMTimelinePoint[] {
+  const timeline: BPMTimelinePoint[] = [];
   let previousSeconds = Number.NaN;
-  let previousBpm = Number.NaN;
+  let previousBPM = Number.NaN;
 
   for (const point of resolver.tempoPoints) {
     const seconds = resolver.beatToSeconds(point.beat);
@@ -65,8 +65,8 @@ export function createBpmTimeline(json: BeMusicJson, resolver: TimingResolver): 
       continue;
     }
     // The readout value: a negative `#BPMxx` shows as |trunc(BPM)| the way LR2's NOWBPM does.
-    const bpm = point.displayBpm ?? point.bpm;
-    if (Math.abs(seconds - previousSeconds) < 1e-6 && Math.abs(bpm - previousBpm) < 1e-6) {
+    const bpm = point.displayBPM ?? point.bpm;
+    if (Math.abs(seconds - previousSeconds) < 1e-6 && Math.abs(bpm - previousBPM) < 1e-6) {
       continue;
     }
     timeline.push({
@@ -74,25 +74,25 @@ export function createBpmTimeline(json: BeMusicJson, resolver: TimingResolver): 
       seconds,
     });
     previousSeconds = seconds;
-    previousBpm = bpm;
+    previousBPM = bpm;
   }
 
   if (timeline.length === 0) {
-    const fallbackBpm = Number.isFinite(json.metadata.bpm) && json.metadata.bpm > 0 ? json.metadata.bpm : 130;
-    timeline.push({ bpm: fallbackBpm, seconds: 0 });
+    const fallbackBPM = Number.isFinite(json.metadata.bpm) && json.metadata.bpm > 0 ? json.metadata.bpm : 130;
+    timeline.push({ bpm: fallbackBPM, seconds: 0 });
   }
 
   return timeline;
 }
 
-export function createScrollTimeline(json: BeMusicJson, beatResolver: BeatResolver): ScrollTimelinePoint[] {
+export function createScrollTimeline(json: BeMusicJSON, beatResolver: BeatResolver): ScrollTimelinePoint[] {
   if (Object.keys(json.bms.scroll).length === 0) {
     return [];
   }
   return toBeatTimeline(collectScrollChanges(json, sortEvents(json.events)), beatResolver);
 }
 
-export function createSpeedTimeline(json: BeMusicJson, beatResolver: BeatResolver): SpeedTimelinePoint[] {
+export function createSpeedTimeline(json: BeMusicJSON, beatResolver: BeatResolver): SpeedTimelinePoint[] {
   if (Object.keys(json.bms.speed).length === 0) {
     return [];
   }
@@ -109,18 +109,18 @@ export interface KeyframeChange {
  * The SCROLL keyframes of a chart, in chart order: `SC` objects whose `#SCROLLxx` is a finite number (negative values
  * included). Not part of the package API (the chart fingerprint reads exact positions from the events).
  */
-export function collectScrollChanges(json: BeMusicJson, sortedEvents: ReadonlyArray<BeMusicEvent>): KeyframeChange[] {
-  return collectKeyframeChanges(json.bms.scroll, resolveBmsBase(json), sortedEvents, isScrollChannel, true);
+export function collectScrollChanges(json: BeMusicJSON, sortedEvents: ReadonlyArray<BeMusicEvent>): KeyframeChange[] {
+  return collectKeyframeChanges(json.bms.scroll, resolveBMSBase(json), sortedEvents, isScrollChannel, true);
 }
 
 /**
  * The SPEED keyframes of a chart, in chart order: `SP` objects whose `#SPEEDxx` is a finite number of at least 0. Not
  * part of the package API (the chart fingerprint reads exact positions from the events).
  */
-export function collectSpeedChanges(json: BeMusicJson, sortedEvents: ReadonlyArray<BeMusicEvent>): KeyframeChange[] {
+export function collectSpeedChanges(json: BeMusicJSON, sortedEvents: ReadonlyArray<BeMusicEvent>): KeyframeChange[] {
   return collectKeyframeChanges(
     json.bms.speed,
-    resolveBmsBase(json),
+    resolveBMSBase(json),
     sortedEvents,
     (channel) => normalizeChannel(channel) === 'SP',
     false,
@@ -163,7 +163,7 @@ function toBeatTimeline(changes: ReadonlyArray<KeyframeChange>, beatResolver: Be
   return timeline;
 }
 
-export function createBeatAtSecondsResolver(json: BeMusicJson): (seconds: number) => number {
+export function createBeatAtSecondsResolver(json: BeMusicJSON): (seconds: number) => number {
   const resolver = createTimingResolver(json);
   return createBeatAtSecondsResolverFromTimingResolver(resolver);
 }
@@ -227,7 +227,7 @@ export function createStopBeatWindows(resolver: TimingResolver): StopBeatWindow[
  * measure. A bmson chart that authors `lines` gets exactly those (one per measure start), as beatoraja's
  * `BMSONDecoder` draws them; without `lines` the spec's line every 4 beats applies over the chart's measures.
  */
-export function createMeasureBoundariesBeats(json: BeMusicJson, beatResolver: BeatResolver): number[] {
+export function createMeasureBoundariesBeats(json: BeMusicJSON, beatResolver: BeatResolver): number[] {
   const bmsonLines = json.sourceFormat === 'bmson' ? json.preservation.bmson.lines : [];
   const lastMeasure = bmsonLines.length > 0 ? bmsonLines.length - 1 : resolveMaxMeasureIndex(json);
   const boundaries: number[] = [];
@@ -262,7 +262,7 @@ function secondsToBeatWithoutStops(
   return point.beat + (elapsed * point.bpm) / 60;
 }
 
-function resolveMaxMeasureIndex(json: BeMusicJson): number {
+function resolveMaxMeasureIndex(json: BeMusicJSON): number {
   let maxMeasure = 0;
   for (const event of json.events) {
     if (event.measure > maxMeasure) {

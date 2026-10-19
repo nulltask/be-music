@@ -1,4 +1,4 @@
-import type { Lr2BarBodyKind, Lr2BarLampKind } from '../skin.ts';
+import type { LR2BarBodyKind, LR2BarLampKind } from '../skin.ts';
 
 /** LR2's select bar bodies: which bar a `#SRC_BAR_BODY` draws (its index column). */
 export const LR2_BAR_BODY = {
@@ -25,10 +25,10 @@ export const LR2_BAR_BODY = {
 } as const;
 
 /** One of LR2's bar bodies ({@link LR2_BAR_BODY}). */
-export type Lr2BarBody = (typeof LR2_BAR_BODY)[keyof typeof LR2_BAR_BODY];
+export type LR2BarBody = (typeof LR2_BAR_BODY)[keyof typeof LR2_BAR_BODY];
 
 /** The parsed kind of each bar body, by its {@link LR2_BAR_BODY} index. */
-export const LR2_BAR_BODY_KINDS: readonly Lr2BarBodyKind[] = [
+export const LR2_BAR_BODY_KINDS: readonly LR2BarBodyKind[] = [
   'song',
   'folder',
   'customFolder',
@@ -61,7 +61,7 @@ export const LR2_BAR_LAMP = {
 } as const;
 
 /** One of LR2's bar lamps ({@link LR2_BAR_LAMP}). */
-export type Lr2BarLamp = (typeof LR2_BAR_LAMP)[keyof typeof LR2_BAR_LAMP];
+export type LR2BarLamp = (typeof LR2_BAR_LAMP)[keyof typeof LR2_BAR_LAMP];
 
 /** The parsed kind of each bar lamp, by its {@link LR2_BAR_LAMP} index. */
-export const LR2_BAR_LAMP_KINDS: readonly Lr2BarLampKind[] = ['noplay', 'failed', 'easy', 'clear', 'hard', 'fullcombo'];
+export const LR2_BAR_LAMP_KINDS: readonly LR2BarLampKind[] = ['noplay', 'failed', 'easy', 'clear', 'hard', 'fullcombo'];

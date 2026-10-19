@@ -1,14 +1,14 @@
 import { latticeSkin, plainSkin, synesthesiaSkin } from '@be-music/player-web/skin';
 import type { BeMusicSkin } from '@be-music/skin-sdk';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import type { DemoGuiState } from '../../types.ts';
+import type { DemoGUIState } from '../../types.ts';
 import { BE_MUSIC_SKINS } from '../built-in-skins.ts';
 import { BuiltInThemeService, type BuiltInThemeServiceOptions } from './built-in.ts';
 
-function harness(state: Partial<Pick<DemoGuiState, 'builtInSkin' | 'skinEffects'>> = {}): {
+function harness(state: Partial<Pick<DemoGUIState, 'builtInSkin' | 'skinEffects'>> = {}): {
   service: BuiltInThemeService;
   options: BuiltInThemeServiceOptions;
-  guiState: Pick<DemoGuiState, 'builtInSkin' | 'skinEffects'>;
+  guiState: Pick<DemoGUIState, 'builtInSkin' | 'skinEffects'>;
 } {
   const guiState = { builtInSkin: synesthesiaSkin.id, skinEffects: 'full' as const, ...state };
   const options: BuiltInThemeServiceOptions = { guiState, setStatus: vi.fn(), handleBuiltInSkinChange: vi.fn() };
@@ -85,9 +85,9 @@ describe('BuiltInThemeService', () => {
 
   test('a skin module is loaded from a URL only once one is given and the player confirms it', async () => {
     const { service, options } = harness();
-    await service.addBeMusicSkinFromUrl('  ');
+    await service.addBeMusicSkinFromURL('  ');
     expect(options.setStatus).toHaveBeenLastCalledWith('Enter the URL of a skin module first');
-    await service.addBeMusicSkinFromUrl('https://skins.example/skin.js');
+    await service.addBeMusicSkinFromURL('https://skins.example/skin.js');
     expect(window.confirm).toHaveBeenCalledOnce();
     expect(options.setStatus).toHaveBeenCalledOnce();
     expect(options.handleBuiltInSkinChange).not.toHaveBeenCalled();

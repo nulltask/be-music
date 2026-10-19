@@ -31,7 +31,7 @@ import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
  * `speed`.
  */
 export function createPlayJudgeCore(session: PlaySession, judgeMsPerChartSecond: number): JudgeCoreState {
-  const { playbackChart, resolvedJson } = session;
+  const { playbackChart, resolvedJSON } = session;
   return createJudgeCoreState(
     {
       ruleset: session.ruleset,
@@ -46,7 +46,7 @@ export function createPlayJudgeCore(session: PlaySession, judgeMsPerChartSecond:
       judgeMsPerChartSecond,
       wavResources: session.wavResources,
       idBase: session.idBase,
-      sourceFormat: resolvedJson.sourceFormat,
+      sourceFormat: resolvedJSON.sourceFormat,
       // LR2 negative-BPM reversal (#134): timing stays monotonic (the resolver integrates |BPM|), but from this chart
       // time on LR2's event pump freezes and presses are judged on the mirrored clock. The realtime audio streams are
       // already cut there (`collectRealtimeAudioTriggers` / `collectRealtimeAudioVolumeEvents`).

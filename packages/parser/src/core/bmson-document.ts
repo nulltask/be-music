@@ -1,4 +1,4 @@
-import { createEmptyJson, type BmsonMineChannelEntry, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BmsonMineChannelEntry, type BeMusicEvent, type BeMusicJSON } from '@be-music/json';
 import { countDistinctValues, createBmsonValueKeyTable, encodeBmsonKey, resolveBmsonKeyBase } from './bmson-keys.ts';
 import { normalizeBmsonNoteLength, sortAndNormalizeEvents } from './event-utils.ts';
 import {
@@ -8,9 +8,9 @@ import {
   createBmsonPositionResolver,
   createMeasureLengthsFromBmsonLines,
   type BmsonDocument,
-  normalizeBmsonBpmEvents,
-  normalizeBmsonBgaForIr,
-  normalizeBmsonInfoForIr,
+  normalizeBmsonBPMEvents,
+  normalizeBmsonBGAForIR,
+  normalizeBmsonInfoForIR,
   normalizeBmsonKeyChannels,
   normalizeBmsonMineChannels,
   normalizeBmsonLines,
@@ -20,8 +20,8 @@ import {
   resolveBmsonResolution,
 } from './bmson.ts';
 
-export function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
-  const json = createEmptyJson('bmson');
+export function parseBmsonDocument(document: BmsonDocument): BeMusicJSON {
+  const json = createEmptyJSON('bmson');
 
   const info = document.info ?? {};
   if (typeof document.version === 'string' && document.version.length > 0) {
@@ -29,7 +29,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   }
 
   const resolution = resolveBmsonResolution(document);
-  json.bmson.info = normalizeBmsonInfoForIr(info, resolution);
+  json.bmson.info = normalizeBmsonInfoForIR(info, resolution);
   // Per spec, the difference between "lines missing" and "lines: []" matters: missing → assume 4/4 and generate a
   // barline every 4 quarter notes (the renderer's default derive-from-events path); explicit empty → no barlines at all
   // (the "100 % minimoo-G effect"). Detect the explicit- empty case here so the IR carries the suppress flag, since
@@ -43,7 +43,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   if (lines.length > 0) {
     json.preservation.bmson.lines = lines;
   }
-  json.bmson.bga = normalizeBmsonBgaForIr(document.bga);
+  json.bmson.bga = normalizeBmsonBGAForIR(document.bga);
 
   const measureLengths = createMeasureLengthsFromBmsonLines(lines, resolution);
   if (measureLengths.length > 0) {
@@ -58,8 +58,8 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
     json.metadata.playLevel = json.bmson.info.level;
   }
 
-  if (Number.isFinite(json.bmson.info.initBpm) && (json.bmson.info.initBpm ?? 0) > 0) {
-    json.metadata.bpm = json.bmson.info.initBpm!;
+  if (Number.isFinite(json.bmson.info.initBPM) && (json.bmson.info.initBPM ?? 0) > 0) {
+    json.metadata.bpm = json.bmson.info.initBPM!;
   } else {
     // bmson 1.0.0 spec — "It is a fatal error if `info.init_bpm` is unspecified." A chart that omits / zeroes / negates
     // `init_bpm` has no anchor for tempo-driven timing, so every downstream calculation (note seconds, BGA cues, gauge
@@ -83,7 +83,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   // Mirror bmson's `info.backImage` / `bannerImage` / `eyecatchImage` onto the unified `metadata` slots so consumers
   // (the select view's BACKBMP loader, rendered banner, etc.) don't need to branch on chart format.
   if (json.bmson.info.backImage) {
-    json.metadata.backBmp = json.bmson.info.backImage;
+    json.metadata.backBMP = json.bmson.info.backImage;
   }
   if (json.bmson.info.bannerImage) {
     json.metadata.banner = json.bmson.info.bannerImage;
@@ -102,7 +102,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   const keyChannels = normalizeBmsonKeyChannels(document.key_channels);
   const mineChannels = normalizeBmsonMineChannels(document.mine_channels);
   const laneMap = buildBmsonLaneMap([...soundChannels, ...keyChannels, ...mineChannels], json.bmson.info.modeHint);
-  const bpmEvents = normalizeBmsonBpmEvents(document.bpm_events);
+  const bpmEvents = normalizeBmsonBPMEvents(document.bpm_events);
   const stopEvents = normalizeBmsonStopEvents(document.stop_events);
   // Spec: `stop_events.duration` is measured in **pulses** at the chart's `resolution`. The downstream timing resolver
   // reads `resources.stop[key]` through the BMS-style `(value / 192) × (240/bpm)` formula, which expects the value in
@@ -168,8 +168,8 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
       // An `x` the lane map has no lane for (x <= 0, missing, or outside the hint's table) is a BGM note: the spec makes
       // x = 0 BGM, and beatoraja plays any x outside the hint's key table in the background too.
       const playableChannel = lane > 0 ? laneMap.get(lane) : undefined;
-      const isBgmNote = playableChannel === undefined;
-      if (!isBgmNote) {
+      const isBGMNote = playableChannel === undefined;
+      if (!isBGMNote) {
         playableTicks.add(pulse);
       }
 
@@ -200,7 +200,7 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
           event.bmson.t = noteLongNoteType;
         }
       }
-      if (isBgmNote) {
+      if (isBGMNote) {
         bgmCandidates.push({ pulse, event });
         continue;
       }
@@ -221,15 +221,15 @@ export function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   // the same `mode_hint`-aware lane map as the playable notes, and drop a note without a lane. Their WAVs are
   // registered after the sound channels in beatoraja's order — `key_channels`, then `mine_channels` — so the WAV ID
   // space stays contiguous.
-  let nextWavIndex = soundChannels.length + 1;
+  let nextWAVIndex = soundChannels.length + 1;
   const pushBmsonExtensionNotes = (
     channels: readonly BmsonMineChannelEntry[],
     toChannel: (playableChannel: string) => string | undefined,
     keepDamage: boolean,
   ): void => {
     for (const extensionChannel of channels) {
-      const wavKey = encodeBmsonKey(nextWavIndex, keyBase);
-      nextWavIndex += 1;
+      const wavKey = encodeBmsonKey(nextWAVIndex, keyBase);
+      nextWAVIndex += 1;
       if (wavKey === undefined) {
         return;
       }

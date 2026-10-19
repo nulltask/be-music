@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, gt, type SQL } from 'drizzle-orm';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
-import { avatarUrl } from './avatars.ts';
+import { avatarURL } from './avatars.ts';
 import type { Database } from './db/client.ts';
 import { bestScore, profile, score, user } from './db/schema.ts';
 import { PLAY_INFO_COLUMNS, toPlayInfo, type PlayInfo } from './play-info.ts';
@@ -104,7 +104,7 @@ export async function loadRanking(
     entries.push({
       ...rest,
       anonymous: row.anonymous === true,
-      avatarUrl: avatarUrl(row.handle, avatarKey),
+      avatarUrl: avatarURL(row.handle, avatarKey),
       achievedAt: row.achievedAt.getTime(),
       rank,
     });

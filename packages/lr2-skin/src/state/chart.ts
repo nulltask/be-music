@@ -1,9 +1,9 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { resolveLibraryChartKeyMode, type KeyMode, type LibraryChart } from '@be-music/scene-model';
 import { LR2_OP, LR2_TEXT } from '../ids/index.ts';
 
 /** What a chart has that LR2's ops 170-179 report. */
-export interface Lr2ChartFeatures {
+export interface LR2ChartFeatures {
   /** A BGA: channel `04`, `06`, `07` or `0A` objects (ops 170 / 171). */
   readonly bga: boolean;
   /** Long notes: `#LNOBJ`, or channel `5x` / `6x` objects (ops 172 / 173). */
@@ -14,16 +14,16 @@ export interface Lr2ChartFeatures {
   readonly random: boolean;
 }
 
-const FEATURES_BY_CHART = new WeakMap<BeMusicJson, Lr2ChartFeatures>();
+const FEATURES_BY_CHART = new WeakMap<BeMusicJSON, LR2ChartFeatures>();
 
 /**
  * The features of a chart LR2's chart ops report, read off its objects and control flow. Kept per chart, since a select
  * screen asks again on every frame.
  */
-export function resolveLr2ChartFeatures(chart: BeMusicJson): Lr2ChartFeatures {
+export function resolveLR2ChartFeatures(chart: BeMusicJSON): LR2ChartFeatures {
   const cached = FEATURES_BY_CHART.get(chart);
   if (cached !== undefined) return cached;
-  const features: Lr2ChartFeatures = {
+  const features: LR2ChartFeatures = {
     bga: chart.events.some((event) => /^(04|06|07|0a)$/iu.test(event.channel)),
     longNote:
       (chart.bms.lnObjs?.length ?? 0) > 0 ||
@@ -53,12 +53,12 @@ const KEY_MODE_OPS: Readonly<Record<KeyMode, number>> = {
 };
 
 /** LR2's key-mode op (160-164) for a library chart: its key mode (`resolveLibraryChartKeyMode`), 24-key ones folded. */
-export function resolveLr2KeyModeOp(chart: LibraryChart): number {
+export function resolveLR2KeyModeOp(chart: LibraryChart): number {
   return KEY_MODE_OPS[resolveLibraryChartKeyMode(chart)];
 }
 
 /** LR2's `#DIFFICULTY` op (150 undefined, 151 BEGINNER … 155 INSANE); a missing or unknown difficulty is undefined. */
-export function resolveLr2DifficultyOp(difficulty: number | undefined): number {
+export function resolveLR2DifficultyOp(difficulty: number | undefined): number {
   switch (difficulty) {
     case 1:
       return LR2_OP.DIFFICULTY_BEGINNER;
@@ -76,7 +76,7 @@ export function resolveLr2DifficultyOp(difficulty: number | undefined): number {
 }
 
 /** LR2's judge-rank op (180 VERY HARD … 183 EASY) for a `#RANK`; a chart without one reads NORMAL. */
-export function resolveLr2JudgeRankOp(rank: number | undefined): number {
+export function resolveLR2JudgeRankOp(rank: number | undefined): number {
   switch (rank) {
     case 0:
       return LR2_OP.JUDGE_VERY_HARD;
@@ -101,7 +101,7 @@ export function lr2PlayLevel(chart: Pick<LibraryChart, 'playLevel'>): number | u
  * tag (empty: be-music keeps no tags), play level and difficulty number (10-18; texts 20-28 repeat them) and the INSANE
  * level (29). `undefined` for any other text.
  */
-export function resolveLr2ChartText(st: number, chart: LibraryChart): string | undefined {
+export function resolveLR2ChartText(st: number, chart: LibraryChart): string | undefined {
   switch (st) {
     case LR2_TEXT.TITLE:
     case LR2_TEXT.TITLE_ALT:

@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import { extractChartSubartist } from './meta.ts';
 
-function makeChart(opts: { extras?: Record<string, string>; subartists?: string[] }): BeMusicJson {
+function makeChart(opts: { extras?: Record<string, string>; subartists?: string[] }): BeMusicJSON {
   return {
     metadata: {
       bpm: 120,
       title: 't',
       extras: opts.extras ?? {},
-    } as unknown as BeMusicJson['metadata'],
+    } as unknown as BeMusicJSON['metadata'],
     events: [],
     measures: [],
-    bms: {} as unknown as BeMusicJson['bms'],
-    resources: {} as unknown as BeMusicJson['resources'],
-    bmson: opts.subartists ? ({ info: { subartists: opts.subartists } } as unknown as BeMusicJson['bmson']) : undefined,
-  } as unknown as BeMusicJson;
+    bms: {} as unknown as BeMusicJSON['bms'],
+    resources: {} as unknown as BeMusicJSON['resources'],
+    bmson: opts.subartists ? ({ info: { subartists: opts.subartists } } as unknown as BeMusicJSON['bmson']) : undefined,
+  } as unknown as BeMusicJSON;
 }
 
 describe('extractChartSubartist', () => {

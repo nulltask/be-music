@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { generatedAvatarSvg } from '../avatars.ts';
+import { generatedAvatarSVG } from '../avatars.ts';
 import { openDatabase } from '../db/client.ts';
 import { profile } from '../db/schema.ts';
 import { resolveFormerHandle } from '../profiles.ts';
@@ -9,8 +9,8 @@ import type { PageContext } from './page.tsx';
 const AVATAR_CACHE = 'public, max-age=86400';
 
 /** The same URL with the player's former handle replaced by the current one (query kept). */
-export function movedTo(requestUrl: string, former: string, current: string): string {
-  const url = new URL(requestUrl);
+export function movedTo(requestURL: string, former: string, current: string): string {
+  const url = new URL(requestURL);
   const from = `/players/${encodeURIComponent(former)}`;
   const to = `/players/${encodeURIComponent(current)}`;
   return `${url.pathname.replace(from, to)}${url.search}`;
@@ -39,7 +39,7 @@ export async function avatarImage(c: PageContext<'/players/:handle/avatar'>) {
       });
     }
   }
-  return c.body(generatedAvatarSvg(found.userId), 200, {
+  return c.body(generatedAvatarSVG(found.userId), 200, {
     'content-type': 'image/svg+xml',
     'cache-control': AVATAR_CACHE,
   });

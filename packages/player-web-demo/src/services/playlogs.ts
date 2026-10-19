@@ -10,12 +10,12 @@ import {
   type BeMusicPlaylog,
   type PlaylogRecorderInfo,
 } from '@be-music/player/playlog';
-import demoPackageJson from '../../package.json' with { type: 'json' };
+import demoPackageJSON from '../../package.json' with { type: 'json' };
 
 /** This app as the recorder of its play-logs (`recorder` in `*.bmplay.json`); the engine adds its own version. */
 export const PLAYLOG_RECORDER: Omit<PlaylogRecorderInfo, 'engine'> = {
   name: 'be-music-web',
-  version: demoPackageJson.version,
+  version: demoPackageJSON.version,
   ...(__BE_MUSIC_BUILD__.length > 0 ? { build: __BE_MUSIC_BUILD__ } : {}),
   platform: 'web',
 };

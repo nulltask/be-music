@@ -1,15 +1,15 @@
 import {
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 import {
-  collectLnobjEndEvents,
+  collectLNOBJEndEvents,
   isLandmineChannel,
   isSampleTriggerChannel,
-  resolveBmsLongNotes,
+  resolveBMSLongNotes,
   type BeatResolver,
 } from './index.ts';
 import {
@@ -32,13 +32,13 @@ export interface TimedSampleTrigger {
 }
 
 export interface CollectSampleTriggersOptions {
-  inferBmsLnTypeWhenMissing?: boolean;
+  inferBmsLNTypeWhenMissing?: boolean;
 }
 
 const EMPTY_EVENT_SET = new Set<BeMusicEvent>();
 
 export function collectSampleTriggers(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   resolver: TimingResolver = createTimingResolver(json),
   options: CollectSampleTriggersOptions = {},
 ): TimedSampleTrigger[] {
@@ -46,17 +46,17 @@ export function collectSampleTriggers(
 }
 
 export function collectSampleTriggersWithContext(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   resolver: TimingResolver,
   context: TimingBuildContext,
   options: CollectSampleTriggersOptions = {},
 ): TimedSampleTrigger[] {
   const { sortedEvents, beatResolver } = context;
-  const isBmsChart = json.sourceFormat === 'bms';
-  const lnobjEndEvents = isBmsChart ? collectLnobjEndEvents(json) : EMPTY_EVENT_SET;
-  const suppressedBmsLongNoteEvents = isBmsChart
-    ? resolveBmsLongNotes(json, {
-        inferLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
+  const isBMSChart = json.sourceFormat === 'bms';
+  const lnobjEndEvents = isBMSChart ? collectLNOBJEndEvents(json) : EMPTY_EVENT_SET;
+  const suppressedBMSLongNoteEvents = isBMSChart
+    ? resolveBMSLongNotes(json, {
+        inferLNTypeWhenMissing: options.inferBmsLNTypeWhenMissing === true,
       }).suppressedTriggerEvents
     : EMPTY_EVENT_SET;
   const selectedEvents: Array<{ event: BeMusicEvent; normalizedChannel: string }> = [];
@@ -68,7 +68,7 @@ export function collectSampleTriggersWithContext(
     if (lnobjEndEvents.has(event)) {
       continue;
     }
-    if (suppressedBmsLongNoteEvents.has(event)) {
+    if (suppressedBMSLongNoteEvents.has(event)) {
       continue;
     }
     selectedEvents.push({ event, normalizedChannel });
@@ -77,7 +77,7 @@ export function collectSampleTriggersWithContext(
   const bmsonPlaybackMap =
     json.sourceFormat === 'bmson' ? createBmsonSamplePlaybackMap(json, resolver, events, beatResolver) : undefined;
 
-  const idBase = resolveBmsBase(json);
+  const idBase = resolveBMSBase(json);
   const triggers: TimedSampleTrigger[] = [];
   for (const item of selectedEvents) {
     const event = item.event;
@@ -100,7 +100,7 @@ export function collectSampleTriggersWithContext(
 }
 
 export function createBmsonSamplePlaybackMap(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   resolver: TimingResolver,
   sampleEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
@@ -109,7 +109,7 @@ export function createBmsonSamplePlaybackMap(
     string,
     Array<{ event: BeMusicEvent; beat: number; seconds: number; sampleKey: string }>
   >();
-  const idBase = resolveBmsBase(json);
+  const idBase = resolveBMSBase(json);
   for (const event of sampleEvents) {
     const sampleKey = normalizeObjectKey(event.value, idBase);
     let entries = perSampleKey.get(sampleKey);

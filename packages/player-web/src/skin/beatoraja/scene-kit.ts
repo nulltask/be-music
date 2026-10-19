@@ -221,7 +221,7 @@ export async function loadBeatorajaSceneKit(
     caches.textures.set(entryPath, textures);
   }
 
-  // TTFs are small and a registered FontFace outlives every scene anyway, so fonts are kept per entry as textures are.
+  // TTFS are small and a registered FontFace outlives every scene anyway, so fonts are kept per entry as textures are.
   let fonts = caches.fonts.get(entryPath);
   if (fonts === undefined) {
     const declared = normalizeBeatorajaFonts(skin.font);

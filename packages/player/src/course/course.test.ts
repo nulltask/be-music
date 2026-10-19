@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import {
   applyCourseLongNoteConstraint,
   courseConstraintGroup,
@@ -12,14 +12,14 @@ import {
   parseBeatorajaCourseFile,
   parseBeatorajaRandomCourseData,
   parseCourseConstraint,
-  countLr2UnplayedStages,
-  parseLr2CourseFile,
-  parseLr2NonstopConnections,
+  countLR2UnplayedStages,
+  parseLR2CourseFile,
+  parseLR2NonstopConnections,
   parseTableHeaderCourses,
   resolveCourseStages,
   resolveTableModeKeys,
 } from './index.ts';
-import { parseCourseXml } from './text.ts';
+import { parseCourseXML } from './text.ts';
 
 const MD5_A = '0123456789abcdef0123456789abcdef';
 const MD5_B = 'fedcba9876543210fedcba9876543210';
@@ -79,8 +79,8 @@ describe('course text', () => {
     expect(decodeCourseText(declared)).toBe('<?xml version="1.0" encoding="shift_jis"?>段');
   });
 
-  test('parseCourseXml reads elements, entities, CDATA and skips comments and declarations', () => {
-    const root = parseCourseXml(
+  test('parseCourseXML reads elements, entities, CDATA and skips comments and declarations', () => {
+    const root = parseCourseXML(
       '<?xml version="1.0"?><!-- c --><list a="1"><item>x &amp; &lt;y&gt; &#x41;</item><item><![CDATA[<z>]]></item><e/></list>',
     );
     expect(root?.name).toBe('list');
@@ -89,11 +89,11 @@ describe('course text', () => {
       ['item', '<z>'],
       ['e', ''],
     ]);
-    expect(parseCourseXml('no element')).toBeUndefined();
+    expect(parseCourseXML('no element')).toBeUndefined();
   });
 });
 
-describe('parseLr2CourseFile', () => {
+describe('parseLR2CourseFile', () => {
   const header = (type: number): string => `${'0'.repeat(10)}${type}${'0'.repeat(17)}5190`;
 
   test('reads the courses of a course list', () => {
@@ -112,7 +112,7 @@ describe('parseLr2CourseFile', () => {
     <hash>${header(0)}${MD5_B}</hash>
   </course>
 </courselist>`;
-    const courses = parseLr2CourseFile(xml);
+    const courses = parseLR2CourseFile(xml);
     expect(courses).toHaveLength(2);
     expect(courses[0]).toEqual({
       name: '発狂初段',
@@ -137,7 +137,7 @@ describe('parseLr2CourseFile', () => {
       <course><title>bad hash</title><type>0</type><hash>${header(0)}${'z'.repeat(32)}</hash></course>
       <course><Title>case</Title><type>0</type><hash>${header(0)}${MD5_A}</hash></course>
     </courselist>`;
-    const courses = parseLr2CourseFile(new TextEncoder().encode(xml));
+    const courses = parseLR2CourseFile(new TextEncoder().encode(xml));
     expect(courses.map((course) => [course.name, course.kind, course.stages.length])).toEqual([
       ['N', 'grade', 5],
       ['', 'expert', 1],
@@ -151,10 +151,10 @@ describe('parseLr2CourseFile', () => {
       <course><title>NS</title><type>1</type><hash>${nonstopHeader}${stages}</hash></course>
       <course><title>EX</title><type>0</type><hash>${header(0)}${MD5_A}${MD5_B}</hash></course>
     </courselist>`;
-    const [nonstop, expert] = parseLr2CourseFile(xml);
+    const [nonstop, expert] = parseLR2CourseFile(xml);
     expect(nonstop?.connections).toEqual(['cut', 'blank1', 'fade']);
     expect(expert?.connections).toBeUndefined();
-    expect(parseLr2NonstopConnections('0123459x')).toEqual([
+    expect(parseLR2NonstopConnections('0123459x')).toEqual([
       'fade',
       'fade-fit',
       'cut',
@@ -169,8 +169,8 @@ describe('parseLr2CourseFile', () => {
   });
 
   test('gives no course for a file that is not a course list', () => {
-    expect(parseLr2CourseFile('<other/>')).toEqual([]);
-    expect(parseLr2CourseFile('')).toEqual([]);
+    expect(parseLR2CourseFile('<other/>')).toEqual([]);
+    expect(parseLR2CourseFile('')).toEqual([]);
   });
 });
 
@@ -265,8 +265,8 @@ describe('parseTableHeaderCourses', () => {
       course: [{ charts: [{ md5: MD5_A, title: 'A' }, { md5: MD5_B }, { md5: MD5_A, title: '' }] }],
     })[0]!;
     expect(course!.stages.map((stage) => stage.title)).toEqual(['A', 'course 2', 'course 3']);
-    const [byMd5] = parseTableHeaderCourses({ course: [{ md5: [MD5_A, MD5_B] }] })[0]!;
-    expect(byMd5!.stages.map((stage) => stage.title)).toEqual(['course 1', 'course 2']);
+    const [byMD5] = parseTableHeaderCourses({ course: [{ md5: [MD5_A, MD5_B] }] })[0]!;
+    expect(byMD5!.stages.map((stage) => stage.title)).toEqual(['course 1', 'course 2']);
   });
 
   test('reads a single group and the legacy grade list', () => {
@@ -296,7 +296,7 @@ describe('resolveCourseStages', () => {
     [MD5_A, 'chart A'],
     [SHA_A, 'chart S'],
   ]);
-  const lookup = { bySha256: (hash: string) => charts.get(hash), byMd5: (hash: string) => charts.get(hash) };
+  const lookup = { bySHA256: (hash: string) => charts.get(hash), byMD5: (hash: string) => charts.get(hash) };
 
   test('finds stages by SHA-256, then MD5, and reports a missing one', () => {
     const course = parseBeatorajaCourseData({
@@ -311,18 +311,18 @@ describe('resolveCourseStages', () => {
 
 describe('applyCourseLongNoteConstraint', () => {
   test('sets the mode only on charts that leave it undefined', () => {
-    const bms = createEmptyJson('bms');
+    const bms = createEmptyJSON('bms');
     expect(
       applyCourseLongNoteConstraint(bms, ['hcn']).sourceFormat === 'bms' && applyCourseLongNoteConstraint(bms, ['hcn']),
     ).toMatchObject({
       bms: { lnMode: 3 },
     });
     expect(bms.bms.lnMode).toBeUndefined();
-    const declared = createEmptyJson('bms');
+    const declared = createEmptyJSON('bms');
     declared.bms.lnMode = 1;
     expect(applyCourseLongNoteConstraint(declared, ['cn'])).toBe(declared);
     expect(applyCourseLongNoteConstraint(bms, ['grade'])).toBe(bms);
-    const bmson = createEmptyJson('bmson');
+    const bmson = createEmptyJSON('bmson');
     expect(applyCourseLongNoteConstraint(bmson, ['cn'])).toMatchObject({ bmson: { info: { lnType: 2 } } });
   });
 });
@@ -331,22 +331,22 @@ describe('LR2 stage limit', () => {
   test('reads every course as its first five stages, as LR2 plays it', () => {
     const md5s = ['1', '2', '3', '4', '5', '6'].map((digit) => digit.repeat(32));
     const header = `${'0'.repeat(10)}1${'0'.repeat(21)}`;
-    const [nonstop] = parseLr2CourseFile(
+    const [nonstop] = parseLR2CourseFile(
       `<courselist><course><title>N</title><type>1</type><hash>${header}${md5s.join('')}</hash></course></courselist>`,
     );
     expect(nonstop!.stages.map((stage) => stage.md5)).toEqual(md5s.slice(0, 5));
     expect(nonstop!.connections).toHaveLength(4);
-    const [expert] = parseLr2CourseFile(
+    const [expert] = parseLR2CourseFile(
       `<courselist><course><title>E</title><type>0</type><hash>${header}${md5s.join('')}</hash></course></courselist>`,
     );
     // LR2 clamps every course type, not only NONSTOP.
     expect(expert!.stages.map((stage) => stage.md5)).toEqual(md5s.slice(0, 5));
     // The left-out stage is still counted, so a host can say the course was cut short.
-    expect(countLr2UnplayedStages(expert!)).toBe(1);
-    const [short] = parseLr2CourseFile(
+    expect(countLR2UnplayedStages(expert!)).toBe(1);
+    const [short] = parseLR2CourseFile(
       `<courselist><course><title>S</title><type>0</type><hash>${header}${md5s.slice(0, 5).join('')}</hash></course></courselist>`,
     );
-    expect(countLr2UnplayedStages(short!)).toBe(0);
-    expect(countLr2UnplayedStages({ ...expert!, source: { format: 'beatoraja-json' } })).toBe(0);
+    expect(countLR2UnplayedStages(short!)).toBe(0);
+    expect(countLR2UnplayedStages({ ...expert!, source: { format: 'beatoraja-json' } })).toBe(0);
   });
 });

@@ -5,7 +5,7 @@ export interface MeasureTimelinePoint {
   seconds: number;
 }
 
-export interface BpmTimelinePoint {
+export interface BPMTimelinePoint {
   bpm: number;
   seconds: number;
 }
@@ -124,7 +124,7 @@ function formatMeterDecimal(value: number): string {
   return fixed.replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
 }
 
-export function findCurrentBpm(timeline: ReadonlyArray<BpmTimelinePoint> | undefined, currentSeconds: number): number {
+export function findCurrentBPM(timeline: ReadonlyArray<BPMTimelinePoint> | undefined, currentSeconds: number): number {
   if (!timeline || timeline.length === 0) {
     return 0;
   }

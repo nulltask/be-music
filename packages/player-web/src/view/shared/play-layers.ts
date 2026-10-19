@@ -17,7 +17,7 @@ import type { BeMusicGameplayBinding } from '../../skin/be-music/binding.ts';
 import type { SongImageCache } from '../../skin/be-music/song-images.ts';
 import type { BeMusicGameplayLayout, BeMusicStage } from '../../skin/be-music/types.ts';
 import type { SideLaneRun } from './playfield/measure-line-runs.ts';
-import type { PlayfieldBgaTarget } from '../types.ts';
+import type { PlayfieldBGATarget } from '../types.ts';
 import type { PlayfieldRuntime, RuntimeNote } from './playfield/context.ts';
 
 export class PlayLayers {
@@ -53,8 +53,8 @@ export class PlayLayers {
   /** Design size the clip mask and design background were last drawn at (the stage can change with the screen). */
   stampedDesignWidth = -1;
   stampedDesignHeight = -1;
-  /** BGA target for the be-music stage, rebuilt only when the rect moves (see {@link collectBgaTargets}). */
-  stageBgaTarget: PlayfieldBgaTarget | undefined;
+  /** BGA target for the be-music stage, rebuilt only when the rect moves (see {@link collectBGATargets}). */
+  stageBGATarget: PlayfieldBGATarget | undefined;
   /**
    * Cached screen / design dimensions baked into the static graphics (`viewportBackground`, `background`,
    * `designClipMask`). Compared against the per-frame values so we only call `.clear().rect().fill()` when the size
@@ -136,7 +136,7 @@ export class PlayLayers {
    * worked out from; rebuilt only when the lanes move.
    */
   measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
-  readonly bgaTargetsScratch: PlayfieldBgaTarget[] = [];
+  readonly bgaTargetsScratch: PlayfieldBGATarget[] = [];
   /**
    * Per-frame section timing tracker. Logs a console summary every second when enabled (via `?perf` URL flag or
    * `globalThis.__BE_MUSIC_PERF__ = true`). When disabled the wrapper adds no measurable overhead.
@@ -161,7 +161,7 @@ export class PlayLayers {
    * Cropped copies of the `#BGAxx` sub-region textures, for a skin that composites the BGA itself (a canvas image can't
    * carry the crop the way a Pixi sub-texture does). `null` while the crop is being made.
    */
-  readonly skinBgaCrops: Map<Texture, ImageBitmap | null> = new Map<Texture, ImageBitmap | null>();
+  readonly skinBGACrops: Map<Texture, ImageBitmap | null> = new Map<Texture, ImageBitmap | null>();
   /**
    * Cached cumulative beats at each measure boundary, keyed by song identity. Computed on first access so we don't walk
    * the measure list every frame. Each entry is the beat count at the *start* of the measure with that index (measure 0

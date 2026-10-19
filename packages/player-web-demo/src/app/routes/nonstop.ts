@@ -24,7 +24,7 @@ import type { LibraryService } from '../../services/library.ts';
 import type { PlaylogAutoSave } from '../../services/playlogs.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
-import type { DemoGuiState } from '../../types.ts';
+import type { DemoGUIState } from '../../types.ts';
 import type { FamilyKits } from '../family-kits.ts';
 
 /** A NONSTOP course being played as its stitched chart. */
@@ -41,7 +41,7 @@ export interface NonstopRouteDeps {
   /** The stages' chart hashes, which their cut-out play logs record, and the course's best record. */
   readonly records: Pick<RecordsService, 'resolveChartHashes' | 'recordCourseResult'>;
   /** Debug Menu → Course → NONSTOP placement. */
-  readonly guiState: Pick<DemoGuiState, 'nonstopPlacement'>;
+  readonly guiState: Pick<DemoGUIState, 'nonstopPlacement'>;
   /** The course play log's auto-save, by the setting latched at the play's start. */
   readonly playlogAutoSave: Pick<PlaylogAutoSave, 'saveCourse'>;
   /** Ranks the NONSTOP run as one course run. */

@@ -1,17 +1,17 @@
 import {
-  isBmsBgmVolumeChangeChannel,
-  isBmsKeyVolumeChangeChannel,
+  isBmsBGMVolumeChangeChannel,
+  isBMSKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
-  parseBmsDynamicVolumeGain,
-  usesMonophonicWavPlayback,
+  parseBMSDynamicVolumeGain,
+  usesMonophonicWAVPlayback,
 } from '@be-music/chart';
 import type { WebAudioStageMixer } from './nonstop-audio.ts';
 import {
   normalizeChannel,
   normalizeObjectKey,
-  resolveBmsBase,
+  resolveBMSBase,
   type BeMusicEvent,
-  type BeMusicJson,
+  type BeMusicJSON,
 } from '@be-music/json';
 import type { AudioSession } from '@be-music/player';
 import { normalizePath } from '@be-music/utils/core';
@@ -39,7 +39,7 @@ export interface WebAudioSessionSlicePlayback {
 }
 
 /**
- * Construction-time inputs for {@link createWebAudioSession}. Decoupled from `BeMusicJson` resolution so the demo's
+ * Construction-time inputs for {@link createWebAudioSession}. Decoupled from `BeMusicJSON` resolution so the demo's
  * existing prepare path can decode every `#WAVxx` to an `AudioBuffer` once and reuse the same buffer cache across
  * pause / restart / replay cycles without re-decoding.
  */
@@ -52,12 +52,12 @@ export interface WebAudioSessionContext {
   audioBus: AudioBusHandle;
   /** Resolved chart used to look up `event.value` → `#WAVxx` slot path and to read the `#BASE` radix for slot lookups
    *  on `#BASE 62` charts. */
-  chart: BeMusicJson;
-  /** Decoded WAV cache, keyed by lower-cased `normalizePath(resourceWavPath)`. The session reads from this map but
+  chart: BeMusicJSON;
+  /** Decoded WAV cache, keyed by lower-cased `normalizePath(resourceWAVPath)`. The session reads from this map but
    *  never mutates it; the host keeps decoding ownership so cross-session caches stay possible. */
   decodedSamples: ReadonlyMap<string, AudioBuffer>;
-  /** Per-`#WAVxx` slot gain multiplier produced by `collectBmsWavCmdVolumeMultipliers` /
-   *  `collectBmsExWavVolumeMultipliers`. Slots without an entry play at unity gain. */
+  /** Per-`#WAVxx` slot gain multiplier produced by `collectBmsWAVCmdVolumeMultipliers` /
+   *  `collectBMSExWAVVolumeMultipliers`. Slots without an entry play at unity gain. */
   wavCmdVolumeMultipliers: ReadonlyMap<string, number>;
   /** Optional per-event slice overrides for bmson sound-channel splitting — see
    *  {@link WebAudioSessionSlicePlayback}. */
@@ -144,7 +144,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     context;
   const resolveChartStartContextTime = context.getChartStartContextTime ?? (() => 0);
   let basePlaybackRate = context.playbackRate !== undefined && context.playbackRate > 0 ? context.playbackRate : 1;
-  const sampleIdBase = resolveBmsBase(chart);
+  const sampleIdBase = resolveBMSBase(chart);
   /** Active BufferSource per `#WAVxx` slot. Used to honor bmson `c = true` (skip retrigger of a still-playing sample)
    *  and to wipe the slot once the source ends naturally. */
   const activeBySlot = new Map<string, WebAudioSourceHandle>();
@@ -158,7 +158,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   // `#xxx97` / `#xxx98` current dynamic gains. Spec (docs/bms-spec.md「#xxx97 / #xxx98」): a volume change applies to
   // voices triggered from that point on; already-playing voices are untouched. The gain is therefore captured
   // per-voice at build time instead of being written onto the shared bus mixers.
-  let currentBgmDynamicGain = 1;
+  let currentBGMDynamicGain = 1;
   let currentKeyDynamicGain = 1;
 
   const resolveSamplePath = (event: BeMusicEvent): { sampleKey: string; path: string } | undefined => {
@@ -262,7 +262,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const channel = normalizeChannel(event.channel);
     const isPlayerLane = isPlayLaneSoundChannel(channel);
     const bus = isPlayerLane ? audioBus.keyMixer : audioBus.bgmMixer;
-    const built = buildSourceNode(sampleKey, path, bus, isPlayerLane ? currentKeyDynamicGain : currentBgmDynamicGain);
+    const built = buildSourceNode(sampleKey, path, bus, isPlayerLane ? currentKeyDynamicGain : currentBGMDynamicGain);
     if (!built) return;
     const { node, buffer } = built;
 
@@ -278,7 +278,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
     const startAt =
       audioContextStartSeconds !== undefined ? Math.max(audioContext.currentTime, audioContextStartSeconds) : undefined;
-    if (usesMonophonicWavPlayback(chart)) {
+    if (usesMonophonicWAVPlayback(chart)) {
       const previous = activeBySlot.get(sampleKey);
       if (previous) {
         stopSource(previous, startAt);
@@ -293,17 +293,17 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
 
   const applyDynamicVolumeEvent = (event: BeMusicEvent): void => {
     if (disposed) return;
-    const gain = parseBmsDynamicVolumeGain(event.value);
+    const gain = parseBMSDynamicVolumeGain(event.value);
     if (gain === undefined) return;
     const clamped = Math.max(0, Math.min(1, gain));
-    // Bgm channel = `97`, key channel = `98`. The dispatcher already gated on
-    // `isBmsDynamicVolumeChangeChannel(event.channel)` so one of the two predicates must match — but we still branch
+    // BGM channel = `97`, key channel = `98`. The dispatcher already gated on
+    // `isBMSDynamicVolumeChangeChannel(event.channel)` so one of the two predicates must match — but we still branch
     // explicitly so an unrecognized future channel doesn't accidentally retarget the wrong side. The stored gain is
     // consumed by `buildSourceNode` for subsequently triggered voices only — never written to the live bus mixers,
     // so in-flight voices keep the level they started with (docs/bms-spec.md「#xxx97 / #xxx98」).
-    if (isBmsBgmVolumeChangeChannel(event.channel)) {
-      currentBgmDynamicGain = clamped;
-    } else if (isBmsKeyVolumeChangeChannel(event.channel)) {
+    if (isBmsBGMVolumeChangeChannel(event.channel)) {
+      currentBGMDynamicGain = clamped;
+    } else if (isBMSKeyVolumeChangeChannel(event.channel)) {
       currentKeyDynamicGain = clamped;
     }
   };
@@ -366,7 +366,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     triggerEvent: (event: BeMusicEvent): void => {
       // Dynamic volume changes (`#xxx97` / `#xxx98`) reach the session through the same `triggerEvent` channel as
       // sample plays — the engine batches all realtime audio into one stream — so we branch on the channel here.
-      if (isBmsBgmVolumeChangeChannel(event.channel) || isBmsKeyVolumeChangeChannel(event.channel)) {
+      if (isBmsBGMVolumeChangeChannel(event.channel) || isBMSKeyVolumeChangeChannel(event.channel)) {
         applyDynamicVolumeEvent(event);
         return;
       }
@@ -376,7 +376,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // Scheduled cues are exclusively BGM-style triggers (player input is by definition immediate), so we don't
       // expect dynamic volume events to arrive here — but route them through the same handler if they ever do so a
       // misuse doesn't silently drop the event.
-      if (isBmsBgmVolumeChangeChannel(event.channel) || isBmsKeyVolumeChangeChannel(event.channel)) {
+      if (isBmsBGMVolumeChangeChannel(event.channel) || isBMSKeyVolumeChangeChannel(event.channel)) {
         applyDynamicVolumeEvent(event);
         return;
       }

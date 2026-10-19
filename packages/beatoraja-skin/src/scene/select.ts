@@ -75,7 +75,7 @@ export function beatorajaKeyModeIndex(playVariant: string | undefined): number {
  * The LNMODE button's index (0 LN, 1 CN, 2 HCN) for a chart's `#LNMODE`, which counts from 1 (1 LN, 2 CN, 3 HCN).
  * Charts without the directive, or with a value outside 1..3, read as LN.
  */
-export function beatorajaLnModeIndex(lnMode: number | undefined): 0 | 1 | 2 {
+export function beatorajaLNModeIndex(lnMode: number | undefined): 0 | 1 | 2 {
   if (lnMode === 2) return 1;
   if (lnMode === 3) return 2;
   return 0;
@@ -152,10 +152,10 @@ export interface BeatorajaSelectChartFacts {
   /** The lowest and highest BPM; absent without a positive one. */
   readonly bpmRange?: { readonly min: number; readonly max: number };
   /**
-   * The BPM the most judged notes sit at (beatoraja's MAINBPM, `resolveChartMainBpm` of `@be-music/chart`, the rule a
+   * The BPM the most judged notes sit at (beatoraja's MAINBPM, `resolveChartMainBPM` of `@be-music/chart`, the rule a
    * play reads); the header BPM when 0 or absent.
    */
-  readonly mainBpm?: number;
+  readonly mainBPM?: number;
 }
 
 /**
@@ -285,7 +285,7 @@ function playLevelNumber(level: number | string | undefined): number | undefined
  * The select screen's number for the bar under the cursor, `undefined` to hide it. The folder bar's chart count (300)
  * and the clock (21-26) read on any bar; the rest on a chart bar only: its `#TOTAL` (368), note kinds (350-353),
  * densities (360-365), notes, BPMs and `#PLAYLEVEL`, length (1163 / 1164), and the judge timing offset (12). The main
- * BPM (92) is the one a play shows ({@link BeatorajaSelectChartFacts.mainBpm}), not the header BPM. The play's live
+ * BPM (92) is the one a play shows ({@link BeatorajaSelectChartFacts.mainBPM}), not the header BPM. The play's live
  * numbers read 0 (there is no play on the select screen).
  */
 export function resolveBeatorajaSelectNumber(id: number, input: BeatorajaSelectInput): number | undefined {
@@ -336,7 +336,7 @@ export function resolveBeatorajaSelectNumber(id: number, input: BeatorajaSelectI
     case BEATORAJA_NUM.TOTALNOTES_LIVE:
       return song.totalNotes;
     case BEATORAJA_NUM.MAINBPM: {
-      const main = chart?.mainBpm !== undefined && chart.mainBpm > 0 ? chart.mainBpm : song.bpm;
+      const main = chart?.mainBPM !== undefined && chart.mainBPM > 0 ? chart.mainBPM : song.bpm;
       return main !== undefined ? Math.round(main) : undefined;
     }
     case BEATORAJA_NUM.NOWBPM:
@@ -383,7 +383,7 @@ export function resolveBeatorajaSelectRefValue(ref: number, input: BeatorajaSele
     case BEATORAJA_BUTTON.SORT:
       return beatorajaSortIndex(input.list.sort);
     case BEATORAJA_BUTTON.LNMODE:
-      return input.lnMode ?? beatorajaLnModeIndex(input.focused?.kind === 'chart' ? input.chart?.lnMode : undefined);
+      return input.lnMode ?? beatorajaLNModeIndex(input.focused?.kind === 'chart' ? input.chart?.lnMode : undefined);
     case BEATORAJA_NUM.CLEAR:
       return 0;
     default:

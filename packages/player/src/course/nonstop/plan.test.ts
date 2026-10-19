@@ -15,8 +15,8 @@ function stage(
       position <= 1 ? position * first * measureSeconds : (first + (position - 1)) * measureSeconds,
     firstNote,
     lastNote,
-    headerBpm: bpm,
-    finalBpm: bpm,
+    headerBPM: bpm,
+    finalBPM: bpm,
     firstMeasureLength: first,
     ...extra,
   };
@@ -71,7 +71,7 @@ describe('planNonstopCourse', () => {
   });
 
   test('time-stretches a stage after a FIT connection to the previous final BPM', () => {
-    const [, fitted] = planNonstopCourse([stage(150, 0, 7, { finalBpm: 150 }), stage(100, 2, 6)], ['fade-fit']);
+    const [, fitted] = planNonstopCourse([stage(150, 0, 7, { finalBPM: 150 }), stage(100, 2, 6)], ['fade-fit']);
     expect(fitted?.rate).toBe(1.5);
     // Stage 1 hands over at 7 × 1.6 s = 11.2 s; the stretched stage's measures last 2.4 / 1.5 = 1.6 s.
     expect(fitted!.offsetSeconds + (2 * 2.4) / 1.5).toBeCloseTo(11.2);

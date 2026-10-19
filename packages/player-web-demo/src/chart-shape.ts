@@ -7,10 +7,10 @@ import {
 import { resolveLibraryChartPlayVariant, type LibraryChart } from '@be-music/scene-model';
 
 /**
- * Maps a song's parsed chart variant onto the `{ keys, isDouble, isPms }` shape `pickBeatorajaPlayableVariant`
+ * Maps a song's parsed chart variant onto the `{ keys, isDouble, isPMS }` shape `pickBeatorajaPlayableVariant`
  * expects. Pure derivation — no state, no side effects.
  */
-export function chartShapeFor(song: LibraryChart): { keys: number; isDouble: boolean; isPms: boolean } {
+export function chartShapeFor(song: LibraryChart): { keys: number; isDouble: boolean; isPMS: boolean } {
   const variant = resolveLibraryChartPlayVariant(song);
   // `'48'` is the DP form of the 24-key keyboard mode, so it reports 24 keys per side plus `isDouble` — the same
   // per-side convention the IIDX `'14'` / `'10'` variants use.
@@ -29,7 +29,7 @@ export function chartShapeFor(song: LibraryChart): { keys: number; isDouble: boo
   return {
     keys,
     isDouble: variant === '14' || variant === '10' || variant === '48',
-    isPms: variant === '9',
+    isPMS: variant === '9',
   };
 }
 

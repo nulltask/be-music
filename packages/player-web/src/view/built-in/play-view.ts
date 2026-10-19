@@ -25,10 +25,10 @@ import { uploadTextures } from '../shared/texture-upload.ts';
 import { playfieldTouchLanes, TouchLaneInput } from '../shared/touch-lane-input.ts';
 import type { IntentSink, PlayFrame, PlayIntent, PlayView, PlayViewTiming, PlayfieldSkin } from '../types.ts';
 import {
-  collectBgaTargets,
+  collectBGATargets,
   LEGACY_STAGE_SIZE,
   renderBuiltInChrome,
-  type BgaTargetsContext,
+  type BGATargetsContext,
   type BuiltInChromeContext,
 } from './play-chrome.ts';
 
@@ -60,7 +60,7 @@ export type BuiltInPlayViewOptions = Pick<
 /** The built-in play view. See the module comment. */
 export class BuiltInPlayView
   extends PlayLayers
-  implements PlayView, PlayFrameContext, BuiltInChromeContext, BgaTargetsContext
+  implements PlayView, PlayFrameContext, BuiltInChromeContext, BGATargetsContext
 {
   public readonly family = 'built-in' as const;
   public readonly timing: PlayViewTiming = BUILT_IN_PLAY_TIMING;
@@ -183,8 +183,8 @@ export class BuiltInPlayView
       this.skinBindingInstance = undefined;
       this.songImages?.dispose();
       this.songImages = undefined;
-      for (const crop of this.skinBgaCrops.values()) crop?.close();
-      this.skinBgaCrops.clear();
+      for (const crop of this.skinBGACrops.values()) crop?.close();
+      this.skinBGACrops.clear();
       this.noteLayerPool.destroy();
       this.skinLayerPool.destroy();
       this.overlayLayerPool.destroy();
@@ -218,7 +218,7 @@ function createBuiltInPlayfieldSkin(view: BuiltInPlayView): PlayfieldSkin {
     laneRect: () => undefined,
     noteCell: () => undefined,
     measureLines: () => undefined,
-    bgaTargets: (out) => collectBgaTargets(view, out),
+    bgaTargets: (out) => collectBGATargets(view, out),
     bombCell: () => undefined,
     bombDurationMs: () => view.skinBinding.bombDurationMs ?? PHANTOM_BOMB_DURATION_MS,
     keyOnFadeMs: () => KEY_ON_FADE_OUT_MS,

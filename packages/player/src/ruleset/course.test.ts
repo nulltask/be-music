@@ -5,7 +5,7 @@ import {
   resolveCourseGaugeId,
   resolveDefaultCourseGaugeSet,
 } from './course.ts';
-import { resolveLr2HardDamageMultiplier, resolveRuleset, type RulesetWindowTables } from './definitions.ts';
+import { resolveLR2HardDamageMultiplier, resolveRuleset, type RulesetWindowTables } from './definitions.ts';
 import { createEmptyRulesetNoteCounts, type RulesetChartFacts } from './facts.ts';
 import { RulesetGauge } from './gauge.ts';
 
@@ -158,7 +158,7 @@ describe('resolveRuleset with a course', () => {
 
   test('LR2 course gauges take the HARD damage multiplier of the stage chart', () => {
     const stage = resolveRuleset(facts('7-key-sp', 100), 'lr2', { selectedGauge: 'HARD', course: { kind: 'grade' } });
-    const damage = resolveLr2HardDamageMultiplier(stage.effectiveTotal, 100);
+    const damage = resolveLR2HardDamageMultiplier(stage.effectiveTotal, 100);
     expect(stage.gauge.id).toBe('GRADE-HARD');
     expect(stage.gauge.values[3]).toBeCloseTo(-6 * damage, 9);
   });

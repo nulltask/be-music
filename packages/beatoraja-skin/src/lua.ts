@@ -309,7 +309,7 @@ class LuaRuntimeOwner {
     this.context = context;
     try {
       lua_rawgeti(this.L, LUA_REGISTRYINDEX, ref);
-      for (const arg of args) pushJsValueAsLua(this.L, arg);
+      for (const arg of args) pushJSValueAsLua(this.L, arg);
       const status = lua_pcall(this.L, args.length, 1, 0);
       if (status !== LUA_OK) {
         lua_settop(this.L, top);
@@ -841,16 +841,16 @@ function setupCompatStubs(L: lua_State): void {
     const t = lua_type(state, 2) === LUA_TNUMBER ? lua_tonumber(state, 2) * 1000 : Date.now();
     if (fmt === '*t' || fmt === '!*t') {
       const d = new Date(t);
-      const useUtc = fmt.startsWith('!');
+      const useUTC = fmt.startsWith('!');
       lua_createtable(state, 0, 8);
-      pushNumberField(state, 'year', useUtc ? d.getUTCFullYear() : d.getFullYear());
-      pushNumberField(state, 'month', (useUtc ? d.getUTCMonth() : d.getMonth()) + 1);
-      pushNumberField(state, 'day', useUtc ? d.getUTCDate() : d.getDate());
-      pushNumberField(state, 'hour', useUtc ? d.getUTCHours() : d.getHours());
-      pushNumberField(state, 'min', useUtc ? d.getUTCMinutes() : d.getMinutes());
-      pushNumberField(state, 'sec', useUtc ? d.getUTCSeconds() : d.getSeconds());
-      pushNumberField(state, 'wday', (useUtc ? d.getUTCDay() : d.getDay()) + 1);
-      pushNumberField(state, 'yday', dayOfYear(d, useUtc));
+      pushNumberField(state, 'year', useUTC ? d.getUTCFullYear() : d.getFullYear());
+      pushNumberField(state, 'month', (useUTC ? d.getUTCMonth() : d.getMonth()) + 1);
+      pushNumberField(state, 'day', useUTC ? d.getUTCDate() : d.getDate());
+      pushNumberField(state, 'hour', useUTC ? d.getUTCHours() : d.getHours());
+      pushNumberField(state, 'min', useUTC ? d.getUTCMinutes() : d.getMinutes());
+      pushNumberField(state, 'sec', useUTC ? d.getUTCSeconds() : d.getSeconds());
+      pushNumberField(state, 'wday', (useUTC ? d.getUTCDay() : d.getDay()) + 1);
+      pushNumberField(state, 'yday', dayOfYear(d, useUTC));
       return 1;
     }
     lua_pushstring(state, to_luastring(formatLuaDate(fmt, new Date(t))));
@@ -959,9 +959,9 @@ function pushNumberField(L: lua_State, key: string, value: number): void {
  * unless the format starts with `!` (UTC).
  */
 function formatLuaDate(fmt: string, date: Date): string {
-  const useUtc = fmt.startsWith('!');
-  const f = useUtc ? fmt.slice(1) : fmt;
-  const get = (utc: () => number, local: () => number): number => (useUtc ? utc() : local());
+  const useUTC = fmt.startsWith('!');
+  const f = useUTC ? fmt.slice(1) : fmt;
+  const get = (utc: () => number, local: () => number): number => (useUTC ? utc() : local());
   const pad = (n: number, w = 2): string => String(n).padStart(w, '0');
   const year = get(
     () => date.getUTCFullYear(),
@@ -1018,9 +1018,9 @@ function formatLuaDate(fmt: string, date: Date): string {
   });
 }
 
-function dayOfYear(d: Date, useUtc: boolean): number {
-  const start = useUtc ? Date.UTC(d.getUTCFullYear(), 0, 1) : new Date(d.getFullYear(), 0, 1).getTime();
-  const cur = useUtc ? d.getTime() : d.getTime() - d.getTimezoneOffset() * 60000;
+function dayOfYear(d: Date, useUTC: boolean): number {
+  const start = useUTC ? Date.UTC(d.getUTCFullYear(), 0, 1) : new Date(d.getFullYear(), 0, 1).getTime();
+  const cur = useUTC ? d.getTime() : d.getTime() - d.getTimezoneOffset() * 60000;
   return Math.floor((cur - start) / 86400000) + 1;
 }
 
@@ -1124,7 +1124,7 @@ function pushMainStateStub(L: lua_State, owner: LuaRuntimeOwner, exposeMainState
   setStringAccessor('text', (ctx, state) => ctx.text?.(numberArg(state)));
   lua_pushjsfunction(L, (state) => {
     const offset = owner.context?.offset?.(numberArg(state)) ?? ZERO_LUA_OFFSET;
-    pushJsValueAsLua(state, {
+    pushJSValueAsLua(state, {
       x: numberOrZero(offset.x),
       y: numberOrZero(offset.y),
       w: numberOrZero(offset.w),
@@ -1228,7 +1228,7 @@ function setupSkinConfig(L: lua_State, config: BeatorajaLuaSkinConfig | undefine
   }
 
   // Build `skin_config` as a fresh Lua table directly (instead of going through
-  // `pushJsValueAsLua`) so we can attach a metatable to `skin_config.offset`. Beatoraja's
+  // `pushJSValueAsLua`) so we can attach a metatable to `skin_config.offset`. Beatoraja's
   // Lua bridge exposes `skin_config.offset` as a NAME-KEYED TABLE — `skin_config.offset[name]`
   // returns an `{x, y, w, h, r, a}` record per declared custom offset. ModernChic and other
   // sophisticated skins access this in deferred property closures:
@@ -1243,10 +1243,10 @@ function setupSkinConfig(L: lua_State, config: BeatorajaLuaSkinConfig | undefine
   lua_createtable(L, 0, 4);
 
   // option / file tables — pre-populated with the user's confirmed picks.
-  pushJsValueAsLua(L, config.option ?? {});
+  pushJSValueAsLua(L, config.option ?? {});
   lua_setfield(L, -2, to_luastring('option'));
 
-  pushJsValueAsLua(L, config.file ?? {});
+  pushJSValueAsLua(L, config.file ?? {});
   lua_setfield(L, -2, to_luastring('file'));
 
   // offset table with __index → default-zero record.
@@ -1298,7 +1298,7 @@ function pushOffsetTable(L: lua_State, populated: BeatorajaLuaSkinConfig['offset
       populated as Readonly<Record<string, Partial<BeatorajaLuaOffsetValue>>>,
     )) {
       if (value === null || typeof value !== 'object') continue;
-      pushJsValueAsLua(L, sanitizeOffsetValue(value));
+      pushJSValueAsLua(L, sanitizeOffsetValue(value));
       lua_setfield(L, -2, to_luastring(name));
     }
   }
@@ -1309,7 +1309,7 @@ function pushOffsetTable(L: lua_State, populated: BeatorajaLuaSkinConfig['offset
   // these records but cheap-to-recreate is safer).
   lua_createtable(L, 0, 1);
   const indexFn: LuaCFunction = (state) => {
-    pushJsValueAsLua(state, { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 });
+    pushJSValueAsLua(state, { x: 0, y: 0, w: 0, h: 0, r: 0, a: 0 });
     return 1;
   };
   lua_pushjsfunction(L, indexFn);
@@ -1329,7 +1329,7 @@ function sanitizeOffsetValue(value: Partial<BeatorajaLuaOffsetValue>): Beatoraja
   };
 }
 
-function pushJsValueAsLua(L: lua_State, value: unknown): void {
+function pushJSValueAsLua(L: lua_State, value: unknown): void {
   if (value === null || value === undefined) {
     lua_pushnil(L);
     return;
@@ -1353,7 +1353,7 @@ function pushJsValueAsLua(L: lua_State, value: unknown): void {
   if (Array.isArray(value)) {
     lua_createtable(L, value.length, 0);
     for (let i = 0; i < value.length; i += 1) {
-      pushJsValueAsLua(L, value[i]);
+      pushJSValueAsLua(L, value[i]);
       lua_rawseti(L, -2, i + 1);
     }
     return;
@@ -1362,7 +1362,7 @@ function pushJsValueAsLua(L: lua_State, value: unknown): void {
     const entries = Object.entries(value as Record<string, unknown>);
     lua_createtable(L, 0, entries.length);
     for (const [key, v] of entries) {
-      pushJsValueAsLua(L, v);
+      pushJSValueAsLua(L, v);
       lua_setfield(L, -2, to_luastring(key));
     }
     return;

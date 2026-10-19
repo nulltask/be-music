@@ -1,4 +1,4 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicJSON } from '@be-music/json';
 import type { CourseDefinition, RandomCourseDefinition } from '@be-music/player/course';
 
 /*
@@ -27,7 +27,7 @@ export interface LibraryChart {
   bpm?: number;
   /** The notes a play scores: judged notes without FREE ZONE tails; mines and invisible objects are not notes. */
   totalNotes: number;
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
 }
 
 /**

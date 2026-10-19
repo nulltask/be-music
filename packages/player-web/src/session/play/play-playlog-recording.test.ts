@@ -1,6 +1,6 @@
 import { computeChartFingerprint, computePlayFingerprint, drawRandomOutcomes } from '@be-music/chart';
-import { createEmptyJson } from '@be-music/json';
-import { parseChart, resolveBmsControlFlowWithDraws } from '@be-music/parser';
+import { createEmptyJSON } from '@be-music/json';
+import { parseChart, resolveBMSControlFlowWithDraws } from '@be-music/parser';
 import { autoPlay, resolvePlayChart, type PlayerOptions } from '@be-music/player';
 import type { BeMusicPlaylog, PlaylogViewState } from '@be-music/player/playlog';
 import { describe, expect, test } from 'vite-plus/test';
@@ -13,16 +13,16 @@ const VIEW: PlaylogViewState = { hiSpeed: 2, hiSpeedScale: 'beatoraja', hsFix: '
 
 describe('resolvePlaylogRecording', () => {
   test('records the DP-flip intent and the chart path next to the host fields', () => {
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     expect(
       resolvePlaylogRecording(
-        { gauge: 'HARD', chartSha256: 'abc', dpFlip: true },
+        { gauge: 'HARD', chartSHA256: 'abc', dpFlip: true },
         { chart, chartPath: 'song/chart.bms' },
         VIEW,
       ),
     ).toEqual({
       gauge: 'HARD',
-      chartSha256: 'abc',
+      chartSHA256: 'abc',
       sourceChart: chart,
       dpFlip: true,
       view: VIEW,
@@ -31,7 +31,7 @@ describe('resolvePlaylogRecording', () => {
   });
 
   test("passes the song's chart through as the fingerprints' source", () => {
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
     expect(resolvePlaylogRecording({}, { chart, chartPath: 'chart.bms' }, VIEW).sourceChart).toBe(chart);
     expect(resolvePlaylogRecording({}, undefined, VIEW)).toEqual({ gauge: undefined, view: VIEW });
   });
@@ -106,7 +106,7 @@ describe('play-log #RANDOM draws on the web paths', () => {
 
   function expectReproducible(playlog: BeMusicPlaylog, played: typeof SOURCE): void {
     // A verifier with the chart file rebuilds the played chart from the recorded draws ...
-    const rebuilt = resolveBmsControlFlowWithDraws(SOURCE, playlog.play.randomDraws ?? []);
+    const rebuilt = resolveBMSControlFlowWithDraws(SOURCE, playlog.play.randomDraws ?? []);
     expect(rebuilt).toEqual(played);
     // ... and recomputes both fingerprints the log carries.
     expect(playlog.chart.playFingerprint).toBe(computePlayFingerprint(played, { chartPath: CHART_PATH }));

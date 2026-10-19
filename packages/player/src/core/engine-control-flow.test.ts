@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { drawRandomOutcomes, type RandomDraws } from '../../../chart/src/index.ts';
-import type { BeMusicJson } from '../../../json/src/index.ts';
-import { parseChart, resolveBmsControlFlowWithDraws } from '../../../parser/src/index.ts';
+import type { BeMusicJSON } from '../../../json/src/index.ts';
+import { parseChart, resolveBMSControlFlowWithDraws } from '../../../parser/src/index.ts';
 import type { BeMusicPlaylog } from '../playlog/index.ts';
 import { autoPlay, manualPlay, type PlayerOptions } from './engine.ts';
 
@@ -32,17 +32,17 @@ const drawsFor = (value: number): RandomDraws => [
 interface PlayResult {
   notes: string[];
   output: string;
-  resolved: BeMusicJson | undefined;
+  resolved: BeMusicJSON | undefined;
 }
 
 async function play(
   run: typeof autoPlay,
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   options: Pick<PlayerOptions, 'randomDraws'>,
 ): Promise<PlayResult> {
   let playlog: BeMusicPlaylog | undefined;
   let output = '';
-  let resolved: BeMusicJson | undefined;
+  let resolved: BeMusicJSON | undefined;
   await run(chart, {
     ...options,
     speed: 64,
@@ -79,7 +79,7 @@ describe('engine control flow', () => {
 
     test(`${name} plays a resolved chart as is and reports the draws it was resolved with`, async () => {
       const draws = drawRandomOutcomes(SOURCE, () => 0.9);
-      const resolved = resolveBmsControlFlowWithDraws(SOURCE, draws);
+      const resolved = resolveBMSControlFlowWithDraws(SOURCE, draws);
       const result = await play(run, resolved, { randomDraws: draws });
       expect(result.notes).toEqual(['12']);
       expect(result.resolved).toEqual(resolved);
@@ -107,7 +107,7 @@ describe('engine control flow', () => {
 
 describe('holding a manual play open after its chart', () => {
   test('reports the chart over once, keeps running, and ends normally when the host lets go', async () => {
-    const chart = resolveBmsControlFlowWithDraws(SOURCE, drawsFor(1));
+    const chart = resolveBMSControlFlowWithDraws(SOURCE, drawsFor(1));
     const controller = new AbortController();
     let settledAt: number | undefined;
     let settledCount = 0;

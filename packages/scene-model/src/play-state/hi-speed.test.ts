@@ -1,27 +1,27 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { HISPEED_MAX } from '../play-options/hi-speed.ts';
-import { createHiSpeedState, reduceHiSpeed, resolveHsFixMultiplier } from './hi-speed.ts';
+import { createHiSpeedState, reduceHiSpeed, resolveHSFixMultiplier } from './hi-speed.ts';
 
-describe('resolveHsFixMultiplier', () => {
-  const tempo = { referenceBpm: 150, bpms: [150, 300, 75], mainBpm: 120 };
+describe('resolveHSFixMultiplier', () => {
+  const tempo = { referenceBPM: 150, bpms: [150, 300, 75], mainBPM: 120 };
 
   test('keeps the maximum, minimum or main BPM at the player hi-speed', () => {
-    expect(resolveHsFixMultiplier('MAXBPM', tempo)).toBe(0.5);
-    expect(resolveHsFixMultiplier('MINBPM', tempo)).toBe(2);
-    expect(resolveHsFixMultiplier('AVERAGE', tempo)).toBe(1.25);
+    expect(resolveHSFixMultiplier('MAXBPM', tempo)).toBe(0.5);
+    expect(resolveHSFixMultiplier('MINBPM', tempo)).toBe(2);
+    expect(resolveHSFixMultiplier('AVERAGE', tempo)).toBe(1.25);
     // CONSTANT scrolls as AVERAGE until the scroll can follow every BPM change.
-    expect(resolveHsFixMultiplier('CONSTANT', tempo)).toBe(1.25);
+    expect(resolveHSFixMultiplier('CONSTANT', tempo)).toBe(1.25);
   });
 
   test('reads a negative BPM at its magnitude and falls back to the reference without a main BPM', () => {
-    expect(resolveHsFixMultiplier('MAXBPM', { referenceBpm: 150, bpms: [150, -600] })).toBe(0.25);
-    expect(resolveHsFixMultiplier('AVERAGE', { referenceBpm: 150, bpms: [150] })).toBe(1);
+    expect(resolveHSFixMultiplier('MAXBPM', { referenceBPM: 150, bpms: [150, -600] })).toBe(0.25);
+    expect(resolveHSFixMultiplier('AVERAGE', { referenceBPM: 150, bpms: [150] })).toBe(1);
   });
 
   test('is 1 without HS-FIX, a reference BPM or a positive BPM', () => {
-    expect(resolveHsFixMultiplier('OFF', tempo)).toBe(1);
-    expect(resolveHsFixMultiplier('MAXBPM', { bpms: [150] })).toBe(1);
-    expect(resolveHsFixMultiplier('MAXBPM', { referenceBpm: 150, bpms: [0, Number.NaN] })).toBe(1);
+    expect(resolveHSFixMultiplier('OFF', tempo)).toBe(1);
+    expect(resolveHSFixMultiplier('MAXBPM', { bpms: [150] })).toBe(1);
+    expect(resolveHSFixMultiplier('MAXBPM', { referenceBPM: 150, bpms: [0, Number.NaN] })).toBe(1);
   });
 });
 

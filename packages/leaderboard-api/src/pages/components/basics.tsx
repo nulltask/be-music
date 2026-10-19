@@ -15,8 +15,8 @@ export const playerHref = (handle: string): string => `/players/${encodeURICompo
  * `leaderboard.be-music.app`, `https://play.preview.be-music.app/` from its preview, and the production player from
  * anywhere else (a local dev server).
  */
-export function playerAppHref(pageUrl: string): string {
-  const match = /^leaderboard\.(.+)$/.exec(new URL(pageUrl).hostname.toLowerCase());
+export function playerAppHref(pageURL: string): string {
+  const match = /^leaderboard\.(.+)$/.exec(new URL(pageURL).hostname.toLowerCase());
   return `https://play.${match?.[1] ?? 'be-music.app'}/`;
 }
 export const courseHref = (courseFingerprint: string): string => `/courses/${encodeURIComponent(courseFingerprint)}`;

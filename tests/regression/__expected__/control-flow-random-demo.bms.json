@@ -28,12 +28,12 @@
       "stp": [],
       "wavCmds": [],
       "changeOption": {},
-      "exWav": {},
-      "exBmp": {},
+      "exWAV": {},
+      "exBMP": {},
       "bga": {},
       "scroll": {},
       "speed": {},
-      "swBga": {}
+      "swBGA": {}
     },
     "controlFlow": [
       "RANDOM 2",
@@ -131,7 +131,7 @@
       ],
       "title": "Control Flow Random Demo [A]",
       "playVariant": "5",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -167,7 +167,7 @@
           "percent": 75
         },
         "noteCount": 17,
-        "playFingerprint": "bmfp0:5fd9c005e4953ec185be930e0661b3c547571d80db842d6017fb660f066dd16f",
+        "playFingerprint": "bmfp0:f30389cad8378f705e40c26764d7c49d242464fb75830f1f8fc9e4a3e5695b81",
         "title": "Control Flow Random Demo [A]",
         "artist": "Codex"
       },
@@ -640,7 +640,7 @@
       ],
       "title": "Control Flow Random Demo [B]",
       "playVariant": "14",
-      "referenceBpm": 120,
+      "referenceBPM": 120,
       "timing": {
         "tempo": [
           "0 120 0"
@@ -666,7 +666,7 @@
           "percent": 75
         },
         "noteCount": 7,
-        "playFingerprint": "bmfp0:ff229ab668eb8a29e471fecfcc8f370a684a3c8012e792eaa228e405cc998858",
+        "playFingerprint": "bmfp0:82ddfb397223652a1dd861c0bc908c7fc6559ddda43c491b0672bc86cd22efe6",
         "title": "Control Flow Random Demo [B]",
         "artist": "Codex"
       },

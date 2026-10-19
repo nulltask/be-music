@@ -2,8 +2,8 @@
 // service opens it for a play (`openPlayGraph`, ADR 0007), and a play without the service builds it directly; the
 // chart's samples are decoded into it by `chart/play-audio.ts`.
 
-import { volWavToLinearGain } from '@be-music/chart';
-import type { BeMusicJson } from '@be-music/json';
+import { volWAVToLinearGain } from '@be-music/chart';
+import type { BeMusicJSON } from '@be-music/json';
 import { logger } from '../logger.ts';
 import { buildAudioBus, type AudioBusHandle, type BuildAudioBusOptions, type CompressorMode } from './audio-bus.ts';
 
@@ -20,7 +20,7 @@ export interface PlayAudioGraph {
  * as beatoraja does; other charts stay at unity), so every sample and the recorder see the post-`#VOLWAV` mix.
  */
 export function createPlayAudioGraph(
-  chart: BeMusicJson,
+  chart: BeMusicJSON,
   compressorMode: CompressorMode,
   busOptions?: BuildAudioBusOptions,
 ): PlayAudioGraph {
@@ -37,6 +37,6 @@ export function createPlayAudioGraph(
       typeof audioContext.outputLatency === 'number' ? +(audioContext.outputLatency * 1000).toFixed(2) : 'n/a',
   });
   const audioBus = buildAudioBus(audioContext, compressorMode, busOptions);
-  audioBus.setMasterGain(volWavToLinearGain(chart.bms.volWav));
+  audioBus.setMasterGain(volWAVToLinearGain(chart.bms.volWAV));
   return { audioContext, audioBus };
 }

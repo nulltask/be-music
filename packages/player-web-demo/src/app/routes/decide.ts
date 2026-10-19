@@ -19,7 +19,7 @@ import type { LibraryService } from '../../services/library.ts';
 import type { PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
-import type { DemoGuiState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
+import type { DemoGUIState, DemoScene, PlayerWebDemoElements } from '../../types.ts';
 import type { BeatorajaSkinOptionsPanel } from '../../ui/beatoraja-skin-options.ts';
 import { settleDecidePreload, type DecidePreload } from '../decide-handoff.ts';
 import type { FamilyKits, ResolvedPlayKit } from '../family-kits.ts';
@@ -62,11 +62,11 @@ export interface DecideRouteDeps {
   /** The family that draws the screen and the play, and the kits they draw with. */
   readonly familyKits: Pick<FamilyKits, 'familyDispatchState' | 'playsOnBeatoraja' | 'decideKitFor' | 'resolvePlayKit'>;
   /** The beatoraja theme's sounds: its decide sound. */
-  readonly beatoraja: Pick<BeatorajaThemeService, 'beatorajaThemeBgm'>;
+  readonly beatoraja: Pick<BeatorajaThemeService, 'beatorajaThemeBGM'>;
   /** The play options in force, which the screen shows. */
   readonly playOptions: Pick<PlayOptionsService, 'current'>;
   /** The Debug Menu's auto play, and the tempo the status line shows. */
-  readonly guiState: Pick<DemoGuiState, 'autoPlay' | 'tempoPercent' | 'tempoPitchMode'>;
+  readonly guiState: Pick<DemoGUIState, 'autoPlay' | 'tempoPercent' | 'tempoPitchMode'>;
   readonly audio: AudioService;
   /** The skin-options panel of the beatoraja play showing. */
   readonly beatorajaSkinOptions: Pick<BeatorajaSkinOptionsPanel, 'refreshBeatorajaPlaySkinOptions'>;
@@ -224,7 +224,7 @@ export class DecideRoute {
       source: resolveSongSource(this.library.collection, song),
       // The LR2 / built-in select screen plays the theme's decide jingle as the chart is picked, and lets it ring on
       // into the play, so those screens play none of their own. The beatoraja screen plays its theme's decide sound.
-      sounds: kit.family === 'beatoraja' ? systemSoundSetFromBeatoraja({ bgm: this.beatoraja.beatorajaThemeBgm }) : {},
+      sounds: kit.family === 'beatoraja' ? systemSoundSetFromBeatoraja({ bgm: this.beatoraja.beatorajaThemeBGM }) : {},
       audio: this.audio,
       on: { continue: callbacks.onContinue, cancel: callbacks.onCancel },
     });

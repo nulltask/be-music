@@ -1,19 +1,19 @@
 import { evaluateControlFlow, type ActiveControlFlowEntry, type RandomDraws } from '@be-music/chart';
 import {
-  cloneJson,
-  type BmsControlFlowCommand,
-  type BmsControlFlowEntry,
-  type BeMusicJson,
+  cloneJSON,
+  type BMSControlFlowCommand,
+  type BMSControlFlowEntry,
+  type BeMusicJSON,
   normalizeChannel,
   normalizeObjectKey,
 } from '@be-music/json';
-import { buildBmsObjectLineEntry, sortAndNormalizeEvents, upsertMeasureLength } from './event-utils.ts';
+import { buildBMSObjectLineEntry, sortAndNormalizeEvents, upsertMeasureLength } from './event-utils.ts';
 
-type ControlFlowCommand = BmsControlFlowCommand;
+type ControlFlowCommand = BMSControlFlowCommand;
 
 export type ControlFlowCaptureFrameType = 'random' | 'if' | 'switch';
 
-type MeasureLengthEntry = BeMusicJson['measures'][number];
+type MeasureLengthEntry = BeMusicJSON['measures'][number];
 
 export interface ResolveControlFlowOptions {
   /**
@@ -24,7 +24,7 @@ export interface ResolveControlFlowOptions {
    * chart). Callers should fall back to `command` when `commandRaw` is undefined, which is the common base-36
    * case-insensitive path.
    */
-  applyHeader: (json: BeMusicJson, command: string, commandRaw: string | undefined, value: string) => void;
+  applyHeader: (json: BeMusicJSON, command: string, commandRaw: string | undefined, value: string) => void;
 }
 
 /**
@@ -33,11 +33,11 @@ export interface ResolveControlFlowOptions {
  * copy's `bms.controlFlow` is emptied.
  */
 export function resolveControlFlow(
-  input: BeMusicJson,
+  input: BeMusicJSON,
   draws: RandomDraws,
   options: ResolveControlFlowOptions,
-): BeMusicJson {
-  const json = cloneJson(input);
+): BeMusicJSON {
+  const json = cloneJSON(input);
   // Evaluated on the copy so the applied events never share `position` / `bmson` objects with `input`. Draws that do
   // not belong to this chart throw here, including for a chart without control flow handed non-empty draws.
   const activeEntries = evaluateControlFlow(json, draws);
@@ -58,7 +58,7 @@ export function resolveControlFlow(
   json.bms.controlFlow = [];
   json.measures.sort((left, right) => left.index - right.index);
   // Honor `#BASE 62` so post-control-flow event normalization preserves lowercase IDs instead of folding them. The
-  // base was recorded on the chart by the initial `parseBms` pass.
+  // base was recorded on the chart by the initial `parseBMS` pass.
   const replayBase: 36 | 62 = json.bms.base === 62 ? 62 : 36;
   json.events = sortAndNormalizeEvents(json.events, replayBase);
   return json;
@@ -95,10 +95,10 @@ export function createControlFlowObjectEntry(
   channel: string,
   data: string,
   base: 36 | 62 = 36,
-): Extract<BmsControlFlowEntry, { kind: 'object' }> | undefined {
-  // Same line interpretation as the strict parse path — `buildBmsObjectLineEntry` owns the rule so captured
+): Extract<BMSControlFlowEntry, { kind: 'object' }> | undefined {
+  // Same line interpretation as the strict parse path — `buildBMSObjectLineEntry` owns the rule so captured
   // control-flow bodies can never drift from regular object lines.
-  const entry = buildBmsObjectLineEntry(measure, channel, data, base);
+  const entry = buildBMSObjectLineEntry(measure, channel, data, base);
   if (!entry) {
     return undefined;
   }
@@ -171,9 +171,9 @@ function removeCurrentCaptureFrame(stack: ControlFlowCaptureFrameType[], type: C
 }
 
 function applyActiveControlFlowEntry(
-  json: BeMusicJson,
+  json: BeMusicJSON,
   entry: ActiveControlFlowEntry,
-  applyHeader: (json: BeMusicJson, command: string, commandRaw: string | undefined, value: string) => void,
+  applyHeader: (json: BeMusicJSON, command: string, commandRaw: string | undefined, value: string) => void,
   measureByIndex?: Map<number, MeasureLengthEntry>,
 ): void {
   if (entry.kind === 'header') {

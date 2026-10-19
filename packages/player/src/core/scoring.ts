@@ -1,7 +1,7 @@
 import {
   IIDX_EX_SCORE_PER_GREAT,
   IIDX_EX_SCORE_PER_PGREAT,
-  resolveLr2MoneyScore,
+  resolveLR2MoneyScore,
   type JudgeKind,
   type ScoreSummary,
 } from '../ruleset/score.ts';
@@ -16,11 +16,11 @@ export {
   IIDX_RANK_LABELS,
   LR2_MONEY_SCORE_MAX,
   resolveDisplayedPoor,
-  resolveIidxRankIndexFromRate,
-  resolveIidxRankIndexFromScore,
-  resolveIidxRankLabel,
-  resolveLr2MoneyScore,
-  type IidxRankLabel,
+  resolveIIDXRankIndexFromRate,
+  resolveIIDXRankIndexFromScore,
+  resolveIIDXRankLabel,
+  resolveLR2MoneyScore,
+  type IIDXRankLabel,
   type JudgeKind,
   type ScoreSummary,
 } from '../ruleset/score.ts';
@@ -93,7 +93,7 @@ export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgeKind, tra
     breakTrackedCombo(tracker);
   }
 
-  summary.score = tracker.moneyScore ? resolveLr2MoneyScore(summary) : summary.exScore;
+  summary.score = tracker.moneyScore ? resolveLR2MoneyScore(summary) : summary.exScore;
 }
 
 function resolveExScoreDelta(judge: JudgeKind): number {

@@ -1,8 +1,8 @@
 import { DEFAULT_PLAY_OPTIONS, type PlayOptions } from '@be-music/scene-model';
 import { describe, expect, test } from 'vite-plus/test';
-import { copyPlayOptionsToGui, playOptionsFromGui, PlayOptionsService, type GuiPlayOptions } from './play-options.ts';
+import { copyPlayOptionsToGUI, playOptionsFromGUI, PlayOptionsService, type GUIPlayOptions } from './play-options.ts';
 
-const gui: GuiPlayOptions = {
+const gui: GUIPlayOptions = {
   autoPlay: true,
   gauge: 'HARD',
   random1P: 'MIRROR',
@@ -16,9 +16,9 @@ const gui: GuiPlayOptions = {
   hiSpeed: 3.5,
 };
 
-describe('playOptionsFromGui', () => {
+describe('playOptionsFromGUI', () => {
   test("names the Debug Menu's play options as PlayOptions fields", () => {
-    expect(playOptionsFromGui(gui)).toEqual({
+    expect(playOptionsFromGUI(gui)).toEqual({
       autoPlay: true,
       gauge1P: 'HARD',
       random1P: 'MIRROR',
@@ -34,9 +34,9 @@ describe('playOptionsFromGui', () => {
   });
 });
 
-describe('copyPlayOptionsToGui', () => {
+describe('copyPlayOptionsToGUI', () => {
   test("mirrors a select screen's options into the Debug Menu's state, leaving the hi-speed to the caller", () => {
-    const state: GuiPlayOptions = { ...gui, hiSpeed: 2 };
+    const state: GUIPlayOptions = { ...gui, hiSpeed: 2 };
     const options: PlayOptions = {
       ...DEFAULT_PLAY_OPTIONS,
       autoPlay: false,
@@ -45,7 +45,7 @@ describe('copyPlayOptionsToGui', () => {
       sort: 'TITLE',
       hiSpeed: 4,
     };
-    copyPlayOptionsToGui(options, state);
+    copyPlayOptionsToGUI(options, state);
     expect(state).toEqual({
       autoPlay: false,
       gauge: 'EASY',
@@ -64,12 +64,12 @@ describe('copyPlayOptionsToGui', () => {
 
 describe('PlayOptionsService', () => {
   test("starts from the Debug Menu's options over the defaults", () => {
-    const service = new PlayOptionsService(playOptionsFromGui(gui));
-    expect(service.current).toEqual({ ...DEFAULT_PLAY_OPTIONS, ...playOptionsFromGui(gui) });
+    const service = new PlayOptionsService(playOptionsFromGUI(gui));
+    expect(service.current).toEqual({ ...DEFAULT_PLAY_OPTIONS, ...playOptionsFromGUI(gui) });
   });
 
   test('keeps the options only a select screen changes, so the next select screen starts from them', () => {
-    const service = new PlayOptionsService(playOptionsFromGui(gui));
+    const service = new PlayOptionsService(playOptionsFromGUI(gui));
     // A select screen reports its whole set (`on.playOptions`): HS-FIX, SUDDEN and the lane cover changed on it.
     service.update({ ...service.current, hsFix: 'MAXBPM', hiddenSudden1P: 'SUDDEN', laneCover: true, shutter: 0.3 });
     // A Debug Menu change of another option leaves them alone.

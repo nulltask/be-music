@@ -4,7 +4,7 @@
 // `DebugMenuDeps`, which the app (`app/app.ts`) builds.
 
 import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/beatoraja-skin';
-import type { Lr2DiscoveredTheme } from '@be-music/lr2-skin';
+import type { LR2DiscoveredTheme } from '@be-music/lr2-skin';
 import type { TunableCompressor } from '@be-music/player-web/audio';
 import type { PixiSceneHost, PlayScene, SelectScene } from '@be-music/player-web/host';
 import type { BeatorajaThemeBundle } from '@be-music/player-web/skin';
@@ -21,13 +21,13 @@ import type { LibraryService } from '../../services/library.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { SilentModeSetting } from '../../services/silent-mode.ts';
 import type { StoredSkinSettings } from '../../skin-settings.ts';
-import type { DemoGuiState, SkinFamilyOverride } from '../../types.ts';
+import type { DemoGUIState, SkinFamilyOverride } from '../../types.ts';
 import type { ActiveBeatorajaPlay } from '../beatoraja-skin-options.ts';
 import type { SkinDropFamily } from '../skin-drop-prompt.ts';
 import { buildAudioFolder } from './audio.ts';
 import { buildCaptureFolder } from './capture.ts';
 import {
-  buildCompressorTuningGui,
+  buildCompressorTuningGUI,
   refreshCompressorStageVisibility,
   resolveCompressorParamOverrides,
 } from './compressor.ts';
@@ -39,7 +39,7 @@ import { PlayLock } from './play-lock.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
 import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
-import { buildSkinFolder, rebuildLr2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
+import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
 import { buildTempoFolder } from './tempo.ts';
 
 /**
@@ -47,8 +47,8 @@ import { buildTempoFolder } from './tempo.ts';
  * loaded and shows, and the app's actions its controllers start. The actions keep the names of the app's methods.
  */
 export interface DebugMenuDeps {
-  /** The settings the controllers read and write (`createDemoGuiState`), read by the app as each play starts. */
-  readonly settings: DemoGuiState;
+  /** The settings the controllers read and write (`createDemoGUIState`), read by the app as each play starts. */
+  readonly settings: DemoGUIState;
   /** The scene host: "Render resolution" sets its resolution, and the Developer folder reads its frame rate. */
   readonly sceneHost: PixiSceneHost;
   /** "Play in silent mode": the Audio folder's checkbox and the start card's option drive it. */
@@ -56,7 +56,7 @@ export interface DebugMenuDeps {
   /** The Leaderboard panel, which fills its own folder. */
   readonly leaderboard: Pick<LeaderboardPanel, 'buildFolder'>;
   /** The library service: "Import table courses" and "Load from URLs" add to the library through it. */
-  readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromUrl'>;
+  readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
   /** The records service, whose best records "Clear best records" empties. */
   readonly records: Pick<RecordsService, 'songRecords'>;
   /** The course-maker service, whose card "My courses…" opens. */
@@ -81,9 +81,9 @@ export interface DebugMenuDeps {
   /** The loaded beatoraja theme. */
   beatorajaTheme(): BeatorajaThemeBundle | undefined;
   /** The LR2 themes the drops so far discovered, by name. */
-  availableLr2Themes(): ReadonlyArray<Lr2DiscoveredTheme<File>>;
+  availableLR2Themes(): ReadonlyArray<LR2DiscoveredTheme<File>>;
   /** The name of the LR2 theme mounted. */
-  activeLr2ThemeName(): string | undefined;
+  activeLR2ThemeName(): string | undefined;
   /** The be-music skin the built-in scenes draw with. */
   beMusicSkin(): BeMusicSkin;
   /** The beatoraja play entry the play on the stage is drawn with, when it plays on a beatoraja theme. */
@@ -109,11 +109,11 @@ export interface DebugMenuDeps {
   /** Adds a be-music skin and switches to it. */
   addBeMusicSkin(skin: BeMusicSkin): void;
   /** Imports a be-music skin module from a URL and adds it. */
-  addBeMusicSkinFromUrl(url: string): Promise<void>;
+  addBeMusicSkinFromURL(url: string): Promise<void>;
   /** Hands the be-music skin's settings, as stored, to the scenes drawing with it. */
   applyBeMusicSkinSettings(): void;
   /** Mounts another of the discovered LR2 themes. */
-  applyLr2ThemeByName(name: string): Promise<void>;
+  applyLR2ThemeByName(name: string): Promise<void>;
   /** Asks for a drop of a skin of a skin system with none loaded (`promptSkinDrop`). */
   promptSkinDrop(family: SkinDropFamily): void;
   /** Loads the select entry again with other options and hands it to the beatoraja select screen. */
@@ -123,7 +123,7 @@ export interface DebugMenuDeps {
 }
 
 /**
- * The Debug Menu (top-right, collapsed on arrival). {@link buildGui} makes it; then the app reaches it through the
+ * The Debug Menu (top-right, collapsed on arrival). {@link buildGUI} makes it; then the app reaches it through the
  * methods it calls on a change of its own: a theme load rebuilds the pickers, a status line repaints the status row, a
  * play locks the options it latched ({@link lockForPlay}) and its end unlocks them ({@link unlockAfterPlay}).
  *
@@ -134,10 +134,10 @@ export class DebugMenu {
   /** What the menu reaches of the app. */
   public readonly deps: DebugMenuDeps;
   /** The settings the controllers read and write ({@link DebugMenuDeps.settings}). */
-  public readonly guiState: DemoGuiState;
+  public readonly guiState: DemoGUIState;
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
-  public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromUrl'>;
+  public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
   public readonly records: Pick<RecordsService, 'songRecords'>;
   public readonly courseMaker: Pick<CourseMakerService, 'panel'>;
   public readonly skinSettings: StoredSkinSettings;
@@ -202,7 +202,7 @@ export class DebugMenu {
    */
   public skinFamilyController: Controller | undefined;
   /**
-   * "LR2 theme" picker. Visible only when `availableLr2Themes` has 2+ entries; rebuilt on each theme drop so
+   * "LR2 theme" picker. Visible only when `availableLR2Themes` has 2+ entries; rebuilt on each theme drop so
    * its option list tracks what was just loaded. The lil-gui option-controller pattern (`Controller#options(...)`)
    * preserves the previously-attached `onChange` listener across rebuilds — see {@link rebuildSkinFamilyPicker}
    * for the same idiom.
@@ -237,7 +237,7 @@ export class DebugMenu {
   private readonly buildSkinFolder = buildSkinFolder;
   private readonly buildLibraryFolder = buildLibraryFolder;
   private readonly buildDeveloperFolder = buildDeveloperFolder;
-  public readonly buildCompressorTuningGui = buildCompressorTuningGui;
+  public readonly buildCompressorTuningGUI = buildCompressorTuningGUI;
   public readonly refreshCompressorStageVisibility = refreshCompressorStageVisibility;
   /** Bus `CompressorParams` for every compressor, from the tuning: what each play mounts with. */
   public readonly resolveCompressorParamOverrides = resolveCompressorParamOverrides;
@@ -246,7 +246,7 @@ export class DebugMenu {
   /** Refills the "Skin settings" folder: when the be-music skin changes. */
   public readonly rebuildSkinSettingsFolder = rebuildSkinSettingsFolder;
   /** Rebuilds the LR2 theme picker: on every LR2 theme load. */
-  public readonly rebuildLr2ThemePicker = rebuildLr2ThemePicker;
+  public readonly rebuildLR2ThemePicker = rebuildLR2ThemePicker;
   /** Rebuilds the "Beatoraja skins" pickers: on every beatoraja theme load. */
   public readonly rebuildBeatorajaSkinPickers = rebuildBeatorajaSkinPickers;
   public readonly applyBeatorajaSkinSwitchIfActive = applyBeatorajaSkinSwitchIfActive;
@@ -297,7 +297,7 @@ export class DebugMenu {
    * — status, loading, skin pick, capture — followed by the Play options and Audio folders (open by default), then the
    * skin detail, library, and developer folders (closed by default). Every folder remembers whether it was left open.
    */
-  public buildGui(): void {
+  public buildGUI(): void {
     // Start the panel itself collapsed so it doesn't cover the select-screen / gameplay canvas the moment a user lands
     // on the demo.
     const gui = new GUI({ title: 'Debug Menu', width: 280 });

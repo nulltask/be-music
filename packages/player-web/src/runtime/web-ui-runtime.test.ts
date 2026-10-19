@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { createPlayerUiSignalBus } from '../../../player/src/core/ui-signal-bus.ts';
-import type { PlayerUiCommand, PlayerUiFramePayload } from '../../../player/src/core/ui-signal-bus.ts';
-import { createWebUiRuntime, drainWebUiSignals } from './web-ui-runtime.ts';
+import { createPlayerUISignalBus } from '../../../player/src/core/ui-signal-bus.ts';
+import type { PlayerUICommand, PlayerUIFramePayload } from '../../../player/src/core/ui-signal-bus.ts';
+import { createWebUIRuntime, drainWebUISignals } from './web-ui-runtime.ts';
 
-function makeInitialFrame(): PlayerUiFramePayload {
+function makeInitialFrame(): PlayerUIFramePayload {
   return {
     currentBeat: 0,
     currentSeconds: 0,
@@ -25,13 +25,13 @@ function makeInitialFrame(): PlayerUiFramePayload {
   };
 }
 
-describe('createWebUiRuntime', () => {
+describe('createWebUIRuntime', () => {
   test('start fires onStart and triggerPoor / clearPoor route to their host callbacks', () => {
-    const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
+    const uiSignals = createPlayerUISignalBus(makeInitialFrame());
     const onStart = vi.fn();
     const onPoorTriggered = vi.fn();
     const onPoorCleared = vi.fn();
-    const runtime = createWebUiRuntime({ uiSignals, onStart, onPoorTriggered, onPoorCleared });
+    const runtime = createWebUIRuntime({ uiSignals, onStart, onPoorTriggered, onPoorCleared });
     runtime.start();
     expect(onStart).toHaveBeenCalledTimes(1);
     runtime.triggerPoor(1.5);
@@ -41,10 +41,10 @@ describe('createWebUiRuntime', () => {
   });
 
   test('stop and dispose fire their respective callbacks', async () => {
-    const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
+    const uiSignals = createPlayerUISignalBus(makeInitialFrame());
     const onStop = vi.fn();
     const onDispose = vi.fn();
-    const runtime = createWebUiRuntime({ uiSignals, onStop, onDispose });
+    const runtime = createWebUIRuntime({ uiSignals, onStop, onDispose });
     runtime.start();
     await runtime.stop();
     expect(onStop).toHaveBeenCalledTimes(1);
@@ -53,8 +53,8 @@ describe('createWebUiRuntime', () => {
   });
 
   test('callback exceptions do not propagate so a Pixi-side bug cannot break the engine main loop', () => {
-    const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
-    const runtime = createWebUiRuntime({
+    const uiSignals = createPlayerUISignalBus(makeInitialFrame());
+    const runtime = createWebUIRuntime({
       uiSignals,
       onStart: () => {
         throw new Error('boom');
@@ -72,21 +72,21 @@ describe('createWebUiRuntime', () => {
     // silence every uiSignals push (`flash-lane`, `press-lane`, `release-lane`, `hold-lane-until-beat`,
     // `trigger-poor-bga`, `clear-poor-bga`) AND every `stateSignals.publishJudgeCombo` call, which are the only
     // sources the Pixi gameplay view has for press visuals and the NOWJUDGE plate timer.
-    const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
-    const runtime = createWebUiRuntime({ uiSignals });
+    const uiSignals = createPlayerUISignalBus(makeInitialFrame());
+    const runtime = createWebUIRuntime({ uiSignals });
     expect(runtime.tuiEnabled).toBe(true);
   });
 
   test('playbackEndSeconds is forwarded so the engine can wait for trailing BGA / audio tails', () => {
-    const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
-    const runtime = createWebUiRuntime({ uiSignals, playbackEndSeconds: 12.5 });
+    const uiSignals = createPlayerUISignalBus(makeInitialFrame());
+    const runtime = createWebUIRuntime({ uiSignals, playbackEndSeconds: 12.5 });
     expect(runtime.playbackEndSeconds).toBe(12.5);
   });
 });
 
-describe('drainWebUiSignals', () => {
+describe('drainWebUISignals', () => {
   test('routes the current frame snapshot + queued commands to the host callbacks', () => {
-    const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
+    const uiSignals = createPlayerUISignalBus(makeInitialFrame());
     const onFrame = vi.fn();
     const onCommand = vi.fn();
     uiSignals.publishFrame({
@@ -96,19 +96,19 @@ describe('drainWebUiSignals', () => {
     });
     uiSignals.pushCommand({ kind: 'flash-lane', channel: '11' });
     uiSignals.pushCommand({ kind: 'press-lane', channel: '12' });
-    const result = drainWebUiSignals(uiSignals, { onFrame, onCommand });
+    const result = drainWebUISignals(uiSignals, { onFrame, onCommand });
     expect(result.drained).toBe(true);
     expect(onFrame).toHaveBeenCalledTimes(1);
-    const frame = onFrame.mock.calls[0]![0] as PlayerUiFramePayload;
+    const frame = onFrame.mock.calls[0]![0] as PlayerUIFramePayload;
     expect(frame.currentSeconds).toBe(1);
     expect(frame.summary.perfect).toBe(5);
     expect(onCommand).toHaveBeenCalledTimes(2);
-    const commandKinds = onCommand.mock.calls.map((call) => (call[0] as PlayerUiCommand).kind);
+    const commandKinds = onCommand.mock.calls.map((call) => (call[0] as PlayerUICommand).kind);
     expect(commandKinds).toEqual(['flash-lane', 'press-lane']);
     // Drained queue is now empty so a subsequent drain is a no-op (still returns drained:true because the frame
     // snapshot is always reported, but no further commands fire).
     onCommand.mockClear();
-    drainWebUiSignals(uiSignals, { onFrame, onCommand });
+    drainWebUISignals(uiSignals, { onFrame, onCommand });
     expect(onCommand).not.toHaveBeenCalled();
   });
 
@@ -116,10 +116,10 @@ describe('drainWebUiSignals', () => {
     // Regression cover for the AUTO PLAY simultaneous-press bomb bug: the renderer used to read
     // `getJudgeCombo()` once per drain, so chord publishes inside the same engine tick collapsed onto the
     // latch's last entry and only the right-most lane's bomb fired. The fix is the queue API
-    // (`drainPendingJudgeCombos`) — `drainWebUiSignals` must invoke `onJudgeCombo` ONCE PER QUEUED PUBLISH
+    // (`drainPendingJudgeCombos`) — `drainWebUISignals` must invoke `onJudgeCombo` ONCE PER QUEUED PUBLISH
     // in publish order so the host can fan out one bomb sprite per chord note.
     const { createPlayerStateSignals } = await import('../../../player/src/state-signals.ts');
-    const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
+    const uiSignals = createPlayerUISignalBus(makeInitialFrame());
     const stateSignals = createPlayerStateSignals(1);
     const onJudgeCombo = vi.fn();
 
@@ -127,7 +127,7 @@ describe('drainWebUiSignals', () => {
     stateSignals.publishJudgeCombo('PERFECT', 2, '12', 100);
     stateSignals.publishJudgeCombo('PERFECT', 3, '13', 100);
 
-    drainWebUiSignals(uiSignals, { onJudgeCombo }, { stateSignals });
+    drainWebUISignals(uiSignals, { onJudgeCombo }, { stateSignals });
     expect(onJudgeCombo).toHaveBeenCalledTimes(3);
     expect(onJudgeCombo.mock.calls.map((call) => (call[0] as { channel?: string }).channel)).toEqual([
       '11',
@@ -137,7 +137,7 @@ describe('drainWebUiSignals', () => {
 
     // Second drain with no new publishes: queue is empty, callback not invoked again.
     onJudgeCombo.mockClear();
-    drainWebUiSignals(uiSignals, { onJudgeCombo }, { stateSignals });
+    drainWebUISignals(uiSignals, { onJudgeCombo }, { stateSignals });
     expect(onJudgeCombo).not.toHaveBeenCalled();
   });
 });

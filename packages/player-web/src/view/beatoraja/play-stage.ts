@@ -15,11 +15,11 @@ import type { TempoReversalPoint, ChartPlayVariant } from '@be-music/chart';
 import type { ScrollDistanceMapperLike } from '@be-music/player/display';
 import type { Container, Texture } from 'pixi.js';
 import type { BeatorajaSceneKit } from '../../skin/beatoraja/scene-kit.ts';
-import type { BgaCue, NonstopBgaStage, NonstopStageBgaTimeline } from '../../chart/bga-timeline.ts';
+import type { BGACue, NonstopBGAStage, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
 import { BeatorajaPlaySkinView, type BeatorajaPlaySkinViewOptions } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
-import { BeatorajaBgaLayer } from './play/bga.ts';
+import { BeatorajaBGALayer } from './play/bga.ts';
 import type { BeatorajaMarkerBeats } from '../../chart/beatoraja/markers.ts';
 import { BeatorajaMarkerLayer } from './play/markers.ts';
 import {
@@ -47,16 +47,16 @@ export interface BeatorajaPlayChartLayout {
  * The chart's BGA as the BGA layer draws it: its textures and videos by `#BMPxx` key and its cues, and a stitched NONSTOP
  * chart's stages with each stage's own cues.
  */
-export interface BeatorajaPlayBga {
+export interface BeatorajaPlayBGA {
   /** Base and POOR track textures (black kept). */
   readonly textures: ReadonlyMap<string, Texture>;
   /** Layer track textures (black keyed out for a BMS chart). */
   readonly layerTextures: ReadonlyMap<string, Texture>;
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
-  readonly cues: { base: readonly BgaCue[]; layer: readonly BgaCue[]; poor: readonly BgaCue[] };
+  readonly cues: { base: readonly BGACue[]; layer: readonly BGACue[]; poor: readonly BGACue[] };
   readonly nonstop?: {
-    readonly stages: readonly NonstopBgaStage[];
-    readonly timelines: readonly NonstopStageBgaTimeline[];
+    readonly stages: readonly NonstopBGAStage[];
+    readonly timelines: readonly NonstopStageBGATimeline[];
   };
 }
 
@@ -68,7 +68,7 @@ export class BeatorajaPlayStage {
   private readonly stage: BeatorajaSkinStage;
   private readonly noteLayer: BeatorajaNoteLayer;
   private readonly markerLayer: BeatorajaMarkerLayer;
-  private bgaLayer: BeatorajaBgaLayer | undefined;
+  private bgaLayer: BeatorajaBGALayer | undefined;
   private readonly kit: BeatorajaSceneKit;
   private readonly skinConfigOps: ReadonlySet<number>;
   private readonly layout: BeatorajaPlayChartLayout;
@@ -134,7 +134,7 @@ export class BeatorajaPlayStage {
   }
 
   /** Whether the BGA layer is in. */
-  public get hasBga(): boolean {
+  public get hasBGA(): boolean {
     return this.bgaLayer !== undefined;
   }
 
@@ -142,10 +142,10 @@ export class BeatorajaPlayStage {
    * Puts the BGA layer in, at the skin's `bga` destination (`bgaLayerInsertIndex`): later elements draw over it, so the
    * default skin's full-canvas background does not cover it.
    */
-  public addBga(bga: BeatorajaPlayBga): void {
+  public addBGA(bga: BeatorajaPlayBGA): void {
     if (this.bgaLayer !== undefined) return;
     const view = this.stage.view;
-    this.bgaLayer = new BeatorajaBgaLayer({
+    this.bgaLayer = new BeatorajaBGALayer({
       skin: this.kit.skin,
       textures: bga.textures,
       layerTextures: bga.layerTextures,
@@ -158,7 +158,7 @@ export class BeatorajaPlayStage {
   }
 
   /** Plays the BGA's current video again after a pause (the play paused every video). */
-  public resumeBga(): void {
+  public resumeBGA(): void {
     this.bgaLayer?.resume();
   }
 
@@ -183,13 +183,13 @@ export class BeatorajaPlayStage {
     context: BeatorajaRenderContext,
     clock: BeatorajaPlayLayerClock | undefined,
     hiSpeed: number,
-    lanes: { isLaneLnHeld(channel: string): boolean; isPoorBgaActive(seconds: number): boolean },
+    lanes: { isLaneLNHeld(channel: string): boolean; isPoorBGAActive(seconds: number): boolean },
   ): void {
     const view = this.stage.view;
     view.update(context);
     if (clock === undefined) return;
     const activeOps = context.activeOps;
-    this.noteLayer.update(clock, hiSpeed, activeOps, (channel) => lanes.isLaneLnHeld(channel));
+    this.noteLayer.update(clock, hiSpeed, activeOps, (channel) => lanes.isLaneLNHeld(channel));
     // The markers scroll with the notes' per-beat distance (`rxhs / 4 * hispeed`, `LaneRenderer.java:271-276`) on the
     // lane the active dst block resolves; skin-canvas defaults when no lane matched.
     const laneBounds = this.noteLayer.getLaneBounds(activeOps) ?? { topY: 0, bottomY: view.height };
@@ -222,7 +222,7 @@ export class BeatorajaPlayStage {
     this.bgaLayer?.update(
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),
       context,
-      lanes.isPoorBgaActive(clock.currentSeconds),
+      lanes.isPoorBGAActive(clock.currentSeconds),
     );
   }
 

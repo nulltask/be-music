@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createEmptyJson } from '../../json/src/index.ts';
+import { createEmptyJSON } from '../../json/src/index.ts';
 import {
   collectSampleTriggers,
   createTimingBuildContext,
@@ -12,7 +12,7 @@ import {
 
 describe('timing', () => {
   test('integrates BPM changes and stops into seconds', () => {
-    const json = createEmptyJson();
+    const json = createEmptyJSON();
     json.metadata.bpm = 120;
     json.resources.bpm['01'] = 240;
     json.resources.stop['01'] = 48;
@@ -34,7 +34,7 @@ describe('timing', () => {
   });
 
   test('keeps the last BMS #STOP at one position, as LR2 and beatoraja do', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.resources.stop['01'] = 48;
     json.resources.stop['02'] = 96;
@@ -48,7 +48,7 @@ describe('timing', () => {
   });
 
   test('adds up bmson stop_events on one pulse, as the bmson spec says', () => {
-    const json = createEmptyJson('bmson');
+    const json = createEmptyJSON('bmson');
     json.metadata.bpm = 120;
     json.resources.stop['01'] = 48;
     json.resources.stop['02'] = 96;
@@ -60,7 +60,7 @@ describe('timing', () => {
   });
 
   test('reads #STP stops in milliseconds', () => {
-    const json = createEmptyJson();
+    const json = createEmptyJSON();
     json.metadata.bpm = 120;
     json.bms.stp = ['001.500 1000'];
     const timing = createTimingResolver(json);
@@ -68,7 +68,7 @@ describe('timing', () => {
   });
 
   test('the context variant gives the same resolver', () => {
-    const json = createEmptyJson();
+    const json = createEmptyJSON();
     json.metadata.bpm = 150;
     json.events = [{ measure: 0, channel: '03', position: [1, 2], value: '78' }];
     const context = createTimingBuildContext(json);
@@ -78,7 +78,7 @@ describe('timing', () => {
 
 describe('sample triggers', () => {
   test('collects BGM and lane keysounds but not mines or #LNOBJ tails', () => {
-    const json = createEmptyJson();
+    const json = createEmptyJSON();
     json.metadata.bpm = 120;
     json.bms.lnObjs = ['ZZ'];
     json.resources.wav['01'] = 'a.wav';
@@ -104,7 +104,7 @@ describe('sample triggers', () => {
 
 describe('LR2 negative-BPM reversal', () => {
   test('integrates negative #BPMxx at |BPM| and exposes the LR2 reversal point', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.resources.bpm['02'] = -60;
     json.events = [
@@ -135,7 +135,7 @@ describe('LR2 negative-BPM reversal', () => {
   test('truncates a negative #BPMxx to an integer before arming the LR2 reversal', () => {
     // LR2 converts the BPM to int before its `< 0` check (LR2body.exe 0x42b960 `__ftol`): -1 < BPM < 0 never
     // reverses, but timing still integrates the full |BPM|. NOWBPM shows |trunc(BPM)|.
-    const fractional = createEmptyJson('bms');
+    const fractional = createEmptyJSON('bms');
     fractional.metadata.bpm = 120;
     fractional.resources.bpm['02'] = -0.5;
     fractional.events = [{ measure: 1, channel: '08', position: [0, 1], value: '02' }];
@@ -143,21 +143,21 @@ describe('LR2 negative-BPM reversal', () => {
     expect(slow.reversal).toBeUndefined();
     expect(slow.bpmAtBeat(6)).toBeCloseTo(0.5, 9);
     expect(slow.beatToSeconds(5)).toBeCloseTo(2 + 120, 9); // one beat at 0.5 BPM = 120 s
-    expect(slow.displayBpmAtBeat(6)).toBe(0);
-    expect(slow.displayBpmAtBeat(2)).toBe(120);
+    expect(slow.displayBPMAtBeat(6)).toBe(0);
+    expect(slow.displayBPMAtBeat(2)).toBe(120);
 
-    const truncated = createEmptyJson('bms');
+    const truncated = createEmptyJSON('bms');
     truncated.metadata.bpm = 120;
     truncated.resources.bpm['02'] = -65.5;
     truncated.events = [{ measure: 1, channel: '08', position: [0, 1], value: '02' }];
     const reversing = createTimingResolver(truncated);
     expect(reversing.reversal?.beat).toBeCloseTo(4, 9);
     expect(reversing.bpmAtBeat(6)).toBeCloseTo(65.5, 9);
-    expect(reversing.displayBpmAtBeat(6)).toBe(65);
+    expect(reversing.displayBPMAtBeat(6)).toBe(65);
   });
 
   test('keeps dropping zero and undefined #BPMxx references (no reversal)', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.resources.bpm['02'] = 0;
     json.events = [
@@ -188,11 +188,11 @@ describe('LR2 negative-BPM reversal', () => {
   });
 
   test('the resolved chart exposes the reversal of its tempo map', () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.resources.bpm['02'] = -60;
     json.events = [{ measure: 1, channel: '08', position: [0, 1], value: '02' }];
     expect(resolveChart(json).reversal).toEqual({ beat: 4, seconds: 2 });
-    expect(resolveChart(createEmptyJson('bms')).reversal).toBeUndefined();
+    expect(resolveChart(createEmptyJSON('bms')).reversal).toBeUndefined();
   });
 });

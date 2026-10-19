@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { shareText, xIntentUrl } from './score-card-data.ts';
+import { shareText, xIntentURL } from './score-card-data.ts';
 
 describe('sharing a play', () => {
   const play = {
@@ -17,7 +17,7 @@ describe('sharing a play', () => {
   });
 
   test('the X post carries the text, the page and #bemusic', () => {
-    const url = new URL(xIntentUrl(shareText(play), 'https://example.test/leaderboard/scores/s1'));
+    const url = new URL(xIntentURL(shareText(play), 'https://example.test/leaderboard/scores/s1'));
     expect(url.origin + url.pathname).toBe('https://x.com/intent/post');
     expect(url.searchParams.get('text')).toBe(shareText(play));
     expect(url.searchParams.get('url')).toBe('https://example.test/leaderboard/scores/s1');

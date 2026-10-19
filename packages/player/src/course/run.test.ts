@@ -1,5 +1,5 @@
 import { computeChartFingerprint } from '@be-music/chart';
-import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { createEmptyJSON, type BeMusicJSON } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '../playlog/format.ts';
 import { CourseRun, parseBeatorajaCourseData, resolveGivenUpPlaySeconds } from './index.ts';
@@ -8,11 +8,11 @@ const MD5 = ['1', '2', '3'].map((digit) => digit.repeat(32));
 
 interface Stage {
   id: string;
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   chartPath: string;
 }
 
-const stage = (id: string): Stage => ({ id, chart: createEmptyJson('bms'), chartPath: `${id}.bms` });
+const stage = (id: string): Stage => ({ id, chart: createEmptyJSON('bms'), chartPath: `${id}.bms` });
 
 function definition(constraint: string[] = ['MIRROR', 'GAUGE_LR2', 'NO_SPEED', 'HCN']) {
   return parseBeatorajaCourseData({ name: 'Dan', hash: MD5.map((md5) => ({ md5 })), constraint })!;

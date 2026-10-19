@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { createBeatResolver, resolveBmsLongNotes, resolveLnobjLongNotes } from '../../chart/src/index.ts';
-import { resolveBmsBase, type BeMusicJson } from '../../json/src/index.ts';
-import { parseBms, parseBmson } from '../../parser/src/index.ts';
+import { createBeatResolver, resolveBMSLongNotes, resolveLNOBJLongNotes } from '../../chart/src/index.ts';
+import { resolveBMSBase, type BeMusicJSON } from '../../json/src/index.ts';
+import { parseBMS, parseBmson } from '../../parser/src/index.ts';
 import { resolveLandmineGaugeEffect } from '../../player/src/core/landmine.ts';
-import { stringifyBms, stringifyBmson } from './index.ts';
+import { stringifyBMS, stringifyBmson } from './index.ts';
 
 interface BmsonNote {
   x: number;
@@ -19,21 +19,21 @@ interface BmsonOutput {
   mine_channels?: Array<{ name: string; notes: Array<{ x: number; y: number; damage?: number }> }>;
 }
 
-const bms = (...lines: string[]): BeMusicJson => parseBms([...lines, ''].join('\n'));
-const toBmson = (json: BeMusicJson): BmsonOutput => JSON.parse(stringifyBmson(json)) as BmsonOutput;
-const bmson = (document: Record<string, unknown>): BeMusicJson =>
+const bms = (...lines: string[]): BeMusicJSON => parseBMS([...lines, ''].join('\n'));
+const toBmson = (json: BeMusicJSON): BmsonOutput => JSON.parse(stringifyBmson(json)) as BmsonOutput;
+const bmson = (document: Record<string, unknown>): BeMusicJSON =>
   parseBmson(JSON.stringify({ version: '1.0.0', ...document }));
 const headerLines = (output: string, command: string): string[] =>
   output.split('\n').filter((line) => line.startsWith(`#${command} `) || line === `#${command}`);
 
 /** Every long note of a BMS chart as `[lane, startBeat, endBeat]`, both `#LNTYPE` and `#LNOBJ` spellings. */
-function bmsLongNotes(json: BeMusicJson): Array<[string, number, number]> {
+function bmsLongNotes(json: BeMusicJSON): Array<[string, number, number]> {
   const resolver = createBeatResolver(json);
   const notes: Array<[string, number, number]> = [];
-  for (const note of resolveBmsLongNotes(json, { inferLnTypeWhenMissing: true }).notes) {
+  for (const note of resolveBMSLongNotes(json, { inferLNTypeWhenMissing: true }).notes) {
     if (note.endBeat !== undefined) notes.push([note.channel, note.beat, note.endBeat]);
   }
-  for (const [event, endBeat] of resolveLnobjLongNotes(json).startToEndBeat) {
+  for (const [event, endBeat] of resolveLNOBJLongNotes(json).startToEndBeat) {
     notes.push([event.channel, resolver.eventToBeat(event), endBeat]);
   }
   return roundBeats(notes);
@@ -48,7 +48,7 @@ function roundBeats(notes: Array<[string, number, number]>): Array<[string, numb
 }
 
 /** Every long note of a bmson-sourced chart as `[lane, startBeat, endBeat]`. */
-function bmsonLongNotes(json: BeMusicJson): Array<[string, number, number]> {
+function bmsonLongNotes(json: BeMusicJSON): Array<[string, number, number]> {
   const resolver = createBeatResolver(json);
   const resolution = json.bmson.info.resolution ?? 240;
   return roundBeats(
@@ -61,10 +61,10 @@ function bmsonLongNotes(json: BeMusicJson): Array<[string, number, number]> {
   );
 }
 
-function mineDamages(json: BeMusicJson): Array<[string, number]> {
+function mineDamages(json: BeMusicJSON): Array<[string, number]> {
   return json.events
     .filter((event) => /^[DE]/.test(event.channel))
-    .map((event) => [event.channel, resolveLandmineGaugeEffect(event, resolveBmsBase(json), json.sourceFormat).damage]);
+    .map((event) => [event.channel, resolveLandmineGaugeEffect(event, resolveBMSBase(json), json.sourceFormat).damage]);
 }
 
 describe('BMS → bmson conversion', () => {
@@ -174,12 +174,12 @@ describe('bmson → BMS conversion', () => {
       { x: 2, y: 240, l: 0 },
       { x: 8, y: 480, l: 1200 },
     ]);
-    const output = stringifyBms(source);
+    const output = stringifyBMS(source);
 
     expect(headerLines(output, 'LNTYPE')).toEqual(['#LNTYPE 1']);
     expect(output).toMatch(/^#00051:/m);
     expect(output).toMatch(/^#00056:/m);
-    const reparsed = parseBms(output);
+    const reparsed = parseBMS(output);
     expect(bmsLongNotes(reparsed)).toEqual(bmsonLongNotes(source));
     // The short note stays a short note.
     expect(reparsed.events.filter((event) => event.channel === '12')).toHaveLength(1);
@@ -191,13 +191,13 @@ describe('bmson → BMS conversion', () => {
       lines: [{ y: 0 }, { y: 720 }, { y: 1680 }],
       sound_channels: [{ name: 'key.wav', notes: [{ x: 3, y: 600, l: 1000 }] }],
     });
-    const reparsed = parseBms(stringifyBms(source));
+    const reparsed = parseBMS(stringifyBMS(source));
     expect(bmsLongNotes(reparsed)).toEqual(bmsonLongNotes(source));
   });
 
   test('BMS → bmson → BMS keeps #LNOBJ long notes as long notes', () => {
     const source = bms('#BPM 120', '#WAV01 key.wav', '#LNOBJ ZZ', '#00111:01ZZ', '#00212:01', '#00312:ZZ');
-    const roundTrip = parseBms(stringifyBms(parseBmson(stringifyBmson(source))));
+    const roundTrip = parseBMS(stringifyBMS(parseBmson(stringifyBmson(source))));
     expect(bmsLongNotes(roundTrip)).toEqual(bmsLongNotes(source));
   });
 
@@ -213,7 +213,7 @@ describe('bmson → BMS conversion', () => {
       info,
       types.map((t, index) => ({ x: index + 1, y: index * 960, l: 240, ...(t !== undefined ? { t } : {}) })),
     );
-    expect(headerLines(stringifyBms(source), 'LNMODE')).toEqual(expected);
+    expect(headerLines(stringifyBMS(source), 'LNMODE')).toEqual(expected);
   });
 
   test.each([
@@ -229,9 +229,9 @@ describe('bmson → BMS conversion', () => {
       sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
       mine_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 240, ...(damage !== undefined ? { damage } : {}) }] }],
     });
-    const output = stringifyBms(source);
+    const output = stringifyBMS(source);
 
-    const reparsed = parseBms(output);
+    const reparsed = parseBMS(output);
     expect(reparsed.events.filter((event) => event.channel === 'D2').map((event) => event.value)).toEqual([value]);
     // The mine's sample becomes the BMS explosion sound.
     expect(headerLines(output, 'WAV00')).toEqual(['#WAV00 mine.wav']);
@@ -240,13 +240,13 @@ describe('bmson → BMS conversion', () => {
 
   test('BMS → bmson → BMS keeps mine damage', () => {
     const source = bms('#BPM 120', '#WAV00 bomb.wav', '#WAV01 key.wav', '#00111:01', '#001D1:0A', '#001D2:00ZZ');
-    const roundTrip = parseBms(stringifyBms(parseBmson(stringifyBmson(source))));
+    const roundTrip = parseBMS(stringifyBMS(parseBmson(stringifyBmson(source))));
     expect(mineDamages(roundTrip)).toEqual(mineDamages(source));
     expect(roundTrip.resources.wav['00']).toBe('bomb.wav');
   });
 
   test('`judge_rank` becomes #DEFEXRANK (same unit) instead of an out-of-range #RANK', () => {
-    const output = stringifyBms(
+    const output = stringifyBMS(
       bmson({
         info: { title: 'Rank', init_bpm: 120, resolution: 240, judge_rank: 120 },
         sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
@@ -254,12 +254,12 @@ describe('bmson → BMS conversion', () => {
     );
     expect(headerLines(output, 'DEFEXRANK')).toEqual(['#DEFEXRANK 120']);
     expect(headerLines(output, 'RANK')).toEqual([]);
-    expect(parseBms(output).bms.defExRank).toBe(120);
+    expect(parseBMS(output).bms.defExRank).toBe(120);
   });
 
   test('a missing or non-positive `judge_rank` writes neither #RANK nor #DEFEXRANK', () => {
     for (const info of [{}, { judge_rank: 0 }]) {
-      const output = stringifyBms(
+      const output = stringifyBMS(
         bmson({
           info: { title: 'Rank', init_bpm: 120, resolution: 240, ...info },
           sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
@@ -272,7 +272,7 @@ describe('bmson → BMS conversion', () => {
 
   test('the percentage `total` is not written as an absolute #TOTAL', () => {
     for (const total of [undefined, 100, 260]) {
-      const output = stringifyBms(
+      const output = stringifyBMS(
         bmson({
           info: { title: 'Total', init_bpm: 120, resolution: 240, ...(total !== undefined ? { total } : {}) },
           sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],

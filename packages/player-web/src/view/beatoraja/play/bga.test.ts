@@ -1,7 +1,7 @@
 import { Sprite, Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
-import { BeatorajaBgaLayer } from './bga.ts';
+import { BeatorajaBGALayer } from './bga.ts';
 
 function fakeTexture(): Texture {
   return new Texture({ source: new TextureSource({ resource: new Uint8Array(4), width: 1, height: 1 }) });
@@ -25,10 +25,10 @@ function skin(): BeatorajaSkin {
   };
 }
 
-describe('BeatorajaBgaLayer', () => {
+describe('BeatorajaBGALayer', () => {
   it('hides missing BGA cues without swapping a rendered sprite back to Texture.EMPTY', () => {
     const validTexture = fakeTexture();
-    const layer = new BeatorajaBgaLayer({
+    const layer = new BeatorajaBGALayer({
       skin: skin(),
       textures: new Map([['01', validTexture]]),
       cues: {
@@ -55,7 +55,7 @@ describe('BeatorajaBgaLayer', () => {
   });
 
   it('centers a small image top-aligned on the 256x256 canvas over a black fill', () => {
-    const layer = new BeatorajaBgaLayer({
+    const layer = new BeatorajaBGALayer({
       skin: skin(),
       textures: new Map([['01', fakeTexture()]]),
       cues: { base: [{ seconds: 0, bmpKey: '01' }], layer: [], poor: [] },
@@ -74,7 +74,7 @@ describe('BeatorajaBgaLayer', () => {
   it('cross-fades a stitched NONSTOP chart from one stage to the next at the seam', () => {
     const red = fakeTexture();
     const blue = fakeTexture();
-    const layer = new BeatorajaBgaLayer({
+    const layer = new BeatorajaBGALayer({
       skin: skin(),
       textures: new Map([
         ['01', red],
@@ -131,7 +131,7 @@ describe('BeatorajaBgaLayer', () => {
     const base = fakeTexture();
     const layerImage = fakeTexture();
     const poor = fakeTexture();
-    const layer = new BeatorajaBgaLayer({
+    const layer = new BeatorajaBGALayer({
       skin: skin(),
       textures: new Map([
         ['01', base],

@@ -27,17 +27,17 @@ core engine の既定は `lr2` 互換ルールセットと、その `GROOVE` gau
 
 | 入口               | 公開するもの                                                                                                                                                                                                                                                                                                                                       |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@be-music/player` | エンジン：`manualPlay`、`autoPlay`、`PlayerOptions` と 5 つの分類の型、`PlayerSummary`、読み込みの進捗、`PlayerInterruptedError`、ランタイムの契約（`AudioSession`、`PlayerInputRuntime`、`PlayerUiRuntime` とその `Create*Context` の型）、`resolvePlayChart`、`preparePlaybackChart`、`resolveChartRulesetFacts`、`createTempoClock`             |
+| `@be-music/player` | エンジン：`manualPlay`、`autoPlay`、`PlayerOptions` と 5 つの分類の型、`PlayerSummary`、読み込みの進捗、`PlayerInterruptedError`、ランタイムの契約（`AudioSession`、`PlayerInputRuntime`、`PlayerUIRuntime` とその `Create*Context` の型）、`resolvePlayChart`、`preparePlaybackChart`、`resolveChartRulesetFacts`、`createTempoClock`             |
 | `./signals`        | ホストの入力と UI のランタイムが演奏中のプレイとやり取りするもの：入力のバスとそのコマンド、UI のバスとそのフレーム・コマンド・`PlayerGaugeSummary`、状態のシグナル、ハイスピードの範囲と操作                                                                                                                                                      |
 | `./lanes`          | プレイモードのレーン：レイアウトとスロット、スクラッチとホイールのレーン、キーの割り当て、FREE ZONE の入力、レーンオプションが入れ替えるレーン                                                                                                                                                                                                     |
-| `./display`        | ホストが表示するもの：時刻を付けたプレイのノート（`extract*`、`toTimed*`）、`ScrollDistanceMapper`、画面の BGA の cue（`pickActiveBgaCue`、`pickActiveBgaKey`、`DEFAULT_POOR_BGA_DISPLAY_SECONDS`）、選曲画面が表示する譜面の情報（`resolveDisplayed*`）、`formatSeconds`、`resolveAltModifierLabel`、TUI のノートの高さ、BGA の縮小のアルゴリズム |
+| `./display`        | ホストが表示するもの：時刻を付けたプレイのノート（`extract*`、`toTimed*`）、`ScrollDistanceMapper`、画面の BGA の cue（`pickActiveBGACue`、`pickActiveBGAKey`、`DEFAULT_POOR_BGA_DISPLAY_SECONDS`）、選曲画面が表示する譜面の情報（`resolveDisplayed*`）、`formatSeconds`、`resolveAltModifierLabel`、TUI のノートの高さ、BGA の縮小のアルゴリズム |
 | `./ruleset`        | ホスト・スキン・リーダーボードが共有する語彙：判定ルールセットの id（`PLAYLOG_RULESET_IDS`）、判定幅、ゲージ、クリアランプ、BP、スコア                                                                                                                                                                                                             |
 | `./playlog`        | プレイログの形式、その記録・シミュレーター・対象の判定、コースと NONSTOP のログ                                                                                                                                                                                                                                                                    |
 | `./records`        | 判定ルールセットごとのベスト記録と、その記録の規則                                                                                                                                                                                                                                                                                                 |
 | `./course`         | コースの定義：LR2 の `.lr2crs`、beatoraja のコース、難易度表のコース、コースメーカー、NONSTOP の通しプレイ                                                                                                                                                                                                                                         |
 | `./audio-sink`     | Node（`node-web-audio-api`）と Web Audio のコンテキストの音声シンク                                                                                                                                                                                                                                                                                |
 
-譜面の層の名前は `@be-music/chart` から読み込みます。`ChartPlayVariant`、`LongNoteMode`、タイムラインとその点、`BgaCue` と BGA のタイムラインを作る関数、タイミングの解決、サンプルのトリガーです。それ以外はパッケージの内部です。
+譜面の層の名前は `@be-music/chart` から読み込みます。`ChartPlayVariant`、`LongNoteMode`、タイムラインとその点、`BGACue` と BGA のタイムラインを作る関数、タイミングの解決、サンプルのトリガーです。それ以外はパッケージの内部です。
 
 ## BMS 対応範囲
 
@@ -79,7 +79,7 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | `#WAVxx`, `#BMPxx`                                                                                                                      | 音声・BGA リソース解決に使います。                                                                                                                                                                                                                   |
 | `#BASE`                                                                                                                                 | BMS object ID の base を選びます。`#BASE 62` では sample、BGA、BPM/STOP 参照、long-note 終端、地雷値の解決時に小文字 ID を case-sensitive に扱います。                                                                                               |
 | `#PREVIEW`                                                                                                                              | 選曲画面のプレビュー再生で優先的に使います。                                                                                                                                                                                                         |
-| `#PATH_WAV`                                                                                                                             | ブラウザのゲームプレイとオフラインレンダラ（`renderJson`）が sample を解決するとき、素のパスより先にディレクトリ接頭辞として試します。選曲画面プレビューのファイル探索にも使います。ターミナル player はプレイ用の sample 読み込みでは適用しません。 |
+| `#PATH_WAV`                                                                                                                             | ブラウザのゲームプレイとオフラインレンダラ（`renderJSON`）が sample を解決するとき、素のパスより先にディレクトリ接頭辞として試します。選曲画面プレビューのファイル探索にも使います。ターミナル player はプレイ用の sample 読み込みでは適用しません。 |
 | `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | BMS long note の解釈に使います。                                                                                                                                                                                                                     |
 | `#PLAYER`                                                                                                                               | レーンモード推定と表示上の player metadata に使います。                                                                                                                                                                                              |
 | `#VOLWAV`                                                                                                                               | 譜面全体の音量倍率として使います。                                                                                                                                                                                                                   |
@@ -150,7 +150,7 @@ BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始�
 - `#RANDOM n` / `#SWITCH n` は `1..n` から `value` を引きます。`n` がない、0、負、数値でない行は結果が 1 つしかない行として扱い、`range` 1、`value` 1 とし、乱数源を消費しません。
 - `#SETRANDOM n` / `#SETSWITCH n` は `value` を `n`（`n` がないか正でなければ 1）に固定し、`range` は 1 です。乱数は引きません。
 
-解決する場所は 1 か所だけで、`drawRandomOutcomes(chart, random)` → `RandomDraws` と `resolveBmsControlFlowWithDraws(chart, draws)`（`@be-music/parser`）→ 解決済みの譜面、の組です。ホスト向けには `resolvePlayChart(chart)`（`@be-music/player`）がこれをまとめ、`{ chart, randomDraws }` を返します。
+解決する場所は 1 か所だけで、`drawRandomOutcomes(chart, random)` → `RandomDraws` と `resolveBMSControlFlowWithDraws(chart, draws)`（`@be-music/parser`）→ 解決済みの譜面、の組です。ホスト向けには `resolvePlayChart(chart)`（`@be-music/player`）がこれをまとめ、`{ chart, randomDraws }` を返します。
 分岐の意味（スタックは 1 本で共有する、閉じていない `#IF` は `#ENDRANDOM` の後も残る、選ばれた分岐の中の定義は譜面全体に効く）は、`evaluateControlFlow`（`@be-music/chart`）の 1 か所だけにあります。
 同じ譜面と draws からは常に同じ結果が得られ、その譜面のために引かれていない draws は `RangeError` で拒否します。
 解決済みの譜面は `bms.controlFlow` を持たないので、もう一度解決しても何も変わりません。
@@ -162,7 +162,7 @@ flowchart LR
   src["bms.controlFlow を<br/>持つ譜面"]
   subgraph rpc["resolvePlayChart（プレイごとに 1 回）"]
     draw["drawRandomOutcomes"] --> draws(["RandomDraws"])
-    resolve["resolveBmsControlFlowWithDraws"]
+    resolve["resolveBMSControlFlowWithDraws"]
   end
   log(["プレイログの<br/>randomDraws"])
   src --> draw
@@ -553,8 +553,8 @@ EX-SCORE は IIDX 互換です。
 - `beatoraja` と `iidx` は EX-SCORE を返します。これが実機の表示です（IIDX は BISTROVER でマネースコアを廃止）。
 
 スコアの語彙はルールセットのもので、`@be-music/player/ruleset` が公開します。`ScoreSummary`、`JudgeKind`、
-`createEmptyScore`、`computeScoreRate`、DJ ランク（`resolveIidxRankIndexFromScore`、`resolveIidxRankLabel`、
-`IIDX_RANK_LABELS`）、`resolveLr2MoneyScore`、`resolveDisplayedPoor` です。
+`createEmptyScore`、`computeScoreRate`、DJ ランク（`resolveIIDXRankIndexFromScore`、`resolveIIDXRankLabel`、
+`IIDX_RANK_LABELS`）、`resolveLR2MoneyScore`、`resolveDisplayedPoor` です。
 
 ### 空 POOR
 
@@ -627,7 +627,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
-`HARD` / `EASY` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2`）に合わせます。`DEATH` は beatoraja の `HAZARD_LR2` ではなく LR2 本体（OpenLR2 `LR2f.cpp` L27673-L27680、LR2body.exe `ParseBmsFile`）に合わせます。
+`HARD` / `EASY` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2`）に合わせます。`DEATH` は beatoraja の `HAZARD_LR2` ではなく LR2 本体（OpenLR2 `LR2f.cpp` L27673-L27680、LR2body.exe `ParseBMSFile`）に合わせます。
 
 - `HARD`: 回復 `PGREAT/GREAT +0.1` / `GOOD +0.05`（TOTAL 非依存）、減少 `BAD -6` / `見逃しPOOR -10` / `空POOR -2`。減少には lr2oraja の `MODIFY_DAMAGE`、つまり `#TOTAL` の係数（`TOTAL ≥240` で `×1.0` から `<112` で `×10` まで）とノーツ数の係数（20 ノーツ以下で `×10` から 1000 ノーツ以上で `×1.0` まで）の大きい方を掛け、ゲージが `32%` 未満のときはさらに `×0.6` に緩和します（lr2oraja は比較前にゲージを偶数パーセントへ切り捨てるため、
   「表示 30 %」は内部 32 % に相当します）。
@@ -669,7 +669,7 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
   終点の遅れ側の窓が閉じるまで離す猶予があります。窓が閉じても押し続けていた場合、終点は見逃し `POOR` です
   （beatoraja の `CN end poor`）。途中離し時はレーン音も停止します。
 - モード `3`（HCN）: 判定はモード `2` と同じ（終点は離した瞬間に判定）で、加えて beatoraja のゲージの刻み
-  （`JudgeManager` L289-L340、`HcnTickCounter`）があります。始点と始点の判定（押下、または見逃し）の遅い方から終点の
+  （`JudgeManager` L289-L340、`HCNTickCounter`）があります。始点と始点の判定（押下、または見逃し）の遅い方から終点の
   通過まで、符号付きのカウンタが、レーンが増加側（レーンのキーが押されている、または終点を `GOOD` 以上で離した）なら
   増え、それ以外は減ります。+200 ms を超えるたびにゲージが 1 刻み増え（beatoraja では判定表の `GREAT` ×0.5）、
   −200 ms を超えるたびに 1 刻み減ります（`BAD` ×0.5）。早く離した後も刻みは続くので、終点前に押し直すとまた増えます。
@@ -792,13 +792,13 @@ pause 中は playback clock と audio session を同時に止め、resume で両
 ### `#VOLWAV`
 
 BMS の `#VOLWAV` は譜面全体の音量倍率として扱います。
-省略時は `100` を既定値とします。実効ゲインは、beatoraja と同じく `0 < bms.volWav < 200` のとき `bms.volWav / 100`、それ以外では `1` です（LR2 は `#VOLWAV` を無視します）。
+省略時は `100` を既定値とします。実効ゲインは、beatoraja と同じく `0 < bms.volWAV < 200` のとき `bms.volWAV / 100`、それ以外では `1` です（LR2 は `#VOLWAV` を無視します）。
 
 - `#VOLWAV 100`: 原音量のまま
 - `#VOLWAV 150`: 原音量の `1.5` 倍
 - `#VOLWAV 0`、`#VOLWAV 200` 以上: 原音量のまま
 
-この倍率は、リアルタイム再生の keysound、選曲画面プレビュー、`renderJson()` を使うオフライン音声レンダリングに適用します。
+この倍率は、リアルタイム再生の keysound、選曲画面プレビュー、`renderJSON()` を使うオフライン音声レンダリングに適用します。
 現実装は線形 gain のみを適用し、player やハードウェアに依存する音量差までは再現しません。
 
 ### `#xxx97` / `#xxx98`

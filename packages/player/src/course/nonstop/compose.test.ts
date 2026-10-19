@@ -1,5 +1,5 @@
 import { resolveChart } from '@be-music/chart';
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import { parseChart } from '@be-music/parser';
 import { describe, expect, test } from 'vite-plus/test';
 import { NONSTOP_STITCH_VERSION, stitchNonstopCourse } from './compose.ts';
@@ -161,14 +161,14 @@ describe('stitchNonstopCourse', () => {
   });
 
   test('refuses bmson stages and a course past the key space', () => {
-    expect(stitchNonstopCourse([{ chart: createEmptyJson('bmson') }], { connections: [] })).toEqual({
+    expect(stitchNonstopCourse([{ chart: createEmptyJSON('bmson') }], { connections: [] })).toEqual({
       ok: false,
       reason: 'bmson',
       stage: 0,
     });
     // Three stages using every base-36 key (1295 each) need 3885 stitched keys, past the 3843 base 62 holds.
     const digits = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const crowded = createEmptyJson('bms');
+    const crowded = createEmptyJSON('bms');
     for (let index = 1; index < 36 * 36; index += 1) {
       const key = `${digits[Math.floor(index / 36)]}${digits[index % 36]}`;
       crowded.resources.wav[key] = `${key}.wav`;

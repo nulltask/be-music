@@ -1,21 +1,21 @@
 import { availableParallelism } from 'node:os';
 import { runWithConcurrency, throwIfAborted } from '@be-music/utils/core';
-import type { BeMusicJson } from '@be-music/json';
-import { resolveChart, type BgaCue } from '@be-music/chart';
+import type { BeMusicJSON } from '@be-music/json';
+import { resolveChart, type BGACue } from '@be-music/chart';
 import {
   DEFAULT_IMAGE_RESIZE_ALGORITHM,
   DEFAULT_POOR_BGA_DISPLAY_SECONDS,
-  pickActiveBgaCue,
+  pickActiveBGACue,
   type ImageResizeAlgorithm,
 } from '@be-music/player/display';
 import {
   TERMINAL_PIXEL_ASPECT_X,
   TERMINAL_PIXEL_ASPECT_Y,
   type FrameMode,
-  type AnsiFrame,
+  type ANSIFrame,
   createMissingSourceFrame,
-  createSolidAnsiFrame,
-  resizeAnsiFrame,
+  createSolidANSIFrame,
+  resizeANSIFrame,
 } from './bga-frame.ts';
 import {
   type FrameSource,
@@ -31,11 +31,11 @@ import {
 } from './bga-frame-source.ts';
 import {
   type CompositeFrame,
-  cropAnsiFrameToOpaqueBounds,
+  cropANSIFrameToOpaqueBounds,
   mergeCompositeFrames,
-  fillAnsiFrameBackground,
-  composeAnsiLines,
-  createBlackBackgroundAnsiLines,
+  fillANSIFrameBackground,
+  composeANSILines,
+  createBlackBackgroundANSILines,
 } from './bga-compose.ts';
 import { loadFrameSource, loadTerminalImageSourceFrame, resolveMediaPath } from './bga-media.ts';
 
@@ -45,27 +45,27 @@ const DEFAULT_BGA_ASCII_HEIGHT = 20;
 const KITTY_GRAPHICS_PIXEL_SCALE = 4;
 const BGA_SOURCE_LOAD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 
-export interface BgaAnsiOptions {
+export interface BgaANSIOptions {
   baseDir: string;
   width?: number;
   height?: number;
   imageResizeAlgorithm?: ImageResizeAlgorithm;
-  videoBgaStreaming?: boolean;
-  onLoadProgress?: (progress: BgaAnsiLoadProgress) => void;
+  videoBGAStreaming?: boolean;
+  onLoadProgress?: (progress: BgaANSILoadProgress) => void;
   signal?: AbortSignal;
 }
 
-export interface BgaAnsiLoadProgress {
+export interface BgaANSILoadProgress {
   ratio: number;
   detail: string;
 }
 
-interface TerminalAnsiImageOptions extends Omit<BgaAnsiOptions, 'baseDir' | 'onLoadProgress'> {
+interface TerminalANSIImageOptions extends Omit<BgaANSIOptions, 'baseDir' | 'onLoadProgress'> {
   fitMode?: 'contain' | 'cover';
   includeKittyImage?: boolean;
 }
 
-export interface TerminalAnsiImage {
+export interface TerminalANSIImage {
   width: number;
   height: number;
   rgb: Uint8Array;
@@ -81,12 +81,12 @@ export interface TerminalKittyImage {
   rgb: Uint8Array;
 }
 
-export type StageFileAnsiImage = TerminalAnsiImage;
+export type StageFileANSIImage = TerminalANSIImage;
 export type StageFileKittyImage = TerminalKittyImage;
 
 type FrameSourceLoadCache = Map<string, Promise<FrameSource | null>>;
 
-export interface BgaKittyImage {
+export interface BGAKittyImage {
   pixelWidth: number;
   pixelHeight: number;
   cellWidth: number;
@@ -95,19 +95,19 @@ export interface BgaKittyImage {
   token: string;
 }
 
-export async function loadTerminalAnsiImage(
+export async function loadTerminalANSIImage(
   baseDir: string,
   mediaPath: string,
-  options: TerminalAnsiImageOptions = {},
-): Promise<TerminalAnsiImage | undefined> {
-  const loaded = await loadTerminalAnsiImageInternal(baseDir, mediaPath, options);
+  options: TerminalANSIImageOptions = {},
+): Promise<TerminalANSIImage | undefined> {
+  const loaded = await loadTerminalANSIImageInternal(baseDir, mediaPath, options);
   return loaded?.image;
 }
 
-export async function loadStageFileAnsiImage(
-  json: BeMusicJson,
-  options: Omit<BgaAnsiOptions, 'onLoadProgress'>,
-): Promise<StageFileAnsiImage | undefined> {
+export async function loadStageFileANSIImage(
+  json: BeMusicJSON,
+  options: Omit<BgaANSIOptions, 'onLoadProgress'>,
+): Promise<StageFileANSIImage | undefined> {
   const stageFile = json.metadata.stageFile;
   if (typeof stageFile !== 'string' || stageFile.length === 0) {
     return undefined;
@@ -115,7 +115,7 @@ export async function loadStageFileAnsiImage(
 
   throwIfAborted(options.signal);
   const displaySize = normalizeDisplaySize(options.width, options.height);
-  const loaded = await loadTerminalAnsiImageInternal(options.baseDir, stageFile, {
+  const loaded = await loadTerminalANSIImageInternal(options.baseDir, stageFile, {
     width: displaySize.width,
     height: displaySize.height,
     imageResizeAlgorithm: options.imageResizeAlgorithm,
@@ -126,23 +126,23 @@ export async function loadStageFileAnsiImage(
   return loaded?.image;
 }
 
-export async function loadStageFileAnsiLines(
-  json: BeMusicJson,
-  options: Omit<BgaAnsiOptions, 'onLoadProgress'>,
+export async function loadStageFileANSILines(
+  json: BeMusicJSON,
+  options: Omit<BgaANSIOptions, 'onLoadProgress'>,
 ): Promise<string[] | undefined> {
-  return (await loadStageFileAnsiImage(json, options))?.lines;
+  return (await loadStageFileANSIImage(json, options))?.lines;
 }
 
-export class BgaAnsiRenderer {
+export class BgaANSIRenderer {
   readonly playbackEndSeconds: number;
 
-  private readonly baseTimeline: BgaCue[];
+  private readonly baseTimeline: BGACue[];
 
-  private readonly poorTimeline: BgaCue[];
+  private readonly poorTimeline: BGACue[];
 
-  private readonly layerTimeline: BgaCue[];
+  private readonly layerTimeline: BGACue[];
 
-  private readonly layer2Timeline: BgaCue[];
+  private readonly layer2Timeline: BGACue[];
 
   private readonly baseSourceFramesByKey: Map<string, FrameSource>;
 
@@ -152,11 +152,11 @@ export class BgaAnsiRenderer {
 
   private readonly layer2SourceFramesByKey: Map<string, FrameSource>;
 
-  private readonly missingBaseSourceFrame: AnsiFrame;
+  private readonly missingBaseSourceFrame: ANSIFrame;
 
-  private readonly missingPoorSourceFrame: AnsiFrame;
+  private readonly missingPoorSourceFrame: ANSIFrame;
 
-  private readonly missingLayerSourceFrame: AnsiFrame;
+  private readonly missingLayerSourceFrame: ANSIFrame;
 
   private readonly poorFallbackKey?: string;
 
@@ -170,11 +170,11 @@ export class BgaAnsiRenderer {
 
   private layer2FramesByKey = new Map<string, FrameSource>();
 
-  private missingBaseFrame: AnsiFrame;
+  private missingBaseFrame: ANSIFrame;
 
-  private missingPoorFrame: AnsiFrame;
+  private missingPoorFrame: ANSIFrame;
 
-  private missingLayerFrame: AnsiFrame;
+  private missingLayerFrame: ANSIFrame;
 
   private displayWidth: number;
 
@@ -204,7 +204,7 @@ export class BgaAnsiRenderer {
 
   private cachedLines?: string[];
 
-  private cachedKittyImage?: BgaKittyImage;
+  private cachedKittyImage?: BGAKittyImage;
 
   private blackBackgroundLines: string[];
 
@@ -218,17 +218,17 @@ export class BgaAnsiRenderer {
   private readonly cueFreezeSeconds: number;
 
   constructor(params: {
-    baseTimeline: BgaCue[];
-    poorTimeline: BgaCue[];
-    layerTimeline: BgaCue[];
-    layer2Timeline: BgaCue[];
+    baseTimeline: BGACue[];
+    poorTimeline: BGACue[];
+    layerTimeline: BGACue[];
+    layer2Timeline: BGACue[];
     baseSourceFramesByKey: Map<string, FrameSource>;
     poorSourceFramesByKey: Map<string, FrameSource>;
     layerSourceFramesByKey: Map<string, FrameSource>;
     layer2SourceFramesByKey: Map<string, FrameSource>;
-    missingBaseSourceFrame: AnsiFrame;
-    missingPoorSourceFrame: AnsiFrame;
-    missingLayerSourceFrame: AnsiFrame;
+    missingBaseSourceFrame: ANSIFrame;
+    missingPoorSourceFrame: ANSIFrame;
+    missingLayerSourceFrame: ANSIFrame;
     poorFallbackKey?: string;
     poorFallbackUntilSeconds: number;
     playbackEndSeconds: number;
@@ -257,19 +257,19 @@ export class BgaAnsiRenderer {
     this.displayHeight = params.height;
     this.resizeAlgorithm = params.resizeAlgorithm;
     this.blackBackgroundLines = [];
-    this.missingBaseFrame = resizeAnsiFrame(
+    this.missingBaseFrame = resizeANSIFrame(
       this.missingBaseSourceFrame,
       this.displayWidth,
       this.displayHeight,
       this.resizeAlgorithm,
     );
-    this.missingPoorFrame = resizeAnsiFrame(
+    this.missingPoorFrame = resizeANSIFrame(
       this.missingPoorSourceFrame,
       this.displayWidth,
       this.displayHeight,
       this.resizeAlgorithm,
     );
-    this.missingLayerFrame = resizeAnsiFrame(
+    this.missingLayerFrame = resizeANSIFrame(
       this.missingLayerSourceFrame,
       this.displayWidth,
       this.displayHeight,
@@ -320,13 +320,13 @@ export class BgaAnsiRenderer {
     this.rebuildFrames();
   }
 
-  getAnsiLines(currentSeconds: number): string[] | undefined {
+  getANSILines(currentSeconds: number): string[] | undefined {
     this.refreshComposite(currentSeconds);
     if (!this.cachedComposite) {
       return this.blackBackgroundLines;
     }
     if (!this.cachedLines) {
-      this.cachedLines = composeAnsiLines(
+      this.cachedLines = composeANSILines(
         this.cachedComposite.rgb,
         this.cachedComposite.opaqueMask,
         this.cachedComposite.width,
@@ -336,7 +336,7 @@ export class BgaAnsiRenderer {
     return this.cachedLines;
   }
 
-  getKittyImage(currentSeconds: number): BgaKittyImage {
+  getKittyImage(currentSeconds: number): BGAKittyImage {
     const state = this.resolveActiveState(currentSeconds);
     const pixelWidth = Math.max(1, this.displayWidth * KITTY_GRAPHICS_PIXEL_SCALE);
     const pixelHeight = Math.max(1, this.displayHeight * KITTY_GRAPHICS_PIXEL_SCALE);
@@ -373,17 +373,17 @@ export class BgaAnsiRenderer {
 
     const composite =
       state.poorActive && poorSelection.frame
-        ? mergeCompositeFrames(resizeAnsiFrame(poorSelection.frame, pixelWidth, pixelHeight, this.resizeAlgorithm))
+        ? mergeCompositeFrames(resizeANSIFrame(poorSelection.frame, pixelWidth, pixelHeight, this.resizeAlgorithm))
         : mergeCompositeFrames(
             ...[baseSelection.frame, layerSelection.frame, layer2Selection.frame]
               .slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS)
               .map((frame) =>
-                frame ? resizeAnsiFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
+                frame ? resizeANSIFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
               ),
           );
     const filledFrame = composite
-      ? fillAnsiFrameBackground(composite, 0, 0, 0)
-      : createSolidAnsiFrame(1, 1, 0, 0, 0, 1);
+      ? fillANSIFrameBackground(composite, 0, 0, 0)
+      : createSolidANSIFrame(1, 1, 0, 0, 0, 1);
     const image = {
       pixelWidth: filledFrame.width,
       pixelHeight: filledFrame.height,
@@ -421,25 +421,25 @@ export class BgaAnsiRenderer {
       this.displayHeight,
       this.resizeAlgorithm,
     );
-    this.missingBaseFrame = resizeAnsiFrame(
+    this.missingBaseFrame = resizeANSIFrame(
       this.missingBaseSourceFrame,
       this.displayWidth,
       this.displayHeight,
       this.resizeAlgorithm,
     );
-    this.missingPoorFrame = resizeAnsiFrame(
+    this.missingPoorFrame = resizeANSIFrame(
       this.missingPoorSourceFrame,
       this.displayWidth,
       this.displayHeight,
       this.resizeAlgorithm,
     );
-    this.missingLayerFrame = resizeAnsiFrame(
+    this.missingLayerFrame = resizeANSIFrame(
       this.missingLayerSourceFrame,
       this.displayWidth,
       this.displayHeight,
       this.resizeAlgorithm,
     );
-    this.blackBackgroundLines = createBlackBackgroundAnsiLines(this.displayWidth, this.displayHeight);
+    this.blackBackgroundLines = createBlackBackgroundANSILines(this.displayWidth, this.displayHeight);
     this.resetCache();
   }
 
@@ -515,10 +515,10 @@ export class BgaAnsiRenderer {
     poorActive: boolean;
   } {
     const cueSeconds = Math.min(currentSeconds, this.cueFreezeSeconds);
-    const baseCue = pickActiveBgaCue(this.baseTimeline, cueSeconds);
-    const layerCue = pickActiveBgaCue(this.layerTimeline, cueSeconds);
-    const layer2Cue = pickActiveBgaCue(this.layer2Timeline, cueSeconds);
-    const poorCue = pickActiveBgaCue(this.poorTimeline, cueSeconds);
+    const baseCue = pickActiveBGACue(this.baseTimeline, cueSeconds);
+    const layerCue = pickActiveBGACue(this.layerTimeline, cueSeconds);
+    const layer2Cue = pickActiveBGACue(this.layer2Timeline, cueSeconds);
+    const poorCue = pickActiveBGACue(this.poorTimeline, cueSeconds);
     const poorActive = currentSeconds < this.poorActiveUntilSeconds;
     return {
       baseKey: baseCue?.key ?? '',
@@ -545,7 +545,7 @@ export class BgaAnsiRenderer {
     return resolveFrameSelection(this.layer2FramesByKey, this.missingLayerFrame, layer2Key, seconds);
   }
 
-  private resolvePoorKey(poorCue: BgaCue | undefined, currentSeconds: number): string | undefined {
+  private resolvePoorKey(poorCue: BGACue | undefined, currentSeconds: number): string | undefined {
     if (poorCue) {
       return poorCue.key;
     }
@@ -556,10 +556,10 @@ export class BgaAnsiRenderer {
   }
 }
 
-export async function createBgaAnsiRenderer(
-  json: BeMusicJson,
-  options: BgaAnsiOptions,
-): Promise<BgaAnsiRenderer | undefined> {
+export async function createBgaANSIRenderer(
+  json: BeMusicJSON,
+  options: BgaANSIOptions,
+): Promise<BgaANSIRenderer | undefined> {
   throwIfAborted(options.signal);
   const displaySize = normalizeDisplaySize(options.width, options.height);
   const resizeAlgorithm = options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM;
@@ -571,20 +571,20 @@ export async function createBgaAnsiRenderer(
   const layerKeys = new Set(layerTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const layer2Keys = new Set(layer2Timeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   // LR2 starts its miss layer from `#BMP00`; only `#POORBGA 2` (no POOR image) turns that off.
-  const shouldUsePoorBmp00Fallback =
-    !isPoorBgaHidden(json.bms.poorBga) &&
+  const shouldUsePoorBMP00Fallback =
+    !isPoorBGAHidden(json.bms.poorBGA) &&
     typeof json.resources.bmp['00'] === 'string' &&
     json.resources.bmp['00'].length > 0;
-  const poorFallbackKey = shouldUsePoorBmp00Fallback ? '00' : undefined;
+  const poorFallbackKey = shouldUsePoorBMP00Fallback ? '00' : undefined;
   if (poorFallbackKey) {
     poorKeys.add(poorFallbackKey);
   }
   const poorFallbackUntilSeconds = poorTimeline[0]?.seconds ?? Number.POSITIVE_INFINITY;
   const totalLoadTargetCount =
-    countMappedBmpResourceTargets(baseKeys, json.resources.bmp) +
-    countMappedBmpResourceTargets(poorKeys, json.resources.bmp) +
-    countMappedBmpResourceTargets(layerKeys, json.resources.bmp) +
-    countMappedBmpResourceTargets(layer2Keys, json.resources.bmp);
+    countMappedBMPResourceTargets(baseKeys, json.resources.bmp) +
+    countMappedBMPResourceTargets(poorKeys, json.resources.bmp) +
+    countMappedBMPResourceTargets(layerKeys, json.resources.bmp) +
+    countMappedBMPResourceTargets(layer2Keys, json.resources.bmp);
   let loadedTargetCount = 0;
   const reportLoadProgress = (detail: string): void => {
     if (!options.onLoadProgress || totalLoadTargetCount <= 0) {
@@ -612,7 +612,7 @@ export async function createBgaAnsiRenderer(
         width: displaySize.width,
         height: displaySize.height,
         imageResizeAlgorithm: resizeAlgorithm,
-        videoBgaStreaming: options.videoBgaStreaming,
+        videoBGAStreaming: options.videoBGAStreaming,
         onLoadProgress: reportLoadProgress,
         signal: options.signal,
         sharedSourceCache,
@@ -625,7 +625,7 @@ export async function createBgaAnsiRenderer(
         width: displaySize.width,
         height: displaySize.height,
         imageResizeAlgorithm: resizeAlgorithm,
-        videoBgaStreaming: options.videoBgaStreaming,
+        videoBGAStreaming: options.videoBGAStreaming,
         onLoadProgress: reportLoadProgress,
         signal: options.signal,
         sharedSourceCache,
@@ -638,7 +638,7 @@ export async function createBgaAnsiRenderer(
         width: displaySize.width,
         height: displaySize.height,
         imageResizeAlgorithm: resizeAlgorithm,
-        videoBgaStreaming: options.videoBgaStreaming,
+        videoBGAStreaming: options.videoBGAStreaming,
         onLoadProgress: reportLoadProgress,
         signal: options.signal,
         sharedSourceCache,
@@ -651,7 +651,7 @@ export async function createBgaAnsiRenderer(
         width: displaySize.width,
         height: displaySize.height,
         imageResizeAlgorithm: resizeAlgorithm,
-        videoBgaStreaming: options.videoBgaStreaming,
+        videoBGAStreaming: options.videoBGAStreaming,
         onLoadProgress: reportLoadProgress,
         signal: options.signal,
         sharedSourceCache,
@@ -676,7 +676,7 @@ export async function createBgaAnsiRenderer(
   const missingPoorSourceFrame = createMissingSourceFrame('base');
   const missingLayerSourceFrame = createMissingSourceFrame('layer');
 
-  return new BgaAnsiRenderer({
+  return new BgaANSIRenderer({
     baseTimeline,
     poorTimeline,
     layerTimeline,
@@ -711,7 +711,7 @@ async function loadFramesByKeys(params: {
   width: number;
   height: number;
   imageResizeAlgorithm: ImageResizeAlgorithm;
-  videoBgaStreaming?: boolean;
+  videoBGAStreaming?: boolean;
   onLoadProgress?: (detail: string) => void;
   signal?: AbortSignal;
   sharedSourceCache: FrameSourceLoadCache;
@@ -724,7 +724,7 @@ async function loadFramesByKeys(params: {
     width,
     height,
     imageResizeAlgorithm,
-    videoBgaStreaming,
+    videoBGAStreaming,
     onLoadProgress,
     signal,
     sharedSourceCache,
@@ -748,7 +748,7 @@ async function loadFramesByKeys(params: {
 
       const cacheKey =
         `${mode}:${width}x${height}:${imageResizeAlgorithm}:` +
-        `${videoBgaStreaming === false ? 'full' : 'stream'}:${resolved}`;
+        `${videoBGAStreaming === false ? 'full' : 'stream'}:${resolved}`;
       let sourcePromise = sharedSourceCache.get(cacheKey);
       if (!sourcePromise) {
         sourcePromise = loadFrameSource(
@@ -757,7 +757,7 @@ async function loadFramesByKeys(params: {
           width,
           height,
           imageResizeAlgorithm,
-          videoBgaStreaming,
+          videoBGAStreaming,
           signal,
         ).then((source) => source ?? null);
         sharedSourceCache.set(cacheKey, sourcePromise);
@@ -779,11 +779,11 @@ async function loadFramesByKeys(params: {
  * Whether `#POORBGA` is `2`, which never shows a POOR image (hitkey's command memo). A missing, unparsable or
  * out-of-range value is `0`, the usual behaviour.
  */
-function isPoorBgaHidden(value: string | undefined): boolean {
+function isPoorBGAHidden(value: string | undefined): boolean {
   return value !== undefined && Number.parseInt(value.trim(), 10) === 2;
 }
 
-function countMappedBmpResourceTargets(keys: ReadonlySet<string>, resources: Record<string, string>): number {
+function countMappedBMPResourceTargets(keys: ReadonlySet<string>, resources: Record<string, string>): number {
   let count = 0;
   for (const key of keys) {
     if (resources[key]) {
@@ -828,7 +828,7 @@ function buildTerminalKittyImage(
   if (!frame) {
     return undefined;
   }
-  const filledFrame = fillAnsiFrameBackground(frame, 0, 0, 0);
+  const filledFrame = fillANSIFrameBackground(frame, 0, 0, 0);
   return {
     pixelWidth: filledFrame.width,
     pixelHeight: filledFrame.height,
@@ -838,11 +838,11 @@ function buildTerminalKittyImage(
   };
 }
 
-async function loadTerminalAnsiImageInternal(
+async function loadTerminalANSIImageInternal(
   baseDir: string,
   mediaPath: string,
-  options: TerminalAnsiImageOptions = {},
-): Promise<{ image: TerminalAnsiImage; sourceFrame: FrameSource } | undefined> {
+  options: TerminalANSIImageOptions = {},
+): Promise<{ image: TerminalANSIImage; sourceFrame: FrameSource } | undefined> {
   throwIfAborted(options.signal);
   const displaySize = normalizeTerminalImageDisplaySize(options.width, options.height);
   const resizeAlgorithm = options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM;
@@ -859,8 +859,8 @@ async function loadTerminalAnsiImageInternal(
   if (!selected.frame) {
     return undefined;
   }
-  const outputFrame = options.fitMode === 'cover' ? selected.frame : cropAnsiFrameToOpaqueBounds(selected.frame);
-  const filledFrame = fillAnsiFrameBackground(outputFrame, 0, 0, 0);
+  const outputFrame = options.fitMode === 'cover' ? selected.frame : cropANSIFrameToOpaqueBounds(selected.frame);
+  const filledFrame = fillANSIFrameBackground(outputFrame, 0, 0, 0);
   const kittyImage = options.includeKittyImage
     ? options.fitMode === 'cover'
       ? buildTerminalKittyImage(sourceFrame, displaySize.width, displaySize.height, 'cover', resizeAlgorithm)
@@ -872,7 +872,7 @@ async function loadTerminalAnsiImageInternal(
       width: filledFrame.width,
       height: filledFrame.height,
       rgb: filledFrame.rgb,
-      lines: composeAnsiLines(filledFrame.rgb, filledFrame.opaqueMask, filledFrame.width, filledFrame.height),
+      lines: composeANSILines(filledFrame.rgb, filledFrame.opaqueMask, filledFrame.width, filledFrame.height),
       kittyImage,
     },
   };

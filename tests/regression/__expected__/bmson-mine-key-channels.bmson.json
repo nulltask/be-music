@@ -34,7 +34,7 @@
         "genre": "TEST",
         "modeHint": "beat-7k",
         "level": 4,
-        "initBpm": 150,
+        "initBPM": 150,
         "judgeRank": 100,
         "total": 260,
         "lnType": 2,
@@ -212,7 +212,7 @@
       "randomPatterns": [],
       "title": "BMSON Mine / Key Channels",
       "playVariant": "7",
-      "referenceBpm": 150,
+      "referenceBPM": 150,
       "timing": {
         "tempo": [
           "0 150 0"
@@ -242,8 +242,8 @@
           "sourceExRank": 100
         },
         "noteCount": 6,
-        "chartFingerprint": "bmfp0:313f9c8b385804373a10bef22875293795edd7b8b0f3841350c2bfe8d466e04e",
-        "playFingerprint": "bmfp0:313f9c8b385804373a10bef22875293795edd7b8b0f3841350c2bfe8d466e04e",
+        "chartFingerprint": "bmfp0:46624580085e82088d8c9d16fcbf8dab635554708c56733e0a689350a5f3716d",
+        "playFingerprint": "bmfp0:46624580085e82088d8c9d16fcbf8dab635554708c56733e0a689350a5f3716d",
         "title": "BMSON Mine / Key Channels",
         "subtitle": "beatoraja mine_channels / key_channels / ln_type / notes[].t extensions",
         "artist": "be-music",

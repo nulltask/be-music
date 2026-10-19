@@ -17,7 +17,7 @@ const log = logger('beatoraja-tex');
 /** A chart's images, decoded; an image the chart lacks, or one that would not decode, is left out. */
 export interface BeatorajaChartImages {
   stageFile?: Texture;
-  backBmp?: Texture;
+  backBMP?: Texture;
   banner?: Texture;
 }
 
@@ -31,7 +31,7 @@ export function resolveBeatorajaChartImage(
     case -100:
       return images.stageFile;
     case -101:
-      return images.backBmp;
+      return images.backBMP;
     case -102:
       return images.banner;
     default:
@@ -70,14 +70,14 @@ export async function loadBeatorajaChartImages(
     }
     return undefined;
   };
-  const [stageFile, backBmp, banner] = await Promise.all([
+  const [stageFile, backBMP, banner] = await Promise.all([
     decode(meta.stageFile),
-    decode(meta.backBmp),
+    decode(meta.backBMP),
     decode(meta.banner),
   ]);
   const images: BeatorajaChartImages = {};
   if (stageFile !== undefined) images.stageFile = stageFile;
-  if (backBmp !== undefined) images.backBmp = backBmp;
+  if (backBMP !== undefined) images.backBMP = backBMP;
   if (banner !== undefined) images.banner = banner;
   return images;
 }

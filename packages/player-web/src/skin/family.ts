@@ -13,7 +13,7 @@
  *
  * **Note on scope:** This module deliberately does **not** include scene-factory methods. The four scene kinds
  * (`select` / `decide` / `gameplay` / `result`) take very different construction arguments between families (LR2 takes
- * `Lr2Skin`; beatoraja takes a pre-decoded texture cache + Lua-evaluated skin config; default takes neither) so a
+ * `LR2Skin`; beatoraja takes a pre-decoded texture cache + Lua-evaluated skin config; default takes neither) so a
  * single union-typed factory would push complexity onto every caller. The host instead picks the family via the
  * registry and then makes each screen with the host API (`createSelectScene`, `createDecideScene`, `createPlayScene`,
  * `createResultScene`) and the family's kit; the family views live under `view/{built-in,lr2,beatoraja}/`.

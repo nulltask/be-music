@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
-import { createEmptyJson } from '@be-music/json';
+import { createEmptyJSON } from '@be-music/json';
 import type { ChartPreviewEngineOptions, ChartPreviewTarget } from '../chart/preview.ts';
 import { SILENT_AUDIO } from './audio-analysis.ts';
 import type { AudioBusHandle } from './audio-bus.ts';
@@ -125,7 +125,7 @@ describe('createAudioService', () => {
     const service = createAudioService({ createContext: () => undefined });
     service.setTheme({ sounds: { cursor: { bytes: new Uint8Array([1]) } } });
     await expect(service.playCue('cursor')).resolves.toBe(false);
-    await expect(service.playBgm({ bytes: new Uint8Array([2]) })).resolves.toBe(false);
+    await expect(service.playBGM({ bytes: new Uint8Array([2]) })).resolves.toBe(false);
     await expect(service.decode(new Uint8Array([3]))).resolves.toBeUndefined();
     expect(service.skinSounds.play('missing.wav', 1)).toBe(false);
     expect(service.getContext()).toBeUndefined();
@@ -199,33 +199,33 @@ describe('createAudioService', () => {
     const first = { bytes: new Uint8Array([1]) };
     const second = { bytes: new Uint8Array([2]) };
     const { service, fake } = createService();
-    await expect(service.playBgm(first, { owner: scene, volume: 0.5 })).resolves.toBe(true);
+    await expect(service.playBGM(first, { owner: scene, volume: 0.5 })).resolves.toBe(true);
     expect(fake.sources[0]!.loop).toBe(true);
     expect(fake.sources[0]!.connections[0]!.gain.value).toBe(0.5);
     // The same sound again (a scene entering twice) changes its owner and level only.
-    await expect(service.playBgm(first, { owner: other, volume: 0.7 })).resolves.toBe(true);
+    await expect(service.playBGM(first, { owner: other, volume: 0.7 })).resolves.toBe(true);
     expect(fake.sources).toHaveLength(1);
     expect(fake.sources[0]!.connections[0]!.gain.value).toBe(0.7);
     service.stopOwned(scene);
     expect(fake.sources[0]!.stop).not.toHaveBeenCalled();
-    await service.playBgm(second, { owner: other, loop: false });
+    await service.playBGM(second, { owner: other, loop: false });
     expect(fake.sources[0]!.stop).toHaveBeenCalled();
     expect(fake.sources[1]!.loop).toBe(false);
-    service.stopBgm(scene);
+    service.stopBGM(scene);
     expect(fake.sources[1]!.stop).not.toHaveBeenCalled();
-    service.stopBgm(other);
+    service.stopBGM(other);
     expect(fake.sources[1]!.stop).toHaveBeenCalled();
   });
 
   it('plays a slot of the theme as the BGM or a jingle', async () => {
     const { service, fake } = createService();
-    service.setTheme({ sounds: { selectBgm: { bytes: new Uint8Array([1]) }, clear: { bytes: new Uint8Array([2]) } } });
-    await expect(service.playBgm('selectBgm')).resolves.toBe(true);
+    service.setTheme({ sounds: { selectBGM: { bytes: new Uint8Array([1]) }, clear: { bytes: new Uint8Array([2]) } } });
+    await expect(service.playBGM('selectBGM')).resolves.toBe(true);
     await expect(service.playJingle('clear')).resolves.toBe(true);
     await expect(service.playJingle('fail')).resolves.toBe(false);
     await expect(service.playJingle(undefined)).resolves.toBe(false);
     expect(fake.sources.map((source) => source.loop)).toEqual([true, false]);
-    service.stopBgm();
+    service.stopBGM();
     expect(fake.sources[0]!.stop).toHaveBeenCalled();
   });
 
@@ -282,7 +282,7 @@ describe('createAudioService', () => {
     });
     const { service, fake } = createService(undefined, { createPreviewEngine, preview: { focusDelayMs: 5 } });
     const target = { song: { id: 'a' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
-    await service.playBgm({ bytes: new Uint8Array([1]) }, { owner: scene });
+    await service.playBGM({ bytes: new Uint8Array([1]) }, { owner: scene });
     const duck = busOf(fake.sources[0]!);
     service.preview.focus(target, scene);
     service.preview.focus(target, scene);
@@ -297,7 +297,7 @@ describe('createAudioService', () => {
     expect(service.preview.playing).toBe(false);
     expect(duck.gain.value).toBe(1);
 
-    await service.playBgm({ bytes: new Uint8Array([2]) }, { duckUnderPreview: false });
+    await service.playBGM({ bytes: new Uint8Array([2]) }, { duckUnderPreview: false });
     engineOptions!.onPlaybackStart!(target);
     expect(duck.gain.value).toBe(1);
     engineOptions!.onPlaybackStop!();
@@ -330,7 +330,7 @@ describe('createAudioService', () => {
       return { audioContext: context.context, audioBus: bus };
     });
     const { service } = createService(undefined, { createPlayGraph });
-    const chart = createEmptyJson('bms');
+    const chart = createEmptyJSON('bms');
 
     const first = service.openPlayGraph(chart, 'split', undefined, { owner: scene });
     expect(createPlayGraph).toHaveBeenCalledWith(chart, 'split', undefined);
@@ -364,8 +364,8 @@ describe('createAudioService', () => {
         audioBus: { outputNode: fakeNode('tap'), dispose: vi.fn() } as unknown as AudioBusHandle,
       }),
     });
-    await service.playBgm({ bytes: new Uint8Array([1]) });
-    const graph = service.openPlayGraph(createEmptyJson('bms'), 'split');
+    await service.playBGM({ bytes: new Uint8Array([1]) });
+    const graph = service.openPlayGraph(createEmptyJSON('bms'), 'split');
     graph.close({ delayMs: 1_000 });
     service.dispose();
     service.dispose();

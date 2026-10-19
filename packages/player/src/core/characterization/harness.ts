@@ -1,15 +1,15 @@
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJSON } from '@be-music/json';
 import { autoPlay, manualPlay } from '../play.ts';
 import {
   PlayerInterruptedError,
   type AudioSession,
   type CreatePlayerInputRuntimeContext,
-  type CreatePlayerUiRuntimeContext,
+  type CreatePlayerUIRuntimeContext,
   type PlayerOptions,
   type PlayerSummary,
 } from '../engine-types.ts';
 import type { PlayerInputCommand } from '../input-signal-bus.ts';
-import type { PlayerUiCommand, PlayerUiFrameNote } from '../ui-signal-bus.ts';
+import type { PlayerUICommand, PlayerUIFrameNote } from '../ui-signal-bus.ts';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '../../playlog/format.ts';
 import { simulatePlaylogRulesets } from '../../playlog/simulate.ts';
 import { createVirtualClock } from './virtual-clock.ts';
@@ -70,7 +70,7 @@ export interface TestAudioSessionOptions {
 
 export interface CharacterizationPlay {
   driver: CharacterizationDriver;
-  chart: BeMusicJson;
+  chart: BeMusicJSON;
   /** Engine options over the harness's own (no lead-in, the test runtimes and callbacks, play-log recording). */
   options?: PlayerOptions;
   script?: readonly ScriptStep[];
@@ -312,8 +312,8 @@ export async function observePlay(
     ...(play.ui === false
       ? {}
       : {
-          createUiRuntime: async (context: CreatePlayerUiRuntimeContext) => {
-            observeUi(context);
+          createUIRuntime: async (context: CreatePlayerUIRuntimeContext) => {
+            observeUI(context);
             return {
               tuiEnabled: true,
               start: () => hostEntry('ui start'),
@@ -341,7 +341,7 @@ export async function observePlay(
     ...play.options,
   };
 
-  function observeUi(context: CreatePlayerUiRuntimeContext): void {
+  function observeUI(context: CreatePlayerUIRuntimeContext): void {
     const { stateSignals, uiSignals } = context;
     const publishJudgeCombo = stateSignals.publishJudgeCombo;
     stateSignals.publishJudgeCombo = (judge, combo, channel, updatedAtMs, deltaMs) => {
@@ -353,7 +353,7 @@ export async function observePlay(
       publishJudgeCombo(judge, combo, channel, updatedAtMs, deltaMs);
     };
     const pushCommand = uiSignals.pushCommand;
-    uiSignals.pushCommand = (uiCommand: PlayerUiCommand) => {
+    uiSignals.pushCommand = (uiCommand: PlayerUICommand) => {
       const { kind, ...fields } = uiCommand;
       const details = Object.entries(fields).map(([key, value]) =>
         key === 'channel'
@@ -363,14 +363,14 @@ export async function observePlay(
       ui.push(`${now()} ${kind}${details.join('')}`);
       pushCommand(uiCommand);
     };
-    const seen = new Set<PlayerUiFrameNote>();
+    const seen = new Set<PlayerUIFrameNote>();
     const publishFrame = uiSignals.publishFrame;
     uiSignals.publishFrame = (frame) => {
       frames.count += 1;
       frames.last =
         `${now()} seconds=${formatNumber(frame.currentSeconds)} beat=${formatNumber(frame.currentBeat)}` +
         `${frame.displayBeat === undefined ? '' : ` displayBeat=${formatNumber(frame.displayBeat)}`}`;
-      const scan = (kind: string, notes: readonly PlayerUiFrameNote[] | undefined): void => {
+      const scan = (kind: string, notes: readonly PlayerUIFrameNote[] | undefined): void => {
         for (const note of notes ?? []) {
           if (!note.judged || seen.has(note)) continue;
           seen.add(note);

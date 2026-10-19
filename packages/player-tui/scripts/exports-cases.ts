@@ -1,4 +1,4 @@
-import * as playerTuiApi from '@be-music/player-tui';
+import * as playerTuiAPI from '@be-music/player-tui';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_LANE_CHANNELS = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
@@ -10,23 +10,23 @@ const BENCH_KEY = {
   shift: false,
 };
 
-export function registerPlayerTuiExportsCases(define: DefineBenchmarkCase): void {
+export function registerPlayerTUIExportsCases(define: DefineBenchmarkCase): void {
   define('player-tui.appendFreeZoneInputChannels', {
     run: () => {
-      const bindings = playerTuiApi.createLaneBindings(BENCH_LANE_CHANNELS);
-      const inputTokenToChannels = playerTuiApi.createInputTokenToChannelsMap(bindings);
-      playerTuiApi.appendFreeZoneInputChannels(inputTokenToChannels, bindings, BENCH_LANE_CHANNELS);
+      const bindings = playerTuiAPI.createLaneBindings(BENCH_LANE_CHANNELS);
+      const inputTokenToChannels = playerTuiAPI.createInputTokenToChannelsMap(bindings);
+      playerTuiAPI.appendFreeZoneInputChannels(inputTokenToChannels, bindings, BENCH_LANE_CHANNELS);
     },
   });
   define('player-tui.beginKittyKeyboardProtocolOptIn', {
     run: () => {
-      const stop = playerTuiApi.beginKittyKeyboardProtocolOptIn(createNonTtyWriteStream());
+      const stop = playerTuiAPI.beginKittyKeyboardProtocolOptIn(createNonTTYWriteStream());
       stop();
     },
   });
   define('player-tui.beginStatefulKeyboardProtocolOptIn', {
     run: () => {
-      const stop = playerTuiApi.beginStatefulKeyboardProtocolOptIn(createNonTtyWriteStream(), 'linux', {
+      const stop = playerTuiAPI.beginStatefulKeyboardProtocolOptIn(createNonTTYWriteStream(), 'linux', {
         TERM: 'xterm-kitty',
       });
       stop();
@@ -34,19 +34,19 @@ export function registerPlayerTuiExportsCases(define: DefineBenchmarkCase): void
   });
   define('player-tui.beginWin32InputModeOptIn', {
     run: () => {
-      const stop = playerTuiApi.beginWin32InputModeOptIn(createNonTtyWriteStream());
+      const stop = playerTuiAPI.beginWin32InputModeOptIn(createNonTTYWriteStream());
       stop();
     },
   });
-  define('player-tui.BgaAnsiRenderer', {
+  define('player-tui.BgaANSIRenderer', {
     run: () => {
-      createBenchBgaAnsiRenderer();
+      createBenchBgaANSIRenderer();
     },
   });
-  define('player-tui.createBgaAnsiRenderer', {
+  define('player-tui.createBgaANSIRenderer', {
     ioBound: true,
     run: async (fixtures) => {
-      await playerTuiApi.createBgaAnsiRenderer(fixtures.emptyBmsJson, {
+      await playerTuiAPI.createBgaANSIRenderer(fixtures.emptyBmsJSON, {
         baseDir: fixtures.tmpDir,
         width: 8,
         height: 4,
@@ -55,59 +55,59 @@ export function registerPlayerTuiExportsCases(define: DefineBenchmarkCase): void
   });
   define('player-tui.createInputTokenToChannelsMap', {
     run: () => {
-      playerTuiApi.createInputTokenToChannelsMap(playerTuiApi.createLaneBindings(BENCH_LANE_CHANNELS));
+      playerTuiAPI.createInputTokenToChannelsMap(playerTuiAPI.createLaneBindings(BENCH_LANE_CHANNELS));
     },
   });
   define('player-tui.createLaneBindings', {
     run: () => {
-      playerTuiApi.createLaneBindings(BENCH_LANE_CHANNELS);
+      playerTuiAPI.createLaneBindings(BENCH_LANE_CHANNELS);
     },
   });
   define('player-tui.formatMeasureSignature', {
     run: () => {
-      playerTuiApi.formatMeasureSignature(0.75);
+      playerTuiAPI.formatMeasureSignature(0.75);
     },
   });
   define('player-tui.formatJudgeComboDisplay', {
     run: () => {
-      playerTuiApi.formatJudgeComboDisplay('GREAT', 123, 1000, false);
-      playerTuiApi.formatJudgeComboDisplay('POOR', 123, 1000, false);
+      playerTuiAPI.formatJudgeComboDisplay('GREAT', 123, 1000, false);
+      playerTuiAPI.formatJudgeComboDisplay('POOR', 123, 1000, false);
     },
   });
   define('player-tui.inspectInputTokenEvent', {
     run: () => {
-      playerTuiApi.inspectInputTokenEvent('z', BENCH_KEY);
+      playerTuiAPI.inspectInputTokenEvent('z', BENCH_KEY);
     },
   });
-  define('player-tui.loadStageFileAnsiImage', {
+  define('player-tui.loadStageFileANSIImage', {
     ioBound: true,
     run: async (fixtures) => {
-      await playerTuiApi.loadStageFileAnsiImage(fixtures.emptyBmsJson, {
+      await playerTuiAPI.loadStageFileANSIImage(fixtures.emptyBmsJSON, {
         baseDir: fixtures.tmpDir,
         width: 8,
         height: 4,
       });
     },
   });
-  define('player-tui.loadStageFileAnsiLines', {
+  define('player-tui.loadStageFileANSILines', {
     ioBound: true,
     run: async (fixtures) => {
-      await playerTuiApi.loadStageFileAnsiLines(fixtures.emptyBmsJson, {
+      await playerTuiAPI.loadStageFileANSILines(fixtures.emptyBmsJSON, {
         baseDir: fixtures.tmpDir,
         width: 8,
         height: 4,
       });
     },
   });
-  define('player-tui.loadTerminalAnsiImage', {
+  define('player-tui.loadTerminalANSIImage', {
     ioBound: true,
     run: async (fixtures) => {
-      await playerTuiApi.loadTerminalAnsiImage(fixtures.tmpDir, 'missing.bmp', { width: 8, height: 4 });
+      await playerTuiAPI.loadTerminalANSIImage(fixtures.tmpDir, 'missing.bmp', { width: 8, height: 4 });
     },
   });
-  define('player-tui.PlayerTui', {
+  define('player-tui.PlayerTUI', {
     run: () => {
-      new playerTuiApi.PlayerTui({
+      new playerTuiAPI.PlayerTUI({
         mode: 'AUTO',
         laneDisplayMode: '5 KEY SP',
         title: 'Bench',
@@ -122,41 +122,41 @@ export function registerPlayerTuiExportsCases(define: DefineBenchmarkCase): void
   });
   define('player-tui.resolveAnimatedHighSpeedValue', {
     run: () => {
-      playerTuiApi.resolveAnimatedHighSpeedValue(1, 4, 120, 180);
+      playerTuiAPI.resolveAnimatedHighSpeedValue(1, 4, 120, 180);
     },
   });
-  define('player-tui.resolveVisibleBeatsForTuiGrid', {
+  define('player-tui.resolveVisibleBeatsForTUIGrid', {
     run: () => {
-      playerTuiApi.resolveVisibleBeatsForTuiGrid(24, 2);
+      playerTuiAPI.resolveVisibleBeatsForTUIGrid(24, 2);
     },
   });
   define('player-tui.resolveLaneDisplayMode', {
     run: () => {
-      playerTuiApi.resolveLaneDisplayMode(BENCH_LANE_CHANNELS);
+      playerTuiAPI.resolveLaneDisplayMode(BENCH_LANE_CHANNELS);
     },
   });
   define('player-tui.resolveInputTokenEvent', {
     run: () => {
-      playerTuiApi.resolveInputTokenEvent('z', BENCH_KEY);
+      playerTuiAPI.resolveInputTokenEvent('z', BENCH_KEY);
     },
   });
 }
 
-function createNonTtyWriteStream(): NodeJS.WriteStream {
+function createNonTTYWriteStream(): NodeJS.WriteStream {
   return {
     isTTY: false,
     write: () => true,
   } as unknown as NodeJS.WriteStream;
 }
 
-function createBenchBgaAnsiRenderer(): playerTuiApi.BgaAnsiRenderer {
+function createBenchBgaANSIRenderer(): playerTuiAPI.BgaANSIRenderer {
   const frame = {
     width: 1,
     height: 1,
     rgb: new Uint8Array([0, 0, 0]),
     opaqueMask: new Uint8Array([1]),
   };
-  return new playerTuiApi.BgaAnsiRenderer({
+  return new playerTuiAPI.BgaANSIRenderer({
     baseTimeline: [],
     poorTimeline: [],
     layerTimeline: [],

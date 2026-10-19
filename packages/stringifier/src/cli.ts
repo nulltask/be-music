@@ -1,9 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolveCliPath } from '@be-music/utils/cli-path';
+import { resolveCLIPath } from '@be-music/utils/cli-path';
 import { parseChart } from '@be-music/parser';
-import { stringifyBmson, stringifyBms } from './index.ts';
+import { stringifyBmson, stringifyBMS } from './index.ts';
 
-interface CliArgs {
+interface CLIArgs {
   input?: string;
   output?: string;
   format: 'bms' | 'bmson';
@@ -22,19 +22,19 @@ async function main(): Promise<void> {
     return;
   }
 
-  const inputPath = resolveCliPath(args.input);
-  const outputPath = resolveCliPath(args.output);
+  const inputPath = resolveCLIPath(args.input);
+  const outputPath = resolveCLIPath(args.output);
 
   const content = await readFile(inputPath, 'utf8');
   const json = parseChart(content, 'json');
-  const output = args.format === 'bmson' ? stringifyBmson(json) : stringifyBms(json);
+  const output = args.format === 'bmson' ? stringifyBmson(json) : stringifyBMS(json);
 
   await writeFile(outputPath, output, 'utf8');
   process.stdout.write(`Wrote ${args.format.toUpperCase()} to ${outputPath}\n`);
 }
 
-function parseArgs(rawArgs: string[]): CliArgs {
-  const args: CliArgs = {
+function parseArgs(rawArgs: string[]): CLIArgs {
+  const args: CLIArgs = {
     format: 'bms',
   };
   const positional: string[] = [];

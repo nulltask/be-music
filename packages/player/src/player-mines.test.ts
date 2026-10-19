@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 // The engine writes to a mocked Node audio sink (shared state in test-support/player-fixtures.ts).
 vi.mock('./audio-sink.ts', async () => (await import('./test-support/player-fixtures.ts')).mockAudioSinkModule());
 
-import { createEmptyJson } from '../../json/src/index.ts';
+import { createEmptyJSON } from '../../json/src/index.ts';
 import { manualPlay } from './index.ts';
 import { createVirtualClock } from './core/characterization/virtual-clock.ts';
 import { resetAudioSinkState, createScheduledInputRuntime } from './test-support/player-fixtures.ts';
@@ -20,7 +20,7 @@ describe('player', () => {
   test('player: holding a key through a passing mine detonates it (LR2 hold-through)', async () => {
     // BPM 120 → measure 1 = 2.0 s. Hold the lane from ~0.2 s via kitty press state (no release) and let the mine
     // cross the judge line at 2.0 s — LR2 explodes mines that pass while the key is ON.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }]; // raw 10 %
 
@@ -42,7 +42,7 @@ describe('player', () => {
   });
 
   test('player: a mine passing with the key up is harmless (LR2)', async () => {
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
 
@@ -65,7 +65,7 @@ describe('player', () => {
   test('player: a press outside the PGREAT window does not detonate an approaching mine (LR2)', async () => {
     // BPM 120, NORMAL rank → PGREAT window ±18 ms. The mine sits at 2.0 s; a tap at ~1.7 s is 300 ms early —
     // far outside the detonation range — and the key is up again (grace expired) by the time the mine crosses.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
 
@@ -91,7 +91,7 @@ describe('player', () => {
     // (±100 ms). The mine passes at 2.0 s; a tap at ~2.04 s — 40 ms late, still inside GOOD — must not detonate
     // it: the press missed PGREAT, and the crossing-anchored hold-through leg ignores presses that land after the
     // crossing, so this holds even when the tap is the first processing past the window.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
 
@@ -117,7 +117,7 @@ describe('player', () => {
     // A tap at 1.95 s (exact on the virtual clock) therefore covers the mine's 2.0 s crossing, and the
     // crossing-anchored hold-through leg detonates it deterministically once the PGREAT window closes — no
     // positive-coverage dependence on a frame tick sampling the ±18 ms window itself.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }]; // raw 10 %
 
@@ -142,7 +142,7 @@ describe('player', () => {
     // BPM 240 → measure = 1 s. A note+BGM at 1 s, the reversal (#BPM02 -240 via channel 08) at 2 s, and a
     // note+BGM at 3 s (|−240| keeps one measure per second). The pre-reversal note misses normally; everything
     // behind the reversal must stay silent and unjudged — not swept into POORs at the end of the run.
-    const json = createEmptyJson('bms');
+    const json = createEmptyJSON('bms');
     json.metadata.bpm = 240;
     json.resources.bpm['02'] = -240;
     json.resources.wav = { '01': 'a.wav', '02': 'b.wav', '03': 'bgm.wav' };

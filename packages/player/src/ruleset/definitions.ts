@@ -1,8 +1,8 @@
 import {
   bmsExRankValueToJudgeRankPercent,
-  resolveBmsJudgeWindowsMsForPercent,
-  resolveBmsRankJudgeRankPercent,
-  resolveLr2NonstopRankWindowsMs,
+  resolveBMSJudgeWindowsMsForPercent,
+  resolveBMSRankJudgeRankPercent,
+  resolveLR2NonstopRankWindowsMs,
   type JudgeWindowsMs,
 } from '../core/judge-window.ts';
 import {
@@ -61,7 +61,7 @@ export type BeatorajaJudgeAlgorithm = 'combo' | 'duration' | 'lowest' | 'score';
 
 /** How a ruleset plays the chart's long notes. */
 export type LongNoteStyle =
-  /** LR2: every long note is an LN — one deferred judgment (see {@link LnEarlyReleaseRule} for a release before the tail). */
+  /** LR2: every long note is an LN — one deferred judgment (see {@link LNEarlyReleaseRule} for a release before the tail). */
   | 'ln'
   /** beatoraja: per-note lnMode decides LN (1) vs CN (2) vs HCN (3). */
   | 'per-note'
@@ -88,7 +88,7 @@ export type MineTrigger = 'press-or-hold' | 'hold';
  *   windows and the LN takes the worse of that and the head; when that is BAD or worse and the release came before
  *   the tail, it is a BAD.
  */
-export type LnEarlyReleaseRule = 'head-unless-beyond-good' | 'worse-of-head-and-tail';
+export type LNEarlyReleaseRule = 'head-unless-beyond-good' | 'worse-of-head-and-tail';
 
 /**
  * What a press does on a lane whose long note is being held (a second key bound to the lane, such as the turntable's
@@ -140,10 +140,10 @@ export interface RulesetConfig {
   /** LR2 multi-BAD: one press BADs every other in-BAD-window (but out-of-GOOD-window) note on the lane. */
   multiBad: boolean;
   /** LR2: a long-note head is never judged as a LATE bad — the press is ignored instead. */
-  ignoreLateBadOnLnHead: boolean;
+  ignoreLateBadOnLNHead: boolean;
   longNoteStyle: LongNoteStyle;
-  /** How an LN released before its tail is judged (see {@link LnEarlyReleaseRule}). */
-  lnEarlyRelease: LnEarlyReleaseRule;
+  /** How an LN released before its tail is judged (see {@link LNEarlyReleaseRule}). */
+  lnEarlyRelease: LNEarlyReleaseRule;
   /** What a press on a lane whose long note is held does (see {@link PressDuringLongNoteRule}). */
   pressDuringLongNote: PressDuringLongNoteRule;
   /**
@@ -221,8 +221,8 @@ const lr2LongNoteEnd = (windows: { good: number; bad: number }): JudgeWindowSetU
   ],
 });
 
-function resolveLr2WindowTables(percent: number, overrideBadMs: number | undefined): RulesetWindowTables {
-  return lr2WindowTables(resolveBmsJudgeWindowsMsForPercent(percent, overrideBadMs));
+function resolveLR2WindowTables(percent: number, overrideBadMs: number | undefined): RulesetWindowTables {
+  return lr2WindowTables(resolveBMSJudgeWindowsMsForPercent(percent, overrideBadMs));
 }
 
 function lr2WindowTables(windows: JudgeWindowsMs): RulesetWindowTables {
@@ -385,7 +385,7 @@ const IIDX_WINDOWS: RulesetWindowTables = {
 };
 
 /** LR2 default TOTAL (OpenLR2 `LR2_bmsload.cpp`): piecewise-linear in the note count, ×0.8. */
-export function resolveLr2DefaultTotal(noteCount: number): number {
+export function resolveLR2DefaultTotal(noteCount: number): number {
   const n = Math.max(0, noteCount);
   let base: number;
   if (n < 400) {
@@ -408,7 +408,7 @@ export function resolveBeatorajaDefaultTotal(noteCount: number): number {
  * IIDX gauge recovery unit ("a value", percent per PGREAT/GREAT) — iidx.org measurement: `260 / n` up to 338
  * notes, `760.5 / (n + 650)` beyond, rounded to the nearest 0.02 %.
  */
-export function resolveIidxGaugeUnit(noteCount: number): number {
+export function resolveIIDXGaugeUnit(noteCount: number): number {
   const n = Math.max(1, noteCount);
   const raw = n <= 338 ? 260 / n : 760.5 / (n + 650);
   return Math.round(raw / 0.02 + 1e-9) * 0.02;
@@ -417,7 +417,7 @@ export function resolveIidxGaugeUnit(noteCount: number): number {
 /**
  * lr2oraja `MODIFY_DAMAGE` — LR2 HARD/EX-HARD damage multiplier from TOTAL (fix1) and note count (fix2).
  */
-export function resolveLr2HardDamageMultiplier(total: number, noteCount: number): number {
+export function resolveLR2HardDamageMultiplier(total: number, noteCount: number): number {
   const fix1 = 10.0 / Math.min(10.0, Math.max(1.0, Math.floor(total / 16.0) - 5.0));
   const n = noteCount;
   let fix2: number;
@@ -454,7 +454,7 @@ function scaleNegative(values: GaugeValues, multiplier: number): GaugeValues {
   return values.map((value) => (value < 0 ? value * multiplier : value)) as unknown as GaugeValues;
 }
 
-function resolveLr2Gauge(gaugeId: string, total: number, noteCount: number): GaugeSpec {
+function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): GaugeSpec {
   switch (gaugeId) {
     case 'EASY':
       return {
@@ -468,7 +468,7 @@ function resolveLr2Gauge(gaugeId: string, total: number, noteCount: number): Gau
         guts: [],
       };
     case 'HARD': {
-      const damage = resolveLr2HardDamageMultiplier(total, noteCount);
+      const damage = resolveLR2HardDamageMultiplier(total, noteCount);
       return {
         id: 'HARD',
         min: 0,
@@ -482,7 +482,7 @@ function resolveLr2Gauge(gaugeId: string, total: number, noteCount: number): Gau
       };
     }
     case 'EX-HARD': {
-      const damage = resolveLr2HardDamageMultiplier(total, noteCount);
+      const damage = resolveLR2HardDamageMultiplier(total, noteCount);
       return {
         id: 'EX-HARD',
         min: 0,
@@ -496,7 +496,7 @@ function resolveLr2Gauge(gaugeId: string, total: number, noteCount: number): Gau
       };
     }
     case 'DEATH':
-      // LR2's own DEATH table (OpenLR2 LR2f.cpp L27673-L27680; LR2body.exe `ParseBmsFile` case 2 at 0x4b5c2e):
+      // LR2's own DEATH table (OpenLR2 LR2f.cpp L27673-L27680; LR2body.exe `ParseBMSFile` case 2 at 0x4b5c2e):
       // no gain at all, BAD / POOR kill, and an empty POOR costs nothing. beatoraja's HAZARD_LR2 differs.
       return {
         id: 'DEATH',
@@ -606,8 +606,8 @@ function resolveBeatorajaGauge(gaugeId: string, total: number, noteCount: number
   }
 }
 
-function resolveIidxGauge(gaugeId: string, noteCount: number): GaugeSpec {
-  const a = resolveIidxGaugeUnit(noteCount);
+function resolveIIDXGauge(gaugeId: string, noteCount: number): GaugeSpec {
+  const a = resolveIIDXGaugeUnit(noteCount);
   switch (gaugeId) {
     case 'ASSISTED-EASY':
       return {
@@ -697,13 +697,13 @@ function countRulesetNotes(chart: RulesetChartFacts, style: LongNoteStyle): numb
 
 /**
  * The TOTAL a ruleset falls back to when the chart names none: LR2's note-count curve for `lr2`, beatoraja's formula
- * for `beatoraja`. The `iidx` gauge never reads TOTAL (its recovery comes from {@link resolveIidxGaugeUnit}), so its
+ * for `beatoraja`. The `iidx` gauge never reads TOTAL (its recovery comes from {@link resolveIIDXGaugeUnit}), so its
  * reported TOTAL follows the `lr2` curve.
  */
 function resolveDefaultTotal(rulesetId: PlaylogRulesetId, baseNoteCount: number): number {
   return rulesetId === 'beatoraja'
     ? resolveBeatorajaDefaultTotal(baseNoteCount)
-    : resolveLr2DefaultTotal(baseNoteCount);
+    : resolveLR2DefaultTotal(baseNoteCount);
 }
 
 /**
@@ -750,26 +750,26 @@ export function resolveRuleset(
           gaugeId,
           course,
           chart.laneMode,
-          resolveLr2HardDamageMultiplier(total, baseNotes),
+          resolveLR2HardDamageMultiplier(total, baseNotes),
         );
 
   if (rulesetId === 'lr2') {
     const noteCount = countRulesetNotes(chart, 'ln');
     const effectiveTotal = resolveEffectiveTotal('lr2', chart, baseNotes);
     const timeline = chart.judgeRank.timeline ?? [];
-    const staticTables = constrain(resolveLr2WindowTables(chart.judgeRank.percent, overrideBadMs));
+    const staticTables = constrain(resolveLR2WindowTables(chart.judgeRank.percent, overrideBadMs));
     const timelineTables = [
       ...timeline.map((change) => ({
         timeUs: change.timeUs,
-        tables: constrain(resolveLr2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs)),
+        tables: constrain(resolveLR2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs)),
       })),
       // A stitched NONSTOP chart's later stages (`RulesetStageRank`); stable after the `#EXRANKxx` changes on a tie.
       ...(chart.judgeRank.stageRanks ?? []).map((change) => ({
         timeUs: change.timeUs,
         tables: constrain(
           change.table === 'lr2-nonstop'
-            ? lr2WindowTables(resolveLr2NonstopRankWindowsMs(change.rank, overrideBadMs))
-            : resolveLr2WindowTables(resolveBmsRankJudgeRankPercent(change.rank), overrideBadMs),
+            ? lr2WindowTables(resolveLR2NonstopRankWindowsMs(change.rank, overrideBadMs))
+            : resolveLR2WindowTables(resolveBMSRankJudgeRankPercent(change.rank), overrideBadMs),
         ),
       })),
     ].sort((left, right) => left.timeUs - right.timeUs);
@@ -790,7 +790,7 @@ export function resolveRuleset(
       },
       selection: 'lowest',
       multiBad: true,
-      ignoreLateBadOnLnHead: true,
+      ignoreLateBadOnLNHead: true,
       longNoteStyle: 'ln',
       lnEarlyRelease: 'head-unless-beyond-good',
       pressDuringLongNote: 'rejudge-head-or-empty-poor',
@@ -799,7 +799,7 @@ export function resolveRuleset(
       comboBreaksOnEmptyPoor: false,
       mineTrigger: 'press-or-hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
-      gauge: courseGauge(effectiveTotal) ?? resolveLr2Gauge(gaugeId, effectiveTotal, baseNotes),
+      gauge: courseGauge(effectiveTotal) ?? resolveLR2Gauge(gaugeId, effectiveTotal, baseNotes),
       noteCount,
       effectiveTotal,
       moneyScore: true,
@@ -821,7 +821,7 @@ export function resolveRuleset(
       windowsAt: () => tables,
       selection: options.judgeAlgorithm ?? 'combo',
       multiBad: false,
-      ignoreLateBadOnLnHead: false,
+      ignoreLateBadOnLNHead: false,
       longNoteStyle: 'per-note',
       lnEarlyRelease: 'worse-of-head-and-tail',
       pressDuringLongNote: 'ignore',
@@ -848,7 +848,7 @@ export function resolveRuleset(
     windowsAt: () => iidxTables,
     selection: 'lowest',
     multiBad: false,
-    ignoreLateBadOnLnHead: false,
+    ignoreLateBadOnLNHead: false,
     longNoteStyle: 'charge',
     // IIDX plays no LN (every long note is a charge note), so this never applies.
     lnEarlyRelease: 'worse-of-head-and-tail',
@@ -859,7 +859,7 @@ export function resolveRuleset(
     // IIDX has no mines; LR2's model stands in until there is evidence otherwise.
     mineTrigger: 'press-or-hold',
     hcnTick: { heldJudge: 0, heldRate: 1, releasedJudge: 5, releasedRate: 1 },
-    gauge: courseGauge(effectiveTotal) ?? resolveIidxGauge(gaugeId, noteCount),
+    gauge: courseGauge(effectiveTotal) ?? resolveIIDXGauge(gaugeId, noteCount),
     noteCount,
     effectiveTotal,
     moneyScore: false,

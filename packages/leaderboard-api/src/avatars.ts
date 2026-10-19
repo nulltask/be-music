@@ -28,7 +28,7 @@ export function detectAvatarType(bytes: Uint8Array): AvatarType | undefined {
 }
 
 /** The URL of a player's icon; the version (the upload's hash, or `g` for the generated one) busts caches on change. */
-export function avatarUrl(handle: string, avatarKey: string | null): string {
+export function avatarURL(handle: string, avatarKey: string | null): string {
   const version = avatarKey === null ? 'g' : (/\/([0-9a-f]{16})[0-9a-f]*\.\w+$/.exec(avatarKey)?.[1] ?? 'u');
   return `/players/${encodeURIComponent(handle)}/avatar?v=${version}`;
 }
@@ -47,7 +47,7 @@ function fnv1a(text: string, seed = 0x811c9dc5): number {
  * A generated icon: a 5 by 5 grid, mirrored left to right, in one colour drawn from `seed` (the account id), on a dark
  * square. The same seed always gives the same picture.
  */
-export function generatedAvatarSvg(seed: string): string {
+export function generatedAvatarSVG(seed: string): string {
   const bits = fnv1a(seed);
   const hue = fnv1a(seed, 0x2f6b8a4d) % 360;
   const cells: string[] = [];

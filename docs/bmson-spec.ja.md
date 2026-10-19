@@ -47,7 +47,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `lines` を使った `measure` / `position` 解決
 - [x] `x <= 0` または `x` 未指定の note を BGM (`01`) として解釈
 - [x] beatoraja 拡張を beatoraja と同じく読む: `mine_channels` は note ごとの `damage` を保持した landmine channel、`key_channels` は隠し（不可視）ノート
-- [x] `info.back_image`, `info.banner_image`, `info.eyecatch_image` を unified `metadata.backBmp`, `metadata.banner`, `metadata.stageFile` へ mirror
+- [x] `info.back_image`, `info.banner_image`, `info.eyecatch_image` を unified `metadata.backBMP`, `metadata.banner`, `metadata.stageFile` へ mirror
 - [x] 明示的な `lines: []` を barline suppression として扱い、`bmson.barlinesSuppressed` に保持
 - [x] `lines` 欠落時は bmson 既定の 4/4 model として扱う
 - [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` はそのまま保持として扱う
@@ -236,7 +236,7 @@ flowchart TD
 
 ### BMS と bmson の相互変換
 
-`stringifyBms` は bmson 由来の譜面を次のように変換して出力します（通常の BMS 譜面はそのまま出力します）。
+`stringifyBMS` は bmson 由来の譜面を次のように変換して出力します（通常の BMS 譜面はそのまま出力します）。
 
 | bmson                | BMS                                                                                                                                                                                                                                                                                                        |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

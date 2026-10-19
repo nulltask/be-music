@@ -14,7 +14,7 @@ import {
 } from './score.ts';
 
 /** One tempo change of a chart, in chart time: STOPs read as BPM 0. */
-export interface BeatorajaBpmSegment {
+export interface BeatorajaBPMSegment {
   readonly timeMs: number;
   readonly bpm: number;
 }
@@ -24,12 +24,12 @@ export interface BeatorajaPlayChartFacts {
   /** The header BPM. */
   readonly bpm: number;
   /** The BPM most notes sit at (beatoraja's MAINBPM); the header BPM when 0 or absent. */
-  readonly mainBpm?: number;
+  readonly mainBPM?: number;
   /** The lowest and highest BPM of the tempo map (0 without a chart). */
-  readonly minBpm: number;
-  readonly maxBpm: number;
+  readonly minBPM: number;
+  readonly maxBPM: number;
   /** The tempo changes in chart-time order, which the BPM at the playhead is read from. */
-  readonly bpmSegments?: readonly BeatorajaBpmSegment[];
+  readonly bpmSegments?: readonly BeatorajaBPMSegment[];
   /** `#PLAYLEVEL`, as a number or as written. */
   readonly playLevel?: number | string;
 }
@@ -66,7 +66,7 @@ export interface BeatorajaPlayNumberInput extends BeatorajaScoreNumberInput {
  * For each BPM segment, the last positive BPM at or before it (`NaN` before the first one), so the BPM at a time is one
  * binary search away. `undefined` when the segments are not in time order, where only the walk is right.
  */
-function bpmLookupFor(segments: readonly BeatorajaBpmSegment[]): Float64Array | undefined {
+function bpmLookupFor(segments: readonly BeatorajaBPMSegment[]): Float64Array | undefined {
   if (BPM_LOOKUPS.has(segments)) return BPM_LOOKUPS.get(segments);
   let lookup: Float64Array | undefined = new Float64Array(segments.length);
   let lastPositive = Number.NaN;
@@ -83,16 +83,16 @@ function bpmLookupFor(segments: readonly BeatorajaBpmSegment[]): Float64Array | 
   return lookup;
 }
 
-const BPM_LOOKUPS = new WeakMap<readonly BeatorajaBpmSegment[], Float64Array | undefined>();
+const BPM_LOOKUPS = new WeakMap<readonly BeatorajaBPMSegment[], Float64Array | undefined>();
 
 /**
  * The BPM in effect at `timeMs` of chart time (beatoraja's `LaneRenderer.nbpm`): the last positive BPM of a segment at
  * or before it. A STOP (BPM 0) holds the BPM before it, as the readout does; before the first positive segment the
  * first segment's BPM, else the header BPM.
  */
-export function beatorajaBpmAt(segments: readonly BeatorajaBpmSegment[], timeMs: number, headerBpm: number): number {
-  if (segments.length === 0) return headerBpm;
-  const initial = segments[0]!.bpm > 0 ? segments[0]!.bpm : headerBpm;
+export function beatorajaBPMAt(segments: readonly BeatorajaBPMSegment[], timeMs: number, headerBPM: number): number {
+  if (segments.length === 0) return headerBPM;
+  const initial = segments[0]!.bpm > 0 ? segments[0]!.bpm : headerBPM;
   const lookup = bpmLookupFor(segments);
   if (lookup === undefined) {
     let lastPositive = initial;
@@ -116,10 +116,10 @@ export function beatorajaBpmAt(segments: readonly BeatorajaBpmSegment[], timeMs:
 }
 
 /** The BPM at the playhead: the header BPM before the first frame. */
-function playheadBpm(input: BeatorajaPlayNumberInput): number {
+function playheadBPM(input: BeatorajaPlayNumberInput): number {
   const { clock, chart } = input;
   if (clock === undefined) return chart.bpm;
-  return beatorajaBpmAt(chart.bpmSegments ?? [], clock.currentSeconds * 1000, chart.bpm);
+  return beatorajaBPMAt(chart.bpmSegments ?? [], clock.currentSeconds * 1000, chart.bpm);
 }
 
 /**
@@ -159,8 +159,8 @@ function beatorajaPerMille(value: number): number {
   return Math.trunc(Math.fround(Math.fround(value) * 1000));
 }
 
-function mainBpm(chart: BeatorajaPlayChartFacts): number {
-  return chart.mainBpm !== undefined && chart.mainBpm > 0 ? chart.mainBpm : chart.bpm;
+function mainBPM(chart: BeatorajaPlayChartFacts): number {
+  return chart.mainBPM !== undefined && chart.mainBPM > 0 ? chart.mainBPM : chart.bpm;
 }
 
 /** `#PLAYLEVEL` as a whole number: a number truncated, text parsed, 0 without one. */
@@ -216,38 +216,38 @@ export function resolveBeatorajaPlayNumber(id: number, input: BeatorajaPlayNumbe
 
     case BEATORAJA_NUM.DURATION:
     case BEATORAJA_NUM.DURATION_LANECOVER_ON:
-      return duration(input, playheadBpm(input), true, false);
+      return duration(input, playheadBPM(input), true, false);
     case BEATORAJA_NUM.DURATION_GREEN:
     case BEATORAJA_NUM.DURATION_GREEN_LANECOVER_ON:
-      return duration(input, playheadBpm(input), true, true);
+      return duration(input, playheadBPM(input), true, true);
     case BEATORAJA_NUM.DURATION_LANECOVER_OFF:
-      return duration(input, playheadBpm(input), false, false);
+      return duration(input, playheadBPM(input), false, false);
     case BEATORAJA_NUM.DURATION_GREEN_LANECOVER_OFF:
-      return duration(input, playheadBpm(input), false, true);
+      return duration(input, playheadBPM(input), false, true);
     case BEATORAJA_NUM.MAINBPM_DURATION_LANECOVER_ON:
-      return duration(input, mainBpm(chart), true, false);
+      return duration(input, mainBPM(chart), true, false);
     case BEATORAJA_NUM.MAINBPM_DURATION_GREEN_LANECOVER_ON:
-      return duration(input, mainBpm(chart), true, true);
+      return duration(input, mainBPM(chart), true, true);
     case BEATORAJA_NUM.MAINBPM_DURATION_LANECOVER_OFF:
-      return duration(input, mainBpm(chart), false, false);
+      return duration(input, mainBPM(chart), false, false);
     case BEATORAJA_NUM.MAINBPM_DURATION_GREEN_LANECOVER_OFF:
-      return duration(input, mainBpm(chart), false, true);
+      return duration(input, mainBPM(chart), false, true);
     case BEATORAJA_NUM.MINBPM_DURATION_LANECOVER_ON:
-      return duration(input, chart.minBpm, true, false);
+      return duration(input, chart.minBPM, true, false);
     case BEATORAJA_NUM.MINBPM_DURATION_GREEN_LANECOVER_ON:
-      return duration(input, chart.minBpm, true, true);
+      return duration(input, chart.minBPM, true, true);
     case BEATORAJA_NUM.MINBPM_DURATION_LANECOVER_OFF:
-      return duration(input, chart.minBpm, false, false);
+      return duration(input, chart.minBPM, false, false);
     case BEATORAJA_NUM.MINBPM_DURATION_GREEN_LANECOVER_OFF:
-      return duration(input, chart.minBpm, false, true);
+      return duration(input, chart.minBPM, false, true);
     case BEATORAJA_NUM.MAXBPM_DURATION_LANECOVER_ON:
-      return duration(input, chart.maxBpm, true, false);
+      return duration(input, chart.maxBPM, true, false);
     case BEATORAJA_NUM.MAXBPM_DURATION_GREEN_LANECOVER_ON:
-      return duration(input, chart.maxBpm, true, true);
+      return duration(input, chart.maxBPM, true, true);
     case BEATORAJA_NUM.MAXBPM_DURATION_LANECOVER_OFF:
-      return duration(input, chart.maxBpm, false, false);
+      return duration(input, chart.maxBPM, false, false);
     case BEATORAJA_NUM.MAXBPM_DURATION_GREEN_LANECOVER_OFF:
-      return duration(input, chart.maxBpm, false, true);
+      return duration(input, chart.maxBPM, false, true);
 
     case BEATORAJA_NUM.TIME_YEAR:
       return input.wallClock?.year;
@@ -294,11 +294,11 @@ export function resolveBeatorajaPlayNumber(id: number, input: BeatorajaPlayNumbe
       return input.maxCombo;
 
     case BEATORAJA_NUM.MAXBPM:
-      return Math.round(chart.maxBpm);
+      return Math.round(chart.maxBPM);
     case BEATORAJA_NUM.MINBPM:
-      return Math.round(chart.minBpm);
+      return Math.round(chart.minBPM);
     case BEATORAJA_NUM.MAINBPM:
-      return Math.round(mainBpm(chart));
+      return Math.round(mainBPM(chart));
     case BEATORAJA_NUM.PLAYLEVEL:
       return playLevelNumber(chart.playLevel);
 
@@ -316,12 +316,12 @@ export function resolveBeatorajaPlayNumber(id: number, input: BeatorajaPlayNumbe
     case BEATORAJA_NUM.NOWBPM:
       return Math.round(
         clock !== undefined && clock.reversalSeconds !== undefined
-          ? beatorajaBpmAt(
+          ? beatorajaBPMAt(
               chart.bpmSegments ?? [],
               Math.min(clock.currentSeconds, clock.reversalSeconds) * 1000,
               chart.bpm,
             )
-          : playheadBpm(input),
+          : playheadBPM(input),
       );
     case BEATORAJA_NUM.PLAYTIME_MINUTE:
       return clock !== undefined ? Math.floor(clock.currentSeconds / 60) : 0;
