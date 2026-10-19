@@ -1,36 +1,34 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { advanceCourseCombo, createCourseCombo, reduceCourseCombo } from './course-combo.ts';
+import { createCourseCombo, reduceCourseCombo, type CourseComboState } from './course-combo.ts';
+
+/** The course combo after each stage-combo reading in turn. */
+function readings(state: CourseComboState, stageCombos: readonly number[]): CourseComboState {
+  return stageCombos.reduce(reduceCourseCombo, state);
+}
 
 describe('course combo', () => {
   it('runs on from the carried-in combo until the first break', () => {
-    const state = createCourseCombo({ combo: 40, maxCombo: 55 });
-    advanceCourseCombo(state, 1);
-    advanceCourseCombo(state, 2);
+    const state = readings(createCourseCombo({ combo: 40, maxCombo: 55 }), [1, 2]);
     expect(state).toMatchObject({ combo: 42, maxCombo: 55 });
-    for (let combo = 3; combo <= 20; combo += 1) advanceCourseCombo(state, combo);
-    expect(state).toMatchObject({ combo: 60, maxCombo: 60 });
+    const later = readings(
+      state,
+      Array.from({ length: 18 }, (_, index) => index + 3),
+    );
+    expect(later).toMatchObject({ combo: 60, maxCombo: 60 });
   });
 
   it('falls back to the stage combo after a break', () => {
-    const state = createCourseCombo({ combo: 40, maxCombo: 40 });
-    advanceCourseCombo(state, 5);
-    advanceCourseCombo(state, 0);
+    const state = readings(createCourseCombo({ combo: 40, maxCombo: 40 }), [5, 0]);
     expect(state.combo).toBe(0);
-    advanceCourseCombo(state, 1);
-    expect(state).toMatchObject({ combo: 1, maxCombo: 45 });
+    expect(reduceCourseCombo(state, 1)).toMatchObject({ combo: 1, maxCombo: 45 });
   });
 
   it('treats a drop between readings as a break', () => {
-    const state = createCourseCombo({ combo: 10, maxCombo: 10 });
-    advanceCourseCombo(state, 8);
-    advanceCourseCombo(state, 2);
-    expect(state).toMatchObject({ combo: 2, maxCombo: 18 });
+    expect(readings(createCourseCombo({ combo: 10, maxCombo: 10 }), [8, 2])).toMatchObject({ combo: 2, maxCombo: 18 });
   });
 
   it('starts from zero without a carry', () => {
-    const state = createCourseCombo();
-    advanceCourseCombo(state, 3);
-    expect(state).toMatchObject({ combo: 3, maxCombo: 3 });
+    expect(reduceCourseCombo(createCourseCombo(), 3)).toMatchObject({ combo: 3, maxCombo: 3 });
   });
 
   it('reduces without changing the state it is given', () => {
