@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => {
       entrypoint: './dist/worker.js',
       domains: [`leaderboard.${site}`],
       workersDev: false,
+      previewUrls: false,
       observability: { enabled: true },
       // Run next to D1 rather than next to the visitor: a page makes several queries, each a round trip to the
       // database, while the other Workers reach this one once per request through a Service Binding. Both databases'
