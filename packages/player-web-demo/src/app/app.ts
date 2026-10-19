@@ -459,6 +459,7 @@ export class PlayerWebDemoApp {
       search: this.search,
       deviceProfile,
       gameplayView: () => this.gameplayView,
+      showing: () => this.router.current?.identity.kind,
     });
   }
 
