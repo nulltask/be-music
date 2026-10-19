@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { type CourseSongRecord, evaluateCourseSongFilter, parseCourseSongFilter } from './index.ts';
+import { type CourseSongRecord, evaluateCourseSongFilter, parseCourseSongFilter, selectCourseSongs } from './index.ts';
 
 const SONG: CourseSongRecord = {
   md5: '0123456789abcdef0123456789abcdef',
@@ -42,15 +42,15 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
     expect(matches('level > 11')).toBe(true);
     expect(matches('level >= 13')).toBe(false);
     expect(matches('12 = level')).toBe(true);
-    expect(matches('notes >= 1000.5')).toBe(true);
+    expect(matches('song.notes >= 1000.5')).toBe(true);
   });
 
   test('AND, OR, NOT and parentheses follow SQL precedence', () => {
-    expect(matches('level = 12 AND mode = 7')).toBe(true);
-    expect(matches('level = 11 OR mode = 7 AND difficulty = 4')).toBe(true);
-    expect(matches('(level = 11 OR mode = 7) AND difficulty = 3')).toBe(false);
+    expect(matches('level = 12 AND song.mode = 7')).toBe(true);
+    expect(matches('level = 11 OR song.mode = 7 AND difficulty = 4')).toBe(true);
+    expect(matches('(level = 11 OR song.mode = 7) AND difficulty = 3')).toBe(false);
     expect(matches('NOT level = 11')).toBe(true);
-    expect(matches('not (level = 12 and mode = 7)')).toBe(false);
+    expect(matches('not (level = 12 and song.mode = 7)')).toBe(false);
   });
 
   test('IN, BETWEEN and their negations', () => {
@@ -58,7 +58,7 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
     expect(matches('level NOT IN (11, 12)')).toBe(false);
     expect(matches("genre IN ('TRANCE', 'HOUSE')")).toBe(true);
     expect(matches('level IN ()')).toBe(false);
-    expect(matches('level BETWEEN 10 AND 12 AND mode = 7')).toBe(true);
+    expect(matches('level BETWEEN 10 AND 12 AND song.mode = 7')).toBe(true);
     expect(matches('level NOT BETWEEN 10 AND 12')).toBe(false);
     expect(matches('maxbpm BETWEEN 100 AND 200')).toBe(false);
   });
@@ -101,7 +101,8 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
   test('qualified and quoted column names', () => {
     expect(matches('song.level = 12')).toBe(true);
     expect(matches('SONG."level" = 12')).toBe(true);
-    expect(matches('`mode` = 7 AND [notes] > 0')).toBe(true);
+    expect(matches('song.`mode` = 7 AND song.[notes] > 0')).toBe(true);
+    expect(matches(`song.sha256 = '${'a'.repeat(64)}'`)).toBe(true);
     expect(matches('LEVEL = 12')).toBe(true);
   });
 
@@ -110,9 +111,9 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
     expect(matches('(feature & 16) = 0')).toBe(true);
     expect(matches('feature | 1 = 73')).toBe(true);
     expect(matches('maxbpm - minbpm > 100')).toBe(true);
-    expect(matches('notes / 1000 = 1')).toBe(true);
-    expect(matches('notes / 1000.0 = 1.5')).toBe(true);
-    expect(matches('notes % 7 = 2')).toBe(true);
+    expect(matches('song.notes / 1000 = 1')).toBe(true);
+    expect(matches('song.notes / 1000.0 = 1.5')).toBe(true);
+    expect(matches('song.notes % 7 = 2')).toBe(true);
     expect(matches('level * 2 + 1 = 25')).toBe(true);
     expect(matches('-level = -12')).toBe(true);
     expect(matches("genre || '!' = 'TRANCE!'")).toBe(true);
@@ -128,7 +129,7 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
     expect(matches('level NOT IN (11, NULL)')).toBe(false);
     expect(matches('level IN (12, NULL)')).toBe(true);
     expect(matches('NULL IS NULL')).toBe(true);
-    expect(matches('notes / 0 IS NULL')).toBe(true);
+    expect(matches('song.notes / 0 IS NULL')).toBe(true);
   });
 
   test('a bare literal is true when it is a non-zero number', () => {
@@ -144,10 +145,10 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
   });
 
   test('unsupported syntax fails closed with a reason', () => {
-    expect(parseError('clear > 3')).toBe("unknown column 'clear'");
+    expect(parseError('playcount > 3')).toBe("unknown column 'playcount'");
     expect(parseError('score.clear > 3')).toBe("unsupported table 'score'");
     expect(parseError("lower(title) = 'a'")).toBe('functions are not supported: lower');
-    expect(parseError('sha256 IN (SELECT sha256 FROM score)')).toBe('sub-queries are not supported');
+    expect(parseError('song.sha256 IN (SELECT sha256 FROM score)')).toBe('sub-queries are not supported');
     expect(parseError("title GLOB 'a*'")).toMatch(/unexpected/u);
     expect(parseError('level = ')).toMatch(/unexpected end of filter/u);
     expect(parseError("title = 'open")).toMatch(/unterminated string/u);
@@ -158,5 +159,91 @@ describe('parseCourseSongFilter / evaluateCourseSongFilter', () => {
     expect(parseError('AND level = 1')).toMatch(/unexpected AND/u);
     expect(parseError('12abc = 1')).toMatch(/bad number/u);
     expect(parseError('')).toMatch(/unexpected end of filter/u);
+  });
+
+  test("unqualified columns beatoraja's joined tables share are ambiguous, as SQLite refuses them", () => {
+    // song / score / scorelog / information: `mode = 7` selects nothing in beatoraja; `song.mode = 7` works.
+    for (const column of ['sha256', 'mode', 'notes', 'date', 'clear', 'combo', 'minbp', 'avgjudge']) {
+      expect(parseError(`${column} = 1`)).toBe(`ambiguous column name: ${column}`);
+    }
+    expect(parseError('`Mode` = 7')).toBe('ambiguous column name: Mode');
+    expect(parseError('level = 12 ORDER BY notes')).toBe('ambiguous column name: notes');
+    expect(matches('song.mode = 7')).toBe(true);
+    expect(parseError('song.date > 0')).toBe("unknown column 'date'");
+  });
+
+  test('a trailing ORDER BY / LIMIT / OFFSET parses into the query', () => {
+    const parsed = parseCourseSongFilter('level >= 11 ORDER BY level DESC, title ASC NULLS LAST LIMIT 10 OFFSET 2');
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.filter).toEqual(parsed.query.where);
+    expect(parsed.query.orderBy).toEqual([
+      { key: { type: 'column', column: 'level' }, descending: true },
+      { key: { type: 'column', column: 'title' }, descending: false, nulls: 'last' },
+    ]);
+    expect(parsed.query).toMatchObject({ limit: 10, offset: 2 });
+    // `LIMIT m, n` puts the offset first; a negative LIMIT is none and a negative OFFSET is 0, as in SQLite.
+    const comma = parseCourseSongFilter('1 LIMIT 3, 5');
+    expect(comma.ok && comma.query).toMatchObject({ limit: 5, offset: 3 });
+    const negative = parseCourseSongFilter('1 LIMIT -1 OFFSET -4');
+    expect(negative.ok && negative.query).toEqual({ where: { type: 'literal', value: 1 }, orderBy: [], offset: 0 });
+    const random = parseCourseSongFilter('level = 12 ORDER BY RANDOM() LIMIT 1');
+    expect(random.ok && random.query.orderBy).toEqual([{ key: { type: 'random' }, descending: false }]);
+  });
+
+  test('ORDER BY / LIMIT syntax outside the subset fails closed', () => {
+    expect(parseError('1 ORDER BY 1')).toMatch(/column number is not supported/u);
+    expect(parseError('1 ORDER level')).toMatch(/expected BY/u);
+    expect(parseError('1 LIMIT 1.5')).toMatch(/LIMIT takes an integer/u);
+    expect(parseError('1 LIMIT level')).toMatch(/LIMIT takes an integer/u);
+    expect(parseError('1 LIMIT 1 ORDER BY level')).toMatch(/unexpected 'ORDER'/u);
+    expect(parseError('1 ORDER BY level NULLS')).toMatch(/expected FIRST or LAST/u);
+    expect(parseError('1 ORDER BY lower(title)')).toBe('functions are not supported: lower');
+    expect(parseError('random() > 0')).toBe('functions are not supported: random');
+  });
+});
+
+describe('selectCourseSongs', () => {
+  const SONGS: CourseSongRecord[] = [
+    { md5: 'a', title: 'A', level: 11 },
+    { md5: 'b', title: 'B', level: 12 },
+    { md5: 'c', title: 'C', level: 12 },
+    { md5: 'd', title: 'D', level: 10 },
+    { md5: 'e', title: 'E', level: 12 },
+  ];
+
+  function select(sql: string, random?: () => number): string[] {
+    const parsed = parseCourseSongFilter(sql);
+    if (!parsed.ok) throw new Error(parsed.error);
+    return selectCourseSongs(parsed.query, SONGS, (song) => song, random).map((song) => song.md5!);
+  }
+
+  test('without ORDER BY / LIMIT it keeps the candidates the clause passes, in order', () => {
+    expect(select('level = 12')).toEqual(['b', 'c', 'e']);
+  });
+
+  test('orders by the terms, ties keeping the candidates order, then applies OFFSET and LIMIT', () => {
+    expect(select('1 ORDER BY level DESC')).toEqual(['b', 'c', 'e', 'a', 'd']);
+    expect(select('1 ORDER BY level DESC, title DESC')).toEqual(['e', 'c', 'b', 'a', 'd']);
+    expect(select('1 ORDER BY level DESC LIMIT 2')).toEqual(['b', 'c']);
+    expect(select('1 ORDER BY level LIMIT 2 OFFSET 1')).toEqual(['a', 'b']);
+    expect(select('level = 12 LIMIT 1, 5')).toEqual(['c', 'e']);
+    expect(select('1 LIMIT 0')).toEqual([]);
+  });
+
+  test('NULL sorts first ascending and last descending unless NULLS says otherwise', () => {
+    // `level / (level - 12)` is NULL for level 12 (division by zero), -11 for A and -5 for D.
+    expect(select('1 ORDER BY level / (level - 12), title')).toEqual(['b', 'c', 'e', 'a', 'd']);
+    expect(select('1 ORDER BY level / (level - 12) DESC, title')).toEqual(['d', 'a', 'b', 'c', 'e']);
+    expect(select('1 ORDER BY level / (level - 12) NULLS LAST, title')).toEqual(['a', 'd', 'b', 'c', 'e']);
+  });
+
+  test('ORDER BY RANDOM() takes one value per selected candidate from the injected source', () => {
+    const values = [0.9, 0.1, 0.5];
+    let calls = 0;
+    const random = () => values[calls++]!;
+    expect(select('level = 12 ORDER BY RANDOM()', random)).toEqual(['c', 'e', 'b']);
+    expect(calls).toBe(3);
+    expect(() => select('level = 12 ORDER BY RANDOM()')).toThrow(/random source/u);
   });
 });
