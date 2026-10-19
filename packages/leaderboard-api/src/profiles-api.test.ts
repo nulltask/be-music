@@ -42,10 +42,10 @@ describe('profiles', () => {
     expect(renamed.status).toBe(200);
     expect(await renamed.json()).toMatchObject({ handle: 'dj_taro', displayName: 'たろう' });
 
-    const old = await fetchApp(`/leaderboard/players/${before.handle}?x=1`);
+    const old = await fetchApp(`/players/${before.handle}?x=1`);
     expect(old.status).toBe(301);
-    expect(old.headers.get('location')).toBe('/leaderboard/players/dj_taro?x=1');
-    expect((await fetchApp('/leaderboard/players/DJ_TARO')).status).toBe(200);
+    expect(old.headers.get('location')).toBe('/players/dj_taro?x=1');
+    expect((await fetchApp('/players/DJ_TARO')).status).toBe(200);
 
     // Another player can take neither the new handle nor the old one.
     const other = await signInAnonymously(fetchApp);
@@ -54,7 +54,7 @@ describe('profiles', () => {
 
     // The player can take their old handle back.
     expect(await (await patchMe(cookie, { handle: before.handle })).json()).toMatchObject({ handle: before.handle });
-    expect((await fetchApp(`/leaderboard/players/${before.handle}`)).status).toBe(200);
+    expect((await fetchApp(`/players/${before.handle}`)).status).toBe(200);
   });
 
   test('broken rules answer 400 with the reason, and the account is unchanged', async () => {
@@ -94,9 +94,7 @@ describe('profiles', () => {
     expect(new Uint8Array(await image.arrayBuffer())).toEqual(PNG);
 
     // The ranking and the player page show it.
-    expect(await (await fetchApp(`/leaderboard/players/${me.handle}`)).text()).toContain(
-      uploaded.avatarUrl.replace('&', '&amp;'),
-    );
+    expect(await (await fetchApp(`/players/${me.handle}`)).text()).toContain(uploaded.avatarUrl.replace('&', '&amp;'));
 
     const svg = await fetchApp('/api/v0/me/avatar', {
       method: 'PUT',

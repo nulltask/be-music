@@ -310,7 +310,7 @@ export const DEMO_APP_HTML = `
       out). Signed in, it opens the player's Leaderboard page; signed out,
       it opens the Debug Menu's Leaderboard folder. Wired in \`leaderboard-ui.ts\`.
     -->
-    <a class="account-chip" id="account-chip" data-state="loading" href="/leaderboard" target="_blank" rel="noopener">
+    <a class="account-chip" id="account-chip" data-state="loading" href="https://leaderboard.be-music.app/" target="_blank" rel="noopener">
       <span class="account-chip-dot" aria-hidden="true"></span>
       <span class="account-chip-label" id="account-chip-label"></span>
     </a>

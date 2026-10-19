@@ -93,7 +93,7 @@ const en: HelpContent = {
   lead: (
     <span>
       What the figures and marks on these pages mean. For how plays are counted, see{' '}
-      <a class={PROSE_LINK} href="/leaderboard/about">
+      <a class={PROSE_LINK} href="/about">
         About
       </a>
       .
@@ -235,7 +235,7 @@ const ja: HelpContent = {
   lead: (
     <span>
       このサイトの数字や記号の意味です。プレイの採点方法は
-      <a class={PROSE_LINK} href="/leaderboard/about">
+      <a class={PROSE_LINK} href="/about">
         このサイトについて
       </a>
       をご覧ください。

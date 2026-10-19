@@ -154,7 +154,7 @@ const en: AboutContent = {
             nulltask/be-music on GitHub
           </a>
           . The{' '}
-          <a class={PROSE_LINK} href="/leaderboard/api">
+          <a class={PROSE_LINK} href="/api-reference">
             API
           </a>{' '}
           is open too.
@@ -297,7 +297,7 @@ const ja: AboutContent = {
             GitHub の nulltask/be-music
           </a>
           。
-          <a class={PROSE_LINK} href="/leaderboard/api">
+          <a class={PROSE_LINK} href="/api-reference">
             API
           </a>{' '}
           も公開しています。

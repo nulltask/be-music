@@ -23,7 +23,7 @@ import {
 import { loadCourseStats } from './stats.ts';
 
 /** A course's ranking under the display ruleset, its stages with links to their charts, its figures and details. */
-export async function coursePage(c: PageContext<'/leaderboard/courses/:courseFingerprint'>) {
+export async function coursePage(c: PageContext<'/courses/:courseFingerprint'>) {
   const db = openDatabase(c.env.DB);
   const courseFingerprint = c.req.param('courseFingerprint');
   const found = await loadCourseDetail(db, courseFingerprint);

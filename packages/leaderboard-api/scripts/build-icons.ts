@@ -61,7 +61,7 @@ const entries = icons.map((icon) => {
   const [stem, extension] = [icon.file.replace(/\.[^.]+$/, ''), icon.file.split('.').pop()];
   return [
     `  ${icon.key}: {`,
-    `    path: '/leaderboard/assets/${stem}.${hash}.${extension}',`,
+    `    path: '/assets/${stem}.${hash}.${extension}',`,
     `    contentType: '${icon.contentType}',`,
     ...(icon.size !== undefined ? [`    size: ${icon.size},`] : []),
     `    base64: '${icon.bytes.toString('base64')}',`,

@@ -136,7 +136,7 @@ describe('chartsets', () => {
     await refreshChartset(db, lookup, originalFp, NOW);
     await refreshChartset(db, lookup, addOnFp, NOW);
 
-    const response = await fetchApp('/leaderboard/chartsets/work1');
+    const response = await fetchApp('/chartsets/work1');
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain('BOF:TT');
@@ -145,10 +145,10 @@ describe('chartsets', () => {
     expect(html.indexOf('Work [NORMAL]')).toBeLessThan(html.indexOf('Work [Add-on]'));
     expect(html).not.toContain('Lonely');
 
-    const chartPage = await (await fetchApp(`/leaderboard/charts/${encodeURIComponent(addOnFp)}`)).text();
-    expect(chartPage).toContain('href="/leaderboard/chartsets/work1"');
+    const chartPage = await (await fetchApp(`/charts/${encodeURIComponent(addOnFp)}`)).text();
+    expect(chartPage).toContain('href="/chartsets/work1"');
     expect(chartPage).toContain('add-on (差分)');
 
-    expect((await fetchApp('/leaderboard/chartsets/nothing')).status).toBe(404);
+    expect((await fetchApp('/chartsets/nothing')).status).toBe(404);
   });
 });

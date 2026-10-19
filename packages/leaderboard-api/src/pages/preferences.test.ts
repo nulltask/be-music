@@ -9,18 +9,11 @@ describe('display ruleset preference', () => {
     expect(resolveDisplayRuleset('popn')).toBe('lr2');
   });
 
-  test('only returns to pages under /leaderboard on this site', () => {
-    expect(safeReturnPath('/leaderboard/charts/x?assisted=1')).toBe('/leaderboard/charts/x?assisted=1');
-    expect(safeReturnPath('/leaderboard')).toBe('/leaderboard');
-    for (const next of [
-      undefined,
-      '/',
-      'https://evil.example/leaderboard',
-      '//evil.example/leaderboard',
-      '/leaderboard\\..\\x',
-      '/api/v0/me',
-    ]) {
-      expect(safeReturnPath(next)).toBe('/leaderboard');
+  test('only returns to pages on this site', () => {
+    expect(safeReturnPath('/charts/x?assisted=1')).toBe('/charts/x?assisted=1');
+    expect(safeReturnPath('/')).toBe('/');
+    for (const next of [undefined, 'https://evil.example/', '//evil.example/', '/\\..\\x', '/api/v0/me', '/api']) {
+      expect(safeReturnPath(next)).toBe('/');
     }
   });
 });

@@ -46,14 +46,14 @@ describe('share cards', () => {
   test('the score page previews as a large card, the default one until its player uploads one', async () => {
     const owner = await signInAnonymously(fetchApp);
     const scoreId = await submit(owner);
-    const page = await (await fetchApp(`/leaderboard/scores/${scoreId}`)).text();
+    const page = await (await fetchApp(`/scores/${scoreId}`)).text();
     expect(page).toContain('<meta name="twitter:card" content="summary_large_image"');
     const image = /<meta property="og:image" content="([^"]+)"/.exec(page)?.[1];
-    expect(image).toBe(`${ORIGIN}/leaderboard/scores/${scoreId}/card?v=d`);
+    expect(image).toBe(`${ORIGIN}/scores/${scoreId}/card?v=d`);
     expect(page).toContain('https://x.com/intent/post?');
     // Only the player's own view asks the client to draw and upload the card.
     expect(page).not.toContain('data-upload=');
-    const ownView = await (await fetchApp(`/leaderboard/scores/${scoreId}`, { headers: { cookie: owner } })).text();
+    const ownView = await (await fetchApp(`/scores/${scoreId}`, { headers: { cookie: owner } })).text();
     expect(ownView).toContain(`data-upload="/api/v0/scores/${scoreId}/card"`);
     // The card to draw carries the chart's densest notes for its playfield; nobody else's view needs them.
     expect(ownView).toMatch(/"excerpt":\{"lanes":\[\{"tone":"red","side":"1P"\},/);
@@ -71,16 +71,14 @@ describe('share cards', () => {
     const stored = await put(owner, PNG);
     expect(stored.status).toBe(200);
     const { cardUrl } = (await stored.json()) as { cardUrl: string };
-    expect(cardUrl).toMatch(new RegExp(`^/leaderboard/scores/${scoreId}/card\\?v=[0-9a-f]{16}$`));
+    expect(cardUrl).toMatch(new RegExp(`^/scores/${scoreId}/card\\?v=[0-9a-f]{16}$`));
     expect(new Uint8Array(await (await fetchApp(cardUrl)).arrayBuffer())).toEqual(PNG);
-    expect(await (await fetchApp(`/leaderboard/scores/${scoreId}`)).text()).toContain(`${ORIGIN}${cardUrl}`);
+    expect(await (await fetchApp(`/scores/${scoreId}`)).text()).toContain(`${ORIGIN}${cardUrl}`);
   });
 
   test('other pages preview as the site card', async () => {
-    const top = await (await fetchApp('/leaderboard')).text();
-    expect(top).toMatch(
-      /<meta property="og:image" content="http:\/\/[^"]+\/leaderboard\/assets\/og\.[0-9a-f]{12}\.png"/,
-    );
+    const top = await (await fetchApp('/')).text();
+    expect(top).toMatch(/<meta property="og:image" content="http:\/\/[^"]+\/assets\/og\.[0-9a-f]{12}\.png"/);
     expect(top).toContain('<meta property="og:image:width" content="1200"');
   });
 });

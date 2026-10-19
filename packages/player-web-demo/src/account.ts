@@ -170,7 +170,7 @@ export function describeAccountChip(account: LeaderboardAccount | undefined): Ac
       href: undefined,
     };
   }
-  const href = `/leaderboard/players/${encodeURIComponent(account.handle)}`;
+  const href = `/players/${encodeURIComponent(account.handle)}`;
   if (account.anonymous) {
     return {
       state: 'anonymous',
@@ -227,7 +227,7 @@ export function describeStartAccount(account: LeaderboardAccount | undefined): S
       hint: 'Plays are recorded anonymously in this browser. Sign up to show them in the rankings.',
     };
   }
-  const href = `/leaderboard/players/${encodeURIComponent(account.handle)}`;
+  const href = `/players/${encodeURIComponent(account.handle)}`;
   if (account.anonymous) {
     return {
       state: 'anonymous',

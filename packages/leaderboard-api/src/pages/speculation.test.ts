@@ -35,32 +35,30 @@ describe('speculationRules', () => {
   });
 
   test.each([
-    '/leaderboard',
-    '/leaderboard/',
-    '/leaderboard?lang=ja',
-    '/leaderboard/scores/abc',
-    '/leaderboard/charts/0123abcd',
-    '/leaderboard/players/someone',
-    '/leaderboard/chartsets/42',
-    '/leaderboard/help#gauge',
-    '/leaderboard/about',
+    '/',
+    '/?lang=ja',
+    '/scores/abc',
+    '/charts/0123abcd',
+    '/players/someone',
+    '/chartsets/42',
+    '/help#gauge',
+    '/about',
   ])('speculates %s', (path) => {
     expect(matches(rule().prefetch[0].where, new URL(path, BASE).href)).toBe(true);
   });
 
   test.each([
     // Cookie-writing redirects: a hover must not switch the viewer's rules or language.
-    '/leaderboard/ruleset/beatoraja?next=%2Fleaderboard',
-    '/leaderboard/lang/en?next=%2Fleaderboard%2Fhelp',
-    '/leaderboard/settings',
-    '/leaderboard/settings?tab=passkeys',
-    '/leaderboard/assets/app.0123.css',
-    '/leaderboard/api',
-    '/leaderboard/scores/abc/card',
-    '/leaderboard/players/someone/avatar',
-    '/',
+    '/ruleset/beatoraja?next=%2F',
+    '/lang/en?next=%2Fhelp',
+    '/settings',
+    '/settings?tab=passkeys',
+    '/assets/app.0123.css',
+    '/api-reference',
+    '/scores/abc/card',
+    '/players/someone/avatar',
     '/api/v0/scores',
-    '/leaderboards',
+    '/api/auth/get-session',
   ])('never speculates %s', (path) => {
     expect(matches(rule().prefetch[0].where, new URL(path, BASE).href)).toBe(false);
   });

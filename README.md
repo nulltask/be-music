@@ -319,14 +319,15 @@ The demo starts a Vite dev server. Drop a BMS/BMSON song folder, an LR2 theme fo
 
 The demo can also load archives from a URL: `?music=<zip URL>&skin=<zip URL>` (either parameter may be omitted) feeds the archives into the same pipeline as a drop. Cross-origin `https` URLs are fetched through the same-origin proxy route `/__url-load-proxy`, served by the Vite dev server and by the Cloudflare Worker.
 
-To deploy the demo to Cloudflare Workers (Static Assets plus a Worker, see `packages/player-web-demo/wrangler.jsonc`):
+The demo is served by the Player Worker (`packages/play`): Static Assets for the built demo plus a Worker that streams the ffmpeg core from R2 and forwards the Leaderboard's API. Pushes to `main` and `devel` deploy every service to production and the preview (`.github/workflows/deploy.yml`, [Services and environments](./docs/services.md)). To deploy the Player by hand:
 
 ```bash
-pnpm --filter @be-music/player-web-demo run cf:r2:create # once: create the R2 bucket for ffmpeg-core
-pnpm --filter @be-music/player-web-demo run deploy:cf
+pnpm --filter @be-music/player-web-demo run cf:r2:push # when the pinned @ffmpeg/core changes: upload the core to R2
+pnpm --filter @be-music/play run deploy                # production, play.be-music.app
+pnpm --filter @be-music/play run deploy:preview        # preview, play.preview.be-music.app
 ```
 
-`deploy:cf` builds the demo, uploads `ffmpeg-core.wasm` / `ffmpeg-core.js` to R2 only when they changed (they exceed the Static Assets per-file limit and are served from R2 through the Worker), and runs `wrangler deploy`. `cf:r2:push` force-uploads the ffmpeg core.
+`deploy` builds the demo and runs `cf deploy`. The ffmpeg core (`ffmpeg-core.wasm` / `ffmpeg-core.js`) exceeds the Static Assets per-file limit, so it lives in R2 and is served through the Worker.
 
 ### 6. Editor
 

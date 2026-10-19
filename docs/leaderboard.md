@@ -30,11 +30,25 @@ Non-goals:
 
 ## 2. Architecture
 
-```
-player-web (browser) ─┐                       ┌─ D1: users / charts / scores / best_scores / rivals ...
-player-tui (CLI) ─────┼─ HTTPS ─→ be-music-player-demo Worker ─(Service Binding)→ be-music-leaderboard Worker
-                      │            /api/*          → Hono API     └─ R2: play logs, chart documents, ghosts, OG images
-                      │            /leaderboard/*  → Hono JSX pages
+```mermaid
+flowchart LR
+  subgraph clients[Clients]
+    W[player-web]
+    T[player-tui]
+  end
+  subgraph workers[Workers]
+    P[play]
+    A[accounts]
+    D[dashboard]
+    L[leaderboard]
+  end
+  W --> P
+  T --> L
+  P -->|/api/*| L
+  A -->|/api/auth/*| L
+  D -->|session| L
+  L --> DB[(D1)]
+  L --> R2[(R2)]
 ```
 
 - **Runtime**: Cloudflare Workers with D1 and R2. There is no plan to leave Cloudflare.
@@ -45,26 +59,25 @@ player-tui (CLI) ─────┼─ HTTPS ─→ be-music-player-demo Worker 
 - **Validation**: Valibot through `@hono/standard-validator`.
 - **ORM**: Drizzle. drizzle-kit generates SQL migrations into the package; Better Auth's tables use the same
   migrations.
-- **Same origin**: the player demo's Worker (`be-music-player-demo`) forwards `/api/*` and `/leaderboard/*` to the
-  leaderboard Worker through a Service Binding. The leaderboard Worker has no public URL of its own
-  (`workers_dev: false`, `preview_urls: false`), so pages, API and session cookies share the player's origin and no
-  CORS is needed.
+- **Hosts** (docs/services.md): the Leaderboard serves its pages and API on `leaderboard.be-music.app` (pages at the
+  root). The Player Worker (`play`) forwards `/api/*` to it through a Service Binding, so the player's
+  requests stay on its own origin. Better Auth lives here until Accounts is split out; its base URL is
+  `accounts.be-music.app`, whose Worker forwards `/api/auth/*` here, and its session cookies are shared on
+  `be-music.app`, so every service reads the same session.
 
 ### 2.1 Environments and deployment
 
-| Branches        | Leaderboard Worker             | D1 / R2                  | Player demo                                            |
-| --------------- | ------------------------------ | ------------------------ | ------------------------------------------------------ |
-| `devel`         | `be-music-leaderboard`         | production               | `be-music-player-demo`, deployed                       |
-| every other one | `be-music-leaderboard-preview` | preview database, bucket | a preview version of `be-music-player-demo` per branch |
+| Branch  | Leaderboard Worker    | D1 / R2                  | Host                               |
+| ------- | --------------------- | ------------------------ | ---------------------------------- |
+| `main`  | `leaderboard`         | production               | `leaderboard.be-music.app`         |
+| `devel` | `leaderboard-preview` | preview database, bucket | `leaderboard.preview.be-music.app` |
 
-- **CI/CD**: Workers Builds, following the player demo, whose production branch is `devel`. Every other branch is
-  uploaded as a preview version with its own Preview URL (`wrangler versions upload --env preview`). A version carries
-  its own bindings, so the previews talk to the preview Leaderboard. The preview Leaderboard is one Worker shared by all
-  branches; the last deploy wins.
+- **CI/CD**: the Deploy workflow (`.github/workflows/deploy.yml`) deploys every service on pushes to `main` and
+  `devel` (docs/services.md section 2).
 - **Migrations run before the deploy**, so every migration must work with the code that is still running
   (expand → switch → contract). D1 has no rollback.
-- **Previews must never reach production data.** The demo's previews bind the preview Leaderboard, and the Leaderboard
-  Workers keep their own Preview URLs off.
+- **Previews must never reach production data.** The preview Workers bind the preview Leaderboard, and the
+  Leaderboard Workers keep their Preview URLs off.
 - **Secrets** (`BETTER_AUTH_SECRET`, OAuth client secrets) are set per environment. Their values live in 1Password; the
   repository holds `op://` references, and a script sets them with `cf` (package README, "Secrets").
 - **Configuration and tooling**: the `cf` CLI is the primary tool (`cloudflare.config.ts`); Wrangler fills the gaps
@@ -418,7 +431,7 @@ course_best_score (user_id, course_fp, ruleset, assisted,     -- PK, as best_sco
 ## 8. API (`/api/v0`)
 
 The routes describe themselves: their valibot schemas validate requests and also generate the OpenAPI 3.1 document
-(`GET /api/v0/openapi.json`, reference page at `/leaderboard/api`). TypeSpec was considered, but a separate spec would
+(`GET /api/v0/openapi.json`, reference page at `/api-reference`). TypeSpec was considered, but a separate spec would
 drift from the validation the routes run.
 
 | Method                   | Path                                                                     | Purpose                                                                              |
@@ -478,30 +491,30 @@ counted in D1.
   today (`NO TARGET`, zero target scores); they read these values instead. The ghost-curve and matching helpers are pure
   functions in `@be-music/player`.
 
-## 10. Pages (`/leaderboard/*`)
+## 10. Pages (`leaderboard.be-music.app`)
 
 Server-rendered with Hono JSX in the leaderboard Worker, reading D1 directly, and styled as an information site with
 Tailwind CSS v4 and Basecoat (the shadcn/ui design without a framework runtime), following the system colour scheme:
 
-- `/leaderboard` — the top page: the newest plays, each under the ruleset it was played with. It shows every play by
+- `/` — the top page: the newest plays, each under the ruleset it was played with. It shows every play by
   a player who is not anonymous, on any chart, tagging charts that are not listed yet as new; anonymous plays come in
   with a filter. An invented chart reaches this page only through an account with a passkey.
-- `/leaderboard/scores/:id` — a score
-- `/leaderboard/chartsets/:id` — the charts of one work (originals, then add-ons)
-- `/leaderboard/charts/:chartFp` — a chart's rankings, its play counts and lamp spread, and its details (mode, TOTAL,
+- `/scores/:id` — a score
+- `/chartsets/:id` — the charts of one work (originals, then add-ons)
+- `/charts/:chartFp` — a chart's rankings, its play counts and lamp spread, and its details (mode, TOTAL,
   judge rank, long-note mode, file hashes)
-- `/leaderboard/players/:handle` — a profile with the player's figures (plays, charts, average rate, and the lamp and DJ
-  Rank spreads of their bests) and their latest plays and course runs, and `/leaderboard/players/:handle/versus/:rival`
-- `/leaderboard/courses/:courseFp` — a course's ranking (each player's best EX score, lamp, BP and trophy, assisted runs
+- `/players/:handle` — a profile with the player's figures (plays, charts, average rate, and the lamp and DJ
+  Rank spreads of their bests) and their latest plays and course runs, and `/players/:handle/versus/:rival`
+- `/courses/:courseFp` — a course's ranking (each player's best EX score, lamp, BP and trophy, assisted runs
   and anonymous players behind the chart page's switches), its stages linked to their chart pages, its run counts,
   lamp spread and details (kind, constraints). A course no player with an account has run stays out of search engines.
-- `/leaderboard/course-scores/:id` — a course run under every ruleset (stages reached, trophy), broken down stage by
+- `/course-scores/:id` — a course run under every ruleset (stages reached, trophy), broken down stage by
   stage under the display ruleset (judgments, BP, the gauge each stage handed on, the stages never reached), with its
   play log and, for its player, the switch that hides it. The top page lists the latest course runs below the plays.
 
 Every page shows its figures under one **display ruleset** (LR2, beatoraja or IIDX), chosen in the header and kept in a
 cookie; a play's own ruleset is shown alongside as "played with". The switch is its own URL
-(`/leaderboard/ruleset/:id?next=…`, which only returns to Leaderboard pages), so page URLs stay shareable without
+(`/ruleset/:id?next=…`, which only returns to Leaderboard pages), so page URLs stay shareable without
 changing the setting of whoever opens them. Since a page depends on that cookie, pages are `Cache-Control: private,
 max-age=0`. The chart page links to the chart elsewhere, once per file it is known by, in the formats BMS Search itself
 uses: Mocha-Repository, MinIR and BMS Search (`/patterns/{sha256}`) by the file SHA-256, and LR2IR by the MD5 once it
